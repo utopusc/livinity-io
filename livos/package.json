@@ -1,0 +1,55 @@
+{
+  "name": "livos",
+  "version": "0.1.0",
+  "description": "LivOS \u2014 AI-powered home server with chat, server control, and autonomous agents",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev:ui": "pnpm --filter ui dev",
+    "dev:livd": "pnpm --filter livinityd dev",
+    "dev:livcoreai": "pnpm --filter @livos/livcoreai dev",
+    "build": "pnpm --filter livinityd build && pnpm --filter @livos/livcoreai build && pnpm --filter ui build",
+    "build:ui": "pnpm --filter ui build",
+    "build:livd": "pnpm --filter livinityd build",
+    "build:livcoreai": "pnpm --filter @livos/livcoreai build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "build:liv": "cd packages/liv && npm run build",
+    "build:all": "pnpm --filter livinityd build && pnpm --filter @livos/livcoreai build && pnpm --filter ui build && cd packages/liv && npm run build",
+    "start": "pm2 start ecosystem.config.cjs",
+    "stop": "pm2 stop ecosystem.config.cjs",
+    "restart": "pm2 restart ecosystem.config.cjs",
+    "logs": "pm2 logs"
+  },
+  "keywords": [
+    "home-server",
+    "ai",
+    "self-hosting",
+    "docker",
+    "autonomous-agents"
+  ],
+  "author": "LivOS Team",
+  "license": "MIT",
+  "devDependencies": {
+    "prettier": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@swc/core",
+      "cpu-features",
+      "drivelist",
+      "esbuild",
+      "msgpackr-extract",
+      "node-git-server",
+      "node-pty",
+      "protobufjs",
+      "sharp",
+      "ssh2"
+    ]
+  }
+}

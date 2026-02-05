@@ -1,0 +1,8 @@
+# .gitignore contents
+node_modules
+coverage
+.DS_Store
+data
+
+# Prevent prettier erroring on intentionally invalid YAML test case
+source/modules/test-utilities/fixtures/community-repo/app-with-invalid-manifest/livinity-app.yml

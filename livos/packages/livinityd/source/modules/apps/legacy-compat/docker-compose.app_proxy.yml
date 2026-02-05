@@ -1,0 +1,10 @@
+# This file is deprecated - LivOS uses Caddy for reverse proxy
+# Kept for compatibility but should never be used
+version: '3.7'
+
+services:
+  app_proxy:
+    image: busybox:latest
+    command: ["echo", "App proxy is deprecated - using Caddy instead"]
+    user: '1000:1000'
+    restart: "no"
