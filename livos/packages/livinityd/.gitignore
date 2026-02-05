@@ -1,0 +1,10 @@
+node_modules
+coverage
+.DS_Store
+data
+ui
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example

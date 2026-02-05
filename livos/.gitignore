@@ -1,0 +1,43 @@
+# Backup files
+*.bak
+*.backup
+*~
+
+node_modules/
+dist/
+.env
+*.log
+logs/
+data/
+.cache/
+temp/
+*.pyc
+.DS_Store
+
+# Liv artifacts
+packages/liv/node_modules/
+packages/liv/packages/*/node_modules/
+packages/liv/packages/*/dist/
+packages/liv/skills/*.js
+packages/liv/skills/*.js.map
+packages/liv/skills/*.d.ts
+packages/liv/.env
+packages/liv/package-lock.json
+
+# Python venv
+packages/liv/packages/memory/venv/
+
+# Secrets & credentials
+*.pem
+*.key
+.env.*
+!.env.example
+
+# PM2
+.pm2/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

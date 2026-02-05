@@ -1,0 +1,197 @@
+import {fileURLToPath} from 'node:url'
+import path from 'node:path'
+
+import {describe, beforeAll, afterAll, expect, test} from 'vitest'
+import fse from 'fs-extra'
+
+import runGitServer from '../test-utilities/run-git-server.js'
+import temporaryDirectory from '../utilities/temporary-directory.js'
+
+import AppRepository from './app-repository.js'
+import Livinityd from '../../index.js'
+
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
+
+const directory = temporaryDirectory()
+
+let gitServer: Awaited<ReturnType<typeof runGitServer>>
+
+beforeAll(async () => {
+	await directory.createRoot()
+	gitServer = await runGitServer()
+})
+afterAll(async () => {
+	await directory.destroyRoot()
+	await gitServer.close()
+})
+
+describe('AppRepository', async () => {
+	test('is a class', () => {
+		expect(AppRepository).toBeTypeOf('function')
+		expect(AppRepository.toString().startsWith('class ')).toBe(true)
+	})
+
+	test('return an instance on valid URL', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const url = 'http://github.com/getlivinity/livinity-apps.git'
+		const appRepo = new AppRepository(livinityd, url)
+		expect(appRepo.url).toBe(url)
+	})
+
+	test('throws error on invalid URL', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		expect(() => new AppRepository(livinityd, 'invalid-url')).toThrow('Invalid URL')
+	})
+})
+
+describe('appRepository.cleanUrl()', () => {
+	test('cleans HTTP URLs', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, 'http://github.com/getlivinity/livinity-apps.git')
+		expect(appRepo.cleanUrl()).toBe('getlivinity-livinity-apps-github-98f08343')
+	})
+
+	test('cleans HTTPS URLs', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, 'https://github.com/getlivinity/livinity-apps.git')
+		expect(appRepo.cleanUrl()).toBe('getlivinity-livinity-apps-github-53f74447')
+	})
+
+	test('cleans token URLs', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, 'https://somerandomtoken@github.com/getlivinity/livinity-apps.git')
+		expect(appRepo.cleanUrl()).toBe('getlivinity-livinity-apps-github-5db4a3e5')
+	})
+
+	test('cleans GitLab URL', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, 'https://gitlab.com/getlivinity/livinity-apps.git')
+		expect(appRepo.cleanUrl()).toBe('getlivinity-livinity-apps-gitlab-8895504e')
+	})
+
+	test('cleans non user/repo urls', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, 'https://example.com')
+		expect(appRepo.cleanUrl()).toBe('example-100680ad')
+	})
+
+	test('removes dangerous characters', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, `https://example.com/-+_)(*&^%$!~\`,<>?;:'"[{]}\\|=/`)
+		expect(appRepo.cleanUrl()).toBe('example-fcd4912b')
+	})
+})
+
+describe('appRepository.update()', () => {
+	test("does initial install from URL if there's no local repo", async () => {
+		const dataDirectory = await directory.create()
+		const livinityd = new Livinityd({dataDirectory})
+		const appRepository = new AppRepository(livinityd, gitServer.url)
+		expect(await fse.exists(`${appRepository.path}/.git`)).toBe(false)
+		expect(await fse.exists(`${appRepository.path}/livinity-app-store.yml`)).toBe(false)
+		await appRepository.update()
+		expect(await fse.exists(`${appRepository.path}/.git`)).toBe(true)
+		expect(await fse.exists(`${appRepository.path}/livinity-app-store.yml`)).toBe(true)
+	})
+
+	test('updates when the remote repo has changed', async () => {
+		const dataDirectory = await directory.create()
+		const livinityd = new Livinityd({dataDirectory})
+		const appRepository = new AppRepository(livinityd, gitServer.url)
+
+		// Initial install
+		await appRepository.update()
+		const originalCommit = await appRepository.getCurrentCommit()
+		expect(originalCommit).toBeTruthy()
+
+		// Check we are updated
+		expect(await appRepository.isUpdated()).toBe(true)
+
+		// Add new commit to remote repo
+		await gitServer.addNewCommit()
+
+		// Check we are not updated
+		expect(await appRepository.isUpdated()).toBe(false)
+
+		// Update again
+		await appRepository.update()
+		const postUpdateCommit = await appRepository.getCurrentCommit()
+
+		// Check we're on the new commit
+		expect(originalCommit).not.toBe(postUpdateCommit)
+	})
+
+	test('does not update when both repos are the same', async () => {
+		const dataDirectory = await directory.create()
+		const livinityd = new Livinityd({dataDirectory})
+		const appRepository = new AppRepository(livinityd, gitServer.url)
+
+		// Initial install
+		await appRepository.update()
+		const originalCommit = await appRepository.getCurrentCommit()
+		expect(originalCommit).toBeTruthy()
+
+		// Check we are updated
+		expect(await appRepository.isUpdated()).toBe(true)
+
+		// Update again
+		await appRepository.update()
+		const postUpdateCommit = await appRepository.getCurrentCommit()
+
+		// Check we're on the same commit
+		expect(originalCommit).toBe(postUpdateCommit)
+	})
+})
+
+describe('appRepository.readRegistry()', () => {
+	test('reads community registry', async () => {
+		const livinityd = new Livinityd({dataDirectory: '/tmp'})
+		const appRepo = new AppRepository(livinityd, 'http://github.com/getlivinity/livinity-apps.git')
+
+		// Forcefully set app repo path to the community repo fixture
+		appRepo.path = `${currentDirectory}/../test-utilities/fixtures/community-repo`
+		livinityd.appStore.defaultAppStoreRepo = appRepo.path
+
+		// Read registry
+		const registry = await appRepo.readRegistry()
+		const expectedRegistry = {
+			url: 'http://github.com/getlivinity/livinity-apps.git',
+			meta: {
+				id: 'sparkles',
+				name: 'Sparkles',
+			},
+			apps: [
+				{
+					appStoreId: 'sparkles',
+					manifestVersion: '1.0.0',
+					id: 'sparkles-hello-world',
+					name: 'Hello World',
+					tagline: "Replace this tagline with your app's tagline",
+					icon: 'https://svgur.com/i/mvA.svg',
+					category: 'Development',
+					version: '1.0.0',
+					port: 4000,
+					description: "Add your app's description here.\n\nYou can also add newlines!",
+					developer: 'Livinity',
+					website: 'https://livinity.com',
+					submitter: 'Livinity',
+					submission: 'https://github.com/getlivinity/livinity-hello-world-app',
+					repo: 'https://github.com/getlivinity/livinity-hello-world-app',
+					support: 'https://github.com/getlivinity/livinity-hello-world-app/issues',
+					gallery: [
+						'https://i.imgur.com/yyVG0Jb.jpeg',
+						'https://i.imgur.com/yyVG0Jb.jpeg',
+						'https://i.imgur.com/yyVG0Jb.jpeg',
+					],
+					releaseNotes: "Add what's new in the latest version of your app here.",
+					dependencies: [],
+					path: '',
+					defaultUsername: '',
+					defaultPassword: '',
+					backupIgnore: ['data', 'logs', 'cache'],
+				},
+			],
+		}
+		expect(registry).toStrictEqual(expectedRegistry)
+	})
+})

@@ -1,0 +1,17 @@
+packages:
+  - packages/ui
+  - packages/livinityd
+  - packages/config
+
+ignoredBuiltDependencies:
+  - '@parcel/watcher'
+  - '@swc/core'
+  - cpu-features
+  - drivelist
+  - esbuild
+  - msgpackr-extract
+  - node-git-server
+  - node-pty
+  - protobufjs
+  - sharp
+  - ssh2

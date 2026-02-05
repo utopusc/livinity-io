@@ -1,0 +1,70 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Livinity Server
+
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "=== Starting deployment ==="
+
+            # Pull latest code
+            cd /opt/livos
+            git fetch origin
+            git reset --hard origin/master
+
+            # Install LivOS dependencies (livos is a subdirectory in the repo)
+            cd livos
+            pnpm install --frozen-lockfile
+
+            # Build config package
+            cd packages/config
+            pnpm build
+            cd ../..
+
+            # Extract UI dist files
+            cd packages/ui
+            if [ -f "dist.tar.gz" ] && [ ! -d "dist" ]; then
+              echo "Extracting UI dist files..."
+              tar -xzf dist.tar.gz
+            fi
+            cd ../..
+
+            # Ensure UI symlink exists
+            if [ ! -L "packages/livinityd/ui" ]; then
+              echo "Creating UI symlink..."
+              ln -sf /opt/livos/livos/packages/ui/dist /opt/livos/livos/packages/livinityd/ui
+            fi
+
+            # Fix script permissions
+            chmod +x packages/livinityd/source/modules/apps/legacy-compat/app-script 2>/dev/null || true
+
+            # Build Nexus core (nexus is a sibling to livos in repo)
+            cd /opt/livos/nexus/packages/core
+            npm install
+            npm run build
+
+            # Update symlink if nexus was separate before
+            if [ -d "/opt/nexus/app" ] && [ ! -L "/opt/nexus/app" ]; then
+              echo "Migrating nexus to new location..."
+              rm -rf /opt/nexus/app
+              ln -sf /opt/livos/nexus /opt/nexus/app
+            fi
+
+            # Restart services
+            pm2 restart livos nexus-core
+
+            echo "=== Deployment complete ==="
+            pm2 status

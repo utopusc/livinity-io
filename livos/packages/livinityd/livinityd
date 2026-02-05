@@ -1,0 +1,29 @@
+#!/bin/env bash
+
+# We need to add this shim as the main livinityd entrypoint so we can set up the environment we need
+# like adding node_modules/.bin to the PATH so we have access to tsx.
+
+
+# Hook to run development mode
+if [[ -d "/livinity-dev" ]]
+then
+    echo "Running in development mode"
+    cd /livinity-dev
+    exec npm run dev container-init
+fi
+
+# Find the project directory and follow symlinks if necessary
+project_directory="$(dirname $(readlink -f "${BASH_SOURCE[0]}"))"
+
+# Get the start script from package.json
+entrypoint=$(npm --prefix "${project_directory}" pkg get scripts.start)
+
+# Remove double quotes
+entrypoint="${entrypoint#\"}"
+entrypoint="${entrypoint%\"}"
+
+# Set up PATH so we can resolve tsx and local node
+export PATH="${project_directory}/node_modules/.bin:${PATH}"
+
+# Execute the entrypoint and pass through any arguments
+exec "${project_directory}/${entrypoint}" "$@"

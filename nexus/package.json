@@ -1,0 +1,20 @@
+{
+  "name": "nexus",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Nexus — Autonomous AI Server with multi-skill engine, WhatsApp interface, and 24/7 operation",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "npx tsx setup.ts",
+    "build": "npm run build --workspaces && npx tsc -p skills/tsconfig.json",
+    "build:skills": "npx tsc -p skills/tsconfig.json",
+    "dev:core": "npm run dev -w packages/core",
+    "dev:mcp": "npm run dev -w packages/mcp-server",
+    "dev:whatsapp": "npm run dev -w packages/whatsapp",
+    "dev:worker": "npm run dev -w packages/worker",
+    "dev:memory": "npm run dev -w packages/memory"
+  }
+}

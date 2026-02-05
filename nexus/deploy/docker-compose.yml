@@ -1,0 +1,68 @@
+services:
+  # === Firecrawl (Web Scraping) ===
+  firecrawl-api:
+    image: trieve/firecrawl:v0.0.46
+    container_name: nexus-firecrawl
+    restart: unless-stopped
+    command: ["node", "dist/src/index.js"]
+    ports:
+      - "3002:3002"
+    environment:
+      - NUM_WORKERS_PER_QUEUE=4
+      - PORT=3002
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis-firecrawl:6379
+      - REDIS_RATE_LIMIT_URL=redis://redis-firecrawl:6379
+    depends_on:
+      - redis-firecrawl
+    networks:
+      - firecrawl
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  firecrawl-worker:
+    image: trieve/firecrawl:v0.0.46
+    container_name: nexus-firecrawl-worker
+    restart: unless-stopped
+    command: ["node", "dist/src/services/queue-worker.js"]
+    environment:
+      - NUM_WORKERS_PER_QUEUE=4
+      - PORT=3002
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis-firecrawl:6379
+      - REDIS_RATE_LIMIT_URL=redis://redis-firecrawl:6379
+    depends_on:
+      - redis-firecrawl
+      - firecrawl-api
+    networks:
+      - firecrawl
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  redis-firecrawl:
+    image: redis:7-alpine
+    container_name: nexus-redis-firecrawl
+    restart: unless-stopped
+    command: redis-server --bind 0.0.0.0
+    networks:
+      - firecrawl
+
+  # === Playwright (Browser Automation for Nexus) ===
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.49.1-noble
+    container_name: nexus-playwright
+    restart: unless-stopped
+    command: sleep infinity
+    shm_size: "1g"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+networks:
+  firecrawl:
+    driver: bridge
