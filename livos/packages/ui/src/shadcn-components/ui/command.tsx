@@ -56,7 +56,7 @@ const CommandInput = React.forwardRef<
 		<CommandPrimitive.Input
 			ref={ref}
 			className={cn(
-				'flex w-full rounded-md bg-transparent p-2 text-15 font-medium -tracking-2 outline-none placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50',
+				'flex w-full rounded-md bg-transparent p-2 text-body-lg font-medium -tracking-2 outline-none placeholder:text-text-tertiary disabled:cursor-not-allowed disabled:opacity-50',
 				className,
 			)}
 			{...props}
@@ -119,7 +119,7 @@ const CommandItem = React.forwardRef<
 		<CommandPrimitive.Item
 			ref={ref}
 			className={cn(
-				'group relative flex cursor-default select-none items-center gap-3 rounded-8 p-2 text-13 font-medium -tracking-2 outline-none aria-selected:bg-white/4 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 md:text-15',
+				'group relative flex cursor-default select-none items-center gap-3 rounded-radius-sm p-2 text-body-sm font-medium -tracking-2 outline-none aria-selected:bg-surface-base data-[disabled]:pointer-events-none data-[disabled]:opacity-50 md:text-body-lg',
 				className,
 			)}
 			{...props}
@@ -149,7 +149,7 @@ const CommandItem = React.forwardRef<
 CommandItem.displayName = CommandPrimitive.Item.displayName
 
 const CommandShortcut = ({className, ...props}: React.HTMLAttributes<HTMLSpanElement>) => {
-	return <span className={cn('ml-auto text-xs tracking-widest text-white/30', className)} {...props} />
+	return <span className={cn('ml-auto text-xs tracking-widest text-text-tertiary', className)} {...props} />
 }
 CommandShortcut.displayName = 'CommandShortcut'
 

@@ -301,7 +301,7 @@ function FrequentApps({onLaunchApp}: {onLaunchApp: () => void}) {
 	return (
 		<div className='mb-3 flex flex-col gap-3 md:mb-5 md:gap-5'>
 			<div>
-				<h3 className='mb-5 ml-2 hidden text-15 font-semibold leading-tight -tracking-2 md:block'>
+				<h3 className='mb-5 ml-2 hidden text-body-lg font-semibold leading-tight -tracking-2 md:block'>
 					{t('cmdk.frequent-apps')}
 				</h3>
 				<FadeScroller direction='x' className='livinity-hide-scrollbar w-full overflow-x-auto whitespace-nowrap'>
@@ -359,7 +359,7 @@ function FrequentApp({
 	const isMobile = useIsMobile()
 	return (
 		<button
-			className='inline-flex w-[75px] flex-col items-center gap-2 overflow-hidden rounded-8 border border-transparent p-1.5 outline-none transition-all hover:border-white/10 hover:bg-white/4 focus-visible:border-white/10 focus-visible:bg-white/4 active:border-white/20 md:w-[100px] md:p-2'
+			className='inline-flex w-[75px] flex-col items-center gap-2 overflow-hidden rounded-radius-sm border border-transparent p-1.5 outline-none transition-all hover:border-border-default hover:bg-surface-base focus-visible:border-border-default focus-visible:bg-surface-base active:border-border-emphasis md:w-[100px] md:p-2'
 			onClick={() => {
 				onLaunch?.()
 				launchApp(appId)
@@ -373,7 +373,7 @@ function FrequentApp({
 			}}
 		>
 			<AppIcon src={icon} size={isMobile ? 48 : 64} className='rounded-10 lg:rounded-15' />
-			<div className='w-full truncate text-[10px] -tracking-2 text-white/75 md:text-13'>{name ?? appId}</div>
+			<div className='w-full truncate text-[10px] -tracking-2 text-text-secondary md:text-body-sm'>{name ?? appId}</div>
 		</button>
 	)
 }
