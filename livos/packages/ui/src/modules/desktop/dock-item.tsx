@@ -118,7 +118,7 @@ export function DockItem({
 		<motion.div ref={ref} className='relative aspect-square' style={{width}}>
 			{/* icon glow */}
 			<div
-				className='absolute hidden h-full w-full rounded-xl bg-white/20 opacity-30 md:block'
+				className='absolute hidden h-full w-full rounded-radius-lg bg-surface-3 opacity-30 md:block'
 				style={{
 					filter: 'blur(16px)',
 					transform: 'translateY(4px)',
@@ -127,7 +127,7 @@ export function DockItem({
 			{/* icon */}
 			<motion.div
 				className={cn(
-					'relative origin-top-left rounded-xl bg-white/10 backdrop-blur-md border border-white/20 transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
+					'relative origin-top-left rounded-radius-lg bg-surface-2 backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
 					className,
 				)}
 				style={{
@@ -146,7 +146,7 @@ export function DockItem({
 			>
 				{/* Render React Icon if available, otherwise fallback to bg image */}
 				{Icon ? (
-					<Icon className='h-[55%] w-[55%] text-white/90 drop-shadow-md' />
+					<Icon className='h-[55%] w-[55%] text-text-primary drop-shadow-md' />
 				) : bg ? (
 					<div
 						className='h-full w-full bg-cover bg-center rounded-xl'
