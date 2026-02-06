@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 2 of 8 (Desktop Shell)
-Plan: 0 of ? in current phase
-Status: Phase 1 complete, ready to plan Phase 2
-Last activity: 2026-02-06 - Phase 1 complete (3/3 plans, verified 21/21 must-haves)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-06 - Completed 02-01-PLAN.md (Dock Redesign)
 
-Progress: [███         ] 14% (3 of ~22 plans)
+Progress: [████        ] 16% (4 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███         ] 14% (3 of ~22 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 3
-- Average duration: 2.7 min
-- Total execution time: 0.13 hours
+- Total plans completed: 4
+- Average duration: 2.9 min
+- Total execution time: 0.19 hours
 
 *Updated after each plan completion*
 
@@ -55,6 +55,9 @@ v1.1 decisions:
 - [v1.1-01-02]: Keep rounded-14 for dialog sizes until Phase 3 dialog redesign
 - [v1.1-01-03]: Brand-colored focus states for form inputs (border-brand + ring-brand/20)
 - [v1.1-01-03]: Semantic icon sizing tokens (icon-sm, icon-md) for consistent icon dimensions
+- [v1.1-02-01]: OpenPill kept as pure bg-white for maximum visibility (not migrated to semantic token)
+- [v1.1-02-01]: Preview dock retains bg-neutral-900/80 solid background (not surface token)
+- [v1.1-02-01]: Dock border hierarchy: border-default for container, border-emphasis for items, border-subtle for dividers
 
 ### Pending Todos
 
@@ -67,7 +70,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed v1.1-01-03-PLAN.md (Input, Select, Switch Redesign)
+Stopped at: Completed 02-01-PLAN.md (Dock Redesign)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -93,6 +96,15 @@ Resume file: None
   - Brand focus pattern: border-brand + ring-brand/20
   - Icon sizing with semantic tokens (icon-sm, icon-md)
   - Summary: .planning/phases/v1.1-01-design-system/01-03-SUMMARY.md
+
+**Phase v1.1-02: Desktop Shell**
+- Plan 02-01: Dock Redesign (completed 2026-02-06)
+  - Dock container: semantic surface/border/radius tokens
+  - Dock slimmer profile: 74px -> 70px height
+  - Dock items: semantic surface/border/text tokens
+  - Dock divider: subtler and shorter (border-subtle, h-6)
+  - Notification badge: semantic caption-sm typography
+  - Summary: .planning/phases/v1.1-02-desktop-shell/02-01-SUMMARY.md
 
 ---
 
