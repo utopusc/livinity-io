@@ -69,7 +69,7 @@ export function AppIcon({
 		>
 			<div
 				className={cn(
-					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-10 bg-white/10 bg-cover bg-center ring-white/25 backdrop-blur-sm transition-all duration-300 group-hover:scale-110 group-hover:ring-6 group-focus-visible:ring-6 group-active:scale-95 group-data-[state=open]:ring-6 md:w-16 md:rounded-15',
+					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-radius-sm bg-surface-2 bg-cover bg-center ring-border-emphasis backdrop-blur-sm transition-all duration-300 group-hover:scale-110 group-hover:ring-6 group-focus-visible:ring-6 group-active:scale-95 group-data-[state=open]:ring-6 md:w-16 md:rounded-radius-md',
 				)}
 			>
 				{appIconSrc && (
@@ -87,14 +87,14 @@ export function AppIcon({
 				)}
 				{inProgress && (
 					<div className='absolute inset-0 flex items-center justify-center'>
-						<div className='relative h-1 w-[75%] overflow-hidden rounded-full bg-white/40'>
+						<div className='relative h-1 w-[75%] overflow-hidden rounded-full bg-surface-3'>
 							{arrayIncludes(progressBarStates, state) ? (
 								<div
-									className='absolute inset-0 w-0 rounded-full bg-white/90 transition-[width] delay-200 duration-700 animate-in slide-in-from-left-full fill-mode-both'
+									className='absolute inset-0 w-0 rounded-full bg-text-primary transition-[width] delay-200 duration-700 animate-in slide-in-from-left-full fill-mode-both'
 									style={{width: `${progress}%`}}
 								/>
 							) : (
-								<div className='absolute inset-0 w-[30%] animate-sliding-loader rounded-full bg-white/90' />
+								<div className='absolute inset-0 w-[30%] animate-sliding-loader rounded-full bg-text-primary' />
 							)}
 						</div>
 					</div>
@@ -106,7 +106,7 @@ export function AppIcon({
 					</div>
 				)}
 			</div>
-			<div className='max-w-full text-11 leading-normal drop-shadow-desktop-label md:text-13'>
+			<div className='max-w-full text-caption-sm leading-normal drop-shadow-desktop-label md:text-body-sm'>
 				<div className='truncate contrast-more:bg-black contrast-more:px-1'>
 					<AppLabel state={state} label={label} />
 				</div>
