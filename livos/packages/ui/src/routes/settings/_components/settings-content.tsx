@@ -1,5 +1,5 @@
 import {Loader2} from 'lucide-react'
-import React, {Suspense, useEffect, useState, ReactNode} from 'react'
+import React, {Suspense, useEffect, useState} from 'react'
 import {FaRegSave} from 'react-icons/fa'
 import {
 	RiExpandRightFill,
@@ -41,7 +41,6 @@ import {
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
-import {ChevronDown} from '@/assets/chevron-down'
 import {Card} from '@/components/ui/card'
 import {IconButton} from '@/components/ui/icon-button'
 import {IconButtonLink} from '@/components/ui/icon-button-link'
@@ -54,7 +53,6 @@ import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/setting
 import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
-import {Switch} from '@/shadcn-components/ui/switch'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {
@@ -1239,7 +1237,7 @@ function TroubleshootSection() {
 
 	return (
 		<div className='space-y-4'>
-			<p className='text-13 text-white/50'>{t('troubleshoot-description')}</p>
+			<p className='text-body-sm text-text-secondary'>{t('troubleshoot-description')}</p>
 
 			{/* Log Type Tabs */}
 			<Tabs value={logType} onValueChange={(v) => { setLogType(v as 'system' | 'app'); if (v === 'system') setSelectedAppId(null) }}>
@@ -1258,16 +1256,16 @@ function TroubleshootSection() {
 					{/* System Logs Preview */}
 					<div className='space-y-2'>
 						<div className='flex items-center justify-between'>
-							<h3 className='text-13 font-medium text-white/70'>Recent System Logs</h3>
+							<h3 className='text-body-sm font-medium text-text-secondary'>Recent System Logs</h3>
 							<button
 								onClick={() => setShowFullLogs(true)}
-								className='text-12 text-blue-400 hover:text-blue-300'
+								className='text-caption text-blue-400 hover:text-blue-300'
 							>
 								View Full Logs
 							</button>
 						</div>
-						<div className='max-h-[200px] overflow-auto rounded-10 bg-black p-3'>
-							<pre className='whitespace-pre-wrap font-mono text-11 text-white/50'>
+						<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-black p-3'>
+							<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
 								{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 							</pre>
 						</div>
@@ -1277,7 +1275,7 @@ function TroubleshootSection() {
 				<TabsContent value='app' className='space-y-4 pt-4'>
 					{/* App Selector */}
 					<div className='space-y-2'>
-						<label className='text-12 text-white/50'>Select an app to view its logs</label>
+						<label className='text-caption text-text-secondary'>Select an app to view its logs</label>
 						<Select value={selectedAppId || ''} onValueChange={(v) => setSelectedAppId(v || null)}>
 							<SelectTrigger>
 								<SelectValue placeholder='Select an app...' />
@@ -1302,16 +1300,16 @@ function TroubleshootSection() {
 					{selectedAppId && (
 						<div className='space-y-2'>
 							<div className='flex items-center justify-between'>
-								<h3 className='text-13 font-medium text-white/70'>App Logs</h3>
+								<h3 className='text-body-sm font-medium text-text-secondary'>App Logs</h3>
 								<button
 									onClick={() => setShowFullLogs(true)}
-									className='text-12 text-blue-400 hover:text-blue-300'
+									className='text-caption text-blue-400 hover:text-blue-300'
 								>
 									View Full Logs
 								</button>
 							</div>
-							<div className='max-h-[200px] overflow-auto rounded-10 bg-black p-3'>
-								<pre className='whitespace-pre-wrap font-mono text-11 text-white/50'>
+							<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-black p-3'>
+								<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
 									{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 								</pre>
 							</div>
@@ -1319,9 +1317,9 @@ function TroubleshootSection() {
 					)}
 
 					{!selectedAppId && (
-						<div className='rounded-12 border border-white/10 bg-white/5 p-6 text-center'>
-							<TbSettings className='mx-auto h-8 w-8 text-white/20' />
-							<p className='mt-2 text-13 text-white/50'>Select an app above to view its logs</p>
+						<div className='rounded-radius-md border border-border-default bg-surface-base p-6 text-center'>
+							<TbSettings className='mx-auto h-8 w-8 text-text-tertiary' />
+							<p className='mt-2 text-body-sm text-text-secondary'>Select an app above to view its logs</p>
 						</div>
 					)}
 				</TabsContent>
@@ -1341,18 +1339,18 @@ function TroubleshootSection() {
 			{/* Full Logs Dialog */}
 			{showFullLogs && (
 				<div className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/80' onClick={() => setShowFullLogs(false)}>
-					<div className='max-h-[80vh] w-[90vw] max-w-4xl overflow-hidden rounded-20 border border-white/10 bg-neutral-900' onClick={(e) => e.stopPropagation()}>
-						<div className='flex items-center justify-between border-b border-white/10 px-6 py-4'>
+					<div className='max-h-[80vh] w-[90vw] max-w-4xl overflow-hidden rounded-20 border border-border-default bg-neutral-900' onClick={(e) => e.stopPropagation()}>
+						<div className='flex items-center justify-between border-b border-border-default px-6 py-4'>
 							<h2 className='text-18 font-semibold'>{logType === 'system' ? 'System Logs' : 'App Logs'}</h2>
 							<button
 								onClick={() => setShowFullLogs(false)}
-								className='rounded-8 p-2 text-white/50 hover:bg-white/10 hover:text-white'
+								className='rounded-radius-sm p-2 text-text-secondary hover:bg-surface-2 hover:text-text-primary'
 							>
 								<TbArrowLeft className='h-5 w-5' />
 							</button>
 						</div>
 						<div className='max-h-[60vh] overflow-auto p-4'>
-							<pre className='whitespace-pre-wrap font-mono text-12 text-white/60'>
+							<pre className='whitespace-pre-wrap font-mono text-caption text-text-secondary'>
 								{logsQ.data || 'No logs available'}
 							</pre>
 						</div>
@@ -1383,36 +1381,28 @@ function AdvancedSection() {
 	return (
 		<div className='space-y-4'>
 			{/* Beta Program */}
-			<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
-				<div>
-					<div className='text-14 font-medium'>{t('beta-program')}</div>
-					<div className='text-12 text-white/50'>{t('beta-program-description')}</div>
-				</div>
-				<Switch
-					checked={isBetaChannel}
-					onCheckedChange={(checked) => releaseChannelMut.mutate({channel: checked ? 'beta' : 'stable'})}
-					disabled={isBetaLoading}
-				/>
-			</div>
+			<SettingsToggleRow
+				title={t('beta-program')}
+				description={t('beta-program-description')}
+				checked={isBetaChannel}
+				onCheckedChange={(checked) => releaseChannelMut.mutate({channel: checked ? 'beta' : 'stable'})}
+				disabled={isBetaLoading}
+			/>
 
 			{/* External DNS */}
-			<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
-				<div>
-					<div className='text-14 font-medium'>{t('external-dns')}</div>
-					<div className='text-12 text-white/50'>{t('external-dns-description')}</div>
-				</div>
-				<Switch
-					checked={isExternalDns}
-					onCheckedChange={(checked) => externalDnsMut.mutate(checked)}
-					disabled={isExternalDnsLoading}
-				/>
-			</div>
+			<SettingsToggleRow
+				title={t('external-dns')}
+				description={t('external-dns-description')}
+				checked={isExternalDns}
+				onCheckedChange={(checked) => externalDnsMut.mutate(checked)}
+				disabled={isExternalDnsLoading}
+			/>
 
 			{/* Factory Reset */}
-			<div className='flex items-center justify-between rounded-12 border border-red-500/20 bg-red-500/5 p-4'>
+			<div className='flex items-center justify-between rounded-radius-md border border-red-500/20 bg-red-500/5 p-4'>
 				<div>
-					<div className='text-14 font-medium text-red-400'>{t('factory-reset')}</div>
-					<div className='text-12 text-white/50'>{t('factory-reset-description')}</div>
+					<div className='text-body font-medium text-red-400'>{t('factory-reset')}</div>
+					<div className='text-caption text-text-secondary'>{t('factory-reset-description')}</div>
 				</div>
 				<IconButtonLink to='/factory-reset' text='destructive'>
 					{t('reset')}
@@ -1425,7 +1415,7 @@ function AdvancedSection() {
 function SoftwareUpdateSection() {
 	return (
 		<div className='space-y-4'>
-			<p className='text-13 text-white/50'>Check for LivOS updates.</p>
+			<p className='text-body-sm text-text-secondary'>Check for LivOS updates.</p>
 			<SoftwareUpdateListRow isActive={false} />
 		</div>
 	)
