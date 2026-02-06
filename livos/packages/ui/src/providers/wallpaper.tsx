@@ -262,7 +262,7 @@ export function Wallpaper({
 				key={wallpaper.url + '-loading'}
 				src={getWallpaperThumbUrl(wallpaper)}
 				className={cn(
-					'pointer-events-none fixed inset-0 w-full scale-125 object-cover object-center blur-[var(--wallpaper-blur)] duration-700',
+					'pointer-events-none fixed inset-0 w-full scale-125 object-cover object-center blur-[var(--wallpaper-blur)] duration-500',
 					isPreview && 'absolute h-full',
 					!isPreview && 'h-lvh',
 					className,
@@ -274,7 +274,7 @@ export function Wallpaper({
 					src={wallpaper.url}
 					className={cn(
 						// Using black bg by default because sometimes we want to show the wallpaper before it's loaded, and over other elements
-						tw`pointer-events-none fixed inset-0 w-full bg-black object-cover object-center duration-700 animate-in fade-in`,
+						tw`pointer-events-none fixed inset-0 w-full bg-black object-cover object-center duration-500 animate-in fade-in`,
 						isPreview && 'absolute h-full',
 						!isPreview && 'h-lvh',
 						className,
@@ -290,7 +290,7 @@ export function Wallpaper({
 				<div
 					key={prevWallpaper.url}
 					className={cn(
-						'pointer-events-none fixed inset-0 bg-cover bg-center duration-700 animate-out fade-out zoom-out-125 fill-mode-both',
+						'pointer-events-none fixed inset-0 bg-cover bg-center duration-500 animate-out fade-out zoom-out-125 fill-mode-both',
 						isPreview && 'absolute',
 						className,
 					)}
