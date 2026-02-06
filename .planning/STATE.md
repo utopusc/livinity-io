@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 3 of 8 (Window & Sheet System)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-06 - Completed 03-01-PLAN.md (Dialog Foundation & Semantic Tokens)
+Last activity: 2026-02-06 - Completed 03-02-PLAN.md (Sheet System Semantic Tokens)
 
-Progress: [█████████   ] 36% (9 of ~25 plans)
+Progress: [██████████  ] 40% (10 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [█████████   ] 36% (9 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 2.7 min
-- Total execution time: 0.45 hours
+- Total execution time: 0.49 hours
 
 *Updated after each plan completion*
 
@@ -78,6 +78,9 @@ v1.1 decisions:
 - [v1.1-03-01]: Dialog description visibility: text-white/50 -> text-text-secondary (0.50 -> 0.60)
 - [v1.1-03-01]: Close button semantic: opacity-30/hover:opacity-40 -> text-text-tertiary/hover:text-text-secondary
 - [v1.1-03-01]: Button rounded-14 resolved: dialog/lg sizes now rounded-radius-md (14px -> 12px)
+- [v1.1-03-02]: Sheet title text-text-primary (0.90) chosen over text-text-secondary (0.60) for prominent page title readability
+- [v1.1-03-02]: Sheet description text-body-sm (13px) over Tailwind text-sm (14px) to match semantic scale
+- [v1.1-03-02]: Scrollbar group-hover:bg-white/50 kept as raw value (no semantic match at 0.50 opacity)
 
 ### Pending Todos
 
@@ -90,7 +93,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 03-01-PLAN.md (Dialog Foundation & Semantic Tokens)
+Stopped at: Completed 03-02-PLAN.md (Sheet System Semantic Tokens)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -164,6 +167,13 @@ Resume file: None
   - Dialog close button: text-text-tertiary/hover:text-text-secondary, icon-md/icon-lg sizing
   - Button dialog/lg: rounded-radius-md (resolved Phase 1 deferred decision)
   - Summary: .planning/phases/v1.1-03-window-sheet-system/03-01-SUMMARY.md
+- Plan 03-02: Sheet System Semantic Tokens (completed 2026-02-06)
+  - SheetTitle: text-heading-lg font-bold text-text-primary md:text-display-lg
+  - SheetDescription: text-body-sm text-text-tertiary
+  - Sticky header border: border-border-default (was border-white/10)
+  - Scroll area: bg-border-emphasis thumb, hover:bg-surface-2 track
+  - Wallpaper blur (backdrop-blur-3xl) and sheet radii preserved
+  - Summary: .planning/phases/v1.1-03-window-sheet-system/03-02-SUMMARY.md
 
 ---
 
