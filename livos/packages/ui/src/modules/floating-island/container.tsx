@@ -47,7 +47,7 @@ export function FloatingIslandContainer() {
 	// Return the container positioned at the bottom, right above the dock
 	return (
 		// use same z-index as dock, stack the islands vertically on mobile and horizontally on desktop
-		<div className='fixed bottom-[76px] left-1/2 z-50 flex w-full -translate-x-1/2 flex-col items-center justify-center gap-1 md:bottom-[90px] md:flex-row md:items-baseline md:gap-2'>
+		<div className='fixed bottom-[76px] left-1/2 z-50 flex w-full -translate-x-1/2 flex-col items-center justify-center gap-1 md:bottom-[86px] md:flex-row md:items-baseline md:gap-2'>
 			<AnimatePresence>
 				{showUploading && (
 					<motion.div key='upload-island' layout {...commonProps}>
