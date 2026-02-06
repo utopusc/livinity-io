@@ -6,7 +6,7 @@ import {useQueryParams} from '@/hooks/use-query-params'
 import {SettingsDialogKey} from '@/routes/settings'
 import {sleep} from '@/utils/misc'
 
-export const EXIT_DURATION_MS = 100
+export const EXIT_DURATION_MS = 150
 
 export type GlobalDialogKey = 'logout' | 'live-usage' | 'whats-new'
 export type AppStoreDialogKey = 'updates' | 'add-community-store' | 'default-credentials' | 'app-settings'
