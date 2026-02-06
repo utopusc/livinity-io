@@ -104,7 +104,7 @@ export const Island = ({children, onClose, nonDismissable}: IslandProps) => {
 					{isExpanded ? expandedChild : minimizedChild}
 					{isExpanded && onClose && !nonDismissable && (
 						<motion.button
-							className='absolute right-4 top-4 rounded-full bg-white/10 p-1 transition-colors hover:bg-white/20'
+							className='absolute right-4 top-4 rounded-full bg-surface-2 p-1 transition-colors hover:bg-surface-3'
 							initial={{scale: 0}}
 							animate={{scale: 1}}
 							onClick={(e) => {
