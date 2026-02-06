@@ -32,26 +32,26 @@ export default function AiConfigPage() {
 		<SettingsPageLayout title='AI Configuration' description='Set your Gemini API key to enable AI features'>
 			<div className='max-w-lg space-y-6'>
 				{/* Current Key Status */}
-				<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
+				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-center gap-3'>
-						<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-white/10'>
-							<TbKey className='h-5 w-5 text-white/70' />
+						<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
+							<TbKey className='h-5 w-5 text-text-secondary' />
 						</div>
 						<div className='flex-1'>
-							<div className='text-14 font-medium'>Current API Key</div>
-							<div className='font-mono text-13 text-white/50'>
+							<div className='text-body font-medium'>Current API Key</div>
+							<div className='font-mono text-body-sm text-text-secondary'>
 								{configQ.isLoading ? 'Loading...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not configured'}
 							</div>
 						</div>
 						{configQ.data?.hasGeminiKey && (
-							<div className='rounded-full bg-green-500/20 px-3 py-1 text-12 text-green-400'>Active</div>
+							<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
 						)}
 					</div>
 				</div>
 
 				{/* New API Key Input */}
 				<div className='space-y-3'>
-					<label className='text-12 text-white/50'>Enter new API key</label>
+					<label className='text-caption text-text-secondary'>Enter new API key</label>
 					<Input
 						placeholder='AIzaSy...'
 						value={apiKey}
@@ -59,7 +59,7 @@ export default function AiConfigPage() {
 						onKeyDown={(e) => e.key === 'Enter' && handleSave()}
 						className='font-mono'
 					/>
-					<p className='text-11 text-white/30'>
+					<p className='text-caption-sm text-text-tertiary'>
 						Your API key is stored securely and persists across restarts.
 					</p>
 				</div>
@@ -69,7 +69,7 @@ export default function AiConfigPage() {
 					href='https://aistudio.google.com/app/apikey'
 					target='_blank'
 					rel='noopener noreferrer'
-					className='flex items-center gap-2 text-13 text-blue-400 hover:text-blue-300'
+					className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
 				>
 					<TbExternalLink className='h-4 w-4' />
 					Get your Gemini API key from Google AI Studio
