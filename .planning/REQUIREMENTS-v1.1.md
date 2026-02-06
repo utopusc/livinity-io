@@ -27,17 +27,17 @@
 
 ### Window System (WS)
 
-- [ ] **WS-01**: Redesign floating window chrome (title bar) with cleaner, more minimal style
-- [ ] **WS-02**: Update window body with refined borders, shadows, and background
-- [ ] **WS-03**: Improve window drag interaction and z-index management visual feedback
-- [ ] **WS-04**: Add window resize handles with smooth animation
+- [x] **WS-01**: Redesign floating window chrome (title bar) with cleaner, more minimal style ✓
+- [x] **WS-02**: Update window body with refined borders, shadows, and background ✓
+- [x] **WS-03**: Improve window drag interaction and z-index management visual feedback ✓
+- [x] **WS-04**: Add window resize handles with smooth animation ✓
 
 ### Sheet & Modal System (SM)
 
-- [ ] **SM-01**: Redesign sheet header with cleaner close button and title styling
-- [ ] **SM-02**: Update sheet background and border for refined appearance
-- [ ] **SM-03**: Redesign dialog/modal components with consistent styling
-- [ ] **SM-04**: Improve sheet open/close animations for smoother feel
+- [x] **SM-01**: Redesign sheet header with cleaner close button and title styling ✓
+- [x] **SM-02**: Update sheet background and border for refined appearance ✓
+- [x] **SM-03**: Redesign dialog/modal components with consistent styling ✓
+- [x] **SM-04**: Improve sheet open/close animations for smoother feel ✓
 
 ### Settings (ST)
 
@@ -106,8 +106,8 @@
 |-------------|-------|--------|
 | DS-01 to DS-08 | Phase 1 | Complete |
 | DD-01 to DD-05 | Phase 2 | Complete |
-| WS-01 to WS-04 | Phase 3 | Pending |
-| SM-01 to SM-04 | Phase 3 | Pending |
+| WS-01 to WS-04 | Phase 3 | Complete |
+| SM-01 to SM-04 | Phase 3 | Complete |
 | ST-01 to ST-05 | Phase 4 | Pending |
 | AC-01 to AC-06 | Phase 5 | Pending |
 | AS-01 to AS-04 | Phase 6 | Pending |
@@ -118,8 +118,8 @@
 
 **Coverage:**
 - v1.1 requirements: 47 total
-- Complete: 16 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03)
-- Pending: 31
+- Complete: 24 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04)
+- Pending: 23
 - Unmapped: 0
 
 ---

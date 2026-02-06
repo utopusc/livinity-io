@@ -10,7 +10,7 @@ The redesign progresses from foundation (design system tokens) through core shel
 
 - [x] **Phase 1: Design System Foundation** — Define tokens, update Tailwind config, refine base components ✓
 - [x] **Phase 2: Desktop Shell** — Dock, desktop layout, context menu, command palette, notifications ✓
-- [ ] **Phase 3: Window & Sheet System** — Floating windows, sheet modals, dialogs
+- [x] **Phase 3: Window & Sheet System** — Floating windows, sheet modals, dialogs ✓
 - [ ] **Phase 4: Settings Redesign** — Settings sidebar, content sections, forms, tabs
 - [ ] **Phase 5: AI Chat Redesign** — Chat sidebar, messages, input, tool calls, MCP
 - [ ] **Phase 6: App Store & Files** — App store navigation/cards/detail, file manager views
@@ -147,7 +147,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 |-------|----------------|--------|-----------|
 | 1. Design System Foundation | 3/3 | Complete | 2026-02-06 |
 | 2. Desktop Shell | 5/5 | Complete | 2026-02-06 |
-| 3. Window & Sheet System | 0/4 | Planned | - |
+| 3. Window & Sheet System | 4/4 | Complete | 2026-02-06 |
 | 4. Settings Redesign | 0/? | Not started | - |
 | 5. AI Chat Redesign | 0/? | Not started | - |
 | 6. App Store & Files | 0/? | Not started | - |
