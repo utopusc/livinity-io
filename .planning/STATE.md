@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 3 of 8 (Window & Sheet System)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-06 - Completed 03-02-PLAN.md (Sheet System Semantic Tokens)
+Last activity: 2026-02-06 - Completed 03-03-PLAN.md (Window Chrome & Body Redesign)
 
-Progress: [██████████  ] 40% (10 of ~25 plans)
+Progress: [███████████ ] 44% (11 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [██████████  ] 40% (10 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 10
-- Average duration: 2.7 min
-- Total execution time: 0.49 hours
+- Total plans completed: 11
+- Average duration: 2.8 min
+- Total execution time: 0.56 hours
 
 *Updated after each plan completion*
 
@@ -81,6 +81,8 @@ v1.1 decisions:
 - [v1.1-03-02]: Sheet title text-text-primary (0.90) chosen over text-text-secondary (0.60) for prominent page title readability
 - [v1.1-03-02]: Sheet description text-body-sm (13px) over Tailwind text-sm (14px) to match semantic scale
 - [v1.1-03-02]: Scrollbar group-hover:bg-white/50 kept as raw value (no semantic match at 0.50 opacity)
+- [v1.1-03-03]: Drag opacity feedback via Framer Motion animate prop (not style prop, since animate overrides style for shared properties)
+- [v1.1-03-03]: Window body boxShadow isDragging ternary in style prop (boxShadow not animated by Framer Motion, so style prop works correctly)
 
 ### Pending Todos
 
@@ -93,7 +95,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 03-02-PLAN.md (Sheet System Semantic Tokens)
+Stopped at: Completed 03-03-PLAN.md (Window Chrome & Body Redesign)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -174,6 +176,13 @@ Resume file: None
   - Scroll area: bg-border-emphasis thumb, hover:bg-surface-2 track
   - Wallpaper blur (backdrop-blur-3xl) and sheet radii preserved
   - Summary: .planning/phases/v1.1-03-window-sheet-system/03-02-SUMMARY.md
+- Plan 03-03: Window Chrome & Body Redesign (completed 2026-02-06)
+  - Chrome: border-border-emphasis, shadow-elevation-md, text-body, text-text-primary, h-icon-md
+  - Chrome: hover:bg-destructive, slimmer profile (px-4 py-2, w-9 h-9)
+  - Window body: rounded-radius-xl, backdrop-blur-xl, border-border-default
+  - Drag feedback: deeper shadow + opacity via Framer Motion animate prop
+  - Window content: text-text-secondary for unknown app
+  - Summary: .planning/phases/v1.1-03-window-sheet-system/03-03-SUMMARY.md
 
 ---
 
