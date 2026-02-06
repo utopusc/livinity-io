@@ -19,11 +19,11 @@
 
 ### Desktop & Dock (DD)
 
-- [ ] **DD-01**: Redesign dock with slimmer profile, refined hover animations, and cleaner divider
-- [ ] **DD-02**: Redesign desktop layout with improved app grid spacing and alignment
-- [ ] **DD-03**: Redesign desktop header/greeting with minimal typography
-- [ ] **DD-04**: Improve wallpaper system with better blur transitions and edge handling
-- [ ] **DD-05**: Redesign context menu (right-click) with minimal style
+- [x] **DD-01**: Redesign dock with slimmer profile, refined hover animations, and cleaner divider ✓
+- [x] **DD-02**: Redesign desktop layout with improved app grid spacing and alignment ✓
+- [x] **DD-03**: Redesign desktop header/greeting with minimal typography ✓
+- [x] **DD-04**: Improve wallpaper system with better blur transitions and edge handling ✓
+- [x] **DD-05**: Redesign context menu (right-click) with minimal style ✓
 
 ### Window System (WS)
 
@@ -86,9 +86,9 @@
 
 ### Command Palette & Notifications (CN)
 
-- [ ] **CN-01**: Redesign command palette (Cmd+K) with refined styling
-- [ ] **CN-02**: Redesign notification/toast system with cleaner style
-- [ ] **CN-03**: Redesign floating island notifications
+- [x] **CN-01**: Redesign command palette (Cmd+K) with refined styling ✓
+- [x] **CN-02**: Redesign notification/toast system with cleaner style ✓
+- [x] **CN-03**: Redesign floating island notifications ✓
 
 ## Out of Scope
 
@@ -105,7 +105,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DS-01 to DS-08 | Phase 1 | Complete |
-| DD-01 to DD-05 | Phase 2 | Pending |
+| DD-01 to DD-05 | Phase 2 | Complete |
 | WS-01 to WS-04 | Phase 3 | Pending |
 | SM-01 to SM-04 | Phase 3 | Pending |
 | ST-01 to ST-05 | Phase 4 | Pending |
@@ -114,12 +114,12 @@
 | FM-01 to FM-04 | Phase 6 | Pending |
 | LO-01 to LO-04 | Phase 7 | Pending |
 | MR-01 to MR-04 | Phase 8 | Pending |
-| CN-01 to CN-03 | Phase 2 | Pending |
+| CN-01 to CN-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 47 total
-- Complete: 8 (DS-01 through DS-08)
-- Pending: 39
+- Complete: 16 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03)
+- Pending: 31
 - Unmapped: 0
 
 ---
