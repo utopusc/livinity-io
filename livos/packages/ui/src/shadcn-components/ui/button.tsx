@@ -29,8 +29,8 @@ const buttonVariants = cva(
 				default: 'rounded-radius-md h-[34px] px-3.5 text-body-sm',
 				'input-short': 'rounded-radius-md h-10 px-5 text-body-sm font-semibold min-w-[80px]',
 				dialog:
-					'rounded-14 h-[44px] md:h-[36px] min-w-[90px] px-5 font-semibold w-full md:w-auto text-body',
-				lg: 'rounded-14 h-[44px] px-6 text-body-lg font-semibold',
+					'rounded-radius-md h-[44px] md:h-[36px] min-w-[90px] px-5 font-semibold w-full md:w-auto text-body',
+				lg: 'rounded-radius-md h-[44px] px-6 text-body-lg font-semibold',
 				xl: 'rounded-radius-lg h-[52px] px-7 text-body-lg font-semibold',
 				'icon-only': 'rounded-radius-md h-[34px] w-[34px]',
 			},

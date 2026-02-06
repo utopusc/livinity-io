@@ -96,7 +96,7 @@ const AlertDialogHeader = ({
 	const IconComponent = icon
 	return (
 		<div className={cn('flex flex-col space-y-2 text-center', className)} {...props}>
-			{IconComponent && <IconComponent className='mx-auto h-7 w-7 rounded-full bg-white/10 p-1' />}
+			{IconComponent && <IconComponent className='mx-auto h-7 w-7 rounded-full bg-surface-2 p-1' />}
 			{children}
 		</div>
 	)
@@ -115,7 +115,7 @@ const AlertDialogTitle = React.forwardRef<
 	<AlertDialogPrimitive.Title
 		ref={ref}
 		className={cn(
-			'whitespace-pre-line break-words text-center text-19 font-semibold leading-snug -tracking-2',
+			'whitespace-pre-line break-words text-center text-heading -tracking-2',
 			className,
 		)}
 		{...props}
@@ -130,7 +130,7 @@ const AlertDialogDescription = React.forwardRef<
 	<AlertDialogPrimitive.Description
 		ref={ref}
 		className={cn(
-			'whitespace-pre-line break-words text-14 font-normal leading-relaxed -tracking-2 text-white/50',
+			'whitespace-pre-line break-words text-body -tracking-2 text-text-secondary',
 			className,
 		)}
 		{...props}
