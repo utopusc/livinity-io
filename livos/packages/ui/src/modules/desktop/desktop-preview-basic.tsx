@@ -111,7 +111,7 @@ function DockItemPreview({icon}: {icon: string}) {
 	return <FadeInImg src={icon} className='h-3 w-3' />
 }
 
-const dockPreviewClass = tw`mx-auto animate-in slide-in-from-bottom-2 flex gap-1 rounded-5 bg-neutral-900/70 p-[3px] shrink-0 border-hpx border-white/10`
+const dockPreviewClass = tw`mx-auto animate-in slide-in-from-bottom-2 flex gap-1 rounded-5 bg-neutral-900/70 p-[3px] shrink-0 border-hpx border-border-default`
 
 function Header({userName}: {userName: string}) {
 	return (
