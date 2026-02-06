@@ -8,7 +8,7 @@ import {cn} from '@/shadcn-lib/utils'
 import {tw} from '@/utils/tw'
 
 const inputVariants = cva(
-	'flex w-full border border-white/10 bg-white/5 hover:bg-white/8 px-5 py-2 text-15 font-medium -tracking-1 transition-all duration-200 placeholder:text-white/30 focus-visible:placeholder:text-white/50 text-white/50 focus-visible:text-white focus-visible:bg-white/10 focus-visible:outline-none focus-visible:border-white/30 focus-visible:ring-3 focus-visible:ring-white/10 disabled:cursor-not-allowed disabled:opacity-40',
+	'flex w-full border border-border-default bg-surface-base hover:bg-surface-1 px-5 py-2 text-body-lg font-medium -tracking-1 transition-all duration-200 placeholder:text-text-tertiary focus-visible:placeholder:text-text-secondary text-text-secondary focus-visible:text-text-primary focus-visible:bg-surface-1 focus-visible:outline-none focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-40',
 	{
 		variants: {
 			variant: {
@@ -17,9 +17,9 @@ const inputVariants = cva(
 			},
 			// `input` element already has a `size` attribute so we need a different name
 			sizeVariant: {
-				default: 'h-12 rounded-14',
-				short: 'h-10 rounded-12',
-				'short-square': 'h-10 rounded-12 px-3 text-14 font-normal',
+				default: 'h-12 rounded-radius-lg',
+				short: 'h-10 rounded-radius-md',
+				'short-square': 'h-10 rounded-radius-md px-3 text-body font-normal',
 			},
 		},
 		defaultVariants: {
@@ -36,7 +36,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>,
 export function Labeled({children, label}: {children: React.ReactNode; label: string}) {
 	return (
 		<label>
-			<div className='mb-1.5 px-[5px] text-12 -tracking-2 text-white/50'>{label}</div>
+			<div className='mb-1.5 px-[5px] text-caption -tracking-2 text-text-secondary'>{label}</div>
 			{children}
 		</label>
 	)
@@ -151,8 +151,8 @@ export function AnimatedInputError({children}: {children: React.ReactNode}) {
 
 export function InputError({children}: {children: React.ReactNode}) {
 	return (
-		<div className='flex items-center gap-1 p-1 text-13 font-normal -tracking-2 text-destructive2-lightest'>
-			<TbAlertCircle className='h-4 w-4 shrink-0' />
+		<div className='flex items-center gap-1 p-1 text-body-sm font-normal -tracking-2 text-destructive2-lightest'>
+			<TbAlertCircle className='h-icon-sm w-icon-sm shrink-0' />
 			{children}
 		</div>
 	)
@@ -167,5 +167,5 @@ const iconRightClasses = {
 	input: tw`pr-11`,
 	// Using `text-white opacity-40` instead of `text-white/40` because the latter applies to strokes and displays incorrectly
 	button: tw`absolute inset-y-0 right-0 h-full pl-2 pr-4 text-white opacity-40 outline-none hover:opacity-80 transition-opacity`,
-	icon: tw`h-5 w-5`,
+	icon: tw`h-icon-md w-icon-md`,
 }
