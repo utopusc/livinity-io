@@ -6,17 +6,17 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.1 — Complete UI Redesign (Minimal & Clean)
-**Current focus:** Phase 2 — Desktop Shell
+**Current focus:** Phase 2 complete — Desktop Shell
 
 ## Current Position
 
 Milestone: v1.1 (UI Redesign)
 Phase: 2 of 8 (Desktop Shell)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-06 - Completed 02-04-PLAN.md (Toast & Floating Island)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 - Completed 02-05-PLAN.md (Wallpaper & Desktop Preview)
 
-Progress: [███████     ] 28% (7 of ~25 plans)
+Progress: [████████    ] 32% (8 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████     ] 28% (7 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 2.7 min
-- Total execution time: 0.35 hours
+- Total execution time: 0.40 hours
 
 *Updated after each plan completion*
 
@@ -70,6 +70,9 @@ v1.1 decisions:
 - [v1.1-02-04]: Island container desktop bottom-[86px] maintains ~6px gap above slimmer 80px dock
 - [v1.1-02-04]: Island bg-black and shadow-floating-island preserved (component identity, not generic surface)
 - [v1.1-02-04]: Framer Motion borderRadius animation values (22, 32) untouched (JS inline styles, not Tailwind)
+- [v1.1-02-05]: Wallpaper duration-700 -> duration-500 safe (transition-duration controls opacity/transform, not blur animation)
+- [v1.1-02-05]: DesktopPreviewFrame rounded-15 -> rounded-radius-lg (16px vs 15px, acceptable for semantic consistency)
+- [v1.1-02-05]: Preview-specific sizing preserved (rounded-5/rounded-3/bg-neutral-900-70/bg-white-20 not migrated)
 
 ### Pending Todos
 
@@ -82,7 +85,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 02-04-PLAN.md (Toast & Floating Island)
+Stopped at: Completed 02-05-PLAN.md (Wallpaper & Desktop Preview) — Phase 2 complete
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -140,6 +143,13 @@ Resume file: None
   - Island container: md:bottom-[86px] adjusted for slimmer dock
   - Island identity preserved: bg-black, shadow-floating-island, Framer Motion sizes object
   - Summary: .planning/phases/v1.1-02-desktop-shell/02-04-SUMMARY.md
+- Plan 02-05: Wallpaper & Desktop Preview (completed 2026-02-06)
+  - Wallpaper: duration-700 -> duration-500 on all three layers (thumbnail, full, exit)
+  - Wallpaper: scale-125 edge artifact prevention preserved
+  - Wallpaper: brand color extraction completely untouched
+  - Desktop preview frame: rounded-15 -> rounded-radius-lg
+  - Basic preview dock: border-white/10 -> border-border-default
+  - Summary: .planning/phases/v1.1-02-desktop-shell/02-05-SUMMARY.md
 
 ---
 
