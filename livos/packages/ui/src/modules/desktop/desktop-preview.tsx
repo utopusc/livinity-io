@@ -104,7 +104,7 @@ export function DesktopPreviewFrame({children}: {children: React.ReactNode}) {
 
 	return (
 		<div
-			className='max-h-fit max-w-fit rounded-15 p-[1px]'
+			className='max-h-fit max-w-fit rounded-radius-lg p-[1px]'
 			style={{
 				backgroundImage:
 					'linear-gradient(135deg, rgba(237, 237, 237, 0.42) 0.13%, rgba(173, 173, 173, 0.12) 26.95%, rgba(0, 0, 0, 0.00) 81.15%, #404040 105.24%)',
@@ -112,7 +112,7 @@ export function DesktopPreviewFrame({children}: {children: React.ReactNode}) {
 					'drop-shadow(0px 0px 0.6332594156265259px rgba(0, 21, 64, 0.14)) drop-shadow(0px 0.6332594156265259px 1.2665188312530518px rgba(0, 21, 64, 0.05))',
 			}}
 		>
-			<div className='rounded-15 bg-[#0C0D0C] p-[9px]'>
+			<div className='rounded-radius-lg bg-[#0C0D0C] p-[9px]'>
 				<div
 					className='relative overflow-hidden rounded-5 duration-100 animate-in fade-in'
 					style={{
