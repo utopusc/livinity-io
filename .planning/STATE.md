@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 4 of 8 (Settings Redesign)
-Plan: 0 of ? in current phase
-Status: Phase 3 complete, ready to plan Phase 4
-Last activity: 2026-02-06 - Phase 3 complete (4/4 plans, verified 37/37 must-haves)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-06 - Completed 04-01-PLAN.md (Settings Navigation Shell & Shared Foundation)
 
-Progress: [████████████ ] 48% (12 of ~25 plans)
+Progress: [█████████████ ] 52% (13 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [████████████ ] 48% (12 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 2.9 min
-- Total execution time: 0.66 hours
+- Total execution time: 0.72 hours
 
 *Updated after each plan completion*
 
@@ -88,6 +88,9 @@ v1.1 decisions:
 - [v1.1-03-04]: KeyValue key: opacity-60 replaced with text-text-secondary semantic token
 - [v1.1-03-04]: Window resize 400x400 minimum matches getResponsiveSize constraint
 - [v1.1-03-04]: EXIT_DURATION_MS 100ms -> 150ms (50% longer) for smoother close feel
+- [v1.1-04-01]: Sidebar surface hierarchy: surface-2 default, surface-3 active (mirrors dock pattern)
+- [v1.1-04-01]: Tabs base component: dark-theme semantic defaults (surface-base list, surface-2 active trigger)
+- [v1.1-04-01]: Section content functions intentionally untouched — deferred to Plan 04-02/04-03
 
 ### Pending Todos
 
@@ -100,7 +103,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 03-04-PLAN.md (ImmersiveDialog, Window Resize, Animation Polish) — Phase 3 complete
+Stopped at: Completed 04-01-PLAN.md (Settings Navigation Shell & Shared Foundation)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -196,6 +199,18 @@ Resume file: None
   - Window resize: UPDATE_SIZE action, updateWindowSize context, 8 resize handles, 400x400 min
   - EXIT_DURATION_MS: 100ms -> 150ms for smoother close animations
   - Summary: .planning/phases/v1.1-03-window-sheet-system/03-04-SUMMARY.md
+
+**Phase v1.1-04: Settings Redesign**
+- Plan 04-01: Settings Navigation Shell & Shared Foundation (completed 2026-02-06)
+  - Shared class constants: text-caption/text-body/text-heading-sm/text-text-tertiary
+  - ListRow desktop/mobile: semantic typography and surface tokens
+  - SettingsSummary: text-body grid, text-text-tertiary labels
+  - SettingsPageLayout: border-border-default, semantic back button
+  - Sidebar: surface-2 default, surface-3 active, rounded-radius-sm
+  - Header card: text-heading-lg, text-text-tertiary brand
+  - Tabs base: surface-base/surface-2/text-text-primary/text-text-secondary
+  - Mobile: text-heading-lg header, rounded-radius-md/bg-surface-base list
+  - Summary: .planning/phases/v1.1-04-settings-redesign/04-01-SUMMARY.md
 
 ---
 
