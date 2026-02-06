@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 1 of 8 (Design System Foundation)
-Plan: 1 of ~3 in current phase
+Plan: 2 of ~3 in current phase
 Status: In progress
-Last activity: 2026-02-06 - Completed 01-01-PLAN.md (Design Tokens)
+Last activity: 2026-02-06 - Completed 01-02-PLAN.md (Button and Card Redesign)
 
-Progress: [█           ] 5% (1 of ~22 plans)
+Progress: [██          ] 9% (2 of ~22 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [█           ] 5% (1 of ~22 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 1
-- Average duration: 3.0 min
-- Total execution time: 0.05 hours
+- Total plans completed: 2
+- Average duration: 2.5 min
+- Total execution time: 0.08 hours
 
 *Updated after each plan completion*
 
@@ -50,6 +50,9 @@ v1.1 decisions:
 - [v1.1-01-01]: Dual token strategy: preserve numeric tokens alongside semantic for gradual migration
 - [v1.1-01-01]: Static rgba for semantic colors (surface/border/text) vs CSS variables for brand colors
 - [v1.1-01-01]: Complete typographic definitions (size + line-height + letter-spacing + weight)
+- [v1.1-01-02]: focus-visible pattern for keyboard navigation (better UX than focus:)
+- [v1.1-01-02]: Ghost variant for minimal buttons (transparent, reveals on hover)
+- [v1.1-01-02]: Keep rounded-14 for dialog sizes until Phase 3 dialog redesign
 
 ### Pending Todos
 
@@ -62,7 +65,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed v1.1-01-01-PLAN.md (Design Tokens)
+Stopped at: Completed v1.1-01-02-PLAN.md (Button and Card Redesign)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -75,6 +78,12 @@ Resume file: None
   - Elevation shadows: elevation-sm/md/lg/xl
   - Icon sizing: icon-sm/md/lg
   - Summary: .planning/phases/v1.1-01-design-system/01-01-SUMMARY.md
+- Plan 01-02: Button and Card Redesign (completed 2026-02-06)
+  - Button with semantic tokens (surface/border/text)
+  - Card with semantic tokens and elevation shadows
+  - Ghost variant for minimal buttons
+  - focus-visible pattern established
+  - Summary: .planning/phases/v1.1-01-design-system/01-02-SUMMARY.md
 
 ---
 
