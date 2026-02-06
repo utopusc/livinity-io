@@ -11,16 +11,16 @@ import {linkClass} from '@/utils/element-classes'
 import {t} from '@/utils/i18n'
 import {tw} from '@/utils/tw'
 
-export const cardTitleClass = tw`text-12 font-semibold leading-tight truncate -tracking-2 text-white/40`
-export const cardValueClass = tw`font-bold -tracking-4 truncate text-17 leading-inter-trimmed`
-export const cardValueSubClass = tw`text-14 font-bold truncate leading-inter-trimmed -tracking-3 text-white/40`
-export const cardSecondaryValueBaseClass = tw`text-14 font-medium -tracking-3 text-white/40 leading-inter-trimmed`
+export const cardTitleClass = tw`text-caption font-semibold leading-tight truncate -tracking-2 text-text-tertiary`
+export const cardValueClass = tw`font-bold -tracking-4 truncate text-heading-sm leading-inter-trimmed`
+export const cardValueSubClass = tw`text-body font-bold truncate leading-inter-trimmed -tracking-3 text-text-tertiary`
+export const cardSecondaryValueBaseClass = tw`text-body font-medium -tracking-3 text-text-tertiary leading-inter-trimmed`
 export const cardSecondaryValueClass = cn(cardSecondaryValueBaseClass, tw`truncate flex-shrink-full`)
 export const cardErrorClass = cn(cardSecondaryValueBaseClass, tw`animate-pulse leading-snug text-destructive2-lightest`)
 
 export function ContactSupportLink({className}: {className?: string}) {
 	return (
-		<p className={cn('mx-auto text-12 font-normal text-white/70', className)}>
+		<p className={cn('mx-auto text-caption font-normal text-text-secondary', className)}>
 			<Trans
 				i18nKey='settings.contact-support'
 				components={{

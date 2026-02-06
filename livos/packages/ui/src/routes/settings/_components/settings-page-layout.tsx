@@ -18,16 +18,16 @@ export function SettingsPageLayout({title, description, children, backTo = '/set
 		<div className='animate-in fade-in slide-in-from-right-4 duration-200'>
 			<Card className='min-h-[500px]'>
 				{/* Header with back button */}
-				<div className='flex items-center gap-4 border-b border-white/10 pb-4'>
+				<div className='flex items-center gap-4 border-b border-border-default pb-4'>
 					<button
 						onClick={() => navigate(backTo)}
-						className='flex h-10 w-10 items-center justify-center rounded-12 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white'
+						className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
 					>
 						<TbArrowLeft className='h-5 w-5' />
 					</button>
 					<div>
-						<h1 className='text-20 font-semibold -tracking-2'>{title}</h1>
-						{description && <p className='text-13 text-white/50'>{description}</p>}
+						<h1 className='text-heading font-semibold -tracking-2'>{title}</h1>
+						{description && <p className='text-body-sm text-text-secondary'>{description}</p>}
 					</div>
 				</div>
 
