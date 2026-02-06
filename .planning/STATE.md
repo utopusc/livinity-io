@@ -13,10 +13,10 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 Milestone: v1.1 (UI Redesign)
 Phase: 4 of 8 (Settings Redesign)
 Plan: 3 of 3 in current phase
-Status: In progress (04-01 and 04-03 complete, 04-02 pending)
-Last activity: 2026-02-06 - Completed 04-03-PLAN.md (Domain Setup, Nexus Config, Integrations Migration)
+Status: Phase complete
+Last activity: 2026-02-06 - Completed 04-02-PLAN.md (Settings Section Content & Standalone Pages)
 
-Progress: [██████████████ ] 56% (14 of ~25 plans)
+Progress: [███████████████ ] 60% (15 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [██████████████ ] 56% (14 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 14
-- Average duration: 3.1 min
-- Total execution time: 0.82 hours
+- Total plans completed: 15
+- Average duration: 3.6 min
+- Total execution time: 1.02 hours
 
 *Updated after each plan completion*
 
@@ -91,6 +91,9 @@ v1.1 decisions:
 - [v1.1-04-01]: Sidebar surface hierarchy: surface-2 default, surface-3 active (mirrors dock pattern)
 - [v1.1-04-01]: Tabs base component: dark-theme semantic defaults (surface-base list, surface-2 active trigger)
 - [v1.1-04-01]: Section content functions intentionally untouched — deferred to Plan 04-02/04-03
+- [v1.1-04-02]: SettingsToggleRow className override for compact p-3 in retry/heartbeat tabs
+- [v1.1-04-02]: SettingsInfoCard variant colors use raw Tailwind (domain-specific status, not generic surface)
+- [v1.1-04-02]: Wallpaper picker ring-white/50 preserved (active selection indicator, not generic surface)
 - [v1.1-04-03]: domain-setup.tsx Tailwind defaults migrated: text-xs->text-caption, text-sm->text-body, text-base->text-body-lg, rounded-xl->rounded-radius-md
 - [v1.1-04-03]: Tab consumer overrides (bg-white/5 on TabsList, data-[state=active]:bg-white/10 on TabsTrigger) removed from 10 locations in settings-content.tsx
 - [v1.1-04-03]: Brand colors preserved: sky/indigo (Telegram/Discord), orange (danger zone), green/red (status), blue (info), violet (accent)
@@ -106,7 +109,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 04-03-PLAN.md (Domain Setup, Nexus Config, Integrations Migration)
+Stopped at: Completed 04-02-PLAN.md (Settings Section Content & Standalone Pages) — Phase 4 complete
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -214,6 +217,14 @@ Resume file: None
   - Tabs base: surface-base/surface-2/text-text-primary/text-text-secondary
   - Mobile: text-heading-lg header, rounded-radius-md/bg-surface-base list
   - Summary: .planning/phases/v1.1-04-settings-redesign/04-01-SUMMARY.md
+- Plan 04-02: Settings Section Content & Standalone Pages (completed 2026-02-06)
+  - SettingsToggleRow: shared toggle+switch component with semantic tokens
+  - SettingsInfoCard: shared info card with variant support (default/success/warning/danger)
+  - All 13 section functions migrated to semantic tokens
+  - 5 standalone pages: ai-config, 2fa-enable, 2fa-disable, advanced, wallpaper-picker
+  - 8 SettingsToggleRow usages, 4 SettingsInfoCard usages
+  - Colored status badges preserved (green/red/orange/sky/indigo/blue)
+  - Summary: .planning/phases/v1.1-04-settings-redesign/04-02-SUMMARY.md
 - Plan 04-03: Domain Setup, Nexus Config, Integrations Migration (completed 2026-02-06)
   - domain-setup.tsx: Tailwind defaults (text-xs/sm/base/lg/xl, rounded-xl/lg/2xl) -> semantic tokens
   - nexus-config.tsx: numeric tokens (text-12/14, rounded-12) -> semantic tokens
