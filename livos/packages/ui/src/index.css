@@ -13,7 +13,7 @@ html,
 body {
 	/* To match Figma weight */
 	text-rendering: geometricPrecision;
-	@apply -tracking-3 text-white/90;
+	@apply -tracking-3 text-text-primary;
 }
 
 html {
