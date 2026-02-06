@@ -70,10 +70,10 @@ Plans:
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 03-01-PLAN.md — shared/dialog.ts foundation + Dialog + AlertDialog + button rounded-14 migration (SM-03)
-- [ ] 03-02-PLAN.md — Sheet title/description, sticky header, scroll area token migration (SM-01, SM-02)
-- [ ] 03-03-PLAN.md — Window chrome redesign + window body semantic tokens + drag feedback (WS-01, WS-02, WS-03)
-- [ ] 03-04-PLAN.md — ImmersiveDialog migration + window resize handles + animation polish (WS-04, SM-04)
+- [x] 03-01-PLAN.md — shared/dialog.ts foundation + Dialog + AlertDialog + button rounded-14 migration (SM-03)
+- [x] 03-02-PLAN.md — Sheet title/description, sticky header, scroll area token migration (SM-01, SM-02)
+- [x] 03-03-PLAN.md — Window chrome redesign + window body semantic tokens + drag feedback (WS-01, WS-02, WS-03)
+- [x] 03-04-PLAN.md — ImmersiveDialog migration + window resize handles + animation polish (WS-04, SM-04)
 
 ### Phase 4: Settings Redesign
 **Goal**: Complete visual overhaul of the settings interface
@@ -85,7 +85,12 @@ Plans:
   3. User info header card is minimal and branded
   4. Forms have proper alignment and spacing
   5. Tab components match new design language
-**Plans**: TBD (estimated 2-3 plans)
+**Plans**: 3 plans in 2 waves
+
+Plans:
+- [ ] 04-01-PLAN.md — Settings sidebar + header card + shared classes + tabs base component (ST-01, ST-03, ST-05)
+- [ ] 04-02-PLAN.md — Section content token migration + shared component extraction (ST-02, ST-04)
+- [ ] 04-03-PLAN.md — Large standalone pages (domain-setup, nexus-config, integrations) + tab consumer cleanup (ST-02, ST-04, ST-05)
 
 ### Phase 5: AI Chat Redesign
 **Goal**: Transform the AI chat into a professional, polished conversation interface
@@ -148,7 +153,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 1. Design System Foundation | 3/3 | Complete | 2026-02-06 |
 | 2. Desktop Shell | 5/5 | Complete | 2026-02-06 |
 | 3. Window & Sheet System | 4/4 | Complete | 2026-02-06 |
-| 4. Settings Redesign | 0/? | Not started | - |
+| 4. Settings Redesign | 0/3 | Planned | - |
 | 5. AI Chat Redesign | 0/? | Not started | - |
 | 6. App Store & Files | 0/? | Not started | - |
 | 7. Login & Onboarding | 0/? | Not started | - |
