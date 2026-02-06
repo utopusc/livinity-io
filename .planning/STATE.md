@@ -77,7 +77,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 02-02-PLAN.md (Desktop Content Semantic Tokens)
+Stopped at: Completed 02-03-PLAN.md (Context Menu + Command Palette)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -119,6 +119,15 @@ Resume file: None
   - Paginator: surface-base arrows, border-emphasis pills
   - Install-first-app: radius-xl/elevation-lg, reduced backdrop-blur-md
   - Summary: .planning/phases/v1.1-02-desktop-shell/02-02-SUMMARY.md
+- Plan 02-03: Context Menu + Command Palette (completed 2026-02-06)
+  - Shared menu.ts: text-body-sm, surface-base focus/highlight, text-text-primary, radius-sm/md
+  - Context menu: rounded-radius-sm items and content
+  - Dropdown menu: rounded-radius-md content, rounded-radius-sm items
+  - Command input: text-body-lg, placeholder:text-text-tertiary
+  - Command items: text-body-sm, aria-selected:bg-surface-base, rounded-radius-sm
+  - Frequent apps: semantic border-default/surface-base/text-secondary tokens
+  - shared/dialog.ts explicitly NOT modified (deferred to Phase 3)
+  - Summary: .planning/phases/v1.1-02-desktop-shell/02-03-SUMMARY.md
 
 ---
 
