@@ -79,9 +79,9 @@ export function SettingsContentMobile() {
 				</div>
 
 				<div className='mx-2.5'>
-					<h2 className='text-24 font-bold leading-none -tracking-4'>
-						{userQ.data?.name && `${firstNameFromFullName(userQ.data?.name)}’s`}{' '}
-						<span className='opacity-40'>{t('livinity')}</span>
+					<h2 className='text-heading-lg font-bold leading-none -tracking-4'>
+						{userQ.data?.name && `${firstNameFromFullName(userQ.data?.name)}'s`}{' '}
+						<span className='text-text-tertiary'>{t('livinity')}</span>
 					</h2>
 					<div className='pt-5' />
 					<SettingsSummary />
@@ -129,7 +129,7 @@ export function SettingsContentMobile() {
 				</Card>
 			</div>
 
-			<div className='livinity-divide-y rounded-12 bg-white/5 p-1'>
+			<div className='livinity-divide-y rounded-radius-md bg-surface-base p-1'>
 				<ListRowMobile
 					icon={TbUser}
 					title={t('account')}

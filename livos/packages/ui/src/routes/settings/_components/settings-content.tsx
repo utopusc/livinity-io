@@ -158,16 +158,16 @@ export function SettingsContent() {
 								<button
 									key={item.id}
 									onClick={() => setActiveSection(item.id)}
-									className='flex w-full items-center gap-3 rounded-10 px-3 py-2.5 text-left transition-colors hover:bg-white/10'
+									className='flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
 								>
-									<div className='flex h-8 w-8 items-center justify-center rounded-8 bg-white/10'>
-										<item.icon className='h-4 w-4 text-white/70' />
+									<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-surface-2'>
+										<item.icon className='h-4 w-4 text-text-secondary' />
 									</div>
 									<div className='flex-1 min-w-0'>
-										<div className='text-13 font-medium truncate'>{item.label}</div>
-										<div className='text-11 text-white/40 truncate'>{item.description}</div>
+										<div className='text-body-sm font-medium truncate'>{item.label}</div>
+										<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
 									</div>
-									<TbChevronRight className='h-4 w-4 text-white/30' />
+									<TbChevronRight className='h-4 w-4 text-text-tertiary' />
 								</button>
 							))}
 						</div>
@@ -180,9 +180,9 @@ export function SettingsContent() {
 				<div className='flex flex-col gap-5'>
 					<Card className='flex flex-wrap items-center justify-between gap-5'>
 						<div>
-							<h2 className='text-24 font-bold leading-none -tracking-4'>
+							<h2 className='text-heading-lg font-bold leading-none -tracking-4'>
 								{userQ.data?.name && `${firstNameFromFullName(userQ.data?.name)}'s`}{' '}
-								<span className='opacity-40'>{t('livinity')}</span>
+								<span className='text-text-tertiary'>{t('livinity')}</span>
 							</h2>
 							<div className='pt-5' />
 							<SettingsSummary />
@@ -241,23 +241,23 @@ function SettingsDetailView({
 								key={item.id}
 								onClick={() => onNavigate(item.id)}
 								className={cn(
-									'flex w-full items-center gap-3 rounded-10 px-3 py-2.5 text-left transition-colors hover:bg-white/10',
-									item.id === section && 'bg-white/15'
+									'flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2',
+									item.id === section && 'bg-surface-3'
 								)}
 							>
 								<div className={cn(
-									'flex h-8 w-8 items-center justify-center rounded-8',
-									item.id === section ? 'bg-white/20' : 'bg-white/10'
+									'flex h-8 w-8 items-center justify-center rounded-radius-sm',
+									item.id === section ? 'bg-surface-3' : 'bg-surface-2'
 								)}>
 									<item.icon className={cn(
 										'h-4 w-4',
-										item.id === section ? 'text-white' : 'text-white/70'
+										item.id === section ? 'text-text-primary' : 'text-text-secondary'
 									)} />
 								</div>
 								<div className='flex-1 min-w-0'>
-									<div className='text-13 font-medium truncate'>{item.label}</div>
+									<div className='text-body-sm font-medium truncate'>{item.label}</div>
 								</div>
-								{item.id === section && <TbChevronRight className='h-4 w-4 text-white/50' />}
+								{item.id === section && <TbChevronRight className='h-4 w-4 text-text-secondary' />}
 							</button>
 						))}
 					</div>
@@ -267,16 +267,16 @@ function SettingsDetailView({
 			{/* Right Side - Content */}
 			<Card className='min-h-[500px]'>
 				{/* Header with back button */}
-				<div className='flex items-center gap-4 border-b border-white/10 pb-4 mb-6'>
+				<div className='flex items-center gap-4 border-b border-border-default pb-4 mb-6'>
 					<button
 						onClick={onBack}
-						className='flex h-10 w-10 items-center justify-center rounded-12 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white'
+						className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
 					>
 						<TbArrowLeft className='h-5 w-5' />
 					</button>
 					<div>
-						<h1 className='text-20 font-semibold -tracking-2'>{menuItem?.label}</h1>
-						<p className='text-13 text-white/50'>{menuItem?.description}</p>
+						<h1 className='text-heading font-semibold -tracking-2'>{menuItem?.label}</h1>
+						<p className='text-body-sm text-text-secondary'>{menuItem?.description}</p>
 					</div>
 				</div>
 
