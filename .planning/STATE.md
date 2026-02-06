@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 1 of 8 (Design System Foundation)
-Plan: 2 of ~3 in current phase
+Plan: 3 of ~3 in current phase
 Status: In progress
-Last activity: 2026-02-06 - Completed 01-02-PLAN.md (Button and Card Redesign)
+Last activity: 2026-02-06 - Completed 01-03-PLAN.md (Input, Select, Switch Redesign)
 
-Progress: [██          ] 9% (2 of ~22 plans)
+Progress: [███         ] 14% (3 of ~22 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [██          ] 9% (2 of ~22 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 2
-- Average duration: 2.5 min
-- Total execution time: 0.08 hours
+- Total plans completed: 3
+- Average duration: 2.7 min
+- Total execution time: 0.13 hours
 
 *Updated after each plan completion*
 
@@ -53,6 +53,8 @@ v1.1 decisions:
 - [v1.1-01-02]: focus-visible pattern for keyboard navigation (better UX than focus:)
 - [v1.1-01-02]: Ghost variant for minimal buttons (transparent, reveals on hover)
 - [v1.1-01-02]: Keep rounded-14 for dialog sizes until Phase 3 dialog redesign
+- [v1.1-01-03]: Brand-colored focus states for form inputs (border-brand + ring-brand/20)
+- [v1.1-01-03]: Semantic icon sizing tokens (icon-sm, icon-md) for consistent icon dimensions
 
 ### Pending Todos
 
@@ -65,7 +67,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed v1.1-01-02-PLAN.md (Button and Card Redesign)
+Stopped at: Completed v1.1-01-03-PLAN.md (Input, Select, Switch Redesign)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -84,6 +86,13 @@ Resume file: None
   - Ghost variant for minimal buttons
   - focus-visible pattern established
   - Summary: .planning/phases/v1.1-01-design-system/01-02-SUMMARY.md
+- Plan 01-03: Input, Select, Switch Redesign (completed 2026-02-06)
+  - Input with semantic tokens and brand-colored focus
+  - Select with semantic tokens and elevation shadows
+  - Switch with semantic surface tokens
+  - Brand focus pattern: border-brand + ring-brand/20
+  - Icon sizing with semantic tokens (icon-sm, icon-md)
+  - Summary: .planning/phases/v1.1-01-design-system/01-03-SUMMARY.md
 
 ---
 
