@@ -48,8 +48,8 @@ export function ListRow({
 			onClick={onClick}
 		>
 			<div className='flex min-w-0 flex-1 flex-col gap-1'>
-				<h3 className='text-14 font-medium leading-none -tracking-2'>{title}</h3>
-				<p className='text-12 leading-tight -tracking-2 text-white/40'>{description}</p>
+				<h3 className='text-body font-medium leading-none -tracking-2'>{title}</h3>
+				<p className='text-caption leading-tight -tracking-2 text-text-tertiary'>{description}</p>
 			</div>
 			{children}
 		</El>
@@ -73,12 +73,12 @@ export function ListRowMobile({
 
 	return (
 		<button className={cn('flex w-full items-center gap-x-4 gap-y-2.5 px-2.5 py-3 text-left')} onClick={onClick}>
-			<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-6 bg-white/6'>
+			<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-radius-sm bg-surface-1'>
 				{Icon && <Icon className={cn('h-5 w-5 text-brand [&>*]:stroke-2')} />}
 			</div>
 			<div className='flex min-w-0 flex-col gap-1'>
-				<h3 className='text-13 font-medium leading-none -tracking-2'>{title}</h3>
-				<p className='truncate text-12 leading-none -tracking-2 text-white/40'>{description}</p>
+				<h3 className='text-body-sm font-medium leading-none -tracking-2'>{title}</h3>
+				<p className='truncate text-caption leading-none -tracking-2 text-text-tertiary'>{description}</p>
 			</div>
 			{children}
 		</button>

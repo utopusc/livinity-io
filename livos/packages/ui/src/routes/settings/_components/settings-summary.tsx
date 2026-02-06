@@ -17,17 +17,17 @@ export function SettingsSummary() {
 
 	return (
 		<dl
-			className='grid grid-cols-2 items-center gap-x-5 gap-y-2 text-14 leading-none -tracking-2'
+			className='grid grid-cols-2 items-center gap-x-5 gap-y-2 text-body leading-none -tracking-2'
 			style={{
 				// Makes columns not all the same width
 				gridTemplateColumns: 'auto auto',
 			}}
 		>
-			<dt className='opacity-40'>{t('device')}</dt>
+			<dt className='text-text-tertiary'>{t('device')}</dt>
 			<dd>{deviceInfo.data?.device || LOADING_DASH}</dd>
-			<dt className='opacity-40'>{t('livos')}</dt>
+			<dt className='text-text-tertiary'>{t('livos')}</dt>
 			<dd>{osVersionQ.isLoading ? LOADING_DASH : (osVersionQ.data?.name ?? UNKNOWN())}</dd>
-			<dt className='opacity-40'>{t('local-ip')}</dt>
+			<dt className='text-text-tertiary'>{t('local-ip')}</dt>
 			<dd>
 				{ipAddresses.data?.length
 					? ipAddresses.data.map((ip: string, index: number) => (
@@ -40,7 +40,7 @@ export function SettingsSummary() {
 						))
 					: LOADING_DASH}
 			</dd>
-			<dt className='opacity-40'>{t('uptime')}</dt>
+			<dt className='text-text-tertiary'>{t('uptime')}</dt>
 			<dd>{uptimeQ.isLoading ? LOADING_DASH : duration(uptimeQ.data, languageCode)}</dd>
 		</dl>
 	)
