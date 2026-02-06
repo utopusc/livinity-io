@@ -74,7 +74,7 @@ export default function TwoFactorEnableDialog() {
 	)
 }
 
-const paragraphClass = tw`text-left text-13 font-normal leading-tight -tracking-2 text-white/60`
+const paragraphClass = tw`text-left text-body-sm font-normal leading-tight -tracking-2 text-text-secondary`
 
 function Inner({
 	qrCodeSize = 240,
@@ -96,7 +96,7 @@ function Inner({
 				/>
 			</AnimateInQr>
 			<div className='w-full space-y-2 text-center'>
-				<p className='text-13 font-normal leading-tight -tracking-2 text-white/60'>{t('2fa.enable.or-paste')}</p>
+				<p className='text-body-sm font-normal leading-tight -tracking-2 text-text-secondary'>{t('2fa.enable.or-paste')}</p>
 				<CopyableField value={totpUri} />
 			</div>
 			<Separator />
@@ -115,7 +115,7 @@ const AnimateInQr = ({children, size, animateIn}: {children: ReactNode; size: nu
 		}}
 	>
 		<motion.div
-			className='rounded-8 bg-white p-3'
+			className='rounded-radius-sm bg-white p-3'
 			initial={{
 				opacity: 0,
 				rotateX: 20,
@@ -151,8 +151,8 @@ export function TwoFactorEnableInline({onComplete}: {onComplete: () => void}) {
 
 	return (
 		<div className='flex flex-col items-center gap-4'>
-			<h3 className='text-16 font-semibold'>{t('2fa.enable.title')}</h3>
-			<p className='text-13 text-white/60 text-center'>{t('2fa.enable.scan-this')}</p>
+			<h3 className='text-body-lg font-semibold'>{t('2fa.enable.title')}</h3>
+			<p className='text-body-sm text-text-secondary text-center'>{t('2fa.enable.scan-this')}</p>
 			<Inner qrCodeSize={180} totpUri={totpUri} onCodeCheck={enable} />
 		</div>
 	)

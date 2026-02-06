@@ -44,7 +44,7 @@ function Inner({onCodeCheck}: {onCodeCheck: (code: string) => Promise<boolean>})
 	return (
 		<>
 			<Separator />
-			<p className='text-17 font-normal leading-tight -tracking-2'>{t('2fa.enter-code')}</p>
+			<p className='text-heading-sm font-normal leading-tight -tracking-2'>{t('2fa.enter-code')}</p>
 			<PinInput autoFocus length={6} onCodeCheck={onCodeCheck} />
 		</>
 	)
@@ -56,8 +56,8 @@ export function TwoFactorDisableInline({onComplete}: {onComplete: () => void}) {
 
 	return (
 		<div className='flex flex-col items-center gap-4'>
-			<h3 className='text-16 font-semibold'>{t('2fa.disable.title')}</h3>
-			<p className='text-13 text-white/60 text-center'>{t('2fa.enter-code')}</p>
+			<h3 className='text-body-lg font-semibold'>{t('2fa.disable.title')}</h3>
+			<p className='text-body-sm text-text-secondary text-center'>{t('2fa.enter-code')}</p>
 			<PinInput autoFocus length={6} onCodeCheck={disable} />
 		</div>
 	)

@@ -208,13 +208,13 @@ function useIsBetaChannel() {
 function CardText({title, description, trailingIcon}: {title: string; description: string; trailingIcon?: IconTypes}) {
 	return (
 		<div className='flex-1 space-y-1'>
-			<h3 className='text-14 font-medium leading-tight'>
+			<h3 className='text-body font-medium leading-tight'>
 				{title}
-				{trailingIcon && <Icon component={trailingIcon} className='ml-2 inline-block opacity-50' />}
+				{trailingIcon && <Icon component={trailingIcon} className='ml-2 inline-block text-text-tertiary' />}
 			</h3>
-			<p className='text-13 leading-tight opacity-45'>{description}</p>
+			<p className='text-body-sm leading-tight text-text-tertiary'>{description}</p>
 		</div>
 	)
 }
 
-const cardClass = tw`flex items-start gap-x-2 rounded-12 bg-white/6 p-4 pointer-events-none`
+const cardClass = tw`flex items-start gap-x-2 rounded-radius-md bg-surface-1 p-4 pointer-events-none`
