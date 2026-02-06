@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 3 of 8 (Window & Sheet System)
-Plan: 0 of ? in current phase
-Status: Phase 2 complete, ready to plan Phase 3
-Last activity: 2026-02-06 - Phase 2 complete (5/5 plans, verified 33/33 must-haves)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-06 - Completed 03-01-PLAN.md (Dialog Foundation & Semantic Tokens)
 
-Progress: [████████    ] 32% (8 of ~25 plans)
+Progress: [█████████   ] 36% (9 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [████████    ] 32% (8 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 2.7 min
-- Total execution time: 0.40 hours
+- Total execution time: 0.45 hours
 
 *Updated after each plan completion*
 
@@ -73,6 +73,11 @@ v1.1 decisions:
 - [v1.1-02-05]: Wallpaper duration-700 -> duration-500 safe (transition-duration controls opacity/transform, not blur animation)
 - [v1.1-02-05]: DesktopPreviewFrame rounded-15 -> rounded-radius-lg (16px vs 15px, acceptable for semantic consistency)
 - [v1.1-02-05]: Preview-specific sizing preserved (rounded-5/rounded-3/bg-neutral-900-70/bg-white-20 not migrated)
+- [v1.1-03-01]: Dialog glassmorphism reduced: backdrop-blur-3xl (64px) -> backdrop-blur-2xl (40px)
+- [v1.1-03-01]: Dialog border semantic: border-white/5 -> border-border-subtle (0.05 -> 0.06)
+- [v1.1-03-01]: Dialog description visibility: text-white/50 -> text-text-secondary (0.50 -> 0.60)
+- [v1.1-03-01]: Close button semantic: opacity-30/hover:opacity-40 -> text-text-tertiary/hover:text-text-secondary
+- [v1.1-03-01]: Button rounded-14 resolved: dialog/lg sizes now rounded-radius-md (14px -> 12px)
 
 ### Pending Todos
 
@@ -85,7 +90,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 02-05-PLAN.md (Wallpaper & Desktop Preview) — Phase 2 complete
+Stopped at: Completed 03-01-PLAN.md (Dialog Foundation & Semantic Tokens)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -150,6 +155,15 @@ Resume file: None
   - Desktop preview frame: rounded-15 -> rounded-radius-lg
   - Basic preview dock: border-white/10 -> border-border-default
   - Summary: .planning/phases/v1.1-02-desktop-shell/02-05-SUMMARY.md
+
+**Phase v1.1-03: Window & Sheet System**
+- Plan 03-01: Dialog Foundation & Semantic Tokens (completed 2026-02-06)
+  - shared/dialog.ts: border-border-subtle, backdrop-blur-2xl (cascades to ~60 consumers)
+  - Dialog title: text-heading, description: text-body text-text-secondary
+  - AlertDialog title: text-heading, description: text-body text-text-secondary, icon: bg-surface-2
+  - Dialog close button: text-text-tertiary/hover:text-text-secondary, icon-md/icon-lg sizing
+  - Button dialog/lg: rounded-radius-md (resolved Phase 1 deferred decision)
+  - Summary: .planning/phases/v1.1-03-window-sheet-system/03-01-SUMMARY.md
 
 ---
 
