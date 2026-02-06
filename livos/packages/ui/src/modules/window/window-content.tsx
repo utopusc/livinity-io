@@ -59,7 +59,7 @@ function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: s
 		default:
 			return (
 				<div className='flex h-full items-center justify-center'>
-					<p className='text-white/50'>Unknown app: {appId}</p>
+					<p className='text-text-secondary'>Unknown app: {appId}</p>
 				</div>
 			)
 	}

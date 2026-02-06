@@ -99,7 +99,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				}}
 				onMouseDown={handleDragStart}
 				initial={{opacity: 0, y: -10, scale: 0.9}}
-				animate={{opacity: 1, y: 0, scale: 1}}
+				animate={{opacity: isDragging ? 0.9 : 1, y: 0, scale: 1}}
 				exit={{opacity: 0, y: -10, scale: 0.9}}
 				transition={{type: 'spring', stiffness: 500, damping: 35}}
 			>
@@ -116,10 +116,12 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 					left: currentX,
 					top: currentY,
 					zIndex,
-					boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+					boxShadow: isDragging
+						? '0 35px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08)'
+						: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
 				}}
 				initial={{opacity: 0, scale: 0.95, y: 20}}
-				animate={{opacity: 1, scale: 1, y: 0}}
+				animate={{opacity: isDragging ? 0.95 : 1, scale: 1, y: 0}}
 				exit={{opacity: 0, scale: 0.95, y: 20}}
 				transition={{
 					type: 'spring',
@@ -138,12 +140,12 @@ const windowClass = tw`
 	fixed
 	flex
 	flex-col
-	rounded-2xl
+	rounded-radius-xl
 	bg-black/90
-	backdrop-blur-3xl
+	backdrop-blur-xl
 	overflow-hidden
 	border
-	border-white/10
+	border-border-default
 `
 
 const windowContentClass = tw`
