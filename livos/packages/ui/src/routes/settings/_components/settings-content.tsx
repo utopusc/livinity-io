@@ -70,6 +70,8 @@ import {firstNameFromFullName} from '@/utils/misc'
 import {cn} from '@/shadcn-lib/utils'
 
 import {ContactSupportLink} from './shared'
+import {SettingsInfoCard} from './settings-info-card'
+import {SettingsToggleRow} from './settings-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,8 +205,8 @@ export function SettingsContent() {
 					{/* Quick Info */}
 					<Card>
 						<div className='text-center py-8'>
-							<div className='text-15 font-medium text-white/70'>Select a setting from the menu</div>
-							<div className='text-13 text-white/40 mt-1'>Configure your Livinity device</div>
+							<div className='text-body-lg font-medium text-text-secondary'>Select a setting from the menu</div>
+							<div className='text-body-sm text-text-tertiary mt-1'>Configure your Livinity device</div>
 						</div>
 					</Card>
 				</div>
@@ -331,7 +333,7 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 function AccountSection() {
 	return (
 		<div className='space-y-4'>
-			<p className='text-13 text-white/50'>{t('account-description')}</p>
+			<p className='text-body-sm text-text-secondary'>{t('account-description')}</p>
 			<div className='flex flex-wrap gap-3'>
 				<IconButtonLink to='/settings/account/change-name' icon={RiUserLine}>
 					{t('change-name')}
@@ -354,7 +356,7 @@ function WallpaperSection() {
 					key={w.id}
 					onClick={() => setWallpaperId(w.id)}
 					className={cn(
-						'relative aspect-video overflow-hidden rounded-12 bg-white/5 bg-cover bg-center transition-all hover:ring-2 hover:ring-white/40 hover:scale-[1.02]',
+						'relative aspect-video overflow-hidden rounded-radius-md bg-surface-base bg-cover bg-center transition-all hover:ring-2 hover:ring-white/40 hover:scale-[1.02]',
 						wallpaper.id === w.id && 'ring-3 ring-white'
 					)}
 					style={{backgroundImage: `url(${getWallpaperThumbUrl(w)})`}}
@@ -388,12 +390,12 @@ function TwoFaSection() {
 			<div className='space-y-4'>
 				<button
 					onClick={() => setShowSetup(false)}
-					className='flex items-center gap-2 text-13 text-white/50 hover:text-white/70'
+					className='flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary'
 				>
 					<TbArrowLeft className='h-4 w-4' />
 					Back to 2FA
 				</button>
-				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-white/30' /></div>}>
+				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 					{is2faEnabledQ.data ? (
 						<TwoFactorDisableInline onComplete={() => setShowSetup(false)} />
 					) : (
@@ -406,11 +408,11 @@ function TwoFaSection() {
 
 	return (
 		<div className='space-y-4'>
-			<p className='text-13 text-white/50'>{t('2fa-description')}</p>
-			<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+			<p className='text-body-sm text-text-secondary'>{t('2fa-description')}</p>
+			<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 				<div>
-					<div className='text-14 font-medium'>Two-Factor Authentication</div>
-					<div className='text-12 text-white/50'>
+					<div className='text-body font-medium'>Two-Factor Authentication</div>
+					<div className='text-caption text-text-secondary'>
 						{is2faEnabledQ.data ? 'Enabled - Your account is protected' : 'Disabled - Enable for extra security'}
 					</div>
 				</div>
@@ -450,26 +452,19 @@ function AiConfigSection() {
 	return (
 		<div className='max-w-lg space-y-6'>
 			{/* Current Key Status */}
-			<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
-				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-white/10'>
-						<TbKey className='h-5 w-5 text-white/70' />
-					</div>
-					<div className='flex-1'>
-						<div className='text-14 font-medium'>Current API Key</div>
-						<div className='font-mono text-13 text-white/50'>
-							{configQ.isLoading ? 'Loading...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not configured'}
-						</div>
-					</div>
-					{configQ.data?.hasGeminiKey && (
-						<div className='rounded-full bg-green-500/20 px-3 py-1 text-12 text-green-400'>Active</div>
-					)}
-				</div>
-			</div>
+			<SettingsInfoCard
+				icon={TbKey}
+				title='Current API Key'
+				description={configQ.isLoading ? 'Loading...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not configured'}
+			>
+				{configQ.data?.hasGeminiKey && (
+					<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
+				)}
+			</SettingsInfoCard>
 
 			{/* New API Key Input */}
 			<div className='space-y-3'>
-				<label className='text-12 text-white/50'>Enter new API key</label>
+				<label className='text-caption text-text-secondary'>Enter new API key</label>
 				<Input
 					placeholder='AIzaSy...'
 					value={apiKey}
@@ -477,7 +472,7 @@ function AiConfigSection() {
 					onKeyDown={(e) => e.key === 'Enter' && handleSave()}
 					className='font-mono'
 				/>
-				<p className='text-11 text-white/30'>
+				<p className='text-caption-sm text-text-tertiary'>
 					Your API key is stored securely and persists across restarts.
 				</p>
 			</div>
@@ -487,7 +482,7 @@ function AiConfigSection() {
 				href='https://aistudio.google.com/app/apikey'
 				target='_blank'
 				rel='noopener noreferrer'
-				className='flex items-center gap-2 text-13 text-blue-400 hover:text-blue-300'
+				className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
 			>
 				<TbExternalLink className='h-4 w-4' />
 				Get your Gemini API key from Google AI Studio
@@ -583,7 +578,7 @@ function NexusConfigSection() {
 	return (
 		<div className='max-w-full overflow-hidden'>
 			<Tabs value={activeTab} onValueChange={setActiveTab} className='w-full'>
-				<TabsList className='mb-3 grid w-full grid-cols-6 gap-0.5 bg-white/5 p-0.5 rounded-8'>
+				<TabsList className='mb-3 grid w-full grid-cols-6 gap-0.5 p-0.5 rounded-radius-sm'>
 					<TabsTrigger value='response' className='flex items-center justify-center p-1.5 rounded-6' title='Response'>
 						<TbMessageCircle className='h-4 w-4' />
 					</TabsTrigger>
@@ -607,7 +602,7 @@ function NexusConfigSection() {
 				{/* Response Tab */}
 				<TabsContent value='response' className='space-y-4'>
 					<div className='flex flex-col gap-2'>
-						<label className='text-12 text-white/50'>Response Style</label>
+						<label className='text-caption text-text-secondary'>Response Style</label>
 						<Select value={config.response?.style || 'detailed'} onValueChange={(v) => updateConfig('response.style', v)}>
 							<SelectTrigger><SelectValue placeholder='Select style' /></SelectTrigger>
 							<SelectContent>
@@ -618,24 +613,22 @@ function NexusConfigSection() {
 						</Select>
 					</div>
 
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
-						<div>
-							<div className='text-14 font-medium'>Show Steps</div>
-							<div className='text-12 text-white/50'>Show step-by-step breakdown</div>
-						</div>
-						<Switch checked={config.response?.showSteps ?? true} onCheckedChange={(v) => updateConfig('response.showSteps', v)} />
-					</div>
+					<SettingsToggleRow
+						title='Show Steps'
+						description='Show step-by-step breakdown'
+						checked={config.response?.showSteps ?? true}
+						onCheckedChange={(v) => updateConfig('response.showSteps', v)}
+					/>
 
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
-						<div>
-							<div className='text-14 font-medium'>Show Reasoning</div>
-							<div className='text-12 text-white/50'>Include thought process</div>
-						</div>
-						<Switch checked={config.response?.showReasoning ?? true} onCheckedChange={(v) => updateConfig('response.showReasoning', v)} />
-					</div>
+					<SettingsToggleRow
+						title='Show Reasoning'
+						description='Include thought process'
+						checked={config.response?.showReasoning ?? true}
+						onCheckedChange={(v) => updateConfig('response.showReasoning', v)}
+					/>
 
 					<div className='flex flex-col gap-2'>
-						<label className='text-12 text-white/50'>Response Language</label>
+						<label className='text-caption text-text-secondary'>Response Language</label>
 						<Select value={config.response?.language || 'auto'} onValueChange={(v) => updateConfig('response.language', v)}>
 							<SelectTrigger><SelectValue placeholder='Select language' /></SelectTrigger>
 							<SelectContent>
@@ -654,47 +647,46 @@ function NexusConfigSection() {
 				<TabsContent value='agent' className='space-y-3'>
 					<div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Turns</label>
+							<label className='text-caption text-text-secondary'>Max Turns</label>
 							<Input type='number' min={1} max={100} value={config.agent?.maxTurns || 30} onValueChange={(v) => updateConfig('agent.maxTurns', parseInt(v) || 30)} />
 						</div>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Tokens (K)</label>
+							<label className='text-caption text-text-secondary'>Max Tokens (K)</label>
 							<Input type='number' min={10} max={1000} value={Math.round((config.agent?.maxTokens || 200000) / 1000)} onValueChange={(v) => updateConfig('agent.maxTokens', (parseInt(v) || 200) * 1000)} />
 						</div>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Timeout (minutes)</label>
+							<label className='text-caption text-text-secondary'>Timeout (minutes)</label>
 							<Input type='number' min={1} max={60} value={Math.round((config.agent?.timeoutMs || 600000) / 60000)} onValueChange={(v) => updateConfig('agent.timeoutMs', (parseInt(v) || 10) * 60000)} />
 						</div>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Depth</label>
+							<label className='text-caption text-text-secondary'>Max Depth</label>
 							<Input type='number' min={1} max={10} value={config.agent?.maxDepth || 3} onValueChange={(v) => updateConfig('agent.maxDepth', parseInt(v) || 3)} />
 						</div>
 					</div>
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
-						<div>
-							<div className='text-14 font-medium'>Stream Responses</div>
-							<div className='text-12 text-white/50'>Show responses as they generate</div>
-						</div>
-						<Switch checked={config.agent?.streamEnabled ?? true} onCheckedChange={(v) => updateConfig('agent.streamEnabled', v)} />
-					</div>
+					<SettingsToggleRow
+						title='Stream Responses'
+						description='Show responses as they generate'
+						checked={config.agent?.streamEnabled ?? true}
+						onCheckedChange={(v) => updateConfig('agent.streamEnabled', v)}
+					/>
 				</TabsContent>
 
 				{/* Retry Tab */}
 				<TabsContent value='retry' className='space-y-3'>
-					<div className='flex items-center justify-between rounded-10 border border-white/10 bg-white/5 p-3'>
-						<div>
-							<div className='text-13 font-medium'>Enable Retry</div>
-							<div className='text-11 text-white/50'>Automatically retry failed API calls</div>
-						</div>
-						<Switch checked={config.retry?.enabled ?? true} onCheckedChange={(v) => updateConfig('retry.enabled', v)} />
-					</div>
+					<SettingsToggleRow
+						title='Enable Retry'
+						description='Automatically retry failed API calls'
+						checked={config.retry?.enabled ?? true}
+						onCheckedChange={(v) => updateConfig('retry.enabled', v)}
+						className='p-3'
+					/>
 					<div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Attempts</label>
+							<label className='text-caption text-text-secondary'>Max Attempts</label>
 							<Input type='number' min={1} max={10} value={config.retry?.attempts || 3} onValueChange={(v) => updateConfig('retry.attempts', parseInt(v) || 3)} disabled={!config.retry?.enabled} />
 						</div>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Min Delay (ms)</label>
+							<label className='text-caption text-text-secondary'>Min Delay (ms)</label>
 							<Input type='number' min={100} max={10000} value={config.retry?.minDelayMs || 500} onValueChange={(v) => updateConfig('retry.minDelayMs', parseInt(v) || 500)} disabled={!config.retry?.enabled} />
 						</div>
 					</div>
@@ -702,20 +694,20 @@ function NexusConfigSection() {
 
 				{/* Heartbeat Tab */}
 				<TabsContent value='heartbeat' className='space-y-3'>
-					<div className='flex items-center justify-between rounded-10 border border-white/10 bg-white/5 p-3'>
-						<div>
-							<div className='text-13 font-medium'>Enable Heartbeat</div>
-							<div className='text-11 text-white/50'>Periodically check HEARTBEAT.md for tasks</div>
-						</div>
-						<Switch checked={config.heartbeat?.enabled ?? false} onCheckedChange={(v) => updateConfig('heartbeat.enabled', v)} />
-					</div>
+					<SettingsToggleRow
+						title='Enable Heartbeat'
+						description='Periodically check HEARTBEAT.md for tasks'
+						checked={config.heartbeat?.enabled ?? false}
+						onCheckedChange={(v) => updateConfig('heartbeat.enabled', v)}
+						className='p-3'
+					/>
 					<div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Interval (minutes)</label>
+							<label className='text-caption text-text-secondary'>Interval (minutes)</label>
 							<Input type='number' min={5} max={1440} value={config.heartbeat?.intervalMinutes || 30} onValueChange={(v) => updateConfig('heartbeat.intervalMinutes', parseInt(v) || 30)} disabled={!config.heartbeat?.enabled} />
 						</div>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Delivery Target</label>
+							<label className='text-caption text-text-secondary'>Delivery Target</label>
 							<Select value={config.heartbeat?.target || 'telegram'} onValueChange={(v) => updateConfig('heartbeat.target', v)} disabled={!config.heartbeat?.enabled}>
 								<SelectTrigger><SelectValue placeholder='Select target' /></SelectTrigger>
 								<SelectContent>
@@ -733,11 +725,11 @@ function NexusConfigSection() {
 				<TabsContent value='session' className='space-y-3'>
 					<div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Idle Timeout (minutes)</label>
+							<label className='text-caption text-text-secondary'>Idle Timeout (minutes)</label>
 							<Input type='number' min={5} max={1440} value={config.session?.idleMinutes || 60} onValueChange={(v) => updateConfig('session.idleMinutes', parseInt(v) || 60)} />
 						</div>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max History Messages</label>
+							<label className='text-caption text-text-secondary'>Max History Messages</label>
 							<Input type='number' min={10} max={500} value={config.session?.maxHistoryMessages || 100} onValueChange={(v) => updateConfig('session.maxHistoryMessages', parseInt(v) || 100)} />
 						</div>
 					</div>
@@ -746,7 +738,7 @@ function NexusConfigSection() {
 				{/* Advanced Tab */}
 				<TabsContent value='advanced' className='space-y-4'>
 					<div className='flex flex-col gap-2'>
-						<label className='text-12 text-white/50'>Log Level</label>
+						<label className='text-caption text-text-secondary'>Log Level</label>
 						<Select value={config.logging?.level || 'info'} onValueChange={(v) => updateConfig('logging.level', v)}>
 							<SelectTrigger><SelectValue placeholder='Select log level' /></SelectTrigger>
 							<SelectContent>
@@ -758,22 +750,21 @@ function NexusConfigSection() {
 							</SelectContent>
 						</Select>
 					</div>
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
-						<div>
-							<div className='text-14 font-medium'>Redact Sensitive Data</div>
-							<div className='text-12 text-white/50'>Hide API keys in logs</div>
-						</div>
-						<Switch checked={config.logging?.redactSensitive ?? true} onCheckedChange={(v) => updateConfig('logging.redactSensitive', v)} />
-					</div>
-					<div className='rounded-12 border border-orange-500/30 bg-orange-500/10 p-4'>
-						<div className='text-14 font-medium text-orange-400'>Danger Zone</div>
+					<SettingsToggleRow
+						title='Redact Sensitive Data'
+						description='Hide API keys in logs'
+						checked={config.logging?.redactSensitive ?? true}
+						onCheckedChange={(v) => updateConfig('logging.redactSensitive', v)}
+					/>
+					<div className='rounded-radius-md border border-orange-500/30 bg-orange-500/10 p-4'>
+						<div className='text-body font-medium text-orange-400'>Danger Zone</div>
 						<Button variant='destructive' size='sm' className='mt-3' onClick={handleReset}>Reset to Defaults</Button>
 					</div>
 				</TabsContent>
 			</Tabs>
 
 			{/* Save Button */}
-			<div className='mt-4 flex justify-end border-t border-white/10 pt-3'>
+			<div className='mt-4 flex justify-end border-t border-border-default pt-3'>
 				<Button variant='primary' size='sm' onClick={handleSave} disabled={updateConfigMutation.isPending}>
 					{saved ? <><TbCheck className='h-4 w-4' /> Saved</> : updateConfigMutation.isPending ? 'Saving...' : 'Save Changes'}
 				</Button>
@@ -800,12 +791,12 @@ function IntegrationsSection() {
 	return (
 		<div>
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'telegram' | 'discord')}>
-				<TabsList className='grid w-full grid-cols-2 bg-white/5 mb-4'>
-					<TabsTrigger value='telegram' className='flex items-center gap-1.5 data-[state=active]:bg-white/10'>
+				<TabsList className='grid w-full grid-cols-2 mb-4'>
+					<TabsTrigger value='telegram' className='flex items-center gap-1.5'>
 						<TbBrandTelegram className='h-4 w-4 text-sky-400' />
 						Telegram
 					</TabsTrigger>
-					<TabsTrigger value='discord' className='flex items-center gap-1.5 data-[state=active]:bg-white/10'>
+					<TabsTrigger value='discord' className='flex items-center gap-1.5'>
 						<TbBrandDiscord className='h-4 w-4 text-indigo-400' />
 						Discord
 					</TabsTrigger>
@@ -842,31 +833,31 @@ function TelegramPanel() {
 	return (
 		<div className='space-y-4'>
 			{/* Status */}
-			<div className='rounded-12 border border-sky-500/30 bg-sky-500/10 p-4'>
+			<div className='rounded-radius-md border border-sky-500/30 bg-sky-500/10 p-4'>
 				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-white/10'>
+					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
 						<TbBrandTelegram className='h-6 w-6 text-sky-400' />
 					</div>
 					<div className='flex-1'>
-						<div className='text-15 font-semibold'>Telegram</div>
-						<div className='text-12 text-white/50'>Connect via BotFather token</div>
+						<div className='text-body-lg font-semibold'>Telegram</div>
+						<div className='text-caption text-text-secondary'>Connect via BotFather token</div>
 					</div>
 					{status?.connected ? (
-						<div className='flex items-center gap-2 text-12 text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-green-400'>
 							<TbPlugConnected className='h-4 w-4' /> Connected
 						</div>
 					) : (
-						<div className='flex items-center gap-2 text-12 text-red-400'>
+						<div className='flex items-center gap-2 text-caption text-red-400'>
 							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
 						</div>
 					)}
 				</div>
-				{status?.botName && <div className='mt-2 text-12 text-white/50'>Bot: @{status.botName}</div>}
+				{status?.botName && <div className='mt-2 text-caption text-text-secondary'>Bot: @{status.botName}</div>}
 			</div>
 
 			{/* Token Input */}
 			<div className='space-y-2'>
-				<label className='text-12 text-white/50'>Bot Token</label>
+				<label className='text-caption text-text-secondary'>Bot Token</label>
 				<div className='relative'>
 					<Input
 						type={showToken ? 'text' : 'password'}
@@ -875,11 +866,11 @@ function TelegramPanel() {
 						placeholder='123456789:ABCdef...'
 						className='pr-10'
 					/>
-					<button onClick={() => setShowToken(!showToken)} className='absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/70'>
+					<button onClick={() => setShowToken(!showToken)} className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary'>
 						{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
 					</button>
 				</div>
-				<p className='text-11 text-white/30'>Create a bot with @BotFather and paste the token here</p>
+				<p className='text-caption-sm text-text-tertiary'>Create a bot with @BotFather and paste the token here</p>
 			</div>
 
 			<div className='flex gap-2'>
@@ -924,31 +915,31 @@ function DiscordPanel() {
 	return (
 		<div className='space-y-4'>
 			{/* Status */}
-			<div className='rounded-12 border border-indigo-500/30 bg-indigo-500/10 p-4'>
+			<div className='rounded-radius-md border border-indigo-500/30 bg-indigo-500/10 p-4'>
 				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-white/10'>
+					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
 						<TbBrandDiscord className='h-6 w-6 text-indigo-400' />
 					</div>
 					<div className='flex-1'>
-						<div className='text-15 font-semibold'>Discord</div>
-						<div className='text-12 text-white/50'>Connect your Discord bot</div>
+						<div className='text-body-lg font-semibold'>Discord</div>
+						<div className='text-caption text-text-secondary'>Connect your Discord bot</div>
 					</div>
 					{status?.connected ? (
-						<div className='flex items-center gap-2 text-12 text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-green-400'>
 							<TbPlugConnected className='h-4 w-4' /> Connected
 						</div>
 					) : (
-						<div className='flex items-center gap-2 text-12 text-red-400'>
+						<div className='flex items-center gap-2 text-caption text-red-400'>
 							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
 						</div>
 					)}
 				</div>
-				{status?.botName && <div className='mt-2 text-12 text-white/50'>Bot: {status.botName}</div>}
+				{status?.botName && <div className='mt-2 text-caption text-text-secondary'>Bot: {status.botName}</div>}
 			</div>
 
 			{/* Token Input */}
 			<div className='space-y-2'>
-				<label className='text-12 text-white/50'>Bot Token</label>
+				<label className='text-caption text-text-secondary'>Bot Token</label>
 				<div className='relative'>
 					<Input
 						type={showToken ? 'text' : 'password'}
@@ -957,11 +948,11 @@ function DiscordPanel() {
 						placeholder='Enter bot token...'
 						className='pr-10'
 					/>
-					<button onClick={() => setShowToken(!showToken)} className='absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/70'>
+					<button onClick={() => setShowToken(!showToken)} className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary'>
 						{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
 					</button>
 				</div>
-				<p className='text-11 text-white/30'>Get your bot token from the Discord Developer Portal</p>
+				<p className='text-caption-sm text-text-tertiary'>Get your bot token from the Discord Developer Portal</p>
 			</div>
 
 			<div className='flex gap-2'>
@@ -993,7 +984,7 @@ const DomainSetupInner = React.lazy(() =>
 
 function DomainSection() {
 	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-white/30' /></div>}>
+		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 			<DomainSetupInner onClose={() => {}} />
 		</Suspense>
 	)
@@ -1016,7 +1007,7 @@ function BackupsSection() {
 	if (isLoadingBackups) {
 		return (
 			<div className='flex items-center justify-center py-12'>
-				<Loader2 className='size-6 animate-spin text-white/30' />
+				<Loader2 className='size-6 animate-spin text-text-tertiary' />
 			</div>
 		)
 	}
@@ -1029,12 +1020,12 @@ function BackupsSection() {
 			<div className='space-y-4'>
 				<button
 					onClick={() => setShowSetupWizard(false)}
-					className='flex items-center gap-2 text-13 text-white/50 hover:text-white/70'
+					className='flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary'
 				>
 					<TbArrowLeft className='h-4 w-4' />
 					Back to Backups
 				</button>
-				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-white/30' /></div>}>
+				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 					<BackupSetupWizard />
 				</Suspense>
 			</div>
@@ -1047,12 +1038,12 @@ function BackupsSection() {
 			<div className='space-y-4'>
 				<button
 					onClick={() => setShowRestoreWizard(false)}
-					className='flex items-center gap-2 text-13 text-white/50 hover:text-white/70'
+					className='flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary'
 				>
 					<TbArrowLeft className='h-4 w-4' />
 					Back to Backups
 				</button>
-				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-white/30' /></div>}>
+				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 					<BackupRestoreWizard />
 				</Suspense>
 			</div>
@@ -1063,12 +1054,12 @@ function BackupsSection() {
 		<div className='space-y-4'>
 			{/* Tab Navigation */}
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'status' | 'restore')}>
-				<TabsList className='grid w-full grid-cols-2 bg-white/5'>
-					<TabsTrigger value='status' className='flex items-center gap-2 data-[state=active]:bg-white/10'>
+				<TabsList className='grid w-full grid-cols-2'>
+					<TabsTrigger value='status' className='flex items-center gap-2'>
 						<TbDatabase className='h-4 w-4' />
 						{hasBackups ? 'Status' : 'Setup'}
 					</TabsTrigger>
-					<TabsTrigger value='restore' className='flex items-center gap-2 data-[state=active]:bg-white/10'>
+					<TabsTrigger value='restore' className='flex items-center gap-2'>
 						<TbHistory className='h-4 w-4' />
 						Restore
 					</TabsTrigger>
@@ -1078,14 +1069,14 @@ function BackupsSection() {
 					{hasBackups ? (
 						<>
 							{/* Backup Status */}
-							<div className='rounded-12 border border-green-500/30 bg-green-500/10 p-4'>
+							<div className='rounded-radius-md border border-green-500/30 bg-green-500/10 p-4'>
 								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-green-500/20'>
+									<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-green-500/20'>
 										<TbCheck className='h-5 w-5 text-green-400' />
 									</div>
 									<div className='flex-1'>
-										<div className='text-14 font-medium text-green-400'>Backups Configured</div>
-										<div className='text-12 text-white/50'>
+										<div className='text-body font-medium text-green-400'>Backups Configured</div>
+										<div className='text-caption text-text-secondary'>
 											{backupRepositories?.length} backup location{(backupRepositories?.length ?? 0) > 1 ? 's' : ''} configured
 										</div>
 									</div>
@@ -1095,11 +1086,11 @@ function BackupsSection() {
 							{/* Repository List */}
 							<div className='space-y-2'>
 								{backupRepositories?.map((repo, idx) => (
-									<div key={idx} className='rounded-10 border border-white/10 bg-white/5 p-3'>
+									<div key={idx} className='rounded-radius-sm border border-border-default bg-surface-base p-3'>
 										<div className='flex items-center gap-3'>
-											<TbDatabase className='h-5 w-5 text-white/50' />
+											<TbDatabase className='h-5 w-5 text-text-secondary' />
 											<div className='flex-1 min-w-0'>
-												<div className='text-13 font-medium truncate'>{repo.path || 'Backup Location'}</div>
+												<div className='text-body-sm font-medium truncate'>{repo.path || 'Backup Location'}</div>
 											</div>
 										</div>
 									</div>
@@ -1112,17 +1103,11 @@ function BackupsSection() {
 						</>
 					) : (
 						<>
-							<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
-								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-white/10'>
-										<TbDatabase className='h-5 w-5 text-white/50' />
-									</div>
-									<div className='flex-1'>
-										<div className='text-14 font-medium'>No Backups Configured</div>
-										<div className='text-12 text-white/50'>Set up automatic backups to protect your data</div>
-									</div>
-								</div>
-							</div>
+							<SettingsInfoCard
+								icon={TbDatabase}
+								title='No Backups Configured'
+								description='Set up automatic backups to protect your data'
+							/>
 
 							<IconButton onClick={() => setShowSetupWizard(true)} icon={FaRegSave}>
 								{t('backups-setup')}
@@ -1132,7 +1117,7 @@ function BackupsSection() {
 				</TabsContent>
 
 				<TabsContent value='restore' className='space-y-4 pt-4'>
-					<p className='text-13 text-white/50'>Restore files and data from a previous backup.</p>
+					<p className='text-body-sm text-text-secondary'>Restore files and data from a previous backup.</p>
 					<IconButton onClick={() => setShowRestoreWizard(true)} icon={TbHistory}>
 						{t('backups-restore')}
 					</IconButton>
@@ -1148,7 +1133,7 @@ function MigrationSection() {
 	if (isLivinityHomeQ.isLoading) {
 		return (
 			<div className='flex items-center justify-center py-8'>
-				<Loader2 className='size-5 animate-spin text-white/30' />
+				<Loader2 className='size-5 animate-spin text-text-tertiary' />
 			</div>
 		)
 	}
@@ -1157,17 +1142,11 @@ function MigrationSection() {
 	if (!isLivinityHomeQ.data) {
 		return (
 			<div className='space-y-4'>
-				<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
-					<div className='flex items-center gap-3'>
-						<div className='flex h-10 w-10 items-center justify-center rounded-10 bg-white/10'>
-							<RiExpandRightFill className='h-5 w-5 text-white/50' />
-						</div>
-						<div className='flex-1'>
-							<div className='text-14 font-medium'>Migration Not Available</div>
-							<div className='text-12 text-white/50'>This feature is only available on Livinity Home devices</div>
-						</div>
-					</div>
-				</div>
+				<SettingsInfoCard
+					icon={RiExpandRightFill}
+					title='Migration Not Available'
+					description='This feature is only available on Livinity Home devices'
+				/>
 			</div>
 		)
 	}
@@ -1175,40 +1154,40 @@ function MigrationSection() {
 	// Livinity Home device - show migration assistant
 	return (
 		<div className='space-y-4'>
-			<p className='text-13 text-white/50'>{t('migration-assistant-description')}</p>
+			<p className='text-body-sm text-text-secondary'>{t('migration-assistant-description')}</p>
 
 			{/* Migration Steps */}
 			<div className='space-y-3'>
-				<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
+				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-8 bg-blue-500/20 text-blue-400'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-blue-500/20 text-blue-400'>
 							1
 						</div>
 						<div>
-							<div className='text-14 font-medium'>Shut down Raspberry Pi</div>
-							<div className='text-12 text-white/50'>Power off your existing device</div>
+							<div className='text-body font-medium'>Shut down Raspberry Pi</div>
+							<div className='text-caption text-text-secondary'>Power off your existing device</div>
 						</div>
 					</div>
 				</div>
-				<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
+				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-8 bg-blue-500/20 text-blue-400'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-blue-500/20 text-blue-400'>
 							2
 						</div>
 						<div>
-							<div className='text-14 font-medium'>Connect disk to Livinity Home</div>
-							<div className='text-12 text-white/50'>Attach the storage device via USB</div>
+							<div className='text-body font-medium'>Connect disk to Livinity Home</div>
+							<div className='text-caption text-text-secondary'>Attach the storage device via USB</div>
 						</div>
 					</div>
 				</div>
-				<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
+				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-8 bg-blue-500/20 text-blue-400'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-blue-500/20 text-blue-400'>
 							3
 						</div>
 						<div>
-							<div className='text-14 font-medium'>Start migration</div>
-							<div className='text-12 text-white/50'>Click the button below when ready</div>
+							<div className='text-body font-medium'>Start migration</div>
+							<div className='text-caption text-text-secondary'>Click the button below when ready</div>
 						</div>
 					</div>
 				</div>
@@ -1226,7 +1205,7 @@ function LanguageSection() {
 
 	return (
 		<div className='space-y-4'>
-			<p className='text-13 text-white/50'>{t('language-description')}</p>
+			<p className='text-body-sm text-text-secondary'>{t('language-description')}</p>
 			<DropdownMenu open={languageOpen} onOpenChange={setLanguageOpen}>
 				<DropdownMenuTrigger asChild>
 					<div className='cursor-pointer'>
@@ -1264,12 +1243,12 @@ function TroubleshootSection() {
 
 			{/* Log Type Tabs */}
 			<Tabs value={logType} onValueChange={(v) => { setLogType(v as 'system' | 'app'); if (v === 'system') setSelectedAppId(null) }}>
-				<TabsList className='grid w-full grid-cols-2 bg-white/5'>
-					<TabsTrigger value='system' className='flex items-center gap-2 data-[state=active]:bg-white/10'>
+				<TabsList className='grid w-full grid-cols-2'>
+					<TabsTrigger value='system' className='flex items-center gap-2'>
 						<TbTool className='h-4 w-4' />
 						System Logs
 					</TabsTrigger>
-					<TabsTrigger value='app' className='flex items-center gap-2 data-[state=active]:bg-white/10'>
+					<TabsTrigger value='app' className='flex items-center gap-2'>
 						<TbSettings className='h-4 w-4' />
 						App Logs
 					</TabsTrigger>

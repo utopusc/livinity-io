@@ -139,7 +139,7 @@ export default function NexusConfigPage() {
 				{/* Response Tab - Now First! */}
 				<TabsContent value='response' className='space-y-4'>
 					<div className='flex flex-col gap-2'>
-						<label className='text-12 text-white/50'>Response Style</label>
+						<label className='text-caption text-text-secondary'>Response Style</label>
 						<Select
 							value={config.response?.style || 'detailed'}
 							onValueChange={(v) => updateConfig('response.style', v)}
@@ -151,30 +151,30 @@ export default function NexusConfigPage() {
 								<SelectItem value='detailed'>
 									<div className='flex flex-col'>
 										<span>Detailed</span>
-										<span className='text-11 text-white/40'>Step-by-step with explanations</span>
+										<span className='text-caption-sm text-text-tertiary'>Step-by-step with explanations</span>
 									</div>
 								</SelectItem>
 								<SelectItem value='concise'>
 									<div className='flex flex-col'>
 										<span>Concise</span>
-										<span className='text-11 text-white/40'>Brief but informative</span>
+										<span className='text-caption-sm text-text-tertiary'>Brief but informative</span>
 									</div>
 								</SelectItem>
 								<SelectItem value='direct'>
 									<div className='flex flex-col'>
 										<span>Direct</span>
-										<span className='text-11 text-white/40'>Just the result, no explanation</span>
+										<span className='text-caption-sm text-text-tertiary'>Just the result, no explanation</span>
 									</div>
 								</SelectItem>
 							</SelectContent>
 						</Select>
-						<span className='text-11 text-white/30'>How detailed AI responses should be</span>
+						<span className='text-caption-sm text-text-tertiary'>How detailed AI responses should be</span>
 					</div>
 
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+					<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 						<div>
-							<div className='text-14 font-medium'>Show Steps</div>
-							<div className='text-12 text-white/50'>Show step-by-step breakdown (Step 1, Step 2...)</div>
+							<div className='text-body font-medium'>Show Steps</div>
+							<div className='text-caption text-text-secondary'>Show step-by-step breakdown (Step 1, Step 2...)</div>
 						</div>
 						<Switch
 							checked={config.response?.showSteps ?? true}
@@ -182,10 +182,10 @@ export default function NexusConfigPage() {
 						/>
 					</div>
 
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+					<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 						<div>
-							<div className='text-14 font-medium'>Show Reasoning</div>
-							<div className='text-12 text-white/50'>Include thought process and reasoning</div>
+							<div className='text-body font-medium'>Show Reasoning</div>
+							<div className='text-caption text-text-secondary'>Include thought process and reasoning</div>
 						</div>
 						<Switch
 							checked={config.response?.showReasoning ?? true}
@@ -194,7 +194,7 @@ export default function NexusConfigPage() {
 					</div>
 
 					<div className='flex flex-col gap-2'>
-						<label className='text-12 text-white/50'>Response Language</label>
+						<label className='text-caption text-text-secondary'>Response Language</label>
 						<Select
 							value={config.response?.language || 'auto'}
 							onValueChange={(v) => updateConfig('response.language', v)}
@@ -211,7 +211,7 @@ export default function NexusConfigPage() {
 								<SelectItem value='es'>Spanish</SelectItem>
 							</SelectContent>
 						</Select>
-						<span className='text-11 text-white/30'>Language for AI responses</span>
+						<span className='text-caption-sm text-text-tertiary'>Language for AI responses</span>
 					</div>
 				</TabsContent>
 
@@ -219,7 +219,7 @@ export default function NexusConfigPage() {
 				<TabsContent value='agent' className='space-y-4'>
 					<div className='grid grid-cols-2 gap-4'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Turns (1-100)</label>
+							<label className='text-caption text-text-secondary'>Max Turns (1-100)</label>
 							<Input
 								type='number'
 								min={1}
@@ -227,11 +227,11 @@ export default function NexusConfigPage() {
 								value={config.agent?.maxTurns || 30}
 								onValueChange={(v) => updateConfig('agent.maxTurns', parseInt(v) || 30)}
 							/>
-							<span className='text-11 text-white/30'>Maximum tool calls per conversation</span>
+							<span className='text-caption-sm text-text-tertiary'>Maximum tool calls per conversation</span>
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Tokens (K)</label>
+							<label className='text-caption text-text-secondary'>Max Tokens (K)</label>
 							<Input
 								type='number'
 								min={10}
@@ -239,11 +239,11 @@ export default function NexusConfigPage() {
 								value={Math.round((config.agent?.maxTokens || 200000) / 1000)}
 								onValueChange={(v) => updateConfig('agent.maxTokens', (parseInt(v) || 200) * 1000)}
 							/>
-							<span className='text-11 text-white/30'>Token budget per conversation</span>
+							<span className='text-caption-sm text-text-tertiary'>Token budget per conversation</span>
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Timeout (minutes)</label>
+							<label className='text-caption text-text-secondary'>Timeout (minutes)</label>
 							<Input
 								type='number'
 								min={1}
@@ -251,11 +251,11 @@ export default function NexusConfigPage() {
 								value={Math.round((config.agent?.timeoutMs || 600000) / 60000)}
 								onValueChange={(v) => updateConfig('agent.timeoutMs', (parseInt(v) || 10) * 60000)}
 							/>
-							<span className='text-11 text-white/30'>Max time per task</span>
+							<span className='text-caption-sm text-text-tertiary'>Max time per task</span>
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Subagent Depth</label>
+							<label className='text-caption text-text-secondary'>Max Subagent Depth</label>
 							<Input
 								type='number'
 								min={1}
@@ -263,14 +263,14 @@ export default function NexusConfigPage() {
 								value={config.agent?.maxDepth || 3}
 								onValueChange={(v) => updateConfig('agent.maxDepth', parseInt(v) || 3)}
 							/>
-							<span className='text-11 text-white/30'>Nested agent limit</span>
+							<span className='text-caption-sm text-text-tertiary'>Nested agent limit</span>
 						</div>
 					</div>
 
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+					<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 						<div>
-							<div className='text-14 font-medium'>Stream Responses</div>
-							<div className='text-12 text-white/50'>Show responses as they generate</div>
+							<div className='text-body font-medium'>Stream Responses</div>
+							<div className='text-caption text-text-secondary'>Show responses as they generate</div>
 						</div>
 						<Switch
 							checked={config.agent?.streamEnabled ?? true}
@@ -281,10 +281,10 @@ export default function NexusConfigPage() {
 
 				{/* Retry Tab */}
 				<TabsContent value='retry' className='space-y-4'>
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+					<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 						<div>
-							<div className='text-14 font-medium'>Enable Retry</div>
-							<div className='text-12 text-white/50'>Automatically retry failed API calls</div>
+							<div className='text-body font-medium'>Enable Retry</div>
+							<div className='text-caption text-text-secondary'>Automatically retry failed API calls</div>
 						</div>
 						<Switch
 							checked={config.retry?.enabled ?? true}
@@ -294,7 +294,7 @@ export default function NexusConfigPage() {
 
 					<div className='grid grid-cols-2 gap-4'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Attempts</label>
+							<label className='text-caption text-text-secondary'>Max Attempts</label>
 							<Input
 								type='number'
 								min={1}
@@ -306,7 +306,7 @@ export default function NexusConfigPage() {
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Min Delay (ms)</label>
+							<label className='text-caption text-text-secondary'>Min Delay (ms)</label>
 							<Input
 								type='number'
 								min={100}
@@ -318,7 +318,7 @@ export default function NexusConfigPage() {
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Delay (ms)</label>
+							<label className='text-caption text-text-secondary'>Max Delay (ms)</label>
 							<Input
 								type='number'
 								min={1000}
@@ -330,7 +330,7 @@ export default function NexusConfigPage() {
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Jitter (0-1)</label>
+							<label className='text-caption text-text-secondary'>Jitter (0-1)</label>
 							<Input
 								type='number'
 								min={0}
@@ -340,17 +340,17 @@ export default function NexusConfigPage() {
 								onValueChange={(v) => updateConfig('retry.jitter', parseFloat(v) || 0.2)}
 								disabled={!config.retry?.enabled}
 							/>
-							<span className='text-11 text-white/30'>Randomness in delay timing</span>
+							<span className='text-caption-sm text-text-tertiary'>Randomness in delay timing</span>
 						</div>
 					</div>
 				</TabsContent>
 
 				{/* Heartbeat Tab */}
 				<TabsContent value='heartbeat' className='space-y-4'>
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+					<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 						<div>
-							<div className='text-14 font-medium'>Enable Heartbeat</div>
-							<div className='text-12 text-white/50'>Periodically check HEARTBEAT.md for tasks</div>
+							<div className='text-body font-medium'>Enable Heartbeat</div>
+							<div className='text-caption text-text-secondary'>Periodically check HEARTBEAT.md for tasks</div>
 						</div>
 						<Switch
 							checked={config.heartbeat?.enabled ?? false}
@@ -360,7 +360,7 @@ export default function NexusConfigPage() {
 
 					<div className='grid grid-cols-2 gap-4'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Interval (minutes)</label>
+							<label className='text-caption text-text-secondary'>Interval (minutes)</label>
 							<Input
 								type='number'
 								min={5}
@@ -369,11 +369,11 @@ export default function NexusConfigPage() {
 								onValueChange={(v) => updateConfig('heartbeat.intervalMinutes', parseInt(v) || 30)}
 								disabled={!config.heartbeat?.enabled}
 							/>
-							<span className='text-11 text-white/30'>How often to check for tasks</span>
+							<span className='text-caption-sm text-text-tertiary'>How often to check for tasks</span>
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Delivery Target</label>
+							<label className='text-caption text-text-secondary'>Delivery Target</label>
 							<Select
 								value={config.heartbeat?.target || 'telegram'}
 								onValueChange={(v) => updateConfig('heartbeat.target', v)}
@@ -403,13 +403,13 @@ export default function NexusConfigPage() {
 									</SelectItem>
 									<SelectItem value='none'>
 										<div className='flex items-center gap-2'>
-											<TbTool className='h-4 w-4 text-white/50' />
+											<TbTool className='h-4 w-4 text-text-secondary' />
 											Don't deliver (log only)
 										</div>
 									</SelectItem>
 								</SelectContent>
 							</Select>
-							<span className='text-11 text-white/30'>Where to send alerts</span>
+							<span className='text-caption-sm text-text-tertiary'>Where to send alerts</span>
 						</div>
 					</div>
 				</TabsContent>
@@ -418,7 +418,7 @@ export default function NexusConfigPage() {
 				<TabsContent value='session' className='space-y-4'>
 					<div className='grid grid-cols-2 gap-4'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Idle Timeout (minutes)</label>
+							<label className='text-caption text-text-secondary'>Idle Timeout (minutes)</label>
 							<Input
 								type='number'
 								min={5}
@@ -426,11 +426,11 @@ export default function NexusConfigPage() {
 								value={config.session?.idleMinutes || 60}
 								onValueChange={(v) => updateConfig('session.idleMinutes', parseInt(v) || 60)}
 							/>
-							<span className='text-11 text-white/30'>Session reset after inactivity</span>
+							<span className='text-caption-sm text-text-tertiary'>Session reset after inactivity</span>
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max History Messages</label>
+							<label className='text-caption text-text-secondary'>Max History Messages</label>
 							<Input
 								type='number'
 								min={10}
@@ -438,13 +438,13 @@ export default function NexusConfigPage() {
 								value={config.session?.maxHistoryMessages || 100}
 								onValueChange={(v) => updateConfig('session.maxHistoryMessages', parseInt(v) || 100)}
 							/>
-							<span className='text-11 text-white/30'>Messages kept in context</span>
+							<span className='text-caption-sm text-text-tertiary'>Messages kept in context</span>
 						</div>
 					</div>
 
 					<div className='grid grid-cols-2 gap-4'>
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Subagent Max Turns</label>
+							<label className='text-caption text-text-secondary'>Subagent Max Turns</label>
 							<Input
 								type='number'
 								min={1}
@@ -455,7 +455,7 @@ export default function NexusConfigPage() {
 						</div>
 
 						<div className='flex flex-col gap-2'>
-							<label className='text-12 text-white/50'>Max Concurrent Subagents</label>
+							<label className='text-caption text-text-secondary'>Max Concurrent Subagents</label>
 							<Input
 								type='number'
 								min={1}
@@ -470,7 +470,7 @@ export default function NexusConfigPage() {
 				{/* Advanced Tab */}
 				<TabsContent value='advanced' className='space-y-4'>
 					<div className='flex flex-col gap-2'>
-						<label className='text-12 text-white/50'>Log Level</label>
+						<label className='text-caption text-text-secondary'>Log Level</label>
 						<Select
 							value={config.logging?.level || 'info'}
 							onValueChange={(v) => updateConfig('logging.level', v)}
@@ -489,10 +489,10 @@ export default function NexusConfigPage() {
 						</Select>
 					</div>
 
-					<div className='flex items-center justify-between rounded-12 border border-white/10 bg-white/5 p-4'>
+					<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
 						<div>
-							<div className='text-14 font-medium'>Redact Sensitive Data</div>
-							<div className='text-12 text-white/50'>Hide API keys and tokens in logs</div>
+							<div className='text-body font-medium'>Redact Sensitive Data</div>
+							<div className='text-caption text-text-secondary'>Hide API keys and tokens in logs</div>
 						</div>
 						<Switch
 							checked={config.logging?.redactSensitive ?? true}
@@ -500,9 +500,9 @@ export default function NexusConfigPage() {
 						/>
 					</div>
 
-					<div className='rounded-12 border border-orange-500/30 bg-orange-500/10 p-4'>
-						<div className='text-14 font-medium text-orange-400'>Danger Zone</div>
-						<div className='mt-2 text-12 text-white/50'>
+					<div className='rounded-radius-md border border-orange-500/30 bg-orange-500/10 p-4'>
+						<div className='text-body font-medium text-orange-400'>Danger Zone</div>
+						<div className='mt-2 text-caption text-text-secondary'>
 							Reset all settings to factory defaults. This cannot be undone.
 						</div>
 						<Button variant='destructive' size='sm' className='mt-3' onClick={handleReset}>
@@ -513,7 +513,7 @@ export default function NexusConfigPage() {
 			</Tabs>
 
 			{/* Save Button - Fixed at bottom */}
-			<div className='mt-8 flex justify-end border-t border-white/10 pt-4'>
+			<div className='mt-8 flex justify-end border-t border-border-default pt-4'>
 				<Button
 					variant='primary'
 					size='dialog'
