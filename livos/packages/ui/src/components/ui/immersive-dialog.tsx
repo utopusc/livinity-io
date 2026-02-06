@@ -16,11 +16,11 @@ import {tw} from '@/utils/tw'
 import {IconTypes} from './icon'
 import {IconButton} from './icon-button'
 
-export const immersiveDialogTitleClass = tw`text-24 font-bold leading-none -tracking-4 text-white/80`
-export const immersiveDialogDescriptionClass = tw`text-15 font-normal leading-tight -tracking-2 text-white/40`
+export const immersiveDialogTitleClass = tw`text-heading-lg font-bold leading-none -tracking-4 text-text-primary`
+export const immersiveDialogDescriptionClass = tw`text-body-lg leading-tight -tracking-2 text-text-tertiary`
 
 export function ImmersiveDialogSeparator() {
-	return <hr className='w-full border-white/10' />
+	return <hr className='w-full border-border-default' />
 }
 
 export const ImmersiveDialog = Dialog
@@ -87,7 +87,7 @@ function ForwardedImmersiveDialogSplitContent(
 				ref={ref}
 				className={cn(
 					dialogContentClass,
-					'bg-transparent shadow-none ring-2 ring-white/3', // remove shadow from `dialogContentClass`
+					'bg-transparent shadow-none ring-2 ring-border-subtle', // remove shadow from `dialogContentClass`
 					dialogContentAnimationClass,
 					dialogContentAnimationSlideClass,
 					immersiveContentTallClass,
@@ -171,7 +171,7 @@ export function ImmersiveDialogBody({
 	)
 }
 
-const bodyTextClass = tw`text-15 font-medium leading-none -tracking-4 text-white/90`
+const bodyTextClass = tw`text-body-lg font-medium leading-none -tracking-4 text-text-primary`
 
 function AnimateIn({children}: {children: React.ReactNode}) {
 	return (
@@ -213,20 +213,20 @@ export function ImmersiveDialogIconMessage({
 	return (
 		<div
 			className={cn(
-				'inline-flex w-full items-center gap-2 rounded-10 border border-white/4 bg-white/4 p-2 text-left font-normal',
+				'inline-flex w-full items-center gap-2 rounded-radius-sm border border-border-subtle bg-surface-base p-2 text-left font-normal',
 				className,
 			)}
 			style={{
 				boxShadow: '0px 40px 60px 0px rgba(0, 0, 0, 0.10)',
 			}}
 		>
-			<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-8 bg-white/4'>
+			<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-radius-sm bg-surface-base'>
 				<IconComponent className={cn('h-5 w-5 [&>*]:stroke-1', iconClassName)} />
 			</div>
 			<div className='space-y-1'>
-				<div className='text-13 font-normal leading-tight -tracking-2'>{title}</div>
+				<div className='text-body-sm leading-tight -tracking-2'>{title}</div>
 				{description && (
-					<div className='text-12 font-normal leading-tight -tracking-2 text-white/50'>{description}</div>
+					<div className='text-caption leading-tight -tracking-2 text-text-secondary'>{description}</div>
 				)}
 			</div>
 		</div>
@@ -251,18 +251,18 @@ export function ImmersiveDialogIconMessageKeyValue({
 	return (
 		<div
 			className={cn(
-				'inline-flex w-full items-center gap-2 rounded-10 border border-white/4 bg-white/4 px-3 py-2.5 text-left font-normal',
+				'inline-flex w-full items-center gap-2 rounded-radius-sm border border-border-subtle bg-surface-base px-3 py-2.5 text-left font-normal',
 				className,
 			)}
 			style={{
 				boxShadow: '0px 40px 60px 0px rgba(0, 0, 0, 0.10)',
 			}}
 		>
-			<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-8 bg-white/4'>
+			<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-radius-sm bg-surface-base'>
 				<IconComponent className={cn('h-5 w-5', iconClassName)} />
 			</div>
-			<div className='flex flex-1 text-14'>
-				<div className='flex-1 font-normal leading-tight -tracking-2 opacity-60'>{k}</div>
+			<div className='flex flex-1 text-body'>
+				<div className='flex-1 font-normal leading-tight -tracking-2 text-text-secondary'>{k}</div>
 				<div className='font-medium leading-tight -tracking-2'>{v}</div>
 			</div>
 		</div>
