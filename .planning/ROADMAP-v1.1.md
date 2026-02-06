@@ -48,7 +48,14 @@ Plans:
   4. Context menu follows new design language
   5. Command palette (Cmd+K) has refined styling
   6. Notifications and floating island updated
-**Plans**: TBD (estimated 3-4 plans)
+**Plans**: 5 plans in 3 waves
+
+Plans:
+- [ ] 02-01-PLAN.md — Dock redesign with slimmer profile and semantic tokens (DD-01)
+- [ ] 02-02-PLAN.md — Desktop content, app grid, header, and search button token migration (DD-02, DD-03)
+- [ ] 02-03-PLAN.md — Context menu shared classes and command palette token migration (DD-05, CN-01)
+- [ ] 02-04-PLAN.md — Toast and floating island notification redesign (CN-02, CN-03)
+- [ ] 02-05-PLAN.md — Wallpaper blur transitions and desktop preview alignment (DD-04)
 
 ### Phase 3: Window & Sheet System
 **Goal**: Redesign the window chrome and sheet/modal patterns used across the app
@@ -133,7 +140,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Design System Foundation | 3/3 | Complete | 2026-02-06 |
-| 2. Desktop Shell | 0/? | Not started | - |
+| 2. Desktop Shell | 0/5 | Planned | - |
 | 3. Window & Sheet System | 0/? | Not started | - |
 | 4. Settings Redesign | 0/? | Not started | - |
 | 5. AI Chat Redesign | 0/? | Not started | - |
@@ -143,5 +150,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ---
 *Roadmap created: 2026-02-06*
-*Total phases: 8 | Total plans: ~20-26 (estimated)*
+*Total phases: 8 | Total plans: ~22-28 (estimated)*
 *Coverage: 47/47 v1.1 requirements mapped*
