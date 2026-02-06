@@ -38,6 +38,7 @@ type WindowManagerContextT = {
 	minimizeWindow: (windowId: WindowId) => void
 	restoreWindow: (windowId: WindowId) => void
 	updateWindowPosition: (windowId: WindowId, position: Position) => void
+	updateWindowSize: (windowId: WindowId, size: Size) => void
 }
 
 // Get responsive window size based on screen dimensions
@@ -103,6 +104,7 @@ type WindowAction =
 	| {type: 'MINIMIZE_WINDOW'; payload: WindowId}
 	| {type: 'RESTORE_WINDOW'; payload: WindowId}
 	| {type: 'UPDATE_POSITION'; payload: {id: WindowId; position: Position}}
+	| {type: 'UPDATE_SIZE'; payload: {id: WindowId; size: Size}}
 
 function windowReducer(state: WindowManagerState, action: WindowAction): WindowManagerState {
 	switch (action.type) {
@@ -143,6 +145,14 @@ function windowReducer(state: WindowManagerState, action: WindowAction): WindowM
 				...state,
 				windows: state.windows.map((w) =>
 					w.id === action.payload.id ? {...w, position: action.payload.position} : w,
+				),
+			}
+
+		case 'UPDATE_SIZE':
+			return {
+				...state,
+				windows: state.windows.map((w) =>
+					w.id === action.payload.id ? {...w, size: action.payload.size} : w,
 				),
 			}
 
@@ -206,6 +216,10 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		dispatch({type: 'UPDATE_POSITION', payload: {id: windowId, position}})
 	}, [])
 
+	const updateWindowSize = useCallback((windowId: WindowId, size: Size) => {
+		dispatch({type: 'UPDATE_SIZE', payload: {id: windowId, size}})
+	}, [])
+
 	return (
 		<WindowManagerContext.Provider
 			value={{
@@ -216,6 +230,7 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				minimizeWindow,
 				restoreWindow,
 				updateWindowPosition,
+				updateWindowSize,
 			}}
 		>
 			{children}
