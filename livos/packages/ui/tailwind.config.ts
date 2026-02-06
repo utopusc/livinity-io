@@ -32,6 +32,11 @@ export default {
 				// Used if you want to shrink the item totally if no room
 				full: '9999',
 			},
+			spacing: {
+				'icon-sm': '16px',
+				'icon-md': '20px',
+				'icon-lg': '24px',
+			},
 			borderRadius: {
 				// Using numbers instead of sm, md, lg because easier to add radii in between later
 				3: '3px',
@@ -51,6 +56,11 @@ export default {
 				24: '24px',
 				28: '28px',
 				32: '32px',
+				// Semantic border radii
+				'radius-sm': '8px',
+				'radius-md': '12px',
+				'radius-lg': '16px',
+				'radius-xl': '20px',
 			},
 			colors: {
 				// Extracted from background
@@ -65,12 +75,31 @@ export default {
 				success: '#299E16',
 				'success-light': '#51CB41',
 				'dialog-content': '#1E1E1E',
+				// Semantic surface colors (dark theme, static)
+				'surface-base': 'rgba(255, 255, 255, 0.04)',
+				'surface-1': 'rgba(255, 255, 255, 0.06)',
+				'surface-2': 'rgba(255, 255, 255, 0.10)',
+				'surface-3': 'rgba(255, 255, 255, 0.14)',
+				// Semantic border colors
+				'border-subtle': 'rgba(255, 255, 255, 0.06)',
+				'border-default': 'rgba(255, 255, 255, 0.10)',
+				'border-emphasis': 'rgba(255, 255, 255, 0.20)',
+				// Semantic text colors
+				'text-primary': 'rgba(255, 255, 255, 0.90)',
+				'text-secondary': 'rgba(255, 255, 255, 0.60)',
+				'text-tertiary': 'rgba(255, 255, 255, 0.40)',
 			},
 			borderWidth: {
 				px: '1px',
 				hpx: '0.5px',
 			},
 			boxShadow: {
+				// Semantic elevation shadows
+				'elevation-sm': '0px 2px 8px rgba(0, 0, 0, 0.12)',
+				'elevation-md': '0px 4px 16px rgba(0, 0, 0, 0.16)',
+				'elevation-lg': '0px 8px 24px rgba(0, 0, 0, 0.20)',
+				'elevation-xl': '0px 16px 48px rgba(0, 0, 0, 0.24)',
+				// Component-specific shadows (preserved for backward compatibility)
 				dock: '1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 1.06058px 0px 0px rgba(255, 255, 255, 0.20) inset, 0px 0.53029px 0px 0px rgba(255, 255, 255, 0.10) inset, 0px 4.04029px 24.24174px 0px rgba(0, 0, 0, 0.56)',
 				'floating-island':
 					'1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 1.06058px 0px 0px rgba(255, 255, 255, 0.14) inset, 0px 0.53029px 0px 0px rgba(255, 255, 255, 0.07) inset, 0px 4.04029px 24.24174px 0px rgba(0, 0, 0, 0.56)',
@@ -106,6 +135,7 @@ export default {
 				6: '0.06',
 			},
 			fontSize: {
+				// Numeric font sizes (preserved for backward compatibility)
 				9: '9px',
 				11: '11px',
 				12: '12px',
@@ -120,6 +150,22 @@ export default {
 				36: '36px',
 				48: '48px',
 				56: '56px',
+				// Semantic font sizes with line-height and letter-spacing
+				// Caption level
+				'caption-sm': ['11px', {lineHeight: '1.4', letterSpacing: '0.01em'}],
+				caption: ['12px', {lineHeight: '1.4', letterSpacing: '0.01em'}],
+				// Body level
+				'body-sm': ['13px', {lineHeight: '1.5', letterSpacing: '0.01em'}],
+				body: ['14px', {lineHeight: '1.5', letterSpacing: '0.01em'}],
+				'body-lg': ['15px', {lineHeight: '1.5', letterSpacing: '0.01em'}],
+				// Heading level
+				'heading-sm': ['17px', {lineHeight: '1.3', letterSpacing: '0em', fontWeight: '600'}],
+				heading: ['19px', {lineHeight: '1.3', letterSpacing: '0em', fontWeight: '600'}],
+				'heading-lg': ['24px', {lineHeight: '1.2', letterSpacing: '-0.01em', fontWeight: '600'}],
+				// Display level
+				'display-sm': ['32px', {lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700'}],
+				display: ['36px', {lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '700'}],
+				'display-lg': ['48px', {lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '700'}],
 			},
 			backdropBlur: {
 				'4xl': '180px',
