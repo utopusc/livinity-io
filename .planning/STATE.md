@@ -6,15 +6,15 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.1 — Complete UI Redesign (Minimal & Clean)
-**Current focus:** Phase 1 — Design System Foundation
+**Current focus:** Phase 2 — Desktop Shell
 
 ## Current Position
 
 Milestone: v1.1 (UI Redesign)
-Phase: 1 of 8 (Design System Foundation)
-Plan: 3 of ~3 in current phase
-Status: In progress
-Last activity: 2026-02-06 - Completed 01-03-PLAN.md (Input, Select, Switch Redesign)
+Phase: 2 of 8 (Desktop Shell)
+Plan: 0 of ? in current phase
+Status: Phase 1 complete, ready to plan Phase 2
+Last activity: 2026-02-06 - Phase 1 complete (3/3 plans, verified 21/21 must-haves)
 
 Progress: [███         ] 14% (3 of ~22 plans)
 

@@ -8,7 +8,7 @@ The redesign progresses from foundation (design system tokens) through core shel
 
 ## Phases
 
-- [ ] **Phase 1: Design System Foundation** — Define tokens, update Tailwind config, refine base components
+- [x] **Phase 1: Design System Foundation** — Define tokens, update Tailwind config, refine base components ✓
 - [ ] **Phase 2: Desktop Shell** — Dock, desktop layout, context menu, command palette, notifications
 - [ ] **Phase 3: Window & Sheet System** — Floating windows, sheet modals, dialogs
 - [ ] **Phase 4: Settings Redesign** — Settings sidebar, content sections, forms, tabs
@@ -33,9 +33,9 @@ The redesign progresses from foundation (design system tokens) through core shel
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 01-01-PLAN.md — Define semantic design tokens (colors, typography, shadows, radii, icon sizes) in tailwind.config.ts
-- [ ] 01-02-PLAN.md — Redesign Button and Card components with semantic tokens
-- [ ] 01-03-PLAN.md — Redesign Input, Select, and Switch components with semantic tokens
+- [x] 01-01-PLAN.md — Define semantic design tokens (colors, typography, shadows, radii, icon sizes) in tailwind.config.ts
+- [x] 01-02-PLAN.md — Redesign Button and Card components with semantic tokens
+- [x] 01-03-PLAN.md — Redesign Input, Select, and Switch components with semantic tokens
 
 ### Phase 2: Desktop Shell
 **Goal**: Redesign the main desktop experience — dock, app grid, command palette, notifications
@@ -132,7 +132,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Design System Foundation | 0/3 | Planned | - |
+| 1. Design System Foundation | 3/3 | Complete | 2026-02-06 |
 | 2. Desktop Shell | 0/? | Not started | - |
 | 3. Window & Sheet System | 0/? | Not started | - |
 | 4. Settings Redesign | 0/? | Not started | - |

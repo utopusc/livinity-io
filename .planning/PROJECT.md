@@ -29,40 +29,26 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Skill system with hot-reload — existing
 - ✓ Reverse proxy with Caddy (auto HTTPS) — existing
 
-### Active
+### Active (v1.1 — UI Redesign)
 
 *This milestone's goals:*
 
-**AI Consolidation:**
-- [ ] Remove livcoreai package (1,499 LOC duplicate)
-- [ ] Remove liv/packages/core package (2,039 LOC duplicate)
-- [ ] Export SubagentManager & ScheduleManager from Nexus
-- [ ] Update LivOS imports to use Nexus exports
-
-**Security Hardening:**
-- [ ] Remove hardcoded secrets from .env files
-- [ ] Implement environment variable injection pattern
-- [ ] Add authentication to internal APIs (memory service, etc.)
-- [ ] Rotate all production secrets
-
-**Code Quality:**
-- [ ] Delete all .bak files from repository
-- [ ] Reduce `any` type usage - add proper TypeScript types
-- [ ] Fix silent error swallowing - add proper error logging
-- [ ] Remove hardcoded values (livinity.cloud domain, /opt/livos paths, etc.)
-- [ ] Make all paths and domains configurable
-
-**Architecture Improvements:**
-- [ ] Convert daemon polling (30s interval) to event-driven (Redis pub/sub)
-- [ ] Add test coverage for core AI logic (AgentLoop, Brain, Daemon)
-- [ ] Add test coverage for tool execution
-
-**Open Source Readiness:**
-- [ ] Create one-command install script (curl | bash style)
-- [ ] Configuration wizard for first-time setup
-- [ ] Environment template (.env.example) with all required variables
-- [ ] README with installation and configuration guide
-- [ ] Remove any proprietary or personal references
+**Complete UI Redesign — Minimal & Clean (Apple/Linear style):**
+- [ ] Replace Umbrel-inherited UI with Livinity-branded modern interface
+- [ ] Redesign desktop layout with cleaner grid, spacing, and typography
+- [ ] Redesign dock with refined animations and minimal aesthetics
+- [ ] Redesign window system with improved glassmorphism and polish
+- [ ] Redesign sheet/modal system for consistency and elegance
+- [ ] Redesign settings pages with structured, clean layouts
+- [ ] Redesign app store with modern card-based browsing
+- [ ] Redesign file manager with clean, functional interface
+- [ ] Redesign AI chat interface with professional conversation UI
+- [ ] Redesign login/onboarding flow with branded experience
+- [ ] Update color system with refined palette and better contrast
+- [ ] Update typography system with tighter hierarchy
+- [ ] Improve animations and micro-interactions
+- [ ] Ensure mobile responsiveness across all redesigned views
+- [ ] Create cohesive Livinity brand identity throughout UI
 
 ### Out of Scope
 
@@ -112,4 +98,4 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 | Single install script | Lowers barrier to entry for non-technical users | — Pending |
 
 ---
-*Last updated: 2026-02-03 after initialization*
+*Last updated: 2026-02-06 — v1.1 milestone (UI Redesign)*
