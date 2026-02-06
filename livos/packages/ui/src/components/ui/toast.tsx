@@ -18,10 +18,10 @@ export function Toaster() {
 			toastOptions={{
 				unstyled: true,
 				classNames: {
-					closeButton: tw`absolute top-0 right-0 p-1 -translate-y-1/3 translate-x-1/3 bg-neutral-600/70 rounded-full hover:scale-105 transition-[transform,opacity] duration-300 hidden sm:block`,
-					toast: tw`bg-[#404040]/40 rounded-12 py-4 px-5 backdrop-blur-md flex items-center gap-2 shadow-dialog text-15 text-white -tracking-4 w-full`,
+					closeButton: tw`absolute top-0 right-0 p-1 -translate-y-1/3 translate-x-1/3 bg-surface-3 rounded-full hover:scale-105 transition-[transform,opacity] duration-300 hidden sm:block`,
+					toast: tw`bg-surface-3 rounded-radius-md py-4 px-5 backdrop-blur-md flex items-center gap-2 shadow-elevation-lg text-body-lg text-text-primary -tracking-4 w-full`,
 					title: tw`font-medium leading-[18px]`,
-					description: tw`opacity-60 leading-[18px]`,
+					description: tw`text-text-secondary leading-[18px]`,
 					actionButton: buttonVariants(),
 				},
 			}}
