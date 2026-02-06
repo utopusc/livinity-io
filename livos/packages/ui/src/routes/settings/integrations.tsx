@@ -72,12 +72,12 @@ export default function IntegrationsPage() {
 	return (
 		<SettingsPageLayout title='Integrations' description='Connect messaging platforms to interact with Nexus AI from anywhere'>
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChannelId)}>
-				<TabsList className='grid w-full grid-cols-2 bg-white/5'>
+				<TabsList className='grid w-full grid-cols-2'>
 					{CHANNELS.map((channel) => (
 						<TabsTrigger
 							key={channel.id}
 							value={channel.id}
-							className='flex items-center gap-1.5 data-[state=active]:bg-white/10'
+							className='flex items-center gap-1.5'
 						>
 							<channel.icon className={cn('h-4 w-4', channel.color)} />
 							<span>{channel.name}</span>
@@ -131,9 +131,9 @@ function TelegramPanel() {
 			<ChannelHeader channel={channel} />
 
 			{/* Status */}
-			<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 				<div className='flex items-center justify-between'>
-					<div className='text-14 font-medium'>Connection Status</div>
+					<div className='text-body font-medium'>Connection Status</div>
 					<Button
 						variant='default'
 						size='sm'
@@ -151,9 +151,9 @@ function TelegramPanel() {
 						<StatusRow label='Enabled' connected={status.enabled} />
 						<StatusRow label='Connected' connected={status.connected} />
 						{status.botName && (
-							<div className='flex items-center justify-between text-12'>
-								<span className='text-white/50'>Bot</span>
-								<span className='text-white/70'>@{status.botName}</span>
+							<div className='flex items-center justify-between text-caption'>
+								<span className='text-text-secondary'>Bot</span>
+								<span className='text-text-secondary'>@{status.botName}</span>
 							</div>
 						)}
 						{status.error && <ErrorBanner message={status.error} />}
@@ -164,9 +164,9 @@ function TelegramPanel() {
 			</div>
 
 			{/* Configuration */}
-			<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
-				<div className='text-14 font-medium'>Bot Token</div>
-				<div className='mt-1 text-12 text-white/50'>
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>Bot Token</div>
+				<div className='mt-1 text-caption text-text-secondary'>
 					Create a bot with{' '}
 					<a
 						href='https://t.me/BotFather'
@@ -190,7 +190,7 @@ function TelegramPanel() {
 						<button
 							type='button'
 							onClick={() => setShowToken(!showToken)}
-							className='absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/70'
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-secondary'
 						>
 							{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
 						</button>
@@ -280,9 +280,9 @@ function DiscordPanel() {
 			<ChannelHeader channel={channel} />
 
 			{/* Status */}
-			<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 				<div className='flex items-center justify-between'>
-					<div className='text-14 font-medium'>Connection Status</div>
+					<div className='text-body font-medium'>Connection Status</div>
 					<Button
 						variant='default'
 						size='sm'
@@ -300,9 +300,9 @@ function DiscordPanel() {
 						<StatusRow label='Enabled' connected={status.enabled} />
 						<StatusRow label='Connected' connected={status.connected} />
 						{status.botName && (
-							<div className='flex items-center justify-between text-12'>
-								<span className='text-white/50'>Bot Name</span>
-								<span className='text-white/70'>{status.botName}</span>
+							<div className='flex items-center justify-between text-caption'>
+								<span className='text-text-secondary'>Bot Name</span>
+								<span className='text-text-secondary'>{status.botName}</span>
 							</div>
 						)}
 						<TimestampRow label='Last Connect' value={status.lastConnect} />
@@ -314,9 +314,9 @@ function DiscordPanel() {
 			</div>
 
 			{/* Configuration */}
-			<div className='rounded-12 border border-white/10 bg-white/5 p-4'>
-				<div className='text-14 font-medium'>Bot Token</div>
-				<div className='mt-1 text-12 text-white/50'>
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>Bot Token</div>
+				<div className='mt-1 text-caption text-text-secondary'>
 					Get your bot token from the{' '}
 					<a
 						href='https://discord.com/developers/applications'
@@ -339,7 +339,7 @@ function DiscordPanel() {
 						<button
 							type='button'
 							onClick={() => setShowToken(!showToken)}
-							className='absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/70'
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-secondary'
 						>
 							{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
 						</button>
@@ -386,20 +386,20 @@ function DiscordPanel() {
 
 function ChannelHeader({channel}: {channel: (typeof CHANNELS)[number]}) {
 	return (
-		<div className={cn('rounded-12 border p-4', channel.borderColor, channel.bgColor)}>
+		<div className={cn('rounded-radius-md border p-4', channel.borderColor, channel.bgColor)}>
 			<div className='flex items-center gap-3'>
-				<div className={cn('flex h-10 w-10 items-center justify-center rounded-10', 'bg-white/10')}>
+				<div className={cn('flex h-10 w-10 items-center justify-center rounded-radius-sm', 'bg-surface-2')}>
 					<channel.icon className={cn('h-6 w-6', channel.color)} />
 				</div>
 				<div className='flex-1'>
-					<div className='text-15 font-semibold'>{channel.name}</div>
-					<div className='text-12 text-white/50'>{channel.description}</div>
+					<div className='text-body-lg font-semibold'>{channel.name}</div>
+					<div className='text-caption text-text-secondary'>{channel.description}</div>
 				</div>
 				<a
 					href={channel.docsUrl}
 					target='_blank'
 					rel='noopener noreferrer'
-					className='flex items-center gap-1 text-12 text-white/50 hover:text-white/70'
+					className='flex items-center gap-1 text-caption text-text-secondary hover:text-text-secondary'
 				>
 					Docs <TbExternalLink className='h-3.5 w-3.5' />
 				</a>
@@ -410,8 +410,8 @@ function ChannelHeader({channel}: {channel: (typeof CHANNELS)[number]}) {
 
 function StatusRow({label, connected}: {label: string; connected: boolean}) {
 	return (
-		<div className='flex items-center justify-between text-12'>
-			<span className='text-white/50'>{label}</span>
+		<div className='flex items-center justify-between text-caption'>
+			<span className='text-text-secondary'>{label}</span>
 			<div className='flex items-center gap-2'>
 				{connected ? (
 					<>
@@ -432,34 +432,34 @@ function StatusRow({label, connected}: {label: string; connected: boolean}) {
 function TimestampRow({label, value}: {label: string; value?: string}) {
 	if (!value) return null
 	return (
-		<div className='flex items-center justify-between text-12'>
-			<span className='text-white/50'>{label}</span>
-			<span className='text-white/70'>{new Date(value).toLocaleString()}</span>
+		<div className='flex items-center justify-between text-caption'>
+			<span className='text-text-secondary'>{label}</span>
+			<span className='text-text-secondary'>{new Date(value).toLocaleString()}</span>
 		</div>
 	)
 }
 
 function ErrorBanner({message}: {message: string}) {
-	return <div className='rounded-8 bg-red-500/20 p-2 text-12 text-red-400'>{message}</div>
+	return <div className='rounded-radius-sm bg-red-500/20 p-2 text-caption text-red-400'>{message}</div>
 }
 
 function LoadingState() {
 	return (
 		<div className='mt-4 flex items-center justify-center py-8'>
-			<Loader2 className='h-8 w-8 animate-spin text-white/50' />
+			<Loader2 className='h-8 w-8 animate-spin text-text-secondary' />
 		</div>
 	)
 }
 
 function EmptyState({message}: {message: string}) {
-	return <div className='mt-4 text-center text-12 text-white/50'>{message}</div>
+	return <div className='mt-4 text-center text-caption text-text-secondary'>{message}</div>
 }
 
 function UsageInfo({items}: {items: string[]}) {
 	return (
-		<div className='rounded-12 border border-blue-500/30 bg-blue-500/10 p-4'>
-			<div className='text-14 font-medium text-blue-400'>How it works</div>
-			<div className='mt-2 space-y-1 text-12 text-white/50'>
+		<div className='rounded-radius-md border border-blue-500/30 bg-blue-500/10 p-4'>
+			<div className='text-body font-medium text-blue-400'>How it works</div>
+			<div className='mt-2 space-y-1 text-caption text-text-secondary'>
 				{items.map((item, i) => (
 					<p key={i}>• {item}</p>
 				))}
