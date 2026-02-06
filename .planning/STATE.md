@@ -6,17 +6,17 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.1 — Complete UI Redesign (Minimal & Clean)
-**Current focus:** Phase 3 — Window & Sheet System
+**Current focus:** Phase 3 complete — Window & Sheet System
 
 ## Current Position
 
 Milestone: v1.1 (UI Redesign)
 Phase: 3 of 8 (Window & Sheet System)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-06 - Completed 03-03-PLAN.md (Window Chrome & Body Redesign)
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 - Completed 03-04-PLAN.md (ImmersiveDialog, Window Resize, Animation Polish)
 
-Progress: [███████████ ] 44% (11 of ~25 plans)
+Progress: [████████████ ] 48% (12 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████ ] 44% (11 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 11
-- Average duration: 2.8 min
-- Total execution time: 0.56 hours
+- Total plans completed: 12
+- Average duration: 2.9 min
+- Total execution time: 0.66 hours
 
 *Updated after each plan completion*
 
@@ -83,6 +83,11 @@ v1.1 decisions:
 - [v1.1-03-02]: Scrollbar group-hover:bg-white/50 kept as raw value (no semantic match at 0.50 opacity)
 - [v1.1-03-03]: Drag opacity feedback via Framer Motion animate prop (not style prop, since animate overrides style for shared properties)
 - [v1.1-03-03]: Window body boxShadow isDragging ternary in style prop (boxShadow not animated by Framer Motion, so style prop works correctly)
+- [v1.1-03-04]: ImmersiveDialog title text-text-primary (0.90) from text-white/80 (0.80) for title prominence
+- [v1.1-03-04]: Icon message description visibility: text-text-secondary (0.60) from text-white/50 (0.50)
+- [v1.1-03-04]: KeyValue key: opacity-60 replaced with text-text-secondary semantic token
+- [v1.1-03-04]: Window resize 400x400 minimum matches getResponsiveSize constraint
+- [v1.1-03-04]: EXIT_DURATION_MS 100ms -> 150ms (50% longer) for smoother close feel
 
 ### Pending Todos
 
@@ -95,7 +100,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 03-03-PLAN.md (Window Chrome & Body Redesign)
+Stopped at: Completed 03-04-PLAN.md (ImmersiveDialog, Window Resize, Animation Polish) — Phase 3 complete
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -183,6 +188,14 @@ Resume file: None
   - Drag feedback: deeper shadow + opacity via Framer Motion animate prop
   - Window content: text-text-secondary for unknown app
   - Summary: .planning/phases/v1.1-03-window-sheet-system/03-03-SUMMARY.md
+- Plan 03-04: ImmersiveDialog, Window Resize, Animation Polish (completed 2026-02-06)
+  - ImmersiveDialog: text-heading-lg/text-text-primary title, text-body-lg/text-text-tertiary description
+  - ImmersiveDialog: body text-body-lg/text-text-primary, separator border-border-default
+  - ImmersiveDialog: icon messages rounded-radius-sm/border-border-subtle/bg-surface-base
+  - ImmersiveDialog: icon text text-body-sm/text-caption/text-text-secondary
+  - Window resize: UPDATE_SIZE action, updateWindowSize context, 8 resize handles, 400x400 min
+  - EXIT_DURATION_MS: 100ms -> 150ms for smoother close animations
+  - Summary: .planning/phases/v1.1-03-window-sheet-system/03-04-SUMMARY.md
 
 ---
 
