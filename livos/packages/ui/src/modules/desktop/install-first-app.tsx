@@ -31,7 +31,7 @@ export function InstallFirstApp() {
 			/>
 			<div className='pt-5' />
 			<h1
-				className='-translate-y-2 text-center text-3xl font-bold leading-tight -tracking-2 md:text-48'
+				className='-translate-y-2 text-center text-heading-lg font-bold leading-tight -tracking-2 md:text-display-lg'
 				// Cannot use `view-transition-name` on the headline as well, see above
 				/*style={{
 					viewTransitionName: 'title',
@@ -47,7 +47,7 @@ export function InstallFirstApp() {
 				</div>
 			</div>
 			<div className='pt-7' />
-			<ButtonLink to='/app-store' className='h-[42px] px-5 py-4 text-14 backdrop-blur-md'>
+			<ButtonLink to='/app-store' className='h-[42px] px-5 py-4 text-body backdrop-blur-md'>
 				{t('desktop.install-first.link-to-app-store')}
 			</ButtonLink>
 			<div className='pt-[50px]' />
@@ -144,17 +144,17 @@ function App({
 	return (
 		<Link
 			to={`/app-store/${id}`}
-			className='flex w-full items-center gap-2.5 rounded-15 p-2 duration-300 hover:bg-white/4'
+			className='flex w-full items-center gap-2.5 rounded-radius-md p-2 duration-300 hover:bg-surface-base'
 		>
 			<AppIcon src={icon} size={50} className='rounded-10' />
 			<div className='flex min-w-0 flex-1 flex-col'>
-				<h3 className='text-15 font-semibold -tracking-3'>{appName}</h3>
-				<p className='w-full min-w-0 truncate text-13 opacity-50'>{appDescription}</p>
+				<h3 className='text-body-lg font-semibold -tracking-3'>{appName}</h3>
+				<p className='w-full min-w-0 truncate text-body-sm text-text-secondary'>{appDescription}</p>
 			</div>
 		</Link>
 	)
 }
 
-const cardClass = tw`rounded-20 backdrop-blur-2xl contrast-more:backdrop-blur-none bg-blend-soft-light bg-gradient-to-b from-black/50 via-black/50 to-black contrast-more:bg-neutral-800 px-4 py-8 shadow-dialog flex flex-col gap-4 min-w-0`
+const cardClass = tw`rounded-radius-xl backdrop-blur-md contrast-more:backdrop-blur-none bg-blend-soft-light bg-gradient-to-b from-black/50 via-black/50 to-black contrast-more:bg-neutral-800 px-4 py-8 shadow-elevation-lg flex flex-col gap-4 min-w-0`
 
-const cardHeadingClass = tw`text-center text-19 font-bold leading-tight -tracking-2`
+const cardHeadingClass = tw`text-center text-heading font-bold leading-tight -tracking-2`
