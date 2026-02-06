@@ -16,7 +16,7 @@ export function Header({userName}: {userName: string}) {
 						ref?.style?.removeProperty('view-transition-name')
 					}}
 				/>
-				<h1 className='text-center text-19 font-bold md:text-5xl'>{greetingMessage(name)}</h1>
+				<h1 className='text-center text-heading font-bold md:text-display-lg'>{greetingMessage(name)}</h1>
 			</div>
 		</div>
 	)

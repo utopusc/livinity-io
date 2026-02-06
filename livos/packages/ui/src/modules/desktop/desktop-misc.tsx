@@ -9,11 +9,11 @@ export function Search({onClick}: {onClick?: () => void}) {
 	const isMobile = useIsSmallMobile()
 	return (
 		<button
-			className='z-10 select-none rounded-full border border-white/5 bg-neutral-600/20 px-3 py-2.5 text-12 leading-inter-trimmed text-white/90 backdrop-blur-sm transition-colors delay-300 duration-300 animate-in fade-in fill-mode-both hover:bg-neutral-600/30 active:bg-neutral-600/10'
+			className='z-10 select-none rounded-full border border-border-subtle bg-surface-1 px-3 py-2.5 text-caption leading-inter-trimmed text-text-primary backdrop-blur-sm transition-colors delay-300 duration-300 animate-in fade-in fill-mode-both hover:bg-surface-2 active:bg-surface-base'
 			onClick={onClick}
 		>
 			{/* TODO: ideally, centralize shortcut preview and shortcut event listener so always in sync */}
-			{t('search')} {platform() !== 'other' && !isMobile && <span className='text-white/20'>{cmdOrCtrl()}K</span>}
+			{t('search')} {platform() !== 'other' && !isMobile && <span className='text-text-tertiary'>{cmdOrCtrl()}K</span>}
 		</button>
 	)
 }
