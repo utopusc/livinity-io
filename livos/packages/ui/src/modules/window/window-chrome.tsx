@@ -16,16 +16,16 @@ export function WindowChrome({title, icon, onClose}: WindowChromeProps) {
 					e.stopPropagation()
 					onClose()
 				}}
-				className='absolute right-full mr-3 group flex items-center justify-center w-10 h-10 rounded-full bg-black/70 backdrop-blur-xl border-2 border-[hsl(var(--color-brand)/0.6)] shadow-xl hover:bg-red-500 hover:border-red-400 transition-all duration-200'
+				className='absolute right-full mr-3 group flex items-center justify-center w-9 h-9 rounded-full bg-black/80 backdrop-blur-lg border border-border-emphasis shadow-elevation-md hover:bg-destructive hover:border-destructive/80 transition-all duration-200'
 				aria-label='Close window'
 			>
-				<TbX className='h-5 w-5 text-white/70 group-hover:text-white transition-colors' strokeWidth={2.5} />
+				<TbX className='h-icon-md w-icon-md text-text-secondary group-hover:text-white transition-colors' strokeWidth={2.5} />
 			</button>
 
 			{/* Title pill - this is what gets centered */}
-			<div className='flex items-center gap-3 px-5 py-2.5 bg-black/70 backdrop-blur-xl rounded-full border-2 border-[hsl(var(--color-brand)/0.6)] shadow-xl cursor-grab active:cursor-grabbing'>
-				{icon && <img src={icon} alt='' className='h-5 w-5 rounded-md' />}
-				<span className='text-14 font-medium text-white/90 tracking-tight whitespace-nowrap select-none'>
+			<div className='flex items-center gap-3 px-4 py-2 bg-black/80 backdrop-blur-lg rounded-full border border-border-emphasis shadow-elevation-md cursor-grab active:cursor-grabbing'>
+				{icon && <img src={icon} alt='' className='h-icon-md w-icon-md rounded-md' />}
+				<span className='text-body font-medium text-text-primary tracking-tight whitespace-nowrap select-none'>
 					{title}
 				</span>
 			</div>
