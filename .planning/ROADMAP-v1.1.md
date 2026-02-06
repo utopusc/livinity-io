@@ -58,7 +58,7 @@ Plans:
 - [x] 02-05-PLAN.md — Wallpaper blur transitions and desktop preview alignment (DD-04)
 
 ### Phase 3: Window & Sheet System
-**Goal**: Redesign the window chrome and sheet/modal patterns used across the app
+**Goal**: Redesign the window chrome, sheet/modal patterns, and dialog system with semantic tokens, plus add window resize
 **Depends on**: Phase 1
 **Requirements**: WS-01, WS-02, WS-03, WS-04, SM-01, SM-02, SM-03, SM-04
 **Success Criteria** (what must be TRUE):
@@ -67,7 +67,13 @@ Plans:
   3. Sheet header and background use new design tokens
   4. Dialogs/modals have consistent styling
   5. Animations are smooth and polished
-**Plans**: TBD (estimated 2-3 plans)
+**Plans**: 4 plans in 3 waves
+
+Plans:
+- [ ] 03-01-PLAN.md — shared/dialog.ts foundation + Dialog + AlertDialog + button rounded-14 migration (SM-03)
+- [ ] 03-02-PLAN.md — Sheet title/description, sticky header, scroll area token migration (SM-01, SM-02)
+- [ ] 03-03-PLAN.md — Window chrome redesign + window body semantic tokens + drag feedback (WS-01, WS-02, WS-03)
+- [ ] 03-04-PLAN.md — ImmersiveDialog migration + window resize handles + animation polish (WS-04, SM-04)
 
 ### Phase 4: Settings Redesign
 **Goal**: Complete visual overhaul of the settings interface
@@ -141,7 +147,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 |-------|----------------|--------|-----------|
 | 1. Design System Foundation | 3/3 | Complete | 2026-02-06 |
 | 2. Desktop Shell | 5/5 | Complete | 2026-02-06 |
-| 3. Window & Sheet System | 0/? | Not started | - |
+| 3. Window & Sheet System | 0/4 | Planned | - |
 | 4. Settings Redesign | 0/? | Not started | - |
 | 5. AI Chat Redesign | 0/? | Not started | - |
 | 6. App Store & Files | 0/? | Not started | - |
