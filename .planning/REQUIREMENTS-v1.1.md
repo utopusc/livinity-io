@@ -41,11 +41,11 @@
 
 ### Settings (ST)
 
-- [ ] **ST-01**: Redesign settings sidebar with cleaner navigation items and active states
-- [ ] **ST-02**: Redesign settings content sections with consistent card-based layout
-- [ ] **ST-03**: Redesign settings header card (user info area) with minimal style
-- [ ] **ST-04**: Update form layouts within settings for better alignment and spacing
-- [ ] **ST-05**: Redesign tab components used in settings (Nexus config, Integrations)
+- [x] **ST-01**: Redesign settings sidebar with cleaner navigation items and active states ✓
+- [x] **ST-02**: Redesign settings content sections with consistent card-based layout ✓
+- [x] **ST-03**: Redesign settings header card (user info area) with minimal style ✓
+- [x] **ST-04**: Update form layouts within settings for better alignment and spacing ✓
+- [x] **ST-05**: Redesign tab components used in settings (Nexus config, Integrations) ✓
 
 ### AI Chat (AC)
 
@@ -108,7 +108,7 @@
 | DD-01 to DD-05 | Phase 2 | Complete |
 | WS-01 to WS-04 | Phase 3 | Complete |
 | SM-01 to SM-04 | Phase 3 | Complete |
-| ST-01 to ST-05 | Phase 4 | Pending |
+| ST-01 to ST-05 | Phase 4 | Complete |
 | AC-01 to AC-06 | Phase 5 | Pending |
 | AS-01 to AS-04 | Phase 6 | Pending |
 | FM-01 to FM-04 | Phase 6 | Pending |
@@ -118,8 +118,8 @@
 
 **Coverage:**
 - v1.1 requirements: 47 total
-- Complete: 24 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04)
-- Pending: 23
+- Complete: 29 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05)
+- Pending: 18
 - Unmapped: 0
 
 ---

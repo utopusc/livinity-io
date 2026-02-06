@@ -153,7 +153,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 1. Design System Foundation | 3/3 | Complete | 2026-02-06 |
 | 2. Desktop Shell | 5/5 | Complete | 2026-02-06 |
 | 3. Window & Sheet System | 4/4 | Complete | 2026-02-06 |
-| 4. Settings Redesign | 0/3 | Planned | - |
+| 4. Settings Redesign | 3/3 | Complete | 2026-02-06 |
 | 5. AI Chat Redesign | 0/? | Not started | - |
 | 6. App Store & Files | 0/? | Not started | - |
 | 7. Login & Onboarding | 0/? | Not started | - |
