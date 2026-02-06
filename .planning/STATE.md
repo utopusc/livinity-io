@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 2 of 8 (Desktop Shell)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-06 - Completed 02-02-PLAN.md (Desktop Content Semantic Tokens)
+Last activity: 2026-02-06 - Completed 02-04-PLAN.md (Toast & Floating Island)
 
-Progress: [██████      ] 24% (6 of ~25 plans)
+Progress: [███████     ] 28% (7 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [██████      ] 24% (6 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 6
-- Average duration: 2.8 min
-- Total execution time: 0.32 hours
+- Total plans completed: 7
+- Average duration: 2.7 min
+- Total execution time: 0.35 hours
 
 *Updated after each plan completion*
 
@@ -65,6 +65,11 @@ v1.1 decisions:
 - [v1.1-02-03]: Preserve color-mix brand background in menu content (not a generic surface)
 - [v1.1-02-03]: Keep focus:text-white at full opacity on brand-tinted backgrounds for contrast
 - [v1.1-02-03]: Keep text-[10px] as arbitrary value on mobile FrequentApp (below caption-sm 11px)
+- [v1.1-02-04]: Toast bg-surface-3 replaces both container bg-[#404040]/40 and close button bg-neutral-600/70
+- [v1.1-02-04]: Island close button hover subtler (surface-3 at 0.14 vs original white/20 at 0.20) — adequate on solid black
+- [v1.1-02-04]: Island container desktop bottom-[86px] maintains ~6px gap above slimmer 80px dock
+- [v1.1-02-04]: Island bg-black and shadow-floating-island preserved (component identity, not generic surface)
+- [v1.1-02-04]: Framer Motion borderRadius animation values (22, 32) untouched (JS inline styles, not Tailwind)
 
 ### Pending Todos
 
@@ -77,7 +82,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 02-03-PLAN.md (Context Menu + Command Palette)
+Stopped at: Completed 02-04-PLAN.md (Toast & Floating Island)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -128,6 +133,13 @@ Resume file: None
   - Frequent apps: semantic border-default/surface-base/text-secondary tokens
   - shared/dialog.ts explicitly NOT modified (deferred to Phase 3)
   - Summary: .planning/phases/v1.1-02-desktop-shell/02-03-SUMMARY.md
+- Plan 02-04: Toast & Floating Island (completed 2026-02-06)
+  - Toast: semantic surface-3/radius-md/elevation-lg/body-lg/text-primary/text-secondary
+  - Toast: eliminated bg-[#404040]/40 hex background and opacity-60 hack
+  - Island close button: bg-surface-2 / hover:bg-surface-3
+  - Island container: md:bottom-[86px] adjusted for slimmer dock
+  - Island identity preserved: bg-black, shadow-floating-island, Framer Motion sizes object
+  - Summary: .planning/phases/v1.1-02-desktop-shell/02-04-SUMMARY.md
 
 ---
 
