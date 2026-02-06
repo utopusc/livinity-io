@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 2 of 8 (Desktop Shell)
-Plan: 1 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-06 - Completed 02-01-PLAN.md (Dock Redesign)
+Last activity: 2026-02-06 - Completed 02-02-PLAN.md (Desktop Content Semantic Tokens)
 
-Progress: [████        ] 16% (4 of ~25 plans)
+Progress: [██████      ] 24% (6 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [████        ] 16% (4 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 4
-- Average duration: 2.9 min
-- Total execution time: 0.19 hours
+- Total plans completed: 6
+- Average duration: 2.8 min
+- Total execution time: 0.32 hours
 
 *Updated after each plan completion*
 
@@ -58,6 +58,13 @@ v1.1 decisions:
 - [v1.1-02-01]: OpenPill kept as pure bg-white for maximum visibility (not migrated to semantic token)
 - [v1.1-02-01]: Preview dock retains bg-neutral-900/80 solid background (not surface token)
 - [v1.1-02-01]: Dock border hierarchy: border-default for container, border-emphasis for items, border-subtle for dividers
+- [v1.1-02-02]: bg-text-primary used as progress bar fill (same rgba as bg-white/90)
+- [v1.1-02-02]: bg-border-emphasis used as inactive paginator pill background (same 0.20 opacity)
+- [v1.1-02-02]: text-text-secondary replaces opacity-50 hack for proper semantic app description color
+- [v1.1-02-02]: Reduced backdrop-blur from 2xl to md on install-first-app cards
+- [v1.1-02-03]: Preserve color-mix brand background in menu content (not a generic surface)
+- [v1.1-02-03]: Keep focus:text-white at full opacity on brand-tinted backgrounds for contrast
+- [v1.1-02-03]: Keep text-[10px] as arbitrary value on mobile FrequentApp (below caption-sm 11px)
 
 ### Pending Todos
 
@@ -70,7 +77,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 02-01-PLAN.md (Dock Redesign)
+Stopped at: Completed 02-02-PLAN.md (Desktop Content Semantic Tokens)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -105,6 +112,13 @@ Resume file: None
   - Dock divider: subtler and shorter (border-subtle, h-6)
   - Notification badge: semantic caption-sm typography
   - Summary: .planning/phases/v1.1-02-desktop-shell/02-01-SUMMARY.md
+- Plan 02-02: Desktop Content Semantic Tokens (completed 2026-02-06)
+  - Header greeting: text-heading / md:text-display-lg
+  - Search button: surface-1/border-subtle/text-caption/text-primary
+  - App icon: surface-2/border-emphasis/radius-sm/md, caption-sm/body-sm labels
+  - Paginator: surface-base arrows, border-emphasis pills
+  - Install-first-app: radius-xl/elevation-lg, reduced backdrop-blur-md
+  - Summary: .planning/phases/v1.1-02-desktop-shell/02-02-SUMMARY.md
 
 ---
 
