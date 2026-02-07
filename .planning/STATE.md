@@ -16,7 +16,7 @@ Plan: 3 of 3 in current phase
 Status: In progress
 Last activity: 2026-02-07 - Completed 07-03-PLAN.md (Restore Flow & App-Auth Migration)
 
-Progress: [███████████████████████ ] 92% (23 of 25 plans)
+Progress: [████████████████████████ ] 96% (24 of 25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████████████████
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 23
+- Total plans completed: 24
 - Average duration: 3.5 min
-- Total execution time: 1.57 hours
+- Total execution time: 1.62 hours
 
 *Updated after each plan completion*
 
@@ -129,6 +129,10 @@ v1.1 decisions:
 - [v1.1-07-01]: darken-layer.tsx unchanged (bg-black/50 is intentional overlay, not generic surface)
 - [v1.1-07-01]: StepIndicator 0-indexed to match restore.tsx Step enum convention
 - [v1.1-07-01]: focus-visible:ring-3 -> ring-2 ring-brand/20 (consistent with Phase 1 brand focus pattern)
+- [v1.1-07-02]: PinInput error recovery 500ms -> 800ms for better user recognition of error state
+- [v1.1-07-02]: 2FA step changed from form to div (PinInput auto-submits, form wrapping was redundant)
+- [v1.1-07-02]: ToS text opacity-70 -> text-text-secondary (0.70 -> 0.60, consistent with design system)
+- [v1.1-07-02]: Error spacer -my-2.5 -> -my-2 (standardized to Tailwind scale)
 - [v1.1-07-03]: BackupSnapshot badge text-caption-sm (11px) over text-[10px] — enough space in onboarding for 11px
 - [v1.1-07-03]: bg-dialog-content/70 preserved on app-auth card (semantic token from Phase 3 dialog system with transparency)
 - [v1.1-07-03]: bg-black/50 overlay preserved on app-auth (intentional darken layer convention)
@@ -331,6 +335,14 @@ Resume file: None
   - StepIndicator: pill/dot component (bg-brand active, bg-brand/50 completed, bg-surface-3 future)
   - bare-page.tsx: min-h-[100dvh] -> min-h-dvh
   - Summary: .planning/phases/v1.1-07-login-onboarding/07-01-SUMMARY.md
+- Plan 07-02: Login, PinInput & Onboarding Pages (completed 2026-02-07)
+  - Login 2FA step: back button with secondaryButtonClasss, form->div wrapping
+  - PinInput: border-border-emphasis, bg-surface-base, bg-surface-2 dots, rounded-radius-sm, bg-text-primary caret
+  - PinInput: error recovery 500ms -> 800ms
+  - OnboardingStart: StepIndicator step 0/3
+  - CreateAccount: StepIndicator step 1/3, error spacer standardized
+  - AccountCreated: StepIndicator step 2/3, text-caption + text-text-secondary for ToS
+  - Summary: .planning/phases/v1.1-07-login-onboarding/07-02-SUMMARY.md
 - Plan 07-03: Restore Flow & App-Auth Migration (completed 2026-02-07)
   - restore.tsx: StepIndicator with steps=4 and dynamic currentStep=step
   - restore.tsx: back button border-border-default/bg-surface-base/focus-visible:border-brand
