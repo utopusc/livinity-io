@@ -72,10 +72,10 @@
 
 ### Login & Onboarding (LO)
 
-- [ ] **LO-01**: Redesign login page with Livinity-branded visual identity
-- [ ] **LO-02**: Redesign onboarding flow with step indicators and cleaner forms
-- [ ] **LO-03**: Add Livinity logo and brand assets to auth pages
-- [ ] **LO-04**: Redesign 2FA input with improved UX
+- [x] **LO-01**: Redesign login page with Livinity-branded visual identity ✓
+- [x] **LO-02**: Redesign onboarding flow with step indicators and cleaner forms ✓
+- [x] **LO-03**: Add Livinity logo and brand assets to auth pages ✓
+- [x] **LO-04**: Redesign 2FA input with improved UX ✓
 
 ### Mobile Responsiveness (MR)
 
@@ -112,14 +112,14 @@
 | AC-01 to AC-06 | Phase 5 | Complete |
 | AS-01 to AS-04 | Phase 6 | Complete |
 | FM-01 to FM-04 | Phase 6 | Complete |
-| LO-01 to LO-04 | Phase 7 | Pending |
+| LO-01 to LO-04 | Phase 7 | Complete |
 | MR-01 to MR-04 | Phase 8 | Pending |
 | CN-01 to CN-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 47 total
-- Complete: 43 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05, AC-01–AC-06, AS-01–AS-04, FM-01–FM-04)
-- Pending: 4
+- Complete: 47 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05, AC-01–AC-06, AS-01–AS-04, FM-01–FM-04, LO-01–LO-04)
+- Pending: 0 (MR-01–MR-04 remaining in Phase 8)
 - Unmapped: 0
 
 ---

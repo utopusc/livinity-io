@@ -14,7 +14,7 @@ The redesign progresses from foundation (design system tokens) through core shel
 - [x] **Phase 4: Settings Redesign** — Settings sidebar, content sections, forms, tabs ✓
 - [x] **Phase 5: AI Chat Redesign** — Chat sidebar, messages, input, tool calls, MCP ✓
 - [x] **Phase 6: App Store & Files** — App store navigation/cards/detail, file manager views ✓
-- [ ] **Phase 7: Login & Onboarding** — Auth pages with Livinity branding
+- [x] **Phase 7: Login & Onboarding** — Auth pages with Livinity branding ✓
 - [ ] **Phase 8: Mobile & Polish** — Responsive fixes, animations, final polish
 
 ## Phase Details
@@ -141,9 +141,9 @@ Plans:
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 07-01-PLAN.md — Layout & brand foundation: shared.tsx token migration, brand buttons, StepIndicator component (LO-01, LO-03)
-- [ ] 07-02-PLAN.md — Login page, PinInput UX, onboarding step indicators (LO-01, LO-02, LO-03, LO-04)
-- [ ] 07-03-PLAN.md — Restore flow step indicators & token migration, app-auth brand alignment (LO-02)
+- [x] 07-01-PLAN.md — Layout & brand foundation: shared.tsx token migration, brand buttons, StepIndicator component (LO-01, LO-03)
+- [x] 07-02-PLAN.md — Login page, PinInput UX, onboarding step indicators (LO-01, LO-02, LO-03, LO-04)
+- [x] 07-03-PLAN.md — Restore flow step indicators & token migration, app-auth brand alignment (LO-02)
 
 ### Phase 8: Mobile & Polish
 **Goal**: Ensure responsive design works across all redesigned views and add final polish
@@ -171,7 +171,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 4. Settings Redesign | 3/3 | Complete | 2026-02-06 |
 | 5. AI Chat Redesign | 3/3 | Complete | 2026-02-06 |
 | 6. App Store & Files | 3/3 | Complete | 2026-02-07 |
-| 7. Login & Onboarding | 0/? | Not started | - |
+| 7. Login & Onboarding | 3/3 | Complete | 2026-02-07 |
 | 8. Mobile & Polish | 0/? | Not started | - |
 
 ---

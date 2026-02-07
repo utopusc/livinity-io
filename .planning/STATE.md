@@ -6,17 +6,17 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.1 — Complete UI Redesign (Minimal & Clean)
-**Current focus:** Phase 7 — Login & Onboarding
+**Current focus:** Phase 8 — Mobile & Polish
 
 ## Current Position
 
 Milestone: v1.1 (UI Redesign)
-Phase: 7 of 8 (Login & Onboarding)
-Plan: 3 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-07 - Completed 07-03-PLAN.md (Restore Flow & App-Auth Migration)
+Phase: 8 of 8 (Mobile & Polish)
+Plan: 0 of ? in current phase
+Status: Phase 7 complete, ready to plan Phase 8
+Last activity: 2026-02-07 - Phase 7 complete (3/3 plans)
 
-Progress: [████████████████████████ ] 96% (24 of 25 plans)
+Progress: [████████████████████████ ] 96% (24 of ~27 plans)
 
 ## Performance Metrics
 
