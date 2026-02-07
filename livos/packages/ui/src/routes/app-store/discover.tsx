@@ -29,8 +29,8 @@ const getAppById = (appId: string, apps: RegistryApp[]): RegistryApp | undefined
 function DiscoverUnavailable() {
 	return (
 		<div className={cn(cardFaintClass, 'flex h-40 flex-col items-center justify-center p-8 text-center')}>
-			<p className='text-15 font-medium text-white/80'>{t('app-store.discover.temporarily-unavailable-title')}</p>
-			<p className='mt-2 text-12 text-white/50'>{t('app-store.discover.temporarily-unavailable-description')}</p>
+			<p className='text-body font-medium text-text-primary'>{t('app-store.discover.temporarily-unavailable-title')}</p>
+			<p className='mt-2 text-caption text-text-secondary'>{t('app-store.discover.temporarily-unavailable-description')}</p>
 		</div>
 	)
 }

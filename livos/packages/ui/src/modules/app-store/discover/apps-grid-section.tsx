@@ -73,41 +73,36 @@ export function AppWithDescription({
 			className={cn(
 				'group relative flex w-full items-start gap-4 rounded-2xl p-4',
 				'border border-transparent',
-				'bg-gradient-to-br from-white/[0.02] to-transparent',
+				'bg-transparent',
 				'transition-all duration-300 ease-out',
-				'hover:border-white/[0.1] hover:bg-white/[0.06]',
-				'hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]',
-				'focus:outline-none focus:ring-2 focus:ring-purple-500/40',
+				'hover:border-border-default hover:bg-surface-1',
+				'hover:shadow-elevation-sm',
+				'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/20',
 				'animate-in fade-in slide-in-from-bottom-4',
 			)}
 			style={style}
 			unstable_viewTransition
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
-			{/* Subtle glow on hover */}
-			<div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/0 via-transparent to-cyan-500/0 opacity-0 transition-opacity duration-300 group-hover:opacity-5' />
-
 			<div className='relative'>
 				<AppIcon
 					src={app.icon}
 					size={56}
 					className={cn(
 						'rounded-xl',
-						'shadow-[0_4px_12px_rgba(0,0,0,0.25)]',
-						'ring-1 ring-white/10',
+						'shadow-elevation-sm',
+						'ring-1 ring-border-default',
 						'transition-all duration-300',
-						'group-hover:scale-105 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.35)]',
+						'group-hover:scale-105 group-hover:shadow-elevation-md',
 					)}
 				/>
-				{/* Icon glow */}
-				<div className='absolute -inset-2 -z-10 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-40' />
 			</div>
 
 			<div className='flex min-w-0 flex-1 flex-col gap-1'>
-				<h3 className='truncate text-[15px] font-semibold tracking-tight text-white transition-colors group-hover:text-white'>
+				<h3 className='truncate text-body font-semibold tracking-tight text-text-primary transition-colors group-hover:text-white'>
 					{app.name}
 				</h3>
-				<p className='line-clamp-2 text-[13px] leading-snug text-white/40 transition-colors group-hover:text-white/55'>
+				<p className='line-clamp-2 text-body-sm leading-snug text-text-tertiary transition-colors group-hover:text-text-secondary'>
 					{app.tagline}
 				</p>
 			</div>
@@ -115,7 +110,7 @@ export function AppWithDescription({
 			{/* Arrow indicator on hover */}
 			<div className='absolute right-4 top-1/2 -translate-y-1/2 opacity-0 transition-all duration-300 group-hover:opacity-100'>
 				<svg
-					className='h-5 w-5 text-white/40'
+					className='h-5 w-5 text-text-tertiary'
 					fill='none'
 					viewBox='0 0 24 24'
 					stroke='currentColor'
@@ -134,31 +129,31 @@ export function FeaturedAppCard({app, gradient}: {app: RegistryApp; gradient?: s
 			to={`/app-store/${app.id}`}
 			className={cn(
 				'group relative flex flex-col overflow-hidden rounded-3xl p-6',
-				'border border-white/[0.1]',
+				'border border-border-default',
 				'transition-all duration-500',
-				'hover:border-white/[0.2] hover:shadow-[0_20px_50px_rgba(0,0,0,0.4)]',
-				gradient || 'bg-gradient-to-br from-purple-600/20 via-blue-600/10 to-cyan-600/5',
+				'hover:border-border-emphasis hover:shadow-elevation-lg',
+				gradient || 'bg-surface-2',
 			)}
 			unstable_viewTransition
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
 			{/* Background glow */}
-			<div className='absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/5 blur-3xl transition-all duration-500 group-hover:bg-white/10' />
+			<div className='absolute -right-10 -top-10 h-32 w-32 rounded-full bg-surface-1 blur-3xl transition-all duration-500 group-hover:bg-surface-2' />
 
 			<div className='relative flex items-start gap-4'>
 				<AppIcon
 					src={app.icon}
 					size={72}
-					className='rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.3)] ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-105'
+					className='rounded-2xl shadow-elevation-md ring-1 ring-border-emphasis transition-transform duration-300 group-hover:scale-105'
 				/>
 				<div className='flex-1'>
-					<h3 className='text-xl font-bold tracking-tight text-white'>{app.name}</h3>
-					<p className='mt-1 text-sm text-white/60'>{app.tagline}</p>
+					<h3 className='text-xl font-bold tracking-tight text-text-primary'>{app.name}</h3>
+					<p className='mt-1 text-body-sm text-text-secondary'>{app.tagline}</p>
 				</div>
 			</div>
 
 			{app.description && (
-				<p className='mt-4 line-clamp-2 text-sm text-white/40'>{app.description}</p>
+				<p className='mt-4 line-clamp-2 text-body-sm text-text-tertiary'>{app.description}</p>
 			)}
 		</Link>
 	)
