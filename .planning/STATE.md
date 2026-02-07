@@ -97,6 +97,10 @@ v1.1 decisions:
 - [v1.1-04-03]: domain-setup.tsx Tailwind defaults migrated: text-xs->text-caption, text-sm->text-body, text-base->text-body-lg, rounded-xl->rounded-radius-md
 - [v1.1-04-03]: Tab consumer overrides (bg-white/5 on TabsList, data-[state=active]:bg-white/10 on TabsTrigger) removed from 10 locations in settings-content.tsx
 - [v1.1-04-03]: Brand colors preserved: sky/indigo (Telegram/Discord), orange (danger zone), green/red (status), blue (info), violet (accent)
+- [v1.1-05-01]: Brand gradients (violet-500/30, blue-500/30) and text-violet-400 preserved as Liv AI brand identity
+- [v1.1-05-01]: text-blue-400 kept on tool names in ToolCallDisplay (semantic tool accent)
+- [v1.1-05-01]: Status icon colors (violet/purple/orange/blue) preserved as semantic tool status indicators
+- [v1.1-05-01]: Conversation title upgraded from text-xs to text-body-sm with text-caption-sm relative timestamp
 - [v1.1-05-03]: Transport toggle active state preserved as bg-violet-500/20 (deliberate brand accent, not generic surface)
 - [v1.1-05-03]: CATEGORY_COLORS and FEATURED_MCPS gradients preserved as domain-specific (not migrated to semantic tokens)
 - [v1.1-05-03]: InstallDialog uses bg-dialog-content (consistent with Phase 3 dialog pattern)
@@ -114,7 +118,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 05-03-PLAN.md (MCP Panel Semantic Token Migration)
+Stopped at: Completed 05-01-PLAN.md (AI Chat Sidebar, Messages, Tool Calls)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -239,6 +243,15 @@ Resume file: None
   - Summary: .planning/phases/v1.1-04-settings-redesign/04-03-SUMMARY.md
 
 **Phase v1.1-05: AI Chat Redesign**
+- Plan 05-01: AI Chat Sidebar, Messages, Tool Calls (completed 2026-02-07)
+  - ConversationSidebar: semantic surface-base/border-default/text-primary tokens
+  - Relative timestamps via date-fns formatDistanceToNow
+  - Tab switcher: border-brand for active state
+  - ChatMessage: bg-brand user bubbles, bg-surface-2 assistant bubbles
+  - ToolCallDisplay: border-default/surface-base/caption typography
+  - StatusIndicator: surface-base/text-secondary
+  - All conditional classes converted to cn()
+  - Summary: .planning/phases/v1.1-05-ai-chat-redesign/05-01-SUMMARY.md
 - Plan 05-03: MCP Panel Semantic Token Migration (completed 2026-02-07)
   - All ~81 raw opacity values replaced with semantic tokens
   - InstallDialog: bg-dialog-content, border-border-default
