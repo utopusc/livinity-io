@@ -59,9 +59,9 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 
 	if (subdomainQuery.isLoading) {
 		return (
-			<div className='flex items-center gap-2 py-4 text-white/50'>
+			<div className='flex items-center gap-2 py-4 text-text-secondary'>
 				<TbLoader2 className='h-4 w-4 animate-spin' />
-				<span className='text-sm'>Loading...</span>
+				<span className='text-body-sm'>Loading...</span>
 			</div>
 		)
 	}
@@ -71,12 +71,12 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	// Main domain not configured yet
 	if (!mainDomainActive) {
 		return (
-			<div className='rounded-lg border border-white/10 bg-white/5 p-4'>
+			<div className='rounded-radius-sm border border-border-default bg-surface-base p-4'>
 				<div className='flex items-start gap-3'>
 					<TbInfoCircle className='mt-0.5 h-5 w-5 text-yellow-400' />
 					<div>
-						<p className='text-sm font-medium text-white/90'>Domain Required</p>
-						<p className='mt-1 text-xs text-white/50'>
+						<p className='text-body-sm font-medium text-text-primary'>Domain Required</p>
+						<p className='mt-1 text-caption text-text-secondary'>
 							To enable public access for apps, first configure your main domain in Settings → Domain & HTTPS.
 						</p>
 					</div>
@@ -111,8 +111,8 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	return (
 		<div className='space-y-4'>
 			<div className='flex items-center gap-2'>
-				<TbWorld className='h-5 w-5 text-white/70' />
-				<span className='text-sm font-medium text-white/90'>Public Access</span>
+				<TbWorld className='h-5 w-5 text-text-primary' />
+				<span className='text-body-sm font-medium text-text-primary'>Public Access</span>
 			</div>
 
 			{!isConfigured || isEditing ? (
@@ -125,7 +125,7 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 							placeholder={appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}
 							className='max-w-[200px] font-mono text-sm'
 						/>
-						<span className='text-sm text-white/50'>.{mainDomain}</span>
+						<span className='text-body-sm text-text-secondary'>.{mainDomain}</span>
 					</div>
 
 					<div className='flex gap-2'>
@@ -149,7 +149,7 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 						)}
 					</div>
 
-					<p className='text-xs text-white/40'>
+					<p className='text-caption text-text-tertiary'>
 						Make sure to add an A record for <span className='font-mono'>{subdomain || '*'}.{mainDomain}</span> pointing
 						to your server IP, or use a wildcard A record (*.{mainDomain}).
 					</p>
@@ -165,12 +165,12 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 									href={`https://${fullDomain}`}
 									target='_blank'
 									rel='noopener noreferrer'
-									className='flex items-center gap-1 font-mono text-sm text-white/90 hover:text-white'
+									className='flex items-center gap-1 font-mono text-body-sm text-text-primary hover:text-white'
 								>
 									{fullDomain}
 									<TbExternalLink className='h-3.5 w-3.5' />
 								</a>
-								<p className='text-xs text-white/40'>Port {appPort}</p>
+								<p className='text-caption text-text-tertiary'>Port {appPort}</p>
 							</div>
 						</div>
 
@@ -178,7 +178,7 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 						{isEnabled && (
 							<div className='flex items-center gap-1.5'>
 								{dnsQuery.isLoading ? (
-									<TbLoader2 className='h-4 w-4 animate-spin text-white/50' />
+									<TbLoader2 className='h-4 w-4 animate-spin text-text-secondary' />
 								) : dnsQuery.data?.match ? (
 									<span className='flex items-center gap-1 text-xs text-green-400'>
 										<TbCheck className='h-4 w-4' />

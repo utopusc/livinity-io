@@ -70,12 +70,12 @@ const Dependency = ({
 	return (
 		<div className='flex w-full items-center gap-2.5 pl-2'>
 			<Link to={`/app-store/${app.id}`}>
-				<AppIcon src={app.icon} size={36} className='rounded-8' />
+				<AppIcon src={app.icon} size={36} className='rounded-radius-sm' />
 			</Link>
 			<div className='flex-col gap-4'>
 				<Link to={`/app-store/${app.id}`} className='flex gap-1.5'>
-					<h3 className='truncate text-14 font-semibold leading-tight -tracking-3'>{app.name}</h3>
-					{installed && <TbCircleCheckFilled className='h-[16px] w-[16px] text-slate-500' />}
+					<h3 className='truncate text-body font-semibold leading-tight -tracking-3'>{app.name}</h3>
+					{installed && <TbCircleCheckFilled className='h-icon-sm w-icon-sm text-slate-500' />}
 				</Link>
 				{numberOfAlternativeApps > 0 && (
 					<div

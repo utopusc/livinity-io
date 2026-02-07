@@ -55,7 +55,7 @@ export function ReadMoreMarkdownSection({children}: {children: string}) {
 				<button
 					ref={buttonRef}
 					onClick={toggle}
-					className={cn(linkClass, 'self-start text-13 font-medium group-hover:text-brand')}
+					className={cn(linkClass, 'self-start text-body-sm font-medium group-hover:text-brand')}
 				>
 					{isExpanded ? t('read-less') : t('read-more')}
 				</button>
@@ -65,6 +65,6 @@ export function ReadMoreMarkdownSection({children}: {children: string}) {
 }
 
 export const appPageWrapperClass = tw`flex flex-col gap-8`
-export const cardClass = cn(cardFaintClass, tw`rounded-12 px-[20px] py-[30px] flex flex-col gap-5`)
-export const cardTitleClass = tw`text-12 opacity-50 uppercase leading-inter-trim font-semibold tracking-normal`
-export const cardTextClass = tw`text-15 leading-snug`
+export const cardClass = cn(cardFaintClass, tw`rounded-radius-md px-5 py-8 flex flex-col gap-5`)
+export const cardTitleClass = tw`text-caption text-text-secondary uppercase leading-inter-trim font-semibold tracking-normal`
+export const cardTextClass = tw`text-body-lg leading-snug`
