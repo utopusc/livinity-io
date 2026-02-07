@@ -20,7 +20,7 @@ const SheetOverlay = React.forwardRef<
 >(({className, ...props}, ref) => (
 	<SheetPrimitive.Overlay
 		className={cn(
-			'bg-background/80 fixed inset-0 z-30 backdrop-blur-xl duration-700 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+			'bg-background/80 fixed inset-0 z-30 transform-gpu backdrop-blur-lg md:backdrop-blur-xl duration-700 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
 			className,
 		)}
 		{...props}
@@ -81,7 +81,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
 								transform: 'scale(1.2) rotate(180deg)',
 							}}
 						/>
-						<div className='absolute inset-0 backdrop-blur-3xl backdrop-brightness-[0.3] backdrop-saturate-[1.2]' />
+						<div className='absolute inset-0 transform-gpu backdrop-blur-xl md:backdrop-blur-3xl backdrop-brightness-[0.3] backdrop-saturate-[1.2]' />
 					</div>
 					{children}
 					{/* Sheet inner glow highlight */}
