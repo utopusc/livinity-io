@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 5 of 8 (AI Chat Redesign)
-Plan: 0 of ? in current phase
-Status: Phase 4 complete, ready to plan Phase 5
-Last activity: 2026-02-06 - Phase 4 complete (3/3 plans, verified 21/21 must-haves)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-07 - Completed 05-01-PLAN.md (AI Chat Sidebar, Messages, Tool Calls)
 
-Progress: [███████████████ ] 60% (15 of ~25 plans)
+Progress: [████████████████ ] 64% (16 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████████ ] 60% (15 of ~25 plans)
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 15
-- Average duration: 3.6 min
-- Total execution time: 1.02 hours
+- Total plans completed: 16
+- Average duration: 3.5 min
+- Total execution time: 1.10 hours
 
 *Updated after each plan completion*
 
@@ -97,6 +97,11 @@ v1.1 decisions:
 - [v1.1-04-03]: domain-setup.tsx Tailwind defaults migrated: text-xs->text-caption, text-sm->text-body, text-base->text-body-lg, rounded-xl->rounded-radius-md
 - [v1.1-04-03]: Tab consumer overrides (bg-white/5 on TabsList, data-[state=active]:bg-white/10 on TabsTrigger) removed from 10 locations in settings-content.tsx
 - [v1.1-04-03]: Brand colors preserved: sky/indigo (Telegram/Discord), orange (danger zone), green/red (status), blue (info), violet (accent)
+- [v1.1-05-03]: Transport toggle active state preserved as bg-violet-500/20 (deliberate brand accent, not generic surface)
+- [v1.1-05-03]: CATEGORY_COLORS and FEATURED_MCPS gradients preserved as domain-specific (not migrated to semantic tokens)
+- [v1.1-05-03]: InstallDialog uses bg-dialog-content (consistent with Phase 3 dialog pattern)
+- [v1.1-05-03]: All MCP form inputs use brand focus pattern (focus-visible:border-brand + ring-brand/20)
+- [v1.1-05-03]: Server status colors preserved: green-400 (running), amber-400 (connecting), red-400 (error)
 
 ### Pending Todos
 
@@ -108,8 +113,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-06
-Stopped at: Completed 04-02-PLAN.md (Settings Section Content & Standalone Pages) — Phase 4 complete
+Last session: 2026-02-07
+Stopped at: Completed 05-03-PLAN.md (MCP Panel Semantic Token Migration)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -232,6 +237,17 @@ Resume file: None
   - Tab consumer overrides cleaned: 4 TabsList bg-white/5, 6 TabsTrigger data-[state=active]:bg-white/10
   - Brand/status colors preserved throughout
   - Summary: .planning/phases/v1.1-04-settings-redesign/04-03-SUMMARY.md
+
+**Phase v1.1-05: AI Chat Redesign**
+- Plan 05-03: MCP Panel Semantic Token Migration (completed 2026-02-07)
+  - All ~81 raw opacity values replaced with semantic tokens
+  - InstallDialog: bg-dialog-content, border-border-default
+  - Install/save buttons: bg-brand, hover:bg-brand-lighter
+  - Tab bar active: border-brand (was border-violet-500)
+  - All form inputs: brand focus pattern (focus-visible:border-brand + ring)
+  - All text-[Npx] -> semantic typography, all rounded-XX -> semantic radii
+  - Status/category/gradient colors preserved
+  - Summary: .planning/phases/v1.1-05-ai-chat-redesign/05-03-SUMMARY.md
 
 ---
 
