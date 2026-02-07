@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 7 of 8 (Login & Onboarding)
-Plan: 0 of ? in current phase
-Status: Phase 6 complete, ready to plan Phase 7
-Last activity: 2026-02-07 - Phase 6 complete (3/3 plans, verified)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-07 - Completed 07-01-PLAN.md (Auth Layout Foundation)
 
-Progress: [█████████████████████ ] 84% (21 of ~25 plans)
+Progress: [██████████████████████ ] 88% (22 of 25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [█████████████████████ ] 84%
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: 3.5 min
-- Total execution time: 1.45 hours
+- Total execution time: 1.52 hours
 
 *Updated after each plan completion*
 
@@ -124,6 +124,11 @@ v1.1 decisions:
 - [v1.1-06-02]: bg-black/30 on marketplace-app-window header preserved (iframe overlay, not generic surface)
 - [v1.1-06-02]: text-sm in public-access replaced with text-body-sm (13px semantic scale match)
 - [v1.1-06-02]: text-xs in public-access DNS badges replaced with text-caption (12px semantic match)
+- [v1.1-07-01]: md:text-56 kept on Title (custom 56px hero text, no semantic match)
+- [v1.1-07-01]: secondaryButtonClasss typo preserved to avoid breaking imports
+- [v1.1-07-01]: darken-layer.tsx unchanged (bg-black/50 is intentional overlay, not generic surface)
+- [v1.1-07-01]: StepIndicator 0-indexed to match restore.tsx Step enum convention
+- [v1.1-07-01]: focus-visible:ring-3 -> ring-2 ring-brand/20 (consistent with Phase 1 brand focus pattern)
 
 ### Pending Todos
 
@@ -136,7 +141,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 06-02-PLAN.md (App Store Detail Page & Dialogs) — Phase 6 complete
+Stopped at: Completed 07-01-PLAN.md (Auth Layout Foundation)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -312,6 +317,16 @@ Resume file: None
   - 5 dialogs: divide-border-subtle, bg-surface-1, rounded-radius-md/sm, text-body-sm
   - Window-mode pages synced with sheet-mode token vocabulary
   - Summary: .planning/phases/v1.1-06-app-store-files/06-02-SUMMARY.md
+
+**Phase v1.1-07: Login & Onboarding**
+- Plan 07-01: Auth Layout Foundation (completed 2026-02-07)
+  - shared.tsx: semantic tokens for Title/SubTitle/buttonClass/secondaryButtonClasss/footerLinkClass
+  - buttonClass: bg-white text-black -> bg-brand text-white
+  - secondaryButtonClasss: bg-neutral-600/40 -> bg-surface-2
+  - Layout: stepIndicator prop slot between logo and title
+  - StepIndicator: pill/dot component (bg-brand active, bg-brand/50 completed, bg-surface-3 future)
+  - bare-page.tsx: min-h-[100dvh] -> min-h-dvh
+  - Summary: .planning/phases/v1.1-07-login-onboarding/07-01-SUMMARY.md
 
 ---
 
