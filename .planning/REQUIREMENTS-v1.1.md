@@ -49,12 +49,12 @@
 
 ### AI Chat (AC)
 
-- [ ] **AC-01**: Redesign AI chat sidebar with cleaner conversation list
-- [ ] **AC-02**: Redesign message bubbles with refined spacing, typography, and colors
-- [ ] **AC-03**: Redesign chat input area with modern, clean text input
-- [ ] **AC-04**: Redesign empty state with branded illustration
-- [ ] **AC-05**: Improve tool call display with cleaner accordion/expandable sections
-- [ ] **AC-06**: Redesign MCP panel with consistent card layout
+- [x] **AC-01**: Redesign AI chat sidebar with cleaner conversation list ✓
+- [x] **AC-02**: Redesign message bubbles with refined spacing, typography, and colors ✓
+- [x] **AC-03**: Redesign chat input area with modern, clean text input ✓
+- [x] **AC-04**: Redesign empty state with branded illustration ✓
+- [x] **AC-05**: Improve tool call display with cleaner accordion/expandable sections ✓
+- [x] **AC-06**: Redesign MCP panel with consistent card layout ✓
 
 ### App Store (AS)
 
@@ -109,7 +109,7 @@
 | WS-01 to WS-04 | Phase 3 | Complete |
 | SM-01 to SM-04 | Phase 3 | Complete |
 | ST-01 to ST-05 | Phase 4 | Complete |
-| AC-01 to AC-06 | Phase 5 | Pending |
+| AC-01 to AC-06 | Phase 5 | Complete |
 | AS-01 to AS-04 | Phase 6 | Pending |
 | FM-01 to FM-04 | Phase 6 | Pending |
 | LO-01 to LO-04 | Phase 7 | Pending |
@@ -118,8 +118,8 @@
 
 **Coverage:**
 - v1.1 requirements: 47 total
-- Complete: 29 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05)
-- Pending: 18
+- Complete: 35 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05, AC-01–AC-06)
+- Pending: 12
 - Unmapped: 0
 
 ---

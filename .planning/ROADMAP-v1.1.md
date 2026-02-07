@@ -11,8 +11,8 @@ The redesign progresses from foundation (design system tokens) through core shel
 - [x] **Phase 1: Design System Foundation** — Define tokens, update Tailwind config, refine base components ✓
 - [x] **Phase 2: Desktop Shell** — Dock, desktop layout, context menu, command palette, notifications ✓
 - [x] **Phase 3: Window & Sheet System** — Floating windows, sheet modals, dialogs ✓
-- [ ] **Phase 4: Settings Redesign** — Settings sidebar, content sections, forms, tabs
-- [ ] **Phase 5: AI Chat Redesign** — Chat sidebar, messages, input, tool calls, MCP
+- [x] **Phase 4: Settings Redesign** — Settings sidebar, content sections, forms, tabs ✓
+- [x] **Phase 5: AI Chat Redesign** — Chat sidebar, messages, input, tool calls, MCP ✓
 - [ ] **Phase 6: App Store & Files** — App store navigation/cards/detail, file manager views
 - [ ] **Phase 7: Login & Onboarding** — Auth pages with Livinity branding
 - [ ] **Phase 8: Mobile & Polish** — Responsive fixes, animations, final polish
@@ -88,9 +88,9 @@ Plans:
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 04-01-PLAN.md — Settings sidebar + header card + shared classes + tabs base component (ST-01, ST-03, ST-05)
-- [ ] 04-02-PLAN.md — Section content token migration + shared component extraction (ST-02, ST-04)
-- [ ] 04-03-PLAN.md — Large standalone pages (domain-setup, nexus-config, integrations) + tab consumer cleanup (ST-02, ST-04, ST-05)
+- [x] 04-01-PLAN.md — Settings sidebar + header card + shared classes + tabs base component (ST-01, ST-03, ST-05)
+- [x] 04-02-PLAN.md — Section content token migration + shared component extraction (ST-02, ST-04)
+- [x] 04-03-PLAN.md — Large standalone pages (domain-setup, nexus-config, integrations) + tab consumer cleanup (ST-02, ST-04, ST-05)
 
 ### Phase 5: AI Chat Redesign
 **Goal**: Transform the AI chat into a professional, polished conversation interface
@@ -106,9 +106,9 @@ Plans:
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 05-01-PLAN.md — Chat sidebar + message bubbles + tool calls + status indicator token migration (AC-01, AC-02, AC-05)
-- [ ] 05-02-PLAN.md — Chat input + empty state + quick chat dialog token migration (AC-03, AC-04)
-- [ ] 05-03-PLAN.md — MCP panel full redesign with semantic tokens (AC-06)
+- [x] 05-01-PLAN.md — Chat sidebar + message bubbles + tool calls + status indicator token migration (AC-01, AC-02, AC-05)
+- [x] 05-02-PLAN.md — Chat input + empty state + quick chat dialog token migration (AC-03, AC-04)
+- [x] 05-03-PLAN.md — MCP panel full redesign with semantic tokens (AC-06)
 
 ### Phase 6: App Store & Files
 **Goal**: Redesign app browsing and file management interfaces
@@ -159,7 +159,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 2. Desktop Shell | 5/5 | Complete | 2026-02-06 |
 | 3. Window & Sheet System | 4/4 | Complete | 2026-02-06 |
 | 4. Settings Redesign | 3/3 | Complete | 2026-02-06 |
-| 5. AI Chat Redesign | 0/? | Not started | - |
+| 5. AI Chat Redesign | 3/3 | Complete | 2026-02-06 |
 | 6. App Store & Files | 0/? | Not started | - |
 | 7. Login & Onboarding | 0/? | Not started | - |
 | 8. Mobile & Polish | 0/? | Not started | - |
