@@ -2,7 +2,7 @@ import {useState} from 'react'
 import {flushSync} from 'react-dom'
 
 import {PinInput} from '@/components/ui/pin-input'
-import {buttonClass, formGroupClass, Layout} from '@/layouts/bare/shared'
+import {buttonClass, formGroupClass, Layout, secondaryButtonClasss} from '@/layouts/bare/shared'
 import {useAuth} from '@/modules/auth/use-auth'
 import {PasswordInput} from '@/shadcn-components/ui/input'
 import {trpcReact} from '@/trpc/trpc'
@@ -66,9 +66,16 @@ export default function Login() {
 		case '2fa': {
 			return (
 				<Layout title={t('login-2fa.title')} subTitle={t('login-2fa.subtitle')}>
-					<form className='flex w-full flex-col items-center gap-5 px-4 md:px-0' onSubmit={handleSubmitPassword}>
+					<div className='flex w-full flex-col items-center gap-6 px-4 md:px-0'>
 						<PinInput autoFocus length={6} onCodeCheck={handleSubmit2fa} />
-					</form>
+						<button
+							type='button'
+							className={secondaryButtonClasss}
+							onClick={() => setStep('password')}
+						>
+							{t('back')}
+						</button>
+					</div>
 				</Layout>
 			)
 		}

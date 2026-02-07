@@ -10,7 +10,7 @@ import {tw} from '@/utils/tw'
 
 // ---
 
-const dotClass = tw`absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#D9D9D9]/10`
+const dotClass = tw`absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-2`
 
 // ---
 
@@ -67,7 +67,7 @@ export const PinInput = ({length, onCodeCheck, autoFocus}: PinInputProps) => {
 								input.value = ''
 								input.dispatchEvent(new Event('input'))
 								input.focus()
-							}, 500)
+							}, 800)
 						})
 				}
 			}}
@@ -79,13 +79,13 @@ export const PinInput = ({length, onCodeCheck, autoFocus}: PinInputProps) => {
 				const isError = state === 'error'
 				const isActive = isSuccess || isError || isSelection || isCaret
 
-				const baseClassName = tw`flex h-full relative appearance-none rounded-8 border-hpx border-white/20 [--segment-color:#fff]`
-				const activeClassName = tw`bg-white/5 data-[state]:border-[var(--segment-color)]`
+				const baseClassName = tw`flex h-full relative appearance-none rounded-radius-sm border-hpx border-border-emphasis [--segment-color:#fff]`
+				const activeClassName = tw`bg-surface-base data-[state]:border-[var(--segment-color)]`
 				const loadingClassName = tw`animate-[pulse-border_1s_ease-in-out_0s_infinite]`
 
 				const outerClassName = cn(baseClassName, isActive && activeClassName, isLoading && loadingClassName)
 
-				const caretClassName = tw`flex-[0_0_1px] justify-self-center ml-2 my-2 w-0.5 bg-white animate-[blink-caret_1.2s_step-end_infinite]`
+				const caretClassName = tw`flex-[0_0_1px] justify-self-center ml-2 my-2 w-0.5 bg-text-primary animate-[blink-caret_1.2s_step-end_infinite]`
 				const selectionClassName = tw`flex-1 m-[3px] rounded-5 bg-[var(--segment-color)] opacity-[0.15625]`
 
 				const innerClassName = cn(isSelection && selectionClassName, isCaret && caretClassName)
