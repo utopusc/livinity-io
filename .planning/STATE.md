@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 5 of 8 (AI Chat Redesign)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-07 - Completed 05-01-PLAN.md (AI Chat Sidebar, Messages, Tool Calls)
+Last activity: 2026-02-07 - Completed 05-02-PLAN.md (Chat Input, Empty State, Quick Chat Dialog)
 
-Progress: [████████████████ ] 64% (16 of ~25 plans)
+Progress: [█████████████████ ] 68% (17 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [████████████████ ] 64% (16 of ~25 pla
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 3.5 min
-- Total execution time: 1.10 hours
+- Total execution time: 1.15 hours
 
 *Updated after each plan completion*
 
@@ -106,6 +106,9 @@ v1.1 decisions:
 - [v1.1-05-03]: InstallDialog uses bg-dialog-content (consistent with Phase 3 dialog pattern)
 - [v1.1-05-03]: All MCP form inputs use brand focus pattern (focus-visible:border-brand + ring-brand/20)
 - [v1.1-05-03]: Server status colors preserved: green-400 (running), amber-400 (connecting), red-400 (error)
+- [v1.1-05-02]: ai-quick.tsx dialog uses bg-dialog-content (consistent with Phase 3 dialog redesign pattern)
+- [v1.1-05-02]: ai-quick.tsx border-border-subtle on dialog content (matches shared/dialog.ts convention)
+- [v1.1-05-02]: MiniToolCall cn() for status badge conditional classes (matches ToolCallDisplay pattern from 05-01)
 
 ### Pending Todos
 
@@ -118,7 +121,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 05-01-PLAN.md (AI Chat Sidebar, Messages, Tool Calls)
+Stopped at: Completed 05-02-PLAN.md (Chat Input, Empty State, Quick Chat Dialog)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -252,6 +255,15 @@ Resume file: None
   - StatusIndicator: surface-base/text-secondary
   - All conditional classes converted to cn()
   - Summary: .planning/phases/v1.1-05-ai-chat-redesign/05-01-SUMMARY.md
+- Plan 05-02: Chat Input, Empty State, Quick Chat Dialog (completed 2026-02-07)
+  - Empty state: text-heading-sm/text-text-secondary, text-body/text-text-tertiary, rounded-radius-xl
+  - Suggestion chips: border-default/surface-base/text-caption with semantic hover hierarchy
+  - Chat input: bg-surface-1, focus-visible:border-brand + ring-brand/20 brand focus pattern
+  - Send button: bg-brand in both index.tsx and ai-quick.tsx
+  - ai-quick.tsx dialog: bg-dialog-content, border-border-subtle, rounded-radius-xl
+  - MiniToolCall: border-default/surface-base/text-caption matching ToolCallDisplay
+  - Footer kbd: border-default/bg-surface-base/text-caption-sm
+  - Summary: .planning/phases/v1.1-05-ai-chat-redesign/05-02-SUMMARY.md
 - Plan 05-03: MCP Panel Semantic Token Migration (completed 2026-02-07)
   - All ~81 raw opacity values replaced with semantic tokens
   - InstallDialog: bg-dialog-content, border-border-default
