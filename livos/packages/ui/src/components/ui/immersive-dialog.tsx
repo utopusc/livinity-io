@@ -128,13 +128,13 @@ export const ImmersiveDialogOverlay = forwardRef(ForwardedImmersiveDialogOverlay
 
 function ImmersiveDialogClose() {
 	return (
-		<div className='absolute left-1/2 top-full mt-5 -translate-x-1/2'>
+		<div className='absolute left-1/2 top-full mt-2 -translate-x-1/2 md:mt-5'>
 			{/* Note, because this parent has a backdrop, this button won't have a backdrop */}
 			<DialogClose asChild>
 				<IconButton
 					icon={RiCloseLine}
 					// Overriding state colors
-					className='h-[36px] w-[36px] border-none bg-dialog-content bg-opacity-70 shadow-immersive-dialog-close hover:border-solid hover:bg-dialog-content focus:border-solid focus:bg-dialog-content active:bg-dialog-content'
+					className='h-[44px] w-[44px] border-none bg-dialog-content bg-opacity-70 shadow-immersive-dialog-close hover:border-solid hover:bg-dialog-content focus:border-solid focus:bg-dialog-content active:bg-dialog-content md:h-[36px] md:w-[36px]'
 				/>
 			</DialogClose>
 		</div>
