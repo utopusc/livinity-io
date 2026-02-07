@@ -2,6 +2,7 @@ import {useEffect, useRef} from 'react'
 import {Link} from 'react-router-dom'
 
 import {useLanguage} from '@/hooks/use-language'
+import {StepIndicator} from '@/components/ui/step-indicator'
 import {buttonClass, Layout} from '@/layouts/bare/shared'
 import {OnboardingAction, OnboardingFooter} from '@/routes/onboarding/onboarding-footer'
 import {t} from '@/utils/i18n'
@@ -53,6 +54,7 @@ export default function OnboardingStart() {
 			subTitle={t('onboarding.start.subtitle')}
 			subTitleMaxWidth={500}
 			footer={<OnboardingFooter action={OnboardingAction.RESTORE} />}
+			stepIndicator={<StepIndicator steps={3} currentStep={0} />}
 		>
 			<Link to='/onboarding/create-account' unstable_viewTransition className={buttonClass} ref={continueLinkRef}>
 				{t('onboarding.start.continue')}
