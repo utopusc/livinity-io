@@ -36,9 +36,9 @@ const sheetVariants = cva(
 			side: {
 				top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top rounded-b-24',
 				bottom:
-					'inset-x-0 bottom-0 data-[state=closed]:slide-out-to-bottom-1/2 data-[state=open]:slide-in-from-bottom-1/2 rounded-t-28',
+					'inset-x-0 bottom-0 data-[state=closed]:slide-out-to-bottom-1/2 data-[state=open]:slide-in-from-bottom-1/2 rounded-t-28 border-t border-border-default',
 				'bottom-zoom':
-					'inset-x-0 bottom-0 data-[state=closed]:zoom-out-75 data-[state=open]:zoom-in-90 rounded-t-28 data-[state=open]:duration-200 data-[state=closed]:duration-100',
+					'inset-x-0 bottom-0 data-[state=closed]:zoom-out-75 data-[state=open]:zoom-in-90 rounded-t-28 data-[state=open]:duration-200 data-[state=closed]:duration-100 border-t border-border-default',
 				left: 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm rounded-r-24',
 				right:
 					'inset-y-0 right-0 h-full w-3/4  border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm rounded-l-24',
@@ -81,7 +81,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
 								transform: 'scale(1.2) rotate(180deg)',
 							}}
 						/>
-						<div className='absolute inset-0 transform-gpu backdrop-blur-xl md:backdrop-blur-3xl backdrop-brightness-[0.3] backdrop-saturate-[1.2]' />
+						<div className='absolute inset-0 transform-gpu backdrop-blur-xl md:backdrop-blur-3xl backdrop-brightness-[0.38] backdrop-saturate-[1.2]' />
 					</div>
 					{children}
 					{/* Sheet inner glow highlight */}
