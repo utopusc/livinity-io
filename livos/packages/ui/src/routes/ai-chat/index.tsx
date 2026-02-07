@@ -13,6 +13,7 @@ import {
 	IconBrain,
 	IconLoader2,
 	IconPlug,
+	IconMenu2,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -20,6 +21,8 @@ import {formatDistanceToNow} from 'date-fns'
 
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
+import {useIsMobile} from '@/hooks/use-is-mobile'
+import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
 
@@ -152,6 +155,7 @@ function ConversationSidebar({
 	onDelete,
 	activeView,
 	onViewChange,
+	className,
 }: {
 	conversations: Array<{id: string; title: string; updatedAt: number; messageCount: number}>
 	activeId: string | null
@@ -160,9 +164,10 @@ function ConversationSidebar({
 	onDelete: (id: string) => void
 	activeView: SidebarView
 	onViewChange: (view: SidebarView) => void
+	className?: string
 }) {
 	return (
-		<div className='flex h-full w-64 flex-shrink-0 flex-col border-r border-border-default bg-surface-base'>
+		<div className={cn('flex h-full w-64 flex-shrink-0 flex-col border-r border-border-default bg-surface-base', className)}>
 			<div className='flex items-center justify-between border-b border-border-default p-4'>
 				<div className='flex items-center gap-2'>
 					<div className='flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
@@ -250,8 +255,10 @@ export default function AiChat() {
 	const [isLoading, setIsLoading] = useState(false)
 	const [messages, setMessages] = useState<Message[]>([])
 	const [activeView, setActiveView] = useState<SidebarView>('chat')
+	const [sidebarOpen, setSidebarOpen] = useState(false)
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLTextAreaElement>(null)
+	const isMobile = useIsMobile()
 
 	const activeConversationId = searchParams.get('conv') || `conv_${Date.now()}`
 
@@ -353,28 +360,67 @@ export default function AiChat() {
 		conversationsQuery.refetch()
 	}
 
+	const sidebarProps = {
+		conversations: conversationsQuery.data || [],
+		activeId: searchParams.get('conv'),
+		onSelect: (id: string) => {
+			setSearchParams({conv: id})
+			setActiveView('chat')
+			setSidebarOpen(false)
+		},
+		onNew: () => {
+			handleNewConversation()
+			setSidebarOpen(false)
+		},
+		onDelete: handleDeleteConversation,
+		activeView,
+		onViewChange: setActiveView,
+	}
+
 	return (
 		<div className='flex h-full overflow-hidden'>
-			{/* Sidebar - independently scrollable */}
-			<ConversationSidebar
-				conversations={conversationsQuery.data || []}
-				activeId={searchParams.get('conv')}
-				onSelect={(id) => {
-					setSearchParams({conv: id})
-					setActiveView('chat')
-				}}
-				onNew={handleNewConversation}
-				onDelete={handleDeleteConversation}
-				activeView={activeView}
-				onViewChange={setActiveView}
-			/>
+			{/* Desktop sidebar - inline */}
+			{!isMobile && (
+				<ConversationSidebar {...sidebarProps} />
+			)}
+
+			{/* Mobile sidebar - drawer */}
+			{isMobile && (
+				<Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
+					<DrawerContent fullHeight withScroll>
+						<ConversationSidebar
+							{...sidebarProps}
+							className='w-full border-r-0 bg-transparent'
+						/>
+					</DrawerContent>
+				</Drawer>
+			)}
 
 			{/* Main content area */}
 			{activeView === 'chat' ? (
 				/* Chat area - independently scrollable */
 				<div className='flex min-h-0 flex-1 flex-col'>
+					{/* Mobile header */}
+					{isMobile && (
+						<div className='flex items-center justify-between border-b border-border-default bg-surface-base px-4 py-3'>
+							<button
+								onClick={() => setSidebarOpen(true)}
+								className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+							>
+								<IconMenu2 size={20} />
+							</button>
+							<span className='text-body font-semibold text-text-primary'>Liv AI</span>
+							<button
+								onClick={handleNewConversation}
+								className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+							>
+								<IconPlus size={18} />
+							</button>
+						</div>
+					)}
+
 					{/* Messages - scrollable */}
-					<div className='min-h-0 flex-1 overflow-y-auto p-6'>
+					<div className='min-h-0 flex-1 overflow-y-auto p-3 md:p-6'>
 						{messages.length === 0 ? (
 							<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
 								<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
@@ -419,7 +465,7 @@ export default function AiChat() {
 					</div>
 
 					{/* Input - fixed at bottom */}
-					<div className='border-t border-border-default bg-surface-base p-4'>
+					<div className='border-t border-border-default bg-surface-base p-3 md:p-4'>
 						<div className='mx-auto flex max-w-3xl items-end gap-3'>
 							<textarea
 								ref={inputRef}
