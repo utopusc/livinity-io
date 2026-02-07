@@ -41,26 +41,26 @@ function ToolCallDisplay({toolCall}: {toolCall: ToolCall}) {
 	const [expanded, setExpanded] = useState(false)
 
 	return (
-		<div className='my-1 rounded-lg border border-white/10 bg-white/5 text-xs'>
+		<div className='my-1 rounded-radius-sm border border-border-default bg-surface-base text-caption'>
 			<button
 				onClick={() => setExpanded(!expanded)}
-				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-white/5'
+				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-1'
 			>
 				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
 				<IconTool size={14} className='text-blue-400' />
 				<span className='font-mono font-medium text-blue-400'>{toolCall.tool}</span>
-				<span className={`ml-auto text-[10px] ${toolCall.result.success ? 'text-green-400' : 'text-red-400'}`}>
+				<span className={cn('ml-auto text-caption-sm', toolCall.result.success ? 'text-green-400' : 'text-red-400')}>
 					{toolCall.result.success ? 'OK' : 'FAIL'}
 				</span>
 			</button>
 			{expanded && (
-				<div className='border-t border-white/10 px-3 py-2'>
-					<div className='mb-1 text-[10px] uppercase text-white/40'>Params</div>
-					<pre className='mb-2 overflow-x-auto whitespace-pre-wrap text-white/60'>
+				<div className='border-t border-border-default px-3 py-2'>
+					<div className='mb-1 text-caption-sm uppercase text-text-tertiary'>Params</div>
+					<pre className='mb-2 overflow-x-auto whitespace-pre-wrap text-text-secondary'>
 						{JSON.stringify(toolCall.params, null, 2)}
 					</pre>
-					<div className='mb-1 text-[10px] uppercase text-white/40'>Output</div>
-					<pre className='max-h-40 overflow-auto whitespace-pre-wrap text-white/60'>
+					<div className='mb-1 text-caption-sm uppercase text-text-tertiary'>Output</div>
+					<pre className='max-h-40 overflow-auto whitespace-pre-wrap text-text-secondary'>
 						{toolCall.result.output.slice(0, 2000)}
 					</pre>
 				</div>
@@ -73,20 +73,20 @@ function ChatMessage({message}: {message: Message}) {
 	const isUser = message.role === 'user'
 
 	return (
-		<div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
+		<div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
 			{!isUser && (
 				<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
 					<IconBrain size={18} className='text-violet-400' />
 				</div>
 			)}
-			<div className={`max-w-[80%] ${isUser ? 'order-first' : ''}`}>
+			<div className={cn('max-w-[80%]', isUser && 'order-first')}>
 				<div
-					className={`rounded-2xl px-4 py-3 ${
-						isUser ? 'bg-blue-600 text-white' : 'bg-white/10 text-white/90'
-					}`}
+					className={cn('rounded-radius-xl px-4 py-3',
+						isUser ? 'bg-brand text-white' : 'bg-surface-2 text-text-primary'
+					)}
 				>
 					{isUser ? (
-						<p className='whitespace-pre-wrap text-sm'>{message.content}</p>
+						<p className='whitespace-pre-wrap text-body'>{message.content}</p>
 					) : (
 						<div className='prose prose-sm prose-invert max-w-none'>
 							<ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
@@ -102,8 +102,8 @@ function ChatMessage({message}: {message: Message}) {
 				)}
 			</div>
 			{isUser && (
-				<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/20'>
-					<IconUser size={18} className='text-white/80' />
+				<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-3'>
+					<IconUser size={18} className='text-text-primary' />
 				</div>
 			)}
 		</div>
@@ -135,9 +135,9 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 	}
 
 	return (
-		<div className='flex items-center gap-2.5 rounded-xl bg-white/5 px-4 py-2.5 text-sm'>
+		<div className='flex items-center gap-2.5 rounded-radius-md bg-surface-base px-4 py-2.5 text-body'>
 			{getStatusIcon()}
-			<span className='text-white/50'>{statusText}</span>
+			<span className='text-text-secondary'>{statusText}</span>
 		</div>
 	)
 }
