@@ -6,7 +6,7 @@ export function BarePage({children}: {children: React.ReactNode}) {
 		<>
 			<Wallpaper stayBlurred />
 			<DarkenLayer />
-			<div className='relative flex min-h-[100dvh] flex-col items-center justify-between p-5'>{children}</div>
+			<div className='relative flex min-h-dvh flex-col items-center justify-between p-5'>{children}</div>
 		</>
 	)
 }
