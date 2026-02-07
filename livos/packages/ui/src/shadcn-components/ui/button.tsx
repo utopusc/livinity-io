@@ -13,7 +13,7 @@ const buttonVariants = cva(
 		variants: {
 			variant: {
 				default:
-					'bg-surface-1 hover:bg-surface-2 active:bg-surface-base border border-border-default ring-white/20 data-[state=open]:bg-surface-2 hover:border-border-emphasis focus-visible:border-border-emphasis data-[state=open]:border-border-emphasis shadow-button-highlight-soft-hpx',
+					'bg-surface-1 hover:bg-surface-2 active:bg-surface-base border border-border-default ring-white/20 data-[state=open]:bg-surface-2 hover:border-border-emphasis focus-visible:border-border-emphasis data-[state=open]:border-border-emphasis shadow-button-highlight-soft',
 				primary:
 					'bg-brand hover:bg-brand-lighter focus-visible:bg-brand-lighter active:bg-brand ring-brand/40 data-[state=open]:bg-brand-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98]',
 				secondary:
