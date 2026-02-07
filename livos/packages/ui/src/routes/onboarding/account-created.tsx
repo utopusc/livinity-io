@@ -2,6 +2,7 @@ import {useEffect, useRef} from 'react'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {Link} from 'react-router-dom'
 
+import {StepIndicator} from '@/components/ui/step-indicator'
 import {links} from '@/constants/links'
 import {buttonClass, footerLinkClass, Layout} from '@/layouts/bare/shared'
 import {trpcReact} from '@/trpc/trpc'
@@ -29,6 +30,7 @@ export default function AccountCreated() {
 			title={t('onboarding.account-created.youre-all-set-name', {name})}
 			subTitle={t('onboarding.account-created.subtitle')}
 			subTitleMaxWidth={470}
+			stepIndicator={<StepIndicator steps={3} currentStep={2} />}
 			footer={
 				<div className='flex flex-col items-center gap-3'>
 					<Link to={links.support} target='_blank' className={footerLinkClass}>
@@ -46,7 +48,7 @@ export default function AccountCreated() {
 			>
 				{t('onboarding.account-created.next')}
 			</Link>
-			<p className='text-center text-xs font-medium opacity-70'>
+			<p className='text-center text-caption font-medium text-text-secondary'>
 				<Trans
 					i18nKey='onboarding.account-created.by-clicking-button-you-agree'
 					components={{

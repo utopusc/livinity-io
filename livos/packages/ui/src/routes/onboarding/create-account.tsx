@@ -1,5 +1,6 @@
 import {useState} from 'react'
 
+import {StepIndicator} from '@/components/ui/step-indicator'
 import {useLanguage} from '@/hooks/use-language'
 import {buttonClass, formGroupClass, Layout} from '@/layouts/bare/shared'
 import {useAuth} from '@/modules/auth/use-auth'
@@ -66,6 +67,7 @@ export default function CreateAccount() {
 			subTitle={t('onboarding.create-account.subtitle')}
 			subTitleMaxWidth={630}
 			footer={<OnboardingFooter action={OnboardingAction.RESTORE} />}
+			stepIndicator={<StepIndicator steps={3} currentStep={1} />}
 		>
 			<form onSubmit={onSubmit} className='w-full'>
 				<fieldset disabled={isLoading} className='flex flex-col items-center gap-5'>
@@ -89,7 +91,7 @@ export default function CreateAccount() {
 						/>
 					</div>
 
-					<div className='-my-2.5'>
+					<div className='-my-2'>
 						<AnimatedInputError>{formError}</AnimatedInputError>
 					</div>
 					<button type='submit' className={buttonClass}>
