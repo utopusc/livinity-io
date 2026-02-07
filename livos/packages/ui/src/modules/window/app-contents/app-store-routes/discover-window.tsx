@@ -27,8 +27,8 @@ const getAppById = (appId: string, apps: RegistryApp[]): RegistryApp | undefined
 function DiscoverUnavailable() {
 	return (
 		<div className={cn(cardFaintClass, 'flex h-40 flex-col items-center justify-center p-8 text-center')}>
-			<p className='text-15 font-medium text-white/80'>{t('app-store.discover.temporarily-unavailable-title')}</p>
-			<p className='mt-2 text-12 text-white/50'>{t('app-store.discover.temporarily-unavailable-description')}</p>
+			<p className='text-body font-medium text-text-primary'>{t('app-store.discover.temporarily-unavailable-title')}</p>
+			<p className='mt-2 text-caption text-text-secondary'>{t('app-store.discover.temporarily-unavailable-description')}</p>
 		</div>
 	)
 }
@@ -97,7 +97,7 @@ function DiscoverContent() {
 						>
 							{section.category && (
 								<button
-									className='inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/90'
+									className='inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-body-sm font-semibold text-black transition-colors hover:bg-white/90'
 									onClick={() => navigate(`/category/${section.category}`)}
 								>
 									{t('app-store.browse-category-apps', {
