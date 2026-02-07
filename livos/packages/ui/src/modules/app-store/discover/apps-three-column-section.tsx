@@ -32,15 +32,11 @@ export const AppsThreeColumnSection: React.FC<AppsThreeColumnSectionProps> = ({
 			className={cn(
 				slideInFromBottomClass,
 				'relative overflow-hidden rounded-3xl',
-				'border border-white/[0.08]',
-				'bg-gradient-to-br from-white/[0.06] via-white/[0.02] to-transparent',
+				'border border-border-subtle',
+				'bg-surface-1',
 				'p-6 md:p-10',
 			)}
 		>
-			{/* Background decoration */}
-			<div className='absolute -right-20 -top-20 h-60 w-60 rounded-full bg-purple-500/10 blur-3xl' />
-			<div className='absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-cyan-500/10 blur-3xl' />
-
 			<div className='relative flex flex-col gap-8 lg:flex-row lg:items-center lg:gap-12'>
 				{/* Text content */}
 				<div
@@ -50,14 +46,14 @@ export const AppsThreeColumnSection: React.FC<AppsThreeColumnSectionProps> = ({
 					)}
 				>
 					{overline && (
-						<p className='text-xs font-semibold uppercase tracking-wider text-purple-400/80'>
+						<p className='text-caption font-semibold uppercase tracking-wider text-brand'>
 							{overline}
 						</p>
 					)}
-					<h3 className='mt-2 text-2xl font-bold tracking-tight text-white md:text-3xl'>
+					<h3 className='mt-2 text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>
 						{title}
 					</h3>
-					<p className='mt-3 text-sm leading-relaxed text-white/50 md:text-base'>
+					<p className='mt-3 text-body-sm leading-relaxed text-text-secondary md:text-body-lg'>
 						{description}
 					</p>
 					<div className='mt-6'>{children}</div>
@@ -100,10 +96,10 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 			<div
 				className={cn(
 					'relative flex h-[280px] w-[180px] flex-col overflow-hidden rounded-2xl',
-					'border border-white/[0.1]',
+					'border border-border-default',
 					'transition-all duration-500',
-					'group-hover:border-white/[0.2]',
-					'group-hover:shadow-[0_20px_60px_rgba(0,0,0,0.5)]',
+					'group-hover:border-border-emphasis',
+					'group-hover:shadow-elevation-lg',
 					'group-hover:scale-105',
 				)}
 				style={{
@@ -112,14 +108,6 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 					`,
 				}}
 			>
-				{/* Glow effect */}
-				<div
-					className='absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100'
-					style={{
-						background: `radial-gradient(circle at 50% 30%, ${gradientStart}40, transparent 70%)`,
-					}}
-				/>
-
 				{/* Icon */}
 				<div className='flex flex-1 items-center justify-center p-6'>
 					<AppIcon
@@ -129,22 +117,22 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 						size={100}
 						className={cn(
 							'rounded-2xl',
-							'shadow-[0_12px_40px_rgba(0,0,0,0.4)]',
-							'ring-2 ring-white/20',
+							'shadow-elevation-lg',
+							'ring-2 ring-border-emphasis',
 							'transition-all duration-500',
-							'group-hover:scale-110 group-hover:shadow-[0_16px_50px_rgba(0,0,0,0.5)]',
+							'group-hover:scale-110 group-hover:shadow-elevation-xl',
 						)}
 					/>
 				</div>
 
 				{/* Content */}
 				<div className='relative bg-black/30 p-4 backdrop-blur-sm'>
-					<h4 className='truncate text-base font-bold text-white'>{app.name}</h4>
-					<p className='mt-0.5 truncate text-xs text-white/50'>{app.developer}</p>
+					<h4 className='truncate text-body-lg font-bold text-text-primary'>{app.name}</h4>
+					<p className='mt-0.5 truncate text-caption text-text-tertiary'>{app.developer}</p>
 					<button
 						className={cn(
-							'mt-3 w-full rounded-lg py-2 text-sm font-semibold',
-							'bg-white/10 text-white',
+							'mt-3 w-full rounded-lg py-2 text-body-sm font-semibold',
+							'bg-surface-2 text-text-primary',
 							'transition-colors duration-200',
 							'group-hover:bg-white group-hover:text-black',
 						)}
@@ -154,7 +142,7 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 				</div>
 
 				{/* Shine effect */}
-				<div className='absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
+				<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
 			</div>
 		</Link>
 	)
@@ -179,18 +167,14 @@ export function FeaturedCategorySection({
 			className={cn(
 				slideInFromBottomClass,
 				'relative overflow-hidden rounded-3xl p-6 md:p-8',
-				'border border-white/[0.08]',
-				gradient || 'bg-gradient-to-br from-indigo-500/20 via-purple-500/10 to-pink-500/5',
+				'border border-border-subtle',
+				gradient || 'bg-surface-1',
 			)}
 		>
-			{/* Background orbs */}
-			<div className='absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/5 blur-3xl' />
-			<div className='absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-white/5 blur-3xl' />
-
 			<div className='relative'>
 				<div className='mb-6'>
-					<h3 className='text-2xl font-bold tracking-tight text-white md:text-3xl'>{title}</h3>
-					<p className='mt-2 max-w-xl text-sm text-white/50 md:text-base'>{description}</p>
+					<h3 className='text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>{title}</h3>
+					<p className='mt-2 max-w-xl text-body-sm text-text-secondary md:text-body-lg'>{description}</p>
 				</div>
 
 				<div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
@@ -200,9 +184,9 @@ export function FeaturedCategorySection({
 							to={`/app-store/${app.id}`}
 							className={cn(
 								'group flex items-center gap-4 rounded-xl p-4',
-								'bg-white/[0.05] border border-transparent',
+								'bg-surface-base border border-transparent',
 								'transition-all duration-300',
-								'hover:bg-white/[0.1] hover:border-white/[0.1]',
+								'hover:bg-surface-2 hover:border-border-default',
 								'animate-in fade-in slide-in-from-bottom-4',
 							)}
 							style={{animationDelay: `${i * 80}ms`}}
@@ -213,10 +197,10 @@ export function FeaturedCategorySection({
 								className='rounded-xl shadow-lg transition-transform duration-300 group-hover:scale-105'
 							/>
 							<div className='flex-1 min-w-0'>
-								<h4 className='truncate font-semibold text-white'>{app.name}</h4>
-								<p className='truncate text-sm text-white/40'>{app.developer}</p>
+								<h4 className='truncate font-semibold text-text-primary'>{app.name}</h4>
+								<p className='truncate text-body-sm text-text-tertiary'>{app.developer}</p>
 							</div>
-							<span className='rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/60 transition-colors group-hover:bg-white group-hover:text-black'>
+							<span className='rounded-full bg-surface-2 px-3 py-1 text-caption font-medium text-text-secondary transition-colors group-hover:bg-white group-hover:text-black'>
 								View
 							</span>
 						</Link>
@@ -226,7 +210,7 @@ export function FeaturedCategorySection({
 				{categorySlug && (
 					<Link
 						to={`/app-store/category/${categorySlug}`}
-						className='mt-6 inline-flex items-center gap-2 text-sm font-medium text-white/60 transition-colors hover:text-white'
+						className='mt-6 inline-flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors hover:text-white'
 					>
 						Browse all apps
 						<svg className='h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>

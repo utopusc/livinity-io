@@ -53,28 +53,16 @@ function AppCard({app, index}: {app: RegistryApp; index: number}) {
 			<div
 				className={cn(
 					'relative flex h-[180px] w-[280px] flex-col overflow-hidden rounded-2xl md:h-[220px] md:w-[360px]',
-					'border border-white/[0.1]',
+					'border border-border-default',
 					'transition-all duration-500 ease-out',
-					'group-hover:border-white/[0.2]',
-					'group-hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]',
+					'group-hover:border-border-emphasis',
+					'group-hover:shadow-elevation-lg',
 					'group-hover:scale-[1.02]',
 				)}
 				style={{
-					background: `
-						radial-gradient(ellipse 80% 50% at 50% -20%, ${gradientStart}40, transparent),
-						linear-gradient(135deg, ${gradientStart}20 0%, ${gradientEnd}10 50%, transparent 100%),
-						linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.2) 100%)
-					`,
+					background: `linear-gradient(135deg, ${gradientStart}20 0%, ${gradientEnd}10 50%, transparent 100%)`,
 				}}
 			>
-				{/* Glow effect on hover */}
-				<div
-					className='absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100'
-					style={{
-						background: `radial-gradient(circle at 30% 20%, ${gradientStart}30, transparent 60%)`,
-					}}
-				/>
-
 				{/* Floating icon */}
 				<div className='absolute left-6 top-6 z-10'>
 					<AppIcon
@@ -84,26 +72,26 @@ function AppCard({app, index}: {app: RegistryApp; index: number}) {
 						size={64}
 						className={cn(
 							'rounded-2xl',
-							'shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
-							'ring-2 ring-white/20',
+							'shadow-elevation-md',
+							'ring-2 ring-border-emphasis',
 							'transition-all duration-500',
-							'group-hover:scale-110 group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)]',
+							'group-hover:scale-110 group-hover:shadow-elevation-lg',
 						)}
 					/>
 				</div>
 
 				{/* Content */}
 				<div className='relative mt-auto p-6'>
-					<h3 className='truncate text-xl font-bold tracking-tight text-white md:text-2xl'>
+					<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>
 						{app.name}
 					</h3>
-					<p className='mt-1 line-clamp-2 text-sm leading-snug text-white/60 md:text-base'>
+					<p className='mt-1 line-clamp-2 text-body-sm leading-snug text-text-secondary md:text-body-lg'>
 						{app.tagline}
 					</p>
 				</div>
 
 				{/* Shine effect */}
-				<div className='absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
+				<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
 			</div>
 		</Link>
 	)
@@ -114,7 +102,7 @@ export function AppsCompactRow({apps, title}: {apps: RegistryApp[]; title?: stri
 	return (
 		<section>
 			{title && (
-				<h4 className='mb-4 text-sm font-semibold uppercase tracking-wider text-white/40'>{title}</h4>
+				<h4 className='mb-4 text-body-sm font-semibold uppercase tracking-wider text-text-tertiary'>{title}</h4>
 			)}
 			<div className='livinity-hide-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4'>
 				{apps.map((app, i) => (
@@ -123,9 +111,9 @@ export function AppsCompactRow({apps, title}: {apps: RegistryApp[]; title?: stri
 						to={`/app-store/${app.id}`}
 						className={cn(
 							'group flex flex-shrink-0 items-center gap-3 rounded-xl p-3',
-							'bg-white/[0.04] border border-transparent',
+							'bg-surface-base border border-transparent',
 							'transition-all duration-200',
-							'hover:bg-white/[0.08] hover:border-white/[0.1]',
+							'hover:bg-surface-2 hover:border-border-default',
 							'animate-in fade-in slide-in-from-right-4',
 						)}
 						style={{animationDelay: `${i * 50}ms`}}
@@ -136,8 +124,8 @@ export function AppsCompactRow({apps, title}: {apps: RegistryApp[]; title?: stri
 							className='rounded-xl shadow-lg transition-transform duration-200 group-hover:scale-105'
 						/>
 						<div className='min-w-0'>
-							<h4 className='truncate text-sm font-semibold text-white'>{app.name}</h4>
-							<p className='truncate text-xs text-white/40'>{app.tagline}</p>
+							<h4 className='truncate text-body-sm font-semibold text-text-primary'>{app.name}</h4>
+							<p className='truncate text-caption text-text-tertiary'>{app.tagline}</p>
 						</div>
 					</Link>
 				))}
