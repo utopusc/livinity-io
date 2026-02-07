@@ -376,12 +376,12 @@ export default function AiChat() {
 					{/* Messages - scrollable */}
 					<div className='min-h-0 flex-1 overflow-y-auto p-6'>
 						{messages.length === 0 ? (
-							<div className='flex h-full flex-col items-center justify-center text-white/30'>
-								<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
+							<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
+								<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
 									<IconBrain size={32} className='text-violet-400' />
 								</div>
-								<h3 className='mb-2 text-lg font-medium text-white/50'>Liv</h3>
-								<p className='max-w-md text-center text-sm text-white/30'>
+								<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
+								<p className='max-w-md text-center text-body text-text-tertiary'>
 									Your autonomous AI assistant. I can manage your server, Docker containers, run commands,
 									create subagents, schedule tasks, and more.
 								</p>
@@ -398,7 +398,7 @@ export default function AiChat() {
 												setInput(suggestion)
 												inputRef.current?.focus()
 											}}
-											className='rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/40 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white/60'
+											className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
 										>
 											{suggestion}
 										</button>
@@ -419,7 +419,7 @@ export default function AiChat() {
 					</div>
 
 					{/* Input - fixed at bottom */}
-					<div className='border-t border-white/10 bg-black/20 p-4'>
+					<div className='border-t border-border-default bg-surface-base p-4'>
 						<div className='mx-auto flex max-w-3xl items-end gap-3'>
 							<textarea
 								ref={inputRef}
@@ -428,7 +428,7 @@ export default function AiChat() {
 								onKeyDown={handleKeyDown}
 								placeholder='Message Liv...'
 								rows={1}
-								className='flex-1 resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25'
+								className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 								style={{maxHeight: '120px'}}
 								onInput={(e) => {
 									const target = e.target as HTMLTextAreaElement
@@ -439,7 +439,7 @@ export default function AiChat() {
 							<button
 								onClick={handleSend}
 								disabled={!input.trim() || isLoading}
-								className='flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-white transition-colors hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600'
+								className='flex h-11 w-11 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
 							>
 								<IconSend size={18} />
 							</button>
@@ -452,7 +452,7 @@ export default function AiChat() {
 					<Suspense
 						fallback={
 							<div className='flex h-full items-center justify-center'>
-								<IconLoader2 size={24} className='animate-spin text-white/30' />
+								<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
 							</div>
 						}
 					>
