@@ -84,7 +84,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 			<div className={`flex-[5] ${tableStyles}`}>
 				<div className='flex items-center gap-1.5'>
 					<div className='flex-shrink-0'>
-						<FileItemIcon item={item} className='h-5 w-5' />
+						<FileItemIcon item={item} className='h-6 w-6' />
 					</div>
 					<div className={cn(fadedContent && 'opacity-50')}>
 						{isEditingName ? (
