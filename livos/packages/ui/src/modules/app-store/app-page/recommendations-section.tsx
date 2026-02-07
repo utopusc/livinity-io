@@ -44,10 +44,10 @@ function AppWithDescriptionSmall({
 }) {
 	return (
 		<Link to={to ? to : `/app-store/${id}`} className='group flex w-full items-center gap-2.5'>
-			<AppIcon src={icon} size={50} className='rounded-10' />
+			<AppIcon src={icon} size={50} className='rounded-radius-md' />
 			<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
-				<h3 className='truncate text-14 font-semibold leading-tight -tracking-3'>{appName}</h3>
-				<p className='line-clamp-2 w-full min-w-0 max-w-[220px] text-12 leading-tight opacity-40'>{appDescription}</p>
+				<h3 className='truncate text-body font-semibold leading-tight -tracking-3'>{appName}</h3>
+				<p className='line-clamp-2 w-full min-w-0 max-w-[220px] text-caption leading-tight text-text-tertiary'>{appDescription}</p>
 			</div>
 		</Link>
 	)

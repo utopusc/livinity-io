@@ -21,8 +21,8 @@ export const TopHeader = ({app, childrenRight}: {app: RegistryApp; childrenRight
 				<SheetStickyHeader className='flex h-full w-full items-center gap-2.5'>
 					<BackButton />
 					<div className='flex flex-1 items-center gap-2.5'>
-						<AppIcon src={app.icon} size={32} className='rounded-8' />
-						<span className='truncate text-16 font-semibold -tracking-4 md:text-19'>{app.name}</span>
+						<AppIcon src={app.icon} size={32} className='rounded-radius-sm' />
+						<span className='truncate text-body-lg font-semibold -tracking-4 md:text-heading-sm'>{app.name}</span>
 					</div>
 					{childrenRight}
 					<DialogCloseButton />
@@ -46,18 +46,18 @@ export const TopHeader = ({app, childrenRight}: {app: RegistryApp; childrenRight
 
 				<div data-testid='app-top' className='flex flex-col items-center items-stretch gap-5 max-md:mt-5 md:flex-row'>
 					<div className='flex min-w-0 flex-1 items-center gap-2.5 max-md:px-2.5 md:gap-5'>
-						<AppIcon src={app.icon} size={isMobile ? 64 : 100} className='rounded-12 lg:rounded-20' />
+						<AppIcon src={app.icon} size={isMobile ? 64 : 100} className='rounded-radius-md lg:rounded-radius-xl' />
 						<div className='flex min-w-0 flex-col items-start gap-1.5 py-1 md:gap-2'>
-							<h1 className='flex flex-wrap items-center gap-2 text-16 font-semibold leading-inter-trimmed md:text-24'>
+							<h1 className='flex flex-wrap items-center gap-2 text-body-lg font-semibold leading-inter-trimmed md:text-heading-lg'>
 								{app.name} {app.optimizedForLivinityHome && <Badge>{t('app.optimized-for-livinity-home')}</Badge>}
 							</h1>
-							<p className='line-clamp-2 w-full text-12 leading-tight opacity-50 md:line-clamp-1  md:text-16'>
+							<p className='line-clamp-2 w-full text-caption leading-tight text-text-secondary md:line-clamp-1 md:text-body-lg'>
 								{app.tagline}
 							</p>
 							{!isMobile && (
 								<>
 									<div className='flex-1' />
-									<div className='text-12 delay-100 animate-in fade-in slide-in-from-right-2 fill-mode-both md:text-13'>
+									<div className='text-caption text-text-secondary delay-100 animate-in fade-in slide-in-from-right-2 fill-mode-both md:text-body-sm'>
 										{app.developer}
 									</div>
 								</>

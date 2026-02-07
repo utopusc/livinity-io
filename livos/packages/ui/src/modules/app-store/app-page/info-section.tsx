@@ -43,7 +43,7 @@ export const InfoSection = ({app}: {app: RegistryApp}) => {
 				/>
 			)}
 			<KV k={t('app-page.section.info.compatibility')} v={<InfoSectionCompatibilityText app={app} />} />
-			<a href={app.support} target='_blank' className='self-start text-14 font-medium text-brand-lighter'>
+			<a href={app.support} target='_blank' className='self-start text-body font-medium text-brand-lighter'>
 				{t('app-page.section.info.support')}
 			</a>
 		</div>
@@ -53,8 +53,8 @@ export const InfoSection = ({app}: {app: RegistryApp}) => {
 function KV({k, v}: {k: ReactNode; v: ReactNode}) {
 	return (
 		<div className='flex flex-row items-center gap-2'>
-			<span className='flex-1 text-14 opacity-50'>{k}</span>
-			<span className='text-right text-14 font-medium'>{v || UNKNOWN()}</span>
+			<span className='flex-1 text-body text-text-secondary'>{k}</span>
+			<span className='text-right text-body font-medium'>{v || UNKNOWN()}</span>
 		</div>
 	)
 }
