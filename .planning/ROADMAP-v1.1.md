@@ -13,7 +13,7 @@ The redesign progresses from foundation (design system tokens) through core shel
 - [x] **Phase 3: Window & Sheet System** — Floating windows, sheet modals, dialogs ✓
 - [x] **Phase 4: Settings Redesign** — Settings sidebar, content sections, forms, tabs ✓
 - [x] **Phase 5: AI Chat Redesign** — Chat sidebar, messages, input, tool calls, MCP ✓
-- [ ] **Phase 6: App Store & Files** — App store navigation/cards/detail, file manager views
+- [x] **Phase 6: App Store & Files** — App store navigation/cards/detail, file manager views ✓
 - [ ] **Phase 7: Login & Onboarding** — Auth pages with Livinity branding
 - [ ] **Phase 8: Mobile & Polish** — Responsive fixes, animations, final polish
 
@@ -124,9 +124,9 @@ Plans:
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 06-01-PLAN.md — App Store navigation, shared card styles, discover sections, gallery, and window variants (AS-01, AS-02, AS-04)
-- [ ] 06-02-PLAN.md — App Store detail page hero, content sections, dialogs, and window detail variants (AS-03)
-- [ ] 06-03-PLAN.md — File Manager listing views, actions bar, sidebar, and drag-and-drop feedback (FM-01, FM-02, FM-03, FM-04)
+- [x] 06-01-PLAN.md — App Store navigation, shared card styles, discover sections, gallery, and window variants (AS-01, AS-02, AS-04)
+- [x] 06-02-PLAN.md — App Store detail page hero, content sections, dialogs, and window detail variants (AS-03)
+- [x] 06-03-PLAN.md — File Manager listing views, actions bar, sidebar, and drag-and-drop feedback (FM-01, FM-02, FM-03, FM-04)
 
 ### Phase 7: Login & Onboarding
 **Goal**: Create a branded authentication experience
@@ -165,7 +165,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 3. Window & Sheet System | 4/4 | Complete | 2026-02-06 |
 | 4. Settings Redesign | 3/3 | Complete | 2026-02-06 |
 | 5. AI Chat Redesign | 3/3 | Complete | 2026-02-06 |
-| 6. App Store & Files | 0/3 | Not started | - |
+| 6. App Store & Files | 3/3 | Complete | 2026-02-07 |
 | 7. Login & Onboarding | 0/? | Not started | - |
 | 8. Mobile & Polish | 0/? | Not started | - |
 

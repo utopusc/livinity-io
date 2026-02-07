@@ -6,15 +6,15 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.1 — Complete UI Redesign (Minimal & Clean)
-**Current focus:** Phase 6 — App Store & Files
+**Current focus:** Phase 7 — Login & Onboarding
 
 ## Current Position
 
 Milestone: v1.1 (UI Redesign)
-Phase: 6 of 8 (App Store & Files)
-Plan: 3 of 3 in current phase (3 complete)
-Status: Phase complete
-Last activity: 2026-02-07 - Completed 06-02-PLAN.md (App Store Detail Page & Dialogs)
+Phase: 7 of 8 (Login & Onboarding)
+Plan: 0 of ? in current phase
+Status: Phase 6 complete, ready to plan Phase 7
+Last activity: 2026-02-07 - Phase 6 complete (3/3 plans, verified)
 
 Progress: [█████████████████████ ] 84% (21 of ~25 plans)
 

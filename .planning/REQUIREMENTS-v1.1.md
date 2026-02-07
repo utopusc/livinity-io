@@ -58,17 +58,17 @@
 
 ### App Store (AS)
 
-- [ ] **AS-01**: Redesign app store navigation with refined category chips
-- [ ] **AS-02**: Redesign app cards with cleaner layout, better icon display, and subtle hover effects
-- [ ] **AS-03**: Redesign app detail page with modern hero section and structured content
-- [ ] **AS-04**: Redesign gallery/banner carousel with minimal navigation
+- [x] **AS-01**: Redesign app store navigation with refined category chips ✓
+- [x] **AS-02**: Redesign app cards with cleaner layout, better icon display, and subtle hover effects ✓
+- [x] **AS-03**: Redesign app detail page with modern hero section and structured content ✓
+- [x] **AS-04**: Redesign gallery/banner carousel with minimal navigation ✓
 
 ### File Manager (FM)
 
-- [ ] **FM-01**: Redesign file list/grid view with cleaner item layout
-- [ ] **FM-02**: Redesign file browser header with breadcrumb navigation
-- [ ] **FM-03**: Redesign file action buttons and context menus
-- [ ] **FM-04**: Improve drag-and-drop visual feedback
+- [x] **FM-01**: Redesign file list/grid view with cleaner item layout ✓
+- [x] **FM-02**: Redesign file browser header with breadcrumb navigation ✓
+- [x] **FM-03**: Redesign file action buttons and context menus ✓
+- [x] **FM-04**: Improve drag-and-drop visual feedback ✓
 
 ### Login & Onboarding (LO)
 
@@ -110,16 +110,16 @@
 | SM-01 to SM-04 | Phase 3 | Complete |
 | ST-01 to ST-05 | Phase 4 | Complete |
 | AC-01 to AC-06 | Phase 5 | Complete |
-| AS-01 to AS-04 | Phase 6 | Pending |
-| FM-01 to FM-04 | Phase 6 | Pending |
+| AS-01 to AS-04 | Phase 6 | Complete |
+| FM-01 to FM-04 | Phase 6 | Complete |
 | LO-01 to LO-04 | Phase 7 | Pending |
 | MR-01 to MR-04 | Phase 8 | Pending |
 | CN-01 to CN-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 47 total
-- Complete: 35 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05, AC-01–AC-06)
-- Pending: 12
+- Complete: 43 (DS-01–DS-08, DD-01–DD-05, CN-01–CN-03, WS-01–WS-04, SM-01–SM-04, ST-01–ST-05, AC-01–AC-06, AS-01–AS-04, FM-01–FM-04)
+- Pending: 4
 - Unmapped: 0
 
 ---
