@@ -49,7 +49,7 @@ export const ListingBody = ({scrollAreaRef, items, hasMore, isLoading, onLoadMor
 											<button
 												key={option.sortBy}
 												className={cn(
-													'flex items-center justify-between overflow-hidden text-ellipsis whitespace-nowrap p-2.5 text-12 text-white/70',
+													'flex items-center justify-between overflow-hidden text-ellipsis whitespace-nowrap p-2.5 text-caption text-text-primary',
 													option.sortBy === 'name' && 'flex-[5]',
 													option.sortBy === 'modified' && 'flex-[2]',
 													option.sortBy === 'size' && 'flex-[1]',
