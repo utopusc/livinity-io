@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 6 of 8 (App Store & Files)
-Plan: 0 of ? in current phase
-Status: Phase 5 complete, ready to plan Phase 6
-Last activity: 2026-02-07 - Phase 5 complete (3/3 plans, verified 30/30 must-haves)
+Plan: 3 of 3 in current phase (1 complete, 2 pending)
+Status: In progress
+Last activity: 2026-02-07 - Completed 06-03-PLAN.md (File Manager Listing, Actions Bar, Sidebar & DnD)
 
-Progress: [██████████████████ ] 72% (18 of ~25 plans)
+Progress: [███████████████████ ] 76% (19 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [██████████████████ ] 72% (18 of ~
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 17
+- Total plans completed: 18
 - Average duration: 3.5 min
-- Total execution time: 1.15 hours
+- Total execution time: 1.23 hours
 
 *Updated after each plan completion*
 
@@ -109,6 +109,11 @@ v1.1 decisions:
 - [v1.1-05-02]: ai-quick.tsx dialog uses bg-dialog-content (consistent with Phase 3 dialog redesign pattern)
 - [v1.1-05-02]: ai-quick.tsx border-border-subtle on dialog content (matches shared/dialog.ts convention)
 - [v1.1-05-02]: MiniToolCall cn() for status badge conditional classes (matches ToolCallDisplay pattern from 05-01)
+- [v1.1-06-03]: search-input uses focus-within:border-brand on container (not focus-visible on input) because input has !border-none !ring-0
+- [v1.1-06-03]: Sidebar gradient preserved with semantic from-surface-base to-surface-2 (was from-white/[0.04] to-white/[0.08])
+- [v1.1-06-03]: Navigation controls disabled state uses text-text-secondary instead of opacity-50
+- [v1.1-06-03]: Context menu file required no changes — already uses shared menu styles from Phase 2
+- [v1.1-06-03]: drag-and-drop.tsx and file-upload-drop-zone.tsx already use brand tokens correctly — no changes needed
 
 ### Pending Todos
 
@@ -121,7 +126,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 05-02-PLAN.md (Chat Input, Empty State, Quick Chat Dialog)
+Stopped at: Completed 06-03-PLAN.md (File Manager Listing, Actions Bar, Sidebar & DnD)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -273,6 +278,16 @@ Resume file: None
   - All text-[Npx] -> semantic typography, all rounded-XX -> semantic radii
   - Status/category/gradient colors preserved
   - Summary: .planning/phases/v1.1-05-ai-chat-redesign/05-03-SUMMARY.md
+
+**Phase v1.1-06: App Store & Files**
+- Plan 06-03: File Manager Listing, Actions Bar, Sidebar & DnD (completed 2026-02-07)
+  - File item views: text-text-tertiary/secondary/primary, text-caption/caption-sm
+  - Grid view: bg-surface-1 upload overlay, text-text-tertiary
+  - Actions bar: bg-surface-base search, brand focus, bg-surface-1 view toggle
+  - Sidebar: surface-base/surface-2 gradient, text-caption, border-border-subtle
+  - DnD overlay: border-border-emphasis, text-caption
+  - Selection styling (bg-brand/10) and list-view-file-item.css preserved
+  - Summary: .planning/phases/v1.1-06-app-store-files/06-03-SUMMARY.md
 
 ---
 
