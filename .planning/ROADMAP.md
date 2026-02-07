@@ -197,6 +197,7 @@ Plans:
 
 - [x] **Phase 1: Token Foundation** - Update semantic token values for surfaces, borders, text, and shadows
 - [x] **Phase 2: Component Visual Fixes** - Apply targeted visual fixes to components that need more than token value changes
+- [x] **Phase 3: Design Enhancements** - Add new tokens (radius-2xl/3xl, info/warning colors) and AI chat accent
 
 ### Phase 1: Token Foundation
 **Goal**: Change the actual CSS values behind semantic tokens so every component in the UI becomes visibly improved
@@ -234,6 +235,19 @@ Plans:
 - [x] 02-03-PLAN.md — File Manager + Menu visual fixes (CV-05, CV-06)
 - [x] 02-04-PLAN.md — Button highlight and height adjustments (CV-08)
 
+### Phase 3: Design Enhancements
+**Goal**: Add new semantic tokens and visual enhancements
+**Depends on**: Phase 1
+**Requirements**: DE-01, DE-02, DE-03
+**Success Criteria** (what must be TRUE):
+  1. radius-2xl (24px) and radius-3xl (28px) semantic tokens exist
+  2. info (#3B82F6) and warning (#F59E0B) colors with surface variants defined
+  3. AI Chat assistant messages have left border accent
+**Plans**: 1 plan in 1 wave
+
+Plans:
+- [x] 03-01-PLAN.md — Add radius/color tokens and AI chat assistant accent (DE-01, DE-02, DE-03)
+
 ## Progress
 
 ### v1.0 Progress
@@ -260,8 +274,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Token Foundation | 1/1 | Complete | 2026-02-07 |
 | 2. Component Visual Fixes | 4/4 | Complete | 2026-02-07 |
+| 3. Design Enhancements | 1/1 | Complete | 2026-02-07 |
 
 ---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 (v1.0) + 2 (v1.2) | Total plans: 30 (estimated)*
+*Total phases: 10 (v1.0) + 3 (v1.2) | Total plans: 31 (estimated)*
 *Coverage: 29/29 v1 requirements mapped*
