@@ -71,20 +71,20 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 	return (
 		<div className='flex h-full flex-col bg-black/20'>
 			{/* Header */}
-			<div className='flex items-center justify-between border-b border-white/5 bg-black/30 px-4 py-2.5'>
+			<div className='flex items-center justify-between border-b border-border-subtle bg-black/30 px-4 py-2.5'>
 				<button
 					onClick={goBack}
-					className='flex items-center gap-2 rounded-lg px-2 py-1 text-white/60 transition-colors hover:bg-white/5 hover:text-white'
+					className='flex items-center gap-2 rounded-radius-sm px-2 py-1 text-text-secondary transition-colors hover:bg-surface-base hover:text-white'
 				>
 					<TbArrowLeft className='h-4 w-4' />
-					<span className='text-13'>Back</span>
+					<span className='text-body-sm'>Back</span>
 				</button>
 
 				<a
 					href={`${MARKETPLACE_URL}/app/${appId}`}
 					target='_blank'
 					rel='noopener noreferrer'
-					className='flex items-center gap-1.5 rounded-lg px-2 py-1 text-12 text-white/40 transition-colors hover:bg-white/5 hover:text-white/60'
+					className='flex items-center gap-1.5 rounded-radius-sm px-2 py-1 text-caption text-text-tertiary transition-colors hover:bg-surface-base hover:text-text-secondary'
 				>
 					Open in browser
 					<TbExternalLink className='h-3.5 w-3.5' />
@@ -95,7 +95,7 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 			<div className='relative flex-1'>
 				{isLoading && (
 					<div className='absolute inset-0 flex items-center justify-center bg-black/50'>
-						<TbLoader2 className='h-8 w-8 animate-spin text-white/50' />
+						<TbLoader2 className='h-8 w-8 animate-spin text-text-secondary' />
 					</div>
 				)}
 				<iframe

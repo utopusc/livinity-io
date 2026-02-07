@@ -178,7 +178,7 @@ export function SelectDependencies({
 					return (
 						<div key={dependencyId} className={listItemClass}>
 							<span className='flex flex-1 flex-row items-center gap-2 pl-4'>
-								{app.icon && <AppIcon size={26} src={app.icon} className='rounded-6' />}
+								{app.icon && <AppIcon size={26} src={app.icon} className='rounded-radius-sm' />}
 								{app.name}
 							</span>
 							<DependencyStateText
@@ -214,9 +214,9 @@ export function SelectDependencies({
 	)
 }
 
-const listClass = tw`divide-y divide-white/6 overflow-hidden rounded-12 bg-white/6`
-const listItemClass = tw`flex items-center pl-3 pr-4 h-[50px] text-[14px] font-medium -tracking-3 justify-between`
-const listItemClassWithDropdown = tw`flex items-center pl-3 pr-4 h-[60px] text-[14px] font-medium -tracking-3 justify-between`
+const listClass = tw`divide-y divide-border-subtle overflow-hidden rounded-radius-md bg-surface-1`
+const listItemClass = tw`flex items-center pl-3 pr-4 h-[50px] text-body font-medium -tracking-3 justify-between`
+const listItemClassWithDropdown = tw`flex items-center pl-3 pr-4 h-[60px] text-body font-medium -tracking-3 justify-between`
 
 function DependencyStateText({appId, appState, onClick}: {appId: string; appState: AppState; onClick?: () => void}) {
 	const buttonClass = 'w-[70px]' // Fixed width for both buttons
@@ -238,7 +238,7 @@ function DependencyStateText({appId, appState, onClick}: {appId: string; appStat
 		)
 	}
 
-	return <span className='text-sm opacity-50'>{appStateToString(appState) + '...'}</span>
+	return <span className='text-body-sm text-text-secondary'>{appStateToString(appState) + '...'}</span>
 }
 
 function DependencyDropdown({
@@ -268,12 +268,12 @@ function DependencyDropdown({
 							<>
 								{selectedApp.icon && <AppIcon size={26} src={selectedApp.icon} className='shrink-0 rounded-6' />}
 								<div className='min-w-0 flex-1'>
-									<span className='block truncate text-[14px]'>{selectedApp.name}</span>
+									<span className='block truncate text-body'>{selectedApp.name}</span>
 								</div>
 							</>
 						) : (
 							<div className='min-w-0 flex-1'>
-								<span className='block truncate text-[14px]'>{t('app-picker.select-app')}</span>
+								<span className='block truncate text-body'>{t('app-picker.select-app')}</span>
 							</div>
 						)}
 					</div>
@@ -292,7 +292,7 @@ function DependencyDropdown({
 							}}
 							className='flex gap-2'
 						>
-							<AppIcon size={20} src={app.icon} className='rounded-4' />
+							<AppIcon size={20} src={app.icon} className='rounded-radius-sm' />
 							{app.name}
 						</DropdownMenuCheckboxItem>
 					))}

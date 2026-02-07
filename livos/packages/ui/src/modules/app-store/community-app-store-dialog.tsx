@@ -87,19 +87,19 @@ export function CommunityAppStoreDialog() {
 					<div className='livinity-dialog-fade-scroller flex flex-col gap-y-3 overflow-y-auto px-5 py-6'>
 						<DialogHeader>
 							<DialogTitle>{title}</DialogTitle>
-							<DialogDescription className='text-13 text-white/50'>
+							<DialogDescription className='text-body-sm text-text-secondary'>
 								{t('community-app-stores.description')}
 							</DialogDescription>
 							{/* External GitHub URL - cannot be changed */}
 							<a
 								href='https://github.com/getlivinity/livinity-community-app-store'
-								className='text-13 text-brand underline'
+								className='text-body-sm text-brand underline'
 								target='_blank'
 							>
 								{t('community-app-stores.learn-more')}
 							</a>
 						</DialogHeader>
-						<p className='rounded-8 bg-yellow-700/50 p-3 text-13 text-yellow-300/80'>
+						<p className='rounded-radius-sm bg-yellow-700/50 p-3 text-body-sm text-yellow-300/80'>
 							{t('community-app-stores.warning')}
 						</p>
 						<form onSubmit={handleSubmit}>

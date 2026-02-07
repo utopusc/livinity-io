@@ -69,7 +69,7 @@ export function UpdatesDialog({
 					<Separator />
 					<ScrollArea className='flex max-h-[500px] flex-col gap-y-2.5 px-5'>
 						{appsWithUpdates.length === 0 && (
-							<p className='p-4 text-center text-13 opacity-40'>{t('app-updates.no-updates')}</p>
+							<p className='p-4 text-center text-body-sm text-text-tertiary'>{t('app-updates.no-updates')}</p>
 						)}
 						{appsWithUpdates.map((app, i) => (
 							<Fragment key={app.id}>
@@ -112,10 +112,10 @@ function AppItem({app}: {app: RegistryApp}) {
 	return (
 		<div className='p-2.5'>
 			<div className='flex items-center gap-2.5'>
-				<AppIcon src={app.icon} size={36} className='rounded-8' />
+				<AppIcon src={app.icon} size={36} className='rounded-radius-sm' />
 				<div className='flex flex-col'>
-					<h3 className='text-13 font-semibold'>{app.name}</h3>
-					<p className='text-13 opacity-40'>{app.version}</p>
+					<h3 className='text-body-sm font-semibold'>{app.name}</h3>
+					<p className='text-body-sm text-text-tertiary'>{app.version}</p>
 				</div>
 				<div className='flex-1' />
 				<ProgressButton
@@ -134,7 +134,7 @@ function AppItem({app}: {app: RegistryApp}) {
 			{app.releaseNotes && (
 				<div className='relative mt-2 grid'>
 					<div
-						className={cn('relative overflow-x-auto text-13 opacity-50 transition-all')}
+						className={cn('relative overflow-x-auto text-body-sm text-text-secondary transition-all')}
 						style={{
 							maskImage: showAll ? undefined : 'linear-gradient(-45deg, transparent 30px, white 60px, white)',
 						}}
@@ -144,13 +144,13 @@ function AppItem({app}: {app: RegistryApp}) {
 							})
 						}}
 					>
-						<Markdown className={cn('text-13 leading-snug -tracking-3', !showAll && 'line-clamp-2')}>
+						<Markdown className={cn('text-body-sm leading-snug -tracking-3', !showAll && 'line-clamp-2')}>
 							{app.releaseNotes}
 						</Markdown>
 					</div>
 					<button
 						className={cn(
-							'justify-self-end text-13 text-brand underline underline-offset-2',
+							'justify-self-end text-body-sm text-brand underline underline-offset-2',
 							!showAll && 'absolute bottom-0 right-0 ',
 						)}
 						onClick={() => setShowAll((s) => !s)}
