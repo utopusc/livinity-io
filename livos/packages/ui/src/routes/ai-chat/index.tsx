@@ -16,7 +16,9 @@ import {
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import {formatDistanceToNow} from 'date-fns'
 
+import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
@@ -160,17 +162,17 @@ function ConversationSidebar({
 	onViewChange: (view: SidebarView) => void
 }) {
 	return (
-		<div className='flex h-full w-64 flex-shrink-0 flex-col border-r border-white/10 bg-black/20'>
-			<div className='flex items-center justify-between border-b border-white/10 p-4'>
+		<div className='flex h-full w-64 flex-shrink-0 flex-col border-r border-border-default bg-surface-base'>
+			<div className='flex items-center justify-between border-b border-border-default p-4'>
 				<div className='flex items-center gap-2'>
 					<div className='flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
 						<IconBrain size={14} className='text-violet-400' />
 					</div>
-					<h2 className='text-sm font-semibold text-white/80'>Liv AI</h2>
+					<h2 className='text-body font-semibold text-text-primary'>Liv AI</h2>
 				</div>
 				<button
 					onClick={onNew}
-					className='rounded-lg p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white'
+					className='rounded-radius-sm p-1.5 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
 					title='New conversation'
 				>
 					<IconPlus size={18} />
@@ -178,21 +180,21 @@ function ConversationSidebar({
 			</div>
 
 			{/* View switcher */}
-			<div className='flex border-b border-white/10'>
+			<div className='flex border-b border-border-default'>
 				<button
 					onClick={() => onViewChange('chat')}
-					className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
-						activeView === 'chat' ? 'border-b-2 border-violet-500 text-white' : 'text-white/40 hover:text-white/60'
-					}`}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'chat' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
 				>
 					<IconMessageCircle size={14} />
 					Chat
 				</button>
 				<button
 					onClick={() => onViewChange('mcp')}
-					className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
-						activeView === 'mcp' ? 'border-b-2 border-violet-500 text-white' : 'text-white/40 hover:text-white/60'
-					}`}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
 				>
 					<IconPlug size={14} />
 					MCP
@@ -203,24 +205,29 @@ function ConversationSidebar({
 			{activeView === 'chat' && (
 				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
 					{conversations.length === 0 && (
-						<p className='px-2 py-8 text-center text-xs text-white/30'>No conversations yet</p>
+						<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
 					)}
 					{conversations.map((conv) => (
 						<button
 							key={conv.id}
 							onClick={() => onSelect(conv.id)}
-							className={`group mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors ${
-								activeId === conv.id ? 'bg-white/15 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white/80'
-							}`}
+							className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
+								activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+							)}
 						>
 							<IconMessageCircle size={16} className='flex-shrink-0' />
-							<span className='flex-1 truncate text-xs'>{conv.title}</span>
+							<div className='min-w-0 flex-1'>
+								<span className='block truncate text-body-sm'>{conv.title}</span>
+								<span className='text-caption-sm text-text-tertiary'>
+									{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
+								</span>
+							</div>
 							<button
 								onClick={(e) => {
 									e.stopPropagation()
 									onDelete(conv.id)
 								}}
-								className='hidden rounded p-0.5 text-white/40 hover:text-red-400 group-hover:block'
+								className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
 							>
 								<IconTrash size={14} />
 							</button>
