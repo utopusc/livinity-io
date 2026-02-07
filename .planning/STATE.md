@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 8 of 8 (Mobile & Polish)
-Plan: 0 of ? in current phase
-Status: Phase 7 complete, ready to plan Phase 8
-Last activity: 2026-02-07 - Phase 7 complete (3/3 plans)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-07 - Completed 08-01-PLAN.md (Mobile AI Chat Drawer Sidebar)
 
-Progress: [████████████████████████ ] 96% (24 of ~27 plans)
+Progress: [█████████████████████████] 89% (25 of 28 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████████████████
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 24
-- Average duration: 3.5 min
-- Total execution time: 1.62 hours
+- Total plans completed: 25
+- Average duration: 3.4 min
+- Total execution time: 1.65 hours
 
 *Updated after each plan completion*
 
@@ -137,6 +137,10 @@ v1.1 decisions:
 - [v1.1-07-03]: bg-dialog-content/70 preserved on app-auth card (semantic token from Phase 3 dialog system with transparency)
 - [v1.1-07-03]: bg-black/50 overlay preserved on app-auth (intentional darken layer convention)
 - [v1.1-07-03]: bg-neutral-600 preserved on placeholder app icon (domain-specific, not generic surface)
+- [v1.1-08-01]: Drawer component for mobile sidebar (matches vaul-based drawer pattern)
+- [v1.1-08-01]: ConversationSidebar className prop for mobile width override (w-full, border-r-0, bg-transparent)
+- [v1.1-08-01]: h-11 w-11 touch targets on mobile header buttons (44px minimum)
+- [v1.1-08-01]: Responsive padding: messages p-3 md:p-6, input p-3 md:p-4
 
 ### Pending Todos
 
@@ -149,7 +153,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 07-03-PLAN.md (Restore Flow & App-Auth Migration)
+Stopped at: Completed 08-01-PLAN.md (Mobile AI Chat Drawer Sidebar)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -349,6 +353,15 @@ Resume file: None
   - restore.tsx: BackupSnapshot cn() with semantic tokens (rounded-radius-sm, border-border-default, bg-surface-2)
   - login-with-livinity.tsx: rounded-radius-xl, shadow-elevation-lg, text-heading-sm, text-body-sm, text-text-tertiary
   - Summary: .planning/phases/v1.1-07-login-onboarding/07-03-SUMMARY.md
+
+**Phase v1.1-08: Mobile & Polish**
+- Plan 08-01: Mobile AI Chat Drawer Sidebar (completed 2026-02-07)
+  - useIsMobile hook + Drawer for mobile sidebar
+  - Mobile header: hamburger menu, title, new conversation button
+  - Responsive padding: p-3 md:p-6 messages, p-3 md:p-4 input
+  - ConversationSidebar className prop for mobile override
+  - Desktop layout completely unchanged
+  - Summary: .planning/phases/v1.1-08-mobile-polish/08-01-SUMMARY.md
 
 ---
 
