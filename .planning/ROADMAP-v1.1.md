@@ -15,7 +15,7 @@ The redesign progresses from foundation (design system tokens) through core shel
 - [x] **Phase 5: AI Chat Redesign** — Chat sidebar, messages, input, tool calls, MCP ✓
 - [x] **Phase 6: App Store & Files** — App store navigation/cards/detail, file manager views ✓
 - [x] **Phase 7: Login & Onboarding** — Auth pages with Livinity branding ✓
-- [ ] **Phase 8: Mobile & Polish** — Responsive fixes, animations, final polish
+- [x] **Phase 8: Mobile & Polish** — Responsive fixes, animations, final polish ✓
 
 ## Phase Details
 
@@ -158,10 +158,10 @@ Plans:
 **Plans**: 4 plans in 2 waves
 
 Plans:
-- [ ] 08-01-PLAN.md — AI Chat mobile layout with drawer sidebar (MR-01)
-- [ ] 08-02-PLAN.md — Touch target optimization for mobile buttons (MR-02)
-- [ ] 08-03-PLAN.md — Backdrop-blur performance and GPU compositing hints (MR-03)
-- [ ] 08-04-PLAN.md — Drawer/modal polish and cross-viewport verification (MR-04)
+- [x] 08-01-PLAN.md — AI Chat mobile layout with drawer sidebar (MR-01)
+- [x] 08-02-PLAN.md — Touch target optimization for mobile buttons (MR-02)
+- [x] 08-03-PLAN.md — Backdrop-blur performance and GPU compositing hints (MR-03)
+- [x] 08-04-PLAN.md — Drawer/modal polish and cross-viewport verification (MR-04)
 
 ## Progress
 
@@ -178,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 5. AI Chat Redesign | 3/3 | Complete | 2026-02-06 |
 | 6. App Store & Files | 3/3 | Complete | 2026-02-07 |
 | 7. Login & Onboarding | 3/3 | Complete | 2026-02-07 |
-| 8. Mobile & Polish | 0/4 | Not started | - |
+| 8. Mobile & Polish | 4/4 | Complete | 2026-02-07 |
 
 ---
 *Roadmap created: 2026-02-06*
