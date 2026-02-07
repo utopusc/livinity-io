@@ -231,7 +231,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Dock container + dock items visual fixes (CV-01, CV-02)
 - [ ] 02-02-PLAN.md — Sheet + Dialog + Window visual fixes (CV-03, CV-04, CV-07)
-- [ ] 02-03-PLAN.md — File Manager + Menu visual fixes (CV-05, CV-06)
+- [x] 02-03-PLAN.md — File Manager + Menu visual fixes (CV-05, CV-06)
 - [ ] 02-04-PLAN.md — Button highlight and height adjustments (CV-08)
 
 ## Progress
@@ -259,7 +259,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Token Foundation | 1/1 | Complete | 2026-02-07 |
-| 2. Component Visual Fixes | 1/4 | In progress | - |
+| 2. Component Visual Fixes | 2/4 | In progress | - |
 
 ---
 *Roadmap created: 2026-02-03*
