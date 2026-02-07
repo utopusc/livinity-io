@@ -62,7 +62,7 @@ export function PathBarMobile({path}: PathBarMobileProps) {
 				}}
 				className='h-5 w-5'
 			/>
-			<span className='text-13'>
+			<span className='text-body-sm'>
 				{isBrowsingTrash ? t('files-sidebar.trash') : ''}
 				{isBrowsingRecents ? t('files-sidebar.recents') : ''}
 				{isInHome ? t('files-sidebar.home') : ''}

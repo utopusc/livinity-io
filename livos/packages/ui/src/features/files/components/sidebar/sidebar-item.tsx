@@ -6,9 +6,9 @@ import {cn} from '@/shadcn-lib/utils'
 import {tw} from '@/utils/tw'
 
 const selectedClass = tw`
-  bg-gradient-to-b from-white/[0.04] to-white/[0.08]
-  border-white/6  
-  shadow-button-highlight-soft-hpx 
+  bg-gradient-to-b from-surface-base to-surface-2
+  border-border-subtle
+  shadow-button-highlight-soft-hpx
 `
 
 type SidebarItem = {
@@ -30,13 +30,13 @@ export function SidebarItem({item, isActive, onClick, disabled = false}: Sidebar
 			id={`sidebar-${item.path}`}
 			path={item.path}
 			className={cn(
-				'flex w-full rounded-lg border border-transparent from-white/[0.04] to-white/[0.08]  text-12',
+				'flex w-full rounded-lg border border-transparent from-surface-base to-surface-2 text-caption',
 				disabled ? 'cursor-default opacity-50' : 'hover:bg-gradient-to-b',
 				isActive && !disabled
 					? selectedClass
 					: disabled
-						? 'text-white/40'
-						: 'text-white/60 transition-colors hover:bg-white/10 hover:text-white',
+						? 'text-text-tertiary'
+						: 'text-text-secondary transition-colors hover:bg-surface-2 hover:text-white',
 			)}
 			disabled={disabled || item.path === RECENTS_PATH} // Disable dropping on recents and when disabled
 		>

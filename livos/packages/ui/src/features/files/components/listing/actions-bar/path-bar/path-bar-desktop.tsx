@@ -238,7 +238,7 @@ const PathSegment = ({segment, hasArrow, onClick, isStatic, path, type}: PathSeg
 			>
 				{segment && formatItemName({name: segment})}
 			</span>
-			{hasArrow && <CaretRightIcon className='ml-1 mt-[1px] shrink-0 text-white/50' />}
+			{hasArrow && <CaretRightIcon className='ml-1 mt-[1px] shrink-0 text-text-secondary' />}
 		</Droppable>
 	</li>
 )

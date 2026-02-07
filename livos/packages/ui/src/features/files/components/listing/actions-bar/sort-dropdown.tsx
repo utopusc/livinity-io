@@ -23,7 +23,7 @@ export function SortDropdown() {
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align='end' className='w-24'>
-				<span className='block px-2 pb-2 text-13 text-white/40'>Sort by</span>
+				<span className='block px-2 pb-2 text-body-sm text-text-tertiary'>Sort by</span>
 				{SORT_BY_OPTIONS.map((option) => (
 					<DropdownMenuItem
 						key={option.sortBy}

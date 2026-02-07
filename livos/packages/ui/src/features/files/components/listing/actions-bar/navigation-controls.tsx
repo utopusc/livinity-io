@@ -108,7 +108,7 @@ export function NavigationControls() {
 				onClick={handleBack}
 				disabled={!canGoBack}
 				className={cn('p-0 hover:bg-transparent focus:ring-0 focus-visible:ring-0', {
-					'opacity-50': !canGoBack,
+					'text-text-secondary': !canGoBack,
 				})}
 				whileTap={{scale: 0.85}}
 				aria-label='Go back'
@@ -119,7 +119,7 @@ export function NavigationControls() {
 				onClick={handleForward}
 				disabled={!canGoForward}
 				className={cn('p-0 hover:bg-transparent focus:ring-0 focus-visible:ring-0', {
-					'opacity-50': !canGoForward,
+					'text-text-secondary': !canGoForward,
 				})}
 				whileTap={{scale: 0.85}}
 				aria-label='Go forward'
