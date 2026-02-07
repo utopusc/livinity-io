@@ -23,16 +23,16 @@ const buttonVariants = cva(
 				ghost: 'hover:bg-surface-1 active:bg-surface-base border border-transparent hover:border-border-subtle ring-white/20',
 			},
 			size: {
-				sm: 'rounded-radius-sm h-[28px] px-3 text-caption gap-1.5',
-				md: 'rounded-radius-md h-[34px] min-w-[80px] px-4 text-body-sm',
+				sm: 'rounded-radius-sm h-[44px] md:h-[28px] px-3 text-caption gap-1.5',
+				md: 'rounded-radius-md h-[44px] md:h-[34px] min-w-[80px] px-4 text-body-sm',
 				'md-squared': 'rounded-radius-md h-[38px] px-3 text-body-sm gap-2',
-				default: 'rounded-radius-md h-[34px] px-3.5 text-body-sm',
+				default: 'rounded-radius-md h-[44px] md:h-[34px] px-3.5 text-body-sm',
 				'input-short': 'rounded-radius-md h-10 px-5 text-body-sm font-semibold min-w-[80px]',
 				dialog:
 					'rounded-radius-md h-[44px] md:h-[36px] min-w-[90px] px-5 font-semibold w-full md:w-auto text-body',
 				lg: 'rounded-radius-md h-[44px] px-6 text-body-lg font-semibold',
 				xl: 'rounded-radius-lg h-[52px] px-7 text-body-lg font-semibold',
-				'icon-only': 'rounded-radius-md h-[34px] w-[34px]',
+				'icon-only': 'rounded-radius-md h-[44px] w-[44px] md:h-[34px] md:w-[34px]',
 			},
 			text: {
 				default: 'text-white',
