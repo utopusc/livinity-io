@@ -85,7 +85,7 @@ function ChatMessage({message}: {message: Message}) {
 			<div className={cn('max-w-[80%]', isUser && 'order-first')}>
 				<div
 					className={cn('rounded-radius-xl px-4 py-3',
-						isUser ? 'bg-brand text-white' : 'bg-surface-2 text-text-primary'
+						isUser ? 'bg-brand text-white' : 'bg-surface-2 text-text-primary border-l-2 border-brand/30'
 					)}
 				>
 					{isUser ? (
