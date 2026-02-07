@@ -187,7 +187,34 @@ Plans:
 - [ ] 10-01: End-to-end validation on fresh VPS
 - [ ] 10-02: Final cleanup and release preparation
 
+---
+
+## Milestone: v1.2 — Visual Impact Redesign
+
+**Overview**: v1.1 established semantic tokens but kept identical CSS output. v1.2 changes actual token VALUES to make every component visibly improved.
+
+### v1.2 Phases
+
+- [ ] **Phase 1: Token Foundation** - Update semantic token values for surfaces, borders, text, and shadows
+
+### Phase 1: Token Foundation
+**Goal**: Change the actual CSS values behind semantic tokens so every component in the UI becomes visibly improved
+**Depends on**: Nothing (first phase)
+**Requirements**: TF-01, TF-02, TF-03, TF-04, TF-05, TF-06
+**Success Criteria** (what must be TRUE):
+  1. Surface opacities increased: surface-base 0.06, surface-1 0.10, surface-2 0.16, surface-3 0.22
+  2. Border opacities increased: border-subtle 0.10, border-default 0.16, border-emphasis 0.30
+  3. Elevation shadows have white inset glow highlights and stronger outer opacity
+  4. Text secondary/tertiary more readable: 0.65 and 0.45
+  5. Sheet-shadow and dialog shadow insets use proper top-edge highlight technique
+**Plans**: 1 plan in 1 wave
+
+Plans:
+- [ ] 01-01-PLAN.md — Update all token values in tailwind.config.ts (TF-01 to TF-06)
+
 ## Progress
+
+### v1.0 Progress
 
 **Execution Order:**
 Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
@@ -205,7 +232,13 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 9. Installer | 3/3 | Complete | 2026-02-05 |
 | 10. Release | 0/2 | Not started | - |
 
+### v1.2 Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Token Foundation | 0/1 | Not started | - |
+
 ---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 | Total plans: 25 (estimated)*
+*Total phases: 10 (v1.0) + 1 (v1.2) | Total plans: 26 (estimated)*
 *Coverage: 29/29 v1 requirements mapped*
