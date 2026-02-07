@@ -664,9 +664,13 @@ ENVFILE
 
         # Create livos user if not exists
         if ! id -u livos &>/dev/null; then
-            useradd --system --no-create-home --shell /bin/false livos
+            useradd --system --create-home --home-dir /home/livos --shell /bin/false livos
             ok "Created livos system user"
         fi
+
+        # Ensure home dir exists (for npx cache used by MCP servers)
+        mkdir -p /home/livos
+        chown livos:livos /home/livos
 
         # Set ownership
         chown -R livos:livos "$LIVOS_DIR"
@@ -696,6 +700,7 @@ WantedBy=multi-user.target
 UNIT
 
         # Create liv-core service (Nexus AI daemon)
+        # Runs as root so MCP child processes (Playwright, npx, etc.) have full system access
         cat > /etc/systemd/system/liv-core.service << 'UNIT'
 [Unit]
 Description=Liv AI Core
@@ -705,8 +710,7 @@ Requires=redis.service
 
 [Service]
 Type=simple
-User=livos
-Group=livos
+User=root
 WorkingDirectory=/opt/nexus
 ExecStart=/usr/bin/node packages/core/dist/index.js
 Restart=on-failure
@@ -714,11 +718,6 @@ RestartSec=5
 Environment=NODE_ENV=production
 Environment=DAEMON_INTERVAL_MS=30000
 EnvironmentFile=/opt/livos/.env
-
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus
 
 [Install]
 WantedBy=multi-user.target
@@ -747,7 +746,7 @@ EnvironmentFile=/opt/livos/.env
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus
+ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus /home/livos
 
 [Install]
 WantedBy=multi-user.target
@@ -775,7 +774,7 @@ EnvironmentFile=/opt/livos/.env
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus
+ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus /home/livos
 
 [Install]
 WantedBy=multi-user.target
