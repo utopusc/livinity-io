@@ -62,7 +62,7 @@ export default function LoginWithLivinity() {
 							// error={loginMut.error?.message}
 						/>
 						<div>
-							<Button type='submit' variant={'primary'} size='lg' className='text-13'>
+							<Button type='submit' variant={'primary'} size='lg' className='text-body-sm'>
 								{t('login.password.submit')}
 							</Button>
 						</div>
@@ -203,20 +203,20 @@ function LoginWithLayout({children}: {children: ReactNode}) {
 				<div className='flex h-full w-full flex-grow items-center justify-center'>
 					<div
 						className={cn(
-							'w-full rounded-20 bg-dialog-content/70 p-8 shadow-dialog sm:max-w-[480px]',
+							'w-full rounded-radius-xl bg-dialog-content/70 p-8 shadow-elevation-lg sm:max-w-[480px]',
 							'flex flex-col gap-5',
 							'duration-200 ease-out animate-in fade-in zoom-in-90',
 						)}
 					>
 						<div className='flex h-0 -translate-y-[56px] gap-5'>
-							<AppIcon src='/figma-exports/livinity-ios.png' size={56} className='rounded-12' />
-							<AppIcon src={app.icon} size={56} className='rounded-12 bg-neutral-600' />
+							<AppIcon src='/figma-exports/livinity-ios.png' size={56} className='rounded-radius-md' />
+							<AppIcon src={app.icon} size={56} className='rounded-radius-md bg-neutral-600' />
 						</div>
 						<div className='flex flex-col gap-1'>
-							<h1 className='truncate text-17 font-semibold leading-tight -tracking-2'>
+							<h1 className='truncate text-heading-sm font-semibold leading-tight -tracking-2'>
 								{t('login-with-livinity.title')}
 							</h1>
-							<p className='text-13 leading-tight -tracking-2 text-white/40'>
+							<p className='text-body-sm leading-tight -tracking-2 text-text-tertiary'>
 								{t('login-with-livinity.description', {app: app.name})}
 							</p>
 						</div>
