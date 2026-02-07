@@ -127,7 +127,7 @@ export function DockItem({
 			{/* icon */}
 			<motion.div
 				className={cn(
-					'relative origin-top-left rounded-radius-lg bg-surface-2 backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
+					'relative origin-top-left rounded-radius-lg bg-surface-2 transform-gpu backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
 					className,
 				)}
 				style={{
