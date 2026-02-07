@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 8 of 8 (Mobile & Polish)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-07 - Completed 08-03-PLAN.md (Backdrop-Blur Mobile Optimization)
+Plan: 4 of 4 in current phase
+Status: Complete
+Last activity: 2026-02-07 - Completed 08-04-PLAN.md (Drawer/Modal Polish & Cross-Viewport Verification)
 
-Progress: [███████████████████████████] 96% (27 of 28 plans)
+Progress: [████████████████████████████] 100% (28 of 28 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████████████████
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 27
-- Average duration: 3.3 min
-- Total execution time: 1.71 hours
+- Total plans completed: 28
+- Average duration: 3.2 min
+- Total execution time: 1.73 hours
 
 *Updated after each plan completion*
 
@@ -149,6 +149,9 @@ v1.1 decisions:
 - [v1.1-08-03]: Sheet overlay xl->lg on mobile (20px->12px): lighter but benefits from reduction
 - [v1.1-08-03]: transform-gpu added to all modified backdrop-blur elements for GPU layer promotion
 - [v1.1-08-03]: Dock/window-chrome/command-palette NOT changed (static, desktop-only, or infrequent)
+- [v1.1-08-04]: Drawer bg-[#0F0F0F] -> bg-black/90 (slight translucency complements inset box-shadow glass highlight)
+- [v1.1-08-04]: ImmersiveDialog close mt-5 -> mt-2 md:mt-5 (keeps button visible on 667px-tall viewports)
+- [v1.1-08-04]: ImmersiveDialog close 44px mobile touch target matching Plan 08-02 pattern
 
 ### Pending Todos
 
@@ -161,7 +164,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 08-03-PLAN.md (Backdrop-Blur Mobile Optimization)
+Stopped at: Completed 08-04-PLAN.md (Drawer/Modal Polish) - v1.1 COMPLETE
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -382,6 +385,11 @@ Resume file: None
   - Toast: transform-gpu for GPU-composited backdrop blur
   - Dock item: transform-gpu for GPU-composited backdrop blur
   - Summary: .planning/phases/v1.1-08-mobile-polish/08-03-SUMMARY.md
+- Plan 08-04: Drawer/Modal Polish & Cross-Viewport Verification (completed 2026-02-07)
+  - Drawer: bg-[#0F0F0F] -> bg-black/90 (semantic consistency)
+  - ImmersiveDialog close: mt-2 md:mt-5 responsive margin
+  - ImmersiveDialog close: 44px mobile touch target (md:36px desktop)
+  - Summary: .planning/phases/v1.1-08-mobile-polish/08-04-SUMMARY.md
 
 ---
 
