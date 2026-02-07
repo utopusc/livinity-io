@@ -138,7 +138,12 @@ Plans:
   3. Forms are clean and well-spaced
   4. 2FA input has improved UX
   5. Brand assets (logo) are present
-**Plans**: TBD (estimated 1-2 plans)
+**Plans**: 3 plans in 2 waves
+
+Plans:
+- [ ] 07-01-PLAN.md — Layout & brand foundation: shared.tsx token migration, brand buttons, StepIndicator component (LO-01, LO-03)
+- [ ] 07-02-PLAN.md — Login page, PinInput UX, onboarding step indicators (LO-01, LO-02, LO-03, LO-04)
+- [ ] 07-03-PLAN.md — Restore flow step indicators & token migration, app-auth brand alignment (LO-02)
 
 ### Phase 8: Mobile & Polish
 **Goal**: Ensure responsive design works across all redesigned views and add final polish
