@@ -13,31 +13,29 @@ export const scaleInClass = tw`animate-in zoom-in-95 duration-300`
 // ─── Card Styles ────────────────────────────────────────────────
 const cardBaseClass = tw`rounded-2xl px-4 py-4 md:px-8 md:py-8`
 
-// Premium glass card with gradient border
+// Clean card with semantic surface
 export const cardClass = cn(
 	cardBaseClass,
 	tw`relative overflow-hidden`,
-	tw`bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-transparent`,
-	tw`backdrop-blur-xl`,
-	tw`border border-white/[0.08]`,
-	tw`shadow-[0_8px_32px_rgba(0,0,0,0.4)]`,
+	tw`bg-surface-1`,
+	tw`border border-border-subtle`,
+	tw`shadow-elevation-sm`,
 )
 
 // Subtle card for secondary sections
 export const cardFaintClass = cn(
 	cardBaseClass,
-	tw`bg-white/[0.03] hover:bg-white/[0.05] transition-colors duration-300`,
-	tw`border border-white/[0.05]`,
+	tw`bg-surface-base hover:bg-surface-1 transition-colors duration-300`,
+	tw`border border-border-subtle`,
 )
 
-// Featured card with accent glow
+// Featured card with brand accent
 export const cardFeaturedClass = cn(
 	cardBaseClass,
 	tw`relative overflow-hidden`,
-	tw`bg-gradient-to-br from-purple-500/20 via-blue-500/10 to-cyan-500/5`,
-	tw`backdrop-blur-xl`,
-	tw`border border-purple-500/20`,
-	tw`shadow-[0_8px_32px_rgba(139,92,246,0.15)]`,
+	tw`bg-surface-2`,
+	tw`border border-border-default`,
+	tw`shadow-elevation-md`,
 )
 
 // ─── Grid Layouts ───────────────────────────────────────────────
@@ -45,9 +43,9 @@ export const appsGridClass = tw`grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-
 export const appsGridCompactClass = tw`grid gap-3 sm:grid-cols-2 lg:grid-cols-3`
 
 // ─── Typography ─────────────────────────────────────────────────
-export const sectionOverlineClass = tw`text-xs font-semibold uppercase tracking-wider text-purple-400/80 mb-2`
-export const sectionTitleClass = tw`text-2xl md:text-4xl font-bold bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent`
-export const sectionDescriptionClass = tw`text-sm md:text-base text-white/50 mt-2 max-w-2xl`
+export const sectionOverlineClass = tw`text-caption font-semibold uppercase tracking-wider text-brand mb-2`
+export const sectionTitleClass = tw`text-2xl md:text-4xl font-bold text-text-primary`
+export const sectionDescriptionClass = tw`text-body md:text-body-lg text-text-secondary mt-2 max-w-2xl`
 
 // ─── Section Title Component ────────────────────────────────────
 export function SectionTitle({
@@ -90,10 +88,8 @@ export function AppStoreSheetInner({
 			{beforeHeaderChildren}
 			<SheetHeader className='gap-5'>
 				<div className='flex flex-col gap-x-5 gap-y-4 px-2 md:flex-row md:items-center md:px-0'>
-					<SheetTitle className='flex-1 whitespace-nowrap text-3xl font-bold leading-none tracking-tight'>
-						<span className='bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-transparent'>
-							{title}
-						</span>
+					<SheetTitle className='flex-1 whitespace-nowrap text-3xl font-bold leading-none tracking-tight text-text-primary'>
+						{title}
 					</SheetTitle>
 					{titleRightChildren}
 				</div>
@@ -118,7 +114,7 @@ export function AppWithName({
 	return (
 		<div className={cn('flex w-full items-center gap-3', className)}>
 			<AppIcon src={icon} size={40} className='rounded-xl shadow-lg' />
-			<h3 className='flex-1 truncate text-sm font-semibold leading-tight tracking-tight'>{appName}</h3>
+			<h3 className='flex-1 truncate text-body-sm font-semibold leading-tight tracking-tight'>{appName}</h3>
 			{childrenRight}
 		</div>
 	)
@@ -143,31 +139,27 @@ export function PremiumAppCard({
 			onClick={onClick}
 			className={cn(
 				'group relative flex flex-col items-start gap-4 p-5 text-left',
-				'rounded-2xl border border-white/[0.08]',
-				'bg-gradient-to-br from-white/[0.06] to-transparent',
-				'hover:from-white/[0.1] hover:to-white/[0.02]',
-				'hover:border-white/[0.15] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]',
+				'rounded-2xl border border-border-subtle',
+				'bg-surface-1',
+				'hover:bg-surface-2 hover:border-border-default hover:shadow-elevation-md',
 				'transition-all duration-300 ease-out',
-				'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
+				'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/20',
 			)}
 		>
-			{/* Hover glow effect */}
-			<div className='absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/0 to-cyan-500/0 opacity-0 transition-opacity duration-300 group-hover:opacity-10' />
-
 			<div className='relative flex w-full items-start gap-4'>
 				<AppIcon
 					src={icon}
 					size={56}
-					className='rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.3)] ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105'
+					className='rounded-xl shadow-elevation-sm ring-1 ring-border-default transition-transform duration-300 group-hover:scale-105'
 				/>
 				<div className='min-w-0 flex-1'>
-					<h4 className='truncate text-base font-semibold tracking-tight text-white'>{name}</h4>
-					<p className='mt-1 line-clamp-2 text-sm leading-snug text-white/50'>{tagline}</p>
+					<h4 className='truncate text-body-lg font-semibold tracking-tight text-text-primary'>{name}</h4>
+					<p className='mt-1 line-clamp-2 text-body-sm leading-snug text-text-tertiary'>{tagline}</p>
 				</div>
 			</div>
 
 			{category && (
-				<span className='rounded-full bg-white/[0.08] px-3 py-1 text-xs font-medium text-white/60'>
+				<span className='rounded-full bg-surface-2 px-3 py-1 text-caption font-medium text-text-secondary'>
 					{category}
 				</span>
 			)}
@@ -196,32 +188,29 @@ export function FeaturedAppSpotlight({
 			onClick={onClick}
 			className={cn(
 				'group relative w-full overflow-hidden rounded-3xl p-6 md:p-8 text-left',
-				'border border-white/[0.1]',
+				'border border-border-default',
 				'transition-all duration-500 ease-out',
-				'hover:border-white/[0.2] hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)]',
-				'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
-				gradient || 'bg-gradient-to-br from-purple-600/30 via-blue-600/20 to-cyan-600/10',
+				'hover:border-border-emphasis hover:shadow-elevation-lg',
+				'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/20',
+				gradient || 'bg-surface-2',
 			)}
 		>
-			{/* Animated background gradient */}
-			<div className='absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
-
-			{/* Glow orb */}
-			<div className='absolute -right-20 -top-20 h-40 w-40 rounded-full bg-purple-500/20 blur-3xl transition-all duration-500 group-hover:bg-purple-500/30' />
+			{/* Subtle hover overlay */}
+			<div className='absolute inset-0 bg-surface-base opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
 
 			<div className='relative flex flex-col gap-4 md:flex-row md:items-center md:gap-6'>
 				<AppIcon
 					src={icon}
 					size={80}
-					className='rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] ring-2 ring-white/10 transition-transform duration-500 group-hover:scale-110'
+					className='rounded-2xl shadow-elevation-md ring-2 ring-border-default transition-transform duration-500 group-hover:scale-110'
 				/>
 				<div className='flex-1'>
-					<p className='text-xs font-semibold uppercase tracking-wider text-purple-300/80'>Featured</p>
-					<h3 className='mt-1 text-2xl font-bold tracking-tight text-white md:text-3xl'>{name}</h3>
-					<p className='mt-2 text-base text-white/70'>{tagline}</p>
-					{description && <p className='mt-3 text-sm text-white/50'>{description}</p>}
+					<p className='text-caption font-semibold uppercase tracking-wider text-brand'>Featured</p>
+					<h3 className='mt-1 text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>{name}</h3>
+					<p className='mt-2 text-body-lg text-text-primary'>{tagline}</p>
+					{description && <p className='mt-3 text-body-sm text-text-secondary'>{description}</p>}
 				</div>
-				<div className='flex items-center gap-2 text-sm font-medium text-white/60 transition-colors group-hover:text-white'>
+				<div className='flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors group-hover:text-text-primary'>
 					<span>View App</span>
 					<svg className='h-4 w-4 transition-transform group-hover:translate-x-1' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
 						<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5l7 7-7 7' />
@@ -248,12 +237,12 @@ export function CategoryPill({
 		<button
 			onClick={onClick}
 			className={cn(
-				'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium',
+				'flex items-center gap-2 rounded-full px-4 py-2 text-body-sm font-medium',
 				'transition-all duration-200',
-				'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
+				'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/20',
 				isActive
 					? 'bg-white text-black shadow-lg'
-					: 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white',
+					: 'bg-surface-2 text-text-primary hover:bg-surface-3 hover:text-white',
 			)}
 		>
 			{icon}
@@ -265,11 +254,11 @@ export function CategoryPill({
 // ─── Stats Badge ────────────────────────────────────────────────
 export function StatsBadge({label, value, icon}: {label: string; value: string | number; icon?: ReactNode}) {
 	return (
-		<div className='flex items-center gap-3 rounded-xl bg-white/[0.05] px-4 py-3'>
-			{icon && <div className='text-purple-400'>{icon}</div>}
+		<div className='flex items-center gap-3 rounded-xl bg-surface-1 px-4 py-3'>
+			{icon && <div className='text-brand'>{icon}</div>}
 			<div>
-				<p className='text-lg font-bold text-white'>{value}</p>
-				<p className='text-xs text-white/50'>{label}</p>
+				<p className='text-lg font-bold text-text-primary'>{value}</p>
+				<p className='text-caption text-text-tertiary'>{label}</p>
 			</div>
 		</div>
 	)

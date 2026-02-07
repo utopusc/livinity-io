@@ -34,14 +34,11 @@ export const AppsGallerySection: React.FC<{banners: Banner[]}> = ({banners}) => 
 						alt={banner.id}
 					/>
 
-					{/* Gradient overlay */}
+					{/* Single gradient overlay for text readability */}
 					<div className='absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent' />
 
-					{/* Hover glow */}
-					<div className='absolute inset-0 bg-gradient-to-br from-purple-500/0 to-cyan-500/0 opacity-0 transition-opacity duration-500 group-hover:opacity-20' />
-
 					{/* Border highlight on hover */}
-					<div className='absolute inset-0 rounded-2xl border-2 border-white/0 transition-colors duration-300 group-hover:border-white/20 md:rounded-3xl' />
+					<div className='absolute inset-0 rounded-2xl border-2 border-transparent transition-colors duration-300 group-hover:border-border-emphasis md:rounded-3xl' />
 				</Link>
 			))}
 		</div>
@@ -88,7 +85,7 @@ export const AppGallerySection: React.FC<{gallery: string[]; galleryId: string}>
 					/>
 					{/* Zoom indicator */}
 					<div className='absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100'>
-						<div className='rounded-full bg-white/20 p-3 backdrop-blur-sm'>
+						<div className='rounded-full bg-surface-3 p-3 backdrop-blur-sm'>
 							<svg className='h-6 w-6 text-white' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
 								<path
 									strokeLinecap='round'
@@ -100,7 +97,7 @@ export const AppGallerySection: React.FC<{gallery: string[]; galleryId: string}>
 						</div>
 					</div>
 					{/* Border */}
-					<div className='absolute inset-0 rounded-xl border border-white/10 transition-colors duration-300 group-hover:border-white/20 md:rounded-2xl' />
+					<div className='absolute inset-0 rounded-xl border border-border-default transition-colors duration-300 group-hover:border-border-emphasis md:rounded-2xl' />
 				</a>
 			))}
 		</div>
@@ -126,9 +123,9 @@ export function HeroBanner({
 			to={`/app-store/${appId}`}
 			className={cn(
 				'group relative block w-full overflow-hidden rounded-3xl',
-				'border border-white/[0.1]',
+				'border border-border-default',
 				'transition-all duration-500',
-				'hover:border-white/[0.2] hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)]',
+				'hover:border-border-emphasis hover:shadow-elevation-lg',
 				'animate-in fade-in slide-in-from-bottom-8 duration-500',
 			)}
 		>
@@ -136,7 +133,7 @@ export function HeroBanner({
 			<div
 				className={cn(
 					'absolute inset-0',
-					gradient || 'bg-gradient-to-br from-purple-600/40 via-blue-600/30 to-cyan-600/20',
+					gradient || 'bg-surface-2',
 				)}
 			/>
 			{image && (
@@ -147,21 +144,18 @@ export function HeroBanner({
 				/>
 			)}
 
-			{/* Overlay */}
+			{/* Single overlay for text readability */}
 			<div className='absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent' />
-
-			{/* Animated glow */}
-			<div className='absolute -right-20 -top-20 h-60 w-60 rounded-full bg-purple-500/20 blur-3xl transition-all duration-500 group-hover:bg-purple-500/30' />
 
 			{/* Content */}
 			<div className='relative flex min-h-[200px] flex-col justify-end p-6 md:min-h-[280px] md:p-10'>
-				<span className='mb-2 inline-flex w-fit items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-300 backdrop-blur-sm'>
-					<span className='h-1.5 w-1.5 rounded-full bg-purple-400' />
+				<span className='mb-2 inline-flex w-fit items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-caption font-semibold uppercase tracking-wider text-brand backdrop-blur-sm'>
+					<span className='h-1.5 w-1.5 rounded-full bg-brand' />
 					Featured
 				</span>
 				<h2 className='text-3xl font-bold tracking-tight text-white md:text-5xl'>{title}</h2>
-				<p className='mt-2 max-w-xl text-base text-white/70 md:text-lg'>{tagline}</p>
-				<div className='mt-4 flex items-center gap-2 text-sm font-medium text-white/60 transition-colors group-hover:text-white'>
+				<p className='mt-2 max-w-xl text-body-lg text-text-primary md:text-lg'>{tagline}</p>
+				<div className='mt-4 flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors group-hover:text-white'>
 					<span>Explore now</span>
 					<svg
 						className='h-4 w-4 transition-transform group-hover:translate-x-1'
@@ -181,11 +175,12 @@ export const galleryRootClass = tw`-mx-[70px] px-[70px] livinity-hide-scrollbar 
 
 export const galleryItemClass = tw`
 	shrink-0
-	bg-white/5
+	bg-surface-1
 	outline-none
 	ring-inset
 	focus-visible:ring-2
-	focus-visible:ring-purple-500/50
+	focus-visible:ring-brand/20
+	focus-visible:border-brand
 	animate-in
 	fade-in
 	slide-in-from-right-8
