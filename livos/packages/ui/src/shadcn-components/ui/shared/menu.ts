@@ -7,16 +7,16 @@ import {tw} from '@/utils/tw'
 // Removed bg-blur in favor of bg with color-mix as bg-blur doesn't work on subcontext menus
 const menuContentClass = tw`bg-[color-mix(in_hsl,hsl(var(--color-brand))_20%,black_80%)] z-[9999] min-w-[8rem] p-1 animate-in fade-in-80 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 text-text-primary`
 
-const menuItemClass = tw`relative flex cursor-default select-none items-center px-3 py-2 text-body-sm font-medium -tracking-3 leading-tight outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-surface-base focus:text-white data-[highlighted]:bg-surface-base data-[highlighted]:text-white`
+const menuItemClass = tw`relative flex cursor-default select-none items-center px-3 py-2 text-body-sm font-medium -tracking-3 leading-tight outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-surface-1 focus:text-white data-[highlighted]:bg-surface-1 data-[highlighted]:text-white`
 const menuItemDestructiveClass = cn(menuItemClass, tw`text-destructive2-lightest focus:text-destructive2-lightest`)
 
 const checkboxIndicatorWrapperClass = tw`absolute right-3 flex h-3.5 w-3.5 items-center justify-center`
 const radioIndicatorWrapperClass = tw`absolute left-2 flex h-3.5 w-3.5 items-center justify-center`
 
-const contextMenuItemClass = cn(menuItemClass, 'rounded-radius-sm')
+const contextMenuItemClass = cn(menuItemClass, 'rounded-radius-md')
 
 export const contextMenuClasses = {
-	content: cn(menuContentClass, 'shadow-context-menu rounded-radius-sm'),
+	content: cn(menuContentClass, 'shadow-context-menu rounded-radius-md'),
 	item: {
 		root: contextMenuItemClass,
 		rootDestructive: menuItemDestructiveClass,
@@ -31,7 +31,7 @@ export const contextMenuClasses = {
 	},
 }
 
-const dropdownItemClass = cn(menuItemClass, 'rounded-radius-sm')
+const dropdownItemClass = cn(menuItemClass, 'rounded-radius-md')
 export const dropdownClasses = {
 	content: cn(menuContentClass, 'shadow-dropdown rounded-radius-md p-2.5'),
 	item: {
