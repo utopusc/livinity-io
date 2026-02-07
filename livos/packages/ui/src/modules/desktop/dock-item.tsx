@@ -85,7 +85,7 @@ export function DockItem({
 	const springOptions: SpringOptions = {
 		mass: 0.1,
 		stiffness: 150,
-		damping: 10,
+		damping: 14,
 	}
 
 	const widthSync = useTransform(distance, [-150, 0, 150], [iconSize, iconSizeZoomed, iconSize])
@@ -118,7 +118,7 @@ export function DockItem({
 		<motion.div ref={ref} className='relative aspect-square' style={{width}}>
 			{/* icon glow */}
 			<div
-				className='absolute hidden h-full w-full rounded-radius-lg bg-surface-3 opacity-30 md:block'
+				className='absolute hidden h-full w-full rounded-radius-lg bg-surface-3 opacity-50 md:block'
 				style={{
 					filter: 'blur(16px)',
 					transform: 'translateY(4px)',
@@ -146,7 +146,7 @@ export function DockItem({
 			>
 				{/* Render React Icon if available, otherwise fallback to bg image */}
 				{Icon ? (
-					<Icon className='h-[55%] w-[55%] text-text-primary drop-shadow-md' />
+					<Icon className='h-[60%] w-[60%] text-text-primary drop-shadow-md' />
 				) : bg ? (
 					<div
 						className='h-full w-full bg-cover bg-center rounded-xl'
