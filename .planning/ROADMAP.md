@@ -196,6 +196,7 @@ Plans:
 ### v1.2 Phases
 
 - [x] **Phase 1: Token Foundation** - Update semantic token values for surfaces, borders, text, and shadows
+- [ ] **Phase 2: Component Visual Fixes** - Apply targeted visual fixes to components that need more than token value changes
 
 ### Phase 1: Token Foundation
 **Goal**: Change the actual CSS values behind semantic tokens so every component in the UI becomes visibly improved
@@ -211,6 +212,27 @@ Plans:
 
 Plans:
 - [x] 01-01-PLAN.md — Update all token values in tailwind.config.ts (TF-01 to TF-06)
+
+### Phase 2: Component Visual Fixes
+**Goal**: Apply targeted visual fixes to components that need more than just token value changes
+**Depends on**: Phase 1
+**Requirements**: CV-01, CV-02, CV-03, CV-04, CV-05, CV-06, CV-07, CV-08
+**Success Criteria** (what must be TRUE):
+  1. Dock has 1px border, surface-1 background, 12px padding
+  2. Dock items have 60% icon ratio, visible glow, smoother spring
+  3. Sheet shows wallpaper color (brightness 0.38), has top border
+  4. Dialog uses border-default for visible edges
+  5. File list has hover states and larger icons
+  6. Menus have visible hover and larger radius
+  7. Windows have border-emphasis for clear floating edges
+  8. Buttons have 1px highlight and taller desktop heights
+**Plans**: 4 plans in 1 wave (parallel execution)
+
+Plans:
+- [ ] 02-01-PLAN.md — Dock container + dock items visual fixes (CV-01, CV-02)
+- [ ] 02-02-PLAN.md — Sheet + Dialog + Window visual fixes (CV-03, CV-04, CV-07)
+- [ ] 02-03-PLAN.md — File Manager + Menu visual fixes (CV-05, CV-06)
+- [ ] 02-04-PLAN.md — Button highlight and height adjustments (CV-08)
 
 ## Progress
 
@@ -237,8 +259,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Token Foundation | 1/1 | Complete | 2026-02-07 |
+| 2. Component Visual Fixes | 0/4 | Planned | - |
 
 ---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 (v1.0) + 1 (v1.2) | Total plans: 26 (estimated)*
+*Total phases: 10 (v1.0) + 2 (v1.2) | Total plans: 30 (estimated)*
 *Coverage: 29/29 v1 requirements mapped*
