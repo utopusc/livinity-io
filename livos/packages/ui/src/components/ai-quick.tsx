@@ -57,21 +57,21 @@ export function AiQuickProvider({children}: {children: React.ReactNode}) {
 function MiniToolCall({toolCall}: {toolCall: ToolCall}) {
 	const [expanded, setExpanded] = useState(false)
 	return (
-		<div className='rounded-lg border border-white/10 bg-white/5 text-xs'>
+		<div className='rounded-radius-sm border border-border-default bg-surface-base text-caption'>
 			<button
 				onClick={() => setExpanded(!expanded)}
-				className='flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5'
+				className='flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-1'
 			>
 				{expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
 				<IconTool size={12} className='text-blue-400' />
 				<span className='font-mono text-blue-400'>{toolCall.tool}</span>
-				<span className={`ml-auto text-[10px] ${toolCall.result.success ? 'text-green-400' : 'text-red-400'}`}>
+				<span className={cn('ml-auto text-caption-sm', toolCall.result.success ? 'text-green-400' : 'text-red-400')}>
 					{toolCall.result.success ? 'OK' : 'FAIL'}
 				</span>
 			</button>
 			{expanded && (
-				<div className='border-t border-white/10 px-3 py-2'>
-					<pre className='max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-white/50'>
+				<div className='border-t border-border-default px-3 py-2'>
+					<pre className='max-h-32 overflow-auto whitespace-pre-wrap text-caption-sm text-text-secondary'>
 						{toolCall.result.output.slice(0, 1500)}
 					</pre>
 				</div>
@@ -159,7 +159,7 @@ export function AiQuickDialog() {
 					'fixed left-[50%] z-[999] translate-x-[-50%]',
 					'top-4 lg:top-[10%]',
 					'w-full max-w-[calc(100%-40px)] sm:max-w-[640px]',
-					'rounded-2xl border border-white/10 bg-neutral-900/95 shadow-2xl shadow-black/50',
+					'rounded-radius-xl border border-border-subtle bg-dialog-content shadow-2xl shadow-black/50',
 					'data-[state=open]:animate-in data-[state=closed]:animate-out',
 					'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
 					'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -168,7 +168,7 @@ export function AiQuickDialog() {
 				)}
 			>
 				{/* Input area */}
-				<div className='flex items-center gap-3 border-b border-white/10 px-4 py-3'>
+				<div className='flex items-center gap-3 border-b border-border-default px-4 py-3'>
 					<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
 						<IconBrain size={16} className='text-violet-400' />
 					</div>
@@ -179,13 +179,13 @@ export function AiQuickDialog() {
 						onKeyDown={handleKeyDown}
 						placeholder='Ask Liv anything...'
 						disabled={isLoading}
-						className='flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none disabled:opacity-50'
+						className='flex-1 bg-transparent text-body text-text-primary placeholder-text-tertiary outline-none disabled:opacity-50'
 						autoComplete='off'
 					/>
 					{input.trim() && !isLoading && (
 						<button
 							onClick={handleSend}
-							className='flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white transition-colors hover:bg-violet-500'
+							className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-brand text-white transition-colors hover:bg-brand-lighter'
 						>
 							<IconSend size={14} />
 						</button>
@@ -193,7 +193,7 @@ export function AiQuickDialog() {
 					{!isLoading && (
 						<button
 							onClick={handleClose}
-							className='flex h-8 w-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/10 hover:text-white/60'
+							className='flex h-8 w-8 items-center justify-center rounded-radius-sm text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-secondary'
 						>
 							<IconX size={14} />
 						</button>
@@ -202,9 +202,9 @@ export function AiQuickDialog() {
 
 				{/* Status / Loading */}
 				{isLoading && (
-					<div className='flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5'>
+					<div className='flex items-center gap-2.5 border-b border-border-default px-4 py-2.5'>
 						<IconLoader2 size={14} className='animate-spin text-violet-400' />
-						<span className='text-xs text-white/40'>{statusText}</span>
+						<span className='text-caption text-text-tertiary'>{statusText}</span>
 					</div>
 				)}
 
@@ -213,7 +213,7 @@ export function AiQuickDialog() {
 					<div className='max-h-[60vh] overflow-y-auto'>
 						{/* Tool calls */}
 						{toolCalls.length > 0 && (
-							<div className='space-y-1 border-b border-white/10 px-4 py-3'>
+							<div className='space-y-1 border-b border-border-default px-4 py-3'>
 								{toolCalls.map((tc, i) => (
 									<MiniToolCall key={i} toolCall={tc} />
 								))}
@@ -231,15 +231,15 @@ export function AiQuickDialog() {
 
 				{/* Footer hint */}
 				{!response && !isLoading && (
-					<div className='flex items-center gap-4 px-4 py-2.5 text-[11px] text-white/20'>
+					<div className='flex items-center gap-4 px-4 py-2.5 text-caption-sm text-text-tertiary'>
 						<span>
-							<kbd className='rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px]'>
+							<kbd className='rounded border border-border-default bg-surface-base px-1.5 py-0.5 font-mono text-caption-sm'>
 								Enter
 							</kbd>{' '}
 							to send
 						</span>
 						<span>
-							<kbd className='rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px]'>
+							<kbd className='rounded border border-border-default bg-surface-base px-1.5 py-0.5 font-mono text-caption-sm'>
 								Esc
 							</kbd>{' '}
 							to close
