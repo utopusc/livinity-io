@@ -2,6 +2,7 @@ import {ChevronLeft, Loader2} from 'lucide-react'
 import {useMemo, useState} from 'react'
 import {Trans} from 'react-i18next/TransWithoutContext'
 
+import {StepIndicator} from '@/components/ui/step-indicator'
 import {FadeScroller} from '@/components/fade-scroller'
 import {RestoreLocationDropdown} from '@/features/backups/components/restore-location-dropdown'
 import {
@@ -21,6 +22,7 @@ import {buttonClass, formGroupClass, Layout} from '@/layouts/bare/shared'
 import {OnboardingAction, OnboardingFooter} from '@/routes/onboarding/onboarding-footer'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input, PasswordInput} from '@/shadcn-components/ui/input'
+import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
 export default function BackupsRestoreOnboarding() {
@@ -114,6 +116,7 @@ export default function BackupsRestoreOnboarding() {
 			subTitle={stepSubtitle}
 			subTitleMaxWidth={630}
 			footer={<OnboardingFooter action={OnboardingAction.CREATE_ACCOUNT} />}
+			stepIndicator={<StepIndicator steps={4} currentStep={step} />}
 		>
 			<div className='mx-auto mb-6 mt-2 w-full max-w-[720px]'>
 				{step === 0 && (
@@ -165,12 +168,12 @@ export default function BackupsRestoreOnboarding() {
 					<div className='space-y-4'>
 						<div className='mx-auto w-full max-w-[560px]'>
 							{isLoadingBackups ? (
-								<div className='flex items-center justify-center gap-2 py-6 text-white/70'>
+								<div className='flex items-center justify-center gap-2 py-6 text-text-secondary'>
 									<Loader2 className='size-4 animate-spin' aria-hidden='true' />
 									<span>{t('files-listing.loading')}</span>
 								</div>
 							) : backups.length === 0 ? (
-								<div className='text-center text-xs opacity-60'>{t('backups-restore.no-backups-found')}</div>
+								<div className='text-center text-caption text-text-secondary'>{t('backups-restore.no-backups-found')}</div>
 							) : (
 								<FadeScroller direction='y' className='max-h-[45vh] overflow-y-auto pr-1'>
 									<div className='space-y-2'>
@@ -197,7 +200,7 @@ export default function BackupsRestoreOnboarding() {
 
 				{step === Step.Review && (
 					<div className='space-y-4 text-center'>
-						<span className='text-center text-sm'>{t('backups-restore.restoring-from')}</span>
+						<span className='text-center text-body'>{t('backups-restore.restoring-from')}</span>
 
 						{/* Backup snapshot */}
 						<div className='mx-auto w-full max-w-[560px] text-left'>
@@ -220,7 +223,7 @@ export default function BackupsRestoreOnboarding() {
 					{step > Step.ChooseLocation && (
 						<button
 							type='button'
-							className='flex size-10 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-colors duration-300 hover:bg-white/10 focus-visible:border-white/50 focus-visible:bg-white/10 focus-visible:outline-none'
+							className='flex size-10 items-center justify-center rounded-full border border-border-default bg-surface-base transition-colors duration-300 hover:bg-surface-2 focus-visible:border-brand focus-visible:bg-surface-2 focus-visible:outline-none'
 							onClick={() => setStep((s) => (s === 0 ? 0 : ((s - 1) as 0 | 1 | 2)))}
 						>
 							<ChevronLeft className='size-5' />
@@ -325,25 +328,25 @@ function BackupSnapshot({
 	return (
 		<div className='relative'>
 			<div
-				className={[
-					'flex w-full items-center justify-between rounded-8 border px-4 py-3',
-					selected ? 'border-brand bg-brand/15' : 'border-white/10',
-					!noHover && !selected ? 'hover:bg-white/5' : '',
-					onClick ? 'cursor-pointer' : '',
-				].join(' ')}
+				className={cn(
+					'flex w-full items-center justify-between rounded-radius-sm border px-4 py-3',
+					selected ? 'border-brand bg-brand/15' : 'border-border-default',
+					!noHover && !selected && 'hover:bg-surface-base',
+					onClick && 'cursor-pointer',
+				)}
 				onClick={onClick}
 				title={backup.id}
 			>
 				<div className='min-w-0 flex-1'>
-					<div className='truncate text-sm'>{label}</div>
+					<div className='truncate text-body'>{label}</div>
 				</div>
 				{isLatest && (
-					<div className='mr-2 shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide opacity-80'>
+					<div className='mr-2 shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm uppercase tracking-wide text-text-secondary'>
 						{t('backups-restore.latest')}
 					</div>
 				)}
 				{sizeTxt && (
-					<div className='shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide opacity-80'>
+					<div className='shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm uppercase tracking-wide text-text-secondary'>
 						{sizeTxt}
 					</div>
 				)}
