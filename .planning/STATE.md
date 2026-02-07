@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 7 of 8 (Login & Onboarding)
-Plan: 1 of 3 in current phase
+Plan: 3 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-07 - Completed 07-01-PLAN.md (Auth Layout Foundation)
+Last activity: 2026-02-07 - Completed 07-03-PLAN.md (Restore Flow & App-Auth Migration)
 
-Progress: [██████████████████████ ] 88% (22 of 25 plans)
+Progress: [███████████████████████ ] 92% (23 of 25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [██████████████████████ ] 
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 21
+- Total plans completed: 23
 - Average duration: 3.5 min
-- Total execution time: 1.52 hours
+- Total execution time: 1.57 hours
 
 *Updated after each plan completion*
 
@@ -129,6 +129,10 @@ v1.1 decisions:
 - [v1.1-07-01]: darken-layer.tsx unchanged (bg-black/50 is intentional overlay, not generic surface)
 - [v1.1-07-01]: StepIndicator 0-indexed to match restore.tsx Step enum convention
 - [v1.1-07-01]: focus-visible:ring-3 -> ring-2 ring-brand/20 (consistent with Phase 1 brand focus pattern)
+- [v1.1-07-03]: BackupSnapshot badge text-caption-sm (11px) over text-[10px] — enough space in onboarding for 11px
+- [v1.1-07-03]: bg-dialog-content/70 preserved on app-auth card (semantic token from Phase 3 dialog system with transparency)
+- [v1.1-07-03]: bg-black/50 overlay preserved on app-auth (intentional darken layer convention)
+- [v1.1-07-03]: bg-neutral-600 preserved on placeholder app icon (domain-specific, not generic surface)
 
 ### Pending Todos
 
@@ -141,7 +145,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 07-01-PLAN.md (Auth Layout Foundation)
+Stopped at: Completed 07-03-PLAN.md (Restore Flow & App-Auth Migration)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -327,6 +331,12 @@ Resume file: None
   - StepIndicator: pill/dot component (bg-brand active, bg-brand/50 completed, bg-surface-3 future)
   - bare-page.tsx: min-h-[100dvh] -> min-h-dvh
   - Summary: .planning/phases/v1.1-07-login-onboarding/07-01-SUMMARY.md
+- Plan 07-03: Restore Flow & App-Auth Migration (completed 2026-02-07)
+  - restore.tsx: StepIndicator with steps=4 and dynamic currentStep=step
+  - restore.tsx: back button border-border-default/bg-surface-base/focus-visible:border-brand
+  - restore.tsx: BackupSnapshot cn() with semantic tokens (rounded-radius-sm, border-border-default, bg-surface-2)
+  - login-with-livinity.tsx: rounded-radius-xl, shadow-elevation-lg, text-heading-sm, text-body-sm, text-text-tertiary
+  - Summary: .planning/phases/v1.1-07-login-onboarding/07-03-SUMMARY.md
 
 ---
 
