@@ -95,10 +95,10 @@ export default {
 			},
 			boxShadow: {
 				// Semantic elevation shadows
-				'elevation-sm': '0px 2px 8px rgba(0, 0, 0, 0.12)',
-				'elevation-md': '0px 4px 16px rgba(0, 0, 0, 0.16)',
-				'elevation-lg': '0px 8px 24px rgba(0, 0, 0, 0.20)',
-				'elevation-xl': '0px 16px 48px rgba(0, 0, 0, 0.24)',
+				'elevation-sm': '0px 2px 8px rgba(0, 0, 0, 0.25), 0px 0.5px 0px 0px rgba(255, 255, 255, 0.06) inset',
+				'elevation-md': '0px 4px 16px rgba(0, 0, 0, 0.35), 0px 1px 0px 0px rgba(255, 255, 255, 0.08) inset',
+				'elevation-lg': '0px 8px 24px rgba(0, 0, 0, 0.45), 0px 1px 0px 0px rgba(255, 255, 255, 0.10) inset',
+				'elevation-xl': '0px 16px 48px rgba(0, 0, 0, 0.55), 0px 1px 0px 0px rgba(255, 255, 255, 0.12) inset',
 				// Component-specific shadows (preserved for backward compatibility)
 				dock: '1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 1.06058px 0px 0px rgba(255, 255, 255, 0.20) inset, 0px 0.53029px 0px 0px rgba(255, 255, 255, 0.10) inset, 0px 4.04029px 24.24174px 0px rgba(0, 0, 0, 0.56)',
 				'floating-island':
@@ -109,10 +109,10 @@ export default {
 					'0px 20px 30px 0px rgba(0, 0, 0, 0.30), 0 1px 0 0 rgba(255, 255, 255, 0.2) inset, 1px 0 0 0 rgba(255, 255, 255, 0.04) inset, -1px 0 0 0 rgba(255, 255, 255, 0.04) inset',
 				'context-menu':
 					'1.05px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.05px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 0.525px 0px 0px rgba(255, 255, 255, 0.10) inset, 0px 24px 36px 0px rgba(0, 0, 0, 0.50)',
-				'sheet-shadow': '2px 2px 2px 0px rgba(255, 255, 255, 0.05) inset',
+				'sheet-shadow': '0px 1px 0px 0px rgba(255, 255, 255, 0.10) inset',
 				dropdown:
 					'0px 60px 24px -40px rgba(0, 0, 0, 0.25), 1px 1px 0px 0px rgba(255, 255, 255, 0.08) inset, -1px -1px 1px 0px rgba(0, 0, 0, 0.20) inset',
-				dialog: '0px 24px 48px 0px rgba(0, 0, 0, 0.35), 0px 1px 1px 0px rgba(255, 255, 255, 0.1) inset',
+				dialog: '0px 24px 48px 0px rgba(0, 0, 0, 0.35), 0px 1px 0px 0px rgba(255, 255, 255, 0.12) inset',
 				'button-highlight': '0px 1px 0px 0px rgba(255, 255, 255, 0.3) inset',
 				'button-highlight-hpx': '0px 0.5px 0px 0px rgba(255, 255, 255, 0.3) inset',
 				'button-highlight-soft': '0px 1px 0px 0px rgba(255, 255, 255, 0.1) inset',
