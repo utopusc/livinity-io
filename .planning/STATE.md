@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 6 of 8 (App Store & Files)
-Plan: 3 of 3 in current phase (2 complete, 1 pending)
-Status: In progress
-Last activity: 2026-02-07 - Completed 06-01-PLAN.md (App Store Navigation, Cards, Discover Sections)
+Plan: 3 of 3 in current phase (3 complete)
+Status: Phase complete
+Last activity: 2026-02-07 - Completed 06-02-PLAN.md (App Store Detail Page & Dialogs)
 
-Progress: [████████████████████ ] 80% (20 of ~25 plans)
+Progress: [█████████████████████ ] 84% (21 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [████████████████████ ] 80% (2
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 3.5 min
-- Total execution time: 1.35 hours
+- Total execution time: 1.45 hours
 
 *Updated after each plan completion*
 
@@ -120,6 +120,10 @@ v1.1 decisions:
 - [v1.1-06-01]: Gallery simplified from 3-4 overlay layers to single gradient overlay for text readability
 - [v1.1-06-01]: Dynamic useColorThief gradients preserved as inline styles while Tailwind classes use semantic tokens
 - [v1.1-06-01]: Window-mode hex fallbacks (#24242499) replaced with rgba notation (rgba(36,36,36,0.6))
+- [v1.1-06-02]: opacity-50 on disabled Button in select-dependencies preserved (UI state indicator, not text hack)
+- [v1.1-06-02]: bg-black/30 on marketplace-app-window header preserved (iframe overlay, not generic surface)
+- [v1.1-06-02]: text-sm in public-access replaced with text-body-sm (13px semantic scale match)
+- [v1.1-06-02]: text-xs in public-access DNS badges replaced with text-caption (12px semantic match)
 
 ### Pending Todos
 
@@ -132,7 +136,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 06-01-PLAN.md (App Store Navigation, Cards, Discover Sections)
+Stopped at: Completed 06-02-PLAN.md (App Store Detail Page & Dialogs) — Phase 6 complete
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -300,6 +304,14 @@ Resume file: None
   - DnD overlay: border-border-emphasis, text-caption
   - Selection styling (bg-brand/10) and list-view-file-item.css preserved
   - Summary: .planning/phases/v1.1-06-app-store-files/06-03-SUMMARY.md
+- Plan 06-02: App Store Detail Page & Dialogs (completed 2026-02-07)
+  - Hero header: text-heading-lg/body-lg/heading-sm, rounded-radius-sm/md/xl
+  - Local shared.tsx: rounded-radius-md, text-caption text-text-secondary, text-body-lg
+  - 8 content sections: opacity-50/40 replaced with text-text-secondary/tertiary
+  - Public access: all white/* replaced, status colors (green/red/yellow) preserved
+  - 5 dialogs: divide-border-subtle, bg-surface-1, rounded-radius-md/sm, text-body-sm
+  - Window-mode pages synced with sheet-mode token vocabulary
+  - Summary: .planning/phases/v1.1-06-app-store-files/06-02-SUMMARY.md
 
 ---
 
