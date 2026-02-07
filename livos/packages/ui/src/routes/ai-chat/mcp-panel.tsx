@@ -372,7 +372,7 @@ function FeaturedCard({
 	onInstall: () => void
 }) {
 	const IconComponent = ICON_MAP[mcp.icon] || IconPlug
-	const catColor = CATEGORY_COLORS[mcp.category] || 'bg-white/10 text-white/50'
+	const catColor = CATEGORY_COLORS[mcp.category] || 'bg-surface-2 text-text-secondary'
 
 	return (
 		<div className='group relative flex flex-col gap-3 rounded-radius-xl border border-border-subtle bg-surface-base p-4 transition-all hover:border-border-emphasis hover:bg-surface-1'>
@@ -647,21 +647,21 @@ function InstallDialog({
 	return (
 		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm' onClick={onClose}>
 			<div
-				className='w-[460px] rounded-2xl border border-white/[0.08] bg-[#111118] p-5 shadow-2xl'
+				className='w-[460px] rounded-radius-xl border border-border-default bg-dialog-content p-5 shadow-2xl'
 				onClick={(e) => e.stopPropagation()}
 			>
 				{/* Header */}
 				<div className='mb-5 flex items-center justify-between'>
 					<div className='flex items-center gap-3'>
-						<div className='flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
+						<div className='flex h-9 w-9 items-center justify-center rounded-radius-lg bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
 							<IconDownload size={18} className='text-violet-400' />
 						</div>
 						<div>
-							<h3 className='text-[14px] font-semibold text-white/90'>Install Server</h3>
-							<p className='text-[11px] text-white/35'>{sourceName}</p>
+							<h3 className='text-body font-semibold text-text-primary'>Install Server</h3>
+							<p className='text-caption-sm text-text-tertiary'>{sourceName}</p>
 						</div>
 					</div>
-					<button onClick={onClose} className='rounded-lg p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60'>
+					<button onClick={onClose} className='rounded-radius-sm p-1.5 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-secondary'>
 						<IconX size={16} />
 					</button>
 				</div>
@@ -669,28 +669,29 @@ function InstallDialog({
 				<div className='space-y-4'>
 					{/* Name */}
 					<div>
-						<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>Name</label>
+						<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Name</label>
 						<input
 							type='text'
 							value={name}
 							onChange={(e) => setName(e.target.value)}
-							className='w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white placeholder-white/20 outline-none transition-colors focus:border-white/[0.15] focus:bg-white/[0.05]'
+							className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 						/>
 					</div>
 
 					{/* Transport */}
 					<div>
-						<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>Transport</label>
+						<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Transport</label>
 						<div className='flex gap-2'>
 							{(['stdio', 'streamableHttp'] as const).map((t) => (
 								<button
 									key={t}
 									onClick={() => setTransport(t)}
-									className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium transition-all ${
+									className={cn(
+										'flex items-center gap-1.5 rounded-radius-sm px-3 py-2 text-caption font-medium transition-all',
 										transport === t
 											? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30'
-											: 'bg-white/[0.04] text-white/40 hover:bg-white/[0.08] hover:text-white/60'
-									}`}
+											: 'bg-surface-base text-text-tertiary hover:bg-surface-2 hover:text-text-secondary',
+									)}
 								>
 									{t === 'stdio' ? (
 										<>
@@ -712,23 +713,23 @@ function InstallDialog({
 					{transport === 'stdio' && (
 						<>
 							<div>
-								<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>Command</label>
+								<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Command</label>
 								<input
 									type='text'
 									value={command}
 									onChange={(e) => setCommand(e.target.value)}
 									placeholder='npx'
-									className='w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-[13px] text-white placeholder-white/20 outline-none transition-colors focus:border-white/[0.15] focus:bg-white/[0.05]'
+									className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 font-mono text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 								/>
 							</div>
 							<div>
-								<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>Arguments</label>
+								<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Arguments</label>
 								<input
 									type='text'
 									value={args}
 									onChange={(e) => setArgs(e.target.value)}
 									placeholder='-y @modelcontextprotocol/server-name'
-									className='w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-[13px] text-white placeholder-white/20 outline-none transition-colors focus:border-white/[0.15] focus:bg-white/[0.05]'
+									className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 font-mono text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 								/>
 							</div>
 						</>
@@ -737,13 +738,13 @@ function InstallDialog({
 					{/* HTTP fields */}
 					{transport === 'streamableHttp' && (
 						<div>
-							<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>Server URL</label>
+							<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Server URL</label>
 							<input
 								type='text'
 								value={url}
 								onChange={(e) => setUrl(e.target.value)}
 								placeholder='https://mcp.example.com/mcp'
-								className='w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-[13px] text-white placeholder-white/20 outline-none transition-colors focus:border-white/[0.15] focus:bg-white/[0.05]'
+								className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 font-mono text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 							/>
 						</div>
 					)}
@@ -751,13 +752,13 @@ function InstallDialog({
 					{/* Env vars */}
 					{envVars.length > 0 && (
 						<div>
-							<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>
+							<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>
 								Environment Variables
 							</label>
 							<div className='space-y-2'>
 								{envVars.map((ev, idx) => (
 									<div key={ev.key} className='flex gap-2'>
-										<span className='flex min-w-[140px] items-center rounded-lg bg-white/[0.04] px-2.5 font-mono text-[11px] text-white/40'>
+										<span className='flex min-w-[140px] items-center rounded-radius-sm bg-surface-base px-2.5 font-mono text-caption-sm text-text-tertiary'>
 											{ev.key}
 										</span>
 										<input
@@ -769,7 +770,7 @@ function InstallDialog({
 												setEnvVars(next)
 											}}
 											placeholder='Enter value...'
-											className='flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 font-mono text-[12px] text-white placeholder-white/20 outline-none transition-colors focus:border-white/[0.15]'
+											className='flex-1 rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 font-mono text-caption text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand'
 										/>
 									</div>
 								))}
@@ -779,19 +780,19 @@ function InstallDialog({
 
 					{/* Description */}
 					<div>
-						<label className='mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-white/35'>Description</label>
+						<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Description</label>
 						<input
 							type='text'
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
 							placeholder='Optional description'
-							className='w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white placeholder-white/20 outline-none transition-colors focus:border-white/[0.15] focus:bg-white/[0.05]'
+							className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 						/>
 					</div>
 
 					{/* Error */}
 					{error && (
-						<div className='flex items-start gap-2 rounded-xl bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400'>
+						<div className='flex items-start gap-2 rounded-radius-lg bg-red-500/10 px-3 py-2.5 text-caption text-red-400'>
 							<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 							<span>{error}</span>
 						</div>
@@ -801,14 +802,14 @@ function InstallDialog({
 					<div className='flex justify-end gap-2 pt-1'>
 						<button
 							onClick={onClose}
-							className='rounded-xl bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white/50 transition-all hover:bg-white/[0.1] hover:text-white/70'
+							className='rounded-radius-lg bg-surface-1 px-4 py-2 text-body-sm font-medium text-text-secondary transition-all hover:bg-surface-2 hover:text-text-primary'
 						>
 							Cancel
 						</button>
 						<button
 							onClick={handleInstall}
 							disabled={installing || !name}
-							className='flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-[13px] font-semibold text-white transition-all hover:bg-violet-500 disabled:opacity-40'
+							className='flex items-center gap-2 rounded-radius-lg bg-brand px-5 py-2 text-body-sm font-semibold text-white transition-all hover:bg-brand-lighter disabled:opacity-40'
 						>
 							{installing ? <IconLoader2 size={14} className='animate-spin' /> : <IconDownload size={14} />}
 							Install
@@ -876,17 +877,17 @@ function InstalledTab() {
 	if (loading) {
 		return (
 			<div className='flex items-center justify-center py-16'>
-				<IconLoader2 size={20} className='animate-spin text-white/20' />
+				<IconLoader2 size={20} className='animate-spin text-text-tertiary' />
 			</div>
 		)
 	}
 
 	if (servers.length === 0) {
 		return (
-			<div className='flex flex-col items-center justify-center py-16 text-white/25'>
+			<div className='flex flex-col items-center justify-center py-16 text-text-tertiary'>
 				<IconPlugOff size={28} className='mb-3' />
-				<p className='text-[13px] font-medium'>No servers installed</p>
-				<p className='mt-1 text-[11px] text-white/20'>Browse the Marketplace to add MCP servers</p>
+				<p className='text-body-sm font-medium'>No servers installed</p>
+				<p className='mt-1 text-caption-sm text-text-tertiary'>Browse the Marketplace to add MCP servers</p>
 			</div>
 		)
 	}
@@ -894,14 +895,14 @@ function InstalledTab() {
 	return (
 		<div className='space-y-2 p-4'>
 			{/* Summary bar */}
-			<div className='mb-3 flex items-center gap-4 text-[11px] text-white/30'>
+			<div className='mb-3 flex items-center gap-4 text-caption-sm text-text-tertiary'>
 				<span>{servers.length} server{servers.length !== 1 && 's'}</span>
 				<span className='flex items-center gap-1'>
 					<IconCircleFilled size={6} className='text-green-400' />
 					{Object.values(statuses).filter((s) => s.running).length} running
 				</span>
 				<span>{Object.values(statuses).reduce((sum, s) => sum + (s.tools?.length || 0), 0)} tools</span>
-				<button onClick={fetchServers} className='ml-auto rounded-md p-1 text-white/25 transition-colors hover:bg-white/[0.06] hover:text-white/50'>
+				<button onClick={fetchServers} className='ml-auto rounded-radius-sm p-1 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-secondary'>
 					<IconRefresh size={13} />
 				</button>
 			</div>
@@ -916,13 +917,13 @@ function InstalledTab() {
 				return (
 					<div
 						key={server.name}
-						className='rounded-xl border border-white/[0.06] bg-white/[0.02] transition-all hover:border-white/[0.1]'
+						className='rounded-radius-lg border border-border-subtle bg-surface-base transition-all hover:border-border-default'
 					>
 						{/* Header row */}
 						<div className='flex items-center gap-3 px-3.5 py-3'>
 							<button
 								onClick={() => setExpanded(isExpanded ? null : server.name)}
-								className='text-white/30 transition-colors hover:text-white/60'
+								className='text-text-tertiary transition-colors hover:text-text-secondary'
 							>
 								{isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
 							</button>
@@ -936,7 +937,7 @@ function InstalledTab() {
 											? 'text-green-400'
 											: server.enabled
 												? 'text-amber-400'
-												: 'text-white/15'
+												: 'text-text-tertiary'
 									}
 								/>
 								{isRunning && (
@@ -948,8 +949,8 @@ function InstalledTab() {
 
 							<div className='min-w-0 flex-1'>
 								<div className='flex items-center gap-2'>
-									<span className='truncate text-[13px] font-medium text-white/85'>{server.name}</span>
-									<span className='flex items-center gap-1 rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-white/30'>
+									<span className='truncate text-body-sm font-medium text-text-primary'>{server.name}</span>
+									<span className='flex items-center gap-1 rounded-radius-sm bg-surface-1 px-1.5 py-0.5 text-caption-sm font-medium text-text-tertiary'>
 										{server.transport === 'stdio' ? (
 											<>
 												<IconTerminal2 size={10} />
@@ -964,13 +965,13 @@ function InstalledTab() {
 									</span>
 								</div>
 								{server.description && (
-									<p className='mt-0.5 truncate text-[11px] text-white/30'>{server.description}</p>
+									<p className='mt-0.5 truncate text-caption-sm text-text-tertiary'>{server.description}</p>
 								)}
 							</div>
 
 							{/* Tool count */}
 							{toolCount > 0 && (
-								<span className='flex items-center gap-1 text-[11px] text-white/25'>
+								<span className='flex items-center gap-1 text-caption-sm text-text-tertiary'>
 									<IconCode size={12} />
 									{toolCount}
 								</span>
@@ -979,30 +980,31 @@ function InstalledTab() {
 							{/* Actions */}
 							<div className='flex items-center gap-0.5'>
 								{isLoading ? (
-									<IconLoader2 size={14} className='animate-spin text-white/30' />
+									<IconLoader2 size={14} className='animate-spin text-text-tertiary' />
 								) : (
 									<>
 										<button
 											onClick={() => handleAction(server.name, 'toggle', !server.enabled)}
-											className={`rounded-lg p-1.5 transition-all ${
+											className={cn(
+												'rounded-radius-sm p-1.5 transition-all',
 												server.enabled
 													? 'text-green-400/70 hover:bg-green-500/10 hover:text-green-400'
-													: 'text-white/20 hover:bg-white/[0.06] hover:text-white/40'
-											}`}
+													: 'text-text-tertiary hover:bg-surface-1 hover:text-text-secondary',
+											)}
 											title={server.enabled ? 'Disable' : 'Enable'}
 										>
 											{server.enabled ? <IconPlug size={15} /> : <IconPlugOff size={15} />}
 										</button>
 										<button
 											onClick={() => handleAction(server.name, 'restart')}
-											className='rounded-lg p-1.5 text-white/25 transition-all hover:bg-white/[0.06] hover:text-white/50'
+											className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-surface-1 hover:text-text-secondary'
 											title='Restart'
 										>
 											<IconRefresh size={15} />
 										</button>
 										<button
 											onClick={() => handleAction(server.name, 'remove')}
-											className='rounded-lg p-1.5 text-white/25 transition-all hover:bg-red-500/10 hover:text-red-400'
+											className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-red-500/10 hover:text-red-400'
 											title='Remove'
 										>
 											<IconTrash size={15} />
@@ -1014,30 +1016,30 @@ function InstalledTab() {
 
 						{/* Expanded details */}
 						{isExpanded && (
-							<div className='border-t border-white/[0.05] px-4 py-3'>
-								<div className='space-y-2.5 text-[11px]'>
+							<div className='border-t border-border-subtle px-4 py-3'>
+								<div className='space-y-2.5 text-caption-sm'>
 									{/* Connection info */}
 									<div className='grid grid-cols-2 gap-x-4 gap-y-1.5'>
-										<div className='text-white/25'>Status</div>
-										<div className={isRunning ? 'text-green-400' : 'text-white/40'}>
+										<div className='text-text-tertiary'>Status</div>
+										<div className={isRunning ? 'text-green-400' : 'text-text-tertiary'}>
 											{isRunning ? 'Connected' : server.enabled ? 'Connecting...' : 'Disabled'}
 										</div>
 										{server.command && (
 											<>
-												<div className='text-white/25'>Command</div>
-												<div className='font-mono text-white/45'>{server.command} {server.args?.join(' ')}</div>
+												<div className='text-text-tertiary'>Command</div>
+												<div className='font-mono text-text-secondary'>{server.command} {server.args?.join(' ')}</div>
 											</>
 										)}
 										{server.url && (
 											<>
-												<div className='text-white/25'>URL</div>
-												<div className='truncate font-mono text-white/45'>{server.url}</div>
+												<div className='text-text-tertiary'>URL</div>
+												<div className='truncate font-mono text-text-secondary'>{server.url}</div>
 											</>
 										)}
 										{status?.connectedAt && (
 											<>
-												<div className='text-white/25'>Connected</div>
-												<div className='text-white/40'>
+												<div className='text-text-tertiary'>Connected</div>
+												<div className='text-text-tertiary'>
 													{new Date(status.connectedAt).toLocaleString()}
 												</div>
 											</>
@@ -1046,7 +1048,7 @@ function InstalledTab() {
 
 									{/* Error */}
 									{status?.lastError && (
-										<div className='rounded-lg bg-red-500/10 px-2.5 py-2 text-[11px] text-red-400/80'>
+										<div className='rounded-radius-sm bg-red-500/10 px-2.5 py-2 text-caption-sm text-red-400/80'>
 											{status.lastError}
 										</div>
 									)}
@@ -1054,14 +1056,14 @@ function InstalledTab() {
 									{/* Tools */}
 									{toolCount > 0 && (
 										<div>
-											<div className='mb-1.5 text-[10px] font-medium uppercase tracking-wider text-white/25'>
+											<div className='mb-1.5 text-caption-sm font-medium uppercase tracking-wider text-text-tertiary'>
 												Available Tools ({toolCount})
 											</div>
 											<div className='flex flex-wrap gap-1'>
 												{status!.tools.map((t) => (
 													<span
 														key={t}
-														className='rounded-md bg-white/[0.05] px-2 py-0.5 font-mono text-[10px] text-white/40'
+														className='rounded-radius-sm bg-surface-1 px-2 py-0.5 font-mono text-caption-sm text-text-tertiary'
 													>
 														{cleanToolName(t, server.name)}
 													</span>
@@ -1126,7 +1128,7 @@ function ConfigTab() {
 	if (loading) {
 		return (
 			<div className='flex items-center justify-center py-16'>
-				<IconLoader2 size={20} className='animate-spin text-white/20' />
+				<IconLoader2 size={20} className='animate-spin text-text-tertiary' />
 			</div>
 		)
 	}
@@ -1134,16 +1136,17 @@ function ConfigTab() {
 	return (
 		<div className='flex flex-col p-4'>
 			<div className='mb-3 flex items-center justify-between'>
-				<div className='flex items-center gap-2 text-[11px] text-white/30'>
+				<div className='flex items-center gap-2 text-caption-sm text-text-tertiary'>
 					<IconCode size={13} />
 					<span className='font-medium uppercase tracking-wide'>Raw Config</span>
 				</div>
 				<div className='flex items-center gap-2'>
 					{status && (
 						<span
-							className={`flex items-center gap-1 text-[11px] ${
-								status.type === 'success' ? 'text-green-400' : 'text-red-400'
-							}`}
+							className={cn(
+								'flex items-center gap-1 text-caption-sm',
+								status.type === 'success' ? 'text-green-400' : 'text-red-400',
+							)}
 						>
 							{status.type === 'success' ? <IconCheck size={12} /> : <IconAlertCircle size={12} />}
 							{status.message}
@@ -1151,7 +1154,7 @@ function ConfigTab() {
 					)}
 					<button
 						onClick={fetchConfig}
-						className='rounded-lg p-1.5 text-white/25 transition-colors hover:bg-white/[0.06] hover:text-white/50'
+						className='rounded-radius-sm p-1.5 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-secondary'
 						title='Reload'
 					>
 						<IconRefresh size={13} />
@@ -1159,7 +1162,7 @@ function ConfigTab() {
 					<button
 						onClick={handleSave}
 						disabled={saving}
-						className='flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white transition-all hover:bg-violet-500 disabled:opacity-40'
+						className='flex items-center gap-1.5 rounded-radius-sm bg-brand px-3 py-1.5 text-caption-sm font-semibold text-white transition-all hover:bg-brand-lighter disabled:opacity-40'
 					>
 						{saving ? <IconLoader2 size={12} className='animate-spin' /> : <IconCheck size={12} />}
 						Save
@@ -1170,7 +1173,7 @@ function ConfigTab() {
 				value={config}
 				onChange={(e) => setConfig(e.target.value)}
 				spellCheck={false}
-				className='min-h-[600px] resize-y rounded-xl border border-white/[0.06] bg-black/30 p-4 font-mono text-[12px] leading-relaxed text-white/70 outline-none transition-colors focus:border-white/[0.12]'
+				className='min-h-[600px] resize-y rounded-radius-lg border border-border-subtle bg-surface-base p-4 font-mono text-caption leading-relaxed text-text-secondary outline-none transition-colors focus-visible:border-brand'
 			/>
 		</div>
 	)
