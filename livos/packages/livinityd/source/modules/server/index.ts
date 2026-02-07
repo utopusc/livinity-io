@@ -276,6 +276,11 @@ class Server {
 		}, createProxyMiddleware({
 			target: 'http://localhost:3200',
 			changeOrigin: true,
+			onProxyReq: (proxyReq) => {
+				if (process.env.LIV_API_KEY) {
+					proxyReq.setHeader('X-API-Key', process.env.LIV_API_KEY)
+				}
+			},
 			logProvider: () => ({
 				log: this.logger.verbose,
 				debug: this.logger.verbose,
