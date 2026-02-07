@@ -136,15 +136,15 @@ function ShowCredentialsBeforeOpenCheckbox({appId}: {appId: string}) {
 					checked={!showCredentials}
 					onCheckedChange={(checked) => handleHideCredentialsBeforeOpenChange(!!checked)}
 				/>
-				<label htmlFor={checkboxId} className={cn(checkboxLabelClass, 'text-13')}>
+				<label htmlFor={checkboxId} className={cn(checkboxLabelClass, 'text-body-sm')}>
 					{t('default-credentials.dont-show-again')}
 				</label>
 			</div>
 			{!showCredentials && (
-				<div className='pr-2 pt-2 text-xs text-white/40'>{t('default-credentials.dont-show-again-notice')}</div>
+				<div className='pr-2 pt-2 text-caption text-text-tertiary'>{t('default-credentials.dont-show-again-notice')}</div>
 			)}
 		</div>
 	)
 }
 
-const textClass = tw`text-13 font-normal text-white/40 block pb-1`
+const textClass = tw`text-body-sm font-normal text-text-tertiary block pb-1`

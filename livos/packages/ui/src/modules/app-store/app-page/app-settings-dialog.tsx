@@ -142,11 +142,11 @@ function AppSettingsDialogForApp({
 				>
 					<DialogHeader>
 						<DialogTitle className='flex items-center gap-2'>
-							<AppIcon src={app.icon} size={24} className='rounded-6' />
+							<AppIcon src={app.icon} size={24} className='rounded-radius-sm' />
 							{t('app-settings.title')}
 						</DialogTitle>
 					</DialogHeader>
-					<DialogDescription className='-mb-3 text-13 opacity-50'>
+					<DialogDescription className='-mb-3 text-body-sm text-text-secondary'>
 						{t('app-settings.connected-to', {appName: app.name})}
 					</DialogDescription>
 					{dependencies.length ? (
@@ -159,7 +159,7 @@ function AppSettingsDialogForApp({
 						/>
 					) : null}
 					{/* Public Access Section */}
-					<div className='border-t border-white/10 pt-4 mt-4'>
+					<div className='border-t border-border-default pt-4 mt-4'>
 						<PublicAccessSection appId={app.id} appName={app.name} appPort={app.port || 80} />
 					</div>
 					{hadChanges && (

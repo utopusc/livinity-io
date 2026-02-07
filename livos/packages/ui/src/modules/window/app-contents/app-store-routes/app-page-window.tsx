@@ -38,7 +38,7 @@ export default function AppPageWindow({appId}: AppPageWindowProps) {
 	if (!app) {
 		return (
 			<div className='flex h-full items-center justify-center'>
-				<p className='text-white/50'>App not found: {appId}</p>
+				<p className='text-text-secondary'>App not found: {appId}</p>
 			</div>
 		)
 	}
@@ -77,23 +77,23 @@ function TopHeaderWindow({app, childrenRight}: {app: RegistryApp; childrenRight:
 
 	return (
 		<div className='space-y-5'>
-			<button onClick={goBack} className='flex items-center gap-2 text-white/60 hover:text-white transition-colors'>
+			<button onClick={goBack} className='flex items-center gap-2 text-text-secondary hover:text-white transition-colors'>
 				<TbArrowLeft className='h-5 w-5' />
-				<span className='text-13'>Back</span>
+				<span className='text-body-sm'>Back</span>
 			</button>
 
 			<div data-testid='app-top' className='flex flex-col items-stretch gap-5 md:flex-row'>
 				<div className='flex min-w-0 flex-1 items-center gap-2.5 md:gap-5'>
-					<AppIcon src={app.icon} size={100} className='rounded-12 lg:rounded-20' />
+					<AppIcon src={app.icon} size={100} className='rounded-radius-md lg:rounded-radius-xl' />
 					<div className='flex min-w-0 flex-col items-start gap-1.5 py-1 md:gap-2'>
-						<h1 className='flex flex-wrap items-center gap-2 text-16 font-semibold leading-inter-trimmed md:text-24'>
+						<h1 className='flex flex-wrap items-center gap-2 text-body-lg font-semibold leading-inter-trimmed md:text-heading-lg'>
 							{app.name} {app.optimizedForLivinityHome && <Badge>{t('app.optimized-for-livinity-home')}</Badge>}
 						</h1>
-						<p className='line-clamp-2 w-full text-12 leading-tight opacity-50 md:line-clamp-1 md:text-16'>
+						<p className='line-clamp-2 w-full text-caption leading-tight text-text-secondary md:line-clamp-1 md:text-body-lg'>
 							{app.tagline}
 						</p>
 						<div className='flex-1' />
-						<div className='text-12 delay-100 animate-in fade-in slide-in-from-right-2 fill-mode-both md:text-13'>
+						<div className='text-caption text-text-secondary delay-100 animate-in fade-in slide-in-from-right-2 fill-mode-both md:text-body-sm'>
 							{app.developer}
 						</div>
 					</div>
