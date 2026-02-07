@@ -31,6 +31,7 @@ import {
 	IconNote,
 	IconBrandMongodb,
 } from '@tabler/icons-react'
+import {cn} from '@/shadcn-lib/utils'
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -374,36 +375,36 @@ function FeaturedCard({
 	const catColor = CATEGORY_COLORS[mcp.category] || 'bg-white/10 text-white/50'
 
 	return (
-		<div className='group relative flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 transition-all hover:border-white/[0.12] hover:bg-white/[0.05]'>
+		<div className='group relative flex flex-col gap-3 rounded-radius-xl border border-border-subtle bg-surface-base p-4 transition-all hover:border-border-emphasis hover:bg-surface-1'>
 			<div className='flex items-start gap-3'>
-				<div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${mcp.gradient}`}>
-					<IconComponent size={20} className='text-white/80' />
+				<div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-radius-lg bg-gradient-to-br ${mcp.gradient}`}>
+					<IconComponent size={20} className='text-text-primary' />
 				</div>
 				<div className='min-w-0 flex-1'>
 					<div className='flex items-center gap-2'>
-						<span className='truncate text-[13px] font-semibold text-white/90'>{mcp.displayName}</span>
-						<span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${catColor}`}>
+						<span className='truncate text-body-sm font-semibold text-text-primary'>{mcp.displayName}</span>
+						<span className={`flex-shrink-0 rounded-radius-sm px-1.5 py-0.5 text-caption-sm font-medium ${catColor}`}>
 							{mcp.category}
 						</span>
 					</div>
-					<p className='mt-1 line-clamp-2 text-xs leading-relaxed text-white/40'>
+					<p className='mt-1 line-clamp-2 text-caption leading-relaxed text-text-tertiary'>
 						{mcp.description}
 					</p>
 				</div>
 			</div>
 			<div className='flex items-center justify-between'>
-				<span className='font-mono text-[10px] text-white/20'>
+				<span className='font-mono text-caption-sm text-text-tertiary'>
 					{mcp.npmPackage || mcp.remoteUrl || mcp.name}
 				</span>
 				{installed ? (
-					<span className='flex items-center gap-1 rounded-lg bg-green-500/10 px-2.5 py-1 text-[11px] font-medium text-green-400'>
+					<span className='flex items-center gap-1 rounded-radius-sm bg-green-500/10 px-2.5 py-1 text-caption-sm font-medium text-green-400'>
 						<IconCheck size={12} />
 						Installed
 					</span>
 				) : (
 					<button
 						onClick={onInstall}
-						className='flex items-center gap-1 rounded-lg bg-white/[0.08] px-2.5 py-1 text-[11px] font-medium text-white/70 transition-all hover:bg-white/[0.14] hover:text-white'
+						className='flex items-center gap-1 rounded-radius-sm bg-surface-2 px-2.5 py-1 text-caption-sm font-medium text-text-secondary transition-all hover:bg-surface-3 hover:text-text-primary'
 					>
 						<IconDownload size={12} />
 						Install
@@ -463,18 +464,18 @@ function MarketplaceTab({
 	return (
 		<div className='flex flex-col'>
 			{/* Search */}
-			<div className='border-b border-white/[0.06] px-4 py-3'>
+			<div className='border-b border-border-subtle px-4 py-3'>
 				<div className='relative'>
-					<IconSearch size={15} className='absolute left-3 top-1/2 -translate-y-1/2 text-white/25' />
+					<IconSearch size={15} className='absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary' />
 					<input
 						type='text'
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
 						placeholder='Search MCP registry...'
-						className='w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 pl-9 pr-3 text-[13px] text-white placeholder-white/25 outline-none transition-colors focus:border-white/[0.15] focus:bg-white/[0.05]'
+						className='w-full rounded-radius-lg border border-border-default bg-surface-base py-2.5 pl-9 pr-3 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 					/>
 					{loading && (
-						<IconLoader2 size={14} className='absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-white/30' />
+						<IconLoader2 size={14} className='absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-text-tertiary' />
 					)}
 				</div>
 			</div>
@@ -485,39 +486,39 @@ function MarketplaceTab({
 					<div className='p-4'>
 						{loading && results.length === 0 ? (
 							<div className='flex items-center justify-center py-16'>
-								<IconLoader2 size={20} className='animate-spin text-white/20' />
+								<IconLoader2 size={20} className='animate-spin text-text-tertiary' />
 							</div>
 						) : results.length === 0 ? (
 							<div className='py-16 text-center'>
-								<IconSearch size={24} className='mx-auto mb-2 text-white/15' />
-								<p className='text-[13px] text-white/30'>No servers found for "{query}"</p>
+								<IconSearch size={24} className='mx-auto mb-2 text-text-tertiary' />
+								<p className='text-body-sm text-text-tertiary'>No servers found for "{query}"</p>
 							</div>
 						) : (
 							<div className='space-y-1.5'>
 								{results.map((server) => (
 									<div
 										key={server.name}
-										className='flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-all hover:border-white/[0.1] hover:bg-white/[0.04]'
+										className='flex items-center gap-3 rounded-radius-lg border border-border-subtle bg-surface-base p-3 transition-all hover:border-border-default hover:bg-surface-1'
 									>
-										<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/15 to-violet-500/15'>
+										<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-sm bg-gradient-to-br from-blue-500/15 to-violet-500/15'>
 											<IconPlug size={16} className='text-blue-400/70' />
 										</div>
 										<div className='min-w-0 flex-1'>
 											<div className='flex items-center gap-2'>
-												<span className='truncate text-[13px] font-medium text-white/85'>{server.name}</span>
+												<span className='truncate text-body-sm font-medium text-text-primary'>{server.name}</span>
 											</div>
 											{server.description && (
-												<p className='mt-0.5 truncate text-[11px] text-white/35'>{server.description}</p>
+												<p className='mt-0.5 truncate text-caption-sm text-text-tertiary'>{server.description}</p>
 											)}
 											{server.packages?.[0] && (
-												<p className='mt-0.5 truncate font-mono text-[10px] text-white/20'>
+												<p className='mt-0.5 truncate font-mono text-caption-sm text-text-tertiary'>
 													{server.packages[0].identifier}
 												</p>
 											)}
 										</div>
 										<button
 											onClick={() => onInstall(server)}
-											className='flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/60 transition-all hover:bg-white/[0.12] hover:text-white/80'
+											className='flex flex-shrink-0 items-center gap-1.5 rounded-radius-sm bg-surface-1 px-3 py-1.5 text-caption-sm font-medium text-text-secondary transition-all hover:bg-surface-3 hover:text-text-primary'
 										>
 											<IconDownload size={13} />
 											Install
@@ -532,7 +533,7 @@ function MarketplaceTab({
 					<div className='p-4'>
 						<div className='mb-4 flex items-center gap-2'>
 							<IconStar size={14} className='text-amber-400/70' />
-							<span className='text-[12px] font-semibold uppercase tracking-wide text-white/40'>Popular Servers</span>
+							<span className='text-caption font-semibold uppercase tracking-wide text-text-tertiary'>Popular Servers</span>
 						</div>
 						<div className='grid grid-cols-1 gap-2.5 xl:grid-cols-2'>
 							{FEATURED_MCPS.map((mcp) => (
@@ -1201,16 +1202,16 @@ export default function McpPanel() {
 	]
 
 	return (
-		<div className='flex h-full flex-col bg-black/20'>
+		<div className='flex h-full flex-col bg-surface-base'>
 			{/* Sticky header */}
-			<div className='flex-shrink-0 border-b border-white/[0.06] px-5 py-4'>
+			<div className='flex-shrink-0 border-b border-border-subtle px-5 py-4'>
 				<div className='flex items-center gap-3'>
-					<div className='flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-violet-500/20'>
+					<div className='flex h-9 w-9 items-center justify-center rounded-radius-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20'>
 						<IconPlug size={18} className='text-blue-400' />
 					</div>
 					<div>
-						<h2 className='text-[14px] font-semibold text-white/85'>MCP Servers</h2>
-						<p className='text-[11px] leading-relaxed text-white/35'>
+						<h2 className='text-body font-semibold text-text-primary'>MCP Servers</h2>
+						<p className='text-caption-sm leading-relaxed text-text-tertiary'>
 							Model Context Protocol servers extend Liv&apos;s capabilities with external tools.
 							Browse the marketplace to discover servers, or manage your installed ones.
 						</p>
@@ -1219,16 +1220,17 @@ export default function McpPanel() {
 			</div>
 
 			{/* Tab bar */}
-			<div className='flex flex-shrink-0 border-b border-white/[0.06]'>
+			<div className='flex flex-shrink-0 border-b border-border-subtle'>
 				{tabs.map((tab) => (
 					<button
 						key={tab.id}
 						onClick={() => setActiveTab(tab.id)}
-						className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium transition-all ${
+						className={cn(
+							'flex items-center gap-1.5 px-4 py-2.5 text-caption font-medium transition-all',
 							activeTab === tab.id
-								? 'border-b-2 border-violet-500 text-white/90'
-								: 'text-white/30 hover:text-white/50'
-						}`}
+								? 'border-b-2 border-brand text-text-primary'
+								: 'text-text-tertiary hover:text-text-secondary',
+						)}
 					>
 						{tab.icon}
 						{tab.label}
