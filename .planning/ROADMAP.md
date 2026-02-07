@@ -195,7 +195,7 @@ Plans:
 
 ### v1.2 Phases
 
-- [ ] **Phase 1: Token Foundation** - Update semantic token values for surfaces, borders, text, and shadows
+- [x] **Phase 1: Token Foundation** - Update semantic token values for surfaces, borders, text, and shadows
 
 ### Phase 1: Token Foundation
 **Goal**: Change the actual CSS values behind semantic tokens so every component in the UI becomes visibly improved
@@ -210,7 +210,7 @@ Plans:
 **Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 01-01-PLAN.md — Update all token values in tailwind.config.ts (TF-01 to TF-06)
+- [x] 01-01-PLAN.md — Update all token values in tailwind.config.ts (TF-01 to TF-06)
 
 ## Progress
 
@@ -236,7 +236,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Token Foundation | 0/1 | Not started | - |
+| 1. Token Foundation | 1/1 | Complete | 2026-02-07 |
 
 ---
 *Roadmap created: 2026-02-03*
