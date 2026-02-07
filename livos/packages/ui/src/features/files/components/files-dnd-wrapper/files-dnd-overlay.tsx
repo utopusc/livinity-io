@@ -17,13 +17,13 @@ export function FilesDndOverlay() {
 			{
 				<div className='relative z-[20390930293920] flex w-[160px] flex-col items-center gap-0'>
 					{totalItemsBeingDragged > 1 && (
-						<div className='absolute right-[-10px] top-[-10px] flex h-6 w-6 items-center justify-center rounded-full border border-white/25 bg-brand shadow-sm'>
+						<div className='absolute right-[-10px] top-[-10px] flex h-6 w-6 items-center justify-center rounded-full border border-border-emphasis bg-brand shadow-sm'>
 							<span className='text-xs font-medium text-white'>{totalItemsBeingDragged}</span>
 						</div>
 					)}
 					<div className='flex w-full items-center gap-1.5 rounded-lg border border-brand/90 bg-brand/20 p-1.5'>
 						<FileItemIcon item={firstItem} className='h-6 w-6 flex-shrink-0' />
-						<span className='overflow-hidden text-ellipsis whitespace-nowrap text-12 text-white'>
+						<span className='overflow-hidden text-ellipsis whitespace-nowrap text-caption text-white'>
 							{firstItem?.name}
 						</span>
 					</div>
