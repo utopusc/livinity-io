@@ -20,7 +20,7 @@ export function ViewToggle() {
 			onValueChange={(value) => setView(value as ViewPreferences['view'])}
 			className={cn(isLoading || (isError && 'opacity-0'))}
 		>
-			<TabsList className='h-7 rounded-full border-[0.5px] border-white/6 bg-white/6 px-0.5 py-0 shadow-button-highlight-soft-hpx ring-white/6 hover:bg-white/10 data-[state=open]:bg-white/10'>
+			<TabsList className='h-7 rounded-full border-[0.5px] border-border-subtle bg-surface-1 px-0.5 py-0 shadow-button-highlight-soft-hpx ring-border-subtle hover:bg-surface-2 data-[state=open]:bg-surface-2'>
 				{viewModes.map((mode) => (
 					<TabsTrigger
 						key={mode}
@@ -29,9 +29,9 @@ export function ViewToggle() {
 						aria-label={t(`files-view.${mode}`)}
 					>
 						{mode === 'icons' ? (
-							<GridLayoutIcon className={cn('h-4 w-4', view === mode ? 'text-white' : 'text-white/50')} />
+							<GridLayoutIcon className={cn('h-4 w-4', view === mode ? 'text-white' : 'text-text-secondary')} />
 						) : (
-							<ListLayoutIcon className={cn('h-4 w-4', view === mode ? 'text-white' : 'text-white/50')} />
+							<ListLayoutIcon className={cn('h-4 w-4', view === mode ? 'text-white' : 'text-text-secondary')} />
 						)}
 					</TabsTrigger>
 				))}

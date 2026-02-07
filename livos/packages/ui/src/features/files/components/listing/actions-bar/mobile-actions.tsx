@@ -38,7 +38,7 @@ export function MobileActions({DropdownItems = null}: {DropdownItems?: React.Rea
 			{/* Select toggle button */}
 			<Button
 				className={cn(
-					'h-[1.9rem] rounded-full px-3 text-13',
+					'h-[1.9rem] rounded-full px-3 text-body-sm',
 					'focus:ring-0 focus:ring-offset-0 focus-visible:ring-0',
 					'focus:outline-none focus-visible:outline-none',
 				)}

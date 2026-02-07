@@ -122,7 +122,7 @@ export function Sidebar({className}: {className?: string}) {
 const SidebarSection = ({children, label = ''}: {children: React.ReactNode; label?: string}) => {
 	return (
 		<section className='flex flex-col gap-0.5 pr-4' aria-label={label}>
-			<div className='px-2 py-1 text-[11px] font-medium text-white/40'>{label}</div>
+			<div className='px-2 py-1 text-caption-sm font-medium text-text-tertiary'>{label}</div>
 			{children}
 		</section>
 	)

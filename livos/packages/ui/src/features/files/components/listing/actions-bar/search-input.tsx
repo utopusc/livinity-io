@@ -56,7 +56,7 @@ export function SearchInput() {
 	}
 
 	return (
-		<div className='focus-within:border-1 relative rounded-full focus-within:border-neutral-600 focus-within:border-white/20 md:border-[0.5px] md:border-neutral-800 md:border-white/6 md:bg-white/5 md:shadow-button-highlight-soft-hpx md:ring-white/6 md:focus-within:bg-white/10'>
+		<div className='relative rounded-full focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 md:border-[0.5px] md:border-border-subtle md:bg-surface-base md:shadow-button-highlight-soft-hpx md:ring-border-subtle md:focus-within:bg-surface-2'>
 			<Input
 				className={cn(
 					'h-7 w-0 !border-none !bg-transparent px-4 text-xs !outline-none !ring-0 transition-all duration-300 focus:w-[calc(100vw-11rem)] focus:pl-8 md:w-28 md:pl-8 md:pr-0 md:focus:w-36',
@@ -77,7 +77,7 @@ export function SearchInput() {
 				}}
 			/>
 			<SearchIcon
-				className='absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform cursor-text text-neutral-500'
+				className='absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform cursor-text text-text-tertiary'
 				onClick={() => inputRef.current?.focus()}
 			/>
 		</div>
