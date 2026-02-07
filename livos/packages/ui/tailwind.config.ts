@@ -76,18 +76,18 @@ export default {
 				'success-light': '#51CB41',
 				'dialog-content': '#1E1E1E',
 				// Semantic surface colors (dark theme, static)
-				'surface-base': 'rgba(255, 255, 255, 0.04)',
-				'surface-1': 'rgba(255, 255, 255, 0.06)',
-				'surface-2': 'rgba(255, 255, 255, 0.10)',
-				'surface-3': 'rgba(255, 255, 255, 0.14)',
+				'surface-base': 'rgba(255, 255, 255, 0.06)',
+				'surface-1': 'rgba(255, 255, 255, 0.10)',
+				'surface-2': 'rgba(255, 255, 255, 0.16)',
+				'surface-3': 'rgba(255, 255, 255, 0.22)',
 				// Semantic border colors
-				'border-subtle': 'rgba(255, 255, 255, 0.06)',
-				'border-default': 'rgba(255, 255, 255, 0.10)',
-				'border-emphasis': 'rgba(255, 255, 255, 0.20)',
+				'border-subtle': 'rgba(255, 255, 255, 0.10)',
+				'border-default': 'rgba(255, 255, 255, 0.16)',
+				'border-emphasis': 'rgba(255, 255, 255, 0.30)',
 				// Semantic text colors
-				'text-primary': 'rgba(255, 255, 255, 0.90)',
-				'text-secondary': 'rgba(255, 255, 255, 0.60)',
-				'text-tertiary': 'rgba(255, 255, 255, 0.40)',
+				'text-primary': 'rgba(255, 255, 255, 0.92)',
+				'text-secondary': 'rgba(255, 255, 255, 0.65)',
+				'text-tertiary': 'rgba(255, 255, 255, 0.45)',
 			},
 			borderWidth: {
 				px: '1px',
