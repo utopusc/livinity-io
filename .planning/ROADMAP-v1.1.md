@@ -103,7 +103,12 @@ Plans:
   4. Empty state has branded design
   5. Tool calls are displayed cleanly
   6. MCP panel has consistent layout
-**Plans**: TBD (estimated 2-3 plans)
+**Plans**: 3 plans in 2 waves
+
+Plans:
+- [ ] 05-01-PLAN.md — Chat sidebar + message bubbles + tool calls + status indicator token migration (AC-01, AC-02, AC-05)
+- [ ] 05-02-PLAN.md — Chat input + empty state + quick chat dialog token migration (AC-03, AC-04)
+- [ ] 05-03-PLAN.md — MCP panel full redesign with semantic tokens (AC-06)
 
 ### Phase 6: App Store & Files
 **Goal**: Redesign app browsing and file management interfaces
