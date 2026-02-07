@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 6 of 8 (App Store & Files)
-Plan: 3 of 3 in current phase (1 complete, 2 pending)
+Plan: 3 of 3 in current phase (2 complete, 1 pending)
 Status: In progress
-Last activity: 2026-02-07 - Completed 06-03-PLAN.md (File Manager Listing, Actions Bar, Sidebar & DnD)
+Last activity: 2026-02-07 - Completed 06-01-PLAN.md (App Store Navigation, Cards, Discover Sections)
 
-Progress: [███████████████████ ] 76% (19 of ~25 plans)
+Progress: [████████████████████ ] 80% (20 of ~25 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████████████ ] 76% (19 o
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 18
+- Total plans completed: 19
 - Average duration: 3.5 min
-- Total execution time: 1.23 hours
+- Total execution time: 1.35 hours
 
 *Updated after each plan completion*
 
@@ -114,6 +114,12 @@ v1.1 decisions:
 - [v1.1-06-03]: Navigation controls disabled state uses text-text-secondary instead of opacity-50
 - [v1.1-06-03]: Context menu file required no changes — already uses shared menu styles from Phase 2
 - [v1.1-06-03]: drag-and-drop.tsx and file-upload-drop-zone.tsx already use brand tokens correctly — no changes needed
+- [v1.1-06-01]: cardClass flattened from gradient-to-br + backdrop-blur-xl to flat bg-surface-1 with shadow-elevation-sm
+- [v1.1-06-01]: All glow orbs and decorative purple/cyan gradients removed entirely (Minimal & Clean direction)
+- [v1.1-06-01]: sectionTitleClass gradient text (bg-clip-text) replaced with flat text-text-primary
+- [v1.1-06-01]: Gallery simplified from 3-4 overlay layers to single gradient overlay for text readability
+- [v1.1-06-01]: Dynamic useColorThief gradients preserved as inline styles while Tailwind classes use semantic tokens
+- [v1.1-06-01]: Window-mode hex fallbacks (#24242499) replaced with rgba notation (rgba(36,36,36,0.6))
 
 ### Pending Todos
 
@@ -126,7 +132,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 06-03-PLAN.md (File Manager Listing, Actions Bar, Sidebar & DnD)
+Stopped at: Completed 06-01-PLAN.md (App Store Navigation, Cards, Discover Sections)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -280,6 +286,12 @@ Resume file: None
   - Summary: .planning/phases/v1.1-05-ai-chat-redesign/05-03-SUMMARY.md
 
 **Phase v1.1-06: App Store & Files**
+- Plan 06-01: App Store Navigation, Cards, Discover Sections (completed 2026-02-07)
+  - shared.tsx: cardClass/cardFaintClass/cardFeaturedClass -> bg-surface-1/base/2, border-subtle, elevation-sm
+  - Gallery: simplified from 3-4 overlays to single gradient, removed purple/cyan glow
+  - Grid/row/three-column: semantic surface/border/text, useColorThief preserved
+  - Window-mode shared-components.tsx synced with sheet-mode tokens
+  - Summary: .planning/phases/v1.1-06-app-store-files/06-01-SUMMARY.md
 - Plan 06-03: File Manager Listing, Actions Bar, Sidebar & DnD (completed 2026-02-07)
   - File item views: text-text-tertiary/secondary/primary, text-caption/caption-sm
   - Grid view: bg-surface-1 upload overlay, text-text-tertiary
