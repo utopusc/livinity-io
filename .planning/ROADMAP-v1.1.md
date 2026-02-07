@@ -155,7 +155,13 @@ Plans:
   3. Sheets and modals are mobile-optimized
   4. No responsive breakpoint issues
   5. Animations perform well on mobile
-**Plans**: TBD (estimated 2-3 plans)
+**Plans**: 4 plans in 2 waves
+
+Plans:
+- [ ] 08-01-PLAN.md — AI Chat mobile layout with drawer sidebar (MR-01)
+- [ ] 08-02-PLAN.md — Touch target optimization for mobile buttons (MR-02)
+- [ ] 08-03-PLAN.md — Backdrop-blur performance and GPU compositing hints (MR-03)
+- [ ] 08-04-PLAN.md — Drawer/modal polish and cross-viewport verification (MR-04)
 
 ## Progress
 
@@ -172,9 +178,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 5. AI Chat Redesign | 3/3 | Complete | 2026-02-06 |
 | 6. App Store & Files | 3/3 | Complete | 2026-02-07 |
 | 7. Login & Onboarding | 3/3 | Complete | 2026-02-07 |
-| 8. Mobile & Polish | 0/? | Not started | - |
+| 8. Mobile & Polish | 0/4 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-06*
-*Total phases: 8 | Total plans: ~22-28 (estimated)*
+*Total phases: 8 | Total plans: 28*
 *Coverage: 47/47 v1.1 requirements mapped*
