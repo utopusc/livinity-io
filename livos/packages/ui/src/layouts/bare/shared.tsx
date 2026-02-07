@@ -9,7 +9,7 @@ export const LivinityLogoLarge = () => <LivinityLogo className='md:w-[120px]' />
 export function Title({children, hasTransition}: {children: React.ReactNode; hasTransition: boolean}) {
 	return (
 		<h1
-			className='text-center text-3xl font-bold leading-tight -tracking-2 md:text-56'
+			className='text-center text-display-sm font-bold leading-tight -tracking-2 md:text-56'
 			style={{
 				viewTransitionName: hasTransition ? 'title' : undefined,
 			}}
@@ -28,17 +28,17 @@ export function SubTitle({
 	className?: string
 } & HTMLProps<HTMLParagraphElement>) {
 	return (
-		<p className={cn('text-center text-sm font-medium opacity-50 md:text-base', className)} {...props}>
+		<p className={cn('text-center text-body font-medium text-text-secondary md:text-body-lg', className)} {...props}>
 			{children}
 		</p>
 	)
 }
 
 export const footerClass = tw`flex items-center justify-center gap-4`
-export const footerLinkClass = tw`text-13 transition-colors font-normal text-white/60 -tracking-3 hover:text-white/80 focus:outline-none focus-visible:ring-3`
+export const footerLinkClass = tw`text-body-sm transition-colors font-normal text-text-secondary -tracking-3 hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20`
 
-export const buttonClass = tw`flex h-[42px] items-center rounded-full bg-white px-4 text-14 font-medium -tracking-1 text-black ring-white/40 transition-all duration-300 hover:bg-white/80 focus:outline-none focus-visible:ring-3 active:scale-100 active:bg-white/90 min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
-export const secondaryButtonClasss = tw`flex h-[42px] items-center rounded-full bg-neutral-600/40 backdrop-blur-sm px-4 text-14 font-medium -tracking-1 text-white ring-white/40 transition-all duration-300 hover:bg-neutral-600/60 focus:outline-none focus-visible:ring-3 active:scale-100 active:bg-neutral-600/60 min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
+export const buttonClass = tw`flex h-12 items-center rounded-full bg-brand px-4 text-body font-medium -tracking-1 text-white ring-brand/20 transition-all duration-300 hover:bg-brand-lighter focus:outline-none focus-visible:ring-2 focus-visible:border-brand active:scale-100 active:bg-brand min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
+export const secondaryButtonClasss = tw`flex h-12 items-center rounded-full bg-surface-2 backdrop-blur-sm px-4 text-body font-medium -tracking-1 text-white ring-brand/20 transition-all duration-300 hover:bg-surface-3 focus:outline-none focus-visible:ring-2 active:scale-100 active:bg-surface-3 min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
 
 export const formGroupClass = tw`flex w-full max-w-sm flex-col gap-2.5`
 
@@ -51,6 +51,7 @@ export function Layout({
 	subTitleMaxWidth,
 	children,
 	footer,
+	stepIndicator,
 }: {
 	title: string
 	transitionTitle?: boolean
@@ -58,13 +59,15 @@ export function Layout({
 	subTitleMaxWidth?: number
 	children: React.ReactNode
 	footer?: React.ReactNode
+	stepIndicator?: React.ReactNode
 }) {
 	return (
 		<>
 			{/* TODO: probably want consumer to set the title */}
 			<div className='flex-1' />
-			<div className='flex w-full flex-col items-center gap-5'>
+			<div className='flex w-full flex-col items-center gap-6'>
 				<LivinityLogoLarge />
+				{stepIndicator}
 				<div className='flex flex-col items-center gap-1.5'>
 					<Title hasTransition={transitionTitle}>{title}</Title>
 					<SubTitle style={{maxWidth: subTitleMaxWidth}}>{subTitle}</SubTitle>
