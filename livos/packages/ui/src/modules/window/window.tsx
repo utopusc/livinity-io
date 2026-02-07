@@ -179,7 +179,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 					zIndex,
 					boxShadow: isDragging
 						? '0 35px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08)'
-						: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+						: undefined,
 				}}
 				initial={{opacity: 0, scale: 0.95, y: 20}}
 				animate={{opacity: isDragging ? 0.95 : 1, scale: 1, y: 0}}
@@ -216,8 +216,9 @@ const windowClass = tw`
 	bg-black/90
 	backdrop-blur-xl
 	overflow-hidden
+	shadow-elevation-lg
 	border
-	border-border-default
+	border-border-emphasis
 `
 
 const windowContentClass = tw`
