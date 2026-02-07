@@ -52,10 +52,10 @@ export const IconsViewFileItem = ({
 					<TruncatedFilename
 						filename={item.name}
 						view='icons'
-						className='mt-1 line-clamp-2 w-full text-center text-12 leading-tight'
+						className='mt-1 line-clamp-2 w-full text-center text-caption leading-tight'
 					/>
 				)}
-				<span className='w-full text-center text-12 text-white/40'>
+				<span className='w-full text-center text-caption text-text-tertiary'>
 					{isUploading
 						? uploadingProgress === 0
 							? t('files-state.waiting')
@@ -73,7 +73,7 @@ export const IconsViewFileItem = ({
 			</div>
 
 			{!!isUploading && (
-				<div className='absolute inset-0 rounded-lg bg-black/35'>
+				<div className='absolute inset-0 rounded-lg bg-surface-1'>
 					<CircularProgress progress={uploadingProgress} />
 				</div>
 			)}

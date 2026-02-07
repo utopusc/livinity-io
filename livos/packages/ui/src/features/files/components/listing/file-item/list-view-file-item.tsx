@@ -49,10 +49,10 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 							<TruncatedFilename
 								filename={item.name}
 								view='list'
-								className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap pr-2 text-12'
+								className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap pr-2 text-caption'
 							/>
 						)}
-						<span className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-11 text-white/40'>
+						<span className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-caption-sm text-text-tertiary'>
 							{isUploading
 								? uploadingProgress === 0
 									? t('files-state.waiting')
@@ -60,7 +60,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 								: formatFilesystemDate(item.modified, languageCode)}
 						</span>
 					</div>
-					<span className='shrink-0 whitespace-nowrap pl-2 text-right text-11 text-white/40'>
+					<span className='shrink-0 whitespace-nowrap pl-2 text-right text-caption-sm text-text-tertiary'>
 						{item.type === 'directory'
 							? isDirectoryAnExternalDrivePartition(item.path)
 								? t('files-type.external-drive')
@@ -77,7 +77,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 	}
 
 	// Desktop view
-	const tableStyles = 'text-12 p-2.5 whitespace-nowrap overflow-hidden text-ellipsis'
+	const tableStyles = 'text-caption p-2.5 whitespace-nowrap overflow-hidden text-ellipsis'
 
 	return (
 		<div className={cn('flex items-center', isUploading && 'opacity-70')}>
@@ -90,17 +90,17 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 						{isEditingName ? (
 							<EditableName item={item} view='list' onFinish={onEditingNameComplete} />
 						) : (
-							<TruncatedFilename filename={item.name} view='list' className='min-w-0 text-12' />
+							<TruncatedFilename filename={item.name} view='list' className='min-w-0 text-caption' />
 						)}
 					</div>
 				</div>
 			</div>
 
-			<div className={cn(`flex-[2] ${tableStyles} text-white/60`, fadedContent && 'opacity-50')}>
+			<div className={cn(`flex-[2] ${tableStyles} text-text-secondary`, fadedContent && 'opacity-50')}>
 				{isUploading ? <Progress value={uploadingProgress} /> : formatFilesystemDate(item.modified, languageCode)}
 			</div>
 
-			<div className={cn(`flex-1 ${tableStyles} text-white/60`, fadedContent && 'opacity-50')}>
+			<div className={cn(`flex-1 ${tableStyles} text-text-secondary`, fadedContent && 'opacity-50')}>
 				{isUploading
 					? `${formatFilesystemSize(
 							((item.size ?? 0) * (uploadingProgress ?? 0)) / 100,
@@ -109,11 +109,11 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 			</div>
 
 			{/* TODO: Add this back in when we have a file system index in livinityd. The name header was previously flex-[3] */}
-			{/* <div className={`flex-[2] lg:hidden xl:flex ${tableStyles} text-white/60`}>
+			{/* <div className={`flex-[2] lg:hidden xl:flex ${tableStyles} text-text-secondary`}>
 				{isUploading ? `${formatFilesystemSize(item.speed ?? 0)}/s` : formatFilesystemDate(item.created, languageCode)}
 			</div> */}
 
-			<div className={cn(`flex-[2] ${tableStyles} text-white/60`, fadedContent && 'opacity-50')}>
+			<div className={cn(`flex-[2] ${tableStyles} text-text-secondary`, fadedContent && 'opacity-50')}>
 				{isUploading
 					? uploadingProgress !== 0
 						? t('files-state.uploading')

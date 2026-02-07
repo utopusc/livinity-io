@@ -33,7 +33,7 @@ export function EmptyStateDirectory() {
 				) : (
 					<EmptyFolderIcon className='h-15 w-15' />
 				)}
-				<div className='text-12 text-white/40'>
+				<div className='text-caption text-text-tertiary'>
 					{isOfflineNetworkHost ? t('files-empty.network-host-offline') : t('files-empty.directory')}
 				</div>
 			</div>
@@ -56,7 +56,7 @@ export function EmptyStateDirectory() {
 export function EmptyStateNetwork() {
 	return (
 		<div className='flex h-full items-center justify-center p-4 pt-0 text-center'>
-			<div className='text-12 text-white/40'>{t('files-empty.network')}</div>
+			<div className='text-caption text-text-tertiary'>{t('files-empty.network')}</div>
 		</div>
 	)
 }
