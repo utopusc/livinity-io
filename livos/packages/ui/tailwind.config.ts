@@ -61,6 +61,8 @@ export default {
 				'radius-md': '12px',
 				'radius-lg': '16px',
 				'radius-xl': '20px',
+				'radius-2xl': '24px',
+				'radius-3xl': '28px',
 			},
 			colors: {
 				// Extracted from background
@@ -88,6 +90,11 @@ export default {
 				'text-primary': 'rgba(255, 255, 255, 0.92)',
 				'text-secondary': 'rgba(255, 255, 255, 0.65)',
 				'text-tertiary': 'rgba(255, 255, 255, 0.45)',
+				// Semantic status colors
+				info: '#3B82F6',
+				'info-surface': 'rgba(59, 130, 246, 0.08)',
+				warning: '#F59E0B',
+				'warning-surface': 'rgba(245, 158, 11, 0.08)',
 			},
 			borderWidth: {
 				px: '1px',
