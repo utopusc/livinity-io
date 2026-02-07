@@ -12,11 +12,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v1.1 (UI Redesign)
 Phase: 8 of 8 (Mobile & Polish)
-Plan: 1 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-07 - Completed 08-01-PLAN.md (Mobile AI Chat Drawer Sidebar)
+Last activity: 2026-02-07 - Completed 08-03-PLAN.md (Backdrop-Blur Mobile Optimization)
 
-Progress: [█████████████████████████] 89% (25 of 28 plans)
+Progress: [███████████████████████████] 96% (27 of 28 plans)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: [███████████████████████
 - Total execution time: 0.9 hours
 
 **v1.1 Velocity:**
-- Total plans completed: 25
-- Average duration: 3.4 min
-- Total execution time: 1.65 hours
+- Total plans completed: 27
+- Average duration: 3.3 min
+- Total execution time: 1.71 hours
 
 *Updated after each plan completion*
 
@@ -137,10 +137,18 @@ v1.1 decisions:
 - [v1.1-07-03]: bg-dialog-content/70 preserved on app-auth card (semantic token from Phase 3 dialog system with transparency)
 - [v1.1-07-03]: bg-black/50 overlay preserved on app-auth (intentional darken layer convention)
 - [v1.1-07-03]: bg-neutral-600 preserved on placeholder app icon (domain-specific, not generic surface)
+- [v1.1-08-02]: Mobile-first touch targets: h-[44px] md:h-[Npx] on default/md/sm/icon-only button sizes
+- [v1.1-08-02]: md-squared (38px) and input-short (40px) unchanged -- close enough to 44px guideline
+- [v1.1-08-02]: IconButton inherits touch targets via buttonVariants import -- no changes needed
 - [v1.1-08-01]: Drawer component for mobile sidebar (matches vaul-based drawer pattern)
 - [v1.1-08-01]: ConversationSidebar className prop for mobile width override (w-full, border-r-0, bg-transparent)
 - [v1.1-08-01]: h-11 w-11 touch targets on mobile header buttons (44px minimum)
 - [v1.1-08-01]: Responsive padding: messages p-3 md:p-6, input p-3 md:p-4
+- [v1.1-08-03]: Sheet content 3xl->xl on mobile (64px->20px): heaviest blur, overkill on small screens
+- [v1.1-08-03]: Dialog content 2xl->lg on mobile (40px->12px): 12px still visually effective
+- [v1.1-08-03]: Sheet overlay xl->lg on mobile (20px->12px): lighter but benefits from reduction
+- [v1.1-08-03]: transform-gpu added to all modified backdrop-blur elements for GPU layer promotion
+- [v1.1-08-03]: Dock/window-chrome/command-palette NOT changed (static, desktop-only, or infrequent)
 
 ### Pending Todos
 
@@ -153,7 +161,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 08-01-PLAN.md (Mobile AI Chat Drawer Sidebar)
+Stopped at: Completed 08-03-PLAN.md (Backdrop-Blur Mobile Optimization)
 Resume file: None
 
 ## v1.1 Phase Artifacts
@@ -362,6 +370,18 @@ Resume file: None
   - ConversationSidebar className prop for mobile override
   - Desktop layout completely unchanged
   - Summary: .planning/phases/v1.1-08-mobile-polish/08-01-SUMMARY.md
+- Plan 08-02: Touch Target Optimization (completed 2026-02-07)
+  - Mobile-first touch targets: h-[44px] md:h-[Npx] on button sizes
+  - md-squared and input-short unchanged (close enough to 44px)
+  - IconButton inherits via buttonVariants
+  - Summary: .planning/phases/v1.1-08-mobile-polish/08-02-SUMMARY.md
+- Plan 08-03: Backdrop-Blur Mobile Optimization (completed 2026-02-07)
+  - Sheet overlay: backdrop-blur-lg md:backdrop-blur-xl + transform-gpu
+  - Sheet content: backdrop-blur-xl md:backdrop-blur-3xl + transform-gpu
+  - Dialog content: backdrop-blur-lg md:backdrop-blur-2xl + transform-gpu
+  - Toast: transform-gpu for GPU-composited backdrop blur
+  - Dock item: transform-gpu for GPU-composited backdrop blur
+  - Summary: .planning/phases/v1.1-08-mobile-polish/08-03-SUMMARY.md
 
 ---
 
