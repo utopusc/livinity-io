@@ -117,9 +117,10 @@ export const apps = router({
 			z.object({
 				appId: z.string(),
 				alternatives: z.record(z.string()).optional(),
+				environmentOverrides: z.record(z.string()).optional(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.install(input.appId, input.alternatives)),
+		.mutation(async ({ctx, input}) => ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides)),
 
 	// Get state
 	// Temporarily used for polling the state of app mutations until we implement subscriptions

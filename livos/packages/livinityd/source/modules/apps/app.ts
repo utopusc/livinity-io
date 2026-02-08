@@ -98,7 +98,7 @@ export default class App {
 		return writeYaml(`${this.dataDirectory}/docker-compose.yml`, compose)
 	}
 
-	async patchComposeFile() {
+	async patchComposeFile(environmentOverrides?: Record<string, string>) {
 		const manifest = await this.readManifest()
 		const appRequestsGpuAccess = manifest.permissions?.includes('GPU')
 		const DRI_DEVICE_PATH = '/dev/dri'
@@ -209,6 +209,17 @@ export default class App {
 			}
 		}
 
+		// Apply environment overrides from install dialog
+		if (environmentOverrides && Object.keys(environmentOverrides).length > 0) {
+			const mainServiceName = Object.keys(compose.services!)[0]
+			const service = compose.services![mainServiceName]
+			if (!service.environment) service.environment = {}
+			for (const [key, value] of Object.entries(environmentOverrides)) {
+				(service.environment as Record<string, string>)[key] = value
+			}
+			this.logger.log(`Applied ${Object.keys(environmentOverrides).length} environment overrides for ${this.id}`)
+		}
+
 		await this.writeCompose(compose)
 	}
 
@@ -223,11 +234,11 @@ export default class App {
 		})
 	}
 
-	async install() {
+	async install(environmentOverrides?: Record<string, string>) {
 		this.state = 'installing'
 		this.stateProgress = 1
 
-		await this.patchComposeFile()
+		await this.patchComposeFile(environmentOverrides)
 		await this.pull()
 
 		await pRetry(() => appScript(this.#livinityd, 'install', this.id), {

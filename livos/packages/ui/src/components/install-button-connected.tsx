@@ -7,11 +7,12 @@ import {arrayIncludes} from 'ts-extras'
 import {useAppInstall} from '@/hooks/use-app-install'
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {useVersion} from '@/hooks/use-version'
+import {EnvironmentOverridesDialog} from '@/modules/app-store/environment-overrides-dialog'
 import {OSUpdateRequiredDialog} from '@/modules/app-store/os-update-required'
 import {SelectDependenciesDialog} from '@/modules/app-store/select-dependencies-dialog'
 import {useApps} from '@/providers/apps'
 import {useAllAvailableApps} from '@/providers/available-apps'
-import {installedStates, RegistryApp} from '@/trpc/trpc'
+import {installedStates, RegistryApp, trpcReact} from '@/trpc/trpc'
 
 import {InstallButton} from './install-button'
 
@@ -27,6 +28,7 @@ export const InstallButtonConnected = forwardRef(
 		const appInstall = useAppInstall(app.id)
 		const {apps} = useAllAvailableApps()
 		const [showDepsDialog, setShowDepsDialog] = useState(false)
+		const [showEnvOverridesDialog, setShowEnvOverridesDialog] = useState(false)
 		const [showOSUpdateRequiredDialog, setShowOSUpdateRequiredDialog] = useState(false)
 		const {userAppsKeyed, isLoading} = useApps()
 		const openApp = useLaunchApp()
@@ -34,6 +36,8 @@ export const InstallButtonConnected = forwardRef(
 		const os = useVersion()
 		const [show] = useTimeout(400)
 		const [highlightDependency, setHighlightDependency] = useState<string | undefined>(undefined)
+		const builtinAppsQ = trpcReact.appStore.builtinApps.useQuery()
+		const builtinApp = builtinAppsQ.data?.find((b) => b.id === app.id)
 
 		useImperativeHandle(ref, () => ({
 			triggerInstall(highlightDependency?: string) {
@@ -106,6 +110,21 @@ export const InstallButtonConnected = forwardRef(
 
 		const compatible = semver.lte(app.manifestVersion, os.version)
 
+		const envOverrides = builtinApp?.installOptions?.environmentOverrides
+
+		const proceedWithInstall = (selectedDeps?: Record<string, string>, envValues?: Record<string, string>) => {
+			appInstall.install(selectedDeps, envValues)
+		}
+
+		const showEnvDialogOrInstall = (selectedDeps?: Record<string, string>) => {
+			if (envOverrides && envOverrides.length > 0) {
+				setSelections(selectedDeps ?? {})
+				setShowEnvOverridesDialog(true)
+			} else {
+				proceedWithInstall(selectedDeps)
+			}
+		}
+
 		const install = () => {
 			if (!compatible) {
 				setShowOSUpdateRequiredDialog(true)
@@ -114,7 +133,7 @@ export const InstallButtonConnected = forwardRef(
 			if (dependencies.length > 0) {
 				return setShowDepsDialog(true)
 			}
-			appInstall.install()
+			showEnvDialogOrInstall()
 		}
 
 		function triggerInstall() {
@@ -124,7 +143,7 @@ export const InstallButtonConnected = forwardRef(
 		const verifyInstall = (selectedDeps: Record<string, string>) => {
 			// Currently always the case because AppPermissionsDialog checks
 			if (areAllAlternativesSelectedAndInstalled) {
-				appInstall.install(selectedDeps)
+				showEnvDialogOrInstall(selectedDeps)
 			}
 		}
 
@@ -150,6 +169,21 @@ export const InstallButtonConnected = forwardRef(
 					onNext={verifyInstall}
 					highlightDependency={highlightDependency}
 				/>
+				{envOverrides && envOverrides.length > 0 && (
+					<EnvironmentOverridesDialog
+						appName={builtinApp?.name ?? app.name}
+						overrides={envOverrides}
+						open={showEnvOverridesDialog}
+						onOpenChange={setShowEnvOverridesDialog}
+						onNext={(envValues) => {
+							setShowEnvOverridesDialog(false)
+							proceedWithInstall(
+								Object.keys(selections).length > 0 ? selections : undefined,
+								envValues,
+							)
+						}}
+					/>
+				)}
 				<OSUpdateRequiredDialog
 					app={app}
 					open={showOSUpdateRequiredDialog}
