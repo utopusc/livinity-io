@@ -104,8 +104,8 @@ export function useAppInstall(id: string) {
 
 	const start = async () => startMut.mutate({appId: id})
 	const stop = async () => stopMut.mutate({appId: id})
-	const install = async (alternatives?: Record<string, string>) => {
-		return installMut.mutate({appId: id, alternatives})
+	const install = async (alternatives?: Record<string, string>, environmentOverrides?: Record<string, string>) => {
+		return installMut.mutate({appId: id, alternatives, environmentOverrides})
 	}
 	const getAppsToUninstallFirst = async () => {
 		const appsToUninstallFirst = await trpcClient.apps.dependents.query(id)

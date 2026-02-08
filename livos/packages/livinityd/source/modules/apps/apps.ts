@@ -283,7 +283,7 @@ export default class Apps {
 		return app
 	}
 
-	async install(appId: string, alternatives?: AppSettings['dependencies']) {
+	async install(appId: string, alternatives?: AppSettings['dependencies'], environmentOverrides?: Record<string, string>) {
 		if (await this.isInstalled(appId)) throw new Error(`App ${appId} is already installed`)
 
 		this.logger.log(`Installing app ${appId}`)
@@ -324,7 +324,7 @@ export default class Apps {
 			// this just quickly returns and does nothing since the app env is already running.
 			// However in the case where the app env is down this ensures we start it again.
 			await appEnvironment(this.#livinityd, 'up')
-			await app.install()
+			await app.install(environmentOverrides)
 		} catch (error) {
 			this.logger.error(`Failed to install app ${appId}`, error)
 			this.instances = this.instances.filter((app) => app.id !== appId)

@@ -90,6 +90,8 @@ type FeaturedMcp = {
 	npmPackage?: string
 	remoteUrl?: string
 	transport: 'stdio' | 'streamableHttp'
+	customCommand?: string
+	customArgs?: string[]
 }
 
 const FEATURED_MCPS: FeaturedMcp[] = [
@@ -214,14 +216,15 @@ const FEATURED_MCPS: FeaturedMcp[] = [
 		transport: 'stdio',
 	},
 	{
-		name: 'playwright',
-		displayName: 'Playwright',
-		description: 'Browser automation with accessibility snapshots for reliable interaction',
+		name: 'chrome',
+		displayName: 'Chrome',
+		description: 'Control Chrome browser on your server. Navigate pages, click elements, fill forms, take screenshots, and extract content.',
 		category: 'Browser',
 		icon: 'browser',
-		gradient: 'from-lime-500/30 to-green-500/30',
-		npmPackage: '@playwright/mcp',
+		gradient: 'from-blue-500/30 to-green-500/30',
 		transport: 'stdio',
+		customCommand: 'docker',
+		customArgs: ['exec', '-i', 'chromium_server_1', 'npx', '-y', '@playwright/mcp@latest', '--cdp-endpoint', 'http://localhost:9222'],
 	},
 	{
 		name: 'git',
@@ -580,7 +583,10 @@ function InstallDialog({
 			setName(featured.name)
 			setDescription(featured.description)
 			setTransport(featured.transport)
-			if (featured.transport === 'stdio') {
+			if (featured.customCommand) {
+				setCommand(featured.customCommand)
+				setArgs(featured.customArgs?.join(' ') || '')
+			} else if (featured.transport === 'stdio') {
 				setCommand('npx')
 				setArgs(`-y ${featured.npmPackage || featured.name}`)
 			} else if (featured.remoteUrl) {
