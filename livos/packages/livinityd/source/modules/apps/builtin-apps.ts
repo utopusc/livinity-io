@@ -236,6 +236,31 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       ],
     },
   },
+  {
+    id: 'chromium',
+    name: 'Chromium Browser',
+    tagline: 'Persistent web browser with AI control',
+    version: '1.0.0',
+    category: 'networking',
+    port: 6901,
+    description: 'A persistent Chromium browser running in Docker with KasmVNC web viewer. Sessions survive restarts — stay logged into Google, Facebook, and other sites. Includes Playwright MCP for AI-powered browser automation via LivOS. Anti-detection flags prevent automation fingerprinting.',
+    website: 'https://www.chromium.org/Home/',
+    developer: 'Livinity',
+    icon: 'https://raw.githubusercontent.com/nicedoc/browser-logos/refs/heads/main/src/chromium/chromium.svg',
+    docker: {
+      image: 'lscr.io/linuxserver/chromium:latest',
+      environment: {
+        CUSTOM_USER: '',
+        PASSWORD: '',
+        CHROME_CLI: '--remote-debugging-port=9222 --remote-allow-origins=* --restore-last-session --disable-blink-features=AutomationControlled --disable-infobars --disable-dev-shm-usage',
+        TZ: 'Europe/Istanbul',
+      },
+      volumes: ['/config'],
+    },
+    installOptions: {
+      subdomain: 'browser',
+    },
+  },
 ]
 
 export function getBuiltinApp(appId: string): BuiltinAppManifest | undefined {
