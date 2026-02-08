@@ -11,12 +11,12 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 Milestone: v1.3 (Browser App)
-Phase: v1.3-02-mcp-integration (1 of 2 plans complete)
-Plan: 02-01-PLAN.md completed
-Status: In progress
-Last activity: 2026-02-08 — Completed v1.3-02-01-PLAN.md (MCP Integration Hooks)
+Phase: v1.3-03-proxy-anti-detection (1 of 1 plans complete)
+Plan: 03-01-PLAN.md completed
+Status: Phase complete
+Last activity: 2026-02-08 — Completed v1.3-03-01-PLAN.md (Proxy Anti-Detection)
 
-Progress: ███░░░░░░░ 3/10 plans (30%)
+Progress: ████░░░░░░ 4/10 plans (40%)
 
 ## Accumulated Context
 
@@ -40,6 +40,10 @@ v1.3 decisions:
 - [v1.3-02-01]: Sleep 3 for CDP readiness instead of explicit curl check (MCP client has 30s timeout)
 - [v1.3-02-01]: --remote-debugging-address=0.0.0.0 required for docker exec CDP access
 - [v1.3-02-01]: Include name and description fields in MCP config for McpServerConfig compliance
+- [v1.3-03-01]: Remove hardcoded CHROME_CLI, build dynamically at runtime via init script
+- [v1.3-03-01]: Use s6-overlay /run/s6/container_environment/ for runtime environment variable setting
+- [v1.3-03-01]: PROXY_URL empty by default, user-configurable at install time via environmentOverrides
+- [v1.3-03-01]: DNS leak prevention for SOCKS5 via --host-resolver-rules
 
 ### Pending Todos
 
@@ -52,5 +56,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed v1.3-02-01-PLAN.md (MCP Integration Hooks)
+Stopped at: Completed v1.3-03-01-PLAN.md (Proxy Anti-Detection)
 Resume file: None
