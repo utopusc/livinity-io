@@ -347,8 +347,9 @@ app.get('/stats', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`[Memory] SQLite memory service v2.0.0 running on port ${PORT}`);
+const HOST = process.env.MEMORY_HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`[Memory] SQLite memory service v2.0.0 running on http://${HOST}:${PORT}`);
   console.log(`[Memory] Database: ${DB_PATH}`);
   console.log(`[Memory] Ready.`);
 });
