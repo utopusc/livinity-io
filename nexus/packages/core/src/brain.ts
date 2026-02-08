@@ -205,6 +205,11 @@ export class Brain {
             generationConfig: { maxOutputTokens: maxTokens },
           });
 
+          // Prevent unhandled rejection: if the stream errors, result.response
+          // also rejects but we skip its await (jump to catch). Attach a no-op
+          // handler so the rejection doesn't crash the process.
+          result.response.catch(() => {});
+
           for await (const chunk of result.stream) {
             const text = chunk.text();
             if (text) {
