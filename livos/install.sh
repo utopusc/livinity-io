@@ -921,15 +921,19 @@ UNIT
 
         cat > /etc/livos/docker-firewall.sh << 'FWSCRIPT'
 #!/bin/bash
-# LivOS Docker firewall — block external access to Docker-published ports
-# Docker's DOCKER-USER chain is evaluated before container routing rules.
+# LivOS Docker firewall — block external inbound to Docker-published ports
+# Only drop traffic arriving from the physical interface (external).
+# Container outbound traffic (e.g. apt, curl) is unaffected.
+
+EXT_IF=$(ip route show default | awk '{print $5}')
 
 iptables -F DOCKER-USER 2>/dev/null || true
 iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 iptables -A DOCKER-USER -s 127.0.0.0/8 -j RETURN            # localhost (Caddy)
 iptables -A DOCKER-USER -s 172.16.0.0/12 -j RETURN           # Docker networks
 iptables -A DOCKER-USER -i docker0 -j RETURN                  # Docker bridge
-iptables -A DOCKER-USER -j DROP                                # Block external
+iptables -A DOCKER-USER -i $EXT_IF -j DROP                    # Block external inbound
+iptables -A DOCKER-USER -j RETURN                              # Allow everything else
 FWSCRIPT
         chmod +x /etc/livos/docker-firewall.sh
 
