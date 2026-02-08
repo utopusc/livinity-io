@@ -11,12 +11,12 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 Milestone: v1.3 (Browser App)
-Phase: v1.3-01-container-app-store (2 of 2 plans complete)
-Plan: 01-02-PLAN.md completed
-Status: Phase complete
-Last activity: 2026-02-07 — Completed v1.3-01-02-PLAN.md (Update builtin-apps.ts for Chromium)
+Phase: v1.3-02-mcp-integration (1 of 2 plans complete)
+Plan: 02-01-PLAN.md completed
+Status: In progress
+Last activity: 2026-02-08 — Completed v1.3-02-01-PLAN.md (MCP Integration Hooks)
 
-Progress: ██░░░░░░░░ 2/10 plans (20%)
+Progress: ███░░░░░░░ 3/10 plans (30%)
 
 ## Accumulated Context
 
@@ -37,6 +37,9 @@ v1.3 decisions:
 - [v1.3-01-02]: Port 3000 used for Selkies web viewer (was 6901 for KasmVNC)
 - [v1.3-01-02]: Subdomain 'browser' configured for browser.domain.com access
 - [v1.3-01-02]: commonPorts map entry ensures correct port detection when docker-compose.yml has no explicit ports/expose directives
+- [v1.3-02-01]: Sleep 3 for CDP readiness instead of explicit curl check (MCP client has 30s timeout)
+- [v1.3-02-01]: --remote-debugging-address=0.0.0.0 required for docker exec CDP access
+- [v1.3-02-01]: Include name and description fields in MCP config for McpServerConfig compliance
 
 ### Pending Todos
 
@@ -48,6 +51,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-07
-Stopped at: Completed v1.3-01-02-PLAN.md (Update builtin-apps.ts for Chromium)
+Last session: 2026-02-08
+Stopped at: Completed v1.3-02-01-PLAN.md (MCP Integration Hooks)
 Resume file: None
