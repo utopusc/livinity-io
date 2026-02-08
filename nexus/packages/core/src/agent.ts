@@ -452,7 +452,7 @@ export class AgentLoop extends EventEmitter {
         ? `Tool "${step.tool}" succeeded:\n${toolResult.output}`
         : `Tool "${step.tool}" failed:\n${toolResult.error || toolResult.output}`;
 
-      messages.push({ role: 'user', text: `Observation:\n${observation}` });
+      messages.push({ role: 'user', text: `Observation:\n${observation}`, images: toolResult.images });
       this.emitEvent({ type: 'observation', turn: turn + 1, data: { tool: step.tool, success: toolResult.success, output: toolResult.output.slice(0, 500) } });
 
       // Fire onAction callback for live reporting
