@@ -377,7 +377,7 @@ export class AgentLoop extends EventEmitter {
       const step = this.parseStep(responseText);
 
       if (!step) {
-        logger.warn(`${prefix}: unparseable response, treating as final answer`, { turn });
+        logger.warn(`${prefix}: unparseable response, treating as final answer`, { turn, rawResponse: responseText.slice(0, 500) });
         messages.push({ role: 'model', text: responseText });
         this.emitEvent({ type: 'final_answer', turn: turn + 1, data: responseText });
         if (this.config.onAction) {
