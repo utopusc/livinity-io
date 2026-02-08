@@ -329,10 +329,10 @@ Plans:
   2. User can configure HTTP proxy via environment variable
   3. Anti-detection flags prevent basic automation fingerprinting
   4. Browser remains stable with all flags enabled
-**Plans**: 1 plan
+**Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 03-01-PLAN.md — Proxy env vars in docker-compose, CHROME_CLI flag assembly, anti-detection config
+- [ ] v1.3-03-01-PLAN.md — Dynamic CHROME_CLI assembly with PROXY_URL support, anti-detection flags, builtin-apps.ts update
 
 ### v1.3 Progress
 
