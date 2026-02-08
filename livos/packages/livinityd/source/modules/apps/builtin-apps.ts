@@ -252,13 +252,16 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       environment: {
         CUSTOM_USER: '',
         PASSWORD: '',
-        CHROME_CLI: '--remote-debugging-port=9222 --remote-allow-origins=* --restore-last-session --disable-blink-features=AutomationControlled --disable-infobars --disable-dev-shm-usage',
+        PROXY_URL: '',
         TZ: 'Europe/Istanbul',
       },
       volumes: ['/config'],
     },
     installOptions: {
       subdomain: 'browser',
+      environmentOverrides: [
+        { name: 'PROXY_URL', label: 'Proxy URL (e.g. socks5://host:port)', type: 'string', default: '', required: false },
+      ],
     },
   },
 ]
