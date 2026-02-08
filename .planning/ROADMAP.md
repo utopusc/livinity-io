@@ -277,6 +277,72 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Design Enhancements | 1/1 | Complete | 2026-02-07 |
 
 ---
+
+## Milestone: v1.3 — Browser App
+
+**Overview**: Add a persistent Docker-based Chromium browser as an App Store app. Access via subdomain (browser.domain.com), AI controls via Playwright MCP, SOCKS5/HTTP proxy support. No LivOS UI embedding — pure App Store template with gallery hooks for MCP registration.
+
+### v1.3 Phases
+
+- [ ] **Phase 1: Container & App Store** - Docker image, gallery template, builtin-apps entry, installable from store
+- [ ] **Phase 2: MCP Integration** - Playwright MCP auto-registration, CDP connection, AI browser control
+- [ ] **Phase 3: Proxy & Anti-Detection** - SOCKS5/HTTP proxy support, anti-detection flags, security hardening
+
+### Phase 1: Container & App Store
+**Goal**: Create installable Chromium browser app in LivOS App Store with persistent sessions and subdomain access
+**Depends on**: Nothing (first phase)
+**Requirements**: CONT-01, CONT-02, CONT-03, CONT-04, CONT-05, STORE-01, STORE-02, STORE-03, STORE-04, SEC-01, SEC-02, SEC-04
+**Success Criteria** (what must be TRUE):
+  1. User can find "Chromium Browser" in App Store
+  2. User can install the app and it builds the custom Docker image
+  3. User can assign subdomain and access browser at browser.domain.com
+  4. Browser sessions persist across container restarts (logged-in sites stay logged in)
+  5. Container recovers from crashes (stale lock files cleaned, restart policy works)
+**Plans**: 2 plans in 1 wave
+
+Plans:
+- [ ] 01-01-PLAN.md — Gallery template (Dockerfile, docker-compose.yml, livinity-app.yml, clean-singletonlock.sh)
+- [ ] 01-02-PLAN.md — builtin-apps.ts entry + verify install flow works
+
+### Phase 2: MCP Integration
+**Goal**: Enable AI agent to control the browser via Playwright MCP with auto-registration lifecycle
+**Depends on**: Phase 1
+**Requirements**: MCP-01, MCP-02, MCP-03, MCP-04, MCP-05, SEC-03
+**Success Criteria** (what must be TRUE):
+  1. When browser app starts, Playwright MCP server is auto-registered in Nexus
+  2. When browser app stops, Playwright MCP server is auto-deregistered
+  3. AI agent can navigate to URLs via MCP tools
+  4. AI agent can click, type, and take screenshots via MCP tools
+  5. CDP port 9222 is internal only (not exposed to host network)
+**Plans**: 2 plans in 1 wave
+
+Plans:
+- [ ] 02-01-PLAN.md — hooks/post-start and hooks/pre-stop for MCP registration via Redis
+- [ ] 02-02-PLAN.md — Verify Playwright MCP connection to CDP and AI agent control
+
+### Phase 3: Proxy & Anti-Detection
+**Goal**: Add SOCKS5/HTTP proxy support and anti-detection flags for privacy and automation
+**Depends on**: Phase 1
+**Requirements**: PROXY-01, PROXY-02, PROXY-03, SEC-01, SEC-02
+**Success Criteria** (what must be TRUE):
+  1. User can configure SOCKS5 proxy via environment variable
+  2. User can configure HTTP proxy via environment variable
+  3. Anti-detection flags prevent basic automation fingerprinting
+  4. Browser remains stable with all flags enabled
+**Plans**: 1 plan
+
+Plans:
+- [ ] 03-01-PLAN.md — Proxy env vars in docker-compose, CHROME_CLI flag assembly, anti-detection config
+
+### v1.3 Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Container & App Store | 0/2 | Not started | - |
+| 2. MCP Integration | 0/2 | Not started | - |
+| 3. Proxy & Anti-Detection | 0/1 | Not started | - |
+
+---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 (v1.0) + 3 (v1.2) | Total plans: 31 (estimated)*
-*Coverage: 29/29 v1 requirements mapped*
+*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) | Total plans: 36 (estimated)*
+*Coverage: 29/29 v1 + 21/21 v1.3 requirements mapped*
