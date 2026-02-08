@@ -363,6 +363,7 @@ compose() {
   # --env-file "${livinity_env_file}" \
   docker compose \
     --project-name "${app}" \
+    --project-directory "${app_data_dir}" \
     "${compose_args[@]}"
 }
 
