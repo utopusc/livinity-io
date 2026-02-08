@@ -13,6 +13,7 @@ import type {AppSettings} from './schema.js'
 import App, {readManifestInDirectory} from './app.js'
 import type {AppManifest} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
+import {getBuiltinApp} from './builtin-apps.js'
 import {applyCaddyConfig, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 
 // Redis keys for domain config
@@ -343,7 +344,9 @@ export default class Apps {
 
 		// Register subdomain in Caddy for reverse proxy
 		try {
-			await this.registerAppSubdomain(appId, manifest.port)
+			const builtinApp = getBuiltinApp(appId)
+			const subdomain = builtinApp?.installOptions?.subdomain
+			await this.registerAppSubdomain(appId, manifest.port, subdomain)
 		} catch (error) {
 			this.logger.error(`Failed to register subdomain for ${appId}`, error)
 			// Don't fail install if subdomain registration fails
