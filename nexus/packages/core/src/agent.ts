@@ -186,6 +186,16 @@ For each turn, you MUST respond with valid JSON in one of two formats:
 6. ALWAYS respond with valid JSON — no markdown, no explanations outside JSON
 ${canSpawnSubagent ? `7. For complex subtasks, use spawn_subagent to delegate to a focused subagent` : ''}
 
+## Browser Safety (CRITICAL)
+
+When using Chrome browser tools (mcp_chrome_browser_*):
+- NEVER interact with login/sign-in pages, password fields, or authentication flows
+- NEVER click "Sign in", "Log in", "Sign out", or account-related buttons
+- NEVER navigate to accounts.google.com, login.*, or any OAuth/SSO page
+- NEVER fill in credentials (username, email, password) on any website
+- If a page requires authentication, STOP and tell the user to sign in manually
+- The browser has the user's active sessions — disrupting them will log them out
+
 ## Memory
 
 You have long-term memory via memory_search and memory_add tools:
