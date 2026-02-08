@@ -161,8 +161,9 @@ async function main() {
 
   const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager });
   const apiPort = parseInt(process.env.API_PORT || '3200');
-  const httpServer = apiApp.listen(apiPort, '0.0.0.0', () => {
-    logger.info(`API server on http://0.0.0.0:${apiPort}`);
+  const apiHost = process.env.API_HOST || '127.0.0.1';
+  const httpServer = apiApp.listen(apiPort, apiHost, () => {
+    logger.info(`API server on http://${apiHost}:${apiPort}`);
   });
 
   // Attach WebSocket server for streaming

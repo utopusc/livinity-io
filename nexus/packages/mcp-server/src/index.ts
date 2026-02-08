@@ -71,6 +71,7 @@ app.delete('/mcp', async (req, res) => {
 app.get('/health', (_, res) => res.json({ status: 'ok', sessions: Object.keys(transports).length }));
 
 const PORT = parseInt(process.env.MCP_PORT || '3100');
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[MCP] Nexus MCP Server running on http://0.0.0.0:${PORT}/mcp`);
+const HOST = process.env.MCP_HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`[MCP] Nexus MCP Server running on http://${HOST}:${PORT}/mcp`);
 });

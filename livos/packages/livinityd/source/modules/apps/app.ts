@@ -163,7 +163,7 @@ export default class App {
 				}
 
 				// Create proper port mapping: manifest.port (host) -> internalPort (container)
-				const portMapping = `${manifest.port}:${internalPort}`
+				const portMapping = `127.0.0.1:${manifest.port}:${internalPort}`
 				if (!service.ports) {
 					service.ports = []
 				}
