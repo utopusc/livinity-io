@@ -214,8 +214,22 @@ export default class App {
 			const mainServiceName = Object.keys(compose.services!)[0]
 			const service = compose.services![mainServiceName]
 			if (!service.environment) service.environment = {}
-			for (const [key, value] of Object.entries(environmentOverrides)) {
-				(service.environment as Record<string, string>)[key] = value
+
+			if (Array.isArray(service.environment)) {
+				// Array format: ["KEY=VALUE", ...]
+				for (const [key, value] of Object.entries(environmentOverrides)) {
+					const idx = (service.environment as string[]).findIndex((e: string) => typeof e === 'string' && e.startsWith(`${key}=`))
+					if (idx >= 0) {
+						(service.environment as string[])[idx] = `${key}=${value}`
+					} else {
+						(service.environment as string[]).push(`${key}=${value}`)
+					}
+				}
+			} else {
+				// Object format: {KEY: VALUE}
+				for (const [key, value] of Object.entries(environmentOverrides)) {
+					(service.environment as Record<string, string>)[key] = value
+				}
 			}
 			this.logger.log(`Applied ${Object.keys(environmentOverrides).length} environment overrides for ${this.id}`)
 		}
