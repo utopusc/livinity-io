@@ -11,12 +11,12 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 Milestone: v1.3 (Browser App)
-Phase: v1.3-01-container-app-store (1 of 1 plans complete)
-Plan: 01-01-PLAN.md completed
+Phase: v1.3-01-container-app-store (2 of 2 plans complete)
+Plan: 01-02-PLAN.md completed
 Status: Phase complete
-Last activity: 2026-02-07 — Completed v1.3-01-01-PLAN.md (Chromium gallery template update)
+Last activity: 2026-02-07 — Completed v1.3-01-02-PLAN.md (Update builtin-apps.ts for Chromium)
 
-Progress: █░░░░░░░░░ 1/10 plans (10%)
+Progress: ██░░░░░░░░ 2/10 plans (20%)
 
 ## Accumulated Context
 
@@ -34,6 +34,9 @@ v1.3 decisions:
 - [v1.3-01-01]: Selkies web viewer on port 3000 (not KasmVNC on 6901)
 - [v1.3-01-01]: Health checks monitor Selkies availability with 30s interval
 - [v1.3-01-01]: Removed deprecated docker-compose version: line for modern compatibility
+- [v1.3-01-02]: Port 3000 used for Selkies web viewer (was 6901 for KasmVNC)
+- [v1.3-01-02]: Subdomain 'browser' configured for browser.domain.com access
+- [v1.3-01-02]: commonPorts map entry ensures correct port detection when docker-compose.yml has no explicit ports/expose directives
 
 ### Pending Todos
 
@@ -46,5 +49,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed v1.3-01-01-PLAN.md (Chromium gallery template update)
+Stopped at: Completed v1.3-01-02-PLAN.md (Update builtin-apps.ts for Chromium)
 Resume file: None
