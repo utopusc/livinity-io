@@ -19,6 +19,8 @@ export interface ToolResult {
   output: string;
   error?: string;
   data?: unknown;
+  /** Base64-encoded images returned by the tool (e.g. browser screenshots) */
+  images?: Array<{ base64: string; mimeType: string }>;
 }
 
 /** Tool definition — wraps a handler with metadata for agent discovery */

@@ -42,6 +42,8 @@ interface ThinkOptions {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  /** Optional inline images (e.g. browser screenshots) sent as vision input */
+  images?: Array<{ base64: string; mimeType: string }>;
 }
 
 interface ChatOptions {
@@ -144,7 +146,12 @@ export class Brain {
 
         const contents = messages.map((m) => ({
           role: m.role,
-          parts: [{ text: m.text }],
+          parts: [
+            { text: m.text },
+            ...(m.images || []).map(img => ({
+              inlineData: { data: img.base64, mimeType: img.mimeType },
+            })),
+          ],
         }));
 
         const result = await model.generateContent({
@@ -185,7 +192,12 @@ export class Brain {
 
           const contents = messages.map((m) => ({
             role: m.role,
-            parts: [{ text: m.text }],
+            parts: [
+              { text: m.text },
+              ...(m.images || []).map(img => ({
+                inlineData: { data: img.base64, mimeType: img.mimeType },
+              })),
+            ],
           }));
 
           const result = await model.generateContentStream({

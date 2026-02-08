@@ -306,13 +306,29 @@ export class McpClientManager {
                 name: mcpTool.name,
                 arguments: params,
               });
-              const output = Array.isArray(result.content)
-                ? result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n')
-                : String(result.content);
+              const textParts: string[] = [];
+              const images: Array<{ base64: string; mimeType: string }> = [];
+
+              if (Array.isArray(result.content)) {
+                for (const c of result.content as any[]) {
+                  if (c.type === 'image' && c.data) {
+                    images.push({ base64: c.data, mimeType: c.mimeType || 'image/png' });
+                  } else if (c.text) {
+                    textParts.push(c.text);
+                  } else {
+                    textParts.push(JSON.stringify(c));
+                  }
+                }
+              } else {
+                textParts.push(String(result.content));
+              }
+
+              const output = textParts.join('\n');
               return {
                 success: !result.isError,
                 output,
                 error: result.isError ? output : undefined,
+                images: images.length > 0 ? images : undefined,
               };
             } catch (err: any) {
               return { success: false, output: '', error: `MCP tool error: ${err.message}` };
