@@ -246,7 +246,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'A persistent Chromium browser running in Docker with Selkies web viewer. Sessions survive restarts — stay logged into Google, Facebook, and other sites. Includes Playwright MCP for AI-powered browser automation via LivOS. Anti-detection flags prevent automation fingerprinting.',
     website: 'https://www.chromium.org/Home/',
     developer: 'Livinity',
-    icon: 'https://raw.githubusercontent.com/nicedoc/browser-logos/refs/heads/main/src/chrome/chrome.svg',
+    icon: 'https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome.svg',
     docker: {
       image: 'lscr.io/linuxserver/chromium:latest',
       environment: {
@@ -258,7 +258,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       volumes: ['/config'],
     },
     installOptions: {
-      subdomain: 'browser',
+      subdomain: 'chrome',
       environmentOverrides: [
         { name: 'CUSTOM_USER', label: 'Username', type: 'string', required: true },
         { name: 'PASSWORD', label: 'Password', type: 'password', required: true },
