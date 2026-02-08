@@ -18,7 +18,20 @@ type WindowContentProps = {
 	appId: string
 }
 
+// Apps that manage their own scroll and layout (no wrapper padding/scroll)
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal'])
+
 export function WindowContent({route, appId}: WindowContentProps) {
+	if (fullHeightApps.has(appId)) {
+		return (
+			<div className='h-full overflow-hidden'>
+				<Suspense fallback={<Loading />}>
+					<WindowAppContent appId={appId} initialRoute={route} />
+				</Suspense>
+			</div>
+		)
+	}
+
 	return (
 		<div className={contentWrapperClass}>
 			<div className={contentInnerClass}>

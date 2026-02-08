@@ -398,29 +398,31 @@ export default function AiChat() {
 
 			{/* Main content area */}
 			{activeView === 'chat' ? (
-				/* Chat area - independently scrollable */
-				<div className='flex min-h-0 flex-1 flex-col'>
-					{/* Mobile header */}
+				/* Chat area — fixed header, scrollable messages, fixed input */
+				<div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
+					{/* Mobile header — sticky */}
 					{isMobile && (
-						<div className='flex items-center justify-between border-b border-border-default bg-surface-base px-4 py-3'>
-							<button
-								onClick={() => setSidebarOpen(true)}
-								className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
-							>
-								<IconMenu2 size={20} />
-							</button>
-							<span className='text-body font-semibold text-text-primary'>Liv AI</span>
-							<button
-								onClick={handleNewConversation}
-								className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
-							>
-								<IconPlus size={18} />
-							</button>
+						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex items-center justify-between'>
+								<button
+									onClick={() => setSidebarOpen(true)}
+									className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+								>
+									<IconMenu2 size={20} />
+								</button>
+								<span className='text-body font-semibold text-text-primary'>Liv AI</span>
+								<button
+									onClick={handleNewConversation}
+									className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+								>
+									<IconPlus size={18} />
+								</button>
+							</div>
 						</div>
 					)}
 
-					{/* Messages - scrollable */}
-					<div className='min-h-0 flex-1 overflow-y-auto p-3 md:p-6'>
+					{/* Messages — only this section scrolls */}
+					<div className='flex-1 overflow-y-auto overscroll-contain p-3 md:p-6'>
 						{messages.length === 0 ? (
 							<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
 								<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
@@ -464,8 +466,8 @@ export default function AiChat() {
 						)}
 					</div>
 
-					{/* Input - fixed at bottom */}
-					<div className='border-t border-border-default bg-surface-base p-3 md:p-4'>
+					{/* Input — always pinned at bottom */}
+					<div className='flex-shrink-0 border-t border-border-default bg-surface-base p-3 md:p-4'>
 						<div className='mx-auto flex max-w-3xl items-end gap-3'>
 							<textarea
 								ref={inputRef}
@@ -485,7 +487,7 @@ export default function AiChat() {
 							<button
 								onClick={handleSend}
 								disabled={!input.trim() || isLoading}
-								className='flex h-11 w-11 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
+								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
 							>
 								<IconSend size={18} />
 							</button>
