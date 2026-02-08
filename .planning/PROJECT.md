@@ -29,26 +29,28 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Skill system with hot-reload — existing
 - ✓ Reverse proxy with Caddy (auto HTTPS) — existing
 
-### Active (v1.1 — UI Redesign)
+### Validated (v1.1 + v1.2)
 
-*This milestone's goals:*
+- ✓ Complete UI redesign with Minimal & Clean design language — v1.1
+- ✓ Semantic design token system (surface/border/text/radius/elevation) — v1.1
+- ✓ Visual Impact redesign with improved token values — v1.2
+- ✓ Mobile responsiveness with touch targets and blur optimization — v1.1
+- ✓ AI chat with conversation sidebar, tool calls, MCP panel — v1.1
 
-**Complete UI Redesign — Minimal & Clean (Apple/Linear style):**
-- [ ] Replace Umbrel-inherited UI with Livinity-branded modern interface
-- [ ] Redesign desktop layout with cleaner grid, spacing, and typography
-- [ ] Redesign dock with refined animations and minimal aesthetics
-- [ ] Redesign window system with improved glassmorphism and polish
-- [ ] Redesign sheet/modal system for consistency and elegance
-- [ ] Redesign settings pages with structured, clean layouts
-- [ ] Redesign app store with modern card-based browsing
-- [ ] Redesign file manager with clean, functional interface
-- [ ] Redesign AI chat interface with professional conversation UI
-- [ ] Redesign login/onboarding flow with branded experience
-- [ ] Update color system with refined palette and better contrast
-- [ ] Update typography system with tighter hierarchy
-- [ ] Improve animations and micro-interactions
-- [ ] Ensure mobile responsiveness across all redesigned views
-- [ ] Create cohesive Livinity brand identity throughout UI
+### Active (v1.3 — Browser App)
+
+**Goal:** Add a persistent Docker-based Chromium browser to LivOS App Store with KasmVNC web viewer, Playwright MCP for AI automation, and SOCKS5/HTTP proxy support.
+
+**Target features:**
+- [ ] Custom Docker image (linuxserver/chromium + Node.js + Playwright MCP)
+- [ ] KasmVNC web viewer accessible via subdomain with password auth
+- [ ] Persistent browser sessions that survive container restarts
+- [ ] Playwright MCP auto-registration for AI browser control
+- [ ] SOCKS5/HTTP proxy configuration for privacy/geo-unblocking
+- [ ] Anti-detection flags to prevent automation fingerprinting
+- [ ] App Store integration (gallery manifest + builtin featured listing)
+- [ ] Frontend browser viewer component in LivOS window system
+- [ ] Crash recovery with stale lock file cleanup
 
 ### Out of Scope
 
@@ -97,5 +99,9 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 | Environment variables over .env files | Standard deployment practice, secrets manager compatible | — Pending |
 | Single install script | Lowers barrier to entry for non-technical users | — Pending |
 
+| Browser as App Store app | Install from store, not hardcoded into UI | — Pending |
+| KasmVNC over iframe | Web viewer embedded in LivOS window | — Pending |
+| Playwright MCP via hooks | Auto-register/deregister on app lifecycle | — Pending |
+
 ---
-*Last updated: 2026-02-06 — v1.1 milestone (UI Redesign)*
+*Last updated: 2026-02-08 — v1.3 milestone (Browser App)*
