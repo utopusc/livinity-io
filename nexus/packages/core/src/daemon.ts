@@ -2227,11 +2227,9 @@ ${task}`;
       }
     }
 
-    const systemPrompt = config.systemPrompt || subagentPrompt(
-      config.name,
-      config.description,
-      scopedRegistry.list(),
-    );
+    const systemPrompt = config.systemPrompt
+      ? subagentPrompt(config.name, config.systemPrompt, scopedRegistry.list())
+      : subagentPrompt(config.name, config.description, scopedRegistry.list());
 
     let contextPrefix = '';
     if (history) {
