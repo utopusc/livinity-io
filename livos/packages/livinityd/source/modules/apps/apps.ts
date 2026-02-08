@@ -319,13 +319,28 @@ export default class Apps {
 		await app.store.set('dependencies', filledSelectedDependencies)
 		this.instances.push(app)
 
+		// Filter environment overrides to only allow keys declared in the builtin manifest
+		let filteredEnvOverrides = environmentOverrides
+		if (environmentOverrides && Object.keys(environmentOverrides).length > 0) {
+			const builtinApp = getBuiltinApp(appId)
+			const allowedKeys = new Set(builtinApp?.installOptions?.environmentOverrides?.map((o) => o.name) ?? [])
+			filteredEnvOverrides = {}
+			for (const [key, value] of Object.entries(environmentOverrides)) {
+				if (allowedKeys.has(key)) {
+					filteredEnvOverrides[key] = value
+				} else {
+					this.logger.error(`Rejected unknown environment override key '${key}' for app ${appId}`)
+				}
+			}
+		}
+
 		// Complete the install process via the app script
 		try {
 			// We quickly try to start the app env before installing the app. In most normal cases
 			// this just quickly returns and does nothing since the app env is already running.
 			// However in the case where the app env is down this ensures we start it again.
 			await appEnvironment(this.#livinityd, 'up')
-			await app.install(environmentOverrides)
+			await app.install(filteredEnvOverrides)
 		} catch (error) {
 			this.logger.error(`Failed to install app ${appId}`, error)
 			this.instances = this.instances.filter((app) => app.id !== appId)

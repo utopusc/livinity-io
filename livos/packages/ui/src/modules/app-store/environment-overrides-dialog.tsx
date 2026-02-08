@@ -80,19 +80,17 @@ export function EnvironmentOverridesDialog({
 					))}
 				</div>
 				<DialogFooter>
-					<DialogFooter>
-						<Button
-							variant='primary'
-							size='dialog'
-							disabled={!allRequiredFilled}
-							onClick={handleSubmit}
-						>
-							Install {appName}
-						</Button>
-						<Button size='dialog' onClick={() => onOpenChange(false)}>
-							Cancel
-						</Button>
-					</DialogFooter>
+					<Button
+						variant='primary'
+						size='dialog'
+						disabled={!allRequiredFilled}
+						onClick={handleSubmit}
+					>
+						Install {appName}
+					</Button>
+					<Button size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
