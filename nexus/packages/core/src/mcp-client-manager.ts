@@ -23,6 +23,8 @@ const STATUS_KEY_PREFIX = 'nexus:mcp:status:';
 const STATUS_TTL = 3600; // 1 hour
 const UPDATE_CHANNEL = 'nexus:config:updated';
 const CONNECT_TIMEOUT_MS = 30_000; // 30 seconds
+const RECONNECT_DELAY_MS = 5_000; // 5 seconds before reconnect attempt
+const MAX_RECONNECT_ATTEMPTS = 3;
 
 /** Only these commands are allowed for stdio transport */
 const ALLOWED_COMMANDS = new Set([
@@ -48,6 +50,7 @@ interface ManagedServer {
   transport: StdioClientTransport | StreamableHTTPClientTransport;
   tools: string[]; // tool names registered in ToolRegistry
   connectedAt: number;
+  reconnectAttempts: number;
 }
 
 export class McpClientManager {
@@ -233,12 +236,12 @@ export class McpClientManager {
     }
   }
 
-  private async connectServer(config: McpServerConfig): Promise<void> {
+  private async connectServer(config: McpServerConfig, reconnectAttempt = 0): Promise<void> {
     if (this.stopped) return;
     const { name } = config;
 
     try {
-      logger.info(`McpClientManager: connecting to "${name}" (${config.transport})`);
+      logger.info(`McpClientManager: connecting to "${name}" (${config.transport})${reconnectAttempt > 0 ? ` [reconnect #${reconnectAttempt}]` : ''}`);
 
       let transport: StdioClientTransport | StreamableHTTPClientTransport;
 
@@ -280,13 +283,22 @@ export class McpClientManager {
         { capabilities: {} },
       );
 
-      // Connect with timeout
-      await Promise.race([
-        client.connect(transport),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Connection timeout after ${CONNECT_TIMEOUT_MS}ms`)), CONNECT_TIMEOUT_MS),
-        ),
-      ]);
+      // Connect with timeout (clean up timer to avoid leaks)
+      const timeoutId = setTimeout(() => {}, 0); // placeholder
+      clearTimeout(timeoutId);
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`Connection timeout after ${CONNECT_TIMEOUT_MS}ms`)),
+          CONNECT_TIMEOUT_MS,
+        );
+        client.connect(transport).then(() => {
+          clearTimeout(timer);
+          resolve();
+        }).catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+      });
 
       // Discover tools
       const toolsResult = await client.listTools();
@@ -340,7 +352,39 @@ export class McpClientManager {
       }
 
       const connectedAt = Date.now();
-      this.servers.set(name, { config, client, transport, tools: registeredTools, connectedAt });
+      this.servers.set(name, { config, client, transport, tools: registeredTools, connectedAt, reconnectAttempts: reconnectAttempt });
+
+      // Set up close handler for auto-reconnection
+      client.onclose = () => {
+        if (this.stopped) return;
+        const managed = this.servers.get(name);
+        if (!managed) return;
+
+        logger.warn(`McpClientManager: "${name}" connection closed unexpectedly`);
+
+        // Clean up the dead connection
+        for (const toolName of managed.tools) {
+          this.toolRegistry.unregister(toolName);
+        }
+        this.servers.delete(name);
+
+        // Auto-reconnect if under limit
+        const attempt = managed.reconnectAttempts + 1;
+        if (attempt <= MAX_RECONNECT_ATTEMPTS) {
+          const delay = RECONNECT_DELAY_MS * attempt;
+          logger.info(`McpClientManager: reconnecting "${name}" in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})`);
+          setTimeout(async () => {
+            if (this.stopped) return;
+            try {
+              await this.connectServer(config, attempt);
+            } catch (err: any) {
+              logger.error(`McpClientManager: reconnect failed for "${name}"`, { error: err.message });
+            }
+          }, delay);
+        } else {
+          logger.error(`McpClientManager: "${name}" max reconnect attempts reached`);
+        }
+      };
 
       // Write status to Redis
       const status: McpServerStatus = {
@@ -377,6 +421,9 @@ export class McpClientManager {
   private async disconnectServer(name: string): Promise<void> {
     const managed = this.servers.get(name);
     if (!managed) return;
+
+    // Clear close handler to prevent auto-reconnect on intentional disconnect
+    managed.client.onclose = undefined as any;
 
     // Unregister all tools
     for (const toolName of managed.tools) {

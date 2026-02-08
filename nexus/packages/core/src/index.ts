@@ -26,6 +26,14 @@ import { logger } from './logger.js';
 const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
 const NEXUS_SKILLS_DIR = process.env.NEXUS_SKILLS_DIR || '/opt/nexus/app/skills';
 
+// Prevent unhandled rejections from crashing the process (e.g. Gemini stream parse errors)
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('Unhandled rejection (process kept alive)', {
+    error: reason?.message || String(reason),
+    stack: reason?.stack?.split('\n').slice(0, 3).join(' | '),
+  });
+});
+
 async function main() {
   logger.info('Nexus starting...');
 
