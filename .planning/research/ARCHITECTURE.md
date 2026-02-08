@@ -1,1272 +1,540 @@
-# Security Architecture Research
+# Architecture: Browser App Integration with LivOS
 
-**Date:** 2026-02-03
-**Focus:** Self-hosted Node.js application security hardening patterns for LivOS
-
----
-
-## 1. Secrets Management
-
-### Problem Statement
-LivOS currently has hardcoded secrets in `.env` files including API keys (GEMINI_API_KEY), database credentials (REDIS_URL with password), and authentication secrets (JWT_SECRET). If leaked, these compromise all authentication.
-
-### Industry Best Practices (2025-2026)
-
-#### Hybrid Approach (Recommended)
-Use environment variables for non-sensitive configuration, and a secrets manager for credentials, keys, and tokens.
-
-```
-Non-sensitive (.env)          Sensitive (Secrets Manager)
----------------------------   ----------------------------
-NODE_ENV=production           GEMINI_API_KEY
-LOG_LEVEL=info                JWT_SECRET
-DAEMON_INTERVAL_MS=30000      REDIS_PASSWORD
-PORT=3000                     DATABASE_URL
-```
-
-#### Secrets Manager Options
-
-| Solution | Best For | Complexity |
-|----------|----------|------------|
-| HashiCorp Vault | Self-hosted, multi-cloud | High |
-| Doppler | SaaS, team collaboration | Low |
-| Infisical | Open-source, self-hosted | Medium |
-| Docker Secrets | Docker Swarm environments | Low |
-| Kubernetes Secrets | K8s environments | Medium |
-
-#### Implementation Pattern: Bootstrap Token
-
-```typescript
-// secrets-manager.ts
-import Vault from 'node-vault';
-
-interface SecretsManager {
-  get(key: string): Promise<string>;
-  getAll(): Promise<Record<string, string>>;
-}
-
-class VaultSecretsManager implements SecretsManager {
-  private client: Vault.client;
-  private secrets: Map<string, string> = new Map();
-
-  constructor() {
-    // Bootstrap token from env (short-lived, single-use)
-    const bootstrapToken = process.env.VAULT_TOKEN;
-    if (!bootstrapToken) {
-      throw new Error('VAULT_TOKEN required for bootstrap');
-    }
-
-    this.client = Vault({
-      endpoint: process.env.VAULT_ADDR || 'http://127.0.0.1:8200',
-      token: bootstrapToken,
-    });
-  }
-
-  async initialize(): Promise<void> {
-    // Fetch all secrets at startup
-    const result = await this.client.read('secret/data/livos');
-    const data = result.data.data;
-
-    for (const [key, value] of Object.entries(data)) {
-      this.secrets.set(key, value as string);
-    }
-
-    // Clear bootstrap token from memory
-    delete process.env.VAULT_TOKEN;
-  }
-
-  async get(key: string): Promise<string> {
-    const value = this.secrets.get(key);
-    if (!value) throw new Error(`Secret "${key}" not found`);
-    return value;
-  }
-
-  async getAll(): Promise<Record<string, string>> {
-    return Object.fromEntries(this.secrets);
-  }
-}
-
-// Fallback for development
-class EnvSecretsManager implements SecretsManager {
-  async get(key: string): Promise<string> {
-    const value = process.env[key];
-    if (!value) throw new Error(`Secret "${key}" not found in environment`);
-    return value;
-  }
-
-  async getAll(): Promise<Record<string, string>> {
-    return { ...process.env } as Record<string, string>;
-  }
-}
-
-export function createSecretsManager(): SecretsManager {
-  if (process.env.VAULT_ADDR) {
-    return new VaultSecretsManager();
-  }
-  return new EnvSecretsManager();
-}
-```
-
-#### Production Checklist
-- [ ] Never commit `.env` files (add to `.gitignore`)
-- [ ] Rotate all secrets after any suspected leak
-- [ ] Use short-lived tokens for bootstrap
-- [ ] Set up audit logging for secret access
-- [ ] Implement automatic secret rotation where possible
-- [ ] Use Kubernetes Secrets or Docker Secrets in containerized environments
-
-### Sources
-- [Security Boulevard: Environment Variables in 2026](https://securityboulevard.com/2025/12/are-environment-variables-still-safe-for-secrets-in-2026/)
-- [Managing Secrets in Node.js with HashiCorp Vault](https://codersociety.com/blog/articles/hashicorp-vault-node)
-- [Node.js Security Best Practices](https://www.nodejs-security.com/blog/do-not-use-secrets-in-environment-variables-and-here-is-how-to-do-it-better)
+**Domain:** Persistent Docker-based Chromium browser with KasmVNC, Playwright MCP, and proxy support
+**Researched:** 2026-02-07
+**Confidence:** HIGH (based on direct codebase analysis + verified external sources)
 
 ---
 
-## 2. Shell Command Sandboxing
+## 1. System Overview
 
-### Problem Statement
-LivOS AI agents can execute shell commands. The current blocklist approach (`shell.ts`) is insufficient and can be bypassed with alternative syntax (e.g., `rm -r /` without `-f`, `curl | bash`, environment variable exfiltration).
+The browser app integrates into LivOS as a **multi-service Docker Compose application** within the existing app lifecycle. It touches five major integration points: Docker container management (livinityd), Caddy reverse proxy, MCP server registration (Nexus), frontend window/launch system, and the app store catalog.
 
-### Core Principle: Allowlist Over Blocklist
-
-Blocklists will always have gaps. An attacker can find alternative commands, encodings, or syntax to bypass restrictions. **Allowlists define exactly what is permitted and block everything else.**
-
-### Implementation Patterns
-
-#### Pattern 1: Use `execFile`/`spawn` Instead of `exec`
-
-```typescript
-// DANGEROUS - shell interpretation allows injection
-import { exec } from 'child_process';
-exec(`ls -la ${userInput}`); // userInput: "; rm -rf /"
-
-// SAFE - arguments are passed as array, no shell interpretation
-import { execFile, spawn } from 'child_process';
-execFile('ls', ['-la', userInput]); // arguments are escaped
-spawn('ls', ['-la', userInput], { shell: false }); // explicit no shell
+```
+User
+  |
+  v
+LivOS UI (React)  ----window.open()---->  browser.domain.com
+  |                                            |
+  | tRPC (install/start/stop)                  | HTTPS (Caddy auto-TLS)
+  v                                            v
+livinityd (Express+tRPC :8080)            Caddy Reverse Proxy
+  |                                            |
+  | docker compose up/down                     | reverse_proxy 127.0.0.1:6901
+  v                                            v
+Docker Engine                              KasmVNC Web Interface (port 6901)
+  |                                            |
+  +-- chromium container (KasmVNC :3000/:3001)  | WebSocket (auto-upgraded)
+  |     +-- Chromium browser (:9222 CDP)        v
+  |     +-- /config volume (session data)   Chromium Desktop GUI
+  |
+  +-- proxy container (SOCKS5 :1080, HTTP :8118)  [companion service]
+  |
+  +-- playwright-mcp (stdio on host via npx)
+       +-- connects to chromium:9222 via CDP
 ```
 
-#### Pattern 2: Command Allowlist with Argument Validation
+## 2. Existing Architecture Analysis
+
+### 2.1 App Install Flow (Current)
+
+Based on codebase analysis of `apps.ts`, `app.ts`, and the `app-script` bash script:
+
+```
+1. User clicks Install in App Store UI
+2. tRPC mutation: apps.install({appId})
+3. Apps.install(appId) in apps.ts:
+   a. appStore.getAppTemplateFilePath(appId)  -- finds template in gallery repo
+   b. rsync template files to ${dataDirectory}/app-data/${appId}/
+   c. app.install() in app.ts:
+      i.   patchComposeFile() -- removes app_proxy, adds port mapping, container names
+      ii.  pull() -- pulls Docker images
+      iii. appScript('install', appId) -- runs bash install script
+           - sources env, applies templates, pulls compose images
+           - compose up --detach --build
+           - executes hooks/post-start, hooks/post-install
+   d. registerAppSubdomain(appId, port) -- adds to Caddy config
+4. App is running, accessible at subdomain.domain.com
+```
+
+**Critical finding:** The install flow expects template files in a **gallery repository** (git-based), not in builtin-apps.ts. The `BuiltinAppManifest` in `builtin-apps.ts` is used only for the app store **listing/catalog** and icon resolution -- it does NOT drive installation. The actual template (docker-compose.yml, livinity-app.yml, hooks/) must exist in a cloned gallery repo directory.
+
+### 2.2 Caddy Reverse Proxy (Current)
+
+From `caddy.ts`:
 
 ```typescript
-// safe-shell.ts
-import { spawn, type SpawnOptionsWithoutStdio } from 'child_process';
+// generateFullCaddyfile produces:
+// subdomain.mainDomain {
+//   reverse_proxy 127.0.0.1:${port}
+// }
+```
 
-interface CommandConfig {
-  bin: string;
-  allowedArgs: RegExp[];      // Patterns for allowed argument values
-  forbiddenArgs: string[];    // Flags that should never be allowed
-  maxArgs: number;
-  requiresPath?: boolean;     // If true, last arg must be valid path
-}
+**Key constraint:** The current Caddy config generator produces a **simple reverse_proxy** directive per subdomain. It does NOT include:
+- WebSocket-specific configuration (though Caddy v2 handles WebSocket upgrades automatically)
+- TLS backend settings (needed for KasmVNC's self-signed cert)
+- Custom headers
 
-const COMMAND_ALLOWLIST: Record<string, CommandConfig> = {
-  ls: {
-    bin: '/bin/ls',
-    allowedArgs: [/^-[latrshR]+$/, /^[a-zA-Z0-9_./-]+$/],
-    forbiddenArgs: [],
-    maxArgs: 10,
-  },
-  cat: {
-    bin: '/bin/cat',
-    allowedArgs: [/^[a-zA-Z0-9_./-]+$/],
-    forbiddenArgs: [],
-    maxArgs: 5,
-    requiresPath: true,
-  },
-  docker: {
-    bin: '/usr/bin/docker',
-    allowedArgs: [/^(ps|logs|inspect|stats)$/, /^--tail$/, /^\d+$/, /^[a-zA-Z0-9_-]+$/],
-    forbiddenArgs: ['--privileged', '-v', '--volume', '--rm', 'exec'],
-    maxArgs: 10,
-  },
-  pm2: {
-    bin: '/usr/local/bin/pm2',
-    allowedArgs: [/^(list|logs|describe|status)$/, /^--lines$/, /^\d+$/, /^[a-zA-Z0-9_-]+$/],
-    forbiddenArgs: ['delete', 'kill', 'flush'],
-    maxArgs: 5,
-  },
-};
+**Good news:** Caddy v2 automatically handles WebSocket upgrade requests. No special `ws` directive is needed. The `reverse_proxy` directive transparently proxies WebSocket connections. However, KasmVNC serves over HTTPS with self-signed certs, so the Caddy config needs `transport http { tls_insecure_skip_verify }` to connect to the backend.
 
-// Shell metacharacters that indicate injection attempts
-const SHELL_METACHARACTERS = /[;&|`$\\<>(){}[\]!#*?~]/;
+### 2.3 MCP Integration (Current)
 
-// Paths that should never be accessible
-const FORBIDDEN_PATHS = [
-  '/etc/shadow',
-  '/etc/passwd',
-  '~/.ssh',
-  '/root',
-  '/proc',
-  '/sys',
-  '.env',
-];
+From `mcp-config-manager.ts`, `mcp-client-manager.ts`, `mcp-types.ts`:
 
-export interface SafeShellResult {
-  success: boolean;
-  stdout: string;
-  stderr: string;
-  code: number | null;
-}
+```
+Redis key: nexus:mcp:config
+Redis channel: nexus:config:updated (message: 'mcp_config')
 
-export async function safeExec(
-  command: string,
-  args: string[],
-  options?: { cwd?: string; timeout?: number }
-): Promise<SafeShellResult> {
-  // 1. Validate command is in allowlist
-  const config = COMMAND_ALLOWLIST[command];
-  if (!config) {
-    return {
-      success: false,
-      stdout: '',
-      stderr: `Command "${command}" is not allowed. Allowed: ${Object.keys(COMMAND_ALLOWLIST).join(', ')}`,
-      code: 1,
-    };
-  }
-
-  // 2. Validate argument count
-  if (args.length > config.maxArgs) {
-    return {
-      success: false,
-      stdout: '',
-      stderr: `Too many arguments (max ${config.maxArgs})`,
-      code: 1,
-    };
-  }
-
-  // 3. Validate each argument
-  for (const arg of args) {
-    // Check for shell metacharacters
-    if (SHELL_METACHARACTERS.test(arg)) {
-      return {
-        success: false,
-        stdout: '',
-        stderr: `Argument contains forbidden characters: ${arg}`,
-        code: 1,
-      };
-    }
-
-    // Check forbidden args
-    if (config.forbiddenArgs.includes(arg)) {
-      return {
-        success: false,
-        stdout: '',
-        stderr: `Argument "${arg}" is not allowed for ${command}`,
-        code: 1,
-      };
-    }
-
-    // Check allowed patterns
-    const matchesAllowed = config.allowedArgs.some(pattern => pattern.test(arg));
-    if (!matchesAllowed) {
-      return {
-        success: false,
-        stdout: '',
-        stderr: `Argument "${arg}" does not match allowed patterns for ${command}`,
-        code: 1,
-      };
-    }
-
-    // Check forbidden paths
-    for (const forbiddenPath of FORBIDDEN_PATHS) {
-      if (arg.includes(forbiddenPath)) {
-        return {
-          success: false,
-          stdout: '',
-          stderr: `Access to path "${arg}" is forbidden`,
-          code: 1,
-        };
-      }
-    }
-  }
-
-  // 4. Execute with spawn (no shell)
-  return new Promise((resolve) => {
-    const spawnOpts: SpawnOptionsWithoutStdio = {
-      shell: false, // CRITICAL: no shell interpretation
-      cwd: options?.cwd || '/tmp',
-      timeout: options?.timeout || 30000,
-      env: {
-        PATH: '/usr/local/bin:/usr/bin:/bin',
-        HOME: '/tmp',
-        // Minimal env - no secrets
-      },
-    };
-
-    const proc = spawn(config.bin, args, spawnOpts);
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    proc.on('close', (code) => {
-      resolve({
-        success: code === 0,
-        stdout: stdout.slice(0, 50000), // Limit output size
-        stderr: stderr.slice(0, 10000),
-        code,
-      });
-    });
-
-    proc.on('error', (err) => {
-      resolve({
-        success: false,
-        stdout: '',
-        stderr: err.message,
-        code: 1,
-      });
-    });
-  });
+McpServerConfig {
+  name: string
+  transport: 'stdio' | 'streamableHttp'
+  command?: string       // stdio
+  args?: string[]        // stdio
+  url?: string           // streamableHttp
+  headers?: Record<string, string>
+  enabled: boolean
+  description?: string
+  installedFrom?: string
+  installedAt: number
 }
 ```
 
-#### Pattern 3: Container-Based Sandboxing (Maximum Security)
+The McpClientManager listens on `nexus:config:updated` channel and calls `reconcile()` to connect/disconnect MCP servers. Tools are auto-discovered via `client.listTools()` and registered as `mcp_{serverName}_{toolName}` in the ToolRegistry.
 
-For truly untrusted code, use Docker containers with strict limits:
+**Transport options for Playwright MCP:**
+- `stdio`: Spawns a child process. Allowed commands: npx, node, python, python3, uvx, docker, deno, bun. This works if Playwright MCP runs on the host.
+- `streamableHttp`: HTTP-based transport. Has SSRF protection blocking localhost/private IPs. This is problematic for connecting to a local Docker container.
+
+**Critical issue:** The `streamableHttp` transport blocks private IPs (127.x, 10.x, 192.168.x, localhost). The Playwright MCP container would be on an internal Docker network. Either:
+1. Use `stdio` transport with `npx @playwright/mcp --cdp-endpoint ws://localhost:9222` (command allowlist includes `npx`, port 9222 mapped to host)
+2. Modify SSRF protection to allow specific internal addresses for MCP servers
+3. Expose the Playwright MCP SSE endpoint on a host-bound port and use a non-blocked address
+
+**Recommendation:** Use `stdio` transport. The command `npx` is in the allowlist. The CDP endpoint connects to the Chromium container via a host-mapped port (9222). This avoids SSRF issues entirely and requires zero changes to McpClientManager.
+
+### 2.4 Frontend App Launch (Current)
+
+From `use-launch-app.ts` and `misc.ts`:
 
 ```typescript
-// docker-sandbox.ts
-import { spawn } from 'child_process';
+// appToUrl builds: ${protocol}//${subdomain}.${baseDomain}
+// useLaunchApp calls: window.open(url, '_blank')
+```
 
-interface SandboxOptions {
-  command: string;
-  args: string[];
-  timeout?: number;
-  memoryLimit?: string;
-  cpuLimit?: string;
-  networkDisabled?: boolean;
-  readOnlyRoot?: boolean;
-}
+Apps open in a **new browser tab**, not in an iframe within the LivOS window system. The `IframeChecker` component actively blocks LivOS itself from being embedded. The window manager (`window-manager.tsx`) manages internal LivOS windows (app store, settings, files, AI chat) but not external Docker apps.
 
-export async function runInSandbox(options: SandboxOptions): Promise<SafeShellResult> {
-  const dockerArgs = [
-    'run',
-    '--rm',                                    // Remove container after execution
-    '--network', options.networkDisabled ? 'none' : 'bridge',
-    '--memory', options.memoryLimit || '128m',
-    '--cpus', options.cpuLimit || '0.5',
-    '--pids-limit', '100',                     // Limit processes
-    '--read-only',                             // Read-only filesystem
-    '--security-opt', 'no-new-privileges',     // No privilege escalation
-    '--cap-drop', 'ALL',                       // Drop all capabilities
-    '--user', '1000:1000',                     // Non-root user
-    'livos-sandbox:latest',                    // Minimal sandbox image
-    options.command,
-    ...options.args,
-  ];
+**Implication:** The browser app will open via `window.open()` to `browser.domain.com` in a new tab, showing the KasmVNC interface directly. No iframe embedding is needed or desirable for the initial version.
 
-  return new Promise((resolve) => {
-    const proc = spawn('docker', dockerArgs, {
-      shell: false,
-      timeout: options.timeout || 30000,
-    });
+### 2.5 Docker Network (Current)
 
-    let stdout = '';
-    let stderr = '';
+From `docker-compose.yml` (legacy-compat):
 
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+```yaml
+networks:
+  default:
+    name: livinity_main_network
+    ipam:
+      driver: default
+      config:
+        - subnet: "10.21.0.0/16"
+```
 
-    proc.on('close', (code) => {
-      resolve({ success: code === 0, stdout, stderr, code });
-    });
-  });
+All app containers join `livinity_main_network` via `docker-compose.common.yml`. The browser app's companion services (proxy) need to be on this network to communicate with the browser container.
+
+## 3. New Components Needed
+
+### 3.1 App Template Directory
+
+A new gallery repo entry containing:
+
+```
+chromium/
+  livinity-app.yml          # App manifest (port, name, description, etc.)
+  docker-compose.yml        # Multi-service compose (browser + proxy)
+  hooks/
+    post-start              # Register Playwright MCP server in Redis
+    pre-stop                # Deregister Playwright MCP server from Redis
+```
+
+### 3.2 Docker Compose (Multi-Service)
+
+```yaml
+version: '3.7'
+
+services:
+  browser:
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: chromium_browser_1
+    environment:
+      CUSTOM_USER: ""
+      PASSWORD: ""
+      CHROME_CLI: >-
+        --remote-debugging-port=9222
+        --remote-allow-origins=*
+        --restore-last-session
+        --disable-blink-features=AutomationControlled
+        --disable-infobars
+        --disable-dev-shm-usage
+      TZ: "Europe/Istanbul"
+    volumes:
+      - ./data/config:/config
+    ports:
+      - "6901:3000"        # KasmVNC HTTP -> host port 6901
+      - "9222:9222"        # CDP for Playwright MCP
+    shm_size: "2gb"         # Prevent Chromium crashes from shared memory limits
+    restart: unless-stopped
+
+  proxy:
+    image: wernight/dante:latest
+    container_name: chromium_proxy_1
+    restart: unless-stopped
+    # SOCKS5 on port 1080, accessible from browser container via Docker DNS
+```
+
+**Important notes on LinuxServer Chromium:**
+- Exposes port **3000** (HTTP) and **3001** (HTTPS), NOT port 6901
+- The KasmVNC/Selkies web interface is on these ports
+- `CUSTOM_PORT` env var changes the HTTP port (default 3000)
+- `CUSTOM_HTTPS_PORT` env var changes the HTTPS port (default 3001)
+- Self-signed certs are used by default, requiring `tls_insecure_skip_verify` in reverse proxy if proxying to HTTPS backend
+- HTTPS is required for full functionality (WebCodecs, clipboard, etc.)
+- Proxying to the HTTP port (3000) avoids the self-signed cert issue; Caddy provides HTTPS to the user
+
+### 3.3 Caddy Config Enhancement
+
+The current `generateFullCaddyfile()` in `caddy.ts` generates:
+
+```
+subdomain.domain {
+  reverse_proxy 127.0.0.1:PORT
 }
 ```
 
-### Recommended Approach for LivOS
+For KasmVNC proxied via HTTP port 3000 (mapped to host 6901), the basic `reverse_proxy` works because Caddy handles WebSocket upgrades automatically. No special configuration is needed if we proxy to the HTTP port.
 
-1. **Immediate**: Replace blocklist with strict allowlist in `shell.ts`
-2. **Short-term**: Implement argument validation with patterns
-3. **Long-term**: Consider container sandboxing for high-risk operations
+If proxying to the HTTPS port (3001) instead, we would need:
 
-### Sources
-- [Preventing Command Injection in Node.js](https://auth0.com/blog/preventing-command-injection-attacks-in-node-js-apps/)
-- [StackHawk: Node.js Command Injection Guide](https://www.stackhawk.com/blog/nodejs-command-injection-examples-and-prevention/)
-- [eslint-plugin-security: Avoid Command Injection](https://github.com/eslint-community/eslint-plugin-security/blob/main/docs/avoid-command-injection-node.md)
-- [Node.js Security Best Practices](https://nodejs.org/en/learn/getting-started/security-best-practices)
-
----
-
-## 3. Internal Service-to-Service Communication
-
-### Problem Statement
-LivOS internal services (Cognee memory at localhost:3300, Firecrawl) are accessed without authentication. Anyone on the local network can add/query memories.
-
-### Authentication Patterns
-
-#### Pattern 1: Mutual TLS (mTLS) - Strongest
-
-Both client and server authenticate each other with certificates.
-
-```typescript
-// server-with-mtls.ts
-import https from 'https';
-import fs from 'fs';
-import express from 'express';
-
-const app = express();
-
-const server = https.createServer({
-  key: fs.readFileSync('/certs/server-key.pem'),
-  cert: fs.readFileSync('/certs/server-cert.pem'),
-  ca: fs.readFileSync('/certs/ca-cert.pem'),  // Certificate Authority
-  requestCert: true,                           // Require client cert
-  rejectUnauthorized: true,                    // Reject invalid certs
-}, app);
-
-// Middleware to extract client identity
-app.use((req, res, next) => {
-  const cert = req.socket.getPeerCertificate();
-  if (!cert || !cert.subject) {
-    return res.status(401).json({ error: 'Client certificate required' });
-  }
-  req.clientId = cert.subject.CN; // Common Name identifies the service
-  next();
-});
 ```
-
-```typescript
-// client-with-mtls.ts
-import https from 'https';
-import fs from 'fs';
-
-const agent = new https.Agent({
-  key: fs.readFileSync('/certs/client-key.pem'),
-  cert: fs.readFileSync('/certs/client-cert.pem'),
-  ca: fs.readFileSync('/certs/ca-cert.pem'),
-});
-
-// Use with fetch or axios
-const response = await fetch('https://memory-service:3300/add', {
-  agent,
-  method: 'POST',
-  body: JSON.stringify({ data: 'example' }),
-});
-```
-
-#### Pattern 2: Shared Secret / API Key - Simple
-
-For internal services on the same host, use a shared secret.
-
-```typescript
-// internal-auth-middleware.ts
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
-
-export function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers['x-internal-api-key'];
-
-  if (!authHeader || authHeader !== INTERNAL_API_KEY) {
-    return res.status(401).json({ error: 'Invalid or missing internal API key' });
-  }
-
-  next();
-}
-
-// Apply to all internal routes
-app.use('/internal', requireInternalAuth);
-```
-
-#### Pattern 3: JWT with Short Expiry - For Complex Auth
-
-```typescript
-// service-jwt.ts
-import jwt from 'jsonwebtoken';
-
-const SERVICE_JWT_SECRET = process.env.SERVICE_JWT_SECRET;
-
-interface ServiceToken {
-  service: string;
-  permissions: string[];
-  iat: number;
-  exp: number;
-}
-
-export function generateServiceToken(service: string, permissions: string[]): string {
-  return jwt.sign(
-    { service, permissions },
-    SERVICE_JWT_SECRET,
-    { expiresIn: '5m' } // Short expiry for service-to-service
-  );
-}
-
-export function verifyServiceToken(token: string): ServiceToken {
-  return jwt.verify(token, SERVICE_JWT_SECRET) as ServiceToken;
-}
-
-// Middleware
-export function requireServiceAuth(requiredPermission: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Bearer token required' });
-    }
-
-    try {
-      const token = authHeader.slice(7);
-      const payload = verifyServiceToken(token);
-
-      if (!payload.permissions.includes(requiredPermission)) {
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-
-      req.serviceId = payload.service;
-      next();
-    } catch (err) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-  };
-}
-```
-
-### Recommended Approach for LivOS
-
-| Service | Recommendation |
-|---------|----------------|
-| Memory (Cognee) | API Key + localhost binding |
-| Redis | Password + TLS in production |
-| Internal APIs | JWT with service identity |
-| Cross-host communication | mTLS |
-
-```typescript
-// Example: Securing memory service calls
-async function addMemory(content: string): Promise<void> {
-  await fetch('http://127.0.0.1:3300/add', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Internal-API-Key': process.env.MEMORY_SERVICE_KEY,
-    },
-    body: JSON.stringify({ content }),
-  });
-}
-```
-
-### Sources
-- [Securing Microservices: JWTs, API Keys, and Service-to-Service Authentication](https://developers-heaven.net/blog/securing-microservices-jwts-api-keys-and-service-to-service-authentication/)
-- [Building Secure Microservices with Node.js](https://industrywired.com/building-secure-microservices-with-node-js/)
-- [Solo.io: Using JWTs to Authenticate Services](https://www.solo.io/blog/jwts-authenticate-services-api-gateways)
-
----
-
-## 4. Rate Limiting for AI/LLM APIs
-
-### Problem Statement
-LivOS has no rate limiting on AI API calls and tool executions. A single user could exhaust API quotas or enable DoS attacks.
-
-### Algorithm Selection
-
-| Algorithm | Best For | Burst Handling |
-|-----------|----------|----------------|
-| Fixed Window | Simple APIs | Poor (boundary issues) |
-| Sliding Window | General APIs | Good |
-| Token Bucket | Burst-tolerant APIs | Excellent |
-| Leaky Bucket | Smooth rate enforcement | Good |
-
-**For LLM APIs: Token Bucket is recommended** because LLM workloads are bursty (users send multiple messages, then pause).
-
-### Implementation Patterns
-
-#### Pattern 1: Token Bucket with Redis (Distributed)
-
-```typescript
-// rate-limiter.ts
-import Redis from 'ioredis';
-
-interface RateLimitConfig {
-  bucketSize: number;      // Max tokens in bucket
-  refillRate: number;      // Tokens added per second
-  tokensPerRequest: number; // Tokens consumed per request
-}
-
-interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetAt: number;
-  retryAfter?: number;
-}
-
-export class TokenBucketLimiter {
-  constructor(
-    private redis: Redis,
-    private keyPrefix: string,
-    private config: RateLimitConfig
-  ) {}
-
-  async consume(identifier: string, tokens: number = this.config.tokensPerRequest): Promise<RateLimitResult> {
-    const key = `${this.keyPrefix}:${identifier}`;
-    const now = Date.now();
-
-    // Lua script for atomic token bucket operation
-    const script = `
-      local key = KEYS[1]
-      local bucket_size = tonumber(ARGV[1])
-      local refill_rate = tonumber(ARGV[2])
-      local requested = tonumber(ARGV[3])
-      local now = tonumber(ARGV[4])
-
-      local bucket = redis.call('HMGET', key, 'tokens', 'last_update')
-      local tokens = tonumber(bucket[1]) or bucket_size
-      local last_update = tonumber(bucket[2]) or now
-
-      -- Calculate refill
-      local elapsed = (now - last_update) / 1000
-      local refill = elapsed * refill_rate
-      tokens = math.min(bucket_size, tokens + refill)
-
-      if tokens >= requested then
-        tokens = tokens - requested
-        redis.call('HMSET', key, 'tokens', tokens, 'last_update', now)
-        redis.call('EXPIRE', key, 3600)
-        return {1, tokens, 0}
-      else
-        local wait_time = (requested - tokens) / refill_rate * 1000
-        return {0, tokens, wait_time}
-      end
-    `;
-
-    const result = await this.redis.eval(
-      script,
-      1,
-      key,
-      this.config.bucketSize,
-      this.config.refillRate,
-      tokens,
-      now
-    ) as [number, number, number];
-
-    const [allowed, remaining, waitTime] = result;
-
-    return {
-      allowed: allowed === 1,
-      remaining: Math.floor(remaining),
-      resetAt: now + (this.config.bucketSize - remaining) / this.config.refillRate * 1000,
-      retryAfter: allowed === 0 ? Math.ceil(waitTime / 1000) : undefined,
-    };
-  }
-}
-
-// Usage configurations for different tiers
-export const RATE_LIMIT_CONFIGS = {
-  // Free tier: 10 requests/minute, bucket of 15
-  free: {
-    bucketSize: 15,
-    refillRate: 10 / 60, // 10 per minute = 0.167 per second
-    tokensPerRequest: 1,
-  },
-  // Pro tier: 60 requests/minute, bucket of 100
-  pro: {
-    bucketSize: 100,
-    refillRate: 1, // 1 per second
-    tokensPerRequest: 1,
-  },
-  // Tool execution: stricter limits
-  toolExecution: {
-    bucketSize: 20,
-    refillRate: 0.5, // 30 per minute
-    tokensPerRequest: 1,
-  },
-  // Shell commands: very strict
-  shellExecution: {
-    bucketSize: 5,
-    refillRate: 0.1, // 6 per minute
-    tokensPerRequest: 1,
-  },
-};
-```
-
-#### Pattern 2: Express Middleware
-
-```typescript
-// rate-limit-middleware.ts
-import { TokenBucketLimiter, RATE_LIMIT_CONFIGS } from './rate-limiter';
-
-export function rateLimitMiddleware(
-  limiter: TokenBucketLimiter,
-  identifierFn: (req: Request) => string
-) {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    const identifier = identifierFn(req);
-    const result = await limiter.consume(identifier);
-
-    // Set rate limit headers
-    res.setHeader('X-RateLimit-Remaining', result.remaining);
-    res.setHeader('X-RateLimit-Reset', result.resetAt);
-
-    if (!result.allowed) {
-      res.setHeader('Retry-After', result.retryAfter!);
-      return res.status(429).json({
-        error: 'Rate limit exceeded',
-        retryAfter: result.retryAfter,
-      });
-    }
-
-    next();
-  };
-}
-
-// Usage
-const aiLimiter = new TokenBucketLimiter(redis, 'ratelimit:ai', RATE_LIMIT_CONFIGS.free);
-
-app.post('/api/chat',
-  rateLimitMiddleware(aiLimiter, (req) => req.user?.id || req.ip),
-  chatHandler
-);
-```
-
-#### Pattern 3: Adaptive Rate Limiting (Advanced)
-
-Adjust limits based on system health (p95 latency).
-
-```typescript
-// adaptive-limiter.ts
-export class AdaptiveRateLimiter {
-  private currentMultiplier = 1.0;
-  private latencyWindow: number[] = [];
-
-  constructor(
-    private baseLimiter: TokenBucketLimiter,
-    private targetP95Latency: number // e.g., 2000ms
-  ) {}
-
-  recordLatency(latencyMs: number): void {
-    this.latencyWindow.push(latencyMs);
-    if (this.latencyWindow.length > 100) {
-      this.latencyWindow.shift();
-    }
-    this.adjustMultiplier();
-  }
-
-  private adjustMultiplier(): void {
-    if (this.latencyWindow.length < 10) return;
-
-    const sorted = [...this.latencyWindow].sort((a, b) => a - b);
-    const p95Index = Math.floor(sorted.length * 0.95);
-    const p95 = sorted[p95Index];
-
-    if (p95 > this.targetP95Latency * 1.2) {
-      // System stressed, reduce rate
-      this.currentMultiplier = Math.max(0.5, this.currentMultiplier * 0.9);
-    } else if (p95 < this.targetP95Latency * 0.8) {
-      // System healthy, allow more
-      this.currentMultiplier = Math.min(1.5, this.currentMultiplier * 1.1);
+browser.domain {
+  reverse_proxy https://127.0.0.1:6901 {
+    transport http {
+      tls_insecure_skip_verify
     }
   }
-
-  async consume(identifier: string): Promise<RateLimitResult> {
-    const adjustedTokens = Math.ceil(1 / this.currentMultiplier);
-    return this.baseLimiter.consume(identifier, adjustedTokens);
-  }
 }
 ```
 
-### Recommended Limits for LivOS
+**Recommendation:** Proxy to the HTTP port (3000 mapped to host 6901). This avoids any need to modify the Caddy config generator. The existing `generateFullCaddyfile()` works as-is. Caddy's auto-HTTPS ensures the user-facing connection is encrypted.
 
-| Endpoint | Free Tier | Pro Tier |
-|----------|-----------|----------|
-| Chat messages | 10/min | 60/min |
-| Tool executions | 20/min | 100/min |
-| Shell commands | 5/min | 20/min |
-| File operations | 30/min | 200/min |
-| Memory queries | 20/min | 100/min |
+**WebSocket proxying:** Caddy v2 handles WebSocket upgrades automatically within `reverse_proxy`. No additional configuration is needed. The KasmVNC client initiates a WebSocket upgrade, and Caddy transparently proxies it.
 
-### Sources
-- [API Rate Limits Explained: Best Practices 2025](https://orq.ai/blog/api-rate-limit)
-- [From Token Bucket to Sliding Window](https://api7.ai/blog/rate-limiting-guide-algorithms-best-practices)
-- [Adaptive Rate Control with Token Buckets](https://medium.com/@2nick2patel2/node-js-adaptive-rate-control-token-buckets-tuned-by-p95-latency-1016a82a28f4)
-- [Rate Limiting for LLM APIs](https://apxml.com/courses/intro-llm-red-teaming/chapter-5-defenses-mitigation-strategies-llms/rate-limiting-access-controls-llm-apis)
+### 3.4 MCP Registration Hooks
 
----
+**hooks/post-start:**
+```bash
+#!/bin/bash
+# Register Playwright MCP server in Redis for Nexus
+# This makes browser automation tools available to the AI
 
-## 5. Security Headers and Authentication (Express)
+# Wait for Chromium CDP to be ready
+for i in $(seq 1 30); do
+  if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then
+    echo "Chromium CDP is ready"
+    break
+  fi
+  sleep 1
+done
 
-### Problem Statement
-Express applications need proper security headers and authentication middleware to prevent common web vulnerabilities.
+REDIS_CLI=$(which redis-cli 2>/dev/null || echo "/usr/bin/redis-cli")
 
-### Helmet.js Configuration
+# Read current MCP config
+CURRENT_CONFIG=$($REDIS_CLI GET "nexus:mcp:config")
+if [ -z "$CURRENT_CONFIG" ] || [ "$CURRENT_CONFIG" = "(nil)" ]; then
+  CURRENT_CONFIG='{"mcpServers":{}}'
+fi
 
-```typescript
-// security-headers.ts
-import helmet from 'helmet';
-import express from 'express';
+# Add playwright-browser MCP server entry
+UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg now "$(date +%s)" '.mcpServers["playwright-browser"] = {
+  "name": "playwright-browser",
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@playwright/mcp", "--cdp-endpoint", "ws://127.0.0.1:9222"],
+  "enabled": true,
+  "description": "Browser automation via Playwright (connected to persistent Chromium)",
+  "installedFrom": "chromium-app",
+  "installedAt": ($now | tonumber)
+}')
 
-const app = express();
+$REDIS_CLI SET "nexus:mcp:config" "$UPDATED_CONFIG"
+$REDIS_CLI PUBLISH "nexus:config:updated" "mcp_config"
 
-// Apply all default security headers
-app.use(helmet());
-
-// Or configure individually
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"], // Adjust for your CSS needs
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'wss:', 'https://api.anthropic.com'], // API endpoints
-        frameSrc: ["'none'"],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-    },
-    crossOriginEmbedderPolicy: true,
-    crossOriginOpenerPolicy: { policy: 'same-origin' },
-    crossOriginResourcePolicy: { policy: 'same-origin' },
-    dnsPrefetchControl: { allow: false },
-    frameguard: { action: 'deny' },
-    hsts: {
-      maxAge: 31536000, // 1 year
-      includeSubDomains: true,
-      preload: true,
-    },
-    ieNoOpen: true,
-    noSniff: true,
-    originAgentCluster: true,
-    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
-    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    xssFilter: true,
-  })
-);
-
-// Remove X-Powered-By (helmet does this by default)
-app.disable('x-powered-by');
+echo "Playwright MCP server registered"
 ```
 
-### Headers Set by Helmet (Default)
+**hooks/pre-stop:**
+```bash
+#!/bin/bash
+# Deregister Playwright MCP server from Redis
+REDIS_CLI=$(which redis-cli 2>/dev/null || echo "/usr/bin/redis-cli")
 
-| Header | Purpose |
-|--------|---------|
-| Content-Security-Policy | Prevent XSS and injection |
-| Cross-Origin-Opener-Policy | Process isolation |
-| Cross-Origin-Resource-Policy | Block cross-origin loading |
-| Origin-Agent-Cluster | Origin-based process isolation |
-| Strict-Transport-Security | Enforce HTTPS |
-| X-Content-Type-Options | Prevent MIME sniffing |
-| X-DNS-Prefetch-Control | Control DNS prefetching |
-| X-Download-Options | Prevent file downloads in IE |
-| X-Frame-Options | Prevent clickjacking |
-| X-Permitted-Cross-Domain-Policies | Restrict Adobe Flash/PDF |
-| X-XSS-Protection | Enable browser XSS filter |
+CURRENT_CONFIG=$($REDIS_CLI GET "nexus:mcp:config")
+if [ -z "$CURRENT_CONFIG" ] || [ "$CURRENT_CONFIG" = "(nil)" ]; then
+  exit 0
+fi
 
-### Authentication Middleware
+UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq 'del(.mcpServers["playwright-browser"])')
 
-```typescript
-// auth-middleware.ts
-import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
+$REDIS_CLI SET "nexus:mcp:config" "$UPDATED_CONFIG"
+$REDIS_CLI PUBLISH "nexus:config:updated" "mcp_config"
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    tier: 'free' | 'pro' | 'admin';
-  };
-}
-
-// JWT Authentication
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authorization header required' });
-  }
-
-  const token = authHeader.slice(7);
-
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthenticatedRequest['user'];
-    req.user = payload;
-    next();
-  } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ error: 'Token expired' });
-    }
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
-
-// Role-based access control
-export function requireRole(...allowedRoles: string[]) {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    if (!allowedRoles.includes(req.user.tier)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    next();
-  };
-}
-
-// Usage
-app.get('/api/admin/users', requireAuth, requireRole('admin'), adminUsersHandler);
-app.post('/api/chat', requireAuth, chatHandler);
+echo "Playwright MCP server deregistered"
 ```
 
-### Cookie Security
+**Recommendation:** Use the hooks approach. It follows the existing pattern, keeps the browser app self-contained, and does not require changes to livinityd core code. The CDP endpoint uses `ws://127.0.0.1:9222` because port 9222 is mapped from the container to the host, and npx runs on the host where 127.0.0.1 resolves correctly.
 
-```typescript
-// session-config.ts
-import session from 'express-session';
-import RedisStore from 'connect-redis';
+### 3.5 Proxy Container Architecture
 
-app.use(
-  session({
-    store: new RedisStore({ client: redis }),
-    secret: process.env.SESSION_SECRET!,
-    name: 'livos.sid', // Custom name (not default 'connect.sid')
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production', // HTTPS only
-      httpOnly: true,    // Not accessible via JavaScript
-      sameSite: 'strict', // CSRF protection
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  })
-);
+For SOCKS5/HTTP proxy support, two options:
+
+**Option A: Companion service in docker-compose.yml (recommended)**
+```yaml
+proxy:
+  image: wernight/dante:latest
+  container_name: chromium_proxy_1
+  restart: unless-stopped
+```
+Chromium is configured to use `proxy:1080` as SOCKS5 proxy via `CHROME_CLI` flags:
+```
+--proxy-server=socks5://proxy:1080
 ```
 
-### CORS Configuration
+**Option B: Separate toggleable service**
+The proxy runs alongside but is only connected when the user enables it. This requires a tRPC endpoint to toggle proxy on/off by modifying the Chromium container's `CHROME_CLI` env and restarting.
 
-```typescript
-// cors-config.ts
-import cors from 'cors';
+**Recommendation:** Option A for initial implementation. The proxy container always runs but is lightweight (microsocks is <2MB). Making it toggleable is a Phase 2 enhancement.
 
-const ALLOWED_ORIGINS = [
-  'https://livos.local',
-  'https://dashboard.livos.local',
-];
+## 4. Integration Points Summary
 
-if (process.env.NODE_ENV === 'development') {
-  ALLOWED_ORIGINS.push('http://localhost:3000', 'http://localhost:5173');
-}
+| Integration Point | Component | What Changes | Confidence |
+|---|---|---|---|
+| App Store catalog | `builtin-apps.ts` | Already has chromium entry, port value should match host-mapped port (6901) | HIGH |
+| App template | Gallery repo | New directory: docker-compose.yml, livinity-app.yml, hooks/ | HIGH |
+| Docker Compose | livinityd `app.ts` | No changes needed, existing flow handles multi-service compose | HIGH |
+| Caddy reverse proxy | `caddy.ts` | No changes needed if proxying to HTTP port 3000 (Caddy auto-handles WebSocket) | HIGH |
+| MCP registration | hooks/post-start | New hook script, uses existing Redis pub/sub pattern | HIGH |
+| MCP deregistration | hooks/pre-stop | New hook script, mirrors post-start | HIGH |
+| Frontend launch | `use-launch-app.ts` | No changes, existing window.open() to subdomain works | HIGH |
+| Frontend display | `routes.ts` | No changes, existing app list includes subdomain field | HIGH |
+| Docker network | `docker-compose.common.yml` | No changes, browser joins livinity_main_network automatically | HIGH |
+| Port mapping | `app.ts` patchComposeFile | May need attention: internal port detection for LSIO Chromium | MEDIUM |
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman)
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS policy violation'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['X-RateLimit-Remaining', 'X-RateLimit-Reset'],
-  })
-);
+## 5. Data Flow
+
+### 5.1 Normal Usage (User browsing)
+
+```
+User Browser Tab
+  |
+  | HTTPS request to browser.example.com
+  v
+Caddy (auto-TLS, Let's Encrypt)
+  |
+  | reverse_proxy 127.0.0.1:6901
+  | (WebSocket upgrades handled automatically)
+  v
+Chromium Container (KasmVNC HTTP on :3000 mapped to host :6901)
+  |
+  | KasmVNC renders Chromium desktop via WebSocket + WebRTC
+  v
+User sees Chromium browser in their browser tab
+  |
+  | (Optional) Chromium routes traffic through proxy container
+  v
+Proxy Container (SOCKS5 :1080) -> Internet
 ```
 
-### Sources
-- [Express.js Security Best Practices](https://expressjs.com/en/advanced/best-practice-security.html)
-- [Helmet.js Documentation](https://helmetjs.github.io/)
-- [Beginner's Guide to Helmet.js](https://dev.to/abhishekjaiswal_4896/a-beginners-guide-to-helmetjs-protect-your-nodejs-apps-4p2c)
-- [Securing Express Apps with Helmet](https://www.veracode.com/blog/secure-development/fasten-your-helmetjs-part-1-securing-your-express-http-headers)
+### 5.2 AI Automation (Playwright MCP)
 
----
-
-## 6. Allowlist vs Blocklist for Command Execution
-
-### Problem Statement
-LivOS uses a blocklist approach for shell command restrictions. This is fundamentally flawed because attackers can always find bypass techniques.
-
-### Why Blocklists Fail
-
-| Blocklist Entry | Bypass Technique |
-|-----------------|------------------|
-| `rm -rf /` | `rm -r /`, `find / -delete` |
-| `curl` | `wget`, `python -c "import urllib..."` |
-| `nc` | `bash -i >& /dev/tcp/...`, `python -c "import socket..."` |
-| `;` | `$(cmd)`, `` `cmd` ``, `\n` |
-
-**You cannot enumerate all dangerous patterns. Allowlists define what IS permitted.**
-
-### Allowlist Implementation
-
-#### Existing Example (from `mcp-client-manager.ts`)
-
-The archived code already implements a good pattern:
-
-```typescript
-// From _archive/security-hardening/mcp-client-manager.ts
-const ALLOWED_COMMANDS = new Set([
-  'npx', 'node', 'python', 'python3', 'uvx', 'docker', 'deno', 'bun',
-]);
-
-private validateCommand(command: string): void {
-  const base = command.split('/').pop() || command;
-  if (!ALLOWED_COMMANDS.has(base)) {
-    throw new Error(
-      `Command "${command}" is not allowed. Allowed commands: ${Array.from(ALLOWED_COMMANDS).join(', ')}`,
-    );
-  }
-}
+```
+User sends chat message: "Go to example.com and click the login button"
+  |
+  v
+Nexus AI Daemon (Gemini API)
+  |
+  | Selects tool: mcp_playwright-browser_navigate (or similar)
+  v
+McpClientManager
+  |
+  | stdio transport: npx -y @playwright/mcp --cdp-endpoint ws://127.0.0.1:9222
+  v
+Playwright MCP Server (running on host via npx, spawned by McpClientManager)
+  |
+  | Chrome DevTools Protocol (CDP) over WebSocket
+  v
+Chromium Container (:9222 remote debugging, mapped to host)
+  |
+  | Playwright executes actions on the live browser
+  v
+User sees changes reflected in KasmVNC viewer in real-time
 ```
 
-#### Enhanced Allowlist Pattern
+### 5.3 Session Persistence
 
-```typescript
-// command-allowlist.ts
-
-interface AllowedCommand {
-  /** The binary name (without path) */
-  name: string;
-  /** Full path to verify (prevents PATH hijacking) */
-  path: string;
-  /** Allowed subcommands (first positional arg) */
-  allowedSubcommands?: string[];
-  /** Forbidden flags that should never be passed */
-  forbiddenFlags?: string[];
-  /** Whether this command can accept arbitrary file paths */
-  allowsFilePaths: boolean;
-  /** Regex patterns for allowed arguments */
-  argPatterns?: RegExp[];
-}
-
-const COMMAND_ALLOWLIST: AllowedCommand[] = [
-  {
-    name: 'docker',
-    path: '/usr/bin/docker',
-    allowedSubcommands: ['ps', 'logs', 'inspect', 'stats', 'images'],
-    forbiddenFlags: ['--privileged', '-v', '--volume', 'exec', 'run', 'rm', 'rmi'],
-    allowsFilePaths: false,
-  },
-  {
-    name: 'pm2',
-    path: '/usr/local/bin/pm2',
-    allowedSubcommands: ['list', 'status', 'logs', 'describe', 'monit'],
-    forbiddenFlags: ['delete', 'kill', 'flush', 'update'],
-    allowsFilePaths: false,
-  },
-  {
-    name: 'ls',
-    path: '/bin/ls',
-    allowsFilePaths: true,
-    argPatterns: [/^-[lahtrS]+$/, /^\/opt\/livos\/.+$/], // Only livos paths
-  },
-  {
-    name: 'cat',
-    path: '/bin/cat',
-    allowsFilePaths: true,
-    argPatterns: [/^\/opt\/livos\/logs\/.+\.log$/], // Only log files
-  },
-  {
-    name: 'tail',
-    path: '/usr/bin/tail',
-    allowsFilePaths: true,
-    argPatterns: [/^-[nf]$/, /^\d+$/, /^\/opt\/livos\/logs\/.+\.log$/],
-  },
-  {
-    name: 'systemctl',
-    path: '/usr/bin/systemctl',
-    allowedSubcommands: ['status', 'is-active', 'list-units'],
-    forbiddenFlags: ['start', 'stop', 'restart', 'enable', 'disable', 'daemon-reload'],
-    allowsFilePaths: false,
-  },
-];
-
-export class CommandValidator {
-  private allowlistMap: Map<string, AllowedCommand>;
-
-  constructor() {
-    this.allowlistMap = new Map(
-      COMMAND_ALLOWLIST.map(cmd => [cmd.name, cmd])
-    );
-  }
-
-  validate(command: string, args: string[]): { valid: boolean; error?: string } {
-    // Extract command name from potential path
-    const cmdName = command.split('/').pop() || command;
-
-    // 1. Check if command is in allowlist
-    const allowed = this.allowlistMap.get(cmdName);
-    if (!allowed) {
-      return {
-        valid: false,
-        error: `Command "${cmdName}" is not in the allowlist. Allowed: ${[...this.allowlistMap.keys()].join(', ')}`,
-      };
-    }
-
-    // 2. Verify full path matches (prevents PATH hijacking)
-    if (command.includes('/') && command !== allowed.path) {
-      return {
-        valid: false,
-        error: `Command path "${command}" does not match expected path "${allowed.path}"`,
-      };
-    }
-
-    // 3. Check subcommand (first arg) if restricted
-    if (allowed.allowedSubcommands && args.length > 0) {
-      const subcommand = args[0];
-      if (!allowed.allowedSubcommands.includes(subcommand)) {
-        return {
-          valid: false,
-          error: `Subcommand "${subcommand}" is not allowed for ${cmdName}. Allowed: ${allowed.allowedSubcommands.join(', ')}`,
-        };
-      }
-    }
-
-    // 4. Check for forbidden flags
-    if (allowed.forbiddenFlags) {
-      for (const arg of args) {
-        if (allowed.forbiddenFlags.includes(arg)) {
-          return {
-            valid: false,
-            error: `Flag "${arg}" is forbidden for ${cmdName}`,
-          };
-        }
-      }
-    }
-
-    // 5. Validate argument patterns
-    if (allowed.argPatterns) {
-      for (const arg of args) {
-        const matchesPattern = allowed.argPatterns.some(p => p.test(arg));
-        if (!matchesPattern) {
-          return {
-            valid: false,
-            error: `Argument "${arg}" does not match allowed patterns for ${cmdName}`,
-          };
-        }
-      }
-    }
-
-    // 6. If command doesn't allow file paths, ensure no path-like args
-    if (!allowed.allowsFilePaths) {
-      for (const arg of args) {
-        if (arg.includes('/') && !arg.startsWith('-')) {
-          return {
-            valid: false,
-            error: `File paths are not allowed for ${cmdName}`,
-          };
-        }
-      }
-    }
-
-    return { valid: true };
-  }
-}
+```
+Chromium Container
+  |
+  | /config volume mounted to host: ${dataDirectory}/app-data/chromium/data/config
+  v
+Host Filesystem
+  |
+  | Contains: browser profile, cookies, localStorage, bookmarks, extensions
+  | Persists across: container restarts, app stops/starts, system reboots
+  | Backed up by: LivOS backup system (Kopia)
+  v
+User sessions survive indefinitely
 ```
 
-### File Path Restrictions
+## 6. Patterns to Follow
 
-```typescript
-// path-validator.ts
+### Pattern 1: Multi-Service App with Hooks
 
-const ALLOWED_PATH_PREFIXES = [
-  '/opt/livos/',
-  '/tmp/',
-  '/var/log/livos/',
-];
+The browser app should follow the established LivOS pattern where:
+- `docker-compose.yml` defines all services
+- `hooks/post-start` runs after all containers are up
+- `hooks/pre-stop` runs before containers are stopped
+- The first non-proxy service is detected as the "main" service by `patchComposeFile()`
 
-const FORBIDDEN_PATHS = [
-  '/etc/shadow',
-  '/etc/passwd',
-  '/etc/sudoers',
-  '/root/',
-  '/.ssh/',
-  '/.env',
-  '/proc/',
-  '/sys/',
-  '/dev/',
-  '../', // Path traversal
-];
+### Pattern 2: Redis Pub/Sub for Dynamic Config
 
-export function validatePath(path: string): { valid: boolean; error?: string } {
-  // Normalize path to prevent traversal
-  const normalized = path.replace(/\/+/g, '/');
+MCP registration via Redis follows the established Nexus pattern:
+- Write config to `nexus:mcp:config` key
+- Publish `mcp_config` to `nexus:config:updated` channel
+- McpClientManager.reconcile() auto-detects changes
 
-  // Check for traversal attempts
-  if (normalized.includes('..')) {
-    return { valid: false, error: 'Path traversal detected' };
-  }
+### Pattern 3: Caddy Subdomain Auto-Registration
 
-  // Check forbidden paths
-  for (const forbidden of FORBIDDEN_PATHS) {
-    if (normalized.includes(forbidden)) {
-      return { valid: false, error: `Access to "${forbidden}" is forbidden` };
-    }
-  }
+After install, `registerAppSubdomain()` automatically:
+- Creates SubdomainConfig entry
+- Rebuilds full Caddyfile
+- Reloads Caddy (zero-downtime)
 
-  // Check allowed prefixes
-  const hasAllowedPrefix = ALLOWED_PATH_PREFIXES.some(prefix =>
-    normalized.startsWith(prefix)
-  );
+## 7. Anti-Patterns to Avoid
 
-  if (!hasAllowedPrefix) {
-    return {
-      valid: false,
-      error: `Path must start with one of: ${ALLOWED_PATH_PREFIXES.join(', ')}`,
-    };
-  }
+### Anti-Pattern 1: Iframe Embedding
 
-  return { valid: true };
-}
-```
+Do NOT embed KasmVNC in an iframe within the LivOS window system. Reasons:
+- LivOS explicitly blocks iframe embedding (IframeChecker component)
+- KasmVNC requires HTTPS and specific security headers
+- Cross-origin iframe restrictions break clipboard, keyboard, and mouse capture
+- Performance overhead of nested browsing contexts
+- The existing app launch pattern (window.open to subdomain) works perfectly
 
-### Migration from Blocklist to Allowlist
+### Anti-Pattern 2: Custom Install Flow
 
-```typescript
-// BEFORE (blocklist - dangerous)
-const BLOCKED_COMMANDS = ['rm', 'mkfs', 'dd', 'shutdown'];
+Do NOT create a separate install mechanism for the browser app. The existing flow (gallery template -> rsync -> docker compose up -> hooks) handles everything. The `BuiltinAppManifest` in `builtin-apps.ts` is for catalog display only.
 
-function isCommandAllowed(cmd: string): boolean {
-  return !BLOCKED_COMMANDS.some(blocked => cmd.includes(blocked));
-}
+### Anti-Pattern 3: Modifying SSRF Protection
 
-// AFTER (allowlist - secure)
-const ALLOWED_COMMANDS = new Set(['ls', 'cat', 'docker', 'pm2', 'tail']);
+Do NOT weaken the SSRF protection in McpClientManager to allow localhost/private IPs for the streamableHttp transport. Use stdio transport instead, which avoids the issue entirely and requires zero changes to existing security code.
 
-function isCommandAllowed(cmd: string): boolean {
-  const cmdName = cmd.split(/\s+/)[0].split('/').pop();
-  return ALLOWED_COMMANDS.has(cmdName);
-}
-```
+### Anti-Pattern 4: Hardcoding Browser-Specific Logic in livinityd
 
-### Sources
-- [Node.js Permissions Model](https://nodejs.org/api/permissions.html)
-- [Secure JavaScript Coding Practices Against Command Injection](https://www.nodejs-security.com/blog/secure-javascript-coding-practices-against-command-injection-vulnerabilities)
-- [OWASP NPM Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/NPM_Security_Cheat_Sheet.html)
-- [Content Security Policy for Node.js](https://www.digitalocean.com/community/tutorials/how-to-secure-node-js-applications-with-a-content-security-policy)
+Do NOT add browser-specific code paths in `apps.ts`, `app.ts`, or `caddy.ts`. Keep the browser app self-contained in its template directory. The existing app lifecycle handles everything generically.
 
----
+## 8. Component Boundaries
 
-## Summary: Prioritized Actions for LivOS
+| Component | Responsibility | Communicates With |
+|---|---|---|
+| Browser App Template | Docker Compose definition, hooks, manifest | livinityd (via template files) |
+| Chromium Container | Runs browser, exposes KasmVNC + CDP | Caddy (KasmVNC port), Playwright MCP (CDP port), Proxy (SOCKS5) |
+| Proxy Container | SOCKS5/HTTP proxy for Chromium traffic | Chromium (via Docker DNS), Internet |
+| Playwright MCP (stdio) | Browser automation tools for AI | Nexus (stdio transport), Chromium (CDP WebSocket via host-mapped port) |
+| caddy.ts | Caddyfile generation | Caddy process (reload). No changes needed for basic HTTP backend. |
+| hooks/post-start | MCP registration in Redis | Redis (nexus:mcp:config key, nexus:config:updated channel) |
+| hooks/pre-stop | MCP deregistration from Redis | Redis (nexus:mcp:config key, nexus:config:updated channel) |
+| builtin-apps.ts | App store catalog entry | Frontend (display only) |
 
-### Immediate (Critical)
+## 9. Suggested Build Order
 
-1. **Rotate all exposed secrets** - JWT_SECRET, API keys in `.env`
-2. **Add `.env` to `.gitignore`** - prevent future commits
-3. **Replace shell blocklist with allowlist** - in `livos/packages/livcoreai/src/shell.ts`
-4. **Add authentication to internal services** - Memory service at localhost:3300
+Based on dependency analysis of the existing architecture:
 
-### Short-term (1-2 weeks)
+### Phase 1: Core Browser Container
+**Build first because:** Everything else depends on a working Chromium container.
+1. Create app template directory structure (livinity-app.yml, docker-compose.yml)
+2. Configure LinuxServer Chromium with correct env vars, volume mounts, and port mappings
+3. Add `shm_size: "2gb"` to prevent Chromium OOM crashes
+4. Get `docker compose up` working manually
+5. Verify KasmVNC is accessible on the mapped host port
+6. Verify session persistence (cookies survive container restart)
 
-5. **Implement rate limiting** - Token bucket for AI endpoints
-6. **Add Helmet.js** - Security headers for Express
-7. **Implement service-to-service auth** - API keys for internal communication
-8. **Add argument validation** - Regex patterns for allowed command arguments
+### Phase 2: Caddy Integration + App Store
+**Build second because:** Without reverse proxy, the browser is only accessible via IP:port.
+1. Add chromium template to the gallery repo so `getAppTemplateFilePath()` can find it
+2. Test full install flow: click Install -> rsync -> docker compose up -> Caddy registered
+3. Verify subdomain access: browser.domain.com -> KasmVNC
+4. Verify WebSocket proxying works through Caddy (KasmVNC viewer loads and is interactive)
+5. Verify uninstall flow: docker compose down -> Caddy deregistered -> data removed
+6. Update builtin-apps.ts catalog entry if port/config changed from current values
 
-### Medium-term (1 month)
+### Phase 3: MCP + Playwright Integration
+**Build third because:** AI automation is additive, not blocking.
+1. Create hooks/post-start script for MCP registration via Redis
+2. Create hooks/pre-stop script for MCP deregistration via Redis
+3. Map CDP port 9222 from container to host
+4. Test: install browser -> Nexus auto-discovers Playwright tools via McpClientManager.reconcile()
+5. Test: AI can navigate, click, type via Playwright MCP tools through stdio transport
+6. Verify CDP connection: `npx @playwright/mcp --cdp-endpoint ws://127.0.0.1:9222` works from host
 
-9. **Integrate secrets manager** - HashiCorp Vault or Doppler
-10. **Container sandboxing** - Docker isolation for shell commands
-11. **Add adaptive rate limiting** - Based on p95 latency
-12. **Implement mTLS** - For cross-host service communication
+### Phase 4: Proxy Support
+**Build last because:** Optional feature, not required for core functionality.
+1. Add proxy container (microsocks or dante) to docker-compose.yml
+2. Configure Chromium to route traffic through proxy via `--proxy-server` flag in CHROME_CLI
+3. Test: Chromium traffic routes through SOCKS5 proxy (verify external IP changes)
+4. (Future) Add tRPC endpoint to toggle proxy on/off by restarting with modified CHROME_CLI
 
-### Long-term (3+ months)
+## 10. patchComposeFile() Interaction
 
-13. **Security audit** - OWASP ZAP, penetration testing
-14. **Automated secret rotation** - Vault dynamic secrets
-15. **Zero-trust architecture** - Authenticate every request
-16. **Compliance review** - SOC2, GDPR as needed
+The `patchComposeFile()` method in `app.ts` does several things that affect the browser app:
+
+1. **Removes `app_proxy` service** -- Not present in browser compose, no issue.
+2. **Detects main service** -- Looks for service named `server`, `app`, or `web`, falls back to first service. The browser compose should name its main service `browser` or `app` to be detected correctly. Since none of the expected names match, it will fall back to the first service (`browser`), which is correct.
+3. **Port mapping** -- Detects internal port from existing port mappings, expose directives, or a hardcoded lookup table. The browser service has explicit port mapping (`6901:3000`), so `patchComposeFile()` will detect internal port 3000 from the `ports` array. It will then add `6901:3000` mapping (which is already present, so it may duplicate -- this needs testing).
+4. **Container naming** -- Forces `container_name` to `${appId}_${serviceName}_1` format. If we set `container_name: chromium_browser_1` explicitly, this step is skipped. The hook scripts reference the container by name, so the explicit name is important.
+5. **Volume migration** -- Replaces old storage paths. Not relevant for browser app.
+
+**Key risk:** The port duplication in step 3. The browser compose already has `ports: ["6901:3000"]`, and `patchComposeFile()` may add another `6901:3000` entry. This needs testing. If it causes issues, either:
+- Set the port in `livinity-app.yml` manifest to match the host port (6901) and let patchComposeFile handle it
+- Or ensure the existing port mapping format is recognized by the deduplication logic
+
+## 11. Scalability Considerations
+
+| Concern | Single User | Multiple Users (future) |
+|---|---|---|
+| Memory | ~500MB-1GB per Chromium instance | Need per-user containers |
+| Storage | /config volume grows with browser data | Per-user volumes |
+| Network | Single proxy container sufficient | Per-user proxy containers |
+| Ports | One host port per service (6901, 9222) | Dynamic port allocation needed |
+| MCP | One Playwright MCP connection per Chromium | Multiple CDP endpoints |
+
+For the current single-user LivOS deployment, these are non-issues. The architecture supports a single persistent browser instance per LivOS installation.
+
+## 12. Risk Areas Requiring Deeper Research
+
+| Risk | Phase | Why |
+|---|---|---|
+| patchComposeFile port duplication | Phase 1 | Existing port mapping in compose may conflict with auto-added mapping |
+| Playwright MCP stdio + CDP via host port | Phase 3 | npx runs on host, CDP target is localhost:9222 (host-mapped) -- should work but needs verification |
+| `shm_size` support in compose flow | Phase 1 | Chromium crashes without sufficient shared memory; verify docker-compose `shm_size` works through the app-script flow |
+| hooks/ execution context | Phase 3 | Hooks run via bash -- need to verify `redis-cli` and `jq` are available on the LivOS host |
+| KasmVNC clipboard/keyboard through Caddy | Phase 2 | Full functionality requires HTTPS; Caddy provides this, but WebRTC/WebCodecs may need specific headers |
+| LinuxServer Chromium anti-detection | Phase 1 | `--disable-blink-features=AutomationControlled` flag effectiveness with KasmVNC overlay |
+
+## Sources
+
+- Direct codebase analysis: `builtin-apps.ts`, `caddy.ts`, `apps.ts`, `app.ts`, `app-script`, `mcp-client-manager.ts`, `mcp-config-manager.ts`, `mcp-types.ts`, `use-launch-app.ts`, `window-manager.tsx`, `iframe-checker.tsx`, `misc.ts`
+- [LinuxServer Chromium Docker documentation](https://docs.linuxserver.io/images/docker-chromium/) -- Ports are 3000/3001, not 6901
+- [Kasm Reverse Proxy documentation](https://www.kasmweb.com/docs/develop/how_to/reverse_proxy.html)
+- [Caddy reverse_proxy directive](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) -- WebSocket support is automatic in v2
+- [Playwright MCP Server (Microsoft)](https://github.com/microsoft/playwright-mcp) -- `--cdp-endpoint` flag for connecting to existing browsers
+- [Caddy Community: Kasm WebSocket config](https://caddy.community/t/caddyfile-config-for-kasm-websocket/20516)
+- [wernight/dante Docker SOCKS5 proxy](https://github.com/wernight/docker-dante)
