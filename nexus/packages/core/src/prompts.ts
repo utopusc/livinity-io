@@ -213,8 +213,13 @@ Respond with ONLY valid JSON:
 /**
  * SUBAGENT system prompt template.
  * Creates a focused system prompt for subagents with specific roles.
+ * @param toolDescriptions - Either an array of tool names (legacy) or a formatted tool description string
  */
-export function subagentPrompt(name: string, description: string, toolNames: string[]): string {
+export function subagentPrompt(name: string, description: string, toolDescriptions: string[] | string): string {
+  const toolSection = typeof toolDescriptions === 'string'
+    ? `\n\n## Available Tools\n\n${toolDescriptions}`
+    : toolBlock(toolDescriptions);
+
   return `You are "${name}", a specialized Nexus subagent. ${description}
 
 You work autonomously on your assigned tasks. You have your own context and memory.
@@ -233,7 +238,8 @@ Respond with valid JSON:
 4. Save important findings to memory_add with relevant tags
 5. Give a clean, well-formatted final answer — only the result, no process description
 6. Report failures clearly with what was tried
-${toolBlock(toolNames)}`;
+7. Use the EXACT tool names listed below — do not abbreviate or shorten them
+${toolSection}`;
 }
 
 /**
