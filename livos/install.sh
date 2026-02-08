@@ -417,6 +417,13 @@ SSHCONF
             warn "Add your SSH key and re-run to disable password auth"
         fi
 
+        # Neutralize cloud-init SSH overrides that conflict with our hardening
+        local cloud_init="/etc/ssh/sshd_config.d/50-cloud-init.conf"
+        if [[ -f "$cloud_init" ]] && grep -q "PasswordAuthentication" "$cloud_init" 2>/dev/null; then
+            echo "# Disabled by LivOS — see 99-livos-hardening.conf" > "$cloud_init"
+            info "Neutralized cloud-init SSH override"
+        fi
+
         # Validate before applying — prevent lockout
         if sshd -t 2>/dev/null; then
             systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true
