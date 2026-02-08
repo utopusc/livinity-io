@@ -2244,7 +2244,7 @@ ${task}`;
       toolRegistry: scopedRegistry,
       nexusConfig: this.getNexusConfig(), // Include config for retry settings
       maxTurns: config.maxTurns,
-      maxTokens: 150_000,
+      maxTokens: 300_000,
       timeoutMs: 600_000,
       tier: config.tier,
       systemPromptOverride: systemPrompt,
