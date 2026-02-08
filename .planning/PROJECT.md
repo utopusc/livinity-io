@@ -43,13 +43,12 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 **Target features:**
 - [ ] Custom Docker image (linuxserver/chromium + Node.js + Playwright MCP)
-- [ ] KasmVNC web viewer accessible via subdomain with password auth
+- [ ] Access via subdomain (browser.domain.com) — no LivOS UI embedding needed
 - [ ] Persistent browser sessions that survive container restarts
 - [ ] Playwright MCP auto-registration for AI browser control
 - [ ] SOCKS5/HTTP proxy configuration for privacy/geo-unblocking
 - [ ] Anti-detection flags to prevent automation fingerprinting
 - [ ] App Store integration (gallery manifest + builtin featured listing)
-- [ ] Frontend browser viewer component in LivOS window system
 - [ ] Crash recovery with stale lock file cleanup
 
 ### Out of Scope

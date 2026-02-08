@@ -22,7 +22,7 @@ Last activity: 2026-02-08 — Milestone v1.3 started
 
 v1.3 decisions:
 - [Milestone]: Browser published as App Store app (not hardcoded into UI)
-- [Milestone]: KasmVNC for web-based browser access via iframe/window
+- [Milestone]: Access via subdomain (browser.domain.com) — no iframe/window embedding in LivOS UI
 - [Milestone]: Playwright MCP for AI browser automation
 - [Milestone]: SOCKS5/HTTP proxy support for privacy
 - [Milestone]: Custom Docker image extending linuxserver/chromium
