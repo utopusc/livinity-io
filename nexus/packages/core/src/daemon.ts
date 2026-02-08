@@ -2228,8 +2228,8 @@ ${task}`;
     }
 
     const systemPrompt = config.systemPrompt
-      ? subagentPrompt(config.name, config.systemPrompt, scopedRegistry.list())
-      : subagentPrompt(config.name, config.description, scopedRegistry.list());
+      ? subagentPrompt(config.name, config.systemPrompt, scopedRegistry.listForPrompt())
+      : subagentPrompt(config.name, config.description, scopedRegistry.listForPrompt());
 
     let contextPrefix = '';
     if (history) {
