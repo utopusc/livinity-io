@@ -147,6 +147,7 @@ export default class App {
 				if (!internalPort) {
 					// Common patterns: code-server=8080, vikunja=3456, most apps=8080 or 3000
 					const commonPorts: Record<string, number> = {
+						'chromium': 3000,
 						'code-server': 8080,
 						'vikunja': 3456,
 						'nextcloud': 80,
