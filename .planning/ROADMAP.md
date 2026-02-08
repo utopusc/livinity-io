@@ -301,8 +301,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 **Plans**: 2 plans in 1 wave
 
 Plans:
-- [ ] 01-01-PLAN.md — Gallery template (Dockerfile, docker-compose.yml, livinity-app.yml, clean-singletonlock.sh)
-- [ ] 01-02-PLAN.md — builtin-apps.ts entry + verify install flow works
+- [ ] v1.3-01-01-PLAN.md — Gallery template (Dockerfile, docker-compose.yml, livinity-app.yml, clean-singletonlock.sh)
+- [ ] v1.3-01-02-PLAN.md — builtin-apps.ts entry + verify install flow works
 
 ### Phase 2: MCP Integration
 **Goal**: Enable AI agent to control the browser via Playwright MCP with auto-registration lifecycle
@@ -314,11 +314,11 @@ Plans:
   3. AI agent can navigate to URLs via MCP tools
   4. AI agent can click, type, and take screenshots via MCP tools
   5. CDP port 9222 is internal only (not exposed to host network)
-**Plans**: 2 plans in 1 wave
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 02-01-PLAN.md — hooks/post-start and hooks/pre-stop for MCP registration via Redis
-- [ ] 02-02-PLAN.md — Verify Playwright MCP connection to CDP and AI agent control
+- [ ] v1.3-02-01-PLAN.md — Update hooks for MCP registration/deregistration via Redis + verify CDP security
+- [ ] v1.3-02-02-PLAN.md — Verify Playwright MCP connection, tool discovery, and AI agent browser control
 
 ### Phase 3: Proxy & Anti-Detection
 **Goal**: Add SOCKS5/HTTP proxy support and anti-detection flags for privacy and automation
