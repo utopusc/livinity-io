@@ -632,7 +632,7 @@ function AiConfigSection() {
 															variant='primary'
 															size='sm'
 															onClick={() => submitCodeMutation.mutate({code: loginCode.trim()})}
-															disabled={\!loginCode.trim() || submitCodeMutation.isPending}
+															disabled={!loginCode.trim() || submitCodeMutation.isPending}
 														>
 															{submitCodeMutation.isPending ? (
 																<TbLoader2 className='h-4 w-4 animate-spin' />
