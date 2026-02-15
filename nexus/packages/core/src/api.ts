@@ -14,6 +14,7 @@ import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
 import { AppManager, createAppRoutes } from './modules/apps/index.js';
 import type { ChannelManager, ChannelId, ChannelConfig } from './channels/index.js';
+import type { ApprovalManager } from './approval-manager.js';
 import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 
@@ -26,6 +27,7 @@ interface ApiDeps {
   mcpRegistryClient?: McpRegistryClient;
   mcpClientManager?: McpClientManager;
   channelManager?: ChannelManager;
+  approvalManager?: ApprovalManager;
 }
 
 

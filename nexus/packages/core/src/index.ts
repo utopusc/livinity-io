@@ -20,6 +20,7 @@ import { SessionManager } from './session-manager.js';
 import { HeartbeatRunner } from './heartbeat-runner.js';
 import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
+import { ApprovalManager } from './approval-manager.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
@@ -251,6 +252,10 @@ Conversation:`;
 
   logger.info('Memory extraction pipeline initialized');
 
+  // ApprovalManager for human-in-the-loop tool authorization
+  const approvalManager = new ApprovalManager(redis);
+  logger.info('ApprovalManager initialized');
+
   const daemon = new Daemon({
     brain,
     router,
@@ -273,18 +278,22 @@ Conversation:`;
     channelManager,
     userSessionManager,
     memoryExtractionQueue,
+    approvalManager,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager });
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   const httpServer = apiApp.listen(apiPort, apiHost, () => {
     logger.info(`API server on http://${apiHost}:${apiPort}`);
   });
 
+  // Dedicated Redis subscriber connection for WebSocket gateway pub/sub
+  const redisSub = redis.duplicate();
+
   // Attach JSON-RPC 2.0 WebSocket gateway for streaming
-  const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis });
+  const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis, redisSub });
 
   // Event-driven inbox processing using Redis BLPOP (no polling overhead)
   const inboxRedis = redis.duplicate(); // Separate connection for blocking operations
@@ -329,6 +338,7 @@ Conversation:`;
     await channelManager.disconnectAll();
     await mcpClientManager.stop();
     await daemon.stop();
+    await redisSub.quit().catch(() => {}); // Close pub/sub subscriber connection
     await inboxRedis.quit().catch(() => {}); // Close blocking connection
     await redis.quit();
     process.exit(0);
