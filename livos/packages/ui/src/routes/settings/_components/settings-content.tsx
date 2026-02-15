@@ -461,6 +461,7 @@ function AiConfigSection() {
 	}, [serverAuthMethod])
 
 	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
+	const [loginUrl, setLoginUrl] = useState<string | null>(null)
 
 	// Clear login URL when auth succeeds
 	useEffect(() => {
@@ -474,11 +475,18 @@ function AiConfigSection() {
 		return () => clearInterval(interval)
 	}, [authMethod, cliAuthenticated])
 
+	// When login URL is shown, poll more frequently (every 3s) to detect auth completion
+	useEffect(() => {
+		if (!loginUrl) return
+		const interval = setInterval(() => {
+			cliStatusQ.refetch()
+		}, 3000)
+		return () => clearInterval(interval)
+	}, [loginUrl])
+
 	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
 		onSuccess: () => { utils.ai.getClaudeCliStatus.invalidate() },
 	})
-
-	const [loginUrl, setLoginUrl] = useState<string | null>(null)
 
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
@@ -489,15 +497,6 @@ function AiConfigSection() {
 			}
 		},
 	})
-
-	// When login URL is shown, poll more frequently (every 3s) to detect auth completion
-	useEffect(() => {
-		if (!loginUrl) return
-		const interval = setInterval(() => {
-			cliStatusQ.refetch()
-		}, 3000)
-		return () => clearInterval(interval)
-	}, [loginUrl])
 
 	const handleAuthMethodChange = (value: string) => {
 		const method = value as 'api-key' | 'sdk-subscription'
