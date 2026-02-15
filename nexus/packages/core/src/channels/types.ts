@@ -4,11 +4,17 @@ import type Redis from 'ioredis';
 // Channel Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ChannelId = 'telegram' | 'discord';
+export type ChannelId = 'telegram' | 'discord' | 'slack' | 'matrix';
 
 export interface ChannelConfig {
   enabled: boolean;
   token?: string;
+  /** Slack app-level token for Socket Mode (xapp-...) */
+  appToken?: string;
+  /** Matrix homeserver URL */
+  homeserverUrl?: string;
+  /** Matrix room ID */
+  roomId?: string;
 }
 
 export interface ChannelStatus {
@@ -76,6 +82,8 @@ export interface ChannelProvider {
 export const CHANNEL_META: Record<ChannelId, { name: string; color: string; textLimit: number }> = {
   telegram: { name: 'Telegram', color: '#0088cc', textLimit: 4096 },
   discord: { name: 'Discord', color: '#5865F2', textLimit: 2000 },
+  slack: { name: 'Slack', color: '#4A154B', textLimit: 4000 },
+  matrix: { name: 'Matrix', color: '#0DBD8B', textLimit: 65536 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
