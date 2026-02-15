@@ -322,8 +322,12 @@ export class ClaudeProvider implements AIProvider {
       return { error: 'Claude CLI is not installed on the server. Run: npm install -g @anthropic-ai/claude-code' };
     }
 
-    // Kill any existing login process
+    // If a login process is already running, return its URL instead of starting a new one
     if (this.loginProcess) {
+      if (this.loginProcess.url) {
+        return { url: this.loginProcess.url };
+      }
+      // Process running but no URL yet — kill and restart
       try { this.loginProcess.proc.kill(); } catch { /* ignore */ }
       this.loginProcess = null;
     }
