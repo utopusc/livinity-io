@@ -1,6 +1,6 @@
 /**
  * ClaudeProvider — Primary AI provider for LivOS using Anthropic's Claude API.
- * Implements the AIProvider interface with chat, streaming, and think capabilities.
+ * Implements the AIProvider interface with chat, streaming, think, and native tool calling.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -12,6 +12,7 @@ import type {
   ProviderStreamResult,
   ProviderStreamChunk,
   ModelTier,
+  ToolUseBlock,
 } from './types.js';
 import { prepareForProvider } from './normalize.js';
 import { logger } from '../logger.js';
@@ -39,7 +40,6 @@ export class ClaudeProvider implements AIProvider {
   }
 
   private async getApiKey(): Promise<string> {
-    // Try Redis first
     if (this.redis) {
       try {
         const key = await this.redis.get(REDIS_KEY);
@@ -49,7 +49,6 @@ export class ClaudeProvider implements AIProvider {
       }
     }
 
-    // Fallback to env
     const envKey = process.env.ANTHROPIC_API_KEY;
     if (envKey) return envKey;
 
@@ -59,7 +58,6 @@ export class ClaudeProvider implements AIProvider {
   private async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
 
-    // Re-create client if key changed
     if (this.client && apiKey === this.cachedApiKey) {
       return this.client;
     }
@@ -73,22 +71,39 @@ export class ClaudeProvider implements AIProvider {
     const tier = options.tier || 'sonnet';
     const model = CLAUDE_MODELS[tier] || CLAUDE_MODELS.sonnet;
     const maxTokens = options.maxOutputTokens || 4096;
-    const claudeMessages = prepareForProvider(options.messages, 'claude') as Anthropic.MessageParam[];
+    const claudeMessages = (options.rawMessages as Anthropic.MessageParam[])
+      || prepareForProvider(options.messages, 'claude') as Anthropic.MessageParam[];
 
     const client = await this.getClient();
 
-    const response = await client.messages.create({
+    const createParams: Anthropic.MessageCreateParams = {
       model,
       max_tokens: maxTokens,
       system: options.systemPrompt,
       messages: claudeMessages,
-    });
+    };
 
-    // Extract text from content blocks
-    const text = response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('');
+    if (options.tools && options.tools.length > 0) {
+      (createParams as any).tools = options.tools;
+    }
+
+    const response = await client.messages.create(createParams);
+
+    // Extract text and tool_use blocks from content
+    let text = '';
+    const toolCalls: ToolUseBlock[] = [];
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        text += block.text;
+      } else if (block.type === 'tool_use') {
+        toolCalls.push({
+          type: 'tool_use',
+          id: block.id,
+          name: block.name,
+          input: block.input as Record<string, unknown>,
+        });
+      }
+    }
 
     return {
       text,
@@ -96,6 +111,8 @@ export class ClaudeProvider implements AIProvider {
       outputTokens: response.usage.output_tokens,
       provider: 'claude',
       model,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      stopReason: response.stop_reason || undefined,
     };
   }
 
@@ -103,7 +120,8 @@ export class ClaudeProvider implements AIProvider {
     const tier = options.tier || 'sonnet';
     const model = CLAUDE_MODELS[tier] || CLAUDE_MODELS.sonnet;
     const maxTokens = options.maxOutputTokens || 4096;
-    const claudeMessages = prepareForProvider(options.messages, 'claude') as Anthropic.MessageParam[];
+    const claudeMessages = (options.rawMessages as Anthropic.MessageParam[])
+      || prepareForProvider(options.messages, 'claude') as Anthropic.MessageParam[];
 
     let finalInputTokens = 0;
     let finalOutputTokens = 0;
@@ -111,29 +129,74 @@ export class ClaudeProvider implements AIProvider {
 
     async function* generate(): AsyncGenerator<ProviderStreamChunk> {
       const client = await self.getClient();
-      const stream = client.messages.stream({
+
+      const createParams: Anthropic.MessageCreateParams = {
         model,
         max_tokens: maxTokens,
         system: options.systemPrompt,
         messages: claudeMessages,
-      });
+      };
+
+      if (options.tools && options.tools.length > 0) {
+        (createParams as any).tools = options.tools;
+      }
+
+      const stream = client.messages.stream(createParams);
+
+      // Track tool_use accumulation
+      let currentToolUse: { id: string; name: string; inputJson: string } | null = null;
+      let stopReason = '';
 
       try {
         for await (const event of stream) {
-          if (
-            event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta'
-          ) {
-            yield { text: event.delta.text, done: false };
+          if (event.type === 'content_block_delta') {
+            if (event.delta.type === 'text_delta') {
+              yield { text: event.delta.text, done: false };
+            } else if (event.delta.type === 'input_json_delta') {
+              if (currentToolUse) {
+                currentToolUse.inputJson += event.delta.partial_json;
+              }
+            }
+          } else if (event.type === 'content_block_start') {
+            if (event.content_block.type === 'tool_use') {
+              currentToolUse = {
+                id: event.content_block.id,
+                name: event.content_block.name,
+                inputJson: '',
+              };
+            }
+          } else if (event.type === 'content_block_stop') {
+            if (currentToolUse) {
+              let input: Record<string, unknown> = {};
+              try {
+                input = currentToolUse.inputJson ? JSON.parse(currentToolUse.inputJson) : {};
+              } catch {
+                logger.warn('ClaudeProvider: failed to parse tool input JSON', {
+                  raw: currentToolUse.inputJson.slice(0, 200),
+                });
+              }
+              yield {
+                text: '',
+                done: false,
+                toolUse: {
+                  type: 'tool_use',
+                  id: currentToolUse.id,
+                  name: currentToolUse.name,
+                  input,
+                },
+              };
+              currentToolUse = null;
+            }
+          } else if (event.type === 'message_delta') {
+            stopReason = (event as any).delta?.stop_reason || '';
           }
         }
 
-        // Get final usage from the accumulated message
         const finalMessage = await stream.finalMessage();
         finalInputTokens = finalMessage.usage.input_tokens;
         finalOutputTokens = finalMessage.usage.output_tokens;
 
-        yield { text: '', done: true };
+        yield { text: '', done: true, stopReason: stopReason || finalMessage.stop_reason || '' };
       } catch (err: any) {
         logger.error('ClaudeProvider.chatStream error', { error: err.message });
         yield { text: '', done: true };
