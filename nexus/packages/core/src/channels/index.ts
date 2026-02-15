@@ -3,6 +3,8 @@ import { logger } from '../logger.js';
 import type { ChannelProvider, ChannelId, IncomingMessage, ChannelStatus, ChannelConfig } from './types.js';
 import { TelegramProvider } from './telegram.js';
 import { DiscordProvider } from './discord.js';
+import { SlackProvider } from './slack.js';
+import { MatrixProvider } from './matrix.js';
 
 export * from './types.js';
 
@@ -20,6 +22,7 @@ export class ChannelManager {
     // Register all providers
     this.providers.set('telegram', new TelegramProvider());
     this.providers.set('discord', new DiscordProvider());
+    this.providers.set('slack', new SlackProvider());
   }
 
   /**

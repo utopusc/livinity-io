@@ -17,6 +17,7 @@ import type { Tool, ToolResult } from './types.js';
 import { logger } from './logger.js';
 import { formatErrorMessage } from './infra/errors.js';
 import type Redis from 'ioredis';
+import type { Queue } from 'bullmq';
 import type { McpConfigManager } from './mcp-config-manager.js';
 import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
@@ -52,6 +53,7 @@ interface DaemonConfig {
   heartbeatRunner?: HeartbeatRunner;
   channelManager?: ChannelManager;
   userSessionManager?: UserSessionManager;
+  memoryExtractionQueue?: Queue;
   intervalMs: number;
 }
 
@@ -238,7 +240,7 @@ export class Daemon {
         // Track current WhatsApp JID for progress_report tool
         this.currentWhatsAppJid = item.from;
         // Track current channel context for cron tool
-        if (['telegram', 'discord', 'whatsapp'].includes(item.source)) {
+        if (['telegram', 'discord', 'slack', 'whatsapp'].includes(item.source)) {
           this.currentChannelContext = {
             source: item.source,
             chatId: item.from || item.params?.chatId || '',
@@ -395,7 +397,7 @@ export class Daemon {
     const item: InboxItem = { message, source, requestId, params, from };
 
     // Real-time messaging sources - process immediately (event-driven)
-    const realtimeSources = ['telegram', 'discord'];
+    const realtimeSources = ['telegram', 'discord', 'slack'];
     if (realtimeSources.includes(source)) {
       // Process immediately without waiting for polling loop
       this.processInboxItem(item).catch((err) => {
@@ -413,7 +415,7 @@ export class Daemon {
       // Track current WhatsApp JID for progress_report tool
       this.currentWhatsAppJid = item.from;
       // Track current channel context for cron tool
-      if (['telegram', 'discord', 'whatsapp'].includes(item.source)) {
+      if (['telegram', 'discord', 'slack', 'whatsapp'].includes(item.source)) {
         this.currentChannelContext = {
           source: item.source,
           chatId: item.from || item.params?.chatId || '',
@@ -591,8 +593,8 @@ export class Daemon {
       const ms = unit === 'hours' ? delay * 3600000 : delay * 60000;
       const delayStr = `${delay} ${unit}`;
 
-      // Capture channel context to replay when timer fires (WhatsApp, Telegram, Discord)
-      const validSources = ['whatsapp', 'telegram', 'discord'] as const;
+      // Capture channel context to replay when timer fires (WhatsApp, Telegram, Discord, Slack)
+      const validSources = ['whatsapp', 'telegram', 'discord', 'slack'] as const;
       const scheduledSource = validSources.includes(intent.source as any) ? intent.source : 'cron';
       const scheduledFrom = intent.from; // Chat ID or JID
       const scheduledParams = intent.params?.chatId ? { chatId: intent.params.chatId } : undefined;
@@ -954,6 +956,21 @@ ${task}`;
       if (intent.from && this.config.userSessionManager) {
         const totalTokens = result.totalInputTokens + result.totalOutputTokens;
         await this.config.userSessionManager.recordUsage(intent.from, totalTokens).catch(() => {});
+      }
+
+      // Fire-and-forget: enqueue memory extraction for this conversation
+      if (this.config.memoryExtractionQueue && result.success) {
+        const sessionId = `session_${intent.from || 'web'}_${Date.now()}`;
+        this.config.memoryExtractionQueue.add('extract-memories', {
+          conversation: task.slice(0, 4000),
+          response: result.answer.slice(0, 4000),
+          userId: intent.from || 'default',
+          sessionId,
+          source: intent.source || 'web',
+        }, {
+          removeOnComplete: { count: 100 },
+          removeOnFail: { count: 50 },
+        }).catch(err => logger.error('Failed to enqueue memory extraction', { error: (err as Error).message }));
       }
 
       // For WhatsApp, chunk long responses
@@ -2050,7 +2067,7 @@ ${task}`;
    *  Uses the ChannelManager to route messages to the appropriate platform. */
   private async sendChannelResponse(item: InboxItem, text: string) {
     // Skip if not a channel source or no chatId
-    const channelSources = ['telegram', 'discord'] as const;
+    const channelSources = ['telegram', 'discord', 'slack'] as const;
     if (!channelSources.includes(item.source as any) || !item.from) return;
 
     try {
@@ -2065,7 +2082,7 @@ ${task}`;
 
       // Send via the appropriate channel
       const success = await channelManager.sendMessage(
-        item.source as 'telegram' | 'discord',
+        item.source as 'telegram' | 'discord' | 'slack',
         item.from,
         text,
         replyTo
@@ -2184,11 +2201,11 @@ ${task}`;
       this.actionMessageCount++;
 
       // Route to appropriate channel
-      const channelSources = ['telegram', 'discord'] as const;
+      const channelSources = ['telegram', 'discord', 'slack'] as const;
       if (source && channelSources.includes(source as any) && this.config.channelManager) {
-        // Send via channel manager for Telegram/Discord
+        // Send via channel manager for Telegram/Discord/Slack
         this.config.channelManager.sendMessage(
-          source as 'telegram' | 'discord',
+          source as 'telegram' | 'discord' | 'slack',
           chatId,
           line
         ).catch(() => {});
