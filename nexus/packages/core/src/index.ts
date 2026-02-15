@@ -118,12 +118,12 @@ async function main() {
     workspaceDir,
     onDeliver: async (message: string, target: string) => {
       // Determine delivery method based on target
-      if (target === 'telegram' || target === 'discord' || target === 'slack') {
-        // Use ChannelManager for Telegram/Discord/Slack
+      if (['telegram', 'discord', 'slack', 'matrix'].includes(target)) {
+        // Use ChannelManager for Telegram/Discord/Slack/Matrix
         // Get the last chat ID from Redis for the target channel
         const lastChatId = await redis.get(`nexus:${target}:last_chat_id`);
         if (lastChatId) {
-          const success = await channelManager.sendMessage(target as 'telegram' | 'discord' | 'slack', lastChatId, message);
+          const success = await channelManager.sendMessage(target as 'telegram' | 'discord' | 'slack' | 'matrix', lastChatId, message);
           if (success) {
             logger.info('HeartbeatRunner: delivered via channel', { target, chatId: lastChatId, messageLength: message.length });
           } else {
@@ -134,7 +134,7 @@ async function main() {
         }
       } else if (target === 'all') {
         // Deliver to all connected channels
-        for (const channelId of ['telegram', 'discord', 'slack'] as const) {
+        for (const channelId of ['telegram', 'discord', 'slack', 'matrix'] as const) {
           const lastChatId = await redis.get(`nexus:${channelId}:last_chat_id`);
           if (lastChatId) {
             await channelManager.sendMessage(channelId, lastChatId, message);
@@ -158,6 +158,99 @@ async function main() {
     intervalMinutes: configManager.get().heartbeat?.intervalMinutes,
   });
 
+  // ── Memory extraction pipeline (BullMQ) ──────────────────────────────
+  const MEMORY_EXTRACTION_PROMPT = `Extract important facts, preferences, and knowledge from this conversation that would be useful to remember for future interactions. Return a JSON array of memory strings. Only include genuinely useful information — not greetings, acknowledgments, or task mechanics.
+
+Examples of good memories:
+- "User prefers dark mode"
+- "User's server runs Ubuntu 22.04"
+- "User's timezone is Europe/Istanbul"
+- "The PostgreSQL password was changed on 2026-02-15"
+
+Return ONLY a JSON array of strings. If nothing worth remembering, return [].
+
+Conversation:`;
+
+  const redisOpts = redis.options as any;
+  const bullConnection = {
+    host: redisOpts?.host || 'localhost',
+    port: redisOpts?.port || 6379,
+    ...(redisOpts?.password ? { password: redisOpts.password } : {}),
+  };
+
+  const memoryExtractionQueue = new Queue('nexus-memory-extraction', {
+    connection: bullConnection,
+    defaultJobOptions: {
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 50 },
+    },
+  });
+
+  const memoryExtractionWorker = new Worker(
+    'nexus-memory-extraction',
+    async (job) => {
+      const { conversation, response, userId, sessionId, source } = job.data;
+      try {
+        // Use flash tier for cheap extraction
+        const extractionResult = await brain.think({
+          prompt: `${conversation}\n\nAssistant: ${response}`,
+          systemPrompt: MEMORY_EXTRACTION_PROMPT,
+          tier: 'flash',
+          maxTokens: 500,
+        });
+
+        // Parse JSON array from response
+        const cleaned = extractionResult.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+        let memories: string[];
+        try {
+          memories = JSON.parse(cleaned);
+        } catch {
+          // Try to extract array from response
+          const match = cleaned.match(/\[[\s\S]*\]/);
+          memories = match ? JSON.parse(match[0]) : [];
+        }
+
+        if (!Array.isArray(memories) || memories.length === 0) {
+          logger.debug('Memory extraction: nothing to remember', { sessionId });
+          return;
+        }
+
+        // Store each extracted memory via memory service
+        for (const content of memories.slice(0, 5)) { // Max 5 memories per conversation
+          if (typeof content !== 'string' || content.length < 5) continue;
+          try {
+            await fetch('http://localhost:3300/add', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': process.env.LIV_API_KEY || '',
+              },
+              body: JSON.stringify({
+                userId,
+                content,
+                sessionId,
+                metadata: { source, extractedAt: Date.now(), auto: true },
+              }),
+            });
+          } catch (err: any) {
+            logger.error('Memory extraction: failed to store', { error: err.message, content: content.slice(0, 50) });
+          }
+        }
+
+        logger.info('Memory extraction complete', { sessionId, memoriesStored: memories.length });
+      } catch (err: any) {
+        logger.error('Memory extraction job failed', { error: err.message, sessionId });
+      }
+    },
+    { connection: bullConnection, concurrency: 2 },
+  );
+
+  memoryExtractionWorker.on('failed', (job, err) => {
+    logger.error('Memory extraction worker: job failed', { jobId: job?.id, error: err.message });
+  });
+
+  logger.info('Memory extraction pipeline initialized');
+
   const daemon = new Daemon({
     brain,
     router,
@@ -179,6 +272,7 @@ async function main() {
     heartbeatRunner,
     channelManager,
     userSessionManager,
+    memoryExtractionQueue,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
@@ -229,6 +323,8 @@ async function main() {
   const shutdown = async () => {
     logger.info('Shutting down...');
     heartbeatRunner.stop();
+    await memoryExtractionWorker.close();
+    await memoryExtractionQueue.close();
     await channelManager.disconnectAll();
     await mcpClientManager.stop();
     await daemon.stop();
