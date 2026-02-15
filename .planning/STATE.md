@@ -11,17 +11,17 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Milestone: v1.5 (Claude Migration & AI Platform)
-Phase: 3 of 5 (Hybrid Memory + Channel Expansion)
-Plan: 5 of 5 in Phase 3 (Wave 2 in progress — plan 05 remaining)
-Status: In progress — plan 05 remaining
-Last activity: 2026-02-15 — Completed v1.5-03-02-PLAN.md (Memory Context Assembly & Agent Injection)
+Phase: 3 of 5 (Hybrid Memory + Channel Expansion) -- COMPLETE
+Plan: 5 of 5 in Phase 3 (all complete)
+Status: Phase 3 complete -- ready for Phase 4
+Last activity: 2026-02-15 — Completed v1.5-03-05-PLAN.md (Slack/Matrix Settings UI & Response Routing)
 
-Progress: [██████░░░░] 65%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11 (v1.5)
+- Total plans completed: 12 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -31,7 +31,7 @@ Progress: [██████░░░░] 65%
 |-------|-------|-------|----------|
 | 1 - Provider Abstraction | 3/3 | — | — |
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
-| 3 - Hybrid Memory + Channel Expansion | 4/5 | — | ~5min |
+| 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
 
 *Updated after each plan completion*
 
@@ -64,6 +64,8 @@ v1.5 decisions:
 - [Phase3]: Memory extraction uses flash tier, max 5 memories per conversation, fire-and-forget via BullMQ
 - [Phase3]: MatrixProvider uses matrix-js-sdk v40 with sync-based listening, initialSyncLimit: 0
 - [Phase3]: Memory /context endpoint with 2000 token budget, best-effort 2s timeout injection into agent prompts
+- [Phase3]: CHAN-05 response routing uses per-request closures (not instance state) — race-condition free
+- [Phase3]: tRPC integration routes expanded to 4 channels (telegram, discord, slack, matrix)
 
 ### Pending Todos
 
@@ -76,5 +78,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-03-02-PLAN.md (Memory Context Assembly & Agent Injection)
+Stopped at: Completed v1.5-03-05-PLAN.md (Phase 3 fully complete)
 Resume file: None
