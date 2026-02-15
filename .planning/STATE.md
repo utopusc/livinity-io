@@ -12,16 +12,16 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 Milestone: v1.5 (Claude Migration & AI Platform)
 Phase: 5 of 5 (Skill Marketplace + Parallel Execution)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete (01, 03)
 Status: In progress
-Last activity: 2026-02-15 — Completed v1.5-05-01-PLAN.md
+Last activity: 2026-02-15 — Completed v1.5-05-03-PLAN.md
 
-Progress: [████████░░] 84%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16 (v1.5)
+- Total plans completed: 17 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -33,7 +33,7 @@ Progress: [████████░░] 84%
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
 | 4 - WebSocket Gateway + HITL | 4/4 | ~21min | ~5min |
-| 5 - Skill Marketplace + Parallel Execution | 1/3 | ~3min | ~3min |
+| 5 - Skill Marketplace + Parallel Execution | 2/3 | ~7min | ~3.5min |
 
 *Updated after each plan completion*
 
@@ -85,6 +85,10 @@ v1.5 decisions:
 - [Phase5]: Simple YAML parser for SKILL.md (no js-yaml dependency), extended to handle nested objects
 - [Phase5]: Git-based registry: GitHub Contents API for directory listing, raw.githubusercontent.com for file fetch
 - [Phase5]: File-based catalog caching with MD5-hashed URL keys and configurable TTL
+- [Phase5]: BullMQ worker concurrency directly controls parallel task limit (no custom scheduler)
+- [Phase5]: Task cancellation via Redis flag (cooperative, checked between agent events)
+- [Phase5]: Task events published to nexus:notify:task:{id} for WebSocket real-time routing
+- [Phase5]: TaskConfigSchema: maxConcurrent=4, perTaskTokenBudget=100K, perTaskMaxTurns=15, perTaskTimeoutMs=300s, resultTtlSec=3600
 
 ### Pending Todos
 
@@ -97,5 +101,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-05-01-PLAN.md
+Stopped at: Completed v1.5-05-03-PLAN.md
 Resume file: None
