@@ -366,12 +366,12 @@ Plans:
   3. Existing Gemini conversations continue to work identically after the migration (no regression)
   4. Token usage (input/output tokens) is displayed consistently regardless of which provider handled the request
   5. The AI chat streaming experience (chunks appearing, tool call indicators, done events) is visually identical to before the migration
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves (sequential)
 
 Plans:
-- [ ] v1.5-01-01: AIProvider interface, provider-neutral message format, message normalization layer
-- [ ] v1.5-01-02: ClaudeProvider implementation with streaming, model tier mapping
-- [ ] v1.5-01-03: GeminiProvider extraction from Brain class, fallback logic, Brain refactor as thin wrapper
+- [ ] v1.5-01-01-PLAN.md — AIProvider interface, provider-neutral message types, message normalization layer
+- [ ] v1.5-01-02-PLAN.md — ClaudeProvider implementation with streaming, model tier mapping, SDK upgrade
+- [ ] v1.5-01-03-PLAN.md — GeminiProvider extraction, ProviderManager fallback logic, Brain refactor as thin wrapper
 
 ### Phase 2: Native Tool Calling + Auth UI
 **Goal**: AI agent uses Claude's native tool calling for reliable tool execution, and users can configure API keys and provider preferences through the Settings UI
