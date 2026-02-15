@@ -21,6 +21,7 @@ import { HeartbeatRunner } from './heartbeat-runner.js';
 import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
 import { createApiServer, setupWebSocket } from './api.js';
+import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
 
 const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
@@ -117,12 +118,12 @@ async function main() {
     workspaceDir,
     onDeliver: async (message: string, target: string) => {
       // Determine delivery method based on target
-      if (target === 'telegram' || target === 'discord') {
-        // Use ChannelManager for Telegram/Discord
+      if (target === 'telegram' || target === 'discord' || target === 'slack') {
+        // Use ChannelManager for Telegram/Discord/Slack
         // Get the last chat ID from Redis for the target channel
         const lastChatId = await redis.get(`nexus:${target}:last_chat_id`);
         if (lastChatId) {
-          const success = await channelManager.sendMessage(target as 'telegram' | 'discord', lastChatId, message);
+          const success = await channelManager.sendMessage(target as 'telegram' | 'discord' | 'slack', lastChatId, message);
           if (success) {
             logger.info('HeartbeatRunner: delivered via channel', { target, chatId: lastChatId, messageLength: message.length });
           } else {
@@ -133,7 +134,7 @@ async function main() {
         }
       } else if (target === 'all') {
         // Deliver to all connected channels
-        for (const channelId of ['telegram', 'discord'] as const) {
+        for (const channelId of ['telegram', 'discord', 'slack'] as const) {
           const lastChatId = await redis.get(`nexus:${channelId}:last_chat_id`);
           if (lastChatId) {
             await channelManager.sendMessage(channelId, lastChatId, message);
@@ -254,7 +255,7 @@ async function main() {
     });
 
     // Save last chat ID for heartbeat delivery
-    if (msg.channel === 'telegram' || msg.channel === 'discord') {
+    if (msg.channel === 'telegram' || msg.channel === 'discord' || msg.channel === 'slack') {
       await redis.set(`nexus:${msg.channel}:last_chat_id`, msg.chatId);
     }
 
