@@ -6,22 +6,22 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.5 — Claude Migration & AI Platform
-**Current focus:** Phase 2 — Native Tool Calling + Auth UI
+**Current focus:** Phase 3 — Hybrid Memory + Channel Expansion
 
 ## Current Position
 
 Milestone: v1.5 (Claude Migration & AI Platform)
-Phase: 2 of 5 (Native Tool Calling + Auth UI)
-Plan: —
-Status: Planned (3 plans created, ready to execute)
-Last activity: 2026-02-15 — Phase 2 planned (3 plans in 2 waves)
+Phase: 3 of 5 (Hybrid Memory + Channel Expansion)
+Plan: 3 of 4 in Phase 3
+Status: In progress
+Last activity: 2026-02-15 — Completed v1.5-03-03-PLAN.md (Slack Channel Provider)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (v1.5)
+- Total plans completed: 9 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -30,6 +30,8 @@ Progress: [██░░░░░░░░] 20%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 - Provider Abstraction | 3/3 | — | — |
+| 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
+| 3 - Hybrid Memory + Channel Expansion | 3/4 | — | ~4min |
 
 *Updated after each plan completion*
 
@@ -51,6 +53,13 @@ v1.5 decisions:
 - [Phase1]: @anthropic-ai/sdk upgraded to v0.74.0 (verified working)
 - [Phase1]: Brain refactored as thin wrapper — all callers unchanged
 - [Phase1]: ProviderManager hasYielded guard prevents fallback after partial stream delivery
+- [Phase2]: Dual-mode AgentLoop: Claude native tool_use + Gemini JSON-in-text preserved
+- [Phase2]: rawClaudeMessages bypass for pre-formatted content blocks (tool_use/tool_result)
+- [Phase2]: validateKey mutation tests API keys before saving (Claude max_tokens:1, Gemini models.list)
+- [Phase2]: Provider selection stored in Redis nexus:config:primary_provider
+- [Phase3]: SlackProvider uses @slack/bolt Socket Mode (no public URL required)
+- [Phase3]: ChannelId forward-extended with 'slack' + 'matrix' to avoid second type change
+- [Phase3]: ChannelConfig extended with appToken, homeserverUrl, roomId for Slack/Matrix
 
 ### Pending Todos
 
@@ -59,10 +68,10 @@ None.
 ### Blockers/Concerns
 
 - sqlite-vec is alpha-versioned (v0.1.7) — needs stability testing in Phase 3
-- Matrix SDK complexity uncertain — may need prototyping in Phase 3
+- Matrix SDK complexity uncertain — may need prototyping in Phase 3 plan 04
 
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Phase 2 planned — ready to execute
+Stopped at: Completed v1.5-03-03-PLAN.md (Slack Channel Provider)
 Resume file: None
