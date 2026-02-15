@@ -15,7 +15,11 @@ import type {
   ToolUseBlock,
 } from './types.js';
 import { prepareForProvider } from './normalize.js';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { logger } from '../logger.js';
+
+const execFileAsync = promisify(execFile);
 
 const CLAUDE_MODELS: Record<string, string> = {
   flash: 'claude-haiku-4-5',
@@ -25,6 +29,9 @@ const CLAUDE_MODELS: Record<string, string> = {
 };
 
 const REDIS_KEY = 'nexus:config:anthropic_api_key';
+const AUTH_METHOD_KEY = 'nexus:config:claude_auth_method';
+
+export type ClaudeAuthMethod = 'api-key' | 'sdk-subscription';
 
 export class ClaudeProvider implements AIProvider {
   readonly id = 'claude';
@@ -34,6 +41,9 @@ export class ClaudeProvider implements AIProvider {
   private client: Anthropic | null = null;
   private redis: Redis | null = null;
   private cachedApiKey: string = '';
+  private cliStatusCache: { installed: boolean; authenticated: boolean; user?: string; checkedAt: number } | null = null;
+  /** Active login process (only one at a time) */
+  private loginProcess: { proc: ReturnType<typeof spawn>; url?: string; startedAt: number } | null = null;
 
   constructor(redis?: Redis) {
     this.redis = redis ?? null;
@@ -223,6 +233,11 @@ export class ClaudeProvider implements AIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
+    const method = await this.getAuthMethod();
+    if (method === 'sdk-subscription') {
+      const status = await this.getCliStatus();
+      return status.installed && status.authenticated;
+    }
     try {
       await this.getApiKey();
       return true;
@@ -233,5 +248,137 @@ export class ClaudeProvider implements AIProvider {
 
   getModels(): Record<string, string> {
     return { ...CLAUDE_MODELS };
+  }
+
+  /** Get the configured auth method (api-key or sdk-subscription) */
+  async getAuthMethod(): Promise<ClaudeAuthMethod> {
+    if (this.redis) {
+      try {
+        const method = await this.redis.get(AUTH_METHOD_KEY);
+        if (method === 'sdk-subscription') return 'sdk-subscription';
+      } catch (err: any) {
+        logger.warn('ClaudeProvider: failed to read auth method from Redis', { error: err.message });
+      }
+    }
+    return 'api-key';
+  }
+
+  /** Check Claude CLI installation and authentication status */
+  async getCliStatus(): Promise<{ installed: boolean; authenticated: boolean; user?: string }> {
+    // Cache for 30 seconds to avoid spawning processes repeatedly
+    if (this.cliStatusCache && Date.now() - this.cliStatusCache.checkedAt < 30_000) {
+      return this.cliStatusCache;
+    }
+
+    let installed = false;
+    let authenticated = false;
+    let user: string | undefined;
+
+    try {
+      await execFileAsync('claude', ['--version'], { timeout: 5000 });
+      installed = true;
+    } catch {
+      this.cliStatusCache = { installed: false, authenticated: false, checkedAt: Date.now() };
+      return this.cliStatusCache;
+    }
+
+    try {
+      const { stdout } = await execFileAsync('claude', ['auth', 'status'], { timeout: 10000 });
+      const output = stdout.toString();
+      // Parse output — typically shows "Authenticated as <email>" or similar
+      if (/authenticated|logged.?in|active/i.test(output)) {
+        authenticated = true;
+        const emailMatch = output.match(/[\w.+-]+@[\w.-]+\.\w+/);
+        if (emailMatch) user = emailMatch[0];
+      }
+    } catch {
+      // auth status command failed — not authenticated
+    }
+
+    this.cliStatusCache = { installed, authenticated, user, checkedAt: Date.now() };
+    return this.cliStatusCache;
+  }
+
+  /**
+   * Start `claude login` in the background and capture the OAuth URL.
+   * Returns the URL the user should open in their browser to authenticate.
+   * The login process runs in the background — once the user completes auth
+   * in the browser, the CLI stores credentials and exits.
+   */
+  async startLogin(): Promise<{ url?: string; error?: string; alreadyAuthenticated?: boolean }> {
+    // Check if already authenticated
+    this.cliStatusCache = null; // bust cache
+    const status = await this.getCliStatus();
+    if (status.authenticated) {
+      return { alreadyAuthenticated: true };
+    }
+    if (!status.installed) {
+      return { error: 'Claude CLI is not installed on the server. Run: npm install -g @anthropic-ai/claude-code' };
+    }
+
+    // Kill any existing login process
+    if (this.loginProcess) {
+      try { this.loginProcess.proc.kill(); } catch { /* ignore */ }
+      this.loginProcess = null;
+    }
+
+    return new Promise((resolve) => {
+      const proc = spawn('claude', ['login'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, BROWSER: 'echo' }, // Prevent auto-opening browser, just print the URL
+        timeout: 300_000, // 5 minute timeout
+      });
+
+      this.loginProcess = { proc, startedAt: Date.now() };
+      let allOutput = '';
+      let resolved = false;
+
+      const tryExtractUrl = (chunk: string) => {
+        allOutput += chunk;
+        // Look for an HTTPS URL in the output
+        const urlMatch = allOutput.match(/https:\/\/[^\s"'<>]+/);
+        if (urlMatch && !resolved) {
+          resolved = true;
+          this.loginProcess!.url = urlMatch[0];
+          logger.info('ClaudeProvider: login URL captured', { url: urlMatch[0] });
+          resolve({ url: urlMatch[0] });
+        }
+      };
+
+      proc.stdout?.on('data', (data: Buffer) => tryExtractUrl(data.toString()));
+      proc.stderr?.on('data', (data: Buffer) => tryExtractUrl(data.toString()));
+
+      proc.on('close', (code) => {
+        logger.info('ClaudeProvider: login process exited', { code });
+        this.loginProcess = null;
+        // Bust status cache so next poll picks up the new auth state
+        this.cliStatusCache = null;
+        if (!resolved) {
+          resolved = true;
+          if (code === 0) {
+            resolve({ alreadyAuthenticated: true });
+          } else {
+            resolve({ error: `Login process exited with code ${code}. Output: ${allOutput.slice(0, 500)}` });
+          }
+        }
+      });
+
+      proc.on('error', (err) => {
+        logger.error('ClaudeProvider: login process error', { error: err.message });
+        this.loginProcess = null;
+        if (!resolved) {
+          resolved = true;
+          resolve({ error: err.message });
+        }
+      });
+
+      // If we don't get a URL within 15 seconds, return whatever we have
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve({ error: `Timed out waiting for login URL. Output so far: ${allOutput.slice(0, 500)}` });
+        }
+      }, 15_000);
+    });
   }
 }
