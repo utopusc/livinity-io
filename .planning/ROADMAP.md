@@ -437,12 +437,12 @@ Plans:
   3. Installed skills declare permissions upfront and the user reviews them before confirming installation
   4. User can ask the AI to perform two independent tasks simultaneously (e.g., "scan my Docker containers AND check disk usage") and both run in parallel
   5. User can view the status of running tasks and cancel any task mid-execution
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] v1.5-05-01: SKILL.md manifest schema, directory-based format, Git registry client
-- [ ] v1.5-05-02: Skill install/uninstall flow, permission review, progressive loading, marketplace UI
-- [ ] v1.5-05-03: BullMQ parallel agent tasks, status monitoring API, cancellation, resource-aware scheduling
+- [ ] v1.5-05-01-PLAN.md -- SKILL.md manifest schema, directory-based format, Git registry client [Wave 1]
+- [ ] v1.5-05-02-PLAN.md -- Skill install/uninstall flow, permission review, progressive loading, marketplace UI [Wave 2]
+- [ ] v1.5-05-03-PLAN.md -- BullMQ parallel agent tasks, status monitoring API, cancellation, resource-aware scheduling [Wave 1]
 
 ### v1.5 Progress
 
