@@ -22,6 +22,8 @@ import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
 import { ApprovalManager } from './approval-manager.js';
 import { TaskManager } from './task-manager.js';
+import { SkillRegistryClient } from './skill-registry-client.js';
+import { SkillInstaller } from './skill-installer.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
@@ -269,6 +271,24 @@ Conversation:`;
     maxConcurrent: configManager.get().tasks?.maxConcurrent || 4,
   });
 
+  // Skill marketplace: registry client + installer
+  const skillCacheDir = process.env.SKILL_CACHE_DIR || '/opt/nexus/data/skill-cache';
+  const skillRegistryClient = new SkillRegistryClient({ cacheDir: skillCacheDir });
+  const defaultSkillRegistry = process.env.SKILL_REGISTRY_URL || 'https://github.com/utopusc/livinity-skills';
+  skillRegistryClient.addRegistry(defaultSkillRegistry);
+
+  const skillInstallDir = process.env.SKILL_INSTALL_DIR || '/opt/nexus/skills/marketplace';
+  const skillInstaller = new SkillInstaller({
+    skillLoader,
+    registryClient: skillRegistryClient,
+    installDir: skillInstallDir,
+    redis,
+  });
+
+  // Load previously installed marketplace skills from disk
+  await skillLoader.loadMarketplaceSkills(skillInstallDir);
+  logger.info('SkillInstaller initialized', { installDir: skillInstallDir, registry: defaultSkillRegistry });
+
   const daemon = new Daemon({
     brain,
     router,
@@ -295,7 +315,7 @@ Conversation:`;
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager });
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   const httpServer = apiApp.listen(apiPort, apiHost, () => {
