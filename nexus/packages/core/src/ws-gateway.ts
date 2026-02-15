@@ -21,6 +21,7 @@ import type { AgentEvent, AgentResult } from './agent.js';
 import type { Brain } from './brain.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { Daemon } from './daemon.js';
+import type { TaskManager, TaskStatus } from './task-manager.js';
 
 // ── JSON-RPC 2.0 Types ─────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ export interface WsGatewayDeps {
   daemon: Daemon;
   redis: Redis;
   redisSub: Redis; // Dedicated Redis connection for blocking subscribe
+  taskManager?: TaskManager;
 }
 
 /** Payload structure for messages published to nexus:notify:* channels */
@@ -414,6 +416,18 @@ export class WsGateway {
       case 'notify.unsubscribe':
         this.handleNotifyUnsubscribe(client, msg);
         break;
+      case 'task.submit':
+        this.handleTaskSubmit(client, msg);
+        break;
+      case 'task.status':
+        this.handleTaskStatus(client, msg);
+        break;
+      case 'task.list':
+        this.handleTaskList(client, msg);
+        break;
+      case 'task.cancel':
+        this.handleTaskCancel(client, msg);
+        break;
       default:
         this.sendError(client.ws, msg.id, RPC_METHOD_NOT_FOUND, `Method not found: ${msg.method}`);
     }
@@ -727,6 +741,125 @@ export class WsGateway {
     this.sendResult(client.ws, msg.id, {
       subscribed: Array.from(client.notifyFilter),
     });
+  }
+
+  // ── Task Management Methods ────────────────────────────────────────────
+
+  /**
+   * task.submit: Submit a parallel task via WebSocket.
+   * params: { task: string, tier?: string, maxTurns?: number, timeoutMs?: number }
+   */
+  private async handleTaskSubmit(client: ClientState, msg: JsonRpcRequest): Promise<void> {
+    const taskManager = this.deps.taskManager;
+    if (!taskManager) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, 'Task system not configured');
+      return;
+    }
+
+    const params = msg.params || {};
+    const task = params.task as string;
+
+    if (!task || typeof task !== 'string') {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, 'Missing required param: task (string)');
+      return;
+    }
+
+    try {
+      const taskId = await taskManager.submit({
+        task,
+        tier: params.tier as any,
+        maxTurns: params.maxTurns as number | undefined,
+        timeoutMs: params.timeoutMs as number | undefined,
+        sessionId: params.sessionId as string | undefined,
+      });
+
+      // Auto-subscribe the client to this task's notifications
+      client.notifyFilter.add(`task:${taskId}`);
+
+      this.sendResult(client.ws, msg.id, { taskId, status: 'queued' });
+    } catch (err: any) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, `Task submission failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * task.status: Get the status of a specific task.
+   * params: { taskId: string }
+   */
+  private async handleTaskStatus(client: ClientState, msg: JsonRpcRequest): Promise<void> {
+    const taskManager = this.deps.taskManager;
+    if (!taskManager) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, 'Task system not configured');
+      return;
+    }
+
+    const params = msg.params || {};
+    const taskId = params.taskId as string;
+
+    if (!taskId || typeof taskId !== 'string') {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, 'Missing required param: taskId (string)');
+      return;
+    }
+
+    try {
+      const info = await taskManager.getStatus(taskId);
+      if (!info) {
+        this.sendError(client.ws, msg.id, RPC_SESSION_NOT_FOUND, `Task not found: ${taskId}`);
+        return;
+      }
+      this.sendResult(client.ws, msg.id, info);
+    } catch (err: any) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, `Task status failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * task.list: List all tasks with optional status filter.
+   * params: { status?: string }
+   */
+  private async handleTaskList(client: ClientState, msg: JsonRpcRequest): Promise<void> {
+    const taskManager = this.deps.taskManager;
+    if (!taskManager) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, 'Task system not configured');
+      return;
+    }
+
+    const params = msg.params || {};
+    const status = params.status as TaskStatus | undefined;
+
+    try {
+      const tasks = await taskManager.listTasks(status ? { status } : undefined);
+      this.sendResult(client.ws, msg.id, { tasks });
+    } catch (err: any) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, `Task list failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * task.cancel: Cancel a running task.
+   * params: { taskId: string }
+   */
+  private async handleTaskCancel(client: ClientState, msg: JsonRpcRequest): Promise<void> {
+    const taskManager = this.deps.taskManager;
+    if (!taskManager) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, 'Task system not configured');
+      return;
+    }
+
+    const params = msg.params || {};
+    const taskId = params.taskId as string;
+
+    if (!taskId || typeof taskId !== 'string') {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, 'Missing required param: taskId (string)');
+      return;
+    }
+
+    try {
+      const cancelled = await taskManager.cancel(taskId);
+      this.sendResult(client.ws, msg.id, { taskId, cancelled });
+    } catch (err: any) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, `Task cancel failed: ${err.message}`);
+    }
   }
 
   // ── Message Sending Helpers ─────────────────────────────────────────────
