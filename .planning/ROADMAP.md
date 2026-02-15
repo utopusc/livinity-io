@@ -419,12 +419,13 @@ Plans:
   3. When the AI attempts to run a destructive tool (e.g., delete a file), the user receives an approval prompt and the agent pauses until the user approves or denies
   4. A user can approve a pending tool action from any connected channel (web, Telegram, Slack), not just the channel where the task originated
   5. All tool approval decisions are logged with who approved, what was approved, and when
-**Plans**: TBD
+**Plans**: 4 plans in 2 waves
 
 Plans:
-- [ ] v1.5-04-01: JSON-RPC 2.0 framing, WebSocket auth, method routing, multiplexed sessions
-- [ ] v1.5-04-02: Server-initiated notifications (Redis pub/sub to WebSocket push)
-- [ ] v1.5-04-03: Tool approval metadata, agent loop pause/resume, cross-channel approval, audit trail
+- [ ] v1.5-04-01-PLAN.md — JSON-RPC 2.0 WebSocket gateway: auth, framing, method routing, multiplexed sessions (WS-01, WS-02, WS-03, WS-04)
+- [ ] v1.5-04-02-PLAN.md — Server-initiated notifications via Redis pub/sub to WebSocket push (WS-05)
+- [ ] v1.5-04-03-PLAN.md — HITL core: tool approval metadata, ApprovalManager, agent loop pause/resume (HITL-01, HITL-02, HITL-03)
+- [ ] v1.5-04-04-PLAN.md — HITL wiring: approval policy config, API endpoints, audit trail, destructive tool marking (HITL-04, HITL-05)
 
 ### Phase 5: Skill Marketplace + Parallel Execution
 **Goal**: Users can discover and install community skills from a Git-based marketplace, and the AI can run multiple independent tasks in parallel
@@ -453,7 +454,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Provider Abstraction + Claude Integration | 0/3 | Not started | - |
 | 2. Native Tool Calling + Auth UI | 0/3 | Not started | - |
 | 3. Hybrid Memory + Channel Expansion | 0/3 | Not started | - |
-| 4. WebSocket Gateway + Human-in-the-Loop | 0/3 | Not started | - |
+| 4. WebSocket Gateway + Human-in-the-Loop | 0/4 | Not started | - |
 | 5. Skill Marketplace + Parallel Execution | 0/3 | Not started | - |
 
 ---
