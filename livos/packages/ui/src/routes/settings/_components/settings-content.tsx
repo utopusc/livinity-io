@@ -38,6 +38,9 @@ import {
 	TbKey,
 	TbDatabase,
 	TbUser,
+	TbLoader2,
+	TbAlertCircle,
+	TbCircleCheck,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -54,6 +57,7 @@ import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
+import {RadioGroup, RadioGroupItem} from '@/shadcn-components/ui/radio-group'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {
 	DropdownMenu,
@@ -437,6 +441,7 @@ function AiConfigSection() {
 	const [geminiError, setGeminiError] = useState('')
 
 	const configQ = trpcReact.ai.getConfig.useQuery()
+	const cliStatusQ = trpcReact.ai.getClaudeCliStatus.useQuery()
 	const utils = trpcReact.useUtils()
 
 	const validateKeyMutation = trpcReact.ai.validateKey.useMutation()
@@ -446,6 +451,43 @@ function AiConfigSection() {
 			utils.ai.getConfig.invalidate()
 		},
 	})
+
+	// Auth method state
+	const serverAuthMethod = cliStatusQ.data?.authMethod ?? 'api-key'
+	const [authMethod, setAuthMethod] = useState<'api-key' | 'sdk-subscription'>('api-key')
+
+	useEffect(() => {
+		if (serverAuthMethod) setAuthMethod(serverAuthMethod)
+	}, [serverAuthMethod])
+
+	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
+
+	// Poll CLI status every 5s when subscription mode selected but not authenticated
+	useEffect(() => {
+		if (authMethod !== 'sdk-subscription' || cliAuthenticated) return
+		const interval = setInterval(() => { cliStatusQ.refetch() }, 5000)
+		return () => clearInterval(interval)
+	}, [authMethod, cliAuthenticated])
+
+	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
+		onSuccess: () => { utils.ai.getClaudeCliStatus.invalidate() },
+	})
+
+	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
+		onSuccess: (data) => {
+			if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
+			if (data.alreadyAuthenticated) utils.ai.getClaudeCliStatus.invalidate()
+		},
+	})
+
+	const handleAuthMethodChange = (value: string) => {
+		const method = value as 'api-key' | 'sdk-subscription'
+		setAuthMethod(method)
+		setAuthMethodMutation.mutate({method})
+	}
+
+	const cliInstalled = cliStatusQ.data?.installed ?? false
+	const cliUser = cliStatusQ.data?.user
 
 	const handleSaveAnthropicKey = async () => {
 		if (!anthropicKey.trim()) return
@@ -503,152 +545,216 @@ function AiConfigSection() {
 		}
 	}
 
-	const handleProviderChange = async (provider: string) => {
-		await setConfigMutation.mutateAsync({primaryProvider: provider as 'claude' | 'gemini'})
-	}
-
 	return (
 		<div className='max-w-lg space-y-8'>
-			{/* Provider Selection */}
-			<div className='space-y-3'>
-				<h3 className='text-body font-medium text-text-primary'>Primary Provider</h3>
-				<p className='text-caption text-text-secondary'>
-					Choose which AI provider to use by default. The other will serve as fallback.
-				</p>
-				<Select
-					value={configQ.data?.primaryProvider || 'claude'}
-					onValueChange={handleProviderChange}
-				>
-					<SelectTrigger className='w-[240px]'>
-						<SelectValue placeholder='Select provider' />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value='claude'>Claude (Anthropic)</SelectItem>
-						<SelectItem value='gemini'>Gemini (Google)</SelectItem>
-					</SelectContent>
-				</Select>
+			{/* ── Claude Provider ─────────────────── */}
+			<div className='space-y-4'>
+				<h3 className='text-body font-medium text-text-primary'>Claude Provider</h3>
+
+				<RadioGroup value={authMethod} onValueChange={handleAuthMethodChange} className='gap-0'>
+					{/* SDK Subscription Option */}
+					<label
+						className={cn(
+							'flex cursor-pointer gap-3 rounded-t-radius-md border p-4 transition-colors',
+							authMethod === 'sdk-subscription'
+								? 'border-brand/50 bg-brand/5'
+								: 'border-border-default bg-surface-base hover:bg-surface-1',
+						)}
+					>
+						<RadioGroupItem value='sdk-subscription' className='mt-0.5 shrink-0' />
+						<div className='flex-1 space-y-2'>
+							<div className='flex items-center gap-2'>
+								<span className='text-body font-medium'>Claude Subscription</span>
+								<span className='rounded-full bg-brand/20 px-2 py-0.5 text-caption-sm text-brand'>Recommended</span>
+							</div>
+							<p className='text-body-sm text-text-secondary'>
+								Use your Claude Pro/Max subscription. No API key needed.
+							</p>
+
+							{authMethod === 'sdk-subscription' && (
+								<div className='mt-3 space-y-3'>
+									{cliStatusQ.isLoading ? (
+										<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
+											<TbLoader2 className='h-4 w-4 animate-spin' />
+											Checking CLI status...
+										</div>
+									) : cliAuthenticated ? (
+										<div className='flex items-center gap-2 text-body-sm text-green-400'>
+											<TbCircleCheck className='h-4 w-4' />
+											Authenticated{cliUser ? ` as ${cliUser}` : ''}
+										</div>
+									) : cliInstalled ? (
+										<>
+											<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+												<TbAlertCircle className='h-4 w-4' />
+												CLI installed but not authenticated
+											</div>
+											<Button
+												variant='primary'
+												size='sm'
+												onClick={() => startLoginMutation.mutate()}
+												disabled={startLoginMutation.isPending}
+											>
+												{startLoginMutation.isPending ? (
+													<><TbLoader2 className='h-4 w-4 animate-spin' /> Starting login...</>
+												) : (
+													<><TbExternalLink className='h-4 w-4' /> Authenticate with Claude</>
+												)}
+											</Button>
+											{startLoginMutation.isError && (
+												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
+											)}
+											{startLoginMutation.isSuccess && startLoginMutation.data.url && (
+												<p className='text-caption text-text-secondary'>
+													Auth page opened in a new tab. Complete login there, then this page will update automatically.
+												</p>
+											)}
+										</>
+									) : (
+										<>
+											<div className='flex items-center gap-2 text-body-sm text-red-400'>
+												<TbAlertCircle className='h-4 w-4' />
+												Claude CLI not installed
+											</div>
+											<div className='rounded-radius-sm bg-surface-2 p-3'>
+												<p className='text-caption text-text-secondary'>Run on the server first:</p>
+												<code className='mt-1 block font-mono text-caption text-text-primary'>
+													npm install -g @anthropic-ai/claude-code
+												</code>
+											</div>
+											<Button
+												variant='primary'
+												size='sm'
+												onClick={() => startLoginMutation.mutate()}
+												disabled={startLoginMutation.isPending}
+											>
+												{startLoginMutation.isPending ? (
+													<><TbLoader2 className='h-4 w-4 animate-spin' /> Checking...</>
+												) : (
+													<><TbExternalLink className='h-4 w-4' /> Authenticate with Claude</>
+												)}
+											</Button>
+											{startLoginMutation.isError && (
+												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
+											)}
+										</>
+									)}
+								</div>
+							)}
+						</div>
+					</label>
+
+					{/* API Key Option */}
+					<label
+						className={cn(
+							'flex cursor-pointer gap-3 rounded-b-radius-md border border-t-0 p-4 transition-colors',
+							authMethod === 'api-key'
+								? 'border-brand/50 bg-brand/5'
+								: 'border-border-default bg-surface-base hover:bg-surface-1',
+						)}
+					>
+						<RadioGroupItem value='api-key' className='mt-0.5 shrink-0' />
+						<div className='flex-1 space-y-2'>
+							<span className='text-body font-medium'>API Key</span>
+							<p className='text-body-sm text-text-secondary'>
+								Enter your Anthropic API key directly.
+							</p>
+
+							{authMethod === 'api-key' && (
+								<div className='mt-3 space-y-3'>
+									{configQ.data?.hasAnthropicKey && (
+										<div className='flex items-center gap-2 text-body-sm text-green-400'>
+											<TbCircleCheck className='h-4 w-4' />
+											Current: {configQ.data.anthropicApiKey}
+										</div>
+									)}
+									<Input
+										placeholder='sk-ant-...'
+										value={anthropicKey}
+										onValueChange={(v) => { setAnthropicKey(v); setAnthropicError('') }}
+										onKeyDown={(e) => e.key === 'Enter' && handleSaveAnthropicKey()}
+										className='font-mono'
+									/>
+									{anthropicError && (
+										<p className='text-caption-sm text-red-400'>{anthropicError}</p>
+									)}
+									<a
+										href='https://console.anthropic.com/settings/keys'
+										target='_blank'
+										rel='noopener noreferrer'
+										className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+									>
+										<TbExternalLink className='h-3.5 w-3.5' />
+										Get API key from Anthropic Console
+									</a>
+									<Button
+										variant='primary'
+										size='sm'
+										onClick={handleSaveAnthropicKey}
+										disabled={!anthropicKey.trim() || anthropicValidating}
+									>
+										{anthropicSaved ? (
+											<><TbCheck className='h-4 w-4' /> Saved</>
+										) : anthropicValidating ? (
+											'Validating...'
+										) : (
+											'Save API Key'
+										)}
+									</Button>
+								</div>
+							)}
+						</div>
+					</label>
+				</RadioGroup>
 			</div>
 
 			<div className='border-t border-border-subtle' />
 
-			{/* Anthropic API Key */}
+			{/* ── Gemini (Fallback) ─────────────────── */}
 			<div className='space-y-4'>
-				<h3 className='text-body font-medium text-text-primary'>Anthropic API Key</h3>
+				<h3 className='text-body font-medium text-text-primary'>Gemini (Fallback)</h3>
 
-				<SettingsInfoCard
-					icon={TbKey}
-					title='Current Key'
-					description={configQ.isLoading ? 'Loading...' : configQ.data?.hasAnthropicKey ? configQ.data.anthropicApiKey : 'Not configured'}
-				>
-					{configQ.data?.hasAnthropicKey && (
-						<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
-					)}
-				</SettingsInfoCard>
-
-				<div className='space-y-3'>
-					<label className='text-caption text-text-secondary'>Enter new API key</label>
-					<Input
-						placeholder='sk-ant-...'
-						value={anthropicKey}
-						onValueChange={(v) => { setAnthropicKey(v); setAnthropicError(''); }}
-						onKeyDown={(e) => e.key === 'Enter' && handleSaveAnthropicKey()}
-						className='font-mono'
-					/>
-					{anthropicError && (
-						<p className='text-caption-sm text-red-400'>{anthropicError}</p>
-					)}
-					<p className='text-caption-sm text-text-tertiary'>
-						Your API key is validated before saving and stored securely.
-					</p>
-				</div>
-
-				<a
-					href='https://console.anthropic.com/settings/keys'
-					target='_blank'
-					rel='noopener noreferrer'
-					className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
-				>
-					<TbExternalLink className='h-4 w-4' />
-					Get your API key from Anthropic Console
-				</a>
-
-				<Button
-					variant='primary'
-					onClick={handleSaveAnthropicKey}
-					disabled={!anthropicKey.trim() || anthropicValidating}
-				>
-					{anthropicSaved ? (
-						<>
-							<TbCheck className='h-4 w-4' />
-							Saved
-						</>
-					) : anthropicValidating ? (
-						'Validating...'
-					) : (
-						'Save API Key'
-					)}
-				</Button>
-			</div>
-
-			<div className='border-t border-border-subtle' />
-
-			{/* Gemini API Key */}
-			<div className='space-y-4'>
-				<h3 className='text-body font-medium text-text-primary'>Gemini API Key</h3>
-
-				<SettingsInfoCard
-					icon={TbKey}
-					title='Current Key'
-					description={configQ.isLoading ? 'Loading...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not configured'}
-				>
+				<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
 					{configQ.data?.hasGeminiKey && (
-						<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
+						<div className='flex items-center gap-2 text-body-sm text-green-400'>
+							<TbCircleCheck className='h-4 w-4' />
+							Current: {configQ.data.geminiApiKey}
+						</div>
 					)}
-				</SettingsInfoCard>
-
-				<div className='space-y-3'>
-					<label className='text-caption text-text-secondary'>Enter new API key</label>
 					<Input
 						placeholder='AIzaSy...'
 						value={geminiKey}
-						onValueChange={(v) => { setGeminiKey(v); setGeminiError(''); }}
+						onValueChange={(v) => { setGeminiKey(v); setGeminiError('') }}
 						onKeyDown={(e) => e.key === 'Enter' && handleSaveGeminiKey()}
 						className='font-mono'
 					/>
 					{geminiError && (
 						<p className='text-caption-sm text-red-400'>{geminiError}</p>
 					)}
-					<p className='text-caption-sm text-text-tertiary'>
-						Your API key is validated before saving and stored securely.
-					</p>
+					<a
+						href='https://aistudio.google.com/app/apikey'
+						target='_blank'
+						rel='noopener noreferrer'
+						className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+					>
+						<TbExternalLink className='h-3.5 w-3.5' />
+						Get API key from Google AI Studio
+					</a>
+					<Button
+						variant='primary'
+						size='sm'
+						onClick={handleSaveGeminiKey}
+						disabled={!geminiKey.trim() || geminiValidating}
+					>
+						{geminiSaved ? (
+							<><TbCheck className='h-4 w-4' /> Saved</>
+						) : geminiValidating ? (
+							'Validating...'
+						) : (
+							'Save API Key'
+						)}
+					</Button>
 				</div>
-
-				<a
-					href='https://aistudio.google.com/app/apikey'
-					target='_blank'
-					rel='noopener noreferrer'
-					className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
-				>
-					<TbExternalLink className='h-4 w-4' />
-					Get your API key from Google AI Studio
-				</a>
-
-				<Button
-					variant='primary'
-					onClick={handleSaveGeminiKey}
-					disabled={!geminiKey.trim() || geminiValidating}
-				>
-					{geminiSaved ? (
-						<>
-							<TbCheck className='h-4 w-4' />
-							Saved
-						</>
-					) : geminiValidating ? (
-						'Validating...'
-					) : (
-						'Save API Key'
-					)}
-				</Button>
 			</div>
 		</div>
 	)
