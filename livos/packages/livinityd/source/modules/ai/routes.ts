@@ -660,7 +660,7 @@ export default router({
 
 	/** Get integration config for a channel */
 	getIntegrationConfig: privateProcedure
-		.input(z.object({channel: z.enum(['discord', 'telegram'])}))
+		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.query(async ({ctx, input}) => {
 			try {
 				const redis = ctx.livinityd.ai.redis
@@ -672,6 +672,8 @@ export default router({
 					appToken?: string
 					webhookUrl?: string
 					webhookSecret?: string
+					homeserverUrl?: string
+					roomId?: string
 				}
 			} catch (error) {
 				ctx.livinityd.logger.error(`Failed to get ${input.channel} config`, error)
@@ -681,7 +683,7 @@ export default router({
 
 	/** Get integration status for a channel */
 	getIntegrationStatus: privateProcedure
-		.input(z.object({channel: z.enum(['discord', 'telegram'])}))
+		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.query(async ({ctx, input}) => {
 			try {
 				const redis = ctx.livinityd.ai.redis
@@ -712,13 +714,15 @@ export default router({
 	saveIntegrationConfig: privateProcedure
 		.input(
 			z.object({
-				channel: z.enum(['discord', 'telegram']),
+				channel: z.enum(['discord', 'telegram', 'slack', 'matrix']),
 				config: z.object({
 					enabled: z.boolean().optional(),
 					token: z.string().optional(),
 					appToken: z.string().optional(),
 					webhookUrl: z.string().optional(),
 					webhookSecret: z.string().optional(),
+					homeserverUrl: z.string().optional(),
+					roomId: z.string().optional(),
 				}),
 			}),
 		)
@@ -747,7 +751,7 @@ export default router({
 
 	/** Test integration connection */
 	testIntegration: privateProcedure
-		.input(z.object({channel: z.enum(['discord', 'telegram'])}))
+		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.mutation(async ({ctx, input}) => {
 			try {
 				const nexusUrl = getNexusApiUrl()

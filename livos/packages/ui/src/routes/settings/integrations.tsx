@@ -1,6 +1,8 @@
 import {useState, useEffect} from 'react'
 import {
 	TbBrandDiscord,
+	TbBrandMatrix,
+	TbBrandSlack,
 	TbBrandTelegram,
 	TbPlugConnected,
 	TbPlugConnectedX,
@@ -58,6 +60,26 @@ const CHANNELS = [
 		description: 'Connect your Discord bot',
 		docsUrl: 'https://discord.com/developers/docs/intro',
 	},
+	{
+		id: 'slack',
+		name: 'Slack',
+		icon: TbBrandSlack,
+		color: 'text-purple-400',
+		bgColor: 'bg-purple-500/10',
+		borderColor: 'border-purple-500/30',
+		description: 'Connect via Slack app with Socket Mode',
+		docsUrl: 'https://api.slack.com/start/quickstart',
+	},
+	{
+		id: 'matrix',
+		name: 'Matrix',
+		icon: TbBrandMatrix,
+		color: 'text-emerald-400',
+		bgColor: 'bg-emerald-500/10',
+		borderColor: 'border-emerald-500/30',
+		description: 'Connect via Matrix homeserver',
+		docsUrl: 'https://matrix.org/docs/guides/',
+	},
 ] as const
 
 type ChannelId = (typeof CHANNELS)[number]['id']
@@ -72,7 +94,7 @@ export default function IntegrationsPage() {
 	return (
 		<SettingsPageLayout title='Integrations' description='Connect messaging platforms to interact with Nexus AI from anywhere'>
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChannelId)}>
-				<TabsList className='grid w-full grid-cols-2'>
+				<TabsList className='grid w-full grid-cols-4'>
 					{CHANNELS.map((channel) => (
 						<TabsTrigger
 							key={channel.id}
@@ -91,6 +113,12 @@ export default function IntegrationsPage() {
 					</TabsContent>
 					<TabsContent value='discord' className='mt-0'>
 						<DiscordPanel />
+					</TabsContent>
+					<TabsContent value='slack' className='mt-0'>
+						<SlackPanel />
+					</TabsContent>
+					<TabsContent value='matrix' className='mt-0'>
+						<MatrixPanel />
 					</TabsContent>
 				</div>
 			</Tabs>
@@ -374,6 +402,342 @@ function DiscordPanel() {
 					'Mention your bot in any channel to interact',
 					'Use slash commands for quick actions',
 					'Configure per-channel settings in Discord',
+				]}
+			/>
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slack Panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SlackPanel() {
+	const [botToken, setBotToken] = useState('')
+	const [appToken, setAppToken] = useState('')
+	const [showBotToken, setShowBotToken] = useState(false)
+	const [showAppToken, setShowAppToken] = useState(false)
+
+	const configQ = trpcReact.ai.getIntegrationConfig.useQuery({channel: 'slack'})
+	const statusQ = trpcReact.ai.getIntegrationStatus.useQuery({channel: 'slack'})
+	const saveMutation = trpcReact.ai.saveIntegrationConfig.useMutation()
+	const testMutation = trpcReact.ai.testIntegration.useMutation()
+	const utils = trpcReact.useUtils()
+
+	useEffect(() => {
+		if (configQ.data?.token) setBotToken(configQ.data.token)
+		if (configQ.data?.appToken) setAppToken(configQ.data.appToken)
+	}, [configQ.data])
+
+	const channel = CHANNELS.find((c) => c.id === 'slack')!
+	const status = statusQ.data as ChannelStatus | undefined
+
+	const handleSave = async () => {
+		await saveMutation.mutateAsync({channel: 'slack', config: {token: botToken, appToken, enabled: true}})
+		utils.ai.getIntegrationConfig.invalidate()
+		utils.ai.getIntegrationStatus.invalidate()
+	}
+
+	const handleTest = async () => {
+		await testMutation.mutateAsync({channel: 'slack'})
+		utils.ai.getIntegrationStatus.invalidate()
+	}
+
+	const handleDisable = async () => {
+		await saveMutation.mutateAsync({channel: 'slack', config: {enabled: false}})
+		utils.ai.getIntegrationConfig.invalidate()
+		utils.ai.getIntegrationStatus.invalidate()
+	}
+
+	return (
+		<div className='space-y-4'>
+			<ChannelHeader channel={channel} />
+
+			{/* Status */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='flex items-center justify-between'>
+					<div className='text-body font-medium'>Connection Status</div>
+					<Button
+						variant='default'
+						size='sm'
+						onClick={() => utils.ai.getIntegrationStatus.invalidate({channel: 'slack'})}
+						disabled={statusQ.isLoading}
+					>
+						<TbRefresh className={cn('h-4 w-4', statusQ.isLoading && 'animate-spin')} />
+					</Button>
+				</div>
+
+				{statusQ.isLoading ? (
+					<LoadingState />
+				) : status ? (
+					<div className='mt-4 space-y-3'>
+						<StatusRow label='Enabled' connected={status.enabled} />
+						<StatusRow label='Connected' connected={status.connected} />
+						{status.botName && (
+							<div className='flex items-center justify-between text-caption'>
+								<span className='text-text-secondary'>Bot</span>
+								<span className='text-text-secondary'>{status.botName}</span>
+							</div>
+						)}
+						{status.error && <ErrorBanner message={status.error} />}
+					</div>
+				) : (
+					<EmptyState message='Not configured' />
+				)}
+			</div>
+
+			{/* Bot Token */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>Bot Token</div>
+				<div className='mt-1 text-caption text-text-secondary'>
+					Bot User OAuth Token (xoxb-...) from your Slack app settings
+				</div>
+				<div className='mt-3 flex gap-2'>
+					<div className='relative flex-1'>
+						<Input
+							type={showBotToken ? 'text' : 'password'}
+							value={botToken}
+							onChange={(e) => setBotToken(e.target.value)}
+							placeholder='xoxb-...'
+							className='pr-10'
+						/>
+						<button
+							type='button'
+							onClick={() => setShowBotToken(!showBotToken)}
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-secondary'
+						>
+							{showBotToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
+						</button>
+					</div>
+				</div>
+			</div>
+
+			{/* App-Level Token */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>App-Level Token</div>
+				<div className='mt-1 text-caption text-text-secondary'>
+					App-Level Token (xapp-...) with <code className='rounded bg-surface-2 px-1'>connections:write</code> scope for Socket Mode
+				</div>
+				<div className='mt-3 flex gap-2'>
+					<div className='relative flex-1'>
+						<Input
+							type={showAppToken ? 'text' : 'password'}
+							value={appToken}
+							onChange={(e) => setAppToken(e.target.value)}
+							placeholder='xapp-...'
+							className='pr-10'
+						/>
+						<button
+							type='button'
+							onClick={() => setShowAppToken(!showAppToken)}
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-secondary'
+						>
+							{showAppToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
+						</button>
+					</div>
+				</div>
+			</div>
+
+			{/* Actions */}
+			<div className='flex gap-2'>
+				<Button
+					variant='primary'
+					className='flex-1'
+					onClick={handleSave}
+					disabled={!botToken || !appToken || saveMutation.isPending}
+				>
+					{saveMutation.isPending ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+					Save & Connect
+				</Button>
+				<Button variant='default' onClick={handleTest} disabled={!status?.enabled || testMutation.isPending}>
+					{testMutation.isPending ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+					Test
+				</Button>
+				{status?.enabled && (
+					<Button variant='destructive' onClick={handleDisable} disabled={saveMutation.isPending}>
+						Disable
+					</Button>
+				)}
+			</div>
+
+			<UsageInfo
+				items={[
+					'Requires a Slack app with Socket Mode enabled',
+					'Bot needs chat:write and app_mentions:read scopes',
+					'Message the bot directly or mention it in channels',
+				]}
+			/>
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Matrix Panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MatrixPanel() {
+	const [homeserverUrl, setHomeserverUrl] = useState('')
+	const [token, setToken] = useState('')
+	const [roomId, setRoomId] = useState('')
+	const [showToken, setShowToken] = useState(false)
+
+	const configQ = trpcReact.ai.getIntegrationConfig.useQuery({channel: 'matrix'})
+	const statusQ = trpcReact.ai.getIntegrationStatus.useQuery({channel: 'matrix'})
+	const saveMutation = trpcReact.ai.saveIntegrationConfig.useMutation()
+	const testMutation = trpcReact.ai.testIntegration.useMutation()
+	const utils = trpcReact.useUtils()
+
+	useEffect(() => {
+		if (configQ.data?.token) setToken(configQ.data.token)
+		if (configQ.data?.homeserverUrl) setHomeserverUrl(configQ.data.homeserverUrl)
+		if (configQ.data?.roomId) setRoomId(configQ.data.roomId)
+	}, [configQ.data])
+
+	const channel = CHANNELS.find((c) => c.id === 'matrix')!
+	const status = statusQ.data as ChannelStatus | undefined
+
+	const handleSave = async () => {
+		await saveMutation.mutateAsync({
+			channel: 'matrix',
+			config: {token, homeserverUrl, roomId, enabled: true},
+		})
+		utils.ai.getIntegrationConfig.invalidate()
+		utils.ai.getIntegrationStatus.invalidate()
+	}
+
+	const handleTest = async () => {
+		await testMutation.mutateAsync({channel: 'matrix'})
+		utils.ai.getIntegrationStatus.invalidate()
+	}
+
+	const handleDisable = async () => {
+		await saveMutation.mutateAsync({channel: 'matrix', config: {enabled: false}})
+		utils.ai.getIntegrationConfig.invalidate()
+		utils.ai.getIntegrationStatus.invalidate()
+	}
+
+	return (
+		<div className='space-y-4'>
+			<ChannelHeader channel={channel} />
+
+			{/* Status */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='flex items-center justify-between'>
+					<div className='text-body font-medium'>Connection Status</div>
+					<Button
+						variant='default'
+						size='sm'
+						onClick={() => utils.ai.getIntegrationStatus.invalidate({channel: 'matrix'})}
+						disabled={statusQ.isLoading}
+					>
+						<TbRefresh className={cn('h-4 w-4', statusQ.isLoading && 'animate-spin')} />
+					</Button>
+				</div>
+
+				{statusQ.isLoading ? (
+					<LoadingState />
+				) : status ? (
+					<div className='mt-4 space-y-3'>
+						<StatusRow label='Enabled' connected={status.enabled} />
+						<StatusRow label='Connected' connected={status.connected} />
+						{status.botName && (
+							<div className='flex items-center justify-between text-caption'>
+								<span className='text-text-secondary'>User</span>
+								<span className='text-text-secondary'>@{status.botName}</span>
+							</div>
+						)}
+						{status.error && <ErrorBanner message={status.error} />}
+					</div>
+				) : (
+					<EmptyState message='Not configured' />
+				)}
+			</div>
+
+			{/* Homeserver URL */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>Homeserver URL</div>
+				<div className='mt-1 text-caption text-text-secondary'>
+					Your Matrix homeserver (e.g., https://matrix.org)
+				</div>
+				<div className='mt-3'>
+					<Input
+						type='text'
+						value={homeserverUrl}
+						onChange={(e) => setHomeserverUrl(e.target.value)}
+						placeholder='https://matrix.org'
+					/>
+				</div>
+			</div>
+
+			{/* Access Token */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>Access Token</div>
+				<div className='mt-1 text-caption text-text-secondary'>
+					Bot account access token (get from Element: Settings &rarr; Help & About &rarr; Access Token)
+				</div>
+				<div className='mt-3 flex gap-2'>
+					<div className='relative flex-1'>
+						<Input
+							type={showToken ? 'text' : 'password'}
+							value={token}
+							onChange={(e) => setToken(e.target.value)}
+							placeholder='syt_...'
+							className='pr-10'
+						/>
+						<button
+							type='button'
+							onClick={() => setShowToken(!showToken)}
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-secondary'
+						>
+							{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
+						</button>
+					</div>
+				</div>
+			</div>
+
+			{/* Room ID */}
+			<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='text-body font-medium'>Room ID</div>
+				<div className='mt-1 text-caption text-text-secondary'>
+					The room to listen in (e.g., !abc123:matrix.org). Leave empty to listen in all joined rooms.
+				</div>
+				<div className='mt-3'>
+					<Input
+						type='text'
+						value={roomId}
+						onChange={(e) => setRoomId(e.target.value)}
+						placeholder='!roomid:matrix.org'
+					/>
+				</div>
+			</div>
+
+			{/* Actions */}
+			<div className='flex gap-2'>
+				<Button
+					variant='primary'
+					className='flex-1'
+					onClick={handleSave}
+					disabled={!token || !homeserverUrl || saveMutation.isPending}
+				>
+					{saveMutation.isPending ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+					Save & Connect
+				</Button>
+				<Button variant='default' onClick={handleTest} disabled={!status?.enabled || testMutation.isPending}>
+					{testMutation.isPending ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+					Test
+				</Button>
+				{status?.enabled && (
+					<Button variant='destructive' onClick={handleDisable} disabled={saveMutation.isPending}>
+						Disable
+					</Button>
+				)}
+			</div>
+
+			<UsageInfo
+				items={[
+					'Create a bot account on your homeserver',
+					'Invite the bot to the target room',
+					'Messages in the room will be processed by the AI',
 				]}
 			/>
 		</div>
