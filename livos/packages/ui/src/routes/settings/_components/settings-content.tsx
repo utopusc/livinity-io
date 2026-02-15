@@ -462,6 +462,11 @@ function AiConfigSection() {
 
 	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
 
+	// Clear login URL when auth succeeds
+	useEffect(() => {
+		if (cliAuthenticated && loginUrl) setLoginUrl(null)
+	}, [cliAuthenticated, loginUrl])
+
 	// Poll CLI status every 5s when subscription mode selected but not authenticated
 	useEffect(() => {
 		if (authMethod !== 'sdk-subscription' || cliAuthenticated) return
@@ -474,25 +479,25 @@ function AiConfigSection() {
 	})
 
 	const [loginUrl, setLoginUrl] = useState<string | null>(null)
-	const [loginCode, setLoginCode] = useState('')
 
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
 			if (data.url) setLoginUrl(data.url)
-			if (data.alreadyAuthenticated) utils.ai.getClaudeCliStatus.invalidate()
-		},
-	})
-
-	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
-		onSuccess: (data) => {
-			if (data.success) {
+			if (data.alreadyAuthenticated) {
 				setLoginUrl(null)
-				setLoginCode('')
-				// Poll for auth status after submitting code
-				setTimeout(() => cliStatusQ.refetch(), 3000)
+				utils.ai.getClaudeCliStatus.invalidate()
 			}
 		},
 	})
+
+	// When login URL is shown, poll more frequently (every 3s) to detect auth completion
+	useEffect(() => {
+		if (!loginUrl) return
+		const interval = setInterval(() => {
+			cliStatusQ.refetch()
+		}, 3000)
+		return () => clearInterval(interval)
+	}, [loginUrl])
 
 	const handleAuthMethodChange = (value: string) => {
 		const method = value as 'api-key' | 'sdk-subscription'
@@ -619,9 +624,10 @@ function AiConfigSection() {
 												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
 											)}
 											{loginUrl && (
-												<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
+												<div className='space-y-2 rounded-radius-sm bg-surface-2 p-3'>
 													<p className='text-caption text-text-secondary'>
-														1. Click the link below to sign in with your Claude account:
+														Click the link below to sign in with your Claude account.
+														After signing in, this page will update automatically.
 													</p>
 													<a
 														href={loginUrl}
@@ -632,40 +638,10 @@ function AiConfigSection() {
 														<TbExternalLink className='h-3.5 w-3.5 shrink-0' />
 														Open Claude sign-in page
 													</a>
-													<p className='text-caption text-text-secondary'>
-														2. After signing in, paste the code you receive below:
-													</p>
-													<div className='flex gap-2'>
-														<Input
-															value={loginCode}
-															onChange={(e) => setLoginCode(e.target.value)}
-															placeholder='Paste your auth code here...'
-															className='flex-1 font-mono text-caption'
-															onKeyDown={(e) => {
-																if (e.key === 'Enter' && loginCode.trim()) {
-																	submitCodeMutation.mutate({ code: loginCode.trim() })
-																}
-															}}
-														/>
-														<Button
-															variant='primary'
-															size='sm'
-															onClick={() => submitCodeMutation.mutate({ code: loginCode.trim() })}
-															disabled={!loginCode.trim() || submitCodeMutation.isPending}
-														>
-															{submitCodeMutation.isPending ? (
-																<TbLoader2 className='h-4 w-4 animate-spin' />
-															) : (
-																'Submit'
-															)}
-														</Button>
+													<div className='flex items-center gap-2 text-caption text-text-secondary'>
+														<TbLoader2 className='h-3.5 w-3.5 animate-spin' />
+														Waiting for authentication...
 													</div>
-													{submitCodeMutation.isError && (
-														<p className='text-caption text-red-400'>{submitCodeMutation.error.message}</p>
-													)}
-													{submitCodeMutation.isSuccess && submitCodeMutation.data?.success && (
-														<p className='text-caption text-green-400'>Code submitted! Checking authentication...</p>
-													)}
 												</div>
 											)}
 										</>

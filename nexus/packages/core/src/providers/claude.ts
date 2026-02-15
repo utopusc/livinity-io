@@ -336,7 +336,7 @@ export class ClaudeProvider implements AIProvider {
       const proc = spawn('claude', ['auth', 'login'], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, BROWSER: 'echo' }, // Prevent auto-opening browser, just print the URL
-        timeout: 300_000, // 5 minute timeout
+        timeout: 600_000, // 10 minute timeout
       });
 
       this.loginProcess = { proc, startedAt: Date.now() };
