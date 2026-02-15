@@ -1,5 +1,4 @@
 import express from 'express';
-import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import Redis from 'ioredis';
 import { logger } from './logger.js';
@@ -15,6 +14,8 @@ import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
 import { AppManager, createAppRoutes } from './modules/apps/index.js';
 import type { ChannelManager, ChannelId, ChannelConfig } from './channels/index.js';
+import { WsGateway } from './ws-gateway.js';
+import type { WsGatewayDeps } from './ws-gateway.js';
 
 interface ApiDeps {
   daemon: Daemon;
@@ -662,62 +663,12 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   return app;
 }
 
-// ── WebSocket Server ──────────────────────────────────────────
+// ── WebSocket Gateway ─────────────────────────────────────────
 
-export function setupWebSocket(server: Server, brain: Brain, toolRegistry: ToolRegistry) {
-  const wss = new WebSocketServer({ server, path: '/ws/agent' });
-
-  wss.on('connection', (ws: WebSocket) => {
-    logger.info('WebSocket: client connected');
-
-    ws.on('message', async (raw: Buffer) => {
-      let msg: { type: string; task?: string; max_turns?: number };
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        ws.send(JSON.stringify({ type: 'error', data: 'Invalid JSON' }));
-        return;
-      }
-
-      if (msg.type !== 'agent' || !msg.task) {
-        ws.send(JSON.stringify({ type: 'error', data: 'Expected { type: "agent", task: "..." }' }));
-        return;
-      }
-
-      logger.info('WebSocket: agent stream started', { task: msg.task.slice(0, 80) });
-
-      const agent = new AgentLoop({
-        brain,
-        toolRegistry,
-        maxTurns: Math.min(msg.max_turns || parseInt(process.env.AGENT_MAX_TURNS || '10'), 20),
-        maxTokens: parseInt(process.env.AGENT_MAX_TOKENS || '100000'),
-        timeoutMs: parseInt(process.env.AGENT_TIMEOUT_MS || '300000'),
-        tier: (process.env.AGENT_TIER as any) || 'sonnet',
-        maxDepth: parseInt(process.env.AGENT_MAX_DEPTH || '3'),
-        stream: true,
-      });
-
-      const sendEvent = (event: AgentEvent) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(event));
-        }
-      };
-
-      agent.on('event', sendEvent);
-
-      try {
-        const result = await agent.run(msg.task);
-        sendEvent({ type: 'done', data: { success: result.success, answer: result.answer, turns: result.turns, stoppedReason: result.stoppedReason } });
-      } catch (err) {
-        sendEvent({ type: 'error', data: formatErrorMessage(err) });
-      }
-    });
-
-    ws.on('close', () => {
-      logger.info('WebSocket: client disconnected');
-    });
-  });
-
-  logger.info('WebSocket server on /ws/agent');
-  return wss;
+/**
+ * Create and attach a JSON-RPC 2.0 WebSocket gateway to the HTTP server.
+ * Replaces the old bare setupWebSocket with auth, multiplexing, and standard protocol.
+ */
+export function setupWsGateway(server: Server, deps: WsGatewayDeps): WsGateway {
+  return new WsGateway(server, deps);
 }
