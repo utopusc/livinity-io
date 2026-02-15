@@ -168,12 +168,6 @@
 | CHAN-03 | Phase 3 | Pending |
 | CHAN-04 | Phase 3 | Pending |
 | CHAN-05 | Phase 3 | Pending |
-| SKILL-01 | Phase 5 | Pending |
-| SKILL-02 | Phase 5 | Pending |
-| SKILL-03 | Phase 5 | Pending |
-| SKILL-04 | Phase 5 | Pending |
-| SKILL-05 | Phase 5 | Pending |
-| SKILL-06 | Phase 5 | Pending |
 | WS-01 | Phase 4 | Pending |
 | WS-02 | Phase 4 | Pending |
 | WS-03 | Phase 4 | Pending |
@@ -184,16 +178,22 @@
 | HITL-03 | Phase 4 | Pending |
 | HITL-04 | Phase 4 | Pending |
 | HITL-05 | Phase 4 | Pending |
+| SKILL-01 | Phase 5 | Pending |
+| SKILL-02 | Phase 5 | Pending |
+| SKILL-03 | Phase 5 | Pending |
+| SKILL-04 | Phase 5 | Pending |
+| SKILL-05 | Phase 5 | Pending |
+| SKILL-06 | Phase 5 | Pending |
 | PARA-01 | Phase 5 | Pending |
 | PARA-02 | Phase 5 | Pending |
 | PARA-03 | Phase 5 | Pending |
 | PARA-04 | Phase 5 | Pending |
 
 **Coverage:**
-- v1.5 requirements: 50 total
-- Mapped to phases: 50
+- v1.5 requirements: 54 total
+- Mapped to phases: 54
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-15*
-*Last updated: 2026-02-15 after research synthesis*
+*Last updated: 2026-02-15 — roadmap created, traceability verified*

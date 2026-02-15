@@ -343,6 +343,118 @@ Plans:
 | 3. Proxy & Anti-Detection | 0/1 | Not started | - |
 
 ---
+
+## Milestone: v1.5 — Claude Migration & AI Platform
+
+**Overview**: Replace Gemini as the sole AI backend with a multi-provider architecture where Claude is primary and Gemini serves as fallback. Integrate OpenClaw-inspired features: hybrid memory with automatic extraction, skill marketplace with Git-based registries, expanded channel support (Slack, Matrix), WebSocket RPC gateway, human-in-the-loop tool approval, and parallel agent execution. The result is LivOS as a serious AI platform, not just a Gemini wrapper.
+
+### v1.5 Phases
+
+- [ ] **Phase 1: Provider Abstraction + Claude Integration** - Multi-provider AI backend with Claude primary, Gemini fallback
+- [ ] **Phase 2: Native Tool Calling + Auth UI** - Claude native tool_use, dual-mode AgentLoop, API key management UI
+- [ ] **Phase 3: Hybrid Memory + Channel Expansion** - Automatic memory extraction, Slack and Matrix channels
+- [ ] **Phase 4: WebSocket Gateway + Human-in-the-Loop** - JSON-RPC 2.0 over WebSocket, tool approval system
+- [ ] **Phase 5: Skill Marketplace + Parallel Execution** - Git-based skill registry, concurrent agent tasks
+
+### Phase 1: Provider Abstraction + Claude Integration
+**Goal**: Users can chat with Claude as the primary AI and automatically fall back to Gemini when Claude is unavailable, with no change to the existing UI or streaming experience
+**Depends on**: Nothing (first v1.5 phase)
+**Requirements**: PROV-01, PROV-02, PROV-03, PROV-04, PROV-05, PROV-06, PROV-07, CLAUDE-01, CLAUDE-02, CLAUDE-03, CLAUDE-04, CLAUDE-05, GEM-01, GEM-02, GEM-03
+**Success Criteria** (what must be TRUE):
+  1. User can send a message in web chat and receive a streaming response from Claude (Sonnet by default)
+  2. If the Claude API returns 429/503 or times out, the same message automatically retries with Gemini and the user sees a response (not an error)
+  3. Existing Gemini conversations continue to work identically after the migration (no regression)
+  4. Token usage (input/output tokens) is displayed consistently regardless of which provider handled the request
+  5. The AI chat streaming experience (chunks appearing, tool call indicators, done events) is visually identical to before the migration
+**Plans**: TBD
+
+Plans:
+- [ ] v1.5-01-01: AIProvider interface, provider-neutral message format, message normalization layer
+- [ ] v1.5-01-02: ClaudeProvider implementation with streaming, model tier mapping
+- [ ] v1.5-01-03: GeminiProvider extraction from Brain class, fallback logic, Brain refactor as thin wrapper
+
+### Phase 2: Native Tool Calling + Auth UI
+**Goal**: AI agent uses Claude's native tool calling for reliable tool execution, and users can configure API keys and provider preferences through the Settings UI
+**Depends on**: Phase 1 (provider abstraction must exist)
+**Requirements**: TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05, AUTH-01, AUTH-02, AUTH-03, AUTH-04
+**Success Criteria** (what must be TRUE):
+  1. User asks the AI to perform a tool action (e.g., "list my Docker containers") and sees the tool call execute successfully with Claude's native tool_use format
+  2. When the AI uses extended thinking, the user can expand a collapsible section in the chat UI to see the reasoning
+  3. User can navigate to Settings, enter an Anthropic API key, and the system validates it before saving
+  4. User can select a primary provider (Claude or Gemini) and configure a fallback chain in Settings
+  5. A fresh install via install.sh prompts for an Anthropic API key during the setup wizard
+**Plans**: TBD
+
+Plans:
+- [ ] v1.5-02-01: ToolRegistry.toClaudeTools(), dual-mode AgentLoop (native tool_use + JSON-in-text)
+- [ ] v1.5-02-02: tool_use_id tracking, parallel tool call handling, extended thinking UI
+- [ ] v1.5-02-03: Settings UI for API keys, provider selection, key validation, install.sh update
+
+### Phase 3: Hybrid Memory + Channel Expansion
+**Goal**: The AI remembers important facts from past conversations automatically, and users can interact with the AI through Slack and Matrix in addition to existing channels
+**Depends on**: Phase 1 (needs provider abstraction for memory extraction LLM calls)
+**Requirements**: MEM-01, MEM-02, MEM-03, MEM-04, MEM-05, CHAN-01, CHAN-02, CHAN-03, CHAN-04, CHAN-05
+**Success Criteria** (what must be TRUE):
+  1. After a conversation where the user mentions a preference (e.g., "I prefer dark mode"), the AI recalls this in a future conversation without being reminded
+  2. Duplicate memories are not accumulated (telling the AI the same fact twice does not create two memory entries)
+  3. Recent memories are prioritized over old ones in the AI's context (time-decay scoring)
+  4. User can add a Slack workspace in Settings and send messages to the AI via Slack, receiving responses in the same Slack channel
+  5. User can configure a Matrix room in Settings and interact with the AI through Matrix messages
+**Plans**: TBD
+
+Plans:
+- [ ] v1.5-03-01: Automatic memory extraction (BullMQ job), deduplication, session binding, temporal scoring
+- [ ] v1.5-03-02: Context window optimization (relevance-scored memory assembly within token budget)
+- [ ] v1.5-03-03: SlackProvider, MatrixProvider, ChannelId update, per-channel Settings UI, routing race fix
+
+### Phase 4: WebSocket Gateway + Human-in-the-Loop
+**Goal**: External clients can interact with the AI agent over a standardized WebSocket protocol, and destructive tool operations require explicit user approval before execution
+**Depends on**: Phase 2 (needs tool calling infrastructure for approval gates)
+**Requirements**: WS-01, WS-02, WS-03, WS-04, WS-05, HITL-01, HITL-02, HITL-03, HITL-04, HITL-05
+**Success Criteria** (what must be TRUE):
+  1. A client can connect to the WebSocket endpoint with a valid API key or JWT, send a JSON-RPC request to run an agent task, and receive streaming results
+  2. Multiple concurrent agent tasks can run over a single WebSocket connection (multiplexed by session ID)
+  3. When the AI attempts to run a destructive tool (e.g., delete a file), the user receives an approval prompt and the agent pauses until the user approves or denies
+  4. A user can approve a pending tool action from any connected channel (web, Telegram, Slack), not just the channel where the task originated
+  5. All tool approval decisions are logged with who approved, what was approved, and when
+**Plans**: TBD
+
+Plans:
+- [ ] v1.5-04-01: JSON-RPC 2.0 framing, WebSocket auth, method routing, multiplexed sessions
+- [ ] v1.5-04-02: Server-initiated notifications (Redis pub/sub to WebSocket push)
+- [ ] v1.5-04-03: Tool approval metadata, agent loop pause/resume, cross-channel approval, audit trail
+
+### Phase 5: Skill Marketplace + Parallel Execution
+**Goal**: Users can discover and install community skills from a Git-based marketplace, and the AI can run multiple independent tasks in parallel
+**Depends on**: Phase 2 (needs tool calling for skills), Phase 4 (needs WebSocket for task monitoring)
+**Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04, SKILL-05, SKILL-06, PARA-01, PARA-02, PARA-03, PARA-04
+**Success Criteria** (what must be TRUE):
+  1. User can browse available skills in a marketplace UI within LivOS, seeing name, description, and required permissions for each skill
+  2. User can install a skill from the marketplace and it becomes immediately available to the AI agent without restart
+  3. Installed skills declare permissions upfront and the user reviews them before confirming installation
+  4. User can ask the AI to perform two independent tasks simultaneously (e.g., "scan my Docker containers AND check disk usage") and both run in parallel
+  5. User can view the status of running tasks and cancel any task mid-execution
+**Plans**: TBD
+
+Plans:
+- [ ] v1.5-05-01: SKILL.md manifest schema, directory-based format, Git registry client
+- [ ] v1.5-05-02: Skill install/uninstall flow, permission review, progressive loading, marketplace UI
+- [ ] v1.5-05-03: BullMQ parallel agent tasks, status monitoring API, cancellation, resource-aware scheduling
+
+### v1.5 Progress
+
+**Execution Order:**
+Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Provider Abstraction + Claude Integration | 0/3 | Not started | - |
+| 2. Native Tool Calling + Auth UI | 0/3 | Not started | - |
+| 3. Hybrid Memory + Channel Expansion | 0/3 | Not started | - |
+| 4. WebSocket Gateway + Human-in-the-Loop | 0/3 | Not started | - |
+| 5. Skill Marketplace + Parallel Execution | 0/3 | Not started | - |
+
+---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) | Total plans: 36 (estimated)*
-*Coverage: 29/29 v1 + 21/21 v1.3 requirements mapped*
+*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) | Total plans: 51 (estimated)*
+*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 requirements mapped*
