@@ -103,7 +103,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Gemini API key'},
+	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'API keys & provider'},
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
 	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL'},
@@ -427,82 +427,229 @@ function TwoFaSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AiConfigSection() {
-	const [apiKey, setApiKey] = useState('')
-	const [saved, setSaved] = useState(false)
+	const [anthropicKey, setAnthropicKey] = useState('')
+	const [geminiKey, setGeminiKey] = useState('')
+	const [anthropicSaved, setAnthropicSaved] = useState(false)
+	const [geminiSaved, setGeminiSaved] = useState(false)
+	const [anthropicValidating, setAnthropicValidating] = useState(false)
+	const [geminiValidating, setGeminiValidating] = useState(false)
+	const [anthropicError, setAnthropicError] = useState('')
+	const [geminiError, setGeminiError] = useState('')
 
 	const configQ = trpcReact.ai.getConfig.useQuery()
 	const utils = trpcReact.useUtils()
 
+	const validateKeyMutation = trpcReact.ai.validateKey.useMutation()
+
 	const setConfigMutation = trpcReact.ai.setConfig.useMutation({
 		onSuccess: () => {
-			setSaved(true)
-			setApiKey('')
 			utils.ai.getConfig.invalidate()
-			setTimeout(() => setSaved(false), 2000)
 		},
 	})
 
-	const handleSave = () => {
-		if (!apiKey.trim()) return
-		setConfigMutation.mutate({geminiApiKey: apiKey.trim()})
+	const handleSaveAnthropicKey = async () => {
+		if (!anthropicKey.trim()) return
+		setAnthropicError('')
+		setAnthropicValidating(true)
+
+		try {
+			const result = await validateKeyMutation.mutateAsync({
+				provider: 'claude',
+				apiKey: anthropicKey.trim(),
+			})
+
+			if (!result.valid) {
+				setAnthropicError(result.error || 'Invalid API key')
+				setAnthropicValidating(false)
+				return
+			}
+
+			await setConfigMutation.mutateAsync({anthropicApiKey: anthropicKey.trim()})
+			setAnthropicSaved(true)
+			setAnthropicKey('')
+			setAnthropicValidating(false)
+			setTimeout(() => setAnthropicSaved(false), 2000)
+		} catch {
+			setAnthropicError('Failed to validate key')
+			setAnthropicValidating(false)
+		}
+	}
+
+	const handleSaveGeminiKey = async () => {
+		if (!geminiKey.trim()) return
+		setGeminiError('')
+		setGeminiValidating(true)
+
+		try {
+			const result = await validateKeyMutation.mutateAsync({
+				provider: 'gemini',
+				apiKey: geminiKey.trim(),
+			})
+
+			if (!result.valid) {
+				setGeminiError(result.error || 'Invalid API key')
+				setGeminiValidating(false)
+				return
+			}
+
+			await setConfigMutation.mutateAsync({geminiApiKey: geminiKey.trim()})
+			setGeminiSaved(true)
+			setGeminiKey('')
+			setGeminiValidating(false)
+			setTimeout(() => setGeminiSaved(false), 2000)
+		} catch {
+			setGeminiError('Failed to validate key')
+			setGeminiValidating(false)
+		}
+	}
+
+	const handleProviderChange = async (provider: string) => {
+		await setConfigMutation.mutateAsync({primaryProvider: provider as 'claude' | 'gemini'})
 	}
 
 	return (
-		<div className='max-w-lg space-y-6'>
-			{/* Current Key Status */}
-			<SettingsInfoCard
-				icon={TbKey}
-				title='Current API Key'
-				description={configQ.isLoading ? 'Loading...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not configured'}
-			>
-				{configQ.data?.hasGeminiKey && (
-					<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
-				)}
-			</SettingsInfoCard>
-
-			{/* New API Key Input */}
+		<div className='max-w-lg space-y-8'>
+			{/* Provider Selection */}
 			<div className='space-y-3'>
-				<label className='text-caption text-text-secondary'>Enter new API key</label>
-				<Input
-					placeholder='AIzaSy...'
-					value={apiKey}
-					onValueChange={setApiKey}
-					onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-					className='font-mono'
-				/>
-				<p className='text-caption-sm text-text-tertiary'>
-					Your API key is stored securely and persists across restarts.
+				<h3 className='text-body font-medium text-text-primary'>Primary Provider</h3>
+				<p className='text-caption text-text-secondary'>
+					Choose which AI provider to use by default. The other will serve as fallback.
 				</p>
+				<Select
+					value={configQ.data?.primaryProvider || 'claude'}
+					onValueChange={handleProviderChange}
+				>
+					<SelectTrigger className='w-[240px]'>
+						<SelectValue placeholder='Select provider' />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value='claude'>Claude (Anthropic)</SelectItem>
+						<SelectItem value='gemini'>Gemini (Google)</SelectItem>
+					</SelectContent>
+				</Select>
 			</div>
 
-			{/* Get API Key Link */}
-			<a
-				href='https://aistudio.google.com/app/apikey'
-				target='_blank'
-				rel='noopener noreferrer'
-				className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
-			>
-				<TbExternalLink className='h-4 w-4' />
-				Get your Gemini API key from Google AI Studio
-			</a>
+			<div className='border-t border-border-subtle' />
 
-			{/* Save Button */}
-			<Button
-				variant='primary'
-				onClick={handleSave}
-				disabled={!apiKey.trim() || setConfigMutation.isPending}
-			>
-				{saved ? (
-					<>
-						<TbCheck className='h-4 w-4' />
-						Saved
-					</>
-				) : setConfigMutation.isPending ? (
-					'Saving...'
-				) : (
-					'Save API Key'
-				)}
-			</Button>
+			{/* Anthropic API Key */}
+			<div className='space-y-4'>
+				<h3 className='text-body font-medium text-text-primary'>Anthropic API Key</h3>
+
+				<SettingsInfoCard
+					icon={TbKey}
+					title='Current Key'
+					description={configQ.isLoading ? 'Loading...' : configQ.data?.hasAnthropicKey ? configQ.data.anthropicApiKey : 'Not configured'}
+				>
+					{configQ.data?.hasAnthropicKey && (
+						<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
+					)}
+				</SettingsInfoCard>
+
+				<div className='space-y-3'>
+					<label className='text-caption text-text-secondary'>Enter new API key</label>
+					<Input
+						placeholder='sk-ant-...'
+						value={anthropicKey}
+						onValueChange={(v) => { setAnthropicKey(v); setAnthropicError(''); }}
+						onKeyDown={(e) => e.key === 'Enter' && handleSaveAnthropicKey()}
+						className='font-mono'
+					/>
+					{anthropicError && (
+						<p className='text-caption-sm text-red-400'>{anthropicError}</p>
+					)}
+					<p className='text-caption-sm text-text-tertiary'>
+						Your API key is validated before saving and stored securely.
+					</p>
+				</div>
+
+				<a
+					href='https://console.anthropic.com/settings/keys'
+					target='_blank'
+					rel='noopener noreferrer'
+					className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
+				>
+					<TbExternalLink className='h-4 w-4' />
+					Get your API key from Anthropic Console
+				</a>
+
+				<Button
+					variant='primary'
+					onClick={handleSaveAnthropicKey}
+					disabled={!anthropicKey.trim() || anthropicValidating}
+				>
+					{anthropicSaved ? (
+						<>
+							<TbCheck className='h-4 w-4' />
+							Saved
+						</>
+					) : anthropicValidating ? (
+						'Validating...'
+					) : (
+						'Save API Key'
+					)}
+				</Button>
+			</div>
+
+			<div className='border-t border-border-subtle' />
+
+			{/* Gemini API Key */}
+			<div className='space-y-4'>
+				<h3 className='text-body font-medium text-text-primary'>Gemini API Key</h3>
+
+				<SettingsInfoCard
+					icon={TbKey}
+					title='Current Key'
+					description={configQ.isLoading ? 'Loading...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not configured'}
+				>
+					{configQ.data?.hasGeminiKey && (
+						<div className='rounded-full bg-green-500/20 px-3 py-1 text-caption text-green-400'>Active</div>
+					)}
+				</SettingsInfoCard>
+
+				<div className='space-y-3'>
+					<label className='text-caption text-text-secondary'>Enter new API key</label>
+					<Input
+						placeholder='AIzaSy...'
+						value={geminiKey}
+						onValueChange={(v) => { setGeminiKey(v); setGeminiError(''); }}
+						onKeyDown={(e) => e.key === 'Enter' && handleSaveGeminiKey()}
+						className='font-mono'
+					/>
+					{geminiError && (
+						<p className='text-caption-sm text-red-400'>{geminiError}</p>
+					)}
+					<p className='text-caption-sm text-text-tertiary'>
+						Your API key is validated before saving and stored securely.
+					</p>
+				</div>
+
+				<a
+					href='https://aistudio.google.com/app/apikey'
+					target='_blank'
+					rel='noopener noreferrer'
+					className='flex items-center gap-2 text-body-sm text-blue-400 hover:text-blue-300'
+				>
+					<TbExternalLink className='h-4 w-4' />
+					Get your API key from Google AI Studio
+				</a>
+
+				<Button
+					variant='primary'
+					onClick={handleSaveGeminiKey}
+					disabled={!geminiKey.trim() || geminiValidating}
+				>
+					{geminiSaved ? (
+						<>
+							<TbCheck className='h-4 w-4' />
+							Saved
+						</>
+					) : geminiValidating ? (
+						'Validating...'
+					) : (
+						'Save API Key'
+					)}
+				</Button>
+			</div>
 		</div>
 	)
 }

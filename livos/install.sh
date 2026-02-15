@@ -443,6 +443,7 @@ SSHCONF
         CONFIG_DOMAIN="localhost"
         CONFIG_USE_HTTPS="false"
         CONFIG_GEMINI_KEY=""
+        CONFIG_ANTHROPIC_KEY=""
         CONFIG_WHATSAPP="false"
 
         if ! $HAS_TTY; then
@@ -475,6 +476,14 @@ SSHCONF
                 "")
         fi
 
+        # Anthropic API Key
+        if wizard_yesno "AI Configuration" \
+            "Configure an Anthropic API key now?\n\nThis enables Claude as your primary AI provider.\n(You can also add this later in Settings > AI Configuration)\n\nGet a key at: https://console.anthropic.com/settings/keys"; then
+            CONFIG_ANTHROPIC_KEY=$(wizard_input "Anthropic API Key" \
+                "Enter your Anthropic API key:" \
+                "")
+        fi
+
         # Optional features
         if wizard_yesno "WhatsApp Integration" \
             "Enable WhatsApp integration?\n\n(Requires WhatsApp Business API setup)\n\nMost users skip this initially." \
@@ -487,6 +496,7 @@ SSHCONF
         summary+="Domain: $CONFIG_DOMAIN\n"
         summary+="HTTPS: $CONFIG_USE_HTTPS\n"
         summary+="Gemini API Key: $([ -n "$CONFIG_GEMINI_KEY" ] && echo "Configured" || echo "Not set")\n"
+        summary+="Anthropic API Key: $([ -n "$CONFIG_ANTHROPIC_KEY" ] && echo "Configured" || echo "Not set")\n"
         summary+="WhatsApp: $CONFIG_WHATSAPP"
 
         wizard_msgbox "Configuration Complete" "$summary"
@@ -544,7 +554,7 @@ SSHCONF
 
 # === AI API Keys ===
 GEMINI_API_KEY=${CONFIG_GEMINI_KEY:-}
-ANTHROPIC_API_KEY=
+ANTHROPIC_API_KEY=${CONFIG_ANTHROPIC_KEY:-}
 
 # === Security ===
 JWT_SECRET=${SECRET_JWT}
@@ -988,9 +998,9 @@ FWSVC
         echo -e "    systemctl restart livos       - restart"
         echo -e "    journalctl -u livos -f        - view logs"
         echo ""
-        if [[ -z "${CONFIG_GEMINI_KEY:-}" ]]; then
+        if [[ -z "${CONFIG_GEMINI_KEY:-}" ]] || [[ -z "${CONFIG_ANTHROPIC_KEY:-}" ]]; then
             echo -e "  ${YELLOW}Next step:${NC} Open Settings > AI Configuration"
-            echo -e "  and add your Gemini API key."
+            echo -e "  and add your API keys for AI providers."
             echo ""
         fi
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
