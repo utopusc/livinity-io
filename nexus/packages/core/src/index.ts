@@ -26,12 +26,26 @@ import { logger } from './logger.js';
 const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
 const NEXUS_SKILLS_DIR = process.env.NEXUS_SKILLS_DIR || '/opt/nexus/app/skills';
 
-// Prevent unhandled rejections from crashing the process (e.g. Gemini stream parse errors)
+// Prevent unhandled errors from crashing the process (e.g. Gemini stream parse errors)
 process.on('unhandledRejection', (reason: any) => {
   logger.error('Unhandled rejection (process kept alive)', {
     error: reason?.message || String(reason),
     stack: reason?.stack?.split('\n').slice(0, 3).join(' | '),
   });
+});
+process.on('uncaughtException', (err: Error) => {
+  // Only keep alive for known recoverable errors; crash for truly fatal ones
+  const recoverable = err.message?.includes('Failed to parse stream')
+    || err.message?.includes('fetch failed')
+    || err.message?.includes('ECONNRESET')
+    || err.message?.includes('socket hang up');
+  logger.error(`Uncaught exception (${recoverable ? 'recovered' : 'FATAL'})`, {
+    error: err.message,
+    stack: err.stack?.split('\n').slice(0, 5).join(' | '),
+  });
+  if (!recoverable) {
+    process.exit(1);
+  }
 });
 
 async function main() {

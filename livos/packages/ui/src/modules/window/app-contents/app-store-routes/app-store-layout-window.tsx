@@ -59,7 +59,11 @@ export default function AppStoreLayoutWindow({children}: AppStoreLayoutWindowPro
 			{/* Content */}
 			<div className='flex-1 overflow-auto p-4'>
 				<div className='flex flex-col gap-5'>
-					{deferredSearchQuery ? <SearchResultsMemoized query={deferredSearchQuery} /> : children}
+					{deferredSearchQuery ? (
+						<SearchResultsMemoized query={deferredSearchQuery} onNavigate={() => setSearchQuery('')} />
+					) : (
+						children
+					)}
 				</div>
 			</div>
 		</div>
@@ -95,7 +99,7 @@ function SearchInput({
 	)
 }
 
-function SearchResults({query}: {query: string}) {
+function SearchResults({query, onNavigate}: {query: string; onNavigate?: () => void}) {
 	const {isLoading, apps} = useAvailableApps()
 
 	const search = useMemo(
@@ -122,7 +126,12 @@ function SearchResults({query}: {query: string}) {
 	)
 
 	return (
-		<div className={cn(cardFaintClass, slideInFromBottomClass)}>
+		<div
+			className={cn(cardFaintClass, slideInFromBottomClass)}
+			onClick={(e) => {
+				if ((e.target as HTMLElement).closest('a')) onNavigate?.()
+			}}
+		>
 			<h3 className={cn(sectionTitleClass, 'p-2.5')}>{title}</h3>
 			<div className={appsGridClass}>
 				{appResults?.map((app) => <AppWithDescriptionWindow key={app.id} app={app} />)}

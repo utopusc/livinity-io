@@ -1,5 +1,6 @@
 import prettyBytes from 'pretty-bytes'
-import {forwardRef, useImperativeHandle, useState} from 'react'
+import {forwardRef, useEffect, useImperativeHandle, useRef, useState} from 'react'
+import {useNavigate} from 'react-router-dom'
 import {useTimeout} from 'react-use'
 import semver from 'semver'
 import {arrayIncludes} from 'ts-extras'
@@ -12,7 +13,8 @@ import {OSUpdateRequiredDialog} from '@/modules/app-store/os-update-required'
 import {SelectDependenciesDialog} from '@/modules/app-store/select-dependencies-dialog'
 import {useApps} from '@/providers/apps'
 import {useAllAvailableApps} from '@/providers/available-apps'
-import {installedStates, RegistryApp, trpcReact} from '@/trpc/trpc'
+import {AppState, installedStates, RegistryApp, trpcReact} from '@/trpc/trpc'
+import {useLinkToDialog} from '@/utils/dialog'
 
 import {InstallButton} from './install-button'
 
@@ -32,12 +34,27 @@ export const InstallButtonConnected = forwardRef(
 		const [showOSUpdateRequiredDialog, setShowOSUpdateRequiredDialog] = useState(false)
 		const {userAppsKeyed, isLoading} = useApps()
 		const openApp = useLaunchApp()
+		const navigate = useNavigate()
+		const linkToDialog = useLinkToDialog()
 		const [selections, setSelections] = useState({} as Record<string, string>)
 		const os = useVersion()
 		const [show] = useTimeout(400)
 		const [highlightDependency, setHighlightDependency] = useState<string | undefined>(undefined)
 		const builtinAppsQ = trpcReact.appStore.builtinApps.useQuery()
 		const builtinApp = builtinAppsQ.data?.find((b) => b.id === app.id)
+		const waitingForCredentials = useRef(false)
+
+		// Show credentials dialog after installation completes
+		useEffect(() => {
+			if (!waitingForCredentials.current) return
+			if (!arrayIncludes(installedStates, appInstall.state as AppState)) return
+
+			waitingForCredentials.current = false
+			const userApp = userAppsKeyed?.[app.id]
+			if (userApp?.credentials?.defaultUsername || userApp?.credentials?.defaultPassword) {
+				navigate(linkToDialog('default-credentials', {for: app.id, direct: 'true'}))
+			}
+		}, [appInstall.state, userAppsKeyed])
 
 		useImperativeHandle(ref, () => ({
 			triggerInstall(highlightDependency?: string) {
@@ -113,6 +130,7 @@ export const InstallButtonConnected = forwardRef(
 		const envOverrides = builtinApp?.installOptions?.environmentOverrides
 
 		const proceedWithInstall = (selectedDeps?: Record<string, string>, envValues?: Record<string, string>) => {
+			waitingForCredentials.current = true
 			appInstall.install(selectedDeps, envValues)
 		}
 

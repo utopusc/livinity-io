@@ -1,42 +1,135 @@
 import {ReactNode, useRef} from 'react'
 
 import {AppIcon} from '@/components/app-icon'
-import {FadeScroller} from '@/components/fade-scroller'
 import {WindowAwareLink} from '@/components/window-aware-link'
 import {useColorThief} from '@/hooks/use-color-thief'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {
 	appsGridClass,
-	cardClass,
-	cardFaintClass,
 	sectionOverlineClass,
 	SectionTitle,
 	sectionTitleClass,
+	cardFaintClass,
 } from '@/modules/app-store/shared'
 import {preloadFirstFewGalleryImages} from '@/modules/app-store/utils'
-import {Button} from '@/shadcn-components/ui/button'
 import {cn} from '@/shadcn-lib/utils'
 import {RegistryApp} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
-// App with description - used in grid sections
+// ─── App Card — used in search results & fallback grids ─────────
 export function AppWithDescriptionWindow({app, to}: {app: RegistryApp; to?: string}) {
 	return (
 		<WindowAwareLink
 			to={to ? to : `/${app.id}`}
-			className='group flex w-full items-start gap-2.5 rounded-radius-xl p-2.5 outline-none hover:bg-surface-base focus:bg-surface-base'
+			className={cn(
+				'group flex w-full items-start gap-3 rounded-xl p-3',
+				'transition-all duration-200 ease-out',
+				'hover:bg-surface-2',
+				'outline-none focus-visible:ring-2 focus-visible:ring-brand/20',
+			)}
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
-			<AppIcon src={app.icon} size={48} className='rounded-radius-md md:w-[55px]' />
-			<div className='flex min-w-0 flex-1 flex-col'>
-				<h3 className='truncate text-body-sm font-bold -tracking-3 md:text-body'>{app.name}</h3>
-				<p className='line-clamp-2 w-full min-w-0 text-caption leading-tight text-text-tertiary md:text-body-sm'>{app.tagline}</p>
+			<AppIcon
+				src={app.icon}
+				size={48}
+				className={cn(
+					'rounded-xl md:w-[52px]',
+					'shadow-sm',
+					'transition-transform duration-200',
+					'group-hover:scale-105',
+				)}
+			/>
+			<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+				<h3 className='truncate text-body-sm font-semibold tracking-tight text-text-primary md:text-body'>
+					{app.name}
+				</h3>
+				<p className='line-clamp-2 w-full min-w-0 text-caption leading-snug text-text-tertiary md:text-body-sm'>
+					{app.tagline}
+				</p>
 			</div>
 		</WindowAwareLink>
 	)
 }
 
-// Grid section
+// ─── Featured Grid Card — horizontal with color accent bar ──────
+function FeaturedGridCard({app}: {app: RegistryApp}) {
+	const iconRef = useRef<HTMLImageElement>(null)
+	const colors = useColorThief(iconRef)
+	const accent = colors?.[0] || 'rgba(99,102,241,0.5)'
+
+	return (
+		<WindowAwareLink
+			to={`/${app.id}`}
+			className={cn(
+				'group flex items-center gap-4 overflow-hidden rounded-2xl',
+				'bg-surface-2/50',
+				'border border-border-subtle',
+				'p-4',
+				'transition-all duration-300',
+				'hover:border-border-default hover:shadow-elevation-md',
+				'hover:-translate-y-0.5',
+			)}
+			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
+		>
+			<div
+				className='w-1 self-stretch rounded-full flex-shrink-0 transition-all duration-300 group-hover:w-1.5'
+				style={{background: accent}}
+			/>
+			<AppIcon
+				ref={iconRef}
+				src={app.icon}
+				crossOrigin='anonymous'
+				size={52}
+				className={cn(
+					'flex-shrink-0 rounded-xl',
+					'shadow-sm',
+					'transition-transform duration-300',
+					'group-hover:scale-110',
+					'md:w-[56px] md:h-[56px]',
+				)}
+			/>
+			<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+				<h3 className='truncate text-body font-bold tracking-tight text-text-primary'>
+					{app.name}
+				</h3>
+				<p className='line-clamp-2 text-body-sm leading-snug text-text-secondary'>
+					{app.tagline}
+				</p>
+			</div>
+		</WindowAwareLink>
+	)
+}
+
+// ─── Compact Card — vertical icon + name ────────────────────────
+function CompactAppCard({app}: {app: RegistryApp}) {
+	return (
+		<WindowAwareLink
+			to={`/${app.id}`}
+			className={cn(
+				'group flex flex-col items-center gap-2 rounded-xl p-3',
+				'transition-all duration-200',
+				'hover:bg-surface-2',
+			)}
+			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
+		>
+			<AppIcon
+				src={app.icon}
+				size={44}
+				className={cn(
+					'rounded-[12px]',
+					'shadow-sm',
+					'transition-all duration-200',
+					'group-hover:scale-110 group-hover:shadow-elevation-sm',
+				)}
+			/>
+			<span className='max-w-full truncate text-center text-caption font-medium text-text-primary'>
+				{app.name}
+			</span>
+		</WindowAwareLink>
+	)
+}
+
+// ─── Grid Section — Bento Layout (featured + compact) ───────────
 export function AppsGridSectionWindow({
 	overline,
 	title,
@@ -48,21 +141,42 @@ export function AppsGridSectionWindow({
 }) {
 	const isMobile = useIsMobile()
 	const appsToShow = isMobile ? (apps ?? []).slice(0, 6) : apps ?? []
+	const featured = appsToShow.slice(0, 2)
+	const rest = appsToShow.slice(2)
+
 	return (
-		<div className={cardClass}>
+		<section
+			className={cn(
+				'rounded-2xl p-4 md:p-6',
+				'bg-surface-1',
+				'border border-border-subtle',
+				'animate-in fade-in slide-in-from-bottom-6 duration-500',
+			)}
+		>
 			<SectionTitle overline={overline} title={title} />
-			<div className={appsGridClass}>
-				{appsToShow.map((app) => (
-					<AppWithDescriptionWindow key={app.id} app={app} />
+
+			{/* Featured — two large horizontal accent cards */}
+			<div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+				{featured.map((app) => (
+					<FeaturedGridCard key={app.id} app={app} />
 				))}
 			</div>
-		</div>
+
+			{/* Rest — compact vertical icon grid */}
+			{rest.length > 0 && (
+				<div className='mt-4 grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6'>
+					{rest.map((app) => (
+						<CompactAppCard key={app.id} app={app} />
+					))}
+				</div>
+			)}
+		</section>
 	)
 }
 
 export function AppsGridFaintSectionWindow({title, apps}: {title?: string; apps?: RegistryApp[]}) {
 	return (
-		<div className={cardFaintClass}>
+		<div className={cn(cardFaintClass, 'animate-in fade-in slide-in-from-bottom-6 duration-500')}>
 			{title && <h3 className={cn(sectionTitleClass, 'p-2.5')}>{title}</h3>}
 			<div className={appsGridClass}>
 				{apps?.map((app) => <AppWithDescriptionWindow key={app.id} app={app} />)}
@@ -71,7 +185,7 @@ export function AppsGridFaintSectionWindow({title, apps}: {title?: string; apps?
 	)
 }
 
-// Row section
+// ─── Row Section — Wide Panoramic Landscape Cards ───────────────
 export function AppsRowSectionWindow({
 	overline,
 	title,
@@ -82,53 +196,84 @@ export function AppsRowSectionWindow({
 	apps: RegistryApp[]
 }) {
 	return (
-		<div>
+		<section className='animate-in fade-in slide-in-from-bottom-6 duration-500'>
 			<SectionTitle overline={overline} title={title} />
-			<div className='livinity-hide-scrollbar -mx-[70px] mt-3 flex flex-row gap-3 overflow-x-auto px-[70px] md:gap-[40px]'>
+			<div className='livinity-hide-scrollbar -mx-[70px] mt-3 flex flex-row gap-4 overflow-x-auto px-[70px] pb-2 md:gap-5'>
 				{apps.map((app, i) => (
-					<AppRowItemWindow key={app.id} app={app} index={i} />
+					<PanoramicCard key={app.id} app={app} index={i} />
 				))}
 			</div>
-		</div>
+		</section>
 	)
 }
 
-function AppRowItemWindow({app, index}: {app: RegistryApp; index: number}) {
+function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 	const iconRef = useRef<HTMLImageElement>(null)
 	const colors = useColorThief(iconRef)
+
+	const c1 = colors?.[0] || 'rgba(80,80,120,0.8)'
+	const c2 = colors?.[1] || 'rgba(50,50,80,0.8)'
 
 	return (
 		<WindowAwareLink
 			to={`/${app.id}`}
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
-			className='duration-200 animate-in fade-in slide-in-from-right-10 fill-mode-both'
-			style={{animationDelay: `${index * 0.1}s`}}
+			className={cn(
+				'group relative flex-shrink-0',
+				'animate-in fade-in slide-in-from-right-8 fill-mode-both',
+			)}
+			style={{animationDelay: `${index * 80}ms`}}
 		>
-			<AppIcon
-				ref={iconRef}
-				src={app.icon}
-				crossOrigin='anonymous'
-				className='relative z-10 -mb-[30px] ml-[27px] w-[60px] rounded-radius-md md:mb-[-50px] md:w-[100px] md:rounded-radius-xl'
-				style={{
-					filter: 'drop-shadow(0px 18px 24px rgba(0, 0, 0, 0.12))',
-				}}
-			/>
 			<div
-				className='relative flex h-[150px] w-[267px] flex-col justify-start overflow-hidden rounded-radius-xl p-[27px] md:h-[188px] md:w-[345px]'
+				className={cn(
+					'relative flex h-[110px] w-[270px] items-center gap-4 overflow-hidden rounded-2xl',
+					'md:h-[120px] md:w-[310px]',
+					'border border-border-subtle',
+					'transition-all duration-400 ease-out',
+					'group-hover:border-border-default',
+					'group-hover:shadow-elevation-lg',
+					'group-hover:scale-[1.03]',
+				)}
 				style={{
-					background: `radial-gradient(circle farthest-side at 30% 10%, rgba(255,255,255,0.13), transparent), linear-gradient(123deg, ${
-						colors ? colors[0] : 'rgba(36,36,36,0.6)'
-					}, ${colors ? colors[1] : 'rgba(24,24,24,0.6)'})`,
+					background: `linear-gradient(135deg, ${c1}, ${c2})`,
 				}}
 			>
-				<h3 className='mt-3 truncate text-24 font-semibold -tracking-3 md:mt-8 md:text-[28px]'>{app.name}</h3>
-				<p className='line-clamp-2 text-caption -tracking-4 text-text-primary md:text-body-lg'>{app.tagline}</p>
+				{/* Decorative blobs — asymmetric shapes */}
+				<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/[0.06]' />
+				<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-white/[0.04]' />
+
+				{/* Icon — left-aligned, vertically centered */}
+				<div className='relative z-10 pl-5'>
+					<AppIcon
+						ref={iconRef}
+						src={app.icon}
+						crossOrigin='anonymous'
+						size={48}
+						className={cn(
+							'flex-shrink-0 rounded-xl',
+							'shadow-elevation-md',
+							'transition-transform duration-400',
+							'group-hover:scale-110',
+							'md:w-[56px] md:h-[56px]',
+						)}
+					/>
+				</div>
+
+				{/* Text — right side */}
+				<div className='relative z-10 flex min-w-0 flex-1 flex-col pr-5'>
+					<h3 className='truncate text-body font-bold tracking-tight text-white md:text-lg'>
+						{app.name}
+					</h3>
+					<p className='mt-0.5 line-clamp-2 text-caption text-white/65 md:text-body-sm'>
+						{app.tagline}
+					</p>
+				</div>
 			</div>
 		</WindowAwareLink>
 	)
 }
 
-// Three column section
+// ─── Three Column Section — Fan Showcase ────────────────────────
 export type AppsThreeColumnSectionWindowProps = {
 	apps: RegistryApp[]
 	overline: string
@@ -147,68 +292,109 @@ export function AppsThreeColumnSectionWindow({
 	children,
 }: AppsThreeColumnSectionWindowProps) {
 	return (
-		<div
+		<section
 			className={cn(
-				cardClass,
-				'flex flex-wrap justify-center gap-x-16 gap-y-8 overflow-hidden p-4 text-center xl:flex-nowrap xl:text-left',
+				'overflow-hidden rounded-2xl',
+				'bg-surface-1',
+				'border border-border-subtle',
+				'p-5 md:p-8',
+				'animate-in fade-in slide-in-from-bottom-6 duration-500',
 			)}
 		>
-			<div
-				className={cn(
-					'flex w-full flex-col items-center justify-center md:w-auto xl:items-start',
-					textLocation === 'right' && 'xl:order-2',
-				)}
-			>
-				<p className={sectionOverlineClass}>{overline}</p>
-				<h3 className={sectionTitleClass}>{title}</h3>
-				<p className='max-w-md text-body text-text-secondary'>{description}</p>
-				<div className='pt-5' />
-				{children}
+			<div className='flex flex-col gap-8 lg:flex-row lg:items-center lg:gap-12'>
+				{/* Text side */}
+				<div
+					className={cn(
+						'flex flex-col lg:w-[280px] lg:flex-shrink-0',
+						textLocation === 'right' && 'lg:order-2',
+					)}
+				>
+					<p className={sectionOverlineClass}>{overline}</p>
+					<h3 className='mt-1 text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>{title}</h3>
+					<p className='mt-3 text-body-sm leading-relaxed text-text-secondary md:text-body'>{description}</p>
+					<div className='mt-6'>{children}</div>
+				</div>
+
+				{/* Fan showcase cards — center elevated, sides tilted */}
+				<div className='flex flex-1 items-end justify-center gap-3 py-8 md:gap-4'>
+					{apps.slice(0, 3).map((app, i) => (
+						<ShowcaseCard key={app?.id || i} app={app} index={i} />
+					))}
+				</div>
 			</div>
-			<FadeScroller direction='x' className='livinity-hide-scrollbar flex gap-5 overflow-x-auto md:w-auto md:shrink-0'>
-				<ColorAppWindow app={apps[0]} />
-				<ColorAppWindow app={apps[1]} />
-				<ColorAppWindow app={apps[2]} />
-			</FadeScroller>
-		</div>
+		</section>
 	)
 }
 
-function ColorAppWindow({app, className}: {app: RegistryApp | undefined; className?: string}) {
+const SHOWCASE_CONFIGS = [
+	{rotate: -5, translateY: 0, width: 'w-[150px]', height: 'h-[235px]', iconSize: 80},
+	{rotate: 0, translateY: -16, width: 'w-[170px]', height: 'h-[270px]', iconSize: 100},
+	{rotate: 5, translateY: 0, width: 'w-[150px]', height: 'h-[235px]', iconSize: 80},
+]
+
+function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number}) {
 	const iconRef = useRef<HTMLImageElement>(null)
 	const colors = useColorThief(iconRef)
 
 	if (!app) return null
 
+	const c1 = colors?.[0] || 'rgba(80,80,120,0.9)'
+	const c2 = colors?.[1] || 'rgba(50,50,80,0.9)'
+	const config = SHOWCASE_CONFIGS[index] || SHOWCASE_CONFIGS[0]
+
 	return (
-		<div className={cn('relative', colors)}>
-			<WindowAwareLink
-				to={`/${app.id}`}
-				className={cn('flex h-[268px] w-40 flex-col justify-stretch rounded-radius-xl bg-surface-2 px-3 py-4', className)}
+		<WindowAwareLink
+			to={`/${app.id}`}
+			className={cn(
+				'group relative flex-shrink-0',
+				'transition-all duration-500 ease-out',
+				'hover:z-10',
+			)}
+			style={{
+				transform: `rotate(${config.rotate}deg) translateY(${config.translateY}px)`,
+			}}
+			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
+		>
+			<div
+				className={cn(
+					'relative flex flex-col overflow-hidden rounded-2xl',
+					config.width,
+					config.height,
+					'border border-border-subtle',
+					'transition-all duration-400',
+					'group-hover:border-border-default',
+					'group-hover:shadow-elevation-lg',
+					'group-hover:scale-110',
+				)}
 				style={{
-					backgroundImage: colors
-						? `linear-gradient(to bottom, ${colors.join(', ')})`
-						: 'linear-gradient(to bottom, rgba(36,36,36,0.6), rgba(24,24,24,0.6))',
+					background: `radial-gradient(circle at 50% 30%, rgba(255,255,255,0.12), transparent 70%), linear-gradient(180deg, ${c1}, ${c2})`,
 				}}
-				onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 			>
-				<AppIcon
-					ref={iconRef}
-					src={app.icon}
-					crossOrigin='anonymous'
-					size={128}
-					className='shrink-0 self-center rounded-radius-xl'
-					style={{
-						filter: `drop-shadow(0px 8px 12.000000953674316px rgba(31, 33, 36, 0.32))`,
-					}}
-				/>
-				<div className='flex-1' />
-				<h3 className='font-16 truncate font-bold'>{app.name}</h3>
-				<p className='truncate text-body-sm -tracking-3 text-text-tertiary'>{app.developer}</p>
-				<Button size='sm' variant='secondary' className='mt-2'>
-					{t('app.view')}
-				</Button>
-			</WindowAwareLink>
-		</div>
+				{/* Icon centered */}
+				<div className='flex flex-1 items-center justify-center p-4'>
+					<AppIcon
+						ref={iconRef}
+						src={app.icon}
+						crossOrigin='anonymous'
+						size={config.iconSize}
+						className={cn(
+							'rounded-2xl',
+							'shadow-elevation-md',
+							'transition-transform duration-400',
+							'group-hover:scale-110',
+						)}
+					/>
+				</div>
+
+				{/* Info at bottom */}
+				<div className='px-3 pb-3'>
+					<h4 className='truncate text-body-sm font-bold text-white'>{app.name}</h4>
+					<p className='truncate text-caption text-white/55'>{app.developer}</p>
+					<div className='mt-1.5 flex items-center justify-center rounded-lg bg-white/10 py-1.5 text-caption font-medium text-white/90 backdrop-blur-sm transition-colors group-hover:bg-white/20'>
+						{t('app.view')}
+					</div>
+				</div>
+			</div>
+		</WindowAwareLink>
 	)
 }
