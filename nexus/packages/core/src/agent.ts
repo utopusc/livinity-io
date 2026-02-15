@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { randomUUID } from 'node:crypto';
 import { Brain, ChatMessage } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
 import type { ToolResult } from './types.js';
@@ -6,6 +7,7 @@ import type { ClaudeToolDefinition, ToolUseBlock, ToolResultBlock } from './prov
 import { logger } from './logger.js';
 import type { NexusConfig } from './config/schema.js';
 import { getThinkingPromptModifier, getVerbosePromptModifier, getResponseStylePromptModifier, type ThinkLevel, type VerboseLevel, type ResponseConfig } from './thinking.js';
+import type { ApprovalManager } from './approval-manager.js';
 
 /** Events emitted during agent execution for real-time streaming */
 export interface AgentEvent {
@@ -55,6 +57,12 @@ export interface AgentConfig {
   verboseLevel?: VerboseLevel;
   /** Response style configuration (affects output format) */
   responseConfig?: ResponseConfig;
+  /** ApprovalManager for human-in-the-loop tool approval */
+  approvalManager?: ApprovalManager;
+  /** Session ID for this agent run (used for approval tracking) */
+  sessionId?: string;
+  /** Approval policy: 'always' = all tools, 'destructive' = only requiresApproval tools, 'never' = skip */
+  approvalPolicy?: 'always' | 'destructive' | 'never';
 }
 
 /** Resolve agent config with defaults from NexusConfig */
@@ -271,8 +279,72 @@ export class AgentLoop extends EventEmitter {
     }
   }
 
+  /** Check whether a tool requires approval and wait for the decision */
+  private async checkApproval(
+    toolName: string,
+    params: Record<string, unknown>,
+    thought: string,
+    turn: number,
+  ): Promise<{ approved: boolean; deniedReason?: string }> {
+    const { approvalManager, toolRegistry, sessionId } = this.config;
+    const policy = this.config.approvalPolicy ?? 'destructive';
+
+    // Skip if no approval manager or policy is 'never'
+    if (!approvalManager || policy === 'never') {
+      return { approved: true };
+    }
+
+    // Check if this tool needs approval
+    const needsApproval = policy === 'always' || toolRegistry.requiresApproval(toolName);
+    if (!needsApproval) {
+      return { approved: true };
+    }
+
+    // Emit approval_request event for streaming clients
+    this.emitEvent({
+      type: 'tool_call',
+      turn,
+      data: {
+        tool: toolName,
+        params,
+        thought,
+        awaitingApproval: true,
+      },
+    });
+
+    // Create approval request and wait for response
+    const request = await approvalManager.createRequest({
+      sessionId: sessionId || 'unknown',
+      tool: toolName,
+      params,
+      thought,
+    });
+
+    logger.info('Agent: awaiting approval', { requestId: request.id, tool: toolName, sessionId });
+
+    const response = await approvalManager.waitForResponse(request.id);
+
+    if (!response) {
+      logger.warn('Agent: approval timed out', { requestId: request.id, tool: toolName });
+      return { approved: false, deniedReason: 'Approval request timed out (5 minutes). Tool execution was skipped.' };
+    }
+
+    if (response.decision === 'deny') {
+      logger.info('Agent: approval denied', { requestId: request.id, tool: toolName, by: response.respondedBy });
+      return { approved: false, deniedReason: `Tool execution denied by ${response.respondedBy || 'user'}${response.respondedFrom ? ` via ${response.respondedFrom}` : ''}.` };
+    }
+
+    logger.info('Agent: approval granted', { requestId: request.id, tool: toolName, by: response.respondedBy });
+    return { approved: true };
+  }
+
   async run(task: string): Promise<AgentResult> {
     const { brain, toolRegistry, depth = 0 } = this.config;
+
+    // Auto-generate sessionId if not provided (used for approval tracking)
+    if (!this.config.sessionId) {
+      this.config.sessionId = randomUUID();
+    }
 
     // Resolve config with defaults from NexusConfig
     const resolved = resolveAgentConfig(this.config);
@@ -493,12 +565,18 @@ export class AgentLoop extends EventEmitter {
             let toolResult: ToolResult;
             if (!toolRegistry.isToolAllowed(toolCall.name, toolPolicy)) {
               toolResult = { success: false, output: '', error: `Tool "${toolCall.name}" is not allowed by the current policy.` };
-            } else if (toolCall.name === 'spawn_subagent' && canSpawnSubagent) {
-              toolResult = await this.spawnSubagent(toolCall.input, depth);
-            } else if (toolCall.name === 'spawn_subagent' && !canSpawnSubagent) {
-              toolResult = { success: false, output: '', error: `Maximum subagent depth (${maxDepth}) reached.` };
             } else {
-              toolResult = await toolRegistry.execute(toolCall.name, toolCall.input);
+              // Approval gate — check before execution
+              const approval = await this.checkApproval(toolCall.name, toolCall.input, responseText.slice(0, 200), turn + 1);
+              if (!approval.approved) {
+                toolResult = { success: false, output: '', error: approval.deniedReason || 'Tool execution denied.' };
+              } else if (toolCall.name === 'spawn_subagent' && canSpawnSubagent) {
+                toolResult = await this.spawnSubagent(toolCall.input, depth);
+              } else if (toolCall.name === 'spawn_subagent' && !canSpawnSubagent) {
+                toolResult = { success: false, output: '', error: `Maximum subagent depth (${maxDepth}) reached.` };
+              } else {
+                toolResult = await toolRegistry.execute(toolCall.name, toolCall.input);
+              }
             }
 
             toolCalls.push({ tool: toolCall.name, params: toolCall.input, result: toolResult });
@@ -712,12 +790,18 @@ export class AgentLoop extends EventEmitter {
       // Check if tool is allowed by policy before execution
       if (!toolRegistry.isToolAllowed(step.tool, toolPolicy)) {
         toolResult = { success: false, output: '', error: `Tool "${step.tool}" is not allowed by the current policy.` };
-      } else if (step.tool === 'spawn_subagent' && canSpawnSubagent) {
-        toolResult = await this.spawnSubagent(step.params, depth);
-      } else if (step.tool === 'spawn_subagent' && !canSpawnSubagent) {
-        toolResult = { success: false, output: '', error: `Maximum subagent depth (${maxDepth}) reached. Solve the subtask directly using available tools.` };
       } else {
-        toolResult = await toolRegistry.execute(step.tool, step.params);
+        // Approval gate — check before execution
+        const approval = await this.checkApproval(step.tool, step.params, step.thought, turn + 1);
+        if (!approval.approved) {
+          toolResult = { success: false, output: '', error: approval.deniedReason || 'Tool execution denied.' };
+        } else if (step.tool === 'spawn_subagent' && canSpawnSubagent) {
+          toolResult = await this.spawnSubagent(step.params, depth);
+        } else if (step.tool === 'spawn_subagent' && !canSpawnSubagent) {
+          toolResult = { success: false, output: '', error: `Maximum subagent depth (${maxDepth}) reached. Solve the subtask directly using available tools.` };
+        } else {
+          toolResult = await toolRegistry.execute(step.tool, step.params);
+        }
       }
 
       toolCalls.push({ tool: step.tool, params: step.params, result: toolResult });
