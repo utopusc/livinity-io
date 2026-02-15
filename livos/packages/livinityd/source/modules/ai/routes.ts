@@ -72,25 +72,106 @@ export default router({
 	getConfig: privateProcedure.query(async ({ctx}) => {
 		const redis = ctx.livinityd.ai.redis
 		const geminiKey = await redis.get('livos:config:gemini_api_key') || process.env.GEMINI_API_KEY || ''
+		const anthropicKey = await redis.get('nexus:config:anthropic_api_key') || process.env.ANTHROPIC_API_KEY || ''
+		const primaryProvider = await redis.get('nexus:config:primary_provider') || 'claude'
 		return {
 			geminiApiKey: maskKey(geminiKey),
 			hasGeminiKey: geminiKey.length > 0,
+			anthropicApiKey: maskKey(anthropicKey),
+			hasAnthropicKey: anthropicKey.length > 0,
+			primaryProvider,
 		}
 	}),
 
-	/** Set AI configuration (Gemini API key) */
+	/** Set AI configuration (API keys and provider selection) */
 	setConfig: privateProcedure
 		.input(
 			z.object({
-				geminiApiKey: z.string().min(1).max(256),
+				geminiApiKey: z.string().min(1).max(256).optional(),
+				anthropicApiKey: z.string().min(1).max(256).optional(),
+				primaryProvider: z.enum(['claude', 'gemini']).optional(),
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
 			const redis = ctx.livinityd.ai.redis
-			await redis.set('livos:config:gemini_api_key', input.geminiApiKey)
-			await redis.publish('livos:config:updated', 'gemini_api_key')
-			ctx.livinityd.logger.log('Gemini API key updated via Settings UI')
+
+			if (input.geminiApiKey) {
+				await redis.set('livos:config:gemini_api_key', input.geminiApiKey)
+				await redis.publish('livos:config:updated', 'gemini_api_key')
+				ctx.livinityd.logger.log('Gemini API key updated via Settings UI')
+			}
+
+			if (input.anthropicApiKey) {
+				await redis.set('nexus:config:anthropic_api_key', input.anthropicApiKey)
+				await redis.publish('livos:config:updated', 'anthropic_api_key')
+				ctx.livinityd.logger.log('Anthropic API key updated via Settings UI')
+			}
+
+			if (input.primaryProvider) {
+				await redis.set('nexus:config:primary_provider', input.primaryProvider)
+				await redis.publish('livos:config:updated', 'primary_provider')
+				ctx.livinityd.logger.log(`Primary provider set to ${input.primaryProvider} via Settings UI`)
+			}
+
 			return {success: true}
+		}),
+
+	/** Validate an API key by making a lightweight test call */
+	validateKey: privateProcedure
+		.input(
+			z.object({
+				provider: z.enum(['claude', 'gemini']),
+				apiKey: z.string().min(1).max(256),
+			}),
+		)
+		.mutation(async ({ctx, input}): Promise<{valid: boolean; error?: string}> => {
+			try {
+				if (input.provider === 'claude') {
+					const response = await fetch('https://api.anthropic.com/v1/messages', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'x-api-key': input.apiKey,
+							'anthropic-version': '2023-06-01',
+						},
+						body: JSON.stringify({
+							model: 'claude-haiku-4-5-20250610',
+							max_tokens: 1,
+							messages: [{role: 'user', content: 'Hi'}],
+						}),
+					})
+
+					if (response.status === 401) {
+						return {valid: false, error: 'Invalid API key'}
+					}
+					if (response.status === 403) {
+						return {valid: false, error: 'API key does not have permission'}
+					}
+					// 200 or 429 (rate limited) both mean the key is valid
+					if (response.ok || response.status === 429) {
+						return {valid: true}
+					}
+					const data = (await response.json().catch(() => ({}))) as {error?: {message?: string}}
+					return {valid: false, error: data.error?.message || `Unexpected status: ${response.status}`}
+				} else if (input.provider === 'gemini') {
+					const response = await fetch(
+						`https://generativelanguage.googleapis.com/v1beta/models?key=${input.apiKey}`,
+					)
+
+					if (response.status === 400 || response.status === 403) {
+						return {valid: false, error: 'Invalid API key'}
+					}
+					if (response.ok) {
+						return {valid: true}
+					}
+					return {valid: false, error: `Unexpected status: ${response.status}`}
+				}
+
+				return {valid: false, error: 'Unknown provider'}
+			} catch (error) {
+				ctx.livinityd.logger.error('API key validation failed', error)
+				return {valid: false, error: getErrorMessage(error)}
+			}
 		}),
 
 	// ── Nexus Config ─────────────────────────────────────────
