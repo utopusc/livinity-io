@@ -345,7 +345,7 @@ export class ClaudeProvider implements AIProvider {
         const urlMatch = allOutput.match(/https:\/\/[^\s"'<>]+/);
         if (urlMatch && !resolved) {
           resolved = true;
-          this.loginProcess!.url = urlMatch[0];
+          if (this.loginProcess) this.loginProcess.url = urlMatch[0];
           logger.info('ClaudeProvider: login URL captured', { url: urlMatch[0] });
           resolve({ url: urlMatch[0] });
         }
