@@ -383,12 +383,12 @@ Plans:
   3. User can navigate to Settings, enter an Anthropic API key, and the system validates it before saving
   4. User can select a primary provider (Claude or Gemini) and configure a fallback chain in Settings
   5. A fresh install via install.sh prompts for an Anthropic API key during the setup wizard
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] v1.5-02-01: ToolRegistry.toClaudeTools(), dual-mode AgentLoop (native tool_use + JSON-in-text)
-- [ ] v1.5-02-02: tool_use_id tracking, parallel tool call handling, extended thinking UI
-- [ ] v1.5-02-03: Settings UI for API keys, provider selection, key validation, install.sh update
+- [ ] v1.5-02-01-PLAN.md — ToolRegistry.toClaudeTools(), ClaudeProvider native tool_use support (TOOL-01) [Wave 1]
+- [ ] v1.5-02-02-PLAN.md — Dual-mode AgentLoop, Brain/ProviderManager tools passthrough, extended thinking (TOOL-02, TOOL-03, TOOL-04, TOOL-05) [Wave 2]
+- [ ] v1.5-02-03-PLAN.md — Settings UI for API keys, provider selection, key validation, install.sh update (AUTH-01, AUTH-02, AUTH-03, AUTH-04) [Wave 1]
 
 ### Phase 3: Hybrid Memory + Channel Expansion
 **Goal**: The AI remembers important facts from past conversations automatically, and users can interact with the AI through Slack and Matrix in addition to existing channels
