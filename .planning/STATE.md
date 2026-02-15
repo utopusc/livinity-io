@@ -14,14 +14,14 @@ Milestone: v1.5 (Claude Migration & AI Platform)
 Phase: 4 of 5 (WebSocket Gateway + HITL)
 Plan: 3 of 4 complete
 Status: In progress
-Last activity: 2026-02-15 — Completed v1.5-04-03-PLAN.md
+Last activity: 2026-02-15 — Completed v1.5-04-02-PLAN.md
 
 Progress: [█████████░] 88%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15 (v1.5)
+- Total plans completed: 16 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -32,7 +32,7 @@ Progress: [█████████░] 88%
 | 1 - Provider Abstraction | 3/3 | — | — |
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
-| 4 - WebSocket Gateway + HITL | 3/4 | ~11min | ~4min |
+| 4 - WebSocket Gateway + HITL | 3/4 | ~15min | ~4min |
 
 *Updated after each plan completion*
 
@@ -74,6 +74,9 @@ v1.5 decisions:
 - [Phase4]: BLPOP on per-request Redis key for approval wait (duplicated connection, auto-disconnect)
 - [Phase4]: Three-level approval policy: 'always', 'destructive' (default), 'never'
 - [Phase4]: Approval timeout 5min, resolved requests kept 24h for audit trail
+- [Phase4]: Redis psubscribe('nexus:notify:*') pattern subscription for notification fanout
+- [Phase4]: Three notification routing patterns: global (all), approval (all), agent:sessionId (targeted)
+- [Phase4]: Empty per-client notifyFilter = receive all notifications (opt-in filtering)
 
 ### Pending Todos
 
@@ -86,5 +89,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-04-03-PLAN.md
+Stopped at: Completed v1.5-04-02-PLAN.md
 Resume file: None
