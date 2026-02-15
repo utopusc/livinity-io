@@ -474,10 +474,11 @@ function AiConfigSection() {
 	})
 
 	const [loginCode, setLoginCode] = useState('')
+	const [loginUrl, setLoginUrl] = useState<string | null>(null)
 
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
-			if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
+			if (data.url) setLoginUrl(data.url)
 			if (data.alreadyAuthenticated) utils.ai.getClaudeCliStatus.invalidate()
 		},
 	})
@@ -615,11 +616,20 @@ function AiConfigSection() {
 											{startLoginMutation.isError && (
 												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
 											)}
-											{startLoginMutation.isSuccess && startLoginMutation.data.url && (
+											{loginUrl && (
 												<div className='space-y-2 rounded-radius-sm bg-surface-2 p-3'>
 													<p className='text-caption text-text-secondary'>
-														Auth page opened in a new tab. After logging in, paste the code below:
+														Click the link below to sign in, then paste the code:
 													</p>
+													<a
+														href={loginUrl}
+														target='_blank'
+														rel='noopener noreferrer'
+														className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+													>
+														<TbExternalLink className='h-3.5 w-3.5 shrink-0' />
+														Open Claude sign-in page
+													</a>
 													<div className='flex gap-2'>
 														<Input
 															placeholder='Paste code here...'
