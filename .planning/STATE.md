@@ -21,7 +21,7 @@ Progress: [█████████░] 88%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13 (v1.5)
+- Total plans completed: 15 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -32,7 +32,7 @@ Progress: [█████████░] 88%
 | 1 - Provider Abstraction | 3/3 | — | — |
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
-| 4 - WebSocket Gateway + HITL | 1/4 | ~3min | ~3min |
+| 4 - WebSocket Gateway + HITL | 3/4 | ~11min | ~4min |
 
 *Updated after each plan completion*
 
@@ -71,6 +71,9 @@ v1.5 decisions:
 - [Phase4]: noServer mode WebSocket with custom upgrade auth (proper HTTP 401 for rejected clients)
 - [Phase4]: Max 5 concurrent WS sessions per client
 - [Phase4]: Cancellation via status flag (AgentLoop lacks native abort)
+- [Phase4]: BLPOP on per-request Redis key for approval wait (duplicated connection, auto-disconnect)
+- [Phase4]: Three-level approval policy: 'always', 'destructive' (default), 'never'
+- [Phase4]: Approval timeout 5min, resolved requests kept 24h for audit trail
 
 ### Pending Todos
 
@@ -83,5 +86,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-04-01-PLAN.md
+Stopped at: Completed v1.5-04-03-PLAN.md
 Resume file: None
