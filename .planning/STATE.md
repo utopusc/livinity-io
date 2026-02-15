@@ -6,22 +6,22 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.5 — Claude Migration & AI Platform
-**Current focus:** Phase 5 — Skill Marketplace + Parallel Execution
+**Current focus:** COMPLETE
 
 ## Current Position
 
 Milestone: v1.5 (Claude Migration & AI Platform)
 Phase: 5 of 5 (Skill Marketplace + Parallel Execution)
-Plan: 2 of 3 complete (01, 03)
-Status: In progress
-Last activity: 2026-02-15 — Completed v1.5-05-03-PLAN.md
+Plan: 3 of 3 complete (01, 02, 03)
+Status: MILESTONE COMPLETE
+Last activity: 2026-02-15 — Completed v1.5-05-02-PLAN.md (final plan)
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17 (v1.5)
+- Total plans completed: 18 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -33,7 +33,7 @@ Progress: [█████████░] 94%
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
 | 4 - WebSocket Gateway + HITL | 4/4 | ~21min | ~5min |
-| 5 - Skill Marketplace + Parallel Execution | 2/3 | ~7min | ~3.5min |
+| 5 - Skill Marketplace + Parallel Execution | 3/3 | ~13min | ~4.3min |
 
 *Updated after each plan completion*
 
@@ -89,6 +89,9 @@ v1.5 decisions:
 - [Phase5]: Task cancellation via Redis flag (cooperative, checked between agent events)
 - [Phase5]: Task events published to nexus:notify:task:{id} for WebSocket real-time routing
 - [Phase5]: TaskConfigSchema: maxConcurrent=4, perTaskTokenBudget=100K, perTaskMaxTurns=15, perTaskTimeoutMs=300s, resultTtlSec=3600
+- [Phase5]: Permission gate: required permissions must be accepted before skill install
+- [Phase5]: Redis SCAN for listing installed skills (production-safe)
+- [Phase5]: SkillsPanel lazy-loaded in AI Chat sidebar (three tabs: Chat, MCP, Skills)
 
 ### Pending Todos
 
@@ -101,5 +104,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-05-03-PLAN.md
+Stopped at: v1.5 MILESTONE COMPLETE
 Resume file: None
