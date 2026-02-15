@@ -16,6 +16,12 @@ const DATA_DIR = process.env.MEMORY_DATA_DIR || '/opt/nexus/data/memory';
 const DB_PATH = path.join(DATA_DIR, 'memory.db');
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
+// Deduplication threshold: memories above this cosine similarity are merged
+const DEDUP_THRESHOLD = 0.92;
+
+// Time-decay: memories lose half their recency boost every 30 days
+const AGE_DECAY_HALF_LIFE_DAYS = 30;
+
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -50,6 +56,16 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
+
+  CREATE TABLE IF NOT EXISTS memory_sessions (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_memory_sessions_session ON memory_sessions(session_id);
+  CREATE INDEX IF NOT EXISTS idx_memory_sessions_memory ON memory_sessions(memory_id);
 `);
 
 // Redis connection
@@ -129,26 +145,68 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health check (public - no auth required)
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.0.0', db: DB_PATH });
+  res.json({ status: 'ok', version: '2.1.0', db: DB_PATH });
 });
 
 // Auth middleware - all routes below this require X-API-Key header
 app.use(requireApiKey);
 
-// Add memory
+// Add memory (with deduplication and optional session binding)
 app.post('/add', async (req, res) => {
   try {
-    const { userId, content, metadata } = req.body;
+    const { userId, content, metadata, sessionId } = req.body;
 
     if (!userId || !content) {
       return res.status(400).json({ error: 'userId and content are required' });
     }
 
-    const id = generateId();
     const now = Date.now();
 
-    // Get embedding (async, don't block)
+    // Get embedding for content
     const embedding = await getEmbedding(content);
+
+    // Deduplication: check if a similar memory already exists
+    if (embedding) {
+      const recentMemories = db.prepare(`
+        SELECT id, content, embedding, updated_at
+        FROM memories
+        WHERE user_id = ? AND embedding IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 50
+      `).all(userId) as Array<{
+        id: string;
+        content: string;
+        embedding: string;
+        updated_at: number;
+      }>;
+
+      for (const existing of recentMemories) {
+        const existingEmb = JSON.parse(existing.embedding) as number[];
+        const similarity = cosineSimilarity(embedding, existingEmb);
+
+        if (similarity >= DEDUP_THRESHOLD) {
+          // Merge: update the existing memory with newer phrasing
+          db.prepare(`
+            UPDATE memories SET content = ?, embedding = ?, updated_at = ? WHERE id = ?
+          `).run(content, JSON.stringify(embedding), now, existing.id);
+
+          console.log(`[Memory] Dedup: merged with existing memory ${existing.id} (similarity: ${similarity.toFixed(3)})`);
+
+          // Still bind session if provided
+          if (sessionId) {
+            const msId = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            db.prepare(`
+              INSERT INTO memory_sessions (id, session_id, memory_id, created_at) VALUES (?, ?, ?, ?)
+            `).run(msId, sessionId, existing.id, now);
+          }
+
+          return res.json({ success: true, id: existing.id, deduplicated: true });
+        }
+      }
+    }
+
+    // No dedup match — insert new memory
+    const id = generateId();
 
     const stmt = db.prepare(`
       INSERT INTO memories (id, user_id, content, embedding, metadata, created_at, updated_at)
@@ -165,6 +223,14 @@ app.post('/add', async (req, res) => {
       now
     );
 
+    // Bind to session if provided
+    if (sessionId) {
+      const msId = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      db.prepare(`
+        INSERT INTO memory_sessions (id, session_id, memory_id, created_at) VALUES (?, ?, ?, ?)
+      `).run(msId, sessionId, id, now);
+    }
+
     console.log(`[Memory] Added memory ${id} for user ${userId}`);
     res.json({ success: true, id });
   } catch (err: any) {
@@ -173,7 +239,7 @@ app.post('/add', async (req, res) => {
   }
 });
 
-// Search memories
+// Search memories (with time-decay scoring)
 app.post('/search', async (req, res) => {
   try {
     const { userId, query, limit = 10 } = req.body;
@@ -211,9 +277,10 @@ app.post('/search', async (req, res) => {
 
     // Get query embedding for semantic search
     const queryEmbedding = await getEmbedding(query);
+    const nowMs = Date.now();
 
     if (!queryEmbedding) {
-      // Fallback to text search
+      // Fallback to text search with time-decay scoring
       const searchTerm = `%${query.toLowerCase()}%`;
       const textResults = db.prepare(`
         SELECT id, content, metadata, created_at
@@ -228,27 +295,32 @@ app.post('/search', async (req, res) => {
         created_at: number;
       }>;
 
-      const results = textResults.map(m => ({
-        id: m.id,
-        content: m.content,
-        metadata: m.metadata ? JSON.parse(m.metadata) : null,
-        score: 0.5,
-        createdAt: m.created_at,
-      }));
-      return res.json({ results });
-    }
-
-    // Semantic search with embeddings
-    const scored = memories
-      .filter(m => m.embedding)
-      .map(m => {
-        const emb = JSON.parse(m.embedding!) as number[];
-        const score = cosineSimilarity(queryEmbedding, emb);
+      const results = textResults.map(m => {
+        const decayFactor = Math.pow(0.5, (nowMs - m.created_at) / (AGE_DECAY_HALF_LIFE_DAYS * 86400000));
         return {
           id: m.id,
           content: m.content,
           metadata: m.metadata ? JSON.parse(m.metadata) : null,
-          score,
+          score: 0.5 * decayFactor,
+          createdAt: m.created_at,
+        };
+      });
+      return res.json({ results });
+    }
+
+    // Semantic search with embeddings + time-decay scoring
+    const scored = memories
+      .filter(m => m.embedding)
+      .map(m => {
+        const emb = JSON.parse(m.embedding!) as number[];
+        const relevanceScore = cosineSimilarity(queryEmbedding, emb);
+        const decayFactor = Math.pow(0.5, (nowMs - m.created_at) / (AGE_DECAY_HALF_LIFE_DAYS * 86400000));
+        const finalScore = relevanceScore * 0.7 + decayFactor * 0.3; // 70% relevance, 30% recency
+        return {
+          id: m.id,
+          content: m.content,
+          metadata: m.metadata ? JSON.parse(m.metadata) : null,
+          score: finalScore,
           createdAt: m.created_at,
         };
       })
@@ -295,11 +367,45 @@ app.get('/memories/:userId', (req, res) => {
   }
 });
 
+// Get memories linked to a specific session
+app.get('/sessions/:sessionId/memories', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const memories = db.prepare(`
+      SELECT m.id, m.content, m.metadata, m.created_at
+      FROM memories m
+      INNER JOIN memory_sessions ms ON ms.memory_id = m.id
+      WHERE ms.session_id = ?
+      ORDER BY ms.created_at DESC
+    `).all(sessionId) as Array<{
+      id: string;
+      content: string;
+      metadata: string | null;
+      created_at: number;
+    }>;
+
+    const results = memories.map(m => ({
+      id: m.id,
+      content: m.content,
+      metadata: m.metadata ? JSON.parse(m.metadata) : null,
+      createdAt: m.created_at,
+    }));
+
+    res.json({ memories: results });
+  } catch (err: any) {
+    console.error('[Memory] Get session memories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Delete memory
 app.delete('/memories/:id', (req, res) => {
   try {
     const { id } = req.params;
     db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+    // Also clean up session links
+    db.prepare('DELETE FROM memory_sessions WHERE memory_id = ?').run(id);
     res.json({ success: true });
   } catch (err: any) {
     console.error('[Memory] Delete error:', err);
@@ -313,9 +419,15 @@ app.post('/reset', (req, res) => {
     const { userId } = req.body;
 
     if (userId) {
+      // Get memory IDs for session cleanup
+      const memoryIds = db.prepare('SELECT id FROM memories WHERE user_id = ?').all(userId) as Array<{ id: string }>;
+      for (const { id } of memoryIds) {
+        db.prepare('DELETE FROM memory_sessions WHERE memory_id = ?').run(id);
+      }
       db.prepare('DELETE FROM memories WHERE user_id = ?').run(userId);
       console.log(`[Memory] Reset memories for user ${userId}`);
     } else {
+      db.prepare('DELETE FROM memory_sessions').run();
       db.prepare('DELETE FROM memories').run();
       console.log('[Memory] Reset all memories');
     }
@@ -332,11 +444,13 @@ app.get('/stats', (req, res) => {
   try {
     const totalMemories = (db.prepare('SELECT COUNT(*) as count FROM memories').get() as { count: number }).count;
     const totalUsers = (db.prepare('SELECT COUNT(DISTINCT user_id) as count FROM memories').get() as { count: number }).count;
+    const totalSessions = (db.prepare('SELECT COUNT(DISTINCT session_id) as count FROM memory_sessions').get() as { count: number }).count;
     const dbSize = fs.statSync(DB_PATH).size;
 
     res.json({
       totalMemories,
       totalUsers,
+      totalSessions,
       dbSizeBytes: dbSize,
       dbSizeMB: (dbSize / 1024 / 1024).toFixed(2),
     });
@@ -349,7 +463,7 @@ app.get('/stats', (req, res) => {
 // Start server
 const HOST = process.env.MEMORY_HOST || '127.0.0.1';
 app.listen(PORT, HOST, () => {
-  console.log(`[Memory] SQLite memory service v2.0.0 running on http://${HOST}:${PORT}`);
+  console.log(`[Memory] SQLite memory service v2.1.0 running on http://${HOST}:${PORT}`);
   console.log(`[Memory] Database: ${DB_PATH}`);
   console.log(`[Memory] Ready.`);
 });
