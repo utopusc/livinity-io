@@ -6,22 +6,22 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.5 — Claude Migration & AI Platform
-**Current focus:** Phase 4 — WebSocket Gateway + Human-in-the-Loop
+**Current focus:** Phase 4 complete — WebSocket Gateway + Human-in-the-Loop
 
 ## Current Position
 
 Milestone: v1.5 (Claude Migration & AI Platform)
 Phase: 4 of 5 (WebSocket Gateway + HITL)
-Plan: 3 of 4 complete
-Status: In progress
-Last activity: 2026-02-15 — Completed v1.5-04-02-PLAN.md
+Plan: 4 of 4 complete
+Status: Phase complete
+Last activity: 2026-02-15 — Completed v1.5-04-04-PLAN.md
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100% (of planned phases 1-4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16 (v1.5)
+- Total plans completed: 15 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -32,7 +32,7 @@ Progress: [█████████░] 88%
 | 1 - Provider Abstraction | 3/3 | — | — |
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
-| 4 - WebSocket Gateway + HITL | 3/4 | ~15min | ~4min |
+| 4 - WebSocket Gateway + HITL | 4/4 | ~21min | ~5min |
 
 *Updated after each plan completion*
 
@@ -77,6 +77,9 @@ v1.5 decisions:
 - [Phase4]: Redis psubscribe('nexus:notify:*') pattern subscription for notification fanout
 - [Phase4]: Three notification routing patterns: global (all), approval (all), agent:sessionId (targeted)
 - [Phase4]: Empty per-client notifyFilter = receive all notifications (opt-in filtering)
+- [Phase4]: Redis sorted set (ZADD) for approval audit trail, trimmed to 1000 entries
+- [Phase4]: Express route ordering: /api/approvals/audit before /:id to avoid param collision
+- [Phase4]: Shell tool marked requiresApproval — primary destructive tool for HITL gating
 
 ### Pending Todos
 
@@ -89,5 +92,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-04-02-PLAN.md
+Stopped at: Completed v1.5-04-04-PLAN.md (Phase 4 complete)
 Resume file: None
