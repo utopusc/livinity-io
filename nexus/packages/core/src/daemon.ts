@@ -240,7 +240,7 @@ export class Daemon {
         // Track current WhatsApp JID for progress_report tool
         this.currentWhatsAppJid = item.from;
         // Track current channel context for cron tool
-        if (['telegram', 'discord', 'slack', 'whatsapp'].includes(item.source)) {
+        if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
           this.currentChannelContext = {
             source: item.source,
             chatId: item.from || item.params?.chatId || '',
@@ -397,7 +397,7 @@ export class Daemon {
     const item: InboxItem = { message, source, requestId, params, from };
 
     // Real-time messaging sources - process immediately (event-driven)
-    const realtimeSources = ['telegram', 'discord', 'slack'];
+    const realtimeSources = ['telegram', 'discord', 'slack', 'matrix'];
     if (realtimeSources.includes(source)) {
       // Process immediately without waiting for polling loop
       this.processInboxItem(item).catch((err) => {
@@ -415,7 +415,7 @@ export class Daemon {
       // Track current WhatsApp JID for progress_report tool
       this.currentWhatsAppJid = item.from;
       // Track current channel context for cron tool
-      if (['telegram', 'discord', 'slack', 'whatsapp'].includes(item.source)) {
+      if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
         this.currentChannelContext = {
           source: item.source,
           chatId: item.from || item.params?.chatId || '',
@@ -594,7 +594,7 @@ export class Daemon {
       const delayStr = `${delay} ${unit}`;
 
       // Capture channel context to replay when timer fires (WhatsApp, Telegram, Discord, Slack)
-      const validSources = ['whatsapp', 'telegram', 'discord', 'slack'] as const;
+      const validSources = ['whatsapp', 'telegram', 'discord', 'slack', 'matrix'] as const;
       const scheduledSource = validSources.includes(intent.source as any) ? intent.source : 'cron';
       const scheduledFrom = intent.from; // Chat ID or JID
       const scheduledParams = intent.params?.chatId ? { chatId: intent.params.chatId } : undefined;
@@ -2063,11 +2063,11 @@ ${task}`;
     }
   }
 
-  /** Send response via channel (Telegram, Discord).
+  /** Send response via channel (Telegram, Discord, Slack, Matrix).
    *  Uses the ChannelManager to route messages to the appropriate platform. */
   private async sendChannelResponse(item: InboxItem, text: string) {
     // Skip if not a channel source or no chatId
-    const channelSources = ['telegram', 'discord', 'slack'] as const;
+    const channelSources = ['telegram', 'discord', 'slack', 'matrix'] as const;
     if (!channelSources.includes(item.source as any) || !item.from) return;
 
     try {
@@ -2082,7 +2082,7 @@ ${task}`;
 
       // Send via the appropriate channel
       const success = await channelManager.sendMessage(
-        item.source as 'telegram' | 'discord' | 'slack',
+        item.source as 'telegram' | 'discord' | 'slack' | 'matrix',
         item.from,
         text,
         replyTo
@@ -2201,11 +2201,11 @@ ${task}`;
       this.actionMessageCount++;
 
       // Route to appropriate channel
-      const channelSources = ['telegram', 'discord', 'slack'] as const;
+      const channelSources = ['telegram', 'discord', 'slack', 'matrix'] as const;
       if (source && channelSources.includes(source as any) && this.config.channelManager) {
-        // Send via channel manager for Telegram/Discord/Slack
+        // Send via channel manager for Telegram/Discord/Slack/Matrix
         this.config.channelManager.sendMessage(
-          source as 'telegram' | 'discord' | 'slack',
+          source as 'telegram' | 'discord' | 'slack' | 'matrix',
           chatId,
           line
         ).catch(() => {});
