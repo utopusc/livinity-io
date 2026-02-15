@@ -473,10 +473,21 @@ function AiConfigSection() {
 		onSuccess: () => { utils.ai.getClaudeCliStatus.invalidate() },
 	})
 
+	const [loginCode, setLoginCode] = useState('')
+
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
 			if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
 			if (data.alreadyAuthenticated) utils.ai.getClaudeCliStatus.invalidate()
+		},
+	})
+
+	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
+		onSuccess: () => {
+			setLoginCode('')
+			// Poll rapidly for a few seconds to pick up new auth state
+			setTimeout(() => cliStatusQ.refetch(), 2000)
+			setTimeout(() => cliStatusQ.refetch(), 5000)
 		},
 	})
 
@@ -605,9 +616,38 @@ function AiConfigSection() {
 												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
 											)}
 											{startLoginMutation.isSuccess && startLoginMutation.data.url && (
-												<p className='text-caption text-text-secondary'>
-													Auth page opened in a new tab. Complete login there, then this page will update automatically.
-												</p>
+												<div className='space-y-2 rounded-radius-sm bg-surface-2 p-3'>
+													<p className='text-caption text-text-secondary'>
+														Auth page opened in a new tab. After logging in, paste the code below:
+													</p>
+													<div className='flex gap-2'>
+														<Input
+															placeholder='Paste code here...'
+															value={loginCode}
+															onValueChange={setLoginCode}
+															onKeyDown={(e) => e.key === 'Enter' && loginCode.trim() && submitCodeMutation.mutate({code: loginCode.trim()})}
+															className='font-mono text-caption'
+														/>
+														<Button
+															variant='primary'
+															size='sm'
+															onClick={() => submitCodeMutation.mutate({code: loginCode.trim()})}
+															disabled={\!loginCode.trim() || submitCodeMutation.isPending}
+														>
+															{submitCodeMutation.isPending ? (
+																<TbLoader2 className='h-4 w-4 animate-spin' />
+															) : (
+																<TbCheck className='h-4 w-4' />
+															)}
+														</Button>
+													</div>
+													{submitCodeMutation.isError && (
+														<p className='text-caption text-red-400'>{submitCodeMutation.error.message}</p>
+													)}
+													{submitCodeMutation.isSuccess && (
+														<p className='text-caption text-green-400'>Code submitted\! Waiting for authentication...</p>
+													)}
+												</div>
 											)}
 										</>
 									) : (

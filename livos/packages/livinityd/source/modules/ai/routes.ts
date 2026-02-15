@@ -231,6 +231,37 @@ export default router({
 		}
 	}),
 
+	/** Submit OAuth code to the running claude auth login process */
+	submitClaudeLoginCode: privateProcedure
+		.input(z.object({code: z.string().min(1)}))
+		.mutation(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(`${nexusUrl}/api/claude-cli/login-code`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+					},
+					body: JSON.stringify({code: input.code}),
+				})
+				if (!response.ok) {
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || `Nexus API error: ${response.status}`,
+					})
+				}
+				return (await response.json()) as {success: boolean; error?: string}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to submit login code',
+				})
+			}
+		}),
+
 	/** Set Claude auth method (api-key or sdk-subscription) */
 	setClaudeAuthMethod: privateProcedure
 		.input(z.object({method: z.enum(['api-key', 'sdk-subscription'])}))

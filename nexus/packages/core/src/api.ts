@@ -114,6 +114,25 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  app.post('/api/claude-cli/login-code', async (req, res) => {
+    try {
+      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!claudeProvider || typeof claudeProvider.submitLoginCode !== 'function') {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+      const { code } = req.body as { code?: string };
+      if (!code || typeof code !== 'string') {
+        res.status(400).json({ error: 'Missing "code" in request body' });
+        return;
+      }
+      const result = claudeProvider.submitLoginCode(code);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── App Management Routes ─────────────────────────────────────
   const appManager = new AppManager(redis);
   app.use('/api/apps', createAppRoutes(appManager));
