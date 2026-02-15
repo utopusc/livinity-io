@@ -450,6 +450,8 @@ export class WsGateway {
     const nexusConfig = this.deps.daemon.getNexusConfig();
     const agentDefaults = nexusConfig?.agent;
 
+    const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
+
     const agent = new AgentLoop({
       brain: this.deps.brain,
       toolRegistry: this.deps.toolRegistry,
@@ -463,6 +465,9 @@ export class WsGateway {
       tier: (tier as any) || agentDefaults?.tier || 'sonnet',
       maxDepth: agentDefaults?.maxDepth || 3,
       stream: true,
+      approvalManager: this.deps.daemon.approvalManager,
+      approvalPolicy,
+      sessionId,
     });
 
     const session: WsSession = {

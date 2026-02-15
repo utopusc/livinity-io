@@ -229,6 +229,19 @@ export const ResponseConfigSchema = z.object({
   maxLength: z.number().int().min(100).max(10000).optional(),
 }).strict().optional();
 
+// ─── Approval Configuration ───────────────────────────────────────────────────
+
+export const ApprovalPolicySchema = z.enum(['always', 'destructive', 'never']);
+
+export const ApprovalConfigSchema = z.object({
+  /** Policy: 'always' = approve all tools, 'destructive' = only requiresApproval tools, 'never' = auto-approve */
+  policy: ApprovalPolicySchema.default('destructive'),
+  /** Timeout in milliseconds for approval requests (default: 5 minutes) */
+  timeoutMs: z.number().int().min(10000).max(3600000).default(300000),
+  /** Whether to log all approvals to audit trail */
+  auditEnabled: z.boolean().default(true),
+}).strict().optional();
+
 // ─── Main Nexus Configuration Schema ───────────────────────────────────────
 
 export const NexusConfigSchema = z.object({
@@ -267,6 +280,9 @@ export const NexusConfigSchema = z.object({
 
   // Response Style
   response: ResponseConfigSchema,
+
+  // Human-in-the-Loop
+  approval: ApprovalConfigSchema,
 }).strict();
 
 export type NexusConfig = z.infer<typeof NexusConfigSchema>;
@@ -277,6 +293,7 @@ export type SessionConfig = z.infer<typeof SessionConfigSchema>;
 export type TtsConfig = z.infer<typeof TtsConfigSchema>;
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 export type ResponseConfig = z.infer<typeof ResponseConfigSchema>;
+export type ApprovalConfig = z.infer<typeof ApprovalConfigSchema>;
 
 // ─── Default Configuration ───────────────────────────────────────────────────
 
@@ -392,6 +409,11 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
     showSteps: true,
     showReasoning: true,
     language: 'auto',
+  },
+  approval: {
+    policy: 'destructive',
+    timeoutMs: 300000,
+    auditEnabled: true,
   },
 };
 
