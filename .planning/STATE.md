@@ -6,22 +6,22 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.5 — Claude Migration & AI Platform
-**Current focus:** Phase 4 complete — WebSocket Gateway + Human-in-the-Loop
+**Current focus:** Phase 5 — Skill Marketplace + Parallel Execution
 
 ## Current Position
 
 Milestone: v1.5 (Claude Migration & AI Platform)
-Phase: 4 of 5 (WebSocket Gateway + HITL)
-Plan: 4 of 4 complete
-Status: Phase complete
-Last activity: 2026-02-15 — Completed v1.5-04-04-PLAN.md
+Phase: 5 of 5 (Skill Marketplace + Parallel Execution)
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-02-15 — Completed v1.5-05-01-PLAN.md
 
-Progress: [██████████] 100% (of planned phases 1-4)
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15 (v1.5)
+- Total plans completed: 16 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -33,6 +33,7 @@ Progress: [██████████] 100% (of planned phases 1-4)
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
 | 4 - WebSocket Gateway + HITL | 4/4 | ~21min | ~5min |
+| 5 - Skill Marketplace + Parallel Execution | 1/3 | ~3min | ~3min |
 
 *Updated after each plan completion*
 
@@ -80,6 +81,10 @@ v1.5 decisions:
 - [Phase4]: Redis sorted set (ZADD) for approval audit trail, trimmed to 1000 entries
 - [Phase4]: Express route ordering: /api/approvals/audit before /:id to avoid param collision
 - [Phase4]: Shell tool marked requiresApproval — primary destructive tool for HITL gating
+- [Phase5]: SKILL.md manifest: YAML frontmatter with permissions (name/reason/required), tools, triggers, marketplace metadata
+- [Phase5]: Simple YAML parser for SKILL.md (no js-yaml dependency), extended to handle nested objects
+- [Phase5]: Git-based registry: GitHub Contents API for directory listing, raw.githubusercontent.com for file fetch
+- [Phase5]: File-based catalog caching with MD5-hashed URL keys and configurable TTL
 
 ### Pending Todos
 
@@ -92,5 +97,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-04-04-PLAN.md (Phase 4 complete)
+Stopped at: Completed v1.5-05-01-PLAN.md
 Resume file: None
