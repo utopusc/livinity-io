@@ -72,6 +72,15 @@ export interface WsGatewayDeps {
   toolRegistry: ToolRegistry;
   daemon: Daemon;
   redis: Redis;
+  redisSub: Redis; // Dedicated Redis connection for blocking subscribe
+}
+
+/** Payload structure for messages published to nexus:notify:* channels */
+export interface NotificationPayload {
+  channel: string;       // "global", "agent:<sessionId>", "approval"
+  event: string;         // "agent.started", "agent.completed", "approval_request", etc.
+  data: unknown;         // Event-specific payload
+  timestamp: number;
 }
 
 interface WsSession {
@@ -88,6 +97,8 @@ interface ClientState {
   id: string;
   sessions: Map<string, WsSession>;
   ws: WebSocket;
+  /** Per-client notification channel filter. Empty set = receive all. */
+  notifyFilter: Set<string>;
 }
 
 // ── WsGateway Class ────────────────────────────────────────────────────────
@@ -146,7 +157,128 @@ export class WsGateway {
       });
     }, 30_000);
 
+    // Subscribe to Redis pub/sub notification channels
+    this.setupPubSub();
+
     logger.info('[WsGateway] JSON-RPC 2.0 WebSocket gateway on /ws/agent');
+  }
+
+  // ── Redis Pub/Sub ──────────────────────────────────────────────────────
+
+  /**
+   * Subscribe to nexus:notify:* via Redis psubscribe and route
+   * incoming notifications to connected WebSocket clients.
+   */
+  private setupPubSub(): void {
+    const redisSub = this.deps.redisSub;
+
+    redisSub.psubscribe('nexus:notify:*', (err) => {
+      if (err) {
+        logger.error('[WsGateway] Failed to psubscribe to nexus:notify:*', { error: err.message });
+      } else {
+        logger.info('[WsGateway] Subscribed to nexus:notify:* pub/sub');
+      }
+    });
+
+    redisSub.on('pmessage', (_pattern: string, channel: string, message: string) => {
+      this.handlePubSubMessage(channel, message);
+    });
+  }
+
+  /**
+   * Route a pub/sub message to the appropriate WebSocket clients.
+   *
+   * Channel patterns:
+   * - nexus:notify:global     -> broadcast to ALL clients
+   * - nexus:notify:approval   -> broadcast to ALL clients (any can approve)
+   * - nexus:notify:agent:<id> -> send only to the client owning that session
+   */
+  private handlePubSubMessage(redisChannel: string, raw: string): void {
+    let payload: NotificationPayload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      logger.warn('[WsGateway] Invalid JSON in pub/sub message', { channel: redisChannel });
+      return;
+    }
+
+    // Extract the sub-channel from Redis channel name (e.g., "global", "approval", "agent:abc-123")
+    const prefix = 'nexus:notify:';
+    const subChannel = redisChannel.startsWith(prefix) ? redisChannel.slice(prefix.length) : redisChannel;
+
+    if (subChannel === 'global' || subChannel === 'approval') {
+      // Broadcast to ALL connected clients (respecting their filter)
+      this.broadcastNotification(payload, subChannel);
+    } else if (subChannel.startsWith('agent:')) {
+      // Targeted: find the client that owns this session
+      const sessionId = subChannel.slice('agent:'.length);
+      this.sendTargetedNotification(payload, sessionId, subChannel);
+    } else {
+      // Unknown sub-channel — broadcast to all as fallback
+      this.broadcastNotification(payload, subChannel);
+    }
+  }
+
+  /**
+   * Send a notification to ALL connected clients, respecting per-client filters.
+   */
+  private broadcastNotification(payload: NotificationPayload, subChannel: string): void {
+    for (const [, client] of this.clients) {
+      if (this.clientAcceptsChannel(client, subChannel)) {
+        this.sendNotification(client.ws, 'notify', {
+          channel: payload.channel,
+          event: payload.event,
+          data: payload.data as Record<string, unknown>,
+          timestamp: payload.timestamp,
+        });
+      }
+    }
+  }
+
+  /**
+   * Send a notification only to the client that owns a specific agent session.
+   */
+  private sendTargetedNotification(payload: NotificationPayload, sessionId: string, subChannel: string): void {
+    for (const [, client] of this.clients) {
+      if (client.sessions.has(sessionId) && this.clientAcceptsChannel(client, subChannel)) {
+        this.sendNotification(client.ws, 'notify', {
+          channel: payload.channel,
+          event: payload.event,
+          data: payload.data as Record<string, unknown>,
+          timestamp: payload.timestamp,
+        });
+        return; // Only one client owns a session
+      }
+    }
+  }
+
+  /**
+   * Check if a client's notification filter allows a given channel.
+   * Empty filter = accept everything.
+   */
+  private clientAcceptsChannel(client: ClientState, subChannel: string): boolean {
+    if (client.notifyFilter.size === 0) return true;
+    // Check exact match or prefix match (e.g., "agent" matches "agent:abc")
+    if (client.notifyFilter.has(subChannel)) return true;
+    const base = subChannel.split(':')[0];
+    return client.notifyFilter.has(base);
+  }
+
+  /**
+   * Publish a notification to a Redis pub/sub channel.
+   * Uses the non-subscriber Redis connection.
+   */
+  publishNotification(channel: string, event: string, data: unknown): void {
+    const payload: NotificationPayload = {
+      channel,
+      event,
+      data,
+      timestamp: Date.now(),
+    };
+    const redisChannel = `nexus:notify:${channel}`;
+    this.deps.redis.publish(redisChannel, JSON.stringify(payload)).catch((err) => {
+      logger.error('[WsGateway] Failed to publish notification', { channel: redisChannel, error: err.message });
+    });
   }
 
   // ── Authentication ──────────────────────────────────────────────────────
@@ -203,6 +335,7 @@ export class WsGateway {
       id: clientId,
       sessions: new Map(),
       ws,
+      notifyFilter: new Set(),
     };
     this.clients.set(clientId, client);
 
@@ -271,6 +404,12 @@ export class WsGateway {
         break;
       case 'system.ping':
         this.handleSystemPing(client, msg);
+        break;
+      case 'notify.subscribe':
+        this.handleNotifySubscribe(client, msg);
+        break;
+      case 'notify.unsubscribe':
+        this.handleNotifyUnsubscribe(client, msg);
         break;
       default:
         this.sendError(client.ws, msg.id, RPC_METHOD_NOT_FOUND, `Method not found: ${msg.method}`);
@@ -341,6 +480,12 @@ export class WsGateway {
       task: task.slice(0, 80),
     });
 
+    // Publish agent.started lifecycle event
+    this.publishNotification('global', 'agent.started', {
+      sessionId,
+      task: task.slice(0, 200),
+    });
+
     // Forward agent events as JSON-RPC notifications
     const eventHandler = (event: AgentEvent) => {
       if (session.status === 'cancelled') return;
@@ -366,6 +511,14 @@ export class WsGateway {
 
         session.status = 'complete';
 
+        // Publish agent.completed lifecycle event
+        this.publishNotification('global', 'agent.completed', {
+          sessionId,
+          success: result.success,
+          turns: result.turns,
+          stoppedReason: result.stoppedReason,
+        });
+
         // Send JSON-RPC result response
         if (client.ws.readyState === WebSocket.OPEN) {
           this.sendResult(client.ws, msg.id, {
@@ -387,6 +540,12 @@ export class WsGateway {
 
         logger.error('[WsGateway] agent.run error', {
           clientId: client.id,
+          sessionId,
+          error: err.message,
+        });
+
+        // Publish agent.error lifecycle event
+        this.publishNotification('global', 'agent.error', {
           sessionId,
           error: err.message,
         });
@@ -468,6 +627,56 @@ export class WsGateway {
     });
   }
 
+  /**
+   * notify.subscribe: Register interest in specific notification channels.
+   * params: { channels: string[] }
+   * Empty channels array = subscribe to everything (reset filter).
+   */
+  private handleNotifySubscribe(client: ClientState, msg: JsonRpcRequest): void {
+    const params = msg.params || {};
+    const channels = params.channels;
+
+    if (!Array.isArray(channels)) {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, 'Missing required param: channels (string[])');
+      return;
+    }
+
+    for (const ch of channels) {
+      if (typeof ch === 'string') {
+        client.notifyFilter.add(ch);
+      }
+    }
+
+    this.sendResult(client.ws, msg.id, {
+      subscribed: Array.from(client.notifyFilter),
+    });
+  }
+
+  /**
+   * notify.unsubscribe: Stop receiving specific notification channels.
+   * params: { channels: string[] }
+   * Removing all channels resets to "receive everything" mode.
+   */
+  private handleNotifyUnsubscribe(client: ClientState, msg: JsonRpcRequest): void {
+    const params = msg.params || {};
+    const channels = params.channels;
+
+    if (!Array.isArray(channels)) {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, 'Missing required param: channels (string[])');
+      return;
+    }
+
+    for (const ch of channels) {
+      if (typeof ch === 'string') {
+        client.notifyFilter.delete(ch);
+      }
+    }
+
+    this.sendResult(client.ws, msg.id, {
+      subscribed: Array.from(client.notifyFilter),
+    });
+  }
+
   // ── Message Sending Helpers ─────────────────────────────────────────────
 
   private sendResult(ws: WebSocket, id: string | number | null, result: unknown): void {
@@ -517,6 +726,9 @@ export class WsGateway {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+
+    // Unsubscribe from Redis pub/sub
+    this.deps.redisSub.punsubscribe('nexus:notify:*').catch(() => {});
 
     // Cancel all sessions and close all connections
     for (const [, client] of this.clients) {
