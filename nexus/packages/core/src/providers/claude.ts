@@ -387,4 +387,28 @@ export class ClaudeProvider implements AIProvider {
       }, 15_000);
     });
   }
+
+  /**
+   * Submit the OAuth code from the browser back to the running `claude auth login` process.
+   * The CLI waits for this code on stdin after the user authenticates in the browser.
+   */
+  submitLoginCode(code: string): { success: boolean; error?: string } {
+    if (!this.loginProcess) {
+      return { success: false, error: 'No login process running. Click "Authenticate with Claude" first.' };
+    }
+    const { proc } = this.loginProcess;
+    if (!proc.stdin || proc.stdin.destroyed) {
+      return { success: false, error: 'Login process stdin is not available.' };
+    }
+    try {
+      proc.stdin.write(code.trim() + '\n');
+      logger.info('ClaudeProvider: login code submitted');
+      // Bust status cache so polling picks up new auth state
+      this.cliStatusCache = null;
+      return { success: true };
+    } catch (err: any) {
+      logger.error('ClaudeProvider: failed to submit login code', { error: err.message });
+      return { success: false, error: err.message };
+    }
+  }
 }
