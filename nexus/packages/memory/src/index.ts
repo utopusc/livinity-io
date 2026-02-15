@@ -239,6 +239,90 @@ app.post('/add', async (req, res) => {
   }
 });
 
+// Helper: Search memories with relevance + time-decay scoring (shared by /search and /context)
+async function searchMemories(
+  userId: string,
+  query: string,
+  limit: number = 10
+): Promise<Array<{ id: string; content: string; score: number; createdAt: number; metadata: any }>> {
+  // Get all memories for user
+  const memories = db.prepare(`
+    SELECT id, content, embedding, metadata, created_at
+    FROM memories
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+  `).all(userId) as Array<{
+    id: string;
+    content: string;
+    embedding: string | null;
+    metadata: string | null;
+    created_at: number;
+  }>;
+
+  if (!query) {
+    // No query, return recent memories
+    return memories.slice(0, limit).map(m => ({
+      id: m.id,
+      content: m.content,
+      metadata: m.metadata ? JSON.parse(m.metadata) : null,
+      score: 1,
+      createdAt: m.created_at,
+    }));
+  }
+
+  // Get query embedding for semantic search
+  const queryEmbedding = await getEmbedding(query);
+  const nowMs = Date.now();
+
+  if (!queryEmbedding) {
+    // Fallback to text search with time-decay scoring
+    const searchTerm = `%${query.toLowerCase()}%`;
+    const textResults = db.prepare(`
+      SELECT id, content, metadata, created_at
+      FROM memories
+      WHERE user_id = ? AND LOWER(content) LIKE ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(userId, searchTerm, limit) as Array<{
+      id: string;
+      content: string;
+      metadata: string | null;
+      created_at: number;
+    }>;
+
+    return textResults.map(m => {
+      const decayFactor = Math.pow(0.5, (nowMs - m.created_at) / (AGE_DECAY_HALF_LIFE_DAYS * 86400000));
+      return {
+        id: m.id,
+        content: m.content,
+        metadata: m.metadata ? JSON.parse(m.metadata) : null,
+        score: 0.5 * decayFactor,
+        createdAt: m.created_at,
+      };
+    });
+  }
+
+  // Semantic search with embeddings + time-decay scoring
+  return memories
+    .filter(m => m.embedding)
+    .map(m => {
+      const emb = JSON.parse(m.embedding!) as number[];
+      const relevanceScore = cosineSimilarity(queryEmbedding, emb);
+      const decayFactor = Math.pow(0.5, (nowMs - m.created_at) / (AGE_DECAY_HALF_LIFE_DAYS * 86400000));
+      const finalScore = relevanceScore * 0.7 + decayFactor * 0.3; // 70% relevance, 30% recency
+      return {
+        id: m.id,
+        content: m.content,
+        metadata: m.metadata ? JSON.parse(m.metadata) : null,
+        score: finalScore,
+        createdAt: m.created_at,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
 // Search memories (with time-decay scoring)
 app.post('/search', async (req, res) => {
   try {
@@ -248,88 +332,48 @@ app.post('/search', async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Get all memories for user
-    const memories = db.prepare(`
-      SELECT id, content, embedding, metadata, created_at
-      FROM memories
-      WHERE user_id = ?
-      ORDER BY created_at DESC
-      LIMIT 100
-    `).all(userId) as Array<{
-      id: string;
-      content: string;
-      embedding: string | null;
-      metadata: string | null;
-      created_at: number;
-    }>;
-
-    if (!query) {
-      // No query, return recent memories
-      const results = memories.slice(0, limit).map(m => ({
-        id: m.id,
-        content: m.content,
-        metadata: m.metadata ? JSON.parse(m.metadata) : null,
-        score: 1,
-        createdAt: m.created_at,
-      }));
-      return res.json({ results });
-    }
-
-    // Get query embedding for semantic search
-    const queryEmbedding = await getEmbedding(query);
-    const nowMs = Date.now();
-
-    if (!queryEmbedding) {
-      // Fallback to text search with time-decay scoring
-      const searchTerm = `%${query.toLowerCase()}%`;
-      const textResults = db.prepare(`
-        SELECT id, content, metadata, created_at
-        FROM memories
-        WHERE user_id = ? AND LOWER(content) LIKE ?
-        ORDER BY created_at DESC
-        LIMIT ?
-      `).all(userId, searchTerm, limit) as Array<{
-        id: string;
-        content: string;
-        metadata: string | null;
-        created_at: number;
-      }>;
-
-      const results = textResults.map(m => {
-        const decayFactor = Math.pow(0.5, (nowMs - m.created_at) / (AGE_DECAY_HALF_LIFE_DAYS * 86400000));
-        return {
-          id: m.id,
-          content: m.content,
-          metadata: m.metadata ? JSON.parse(m.metadata) : null,
-          score: 0.5 * decayFactor,
-          createdAt: m.created_at,
-        };
-      });
-      return res.json({ results });
-    }
-
-    // Semantic search with embeddings + time-decay scoring
-    const scored = memories
-      .filter(m => m.embedding)
-      .map(m => {
-        const emb = JSON.parse(m.embedding!) as number[];
-        const relevanceScore = cosineSimilarity(queryEmbedding, emb);
-        const decayFactor = Math.pow(0.5, (nowMs - m.created_at) / (AGE_DECAY_HALF_LIFE_DAYS * 86400000));
-        const finalScore = relevanceScore * 0.7 + decayFactor * 0.3; // 70% relevance, 30% recency
-        return {
-          id: m.id,
-          content: m.content,
-          metadata: m.metadata ? JSON.parse(m.metadata) : null,
-          score: finalScore,
-          createdAt: m.created_at,
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
-
-    res.json({ results: scored });
+    const results = await searchMemories(userId, query, limit);
+    res.json({ results });
   } catch (err: any) {
     console.error('[Memory] Search error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Assemble memory context within a token budget
+app.post('/context', async (req, res) => {
+  try {
+    const { userId, query, tokenBudget = 2000, limit = 20 } = req.body;
+
+    if (!userId || !query) {
+      return res.status(400).json({ error: 'userId and query are required' });
+    }
+
+    const scoredMemories = await searchMemories(userId, query, limit);
+
+    // Greedily assemble memories by score (highest first) until token budget exhausted
+    let usedTokens = 0;
+    const selected: Array<{ content: string; score: number; createdAt: number }> = [];
+    for (const mem of scoredMemories) {
+      const tokens = Math.ceil(mem.content.length / 4); // ~4 chars per token heuristic
+      if (usedTokens + tokens > tokenBudget) break;
+      selected.push(mem);
+      usedTokens += tokens;
+    }
+
+    // Format as structured context block
+    const context = selected.length > 0
+      ? `## Known Facts (from memory)\n${selected.map(m => `- ${m.content}`).join('\n')}\n`
+      : '';
+
+    res.json({
+      context,
+      memoriesUsed: selected.length,
+      tokensUsed: usedTokens,
+      tokenBudget,
+    });
+  } catch (err: any) {
+    console.error('[Memory] Context error:', err);
     res.status(500).json({ error: err.message });
   }
 });
