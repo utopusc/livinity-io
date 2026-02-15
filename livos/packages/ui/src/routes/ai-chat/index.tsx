@@ -14,6 +14,7 @@ import {
 	IconLoader2,
 	IconPlug,
 	IconMenu2,
+	IconPuzzle,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -25,6 +26,7 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
+const SkillsPanel = lazy(() => import('./skills-panel'))
 
 type ToolCall = {
 	tool: string
@@ -145,7 +147,7 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 	)
 }
 
-type SidebarView = 'chat' | 'mcp'
+type SidebarView = 'chat' | 'mcp' | 'skills'
 
 function ConversationSidebar({
 	conversations,
@@ -204,6 +206,15 @@ function ConversationSidebar({
 					<IconPlug size={14} />
 					MCP
 				</button>
+				<button
+					onClick={() => onViewChange('skills')}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'skills' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
+				>
+					<IconPuzzle size={14} />
+					Skills
+				</button>
 			</div>
 
 			{/* Conversation list (only in chat view) */}
@@ -241,8 +252,8 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{/* MCP view - sidebar filler */}
-			{activeView === 'mcp' && (
+			{/* MCP / Skills view - sidebar filler */}
+			{(activeView === 'mcp' || activeView === 'skills') && (
 				<div className='flex-1' />
 			)}
 		</div>
@@ -397,7 +408,7 @@ export default function AiChat() {
 			)}
 
 			{/* Main content area */}
-			{activeView === 'chat' ? (
+			{activeView === 'chat' && (
 				/* Chat area — fixed header, scrollable messages, fixed input */
 				<div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
 					{/* Mobile header — sticky */}
@@ -494,7 +505,8 @@ export default function AiChat() {
 						</div>
 					</div>
 				</div>
-			) : (
+			)}
+			{activeView === 'mcp' && (
 				/* MCP Panel */
 				<div className='flex-1 overflow-hidden'>
 					<Suspense
@@ -505,6 +517,20 @@ export default function AiChat() {
 						}
 					>
 						<McpPanel />
+					</Suspense>
+				</div>
+			)}
+			{activeView === 'skills' && (
+				/* Skills Panel */
+				<div className='flex-1 overflow-hidden'>
+					<Suspense
+						fallback={
+							<div className='flex h-full items-center justify-center'>
+								<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
+							</div>
+						}
+					>
+						<SkillsPanel />
 					</Suspense>
 				</div>
 			)}
