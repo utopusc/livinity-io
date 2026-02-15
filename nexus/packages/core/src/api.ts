@@ -16,6 +16,7 @@ import type { McpClientManager } from './mcp-client-manager.js';
 import { AppManager, createAppRoutes } from './modules/apps/index.js';
 import type { ChannelManager, ChannelId, ChannelConfig } from './channels/index.js';
 import type { ApprovalManager } from './approval-manager.js';
+import type { TaskManager, TaskStatus } from './task-manager.js';
 import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 
@@ -29,6 +30,7 @@ interface ApiDeps {
   mcpClientManager?: McpClientManager;
   channelManager?: ChannelManager;
   approvalManager?: ApprovalManager;
+  taskManager?: TaskManager;
 }
 
 
@@ -59,7 +61,7 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
-export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager }: ApiDeps) {
+export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager }: ApiDeps) {
   const app = express();
   app.use(express.json());
 
@@ -656,6 +658,74 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         return;
       }
       res.json({ ok: true, decision });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Parallel Task Management API ────────────────────────────────
+
+  /** Submit a new parallel task */
+  app.post('/api/tasks', async (req, res) => {
+    if (!taskManager) {
+      res.status(503).json({ error: 'Task system not configured' });
+      return;
+    }
+    try {
+      const { task, tier, maxTurns, timeoutMs } = req.body;
+      if (!task || typeof task !== 'string') {
+        res.status(400).json({ error: '"task" is required and must be a string' });
+        return;
+      }
+      const taskId = await taskManager.submit({ task, tier, maxTurns, timeoutMs });
+      res.json({ taskId, status: 'queued' });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** List all tasks (optional status filter) */
+  app.get('/api/tasks', async (req, res) => {
+    if (!taskManager) {
+      res.status(503).json({ error: 'Task system not configured' });
+      return;
+    }
+    try {
+      const status = req.query.status as TaskStatus | undefined;
+      const tasks = await taskManager.listTasks(status ? { status } : undefined);
+      res.json({ tasks });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get status of a specific task */
+  app.get('/api/tasks/:id', async (req, res) => {
+    if (!taskManager) {
+      res.status(503).json({ error: 'Task system not configured' });
+      return;
+    }
+    try {
+      const info = await taskManager.getStatus(req.params.id);
+      if (!info) {
+        res.status(404).json({ error: 'Task not found' });
+        return;
+      }
+      res.json(info);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Cancel a running task */
+  app.post('/api/tasks/:id/cancel', async (req, res) => {
+    if (!taskManager) {
+      res.status(503).json({ error: 'Task system not configured' });
+      return;
+    }
+    try {
+      const cancelled = await taskManager.cancel(req.params.id);
+      res.json({ cancelled });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }

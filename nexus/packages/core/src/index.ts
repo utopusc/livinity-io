@@ -21,6 +21,7 @@ import { HeartbeatRunner } from './heartbeat-runner.js';
 import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
 import { ApprovalManager } from './approval-manager.js';
+import { TaskManager } from './task-manager.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
@@ -256,6 +257,18 @@ Conversation:`;
   const approvalManager = new ApprovalManager(redis);
   logger.info('ApprovalManager initialized');
 
+  // TaskManager for parallel agent task execution (BullMQ-based)
+  const taskManager = new TaskManager({
+    brain,
+    toolRegistry,
+    redis,
+    nexusConfig: configManager.get(),
+    approvalManager,
+  });
+  logger.info('TaskManager initialized', {
+    maxConcurrent: configManager.get().tasks?.maxConcurrent || 4,
+  });
+
   const daemon = new Daemon({
     brain,
     router,
@@ -282,7 +295,7 @@ Conversation:`;
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager });
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   const httpServer = apiApp.listen(apiPort, apiHost, () => {
@@ -293,7 +306,7 @@ Conversation:`;
   const redisSub = redis.duplicate();
 
   // Attach JSON-RPC 2.0 WebSocket gateway for streaming
-  const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis, redisSub });
+  const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis, redisSub, taskManager });
 
   // Event-driven inbox processing using Redis BLPOP (no polling overhead)
   const inboxRedis = redis.duplicate(); // Separate connection for blocking operations
@@ -337,6 +350,7 @@ Conversation:`;
     await memoryExtractionQueue.close();
     await channelManager.disconnectAll();
     await mcpClientManager.stop();
+    await taskManager.cleanup();
     await daemon.stop();
     await redisSub.quit().catch(() => {}); // Close pub/sub subscriber connection
     await inboxRedis.quit().catch(() => {}); // Close blocking connection
