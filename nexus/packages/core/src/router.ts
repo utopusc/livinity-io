@@ -5,7 +5,7 @@ export interface Intent {
   type: string;
   action: string;
   params: Record<string, any>;
-  source: 'mcp' | 'whatsapp' | 'cron' | 'daemon' | 'webhook' | 'telegram' | 'discord' | 'slack' | 'signal' | 'line';
+  source: 'mcp' | 'whatsapp' | 'cron' | 'daemon' | 'webhook' | 'telegram' | 'discord' | 'slack' | 'matrix' | 'signal' | 'line';
   raw: string;
   from?: string; // WhatsApp JID or channel chatId — carried through for responses
 }
