@@ -183,6 +183,17 @@ export class ProviderManager {
     return results;
   }
 
+  /** Get the first available provider ID without making an API call */
+  async getActiveProviderId(): Promise<string> {
+    for (const providerId of this.fallbackOrder) {
+      const provider = this.providers.get(providerId);
+      if (!provider) continue;
+      const available = await provider.isAvailable();
+      if (available) return providerId;
+    }
+    return 'gemini'; // fallback default
+  }
+
   setFallbackOrder(order: string[]): void {
     this.fallbackOrder = order.filter((id) => this.providers.has(id));
   }

@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { Brain, ChatMessage } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
 import type { ToolResult } from './types.js';
+import type { ClaudeToolDefinition, ToolUseBlock, ToolResultBlock } from './providers/types.js';
 import { logger } from './logger.js';
 import type { NexusConfig } from './config/schema.js';
 import { getThinkingPromptModifier, getVerbosePromptModifier, getResponseStylePromptModifier, type ThinkLevel, type VerboseLevel, type ResponseConfig } from './thinking.js';
@@ -213,6 +214,48 @@ ${toolDescriptions}${canSpawnSubagent ? `
     - tools (array, optional): Tool names the subagent can use (defaults to all tools)
     - max_turns (number, optional): Max turns for the subagent [default: 5]` : ''}`;
 
+const CLAUDE_NATIVE_SYSTEM_PROMPT = (canSpawnSubagent: boolean) => `You are Nexus, an autonomous AI assistant. You manage a Linux server AND interact with the user via WhatsApp. You solve tasks by reasoning step-by-step and calling tools.
+
+## WhatsApp Context
+
+You are integrated into the user's WhatsApp. When the user sends a command (prefixed with "!"), you receive it along with recent chat history from that conversation. This history includes:
+- Messages from contacts (shown as "ContactName: message") — these are REAL messages from other people in the chat
+- Messages from the user (shown as "User: message")
+- Your previous responses (shown as "Nexus: message")
+
+You CAN see and reference this chat context. If the user asks about what someone said, use the provided conversation history to answer.
+
+IMPORTANT: When the user asks you to send a message to a SPECIFIC person, use the whatsapp_send tool with the contact name.
+
+## How You Work
+
+You have access to tools. Use them to accomplish the user's task:
+1. Think about what you need to do
+2. Call the appropriate tool(s) to accomplish it
+3. When the task is complete, provide your final answer as a text response (no tool call)
+
+## Rules
+
+1. Think before acting
+2. Call ONE tool per turn, then observe the result before deciding next step
+3. If a tool fails, try a different approach
+4. When the task is complete, provide your final answer as text
+5. Be concise in your final answer
+${canSpawnSubagent ? `6. For complex subtasks, use spawn_subagent to delegate to a focused subagent` : ''}
+
+## Browser Safety (CRITICAL)
+
+When using Chrome browser tools (mcp_chrome_browser_*):
+- NEVER interact with login/sign-in pages, password fields, or authentication flows
+- NEVER click "Sign in", "Log in", "Sign out", or account-related buttons
+- If a page requires authentication, STOP and tell the user to sign in manually
+
+## Memory
+
+You have long-term memory via memory_search and memory_add tools:
+- When the user asks about something from past conversations, use memory_search FIRST
+- When you learn important facts or preferences, use memory_add to save them`;
+
 export class AgentLoop extends EventEmitter {
   private config: AgentConfig;
 
@@ -239,10 +282,41 @@ export class AgentLoop extends EventEmitter {
     // Apply tool policy filter to get available tools
     const toolDescriptions = toolRegistry.listForPromptFiltered(toolPolicy);
 
-    // Build system prompt with thinking/verbose modifiers
-    let systemPrompt = this.config.systemPromptOverride
-      ? this.config.systemPromptOverride
-      : AGENT_SYSTEM_PROMPT(toolDescriptions, canSpawnSubagent);
+    // Detect active provider for tool calling mode
+    const activeProvider = await brain.getActiveProviderId();
+    const useNativeTools = activeProvider === 'claude';
+
+    // Prepare Claude tool definitions if using native tool calling
+    let claudeTools: ClaudeToolDefinition[] | undefined;
+    if (useNativeTools) {
+      claudeTools = toolRegistry.toClaudeToolsFiltered(toolPolicy);
+      if (canSpawnSubagent) {
+        claudeTools.push({
+          name: 'spawn_subagent',
+          description: 'Delegate a focused subtask to a subagent with its own tool loop',
+          input_schema: {
+            type: 'object',
+            properties: {
+              task: { type: 'string', description: 'Clear description of the subtask' },
+              tools: { type: 'array', description: 'Tool names the subagent can use (defaults to all tools)' },
+              max_turns: { type: 'number', description: 'Max turns for the subagent (default: 5)' },
+            },
+            required: ['task'],
+          },
+        });
+      }
+      if (claudeTools.length === 0) claudeTools = undefined;
+    }
+
+    // Build system prompt — different for Claude (native tools) vs Gemini (JSON-in-text)
+    let systemPrompt: string;
+    if (this.config.systemPromptOverride) {
+      systemPrompt = this.config.systemPromptOverride;
+    } else if (useNativeTools && claudeTools) {
+      systemPrompt = CLAUDE_NATIVE_SYSTEM_PROMPT(canSpawnSubagent);
+    } else {
+      systemPrompt = AGENT_SYSTEM_PROMPT(toolDescriptions, canSpawnSubagent);
+    }
 
     // Inject thinking level modifier (affects reasoning depth)
     if (this.config.thinkLevel) {
@@ -261,6 +335,8 @@ export class AgentLoop extends EventEmitter {
     }
 
     const messages: ChatMessage[] = [];
+    // Parallel Claude message array for native tool calling (proper content blocks)
+    const claudeMessages: unknown[] = [];
     const toolCalls: AgentResult['toolCalls'] = [];
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
@@ -273,8 +349,11 @@ export class AgentLoop extends EventEmitter {
       ? `${this.config.contextPrefix}\n\n## Current Task\n${task}`
       : `Task: ${task}`;
     messages.push({ role: 'user', text: taskWithContext });
+    if (useNativeTools) {
+      claudeMessages.push({ role: 'user', content: taskWithContext });
+    }
 
-    logger.info(`${prefix}: starting task`, { task: task.slice(0, 100), maxTurns, tier, depth });
+    logger.info(`${prefix}: starting task`, { task: task.slice(0, 100), maxTurns, tier, depth, provider: activeProvider });
     const streaming = this.config.stream ?? stream;
 
     for (let turn = 0; turn < maxTurns; turn++) {
@@ -296,19 +375,214 @@ export class AgentLoop extends EventEmitter {
       let brainSuccess = false;
       let lastError: Error | null = null;
 
+      // === CLAUDE NATIVE TOOL CALLING MODE ===
+      if (useNativeTools && claudeTools) {
+        let nativeToolUseBlocks: ToolUseBlock[] = [];
+
+        for (let attempt = 0; attempt <= resolved.maxRetries; attempt++) {
+          try {
+            if (streaming) {
+              const { stream: brainStream, getUsage } = brain.chatStream({
+                systemPrompt,
+                messages,
+                tier,
+                maxTokens: 4096,
+                tools: claudeTools,
+                rawClaudeMessages: claudeMessages,
+              });
+
+              const textChunks: string[] = [];
+              nativeToolUseBlocks = [];
+              let lastStopReason = '';
+
+              for await (const chunk of brainStream) {
+                if (chunk.text) {
+                  textChunks.push(chunk.text);
+                  this.emitEvent({ type: 'chunk', turn: turn + 1, data: chunk.text });
+                }
+                if (chunk.toolUse) {
+                  nativeToolUseBlocks.push(chunk.toolUse);
+                }
+                if (chunk.stopReason) {
+                  lastStopReason = chunk.stopReason;
+                }
+              }
+
+              responseText = textChunks.join('');
+              const usage = getUsage();
+              totalInputTokens += usage.inputTokens;
+              totalOutputTokens += usage.outputTokens;
+            } else {
+              const response = await brain.chat({
+                systemPrompt,
+                messages,
+                tier,
+                maxTokens: 4096,
+                tools: claudeTools,
+                rawClaudeMessages: claudeMessages,
+              });
+              responseText = response.text;
+              nativeToolUseBlocks = response.toolCalls || [];
+              totalInputTokens += response.inputTokens;
+              totalOutputTokens += response.outputTokens;
+            }
+            brainSuccess = true;
+            break;
+          } catch (err: any) {
+            lastError = err;
+            const isTransient = isTransientError(err.message || '');
+            if (isTransient && attempt < resolved.maxRetries) {
+              const delay = resolved.retryDelayMs * Math.pow(2, attempt);
+              logger.warn(`${prefix}: transient brain error, retrying in ${delay}ms`, {
+                turn, attempt: attempt + 1, maxRetries: resolved.maxRetries, error: err.message,
+              });
+              await sleep(delay);
+              continue;
+            }
+            logger.error(`${prefix}: brain error (${isTransient ? 'max retries reached' : 'non-transient'})`, {
+              turn, attempt: attempt + 1, error: err.message,
+            });
+            break;
+          }
+        }
+
+        if (!brainSuccess) {
+          this.emitEvent({ type: 'error', turn: turn + 1, data: lastError?.message });
+          stoppedReason = 'error';
+          return {
+            success: false,
+            answer: `${prefix} error on turn ${turn + 1}: ${lastError?.message}`,
+            turns: turn + 1,
+            totalInputTokens, totalOutputTokens, toolCalls, stoppedReason,
+          };
+        }
+
+        // === Handle tool calls from Claude native response ===
+        if (nativeToolUseBlocks.length > 0) {
+          // Emit thinking text if any
+          if (responseText.trim()) {
+            this.emitEvent({ type: 'thinking', turn: turn + 1, data: responseText });
+          }
+
+          // Build assistant content blocks for Claude message history
+          const assistantContent: unknown[] = [];
+          if (responseText) assistantContent.push({ type: 'text', text: responseText });
+          for (const tc of nativeToolUseBlocks) {
+            assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+          }
+          claudeMessages.push({ role: 'assistant', content: assistantContent });
+          messages.push({ role: 'model', text: responseText });
+
+          // Execute each tool and collect results
+          const toolResultBlocks: ToolResultBlock[] = [];
+          for (const toolCall of nativeToolUseBlocks) {
+            this.emitEvent({
+              type: 'tool_call', turn: turn + 1,
+              data: { tool: toolCall.name, params: toolCall.input, thought: responseText.slice(0, 200) },
+            });
+
+            if (this.config.onAction) {
+              try {
+                this.config.onAction({
+                  type: 'thinking', thought: responseText.slice(0, 200),
+                  tool: toolCall.name, turn: turn + 1,
+                });
+              } catch { /* callback errors don't break the loop */ }
+            }
+
+            let toolResult: ToolResult;
+            if (!toolRegistry.isToolAllowed(toolCall.name, toolPolicy)) {
+              toolResult = { success: false, output: '', error: `Tool "${toolCall.name}" is not allowed by the current policy.` };
+            } else if (toolCall.name === 'spawn_subagent' && canSpawnSubagent) {
+              toolResult = await this.spawnSubagent(toolCall.input, depth);
+            } else if (toolCall.name === 'spawn_subagent' && !canSpawnSubagent) {
+              toolResult = { success: false, output: '', error: `Maximum subagent depth (${maxDepth}) reached.` };
+            } else {
+              toolResult = await toolRegistry.execute(toolCall.name, toolCall.input);
+            }
+
+            toolCalls.push({ tool: toolCall.name, params: toolCall.input, result: toolResult });
+
+            const resultContent = toolResult.success
+              ? toolResult.output
+              : `Error: ${toolResult.error || toolResult.output}`;
+
+            toolResultBlocks.push({
+              type: 'tool_result',
+              tool_use_id: toolCall.id,
+              content: resultContent,
+              is_error: !toolResult.success,
+            });
+
+            this.emitEvent({
+              type: 'observation', turn: turn + 1,
+              data: { tool: toolCall.name, success: toolResult.success, output: (toolResult.output || '').slice(0, 500) },
+            });
+
+            if (this.config.onAction) {
+              try {
+                this.config.onAction({
+                  type: 'tool_call', tool: toolCall.name, params: toolCall.input,
+                  thought: responseText.slice(0, 200), success: toolResult.success,
+                  output: (toolResult.output || '').slice(0, 200), turn: turn + 1,
+                });
+              } catch { /* callback errors don't break the loop */ }
+            }
+
+            logger.info(`${prefix}: observation`, {
+              turn: turn + 1, tool: toolCall.name, success: toolResult.success,
+              outputLength: (toolResult.output || '').length,
+            });
+          }
+
+          // Add tool results as user message with content blocks for Claude
+          claudeMessages.push({ role: 'user', content: toolResultBlocks });
+
+          const toolResultText = toolResultBlocks.map(r => {
+            const name = nativeToolUseBlocks.find(t => t.id === r.tool_use_id)?.name || 'unknown';
+            return `Tool "${name}": ${r.content}`;
+          }).join('\n\n');
+          messages.push({ role: 'user', text: toolResultText });
+
+          if (turn === maxTurns - 1) {
+            stoppedReason = 'max_turns';
+            logger.warn(`${prefix}: max turns reached`, { maxTurns });
+          }
+          continue; // Next turn
+        }
+
+        // === No tool calls — final answer (Claude native mode) ===
+        messages.push({ role: 'model', text: responseText });
+        claudeMessages.push({ role: 'assistant', content: responseText });
+        this.emitEvent({ type: 'final_answer', turn: turn + 1, data: responseText });
+        if (this.config.onAction) {
+          try {
+            this.config.onAction({ type: 'final_answer', turn: turn + 1, answer: responseText });
+          } catch { /* callback errors don't break the loop */ }
+        }
+        return {
+          success: true,
+          answer: responseText,
+          turns: turn + 1,
+          totalInputTokens, totalOutputTokens, toolCalls, stoppedReason: 'complete',
+        };
+      }
+
+      // === GEMINI / JSON-IN-TEXT MODE (existing code path) ===
+
       // Retry loop for transient errors
       for (let attempt = 0; attempt <= resolved.maxRetries; attempt++) {
         try {
           if (streaming) {
             // Stream tokens chunk-by-chunk
-            const { stream, getUsage } = brain.chatStream({
+            const { stream: brainStream, getUsage } = brain.chatStream({
               systemPrompt,
               messages,
               tier,
               maxTokens: 2048,
             });
             const chunks: string[] = [];
-            for await (const chunk of stream) {
+            for await (const chunk of brainStream) {
               if (chunk.text) {
                 chunks.push(chunk.text);
                 this.emitEvent({ type: 'chunk', turn: turn + 1, data: chunk.text });

@@ -1,6 +1,7 @@
 import type { Redis } from 'ioredis';
 import { ProviderManager } from './providers/manager.js';
 import { normalizeMessages } from './providers/normalize.js';
+import type { ClaudeToolDefinition, ToolUseBlock, ProviderStreamChunk } from './providers/types.js';
 
 export type ModelTier = 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
 
@@ -16,11 +17,19 @@ interface ChatOptions {
   messages: ChatMessage[];
   tier?: ModelTier;
   maxTokens?: number;
+  /** Claude tool definitions for native tool calling */
+  tools?: ClaudeToolDefinition[];
+  /** Pre-formatted Claude messages (bypasses normalization, used for tool_result messages) */
+  rawClaudeMessages?: unknown[];
 }
 
 interface ChatStreamChunk {
   text: string;
   done: boolean;
+  /** Tool use block completed during streaming */
+  toolUse?: ToolUseBlock;
+  /** Stop reason from the provider */
+  stopReason?: string;
 }
 
 interface ChatStreamResult {
@@ -41,27 +50,41 @@ export class Brain {
     return this.manager.think(options);
   }
 
-  async chat(options: ChatOptions): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
-    const normalized = normalizeMessages(options.messages);
+  async chat(options: ChatOptions): Promise<{ text: string; inputTokens: number; outputTokens: number; toolCalls?: ToolUseBlock[]; stopReason?: string }> {
+    const messages = options.rawClaudeMessages
+      ? undefined
+      : normalizeMessages(options.messages);
     const result = await this.manager.chat({
       systemPrompt: options.systemPrompt,
-      messages: normalized,
+      messages: messages || [],
       tier: options.tier,
       maxOutputTokens: options.maxTokens,
+      tools: options.tools,
+      rawMessages: options.rawClaudeMessages,
     });
-    return { text: result.text, inputTokens: result.inputTokens, outputTokens: result.outputTokens };
+    return {
+      text: result.text,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      toolCalls: result.toolCalls,
+      stopReason: result.stopReason,
+    };
   }
 
   chatStream(options: ChatOptions): ChatStreamResult {
-    const normalized = normalizeMessages(options.messages);
+    const messages = options.rawClaudeMessages
+      ? undefined
+      : normalizeMessages(options.messages);
     const result = this.manager.chatStream({
       systemPrompt: options.systemPrompt,
-      messages: normalized,
+      messages: messages || [],
       tier: options.tier,
       maxOutputTokens: options.maxTokens,
+      tools: options.tools,
+      rawMessages: options.rawClaudeMessages,
     });
     return {
-      stream: result.stream,
+      stream: result.stream as AsyncGenerator<ChatStreamChunk>,
       getUsage: result.getUsage,
     };
   }
@@ -76,6 +99,11 @@ export class Brain {
     const strong = ['complex_plan', 'architecture', 'multi_step_reasoning'];
     if (strong.includes(intentType)) return 'opus';
     return 'flash';
+  }
+
+  /** Get the ID of the primary available provider ('claude' or 'gemini') */
+  async getActiveProviderId(): Promise<string> {
+    return this.manager.getActiveProviderId();
   }
 
   /** Access the underlying ProviderManager for advanced usage */
