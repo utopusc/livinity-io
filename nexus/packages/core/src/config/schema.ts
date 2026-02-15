@@ -242,6 +242,21 @@ export const ApprovalConfigSchema = z.object({
   auditEnabled: z.boolean().default(true),
 }).strict().optional();
 
+// ─── Task Manager Configuration ───────────────────────────────────────────
+
+export const TaskConfigSchema = z.object({
+  /** Maximum concurrent parallel tasks */
+  maxConcurrent: z.number().int().min(1).max(20).default(4),
+  /** Per-task token budget (total input+output tokens) */
+  perTaskTokenBudget: z.number().int().min(10000).max(500000).default(100000),
+  /** Per-task max turns */
+  perTaskMaxTurns: z.number().int().min(1).max(50).default(15),
+  /** Per-task timeout in ms */
+  perTaskTimeoutMs: z.number().int().min(10000).max(600000).default(300000),
+  /** How long to keep completed task results in Redis (seconds) */
+  resultTtlSec: z.number().int().min(60).max(86400).default(3600),
+}).strict().optional();
+
 // ─── Main Nexus Configuration Schema ───────────────────────────────────────
 
 export const NexusConfigSchema = z.object({
@@ -283,6 +298,9 @@ export const NexusConfigSchema = z.object({
 
   // Human-in-the-Loop
   approval: ApprovalConfigSchema,
+
+  // Parallel Task Execution
+  tasks: TaskConfigSchema,
 }).strict();
 
 export type NexusConfig = z.infer<typeof NexusConfigSchema>;
@@ -294,6 +312,7 @@ export type TtsConfig = z.infer<typeof TtsConfigSchema>;
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 export type ResponseConfig = z.infer<typeof ResponseConfigSchema>;
 export type ApprovalConfig = z.infer<typeof ApprovalConfigSchema>;
+export type TaskConfig = z.infer<typeof TaskConfigSchema>;
 
 // ─── Default Configuration ───────────────────────────────────────────────────
 
@@ -414,6 +433,13 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
     policy: 'destructive',
     timeoutMs: 300000,
     auditEnabled: true,
+  },
+  tasks: {
+    maxConcurrent: 4,
+    perTaskTokenBudget: 100000,
+    perTaskMaxTurns: 15,
+    perTaskTimeoutMs: 300000,
+    resultTtlSec: 3600,
   },
 };
 
