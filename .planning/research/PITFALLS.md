@@ -1,592 +1,549 @@
-# Domain Pitfalls: Docker Browser App with KasmVNC + Playwright MCP
+# Domain Pitfalls: Claude Migration & OpenClaw Feature Integration
 
-**Domain:** Docker-based persistent Chromium browser with KasmVNC viewer, Playwright MCP integration, and proxy support
-**Target System:** LivOS self-hosted platform (2-4 CPU, 4-8GB RAM VPS, Caddy reverse proxy)
-**Researched:** 2026-02-07
-**Milestone:** v1.3 Browser App
+**Domain:** Multi-provider AI migration, subscription auth, memory integration, skill marketplace, WebSocket gateway
+**Target System:** LivOS / Nexus production deployment (server4 production, server5 test)
+**Researched:** 2026-02-15
+**Milestone:** v1.4 Claude Migration & OpenClaw Features
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause security breaches, data loss, or complete feature failure.
+Mistakes that cause production outages, data loss, or complete feature failure.
 
-### Pitfall 1: CDP Remote Debugging Port Exposed to Network
+### Pitfall 1: Gemini-to-Claude Message Role Mapping Breaks Agent Loop
 
-**What goes wrong:** The linuxserver/chromium container is launched with `--remote-debugging-port=9222 --remote-allow-origins=*` (as currently defined in `builtin-apps.ts` CHROME_CLI). If port 9222 is published on the Docker host or reachable via Docker networking, anyone who can reach that port gains full control of the browser -- reading cookies, session tokens, browsing history, localStorage, and executing arbitrary JavaScript. This is equivalent to handing over all logged-in sessions.
+**What goes wrong:** The current `ChatMessage` interface uses `role: 'user' | 'model'` (Gemini convention). Claude's Messages API uses `role: 'user' | 'assistant'`. Simply find-and-replacing `'model'` with `'assistant'` seems trivial but has deep ramifications: the entire `agent.ts` file pushes `{ role: 'model', text: responseText }` after every LLM response, and `{ role: 'user', text: observation }` for tool results. If the role mapping is incomplete or inconsistent, Claude will reject the message array with a 400 error ("messages must alternate between user and assistant roles"), crashing every agent invocation.
 
-**Why it happens:** Developers enable remote debugging for Playwright MCP connectivity but forget to restrict network access. The `--remote-allow-origins=*` wildcard disables all origin-based access control, and `--remote-debugging-port=9222` opens a powerful unauthed endpoint.
+**Why it happens:** Gemini is lenient about consecutive same-role messages; Claude strictly enforces alternation. In the current codebase, `agent.ts` line 381 pushes `role: 'model'` for unparseable responses and line 401 for final answers, then pushes `role: 'user'` for observations. If any code path produces two consecutive `user` or `assistant` messages (e.g., tool result followed by another tool result without an assistant message in between), Claude silently rejects the entire conversation.
 
 **Consequences:**
-- Complete session hijacking -- attacker extracts cookies for Google, Facebook, banking sites
-- Arbitrary JavaScript execution in any tab (XSS equivalent)
-- File system read access via `file://` protocol navigation
-- Chrome 136+ changes mean `--remote-debugging-address=0.0.0.0` is forced to `127.0.0.1` internally, but Docker port mapping circumvents this protection
+- All agent invocations fail with 400 errors
+- No error recovery possible -- the message history is corrupted
+- Production WhatsApp/Telegram/Discord bots stop responding entirely
+- SSE streaming endpoint returns error events immediately
 
 **Warning signs:**
-- `docker port` shows 9222 mapped externally
-- `nmap` from another host can reach port 9222
-- `/json/version` endpoint returns data from external network
+- Agent works for single-turn but fails on multi-turn
+- "messages must alternate between user and assistant roles" in error logs
+- Works with simple queries but fails when tools are involved
 
 **Prevention:**
-1. NEVER publish port 9222 to the host. Use Docker internal networking only.
-2. Playwright MCP connects via Docker network name (e.g., `http://chromium-container:9222`), not via published host port.
-3. Replace `--remote-allow-origins=*` with `--remote-allow-origins=http://localhost` in the CHROME_CLI env var.
-4. If CDP must be externally accessible (it should not be), use a socat relay inside the container and an authenticated proxy in front.
-5. Add a firewall rule (`ufw deny 9222`) as defense-in-depth.
+1. Create a message normalization layer between the internal `ChatMessage[]` format and Claude's expected format. This layer merges consecutive same-role messages and handles the `model` -> `assistant` rename.
+2. Add a pre-flight validation function that checks message alternation before sending to Claude API. Log and fix any violations rather than letting Claude reject them.
+3. Change the `ChatMessage.role` type from `'user' | 'model'` to `'user' | 'model' | 'assistant'` and add a mapping function in the Brain class -- do NOT change the role values throughout the codebase, as that would break Gemini compatibility during the transition period.
+4. Write integration tests that replay actual multi-turn agent conversations (with tool calls) against Claude's validation rules.
 
-**Phase:** Must be addressed in Phase 1 (Docker image + compose). This is a security-critical configuration.
+**Detection:** Unit test that passes a sequence of messages through the normalization layer and asserts alternation. Integration test against Claude API with `max_tokens: 1` just to validate message format.
 
-**Confidence:** HIGH -- verified via [Chrome Developer Blog](https://developer.chrome.com/blog/remote-debugging-port), [SpecterOps cookie dumping analysis](https://posts.specterops.io/hands-in-the-cookie-jar-dumping-cookies-with-chromiums-remote-debugger-port-34c4f468844e), and [linuxserver/docker-chromium issue #30](https://github.com/linuxserver/docker-chromium/issues/30).
+**Phase:** Must be addressed in Phase 1 (Brain abstraction layer). This is the single most likely cause of "it works in dev, breaks in prod."
+
+**Confidence:** HIGH -- verified against Claude API documentation at [platform.claude.com/docs/en/api/messages-streaming](https://platform.claude.com/docs/en/api/messages-streaming) and the current `agent.ts` source code.
 
 ---
 
-### Pitfall 2: KasmVNC Container Exposed Without Authentication
+### Pitfall 2: Tool Calling Format Mismatch Causes Silent Agent Failures
 
-**What goes wrong:** The linuxserver/chromium container (built on KasmVNC baseimage) has NO authentication by default. The optional `CUSTOM_USER` and `PASSWORD` env vars only enable basic HTTP auth via embedded nginx, suitable only for trusted local networks. When exposed to the internet via Caddy subdomain (e.g., `browser.livinity.cloud`), anyone can access the full browser desktop, open a terminal with passwordless sudo, probe the local Docker network, and install malware.
+**What goes wrong:** The current `AgentLoop` uses a JSON-in-text approach where the LLM outputs `{"type": "tool_call", "tool": "...", "params": {...}}` as plain text, and `parseStep()` extracts it with JSON.parse and regex fallbacks. Claude's native tool calling uses a fundamentally different mechanism: you pass `tools` in the API request, and Claude returns `content` blocks with `type: "tool_use"` containing `id`, `name`, and `input` fields. You then return `tool_result` blocks in the next user message matching by `tool_use_id`.
 
-**Why it happens:** LinuxServer.io published a [security advisory (2024-10-06)](https://info.linuxserver.io/issues/2024-10-06-securing-kasm/) documenting a surge in users exposing KasmVNC containers to the internet without auth. The basic HTTP auth with `CUSTOM_USER`/`PASSWORD` is insufficient for internet exposure because credentials transit as base64-encoded plaintext (mitigated by HTTPS, but still weak).
+If you continue using the text-based JSON approach with Claude, you lose: (a) guaranteed valid tool schemas, (b) parallel tool calling, (c) streaming tool input deltas, and (d) the `stop_reason: "tool_use"` signal. If you switch to native tool calling, the entire `parseStep()` mechanism and the ReAct prompt must be rewritten.
+
+**Why it happens:** The existing architecture was designed around Gemini's lack of native tool calling support (Gemini uses FunctionDeclaration but the codebase chose to implement its own JSON-in-text protocol). Claude has mature native tool calling with `input_json_delta` streaming events, but adopting it requires restructuring both the Brain interface and the AgentLoop.
 
 **Consequences:**
-- Full browser access for any internet user
-- Terminal access with sudo privileges inside the container
-- Lateral movement to other containers on the Docker network
-- Cryptocurrency miners or malware installed in the container
+- If kept as text-based: Claude may refuse to emit raw JSON (its system prompt training discourages unstructured JSON dumps), tool calls become unreliable, no parallel tool use
+- If switched to native but incompletely: Tool results missing `tool_use_id` cause 400 errors, partial JSON in streaming needs accumulation, `stop_reason` parsing changes
+- Streaming tool input arrives as `input_json_delta` partial JSON strings that must be accumulated and parsed only after `content_block_stop` -- failing to do this causes parse errors
 
 **Warning signs:**
-- `browser.yourdomain.com` accessible without any login prompt
-- Container CPU usage spikes unexpectedly (cryptominer)
-- Unknown processes in `docker exec <container> ps aux`
+- Claude wraps JSON in markdown code blocks despite prompt instructions
+- Tool calls succeed on simple tools but fail on complex parameter schemas
+- "tool_use ids were found without tool_result blocks" errors in logs
 
 **Prevention:**
-1. The Caddy reverse proxy MUST enforce LivOS auth before proxying to KasmVNC. Use LivOS's existing JWT auth as a gatekeeper -- requests to the browser subdomain must carry a valid LivOS session.
-2. Additionally set `CUSTOM_USER` and `PASSWORD` env vars as a second auth layer.
-3. Never expose ports 3000/3001 directly to the host -- proxy through Caddy only.
-4. Consider implementing Caddy `forward_auth` to LivOS auth service, similar to how [Authelia/Authentik integrate with Caddy](https://caddyserver.com/docs/caddyfile/directives/forward_auth).
+1. **Phase 1 decision: Choose one approach and commit.** Recommended: Use native Claude tool calling AND keep the text-based approach as Gemini fallback. The Brain abstraction layer should normalize both into a common `ToolCall` type.
+2. Create a `ToolCallResult` interface: `{ toolCallId: string, toolName: string, input: Record<string, unknown> }` that both providers map to.
+3. For Claude native tool calling, convert the existing `ToolRegistry.toJsonSchemas()` output to Claude's `input_schema` format (they're similar but Claude uses `input_schema` not `parameters`).
+4. For tool results, Claude requires `{ type: "tool_result", tool_use_id: "...", content: "..." }` in the user message. The Brain layer must handle this mapping transparently.
+5. Handle parallel tool calls: Claude may return multiple `tool_use` blocks in one response. The AgentLoop currently assumes one tool call per turn. This must be restructured or Claude must be instructed to use sequential calls via `disable_parallel_tool_use: true`.
 
-**Phase:** Must be addressed in Phase 1 (Docker compose) and Phase 4 (frontend viewer auth integration).
+**Detection:** Test with a tool that has complex nested parameters. If the schema doesn't translate correctly, the tool call will have wrong or missing fields.
 
-**Confidence:** HIGH -- verified via [LinuxServer.io security PSA](https://info.linuxserver.io/issues/2024-10-06-securing-kasm/) and [KasmVNC documentation](https://kasmweb.com/kasmvnc/docs/master/man/vncpasswd.html).
+**Phase:** Must be addressed in Phase 1 (Brain abstraction layer), with the AgentLoop adaptation in Phase 2.
+
+**Confidence:** HIGH -- verified against Claude tool use documentation at [platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use) and the actual `agent.ts` `parseStep()` implementation.
 
 ---
 
-### Pitfall 3: Docker /dev/shm Undersized -- Chromium Crashes
+### Pitfall 3: SSE Streaming Format Change Breaks Frontend Without Warning
 
-**What goes wrong:** Docker containers default to 64MB of shared memory (`/dev/shm`). Chromium's multi-process architecture requires significant shared memory for inter-process communication. With insufficient `/dev/shm`, Chromium silently crashes, fails to render pages, or produces `SIGBUS` errors. This manifests as blank white pages, tab crashes, or the browser failing to start entirely.
+**What goes wrong:** The current SSE streaming endpoint (`POST /api/agent/stream`) emits `AgentEvent` objects with types like `thinking`, `chunk`, `tool_call`, `observation`, `final_answer`, `error`, `done`. These events are constructed from the Gemini stream where text arrives as continuous `chunk.text()` strings.
 
-**Why it happens:** Docker's 64MB default was designed for simple services, not full desktop applications. Chromium allocates shared memory segments for each renderer process (one per tab/iframe). Even a single complex page like YouTube can exhaust 64MB.
+Claude streaming uses a completely different event model: `message_start`, `content_block_start`, `content_block_delta` (with `text_delta` or `input_json_delta` subtypes), `content_block_stop`, `message_delta`, `message_stop`. The text arrives in `delta.text` not `chunk.text()`. Tool inputs arrive as `input_json_delta` partial JSON strings, not complete objects.
+
+If the backend switches to Claude streaming without updating the SSE event format, the frontend (LivOS UI) will receive garbled or missing data. If the event format IS changed, the frontend must be updated simultaneously or it will break.
+
+**Why it happens:** The SSE format is an implicit API contract between the Nexus backend and the LivOS frontend. There's no versioned protocol -- the frontend simply parses `data: ${JSON.stringify(event)}` and expects specific `type` values. Changing the backend streaming without a coordinated frontend update creates a silent incompatibility.
 
 **Consequences:**
-- Browser crashes immediately on page load
-- Cryptic `Creating shared memory in /dev/shm/... failed: No space left on device` errors in container logs
-- Container appears running but browser is non-functional
-- Users think the entire feature is broken
+- Frontend shows blank responses (events received but not parsed)
+- Streaming progress indicators stop working
+- Tool call visualization breaks
+- No error shown to user -- just silence or partial text
 
 **Warning signs:**
-- `docker logs <container>` shows SIGBUS or shared memory errors
-- `docker exec <container> df -h /dev/shm` shows 100% usage
-- Browser works for simple pages but crashes on complex sites
+- Frontend console shows unknown event types
+- Streaming works in API testing but not in UI
+- Agent completes successfully server-side but UI shows "error" or nothing
 
 **Prevention:**
-1. Set `shm_size: "1gb"` in docker-compose.yml. The linuxserver/chromium docs explicitly state this is mandatory for modern websites.
-2. Alternatively, use `--disable-dev-shm-usage` Chrome flag, which forces Chromium to use `/tmp` instead of `/dev/shm`. This is slower but avoids the size limit. However, this flag is less reliable for GUI (non-headless) usage.
-3. For a VPS with only 4GB RAM, `shm_size: "512m"` may be sufficient to conserve memory. Monitor and adjust.
-4. The existing `nexus/deploy/docker-compose.yml` already uses `shm_size: "1g"` for the Playwright container -- follow the same pattern.
+1. **Keep the existing `AgentEvent` format as the SSE contract.** The Brain streaming layer should translate Claude's event stream into the existing `AgentEvent` types. The frontend should not need to change.
+2. Map Claude events to AgentEvents:
+   - `content_block_delta` with `text_delta` -> `{ type: 'chunk', data: delta.text }`
+   - `content_block_start` with `tool_use` -> `{ type: 'tool_call', data: { tool, params } }` (accumulate input_json_delta first)
+   - `message_stop` with accumulated text -> `{ type: 'done', data: { answer, success } }`
+3. Use the Anthropic SDK's `client.messages.stream()` helper which provides `.on('text', callback)` event handler, making it easy to emit chunk events matching the current format.
+4. Test streaming with a Claude API call that includes tool use to verify the full event sequence maps correctly.
+5. Version the SSE event format (add an `apiVersion` field) so future changes can be detected by the frontend.
 
-**Phase:** Phase 1 (Docker compose configuration). Simple configuration fix but causes complete feature failure if missed.
+**Detection:** Side-by-side comparison: run the same task against Gemini and Claude, diff the SSE event sequences.
 
-**Confidence:** HIGH -- verified via [Chromium bug #715363](https://issues.chromium.org/issues/40517415), [linuxserver/chromium docs](https://docs.linuxserver.io/images/docker-chromium/), and confirmed by existing project config in `nexus/deploy/docker-compose.yml` which already sets `shm_size: "1g"`.
+**Phase:** Must be addressed in Phase 1 (Brain abstraction layer) since the streaming endpoint is the primary consumer of Brain.chatStream().
+
+**Confidence:** HIGH -- verified by reading the current `api.ts` SSE implementation (line 584-660) and Claude's streaming event format from official docs.
 
 ---
 
-### Pitfall 4: Caddy Config Reload Kills KasmVNC WebSocket Sessions
+### Pitfall 4: Claude Subscription Token Expiry Causes Silent Auth Failures
 
-**What goes wrong:** KasmVNC uses persistent WebSocket connections for the VNC stream. When LivOS installs, uninstalls, or updates any app, it calls `applyCaddyConfig()` which writes a new Caddyfile and runs `caddy reload`. By default, Caddy forcibly closes all active WebSocket connections on config reload, sending a Close control frame to both client and upstream. Users see their browser viewer session instantly disconnect whenever ANY app is installed or configuration changes.
+**What goes wrong:** Unlike Gemini (which uses a simple API key that never expires), Claude subscription auth via `claude setup-token` creates a token with a finite lifetime. Standard OAuth tokens expire after 8-12 hours. Even `setup-token` long-lived tokens have a 1-year expiry. When the token expires, every LLM call silently fails with a 401 error. The retry logic in `Brain` treats 401 as a non-retryable error (it's not in `isRetryableError`), so the agent immediately fails without any user-facing indication of what went wrong.
 
-**Why it happens:** Caddy holds a reference to the active configuration for each connection. When the config is reloaded, old connections must be closed to free the old config from memory. This is intentional behavior, documented in [Caddy issue #5471](https://github.com/caddyserver/caddy/issues/5471) and [#6420](https://github.com/caddyserver/caddy/issues/6420).
+**Why it happens:** The current `getGeminiClient()` pattern reads the API key from Redis (`livos:config:gemini_api_key`) and caches it. There's no concept of token refresh because API keys don't expire. When migrating to Claude subscription auth, the same pattern of "read once, cache forever" will silently fail when the token expires. GitHub issues [#12447](https://github.com/anthropics/claude-code/issues/12447) and [#19078](https://github.com/anthropics/claude-code/issues/19078) on the claude-code repo document this exact failure mode in production.
 
 **Consequences:**
-- User is actively browsing in KasmVNC viewer, installs another app from App Store, browser viewer disconnects
-- Reconnection causes thundering herd if multiple users/sessions are active
-- Perceived instability -- users think the browser feature is unreliable
-- Loss of unsaved work in browser session (the browser itself keeps running, but the VNC viewer disconnects)
+- All AI functionality stops working silently
+- No user-visible error -- messages just never get responses
+- Heartbeat runner, scheduled agents, and loop runners all fail simultaneously
+- Token expiry can happen at 3 AM with no one monitoring
 
 **Warning signs:**
-- Browser viewer disconnects whenever Settings or App Store changes are made
-- WebSocket close frames appear in browser devtools during Caddy reload
-- Users report intermittent disconnections
+- Sudden increase in 401 errors in logs
+- All agent invocations fail simultaneously (not gradually)
+- Brain.chat() and Brain.chatStream() both fail with same error
+- Redis still has the token cached, but it's expired
 
 **Prevention:**
-1. Add `stream_close_delay` to the Caddy reverse proxy block for the browser subdomain:
-   ```
-   browser.example.com {
-       reverse_proxy 127.0.0.1:3000 {
-           stream_close_delay 5m
-       }
-   }
-   ```
-   This keeps WebSocket connections alive for 5 minutes after a config reload, giving the new config time to take over gracefully.
-2. The current `generateFullCaddyfile()` in `caddy.ts` generates simple `reverse_proxy` blocks without any subdirectives. It must be extended to support `stream_close_delay` for specific subdomains.
-3. KasmVNC client-side has built-in reconnection logic, but the user experience is still jarring. The `stream_close_delay` prevents this entirely.
+1. **Support both auth modes:** API key (never expires, simple) and subscription token (expires, needs refresh). The Brain class should detect which mode is in use.
+2. For subscription tokens, implement a token health check that runs on a timer (every 30 min) and proactively refreshes before expiry.
+3. Add specific 401 handling in the retry logic: on 401, attempt token refresh once, then retry. Add `401` to the retriable error patterns but with a refresh-first strategy.
+4. Store token metadata (expires_at, refresh_token) alongside the token in Redis: `nexus:config:claude_token_meta`.
+5. Add a health check endpoint that verifies the token is still valid (call Claude API with `max_tokens: 1` and a trivial prompt).
+6. Send a proactive notification (via Telegram/Discord/WhatsApp) when token is within 24 hours of expiry.
+7. Consider defaulting to API key auth for simplicity and only using subscription auth as an opt-in feature.
 
-**Phase:** Phase 2 (Caddy subdomain configuration). Requires modifying the Caddyfile generation in `caddy.ts`.
+**Detection:** Health check endpoint that returns token expiry time. Alert when < 24 hours remaining.
 
-**Confidence:** HIGH -- verified via [Caddy reverse_proxy docs](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) and [GitHub issue #6420](https://github.com/caddyserver/caddy/issues/6420).
+**Phase:** Phase 2 (Auth integration). Must be designed alongside the Brain abstraction but can be implemented after basic Claude support works.
+
+**Confidence:** MEDIUM -- based on GitHub issues and community reports. The exact expiry behavior of `setup-token` vs standard OAuth is not fully documented by Anthropic; the 1-year figure comes from community sources at [claude-did-this.com](https://claude-did-this.com/claude-hub/getting-started/setup-container-guide).
+
+---
+
+### Pitfall 5: Memory Service Uses Gemini Embeddings -- Breaks When Gemini Key Removed
+
+**What goes wrong:** The current memory service (`nexus/packages/memory/src/index.ts`) uses Gemini's `text-embedding-004` model for vector embeddings via a direct HTTP call to `generativelanguage.googleapis.com`. If the project migrates to Claude as primary provider and the user removes their Gemini API key, all memory operations (search and add) silently degrade to keyword-only search (no embeddings). Worse, if new memories are added without embeddings while old memories have Gemini embeddings, the vector similarity search returns inconsistent results -- new memories never match.
+
+**Why it happens:** The memory service was built with a hard dependency on Gemini embeddings. The `getEmbedding()` function only knows how to call Gemini. Claude does not offer an embedding model. This creates a hidden dependency on Gemini even after "full migration" to Claude.
+
+**Consequences:**
+- Memory search quality degrades silently (no error, just bad results)
+- Users think memory is working but it's returning keyword matches only
+- Mixed embedding sources (some Gemini, some none) in the same database make similarity scores meaningless
+- If someone later adds a different embedding provider, existing embeddings are incompatible (different vector dimensions, different semantic spaces)
+
+**Warning signs:**
+- Memory search returns irrelevant results
+- `[Memory] No Gemini API key available for embeddings` in logs (currently just a warning, not an error)
+- Memory add succeeds but `embedding` column is NULL in SQLite
+
+**Prevention:**
+1. **Keep Gemini API key for embeddings even after Claude migration.** Embeddings are cheap ($0.00 per 1M tokens for text-embedding-004) and there's no reason to remove this dependency.
+2. If Gemini key must be removed, integrate an alternative embedding provider (e.g., local sentence-transformers, OpenAI text-embedding-3-small, or Cohere embed-v3). Add this as a configurable option.
+3. Add a startup health check that verifies embedding generation works. If not, log an ERROR (not warning) and disable vector search entirely rather than returning inconsistent results.
+4. If changing embedding models, re-embed all existing memories on migration. Do NOT mix embeddings from different models in the same database.
+5. Store the embedding model name alongside each memory so the system knows which memories need re-embedding.
+
+**Detection:** Startup check that attempts to generate one embedding. Alert if it fails.
+
+**Phase:** Phase 3 (Memory integration). Must be designed in Phase 1 but implemented when hybrid memory is added.
+
+**Confidence:** HIGH -- verified by reading `nexus/packages/memory/src/index.ts` line 79-100 which contains the hard-coded Gemini embedding call.
 
 ---
 
 ## Moderate Pitfalls
 
-Mistakes that cause degraded functionality, hard-to-debug issues, or integration failures.
+Mistakes that cause significant delays, degraded experience, or technical debt.
 
-### Pitfall 5: Chromium SingletonLock After Container Crash
+### Pitfall 6: Leaky Multi-Provider Abstraction (Lowest Common Denominator)
 
-**What goes wrong:** When the Docker container is killed ungracefully (OOM killer, `docker kill`, host reboot, power loss), Chromium leaves a stale `SingletonLock` symlink in the profile directory at `/config/.config/chromium/SingletonLock`. On the next container start, Chromium sees this lock file, concludes another instance is running, and refuses to start. The container appears to be running but the browser never launches.
+**What goes wrong:** When building a Brain abstraction layer that supports both Gemini and Claude, there's strong temptation to create a lowest-common-denominator interface that only exposes features both providers support. This means losing:
+- Claude's native tool calling (Gemini doesn't use it in this codebase)
+- Claude's extended thinking (budget_tokens, thinking blocks)
+- Claude's parallel tool use
+- Claude's `stop_reason` semantic signals (`end_turn`, `tool_use`, `max_tokens`, `pause_turn`)
+- Claude's content block structure (multiple text + tool_use blocks in one response)
+- Claude's prompt caching
+- Gemini's inline vision with `inlineData` (Claude uses different image format)
 
-**Why it happens:** Chromium's `SingletonLock` is a symlink encoding `hostname-PID`. On container restart, the hostname and PID change, but the old lock file persists on the mounted volume because `/config` is a persistent Docker volume that survives container restarts (which is the entire point of persistent browser sessions).
+The abstraction becomes a straitjacket that prevents using the best features of either provider.
+
+**Why it happens:** Clean abstraction design favors symmetry. When providers have different capabilities, the natural instinct is to hide the differences behind a uniform interface. But AI providers are NOT interchangeable -- their strengths and interaction patterns differ fundamentally. As noted in [ProxAI's analysis](https://www.proxai.co/blog/archive/llm-abstraction-layer), "every time a provider updates its API, an internal wrapper must be updated too" and the maintenance burden grows exponentially.
 
 **Consequences:**
-- Browser does not launch after any ungraceful shutdown
-- KasmVNC shows a desktop but no browser window
-- Users must manually SSH in and delete lock files
-- Contradicts the "persistent sessions that survive restarts" value proposition
-
-**Warning signs:**
-- Container starts but no Chromium window appears in KasmVNC
-- Container logs show `SingletonLock` or "profile in use" errors
-- Problem appears after `docker restart` or host reboot but not after clean `docker stop`
+- Can't use Claude's superior tool calling
+- Can't use extended thinking when it would help
+- Performance degrades because provider-specific optimizations are unavailable
+- Every new Claude/Gemini feature requires changes to the abstraction layer
 
 **Prevention:**
-1. Add a startup script that deletes stale lock files before launching Chromium:
-   ```bash
-   rm -f /config/.config/chromium/SingletonLock
-   rm -f /config/.config/chromium/SingletonSocket
-   rm -f /config/.config/chromium/SingletonCookie
-   ```
-2. In a custom Dockerfile layer on top of linuxserver/chromium, add this cleanup to the entrypoint or use linuxserver's custom script mechanism (s6-overlay custom-cont-init.d scripts).
-3. The `--restore-last-session` flag (already in CHROME_CLI) works correctly after lock cleanup, restoring all tabs.
-4. For defense-in-depth, implement a health check that detects when the container is running but no Chromium process exists, and trigger automatic restart.
+1. **Use a "capability-based" abstraction, not a "uniform" abstraction.** Define a core interface (chat, stream, think) but allow provider-specific extensions via an `options` bag.
+2. Design pattern: `Brain.chat(options)` has a `providerOptions?: Record<string, unknown>` field where Claude-specific options (extended thinking, tool choice, cache control) can be passed without polluting the generic interface.
+3. **Do NOT abstract tool calling.** Let each provider handle tools in its native format. The AgentLoop should call `brain.chatWithTools()` which returns a normalized `ToolCallResult[]`, but the internal mechanism differs per provider.
+4. Accept that switching providers mid-conversation is NOT a goal. The provider is chosen at agent startup and stays fixed for the session.
+5. Start with a thin wrapper, not a thick one. Add abstraction only where both providers genuinely share behavior.
 
-**Phase:** Phase 1 (custom Docker image). Straightforward but absolutely required for the persistent session feature.
+**Detection:** Review the abstraction interface. If it has zero provider-specific options, it's too thin. If it has a `provider: 'claude' | 'gemini'` switch in every method, it's too thick.
 
-**Confidence:** HIGH -- verified via [Chromium bug #612453](https://bugs.chromium.org/p/chromium/issues/detail?id=612453) and [jessfraz/dockerfiles issue #435](https://github.com/jessfraz/dockerfiles/issues/435).
+**Phase:** Phase 1 (Brain abstraction). This is a design decision, not an implementation bug.
+
+**Confidence:** HIGH -- based on established software engineering principles and real-world multi-provider abstraction failures documented by [Ably](https://ably.com/topic/websocket-architecture-best-practices) and [ProxAI](https://www.proxai.co/blog/archive/llm-abstraction-layer).
 
 ---
 
-### Pitfall 6: linuxserver/chromium Remote Debugging Port Breaks With Volume Mounts
+### Pitfall 7: AgentLoop ReAct Prompt Assumes Text-Only Response Format
 
-**What goes wrong:** When the linuxserver/chromium container has `/config` volume mounted AND `--remote-debugging-port=9222` in CHROME_CLI, the debugging port becomes inaccessible from within the container. Attempting to query `localhost:9222/json/version` fails with "connection refused". Without the volume mount, it works fine.
+**What goes wrong:** The current `AGENT_SYSTEM_PROMPT` in `agent.ts` instructs the LLM to respond in one of two JSON formats: `{"type": "tool_call", ...}` or `{"type": "final_answer", ...}`. This is parsed by `parseStep()` which expects the entire LLM response to be a single JSON object.
 
-**Why it happens:** This is a confirmed but not officially resolved issue ([linuxserver/docker-chromium issue #30](https://github.com/linuxserver/docker-chromium/issues/30)). The root cause appears to be related to how mounted volumes interact with Chromium's process initialization. The issue was closed as "not planned" by the maintainers.
+If Claude is used with native tool calling enabled, the response contains `content` blocks (text + tool_use), NOT a single JSON string. The `parseStep()` method will either (a) fail to parse the response and treat it as a free-form final answer, or (b) parse the text portion but miss the tool_use blocks entirely. Either way, tool calls are lost.
 
-**Consequences:**
-- Playwright MCP cannot connect to the browser via CDP
-- The entire AI automation feature is non-functional
-- Volume mount is required for persistent sessions, so removing it is not an option
-- This is a fundamental conflict between two core requirements (persistence + CDP access)
+If Claude is used WITHOUT native tool calling (text-only mode), it can follow the JSON protocol, but Claude's training makes it more likely to add explanatory text around the JSON, wrap it in markdown code blocks, or produce other formatting that breaks `parseStep()`.
 
-**Warning signs:**
-- `curl http://localhost:9222/json/version` returns connection refused inside container
-- Playwright MCP connection times out with "CDP endpoint unreachable"
-- Works perfectly without volume mount, breaks with it
+**Why it happens:** The ReAct pattern implemented in `agent.ts` was designed for Gemini, which readily emits raw JSON when instructed. Claude models, especially Opus and Sonnet, tend to be more "chatty" and may add context around their JSON output. The `parseStep()` regex fallbacks help but are fragile.
 
 **Prevention:**
-1. Build a custom Docker image that launches Chromium via `wrapped-chromium` or `xterm` directly with the debugging flags, bypassing the default entrypoint behavior that causes the conflict.
-2. Alternative: Use `socat` as a relay inside the container to forward the debugging port.
-3. Alternative: Start Chromium without `--remote-debugging-port` in CHROME_CLI, then use a custom init script to launch a separate debugging-enabled browser instance or connect to the running instance via D-Bus.
-4. Test this exact combination (volume mount + CDP port) during Phase 1 before building any Playwright MCP integration that depends on it.
+1. **For Claude with native tool calling:** Remove the JSON-in-text protocol entirely. Instead, check `response.stop_reason === 'tool_use'` and extract tool calls from `content` blocks of type `tool_use`. The "thought" is the text block that precedes the tool_use block.
+2. **For Claude without native tool calling (fallback):** Strengthen the system prompt with Claude-specific instructions: use `<tool_call>` XML tags instead of JSON (Claude is better at structured XML), or use `tool_choice: {"type": "any"}` to force tool use when appropriate.
+3. **For the transition period:** Support both parsing modes. If the response contains native tool_use blocks, use those. Otherwise, fall back to `parseStep()`.
+4. Consider using Claude's `stop_reason` to drive the agent loop instead of parsing response text. When `stop_reason === 'tool_use'`, execute tools. When `stop_reason === 'end_turn'`, extract the final answer from text blocks.
 
-**Phase:** Phase 1 (Docker image). This is a blocking issue that must be validated and solved before Phase 3 (Playwright MCP integration).
+**Detection:** Run the agent with a task that requires tool use. If the first tool call fails to parse, the prompt format is incompatible.
 
-**Confidence:** HIGH -- directly verified via [linuxserver/docker-chromium issue #30](https://github.com/linuxserver/docker-chromium/issues/30). The reporter confirmed "forked and fixed" independently.
+**Phase:** Phase 2 (AgentLoop adaptation). Depends on the Brain abstraction from Phase 1.
+
+**Confidence:** HIGH -- verified by reading the Claude streaming response examples which show `stop_reason: "tool_use"` and `content_block_start` with `type: "tool_use"` structure, contrasted with the current `parseStep()` implementation.
 
 ---
 
-### Pitfall 7: SOCKS5 Proxy DNS Leaks
+### Pitfall 8: Conversation History Format Incompatible Between Providers
 
-**What goes wrong:** When configuring Chromium to use a SOCKS5 proxy (e.g., `--proxy-server="socks5://proxy:1080"`), DNS queries may still be resolved locally by the browser or the container's resolver, bypassing the proxy entirely. This leaks the user's intended browsing destinations to their ISP or local DNS provider, defeating the privacy purpose of using a proxy.
+**What goes wrong:** The `SessionManager` stores conversation history as `ChatMessage[]` with `role: 'user' | 'model'` and a simple `text` string. When the user switches providers (or when the system is migrated), existing conversation history cannot be replayed to Claude because:
+1. Role `'model'` must become `'assistant'`
+2. Claude requires `content` (array of content blocks), not `text` (string)
+3. Tool use history must include `tool_use_id` for Claude, which was never stored
+4. Images use different formats (Gemini: `inlineData`, Claude: base64 `source` blocks)
 
-**Why it happens:** Chromium has multiple DNS resolution paths: the standard resolver, the DNS prefetcher, and speculative DNS resolution. While Chromium SOCKS5 natively resolves DNS proxy-side (unlike Firefox), the DNS prefetcher can issue local DNS requests proactively for links on the page.
+Old conversations stored in Redis/sessions become unusable, and replaying them to Claude produces 400 errors.
+
+**Why it happens:** The conversation history format was designed for Gemini. No serialization format was chosen with provider-independence in mind.
 
 **Consequences:**
-- ISP can see which domains the user visits despite using a proxy
-- Geo-unblocking fails because DNS reveals the real location
-- Privacy-conscious users lose trust in the feature
-
-**Warning signs:**
-- DNS leak test sites (e.g., dnsleaktest.com) show local DNS servers
-- `tcpdump` on the host shows DNS queries (port 53) from the container
-- Websites detect the user's real location despite proxy configuration
+- Context loss on provider switch (agent "forgets" everything)
+- Session continuity breaks during migration
+- If history is blindly passed to Claude, API errors crash the agent
 
 **Prevention:**
-1. Use the `--host-resolver-rules="MAP * ~NOTFOUND , EXCLUDE <proxy-host>"` flag alongside `--proxy-server` to force all DNS through the proxy:
-   ```
-   --proxy-server="socks5://proxy:1080" --host-resolver-rules="MAP * ~NOTFOUND , EXCLUDE proxy"
-   ```
-2. Disable DNS prefetching with `--dns-prefetch-disable` flag.
-3. Configure the container's DNS to use the proxy's DNS or a privacy-focused resolver (e.g., 1.1.1.1 or 9.9.9.9) as a fallback.
-4. Document to users that DNS leak protection is only active when the proxy is configured -- without a proxy, DNS behaves normally.
+1. Define a provider-neutral conversation format NOW (before migration starts). Use `role: 'user' | 'assistant'` (Claude's convention, which is more standard), `content: string | ContentBlock[]`, and include tool metadata.
+2. Write a one-time migration script that converts existing Redis session data from Gemini format to the neutral format.
+3. In the Brain abstraction, convert from neutral format to provider-specific format just before the API call. This keeps storage provider-independent.
+4. For the transition period, add a `format_version` field to stored sessions so the system can detect and convert old formats.
 
-**Phase:** Phase 2 (proxy configuration). Must be implemented when proxy support is added.
+**Detection:** Load an existing session from Redis and attempt to pass it to Claude -- if it fails, format migration is needed.
 
-**Confidence:** MEDIUM -- verified via [Chromium SOCKS proxy design docs](https://www.chromium.org/developers/design-documents/network-stack/socks-proxy/) and community guides. The DNS prefetch leak vector is well-documented but the exact behavior may vary by Chromium version.
+**Phase:** Phase 1 (Brain abstraction). The neutral format must be defined before any Claude integration.
+
+**Confidence:** HIGH -- verified by examining `ChatMessage` interface in `brain.ts` and Claude's message format requirements.
 
 ---
 
-### Pitfall 8: Playwright MCP CDP Connection Timing Race
+### Pitfall 9: WebSocket Agent Endpoint Lacks Authentication
 
-**What goes wrong:** When the browser container starts, Chromium takes several seconds to initialize. Playwright MCP tries to connect to the CDP endpoint (`http://chromium:9222`) before Chromium is ready, gets a connection refused error, and fails permanently. The MCP server does not automatically retry after initial connection failure.
+**What goes wrong:** The current WebSocket endpoint (`/ws/agent`) in `api.ts` has NO authentication. Any client that can connect to the WebSocket can execute arbitrary agent tasks with full tool access (shell commands, file operations, Docker management). This is already a security issue with Gemini, but it becomes worse when expanding to multiple channels and adding a WebSocket gateway.
 
-**Why it happens:** Docker containers start in dependency order (`depends_on`), but `depends_on` only waits for the container to start, not for the service inside to be ready. Chromium inside the linuxserver/chromium container takes 5-15 seconds to initialize (display server, window manager, then Chromium itself). The Playwright MCP default CDP timeout is 30 seconds, which should be enough -- but only if the connection attempt starts after the container is up, not when the MCP server itself starts.
+**Why it happens:** The REST API uses `requireApiKey` middleware, but the WebSocket connection setup in `setupWebSocket()` (line 667-723) performs no authentication check. The `ws.on('message')` handler directly creates an `AgentLoop` with full tool access.
 
 **Consequences:**
-- AI browser automation is non-functional after system boot
-- Intermittent connection failures on container restart
-- Manual restart of MCP server required after browser container restart
-- Race condition makes the issue non-deterministic and hard to reproduce
+- Unauthenticated remote code execution via `shell` tool
+- Docker container manipulation
+- File system read/write
+- Memory access (read stored user data)
 
 **Warning signs:**
-- Playwright MCP logs show "CDP endpoint connection timeout" or "ECONNREFUSED"
-- Browser automation works after manual MCP restart but not on boot
-- `depends_on` is configured but still fails
+- WebSocket connections from unknown IPs in logs
+- Unexpected agent executions
 
 **Prevention:**
-1. Implement a health check on the browser container that verifies Chromium's CDP endpoint:
-   ```yaml
-   healthcheck:
-     test: ["CMD", "curl", "-sf", "http://localhost:9222/json/version"]
-     interval: 5s
-     timeout: 3s
-     retries: 10
-     start_period: 15s
-   ```
-2. In the Nexus MCP config manager, implement retry-with-backoff for CDP connections using the `cdpTimeout` parameter (set to 60000ms for initial connection).
-3. Use `depends_on` with `condition: service_healthy` (requires Docker Compose v2.1+):
-   ```yaml
-   playwright-mcp:
-     depends_on:
-       chromium:
-         condition: service_healthy
-   ```
-4. Since Playwright MCP is auto-registered via LivOS hooks (per PROJECT.md), the registration hook should verify CDP connectivity before marking the MCP server as available.
+1. **Add authentication to WebSocket.** Require either:
+   - API key in the WebSocket upgrade request (query param or header): `ws://host:3200/ws/agent?apiKey=XXX`
+   - JWT token validation on connection
+   - First message must be an auth message before any agent messages are accepted
+2. Rate limit WebSocket connections per IP.
+3. Add connection logging with source IP.
+4. Consider restricting WebSocket to localhost only (it's currently only used by the LivOS frontend on the same server).
 
-**Phase:** Phase 3 (Playwright MCP integration). Must be solved for reliable AI automation.
+**Detection:** Attempt to connect to `/ws/agent` without credentials from an external network.
 
-**Confidence:** MEDIUM -- based on [Playwright MCP docs](https://github.com/microsoft/playwright-mcp) confirming 30s default timeout and standard Docker container readiness patterns. The exact retry behavior of Playwright MCP when CDP is unavailable is not fully documented.
+**Phase:** Phase 3 (WebSocket gateway). Must be addressed before any public-facing WebSocket functionality.
+
+**Confidence:** HIGH -- verified by reading `api.ts` line 667-723 which shows no auth check.
 
 ---
 
-### Pitfall 9: Browser Container Consumes All VPS Memory
+### Pitfall 10: Skill Marketplace Security -- Arbitrary Code Execution Risk
 
-**What goes wrong:** Chromium is notoriously memory-hungry. Without Docker resource limits, a browser container with several tabs open can consume 2-4GB of RAM, starving other LivOS services (Redis, PostgreSQL, Nexus AI, other Docker apps). The Linux OOM killer then terminates random processes -- potentially killing the database or AI service instead of the browser.
+**What goes wrong:** The current `SkillLoader` dynamically imports JavaScript/TypeScript files from the `skills/` directory using `import()`. If a skill marketplace is added where users can install third-party skills, those skills will execute with the same Node.js process permissions as Nexus core -- meaning full filesystem access, network access, and access to all registered tools, Redis, and the Brain instance.
 
-**Why it happens:** LivOS runs on VPS with 4-8GB RAM total. The system already runs Caddy, Redis, PostgreSQL, Nexus (Node.js), and potentially Firecrawl (with its own 2GB limit) and other user-installed apps. Chromium's per-tab memory ranges from 50-300MB, and a user with 10+ tabs can easily hit 2GB+. Without explicit limits, Docker allows containers to use all available host memory.
+**Why it happens:** Skills receive a `SkillContext` that includes `redis`, `brain`, and `onAction` -- essentially unlimited access to the entire Nexus system. There's no sandboxing, capability restriction, or permission model.
 
 **Consequences:**
-- OOM killer terminates Redis (data loss) or PostgreSQL (corruption risk)
-- All Docker containers restart simultaneously
-- System becomes unresponsive, SSH access lost
-- VPS provider may auto-reboot the server
-
-**Warning signs:**
-- `docker stats` shows browser container using >50% of total RAM
-- `dmesg` shows OOM killer activity
-- Other containers restart unexpectedly
-- Host `free -m` shows near-zero available memory
+- Malicious skill steals API keys from Redis or environment
+- Skill exfiltrates conversation history
+- Skill installs backdoor (writes to filesystem, adds cron job)
+- Skill crashes entire Nexus process via unhandled exception or infinite loop
+- Supply chain attack via skill dependency
 
 **Prevention:**
-1. Set hard memory limits in docker-compose.yml:
-   ```yaml
-   deploy:
-     resources:
-       limits:
-         memory: 2G
-         cpus: '1.5'
-       reservations:
-         memory: 512M
-         cpus: '0.5'
-   ```
-2. For a 4GB VPS, limit the browser container to 1.5GB max. For 8GB, limit to 2.5GB.
-3. Add Chromium flags to limit memory usage:
-   ```
-   --max-old-space-size=512 --renderer-process-limit=4 --disable-gpu
-   ```
-   `--renderer-process-limit=4` caps the number of renderer processes (tabs share renderers).
-4. Implement a monitoring/alerting hook in the LivOS system health dashboard to show browser container memory usage.
-5. Consider implementing a tab limit warning in the frontend viewer component.
+1. **Do NOT allow arbitrary skill installation from untrusted sources in v1.4.** Start with a curated gallery only.
+2. For marketplace skills, implement a review process before listing.
+3. Consider running marketplace skills in isolated contexts:
+   - Separate Node.js worker threads with limited APIs
+   - Docker containers for untrusted skills
+   - vm2/isolated-vm for lightweight sandboxing (though these have known escapes)
+4. Implement a capability system: skills declare what they need (e.g., `needs: ['redis:read', 'brain:chat']`) and are only given those capabilities.
+5. Add resource limits: timeout per skill execution, memory limits, network restrictions.
+6. Version pin skills and verify checksums on load.
+7. Skills should receive a SCOPED Redis client (restricted to `nexus:skills:{skillName}:*` keyspace) instead of the full Redis connection.
 
-**Phase:** Phase 1 (Docker compose) for limits, Phase 4 (frontend) for monitoring/warnings.
+**Detection:** Code review of skill source. Audit `import()` paths. Monitor network connections from the Nexus process.
 
-**Confidence:** HIGH -- verified via [Docker resource constraints docs](https://docs.docker.com/engine/containers/resource_constraints/) and [Chromium memory backgrounder](https://www.chromium.org/developers/memory-usage-backgrounder/).
+**Phase:** Phase 5 (Skill marketplace). This is a design-time decision that must be made early even if implementation is deferred.
+
+**Confidence:** HIGH -- the arbitrary code execution risk is self-evident from reading `skill-loader.ts`.
 
 ---
 
-### Pitfall 10: Volume Permissions Mismatch for Browser Profile
+### Pitfall 11: Token Budget Mismatch Between Gemini and Claude
 
-**What goes wrong:** The linuxserver/chromium container uses PUID/PGID environment variables (default 1000:1000) to set the user identity for file operations. If the host directory mounted at `/config` has different ownership (e.g., root:root from a previous container run or from manual creation), Chromium cannot write to its profile directory. This causes silent failures: no bookmarks saved, no sessions persisted, no cookies stored, extensions lost on restart.
+**What goes wrong:** The current `AgentLoop` has `maxTokens: 200000` (200K) as the default token budget and sends `maxOutputTokens: 2048` per turn to Gemini. Claude models have different context window sizes and pricing:
+- Claude 3.5 Haiku: 200K context, but much more expensive per token than Gemini Flash
+- Claude Sonnet 4: 200K context
+- Claude Opus 4: 200K context but extremely expensive
 
-**Why it happens:** LivOS creates app data directories in `apps.ts` with `fse.mkdirp(appDataDirectory)`. The directory is created by the livinityd process, which may run as root or a different user than PUID 1000. Docker bind mounts preserve host permissions. If the mounted directory is owned by root, the container process (running as UID 1000) cannot write to it.
+Running the same 200K token budget with Claude Opus could cost $60+ per agent session (at ~$15/MTok input + $75/MTok output). The tier mapping (`flash` -> cheap, `sonnet` -> mid, `opus` -> expensive) has completely different cost implications with Claude.
+
+**Why it happens:** The tier system was designed with Gemini pricing in mind, where `flash` and `sonnet` both map to `gemini-3-flash-preview` (cheap) and `opus` maps to `gemini-3-pro-preview` (moderate). With Claude, each tier is a genuinely different model with 10-50x cost differences.
 
 **Consequences:**
-- "Persistent sessions" feature silently fails -- sessions appear to persist but are lost on restart
-- Chromium shows "your profile could not be opened correctly" warnings
-- Extensions, bookmarks, and login sessions not saved
-- Users blame the feature for being broken but the container runs fine
-
-**Warning signs:**
-- `docker exec <container> ls -la /config` shows root:root ownership
-- Chromium profile directory is empty or missing expected files after container restart
-- "Failed to create directory" errors in container logs
-- Works the first time (Docker creates volume with correct permissions) but fails after backup restore or manual directory creation
+- Unexpectedly high API costs
+- Token budget runs out faster with Claude's more verbose responses
+- `maxOutputTokens: 2048` is too low for Claude's structured responses (tool use blocks + text)
+- Users hit rate limits faster on Claude (lower default rate limits than Gemini)
 
 **Prevention:**
-1. In the LivOS app install flow (`apps.ts`), explicitly set ownership after creating the data directory:
-   ```bash
-   chown -R 1000:1000 /path/to/app-data/chromium
-   ```
-2. Set PUID and PGID in the Docker compose config to match the host user:
-   ```yaml
-   environment:
-     - PUID=1000
-     - PGID=1000
-   ```
-3. Use linuxserver's s6-overlay init scripts which handle permission fixing on startup, but verify they work with bind mounts (not just named volumes).
-4. Add a post-install verification step that checks write permissions inside the container.
-5. After backup restore, the `reinstallMissingAppsAfterRestore()` flow in `apps.ts` must also fix permissions.
+1. Create provider-specific token budget defaults. Claude should have lower `maxTokens` defaults to control costs.
+2. Increase `maxOutputTokens` per turn from 2048 to at least 4096 for Claude -- tool use responses with JSON input tend to be longer.
+3. Add cost tracking per provider. Log estimated cost per agent session.
+4. Add configurable cost limits: `maxCostPerSession` alongside `maxTokens`.
+5. Review the tier mapping: Does `sonnet` mean "mid-tier" (Gemini Flash) or "capable" (Claude Sonnet 4)? Make tier semantics consistent.
+6. Consider using Claude Haiku as default tier instead of Sonnet to control costs.
 
-**Phase:** Phase 1 (Docker image + app install flow).
+**Detection:** Monitor token usage and estimated costs in the first week after migration.
 
-**Confidence:** HIGH -- verified via [LinuxServer docs](https://docs.linuxserver.io/images/docker-chromium/), Docker community discussions on [volume permissions](https://forums.docker.com/t/how-to-mount-a-docker-volume-so-as-writeable-by-a-non-root-user-within-the-container/144321), and analysis of existing `apps.ts` code.
+**Phase:** Phase 1 (Brain abstraction). Token/cost defaults must be provider-specific from the start.
+
+**Confidence:** MEDIUM -- pricing may change. Current estimates based on published Anthropic pricing as of early 2025 training data.
+
+---
+
+### Pitfall 12: Daemon Response Routing Assumes Single Channel per Message
+
+**What goes wrong:** The current `Daemon.processInboxItem()` sets `this.currentChannelContext` per message and routes the response back to that channel. When expanding to WebSocket gateway and more channels, race conditions emerge: if two messages arrive simultaneously from different channels (Telegram and Discord), `this.currentChannelContext` gets overwritten by the second message before the first message's response is sent. The first message's response goes to the wrong channel.
+
+**Why it happens:** `currentChannelContext` and `currentWhatsAppJid` are instance variables on the Daemon class, not per-request state. The `processInboxItem()` method is async and can be called concurrently (via `addToInbox` -> immediate processing for realtime sources).
+
+**Consequences:**
+- Responses sent to wrong channel
+- User on Telegram receives response meant for Discord user
+- WhatsApp JID routing goes to wrong conversation
+- Intermittent, hard to reproduce (race condition)
+
+**Warning signs:**
+- Users report receiving responses to questions they didn't ask
+- Cross-channel message leakage
+- Bug appears under load but not in testing
+
+**Prevention:**
+1. **Pass channel context as a parameter through the processing chain**, not as instance state. Each `InboxItem` already has `source` and `from` -- use these directly in `sendChannelResponse()` instead of `this.currentChannelContext`.
+2. Make `processInboxItem()` fully self-contained: all context needed for response routing must come from the `item` parameter.
+3. Remove `this.currentWhatsAppJid` and `this.currentChannelContext` instance variables.
+4. If shared mutable state is truly needed (e.g., for the `progress_report` tool), use AsyncLocalStorage or pass context through the tool execution chain.
+
+**Detection:** Load test with simultaneous messages from different channels. Check response routing correctness.
+
+**Phase:** Phase 3 (Channel expansion / WebSocket gateway). Must be fixed before adding more concurrent channels.
+
+**Confidence:** HIGH -- the race condition is visible in the source code: `processInboxItem` is called from both the polling loop and `addToInbox` immediate path.
 
 ---
 
 ## Minor Pitfalls
 
-Mistakes that cause annoyance, poor UX, or technical debt but are fixable without major rework.
+Mistakes that cause annoyance, degraded DX, or fixable issues.
 
-### Pitfall 11: Anti-Detection Flags Conflict with Browser Stability
+### Pitfall 13: Anthropic SDK Already Installed But Unused
 
-**What goes wrong:** The CHROME_CLI in `builtin-apps.ts` includes `--disable-blink-features=AutomationControlled` and `--disable-infobars`. Adding more anti-detection flags (e.g., `--disable-extensions`, `--disable-default-apps`, `--no-first-run`, modified user-agent strings) can conflict with each other or with KasmVNC's display requirements, causing rendering glitches, missing UI elements, or extension incompatibility.
-
-**Why it happens:** Anti-detection flags are designed for headless automation, not for interactive GUI browsing. Some flags that help avoid bot detection also disable features users need (like extensions). The `--disable-blink-features=AutomationControlled` flag itself is well-known and [actively detected by advanced anti-bot systems](https://github.com/nicedoc/browser-logos/refs/heads/main/src/chromium/chromium.svg) as a signal that the browser is trying to hide automation.
+**What goes wrong:** The `@anthropic-ai/sdk@0.39.0` is already in `package.json` but not imported anywhere in the source code. When someone starts implementing Claude support, they may install a different version or import it incorrectly. The existing version (0.39.0) may not support the latest Claude features (the current SDK version is likely 0.40+).
 
 **Prevention:**
-1. Keep anti-detection flags minimal for interactive use: only `--disable-blink-features=AutomationControlled` and `--disable-infobars`.
-2. Do NOT add `--disable-extensions` (breaks user-installed extensions).
-3. Do NOT modify the user-agent string globally -- let users configure this per-session if needed.
-4. Test all flag combinations with KasmVNC rendering before deployment.
-5. Document which flags are for anti-detection vs. which are for stability (e.g., `--disable-dev-shm-usage` is stability, not anti-detection).
+1. Check the latest Anthropic SDK version before starting implementation. Update if needed.
+2. Use the SDK's built-in streaming helpers (`client.messages.stream()`) rather than raw HTTP streaming.
+3. The Anthropic SDK uses `import Anthropic from '@anthropic-ai/sdk'` (default export), not named exports like ioredis.
 
-**Phase:** Phase 1 (Docker image configuration).
+**Phase:** Phase 1. Quick check at start of implementation.
 
-**Confidence:** MEDIUM -- based on community discussions and [ZenRows analysis](https://www.zenrows.com/blog/disable-blink-features-automationcontrolled).
+**Confidence:** HIGH -- verified in package.json.
 
 ---
 
-### Pitfall 12: Caddy Subdomain Block Missing WebSocket-Specific Config
+### Pitfall 14: Gemini Model Names Hardcoded as Preview Versions
 
-**What goes wrong:** The current `generateFullCaddyfile()` in `caddy.ts` generates simple `reverse_proxy 127.0.0.1:{port}` blocks with no subdirectives. While Caddy v2 handles WebSocket upgrades automatically (unlike v1), KasmVNC requires specific header configurations for proper operation behind a reverse proxy: `X-Forwarded-Port`, TLS skip verify for HTTPS upstreams, and timeouts tuned for long-lived VNC connections.
-
-**Why it happens:** Other LivOS apps (n8n, Portainer, Gitea) work fine with simple reverse proxy blocks because they use standard HTTP request-response patterns. KasmVNC uses persistent WebSocket streams that need header passthrough and extended timeouts.
+**What goes wrong:** The `GEMINI_MODELS` mapping in `brain.ts` uses `gemini-3-flash-preview` and `gemini-3-pro-preview`. These are preview model names that may be deprecated or renamed by Google. If Gemini support must be maintained alongside Claude, hardcoded preview model names will eventually break.
 
 **Prevention:**
-1. Extend `generateFullCaddyfile()` to support per-subdomain configuration options, not just port numbers.
-2. For the browser subdomain, generate a Caddy block with:
-   ```
-   browser.example.com {
-       reverse_proxy 127.0.0.1:3000 {
-           header_up X-Forwarded-Port {http.request.port}
-           stream_close_delay 5m
-       }
-   }
-   ```
-3. The `SubdomainConfig` interface in `caddy.ts` needs to be extended with optional config fields like `streamCloseDelay`, `headers`, etc.
-4. Do NOT add `tls_insecure_skip_verify` unless proxying to HTTPS port 3001 (prefer HTTP port 3000 for internal traffic).
+1. Move model names to configuration (Redis or config file) so they can be updated without code changes.
+2. Add model name validation on startup -- call Gemini's models.list endpoint to verify configured models exist.
 
-**Phase:** Phase 2 (Caddy configuration). Requires refactoring `caddy.ts` to support richer per-app proxy config.
+**Phase:** Phase 1 (Brain abstraction). Make model names configurable as part of the provider configuration.
 
-**Confidence:** HIGH -- verified via [Kasm reverse proxy docs](https://www.kasmweb.com/docs/develop/how_to/reverse_proxy.html) and [Caddy community thread](https://caddy.community/t/caddyfile-config-for-kasm-websocket/20516).
+**Confidence:** MEDIUM -- preview model names are inherently unstable, but timing of deprecation is unknown.
 
 ---
 
-### Pitfall 13: Playwright MCP Name Collision with Reserved Names
+### Pitfall 15: Missing Error Type Distinction for Claude API Errors
 
-**What goes wrong:** When auto-registering the Playwright MCP server in the Nexus MCP config manager, the chosen name must not collide with reserved names. The `McpConfigManager` in `mcp-config-manager.ts` blocks names in the `RESERVED_NAMES` set (including `shell`, `docker`, `files`, `scrape`, `web`, `agent`). Choosing a name like `web` or `agent` for the browser MCP will fail silently or with a confusing error.
-
-**Why it happens:** The reserved names list was designed before the browser app feature was planned. Names like `browser` are not reserved, but if someone chose `web` or `scrape` they would hit the validation.
+**What goes wrong:** The current error handling in `agent.ts` and `brain.ts` uses pattern matching on error messages (`/rate.?limit/i`, `/429/i`, etc.) to detect retryable errors. Claude's Anthropic SDK throws typed errors (`APIError`, `AuthenticationError`, `RateLimitError`, `InternalServerError`) that should be caught by type, not by message string matching.
 
 **Prevention:**
-1. Use the name `playwright-browser` or `browser-mcp` for the auto-registered MCP server.
-2. Verify the chosen name is not in the RESERVED_NAMES set before implementing auto-registration.
-3. Add clear error messaging if registration fails due to name collision.
-
-**Phase:** Phase 3 (Playwright MCP auto-registration).
-
-**Confidence:** HIGH -- verified by direct code inspection of `mcp-config-manager.ts`.
-
----
-
-### Pitfall 14: Nextcloud Port Collision
-
-**What goes wrong:** The Nextcloud builtin app in `builtin-apps.ts` is configured with port 8080. The linuxserver/chromium container documentation states that port 3000 (HTTP) and 3001 (HTTPS) are the container ports. However, if the published host port is not carefully assigned, it could collide with the LivOS main UI port (also 8080 as shown in `generateFullCaddyfile()`). The current Chromium app uses port 6901, but the linuxserver docs say the actual container listens on 3000/3001 -- port 6901 appears to be from older KasmVNC versions.
-
-**Why it happens:** Port confusion between the container's internal port and the mapped host port. The builtin-apps manifest specifies port 6901 for Chromium, but linuxserver/chromium actually exposes 3000 (HTTP) and 3001 (HTTPS).
-
-**Prevention:**
-1. Verify the correct container port for linuxserver/chromium -- it is 3000 (HTTP) or 3001 (HTTPS), NOT 6901.
-2. Update the port in `builtin-apps.ts` from 6901 to 3000 (for HTTP through Caddy).
-3. Ensure the host port mapping in docker-compose does not collide with other services.
-4. Test with `docker exec <container> netstat -tlnp` to verify which ports the container actually listens on.
-
-**Phase:** Phase 1 (Docker compose + manifest fix).
-
-**Confidence:** HIGH -- verified via [linuxserver/chromium docs](https://docs.linuxserver.io/images/docker-chromium/) which explicitly state ports 3000 and 3001.
-
----
-
-## Integration Pitfalls with Existing LivOS System
-
-Issues specific to adding the browser app to the existing LivOS architecture.
-
-### Pitfall 15: App Install Flow Not Designed for Complex Docker Configs
-
-**What goes wrong:** The current `BuiltinAppManifest` interface in `builtin-apps.ts` supports basic Docker config: `image`, `environment`, `volumes`. But the browser container requires `shm_size`, `deploy.resources.limits`, `healthcheck`, `security_opt`, and potentially `cap_add` for Chromium sandboxing. The install flow in `apps.ts` does not handle these advanced Docker Compose options.
-
-**Why it happens:** The builtin app system was designed for simple single-container apps (n8n, Portainer, Gitea). The browser app is the first builtin app requiring complex Docker configuration.
-
-**Consequences:**
-- Browser container launches without shm_size (crashes -- Pitfall 3)
-- No memory limits (OOM -- Pitfall 9)
-- No health checks (CDP timing -- Pitfall 8)
-- Must either extend the manifest schema or hardcode browser-specific logic
-
-**Prevention:**
-1. Extend `BuiltinAppManifest.docker` to support:
+1. Import Anthropic error types: `import { APIError, RateLimitError, AuthenticationError } from '@anthropic-ai/sdk'`
+2. Add type-based error detection alongside the existing string-based detection:
    ```typescript
-   docker: {
-     image: string;
-     environment?: Record<string, string>;
-     volumes?: string[];
-     shmSize?: string;        // NEW
-     memoryLimit?: string;    // NEW
-     cpuLimit?: string;       // NEW
-     healthcheck?: {          // NEW
-       test: string[];
-       interval: string;
-       timeout: string;
-       retries: number;
-     };
-     securityOpt?: string[];  // NEW
-   }
+   if (err instanceof RateLimitError) return true;
+   if (err instanceof APIError && err.status >= 500) return true;
    ```
-2. Update the Docker container creation logic in the app install flow to apply these options.
-3. Alternative: Keep the manifest simple and use a custom docker-compose.yml template for complex apps. The app install flow already supports `docker-compose.yml` templates for community apps.
+3. Handle Claude-specific errors: `overloaded_error` (529 equivalent), `api_error` (500), `authentication_error` (401).
 
-**Phase:** Phase 1 (Docker infrastructure).
+**Phase:** Phase 1 (Brain abstraction). Implement alongside the Claude provider.
 
-**Confidence:** HIGH -- direct code inspection of `builtin-apps.ts` and `apps.ts`.
+**Confidence:** HIGH -- verified from Claude SDK source in the installed `@anthropic-ai/sdk@0.39.0`.
 
 ---
 
-### Pitfall 16: Caddy Generation Does Not Support Per-App Config
+### Pitfall 16: Image/Vision Format Differences Between Providers
 
-**What goes wrong:** The `generateFullCaddyfile()` function in `caddy.ts` generates identical `reverse_proxy` blocks for all subdomains. The browser app needs `stream_close_delay`, custom headers, and potentially `forward_auth`. There is no mechanism to attach per-app Caddy configuration.
+**What goes wrong:** The current `ChatMessage.images` field uses `{ base64: string, mimeType: string }` which maps directly to Gemini's `inlineData` format. Claude expects images in a different format:
+```json
+{
+  "type": "image",
+  "source": {
+    "type": "base64",
+    "media_type": "image/jpeg",
+    "data": "<base64>"
+  }
+}
+```
 
-**Why it happens:** The subdomain system was designed for uniform reverse proxy blocks. All existing apps only need basic HTTP proxying.
+If vision support (used for browser screenshots via Playwright MCP) is not properly translated, Claude will reject messages containing images.
 
 **Prevention:**
-1. Extend `SubdomainConfig` interface:
-   ```typescript
-   export interface SubdomainConfig {
-     subdomain: string;
-     appId: string;
-     port: number;
-     enabled: boolean;
-     caddyConfig?: {           // NEW
-       streamCloseDelay?: string;
-       headers?: Record<string, string>;
-       forwardAuth?: string;
-     };
-   }
-   ```
-2. Update `generateFullCaddyfile()` to render these options.
-3. The browser app registers with `caddyConfig: { streamCloseDelay: '5m' }`.
+1. Add an image format conversion function in the Brain abstraction layer.
+2. Test with the existing browser screenshot functionality to verify images are correctly passed to Claude.
+3. Note that Claude supports `image/jpeg`, `image/png`, `image/gif`, and `image/webp` -- verify the browser screenshots use a supported format.
 
-**Phase:** Phase 2 (Caddy integration).
+**Phase:** Phase 1 (Brain abstraction). Must be included in the message format translation.
 
-**Confidence:** HIGH -- direct code inspection of `caddy.ts`.
+**Confidence:** HIGH -- format difference is documented in both APIs.
+
+---
+
+### Pitfall 17: Parallel Agent Execution Without Resource Isolation
+
+**What goes wrong:** When expanding to parallel agent execution (multiple agent loops running simultaneously for different users/channels), all agents share the same `ToolRegistry`, `Brain`, and Redis connection. Issues:
+- Shell tool executions from different agents can interfere (cwd conflicts)
+- Docker operations from concurrent agents can conflict
+- Token budget is tracked per-agent but API rate limits are global per-account
+- Redis state mutations from concurrent agents can corrupt shared data
+
+**Prevention:**
+1. Create per-agent resource scopes: each agent gets a scoped `ToolRegistry` (already supported via `createScopedRegistry()`).
+2. Implement global rate limiting at the Brain level, not per-agent.
+3. Use Redis key prefixes per agent session to prevent state conflicts.
+4. Add a semaphore for mutually-exclusive tools (shell, docker) to prevent concurrent conflicting operations.
+5. Track API usage globally and distribute budget across concurrent agents.
+
+**Phase:** Phase 4 (Parallel execution). Design the isolation model early.
+
+**Confidence:** MEDIUM -- the existing system rarely runs concurrent agents, so this is theoretical until parallel execution is implemented.
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase Topic | Likely Pitfall | Severity | Mitigation |
-|-------------|---------------|----------|------------|
-| Phase 1: Docker Image | /dev/shm too small (P3) | Critical | `shm_size: "1gb"` in compose |
-| Phase 1: Docker Image | SingletonLock stale files (P5) | Moderate | Cleanup script in entrypoint |
-| Phase 1: Docker Image | CDP + volume mount conflict (P6) | Moderate | Custom Dockerfile workaround |
-| Phase 1: Docker Image | Wrong port in manifest (P14) | Moderate | Change 6901 to 3000 |
-| Phase 1: Docker Compose | No resource limits (P9) | Critical | memory: 2G, cpus: 1.5 |
-| Phase 1: Docker Compose | Manifest too simple (P15) | Moderate | Extend BuiltinAppManifest |
-| Phase 2: Caddy Config | WebSocket killed on reload (P4) | Critical | stream_close_delay 5m |
-| Phase 2: Caddy Config | No per-app config (P16) | Moderate | Extend SubdomainConfig |
-| Phase 2: Proxy Support | DNS leaks with SOCKS5 (P7) | Moderate | --host-resolver-rules flag |
-| Phase 3: Playwright MCP | CDP connection race (P8) | Moderate | Health check + retry |
-| Phase 3: Playwright MCP | MCP name collision (P13) | Minor | Use "playwright-browser" name |
-| Phase 4: Frontend | No auth on KasmVNC (P2) | Critical | LivOS JWT auth via forward_auth |
-| Phase 4: Frontend | CDP port exposed (P1) | Critical | Never publish port 9222 |
-| Phase 1: Docker Image | Volume permissions (P10) | Moderate | chown 1000:1000 in install flow |
-| Phase 1: Docker Image | Anti-detection flag conflicts (P11) | Minor | Minimal flag set |
-
----
-
-## LivOS-Specific Risk Summary
-
-### Highest Risk: Security
-
-The combination of CDP remote debugging (P1) and unauthenticated KasmVNC (P2) means the browser app introduces two separate full-compromise attack vectors if misconfigured. Both must be addressed before any internet exposure.
-
-### Second Highest Risk: Resource Exhaustion
-
-On a 4GB VPS already running LivOS core services, an unconstrained Chromium container (P9) combined with insufficient shared memory (P3) will crash the entire system. The existing Firecrawl worker already reserves 2GB (per `nexus/deploy/docker-compose.yml`). Adding an uncapped browser container on a 4GB VPS is not viable without strict limits.
-
-### Third Highest Risk: Integration Complexity
-
-The existing app infrastructure (`builtin-apps.ts`, `caddy.ts`, `apps.ts`) was designed for simple HTTP apps. The browser app needs advanced Docker config (P15), rich Caddy config (P16), WebSocket persistence (P4), and lifecycle hooks for MCP registration (P8, P13). This is not a "drop another app in the store" task -- it requires extending the app infrastructure itself.
+| Phase Topic | Likely Pitfall | Mitigation | Pitfall # |
+|-------------|---------------|------------|-----------|
+| Brain abstraction layer | Lowest-common-denominator abstraction | Capability-based design, not uniform | 6 |
+| Brain abstraction layer | Message role mapping breaks | Normalization layer with validation | 1 |
+| Brain abstraction layer | Streaming format breaks frontend | Keep existing AgentEvent contract | 3 |
+| Brain abstraction layer | Token budget mismatch | Provider-specific defaults | 11 |
+| AgentLoop adaptation | Tool calling format mismatch | Dual-mode: native + text fallback | 2 |
+| AgentLoop adaptation | ReAct prompt incompatible | Provider-specific prompts | 7 |
+| Auth integration | Token expiry silent failures | Health check + proactive refresh | 4 |
+| Memory integration | Embedding provider dependency | Keep Gemini for embeddings or add alternative | 5 |
+| Channel expansion | Response routing race condition | Per-request context, not instance state | 12 |
+| WebSocket gateway | No authentication | Add auth to WS upgrade | 9 |
+| Skill marketplace | Arbitrary code execution | Sandboxing + capability model | 10 |
+| Parallel execution | Resource contention | Per-agent scoping + global rate limits | 17 |
 
 ---
 
 ## Sources
 
-### Official Documentation (HIGH confidence)
-- [LinuxServer Chromium Docker Image](https://docs.linuxserver.io/images/docker-chromium/)
-- [Chrome Developer Blog: Remote Debugging Security Changes](https://developer.chrome.com/blog/remote-debugging-port)
-- [Caddy reverse_proxy directive](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
-- [Kasm Reverse Proxy Configuration](https://www.kasmweb.com/docs/develop/how_to/reverse_proxy.html)
-- [Docker Resource Constraints](https://docs.docker.com/engine/containers/resource_constraints/)
-- [Playwright MCP GitHub](https://github.com/microsoft/playwright-mcp)
-- [Chromium SOCKS Proxy Design](https://www.chromium.org/developers/design-documents/network-stack/socks-proxy/)
+**Official Documentation (HIGH confidence):**
+- [Claude Messages API Streaming](https://platform.claude.com/docs/en/api/messages-streaming) -- streaming event types, tool_use in streaming
+- [Claude Tool Use Implementation](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use) -- tool definition format, tool_result format, parallel tool use
+- [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript) -- SDK patterns, error types
 
-### Security Advisories (HIGH confidence)
-- [LinuxServer.io KasmVNC Security PSA](https://info.linuxserver.io/issues/2024-10-06-securing-kasm/)
-- [SpecterOps: Cookie Dumping via Remote Debugger](https://posts.specterops.io/hands-in-the-cookie-jar-dumping-cookies-with-chromiums-remote-debugger-port-34c4f468844e)
-- [Embrace The Red: Chrome Remote Control Post-Exploitation](https://embracethered.com/blog/posts/2020/chrome-spy-remote-control/)
+**Codebase Analysis (HIGH confidence):**
+- `nexus/packages/core/src/brain.ts` -- Current Gemini-specific implementation
+- `nexus/packages/core/src/agent.ts` -- AgentLoop, parseStep(), ReAct prompt
+- `nexus/packages/core/src/api.ts` -- SSE streaming, WebSocket endpoint (no auth)
+- `nexus/packages/core/src/daemon.ts` -- Message routing, channel context race condition
+- `nexus/packages/memory/src/index.ts` -- Gemini embedding dependency
 
-### Bug Reports and Issues (HIGH confidence)
-- [Chromium Bug #715363: /dev/shm too small](https://issues.chromium.org/issues/40517415)
-- [Chromium Bug #612453: Bogus SingletonLock](https://bugs.chromium.org/p/chromium/issues/detail?id=612453)
-- [linuxserver/docker-chromium Issue #30: CDP + volume conflict](https://github.com/linuxserver/docker-chromium/issues/30)
-- [Caddy Issue #5471: WebSocket close on config reload](https://github.com/caddyserver/caddy/issues/5471)
-- [Caddy Issue #6420: Active WebSocket closed on reload](https://github.com/caddyserver/caddy/issues/6420)
+**Community Reports (MEDIUM confidence):**
+- [Claude Code OAuth token expiration issue #12447](https://github.com/anthropics/claude-code/issues/12447) -- Token expiry in autonomous workflows
+- [Claude Code OAuth expired immediately #19078](https://github.com/anthropics/claude-code/issues/19078) -- Token expiry after fresh login
+- [Claude Did This - Setup Container Auth](https://claude-did-this.com/claude-hub/getting-started/setup-container-guide) -- setup-token documentation
 
-### Codebase Analysis (HIGH confidence)
-- `livos/packages/livinityd/source/modules/apps/builtin-apps.ts` -- Chromium app manifest
-- `livos/packages/livinityd/source/modules/domain/caddy.ts` -- Caddyfile generation
-- `livos/packages/livinityd/source/modules/apps/apps.ts` -- App install flow
-- `nexus/packages/core/src/mcp-config-manager.ts` -- MCP server registration
-- `nexus/deploy/docker-compose.yml` -- Existing shm_size pattern
-
----
-
-*Last Updated: 2026-02-07*
-*Research compiled for LivOS v1.3 Browser App milestone*
+**Architecture Guidance (MEDIUM confidence):**
+- [ProxAI - LLM Abstraction Layer](https://www.proxai.co/blog/archive/llm-abstraction-layer) -- Multi-provider abstraction pitfalls
+- [Ably - WebSocket Architecture Best Practices](https://ably.com/topic/websocket-architecture-best-practices) -- Connection management, state sync
