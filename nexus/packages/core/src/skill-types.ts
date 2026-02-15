@@ -1,6 +1,7 @@
 import type { ToolRegistry } from './tool-registry.js';
 import type { Tool, ToolResult } from './types.js';
 import type { AgentResult } from './agent.js';
+import type { SkillManifest } from './skill-manifest.js';
 
 /** YAML frontmatter parsed from skill files */
 export interface SkillFrontmatter {
@@ -97,4 +98,10 @@ export interface Skill {
   filePath: string;
   /** Compiled trigger regexes */
   triggerPatterns: RegExp[];
+  /** Parsed SKILL.md manifest (for marketplace skills) */
+  manifest?: SkillManifest;
+  /** Timestamp when this skill was installed from the marketplace */
+  installedAt?: number;
+  /** Origin of the skill: builtin (bundled) or marketplace (downloaded) */
+  source?: 'builtin' | 'marketplace';
 }
