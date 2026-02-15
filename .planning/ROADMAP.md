@@ -400,12 +400,14 @@ Plans:
   3. Recent memories are prioritized over old ones in the AI's context (time-decay scoring)
   4. User can add a Slack workspace in Settings and send messages to the AI via Slack, receiving responses in the same Slack channel
   5. User can configure a Matrix room in Settings and interact with the AI through Matrix messages
-**Plans**: TBD
+**Plans**: 5 plans in 2 waves
 
 Plans:
-- [ ] v1.5-03-01: Automatic memory extraction (BullMQ job), deduplication, session binding, temporal scoring
-- [ ] v1.5-03-02: Context window optimization (relevance-scored memory assembly within token budget)
-- [ ] v1.5-03-03: SlackProvider, MatrixProvider, ChannelId update, per-channel Settings UI, routing race fix
+- [ ] v1.5-03-01-PLAN.md — Memory extraction (BullMQ job), deduplication, session binding, temporal scoring [Wave 1]
+- [ ] v1.5-03-02-PLAN.md — Context window optimization (/context endpoint, memory injection into agent prompt) [Wave 2]
+- [ ] v1.5-03-03-PLAN.md — SlackProvider, ChannelId update, register in ChannelManager [Wave 1]
+- [ ] v1.5-03-04-PLAN.md — MatrixProvider, matrix-js-sdk install, register in ChannelManager [Wave 1]
+- [ ] v1.5-03-05-PLAN.md — Per-channel Settings UI (Slack + Matrix panels), response routing race fix [Wave 2]
 
 ### Phase 4: WebSocket Gateway + Human-in-the-Loop
 **Goal**: External clients can interact with the AI agent over a standardized WebSocket protocol, and destructive tool operations require explicit user approval before execution
