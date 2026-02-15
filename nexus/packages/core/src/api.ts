@@ -17,6 +17,9 @@ import { AppManager, createAppRoutes } from './modules/apps/index.js';
 import type { ChannelManager, ChannelId, ChannelConfig } from './channels/index.js';
 import type { ApprovalManager } from './approval-manager.js';
 import type { TaskManager, TaskStatus } from './task-manager.js';
+import type { SkillInstaller } from './skill-installer.js';
+import type { SkillRegistryClient } from './skill-registry-client.js';
+import type { SkillLoader } from './skill-loader.js';
 import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 
@@ -31,6 +34,9 @@ interface ApiDeps {
   channelManager?: ChannelManager;
   approvalManager?: ApprovalManager;
   taskManager?: TaskManager;
+  skillInstaller?: SkillInstaller;
+  skillRegistryClient?: SkillRegistryClient;
+  skillLoader?: SkillLoader;
 }
 
 
@@ -61,7 +67,7 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
-export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager }: ApiDeps) {
+export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader }: ApiDeps) {
   const app = express();
   app.use(express.json());
 
@@ -726,6 +732,119 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     try {
       const cancelled = await taskManager.cancel(req.params.id);
       res.json({ cancelled });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Skill Marketplace API ────────────────────────────────────────
+
+  /** Browse skill marketplace catalog */
+  app.get('/api/skills/marketplace', async (req, res) => {
+    if (!skillRegistryClient) {
+      res.status(503).json({ error: 'Skill registry not configured' });
+      return;
+    }
+    try {
+      const search = req.query.search as string | undefined;
+      const skills = search
+        ? await skillRegistryClient.searchCatalog(search)
+        : await skillRegistryClient.fetchCatalog();
+      res.json({ skills });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** List installed marketplace skills */
+  app.get('/api/skills/installed', async (_req, res) => {
+    if (!skillInstaller) {
+      res.status(503).json({ error: 'Skill installer not configured' });
+      return;
+    }
+    try {
+      const skills = await skillInstaller.listInstalled();
+      res.json({ skills });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** List builtin skills */
+  app.get('/api/skills/builtin', async (_req, res) => {
+    if (!skillLoader) {
+      res.status(503).json({ error: 'Skill loader not configured' });
+      return;
+    }
+    try {
+      const all = skillLoader.listSkills();
+      const builtins = all.filter((s) => s.source !== 'marketplace');
+      res.json({ skills: builtins });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Preview skill install (get permissions) */
+  app.post('/api/skills/preview', async (req, res) => {
+    if (!skillInstaller) {
+      res.status(503).json({ error: 'Skill installer not configured' });
+      return;
+    }
+    try {
+      const { skillName } = req.body;
+      if (!skillName || typeof skillName !== 'string') {
+        res.status(400).json({ error: '"skillName" is required and must be a string' });
+        return;
+      }
+      const result = await skillInstaller.previewInstall(skillName);
+      if (!result) {
+        res.status(404).json({ error: `Skill "${skillName}" not found in any registry` });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Install a skill after permission review */
+  app.post('/api/skills/install', async (req, res) => {
+    if (!skillInstaller) {
+      res.status(503).json({ error: 'Skill installer not configured' });
+      return;
+    }
+    try {
+      const { skillName, acceptedPermissions } = req.body;
+      if (!skillName || typeof skillName !== 'string') {
+        res.status(400).json({ error: '"skillName" is required and must be a string' });
+        return;
+      }
+      if (!Array.isArray(acceptedPermissions)) {
+        res.status(400).json({ error: '"acceptedPermissions" must be an array of strings' });
+        return;
+      }
+      const result = await skillInstaller.install(skillName, acceptedPermissions);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Uninstall a marketplace skill */
+  app.post('/api/skills/uninstall', async (req, res) => {
+    if (!skillInstaller) {
+      res.status(503).json({ error: 'Skill installer not configured' });
+      return;
+    }
+    try {
+      const { skillName } = req.body;
+      if (!skillName || typeof skillName !== 'string') {
+        res.status(400).json({ error: '"skillName" is required and must be a string' });
+        return;
+      }
+      const result = await skillInstaller.uninstall(skillName);
+      res.json(result);
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
