@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { Brain, type ModelTier } from './brain.js';
 import { Router, Intent } from './router.js';
 import { DockerManager } from './docker-manager.js';
@@ -29,6 +30,7 @@ import type { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
 import { handleCommand, isCommand } from './commands.js';
 import { getThinkingPromptModifier, getVerbosePromptModifier, type ThinkLevel, type VerboseLevel } from './thinking.js';
+import type { ApprovalManager } from './approval-manager.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
@@ -54,6 +56,7 @@ interface DaemonConfig {
   channelManager?: ChannelManager;
   userSessionManager?: UserSessionManager;
   memoryExtractionQueue?: Queue;
+  approvalManager?: ApprovalManager;
   intervalMs: number;
 }
 
@@ -118,6 +121,11 @@ export class Daemon {
   /** Expose heartbeat runner for external consumers (API) */
   get heartbeatRunner(): HeartbeatRunner | undefined {
     return this.config.heartbeatRunner;
+  }
+
+  /** Expose approval manager for external consumers (API, WS) */
+  get approvalManager(): ApprovalManager | undefined {
+    return this.config.approvalManager;
   }
 
   /** Get current Nexus config (from ConfigManager or defaults) */
@@ -966,10 +974,13 @@ export class Daemon {
       const effectiveTier = userModelTier || baseTier;
       const effectiveMaxTurns = complexity >= 4 ? Math.max(maxTurns, 20) : maxTurns;
 
+      const nexusConfig = this.getNexusConfig();
+      const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
+
       const agent = new AgentLoop({
         brain: this.config.brain,
         toolRegistry: this.config.toolRegistry,
-        nexusConfig: this.getNexusConfig(),
+        nexusConfig,
         maxTurns: effectiveMaxTurns,
         maxTokens: parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
         timeoutMs: parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
@@ -978,6 +989,9 @@ export class Daemon {
         onAction: this.buildActionCallback(intent.from, intent.source),
         thinkLevel: userThinkLevel,
         verboseLevel: userVerboseLevel,
+        approvalManager: this.config.approvalManager,
+        approvalPolicy,
+        sessionId: randomUUID(),
       });
 
       // For complex tasks (4-5), prepend autonomous guidance context
@@ -2052,6 +2066,16 @@ ${task}`;
         }
       },
     });
+
+    // Mark destructive tools for human-in-the-loop approval
+    const destructiveTools = ['shell']; // Shell can run rm, kill, etc.
+    for (const toolName of destructiveTools) {
+      const tool = toolRegistry.get(toolName);
+      if (tool) {
+        tool.requiresApproval = true;
+        logger.info(`Marked tool "${toolName}" as requiresApproval`);
+      }
+    }
   }
 
   /** Write response to WhatsApp — uses pending channel if available, otherwise pushes to outbox.
@@ -2335,10 +2359,13 @@ ${task}`;
       }
     } catch { /* memory service might be down */ }
 
+    const subNexusConfig = this.getNexusConfig();
+    const subApprovalPolicy = subNexusConfig?.approval?.policy ?? 'destructive';
+
     const agent = new AgentLoop({
       brain: this.config.brain,
       toolRegistry: scopedRegistry,
-      nexusConfig: this.getNexusConfig(), // Include config for retry settings
+      nexusConfig: subNexusConfig,
       maxTurns: config.maxTurns,
       maxTokens: 300_000,
       timeoutMs: 600_000,
@@ -2346,6 +2373,9 @@ ${task}`;
       systemPromptOverride: systemPrompt,
       contextPrefix: contextPrefix || undefined,
       // No onAction — subagents deliver only the final result, not step-by-step
+      approvalManager: this.config.approvalManager,
+      approvalPolicy: subApprovalPolicy,
+      sessionId: randomUUID(),
     });
 
     // Record the user message in history

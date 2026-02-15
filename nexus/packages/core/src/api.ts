@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import type { Server } from 'http';
 import Redis from 'ioredis';
@@ -58,7 +59,7 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
-export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager }: ApiDeps) {
+export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager }: ApiDeps) {
   const app = express();
   app.use(express.json());
 
@@ -626,6 +627,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     const nexusConfig = daemon.getNexusConfig();
     const agentDefaults = nexusConfig?.agent;
 
+    const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
+
     const agent = new AgentLoop({
       brain,
       toolRegistry,
@@ -636,6 +639,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       tier: agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet',
       maxDepth: parseInt(process.env.AGENT_MAX_DEPTH || '3'),
       stream: true,
+      approvalManager,
+      approvalPolicy,
+      sessionId: randomUUID(),
     });
 
     agent.on('event', sendEvent);
