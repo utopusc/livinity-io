@@ -351,14 +351,14 @@ Conversation:`;
     });
 
     // Save last chat ID for heartbeat delivery
-    if (msg.channel === 'telegram' || msg.channel === 'discord' || msg.channel === 'slack') {
+    if (['telegram', 'discord', 'slack', 'matrix'].includes(msg.channel)) {
       await redis.set(`nexus:${msg.channel}:last_chat_id`, msg.chatId);
     }
 
     // Add to daemon inbox for processing
     daemon.addToInbox(
       msg.text,
-      msg.channel, // 'telegram', 'discord', 'slack', etc.
+      msg.channel, // 'telegram', 'discord', 'slack', 'matrix', etc.
       undefined,
       { chatId: msg.chatId, replyToMessageId: msg.replyToMessageId },
       msg.chatId, // Use chatId as 'from' for response routing

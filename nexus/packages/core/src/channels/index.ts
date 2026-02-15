@@ -23,6 +23,7 @@ export class ChannelManager {
     this.providers.set('telegram', new TelegramProvider());
     this.providers.set('discord', new DiscordProvider());
     this.providers.set('slack', new SlackProvider());
+    this.providers.set('matrix', new MatrixProvider());
   }
 
   /**
