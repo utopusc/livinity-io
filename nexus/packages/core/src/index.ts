@@ -20,7 +20,7 @@ import { SessionManager } from './session-manager.js';
 import { HeartbeatRunner } from './heartbeat-runner.js';
 import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
-import { createApiServer, setupWebSocket } from './api.js';
+import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
 
@@ -283,8 +283,8 @@ Conversation:`;
     logger.info(`API server on http://${apiHost}:${apiPort}`);
   });
 
-  // Attach WebSocket server for streaming
-  setupWebSocket(httpServer, brain, toolRegistry);
+  // Attach JSON-RPC 2.0 WebSocket gateway for streaming
+  const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis });
 
   // Event-driven inbox processing using Redis BLPOP (no polling overhead)
   const inboxRedis = redis.duplicate(); // Separate connection for blocking operations
@@ -322,6 +322,7 @@ Conversation:`;
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    wsGateway.stop();
     heartbeatRunner.stop();
     await memoryExtractionWorker.close();
     await memoryExtractionQueue.close();
