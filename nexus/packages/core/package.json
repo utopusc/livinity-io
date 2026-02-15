@@ -20,7 +20,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.74.0",
     "@google/generative-ai": "^0.21.0",
     "@line/bot-sdk": "^9.0.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
@@ -29,22 +29,22 @@
     "discord.js": "^14.0.0",
     "dockerode": "^4.0.0",
     "dotenv": "^16.4.0",
+    "express": "^4.21.0",
     "grammy": "^1.0.0",
     "ioredis": "^5.4.0",
     "js-yaml": "^4.1.0",
-    "pg": "^8.13.0",
     "node-cron": "^3.0.0",
+    "pg": "^8.13.0",
     "winston": "^3.17.0",
-    "ws": "^8.18.0",
-    "express": "^4.21.0"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.0",
     "@types/express": "^5.0.0",
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^22.0.0",
-    "@types/ws": "^8.5.0",
     "@types/pg": "^8.0.0",
+    "@types/ws": "^8.5.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0"
   }
