@@ -6,22 +6,22 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v1.5 — Claude Migration & AI Platform
-**Current focus:** Phase 3 — Hybrid Memory + Channel Expansion
+**Current focus:** Phase 4 — WebSocket Gateway + Human-in-the-Loop
 
 ## Current Position
 
 Milestone: v1.5 (Claude Migration & AI Platform)
-Phase: 3 of 5 (Hybrid Memory + Channel Expansion) -- COMPLETE
-Plan: 5 of 5 in Phase 3 (all complete)
-Status: Phase 3 complete -- ready for Phase 4
-Last activity: 2026-02-15 — Completed v1.5-03-05-PLAN.md (Slack/Matrix Settings UI & Response Routing)
+Phase: 4 of 5 (WebSocket Gateway + HITL)
+Plan: 3 of 4 complete
+Status: In progress
+Last activity: 2026-02-15 — Completed v1.5-04-03-PLAN.md
 
-Progress: [███████░░░] 70%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12 (v1.5)
+- Total plans completed: 13 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -32,6 +32,7 @@ Progress: [███████░░░] 70%
 | 1 - Provider Abstraction | 3/3 | — | — |
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
 | 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
+| 4 - WebSocket Gateway + HITL | 1/4 | ~3min | ~3min |
 
 *Updated after each plan completion*
 
@@ -66,6 +67,10 @@ v1.5 decisions:
 - [Phase3]: Memory /context endpoint with 2000 token budget, best-effort 2s timeout injection into agent prompts
 - [Phase3]: CHAN-05 response routing uses per-request closures (not instance state) — race-condition free
 - [Phase3]: tRPC integration routes expanded to 4 channels (telegram, discord, slack, matrix)
+- [Phase4]: Manual HS256 JWT verification using Node crypto (no jsonwebtoken dependency)
+- [Phase4]: noServer mode WebSocket with custom upgrade auth (proper HTTP 401 for rejected clients)
+- [Phase4]: Max 5 concurrent WS sessions per client
+- [Phase4]: Cancellation via status flag (AgentLoop lacks native abort)
 
 ### Pending Todos
 
@@ -78,5 +83,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-03-05-PLAN.md (Phase 3 fully complete)
+Stopped at: Completed v1.5-04-01-PLAN.md
 Resume file: None
