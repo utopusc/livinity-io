@@ -7,6 +7,7 @@ const APPROVAL_KEY_PREFIX = 'nexus:approval:';
 const APPROVAL_CHANNEL = 'nexus:notify:approval';
 const APPROVAL_RESPONSE_PREFIX = 'nexus:approval:response:';
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const AUDIT_KEY = 'nexus:approval:audit';
 
 export class ApprovalManager {
   constructor(private redis: Redis) {}
@@ -164,5 +165,37 @@ export class ApprovalManager {
 
     // Keep for 24h after resolution (for audit trail)
     await this.redis.set(key, JSON.stringify(request), 'EX', 86400);
+
+    // Log to audit trail
+    await this.logAudit(request);
+  }
+
+  /** Log an approval decision to the audit trail (Redis sorted set, scored by timestamp) */
+  async logAudit(request: ApprovalRequest): Promise<void> {
+    const entry = {
+      requestId: request.id,
+      sessionId: request.sessionId,
+      tool: request.tool,
+      params: request.params,
+      thought: request.thought,
+      status: request.status,
+      createdAt: request.createdAt,
+      resolvedAt: request.resolvedAt,
+      resolvedBy: request.resolvedBy,
+      resolvedFrom: request.resolvedFrom,
+    };
+    // Score by resolvedAt (or createdAt if not resolved)
+    const score = request.resolvedAt || request.createdAt;
+    await this.redis.zadd(AUDIT_KEY, score, JSON.stringify(entry));
+    // Trim to last 1000 entries
+    await this.redis.zremrangebyrank(AUDIT_KEY, 0, -1001);
+  }
+
+  /** Query audit trail. Returns entries in reverse chronological order. */
+  async getAuditTrail(opts?: { limit?: number; offset?: number }): Promise<unknown[]> {
+    const limit = opts?.limit ?? 50;
+    const offset = opts?.offset ?? 0;
+    const entries = await this.redis.zrevrange(AUDIT_KEY, offset, offset + limit - 1);
+    return entries.map(e => JSON.parse(e));
   }
 }

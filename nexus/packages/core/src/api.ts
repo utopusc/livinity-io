@@ -583,6 +583,84 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── Approval Management API ────────────────────────────────────
+
+  /** Get audit trail of approval decisions (must be before /:id route) */
+  app.get('/api/approvals/audit', async (req, res) => {
+    if (!approvalManager) {
+      res.status(503).json({ error: 'Approval system not configured' });
+      return;
+    }
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const trail = await approvalManager.getAuditTrail({ limit, offset });
+      res.json({ audit: trail });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** List pending approval requests */
+  app.get('/api/approvals', async (_req, res) => {
+    if (!approvalManager) {
+      res.status(503).json({ error: 'Approval system not configured' });
+      return;
+    }
+    try {
+      const pending = await approvalManager.listPending();
+      res.json({ approvals: pending });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get a specific approval request */
+  app.get('/api/approvals/:id', async (req, res) => {
+    if (!approvalManager) {
+      res.status(503).json({ error: 'Approval system not configured' });
+      return;
+    }
+    try {
+      const request = await approvalManager.getRequest(req.params.id);
+      if (!request) {
+        res.status(404).json({ error: 'Approval request not found' });
+        return;
+      }
+      res.json(request);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Resolve (approve/deny) an approval request */
+  app.post('/api/approvals/:id/resolve', async (req, res) => {
+    if (!approvalManager) {
+      res.status(503).json({ error: 'Approval system not configured' });
+      return;
+    }
+    try {
+      const { decision } = req.body;
+      if (decision !== 'approve' && decision !== 'deny') {
+        res.status(400).json({ error: '"decision" must be "approve" or "deny"' });
+        return;
+      }
+      const resolved = await approvalManager.resolve({
+        requestId: req.params.id,
+        decision,
+        respondedBy: req.headers['x-user-id'] as string || 'api',
+        respondedFrom: 'http-api',
+      });
+      if (!resolved) {
+        res.status(404).json({ error: 'Approval request not found or already resolved' });
+        return;
+      }
+      res.json({ ok: true, decision });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {

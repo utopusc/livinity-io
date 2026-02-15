@@ -405,6 +405,9 @@ export class WsGateway {
       case 'system.ping':
         this.handleSystemPing(client, msg);
         break;
+      case 'approval.resolve':
+        this.handleApprovalResolve(client, msg);
+        break;
       case 'notify.subscribe':
         this.handleNotifySubscribe(client, msg);
         break;
@@ -629,6 +632,50 @@ export class WsGateway {
     this.sendResult(client.ws, msg.id, {
       pong: true,
       timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * approval.resolve: Resolve a pending tool approval request.
+   * params: { requestId: string, decision: 'approve' | 'deny' }
+   */
+  private async handleApprovalResolve(client: ClientState, msg: JsonRpcRequest): Promise<void> {
+    const params = msg.params || {};
+    const requestId = params.requestId as string;
+    const decision = params.decision as string;
+
+    if (!requestId || typeof requestId !== 'string') {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, 'Missing required param: requestId (string)');
+      return;
+    }
+
+    if (decision !== 'approve' && decision !== 'deny') {
+      this.sendError(client.ws, msg.id, RPC_INVALID_PARAMS, '"decision" must be "approve" or "deny"');
+      return;
+    }
+
+    const approvalManager = this.deps.daemon.approvalManager;
+    if (!approvalManager) {
+      this.sendError(client.ws, msg.id, RPC_INTERNAL_ERROR, 'Approval system not configured');
+      return;
+    }
+
+    const resolved = await approvalManager.resolve({
+      requestId,
+      decision,
+      respondedBy: client.id,
+      respondedFrom: 'websocket',
+    });
+
+    if (!resolved) {
+      this.sendError(client.ws, msg.id, RPC_SESSION_NOT_FOUND, 'Approval request not found or already resolved');
+      return;
+    }
+
+    this.sendResult(client.ws, msg.id, {
+      ok: true,
+      requestId,
+      decision,
     });
   }
 
