@@ -71,9 +71,12 @@ export class Daemon {
   private running = false;
   private cycleCount = 0;
   private inbox: InboxItem[] = [];
-  /** Current WhatsApp JID for progress_report tool (set during inbox processing) */
+  /** Current WhatsApp JID for progress_report tool (set during inbox processing).
+   *  CHAN-05: This is tool-level context only, NOT used for response routing. */
   private currentWhatsAppJid: string | undefined;
-  /** Current channel context for tools like cron (telegram, discord, whatsapp) */
+  /** Current channel context for tools like cron (telegram, discord, slack, matrix, whatsapp).
+   *  CHAN-05: This is tool-level context only, NOT used for response routing.
+   *  Response routing uses per-request InboxItem (source, from) passed through closures. */
   private currentChannelContext: { source: string; chatId: string; params?: Record<string, any> } | undefined;
   /** Count of action feed messages sent during current inbox item processing */
   private actionMessageCount = 0;
@@ -409,7 +412,13 @@ export class Daemon {
     }
   }
 
-  /** Process a single inbox item immediately (for real-time messaging) */
+  /** Process a single inbox item immediately (for real-time messaging).
+   *
+   *  CHAN-05: Response routing (sendChannelResponse, buildActionCallback) uses per-request
+   *  closure context from the InboxItem, NOT instance state. The instance properties below
+   *  (currentWhatsAppJid, currentChannelContext) are only used by tools (cron, progress_report)
+   *  that need to know the "current" context at tool execution time. These are NOT used for
+   *  response routing and are safe for sequential processing within a single item. */
   private async processInboxItem(item: InboxItem): Promise<void> {
     try {
       // Track current WhatsApp JID for progress_report tool
@@ -2099,7 +2108,11 @@ ${task}`;
   }
 
   /** Send response via channel (Telegram, Discord, Slack, Matrix).
-   *  Uses the ChannelManager to route messages to the appropriate platform. */
+   *  Uses the ChannelManager to route messages to the appropriate platform.
+   *
+   *  CHAN-05: Response routing uses per-request context (source, chatId from InboxItem)
+   *  to prevent race conditions when multiple channels send concurrent messages.
+   *  Do NOT replace item.source/item.from with instance state (this.currentChannelContext, etc.). */
   private async sendChannelResponse(item: InboxItem, text: string) {
     // Skip if not a channel source or no chatId
     const channelSources = ['telegram', 'discord', 'slack', 'matrix'] as const;
@@ -2198,7 +2211,11 @@ ${task}`;
     }
   }
 
-  /** Build an onAction callback that sends live action updates to the appropriate channel */
+  /** Build an onAction callback that sends live action updates to the appropriate channel.
+   *
+   *  CHAN-05: Uses per-request closure context (chatId, source parameters) for routing,
+   *  not instance state. Each inbox item creates its own callback with its own routing context.
+   *  Do NOT replace these parameters with this.currentChannelContext or similar instance state. */
   private buildActionCallback(chatId?: string, source?: Intent['source']) {
     if (!chatId) return undefined;
     return (action: {
