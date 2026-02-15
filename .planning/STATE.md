@@ -2,48 +2,34 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-08)
+See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
-**Current milestone:** v1.3 — Browser App
+**Current milestone:** v1.5 — Claude Migration & AI Platform
 **Current focus:** Defining requirements
 
 ## Current Position
 
-Milestone: v1.3 (Browser App)
-Phase: v1.3-03-proxy-anti-detection (1 of 1 plans complete)
-Plan: 03-01-PLAN.md completed
-Status: Phase complete
-Last activity: 2026-02-08 — Completed v1.3-03-01-PLAN.md (Proxy Anti-Detection)
-
-Progress: ████░░░░░░ 4/10 plans (40%)
+Milestone: v1.5 (Claude Migration & AI Platform)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-15 — Milestone v1.5 started
 
 ## Accumulated Context
 
 ### Decisions
 
-v1.3 decisions:
-- [Milestone]: Browser published as App Store app (not hardcoded into UI)
-- [Milestone]: Access via subdomain (browser.domain.com) — no iframe/window embedding in LivOS UI
-- [Milestone]: Playwright MCP for AI browser automation
-- [Milestone]: SOCKS5/HTTP proxy support for privacy
-- [Milestone]: Custom Docker image extending linuxserver/chromium
-- [Tech]: Gallery hooks (post-start/pre-stop) for MCP registration
-- [Tech]: Anti-detection flags (disable-blink-features, disable-infobars)
-- [Tech]: Persistent sessions via Docker volume mapping
-- [v1.3-01-01]: Selkies web viewer on port 3000 (not KasmVNC on 6901)
-- [v1.3-01-01]: Health checks monitor Selkies availability with 30s interval
-- [v1.3-01-01]: Removed deprecated docker-compose version: line for modern compatibility
-- [v1.3-01-02]: Port 3000 used for Selkies web viewer (was 6901 for KasmVNC)
-- [v1.3-01-02]: Subdomain 'browser' configured for browser.domain.com access
-- [v1.3-01-02]: commonPorts map entry ensures correct port detection when docker-compose.yml has no explicit ports/expose directives
-- [v1.3-02-01]: Sleep 3 for CDP readiness instead of explicit curl check (MCP client has 30s timeout)
-- [v1.3-02-01]: --remote-debugging-address=0.0.0.0 required for docker exec CDP access
-- [v1.3-02-01]: Include name and description fields in MCP config for McpServerConfig compliance
-- [v1.3-03-01]: Remove hardcoded CHROME_CLI, build dynamically at runtime via init script
-- [v1.3-03-01]: Use s6-overlay /run/s6/container_environment/ for runtime environment variable setting
-- [v1.3-03-01]: PROXY_URL empty by default, user-configurable at install time via environmentOverrides
-- [v1.3-03-01]: DNS leak prevention for SOCKS5 via --host-resolver-rules
+v1.5 decisions:
+- [Milestone]: Replace Gemini with Claude subscription-based auth (Yol A: wrap `claude setup-token` CLI)
+- [Milestone]: Multi-provider AI support (Claude primary, OpenAI/Gemini optional fallback)
+- [Milestone]: OpenClaw-inspired features integrated with LivOS security model
+- [Milestone]: install.sh auto-installs Claude Code CLI
+- [Milestone]: LivOS UI one-click Claude auth flow
+- [Milestone]: Keep localhost-only Docker isolation and JWT security approach
+- [Tech]: Tier mapping: flash→haiku, sonnet→sonnet, opus→opus
+- [Tech]: Brain class rewrite from @google/genai to @anthropic-ai/sdk
+- [Tech]: Auth via subscription token from `claude setup-token` (not API key)
 
 ### Pending Todos
 
@@ -55,6 +41,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-08
-Stopped at: Completed v1.3-03-01-PLAN.md (Proxy Anti-Detection)
+Last session: 2026-02-15
+Stopped at: Starting v1.5 milestone — research phase
 Resume file: None

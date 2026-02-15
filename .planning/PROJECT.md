@@ -37,19 +37,32 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Mobile responsiveness with touch targets and blur optimization — v1.1
 - ✓ AI chat with conversation sidebar, tool calls, MCP panel — v1.1
 
-### Active (v1.3 — Browser App)
+### Validated (v1.3 — Browser App)
 
-**Goal:** Add a persistent Docker-based Chromium browser to LivOS App Store with KasmVNC web viewer, Playwright MCP for AI automation, and SOCKS5/HTTP proxy support.
+- ✓ Custom Docker image (linuxserver/chromium + Node.js + Playwright MCP) — v1.3
+- ✓ Access via subdomain (browser.domain.com) — v1.3
+- ✓ Persistent browser sessions that survive container restarts — v1.3
+- ✓ Playwright MCP auto-registration for AI browser control — v1.3
+- ✓ SOCKS5/HTTP proxy configuration for privacy/geo-unblocking — v1.3
+- ✓ Anti-detection flags to prevent automation fingerprinting — v1.3
+- ✓ App Store integration (gallery manifest + builtin featured listing) — v1.3
+- ✓ Crash recovery with stale lock file cleanup — v1.3
+
+### Active (v1.5 — Claude Migration & AI Platform)
+
+**Goal:** Replace Gemini AI backend with Claude subscription-based auth, integrate OpenClaw-inspired features (multi-provider, hybrid memory, skill marketplace, expanded channels), and add one-click Claude auth flow in the LivOS UI.
 
 **Target features:**
-- [ ] Custom Docker image (linuxserver/chromium + Node.js + Playwright MCP)
-- [ ] Access via subdomain (browser.domain.com) — no LivOS UI embedding needed
-- [ ] Persistent browser sessions that survive container restarts
-- [ ] Playwright MCP auto-registration for AI browser control
-- [ ] SOCKS5/HTTP proxy configuration for privacy/geo-unblocking
-- [ ] Anti-detection flags to prevent automation fingerprinting
-- [ ] App Store integration (gallery manifest + builtin featured listing)
-- [ ] Crash recovery with stale lock file cleanup
+- [ ] Claude Code CLI auto-install via install.sh
+- [ ] One-click Claude subscription auth in LivOS UI (wrap `claude setup-token`)
+- [ ] Brain class rewrite: @google/genai → @anthropic-ai/sdk with subscription token
+- [ ] Multi-provider AI support (Claude primary, OpenAI/Gemini fallback)
+- [ ] Hybrid memory system (session + long-term + vector + graph)
+- [ ] Skill marketplace with community skill discovery and install
+- [ ] Enhanced channel system (WhatsApp, Telegram, Discord, Slack, Matrix, Web, API, CLI)
+- [ ] Agent capabilities: sub-agents, parallel execution, human-in-the-loop
+- [ ] OpenClaw-inspired gateway pattern for WebSocket RPC communication
+- [ ] Security: localhost-only services, Docker isolation, JWT auth preserved
 
 ### Out of Scope
 
@@ -103,4 +116,4 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 | Playwright MCP via hooks | Auto-register/deregister on app lifecycle | — Pending |
 
 ---
-*Last updated: 2026-02-08 — v1.3 milestone (Browser App)*
+*Last updated: 2026-02-15 — v1.5 milestone (Claude Migration & AI Platform)*
