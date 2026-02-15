@@ -285,12 +285,18 @@ export class ClaudeProvider implements AIProvider {
     try {
       const { stdout } = await execFileAsync('claude', ['auth', 'status'], { timeout: 10000 });
       const output = stdout.toString();
-      // Parse output — typically shows "Authenticated as <email>" or similar
-      if (/authenticated|logged.?in|active/i.test(output)) {
-        authenticated = true;
-        const emailMatch = output.match(/[\w.+-]+@[\w.-]+\.\w+/);
-        if (emailMatch) user = emailMatch[0];
+      // CLI v2 returns JSON: {"loggedIn":true/false,"authMethod":"...","apiProvider":"..."}
+      try {
+        const status = JSON.parse(output);
+        authenticated = status.loggedIn === true;
+      } catch {
+        // Fallback: regex for older CLI versions
+        if (/authenticated|logged.?in|active/i.test(output)) {
+          authenticated = true;
+        }
       }
+      const emailMatch = output.match(/[\w.+-]+@[\w.-]+\.\w+/);
+      if (emailMatch) user = emailMatch[0];
     } catch {
       // auth status command failed — not authenticated
     }
@@ -323,7 +329,7 @@ export class ClaudeProvider implements AIProvider {
     }
 
     return new Promise((resolve) => {
-      const proc = spawn('claude', ['login'], {
+      const proc = spawn('claude', ['auth', 'login'], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, BROWSER: 'echo' }, // Prevent auto-opening browser, just print the URL
         timeout: 300_000, // 5 minute timeout
