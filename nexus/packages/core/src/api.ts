@@ -10,6 +10,8 @@ import { Brain } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
 import type { AgentEvent } from './agent.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
+import { ClaudeProvider } from './providers/claude.js';
 import type { McpConfigManager } from './mcp-config-manager.js';
 import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
@@ -80,6 +82,37 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
   // ── API Key Authentication (all /api/* routes below require auth) ──
   app.use('/api', requireApiKey);
+
+  // ── Claude CLI Status & Login ────────────────────────────────
+  app.get('/api/claude-cli/status', async (_req, res) => {
+    try {
+      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!claudeProvider || typeof claudeProvider.getCliStatus !== 'function') {
+        res.json({ installed: false, authenticated: false, authMethod: 'api-key' });
+        return;
+      }
+      const status = await claudeProvider.getCliStatus();
+      const authMethod = await claudeProvider.getAuthMethod();
+      res.json({ ...status, authMethod });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Start Claude CLI OAuth login — returns a URL the user opens in browser */
+  app.post('/api/claude-cli/login', async (_req, res) => {
+    try {
+      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!claudeProvider || typeof claudeProvider.startLogin !== 'function') {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+      const result = await claudeProvider.startLogin();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
 
   // ── App Management Routes ─────────────────────────────────────
   const appManager = new AppManager(redis);
@@ -896,20 +929,31 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-    const agent = new AgentLoop({
+    // Check if we should use SDK subscription mode
+    const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+    const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
+    const useSdk = authMethod === 'sdk-subscription';
+
+    const agentConfig = {
       brain,
       toolRegistry,
       nexusConfig,
       maxTurns: Math.min(max_turns || agentDefaults?.maxTurns || parseInt(process.env.AGENT_MAX_TURNS || '30'), 100),
       maxTokens: agentDefaults?.maxTokens || parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
       timeoutMs: agentDefaults?.timeoutMs || parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
-      tier: agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet',
+      tier: (agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
       maxDepth: parseInt(process.env.AGENT_MAX_DEPTH || '3'),
       stream: true,
       approvalManager,
-      approvalPolicy,
+      approvalPolicy: approvalPolicy as 'always' | 'destructive' | 'never',
       sessionId: randomUUID(),
-    });
+    };
+
+    const agent = useSdk
+      ? new SdkAgentRunner(agentConfig)
+      : new AgentLoop(agentConfig);
+
+    logger.info('SSE: using agent mode', { mode: useSdk ? 'sdk-subscription' : 'api-key' });
 
     agent.on('event', sendEvent);
 

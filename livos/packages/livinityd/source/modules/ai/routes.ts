@@ -174,6 +174,74 @@ export default router({
 			}
 		}),
 
+	// ── Claude CLI / SDK Auth ─────────────────────────────────
+
+	/** Check Claude CLI installation and auth status (for SDK subscription mode) */
+	getClaudeCliStatus: privateProcedure.query(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/claude-cli/status`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				throw new Error(`Nexus API error: ${response.status}`)
+			}
+			return (await response.json()) as {
+				installed: boolean
+				authenticated: boolean
+				user?: string
+				authMethod: 'api-key' | 'sdk-subscription'
+			}
+		} catch (error) {
+			ctx.livinityd.logger.error('Failed to get Claude CLI status', error)
+			return {installed: false, authenticated: false, authMethod: 'api-key' as const}
+		}
+	}),
+
+	/** Start Claude CLI OAuth login — returns URL user opens in browser to authenticate */
+	startClaudeLogin: privateProcedure.mutation(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/claude-cli/login`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+			})
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: errorData.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return (await response.json()) as {
+				url?: string
+				error?: string
+				alreadyAuthenticated?: boolean
+			}
+		} catch (error) {
+			if (error instanceof TRPCError) throw error
+			ctx.livinityd.logger.error('Failed to start Claude login', error)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(error) || 'Failed to start Claude login',
+			})
+		}
+	}),
+
+	/** Set Claude auth method (api-key or sdk-subscription) */
+	setClaudeAuthMethod: privateProcedure
+		.input(z.object({method: z.enum(['api-key', 'sdk-subscription'])}))
+		.mutation(async ({ctx, input}) => {
+			const redis = ctx.livinityd.ai.redis
+			await redis.set('nexus:config:claude_auth_method', input.method)
+			await redis.publish('livos:config:updated', 'claude_auth_method')
+			ctx.livinityd.logger.log(`Claude auth method set to ${input.method} via Settings UI`)
+			return {success: true}
+		}),
+
 	// ── Nexus Config ─────────────────────────────────────────
 
 	/** Get Nexus AI configuration from backend */

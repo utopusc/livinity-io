@@ -7,6 +7,8 @@ import { ShellExecutor } from './shell.js';
 import { Scheduler } from './scheduler.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
+import { ClaudeProvider } from './providers/claude.js';
 import { SkillLoader } from './skill-loader.js';
 import { SubagentManager } from './subagent-manager.js';
 import { ScheduleManager } from './schedule-manager.js';
@@ -977,22 +979,35 @@ export class Daemon {
       const nexusConfig = this.getNexusConfig();
       const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-      const agent = new AgentLoop({
+      // Check if we should use SDK subscription mode
+      const claudeProvider = this.config.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
+      const useSdk = authMethod === 'sdk-subscription';
+
+      const agentConfig = {
         brain: this.config.brain,
         toolRegistry: this.config.toolRegistry,
         nexusConfig,
         maxTurns: effectiveMaxTurns,
         maxTokens: parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
         timeoutMs: parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
-        tier: effectiveTier,
+        tier: effectiveTier as 'flash' | 'haiku' | 'sonnet' | 'opus',
         maxDepth: parseInt(process.env.AGENT_MAX_DEPTH || '3'),
         onAction: this.buildActionCallback(intent.from, intent.source),
         thinkLevel: userThinkLevel,
         verboseLevel: userVerboseLevel,
         approvalManager: this.config.approvalManager,
-        approvalPolicy,
+        approvalPolicy: approvalPolicy as 'always' | 'destructive' | 'never',
         sessionId: randomUUID(),
-      });
+      };
+
+      const agent = useSdk
+        ? new SdkAgentRunner(agentConfig)
+        : new AgentLoop(agentConfig);
+
+      if (useSdk) {
+        logger.info('Daemon: using SDK subscription mode for task');
+      }
 
       // For complex tasks (4-5), prepend autonomous guidance context
       let agentTask = task;
