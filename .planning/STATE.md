@@ -12,16 +12,16 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 Milestone: v1.5 (Claude Migration & AI Platform)
 Phase: 3 of 5 (Hybrid Memory + Channel Expansion)
-Plan: 3 of 4 in Phase 3
+Plan: 01 of 5 in Phase 3 complete
 Status: In progress
-Last activity: 2026-02-15 — Completed v1.5-03-03-PLAN.md (Slack Channel Provider)
+Last activity: 2026-02-15 — Completed v1.5-03-01-PLAN.md (Memory Extraction, Dedup, Time-Decay)
 
 Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9 (v1.5)
+- Total plans completed: 7 (v1.5)
 - Average duration: —
 - Total execution time: —
 
@@ -31,7 +31,7 @@ Progress: [██████░░░░] 60%
 |-------|-------|-------|----------|
 | 1 - Provider Abstraction | 3/3 | — | — |
 | 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
-| 3 - Hybrid Memory + Channel Expansion | 3/4 | — | ~4min |
+| 3 - Hybrid Memory + Channel Expansion | 2/5 | — | ~5min |
 
 *Updated after each plan completion*
 
@@ -60,6 +60,8 @@ v1.5 decisions:
 - [Phase3]: SlackProvider uses @slack/bolt Socket Mode (no public URL required)
 - [Phase3]: ChannelId forward-extended with 'slack' + 'matrix' to avoid second type change
 - [Phase3]: ChannelConfig extended with appToken, homeserverUrl, roomId for Slack/Matrix
+- [Phase3]: Memory dedup threshold 0.92, time-decay 30-day half-life, 70/30 relevance/recency weighting
+- [Phase3]: Memory extraction uses flash tier, max 5 memories per conversation, fire-and-forget via BullMQ
 
 ### Pending Todos
 
@@ -73,5 +75,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed v1.5-03-03-PLAN.md (Slack Channel Provider)
+Stopped at: Completed v1.5-03-01-PLAN.md (Memory Extraction, Dedup, Time-Decay)
 Resume file: None
