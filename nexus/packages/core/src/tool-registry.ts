@@ -141,6 +141,12 @@ export class ToolRegistry {
     });
   }
 
+  /** Check if a specific tool requires approval */
+  requiresApproval(toolName: string): boolean {
+    const tool = this.tools.get(toolName);
+    return tool?.requiresApproval === true;
+  }
+
   /** Number of registered tools */
   get size(): number {
     return this.tools.size;
