@@ -872,6 +872,41 @@ export class Daemon {
         task = `## Recent Conversation History\n${intent.params.__history}\n\n## Current Task\n${task}`;
       }
 
+      // Fetch relevant memory context for this conversation (best-effort, 2s timeout)
+      let memoryContext = '';
+      try {
+        const memoryFetchWithTimeout = Promise.race([
+          fetch('http://localhost:3300/context', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': process.env.LIV_API_KEY || '',
+            },
+            body: JSON.stringify({
+              userId: intent.from || 'default',
+              query: task.slice(0, 500),
+              tokenBudget: 2000,
+              limit: 20,
+            }),
+          }),
+          new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+        ]);
+        const memRes = await memoryFetchWithTimeout;
+        if (memRes.ok) {
+          const memData = await memRes.json() as { context: string; memoriesUsed: number };
+          if (memData.context && memData.memoriesUsed > 0) {
+            memoryContext = memData.context;
+            logger.debug('Memory context injected', { memoriesUsed: memData.memoriesUsed });
+          }
+        }
+      } catch {
+        // Memory service might be down or timed out — continue without context
+      }
+
+      if (memoryContext) {
+        task = `${memoryContext}\n${task}`;
+      }
+
       // Complexity assessment — quick flash call to determine routing
       let complexity = 3; // default to moderate
       try {
@@ -2255,6 +2290,33 @@ ${task}`;
     if (previousState) {
       contextPrefix += `## Previous State\n${previousState}\n\n`;
     }
+
+    // Fetch relevant memory context for subagent (best-effort, 2s timeout, smaller budget)
+    try {
+      const memoryFetchWithTimeout = Promise.race([
+        fetch('http://localhost:3300/context', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': process.env.LIV_API_KEY || '',
+          },
+          body: JSON.stringify({
+            userId: 'default',
+            query: task.slice(0, 500),
+            tokenBudget: 1000,
+            limit: 10,
+          }),
+        }),
+        new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+      ]);
+      const memRes = await memoryFetchWithTimeout;
+      if (memRes.ok) {
+        const memData = await memRes.json() as { context: string; memoriesUsed: number };
+        if (memData.context && memData.memoriesUsed > 0) {
+          contextPrefix += `${memData.context}\n\n`;
+        }
+      }
+    } catch { /* memory service might be down */ }
 
     const agent = new AgentLoop({
       brain: this.config.brain,
