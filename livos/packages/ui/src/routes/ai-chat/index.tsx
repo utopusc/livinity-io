@@ -16,6 +16,7 @@ import {
 	IconPuzzle,
 	IconCheck,
 	IconPlayerStop,
+	IconTerminal2,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -144,7 +145,7 @@ function useElapsed(active: boolean) {
 	return elapsed
 }
 
-/** Live step-by-step indicator — human-readable descriptions, like Claude Code */
+/** Live progress indicator: descriptions + terminal stream while running, gone when done */
 function StatusIndicator({conversationId, isLoading}: {conversationId: string; isLoading: boolean}) {
 	const statusQuery = trpcReact.ai.getChatStatus.useQuery(
 		{conversationId},
@@ -154,52 +155,91 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 		},
 	)
 	const elapsed = useElapsed(isLoading)
-
-	if (!isLoading) return null
+	const terminalRef = useRef<HTMLDivElement>(null)
 
 	const steps: string[] = (statusQuery.data as any)?.steps ?? []
+	const commands: string[] = (statusQuery.data as any)?.commands ?? []
 	const activeTool: string | undefined = (statusQuery.data as any)?.tool
 	const isExecuting = !!activeTool
 
-	// Show last 8 steps
-	const visibleSteps = steps.slice(-8)
+	// Auto-scroll terminal to bottom when new commands arrive
+	useEffect(() => {
+		if (terminalRef.current) {
+			terminalRef.current.scrollTop = terminalRef.current.scrollHeight
+		}
+	}, [commands.length])
+
+	if (!isLoading) return null
+
+	const visibleSteps = steps.slice(-6)
 
 	return (
-		<div className='rounded-radius-md border border-border-default bg-surface-base px-4 py-3'>
-			<div className='space-y-1.5'>
-				{/* Completed steps */}
+		<div className='rounded-radius-md border border-border-default bg-surface-base overflow-hidden'>
+			{/* Descriptions */}
+			<div className='px-4 py-3 space-y-2'>
+				{/* Thinking state */}
+				{(!isExecuting || steps.length === 0) && (
+					<div className='flex items-start gap-2.5 text-body-sm text-text-secondary'>
+						<IconLoader2 size={14} className='mt-0.5 flex-shrink-0 animate-spin text-violet-400' />
+						<span>Thinking through the best approach...</span>
+						<span className='ml-auto flex-shrink-0 text-caption text-text-tertiary'>{elapsed}s</span>
+					</div>
+				)}
+
+				{/* Step descriptions */}
 				{visibleSteps.map((step, i) => {
 					const isCurrent = i === visibleSteps.length - 1 && isExecuting
 					return (
 						<div
 							key={i}
-							className={cn(
-								'flex items-center gap-2.5 text-caption',
-								isCurrent ? 'text-text-primary' : 'text-text-tertiary',
+							className={cn('flex items-start gap-2.5 text-body-sm leading-relaxed',
+								isCurrent ? 'text-text-primary' : 'text-text-tertiary'
 							)}
 						>
 							{isCurrent ? (
-								<IconLoader2 size={12} className='flex-shrink-0 animate-spin text-violet-400' />
+								<IconLoader2 size={14} className='mt-0.5 flex-shrink-0 animate-spin text-violet-400' />
 							) : (
-								<IconCheck size={12} className='flex-shrink-0 text-green-500' />
+								<IconCheck size={14} className='mt-0.5 flex-shrink-0 text-green-500' />
 							)}
-							<span className={isCurrent ? 'text-text-primary' : 'text-text-tertiary'}>{step}</span>
+							<span className='flex-1'>{step}</span>
 							{isCurrent && (
-								<span className='ml-auto flex-shrink-0 text-caption-sm text-text-tertiary'>{elapsed}s</span>
+								<span className='ml-2 flex-shrink-0 text-caption text-text-tertiary'>{elapsed}s</span>
 							)}
 						</div>
 					)
 				})}
-
-				{/* Thinking indicator when no tool is active */}
-				{(!isExecuting || steps.length === 0) && (
-					<div className='flex items-center gap-2.5 text-caption text-text-secondary'>
-						<IconLoader2 size={12} className='flex-shrink-0 animate-spin text-violet-400' />
-						<span>Düşünüyor...</span>
-						<span className='ml-auto text-caption-sm text-text-tertiary'>{elapsed}s</span>
-					</div>
-				)}
 			</div>
+
+			{/* Terminal — only visible when there are commands */}
+			{commands.length > 0 && (
+				<div className='border-t border-border-default bg-[#0d0d0d]'>
+					<div className='flex items-center gap-2 border-b border-white/5 px-3 py-1.5'>
+						<IconTerminal2 size={12} className='text-text-tertiary' />
+						<span className='text-caption-sm text-text-tertiary'>Running</span>
+						<span className='ml-auto flex items-center gap-1 text-caption-sm text-green-500'>
+							<span className='inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500' />
+							live
+						</span>
+					</div>
+					<div
+						ref={terminalRef}
+						className='max-h-28 overflow-y-auto px-3 py-2 font-mono text-caption'
+					>
+						{commands.map((cmd, i) => {
+							const isLast = i === commands.length - 1
+							return (
+								<div key={i} className={cn('flex items-center gap-2', isLast && isExecuting ? 'text-green-400' : 'text-text-tertiary')}>
+									<span className={isLast && isExecuting ? 'text-green-600' : 'text-text-tertiary/50'}>›</span>
+									<span className='truncate'>{cmd}</span>
+									{isLast && isExecuting && (
+										<span className='ml-0.5 animate-pulse text-green-400'>▌</span>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -243,7 +283,6 @@ function ConversationSidebar({
 				</button>
 			</div>
 
-			{/* View switcher */}
 			<div className='flex border-b border-border-default'>
 				<button
 					onClick={() => onViewChange('chat')}
@@ -274,7 +313,6 @@ function ConversationSidebar({
 				</button>
 			</div>
 
-			{/* Conversation list */}
 			{activeView === 'chat' && (
 				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
 					{conversations.length === 0 && (
@@ -325,7 +363,6 @@ export default function AiChat() {
 	const [sidebarOpen, setSidebarOpen] = useState(false)
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLTextAreaElement>(null)
-	// Use a request ID to prevent stale responses from old requests being shown
 	const activeRequestRef = useRef<number>(0)
 	const isMobile = useIsMobile()
 
@@ -351,16 +388,15 @@ export default function AiChat() {
 		messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
 	}, [messages, isLoading])
 
-	/** Stop the currently running agent — invalidates the active request ID */
 	const handleStop = useCallback(() => {
-		activeRequestRef.current = 0 // invalidate any in-flight request
+		activeRequestRef.current = 0
 		setIsLoading(false)
 		setMessages((prev) => [
 			...prev,
 			{
 				id: `msg_${Date.now()}_stopped`,
 				role: 'assistant',
-				content: '_Durduruldu._',
+				content: '_Stopped._',
 				timestamp: Date.now(),
 			},
 		])
@@ -371,7 +407,6 @@ export default function AiChat() {
 		const text = input.trim()
 		if (!text || isLoading) return
 
-		// Assign a unique ID to this request
 		const reqId = Date.now()
 		activeRequestRef.current = reqId
 
@@ -396,7 +431,6 @@ export default function AiChat() {
 				message: text,
 			})
 
-			// Ignore result if this request was superseded (stopped or new message sent)
 			if (activeRequestRef.current !== reqId) return
 
 			setMessages((prev) => [
@@ -548,7 +582,6 @@ export default function AiChat() {
 						)}
 					</div>
 
-					{/* Input */}
 					<div className='flex-shrink-0 border-t border-border-default bg-surface-base p-3 md:p-4'>
 						<div className='mx-auto flex max-w-3xl items-end gap-3'>
 							<textarea
@@ -556,7 +589,7 @@ export default function AiChat() {
 								value={input}
 								onChange={(e) => setInput(e.target.value)}
 								onKeyDown={handleKeyDown}
-								placeholder={isLoading ? 'Düşünüyor...' : 'Liv\'e mesaj yaz...'}
+								placeholder={isLoading ? 'Working...' : 'Message Liv...'}
 								disabled={isLoading}
 								rows={1}
 								className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:opacity-50'
@@ -571,7 +604,7 @@ export default function AiChat() {
 								<button
 									onClick={handleStop}
 									className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
-									title='Durdur'
+									title='Stop'
 								>
 									<IconPlayerStop size={18} />
 								</button>
