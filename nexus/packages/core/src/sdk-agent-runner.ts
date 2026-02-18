@@ -234,8 +234,7 @@ Rules:
           allowedTools,     // Auto-approve all Nexus MCP tools
           maxTurns,
           model: tierToModel(tier),
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
+          permissionMode: 'acceptEdits',
           persistSession: false,
         },
       });
