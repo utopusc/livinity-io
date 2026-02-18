@@ -17,6 +17,8 @@ import { Redis } from 'ioredis';
 import { logger } from './logger.js';
 import { verifyApiKey, verifyJwt } from './auth.js';
 import { AgentLoop } from './agent.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
+import { ClaudeProvider } from './providers/claude.js';
 import type { AgentEvent, AgentResult } from './agent.js';
 import type { Brain } from './brain.js';
 import type { ToolRegistry } from './tool-registry.js';
@@ -87,7 +89,7 @@ export interface NotificationPayload {
 
 interface WsSession {
   id: string;
-  agent: AgentLoop;
+  agent: AgentLoop | SdkAgentRunner;
   status: 'running' | 'complete' | 'cancelled' | 'error';
   startedAt: number;
   task: string;
@@ -439,7 +441,7 @@ export class WsGateway {
    * agent.run: Start a new agent session.
    * params: { task: string, sessionId?: string, maxTurns?: number, tier?: string }
    */
-  private handleAgentRun(client: ClientState, msg: JsonRpcRequest): void {
+  private async handleAgentRun(client: ClientState, msg: JsonRpcRequest): Promise<void> {
     const params = msg.params || {};
     const task = params.task as string;
 
@@ -469,7 +471,12 @@ export class WsGateway {
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-    const agent = new AgentLoop({
+    // Check if we should use SDK subscription mode
+    const claudeProvider = this.deps.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+    const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
+    const useSdk = authMethod === 'sdk-subscription';
+
+    const agentConfig = {
       brain: this.deps.brain,
       toolRegistry: this.deps.toolRegistry,
       nexusConfig,
@@ -479,13 +486,21 @@ export class WsGateway {
       ),
       maxTokens: agentDefaults?.maxTokens || 200000,
       timeoutMs: agentDefaults?.timeoutMs || 600000,
-      tier: (tier as any) || agentDefaults?.tier || 'sonnet',
+      tier: ((tier as any) || agentDefaults?.tier || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
       maxDepth: agentDefaults?.maxDepth || 3,
       stream: true,
       approvalManager: this.deps.daemon.approvalManager,
       approvalPolicy,
       sessionId,
-    });
+    };
+
+    const agent = useSdk
+      ? new SdkAgentRunner(agentConfig)
+      : new AgentLoop(agentConfig);
+
+    if (useSdk) {
+      logger.info('[WsGateway] using SDK subscription mode');
+    }
 
     const session: WsSession = {
       id: sessionId,
