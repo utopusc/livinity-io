@@ -10,6 +10,7 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
+import { request } from 'node:http';
 import { z } from 'zod';
 import {
   query,
@@ -99,6 +100,20 @@ function buildSdkTools(
   });
 }
 
+/** Check if Chrome CDP is reachable at the given HTTP URL */
+function isCdpReachable(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const parsed = new URL(url.replace(/^ws:\/\//, 'http://'));
+    const req = request(
+      { hostname: parsed.hostname, port: parsed.port || 9223, path: '/json/version', method: 'GET', timeout: 2000 },
+      (res) => resolve(res.statusCode === 200),
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.end();
+  });
+}
+
 /** Model tier to SDK model string */
 function tierToModel(tier?: string): string | undefined {
   switch (tier) {
@@ -159,19 +174,24 @@ export class SdkAgentRunner extends EventEmitter {
       'nexus-tools': mcpServer,
     };
 
-    // Add Chrome DevTools MCP when a Chromium container is likely running
+    // Add Chrome DevTools MCP if Chrome CDP is reachable
     // Connects via socat proxy on port 9223 (Chrome CDP on 127.0.0.1:9222 inside container)
-    // --browserUrl uses HTTP CDP endpoint (not WebSocket)
     const browserUrl = (nexusConfig?.browser?.cdpUrl ?? 'ws://127.0.0.1:9223')
       .replace(/^ws:\/\//, 'http://');
     if (nexusConfig?.browser?.enabled !== false) {
-      mcpServers['chrome-devtools'] = {
-        type: 'stdio' as const,
-        command: 'chrome-devtools-mcp',
-        args: ['--browserUrl', browserUrl, '--no-usage-statistics'],
-      };
-      // Auto-approve ALL chrome-devtools tools via wildcard
-      allowedTools.push('mcp__chrome-devtools__*');
+      const cdpReachable = await isCdpReachable(browserUrl).catch(() => false);
+      if (cdpReachable) {
+        mcpServers['chrome-devtools'] = {
+          type: 'stdio' as const,
+          command: 'chrome-devtools-mcp',
+          args: ['--browserUrl', browserUrl, '--no-usage-statistics'],
+        };
+        // Auto-approve ALL chrome-devtools tools via wildcard
+        allowedTools.push('mcp__chrome-devtools__*');
+        logger.info('SdkAgentRunner: Chrome DevTools MCP enabled', { browserUrl });
+      } else {
+        logger.info('SdkAgentRunner: Chrome CDP not reachable, skipping Chrome DevTools MCP', { browserUrl });
+      }
     }
 
     // Build system prompt
@@ -215,6 +235,7 @@ Rules:
           maxTurns,
           model: tierToModel(tier),
           permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
           persistSession: false,
         },
       });
