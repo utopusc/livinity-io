@@ -2377,21 +2377,33 @@ ${task}`;
     const subNexusConfig = this.getNexusConfig();
     const subApprovalPolicy = subNexusConfig?.approval?.policy ?? 'destructive';
 
-    const agent = new AgentLoop({
+    // Use SDK subscription mode if authenticated, same as main agent
+    const claudeProvider = this.config.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+    const subAuthMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
+    const useSubSdk = subAuthMethod === 'sdk-subscription';
+
+    const agentConfig = {
       brain: this.config.brain,
       toolRegistry: scopedRegistry,
       nexusConfig: subNexusConfig,
       maxTurns: config.maxTurns,
       maxTokens: 300_000,
       timeoutMs: 600_000,
-      tier: config.tier,
+      tier: config.tier as 'flash' | 'haiku' | 'sonnet' | 'opus',
       systemPromptOverride: systemPrompt,
       contextPrefix: contextPrefix || undefined,
-      // No onAction — subagents deliver only the final result, not step-by-step
       approvalManager: this.config.approvalManager,
-      approvalPolicy: subApprovalPolicy,
+      approvalPolicy: subApprovalPolicy as 'always' | 'destructive' | 'never',
       sessionId: randomUUID(),
-    });
+    };
+
+    const agent = useSubSdk
+      ? new SdkAgentRunner(agentConfig)
+      : new AgentLoop(agentConfig);
+
+    if (useSubSdk) {
+      logger.info('executeSubagentTask: using SDK subscription mode', { subagentId });
+    }
 
     // Record the user message in history
     await this.config.subagentManager.addMessage(subagentId, {
