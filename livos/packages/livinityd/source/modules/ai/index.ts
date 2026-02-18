@@ -56,6 +56,30 @@ function formatToolName(name: string): string {
 	return match ? match[1] : name
 }
 
+/** Extract the most meaningful param value for display */
+function briefArgs(params: Record<string, unknown>): string {
+	if (!params || Object.keys(params).length === 0) return ''
+	const priorityKeys = ['command', 'path', 'file_path', 'url', 'query', 'key', 'action', 'task', 'id', 'name', 'message', 'text', 'function']
+	for (const k of priorityKeys) {
+		if (params[k] !== undefined) {
+			const val = String(params[k]).trim().replace(/\s+/g, ' ')
+			return val.length > 60 ? val.slice(0, 57) + '...' : val
+		}
+	}
+	const firstVal = Object.values(params)[0]
+	if (firstVal !== undefined) {
+		const val = String(firstVal).trim().replace(/\s+/g, ' ')
+		return val.length > 60 ? val.slice(0, 57) + '...' : val
+	}
+	return ''
+}
+
+/** Format step for display: "toolName" or "toolName(brief args)" */
+function formatStep(name: string, params: Record<string, unknown>): string {
+	const args = briefArgs(params)
+	return args ? `${name}(${args})` : name
+}
+
 /** Extract error message with proper type narrowing */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error)
@@ -197,7 +221,7 @@ export default class AiModule {
 						this.chatStatus.set(conversationId, {
 							status: `Using ${toolName}...`,
 							tool: toolName,
-							steps: [...(prev?.steps ?? []), toolName],
+							steps: [...(prev?.steps ?? []), formatStep(toolName, event.data.params || {})],
 							turn: event.turn,
 						})
 						pendingToolCalls.set(`${event.turn}-${rawName}`, {

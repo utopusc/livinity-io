@@ -53,11 +53,11 @@ function formatToolName(name: string): string {
 	return match ? match[1] : name
 }
 
-/** Pick an icon based on tool name */
+/** Pick an icon based on tool base name */
 function ToolIcon({name, size = 12, className}: {name: string; size?: number; className?: string}) {
 	if (name.includes('screenshot') || name.includes('photo')) return <IconPhoto size={size} className={className} />
 	if (name.includes('shell') || name.includes('exec') || name.includes('bash')) return <IconTerminal2 size={size} className={className} />
-	if (name.includes('browse') || name.includes('navigate') || name.includes('url') || name.includes('web')) return <IconWorldWww size={size} className={className} />
+	if (name.includes('browse') || name.includes('navigate') || name.includes('url') || name.includes('web') || name.includes('page')) return <IconWorldWww size={size} className={className} />
 	if (name.includes('memory') || name.includes('redis') || name.includes('db')) return <IconDatabase size={size} className={className} />
 	return <IconTool size={size} className={className} />
 }
@@ -157,7 +157,7 @@ function useElapsed(active: boolean) {
 	return elapsed
 }
 
-/** Live step-by-step indicator — shows tool calls as they happen, like Claude Code */
+/** Live step-by-step indicator — shows tool calls like Claude Code: toolName(args) */
 function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: string; isLoading: boolean; onStop: () => void}) {
 	const statusQuery = trpcReact.ai.getChatStatus.useQuery(
 		{conversationId},
@@ -180,9 +180,12 @@ function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: s
 	return (
 		<div className='rounded-radius-md border border-border-default bg-surface-base px-4 py-3'>
 			<div className='space-y-1.5'>
-				{/* Completed + current steps */}
+				{/* Completed + current steps — format: baseName(args) */}
 				{visibleSteps.map((step, i) => {
 					const isCurrent = i === visibleSteps.length - 1 && isExecuting
+					const parenIdx = step.indexOf('(')
+					const baseName = parenIdx >= 0 ? step.slice(0, parenIdx) : step
+					const argsPart = parenIdx >= 0 ? step.slice(parenIdx) : ''
 					return (
 						<div
 							key={i}
@@ -196,10 +199,13 @@ function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: s
 							) : (
 								<IconCheck size={12} className='flex-shrink-0 text-green-500' />
 							)}
-							<ToolIcon name={step} size={12} className={isCurrent ? 'text-violet-400' : 'text-text-tertiary'} />
-							<span className='font-mono'>{step}</span>
+							<ToolIcon name={baseName} size={12} className={isCurrent ? 'text-violet-400' : 'text-text-tertiary'} />
+							<span className='min-w-0 truncate font-mono'>
+								<span className={isCurrent ? 'text-violet-300' : 'text-text-secondary'}>{baseName}</span>
+								{argsPart && <span className='text-text-tertiary'>{argsPart}</span>}
+							</span>
 							{isCurrent && (
-								<span className='ml-auto text-caption-sm text-text-tertiary'>{elapsed}s</span>
+								<span className='ml-auto flex-shrink-0 text-caption-sm text-text-tertiary'>{elapsed}s</span>
 							)}
 						</div>
 					)
