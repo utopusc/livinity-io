@@ -8,7 +8,6 @@ import {
 	IconTool,
 	IconChevronDown,
 	IconChevronRight,
-	IconRobot,
 	IconUser,
 	IconBrain,
 	IconLoader2,
@@ -20,6 +19,7 @@ import {
 	IconWorldWww,
 	IconDatabase,
 	IconPhoto,
+	IconPlayerStop,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -136,8 +136,29 @@ function ChatMessage({message}: {message: Message}) {
 	)
 }
 
+/** Elapsed seconds counter */
+function useElapsed(active: boolean) {
+	const [elapsed, setElapsed] = useState(0)
+	const startRef = useRef(Date.now())
+
+	useEffect(() => {
+		if (!active) {
+			setElapsed(0)
+			startRef.current = Date.now()
+			return
+		}
+		startRef.current = Date.now()
+		const id = setInterval(() => {
+			setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
+		}, 1000)
+		return () => clearInterval(id)
+	}, [active])
+
+	return elapsed
+}
+
 /** Live step-by-step indicator — shows tool calls as they happen, like Claude Code */
-function StatusIndicator({conversationId, isLoading}: {conversationId: string; isLoading: boolean}) {
+function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: string; isLoading: boolean; onStop: () => void}) {
 	const statusQuery = trpcReact.ai.getChatStatus.useQuery(
 		{conversationId},
 		{
@@ -145,15 +166,16 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 			refetchInterval: isLoading ? 500 : false,
 		},
 	)
+	const elapsed = useElapsed(isLoading)
 
 	if (!isLoading) return null
 
 	const steps: string[] = (statusQuery.data as any)?.steps ?? []
 	const activeTool: string | undefined = (statusQuery.data as any)?.tool
-
-	// Last N steps to avoid overflow
-	const visibleSteps = steps.slice(-8)
 	const isExecuting = !!activeTool
+
+	// Show last 8 steps
+	const visibleSteps = steps.slice(-8)
 
 	return (
 		<div className='rounded-radius-md border border-border-default bg-surface-base px-4 py-3'>
@@ -176,6 +198,9 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 							)}
 							<ToolIcon name={step} size={12} className={isCurrent ? 'text-violet-400' : 'text-text-tertiary'} />
 							<span className='font-mono'>{step}</span>
+							{isCurrent && (
+								<span className='ml-auto text-caption-sm text-text-tertiary'>{elapsed}s</span>
+							)}
 						</div>
 					)
 				})}
@@ -186,9 +211,19 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 						<IconLoader2 size={12} className='flex-shrink-0 animate-spin text-violet-400' />
 						<IconBrain size={12} className='flex-shrink-0 text-violet-400' />
 						<span>Thinking...</span>
+						<span className='ml-auto text-caption-sm text-text-tertiary'>{elapsed}s</span>
 					</div>
 				)}
 			</div>
+
+			{/* Stop button */}
+			<button
+				onClick={onStop}
+				className='mt-3 flex w-full items-center justify-center gap-1.5 rounded-radius-sm border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-caption text-red-400 transition-colors hover:bg-red-500/20 hover:text-red-300'
+			>
+				<IconPlayerStop size={12} />
+				Stop
+			</button>
 		</div>
 	)
 }
@@ -263,7 +298,7 @@ function ConversationSidebar({
 				</button>
 			</div>
 
-			{/* Conversation list (only in chat view) */}
+			{/* Conversation list */}
 			{activeView === 'chat' && (
 				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
 					{conversations.length === 0 && (
@@ -298,7 +333,6 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{/* MCP / Skills view - sidebar filler */}
 			{(activeView === 'mcp' || activeView === 'skills') && (
 				<div className='flex-1' />
 			)}
@@ -315,11 +349,11 @@ export default function AiChat() {
 	const [sidebarOpen, setSidebarOpen] = useState(false)
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLTextAreaElement>(null)
+	const cancelledRef = useRef(false)
 	const isMobile = useIsMobile()
 
 	const activeConversationId = searchParams.get('conv') || `conv_${Date.now()}`
 
-	// Queries
 	const conversationsQuery = trpcReact.ai.listConversations.useQuery(undefined, {
 		refetchInterval: 10_000,
 	})
@@ -330,26 +364,40 @@ export default function AiChat() {
 	const sendMutation = trpcReact.ai.send.useMutation()
 	const deleteMutation = trpcReact.ai.deleteConversation.useMutation()
 
-	// Sync messages from query
 	useEffect(() => {
 		if (conversationQuery.data) {
 			setMessages(conversationQuery.data.messages)
 		}
 	}, [conversationQuery.data])
 
-	// Auto-scroll
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
 	}, [messages, isLoading])
+
+	/** Stop the currently running agent (client-side cancel) */
+	const handleStop = useCallback(() => {
+		cancelledRef.current = true
+		setIsLoading(false)
+		setMessages((prev) => [
+			...prev,
+			{
+				id: `msg_${Date.now()}_stopped`,
+				role: 'assistant',
+				content: '_Stopped._',
+				timestamp: Date.now(),
+			},
+		])
+		inputRef.current?.focus()
+	}, [])
 
 	const handleSend = useCallback(async () => {
 		const text = input.trim()
 		if (!text || isLoading) return
 
+		cancelledRef.current = false
 		setInput('')
 		setIsLoading(true)
 
-		// Add user message optimistically
 		const userMsg: Message = {
 			id: `msg_${Date.now()}_user`,
 			role: 'user',
@@ -358,7 +406,6 @@ export default function AiChat() {
 		}
 		setMessages((prev) => [...prev, userMsg])
 
-		// Ensure conversation ID is in URL
 		if (!searchParams.get('conv')) {
 			setSearchParams({conv: activeConversationId})
 		}
@@ -368,6 +415,9 @@ export default function AiChat() {
 				conversationId: activeConversationId,
 				message: text,
 			})
+
+			// Ignore result if user stopped
+			if (cancelledRef.current) return
 
 			setMessages((prev) => [
 				...prev,
@@ -381,6 +431,7 @@ export default function AiChat() {
 			])
 			conversationsQuery.refetch()
 		} catch (error: any) {
+			if (cancelledRef.current) return
 			setMessages((prev) => [
 				...prev,
 				{
@@ -391,7 +442,9 @@ export default function AiChat() {
 				},
 			])
 		} finally {
-			setIsLoading(false)
+			if (!cancelledRef.current) {
+				setIsLoading(false)
+			}
 			inputRef.current?.focus()
 		}
 	}, [input, isLoading, activeConversationId, searchParams, setSearchParams, sendMutation, conversationsQuery])
@@ -436,28 +489,18 @@ export default function AiChat() {
 
 	return (
 		<div className='flex h-full overflow-hidden'>
-			{/* Desktop sidebar - inline */}
-			{!isMobile && (
-				<ConversationSidebar {...sidebarProps} />
-			)}
+			{!isMobile && <ConversationSidebar {...sidebarProps} />}
 
-			{/* Mobile sidebar - drawer */}
 			{isMobile && (
 				<Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
 					<DrawerContent fullHeight withScroll>
-						<ConversationSidebar
-							{...sidebarProps}
-							className='w-full border-r-0 bg-transparent'
-						/>
+						<ConversationSidebar {...sidebarProps} className='w-full border-r-0 bg-transparent' />
 					</DrawerContent>
 				</Drawer>
 			)}
 
-			{/* Main content area */}
 			{activeView === 'chat' && (
-				/* Chat area — fixed header, scrollable messages, fixed input */
 				<div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
-					{/* Mobile header — sticky */}
 					{isMobile && (
 						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
 							<div className='flex items-center justify-between'>
@@ -478,7 +521,6 @@ export default function AiChat() {
 						</div>
 					)}
 
-					{/* Messages — only this section scrolls */}
 					<div className='flex-1 overflow-y-auto overscroll-contain p-3 md:p-6'>
 						{messages.length === 0 ? (
 							<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
@@ -516,14 +558,18 @@ export default function AiChat() {
 									<ChatMessage key={msg.id} message={msg} />
 								))}
 								{isLoading && (
-									<StatusIndicator conversationId={activeConversationId} isLoading={isLoading} />
+									<StatusIndicator
+										conversationId={activeConversationId}
+										isLoading={isLoading}
+										onStop={handleStop}
+									/>
 								)}
 								<div ref={messagesEndRef} />
 							</div>
 						)}
 					</div>
 
-					{/* Input — always pinned at bottom */}
+					{/* Input */}
 					<div className='flex-shrink-0 border-t border-border-default bg-surface-base p-3 md:p-4'>
 						<div className='mx-auto flex max-w-3xl items-end gap-3'>
 							<textarea
@@ -531,9 +577,10 @@ export default function AiChat() {
 								value={input}
 								onChange={(e) => setInput(e.target.value)}
 								onKeyDown={handleKeyDown}
-								placeholder='Message Liv...'
+								placeholder={isLoading ? 'AI is thinking...' : 'Message Liv...'}
+								disabled={isLoading}
 								rows={1}
-								className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
+								className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:opacity-50'
 								style={{maxHeight: '120px'}}
 								onInput={(e) => {
 									const target = e.target as HTMLTextAreaElement
@@ -541,41 +588,38 @@ export default function AiChat() {
 									target.style.height = Math.min(target.scrollHeight, 120) + 'px'
 								}}
 							/>
-							<button
-								onClick={handleSend}
-								disabled={!input.trim() || isLoading}
-								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
-							>
-								<IconSend size={18} />
-							</button>
+							{isLoading ? (
+								<button
+									onClick={handleStop}
+									className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
+									title='Stop'
+								>
+									<IconPlayerStop size={18} />
+								</button>
+							) : (
+								<button
+									onClick={handleSend}
+									disabled={!input.trim()}
+									className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
+								>
+									<IconSend size={18} />
+								</button>
+							)}
 						</div>
 					</div>
 				</div>
 			)}
+
 			{activeView === 'mcp' && (
-				/* MCP Panel */
 				<div className='flex-1 overflow-hidden'>
-					<Suspense
-						fallback={
-							<div className='flex h-full items-center justify-center'>
-								<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
-							</div>
-						}
-					>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<McpPanel />
 					</Suspense>
 				</div>
 			)}
 			{activeView === 'skills' && (
-				/* Skills Panel */
 				<div className='flex-1 overflow-hidden'>
-					<Suspense
-						fallback={
-							<div className='flex h-full items-center justify-center'>
-								<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
-							</div>
-						}
-					>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<SkillsPanel />
 					</Suspense>
 				</div>
