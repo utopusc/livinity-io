@@ -15,6 +15,11 @@ import {
 	IconPlug,
 	IconMenu2,
 	IconPuzzle,
+	IconCheck,
+	IconTerminal2,
+	IconWorldWww,
+	IconDatabase,
+	IconPhoto,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -42,8 +47,24 @@ type Message = {
 	timestamp: number
 }
 
+/** Strip mcp__servername__ prefix for display */
+function formatToolName(name: string): string {
+	const match = name.match(/^mcp__[^_]+__(.+)$/)
+	return match ? match[1] : name
+}
+
+/** Pick an icon based on tool name */
+function ToolIcon({name, size = 12, className}: {name: string; size?: number; className?: string}) {
+	if (name.includes('screenshot') || name.includes('photo')) return <IconPhoto size={size} className={className} />
+	if (name.includes('shell') || name.includes('exec') || name.includes('bash')) return <IconTerminal2 size={size} className={className} />
+	if (name.includes('browse') || name.includes('navigate') || name.includes('url') || name.includes('web')) return <IconWorldWww size={size} className={className} />
+	if (name.includes('memory') || name.includes('redis') || name.includes('db')) return <IconDatabase size={size} className={className} />
+	return <IconTool size={size} className={className} />
+}
+
 function ToolCallDisplay({toolCall}: {toolCall: ToolCall}) {
 	const [expanded, setExpanded] = useState(false)
+	const short = formatToolName(toolCall.tool)
 
 	return (
 		<div className='my-1 rounded-radius-sm border border-border-default bg-surface-base text-caption'>
@@ -52,8 +73,8 @@ function ToolCallDisplay({toolCall}: {toolCall: ToolCall}) {
 				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-1'
 			>
 				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-				<IconTool size={14} className='text-blue-400' />
-				<span className='font-mono font-medium text-blue-400'>{toolCall.tool}</span>
+				<ToolIcon name={short} size={14} className='text-blue-400' />
+				<span className='font-mono font-medium text-blue-400'>{short}</span>
 				<span className={cn('ml-auto text-caption-sm', toolCall.result.success ? 'text-green-400' : 'text-red-400')}>
 					{toolCall.result.success ? 'OK' : 'FAIL'}
 				</span>
@@ -115,34 +136,59 @@ function ChatMessage({message}: {message: Message}) {
 	)
 }
 
-/** Dynamic status indicator that shows what Liv is doing */
+/** Live step-by-step indicator — shows tool calls as they happen, like Claude Code */
 function StatusIndicator({conversationId, isLoading}: {conversationId: string; isLoading: boolean}) {
 	const statusQuery = trpcReact.ai.getChatStatus.useQuery(
 		{conversationId},
 		{
 			enabled: isLoading,
-			refetchInterval: isLoading ? 600 : false,
+			refetchInterval: isLoading ? 500 : false,
 		},
 	)
 
 	if (!isLoading) return null
 
-	const statusText = statusQuery.data?.status || 'Connecting to Liv...'
-	const toolName = statusQuery.data?.tool
+	const steps: string[] = (statusQuery.data as any)?.steps ?? []
+	const activeTool: string | undefined = (statusQuery.data as any)?.tool
 
-	// Map tool names to friendly descriptions
-	const getStatusIcon = () => {
-		if (!toolName) return <IconLoader2 size={14} className='animate-spin text-violet-400' />
-		if (toolName.includes('memory')) return <IconBrain size={14} className='animate-pulse text-purple-400' />
-		if (toolName.includes('shell')) return <IconTool size={14} className='animate-pulse text-orange-400' />
-		if (toolName.includes('docker')) return <IconTool size={14} className='animate-pulse text-blue-400' />
-		return <IconTool size={14} className='animate-pulse text-blue-400' />
-	}
+	// Last N steps to avoid overflow
+	const visibleSteps = steps.slice(-8)
+	const isExecuting = !!activeTool
 
 	return (
-		<div className='flex items-center gap-2.5 rounded-radius-md bg-surface-base px-4 py-2.5 text-body'>
-			{getStatusIcon()}
-			<span className='text-text-secondary'>{statusText}</span>
+		<div className='rounded-radius-md border border-border-default bg-surface-base px-4 py-3'>
+			<div className='space-y-1.5'>
+				{/* Completed + current steps */}
+				{visibleSteps.map((step, i) => {
+					const isCurrent = i === visibleSteps.length - 1 && isExecuting
+					return (
+						<div
+							key={i}
+							className={cn(
+								'flex items-center gap-2 text-caption',
+								isCurrent ? 'text-text-primary' : 'text-text-tertiary',
+							)}
+						>
+							{isCurrent ? (
+								<IconLoader2 size={12} className='flex-shrink-0 animate-spin text-violet-400' />
+							) : (
+								<IconCheck size={12} className='flex-shrink-0 text-green-500' />
+							)}
+							<ToolIcon name={step} size={12} className={isCurrent ? 'text-violet-400' : 'text-text-tertiary'} />
+							<span className='font-mono'>{step}</span>
+						</div>
+					)
+				})}
+
+				{/* Thinking indicator when no tool is active */}
+				{(!isExecuting || steps.length === 0) && (
+					<div className='flex items-center gap-2 text-caption text-text-secondary'>
+						<IconLoader2 size={12} className='flex-shrink-0 animate-spin text-violet-400' />
+						<IconBrain size={12} className='flex-shrink-0 text-violet-400' />
+						<span>Thinking...</span>
+					</div>
+				)}
+			</div>
 		</div>
 	)
 }
