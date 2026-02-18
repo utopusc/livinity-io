@@ -216,8 +216,7 @@ Rules:
           tools: [],        // Disable built-in Claude Code tools
           maxTurns,
           model: tierToModel(tier),
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
+          permissionMode: 'acceptEdits',
           persistSession: false,
         },
       });
