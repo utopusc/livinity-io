@@ -4,6 +4,8 @@ import { pathToFileURL } from 'url';
 import { logger } from './logger.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
+import { ClaudeProvider } from './providers/claude.js';
 import { scanSkillDirectory } from './skill-manifest.js';
 import type { Brain } from './brain.js';
 import type Redis from 'ioredis';
@@ -253,17 +255,26 @@ export class SkillLoader {
         if (tool) scopedRegistry.register(tool);
       }
 
-      const agent = new AgentLoop({
+      // Check if we should use SDK subscription mode
+      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
+      const useSdk = authMethod === 'sdk-subscription';
+
+      const agentConfig = {
         brain,
         toolRegistry: scopedRegistry,
         maxTurns: agentOpts.maxTurns || skill.meta.max_turns || 15,
         maxTokens: agentOpts.maxTokens || skill.meta.max_tokens || 100_000,
         timeoutMs: agentOpts.timeoutMs || skill.meta.timeout_ms || 300_000,
-        tier: agentOpts.tier || skill.meta.model_tier || 'sonnet',
+        tier: (agentOpts.tier || skill.meta.model_tier || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
         systemPromptOverride: agentOpts.systemPrompt,
         contextPrefix: agentOpts.contextPrefix,
         onAction,
-      });
+      };
+
+      const agent = useSdk
+        ? new SdkAgentRunner(agentConfig)
+        : new AgentLoop(agentConfig);
 
       return agent.run(agentOpts.task);
     };

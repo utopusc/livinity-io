@@ -5,54 +5,89 @@
  * spawns Claude Code CLI as a subprocess. The CLI handles its own OAuth auth
  * from `claude login`, so no API key is needed.
  *
- * Nexus tools are wrapped as SDK tool() definitions so Claude can call them.
+ * Nexus tools are exposed via createSdkMcpServer() so Claude can call them.
  */
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
-import { query, tool, type Tool as SdkTool } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
+import {
+  query,
+  tool,
+  createSdkMcpServer,
+  type SdkMcpToolDefinition,
+  type SDKMessage,
+  type SDKAssistantMessage,
+  type SDKResultSuccess,
+  type SDKResultError,
+  type SDKResultMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import type { ToolRegistry } from './tool-registry.js';
 import type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
 import type { ApprovalManager } from './approval-manager.js';
 import type { ToolPolicy } from './tool-registry.js';
 import { logger } from './logger.js';
 
-/** Map Nexus ToolRegistry tools to SDK tool() definitions */
-function wrapToolsForSdk(
+/** Convert our ToolParameter type string to a Zod type */
+function paramTypeToZod(type: string, description?: string, enumValues?: string[]): z.ZodTypeAny {
+  if (enumValues && enumValues.length > 0) {
+    return z.enum(enumValues as [string, ...string[]]).describe(description || '');
+  }
+
+  let field: z.ZodTypeAny;
+  switch (type) {
+    case 'number':
+    case 'integer':
+      field = z.number();
+      break;
+    case 'boolean':
+      field = z.boolean();
+      break;
+    case 'array':
+      field = z.array(z.any());
+      break;
+    case 'object':
+      field = z.record(z.string(), z.any());
+      break;
+    case 'string':
+    default:
+      field = z.string();
+      break;
+  }
+
+  if (description) field = field.describe(description);
+  return field;
+}
+
+/** Build SDK MCP tool definitions from Nexus ToolRegistry */
+function buildSdkTools(
   toolRegistry: ToolRegistry,
   toolPolicy?: ToolPolicy,
   approvalManager?: ApprovalManager,
   sessionId?: string,
   approvalPolicy?: 'always' | 'destructive' | 'never',
-): SdkTool[] {
+): SdkMcpToolDefinition<any>[] {
   const toolNames = toolRegistry.listFiltered(toolPolicy);
 
   return toolNames.map((name) => {
     const t = toolRegistry.get(name)!;
 
-    // Build JSON schema properties from our ToolParameter format
-    const properties: Record<string, unknown> = {};
-    const required: string[] = [];
+    // Build Zod raw shape from our ToolParameter definitions
+    const shape: Record<string, z.ZodTypeAny> = {};
     for (const p of t.parameters) {
-      const prop: Record<string, unknown> = {
-        type: p.type,
-        description: p.description,
-      };
-      if (p.enum) prop.enum = p.enum;
-      if (p.default !== undefined) prop.default = p.default;
-      properties[p.name] = prop;
-      if (p.required) required.push(p.name);
+      let field = paramTypeToZod(p.type, p.description, p.enum);
+      if (!p.required) {
+        field = field.optional();
+      }
+      shape[p.name] = field;
     }
 
-    return tool({
-      name: t.name,
-      description: t.description,
-      inputSchema: {
-        type: 'object' as const,
-        properties,
-        required,
-      },
-      async run(input: Record<string, unknown>) {
+    // Use tool() with proper 4-arg signature: (name, description, zodShape, handler)
+    return tool(
+      t.name,
+      t.description,
+      shape,
+      async (args: Record<string, unknown>) => {
         // Approval gate
         const policy = approvalPolicy ?? 'destructive';
         if (approvalManager && policy !== 'never') {
@@ -61,31 +96,40 @@ function wrapToolsForSdk(
             const request = await approvalManager.createRequest({
               sessionId: sessionId || 'unknown',
               tool: name,
-              params: input,
+              params: args,
               thought: 'SDK agent tool call',
             });
             const response = await approvalManager.waitForResponse(request.id);
             if (!response || response.decision === 'deny') {
-              return `Error: Tool execution denied.`;
+              return {
+                content: [{ type: 'text' as const, text: 'Error: Tool execution denied.' }],
+                isError: true,
+              };
             }
           }
         }
 
-        const result = await toolRegistry.execute(name, input);
-        return result.success ? result.output : `Error: ${result.error || result.output}`;
+        const result = await toolRegistry.execute(name, args);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: result.success ? result.output : `Error: ${result.error || result.output}`,
+          }],
+          isError: !result.success,
+        };
       },
-    });
+    );
   });
 }
 
 /** Model tier to SDK model string */
 function tierToModel(tier?: string): string | undefined {
   switch (tier) {
-    case 'opus': return 'opus';
-    case 'sonnet': return 'sonnet';
-    case 'haiku': return 'haiku';
-    case 'flash': return 'haiku';
-    default: return 'sonnet';
+    case 'opus': return 'claude-opus-4-6';
+    case 'sonnet': return 'claude-sonnet-4-5';
+    case 'haiku': return 'claude-haiku-4-5';
+    case 'flash': return 'claude-haiku-4-5';
+    default: return 'claude-sonnet-4-5';
   }
 }
 
@@ -118,14 +162,20 @@ export class SdkAgentRunner extends EventEmitter {
     const maxTurns = this.config.maxTurns ?? agentDefaults?.maxTurns ?? 30;
     const tier = this.config.tier ?? agentDefaults?.tier ?? 'sonnet';
 
-    // Wrap Nexus tools for the SDK
-    const sdkTools = wrapToolsForSdk(
+    // Build MCP tool definitions from Nexus ToolRegistry
+    const sdkTools = buildSdkTools(
       this.config.toolRegistry,
       toolPolicy,
       this.config.approvalManager,
       sessionId,
       this.config.approvalPolicy,
     );
+
+    // Create an SDK MCP server that hosts our Nexus tools
+    const mcpServer = createSdkMcpServer({
+      name: 'nexus-tools',
+      tools: sdkTools,
+    });
 
     // Build system prompt
     let systemPrompt = this.config.systemPromptOverride || `You are Nexus, an autonomous AI assistant. You manage a Linux server and interact with users via WhatsApp, Telegram, Discord, and a web UI.
@@ -154,16 +204,21 @@ Rules:
     const toolCalls: AgentResult['toolCalls'] = [];
     let answer = '';
     let turns = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
     try {
       const messages = query({
         prompt: task,
         options: {
           systemPrompt,
-          tools: sdkTools,
+          mcpServers: { 'nexus-tools': mcpServer },
+          tools: [],        // Disable built-in Claude Code tools
           maxTurns,
           model: tierToModel(tier),
-          permissionMode: 'acceptEdits',
+          permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
+          persistSession: false,
         },
       });
 
@@ -171,13 +226,10 @@ Rules:
         turns++;
 
         if (message.type === 'assistant') {
-          // Assistant message — may contain text and/or tool calls
-          const content = message.content;
-          if (typeof content === 'string' && content) {
-            this.emitEvent({ type: 'chunk', turn: turns, data: content });
-            answer = content;
-          } else if (Array.isArray(content)) {
-            for (const block of content) {
+          // Assistant message — extract text from BetaMessage.content
+          const betaMessage = (message as SDKAssistantMessage).message;
+          if (betaMessage && Array.isArray(betaMessage.content)) {
+            for (const block of betaMessage.content) {
               if (block.type === 'text' && block.text) {
                 this.emitEvent({ type: 'chunk', turn: turns, data: block.text });
                 answer = block.text;
@@ -187,7 +239,6 @@ Rules:
                   turn: turns,
                   data: { tool: block.name, params: block.input },
                 });
-                // Tool result will come in a subsequent message
               }
             }
           }
@@ -202,31 +253,21 @@ Rules:
               });
             } catch { /* callback errors don't break the loop */ }
           }
-        } else if (message.type === 'user') {
-          // Tool results come back as user messages
-          const content = message.content;
-          if (Array.isArray(content)) {
-            for (const block of content) {
-              if (block.type === 'tool_result') {
-                this.emitEvent({
-                  type: 'observation',
-                  turn: turns,
-                  data: {
-                    tool: block.tool_use_id,
-                    success: !block.is_error,
-                    output: typeof block.content === 'string'
-                      ? block.content.slice(0, 500)
-                      : JSON.stringify(block.content).slice(0, 500),
-                  },
-                });
-              }
-            }
-          }
         } else if (message.type === 'result') {
           // Final result from the SDK
-          answer = typeof message.content === 'string'
-            ? message.content
-            : (message.text || answer);
+          const resultMsg = message as SDKResultMessage;
+
+          if (resultMsg.subtype === 'success') {
+            const success = resultMsg as SDKResultSuccess;
+            answer = success.result || answer;
+            totalInputTokens = success.usage?.input_tokens ?? 0;
+            totalOutputTokens = success.usage?.output_tokens ?? 0;
+          } else {
+            // Error result
+            const errorResult = resultMsg as SDKResultError;
+            const errorText = errorResult.errors?.join('; ') || 'SDK execution error';
+            answer = answer || errorText;
+          }
 
           this.emitEvent({ type: 'final_answer', turn: turns, data: answer });
 
@@ -236,6 +277,7 @@ Rules:
             } catch { /* callback errors don't break the loop */ }
           }
         }
+        // Other message types (system, stream_event, tool_progress, etc.) are logged but not emitted
       }
 
       logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length });
@@ -244,8 +286,8 @@ Rules:
         success: true,
         answer: answer || 'Task completed (no text response).',
         turns,
-        totalInputTokens: 0, // SDK doesn't expose token counts
-        totalOutputTokens: 0,
+        totalInputTokens,
+        totalOutputTokens,
         toolCalls,
         stoppedReason: 'complete',
       };
