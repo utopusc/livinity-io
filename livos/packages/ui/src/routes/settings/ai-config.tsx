@@ -104,8 +104,6 @@ export default function AiConfigPage() {
 		setConfigMutation.mutate(updates)
 	}
 
-	const showCodeInput = loginUrl && !cliAuthenticated
-
 	return (
 		<SettingsPageLayout title='AI Configuration' description='Configure how LivOS connects to Claude and Gemini'>
 			<div className='max-w-lg space-y-8'>
@@ -175,6 +173,8 @@ export default function AiConfigPage() {
 													<TbAlertCircle className='h-4 w-4' />
 													Not authenticated
 												</div>
+
+												{/* Step 1: Open auth page */}
 												<Button
 													variant='primary'
 													size='sm'
@@ -184,12 +184,12 @@ export default function AiConfigPage() {
 													{startLoginMutation.isPending ? (
 														<>
 															<TbLoader2 className='h-4 w-4 animate-spin' />
-															Starting login...
+															Opening...
 														</>
 													) : (
 														<>
 															<TbExternalLink className='h-4 w-4' />
-															Sign in with Claude
+															{loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}
 														</>
 													)}
 												</Button>
@@ -198,13 +198,17 @@ export default function AiConfigPage() {
 														{startLoginMutation.error.message}
 													</p>
 												)}
-												{showCodeInput && (
-													<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
-														<p className='text-caption text-text-secondary'>
-															1. Complete login in the opened tab.
-															<br />
-															2. Copy the code you receive and paste it below:
-														</p>
+
+												{/* Step 2: ALWAYS show code input when not authenticated */}
+												<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
+													<p className='text-caption text-text-secondary'>
+														1. Click "Sign in with Claude" above to open the auth page.
+														<br />
+														2. Log in with your Claude account.
+														<br />
+														3. Copy the code you receive and paste it below:
+													</p>
+													{loginUrl && (
 														<a
 															href={loginUrl}
 															target='_blank'
@@ -214,38 +218,49 @@ export default function AiConfigPage() {
 															<TbExternalLink className='h-3.5 w-3.5' />
 															Re-open auth page
 														</a>
-														<div className='flex gap-2'>
-															<Input
-																placeholder='Paste auth code here...'
-																value={loginCode}
-																onValueChange={setLoginCode}
-																className='font-mono text-caption'
-															/>
-															<Button
-																variant='primary'
-																size='sm'
-																onClick={() => submitCodeMutation.mutate({code: loginCode})}
-																disabled={!loginCode.trim() || submitCodeMutation.isPending}
-															>
-																{submitCodeMutation.isPending ? (
-																	<TbLoader2 className='h-4 w-4 animate-spin' />
-																) : (
-																	'Submit'
-																)}
-															</Button>
-														</div>
-														{submitCodeMutation.isError && (
-															<p className='text-caption text-red-400'>
-																{submitCodeMutation.error.message}
-															</p>
-														)}
-														{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
-															<p className='text-caption text-red-400'>
-																{submitCodeMutation.data?.error || 'Code exchange failed'}
-															</p>
-														)}
+													)}
+													<div className='flex gap-2'>
+														<Input
+															placeholder='Paste auth code here...'
+															value={loginCode}
+															onValueChange={setLoginCode}
+															className='font-mono text-caption'
+														/>
+														<Button
+															variant='primary'
+															size='sm'
+															onClick={() => {
+																if (!loginUrl) {
+																	// If no OAuth flow started yet, start one first then submit
+																	startLoginMutation.mutate(undefined, {
+																		onSuccess: () => {
+																			submitCodeMutation.mutate({code: loginCode})
+																		},
+																	})
+																} else {
+																	submitCodeMutation.mutate({code: loginCode})
+																}
+															}}
+															disabled={!loginCode.trim() || submitCodeMutation.isPending}
+														>
+															{submitCodeMutation.isPending ? (
+																<TbLoader2 className='h-4 w-4 animate-spin' />
+															) : (
+																'Submit'
+															)}
+														</Button>
 													</div>
-												)}
+													{submitCodeMutation.isError && (
+														<p className='text-caption text-red-400'>
+															{submitCodeMutation.error.message}
+														</p>
+													)}
+													{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
+														<p className='text-caption text-red-400'>
+															{submitCodeMutation.data?.error || 'Code exchange failed'}
+														</p>
+													)}
+												</div>
 											</div>
 										)}
 									</div>
