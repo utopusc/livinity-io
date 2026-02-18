@@ -37,7 +37,7 @@ export class ConfigManager {
           logger.info('ConfigManager: loaded config from Redis');
         } else {
           logger.warn('ConfigManager: invalid stored config, using defaults', {
-            errors: validated.error.errors.slice(0, 3),
+            errors: validated.error.issues.slice(0, 3),
           });
         }
       }
