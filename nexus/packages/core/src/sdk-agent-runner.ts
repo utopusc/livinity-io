@@ -24,7 +24,6 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { ToolRegistry } from './tool-registry.js';
 import type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
-import type { ApprovalManager } from './approval-manager.js';
 import type { ToolPolicy } from './tool-registry.js';
 import { logger } from './logger.js';
 
@@ -63,9 +62,6 @@ function paramTypeToZod(type: string, description?: string, enumValues?: string[
 function buildSdkTools(
   toolRegistry: ToolRegistry,
   toolPolicy?: ToolPolicy,
-  approvalManager?: ApprovalManager,
-  sessionId?: string,
-  approvalPolicy?: 'always' | 'destructive' | 'never',
 ): SdkMcpToolDefinition<any>[] {
   const toolNames = toolRegistry.listFiltered(toolPolicy);
 
@@ -88,27 +84,8 @@ function buildSdkTools(
       t.description,
       shape,
       async (args: Record<string, unknown>) => {
-        // Approval gate
-        const policy = approvalPolicy ?? 'destructive';
-        if (approvalManager && policy !== 'never') {
-          const needsApproval = policy === 'always' || toolRegistry.requiresApproval(name);
-          if (needsApproval) {
-            const request = await approvalManager.createRequest({
-              sessionId: sessionId || 'unknown',
-              tool: name,
-              params: args,
-              thought: 'SDK agent tool call',
-            });
-            const response = await approvalManager.waitForResponse(request.id);
-            if (!response || response.decision === 'deny') {
-              return {
-                content: [{ type: 'text' as const, text: 'Error: Tool execution denied.' }],
-                isError: true,
-              };
-            }
-          }
-        }
-
+        // SDK mode: skip Nexus approval gate — Claude Code CLI handles permissions
+        // via permissionMode + allowedTools. No need for double approval.
         const result = await toolRegistry.execute(name, args);
         return {
           content: [{
@@ -166,9 +143,6 @@ export class SdkAgentRunner extends EventEmitter {
     const sdkTools = buildSdkTools(
       this.config.toolRegistry,
       toolPolicy,
-      this.config.approvalManager,
-      sessionId,
-      this.config.approvalPolicy,
     );
 
     // Create an SDK MCP server that hosts our Nexus tools
