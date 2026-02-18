@@ -177,6 +177,9 @@ export class SdkAgentRunner extends EventEmitter {
       tools: sdkTools,
     });
 
+    // Build allowedTools list so Claude Code auto-approves our MCP tools
+    const allowedTools = sdkTools.map((t: any) => `mcp__nexus-tools__${t.name}`);
+
     // Build system prompt
     let systemPrompt = this.config.systemPromptOverride || `You are Nexus, an autonomous AI assistant. You manage a Linux server and interact with users via WhatsApp, Telegram, Discord, and a web UI.
 
@@ -214,6 +217,7 @@ Rules:
           systemPrompt,
           mcpServers: { 'nexus-tools': mcpServer },
           tools: [],        // Disable built-in Claude Code tools
+          allowedTools,     // Auto-approve all Nexus MCP tools
           maxTurns,
           model: tierToModel(tier),
           permissionMode: 'acceptEdits',
