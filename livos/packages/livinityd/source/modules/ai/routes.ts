@@ -262,6 +262,35 @@ export default router({
 			}
 		}),
 
+	/** Log out from Claude (delete credentials) */
+	claudeLogout: privateProcedure.mutation(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/claude-cli/logout`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+			})
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: errorData.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return (await response.json()) as {success: boolean; error?: string}
+		} catch (error) {
+			if (error instanceof TRPCError) throw error
+			ctx.livinityd.logger.error('Failed to logout from Claude', error)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(error) || 'Failed to logout',
+			})
+		}
+	}),
+
 	/** Set Claude auth method (api-key or sdk-subscription) */
 	setClaudeAuthMethod: privateProcedure
 		.input(z.object({method: z.enum(['api-key', 'sdk-subscription'])}))

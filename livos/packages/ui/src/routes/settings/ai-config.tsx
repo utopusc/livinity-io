@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react'
-import {TbCheck, TbExternalLink, TbLoader2, TbAlertCircle, TbCircleCheck} from 'react-icons/tb'
+import {TbCheck, TbExternalLink, TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
@@ -75,10 +75,18 @@ export default function AiConfigPage() {
 	})
 
 	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
+		onSuccess: (data) => {
+			if (data.success) {
+				setLoginCode('')
+				setLoginUrl('')
+				utils.ai.getClaudeCliStatus.invalidate()
+			}
+		},
+	})
+
+	const logoutMutation = trpcReact.ai.claudeLogout.useMutation({
 		onSuccess: () => {
-			setLoginCode('')
-			// Poll for auth status update
-			setTimeout(() => utils.ai.getClaudeCliStatus.invalidate(), 2000)
+			utils.ai.getClaudeCliStatus.invalidate()
 		},
 	})
 
@@ -96,8 +104,6 @@ export default function AiConfigPage() {
 		setConfigMutation.mutate(updates)
 	}
 
-	const cliInstalled = cliStatusQ.data?.installed ?? false
-	const cliUser = cliStatusQ.data?.user
 	const showCodeInput = loginUrl && !cliAuthenticated
 
 	return (
@@ -127,22 +133,47 @@ export default function AiConfigPage() {
 								</p>
 
 								{authMethod === 'sdk-subscription' && (
-									<div className='mt-3 space-y-2'>
+									<div className='mt-3 space-y-3'>
 										{cliStatusQ.isLoading ? (
 											<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
 												<TbLoader2 className='h-4 w-4 animate-spin' />
-												Checking CLI status...
+												Checking status...
 											</div>
 										) : cliAuthenticated ? (
-											<div className='flex items-center gap-2 text-body-sm text-green-400'>
-												<TbCircleCheck className='h-4 w-4' />
-												Authenticated{cliUser ? ` as ${cliUser}` : ''}
+											<div className='space-y-3'>
+												<div className='flex items-center gap-2 text-body-sm text-green-400'>
+													<TbCircleCheck className='h-4 w-4' />
+													Authenticated{cliStatusQ.data?.user ? ` as ${cliStatusQ.data.user}` : ''}
+												</div>
+												<Button
+													variant='secondary'
+													size='sm'
+													onClick={() => logoutMutation.mutate()}
+													disabled={logoutMutation.isPending}
+												>
+													{logoutMutation.isPending ? (
+														<>
+															<TbLoader2 className='h-4 w-4 animate-spin' />
+															Signing out...
+														</>
+													) : (
+														<>
+															<TbLogout className='h-4 w-4' />
+															Sign Out
+														</>
+													)}
+												</Button>
+												{logoutMutation.isError && (
+													<p className='text-caption text-red-400'>
+														{logoutMutation.error.message}
+													</p>
+												)}
 											</div>
-										) : cliInstalled ? (
+										) : (
 											<div className='space-y-3'>
 												<div className='flex items-center gap-2 text-body-sm text-amber-400'>
 													<TbAlertCircle className='h-4 w-4' />
-													CLI installed but not authenticated
+													Not authenticated
 												</div>
 												<Button
 													variant='primary'
@@ -158,7 +189,7 @@ export default function AiConfigPage() {
 													) : (
 														<>
 															<TbExternalLink className='h-4 w-4' />
-															Authenticate with Claude
+															Sign in with Claude
 														</>
 													)}
 												</Button>
@@ -208,50 +239,12 @@ export default function AiConfigPage() {
 																{submitCodeMutation.error.message}
 															</p>
 														)}
-														{submitCodeMutation.isSuccess && (
-															<p className='text-caption text-green-400'>
-																Code submitted! Waiting for authentication...
+														{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
+															<p className='text-caption text-red-400'>
+																{submitCodeMutation.data?.error || 'Code exchange failed'}
 															</p>
 														)}
 													</div>
-												)}
-											</div>
-										) : (
-											<div className='space-y-3'>
-												<div className='flex items-center gap-2 text-body-sm text-red-400'>
-													<TbAlertCircle className='h-4 w-4' />
-													Claude CLI not installed
-												</div>
-												<div className='rounded-radius-sm bg-surface-2 p-3'>
-													<p className='text-caption text-text-secondary'>
-														Run on the server first:
-													</p>
-													<code className='mt-1 block font-mono text-caption text-text-primary'>
-														npm install -g @anthropic-ai/claude-code
-													</code>
-												</div>
-												<Button
-													variant='primary'
-													size='sm'
-													onClick={() => startLoginMutation.mutate()}
-													disabled={startLoginMutation.isPending}
-												>
-													{startLoginMutation.isPending ? (
-														<>
-															<TbLoader2 className='h-4 w-4 animate-spin' />
-															Checking...
-														</>
-													) : (
-														<>
-															<TbExternalLink className='h-4 w-4' />
-															Authenticate with Claude
-														</>
-													)}
-												</Button>
-												{startLoginMutation.isError && (
-													<p className='text-caption text-red-400'>
-														{startLoginMutation.error.message}
-													</p>
 												)}
 											</div>
 										)}
