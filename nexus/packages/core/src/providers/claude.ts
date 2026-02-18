@@ -15,8 +15,11 @@ import type {
   ToolUseBlock,
 } from './types.js';
 import { prepareForProvider } from './normalize.js';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { logger } from '../logger.js';
 
 const execFileAsync = promisify(execFile);
@@ -31,6 +34,17 @@ const CLAUDE_MODELS: Record<string, string> = {
 const REDIS_KEY = 'nexus:config:anthropic_api_key';
 const AUTH_METHOD_KEY = 'nexus:config:claude_auth_method';
 
+// OAuth PKCE constants (same as Claude Code CLI)
+const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
+const OAUTH_AUTHORIZE_URL = 'https://claude.ai/oauth/authorize';
+const OAUTH_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
+const OAUTH_SCOPES = 'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers';
+
+function base64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 export type ClaudeAuthMethod = 'api-key' | 'sdk-subscription';
 
 export class ClaudeProvider implements AIProvider {
@@ -42,8 +56,8 @@ export class ClaudeProvider implements AIProvider {
   private redis: Redis | null = null;
   private cachedApiKey: string = '';
   private cliStatusCache: { installed: boolean; authenticated: boolean; user?: string; checkedAt: number } | null = null;
-  /** Active login process (only one at a time) */
-  private loginProcess: { proc: ReturnType<typeof spawn>; url?: string; startedAt: number } | null = null;
+  /** Pending OAuth PKCE flow state */
+  private pendingOAuth: { codeVerifier: string; state: string; createdAt: number } | null = null;
 
   constructor(redis?: Redis) {
     this.redis = redis ?? null;
@@ -306,112 +320,147 @@ export class ClaudeProvider implements AIProvider {
   }
 
   /**
-   * Start `claude login` in the background and capture the OAuth URL.
-   * Returns the URL the user should open in their browser to authenticate.
-   * The login process runs in the background — once the user completes auth
-   * in the browser, the CLI stores credentials and exits.
+   * Start a custom PKCE OAuth flow. Generates code_verifier, code_challenge,
+   * and returns the authorize URL. The user opens this URL, authenticates,
+   * and gets a code which they submit via submitLoginCode().
    */
   async startLogin(): Promise<{ url?: string; error?: string; alreadyAuthenticated?: boolean }> {
     // Check if already authenticated
-    this.cliStatusCache = null; // bust cache
+    this.cliStatusCache = null;
     const status = await this.getCliStatus();
     if (status.authenticated) {
       return { alreadyAuthenticated: true };
     }
-    if (!status.installed) {
-      return { error: 'Claude CLI is not installed on the server. Run: npm install -g @anthropic-ai/claude-code' };
-    }
 
-    // If a login process is already running, return its URL instead of starting a new one
-    if (this.loginProcess) {
-      if (this.loginProcess.url) {
-        return { url: this.loginProcess.url };
-      }
-      // Process running but no URL yet — kill and restart
-      try { this.loginProcess.proc.kill(); } catch { /* ignore */ }
-      this.loginProcess = null;
-    }
+    // Generate PKCE parameters
+    const codeVerifier = base64url(crypto.randomBytes(32));
+    const codeChallenge = base64url(crypto.createHash('sha256').update(codeVerifier).digest());
+    const state = base64url(crypto.randomBytes(32));
 
-    return new Promise((resolve) => {
-      const proc = spawn('claude', ['auth', 'login'], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, BROWSER: 'echo' }, // Prevent auto-opening browser, just print the URL
-        timeout: 600_000, // 10 minute timeout
-      });
+    // Store for code exchange later
+    this.pendingOAuth = { codeVerifier, state, createdAt: Date.now() };
 
-      this.loginProcess = { proc, startedAt: Date.now() };
-      let allOutput = '';
-      let resolved = false;
+    // Build authorize URL
+    const authUrl = new URL(OAUTH_AUTHORIZE_URL);
+    authUrl.searchParams.set('code', 'true');
+    authUrl.searchParams.set('client_id', OAUTH_CLIENT_ID);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+    authUrl.searchParams.set('scope', OAUTH_SCOPES);
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('state', state);
 
-      const tryExtractUrl = (chunk: string) => {
-        allOutput += chunk;
-        // Look for an HTTPS URL in the output
-        const urlMatch = allOutput.match(/https:\/\/[^\s"'<>]+/);
-        if (urlMatch && !resolved) {
-          resolved = true;
-          if (this.loginProcess) this.loginProcess.url = urlMatch[0];
-          logger.info('ClaudeProvider: login URL captured', { url: urlMatch[0] });
-          resolve({ url: urlMatch[0] });
-        }
-      };
-
-      proc.stdout?.on('data', (data: Buffer) => tryExtractUrl(data.toString()));
-      proc.stderr?.on('data', (data: Buffer) => tryExtractUrl(data.toString()));
-
-      proc.on('close', (code) => {
-        logger.info('ClaudeProvider: login process exited', { code });
-        this.loginProcess = null;
-        // Bust status cache so next poll picks up the new auth state
-        this.cliStatusCache = null;
-        if (!resolved) {
-          resolved = true;
-          if (code === 0) {
-            resolve({ alreadyAuthenticated: true });
-          } else {
-            resolve({ error: `Login process exited with code ${code}. Output: ${allOutput.slice(0, 500)}` });
-          }
-        }
-      });
-
-      proc.on('error', (err) => {
-        logger.error('ClaudeProvider: login process error', { error: err.message });
-        this.loginProcess = null;
-        if (!resolved) {
-          resolved = true;
-          resolve({ error: err.message });
-        }
-      });
-
-      // If we don't get a URL within 15 seconds, return whatever we have
-      setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          resolve({ error: `Timed out waiting for login URL. Output so far: ${allOutput.slice(0, 500)}` });
-        }
-      }, 15_000);
-    });
+    const url = authUrl.toString();
+    logger.info('ClaudeProvider: OAuth flow started', { url: url.slice(0, 80) + '...' });
+    return { url };
   }
 
   /**
-   * Submit the OAuth code from the browser back to the running `claude auth login` process.
-   * The CLI waits for this code on stdin after the user authenticates in the browser.
+   * Exchange the OAuth authorization code for tokens.
+   * Saves credentials in the format Claude CLI expects (~/.claude/.credentials.json).
    */
-  submitLoginCode(code: string): { success: boolean; error?: string } {
-    if (!this.loginProcess) {
-      return { success: false, error: 'No login process running. Click "Authenticate with Claude" first.' };
+  async submitLoginCode(code: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.pendingOAuth) {
+      return { success: false, error: 'No pending OAuth flow. Click "Authenticate with Claude" first.' };
     }
-    const { proc } = this.loginProcess;
-    if (!proc.stdin || proc.stdin.destroyed) {
-      return { success: false, error: 'Login process stdin is not available.' };
+
+    // Expire after 10 minutes
+    if (Date.now() - this.pendingOAuth.createdAt > 600_000) {
+      this.pendingOAuth = null;
+      return { success: false, error: 'OAuth flow expired. Please start again.' };
     }
+
+    const { codeVerifier, state } = this.pendingOAuth;
+
+    // Strip the # fragment if present (callback includes state after #)
+    let authCode = code.trim();
+    if (authCode.includes('#')) {
+      authCode = authCode.split('#')[0];
+    }
+
     try {
-      proc.stdin.write(code.trim() + '\n');
-      logger.info('ClaudeProvider: login code submitted');
-      // Bust status cache so polling picks up new auth state
+      // Exchange code for tokens
+      const resp = await fetch(OAUTH_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          code: authCode,
+          redirect_uri: OAUTH_REDIRECT_URI,
+          client_id: OAUTH_CLIENT_ID,
+          code_verifier: codeVerifier,
+          state,
+        }),
+      });
+
+      const text = await resp.text();
+      if (resp.status !== 200) {
+        logger.error('ClaudeProvider: token exchange failed', { status: resp.status, body: text.slice(0, 200) });
+        return { success: false, error: `Token exchange failed (${resp.status}): ${text.slice(0, 200)}` };
+      }
+
+      const tokens = JSON.parse(text);
+      logger.info('ClaudeProvider: token exchange success', { keys: Object.keys(tokens) });
+
+      // Save in the format Claude CLI expects
+      const claudeDir = path.join(process.env.HOME || '/root', '.claude');
+      if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
+
+      const credPath = path.join(claudeDir, '.credentials.json');
+      const config: Record<string, unknown> = {
+        claudeAiOauth: {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: Date.now() + (tokens.expires_in || 28800) * 1000,
+          scopes: (tokens.scope || '').split(' ').filter(Boolean),
+        },
+      };
+
+      // Add account info if available
+      if (tokens.account || tokens.organization) {
+        config.oauthAccount = {
+          accountUuid: tokens.account?.uuid,
+          emailAddress: tokens.account?.email_address,
+          organizationUuid: tokens.organization?.uuid,
+        };
+      }
+
+      fs.writeFileSync(credPath, JSON.stringify(config, null, 2));
+      fs.chmodSync(credPath, 0o600);
+
+      logger.info('ClaudeProvider: credentials saved', { path: credPath });
+
+      // Clear state
+      this.pendingOAuth = null;
       this.cliStatusCache = null;
+
       return { success: true };
     } catch (err: any) {
-      logger.error('ClaudeProvider: failed to submit login code', { error: err.message });
+      logger.error('ClaudeProvider: OAuth code exchange error', { error: err.message });
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Log out by deleting the Claude CLI credentials file.
+   */
+  async logout(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const claudeDir = path.join(process.env.HOME || '/root', '.claude');
+      const credPath = path.join(claudeDir, '.credentials.json');
+
+      if (fs.existsSync(credPath)) {
+        fs.unlinkSync(credPath);
+        logger.info('ClaudeProvider: credentials deleted', { path: credPath });
+      }
+
+      this.cliStatusCache = null;
+      this.pendingOAuth = null;
+
+      return { success: true };
+    } catch (err: any) {
+      logger.error('ClaudeProvider: logout error', { error: err.message });
       return { success: false, error: err.message };
     }
   }

@@ -126,7 +126,21 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         res.status(400).json({ error: 'Missing "code" in request body' });
         return;
       }
-      const result = claudeProvider.submitLoginCode(code);
+      const result = await claudeProvider.submitLoginCode(code);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  app.post('/api/claude-cli/logout', async (_req, res) => {
+    try {
+      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!claudeProvider || typeof claudeProvider.logout !== 'function') {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+      const result = await claudeProvider.logout();
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
