@@ -15,10 +15,6 @@ import {
 	IconMenu2,
 	IconPuzzle,
 	IconCheck,
-	IconTerminal2,
-	IconWorldWww,
-	IconDatabase,
-	IconPhoto,
 	IconPlayerStop,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
@@ -53,15 +49,6 @@ function formatToolName(name: string): string {
 	return match ? match[1] : name
 }
 
-/** Pick an icon based on tool base name */
-function ToolIcon({name, size = 12, className}: {name: string; size?: number; className?: string}) {
-	if (name.includes('screenshot') || name.includes('photo')) return <IconPhoto size={size} className={className} />
-	if (name.includes('shell') || name.includes('exec') || name.includes('bash')) return <IconTerminal2 size={size} className={className} />
-	if (name.includes('browse') || name.includes('navigate') || name.includes('url') || name.includes('web') || name.includes('page')) return <IconWorldWww size={size} className={className} />
-	if (name.includes('memory') || name.includes('redis') || name.includes('db')) return <IconDatabase size={size} className={className} />
-	return <IconTool size={size} className={className} />
-}
-
 function ToolCallDisplay({toolCall}: {toolCall: ToolCall}) {
 	const [expanded, setExpanded] = useState(false)
 	const short = formatToolName(toolCall.tool)
@@ -73,7 +60,7 @@ function ToolCallDisplay({toolCall}: {toolCall: ToolCall}) {
 				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-1'
 			>
 				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-				<ToolIcon name={short} size={14} className='text-blue-400' />
+				<IconTool size={14} className='text-blue-400' />
 				<span className='font-mono font-medium text-blue-400'>{short}</span>
 				<span className={cn('ml-auto text-caption-sm', toolCall.result.success ? 'text-green-400' : 'text-red-400')}>
 					{toolCall.result.success ? 'OK' : 'FAIL'}
@@ -157,8 +144,8 @@ function useElapsed(active: boolean) {
 	return elapsed
 }
 
-/** Live step-by-step indicator — shows tool calls like Claude Code: toolName(args) */
-function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: string; isLoading: boolean; onStop: () => void}) {
+/** Live step-by-step indicator — human-readable descriptions, like Claude Code */
+function StatusIndicator({conversationId, isLoading}: {conversationId: string; isLoading: boolean}) {
 	const statusQuery = trpcReact.ai.getChatStatus.useQuery(
 		{conversationId},
 		{
@@ -180,17 +167,14 @@ function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: s
 	return (
 		<div className='rounded-radius-md border border-border-default bg-surface-base px-4 py-3'>
 			<div className='space-y-1.5'>
-				{/* Completed + current steps — format: baseName(args) */}
+				{/* Completed steps */}
 				{visibleSteps.map((step, i) => {
 					const isCurrent = i === visibleSteps.length - 1 && isExecuting
-					const parenIdx = step.indexOf('(')
-					const baseName = parenIdx >= 0 ? step.slice(0, parenIdx) : step
-					const argsPart = parenIdx >= 0 ? step.slice(parenIdx) : ''
 					return (
 						<div
 							key={i}
 							className={cn(
-								'flex items-center gap-2 text-caption',
+								'flex items-center gap-2.5 text-caption',
 								isCurrent ? 'text-text-primary' : 'text-text-tertiary',
 							)}
 						>
@@ -199,11 +183,7 @@ function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: s
 							) : (
 								<IconCheck size={12} className='flex-shrink-0 text-green-500' />
 							)}
-							<ToolIcon name={baseName} size={12} className={isCurrent ? 'text-violet-400' : 'text-text-tertiary'} />
-							<span className='min-w-0 truncate font-mono'>
-								<span className={isCurrent ? 'text-violet-300' : 'text-text-secondary'}>{baseName}</span>
-								{argsPart && <span className='text-text-tertiary'>{argsPart}</span>}
-							</span>
+							<span className={isCurrent ? 'text-text-primary' : 'text-text-tertiary'}>{step}</span>
 							{isCurrent && (
 								<span className='ml-auto flex-shrink-0 text-caption-sm text-text-tertiary'>{elapsed}s</span>
 							)}
@@ -213,23 +193,13 @@ function StatusIndicator({conversationId, isLoading, onStop}: {conversationId: s
 
 				{/* Thinking indicator when no tool is active */}
 				{(!isExecuting || steps.length === 0) && (
-					<div className='flex items-center gap-2 text-caption text-text-secondary'>
+					<div className='flex items-center gap-2.5 text-caption text-text-secondary'>
 						<IconLoader2 size={12} className='flex-shrink-0 animate-spin text-violet-400' />
-						<IconBrain size={12} className='flex-shrink-0 text-violet-400' />
-						<span>Thinking...</span>
+						<span>Düşünüyor...</span>
 						<span className='ml-auto text-caption-sm text-text-tertiary'>{elapsed}s</span>
 					</div>
 				)}
 			</div>
-
-			{/* Stop button */}
-			<button
-				onClick={onStop}
-				className='mt-3 flex w-full items-center justify-center gap-1.5 rounded-radius-sm border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-caption text-red-400 transition-colors hover:bg-red-500/20 hover:text-red-300'
-			>
-				<IconPlayerStop size={12} />
-				Stop
-			</button>
 		</div>
 	)
 }
@@ -355,7 +325,8 @@ export default function AiChat() {
 	const [sidebarOpen, setSidebarOpen] = useState(false)
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLTextAreaElement>(null)
-	const cancelledRef = useRef(false)
+	// Use a request ID to prevent stale responses from old requests being shown
+	const activeRequestRef = useRef<number>(0)
 	const isMobile = useIsMobile()
 
 	const activeConversationId = searchParams.get('conv') || `conv_${Date.now()}`
@@ -380,16 +351,16 @@ export default function AiChat() {
 		messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
 	}, [messages, isLoading])
 
-	/** Stop the currently running agent (client-side cancel) */
+	/** Stop the currently running agent — invalidates the active request ID */
 	const handleStop = useCallback(() => {
-		cancelledRef.current = true
+		activeRequestRef.current = 0 // invalidate any in-flight request
 		setIsLoading(false)
 		setMessages((prev) => [
 			...prev,
 			{
 				id: `msg_${Date.now()}_stopped`,
 				role: 'assistant',
-				content: '_Stopped._',
+				content: '_Durduruldu._',
 				timestamp: Date.now(),
 			},
 		])
@@ -400,15 +371,18 @@ export default function AiChat() {
 		const text = input.trim()
 		if (!text || isLoading) return
 
-		cancelledRef.current = false
+		// Assign a unique ID to this request
+		const reqId = Date.now()
+		activeRequestRef.current = reqId
+
 		setInput('')
 		setIsLoading(true)
 
 		const userMsg: Message = {
-			id: `msg_${Date.now()}_user`,
+			id: `msg_${reqId}_user`,
 			role: 'user',
 			content: text,
-			timestamp: Date.now(),
+			timestamp: reqId,
 		}
 		setMessages((prev) => [...prev, userMsg])
 
@@ -422,8 +396,8 @@ export default function AiChat() {
 				message: text,
 			})
 
-			// Ignore result if user stopped
-			if (cancelledRef.current) return
+			// Ignore result if this request was superseded (stopped or new message sent)
+			if (activeRequestRef.current !== reqId) return
 
 			setMessages((prev) => [
 				...prev,
@@ -437,7 +411,7 @@ export default function AiChat() {
 			])
 			conversationsQuery.refetch()
 		} catch (error: any) {
-			if (cancelledRef.current) return
+			if (activeRequestRef.current !== reqId) return
 			setMessages((prev) => [
 				...prev,
 				{
@@ -448,7 +422,7 @@ export default function AiChat() {
 				},
 			])
 		} finally {
-			if (!cancelledRef.current) {
+			if (activeRequestRef.current === reqId) {
 				setIsLoading(false)
 			}
 			inputRef.current?.focus()
@@ -567,7 +541,6 @@ export default function AiChat() {
 									<StatusIndicator
 										conversationId={activeConversationId}
 										isLoading={isLoading}
-										onStop={handleStop}
 									/>
 								)}
 								<div ref={messagesEndRef} />
@@ -583,7 +556,7 @@ export default function AiChat() {
 								value={input}
 								onChange={(e) => setInput(e.target.value)}
 								onKeyDown={handleKeyDown}
-								placeholder={isLoading ? 'AI is thinking...' : 'Message Liv...'}
+								placeholder={isLoading ? 'Düşünüyor...' : 'Liv\'e mesaj yaz...'}
 								disabled={isLoading}
 								rows={1}
 								className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:opacity-50'
@@ -598,7 +571,7 @@ export default function AiChat() {
 								<button
 									onClick={handleStop}
 									className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
-									title='Stop'
+									title='Durdur'
 								>
 									<IconPlayerStop size={18} />
 								</button>
