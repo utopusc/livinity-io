@@ -26,11 +26,11 @@ export const ModelConfigSchema = z.object({
 }).strict().optional();
 
 export const ModelsConfigSchema = z.object({
-  default: z.string().default('gemini-3-flash-preview'),
-  flash: z.string().default('gemini-3-flash-preview'),
-  haiku: z.string().default('gemini-3-flash-preview'),
-  sonnet: z.string().default('gemini-3-flash-preview'),
-  opus: z.string().default('gemini-2.5-pro'),
+  default: z.string().default('claude-haiku-4-5'),
+  flash: z.string().default('claude-haiku-4-5'),
+  haiku: z.string().default('claude-haiku-4-5'),
+  sonnet: z.string().default('claude-sonnet-4-5'),
+  opus: z.string().default('claude-opus-4-6'),
   fallbackEnabled: z.boolean().default(true),
   fallbackOrder: z.array(z.string()).default(['flash', 'haiku', 'sonnet', 'opus']),
 }).strict().optional();
@@ -257,6 +257,15 @@ export const TaskConfigSchema = z.object({
   resultTtlSec: z.number().int().min(60).max(86400).default(3600),
 }).strict().optional();
 
+// ─── Browser Configuration ──────────────────────────────────────────────────
+
+export const BrowserConfigSchema = z.object({
+  /** Enable Chrome DevTools MCP for browser control tasks */
+  enabled: z.boolean().default(true),
+  /** CDP URL for Chrome DevTools MCP (via socat proxy on port 9223) */
+  cdpUrl: z.string().default('ws://127.0.0.1:9223'),
+}).strict().optional();
+
 // ─── Main Nexus Configuration Schema ───────────────────────────────────────
 
 export const NexusConfigSchema = z.object({
@@ -301,6 +310,9 @@ export const NexusConfigSchema = z.object({
 
   // Parallel Task Execution
   tasks: TaskConfigSchema,
+
+  // Browser Control
+  browser: BrowserConfigSchema,
 }).strict();
 
 export type NexusConfig = z.infer<typeof NexusConfigSchema>;
@@ -326,11 +338,11 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
     jitter: 0.2,
   },
   models: {
-    default: 'gemini-3-flash-preview',
-    flash: 'gemini-3-flash-preview',
-    haiku: 'gemini-3-flash-preview',
-    sonnet: 'gemini-3-flash-preview',
-    opus: 'gemini-2.5-pro',
+    default: 'claude-haiku-4-5',
+    flash: 'claude-haiku-4-5',
+    haiku: 'claude-haiku-4-5',
+    sonnet: 'claude-sonnet-4-5',
+    opus: 'claude-opus-4-6',
     fallbackEnabled: true,
     fallbackOrder: ['flash', 'haiku', 'sonnet', 'opus'],
   },
@@ -440,6 +452,10 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
     perTaskMaxTurns: 15,
     perTaskTimeoutMs: 300000,
     resultTtlSec: 3600,
+  },
+  browser: {
+    enabled: true,
+    cdpUrl: 'ws://127.0.0.1:9223',
   },
 };
 

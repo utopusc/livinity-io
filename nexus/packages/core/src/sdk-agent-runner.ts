@@ -154,6 +154,29 @@ export class SdkAgentRunner extends EventEmitter {
     // Build allowedTools list so Claude Code auto-approves our MCP tools
     const allowedTools = sdkTools.map((t: any) => `mcp__nexus-tools__${t.name}`);
 
+    // Build MCP servers config — always include nexus-tools + chrome-devtools if available
+    const mcpServers: Record<string, any> = {
+      'nexus-tools': mcpServer,
+    };
+
+    // Add Chrome DevTools MCP when a Chromium container is likely running
+    // Connects via socat proxy on port 9223 (Chrome CDP on 127.0.0.1:9222 inside container)
+    const cdpUrl = nexusConfig?.browser?.cdpUrl ?? 'ws://127.0.0.1:9223';
+    if (nexusConfig?.browser?.enabled !== false) {
+      mcpServers['chrome-devtools'] = {
+        type: 'stdio' as const,
+        command: 'chrome-devtools-mcp',
+        args: ['--cdp-url', cdpUrl],
+      };
+      // Auto-approve chrome-devtools tools too
+      const cdtTools = ['screenshot', 'navigate', 'click', 'type', 'evaluate', 'get_page_content',
+        'list_tabs', 'new_tab', 'close_tab', 'scroll', 'hover', 'wait_for_element',
+        'get_console_logs', 'get_network_requests', 'take_screenshot', 'get_dom'];
+      for (const t of cdtTools) {
+        allowedTools.push(`mcp__chrome-devtools__${t}`);
+      }
+    }
+
     // Build system prompt
     let systemPrompt = this.config.systemPromptOverride || `You are Nexus, an autonomous AI assistant. You manage a Linux server and interact with users via WhatsApp, Telegram, Discord, and a web UI.
 
@@ -189,7 +212,7 @@ Rules:
         prompt: task,
         options: {
           systemPrompt,
-          mcpServers: { 'nexus-tools': mcpServer },
+          mcpServers,
           tools: [],        // Disable built-in Claude Code tools
           allowedTools,     // Auto-approve all Nexus MCP tools
           maxTurns,
