@@ -41,6 +41,7 @@ import {
 	TbLoader2,
 	TbAlertCircle,
 	TbCircleCheck,
+	TbLogout,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -461,12 +462,16 @@ function AiConfigSection() {
 	}, [serverAuthMethod])
 
 	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
-	const [loginUrl, setLoginUrl] = useState<string | null>(null)
+	const [loginUrl, setLoginUrl] = useState('')
+	const [loginCode, setLoginCode] = useState('')
 
-	// Clear login URL when auth succeeds
+	// Clear login UI when auth succeeds
 	useEffect(() => {
-		if (cliAuthenticated && loginUrl) setLoginUrl(null)
-	}, [cliAuthenticated, loginUrl])
+		if (cliAuthenticated) {
+			setLoginUrl('')
+			setLoginCode('')
+		}
+	}, [cliAuthenticated])
 
 	// Poll CLI status every 5s when subscription mode selected but not authenticated
 	useEffect(() => {
@@ -490,11 +495,29 @@ function AiConfigSection() {
 
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
-			if (data.url) setLoginUrl(data.url)
+			if (data.url) {
+				setLoginUrl(data.url)
+				window.open(data.url, '_blank', 'noopener,noreferrer')
+			}
 			if (data.alreadyAuthenticated) {
-				setLoginUrl(null)
 				utils.ai.getClaudeCliStatus.invalidate()
 			}
+		},
+	})
+
+	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
+		onSuccess: (data) => {
+			if (data.success) {
+				setLoginCode('')
+				setLoginUrl('')
+				utils.ai.getClaudeCliStatus.invalidate()
+			}
+		},
+	})
+
+	const logoutMutation = trpcReact.ai.claudeLogout.useMutation({
+		onSuccess: () => {
+			utils.ai.getClaudeCliStatus.invalidate()
 		},
 	})
 
@@ -504,7 +527,6 @@ function AiConfigSection() {
 		setAuthMethodMutation.mutate({method})
 	}
 
-	const cliInstalled = cliStatusQ.data?.installed ?? false
 	const cliUser = cliStatusQ.data?.user
 
 	const handleSaveAnthropicKey = async () => {
@@ -594,19 +616,38 @@ function AiConfigSection() {
 									{cliStatusQ.isLoading ? (
 										<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
 											<TbLoader2 className='h-4 w-4 animate-spin' />
-											Checking CLI status...
+											Checking status...
 										</div>
 									) : cliAuthenticated ? (
-										<div className='flex items-center gap-2 text-body-sm text-green-400'>
-											<TbCircleCheck className='h-4 w-4' />
-											Authenticated{cliUser ? ` as ${cliUser}` : ''}
+										<div className='space-y-3'>
+											<div className='flex items-center gap-2 text-body-sm text-green-400'>
+												<TbCircleCheck className='h-4 w-4' />
+												Authenticated{cliUser ? ` as ${cliUser}` : ''}
+											</div>
+											<Button
+												variant='secondary'
+												size='sm'
+												onClick={() => logoutMutation.mutate()}
+												disabled={logoutMutation.isPending}
+											>
+												{logoutMutation.isPending ? (
+													<><TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...</>
+												) : (
+													<><TbLogout className='h-4 w-4' /> Sign Out</>
+												)}
+											</Button>
+											{logoutMutation.isError && (
+												<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
+											)}
 										</div>
-									) : cliInstalled ? (
-										<>
+									) : (
+										<div className='space-y-3'>
 											<div className='flex items-center gap-2 text-body-sm text-amber-400'>
 												<TbAlertCircle className='h-4 w-4' />
-												CLI installed but not authenticated
+												Not authenticated
 											</div>
+
+											{/* Step 1: Open auth page */}
 											<Button
 												variant='primary'
 												size='sm'
@@ -614,64 +655,77 @@ function AiConfigSection() {
 												disabled={startLoginMutation.isPending}
 											>
 												{startLoginMutation.isPending ? (
-													<><TbLoader2 className='h-4 w-4 animate-spin' /> Starting login...</>
+													<><TbLoader2 className='h-4 w-4 animate-spin' /> Opening...</>
 												) : (
-													<><TbExternalLink className='h-4 w-4' /> Authenticate with Claude</>
+													<><TbExternalLink className='h-4 w-4' /> {loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}</>
 												)}
 											</Button>
 											{startLoginMutation.isError && (
 												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
 											)}
-											{loginUrl && (
-												<div className='space-y-2 rounded-radius-sm bg-surface-2 p-3'>
-													<p className='text-caption text-text-secondary'>
-														Click the link below to sign in with your Claude account.
-														After signing in, this page will update automatically.
-													</p>
+
+											{/* Step 2: Code input - always visible */}
+											<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
+												<p className='text-caption text-text-secondary'>
+													1. Click &quot;Sign in with Claude&quot; above to open the auth page.
+													<br />
+													2. Log in with your Claude account.
+													<br />
+													3. Copy the code you receive and paste it below:
+												</p>
+												{loginUrl && (
 													<a
 														href={loginUrl}
 														target='_blank'
 														rel='noopener noreferrer'
 														className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
 													>
-														<TbExternalLink className='h-3.5 w-3.5 shrink-0' />
-														Open Claude sign-in page
+														<TbExternalLink className='h-3.5 w-3.5' />
+														Re-open auth page
 													</a>
-													<div className='flex items-center gap-2 text-caption text-text-secondary'>
-														<TbLoader2 className='h-3.5 w-3.5 animate-spin' />
-														Waiting for authentication...
-													</div>
-												</div>
-											)}
-										</>
-									) : (
-										<>
-											<div className='flex items-center gap-2 text-body-sm text-red-400'>
-												<TbAlertCircle className='h-4 w-4' />
-												Claude CLI not installed
-											</div>
-											<div className='rounded-radius-sm bg-surface-2 p-3'>
-												<p className='text-caption text-text-secondary'>Run on the server first:</p>
-												<code className='mt-1 block font-mono text-caption text-text-primary'>
-													npm install -g @anthropic-ai/claude-code
-												</code>
-											</div>
-											<Button
-												variant='primary'
-												size='sm'
-												onClick={() => startLoginMutation.mutate()}
-												disabled={startLoginMutation.isPending}
-											>
-												{startLoginMutation.isPending ? (
-													<><TbLoader2 className='h-4 w-4 animate-spin' /> Checking...</>
-												) : (
-													<><TbExternalLink className='h-4 w-4' /> Authenticate with Claude</>
 												)}
-											</Button>
-											{startLoginMutation.isError && (
-												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
-											)}
-										</>
+												<div className='flex gap-2'>
+													<Input
+														placeholder='Paste auth code here...'
+														value={loginCode}
+														onValueChange={setLoginCode}
+														className='font-mono text-caption'
+													/>
+													<Button
+														variant='primary'
+														size='sm'
+														onClick={() => {
+															if (!loginUrl) {
+																startLoginMutation.mutate(undefined, {
+																	onSuccess: () => {
+																		submitCodeMutation.mutate({code: loginCode})
+																	},
+																})
+															} else {
+																submitCodeMutation.mutate({code: loginCode})
+															}
+														}}
+														disabled={!loginCode.trim() || submitCodeMutation.isPending}
+													>
+														{submitCodeMutation.isPending ? (
+															<TbLoader2 className='h-4 w-4 animate-spin' />
+														) : (
+															'Submit'
+														)}
+													</Button>
+												</div>
+												{submitCodeMutation.isError && (
+													<p className='text-caption text-red-400'>
+														{submitCodeMutation.error.message}
+													</p>
+												)}
+												{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
+													<p className='text-caption text-red-400'>
+														{submitCodeMutation.data?.error || 'Code exchange failed'}
+													</p>
+												)}
+											</div>
+										</div>
 									)}
 								</div>
 							)}
