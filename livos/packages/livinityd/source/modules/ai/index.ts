@@ -50,6 +50,12 @@ function isEventData(data: unknown): data is LivStreamEventData {
 	return typeof data === 'object' && data !== null
 }
 
+/** Strip mcp__servername__ prefix from tool names for display */
+function formatToolName(name: string): string {
+	const match = name.match(/^mcp__[^_]+__(.+)$/)
+	return match ? match[1] : name
+}
+
 /** Extract error message with proper type narrowing */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error)
@@ -64,7 +70,7 @@ export default class AiModule {
 
 	private redisUrl: string
 	private conversations = new Map<string, Conversation>()
-	chatStatus = new Map<string, {status: string; tool?: string; turn?: number}>()
+	chatStatus = new Map<string, {status: string; tool?: string; steps?: string[]; turn?: number}>()
 
 	constructor({livinityd, redisUrl}: AiModuleOptions) {
 		this.livinityd = livinityd
@@ -90,6 +96,7 @@ export default class AiModule {
 		if (this.redis) await this.redis.quit()
 		this.logger.log('AI module stopped')
 	}
+
 	/** Run a single chat turn — bridges to Liv AI daemon via HTTP SSE */
 	async chat(
 		conversationId: string,
@@ -132,7 +139,7 @@ export default class AiModule {
 
 		// Forward to Liv AI daemon via HTTP SSE
 		const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
-		this.chatStatus.set(conversationId, {status: 'Connecting to Liv...'})
+		this.chatStatus.set(conversationId, {status: 'Connecting to Liv...', steps: []})
 		let finalAnswer = ''
 		const toolCalls: Array<{tool: string; params: Record<string, unknown>; result: {success: boolean; output: string}}> = []
 		const pendingToolCalls = new Map<string, {tool: string; params: Record<string, unknown>}>()
@@ -173,7 +180,8 @@ export default class AiModule {
 
 					// Update chat status for UI polling
 					if (event.type === 'thinking') {
-						this.chatStatus.set(conversationId, {status: 'Thinking...', turn: event.turn})
+						const prev = this.chatStatus.get(conversationId)
+						this.chatStatus.set(conversationId, {status: 'Thinking...', steps: prev?.steps ?? [], turn: event.turn})
 					}
 
 					// Forward event for streaming UI
@@ -181,21 +189,35 @@ export default class AiModule {
 						onEvent({type: event.type as AgentEvent['type'], turn: event.turn, data: event.data})
 					}
 
-					// Collect tool calls
+					// Collect tool calls — append short name to steps[]
 					if (event.type === 'tool_call' && isEventData(event.data)) {
-						const toolName = event.data.tool || 'unknown'
-						this.chatStatus.set(conversationId, {status: `Using ${toolName}...`, tool: toolName, turn: event.turn})
-						pendingToolCalls.set(`${event.turn}-${toolName}`, {
+						const rawName = event.data.tool || 'unknown'
+						const toolName = formatToolName(rawName)
+						const prev = this.chatStatus.get(conversationId)
+						this.chatStatus.set(conversationId, {
+							status: `Using ${toolName}...`,
 							tool: toolName,
+							steps: [...(prev?.steps ?? []), toolName],
+							turn: event.turn,
+						})
+						pendingToolCalls.set(`${event.turn}-${rawName}`, {
+							tool: rawName,
 							params: event.data.params || {},
 						})
 					}
 
 					// Collect tool results (observations)
 					if (event.type === 'observation' && isEventData(event.data)) {
-						const toolName = event.data.tool || 'unknown'
-						this.chatStatus.set(conversationId, {status: `Processing ${toolName} result...`, tool: toolName, turn: event.turn})
-						const key = `${event.turn}-${toolName}`
+						const rawName = event.data.tool || 'unknown'
+						const toolName = formatToolName(rawName)
+						const prev = this.chatStatus.get(conversationId)
+						this.chatStatus.set(conversationId, {
+							status: `Processing ${toolName}...`,
+							tool: toolName,
+							steps: prev?.steps ?? [],
+							turn: event.turn,
+						})
+						const key = `${event.turn}-${rawName}`
 						const pending = pendingToolCalls.get(key)
 						toolCalls.push({
 							tool: toolName,
