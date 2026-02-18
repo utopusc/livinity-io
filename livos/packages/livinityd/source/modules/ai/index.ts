@@ -56,33 +56,131 @@ function formatToolName(name: string): string {
 	return match ? match[1] : name
 }
 
-/** Extract the most meaningful param value for display */
-function briefArgs(params: Record<string, unknown>): string {
-	if (!params || Object.keys(params).length === 0) return ''
-	const priorityKeys = ['command', 'path', 'file_path', 'url', 'query', 'key', 'action', 'task', 'id', 'name', 'message', 'text', 'function']
-	for (const k of priorityKeys) {
-		if (params[k] !== undefined) {
-			const val = String(params[k]).trim().replace(/\s+/g, ' ')
-			return val.length > 60 ? val.slice(0, 57) + '...' : val
-		}
-	}
-	const firstVal = Object.values(params)[0]
-	if (firstVal !== undefined) {
-		const val = String(firstVal).trim().replace(/\s+/g, ' ')
-		return val.length > 60 ? val.slice(0, 57) + '...' : val
-	}
-	return ''
-}
-
-/** Format step for display: "toolName" or "toolName(brief args)" */
-function formatStep(name: string, params: Record<string, unknown>): string {
-	const args = briefArgs(params)
-	return args ? `${name}(${args})` : name
-}
-
 /** Extract error message with proper type narrowing */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error)
+}
+
+/** Generate a human-readable Turkish description for a tool call */
+function describeToolCall(name: string, params: Record<string, unknown>): string {
+	const p = params || {}
+	const get = (key: string) => p[key] !== undefined ? String(p[key]).trim() : ''
+
+	// MCP management
+	if (name === 'mcp_list') return 'MCP araç listesi alınıyor'
+	if (name === 'mcp_manage') {
+		const action = get('action')
+		const server = get('server') || get('name') || get('id')
+		const labels: Record<string, string> = {restart: 'yeniden başlatılıyor', stop: 'durduruluyor', start: 'başlatılıyor', status: 'durumu kontrol ediliyor', logs: 'günlükleri okunuyor'}
+		const verb = labels[action] || 'yönetiliyor'
+		return server ? `${server} ${verb}` : `Sunucu ${verb}`
+	}
+
+	// Chrome DevTools
+	if (name === 'navigate_page') {
+		const url = get('url')
+		if (!url) return 'Sayfaya gidiliyor'
+		try { return `${new URL(url).hostname} açılıyor` } catch { return `${url.slice(0, 40)} açılıyor` }
+	}
+	if (name === 'take_screenshot') return 'Ekran görüntüsü alınıyor'
+	if (name === 'take_snapshot') return 'Sayfa içeriği taranıyor'
+	if (name === 'evaluate_script') return 'Sayfada kod çalıştırılıyor'
+	if (name === 'click') return 'Elemente tıklanıyor'
+	if (name === 'fill' || name === 'fill_form') return 'Form dolduruluyor'
+	if (name === 'list_pages') return 'Açık sekmeler listeleniyor'
+	if (name === 'new_page') {
+		const url = get('url')
+		if (!url) return 'Yeni sekme açılıyor'
+		try { return `${new URL(url).hostname} yeni sekmede açılıyor` } catch { return 'Yeni sekme açılıyor' }
+	}
+	if (name === 'close_page') return 'Sekme kapatılıyor'
+	if (name === 'select_page') return 'Sekme seçiliyor'
+	if (name === 'list_network_requests') return 'Ağ trafiği inceleniyor'
+	if (name === 'list_console_messages') return 'Tarayıcı konsolu okunuyor'
+	if (name === 'get_network_request') return 'İstek detayı inceleniyor'
+	if (name === 'hover') return 'Elemente odaklanılıyor'
+	if (name === 'press_key') { const k = get('key'); return k ? `"${k}" tuşuna basılıyor` : 'Tuşa basılıyor' }
+	if (name === 'wait_for') { const t = get('text'); return t ? `"${t.slice(0, 30)}" bekleniyor` : 'Sayfa yüklenmesi bekleniyor' }
+	if (name === 'resize_page') return 'Pencere boyutu ayarlanıyor'
+	if (name === 'emulate') return 'Tarayıcı davranışı ayarlanıyor'
+	if (name === 'handle_dialog') return 'Diyalog penceresi kapatılıyor'
+	if (name === 'performance_start_trace') return 'Performans ölçümü başlatılıyor'
+	if (name === 'performance_stop_trace') return 'Performans ölçümü tamamlanıyor'
+	if (name === 'drag') return 'Element sürükleniyor'
+	if (name === 'upload_file') return 'Dosya yükleniyor'
+
+	// Memory
+	if (name.startsWith('memory_') || name.endsWith('_memory') || name.includes('_memory_')) {
+		if (name.includes('search') || name.includes('get') || name.includes('read')) return 'Bellekten bilgi alınıyor'
+		if (name.includes('store') || name.includes('set') || name.includes('save') || name.includes('write')) return 'Belleğe kaydediliyor'
+		if (name.includes('list')) return 'Bellekler listeleniyor'
+		if (name.includes('delete') || name.includes('remove')) return 'Bellekten siliniyor'
+		return 'Bellek işlemi yapılıyor'
+	}
+
+	// Shell / exec
+	if (name.includes('shell') || name.includes('exec') || name.includes('bash') || name.includes('run_command')) {
+		const cmd = (get('command') || get('cmd') || '').replace(/\s+/g, ' ').slice(0, 50)
+		return cmd ? `Komut çalıştırılıyor: ${cmd}` : 'Terminal komutu çalıştırılıyor'
+	}
+
+	// Apps
+	if (name.includes('app')) {
+		if (name.includes('list')) return 'Uygulamalar listeleniyor'
+		if (name.includes('install')) return `Uygulama kuruluyor${get('appId') ? ': ' + get('appId') : ''}`
+		if (name.includes('start')) return 'Uygulama başlatılıyor'
+		if (name.includes('stop')) return 'Uygulama durduruluyor'
+		if (name.includes('status')) return 'Uygulama durumu kontrol ediliyor'
+		return 'Uygulama yönetiliyor'
+	}
+
+	// Docker
+	if (name.includes('docker') || name.includes('container')) return 'Docker kontrol ediliyor'
+
+	// Agents / subagents
+	if (name.includes('agent') || name.includes('subagent')) {
+		if (name.includes('list')) return 'Subagentlar listeleniyor'
+		if (name.includes('create') || name.includes('add')) return 'Subagent oluşturuluyor'
+		if (name.includes('run') || name.includes('exec') || name.includes('start')) return 'Subagent çalıştırılıyor'
+		if (name.includes('stop') || name.includes('kill')) return 'Subagent durduruluyor'
+		return 'Subagent yönetiliyor'
+	}
+
+	// Schedule / tasks
+	if (name.includes('schedule') || name.includes('cron')) return 'Görev planlanıyor'
+
+	// System
+	if (name.includes('health')) return 'Sistem sağlığı kontrol ediliyor'
+	if (name.includes('disk') || name.includes('storage')) return 'Disk durumu kontrol ediliyor'
+	if (name.includes('metric') || name.includes('monitor') || name.includes('stat')) return 'Sistem metrikleri okunuyor'
+	if (name.includes('log')) return 'Günlükler okunuyor'
+	if (name.includes('network') || name.includes('ping')) return 'Ağ bağlantısı kontrol ediliyor'
+	if (name.includes('status') || name.includes('info')) return 'Durum bilgisi alınıyor'
+
+	// Files
+	if (name.includes('read') && !name.includes('readdir')) {
+		const fp = get('path') || get('file_path')
+		return fp ? `Dosya okunuyor: ${fp.split('/').pop() || fp}` : 'Dosya okunuyor'
+	}
+	if (name.includes('write_file') || name.includes('file_write')) return 'Dosyaya yazılıyor'
+	if (name.includes('list_dir') || name.includes('readdir')) return 'Klasör içeriği listeleniyor'
+	if (name.includes('search') || name.includes('grep') || name.includes('find')) {
+		const q = get('query') || get('pattern') || get('q')
+		return q ? `Aranıyor: ${q.slice(0, 40)}` : 'Dosyalarda arama yapılıyor'
+	}
+
+	// Web
+	if (name.includes('fetch') || name.includes('http_request')) return 'Web isteği yapılıyor'
+	if (name.includes('web_search')) return 'İnternette arama yapılıyor'
+
+	// Config / settings
+	if (name.includes('config') || name.includes('setting')) return 'Ayarlar okunuyor'
+
+	// Notifications
+	if (name.includes('notify') || name.includes('alert') || name.includes('send_message')) return 'Bildirim gönderiliyor'
+
+	// Generic fallback — humanize snake_case
+	return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export default class AiModule {
@@ -213,15 +311,16 @@ export default class AiModule {
 						onEvent({type: event.type as AgentEvent['type'], turn: event.turn, data: event.data})
 					}
 
-					// Collect tool calls — append short name to steps[]
+					// Collect tool calls — store human-readable description in steps[]
 					if (event.type === 'tool_call' && isEventData(event.data)) {
 						const rawName = event.data.tool || 'unknown'
 						const toolName = formatToolName(rawName)
+						const desc = describeToolCall(toolName, event.data.params || {})
 						const prev = this.chatStatus.get(conversationId)
 						this.chatStatus.set(conversationId, {
-							status: `Using ${toolName}...`,
+							status: desc,
 							tool: toolName,
-							steps: [...(prev?.steps ?? []), formatStep(toolName, event.data.params || {})],
+							steps: [...(prev?.steps ?? []), desc],
 							turn: event.turn,
 						})
 						pendingToolCalls.set(`${event.turn}-${rawName}`, {
@@ -236,7 +335,7 @@ export default class AiModule {
 						const toolName = formatToolName(rawName)
 						const prev = this.chatStatus.get(conversationId)
 						this.chatStatus.set(conversationId, {
-							status: `Processing ${toolName}...`,
+							status: 'Yanıt işleniyor...',
 							tool: toolName,
 							steps: prev?.steps ?? [],
 							turn: event.turn,
