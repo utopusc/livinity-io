@@ -84,7 +84,7 @@ export class ConfigManager {
       if (!validated.success) {
         return {
           success: false,
-          errors: validated.error.issues.map((e: { path: (string | number)[]; message: string }) => `${e.path.join('.')}: ${e.message}`),
+          errors: validated.error.issues.map((e) => `${(e.path as string[]).join('.')}: ${e.message}`),
         };
       }
 
@@ -215,7 +215,7 @@ export class ConfigManager {
       }
       return {
         valid: false,
-        errors: validated.error.issues.map((e: { path: (string | number)[]; message: string }) => `${e.path.join('.')}: ${e.message}`),
+        errors: validated.error.issues.map((e) => `${(e.path as string[]).join('.')}: ${e.message}`),
       };
     } catch (err) {
       return { valid: false, errors: [(err as Error).message] };
