@@ -161,20 +161,17 @@ export class SdkAgentRunner extends EventEmitter {
 
     // Add Chrome DevTools MCP when a Chromium container is likely running
     // Connects via socat proxy on port 9223 (Chrome CDP on 127.0.0.1:9222 inside container)
-    const cdpUrl = nexusConfig?.browser?.cdpUrl ?? 'ws://127.0.0.1:9223';
+    // --browserUrl uses HTTP CDP endpoint (not WebSocket)
+    const browserUrl = (nexusConfig?.browser?.cdpUrl ?? 'ws://127.0.0.1:9223')
+      .replace(/^ws:\/\//, 'http://');
     if (nexusConfig?.browser?.enabled !== false) {
       mcpServers['chrome-devtools'] = {
         type: 'stdio' as const,
         command: 'chrome-devtools-mcp',
-        args: ['--cdp-url', cdpUrl],
+        args: ['--browserUrl', browserUrl, '--no-usage-statistics'],
       };
-      // Auto-approve chrome-devtools tools too
-      const cdtTools = ['screenshot', 'navigate', 'click', 'type', 'evaluate', 'get_page_content',
-        'list_tabs', 'new_tab', 'close_tab', 'scroll', 'hover', 'wait_for_element',
-        'get_console_logs', 'get_network_requests', 'take_screenshot', 'get_dom'];
-      for (const t of cdtTools) {
-        allowedTools.push(`mcp__chrome-devtools__${t}`);
-      }
+      // Auto-approve ALL chrome-devtools tools via wildcard
+      allowedTools.push('mcp__chrome-devtools__*');
     }
 
     // Build system prompt
@@ -217,7 +214,7 @@ Rules:
           allowedTools,     // Auto-approve all Nexus MCP tools
           maxTurns,
           model: tierToModel(tier),
-          permissionMode: 'acceptEdits',
+          permissionMode: 'bypassPermissions',
           persistSession: false,
         },
       });
