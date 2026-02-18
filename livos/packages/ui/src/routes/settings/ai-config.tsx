@@ -11,6 +11,8 @@ import {SettingsPageLayout} from './_components/settings-page-layout'
 export default function AiConfigPage() {
 	const [anthropicKey, setAnthropicKey] = useState('')
 	const [geminiKey, setGeminiKey] = useState('')
+	const [loginCode, setLoginCode] = useState('')
+	const [loginUrl, setLoginUrl] = useState('')
 	const [saved, setSaved] = useState(false)
 
 	const configQ = trpcReact.ai.getConfig.useQuery()
@@ -36,6 +38,14 @@ export default function AiConfigPage() {
 		return () => clearInterval(interval)
 	}, [authMethod, cliAuthenticated])
 
+	// Clear login UI when auth completes
+	useEffect(() => {
+		if (cliAuthenticated) {
+			setLoginUrl('')
+			setLoginCode('')
+		}
+	}, [cliAuthenticated])
+
 	const setConfigMutation = trpcReact.ai.setConfig.useMutation({
 		onSuccess: () => {
 			setSaved(true)
@@ -55,12 +65,20 @@ export default function AiConfigPage() {
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
 			if (data.url) {
-				// Open auth URL in new tab
+				setLoginUrl(data.url)
 				window.open(data.url, '_blank', 'noopener,noreferrer')
 			}
 			if (data.alreadyAuthenticated) {
 				utils.ai.getClaudeCliStatus.invalidate()
 			}
+		},
+	})
+
+	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
+		onSuccess: () => {
+			setLoginCode('')
+			// Poll for auth status update
+			setTimeout(() => utils.ai.getClaudeCliStatus.invalidate(), 2000)
 		},
 	})
 
@@ -80,6 +98,7 @@ export default function AiConfigPage() {
 
 	const cliInstalled = cliStatusQ.data?.installed ?? false
 	const cliUser = cliStatusQ.data?.user
+	const showCodeInput = loginUrl && !cliAuthenticated
 
 	return (
 		<SettingsPageLayout title='AI Configuration' description='Configure how LivOS connects to Claude and Gemini'>
@@ -148,10 +167,53 @@ export default function AiConfigPage() {
 														{startLoginMutation.error.message}
 													</p>
 												)}
-												{startLoginMutation.isSuccess && startLoginMutation.data.url && (
-													<p className='text-caption text-text-secondary'>
-														Auth page opened in a new tab. Complete login there, then this page will update automatically.
-													</p>
+												{showCodeInput && (
+													<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
+														<p className='text-caption text-text-secondary'>
+															1. Complete login in the opened tab.
+															<br />
+															2. Copy the code you receive and paste it below:
+														</p>
+														<a
+															href={loginUrl}
+															target='_blank'
+															rel='noopener noreferrer'
+															className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+														>
+															<TbExternalLink className='h-3.5 w-3.5' />
+															Re-open auth page
+														</a>
+														<div className='flex gap-2'>
+															<Input
+																placeholder='Paste auth code here...'
+																value={loginCode}
+																onValueChange={setLoginCode}
+																className='font-mono text-caption'
+															/>
+															<Button
+																variant='primary'
+																size='sm'
+																onClick={() => submitCodeMutation.mutate({code: loginCode})}
+																disabled={!loginCode.trim() || submitCodeMutation.isPending}
+															>
+																{submitCodeMutation.isPending ? (
+																	<TbLoader2 className='h-4 w-4 animate-spin' />
+																) : (
+																	'Submit'
+																)}
+															</Button>
+														</div>
+														{submitCodeMutation.isError && (
+															<p className='text-caption text-red-400'>
+																{submitCodeMutation.error.message}
+															</p>
+														)}
+														{submitCodeMutation.isSuccess && (
+															<p className='text-caption text-green-400'>
+																Code submitted! Waiting for authentication...
+															</p>
+														)}
+													</div>
 												)}
 											</div>
 										) : (
