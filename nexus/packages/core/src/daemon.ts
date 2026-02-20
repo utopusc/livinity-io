@@ -2233,6 +2233,124 @@ ${task}`;
       },
     });
 
+    // ── Gmail MCP Tools ──────────────────────────────────────────────
+
+    const gp = this.config.gmailProvider;
+    if (gp) {
+      toolRegistry.register({
+        name: 'gmail_read',
+        description: 'Read a specific email by ID. Returns full email detail including subject, from, to, cc, date, body, and labels.',
+        parameters: [
+          { name: 'id', type: 'string', description: 'Gmail message ID', required: true },
+        ],
+        execute: async (params) => {
+          const id = params.id as string;
+          if (!id) return { success: false, output: '', error: 'Email ID is required.' };
+          try {
+            const email = await gp.readEmail(id);
+            const formatted = [
+              `From: ${email.from}`,
+              `To: ${email.to}`,
+              email.cc ? `Cc: ${email.cc}` : null,
+              `Date: ${email.date}`,
+              `Subject: ${email.subject}`,
+              `Labels: ${email.labels.join(', ')}`,
+              `Thread: ${email.threadId}`,
+              '',
+              email.body || email.snippet,
+            ].filter(Boolean).join('\n');
+            return { success: true, output: formatted, data: email };
+          } catch (err) {
+            return { success: false, output: '', error: `Failed to read email: ${formatErrorMessage(err)}` };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'gmail_reply',
+        description: 'Reply to an email thread. The reply is sent to the original sender with proper In-Reply-To and References headers.',
+        parameters: [
+          { name: 'id', type: 'string', description: 'Gmail message ID to reply to', required: true },
+          { name: 'body', type: 'string', description: 'Reply body text', required: true },
+        ],
+        execute: async (params) => {
+          const { id, body } = params as { id: string; body: string };
+          if (!id || !body) return { success: false, output: '', error: 'Email ID and body are required.' };
+          try {
+            const result = await gp.sendReply(id, body);
+            return { success: true, output: `Reply sent (message ID: ${result.messageId})`, data: result };
+          } catch (err) {
+            return { success: false, output: '', error: `Failed to send reply: ${formatErrorMessage(err)}` };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'gmail_send',
+        description: 'Compose and send a new email to any address.',
+        parameters: [
+          { name: 'to', type: 'string', description: 'Recipient email address', required: true },
+          { name: 'subject', type: 'string', description: 'Email subject', required: true },
+          { name: 'body', type: 'string', description: 'Email body text', required: true },
+        ],
+        execute: async (params) => {
+          const { to, subject, body } = params as { to: string; subject: string; body: string };
+          if (!to || !subject || !body) return { success: false, output: '', error: 'To, subject, and body are required.' };
+          try {
+            const result = await gp.sendEmail(to, subject, body);
+            return { success: true, output: `Email sent to ${to} (message ID: ${result.messageId})`, data: result };
+          } catch (err) {
+            return { success: false, output: '', error: `Failed to send email: ${formatErrorMessage(err)}` };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'gmail_search',
+        description: 'Search emails with a Gmail search query. Supports all Gmail search operators (from:, to:, subject:, has:attachment, before:, after:, etc).',
+        parameters: [
+          { name: 'query', type: 'string', description: 'Gmail search query', required: true },
+          { name: 'max_results', type: 'number', description: 'Maximum number of results (default: 10)', required: false, default: 10 },
+        ],
+        execute: async (params) => {
+          const { query, max_results } = params as { query: string; max_results?: number };
+          if (!query) return { success: false, output: '', error: 'Search query is required.' };
+          try {
+            const results = await gp.searchEmails(query, max_results || 10);
+            if (results.length === 0) {
+              return { success: true, output: 'No emails found matching the query.' };
+            }
+            const formatted = results.map((r, i) =>
+              `[${i + 1}] ID: ${r.id}\n    From: ${r.from}\n    Subject: ${r.subject}\n    Date: ${r.date}\n    Preview: ${r.snippet.slice(0, 100)}`
+            ).join('\n\n');
+            return { success: true, output: `Found ${results.length} emails:\n\n${formatted}`, data: results };
+          } catch (err) {
+            return { success: false, output: '', error: `Failed to search emails: ${formatErrorMessage(err)}` };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'gmail_archive',
+        description: 'Archive an email by removing it from the inbox. The email remains accessible via search.',
+        parameters: [
+          { name: 'id', type: 'string', description: 'Gmail message ID to archive', required: true },
+        ],
+        execute: async (params) => {
+          const id = params.id as string;
+          if (!id) return { success: false, output: '', error: 'Email ID is required.' };
+          try {
+            await gp.archiveEmail(id);
+            return { success: true, output: `Email ${id} archived successfully.` };
+          } catch (err) {
+            return { success: false, output: '', error: `Failed to archive email: ${formatErrorMessage(err)}` };
+          }
+        },
+      });
+
+      logger.info('Gmail MCP tools registered (gmail_read, gmail_reply, gmail_send, gmail_search, gmail_archive)');
+    }
+
     // Mark destructive tools for human-in-the-loop approval
     const destructiveTools = ['shell']; // Shell can run rm, kill, etc.
     for (const toolName of destructiveTools) {
