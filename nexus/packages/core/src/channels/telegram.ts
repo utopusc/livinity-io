@@ -80,6 +80,29 @@ export class TelegramProvider implements ChannelProvider {
         const msg = ctx.message;
         if (!msg || !msg.text) return;
 
+        // ── Deduplication: skip already-processed messages ──
+        const msgUpdateId = ctx.update.update_id;
+        if (this.redis) {
+          const dedupKey = `nexus:telegram:dedup:${msgUpdateId}`;
+          const already = await this.redis.set(dedupKey, '1', 'EX', 86400, 'NX');
+          if (!already) {
+            // NX returned null → key existed → already processed
+            logger.info('TelegramProvider: duplicate skipped', { updateId: msgUpdateId });
+            return;
+          }
+        }
+
+        // ── Drop stale messages (older than 2 minutes) ──
+        const msgAge = Date.now() - msg.date * 1000;
+        if (msgAge > 120_000) {
+          logger.info('TelegramProvider: stale message dropped', {
+            updateId: msgUpdateId,
+            ageMs: msgAge,
+            text: msg.text.slice(0, 50),
+          });
+          return;
+        }
+
         const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
         const userName = msg.from?.username || msg.from?.first_name || 'Unknown';
 
