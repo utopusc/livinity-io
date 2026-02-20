@@ -139,9 +139,11 @@ async function main() {
   await channelManager.init(redis);
   logger.info('ChannelManager initialized');
 
+  // Get Gmail provider reference (used for MCP tools + config)
+  const gmailProvider = channelManager.getProvider('gmail') as any;
+
   // Configure Gmail provider with OAuth credentials from env
   if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
-    const gmailProvider = channelManager.getProvider('gmail') as any;
     if (gmailProvider?.updateConfig) {
       await gmailProvider.updateConfig({
         enabled: true,
@@ -151,6 +153,12 @@ async function main() {
       });
       logger.info('GmailProvider configured from env vars');
     }
+  }
+
+  // Wire channelManager into GmailProvider for token failure notifications
+  if (gmailProvider?.setChannelManager) {
+    gmailProvider.setChannelManager(channelManager);
+    logger.info('GmailProvider: channelManager wired for notifications');
   }
 
   // User session manager for per-user preferences (thinking, verbose, model)
@@ -381,6 +389,7 @@ Conversation:`;
     cronQueue,
     approvalManager,
     usageTracker,
+    gmailProvider,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
