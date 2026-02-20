@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 2 in progress. Webhook receiver infrastructure complete.
+**Current focus:** Phase 2 in progress. Gmail channel provider at checkpoint (awaiting human verification).
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 2 of 6 (Automation Infrastructure)
-Plan: 1 of 4 in phase (complete)
+Plan: 3 of 4 in phase (checkpoint — 2/3 tasks complete, awaiting verification)
 Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-02-01-PLAN.md (Webhook Receiver Infrastructure)
+Last activity: 2026-02-20 — v2.0-02-03-PLAN.md Tasks 1-2 complete (Gmail Channel Provider — checkpoint)
 
-Progress: [█████░░░░░░░░░░░░░░░░░] 5/22 (~23%)
+Progress: [██████░░░░░░░░░░░░░░░░] 6/22 (~27%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5 (v2.0)
-- Average duration: 6.8min
-- Total execution time: 31min
+- Total plans completed: 6 (v2.0) (02-03 partial — 2/3 tasks)
+- Average duration: 6.7min
+- Total execution time: 38min
 
 ## Accumulated Context
 
@@ -66,6 +66,10 @@ v2.0 Phase 2 decisions:
 - [Webhook]: UUID validation on route IDs to avoid intercepting /api/webhook/git
 - [Webhook]: Duplicate deliveries return HTTP 200 to prevent external service retries
 - [Webhook]: BullMQ webhook worker concurrency 2 (matches memory extraction pattern)
+- [Gmail]: OAuth callback is public (before requireApiKey) — Google redirects browser directly
+- [Gmail]: Polling interval default 60s, configurable via GMAIL_POLL_INTERVAL_SEC
+- [Gmail]: Seen message IDs stored in Redis SET with 500-entry cap
+- [Gmail]: GmailProvider registered in ChannelManager alongside existing providers
 
 ### Pending Todos
 
@@ -77,10 +81,10 @@ None.
 - Memory service empty results — needs debugging
 - SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write (SDK issue #115)
 - SDK token visibility in subscription mode — MEDIUM confidence, verify before Phase 3 usage schema
-- Pre-existing TS errors in channels/types.ts (gmail channel type) — does not block builds
+- Gmail requires GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET env vars + Google Cloud Console OAuth setup before verification
 
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-02-01-PLAN.md (Webhook Receiver Infrastructure)
-Resume file: None
+Stopped at: v2.0-02-03 checkpoint (Tasks 1-2 complete, Task 3 human-verify pending)
+Resume file: None (continuation agent needed after checkpoint)
