@@ -5,3 +5,4 @@
 export * from './retry.js';
 export * from './backoff.js';
 export * from './errors.js';
+export * from './circuit-breaker.js';

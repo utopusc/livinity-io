@@ -27,6 +27,7 @@ import { SkillInstaller } from './skill-installer.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
+import { CircuitBreaker } from './infra/circuit-breaker.js';
 
 const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
 const NEXUS_SKILLS_DIR = process.env.NEXUS_SKILLS_DIR || '/opt/nexus/app/skills';
@@ -40,12 +41,23 @@ process.on('unhandledRejection', (reason: any) => {
 });
 process.on('uncaughtException', (err: Error) => {
   // Only keep alive for known recoverable errors; crash for truly fatal ones
-  const recoverable = err.message?.includes('Failed to parse stream')
-    || err.message?.includes('fetch failed')
-    || err.message?.includes('ECONNRESET')
-    || err.message?.includes('socket hang up');
+  const msg = err.message ?? '';
+  const name = err.name ?? '';
+  const recoverable = msg.includes('Failed to parse stream')
+    || msg.includes('fetch failed')
+    || msg.includes('ECONNRESET')
+    || msg.includes('socket hang up')
+    || name === 'AbortError' || msg.includes('AbortError')
+    || msg.includes('EPIPE')
+    || msg.includes('ECONNREFUSED')
+    || msg.includes('ERR_STREAM')
+    || msg.includes('write after end')
+    || msg.includes('Cannot read properties of null')
+    || msg.includes('ETIMEDOUT')
+    || msg.includes('ENOTFOUND');
   logger.error(`Uncaught exception (${recoverable ? 'recovered' : 'FATAL'})`, {
-    error: err.message,
+    error: msg,
+    name,
     stack: err.stack?.split('\n').slice(0, 5).join(' | '),
   });
   if (!recoverable) {
@@ -59,8 +71,23 @@ async function main() {
   const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
   });
-  redis.on('connect', () => logger.info('Redis connected'));
-  redis.on('error', (err: Error) => logger.error('Redis error', { error: err.message }));
+
+  // Circuit breaker for Redis — prevents cascade crashes when Redis goes down temporarily
+  const redisCircuitBreaker = new CircuitBreaker({
+    name: 'RedisCircuitBreaker',
+    failureThreshold: 5,
+    resetTimeoutMs: 30_000,
+    halfOpenMaxAttempts: 3,
+  });
+
+  redis.on('connect', () => {
+    redisCircuitBreaker.recordSuccess();
+    logger.info('Redis connected');
+  });
+  redis.on('error', (err: Error) => {
+    redisCircuitBreaker.recordFailure();
+    logger.error('Redis error (circuit breaker notified)', { error: err.message, circuitState: redisCircuitBreaker.getState() });
+  });
 
   const brain = new Brain(redis);
   const router = new Router(brain);
@@ -364,6 +391,7 @@ Conversation:`;
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    redisCircuitBreaker.destroy();
     wsGateway.stop();
     heartbeatRunner.stop();
     await memoryExtractionWorker.close();
