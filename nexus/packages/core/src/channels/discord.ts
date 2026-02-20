@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Events, Message, TextChannel } from 'discord.js';
 import type Redis from 'ioredis';
 import { logger } from '../logger.js';
+import type { DmPairingManager } from '../dm-pairing.js';
 import type {
   ChannelProvider,
   ChannelConfig,
@@ -18,6 +19,11 @@ export class DiscordProvider implements ChannelProvider {
   private config: ChannelConfig = { enabled: false };
   private status: ChannelStatus = { enabled: false, connected: false };
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
+  private dmPairing: DmPairingManager | null = null;
+
+  setDmPairing(manager: DmPairingManager): void {
+    this.dmPairing = manager;
+  }
 
   async init(redis: Redis): Promise<void> {
     this.redis = redis;
@@ -100,6 +106,26 @@ export class DiscordProvider implements ChannelProvider {
         }
 
         if (!text) return;
+
+        // ── DM Pairing: check unknown DM users ──
+        if (!isGuild && this.dmPairing) {
+          const result = await this.dmPairing.checkAndInitiatePairing(
+            'discord',
+            message.author.id,
+            message.author.username,
+            message.channelId,
+          );
+          if (!result.allowed) {
+            if (result.message) {
+              try {
+                await message.reply(result.message);
+              } catch (replyErr: any) {
+                logger.error('DiscordProvider: failed to send pairing message', { error: replyErr.message });
+              }
+            }
+            return; // Do NOT pass to handler
+          }
+        }
 
         const incomingMsg: IncomingMessage = {
           channel: 'discord',

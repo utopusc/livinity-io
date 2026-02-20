@@ -1,6 +1,7 @@
 import { Bot, Context } from 'grammy';
 import type Redis from 'ioredis';
 import { logger } from '../logger.js';
+import type { DmPairingManager } from '../dm-pairing.js';
 import type {
   ChannelProvider,
   ChannelConfig,
@@ -19,6 +20,11 @@ export class TelegramProvider implements ChannelProvider {
   private status: ChannelStatus = { enabled: false, connected: false };
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
   private pollingActive = false;
+  private dmPairing: DmPairingManager | null = null;
+
+  setDmPairing(manager: DmPairingManager): void {
+    this.dmPairing = manager;
+  }
 
   async init(redis: Redis): Promise<void> {
     this.redis = redis;
@@ -118,6 +124,26 @@ export class TelegramProvider implements ChannelProvider {
           const botUsername = this.status.botName;
           if (botUsername && !msg.text.includes(`@${botUsername}`)) {
             return;
+          }
+        }
+
+        // ── DM Pairing: check unknown DM users ──
+        if (!isGroup && this.dmPairing) {
+          const result = await this.dmPairing.checkAndInitiatePairing(
+            'telegram',
+            String(msg.from?.id || 0),
+            userName,
+            String(msg.chat.id),
+          );
+          if (!result.allowed) {
+            if (result.message) {
+              try {
+                await ctx.reply(result.message);
+              } catch (replyErr: any) {
+                logger.error('TelegramProvider: failed to send pairing message', { error: replyErr.message });
+              }
+            }
+            return; // Do NOT pass to handler
           }
         }
 
