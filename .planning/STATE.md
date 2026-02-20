@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 3 in progress (Intelligence Enhancements). Wave 1 complete (03-01 + 03-02). Wave 2 (03-03) remaining.
+**Current focus:** Phase 3 complete (Intelligence Enhancements). Ready for Phase 4 (Voice Pipeline).
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 3 of 6 (Intelligence Enhancements)
-Plan: 2 of 3 in phase (Wave 1 complete)
-Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-03-01-PLAN.md (Session Compaction)
+Plan: 3 of 3 in phase (Phase complete)
+Status: Phase complete
+Last activity: 2026-02-20 — Completed v2.0-03-03-PLAN.md (Sub-Agent Execution Engine)
 
-Progress: [█████████░░░░░░░░░░░░░] 10/22 (~45%)
+Progress: [███████████░░░░░░░░░░░] 11/22 (~50%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10 (v2.0)
-- Average duration: 6.1min
-- Total execution time: 53min
+- Total plans completed: 11 (v2.0)
+- Average duration: 5.9min
+- Total execution time: 57min
 
 ## Accumulated Context
 
@@ -85,6 +85,9 @@ v2.0 Phase 3 decisions:
 - [Multi-Agent]: Redis with 1-hour TTL for session state, history as list
 - [Multi-Agent]: Max 2 concurrent sub-agents via SCARD check (MULTI-06)
 - [Multi-Agent]: Tools conditionally registered when multiAgentManager exists
+- [Multi-Agent]: DAG enforcement via restricted ToolRegistry (exclude sessions_* tools) + system prompt
+- [Multi-Agent]: Sub-agents use sonnet tier, stream disabled (background BullMQ execution)
+- [Multi-Agent]: sessions_send only enqueues if session not already running (prevent duplicates)
 
 ### Pending Todos
 
@@ -101,5 +104,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-03-01-PLAN.md (Session Compaction)
+Stopped at: Completed v2.0-03-03-PLAN.md (Sub-Agent Execution Engine) — Phase 3 complete
 Resume file: None
