@@ -43,6 +43,27 @@ interface GmailConfig {
   gmailPollIntervalSec?: number;
 }
 
+export interface EmailDetail {
+  id: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  cc?: string;
+  date: string;
+  body: string;
+  snippet: string;
+  labels: string[];
+}
+
+export interface EmailSummary {
+  id: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Gmail Channel Provider
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +80,7 @@ export class GmailProvider implements ChannelProvider {
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastPollTime: string | null = null;
+  private channelManager: any = null;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -174,10 +196,14 @@ export class GmailProvider implements ChannelProvider {
     return this.status;
   }
 
-  async sendMessage(_chatId: string, _text: string, _replyTo?: string): Promise<boolean> {
-    // Sending email will be implemented in a future plan
-    logger.debug('GmailProvider: sendMessage not yet implemented');
-    return false;
+  async sendMessage(chatId: string, text: string, _replyTo?: string): Promise<boolean> {
+    try {
+      await this.sendEmail(chatId, 'Message from LivOS AI', text);
+      return true;
+    } catch (err: any) {
+      logger.error('GmailProvider: sendMessage failed', { error: err.message, chatId });
+      return false;
+    }
   }
 
   onMessage(handler: (msg: IncomingMessage) => Promise<void>): void {
@@ -437,15 +463,13 @@ export class GmailProvider implements ChannelProvider {
     } catch (err: any) {
       logger.error('GmailProvider: poll error', { error: err.message });
 
-      // If token expired / revoked, update status
-      if (err.message?.includes('invalid_grant') || err.response?.status === 401) {
-        this.status = {
-          enabled: true,
-          connected: false,
-          error: 'Token expired or revoked — reconnect in Settings',
-        };
-        await this.saveStatus();
-        this.stopPolling();
+      // If token expired / revoked, trigger failure notification
+      if (
+        err.message?.includes('invalid_grant') ||
+        err.response?.status === 401 ||
+        err.response?.status === 403
+      ) {
+        await this.handleTokenRefreshFailure(err);
       }
     }
   }
@@ -484,6 +508,251 @@ export class GmailProvider implements ChannelProvider {
     }
 
     return '';
+  }
+
+  // ── Email MCP Helpers ────────────────────────────────────────────────
+
+  /**
+   * Set the ChannelManager reference (for sending notifications on token failure).
+   */
+  setChannelManager(manager: any): void {
+    this.channelManager = manager;
+  }
+
+  /**
+   * Read a single email by ID, returning full detail.
+   */
+  async readEmail(messageId: string): Promise<EmailDetail> {
+    if (!this.gmail) throw new Error('Gmail not connected');
+
+    const res = await this.gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full',
+    });
+
+    const headers = res.data.payload?.headers || [];
+    const getHeader = (name: string) =>
+      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+
+    const body = this.extractBody(res.data.payload);
+
+    return {
+      id: res.data.id || messageId,
+      threadId: res.data.threadId || '',
+      subject: getHeader('subject') || '(no subject)',
+      from: getHeader('from'),
+      to: getHeader('to'),
+      cc: getHeader('cc') || undefined,
+      date: getHeader('date'),
+      body,
+      snippet: res.data.snippet || '',
+      labels: res.data.labelIds || [],
+    };
+  }
+
+  /**
+   * Send a new email.
+   */
+  async sendEmail(to: string, subject: string, body: string): Promise<{ messageId: string }> {
+    if (!this.gmail) throw new Error('Gmail not connected');
+
+    const profile = await this.getProfile();
+    const from = profile?.email || 'me';
+
+    const messageParts = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      body,
+    ];
+    const raw = Buffer.from(messageParts.join('\r\n'))
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const res = await this.gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw },
+    });
+
+    logger.info('GmailProvider: email sent', { to, subject, messageId: res.data.id });
+    return { messageId: res.data.id || '' };
+  }
+
+  /**
+   * Send a reply to an existing email thread.
+   */
+  async sendReply(messageId: string, body: string): Promise<{ messageId: string }> {
+    if (!this.gmail) throw new Error('Gmail not connected');
+
+    // Fetch original message for thread context
+    const original = await this.gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'metadata',
+      metadataHeaders: ['Subject', 'From', 'Message-ID'],
+    });
+
+    const headers = original.data.payload?.headers || [];
+    const getHeader = (name: string) =>
+      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+
+    const threadId = original.data.threadId || '';
+    const originalFrom = getHeader('from');
+    const originalSubject = getHeader('subject');
+    const originalMessageId = getHeader('message-id');
+
+    // Build reply subject
+    const replySubject = originalSubject.toLowerCase().startsWith('re:')
+      ? originalSubject
+      : `Re: ${originalSubject}`;
+
+    const profile = await this.getProfile();
+    const from = profile?.email || 'me';
+
+    const messageParts = [
+      `From: ${from}`,
+      `To: ${originalFrom}`,
+      `Subject: ${replySubject}`,
+      `In-Reply-To: ${originalMessageId}`,
+      `References: ${originalMessageId}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      body,
+    ];
+    const raw = Buffer.from(messageParts.join('\r\n'))
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const res = await this.gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw, threadId },
+    });
+
+    logger.info('GmailProvider: reply sent', { to: originalFrom, threadId, messageId: res.data.id });
+    return { messageId: res.data.id || '' };
+  }
+
+  /**
+   * Search emails with a Gmail search query.
+   */
+  async searchEmails(query: string, maxResults?: number): Promise<EmailSummary[]> {
+    if (!this.gmail) throw new Error('Gmail not connected');
+
+    const listRes = await this.gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: maxResults || 10,
+    });
+
+    const messages = listRes.data.messages || [];
+    if (messages.length === 0) return [];
+
+    const summaries: EmailSummary[] = [];
+
+    for (const msgRef of messages) {
+      if (!msgRef.id) continue;
+      try {
+        const msg = await this.gmail.users.messages.get({
+          userId: 'me',
+          id: msgRef.id,
+          format: 'metadata',
+          metadataHeaders: ['Subject', 'From', 'Date'],
+        });
+
+        const headers = msg.data.payload?.headers || [];
+        const getHeader = (name: string) =>
+          headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+
+        summaries.push({
+          id: msg.data.id || msgRef.id,
+          subject: getHeader('subject') || '(no subject)',
+          from: getHeader('from'),
+          date: getHeader('date'),
+          snippet: msg.data.snippet || '',
+        });
+      } catch (err: any) {
+        logger.error('GmailProvider: failed to fetch search result', { id: msgRef.id, error: err.message });
+      }
+    }
+
+    return summaries;
+  }
+
+  /**
+   * Archive an email (remove from inbox).
+   */
+  async archiveEmail(messageId: string): Promise<boolean> {
+    if (!this.gmail) throw new Error('Gmail not connected');
+
+    await this.gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: { removeLabelIds: ['INBOX'] },
+    });
+
+    logger.info('GmailProvider: email archived', { messageId });
+    return true;
+  }
+
+  // ── Token Refresh Failure ──────────────────────────────────────────
+
+  /**
+   * Handle token refresh failure: log, update status, notify user via other channels, stop polling.
+   */
+  private async handleTokenRefreshFailure(error: Error): Promise<void> {
+    logger.error('GmailProvider: token refresh failed — user notification required', { error: error.message });
+
+    // Update status to disconnected
+    this.status = {
+      enabled: true,
+      connected: false,
+      error: 'Token expired or revoked — reconnect in Settings',
+    };
+    await this.saveStatus();
+
+    // Store notification in Redis for UI
+    if (this.redis) {
+      const notification = {
+        type: 'gmail_token_failure',
+        message: 'Gmail authentication expired. Please reconnect in Settings > Gmail.',
+        timestamp: Date.now(),
+        error: error.message,
+      };
+      await this.redis.lpush('nexus:notifications', JSON.stringify(notification));
+      await this.redis.ltrim('nexus:notifications', 0, 99); // Keep last 100 notifications
+    }
+
+    // Send notification via Telegram/Discord if channelManager is available
+    if (this.channelManager) {
+      const alertMessage = '⚠️ Gmail authentication has expired. Please reconnect Gmail in the LivOS Settings page to restore email functionality.';
+
+      for (const channelId of ['telegram', 'discord'] as const) {
+        try {
+          const lastChatId = this.redis
+            ? await this.redis.get(`nexus:${channelId}:last_chat_id`)
+            : null;
+          if (lastChatId) {
+            await this.channelManager.sendMessage(channelId, lastChatId, alertMessage);
+            logger.info('GmailProvider: token failure notification sent', { channel: channelId });
+          }
+        } catch (err: any) {
+          logger.error('GmailProvider: failed to send token failure notification', {
+            channel: channelId,
+            error: err.message,
+          });
+        }
+      }
+    }
+
+    // Stop polling — can't do anything without valid tokens
+    this.stopPolling();
   }
 
   // ── Redis Helpers ─────────────────────────────────────────────────────
