@@ -94,9 +94,18 @@ export class DiscordProvider implements ChannelProvider {
         const isGuild = message.guild !== null;
         const botMention = this.client?.user ? `<@${this.client.user.id}>` : '';
 
-        // In guilds, only respond if mentioned
-        if (isGuild && !message.mentions.has(this.client!.user!)) {
-          return;
+        // In guilds, check activation mode (mention or always)
+        if (isGuild) {
+          let activationMode = 'mention'; // default
+          if (this.redis) {
+            const mode = await this.redis.get(`nexus:activation:${message.channelId}`);
+            if (mode) activationMode = mode;
+          }
+
+          if (activationMode === 'mention' && !message.mentions.has(this.client!.user!)) {
+            return;
+          }
+          // If 'always', skip mention check and process all messages
         }
 
         // Remove bot mention from message
