@@ -279,7 +279,7 @@ export class Daemon {
           }
         }
 
-        // Handle slash commands (/think, /verbose, /model, /help, /reset, /status)
+        // Handle slash commands (/think, /verbose, /model, /help, /reset, /status, /new, /compact, /activation)
         if (isCommand(item.message) && item.from && this.config.userSessionManager) {
           const session = await this.config.userSessionManager.get(item.from);
           const cmdResult = await handleCommand(item.message, {
@@ -288,6 +288,9 @@ export class Daemon {
             currentThink: session.thinkLevel,
             currentVerbose: session.verboseLevel,
             currentModel: session.modelTier,
+            sessionManager: this.config.sessionManager,
+            channelId: item.from,
+            redis: this.config.redis,
           });
 
           if (cmdResult?.handled && cmdResult.response) {
@@ -472,7 +475,7 @@ export class Daemon {
         }
       }
 
-      // Handle slash commands (/think, /verbose, /model, /help, /reset, /status)
+      // Handle slash commands (/think, /verbose, /model, /help, /reset, /status, /new, /compact, /activation)
       if (isCommand(item.message) && item.from && this.config.userSessionManager) {
         const session = await this.config.userSessionManager.get(item.from);
         const cmdResult = await handleCommand(item.message, {
@@ -481,6 +484,9 @@ export class Daemon {
           currentThink: session.thinkLevel,
           currentVerbose: session.verboseLevel,
           currentModel: session.modelTier,
+          sessionManager: this.config.sessionManager,
+          channelId: item.from,
+          redis: this.config.redis,
         });
 
         if (cmdResult?.handled && cmdResult.response) {
