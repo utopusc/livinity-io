@@ -918,6 +918,129 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── DM Pairing Management API ────────────────────────────────
+
+  /** Get all pending DM pairing requests */
+  app.get('/api/dm-pairing/pending', async (_req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      const pending = await dmPairingManager.getPendingRequests();
+      res.json({ pending });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get allowlist for a channel */
+  app.get('/api/dm-pairing/allowlist/:channel', async (req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      const users = await dmPairingManager.getAllowlist(req.params.channel);
+      res.json({ channel: req.params.channel, users });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Approve a pending pairing request */
+  app.post('/api/dm-pairing/approve', async (req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      const { channel, userId } = req.body;
+      if (!channel || !userId) {
+        res.status(400).json({ error: '"channel" and "userId" are required' });
+        return;
+      }
+      const approved = await dmPairingManager.approvePairing(channel, userId);
+      if (!approved) {
+        res.status(404).json({ error: 'Pending request not found' });
+        return;
+      }
+      res.json({ ok: true, message: `User ${userId} approved for ${channel}` });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Deny a pending pairing request */
+  app.post('/api/dm-pairing/deny', async (req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      const { channel, userId } = req.body;
+      if (!channel || !userId) {
+        res.status(400).json({ error: '"channel" and "userId" are required' });
+        return;
+      }
+      const denied = await dmPairingManager.denyPairing(channel, userId);
+      if (!denied) {
+        res.status(404).json({ error: 'Pending request not found' });
+        return;
+      }
+      res.json({ ok: true, message: `User ${userId} denied for ${channel}` });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get DM policy for a channel */
+  app.get('/api/dm-pairing/policy/:channel', async (req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      const policy = await dmPairingManager.getPolicy(req.params.channel);
+      res.json({ channel: req.params.channel, policy });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Update DM policy for a channel */
+  app.put('/api/dm-pairing/policy/:channel', async (req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      const { policy } = req.body;
+      if (!policy || !['pairing', 'allowlist', 'open', 'disabled'].includes(policy)) {
+        res.status(400).json({ error: '"policy" must be one of: pairing, allowlist, open, disabled' });
+        return;
+      }
+      await dmPairingManager.setPolicy(req.params.channel, policy);
+      res.json({ ok: true, channel: req.params.channel, policy });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Remove a user from the allowlist */
+  app.delete('/api/dm-pairing/allowlist/:channel/:userId', async (req, res) => {
+    if (!dmPairingManager) {
+      res.status(503).json({ error: 'DM pairing not configured' });
+      return;
+    }
+    try {
+      await dmPairingManager.removeFromAllowlist(req.params.channel, req.params.userId);
+      res.json({ ok: true, message: `User ${req.params.userId} removed from ${req.params.channel} allowlist` });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {
