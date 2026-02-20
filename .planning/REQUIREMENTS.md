@@ -55,7 +55,7 @@
 
 - [ ] **GMAIL-01**: User can authenticate Gmail via OAuth 2.0 flow in the web UI Settings page
 - [ ] **GMAIL-02**: GmailProvider implements ChannelProvider interface (connect, disconnect, sendMessage, onMessage)
-- [ ] **GMAIL-03**: Gmail watch is set up via Pub/Sub and auto-renewed every 6 days via BullMQ repeatable job
+- [x] **GMAIL-03**: ~~Gmail watch is set up via Pub/Sub and auto-renewed every 6 days via BullMQ repeatable job~~ — **Deferred to v2.1** (polling mode satisfies GMAIL-07; Pub/Sub is advanced optimization per STATE.md decision)
 - [ ] **GMAIL-04**: Incoming emails trigger agent tasks with email content as the message text
 - [ ] **GMAIL-05**: AI agent can read, reply, send, search, and archive emails via MCP tools
 - [ ] **GMAIL-06**: OAuth refresh token failures are detected and user is notified via Telegram/Discord
@@ -141,6 +141,9 @@
 - **MULTI-ADV-02**: Shared knowledge base between agents
 - **MULTI-ADV-03**: Visual multi-agent orchestration in UI
 
+### Advanced Gmail
+- **GMAIL-ADV-01**: Gmail Pub/Sub watch with auto-renewal every 6 days via BullMQ (replaces polling for real-time)
+
 ### Channels
 - **CHAN-ADV-01**: WhatsApp re-integration
 - **CHAN-ADV-02**: Signal channel
@@ -201,7 +204,7 @@
 | HOOK-06 | v2.0 Phase 2 | Pending |
 | GMAIL-01 | v2.0 Phase 2 | Pending |
 | GMAIL-02 | v2.0 Phase 2 | Pending |
-| GMAIL-03 | v2.0 Phase 2 | Pending |
+| GMAIL-03 | Deferred v2.1 | Deferred |
 | GMAIL-04 | v2.0 Phase 2 | Pending |
 | GMAIL-05 | v2.0 Phase 2 | Pending |
 | GMAIL-06 | v2.0 Phase 2 | Pending |

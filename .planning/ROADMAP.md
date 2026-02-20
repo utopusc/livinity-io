@@ -493,7 +493,7 @@ Plans:
 ### Phase 2: Automation Infrastructure
 **Goal**: External services can trigger AI agent tasks via authenticated webhooks, and the AI can read, reply, search, and manage Gmail as a full communication channel
 **Depends on**: Phase 1 (stable process required before adding webhook/email event sources)
-**Requirements**: HOOK-01, HOOK-02, HOOK-03, HOOK-04, HOOK-05, HOOK-06, GMAIL-01, GMAIL-02, GMAIL-03, GMAIL-04, GMAIL-05, GMAIL-06, GMAIL-07
+**Requirements**: HOOK-01, HOOK-02, HOOK-03, HOOK-04, HOOK-05, HOOK-06, GMAIL-01, GMAIL-02, GMAIL-04, GMAIL-05, GMAIL-06, GMAIL-07
 **Success Criteria** (what must be TRUE):
   1. User can create a webhook endpoint via MCP tool, send a signed POST request to the generated URL, and the AI agent receives and processes the payload as a task
   2. Duplicate webhook deliveries (retries from the same source) are silently deduplicated and do not trigger multiple agent tasks
