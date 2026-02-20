@@ -1,549 +1,752 @@
-# Domain Pitfalls: Claude Migration & OpenClaw Feature Integration
+# Domain Pitfalls: LivOS v2.0 Feature Additions
 
-**Domain:** Multi-provider AI migration, subscription auth, memory integration, skill marketplace, WebSocket gateway
-**Target System:** LivOS / Nexus production deployment (server4 production, server5 test)
-**Researched:** 2026-02-15
-**Milestone:** v1.4 Claude Migration & OpenClaw Features
+**Domain:** Adding voice, canvas, multi-agent, webhooks, Gmail, CLI, session compaction to existing AI agent platform
+**Researched:** 2026-02-20
+**Overall confidence:** HIGH (verified against official docs, existing codebase analysis, and community reports)
 
 ---
 
-## Critical Pitfalls
+## CRITICAL PITFALLS
 
-Mistakes that cause production outages, data loss, or complete feature failure.
+Mistakes that cause rewrites, data loss, or sustained outages on the 2-4 CPU / 4-8GB VPS.
 
-### Pitfall 1: Gemini-to-Claude Message Role Mapping Breaks Agent Loop
+---
 
-**What goes wrong:** The current `ChatMessage` interface uses `role: 'user' | 'model'` (Gemini convention). Claude's Messages API uses `role: 'user' | 'assistant'`. Simply find-and-replacing `'model'` with `'assistant'` seems trivial but has deep ramifications: the entire `agent.ts` file pushes `{ role: 'model', text: responseText }` after every LLM response, and `{ role: 'user', text: observation }` for tool results. If the role mapping is incomplete or inconsistent, Claude will reject the message array with a 400 error ("messages must alternate between user and assistant roles"), crashing every agent invocation.
+### P-01: Voice Pipeline Latency Stacking (Cartesia + Deepgram)
 
-**Why it happens:** Gemini is lenient about consecutive same-role messages; Claude strictly enforces alternation. In the current codebase, `agent.ts` line 381 pushes `role: 'model'` for unparseable responses and line 401 for final answers, then pushes `role: 'user'` for observations. If any code path produces two consecutive `user` or `assistant` messages (e.g., tool result followed by another tool result without an assistant message in between), Claude silently rejects the entire conversation.
+**What goes wrong:** Each component in the voice pipeline adds latency sequentially: Deepgram STT (150-300ms) + Claude LLM (500-2000ms) + Cartesia TTS (40-150ms) + network round-trips (50-100ms) + browser audio scheduling (50-200ms). The total round-trip from user speech to AI speech playback reaches 800ms-2800ms. At the high end, conversations feel unnatural and users talk over the AI.
+
+**Why it happens:** Developers build and test each component independently, measuring per-component latency. When assembled into a pipeline, latencies compound. On a 2-4 CPU VPS with limited bandwidth, these numbers worsen under load.
 
 **Consequences:**
-- All agent invocations fail with 400 errors
-- No error recovery possible -- the message history is corrupted
-- Production WhatsApp/Telegram/Discord bots stop responding entirely
-- SSE streaming endpoint returns error events immediately
+- Conversations feel sluggish at >1200ms round-trip
+- Users begin speaking before AI finishes, causing overlapping audio
+- If using streaming STT + streaming TTS, partial results create audio artifacts ("stuttering")
+- CPU contention on the VPS between audio processing and agent reasoning
 
 **Warning signs:**
-- Agent works for single-turn but fails on multi-turn
-- "messages must alternate between user and assistant roles" in error logs
-- Works with simple queries but fails when tools are involved
+- TTFB (time-to-first-byte) for TTS exceeds 200ms consistently
+- Users report "the AI is slow to respond" in voice mode
+- Audio playback gaps between TTS chunks
+- Browser AudioContext shows underflow warnings in console
 
 **Prevention:**
-1. Create a message normalization layer between the internal `ChatMessage[]` format and Claude's expected format. This layer merges consecutive same-role messages and handles the `model` -> `assistant` rename.
-2. Add a pre-flight validation function that checks message alternation before sending to Claude API. Log and fix any violations rather than letting Claude reject them.
-3. Change the `ChatMessage.role` type from `'user' | 'model'` to `'user' | 'model' | 'assistant'` and add a mapping function in the Brain class -- do NOT change the role values throughout the codebase, as that would break Gemini compatibility during the transition period.
-4. Write integration tests that replay actual multi-turn agent conversations (with tool calls) against Claude's validation rules.
+1. **Stream everything**: Use Deepgram streaming STT (not batch), stream partial LLM output to Cartesia WebSocket as text arrives, stream TTS audio chunks to browser as they generate. Never wait for a complete response before starting TTS.
+2. **Measure end-to-end from day one**: Instrument the full pipeline with timestamps at each stage. Set a target of <1200ms for p95 latency.
+3. **Use Cartesia continuations**: When streaming text incrementally, use Cartesia's continuation feature to maintain prosody across chunks. Without it, each chunk has independent prosody that creates audible seams.
+4. **Pre-buffer TTS**: Set Cartesia's `max_buffer_delay_ms` appropriately -- the default 3000ms is too high for real-time conversation. Lower to 500-1000ms to reduce time-to-first-audio.
+5. **Consider a voice proxy**: Run Deepgram/Cartesia WebSocket connections server-side (on VPS) rather than from the browser directly, to avoid double network hops.
 
-**Detection:** Unit test that passes a sequence of messages through the normalization layer and asserts alternation. Integration test against Claude API with `max_tokens: 1` just to validate message format.
+**Confidence:** HIGH -- latency benchmarks from [Deepgram](https://deepgram.com/learn/speech-to-text-benchmarks), [Cartesia](https://cartesia.ai/pricing), and [voice AI infrastructure analysis](https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025).
 
-**Phase:** Must be addressed in Phase 1 (Brain abstraction layer). This is the single most likely cause of "it works in dev, breaks in prod."
-
-**Confidence:** HIGH -- verified against Claude API documentation at [platform.claude.com/docs/en/api/messages-streaming](https://platform.claude.com/docs/en/api/messages-streaming) and the current `agent.ts` source code.
+**Phase to address:** Voice phase -- must be the core architectural decision, not an afterthought.
 
 ---
 
-### Pitfall 2: Tool Calling Format Mismatch Causes Silent Agent Failures
+### P-02: Always-On Microphone Burns STT Credits
 
-**What goes wrong:** The current `AgentLoop` uses a JSON-in-text approach where the LLM outputs `{"type": "tool_call", "tool": "...", "params": {...}}` as plain text, and `parseStep()` extracts it with JSON.parse and regex fallbacks. Claude's native tool calling uses a fundamentally different mechanism: you pass `tools` in the API request, and Claude returns `content` blocks with `type: "tool_use"` containing `id`, `name`, and `input` fields. You then return `tool_result` blocks in the next user message matching by `tool_use_id`.
+**What goes wrong:** When the browser microphone is always on and streaming to Deepgram, every second of audio is billed -- including silence, background noise, keyboard typing, other people talking. A single user with an always-on mic costs approximately $0.26/hour ($0.0043/min x 60 = $0.26/hr at Nova-3 rates). With 5 users across 8 working hours, that is $10.40/day or $312/month just in STT -- for mostly silence.
 
-If you continue using the text-based JSON approach with Claude, you lose: (a) guaranteed valid tool schemas, (b) parallel tool calling, (c) streaming tool input deltas, and (d) the `stop_reason: "tool_use"` signal. If you switch to native tool calling, the entire `parseStep()` mechanism and the ReAct prompt must be rewritten.
-
-**Why it happens:** The existing architecture was designed around Gemini's lack of native tool calling support (Gemini uses FunctionDeclaration but the codebase chose to implement its own JSON-in-text protocol). Claude has mature native tool calling with `input_json_delta` streaming events, but adopting it requires restructuring both the Brain interface and the AgentLoop.
+**Why it happens:** The simplest implementation is "open mic, stream everything." Developers don't notice cost in development (Deepgram gives $200 free credit) but it compounds rapidly in production.
 
 **Consequences:**
-- If kept as text-based: Claude may refuse to emit raw JSON (its system prompt training discourages unstructured JSON dumps), tool calls become unreliable, no parallel tool use
-- If switched to native but incompletely: Tool results missing `tool_use_id` cause 400 errors, partial JSON in streaming needs accumulation, `stop_reason` parsing changes
-- Streaming tool input arrives as `input_json_delta` partial JSON strings that must be accumulated and parsed only after `content_block_stop` -- failing to do this causes parse errors
+- STT costs 10-50x higher than necessary
+- Deepgram processes and returns transcriptions of background noise, keyboard clicks, ambient conversation
+- AI receives false triggers from ambient speech
+- On the VPS side, processing noise transcriptions wastes agent turns
 
 **Warning signs:**
-- Claude wraps JSON in markdown code blocks despite prompt instructions
-- Tool calls succeed on simple tools but fail on complex parameter schemas
-- "tool_use ids were found without tool_result blocks" errors in logs
+- Deepgram billing shows hours of audio processed but few meaningful interactions
+- Transcription results full of "[inaudible]", single words, background noise fragments
+- AI agent triggered by ambient speech it shouldn't have heard
 
 **Prevention:**
-1. **Phase 1 decision: Choose one approach and commit.** Recommended: Use native Claude tool calling AND keep the text-based approach as Gemini fallback. The Brain abstraction layer should normalize both into a common `ToolCall` type.
-2. Create a `ToolCallResult` interface: `{ toolCallId: string, toolName: string, input: Record<string, unknown> }` that both providers map to.
-3. For Claude native tool calling, convert the existing `ToolRegistry.toJsonSchemas()` output to Claude's `input_schema` format (they're similar but Claude uses `input_schema` not `parameters`).
-4. For tool results, Claude requires `{ type: "tool_result", tool_use_id: "...", content: "..." }` in the user message. The Brain layer must handle this mapping transparently.
-5. Handle parallel tool calls: Claude may return multiple `tool_use` blocks in one response. The AgentLoop currently assumes one tool call per turn. This must be restructured or Claude must be instructed to use sequential calls via `disable_parallel_tool_use: true`.
+1. **Push-to-talk as default**: Require user to hold a button or press-to-toggle. This is the single most effective cost control.
+2. **Voice Activity Detection (VAD)**: Use browser-side VAD (like `@ricky0123/vad-web` or Silero VAD) to detect speech before streaming to Deepgram. Only open the STT connection when voice is detected.
+3. **Deepgram keep-alive during silence**: Send `{"type": "KeepAlive"}` as text WebSocket frames every 3-5 seconds during VAD-detected silence. This keeps the connection alive without billing audio. If no audio or keep-alive is sent within 10 seconds, Deepgram closes with NET-0001 error.
+4. **Budget caps**: Track per-user STT minutes in Redis. Alert at thresholds (e.g., 30 min/day) and hard-stop at limits.
+5. **Cartesia TTS costs too**: At $0.011 per 1,000 characters, a chatty AI generating 500 chars per response x 100 responses/day = $0.55/day. Not catastrophic, but track it.
 
-**Detection:** Test with a tool that has complex nested parameters. If the schema doesn't translate correctly, the tool call will have wrong or missing fields.
+**Confidence:** HIGH -- [Deepgram pricing](https://deepgram.com/pricing) verified, [keep-alive docs](https://developers.deepgram.com/docs/audio-keep-alive) verified.
 
-**Phase:** Must be addressed in Phase 1 (Brain abstraction layer), with the AgentLoop adaptation in Phase 2.
-
-**Confidence:** HIGH -- verified against Claude tool use documentation at [platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use) and the actual `agent.ts` `parseStep()` implementation.
+**Phase to address:** Voice phase -- VAD must be implemented before any "always-on" mode ships.
 
 ---
 
-### Pitfall 3: SSE Streaming Format Change Breaks Frontend Without Warning
+### P-03: Browser Autoplay Policy Blocks Voice Output
 
-**What goes wrong:** The current SSE streaming endpoint (`POST /api/agent/stream`) emits `AgentEvent` objects with types like `thinking`, `chunk`, `tool_call`, `observation`, `final_answer`, `error`, `done`. These events are constructed from the Gemini stream where text arrives as continuous `chunk.text()` strings.
+**What goes wrong:** Modern browsers (Chrome 70+, Firefox, Safari) block AudioContext creation and audio playback unless triggered by a user gesture (click, tap, keypress). If TTS audio arrives before the user has interacted with the page, it silently fails. The AudioContext enters a "suspended" state and no audio plays.
 
-Claude streaming uses a completely different event model: `message_start`, `content_block_start`, `content_block_delta` (with `text_delta` or `input_json_delta` subtypes), `content_block_stop`, `message_delta`, `message_stop`. The text arrives in `delta.text` not `chunk.text()`. Tool inputs arrive as `input_json_delta` partial JSON strings, not complete objects.
-
-If the backend switches to Claude streaming without updating the SSE event format, the frontend (LivOS UI) will receive garbled or missing data. If the event format IS changed, the frontend must be updated simultaneously or it will break.
-
-**Why it happens:** The SSE format is an implicit API contract between the Nexus backend and the LivOS frontend. There's no versioned protocol -- the frontend simply parses `data: ${JSON.stringify(event)}` and expects specific `type` values. Changing the backend streaming without a coordinated frontend update creates a silent incompatibility.
+**Why it happens:** Browsers implemented autoplay policies to prevent websites from autoplaying audio/video. This applies even to AudioContext used for audio analysis (not just playback). Developers testing in localhost or with DevTools open may not trigger the policy, so it appears to "work fine" until deployed.
 
 **Consequences:**
-- Frontend shows blank responses (events received but not parsed)
-- Streaming progress indicators stop working
-- Tool call visualization breaks
-- No error shown to user -- just silence or partial text
+- TTS audio silently fails on first page load
+- Users see the AI "responded" but hear nothing
+- AudioContext.state === "suspended" goes unchecked
+- On mobile browsers, the restrictions are even stricter
 
 **Warning signs:**
-- Frontend console shows unknown event types
-- Streaming works in API testing but not in UI
-- Agent completes successfully server-side but UI shows "error" or nothing
+- "The AudioContext was not allowed to start" warning in browser console
+- Audio works after clicking a button but not on initial load
+- Audio works on desktop but fails on mobile
+- `AudioContext.state` returns "suspended" instead of "running"
 
 **Prevention:**
-1. **Keep the existing `AgentEvent` format as the SSE contract.** The Brain streaming layer should translate Claude's event stream into the existing `AgentEvent` types. The frontend should not need to change.
-2. Map Claude events to AgentEvents:
-   - `content_block_delta` with `text_delta` -> `{ type: 'chunk', data: delta.text }`
-   - `content_block_start` with `tool_use` -> `{ type: 'tool_call', data: { tool, params } }` (accumulate input_json_delta first)
-   - `message_stop` with accumulated text -> `{ type: 'done', data: { answer, success } }`
-3. Use the Anthropic SDK's `client.messages.stream()` helper which provides `.on('text', callback)` event handler, making it easy to emit chunk events matching the current format.
-4. Test streaming with a Claude API call that includes tool use to verify the full event sequence maps correctly.
-5. Version the SSE event format (add an `apiVersion` field) so future changes can be detected by the frontend.
+1. **Gate voice features behind a user gesture**: Show a "Start Voice Mode" button that the user must click. On that click, create/resume the AudioContext.
+2. **Check and resume AudioContext**: Before playing any audio, check `audioContext.state`. If "suspended", call `audioContext.resume()` -- but this only works within a user gesture handler.
+3. **Use `navigator.getAutoplayPolicy()`**: Modern browsers (Chrome 134+) expose this API to check if autoplay is allowed, disallowed, or allowed-if-muted. Use it to show appropriate UI.
+4. **Queue audio during suspension**: If TTS audio arrives while AudioContext is suspended, buffer it. On next user gesture, resume AudioContext and play queued audio.
+5. **Test on fresh browser profiles**: Autoplay policies are more lenient for sites the user visits frequently. Test on a fresh profile/incognito to see the first-visit experience.
 
-**Detection:** Side-by-side comparison: run the same task against Gemini and Claude, diff the SSE event sequences.
+**Confidence:** HIGH -- [MDN Autoplay guide](https://developer.mozilla.org/en-US/docs/Web/Media/Autoplay_guide), [WebRTC autoplay analysis](https://webrtchacks.com/autoplay-restrictions-and-webrtc/).
 
-**Phase:** Must be addressed in Phase 1 (Brain abstraction layer) since the streaming endpoint is the primary consumer of Brain.chatStream().
-
-**Confidence:** HIGH -- verified by reading the current `api.ts` SSE implementation (line 584-660) and Claude's streaming event format from official docs.
+**Phase to address:** Voice phase -- AudioContext lifecycle must be designed into the UI from the start.
 
 ---
 
-### Pitfall 4: Claude Subscription Token Expiry Causes Silent Auth Failures
+### P-04: WebSocket Connection Churn (Deepgram + Cartesia)
 
-**What goes wrong:** Unlike Gemini (which uses a simple API key that never expires), Claude subscription auth via `claude setup-token` creates a token with a finite lifetime. Standard OAuth tokens expire after 8-12 hours. Even `setup-token` long-lived tokens have a 1-year expiry. When the token expires, every LLM call silently fails with a 401 error. The retry logic in `Brain` treats 401 as a non-retryable error (it's not in `isRetryableError`), so the agent immediately fails without any user-facing indication of what went wrong.
+**What goes wrong:** Both Deepgram STT and Cartesia TTS use WebSocket connections. On a VPS with variable network conditions, these connections drop due to: network hiccups, server-side timeouts (Deepgram: 10s without audio/keep-alive), Cartesia WebSocket limits, or VPS resource pressure. Without proper reconnection logic, voice breaks silently.
 
-**Why it happens:** The current `getGeminiClient()` pattern reads the API key from Redis (`livos:config:gemini_api_key`) and caches it. There's no concept of token refresh because API keys don't expire. When migrating to Claude subscription auth, the same pattern of "read once, cache forever" will silently fail when the token expires. GitHub issues [#12447](https://github.com/anthropics/claude-code/issues/12447) and [#19078](https://github.com/anthropics/claude-code/issues/19078) on the claude-code repo document this exact failure mode in production.
+**Why it happens:** WebSocket connections are long-lived and fragile. Unlike HTTP requests that retry naturally, a dropped WebSocket requires explicit reconnection logic: detecting the drop, re-establishing the connection, re-sending configuration, and handling any audio that was lost during the gap.
 
 **Consequences:**
-- All AI functionality stops working silently
-- No user-visible error -- messages just never get responses
-- Heartbeat runner, scheduled agents, and loop runners all fail simultaneously
-- Token expiry can happen at 3 AM with no one monitoring
+- STT stops transcribing mid-sentence; user keeps talking but nothing happens
+- TTS stops mid-word; AI response truncated
+- Deepgram timestamps reset to 0:00:00 on reconnection, breaking alignment
+- If reconnect logic creates new connections without closing old ones: WebSocket connection leak, memory growth, eventual OOM
 
 **Warning signs:**
-- Sudden increase in 401 errors in logs
-- All agent invocations fail simultaneously (not gradually)
-- Brain.chat() and Brain.chatStream() both fail with same error
-- Redis still has the token cached, but it's expired
+- Intermittent "WebSocket closed" errors in server logs
+- Users report voice "cutting out" randomly
+- Deepgram NET-0001 errors in logs (10-second timeout)
+- Growing WebSocket connection count over time (leak)
+- PM2 restart count increasing (OOM from leaked connections)
 
 **Prevention:**
-1. **Support both auth modes:** API key (never expires, simple) and subscription token (expires, needs refresh). The Brain class should detect which mode is in use.
-2. For subscription tokens, implement a token health check that runs on a timer (every 30 min) and proactively refreshes before expiry.
-3. Add specific 401 handling in the retry logic: on 401, attempt token refresh once, then retry. Add `401` to the retriable error patterns but with a refresh-first strategy.
-4. Store token metadata (expires_at, refresh_token) alongside the token in Redis: `nexus:config:claude_token_meta`.
-5. Add a health check endpoint that verifies the token is still valid (call Claude API with `max_tokens: 1` and a trivial prompt).
-6. Send a proactive notification (via Telegram/Discord/WhatsApp) when token is within 24 hours of expiry.
-7. Consider defaulting to API key auth for simplicity and only using subscription auth as an opt-in feature.
+1. **Deepgram keep-alive**: Send `{"type": "KeepAlive"}` as TEXT frame every 3-5 seconds during silence. This prevents the 10-second inactivity timeout.
+2. **Explicit reconnection with backoff**: On WebSocket close/error, reconnect with exponential backoff (1s, 2s, 4s, max 30s). Include jitter to prevent thundering herd.
+3. **Connection state machine**: Track WebSocket state explicitly: `connecting -> connected -> draining -> closed -> reconnecting`. Never send data in non-connected states.
+4. **Cartesia: reuse WebSocket for multiple generations**: Cartesia recommends using a single WebSocket with separate context IDs for each generation. Don't open/close WebSocket per utterance.
+5. **Cleanup on close**: When a WebSocket closes, remove ALL event listeners. Named handlers (not anonymous functions) are required for proper cleanup. Without this, listeners accumulate and prevent garbage collection -- a [documented Node.js WebSocket memory leak pattern](https://oneuptime.com/blog/post/2026-01-24-websocket-memory-leak-issues/view).
+6. **Server-side proxy**: Run WebSocket connections to Deepgram/Cartesia from the Node.js backend, not from each browser client. This centralizes connection management and avoids per-client connection overhead.
 
-**Detection:** Health check endpoint that returns token expiry time. Alert when < 24 hours remaining.
+**Confidence:** HIGH -- [Deepgram reconnection docs](https://developers.deepgram.com/docs/audio-keep-alive), [Cartesia WebSocket docs](https://docs.cartesia.ai/api-reference/tts/tts), [Node.js WebSocket memory leak patterns](https://github.com/websockets/ws/issues/804).
 
-**Phase:** Phase 2 (Auth integration). Must be designed alongside the Brain abstraction but can be implemented after basic Claude support works.
-
-**Confidence:** MEDIUM -- based on GitHub issues and community reports. The exact expiry behavior of `setup-token` vs standard OAuth is not fully documented by Anthropic; the 1-year figure comes from community sources at [claude-did-this.com](https://claude-did-this.com/claude-hub/getting-started/setup-container-guide).
+**Phase to address:** Voice phase -- connection management is foundational infrastructure.
 
 ---
 
-### Pitfall 5: Memory Service Uses Gemini Embeddings -- Breaks When Gemini Key Removed
+### P-05: iframe Sandbox for AI Canvas -- XSS vs. Functionality Tradeoff
 
-**What goes wrong:** The current memory service (`nexus/packages/memory/src/index.ts`) uses Gemini's `text-embedding-004` model for vector embeddings via a direct HTTP call to `generativelanguage.googleapis.com`. If the project migrates to Claude as primary provider and the user removes their Gemini API key, all memory operations (search and add) silently degrade to keyword-only search (no embeddings). Worse, if new memories are added without embeddings while old memories have Gemini embeddings, the vector similarity search returns inconsistent results -- new memories never match.
+**What goes wrong:** The AI-generated HTML/React code displayed in a live canvas runs in an iframe. If the iframe is unsandboxed (`sandbox` attribute absent), the AI-generated code has full access to the parent page: cookies, localStorage, DOM manipulation, network requests. If the iframe is over-sandboxed (`sandbox=""` with no permissions), the generated code can't run scripts, submit forms, or load external resources -- making it useless for interactive demos.
 
-**Why it happens:** The memory service was built with a hard dependency on Gemini embeddings. The `getEmbedding()` function only knows how to call Gemini. Claude does not offer an embedding model. This creates a hidden dependency on Gemini even after "full migration" to Claude.
+**Why it happens:** The `sandbox` attribute is all-or-nothing by default. Developers either omit it entirely (insecure) or add it without permissions (too restrictive), then add permissions one by one until things work -- often ending up with `allow-scripts allow-same-origin` which effectively negates the sandbox entirely (the iframe can remove its own sandbox attribute).
 
 **Consequences:**
-- Memory search quality degrades silently (no error, just bad results)
-- Users think memory is working but it's returning keyword matches only
-- Mixed embedding sources (some Gemini, some none) in the same database make similarity scores meaningless
-- If someone later adds a different embedding provider, existing embeddings are incompatible (different vector dimensions, different semantic spaces)
+- **Too permissive**: AI-generated code can exfiltrate data, hijack sessions, execute XSS against the parent app
+- **Too restrictive**: Generated code can't run, making the canvas feature useless
+- **allow-scripts + allow-same-origin together**: The iframe can reach into the parent DOM and remove its own sandbox -- this combination is explicitly warned against in the HTML spec
 
 **Warning signs:**
-- Memory search returns irrelevant results
-- `[Memory] No Gemini API key available for embeddings` in logs (currently just a warning, not an error)
-- Memory add succeeds but `embedding` column is NULL in SQLite
+- Users report "canvas doesn't work" (too restrictive)
+- XSS vulnerability reports from security scans
+- iframe accessing parent window cookies or localStorage
+- CSP violations in browser console
 
 **Prevention:**
-1. **Keep Gemini API key for embeddings even after Claude migration.** Embeddings are cheap ($0.00 per 1M tokens for text-embedding-004) and there's no reason to remove this dependency.
-2. If Gemini key must be removed, integrate an alternative embedding provider (e.g., local sentence-transformers, OpenAI text-embedding-3-small, or Cohere embed-v3). Add this as a configurable option.
-3. Add a startup health check that verifies embedding generation works. If not, log an ERROR (not warning) and disable vector search entirely rather than returning inconsistent results.
-4. If changing embedding models, re-embed all existing memories on migration. Do NOT mix embeddings from different models in the same database.
-5. Store the embedding model name alongside each memory so the system knows which memories need re-embedding.
+1. **Use `srcdoc` with data URI or blob URL**: Serve canvas content from a different origin (e.g., `null` origin via srcdoc, or a dedicated subdomain). This gives `allow-scripts` without `allow-same-origin`, which is secure.
+2. **Recommended sandbox attributes**: `sandbox="allow-scripts allow-popups allow-forms"` -- NEVER include `allow-same-origin` together with `allow-scripts`.
+3. **Content Security Policy**: Set CSP on the parent page with `frame-src` restricting which origins can be framed. Set CSP within the iframe to restrict network access.
+4. **Cross-Origin Isolation headers**: `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` for additional isolation.
+5. **Communication via postMessage only**: Parent and canvas communicate exclusively through `window.postMessage()` with origin validation. Never expose shared state objects.
+6. **Sanitize generated HTML**: Before injecting into iframe, pass through DOMPurify or similar sanitizer. Even with sandbox, defense-in-depth matters.
 
-**Detection:** Startup check that attempts to generate one embedding. Alert if it fails.
+**Confidence:** HIGH -- [iframe security best practices 2025](https://www.feroot.com/blog/how-to-secure-iframe-compliance-2025/), [HackTricks iframe XSS analysis](https://book.hacktricks.xyz/pentesting-web/xss-cross-site-scripting/iframes-in-xss-and-csp).
 
-**Phase:** Phase 3 (Memory integration). Must be designed in Phase 1 but implemented when hybrid memory is added.
-
-**Confidence:** HIGH -- verified by reading `nexus/packages/memory/src/index.ts` line 79-100 which contains the hard-coded Gemini embedding call.
+**Phase to address:** Canvas phase -- security architecture must be decided before any rendering code is written.
 
 ---
 
-## Moderate Pitfalls
+### P-06: Multi-Agent Recursive Deadlock and Token Explosion
 
-Mistakes that cause significant delays, degraded experience, or technical debt.
+**What goes wrong:** In multi-agent sessions, Agent A delegates to Agent B, which needs information from Agent A, creating a circular dependency. Even without explicit deadlocks, agents can enter "hallucination loops" where one agent generates a false premise, the other validates it using the first agent's reasoning, creating a self-reinforcing cycle. Each loop iteration burns tokens. Research shows accuracy gains saturate past 4 agents -- the "coordination tax."
 
-### Pitfall 6: Leaky Multi-Provider Abstraction (Lowest Common Denominator)
-
-**What goes wrong:** When building a Brain abstraction layer that supports both Gemini and Claude, there's strong temptation to create a lowest-common-denominator interface that only exposes features both providers support. This means losing:
-- Claude's native tool calling (Gemini doesn't use it in this codebase)
-- Claude's extended thinking (budget_tokens, thinking blocks)
-- Claude's parallel tool use
-- Claude's `stop_reason` semantic signals (`end_turn`, `tool_use`, `max_tokens`, `pause_turn`)
-- Claude's content block structure (multiple text + tool_use blocks in one response)
-- Claude's prompt caching
-- Gemini's inline vision with `inlineData` (Claude uses different image format)
-
-The abstraction becomes a straitjacket that prevents using the best features of either provider.
-
-**Why it happens:** Clean abstraction design favors symmetry. When providers have different capabilities, the natural instinct is to hide the differences behind a uniform interface. But AI providers are NOT interchangeable -- their strengths and interaction patterns differ fundamentally. As noted in [ProxAI's analysis](https://www.proxai.co/blog/archive/llm-abstraction-layer), "every time a provider updates its API, an internal wrapper must be updated too" and the maintenance burden grows exponentially.
+**Why it happens:** Agents share context and can reference each other's outputs. Without strict boundaries, they interpret each other's intermediate thoughts as facts. The LLM's pattern-matching behavior amplifies this: seeing other agents "agree" with a premise makes the current agent more likely to agree too.
 
 **Consequences:**
-- Can't use Claude's superior tool calling
-- Can't use extended thinking when it would help
-- Performance degrades because provider-specific optimizations are unavailable
-- Every new Claude/Gemini feature requires changes to the abstraction layer
-
-**Prevention:**
-1. **Use a "capability-based" abstraction, not a "uniform" abstraction.** Define a core interface (chat, stream, think) but allow provider-specific extensions via an `options` bag.
-2. Design pattern: `Brain.chat(options)` has a `providerOptions?: Record<string, unknown>` field where Claude-specific options (extended thinking, tool choice, cache control) can be passed without polluting the generic interface.
-3. **Do NOT abstract tool calling.** Let each provider handle tools in its native format. The AgentLoop should call `brain.chatWithTools()` which returns a normalized `ToolCallResult[]`, but the internal mechanism differs per provider.
-4. Accept that switching providers mid-conversation is NOT a goal. The provider is chosen at agent startup and stays fixed for the session.
-5. Start with a thin wrapper, not a thick one. Add abstraction only where both providers genuinely share behavior.
-
-**Detection:** Review the abstraction interface. If it has zero provider-specific options, it's too thin. If it has a `provider: 'claude' | 'gemini'` switch in every method, it's too thick.
-
-**Phase:** Phase 1 (Brain abstraction). This is a design decision, not an implementation bug.
-
-**Confidence:** HIGH -- based on established software engineering principles and real-world multi-provider abstraction failures documented by [Ably](https://ably.com/topic/websocket-architecture-best-practices) and [ProxAI](https://www.proxai.co/blog/archive/llm-abstraction-layer).
-
----
-
-### Pitfall 7: AgentLoop ReAct Prompt Assumes Text-Only Response Format
-
-**What goes wrong:** The current `AGENT_SYSTEM_PROMPT` in `agent.ts` instructs the LLM to respond in one of two JSON formats: `{"type": "tool_call", ...}` or `{"type": "final_answer", ...}`. This is parsed by `parseStep()` which expects the entire LLM response to be a single JSON object.
-
-If Claude is used with native tool calling enabled, the response contains `content` blocks (text + tool_use), NOT a single JSON string. The `parseStep()` method will either (a) fail to parse the response and treat it as a free-form final answer, or (b) parse the text portion but miss the tool_use blocks entirely. Either way, tool calls are lost.
-
-If Claude is used WITHOUT native tool calling (text-only mode), it can follow the JSON protocol, but Claude's training makes it more likely to add explanatory text around the JSON, wrap it in markdown code blocks, or produce other formatting that breaks `parseStep()`.
-
-**Why it happens:** The ReAct pattern implemented in `agent.ts` was designed for Gemini, which readily emits raw JSON when instructed. Claude models, especially Opus and Sonnet, tend to be more "chatty" and may add context around their JSON output. The `parseStep()` regex fallbacks help but are fragile.
-
-**Prevention:**
-1. **For Claude with native tool calling:** Remove the JSON-in-text protocol entirely. Instead, check `response.stop_reason === 'tool_use'` and extract tool calls from `content` blocks of type `tool_use`. The "thought" is the text block that precedes the tool_use block.
-2. **For Claude without native tool calling (fallback):** Strengthen the system prompt with Claude-specific instructions: use `<tool_call>` XML tags instead of JSON (Claude is better at structured XML), or use `tool_choice: {"type": "any"}` to force tool use when appropriate.
-3. **For the transition period:** Support both parsing modes. If the response contains native tool_use blocks, use those. Otherwise, fall back to `parseStep()`.
-4. Consider using Claude's `stop_reason` to drive the agent loop instead of parsing response text. When `stop_reason === 'tool_use'`, execute tools. When `stop_reason === 'end_turn'`, extract the final answer from text blocks.
-
-**Detection:** Run the agent with a task that requires tool use. If the first tool call fails to parse, the prompt format is incompatible.
-
-**Phase:** Phase 2 (AgentLoop adaptation). Depends on the Brain abstraction from Phase 1.
-
-**Confidence:** HIGH -- verified by reading the Claude streaming response examples which show `stop_reason: "tool_use"` and `content_block_start` with `type: "tool_use"` structure, contrasted with the current `parseStep()` implementation.
-
----
-
-### Pitfall 8: Conversation History Format Incompatible Between Providers
-
-**What goes wrong:** The `SessionManager` stores conversation history as `ChatMessage[]` with `role: 'user' | 'model'` and a simple `text` string. When the user switches providers (or when the system is migrated), existing conversation history cannot be replayed to Claude because:
-1. Role `'model'` must become `'assistant'`
-2. Claude requires `content` (array of content blocks), not `text` (string)
-3. Tool use history must include `tool_use_id` for Claude, which was never stored
-4. Images use different formats (Gemini: `inlineData`, Claude: base64 `source` blocks)
-
-Old conversations stored in Redis/sessions become unusable, and replaying them to Claude produces 400 errors.
-
-**Why it happens:** The conversation history format was designed for Gemini. No serialization format was chosen with provider-independence in mind.
-
-**Consequences:**
-- Context loss on provider switch (agent "forgets" everything)
-- Session continuity breaks during migration
-- If history is blindly passed to Claude, API errors crash the agent
-
-**Prevention:**
-1. Define a provider-neutral conversation format NOW (before migration starts). Use `role: 'user' | 'assistant'` (Claude's convention, which is more standard), `content: string | ContentBlock[]`, and include tool metadata.
-2. Write a one-time migration script that converts existing Redis session data from Gemini format to the neutral format.
-3. In the Brain abstraction, convert from neutral format to provider-specific format just before the API call. This keeps storage provider-independent.
-4. For the transition period, add a `format_version` field to stored sessions so the system can detect and convert old formats.
-
-**Detection:** Load an existing session from Redis and attempt to pass it to Claude -- if it fails, format migration is needed.
-
-**Phase:** Phase 1 (Brain abstraction). The neutral format must be defined before any Claude integration.
-
-**Confidence:** HIGH -- verified by examining `ChatMessage` interface in `brain.ts` and Claude's message format requirements.
-
----
-
-### Pitfall 9: WebSocket Agent Endpoint Lacks Authentication
-
-**What goes wrong:** The current WebSocket endpoint (`/ws/agent`) in `api.ts` has NO authentication. Any client that can connect to the WebSocket can execute arbitrary agent tasks with full tool access (shell commands, file operations, Docker management). This is already a security issue with Gemini, but it becomes worse when expanding to multiple channels and adding a WebSocket gateway.
-
-**Why it happens:** The REST API uses `requireApiKey` middleware, but the WebSocket connection setup in `setupWebSocket()` (line 667-723) performs no authentication check. The `ws.on('message')` handler directly creates an `AgentLoop` with full tool access.
-
-**Consequences:**
-- Unauthenticated remote code execution via `shell` tool
-- Docker container manipulation
-- File system read/write
-- Memory access (read stored user data)
+- Token costs multiply: 2 agents = roughly 3-4x the tokens of 1 agent (not 2x, because of coordination overhead)
+- Deadlocked agents consume tokens indefinitely until max_turns hit
+- On the Claude Code subscription model with rolling windows, multi-agent sessions exhaust the 5-hour window budget rapidly
+- VPS resources consumed by concurrent agent processes (memory, CPU)
 
 **Warning signs:**
-- WebSocket connections from unknown IPs in logs
-- Unexpected agent executions
+- Agent turn counts exceeding 20+ for tasks that should take 5-10 turns
+- Two agents generating nearly identical outputs (echo chamber)
+- Agent A's output appearing verbatim in Agent B's reasoning
+- Token usage per session 5-10x higher than single-agent equivalent
+- Rolling window budget warnings appearing more frequently
 
 **Prevention:**
-1. **Add authentication to WebSocket.** Require either:
-   - API key in the WebSocket upgrade request (query param or header): `ws://host:3200/ws/agent?apiKey=XXX`
-   - JWT token validation on connection
-   - First message must be an auth message before any agent messages are accepted
-2. Rate limit WebSocket connections per IP.
-3. Add connection logging with source IP.
-4. Consider restricting WebSocket to localhost only (it's currently only used by the LivOS frontend on the same server).
+1. **Strict topology**: Define a directed acyclic graph (DAG) of agent communication. Agent A can delegate to Agent B, but B cannot delegate back to A. Use a mediator/orchestrator pattern.
+2. **Append-only shared state**: Agents write results to unique keys in shared state. No agent overwrites another's output. An orchestrator merges results.
+3. **Per-agent turn limits**: Set aggressive limits per sub-agent (5-8 turns). The orchestrator can retry with a fresh context if a sub-agent fails.
+4. **Token budget per session**: Track total tokens across all agents in a session. Hard-stop the entire multi-agent session at a budget (e.g., 50K tokens for the session).
+5. **Start with 2 agents max**: Research shows diminishing returns past 4 agents. For a VPS with 4-8GB RAM, 2 concurrent agents is the practical limit.
+6. **Deduplication**: Before an agent acts, check if the same action was already taken by another agent in the session. Skip if duplicate.
 
-**Detection:** Attempt to connect to `/ws/agent` without credentials from an external network.
+**Confidence:** HIGH -- [multi-agent 17x error trap analysis](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/), [agentic recursive deadlock](https://tech-champion.com/artificial-intelligence/the-agentic-recursive-deadlock-llm-orchestration-collapses/), [Redis AI agent orchestration](https://redis.io/blog/ai-agent-orchestration/).
 
-**Phase:** Phase 3 (WebSocket gateway). Must be addressed before any public-facing WebSocket functionality.
-
-**Confidence:** HIGH -- verified by reading `api.ts` line 667-723 which shows no auth check.
+**Phase to address:** Multi-agent phase -- topology must be designed before implementation.
 
 ---
 
-### Pitfall 10: Skill Marketplace Security -- Arbitrary Code Execution Risk
+### P-07: Process Stability -- 153 PM2 Restarts in 47 Hours
 
-**What goes wrong:** The current `SkillLoader` dynamically imports JavaScript/TypeScript files from the `skills/` directory using `import()`. If a skill marketplace is added where users can install third-party skills, those skills will execute with the same Node.js process permissions as Nexus core -- meaning full filesystem access, network access, and access to all registered tools, Redis, and the Brain instance.
+**What goes wrong:** The nexus-core process currently restarts approximately 3.3 times per hour. This is not merely annoying -- each restart loses: in-flight agent sessions, WebSocket connections to Telegram/Discord/Deepgram/Cartesia, BullMQ worker state, setTimeout-based scheduled tasks, and any in-memory caches. Adding voice, canvas, and multi-agent features increases the crash surface area because each adds new WebSocket connections, event listeners, and async operations.
 
-**Why it happens:** Skills receive a `SkillContext` that includes `redis`, `brain`, and `onAction` -- essentially unlimited access to the entire Nexus system. There's no sandboxing, capability restriction, or permission model.
-
-**Consequences:**
-- Malicious skill steals API keys from Redis or environment
-- Skill exfiltrates conversation history
-- Skill installs backdoor (writes to filesystem, adds cron job)
-- Skill crashes entire Nexus process via unhandled exception or infinite loop
-- Supply chain attack via skill dependency
-
-**Prevention:**
-1. **Do NOT allow arbitrary skill installation from untrusted sources in v1.4.** Start with a curated gallery only.
-2. For marketplace skills, implement a review process before listing.
-3. Consider running marketplace skills in isolated contexts:
-   - Separate Node.js worker threads with limited APIs
-   - Docker containers for untrusted skills
-   - vm2/isolated-vm for lightweight sandboxing (though these have known escapes)
-4. Implement a capability system: skills declare what they need (e.g., `needs: ['redis:read', 'brain:chat']`) and are only given those capabilities.
-5. Add resource limits: timeout per skill execution, memory limits, network restrictions.
-6. Version pin skills and verify checksums on load.
-7. Skills should receive a SCOPED Redis client (restricted to `nexus:skills:{skillName}:*` keyspace) instead of the full Redis connection.
-
-**Detection:** Code review of skill source. Audit `import()` paths. Monitor network connections from the Nexus process.
-
-**Phase:** Phase 5 (Skill marketplace). This is a design-time decision that must be made early even if implementation is deferred.
-
-**Confidence:** HIGH -- the arbitrary code execution risk is self-evident from reading `skill-loader.ts`.
-
----
-
-### Pitfall 11: Token Budget Mismatch Between Gemini and Claude
-
-**What goes wrong:** The current `AgentLoop` has `maxTokens: 200000` (200K) as the default token budget and sends `maxOutputTokens: 2048` per turn to Gemini. Claude models have different context window sizes and pricing:
-- Claude 3.5 Haiku: 200K context, but much more expensive per token than Gemini Flash
-- Claude Sonnet 4: 200K context
-- Claude Opus 4: 200K context but extremely expensive
-
-Running the same 200K token budget with Claude Opus could cost $60+ per agent session (at ~$15/MTok input + $75/MTok output). The tier mapping (`flash` -> cheap, `sonnet` -> mid, `opus` -> expensive) has completely different cost implications with Claude.
-
-**Why it happens:** The tier system was designed with Gemini pricing in mind, where `flash` and `sonnet` both map to `gemini-3-flash-preview` (cheap) and `opus` maps to `gemini-3-pro-preview` (moderate). With Claude, each tier is a genuinely different model with 10-50x cost differences.
+**Why it happens (root causes from existing codebase analysis):**
+1. **Unhandled promise rejections**: The daemon has `try/catch` in the main cycle but individual handler errors (especially from async callbacks in WebSocket handlers, Redis subscriptions, and BullMQ workers) can escape these boundaries.
+2. **setTimeout memory leaks**: Cron handler creates unbounded timers that never get cleaned up (documented in CONCERNS.md item #4).
+3. **Event listener accumulation**: WebSocket connections (grammy for Telegram, Discord.js) attach event listeners. On reconnection, old listeners are not removed, causing the classic Node.js "MaxListenersExceededWarning" followed by memory growth.
+4. **No circuit breaker**: When Redis goes down briefly, all operations fail simultaneously, generating a cascade of unhandled errors.
+5. **OOM on the VPS**: With 4-8GB RAM and multiple services (livos, nexus-core, nexus-mcp, nexus-memory, nexus-worker, Redis, PostgreSQL, Docker), memory pressure is real. A single memory leak in any service can trigger OOM-killer.
 
 **Consequences:**
-- Unexpectedly high API costs
-- Token budget runs out faster with Claude's more verbose responses
-- `maxOutputTokens: 2048` is too low for Claude's structured responses (tool use blocks + text)
-- Users hit rate limits faster on Claude (lower default rate limits than Gemini)
-
-**Prevention:**
-1. Create provider-specific token budget defaults. Claude should have lower `maxTokens` defaults to control costs.
-2. Increase `maxOutputTokens` per turn from 2048 to at least 4096 for Claude -- tool use responses with JSON input tend to be longer.
-3. Add cost tracking per provider. Log estimated cost per agent session.
-4. Add configurable cost limits: `maxCostPerSession` alongside `maxTokens`.
-5. Review the tier mapping: Does `sonnet` mean "mid-tier" (Gemini Flash) or "capable" (Claude Sonnet 4)? Make tier semantics consistent.
-6. Consider using Claude Haiku as default tier instead of Sonnet to control costs.
-
-**Detection:** Monitor token usage and estimated costs in the first week after migration.
-
-**Phase:** Phase 1 (Brain abstraction). Token/cost defaults must be provider-specific from the start.
-
-**Confidence:** MEDIUM -- pricing may change. Current estimates based on published Anthropic pricing as of early 2025 training data.
-
----
-
-### Pitfall 12: Daemon Response Routing Assumes Single Channel per Message
-
-**What goes wrong:** The current `Daemon.processInboxItem()` sets `this.currentChannelContext` per message and routes the response back to that channel. When expanding to WebSocket gateway and more channels, race conditions emerge: if two messages arrive simultaneously from different channels (Telegram and Discord), `this.currentChannelContext` gets overwritten by the second message before the first message's response is sent. The first message's response goes to the wrong channel.
-
-**Why it happens:** `currentChannelContext` and `currentWhatsAppJid` are instance variables on the Daemon class, not per-request state. The `processInboxItem()` method is async and can be called concurrently (via `addToInbox` -> immediate processing for realtime sources).
-
-**Consequences:**
-- Responses sent to wrong channel
-- User on Telegram receives response meant for Discord user
-- WhatsApp JID routing goes to wrong conversation
-- Intermittent, hard to reproduce (race condition)
+- Voice calls drop mid-conversation (WebSocket reset)
+- Multi-agent sessions lose progress (in-memory state gone)
+- Scheduled tasks lost (setTimeout-based crons)
+- Telegram/Discord bots go offline briefly, may lose message offset
+- Users perceive the system as unreliable
 
 **Warning signs:**
-- Users report receiving responses to questions they didn't ask
-- Cross-channel message leakage
-- Bug appears under load but not in testing
+- PM2 restart count incrementing (check `pm2 show nexus-core`)
+- "MaxListenersExceededWarning" in logs
+- RSS memory growing over time without plateauing
+- Redis connection error bursts followed by recovery
+- EventEmitter memory leak warnings
 
 **Prevention:**
-1. **Pass channel context as a parameter through the processing chain**, not as instance state. Each `InboxItem` already has `source` and `from` -- use these directly in `sendChannelResponse()` instead of `this.currentChannelContext`.
-2. Make `processInboxItem()` fully self-contained: all context needed for response routing must come from the `item` parameter.
-3. Remove `this.currentWhatsAppJid` and `this.currentChannelContext` instance variables.
-4. If shared mutable state is truly needed (e.g., for the `progress_report` tool), use AsyncLocalStorage or pass context through the tool execution chain.
+1. **Global error handlers**: Add `process.on('unhandledRejection')` and `process.on('uncaughtException')` that log the full stack trace and attempt graceful shutdown instead of crashing immediately.
+2. **Fix the cron handler**: Replace all `setTimeout` usage with BullMQ Scheduler (repeatable jobs). This is the most impactful single fix because it eliminates both the memory leak and the "lost on restart" problem.
+3. **WebSocket connection management**: Create a connection manager that: tracks all active WebSocket connections, removes event listeners before reconnecting, implements health checks (heartbeat), and closes stale connections.
+4. **Memory monitoring**: Set PM2 `max_memory_restart` to 80% of available RAM (e.g., 1.5GB if 2GB allocated to nexus-core). This provides graceful restarts instead of OOM-killer kills.
+5. **Redis circuit breaker**: When Redis operations fail 3 times in 10 seconds, stop attempting for 30 seconds. Use in-memory queue as buffer during outage. Resume when Redis responds to PING.
+6. **Heap snapshots**: Periodically (every hour) log `process.memoryUsage()`. If RSS growth exceeds 50MB/hour without corresponding workload, investigate.
+7. **Address before adding features**: Every new feature (voice WebSockets, canvas rendering, multi-agent coordination) adds crash surface area. Stabilize first.
 
-**Detection:** Load test with simultaneous messages from different channels. Check response routing correctness.
+**Confidence:** HIGH -- based on direct codebase analysis (CONCERNS.md), PM2 restart data from the project context, and [Node.js PM2 debugging patterns](https://github.com/Unitech/pm2/issues/5082).
 
-**Phase:** Phase 3 (Channel expansion / WebSocket gateway). Must be fixed before adding more concurrent channels.
-
-**Confidence:** HIGH -- the race condition is visible in the source code: `processInboxItem` is called from both the polling loop and `addToInbox` immediate path.
+**Phase to address:** Stability phase (pre-requisite) -- must be addressed BEFORE adding voice, canvas, or multi-agent features.
 
 ---
 
-## Minor Pitfalls
+## HIGH-SEVERITY PITFALLS
 
-Mistakes that cause annoyance, degraded DX, or fixable issues.
-
-### Pitfall 13: Anthropic SDK Already Installed But Unused
-
-**What goes wrong:** The `@anthropic-ai/sdk@0.39.0` is already in `package.json` but not imported anywhere in the source code. When someone starts implementing Claude support, they may install a different version or import it incorrectly. The existing version (0.39.0) may not support the latest Claude features (the current SDK version is likely 0.40+).
-
-**Prevention:**
-1. Check the latest Anthropic SDK version before starting implementation. Update if needed.
-2. Use the SDK's built-in streaming helpers (`client.messages.stream()`) rather than raw HTTP streaming.
-3. The Anthropic SDK uses `import Anthropic from '@anthropic-ai/sdk'` (default export), not named exports like ioredis.
-
-**Phase:** Phase 1. Quick check at start of implementation.
-
-**Confidence:** HIGH -- verified in package.json.
+Mistakes that cause significant rework, poor user experience, or ongoing maintenance burden.
 
 ---
 
-### Pitfall 14: Gemini Model Names Hardcoded as Preview Versions
+### P-08: Claude Code SDK `tools: []` Does Not Disable Built-In Tools
 
-**What goes wrong:** The `GEMINI_MODELS` mapping in `brain.ts` uses `gemini-3-flash-preview` and `gemini-3-pro-preview`. These are preview model names that may be deprecated or renamed by Google. If Gemini support must be maintained alongside Claude, hardcoded preview model names will eventually break.
+**What goes wrong:** Setting `tools: []` in `SdkAgentRunner` does not actually prevent Claude from using built-in tools like Bash, Read, Write, and Edit. This is a [documented open issue](https://github.com/anthropics/claude-agent-sdk-typescript/issues/115) (filed December 2025). Even when specifying an explicit allowlist like `allowedTools: ['Read', 'Glob', 'Grep']`, Claude can still use Edit, Write, and Bash to modify files.
+
+**Why it happens:** The Claude Agent SDK's built-in tools are hardcoded and the `allowedTools` parameter acts as a filter on MCP tools, not on the built-in tool set. The SDK team acknowledged this as a security issue but it may not be fixed yet.
+
+**Consequences:**
+- A "read-only research agent" can still write files and execute shell commands
+- Multi-agent sessions where one agent should be restricted can break out of restrictions
+- Security boundaries between agents are illusory
+- An agent told to "just analyze this code" might start editing it
+
+**Warning signs:**
+- Agent tool call logs showing Bash, Write, Edit even when tools were restricted
+- Files modified by agents that shouldn't have write access
+- Shell commands executed by research-only agents
 
 **Prevention:**
-1. Move model names to configuration (Redis or config file) so they can be updated without code changes.
-2. Add model name validation on startup -- call Gemini's models.list endpoint to verify configured models exist.
+1. **Verify with current SDK version**: Check if issue #115 has been resolved in the version you're using. The fix may have landed since this was reported.
+2. **Workaround via system prompt**: Explicitly tell the agent "You MUST NOT use Bash, Write, or Edit tools. You only have access to Read, Glob, and Grep." This is prompt-based enforcement -- not bulletproof but reduces accidental usage.
+3. **Permission mode interaction**: Use `permissionMode: 'dontAsk'` (as currently configured) but understand that this auto-approves everything including built-in tools. There is no "deny" mode for built-in tools.
+4. **Monitor tool usage**: Log every tool call from the SDK runner. Alert when restricted agents use tools outside their allowlist.
+5. **Sandboxing at OS level**: If true isolation is needed, run restricted agents in Docker containers with read-only filesystem mounts. This provides real enforcement regardless of SDK behavior.
 
-**Phase:** Phase 1 (Brain abstraction). Make model names configurable as part of the provider configuration.
+**Confidence:** HIGH -- [verified via GitHub issue #115](https://github.com/anthropics/claude-agent-sdk-typescript/issues/115).
 
-**Confidence:** MEDIUM -- preview model names are inherently unstable, but timing of deprecation is unknown.
+**Phase to address:** Multi-agent phase -- critical for sub-agent security boundaries.
 
 ---
 
-### Pitfall 15: Missing Error Type Distinction for Claude API Errors
+### P-09: Agent Runs 6-13 Turns for Simple Greetings
 
-**What goes wrong:** The current error handling in `agent.ts` and `brain.ts` uses pattern matching on error messages (`/rate.?limit/i`, `/429/i`, etc.) to detect retryable errors. Claude's Anthropic SDK throws typed errors (`APIError`, `AuthenticationError`, `RateLimitError`, `InternalServerError`) that should be caught by type, not by message string matching.
+**What goes wrong:** The current system uses 6-13 agent turns (tool calls) to handle simple greetings like "hello" or "how are you?" Each turn involves: the agent reading files, checking system status, gathering context it doesn't need, and eventually producing a simple text response. This wastes tokens, time, and contributes to rolling window budget exhaustion.
+
+**Why it happens:**
+1. **System prompt is too broad**: The agent is told about all its capabilities, so it tries to use them even for simple tasks.
+2. **No complexity classifier**: Every message goes through the full agent pipeline regardless of whether it needs tools.
+3. **Tool-use bias**: Claude models have a tendency to use tools when they're available, even when unnecessary. The agent's training rewards thoroughness.
+4. **No tool use examples**: Without examples showing "for simple greetings, respond directly without tools," the agent defaults to exploring.
+
+**Consequences:**
+- Simple conversations consume 5-10x the tokens they should
+- Response latency for greetings is 10-30 seconds instead of 1-2 seconds
+- Rolling window budget gets consumed by trivial interactions
+- Users perceive the system as slow for basic conversation
+
+**Warning signs:**
+- Agent turn count for simple messages exceeding 3
+- Tool calls in conversations that don't require tools
+- High token usage for low-complexity tasks
+- Users complaining about slow responses to simple questions
 
 **Prevention:**
-1. Import Anthropic error types: `import { APIError, RateLimitError, AuthenticationError } from '@anthropic-ai/sdk'`
-2. Add type-based error detection alongside the existing string-based detection:
+1. **Complexity classifier gate**: Before invoking the full SDK agent, classify the message complexity. For simple chat (greetings, small talk, basic questions), respond with a direct LLM call without tool access.
+2. **Tiered agent configuration**:
+   - Tier 0 (no tools): Simple chat, greetings, status queries -> direct LLM response
+   - Tier 1 (read-only tools): Research, code review -> Read, Glob, Grep only
+   - Tier 2 (full tools): Development tasks -> all tools
+3. **Tool use examples in system prompt**: Include examples like "User: hello -> Respond directly, no tools needed" in the system prompt.
+4. **Max turns per complexity**: Simple tasks: max 3 turns. Medium: max 10. Complex: max 25.
+5. **"No tool" fast path**: Implement a regex/keyword check for obvious non-tool messages (greetings, thanks, small talk) that bypasses the agent entirely.
+
+**Confidence:** HIGH -- based on direct observation from project context (6-13 turns documented).
+
+**Phase to address:** Foundation/stability phase -- should be fixed before adding more features that increase tool surface area.
+
+---
+
+### P-10: Webhook Authentication and DDoS via Queue Flooding
+
+**What goes wrong:** Incoming webhooks (GitHub, Stripe, Gmail push notifications) without authentication allow anyone to trigger agent tasks. Even with authentication, webhook providers send retries when they don't receive a timely 2xx response. A webhook endpoint that takes 5+ seconds to process (because it runs the agent inline) will trigger retry storms. Each retry adds another job to BullMQ, and the queue grows unbounded.
+
+**Why it happens:** The current codebase already has webhook endpoints (`POST /api/webhook/git`) that push directly to the daemon inbox without authentication or rate limiting (documented in CONCERNS.md item #12). Adding more webhook sources (Gmail Pub/Sub, Stripe, Discord interactions) multiplies the attack surface.
+
+**Consequences:**
+- Unauthenticated webhooks: anyone who discovers the URL can trigger agent tasks
+- Retry storms: GitHub retries at 10s, 30s, 60s, 120s, 300s intervals. A single failed delivery creates 5+ duplicate jobs.
+- Queue flooding: BullMQ queue grows, consuming Redis memory. On a 4-8GB VPS, Redis OOM can take down the entire system.
+- Agent processes duplicate work: same GitHub push processed 5 times, same email notification handled 5 times.
+
+**Warning signs:**
+- BullMQ queue length growing continuously
+- Duplicate agent tasks for the same event
+- Redis memory usage spiking
+- GitHub/Stripe webhook dashboard showing delivery failures
+- 429 responses from your webhook endpoint
+
+**Prevention:**
+1. **Verify webhook signatures**: GitHub sends `X-Hub-Signature-256`, Stripe sends `Stripe-Signature`, Google Pub/Sub uses JWT. Verify signatures before processing. Reject unsigned requests with 401.
+2. **Respond 200 immediately, process async**: Webhook handler should: validate signature -> enqueue job -> respond 200. Never run agent logic in the webhook handler. Target <500ms response time.
+3. **Idempotency via BullMQ job deduplication**: Use the webhook delivery ID as the BullMQ job ID. BullMQ's [deduplication feature](https://docs.bullmq.io/guide/jobs/deduplication) ignores duplicate job IDs, preventing retry storms from creating duplicate work.
+4. **Rate limiting per source**: Use `express-rate-limit` per IP/source. Suggested: 30 requests/minute for webhooks. BullMQ's [global rate limiting](https://docs.bullmq.io/guide/queues/global-rate-limit) caps job processing rate.
+5. **Payload size limits**: Set `express.json({ limit: '1mb' })` on webhook routes. Reject oversized payloads before they enter the queue.
+6. **Queue depth monitoring**: Alert when BullMQ queue length exceeds 100 pending jobs. Hard-reject new webhook submissions when queue exceeds 500.
+
+**Confidence:** HIGH -- [webhook security best practices](https://www.svix.com/resources/webhook-best-practices/authentication/), [BullMQ idempotent jobs](https://docs.bullmq.io/patterns/idempotent-jobs), existing codebase analysis.
+
+**Phase to address:** Webhooks phase -- authentication must be the first thing implemented, before any webhook endpoint goes live.
+
+---
+
+### P-11: Gmail OAuth Token Refresh Failures
+
+**What goes wrong:** Google OAuth refresh tokens silently expire or get revoked in multiple ways:
+- Unused for 6 months -> automatically invalidated
+- User resets password -> all refresh tokens revoked
+- App in "Testing" mode (OAuth consent screen) -> tokens expire after 7 days
+- User has 100+ refresh tokens for your app -> oldest silently invalidated
+- Google changes behavior and stops sending new refresh tokens if old one is still valid
+
+When the refresh token fails, the system can no longer access Gmail. If this happens silently (no error handling on token refresh), incoming email notifications continue via Pub/Sub but the system can't read the emails, creating a silent failure mode.
+
+**Why it happens:** OAuth token management is deceptively complex. The "happy path" works during development, but edge cases (password reset, token rotation, consent screen status) only appear in production over weeks/months.
+
+**Consequences:**
+- Gmail integration silently stops working
+- Pub/Sub notifications arrive but emails can't be read -> queued tasks fail
+- Users don't realize emails aren't being processed until they check manually
+- Re-authentication requires user interaction (OAuth consent flow) which can't be automated
+
+**Warning signs:**
+- `invalid_grant` errors in logs when refreshing tokens
+- Gmail API returning 401 Unauthorized
+- Pub/Sub notifications being received but email read operations failing
+- Token refresh response not including a new refresh token
+
+**Prevention:**
+1. **Test with "Published" app status**: Move OAuth consent screen from "Testing" to "Published" (even if as internal app) to avoid the 7-day token expiration.
+2. **Monitor token refresh health**: Every time you refresh the access token, log the result. If refresh fails, immediately alert the user via Telegram/Discord: "Gmail authentication expired. Please re-authenticate."
+3. **Store token metadata**: Save `lastRefreshTime`, `lastSuccessfulRefresh`, `tokenAge` in Redis. Monitor for staleness.
+4. **Proactive token refresh**: Don't wait for the access token to expire. Refresh proactively (e.g., every 30 minutes) so you detect failures early.
+5. **Graceful degradation**: When Gmail token fails, disable Gmail-triggered agent tasks (don't queue them) and send a notification. Don't let Pub/Sub notifications pile up as failed jobs.
+6. **Handle the "no new refresh token" case**: Google may not send a new refresh token if the old one is still valid. Store and reuse the original refresh token until it fails.
+
+**Confidence:** HIGH -- [Google OAuth docs](https://developers.google.com/identity/protocols/oauth2), [Nango invalid_grant analysis](https://nango.dev/blog/google-oauth-invalid-grant-token-has-been-expired-or-revoked).
+
+**Phase to address:** Gmail phase -- token lifecycle management must be built before any email processing logic.
+
+---
+
+### P-12: Gmail Pub/Sub Watch Expiration (7-Day Renewal)
+
+**What goes wrong:** Gmail API's `users.watch()` method creates a push notification subscription that expires after 7 days. If the watch is not renewed before expiration, you stop receiving email notifications entirely. There is no warning from Google before expiration -- it simply stops sending notifications.
+
+**Why it happens:** The 7-day expiration is a Google API design decision. Developers set up the watch during initial integration, it works for a week, then silently stops. Without automated renewal, the feature appears broken.
+
+**Consequences:**
+- Email notifications stop after 7 days
+- No error messages -- it just stops working silently
+- Emails accumulate without being processed
+- Users think the system is working but it's not
+
+**Prevention:**
+1. **Schedule watch renewal**: Use BullMQ repeatable job to call `users.watch()` every 6 days (before the 7-day expiration). Store the `expiration` timestamp returned by the API.
+2. **Verify watch is active**: Periodically (every hour) check if the watch is still valid by comparing stored expiration with current time. If expired, renew immediately.
+3. **Gmail API rate limits**: Watch requests count against the 250 quota units per user per second limit. Don't call watch() too frequently.
+4. **Fallback polling**: As a safety net, implement periodic Gmail polling (every 5 minutes) that checks for new emails even if Pub/Sub is working. Use `historyId` to avoid reprocessing.
+5. **Alert on watch failure**: If watch renewal fails (quota exceeded, auth failure), alert immediately via Telegram/Discord.
+
+**Confidence:** HIGH -- verified from Google Gmail API watch documentation.
+
+**Phase to address:** Gmail phase -- renewal automation must be built alongside the initial watch setup.
+
+---
+
+### P-13: Session Compaction Loses Critical Context
+
+**What goes wrong:** When compacting/summarizing older conversation turns to stay within token limits, the summarization LLM decides what's "important." It often discards: specific tool call results (file contents, command outputs), exact error messages, numeric values, configuration details, and user preferences stated early in the conversation. When the agent later needs this information, it either hallucinates it or re-executes tool calls (if it can), wasting tokens and time.
+
+**Why it happens:** LLM summarization optimizes for narrative coherence, not information preservation. A tool call that returned 500 lines of log output gets summarized to "the logs were checked and an error was found" -- losing the actual error message, line numbers, and stack trace. The phenomenon called "context rot" means performance degrades as compressed context fills the window.
+
+**Consequences:**
+- Agent "forgets" results of previous tool calls and re-runs them
+- Compacted summary contradicts information that remains in the uncompacted portion
+- Critical user instructions from early in the conversation are summarized away
+- Agent confidence decreases as it operates on summaries rather than raw data
+
+**Warning signs:**
+- Agent re-executing tool calls it already ran earlier in the session
+- Agent responses contradicting earlier results
+- User repeating instructions the agent should already know
+- Rising token usage per turn after compaction (agent gathering information it lost)
+
+**Prevention:**
+1. **Tiered compaction**: Keep last 5-10 turns verbatim. Summarize turns 10-30. Drop turns 30+. Never summarize the system prompt or user's initial instructions.
+2. **Pin critical facts**: Before compaction, extract structured key facts (file paths mentioned, error codes, user preferences, configuration values) and pin them as a separate section that never gets compacted.
+3. **Tool result summaries at creation time**: When a tool returns results, immediately create a structured summary (`{"tool": "bash", "command": "ls /opt", "result_summary": "14 files found, key directories: livos, nexus, data", "full_result_hash": "abc123"}`). Use the summary in compaction, store full result in Redis with TTL.
+4. **Threshold-based triggers**: Trigger compaction at 70% of token budget (not 90%). This leaves headroom for the compaction itself (which requires LLM tokens) and for post-compaction agent work.
+5. **Compaction quality check**: After compaction, verify the summary mentions all entities from the raw conversation. If entity count drops below 70%, the compaction is too aggressive.
+6. **Never compact within a single "task"**: If the user gave a multi-step task and the agent is mid-execution, don't compact the task instructions and intermediate results. Wait for task completion.
+
+**Confidence:** HIGH -- [Anthropic context engineering guide](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), [Forge Code compaction docs](https://forgecode.dev/docs/context-compaction/), [context rot research](https://research.trychroma.com/context-rot).
+
+**Phase to address:** Session compaction phase -- compaction strategy must be designed with knowledge of downstream impact.
+
+---
+
+### P-14: Usage Tracking Without Token Visibility
+
+**What goes wrong:** The Claude Code SDK in subscription mode (used by LivOS) operates on a rolling window system (5-hour window, weekly limits). The SDK may not expose per-request token counts in the same way the API does. Without token counts, you cannot calculate per-user usage, enforce budgets, or detect runaway sessions.
+
+**Why it happens:** Claude Code subscription mode is designed for individual developer use, not for building platforms that multiplex multiple users through a single subscription. The cost tracking features (`/cost`, `/stats`) are designed for the CLI user, not for programmatic access. The SDK runner may return responses without detailed token metadata.
+
+**Consequences:**
+- Cannot enforce per-user usage limits
+- Cannot detect runaway agent sessions (burning through the rolling window)
+- Cannot provide usage dashboards to users
+- Cannot bill or allocate costs
+- Risk of hitting weekly limits without warning, degrading service for all users
+
+**Warning signs:**
+- `usage` or `token_count` fields missing/null in SDK runner responses
+- Rolling window exhaustion without any internal tracking detecting it
+- All users affected when one user's heavy session exhausts the window
+
+**Prevention:**
+1. **Estimate tokens from text**: Use `tiktoken` or similar to estimate input/output tokens from the actual text. This won't match Claude's internal count exactly but gives a usable approximation.
+2. **Track turns and tool calls as proxy**: If tokens aren't available, track: number of turns, total characters in/out, number of tool calls, session duration. These correlate with token usage.
+3. **Monitor SDK response metadata**: Check every field in the SDK response for usage data. Anthropic may add token counts in future SDK versions.
+4. **Per-user session budgets**: Limit sessions by turns (max 25 turns per session) and time (max 30 minutes) rather than tokens, since turns are always countable.
+5. **Redis counters with TTL**: Store per-user daily counters in Redis: `nexus:usage:{userId}:{date}:turns`, `nexus:usage:{userId}:{date}:chars`. Set TTL to 48 hours for automatic cleanup.
+6. **Rolling window awareness**: Track when the 5-hour window started. If approaching the window's likely budget, throttle new sessions or switch to lower-complexity mode.
+
+**Confidence:** MEDIUM -- the exact token visibility in Claude Code SDK subscription mode requires [verification against current SDK docs](https://platform.claude.com/docs/en/agent-sdk/cost-tracking). The rolling window system is [documented](https://code.claude.com/docs/en/costs) but programmatic access to window state is unclear.
+
+**Phase to address:** Usage tracking phase -- must be one of the first features to implement to prevent unbounded resource consumption.
+
+---
+
+## MODERATE PITFALLS
+
+Mistakes that cause delays, poor UX, or technical debt requiring targeted fixes.
+
+---
+
+### P-15: Command Conflicts With Regular Messages
+
+**What goes wrong:** When implementing chat commands (`/reset`, `/compact`, `/status`), there's ambiguity between commands and regular conversation. A user saying "what is the /reset command?" or "I need to reset my password" triggers the reset handler. Commands embedded in code snippets or URLs also match. In multi-channel (Telegram + Discord + web UI), command syntax may differ (`/command` in Telegram is native, in Discord it's slash commands, in web UI it's free text).
+
+**Prevention:**
+1. **Strict prefix matching**: Commands must start with `/` at the beginning of the message (not embedded). Use regex: `/^\/(\w+)(?:\s+(.*))?$/`.
+2. **Confirmation for destructive commands**: `/reset` and `/compact` should require a confirmation step: "This will clear your session. Send /reset confirm to proceed."
+3. **Channel-appropriate parsing**: In Telegram, use native BotCommand entities (they're tagged in the message metadata). In Discord, use slash command registration (Discord handles parsing). In web UI, use a command palette UI rather than text parsing.
+4. **Reserved word list**: Maintain a list of command names and check at registration time for conflicts.
+
+**Phase to address:** Chat commands phase.
+
+---
+
+### P-16: DM Pairing Activation Code Brute Force
+
+**What goes wrong:** If activation codes for DM pairing are short (4-6 characters), they can be brute-forced. An attacker guessing the code gains access to the AI agent through their own Telegram/Discord account. With Telegram's rate limits (30 messages/second per bot), a 4-character alphanumeric code (36^4 = 1.68M combinations) can be exhausted in ~15 hours of sustained attempts.
+
+**Prevention:**
+1. **Use 8+ character codes**: 36^8 = 2.8 trillion combinations -- infeasible to brute force.
+2. **Short TTL**: Codes expire after 5 minutes. Displayed once, then deleted.
+3. **Rate limit per user/IP**: Max 5 pairing attempts per hour per Telegram user. Lock out for 1 hour after 5 failures. Telegram Bot API 8.0's token-bucket rate limiting helps here.
+4. **One-time use**: Code is invalidated immediately after first use (successful or failed).
+5. **Notification on pairing**: When a new device is paired, notify all existing paired devices.
+6. **Revocation**: Provide `/unpair` command to remove access from paired accounts.
+
+**Phase to address:** DM pairing phase.
+
+---
+
+### P-17: Onboarding CLI Platform Differences
+
+**What goes wrong:** The installation CLI (`npx install-livos` or similar) assumes a specific Linux distribution, package manager, and system configuration. Ubuntu uses `apt`, CentOS uses `yum`/`dnf`, some systems have `systemd`, others don't. Docker installation varies by distribution. Node.js installation paths differ. Non-root users can't install system packages or bind to ports below 1024.
+
+**Prevention:**
+1. **Detect and adapt**: Check `/etc/os-release` for distribution info. Branch logic for apt vs yum vs dnf.
+2. **Docker-first approach**: Instead of installing Node.js/Redis/PostgreSQL directly, use Docker Compose. This standardizes across distributions.
+3. **Root vs non-root**: Detect if running as root. If not, suggest `sudo` or offer rootless Docker setup.
+4. **Prerequisite check**: Before installing, verify: Docker installed, Docker Compose available, minimum RAM (4GB), minimum disk (10GB), required ports available (3000, 3100, 3200, 5432, 6379).
+5. **Partial install recovery**: If install fails at step 5 of 10, the cleanup function should undo steps 1-4. Use a rollback stack that pushes cleanup functions as each step succeeds.
+6. **Target Ubuntu 22.04+ and Debian 12+**: Document these as supported. Other distributions "may work" but are not tested.
+
+**Phase to address:** CLI installer phase.
+
+---
+
+### P-18: Canvas State Management Between iframe and Parent
+
+**What goes wrong:** The AI generates code that runs in a sandboxed iframe. The parent app needs to: send data to the canvas, receive events from the canvas, persist canvas state across messages, and handle canvas errors. Without a structured communication protocol, the parent and iframe exchange arbitrary `postMessage` calls that become impossible to debug or version.
+
+**Prevention:**
+1. **Typed message protocol**: Define a TypeScript interface for all messages between parent and iframe. Version the protocol.
    ```typescript
-   if (err instanceof RateLimitError) return true;
-   if (err instanceof APIError && err.status >= 500) return true;
+   type CanvasMessage =
+     | { type: 'render', code: string, data?: unknown }
+     | { type: 'error', error: string }
+     | { type: 'event', name: string, payload: unknown }
+     | { type: 'resize', height: number }
    ```
-3. Handle Claude-specific errors: `overloaded_error` (529 equivalent), `api_error` (500), `authentication_error` (401).
+2. **Origin validation**: Always check `event.origin` in `postMessage` handlers. Reject messages from unexpected origins.
+3. **Error boundary in iframe**: Wrap the generated code in a try-catch that posts error messages back to the parent instead of silently failing.
+4. **Canvas state in React state**: The parent component manages canvas state in React state/context. The iframe is a pure renderer that receives state and emits events.
+5. **Iframe lifecycle**: When the AI generates new code, create a fresh iframe (or use `srcdoc` replacement) rather than mutating the existing one. This prevents state leakage between generations.
 
-**Phase:** Phase 1 (Brain abstraction). Implement alongside the Claude provider.
-
-**Confidence:** HIGH -- verified from Claude SDK source in the installed `@anthropic-ai/sdk@0.39.0`.
+**Phase to address:** Canvas phase.
 
 ---
 
-### Pitfall 16: Image/Vision Format Differences Between Providers
+### P-19: Grammy (Telegram) Polling Offset Loss on Restart
 
-**What goes wrong:** The current `ChatMessage.images` field uses `{ base64: string, mimeType: string }` which maps directly to Gemini's `inlineData` format. Claude expects images in a different format:
-```json
-{
-  "type": "image",
-  "source": {
-    "type": "base64",
-    "media_type": "image/jpeg",
-    "data": "<base64>"
-  }
-}
-```
+**What goes wrong:** This is a known existing issue (mentioned in project context). When nexus-core restarts (which happens ~3x per hour), grammy's polling loses track of which messages have been processed. This causes either: duplicate message processing (re-processing old messages) or message loss (skipping messages that arrived during restart).
 
-If vision support (used for browser screenshots via Playwright MCP) is not properly translated, Claude will reject messages containing images.
+The current mitigation uses Redis deduplication (checking if a message ID was already processed), but this doesn't prevent the wasted processing of re-fetching and re-classifying already-handled messages.
 
 **Prevention:**
-1. Add an image format conversion function in the Brain abstraction layer.
-2. Test with the existing browser screenshot functionality to verify images are correctly passed to Claude.
-3. Note that Claude supports `image/jpeg`, `image/png`, `image/gif`, and `image/webp` -- verify the browser screenshots use a supported format.
+1. **Persist polling offset to Redis**: Before each restart, save grammy's last processed update_id to Redis. On startup, read it back and start polling from update_id + 1.
+2. **Graceful shutdown handler**: On SIGTERM/SIGINT, complete the current message processing, save the offset, then exit. PM2 sends SIGTERM before killing, giving a window for cleanup.
+3. **Idempotency key per message**: Store `telegram:processed:{update_id}` in Redis with a 1-hour TTL. Check before processing. This is the existing mitigation -- keep it as defense-in-depth.
+4. **Consider switching to webhooks**: If the VPS has a stable public URL (livinity.cloud), Telegram webhook mode pushes updates to your server. No polling offset to manage. Telegram handles retry logic.
+5. **Same applies to Discord**: Discord.js reconnection can also cause duplicate events. Apply the same idempotency pattern with `discord:processed:{message_id}`.
 
-**Phase:** Phase 1 (Brain abstraction). Must be included in the message format translation.
-
-**Confidence:** HIGH -- format difference is documented in both APIs.
+**Phase to address:** Stability phase (pre-requisite) -- fix before adding more channels.
 
 ---
 
-### Pitfall 17: Parallel Agent Execution Without Resource Isolation
+### P-20: Redis Connection Drops Causing Cascade Failures
 
-**What goes wrong:** When expanding to parallel agent execution (multiple agent loops running simultaneously for different users/channels), all agents share the same `ToolRegistry`, `Brain`, and Redis connection. Issues:
-- Shell tool executions from different agents can interfere (cwd conflicts)
-- Docker operations from concurrent agents can conflict
-- Token budget is tracked per-agent but API rate limits are global per-account
-- Redis state mutations from concurrent agents can corrupt shared data
+**What goes wrong:** Redis is the backbone of nexus: inbox queue, session state, agent results, BullMQ jobs, configuration, memory. When Redis becomes temporarily unavailable (network blip, Redis restart, memory pressure), every component fails simultaneously. Without a circuit breaker, the system floods Redis with retry attempts the moment it comes back, causing a "thundering herd" that can push Redis back into overload.
+
+The current system uses ioredis which has built-in reconnection, but the application layer doesn't handle the "Redis unavailable" state gracefully -- operations that fail during outage are lost, not retried.
 
 **Prevention:**
-1. Create per-agent resource scopes: each agent gets a scoped `ToolRegistry` (already supported via `createScopedRegistry()`).
-2. Implement global rate limiting at the Brain level, not per-agent.
-3. Use Redis key prefixes per agent session to prevent state conflicts.
-4. Add a semaphore for mutually-exclusive tools (shell, docker) to prevent concurrent conflicting operations.
-5. Track API usage globally and distribute budget across concurrent agents.
+1. **ioredis retry strategy**: Configure `retryStrategy` with exponential backoff and max retries. ioredis reconnects automatically but operations during outage throw errors.
+2. **Application-level circuit breaker**: When Redis operations fail 3 times in 10 seconds, enter "degraded mode" for 30 seconds. In degraded mode: queue new inbox items in-memory (bounded buffer), respond to health checks with 503, don't attempt new Redis operations except periodic PING.
+3. **Operation-level retry**: Wrap critical Redis operations (inbox push, result store) with a 3-attempt retry with 1s backoff. Non-critical operations (logging, stats) fail silently.
+4. **Redis memory monitoring**: Set Redis `maxmemory` policy to `allkeys-lru` to prevent OOM. Monitor `used_memory` vs `maxmemory` ratio. Alert at 80%.
+5. **Separate Redis connections**: Use separate ioredis clients for: pub/sub (requires dedicated connection), BullMQ (has its own connection management), and application operations. This prevents pub/sub blocking regular operations.
 
-**Phase:** Phase 4 (Parallel execution). Design the isolation model early.
-
-**Confidence:** MEDIUM -- the existing system rarely runs concurrent agents, so this is theoretical until parallel execution is implemented.
+**Phase to address:** Stability phase (pre-requisite).
 
 ---
 
-## Phase-Specific Warnings
+## MINOR PITFALLS
 
-| Phase Topic | Likely Pitfall | Mitigation | Pitfall # |
-|-------------|---------------|------------|-----------|
-| Brain abstraction layer | Lowest-common-denominator abstraction | Capability-based design, not uniform | 6 |
-| Brain abstraction layer | Message role mapping breaks | Normalization layer with validation | 1 |
-| Brain abstraction layer | Streaming format breaks frontend | Keep existing AgentEvent contract | 3 |
-| Brain abstraction layer | Token budget mismatch | Provider-specific defaults | 11 |
-| AgentLoop adaptation | Tool calling format mismatch | Dual-mode: native + text fallback | 2 |
-| AgentLoop adaptation | ReAct prompt incompatible | Provider-specific prompts | 7 |
-| Auth integration | Token expiry silent failures | Health check + proactive refresh | 4 |
-| Memory integration | Embedding provider dependency | Keep Gemini for embeddings or add alternative | 5 |
-| Channel expansion | Response routing race condition | Per-request context, not instance state | 12 |
-| WebSocket gateway | No authentication | Add auth to WS upgrade | 9 |
-| Skill marketplace | Arbitrary code execution | Sandboxing + capability model | 10 |
-| Parallel execution | Resource contention | Per-agent scoping + global rate limits | 17 |
+Mistakes that cause annoyance but are fixable with targeted effort.
 
 ---
 
-## Sources
+### P-21: Audio Sample Rate and Codec Mismatches
 
-**Official Documentation (HIGH confidence):**
-- [Claude Messages API Streaming](https://platform.claude.com/docs/en/api/messages-streaming) -- streaming event types, tool_use in streaming
-- [Claude Tool Use Implementation](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use) -- tool definition format, tool_result format, parallel tool use
-- [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript) -- SDK patterns, error types
+**What goes wrong:** Deepgram expects specific audio formats (e.g., linear16 PCM at 16kHz). The browser's `getUserMedia` typically captures at 44.1kHz or 48kHz. Cartesia outputs audio in configurable formats. If sample rates or codecs don't match between components, you get: garbled audio, high-pitched/low-pitched distortion, or silent output.
 
-**Codebase Analysis (HIGH confidence):**
-- `nexus/packages/core/src/brain.ts` -- Current Gemini-specific implementation
-- `nexus/packages/core/src/agent.ts` -- AgentLoop, parseStep(), ReAct prompt
-- `nexus/packages/core/src/api.ts` -- SSE streaming, WebSocket endpoint (no auth)
-- `nexus/packages/core/src/daemon.ts` -- Message routing, channel context race condition
-- `nexus/packages/memory/src/index.ts` -- Gemini embedding dependency
+**Prevention:**
+- Standardize on a pipeline format: browser captures at 48kHz -> downsample to 16kHz for Deepgram -> Cartesia outputs PCM 16-bit at 24kHz -> upsample for browser playback.
+- Use the `encoding` and `sample_rate` parameters explicitly in both Deepgram and Cartesia configurations. Don't rely on defaults.
+- Test the full pipeline with actual audio, not just API integration tests.
 
-**Community Reports (MEDIUM confidence):**
-- [Claude Code OAuth token expiration issue #12447](https://github.com/anthropics/claude-code/issues/12447) -- Token expiry in autonomous workflows
-- [Claude Code OAuth expired immediately #19078](https://github.com/anthropics/claude-code/issues/19078) -- Token expiry after fresh login
-- [Claude Did This - Setup Container Auth](https://claude-did-this.com/claude-hub/getting-started/setup-container-guide) -- setup-token documentation
+**Phase to address:** Voice phase.
 
-**Architecture Guidance (MEDIUM confidence):**
-- [ProxAI - LLM Abstraction Layer](https://www.proxai.co/blog/archive/llm-abstraction-layer) -- Multi-provider abstraction pitfalls
-- [Ably - WebSocket Architecture Best Practices](https://ably.com/topic/websocket-architecture-best-practices) -- Connection management, state sync
+---
+
+### P-22: Timezone Issues in Daily Usage Aggregation
+
+**What goes wrong:** Redis usage counters keyed by `{date}` use the server's timezone (typically UTC for a VPS). A user in UTC+3 (Turkey) using the system at 23:30 local time sees their usage split across two "days" in the system. Daily limits reset at midnight UTC, not midnight local time.
+
+**Prevention:**
+- Store all timestamps in UTC consistently.
+- For user-facing displays, convert to the user's configured timezone.
+- For daily limits, key by `{userId}:{utc_date}` and document that limits reset at midnight UTC.
+- If per-user timezone limits are needed, key by `{userId}:{local_date}` using the user's configured timezone offset.
+
+**Phase to address:** Usage tracking phase.
+
+---
+
+### P-23: Redis Counter Overflow for High-Volume Tracking
+
+**What goes wrong:** Using Redis `INCR` for usage counters, the values are stored as 64-bit integers (max: 9.2 x 10^18). This won't overflow. However, if counters don't have TTL, they accumulate indefinitely, consuming Redis memory. With per-user, per-day, per-feature counters, the key count grows as: `users * days * features`. After a year with 10 users and 5 features: 10 * 365 * 5 = 18,250 keys.
+
+**Prevention:**
+- Set TTL on all counter keys: daily counters get 48-hour TTL, weekly counters get 14-day TTL.
+- Use Redis hash for daily counters: `HINCRBY nexus:usage:2026-02-20 user1:turns 1`. One key per day, one hash field per user+metric. Set TTL on the hash key.
+- Periodically aggregate old counters to PostgreSQL for long-term storage and delete from Redis.
+
+**Phase to address:** Usage tracking phase.
+
+---
+
+### P-24: `/compact` and `/reset` Commands Losing Critical State
+
+**What goes wrong:** A user runs `/reset` to clear a frustrating conversation, not realizing it also clears: pinned system instructions they customized, tool permissions they configured, or pending scheduled tasks. Similarly, `/compact` might summarize away the user's initial instructions that set the agent's behavior for the session.
+
+**Prevention:**
+- **Confirmation step**: `/reset` shows what will be cleared and requires `/reset confirm`.
+- **Preserve system-level state**: `/reset` clears conversation history but preserves: user preferences (stored in Redis separately from session), scheduled tasks, tool permissions.
+- **`/compact` protects system prompt**: The compaction process never summarizes the system prompt or user-pinned instructions. These are always included verbatim.
+- **Undo window**: After `/reset`, store the cleared session in Redis with a 5-minute TTL. Offer `/undo` to restore.
+
+**Phase to address:** Chat commands phase.
+
+---
+
+## PHASE-SPECIFIC WARNINGS
+
+| Phase/Topic | Likely Pitfall | Risk Level | Mitigation |
+|---|---|---|---|
+| **Stability (prerequisite)** | P-07: PM2 restart storm | CRITICAL | Fix unhandled rejections, setTimeout leaks, connection cleanup before adding features |
+| **Stability (prerequisite)** | P-20: Redis cascade failures | HIGH | Circuit breaker, retry strategy, memory monitoring |
+| **Stability (prerequisite)** | P-19: Telegram offset loss | HIGH | Persist offset to Redis, graceful shutdown |
+| **Voice** | P-01: Latency stacking | CRITICAL | Stream everything, measure end-to-end from day one |
+| **Voice** | P-02: STT credit burn | CRITICAL | VAD + push-to-talk, never always-on without budget |
+| **Voice** | P-03: Browser autoplay block | CRITICAL | Gate behind user gesture, check AudioContext state |
+| **Voice** | P-04: WebSocket churn | CRITICAL | Keep-alive, reconnection backoff, connection state machine |
+| **Voice** | P-21: Sample rate mismatch | MINOR | Standardize pipeline format, explicit encoding params |
+| **Canvas** | P-05: iframe XSS vs usability | CRITICAL | srcdoc + allow-scripts without allow-same-origin |
+| **Canvas** | P-18: State management | MODERATE | Typed postMessage protocol, origin validation |
+| **Multi-Agent** | P-06: Recursive deadlock | CRITICAL | DAG topology, per-agent turn limits, token budget |
+| **Multi-Agent** | P-08: SDK tools:[] bypass | HIGH | Verify SDK fix or use OS-level sandboxing |
+| **Multi-Agent** | P-09: Excessive turns | HIGH | Complexity classifier, tiered agent config |
+| **Webhooks** | P-10: Auth + queue flood | HIGH | Signature verification, idempotent jobs, rate limits |
+| **Gmail** | P-11: OAuth token expiry | HIGH | Proactive refresh, alert on failure, test with published app |
+| **Gmail** | P-12: Pub/Sub watch expiry | HIGH | BullMQ scheduled renewal every 6 days |
+| **Commands** | P-15: Command conflicts | MODERATE | Strict prefix matching, channel-appropriate parsing |
+| **Commands** | P-24: Reset/compact data loss | MODERATE | Confirmation steps, preserve system state |
+| **DM Pairing** | P-16: Code brute force | MODERATE | 8+ char codes, rate limiting, short TTL |
+| **CLI Installer** | P-17: Platform differences | MODERATE | Docker-first, detect distro, rollback on failure |
+| **Compaction** | P-13: Context loss | HIGH | Tiered compaction, pin critical facts, tool result summaries |
+| **Usage Tracking** | P-14: No token visibility | HIGH | Estimate from text, track turns as proxy |
+| **Usage Tracking** | P-22: Timezone issues | MINOR | UTC consistently, convert for display |
+| **Usage Tracking** | P-23: Counter overflow | MINOR | TTL on all keys, hash-based counters |
+
+---
+
+## INTEGRATION PITFALLS WITH EXISTING SYSTEM
+
+These pitfalls are specific to adding features to the existing LivOS/Nexus architecture.
+
+### I-01: New WebSocket Connections Compound PM2 Restart Impact
+
+Every new WebSocket connection (Deepgram, Cartesia, browser voice, canvas live reload) that the nexus-core process manages increases the blast radius of each PM2 restart. Currently, a restart loses Telegram + Discord connections. Adding voice WebSockets means a restart also drops all active voice calls mid-sentence.
+
+**Mitigation:** Run voice WebSocket management in a separate process (e.g., `nexus-voice` PM2 process) that connects to nexus-core via Redis pub/sub. This isolates voice from core restarts.
+
+### I-02: BullMQ Queue Sprawl
+
+The existing system has `nexus-jobs` and `nexus-tasks` queues. Adding webhooks, Gmail, voice processing, and multi-agent orchestration could add 4-6 more queues. Each queue has its own worker, connection, and memory footprint. On a 4-8GB VPS, this becomes a resource concern.
+
+**Mitigation:** Use a single queue with job type routing (BullMQ supports this via job names). Reserve separate queues only for features with fundamentally different processing characteristics (e.g., voice requires real-time processing vs. email can be async).
+
+### I-03: Redis Key Namespace Collision
+
+The existing system uses `nexus:` prefix for all keys. Adding features naively (e.g., `nexus:voice:session:123`, `nexus:canvas:state:456`, `nexus:gmail:token`, `nexus:webhook:processed:789`) can create thousands of keys without clear lifecycle management.
+
+**Mitigation:** Define a key naming convention with TTL requirements: `nexus:{feature}:{entity}:{id}`. Document TTL for each key pattern. Use `SCAN` + TTL verification in a periodic cleanup job.
+
+### I-04: SdkAgentRunner Concurrency on VPS
+
+The current SdkAgentRunner spawns Claude Code SDK processes. On a 2-4 CPU VPS, running more than 2 concurrent SDK agent sessions will cause CPU contention that affects: voice processing latency, WebSocket keepalives, and Redis operations. Multi-agent sessions that spawn sub-agents compound this.
+
+**Mitigation:** Implement a concurrency semaphore: max 2 concurrent SdkAgentRunner sessions. Queue additional requests. For multi-agent: the orchestrator and sub-agents share the 2-session budget (run sequentially, not in parallel).
+
+---
+
+## SOURCES
+
+### Voice Pipeline
+- [Deepgram Keep-Alive Documentation](https://developers.deepgram.com/docs/audio-keep-alive)
+- [Deepgram STT Pricing](https://deepgram.com/pricing)
+- [Cartesia TTS WebSocket API](https://docs.cartesia.ai/api-reference/tts/tts)
+- [Cartesia Stream Inputs with Continuations](https://docs.cartesia.ai/build-with-cartesia/capability-guides/stream-inputs-using-continuations)
+- [Cartesia Context Flushing](https://docs.cartesia.ai/api-reference/tts/working-with-web-sockets/context-flushing-and-flush-i-ds)
+- [Voice AI Infrastructure Guide](https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025)
+- [MDN Autoplay Guide](https://developer.mozilla.org/en-US/docs/Web/Media/Autoplay_guide)
+- [MDN Web Audio API Best Practices](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices)
+
+### Canvas Security
+- [Feroot iframe Security 2025](https://www.feroot.com/blog/how-to-secure-iframe-compliance-2025/)
+- [Qrvey iframe Security Risks 2026](https://qrvey.com/blog/iframe-security/)
+- [HackTricks iframe XSS Analysis](https://book.hacktricks.xyz/pentesting-web/xss-cross-site-scripting/iframes-in-xss-and-csp)
+
+### Multi-Agent
+- [Multi-Agent 17x Error Trap](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/)
+- [Agentic Recursive Deadlock](https://tech-champion.com/artificial-intelligence/the-agentic-recursive-deadlock-llm-orchestration-collapses/)
+- [Redis AI Agent Orchestration](https://redis.io/blog/ai-agent-orchestration/)
+- [Claude Agent SDK Issue #115 - allowedTools bypass](https://github.com/anthropics/claude-agent-sdk-typescript/issues/115)
+
+### Webhooks & Gmail
+- [Svix Webhook Authentication Best Practices](https://www.svix.com/resources/webhook-best-practices/authentication/)
+- [BullMQ Idempotent Jobs](https://docs.bullmq.io/patterns/idempotent-jobs)
+- [BullMQ Deduplication](https://docs.bullmq.io/guide/jobs/deduplication)
+- [Google OAuth invalid_grant Analysis](https://nango.dev/blog/google-oauth-invalid-grant-token-has-been-expired-or-revoked)
+
+### Session & Context
+- [Anthropic Context Engineering Guide](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+- [Forge Code Context Compaction](https://forgecode.dev/docs/context-compaction/)
+- [Context Rot Research](https://research.trychroma.com/context-rot)
+
+### Process Stability
+- [Node.js WebSocket Memory Leak Patterns](https://oneuptime.com/blog/post/2026-01-24-websocket-memory-leak-issues/view)
+- [PM2 Process Management Issues](https://github.com/Unitech/pm2/issues/5082)
+- [Claude Code SDK Cost Tracking](https://platform.claude.com/docs/en/agent-sdk/cost-tracking)
+
+---
+
+**Document Version:** 2.0 (v2.0 feature-specific pitfalls)
+**Research Date:** 2026-02-20
+**Pitfalls Cataloged:** 24 domain-specific + 4 integration-specific
+**Confidence:** HIGH for voice, canvas, webhooks, Gmail, stability. MEDIUM for usage tracking token visibility.

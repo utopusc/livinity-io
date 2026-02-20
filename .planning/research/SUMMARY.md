@@ -1,470 +1,336 @@
-# Research Summary: v1.5 Claude Migration & AI Platform
+# Project Research Summary
 
-**Milestone:** v1.5 — Claude Migration & AI Platform
-**Research Date:** 2026-02-15
-**Overall Confidence:** HIGH
-**Synthesized from:** STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md
+**Project:** LivOS v2.0 — OpenClaw-Class AI Platform
+**Domain:** Self-hosted AI home server OS with voice, multi-agent, and automation capabilities
+**Researched:** 2026-02-20
+**Confidence:** HIGH (stack and architecture verified via direct codebase analysis; pitfalls verified against official docs and live GitHub issues)
 
 ---
 
 ## Executive Summary
 
-LivOS is migrating from a Gemini-only agent system to a multi-provider AI platform with Claude as primary. This is **not a greenfield project** — the existing architecture has clean abstraction points (Brain class, ChannelProvider interface, SkillLoader, SessionManager, memory service) that enable extension rather than replacement.
+LivOS v2.0 is a significant feature expansion of an already-functional self-hosted AI platform. The milestone adds voice interaction (Cartesia TTS + Deepgram STT), a live canvas for AI-generated artifacts, multi-agent session orchestration, Gmail integration, webhooks, DM security pairing, session compaction, usage tracking, an onboarding CLI, and stability hardening. Research across all four dimensions confirms the existing architecture — Daemon inbox pattern, SdkAgentRunner with MCP tools, ChannelManager provider abstraction, Redis state layer, Express API — provides clean integration seams for every v2.0 feature. No architectural rewrites are required. Most features are either new MCP tools, new Express routes, new channel providers, or new UI components. Voice is the only feature requiring a genuinely novel component pattern (bidirectional WebSocket audio relay), and even it calls `daemon.addToInbox()` as its final step, making it "just another source" in the existing processing pipeline.
 
-**Critical Discovery:** Anthropic blocked subscription OAuth tokens (`sk-ant-oat01-*`) from third-party tools in January 2026. LivOS MUST use standard API keys (`sk-ant-api03-*`), not subscription tokens from `claude setup-token`. The original auth plan is not viable.
+The recommended implementation strategy is to front-load stability and security work before adding high-complexity features. The nexus-core process currently restarts approximately 3.3 times per hour (153 restarts in 47 hours per project data), which would cause catastrophic degradation if voice WebSockets, multi-agent sub-processes, or canvas rendering are added before root causes are fixed. DM pairing is a critical security gap: without it, anyone who discovers the bot token can run commands on the server. These two concerns define Phase 1 — stabilize and secure before expanding. The subsequent phase order is driven by dependency chains: webhooks must precede Gmail (Pub/Sub pushes to webhook infrastructure), compaction should precede multi-agent (sub-agents burn tokens faster), and voice and canvas should come last because they carry the highest integration risk but are independent of all other features.
 
-**Key Insight:** The migration touches five core systems: (1) AI abstraction layer (Brain), (2) agent execution engine (AgentLoop), (3) streaming protocol (SSE events), (4) memory with embeddings, and (5) auth configuration. All other features (channels, skills, WebSocket gateway, parallel execution) integrate cleanly at existing seams.
-
-**Primary Risk:** Tool calling format mismatch. The current ReAct loop uses JSON-in-text parsing; Claude has native tool_use content blocks. These must coexist during transition, requiring dual-mode support in AgentLoop. Second risk: Message role mapping — Claude requires strict user/assistant alternation, Gemini allows consecutive same-role messages.
-
-**Recommended Strategy:** Multi-provider abstraction with Claude as primary, Gemini as fallback. Keep the existing AgentEvent SSE format (don't break frontend). Implement native Claude tool calling but maintain JSON-in-text fallback for Gemini. Enhance memory with sqlite-vec (not a separate vector DB). Expand channels incrementally (Slack first, Matrix second). Defer OAuth token support, knowledge graphs, and visual workflow builders.
+The principal risk to the entire v2.0 effort is scope without sequencing. Voice alone has four distinct CRITICAL-rated failure modes: latency stacking, STT credit burn, browser autoplay policy blocking audio output, and WebSocket connection churn. Canvas has an iframe XSS trap that, if misconfigured, undermines the security of the entire application. Multi-agent has a recursive deadlock trap that can exhaust the Claude Code subscription window in minutes. None of these risks are exotic — all are well-documented and all have clear prevention patterns detailed in the research. The roadmap must keep voice, canvas, and multi-agent in separate phases so problems in one do not block the others.
 
 ---
 
 ## Key Findings
 
-### 1. Stack Additions (from STACK.md)
+### Recommended Stack
 
-**Core Dependencies:**
+The existing stack requires minimal additions. Only four new npm packages are needed for core v2.0 functionality: `@cartesia/cartesia-js@^2.2.9` and `@deepgram/sdk@^4.11.3` for voice, `googleapis@^144.0.0` for Gmail OAuth and API calls, and `@google-cloud/pubsub@^4.8.0` for Gmail push notifications. The onboarding CLI is a new package (`nexus/packages/cli`) adding `commander@^13.1.0` and `@clack/prompts@^1.0.1`. The frontend requires zero new npm dependencies — voice uses browser-native `MediaRecorder` and `AudioContext`; canvas uses native `<iframe sandbox srcdoc>` with CDN-loaded React and Tailwind inside the sandbox.
 
-| Package | Action | Version | Purpose |
-|---------|--------|---------|---------|
-| `@anthropic-ai/sdk` | **Upgrade** | `^0.39.0` → `^0.74.0` | Native MCP helpers, Zod tools, structured outputs, message streaming |
-| `sqlite-vec` | **Add** | `^0.1.7` | Native SQLite vector extension for memory service |
-| `matrix-js-sdk` | **Add** | `^40.2.0` | Matrix chat channel (self-hosted friendly) |
-| `openai` | **Optional** | `^6.22.0` | OpenRouter multi-provider gateway (later phase) |
+Two important constraints discovered in research: (1) LivOS uses Claude Code Auth (subscription mode) via `SdkAgentRunner`, not direct Anthropic API keys. This means the native Compaction API (`compact-2026-01-12` beta header) cannot be used — session compaction must be implemented as a `SessionManager` method and MCP tool. (2) A2UI (Google's declarative agent UI protocol) is at v0.8 public preview with v0.9 already introducing breaking changes. It should not be adopted until v1.0 stabilizes. Live Canvas must use the proven `srcdoc` iframe approach.
 
-**Already Installed (use as-is):**
-- `@slack/bolt@^4.0.0` — Socket Mode for Slack channel (no implementation yet)
-- `@line/bot-sdk@^9.0.0` — Line channel (low priority)
-- `bullmq@^5.0.0` — Background jobs for parallel agent execution
-- `ws@^8.18.0` — WebSocket RPC gateway (extend existing)
+**Core technologies:**
+- `@cartesia/cartesia-js` v2.2.9: TTS via persistent WebSocket — sub-100ms TTFB, Sonic-3 model, `context_id` maintains prosody across streaming text chunks
+- `@deepgram/sdk` v4.11.3: STT via WebSocket — Nova-3 model, interim results, VAD events, 50+ languages, $200 free credit
+- `googleapis` v144+: Gmail API + OAuth2 — official Google client, handles token refresh, widely used
+- `@google-cloud/pubsub` v4.8.0: Gmail push notifications — or polling fallback (simpler, no GCP dependency; recommended for self-hosted)
+- `commander` v13.1.0 + `@clack/prompts` v1.0.1: Onboarding CLI — clack chosen over Inquirer for modern UX, less boilerplate
+- `<iframe sandbox="allow-scripts" srcdoc>`: Canvas rendering — zero new dependencies, browser-native isolation, proven by Claude.ai Artifacts pattern
 
-**Auth Method Change:**
-- Original plan: Subscription tokens via `claude setup-token` — **BLOCKED by Anthropic**
-- Required approach: Standard API keys from console.anthropic.com
-- Storage: Redis key `nexus:config:anthropic_api_key` (parallel to `gemini_api_key`)
-
-**Model Tier Mapping:**
-
-```typescript
-const CLAUDE_MODELS = {
-  flash: 'claude-haiku-4-5',        // $1/$5 per MTok — fast, cheap
-  haiku: 'claude-haiku-4-5',        // Same as flash
-  sonnet: 'claude-sonnet-4-5',      // $3/$15 per MTok — agent default
-  opus: 'claude-opus-4-6',          // $5/$25 per MTok — complex reasoning
-};
-```
-
-**Cost Comparison:** Claude Sonnet ($3/$15) vs Gemini Flash ($0.10/$0.40). Recommendation: Default to Sonnet for quality, keep Gemini as "budget mode" fallback.
+**What NOT to add:**
+- `@anthropic-ai/sdk` direct API access: conflicts with subscription auth model; would require bypassing SdkAgentRunner
+- Sandpack / CodeSandbox: too heavy (5MB+); native iframe is sufficient and zero-dependency
+- tldraw: whiteboard framework, wrong tool for AI artifact rendering
+- Whisper or Piper (local STT/TTS): quality gap vs cloud APIs, GPU requirement, 500ms+ latency vs 40ms Cartesia
+- LangChain / LangGraph / CrewAI: conflicts with existing Daemon + SdkAgentRunner orchestration pattern
+- WebRTC for voice: WebSocket is sufficient for single-user self-hosted; WebRTC adds STUN/TURN complexity with no benefit
+- A2UI v0.8/v0.9: pre-stable spec, v0.9 already has breaking changes; migration cost high when v1.0 lands
 
 ---
 
-### 2. Feature Table Stakes (from FEATURES.md)
+### Expected Features
 
-**Multi-Provider Backend (Must-Have):**
-- Claude API integration with streaming + native tool calling
-- API key configuration per provider (UI + Redis storage)
-- Model selection per tier (flash/haiku/sonnet/opus) mapping to provider models
-- Token usage tracking normalized across providers
-- Provider fallback chain (if Claude 429/503, try Gemini)
+Research benchmarked v2.0 against OpenClaw (the reference AI platform) and identified a clear two-tier feature structure.
 
-**Hybrid Memory (Must-Have):**
-- Session context (conversation history) — **already exists**
-- Long-term memory (facts/preferences) — **already exists**
-- Semantic search (vector similarity) — **already exists**
-- Automatic memory extraction (post-conversation fact extraction) — **new**
-- Memory deduplication (prevent accumulation) — **new**
+**Must have (table stakes — missing makes product feel incomplete vs. OpenClaw):**
+- DM Pairing / Activation Code Security — critical security gap; without it anyone who discovers the bot token controls the server
+- Chat Commands `/new`, `/compact`, `/usage`, `/activation` — completes the command set; `/help`, `/think`, `/reset`, `/status` already exist
+- Session Compaction — without it, long conversations exhaust context windows and waste subscription rolling window budget
+- Usage Tracking — visibility into token consumption, turn counts, session costs; needed to detect and prevent rolling window exhaustion
+- Webhook Triggers — enables automation use cases; without webhooks the agent can only respond to direct messages
 
-**Additional Channels (Must-Have):**
-- Slack provider (Socket Mode, no public endpoints)
-- Matrix provider (self-hosted friendly)
-- Channel-agnostic message routing — **already exists**
-- Per-channel configuration UI — **extend existing pattern**
+**Should have (differentiators that set LivOS apart):**
+- Voice Mode (push-to-talk first, VAD later) — browser-based voice without app installation; OpenClaw requires native desktop app
+- Live Canvas (simplified artifacts via iframe srcdoc) — transforms chat from text terminal to dynamic workspace
+- Multi-Agent Sessions (`sessions_list`, `sessions_send`, sub-agent spawning) — structured coordination beyond basic parallel task execution
+- Gmail Integration (OAuth + Pub/Sub + MCP tools) — killer feature for personal AI assistant; few self-hosted alternatives do this well
+- Onboarding CLI (`livinity onboard`) — reduces "time to first chat" from hours to minutes
 
-**Skill Marketplace (Must-Have):**
-- SKILL.md manifest format (OpenClaw compatibility)
-- Skill installation from Git-based registry (like app gallery)
-- Skill versioning and permissions declaration
-- Progressive skill loading (lazy load handlers)
-
-**WebSocket RPC Gateway (Must-Have):**
-- JSON-RPC 2.0 over WebSocket (standardize existing `/ws/agent`)
-- Authentication on connect (API key or JWT)
-- Agent streaming via WebSocket (bidirectional, cancellable)
-- Multiplexed sessions (multiple concurrent tasks per connection)
-
-**Human-in-the-Loop (Must-Have):**
-- Tool approval gate for destructive operations
-- Approval response from any channel
-- Configurable approval policy (always/destructive/never)
-
-**Parallel Execution (Should-Have):**
-- Independent background tasks (BullMQ-based)
-- Task status monitoring and cancellation
-- Fan-out/fan-in pattern (defer to later phase)
+**Defer to v2.1+:**
+- A2UI protocol (spec pre-stable, v1.0 not released)
+- Always-listening wake word detection (constant mic, privacy concern, on-device ML model — massive scope for marginal value)
+- Native desktop or mobile apps for voice (PWA + WebSocket from browser is sufficient; eliminates distribution burden)
+- Real-time voice for Telegram or Discord channels (bot APIs not designed for AI voice; web UI is the right surface)
+- Voice mode supporting multiple simultaneous users (single-user self-hosted context in v2.0)
 
 ---
 
-### 3. Architecture Decisions (from ARCHITECTURE.md)
+### Architecture Approach
 
-**Brain Class Migration:**
+Architecture research (based on direct reading of 10+ production source files) confirms that v2.0 is purely additive. The Daemon with inbox pattern is the central integration seam: `daemon.addToInbox()` is called by every message source and `processInboxItem()` routes to commands, skills, or agent. Voice becomes "just another source" after STT transcription. Gmail becomes a new `ChannelProvider` implementing the same interface as Telegram and Discord. Webhooks extend the existing `/api/webhook/git` route pattern already present in `api.ts`. Multi-agent sessions are new MCP tools plus Redis schema. Session compaction is a new `SessionManager.compactSession()` method with an auto-trigger hook in `processInboxItem`.
 
-```
-BEFORE (Gemini-only):
-  Brain.chat() → generateContent()
-  Brain.chatStream() → generateContentStream()
-  GEMINI_MODELS mapping
-  Redis: livos:config:gemini_api_key
-
-AFTER (Multi-provider):
-  ProviderManager.chat() → ClaudeProvider | GeminiProvider
-  Brain → thin wrapper around ProviderManager
-  Provider-specific model mappings
-  Redis: anthropic_api_key, gemini_api_key, openrouter_key
-```
-
-**Provider Interface:**
-
-```typescript
-interface AIProvider {
-  chat(options: ChatOptions): Promise<ChatResult>
-  chatStream(options: ChatOptions): ChatStreamResult
-  isAvailable(): Promise<boolean>
-  supportsVision: boolean
-  supportsToolCalling: boolean
-  models: Record<string, string>
-}
-```
-
-Three implementations: `ClaudeProvider` (primary), `GeminiProvider` (fallback), `OpenRouterProvider` (optional).
-
-**Tool Calling Strategy:**
-- Claude: Native `tool_use` content blocks with `tool_result` responses
-- Gemini: JSON-in-text parsing (existing `parseStep()` method)
-- AgentLoop: Dual-mode support — detect provider, use appropriate mechanism
-- No abstraction layer for tool calling — let each provider use native format
-- ToolRegistry gains `toClaudeTools()` method for schema conversion
-
-**Memory Enhancement:**
-
-```
-Current: PostgreSQL + pgvector + Gemini embeddings
-Extended:
-  ├── memories table (existing — vector search)
-  ├── memory_sessions table (NEW — session context binding)
-  ├── memory_relations table (NEW — graph edges, defer to later phase)
-  └── sqlite-vec integration (REPLACE manual cosine similarity)
-```
-
-Keep Gemini API key for embeddings even after Claude migration (embeddings are cheap, different feature).
-
-**Streaming Protocol:**
-- **Keep existing AgentEvent format** — no frontend changes required
-- Map Claude events to AgentEvents:
-  - `content_block_delta` (text_delta) → `{type: 'chunk', data: text}`
-  - `content_block_start` (tool_use) → `{type: 'tool_call', data: {tool, params}}`
-  - `message_stop` → `{type: 'done', data: {answer, success}}`
-- Use Anthropic SDK's `.messages.stream()` helper with `.on('text')` events
-
-**Channel Expansion:**
-
-```
-nexus/packages/core/src/channels/
-  ├── telegram.ts (existing)
-  ├── discord.ts (existing)
-  ├── slack.ts (NEW — @slack/bolt Socket Mode)
-  ├── matrix.ts (NEW — matrix-js-sdk)
-  └── index.ts (register new adapters in ChannelManager)
-```
-
-Each adapter: ~150-200 LOC following existing pattern. No architectural changes needed.
-
-**WebSocket Gateway:**
-- Extend existing `/ws/agent` endpoint (don't create separate service)
-- Add JSON-RPC 2.0 framing: `{jsonrpc: "2.0", method, params, id}`
-- Add authentication on connection (API key or JWT validation)
-- Support multiplexed sessions (session ID per request)
+**Major components and integration points:**
+1. **VoiceGateway** (`nexus/packages/core/src/voice-gateway.ts`) — NEW. Binary WebSocket on `/ws/voice`. Manages `DeepgramRelay` (STT), `CartesiaRelay` (TTS), and `VoiceSession` lifecycle. Calls `daemon.addToInbox()` on final transcript. Must run inside nexus-core process (not a separate container) to avoid inter-process latency hops on the VPS.
+2. **GmailProvider** (`nexus/packages/core/src/channels/gmail.ts`) — NEW. Implements `ChannelProvider` interface identically to `TelegramProvider`. Manages OAuth tokens, Gmail watch renewal (BullMQ repeatable job every 6 days), Pub/Sub notifications, and email-to-IncomingMessage conversion.
+3. **Canvas Tool + Panel** — NEW `canvas_render` MCP tool stores artifact HTML in Redis keyed by conversation ID; NEW `CanvasPanel` React component in ai-chat route renders it in `<iframe sandbox="allow-scripts" srcdoc>`. Panel is hidden until `canvas_render` is first called.
+4. **Session MCP Tools** — NEW `sessions_list`, `sessions_create`, `sessions_send`, `sessions_history` registered in `daemon.ts` `registerTools()`. Pure Redis reads/writes; no new infrastructure.
+5. **Extended `commands.ts`** — EXTENDED switch cases for `/compact`, `/usage`, `/activation`, `/pair`. Trivial additions to the existing pattern.
+6. **Extended `SessionManager`** — EXTENDED with `compactSession()` using Brain to summarize old history, plus auto-trigger at 100k token threshold in daemon.
+7. **Stability Hardening** — `process.on('unhandledRejection')` global handlers, replace `setTimeout`-based crons with BullMQ repeatable jobs, Redis circuit breaker, PM2 `max_memory_restart` config.
 
 ---
 
-### 4. Critical Pitfalls (from PITFALLS.md)
+### Critical Pitfalls
 
-**Top 5 Risks to Watch:**
+Research identified 24 domain-specific and 4 integration-specific pitfalls. The top 5 that can cause rewrites or sustained outages:
 
-#### 1. Message Role Mapping Breaks Agent Loop (CRITICAL)
-- **Issue:** Gemini uses `role: 'model'`, Claude uses `role: 'assistant'`. Claude strictly enforces user/assistant alternation; Gemini allows consecutive same-role messages.
-- **Impact:** All multi-turn agent invocations fail with 400 errors. Production bots stop responding.
-- **Prevention:** Normalization layer that merges consecutive messages + pre-flight validation before API calls.
-- **Phase:** Phase 1 (Brain abstraction layer).
+1. **P-07 — Process instability (153 PM2 restarts in 47 hours):** The existing crash rate must be reduced before adding voice WebSockets, canvas rendering, or multi-agent sub-processes. Each new feature multiplies the blast radius of each restart — voice calls will drop mid-sentence, multi-agent sessions will lose progress. Prevention: add `process.on('unhandledRejection')` global handler, replace `setTimeout`-based crons with BullMQ repeatable jobs, add Redis circuit breaker, set PM2 `max_memory_restart`. Must be done before any other Phase 1 work.
 
-#### 2. Tool Calling Format Mismatch (CRITICAL)
-- **Issue:** Current system uses JSON-in-text (`parseStep()` with regex fallbacks). Claude has native `tool_use` content blocks with `tool_use_id` tracking.
-- **Impact:** If kept as text: unreliable tool calls, no parallel use. If switched incompletely: missing `tool_use_id` causes 400 errors.
-- **Prevention:** Dual-mode support — native for Claude, JSON-in-text for Gemini. ToolRegistry gains `toClaudeTools()` method.
-- **Phase:** Phase 1 (Brain abstraction) + Phase 2 (AgentLoop adaptation).
+2. **P-01 — Voice pipeline latency stacking:** STT (150-300ms) + LLM (500-2000ms) + TTS (40-150ms) + network round-trips compound to 800ms-2800ms total. At the high end, conversations feel unnatural and users talk over the AI. Prevention: stream everything end-to-end (never wait for a complete LLM response before starting TTS), use Cartesia `context_id` continuations for prosody across streamed text chunks, instrument the full pipeline with timestamps from day one, target p95 < 1200ms end-to-end.
 
-#### 3. SSE Streaming Format Breaks Frontend (CRITICAL)
-- **Issue:** Claude emits `content_block_delta`, `message_stop` events. Current frontend expects `chunk`, `tool_call`, `done` AgentEvents.
-- **Impact:** Frontend shows blank responses, tool visualizations break, no user-visible errors.
-- **Prevention:** Keep existing AgentEvent format as SSE contract. Brain layer translates Claude events to AgentEvents.
-- **Phase:** Phase 1 (Brain abstraction layer).
+3. **P-05 — iframe sandbox XSS trap:** `sandbox="allow-scripts"` is safe; adding `allow-same-origin` to the same sandbox effectively eliminates security (the iframe can remove its own sandbox attribute via the parent DOM). This combination is explicitly warned against in the HTML spec. Prevention: use `srcdoc` attribute (null origin), `sandbox="allow-scripts allow-popups"` only, never add `allow-same-origin`. Verify via security scan before any canvas code ships.
 
-#### 4. API Key Auth Only (No Subscription Tokens) (HIGH)
-- **Issue:** Anthropic blocked subscription OAuth tokens from third-party tools in Jan 2026. Cannot use `claude setup-token`.
-- **Impact:** Original auth plan is not viable. Must use standard API keys.
-- **Prevention:** Use API key auth (`sk-ant-api03-*` format). Add key validation on save. Store in Redis: `nexus:config:anthropic_api_key`.
-- **Phase:** Phase 1 (configuration) + Phase 2 (auth UI).
+4. **P-06 — Multi-agent recursive deadlock and token explosion:** Two agents can create circular dependencies and self-reinforcing reasoning loops that exhaust the Claude Code subscription window in minutes. Token costs multiply: 2 agents produce roughly 3-4x the tokens of 1 agent (not 2x), because of coordination overhead. Prevention: strict DAG topology (no agent delegates back to its parent), per-agent turn limits (5-8 max), session-level token budget hard stop (50k tokens for the entire multi-agent session), maximum 2 concurrent agents on the VPS.
 
-#### 5. Memory Embeddings Tied to Gemini (HIGH)
-- **Issue:** Memory service uses Gemini `text-embedding-004` via hard-coded HTTP call. Removing Gemini key breaks memory search.
-- **Impact:** Memory search degrades silently. New memories without embeddings never match old ones.
-- **Prevention:** Keep Gemini API key for embeddings (different feature, cheap) OR integrate alternative embedding provider (local sentence-transformers, OpenAI embed).
-- **Phase:** Phase 3 (Memory integration).
-
-**Other Notable Risks:**
-- **Leaky abstraction (lowest-common-denominator):** Use capability-based design with `providerOptions` bag, not uniform interface.
-- **Conversation history format incompatible:** Define provider-neutral format with `role: 'user' | 'assistant'`, migrate existing sessions.
-- **WebSocket lacks authentication:** Add API key or JWT validation on connection upgrade (SEC issue).
-- **Skill marketplace security:** Arbitrary code execution risk — start with curated gallery, implement capability system before allowing untrusted sources.
-- **Token budget mismatch:** Claude costs 10-50x more than Gemini. Add provider-specific defaults and cost tracking.
-- **Response routing race condition:** `currentChannelContext` is instance state, causes cross-channel leakage. Pass context per-request.
+5. **P-11/P-12 — Gmail OAuth token expiry + watch expiration silent failures:** Google OAuth refresh tokens silently expire (password reset, 6-month inactivity, "Testing" consent screen status). Gmail watch expires after exactly 7 days with zero warning from Google. Prevention: BullMQ repeatable job to renew watch every 6 days, proactive access token refresh every 30 minutes, immediate alert via Telegram/Discord on `invalid_grant` error, graceful degradation when authentication fails (stop queuing email tasks, do not allow Pub/Sub notifications to pile up as failed jobs).
 
 ---
 
-## 5. Recommended Build Order
+## Implications for Roadmap
 
-Based on dependencies, risk, and integration points:
-
-### Phase 1: Provider Abstraction + Claude Integration (Foundation)
-**Duration:** 7-10 days
-**Why first:** Everything depends on clean provider abstraction.
-
-**Tasks:**
-1. Define provider-neutral conversation format (`role: 'user' | 'assistant'`, `content: string | ContentBlock[]`)
-2. Create `AIProvider` interface + `ProviderManager`
-3. Implement `ClaudeProvider` with `@anthropic-ai/sdk@^0.74.0`
-4. Refactor existing Gemini code into `GeminiProvider`
-5. Message normalization layer (handle role mapping, alternation validation)
-6. Streaming event mapping (Claude events → AgentEvents, keep existing SSE contract)
-7. Token/cost defaults per provider
-8. API key config (Redis + Settings UI for `anthropic_api_key`)
-9. Provider fallback logic (if Claude fails, try Gemini)
-10. Integration tests: replay multi-turn conversations with tool calls
-
-**Deliverable:** Brain abstraction that works with both Claude and Gemini. Existing functionality preserved.
-
-**Critical Pitfalls to Address:** #1 (role mapping), #3 (streaming format), #4 (API key auth), #11 (token budget).
+Based on combined research across all four dimensions, the following phase structure is recommended. It is intentionally opinionated: stability and security must come first, then automation infrastructure, then intelligence enhancements, then high-complexity user-facing differentiators.
 
 ---
 
-### Phase 2: Native Tool Calling + AgentLoop Adaptation
-**Duration:** 5-7 days
-**Why second:** Requires Brain abstraction from Phase 1.
+### Phase 1: Stability and Security Foundation
 
-**Tasks:**
-1. Add `toClaudeTools()` method to ToolRegistry (convert to `input_schema` format)
-2. Dual-mode tool calling in AgentLoop:
-   - Detect provider type
-   - For Claude: extract `tool_use` content blocks, return `tool_result` blocks
-   - For Gemini: keep existing `parseStep()` JSON-in-text
-3. Handle parallel tool calls (Claude may return multiple `tool_use` blocks) OR disable with `disable_parallel_tool_use: true`
-4. Test with complex parameter schemas (nested objects, enums)
-5. Extended thinking support (expose `thinking` content blocks as collapsible UI sections)
+**Rationale:** The 153-restart problem (P-07) and Redis cascade risk (P-20) are blocking conditions for every subsequent phase, not optional fixes. Voice calls drop mid-sentence on each restart. Multi-agent sessions lose all progress. Adding features to an unstable base multiplies technical debt exponentially. DM pairing (TS-02) is a critical security gap that must be closed before the user base grows. Chat commands and usage tracking are low-risk, high-utility completions that require no new infrastructure.
 
-**Deliverable:** Claude native tool calling working end-to-end. Gemini fallback unchanged.
+**Delivers:**
+- Stable nexus-core process: `unhandledRejection` and `uncaughtException` global handlers, BullMQ repeatable jobs replacing `setTimeout`-based crons, Redis circuit breaker, PM2 `max_memory_restart`, Grammy polling offset persisted to Redis
+- DM pairing/activation code security for Telegram and Discord (6-digit code, 1-hour TTL, admin-only approval, Redis allowlist)
+- Chat commands: `/new`, `/usage` (full), `/activation`, `/compact` (stub wiring only)
+- Usage tracking: Redis counters per user/day, `/usage` command, PostgreSQL daily aggregate table
 
-**Critical Pitfalls to Address:** #2 (tool format mismatch), #7 (ReAct prompt compatibility).
+**Features addressed:** TS-01, TS-02, TS-04 (infrastructure)
+**Pitfalls mitigated:** P-07, P-09 (turn limits stub), P-15, P-16, P-19, P-20
+**Research flag:** Standard patterns — skip research-phase. All fixes are codebase-specific and already analyzed. DM pairing is directly adapted from OpenClaw's documented model (HIGH confidence).
 
 ---
 
-### Phase 3: Hybrid Memory + Channel Expansion
-**Duration:** 7-10 days
-**Why third:** Independent of Brain changes, well-defined integration points.
+### Phase 2: Automation Infrastructure (Webhooks + Gmail)
 
-**Tasks:**
-1. **Memory enhancements:**
-   - Add `sqlite-vec@^0.1.7` to memory service
-   - Schema migration: `memory_sessions` table
-   - Automatic memory extraction (post-conversation LLM call, BullMQ background job)
-   - Memory deduplication (embedding similarity threshold)
-   - Temporal awareness (timestamp metadata, time-aware search ranking)
-   - Context window optimization (relevance-scored assembly within token budget)
-2. **Channel expansion:**
-   - Implement `SlackProvider` (Socket Mode, `@slack/bolt`)
-   - Implement `MatrixProvider` (`matrix-js-sdk`)
-   - Update `ChannelId` type, register in ChannelManager
-   - Test message routing, text chunking, formatting
-3. **Fix response routing race condition:**
-   - Remove `this.currentChannelContext` instance state
-   - Pass channel context per-request through processing chain
+**Rationale:** Webhooks are the dependency that unlocks Gmail — Gmail Pub/Sub pushes notifications to the webhook endpoint infrastructure. Both are additive Express route extensions of the existing `/api/webhook/git` pattern. Webhook security (HMAC signature verification, BullMQ job deduplication, rate limiting) must be implemented correctly before any webhook endpoint goes live — P-10 is HIGH severity and the existing Git webhook has no authentication. Gmail is more complex, requiring OAuth flow, GmailProvider implementation, watch renewal, and MCP tool registration, but builds cleanly on the webhook infrastructure from the same phase.
 
-**Deliverable:** Slack and Matrix channels working. Memory search quality improved.
+**Delivers:**
+- Generic webhook receiver (`POST /api/webhooks/:hookId`) with HMAC-SHA256 signature verification and timing-safe comparison
+- BullMQ job deduplication using delivery ID as job ID (eliminates retry storm duplicates)
+- Rate limiting per webhook source (30 req/min), payload size limit (1MB)
+- Webhook CRUD via MCP tools (`webhook_create`, `webhook_list`, `webhook_delete`) and Settings UI
+- Gmail OAuth flow and Settings panel (Google Cloud project credentials, consent screen)
+- `GmailProvider` implementing `ChannelProvider` interface (push notifications, watch renewal, email-to-message)
+- Gmail MCP tools: `gmail_read`, `gmail_reply`, `gmail_send`, `gmail_search`, `gmail_archive`
+- BullMQ repeatable job for Gmail watch renewal every 6 days
 
-**Critical Pitfalls to Address:** #5 (embedding provider), #12 (routing race condition).
+**Features addressed:** TS-05, DF-04
+**Pitfalls mitigated:** P-10, P-11, P-12
+**Stack additions:** `googleapis@^144.0.0`, `@google-cloud/pubsub@^4.8.0` (polling fallback as default)
+**Research flag:** Execution review recommended before Gmail sub-phase. OAuth self-hosted flow for Google Cloud projects has documented edge cases (P-11). Implement polling mode first, add Pub/Sub as advanced option for users who want instant notifications.
 
 ---
 
-### Phase 4: WebSocket Gateway + Human-in-the-Loop
-**Duration:** 5-7 days
-**Why fourth:** Enables HITL, depends on WebSocket from Phase 3.
+### Phase 3: Intelligence Enhancements (Compaction + Multi-Agent)
 
-**Tasks:**
-1. **WebSocket RPC upgrade:**
-   - JSON-RPC 2.0 message framing (`{jsonrpc: "2.0", method, params, id}`)
-   - Authentication on connection (API key or JWT in upgrade request)
-   - Method-based routing (`agent.run`, `agent.cancel`, `tools.list`)
-   - Multiplexed sessions (session ID per request)
-   - Server-initiated notifications (Redis pub/sub → WebSocket push)
-2. **Human-in-the-loop:**
-   - Tool metadata: `requiresApproval: boolean`
-   - Agent loop pause on approval_request event
-   - Approval response from any channel (stored in Redis, agent polls)
-   - Configurable approval policy (always/destructive/never)
-   - Audit trail (log all approvals)
+**Rationale:** Session compaction is infrastructure that all higher-complexity features depend on — multi-agent sessions burn tokens 3-4x faster than single-agent sessions and hit context limits rapidly without compaction. Compaction must be fully implemented before multi-agent ships. Multi-agent starts minimal: maximum 2 concurrent agents, DAG topology enforced, per-agent turn limits — because of the deadlock and token explosion risks (P-06).
 
-**Deliverable:** WebSocket RPC gateway. Tool approval system working.
+**Delivers:**
+- `SessionManager.compactSession()` with tiered strategy: keep last 10 messages verbatim, summarize older messages using Brain (haiku model for cost), pin critical facts (file paths, error codes, user preferences) as a separate section that is never compacted
+- Auto-compact trigger in daemon at 100k token threshold
+- `/compact` command fully implemented (previously a stub from Phase 1)
+- Multi-agent MCP tools: `sessions_list`, `sessions_create`, `sessions_send`, `sessions_history`
+- Sub-agent spawning via BullMQ with max-depth-1 enforcement, 5-8 turn limit per sub-agent, 50k token session budget
+- Session token budget tracking (extends usage tracking from Phase 1)
 
-**Critical Pitfalls to Address:** #9 (WebSocket auth).
+**Features addressed:** TS-03, DF-03
+**Pitfalls mitigated:** P-06, P-08 (tool leak), P-13, P-14
+**Research flag:** Research-phase review recommended before planning. SDK token visibility in subscription mode is MEDIUM confidence (P-14) — verify whether `SdkAgentRunner` result objects expose per-request token counts before committing to the usage schema. Multi-agent deadlock topology requires deliberate design review.
 
 ---
 
-### Phase 5: Skill Marketplace + Parallel Execution
-**Duration:** 7-10 days
-**Why last:** Most complex, builds on all previous phases.
+### Phase 4: Voice Pipeline
 
-**Tasks:**
-1. **Skill marketplace:**
-   - SKILL.md manifest schema (OpenClaw-compatible YAML frontmatter)
-   - Directory-based skills (`skill-name/SKILL.md` + `skill-name/index.ts`)
-   - Git-based registry client (like app gallery)
-   - Skill installation flow (download, validate, place in `~/.nexus/skills/`)
-   - Progressive loading (lazy import handlers)
-   - Permission declarations + approval before install
-   - Skill analytics (usage tracking in Redis)
-2. **Parallel execution:**
-   - BullMQ job per agent task
-   - Task status monitoring (Redis state, API endpoint)
-   - Task cancellation (AbortController signal)
-   - Resource-aware scheduling (concurrency limits)
-   - Global rate limiting (distribute budget across concurrent agents)
+**Rationale:** Voice is the most complex feature in v2.0, with four CRITICAL-rated pitfalls, all specific to the voice phase. It is deliberately isolated as its own phase so problems here do not block canvas or other features. By Phase 4, nexus-core is stable (Phase 1), BullMQ infrastructure is mature, and voice has no dependencies on compaction, multi-agent, or Gmail.
 
-**Deliverable:** Skill marketplace working (curated gallery only). Parallel agent execution.
+**Delivers:**
+- `VoiceGateway` WebSocket server on `/ws/voice` (binary frame support)
+- `DeepgramRelay` class: persistent Deepgram WebSocket, keep-alive every 5s, exponential reconnect backoff, connection state machine
+- `CartesiaRelay` class: single Cartesia WebSocket reused across utterances (one `context_id` per utterance for prosody), reconnect logic
+- `VoiceSession` lifecycle: ties one browser WebSocket to one Deepgram connection and one Cartesia connection
+- Push-to-talk UI component in ai-chat route (`MediaRecorder` at 48kHz → downsampled to 16kHz PCM for Deepgram; `AudioContext` + `AudioWorkletNode` for 24kHz PCM playback from Cartesia)
+- Voice configuration in Redis: `deepgram_api_key`, `cartesia_api_key`, `voice_id`, `voice_enabled`
+- End-to-end latency instrumentation: timestamp at mic start, Deepgram transcript, LLM first chunk, TTS first audio, browser playback; target p95 < 1200ms
 
-**Critical Pitfalls to Address:** #10 (skill security — curated only, no untrusted sources yet), #17 (resource isolation).
+**Features addressed:** DF-01
+**Pitfalls mitigated:** P-01, P-02, P-03, P-04, P-21
+**Stack additions:** `@cartesia/cartesia-js@^2.2.9`, `@deepgram/sdk@^4.11.3` (nexus/packages/core)
+**Research flag:** Research-phase review recommended before planning. Deepgram keep-alive protocol details, Cartesia `context_id` and continuation behavior, and AudioWorklet PCM scheduling edge cases all require API reference review before architecture is finalized. Plan for a latency measurement/tuning sprint within the phase.
 
 ---
 
-## 6. What NOT to Build
+### Phase 5: Live Canvas
 
-**Explicit Exclusions (Anti-Features):**
+**Rationale:** Canvas is placed after voice because it is independent of voice but shares the "high-risk UI feature" profile. Isolating them in separate phases means voice issues do not delay canvas delivery. Canvas is architecturally simpler than voice (no external APIs, no WebSocket management, zero new npm dependencies) but the iframe XSS trap (P-05) requires security architecture decisions before any rendering code is written.
 
-| Technology/Feature | Why Excluded | Alternative |
-|-------------------|--------------|-------------|
-| **Subscription OAuth tokens** | Blocked by Anthropic for third-party tools (Jan 2026) | Use standard API keys |
-| **Vercel AI SDK** | Would require rewriting AgentLoop, tool registry, streaming patterns | Build provider abstraction natively |
-| **LangChain / LangGraph** | Heavy framework, opinionated abstractions, dependency bloat | Native TypeScript agent loop |
-| **Separate vector database (Pinecone/Weaviate/Milvus)** | Overkill for single-user self-hosted | sqlite-vec within existing SQLite |
-| **Neo4j / FalkorDB graph database** | Too heavy for initial migration | Defer knowledge graph to later phase |
-| **OpenAI compatibility layer** | Adds translation hop, masks provider-specific features | Use native SDKs directly |
-| **Self-hosted LLM support (Ollama)** | Local models are dramatically worse at tool calling and agentic reasoning | Defer to post-milestone as "experimental" |
-| **14+ channels like OpenClaw** | Maintenance hell, unique SDKs, auth flows, rate limits per channel | Support 5 impactful channels: WhatsApp, Telegram, Discord, Slack, Matrix |
-| **Centralized skill marketplace with accounts** | Product company, not a feature. Users shouldn't depend on our servers | Git-based registries, community ratings via GitHub stars |
-| **Visual workflow builder** | Drag-and-drop is impressive but scope-creeping. Multi-month effort | Text-based workflow definitions (skills support multi-phase pipelines already) |
-| **GraphQL subscriptions** | Schema complexity, tooling requirements, learning curve | Keep REST + WebSocket |
-| **gRPC** | Protobuf compilation, not browser-native, build complexity | JSON-RPC 2.0 over WebSocket |
+**Delivers:**
+- `canvas_render` and `canvas_update` MCP tools (store artifact HTML/code in Redis keyed by `nexus:canvas:{conversationId}`)
+- `CanvasPanel` React component: split-pane layout in ai-chat route, hidden until first `canvas_render` call, draggable divider
+- Sandboxed iframe renderer: `sandbox="allow-scripts allow-popups"` on `srcdoc` content (null origin, never `allow-same-origin`)
+- CDN template injected into `srcdoc`: React 18 standalone, Babel standalone (for JSX), Tailwind CSS CDN, Recharts/Mermaid loaded on demand
+- `postMessage` typed protocol between parent and iframe (versioned `CanvasMessage` union type, origin validation)
+- Error boundary inside iframe that posts errors to parent instead of silently failing
+- tRPC endpoints: `ai.getCanvasContent`, `ai.clearCanvas`
+- Artifact type support: React components, HTML/CSS/JS, Mermaid diagrams, SVG, Chart.js/Recharts charts
+
+**Features addressed:** DF-02
+**Pitfalls mitigated:** P-05, P-18
+**Stack additions:** None (browser-native)
+**Research flag:** Standard patterns — skip research-phase. iframe sandbox security is well-documented, proven by Claude.ai Artifacts and LibreChat. Main risk is implementation discipline (never adding `allow-same-origin`), not research gaps.
+
+---
+
+### Phase 6: Onboarding CLI
+
+**Rationale:** The onboarding CLI is fully independent of all other features but must be built last — when all v2.0 features are stable and their configuration requirements are final. A CLI built before the feature set is complete requires constant updates. By Phase 6, the installer can wire up voice API keys, Gmail OAuth credentials, webhook secrets, and DM pairing in a single guided flow with full knowledge of what each step entails.
+
+**Delivers:**
+- New `nexus/packages/cli` npm package (`livinity` binary)
+- `livinity onboard` guided interactive setup: system prerequisite checks (Docker, Node, Redis, PostgreSQL, disk ≥10GB, RAM ≥4GB), domain + SSL (Caddy), Claude Code authentication, Telegram/Discord channel setup, optional voice configuration, optional Gmail setup guide, service startup and health verification
+- `livinity status` command (health check all services)
+- `livinity restart` command (PM2 restart wrapper)
+- Non-interactive mode: `livinity onboard --non-interactive --config setup.json`
+- Partial install rollback: cleanup stack that undoes completed steps on failure
+- Target scope: Ubuntu 22.04+, Debian 12+; Docker-first approach for other distributions
+
+**Features addressed:** DF-05
+**Pitfalls mitigated:** P-17
+**Stack additions:** `commander@^13.1.0`, `@clack/prompts@^1.0.1` (new package only)
+**Research flag:** Standard patterns — CLI frameworks are well-understood. Main complexity is Linux distribution detection and partial install rollback (P-17).
+
+---
+
+### Phase Ordering Rationale
+
+The ordering is driven by three principles from combined research:
+
+1. **Dependency chain enforcement:** Stability precedes everything (P-07). Webhooks precede Gmail (Pub/Sub uses webhook endpoint). Compaction precedes multi-agent (sub-agents exhaust tokens without it). CLI must be last (needs complete, stable feature set to wire up correctly).
+
+2. **Risk isolation:** Voice and Canvas are high-risk, high-reward features that are independent of each other and the automation stack. Placing each in its own phase means a problem in voice does not delay canvas delivery, and neither delays the automation features.
+
+3. **Quick wins first:** Phase 1 delivers visible, testable improvements — a stable system, closed security gap, extended commands, usage visibility — within the first iteration. This builds confidence and provides a stable foundation before tackling high-complexity features.
+
+---
+
+### Research Flags
+
+**Phases needing research-phase review during planning:**
+- **Phase 3 (Compaction + Multi-Agent):** SDK token visibility in subscription mode is MEDIUM confidence (P-14). Verify `SdkAgentRunner` result metadata against actual SDK response objects before designing usage schema. Multi-agent deadlock topology requires deliberate design review before implementation tasks are written.
+- **Phase 4 (Voice):** Deepgram keep-alive protocol, Cartesia `context_id` continuation behavior, and AudioWorklet PCM scheduling all have edge cases requiring API reference review. Plan explicit latency measurement sprint.
+
+**Phases with standard patterns (research complete, skip research-phase):**
+- **Phase 1 (Stability + Security):** Fixes are codebase-specific; research is done. DM pairing is directly adapted from OpenClaw's documented model (HIGH confidence).
+- **Phase 2 (Webhooks + Gmail):** HMAC webhook pattern is industry standard. Gmail API is comprehensively documented. Main risk is execution (OAuth edge cases), not research gaps.
+- **Phase 5 (Canvas):** iframe sandbox security pattern is proven by Claude.ai Artifacts and LibreChat. Security properties are well-documented in the HTML spec.
+- **Phase 6 (CLI):** Commander + clack patterns are straightforward. Linux detection patterns are well-understood.
+
+---
+
+## Technology Decisions Table
+
+| Decision | Choice | Alternative Considered | Rationale |
+|----------|--------|----------------------|-----------|
+| TTS service | Cartesia Sonic-3 | Piper (local), ElevenLabs, AWS Polly | Sub-100ms TTFB, WebSocket streaming, `context_id` prosody continuity across chunks. Local TTS quality gap is significant for conversational use. |
+| STT service | Deepgram Nova-3 | Whisper (local), AssemblyAI, Google STT | Best streaming accuracy, VAD events built-in, $200 free tier generous for personal use. Local Whisper requires GPU; batch mode adds 500ms+. |
+| Canvas rendering | `<iframe sandbox srcdoc>` | Sandpack, tldraw, A2UI | Zero new dependencies, browser-native, proven security model. A2UI spec pre-stable (v0.8 with breaking v0.9). Sandpack is 5MB+ overkill. |
+| CLI framework | Commander + @clack/prompts | Oclif, Inquirer, Ink | clack is modern-looking and minimal (released 7 days ago, v1.0.1). Oclif is enterprise overkill. Inquirer is dated-looking with more boilerplate. |
+| Gmail notifications | Polling default, Pub/Sub advanced | IMAP IDLE | Polling is simpler for self-hosted (no GCP dependency). Pub/Sub is faster but requires Google Cloud project setup. Offer both. |
+| Session compaction | `SessionManager` method + MCP tool | Native Compaction API | Native API requires raw Anthropic API; LivOS uses Claude Code subscription SDK. Manual compaction via Brain call is reliable fallback. |
+| Multi-agent topology | DAG with orchestrator pattern | Peer-to-peer mesh | Prevents circular deadlocks. Simpler to reason about. Matches OpenClaw's documented architecture for sub-agent isolation. |
+| Voice transport | WebSocket (new `/ws/voice` endpoint) | WebRTC | WebSocket is sufficient for single-user. No STUN/TURN infrastructure needed. Binary frame support in `ws` library is already available. |
+| Voice gateway location | Inside nexus-core process | Separate `nexus-voice` PM2 process | Latency-critical path: direct `daemon.addToInbox()` call eliminates inter-process hop. Single-user VPS doesn't need process isolation. |
+| Usage storage | Redis counters (real-time) + PostgreSQL (history) | Redis only | Redis for fast per-request increments. PostgreSQL for daily aggregates, long-term dashboards, and data that survives Redis flush. |
 
 ---
 
 ## Confidence Assessment
 
-| Area | Confidence | Source Quality | Gaps to Address |
-|------|------------|----------------|-----------------|
-| **Stack (Claude API integration)** | HIGH | Official Anthropic docs, SDK source, npm registry | None — well-documented |
-| **Stack (Subscription auth)** | HIGH | GitHub issues, Anthropic blocks article, community reports | Exact OAuth token expiry timing not fully documented |
-| **Features (Multi-provider routing)** | MEDIUM-HIGH | LiteLLM, Portkey patterns, verified against codebase | Custom implementation complexity uncertain |
-| **Features (Hybrid memory)** | MEDIUM | Mem0, Zep academic papers, OpenClaw docs | Production stability of sqlite-vec (alpha-versioned) needs testing |
-| **Features (Skill marketplace)** | MEDIUM-HIGH | OpenClaw SKILL.md format documented, LivOS already has foundations | Security model (capability system) needs design |
-| **Architecture (Brain abstraction)** | HIGH | Current codebase analysis, Claude SDK docs, Gemini SDK docs | None — integration points are clean |
-| **Architecture (Streaming protocol)** | HIGH | Current api.ts SSE implementation, Claude streaming events | None — mapping is straightforward |
-| **Pitfalls (Message format)** | HIGH | Claude API docs, agent.ts source analysis | None — well-documented |
-| **Pitfalls (Tool calling)** | HIGH | Claude tool use docs, current parseStep() implementation | None — dual-mode approach is proven |
-| **Pitfalls (WebSocket auth)** | HIGH | api.ts source shows no auth check | None — obvious security issue |
-| **Pitfalls (Token expiry)** | MEDIUM | Community reports (GitHub issues), not official docs | Anthropic doesn't document exact token expiry behavior for setup-token |
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | Verified via official npm registries, API documentation, and existing codebase. Minor gap: Cartesia docs page didn't fully render; WebSocket format verified via third-party references. |
+| Features | HIGH | OpenClaw documentation verified directly for slash commands, DM pairing model, and session tools. A2UI research is HIGH but decision to defer is a judgment call based on spec maturity. |
+| Architecture | HIGH | Based on direct reading of 10+ production source files including `daemon.ts`, `sdk-agent-runner.ts`, `channels/types.ts`, `session-manager.ts`, `commands.ts`, `api.ts`. Integration points verified by reading actual function signatures. |
+| Pitfalls | HIGH | Voice/canvas/webhook/Gmail pitfalls verified against official documentation, GitHub issues, and community reports. One MEDIUM: SDK token visibility in subscription mode (P-14) requires live verification. |
 
-**Overall Confidence: HIGH** — All critical integration points are well-documented. Main uncertainties are around subscription auth (blocked, must use API keys instead) and production stability of sqlite-vec (alpha version).
+**Overall confidence:** HIGH
 
 ---
 
-## Gaps to Address
+### Gaps to Address
 
-**Before Phase 1 Starts:**
-1. Verify latest `@anthropic-ai/sdk` version (docs reference 0.74.0, confirm it's current)
-2. Test API key auth flow end-to-end with Claude API
-3. Create test Anthropic account with API key for development
+- **SDK token visibility (P-14, MEDIUM confidence):** The exact fields available in `SdkAgentRunner` result objects when using Claude Code subscription mode may not include per-request token counts. Before finalizing the usage tracking and compaction schemas in Phase 3, inspect actual SDK result objects in the development environment. Fallback options: estimate tokens from text length using tiktoken; or track turns and total characters as proxy metrics for budget enforcement.
 
-**During Phase 1:**
-1. Design provider-neutral conversation format (decide on schema for content blocks)
-2. Write migration script for existing Redis session data (Gemini format → neutral format)
-3. Define token budget defaults per provider (how much to allocate for Haiku vs Sonnet vs Opus?)
+- **Cartesia `context_id` continuation behavior (MEDIUM confidence):** The Cartesia docs page did not fully render during research. The `context_id` feature for prosody continuity across streaming text chunks is documented in secondary sources. During Phase 4 planning, verify `context_id` and continuation behavior with a direct API call test before designing the `CartesiaRelay` architecture. Also verify the `max_buffer_delay_ms` parameter default (3000ms is too high for real-time conversation — needs lowering to 500-1000ms).
 
-**During Phase 3:**
-1. Decide embedding provider strategy: keep Gemini, add alternative, or re-embed with new model?
-2. Test sqlite-vec production stability (alpha-versioned, needs validation)
-3. Matrix SDK complexity assessment (large SDK, prototype bot implementation effort)
+- **Gmail OAuth "Testing" vs. "Published" consent screen:** Google's OAuth consent screen in "Testing" mode expires refresh tokens after 7 days. Self-hosted users who set up their own Google Cloud project will hit this unless they set the consent screen to "Published" (internal). Add explicit instruction during Phase 2 planning: move consent screen status before first production token is issued.
 
-**During Phase 5:**
-1. Design capability system for skills (what permissions to support? how to enforce?)
-2. Define skill security review process (who reviews? what criteria?)
-3. Prototype skill sandboxing (worker threads? VM isolation? or trust-based with manifests?)
+- **nexus-core restart root causes:** The 153-restart count is documented in project context but root causes are partially known (setTimeout cron leak documented in CONCERNS.md, unhandled rejections suspected). Full root cause analysis requires a targeted diagnostic sprint with `pm2 logs nexus-core --err` and `process.memoryUsage()` monitoring. Phase 1 planning should include this diagnostic session before fix tasks are written.
+
+- **A2UI spec trajectory:** The recommendation to defer A2UI is sound for v2.0, but monitor the v1.0 release timeline. If A2UI v1.0 ships before v2.1 planning begins, reassess the canvas architecture — migrating from `srcdoc` iframe to A2UI declarative components may be worthwhile for the security and flexibility benefits at that point.
 
 ---
 
 ## Sources
 
-**HIGH Confidence:**
-- [Anthropic Models Overview](https://platform.claude.com/docs/en/about-claude/models/overview)
-- [Anthropic SDK TypeScript GitHub](https://github.com/anthropics/anthropic-sdk-typescript)
-- [Anthropic Tool Use Docs](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use)
-- [Anthropic Streaming Messages](https://docs.anthropic.com/en/api/messages-streaming)
-- [sqlite-vec Documentation](https://alexgarcia.xyz/sqlite-vec/js.html)
-- [@anthropic-ai/sdk npm](https://www.npmjs.com/package/@anthropic-ai/sdk)
-- Existing codebase: `brain.ts`, `agent.ts`, `tool-registry.ts`, `api.ts`, `channels/`, `memory/`
+### Primary (HIGH confidence)
+- Codebase analysis (direct reading): `daemon.ts`, `sdk-agent-runner.ts`, `channels/types.ts`, `channels/index.ts`, `session-manager.ts`, `commands.ts`, `api.ts`, `ws-gateway.ts`, `ai-chat/index.tsx`, `livinityd/modules/ai/index.ts`
+- [Deepgram Live Audio API](https://developers.deepgram.com/reference/speech-to-text/listen-streaming) — WebSocket STT streaming, events, VAD, keep-alive protocol
+- [Deepgram Pricing](https://deepgram.com/pricing) — Nova-3 per-minute rates, $200 free tier
+- [Gmail Push Notifications](https://developers.google.com/workspace/gmail/api/guides/push) — Pub/Sub watch setup, historyId, 7-day expiration
+- [Gmail Watch API](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users/watch) — 7-day renewal requirement confirmed
+- [Claude Compaction API](https://platform.claude.com/docs/en/build-with-claude/compaction) — beta header, SDK constraints clarified
+- [@cartesia/cartesia-js npm](https://www.npmjs.com/package/@cartesia/cartesia-js) — v2.2.9 stable
+- [@deepgram/sdk npm](https://www.npmjs.com/package/@deepgram/sdk) — v4.11.3 stable
+- [@clack/prompts npm](https://www.npmjs.com/package/@clack/prompts) — v1.0.1, API surface
+- [OpenClaw Security Docs](https://docs.openclaw.ai/gateway/security) — DM pairing, allowlist, activation codes, DM policy modes
+- [OpenClaw Session Tools](https://docs.openclaw.ai/concepts/session-tool) — `sessions_list`, `sessions_send`, `sessions_history` full API
+- [Claude Agent SDK Issue #115](https://github.com/anthropics/claude-agent-sdk-typescript/issues/115) — `allowedTools` bypass confirmed, built-in tools not blocked by `tools: []`
+- [MDN Autoplay Guide](https://developer.mozilla.org/en-US/docs/Web/Media/Autoplay_guide) — AudioContext policy, browser restrictions
+- [BullMQ Deduplication](https://docs.bullmq.io/guide/jobs/deduplication) — webhook idempotency via job ID
+- [Anthropic Context Engineering Guide](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — compaction strategy, tiered approach
+- [Context Rot Research](https://research.trychroma.com/context-rot) — compaction quality degradation benchmarks
+- [HackTricks iframe XSS Analysis](https://book.hacktricks.xyz/pentesting-web/xss-cross-site-scripting/iframes-in-xss-and-csp) — `allow-scripts + allow-same-origin` attack vector confirmed
 
-**MEDIUM Confidence:**
-- [OpenClaw Gateway Protocol](https://docs.openclaw.ai/gateway/protocol)
-- [OpenClaw Memory Architecture](https://docs.openclaw.ai/concepts/memory)
-- [OpenClaw Skills Documentation](https://docs.openclaw.ai/tools/skills)
-- [OpenRouter Documentation](https://openrouter.ai/docs/guides/overview/models)
-- [matrix-js-sdk GitHub](https://github.com/matrix-org/matrix-js-sdk)
-- [@slack/bolt npm](https://www.npmjs.com/package/@slack/bolt)
-- [Mem0 Research Paper](https://arxiv.org/abs/2504.19413)
-- [Zep Temporal Knowledge Graph](https://blog.getzep.com/content/files/2025/01/ZEP__USING_KNOWLEDGE_GRAPHS_TO_POWER_LLM_AGENT_MEMORY_2025011700.pdf)
+### Secondary (MEDIUM confidence)
+- [Cartesia TTS Docs](https://docs.cartesia.ai/api-reference/tts/websocket) — WebSocket format (page didn't fully render; verified via Cartesia JS SDK source and third-party references)
+- [Cartesia Pricing](https://cartesia.ai/pricing) — credit tiers (JS-rendered page, verified via community references)
+- [LangChain open-canvas](https://github.com/langchain-ai/open-canvas) — artifact rendering patterns and iframe approach validation
+- [Google ADK Compaction](https://google.github.io/adk-docs/context/compaction/) — auto-compaction at 80% threshold, tiered strategy
+- [Multi-Agent 17x Error Trap](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) — token explosion and coordination overhead analysis
+- [Google OAuth invalid_grant Analysis](https://nango.dev/blog/google-oauth-invalid-grant-token-has-been-expired-or-revoked) — refresh token expiry triggers
+- [Voice AI Infrastructure Guide 2025](https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025) — end-to-end latency benchmarks
+- [Node.js WebSocket Memory Leak Patterns](https://oneuptime.com/blog/post/2026-01-24-websocket-memory-leak-issues/view) — listener accumulation without cleanup
 
-**LOW Confidence (Needs Validation):**
-- [Anthropic blocks subscription tokens](https://github.com/anthropics/claude-code/issues/18340) — policy may evolve, re-check before implementation
-- sqlite-vec v0.1.7 stability in production — alpha-versioned, needs testing
-- Matrix SDK complexity — large SDK, actual bot implementation effort needs prototyping
-- Exact OAuth token expiry behavior (1-year figure from community sources)
-
----
-
-## Ready for Roadmap
-
-This summary provides the roadmapper with:
-- **Clear technology decisions:** What to add, upgrade, and exclude
-- **Feature prioritization:** Table stakes vs differentiators vs anti-features
-- **Build order:** 5 phases with dependencies and durations
-- **Risk mitigation:** Top 5 critical pitfalls with prevention strategies
-- **Integration strategy:** Where to extend vs replace existing code
-
-**Next Steps:**
-1. Roadmapper creates phase definitions in `.planning/phases/`
-2. Each phase gets a PLAN.md with detailed tasks
-3. Use `/gsd:research-phase` for deep dives as needed (e.g., skill security model, memory migration strategy)
+### Tertiary (LOW confidence — needs live verification)
+- [Claude Code SDK Cost Tracking](https://platform.claude.com/docs/en/agent-sdk/cost-tracking) — token visibility in subscription mode; must verify against actual SDK response objects
+- `googleapis` v144 exact minor version — latest stable on npm but verify with `npm install` before pinning
 
 ---
 
-**Research completed:** 2026-02-15
-**Files synthesized:** STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md
-**Synthesizer:** GSD Research Synthesis Agent
+*Research completed: 2026-02-20*
+*Synthesized from: STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md*
+*Ready for roadmap: yes*
