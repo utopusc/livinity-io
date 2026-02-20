@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 2 in progress. Gmail channel provider at checkpoint (awaiting human verification).
+**Current focus:** Phase 2 complete. Ready for Phase 3 (Intelligence Layer).
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 2 of 6 (Automation Infrastructure)
-Plan: 3 of 4 in phase (checkpoint — 2/3 tasks complete, awaiting verification)
-Status: In progress
-Last activity: 2026-02-20 — v2.0-02-03-PLAN.md Tasks 1-2 complete (Gmail Channel Provider — checkpoint)
+Phase: 2 of 6 (Automation Infrastructure) -- COMPLETE
+Plan: 4 of 4 in phase (complete)
+Status: Phase complete
+Last activity: 2026-02-20 — Completed v2.0-02-04-PLAN.md (Gmail MCP Tools)
 
-Progress: [██████░░░░░░░░░░░░░░░░] 6/22 (~27%)
+Progress: [████████░░░░░░░░░░░░░░] 8/22 (~36%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6 (v2.0) (02-03 partial — 2/3 tasks)
-- Average duration: 6.7min
-- Total execution time: 38min
+- Total plans completed: 8 (v2.0)
+- Average duration: 6.6min
+- Total execution time: 45min
 
 ## Accumulated Context
 
@@ -70,6 +70,10 @@ v2.0 Phase 2 decisions:
 - [Gmail]: Polling interval default 60s, configurable via GMAIL_POLL_INTERVAL_SEC
 - [Gmail]: Seen message IDs stored in Redis SET with 500-entry cap
 - [Gmail]: GmailProvider registered in ChannelManager alongside existing providers
+- [Gmail]: MCP tools only registered when gmailProvider exists (graceful no-op without config)
+- [Gmail]: Token failure notifications sent to Telegram/Discord via channelManager
+- [Gmail]: Notifications stored in Redis nexus:notifications list (capped at 100)
+- [Gmail]: Reply emails use In-Reply-To and References headers for proper threading
 
 ### Pending Todos
 
@@ -86,5 +90,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: v2.0-02-03 checkpoint (Tasks 1-2 complete, Task 3 human-verify pending)
-Resume file: None (continuation agent needed after checkpoint)
+Stopped at: Completed v2.0-02-04-PLAN.md (Phase 2 complete)
+Resume file: None
