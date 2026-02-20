@@ -12,18 +12,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 1 of 6 (Stability & Security Foundation)
-Plan: 1 of 4 in phase (v2.0-01-01 complete)
+Plan: 3 of 4 in phase (v2.0-01-01, v2.0-01-03 complete)
 Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-01-01-PLAN.md (Process Stability Hardening)
+Last activity: 2026-02-20 — Completed v2.0-01-03-PLAN.md (Chat Commands: /new, /compact, /activation)
 
-Progress: [█░░░░░░░░░░░░░░░░░░░░░] 1/22 (~5%)
+Progress: [██░░░░░░░░░░░░░░░░░░░░] 2/22 (~9%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1 (v2.0)
+- Total plans completed: 2 (v2.0)
 - Average duration: 4min
-- Total execution time: 4min
+- Total execution time: 8min
 
 ## Accumulated Context
 
@@ -50,6 +50,9 @@ v2.0 Phase 1 decisions:
 - [Infra]: BullMQ delayed jobs for cron scheduling (replaces setTimeout)
 - [Infra]: Agent turn cap: default 15, hard max 25
 - [Infra]: Telegram polling offset persisted to Redis for restart recovery
+- [Commands]: Activation mode stored in Redis key nexus:activation:{channelId} (not channel config)
+- [Commands]: /new resets both SessionManager and UserSessionManager, optionally switches model
+- [Commands]: /compact is stub until session compaction ships in Phase 3
 
 ### Pending Todos
 
@@ -65,5 +68,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-01-01-PLAN.md (Process Stability Hardening)
-Resume file: .planning/phases/v2.0-p01-stability-security/v2.0-01-02-PLAN.md
+Stopped at: Completed v2.0-01-03-PLAN.md (Chat Commands: /new, /compact, /activation)
+Resume file: .planning/phases/v2.0-p01-stability-security/v2.0-01-04-PLAN.md
