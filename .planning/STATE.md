@@ -12,18 +12,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 1 of 6 (Stability & Security Foundation)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-02-20 — Roadmap created for v2.0 (6 phases, 22 plans, 83 requirements)
+Plan: 1 of 4 in phase (v2.0-01-01 complete)
+Status: In progress
+Last activity: 2026-02-20 — Completed v2.0-01-01-PLAN.md (Process Stability Hardening)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░░░░░░░░░░░░░] 1/22 (~5%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0 (v2.0)
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1 (v2.0)
+- Average duration: 4min
+- Total execution time: 4min
 
 ## Accumulated Context
 
@@ -45,13 +45,19 @@ v2.0 decisions:
 - [Milestone]: DAG topology for multi-agent (no recursive sub-agents)
 - [Milestone]: Gmail polling default, Pub/Sub as advanced option
 
+v2.0 Phase 1 decisions:
+- [Infra]: CircuitBreaker wraps Redis error events, not individual commands (non-invasive)
+- [Infra]: BullMQ delayed jobs for cron scheduling (replaces setTimeout)
+- [Infra]: Agent turn cap: default 15, hard max 25
+- [Infra]: Telegram polling offset persisted to Redis for restart recovery
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-- nexus-core: 153 PM2 restarts in 47h — root cause analysis needed in Phase 1
+- nexus-core: 153 PM2 restarts in 47h — ADDRESSED in v2.0-01-01 (expanded error handlers, circuit breaker, PM2 backoff); verify after deployment
 - Memory service empty results — needs debugging
 - SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write (SDK issue #115)
 - SDK token visibility in subscription mode — MEDIUM confidence, verify before Phase 3 usage schema
@@ -59,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: v2.0 roadmap created, ready to plan Phase 1
-Resume file: None
+Stopped at: Completed v2.0-01-01-PLAN.md (Process Stability Hardening)
+Resume file: .planning/phases/v2.0-p01-stability-security/v2.0-01-02-PLAN.md
