@@ -44,6 +44,7 @@ import {
 	TbLogout,
 	TbChartBar,
 	TbMail,
+	TbWebhook,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -88,6 +89,9 @@ const UsageDashboardLazy = React.lazy(() =>
 const GmailContentLazy = React.lazy(() =>
 	import('@/routes/settings/gmail').then((m) => ({default: m.GmailContent})),
 )
+const WebhooksContentLazy = React.lazy(() =>
+	import('@/routes/settings/webhooks').then((m) => ({default: m.WebhooksContent})),
+)
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +109,7 @@ type SettingsSection =
 	| 'gmail'
 	| 'dm-pairing'
 	| 'usage'
+	| 'webhooks'
 	| 'domain'
 	| 'backups'
 	| 'migration'
@@ -130,6 +135,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
 	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
+	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets'},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL'},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore'},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi'},
@@ -335,6 +341,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <DmPairingSection />
 		case 'usage':
 			return <UsageSection />
+		case 'webhooks':
+			return <WebhooksSection />
 		case 'domain':
 			return <DomainSection />
 		case 'backups':
@@ -1365,6 +1373,18 @@ function UsageSection() {
 	return (
 		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 			<UsageDashboardLazy />
+		</Suspense>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Webhooks Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+function WebhooksSection() {
+	return (
+		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
+			<WebhooksContentLazy />
 		</Suspense>
 	)
 }
