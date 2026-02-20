@@ -1126,4 +1126,61 @@ export default router({
 			return await response.json()
 		}),
 
+	// ── Gmail OAuth ─────────────────────────────────────────────
+
+	/** Get Gmail connection status */
+	getGmailStatus: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/gmail/oauth/status`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			return {connected: false, enabled: false, configured: false, email: null, error: null, lastMessage: null}
+		}
+		return await response.json() as {
+			connected: boolean
+			enabled: boolean
+			configured: boolean
+			email: string | null
+			error: string | null
+			lastMessage: string | null
+		}
+	}),
+
+	/** Start Gmail OAuth flow — returns consent screen URL */
+	startGmailOauth: privateProcedure.mutation(async ({ctx}) => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/gmail/oauth/start`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			const err = (await response.json().catch(() => ({}))) as {error?: string}
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err.error || `Nexus API error: ${response.status}`,
+			})
+		}
+		return await response.json() as {url: string}
+	}),
+
+	/** Disconnect Gmail — clears tokens and stops polling */
+	disconnectGmail: privateProcedure.mutation(async ({ctx}) => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/gmail/oauth/disconnect`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+			},
+		})
+		if (!response.ok) {
+			const err = (await response.json().catch(() => ({}))) as {error?: string}
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err.error || `Nexus API error: ${response.status}`,
+			})
+		}
+		return await response.json() as {ok: boolean; message: string}
+	}),
+
 })
