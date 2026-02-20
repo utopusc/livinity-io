@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 3 complete (Intelligence Enhancements). Ready for Phase 4 (Voice Pipeline).
+**Current focus:** Phase 4 in progress (Voice Pipeline). Plan 01 complete, Plans 02-04 remaining.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 3 of 6 (Intelligence Enhancements)
-Plan: 3 of 3 in phase (Phase complete)
-Status: Phase complete
-Last activity: 2026-02-20 — Completed v2.0-03-03-PLAN.md (Sub-Agent Execution Engine)
+Phase: 4 of 6 (Voice Pipeline)
+Plan: 1 of 4 in phase
+Status: In progress
+Last activity: 2026-02-20 — Completed v2.0-04-01-PLAN.md (Voice WebSocket Gateway)
 
-Progress: [███████████░░░░░░░░░░░] 11/22 (~50%)
+Progress: [████████████░░░░░░░░░░] 12/22 (~55%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11 (v2.0)
-- Average duration: 5.9min
-- Total execution time: 57min
+- Total plans completed: 12 (v2.0)
+- Average duration: 5.6min
+- Total execution time: 60min
 
 ## Accumulated Context
 
@@ -89,6 +89,12 @@ v2.0 Phase 3 decisions:
 - [Multi-Agent]: Sub-agents use sonnet tier, stream disabled (background BullMQ execution)
 - [Multi-Agent]: sessions_send only enqueues if session not already running (prevent duplicates)
 
+v2.0 Phase 4 decisions:
+- [Voice]: Auth strategy same as WsGateway — X-API-Key, JWT query, Sec-WebSocket-Protocol
+- [Voice]: Keep-alive 25s ping interval (under typical 30s proxy timeout)
+- [Voice]: Any state can reset to idle (graceful cancel/error recovery)
+- [Voice]: Binary audio only processed in 'listening' state; other states ignore frames
+
 ### Pending Todos
 
 None.
@@ -100,9 +106,10 @@ None.
 - SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write (SDK issue #115)
 - SDK token visibility in subscription mode — MEDIUM confidence, verify before Phase 3 usage schema
 - Gmail requires GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET env vars + Google Cloud Console OAuth setup before verification
+- Voice pipeline requires DEEPGRAM_API_KEY and CARTESIA_API_KEY env vars before voice features work
 
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-03-03-PLAN.md (Sub-Agent Execution Engine) — Phase 3 complete
+Stopped at: Completed v2.0-04-01-PLAN.md (Voice WebSocket Gateway)
 Resume file: None
