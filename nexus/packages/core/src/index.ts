@@ -183,6 +183,9 @@ async function main() {
   const multiAgentManager = new MultiAgentManager({
     redis,
     maxConcurrent: 2, // MULTI-06: VPS resource constraint
+    brain,
+    toolRegistry,
+    nexusConfig: configManager.get(),
   });
   logger.info('MultiAgentManager initialized', { maxConcurrent: 2 });
 
@@ -328,6 +331,39 @@ Conversation:`;
 
   logger.info('Memory extraction pipeline initialized');
 
+  // ── Multi-agent sub-agent execution queue (BullMQ) ──────────────────
+  const multiAgentQueue = new Queue('nexus-multi-agent', {
+    connection: bullConnection,
+    defaultJobOptions: {
+      removeOnComplete: { count: 50 },
+      removeOnFail: { count: 25 },
+    },
+  });
+
+  const multiAgentWorker = new Worker(
+    'nexus-multi-agent',
+    async (job) => {
+      const { sessionId } = job.data;
+      logger.info('Multi-agent worker: executing sub-agent', { sessionId: sessionId?.slice(0, 8) });
+      try {
+        await multiAgentManager.executeSubAgent(sessionId);
+      } catch (err: any) {
+        logger.error('Multi-agent worker: job failed', { sessionId: sessionId?.slice(0, 8), error: err.message });
+        throw err; // Let BullMQ handle retry/fail
+      }
+    },
+    {
+      connection: bullConnection,
+      concurrency: 2, // MULTI-06: Maximum 2 concurrent sub-agents
+    },
+  );
+
+  multiAgentWorker.on('failed', (job, err) => {
+    logger.error('Multi-agent worker: job failed', { jobId: job?.id, error: err.message });
+  });
+
+  logger.info('Multi-agent execution pipeline initialized', { concurrency: 2 });
+
   // ApprovalManager for human-in-the-loop tool authorization
   const approvalManager = new ApprovalManager(redis);
   logger.info('ApprovalManager initialized');
@@ -399,6 +435,7 @@ Conversation:`;
     usageTracker,
     gmailProvider,
     multiAgentManager,
+    multiAgentQueue,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
@@ -478,6 +515,8 @@ Conversation:`;
     await cronQueue.close();
     await memoryExtractionWorker.close();
     await memoryExtractionQueue.close();
+    await multiAgentWorker.close();
+    await multiAgentQueue.close();
     await channelManager.disconnectAll();
     await mcpClientManager.stop();
     await taskManager.cleanup();
