@@ -36,6 +36,7 @@ import type { ApprovalManager } from './approval-manager.js';
 import type { UsageTracker } from './usage-tracker.js';
 import type { WebhookManager } from './webhook-manager.js';
 import type { GmailProvider } from './channels/gmail.js';
+import type { MultiAgentManager } from './multi-agent.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
@@ -66,6 +67,7 @@ interface DaemonConfig {
   usageTracker?: UsageTracker;
   webhookManager?: WebhookManager;
   gmailProvider?: GmailProvider;
+  multiAgentManager?: MultiAgentManager;
   intervalMs: number;
 }
 
@@ -140,6 +142,11 @@ export class Daemon {
   /** Expose usage tracker for external consumers (API, commands) */
   get usageTracker(): UsageTracker | undefined {
     return this.config.usageTracker;
+  }
+
+  /** Expose multi-agent manager for external consumers (API, sub-agent worker) */
+  get multiAgentManager(): MultiAgentManager | undefined {
+    return this.config.multiAgentManager;
   }
 
   /** Set webhook manager after construction (circular dependency: WebhookManager needs Daemon) */
@@ -308,6 +315,7 @@ export class Daemon {
             channelId: item.from,
             redis: this.config.redis,
             usageTracker: this.config.usageTracker,
+            brain: this.config.brain,
           });
 
           if (cmdResult?.handled && cmdResult.response) {
@@ -2349,6 +2357,149 @@ ${task}`;
       });
 
       logger.info('Gmail MCP tools registered (gmail_read, gmail_reply, gmail_send, gmail_search, gmail_archive)');
+    }
+
+    // ── Multi-agent session tools ────────────────────────────────────────
+    // Allow the AI agent to spawn, list, message, and inspect sub-agent sessions.
+    // Sessions are managed by MultiAgentManager with Redis persistence.
+    if (this.config.multiAgentManager) {
+      const mam = this.config.multiAgentManager;
+
+      toolRegistry.register({
+        name: 'sessions_create',
+        description: 'Spawn a sub-agent session to perform a specific task. Sub-agents are limited to 8 turns and 50k tokens. Maximum 2 concurrent sub-agents.',
+        parameters: [
+          { name: 'task', type: 'string', description: 'Clear description of the task for the sub-agent', required: true },
+          { name: 'max_turns', type: 'number', description: 'Maximum turns (default 8, max 8)', required: false },
+        ],
+        execute: async (params) => {
+          try {
+            const session = await mam.create({
+              parentSessionId: this.currentChannelContext?.chatId || 'web',
+              task: params.task as string,
+              maxTurns: params.max_turns as number | undefined,
+            });
+            return {
+              success: true,
+              output: `Sub-agent session created.\nID: ${session.id}\nTask: ${session.task}\nMax turns: ${session.maxTurns}\nStatus: ${session.status}`,
+              data: session,
+            };
+          } catch (err: any) {
+            return { success: false, output: '', error: err.message };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'sessions_list',
+        description: 'List active sub-agent sessions, optionally filtered by parent session.',
+        parameters: [
+          { name: 'parent_session_id', type: 'string', description: 'Filter by parent session ID (optional)', required: false },
+        ],
+        execute: async (params) => {
+          try {
+            const sessions = await mam.list(params.parent_session_id as string | undefined);
+            if (sessions.length === 0) {
+              return { success: true, output: 'No active sub-agent sessions.' };
+            }
+            const lines = sessions.map(s =>
+              `[${s.id.slice(0, 8)}] ${s.status} | Task: ${s.task.slice(0, 80)} | Turns: ${s.turns}/${s.maxTurns} | Tokens: ${s.inputTokens + s.outputTokens}`
+            );
+            return { success: true, output: lines.join('\n'), data: sessions };
+          } catch (err: any) {
+            return { success: false, output: '', error: err.message };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'sessions_send',
+        description: 'Send a message to a sub-agent session. The sub-agent will process the message and update its state.',
+        parameters: [
+          { name: 'session_id', type: 'string', description: 'The sub-agent session ID', required: true },
+          { name: 'message', type: 'string', description: 'Message to send to the sub-agent', required: true },
+        ],
+        execute: async (params) => {
+          try {
+            const session = await mam.get(params.session_id as string);
+            if (!session) {
+              return { success: false, output: '', error: `Session ${params.session_id} not found or expired.` };
+            }
+            if (session.status === 'completed' || session.status === 'failed' || session.status === 'cancelled') {
+              return { success: false, output: '', error: `Session ${params.session_id} is already ${session.status}. Result: ${session.result || session.error || 'N/A'}` };
+            }
+
+            // Add the message to session history
+            await mam.addMessage(params.session_id as string, {
+              role: 'user',
+              content: params.message as string,
+              timestamp: Date.now(),
+            });
+
+            // Note: Actual sub-agent execution is handled by Plan 03's BullMQ worker.
+            // For now, the message is queued in the session history. Plan 03 will add
+            // a BullMQ job that picks up pending sessions and runs them through SdkAgentRunner.
+            // Mark session as pending for the worker to pick up.
+            await mam.updateStatus(params.session_id as string, {
+              status: 'pending',
+              updatedAt: Date.now(),
+            });
+
+            return {
+              success: true,
+              output: `Message sent to session ${(params.session_id as string).slice(0, 8)}. Sub-agent will process it.`,
+            };
+          } catch (err: any) {
+            return { success: false, output: '', error: err.message };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'sessions_history',
+        description: 'Read the conversation history of a sub-agent session, including its result if completed.',
+        parameters: [
+          { name: 'session_id', type: 'string', description: 'The sub-agent session ID', required: true },
+        ],
+        execute: async (params) => {
+          try {
+            const session = await mam.get(params.session_id as string);
+            if (!session) {
+              return { success: false, output: '', error: `Session ${params.session_id} not found or expired.` };
+            }
+
+            const history = await mam.getHistory(params.session_id as string);
+            const lines: string[] = [
+              `Session: ${session.id.slice(0, 8)}`,
+              `Status: ${session.status}`,
+              `Task: ${session.task}`,
+              `Turns: ${session.turns}/${session.maxTurns}`,
+              `Tokens: ${session.inputTokens} in / ${session.outputTokens} out`,
+              '',
+            ];
+
+            if (history.length > 0) {
+              lines.push('--- History ---');
+              for (const msg of history) {
+                lines.push(`[${msg.role}] ${msg.content.slice(0, 500)}`);
+              }
+            }
+
+            if (session.result) {
+              lines.push('', '--- Result ---', session.result);
+            }
+            if (session.error) {
+              lines.push('', '--- Error ---', session.error);
+            }
+
+            return { success: true, output: lines.join('\n'), data: { session, history } };
+          } catch (err: any) {
+            return { success: false, output: '', error: err.message };
+          }
+        },
+      });
+
+      logger.info('Multi-agent session tools registered (sessions_create, sessions_list, sessions_send, sessions_history)');
     }
 
     // Mark destructive tools for human-in-the-loop approval
