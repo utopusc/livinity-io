@@ -467,7 +467,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 
 - [x] **Phase 1: Stability & Security Foundation** - Process hardening, DM pairing security, chat commands, usage tracking ✓
 - [ ] **Phase 2: Automation Infrastructure** - Webhook triggers with HMAC auth, Gmail as a channel provider
-- [ ] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration
+- [x] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration ✓
 - [ ] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS
 - [ ] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace
 - [ ] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool
@@ -523,12 +523,11 @@ Plans:
   3. AI agent can spawn a sub-agent to perform a specific task (e.g., "research this topic") and receive results back, visible in the chat as a coordinated workflow
   4. Sub-agents are limited to 8 turns and 50k tokens, and cannot spawn further sub-agents (no fork bombs)
   5. Maximum 2 sub-agents can run concurrently on the VPS, with additional requests queued until a slot opens
+**Status**: COMPLETE (2026-02-20)
 **Plans**: 3 plans in 2 waves
-
-Plans:
-- [ ] v2.0-03-01-PLAN.md — Session compaction: compactSession(), critical fact pinning, auto-compact at 100k, /compact command [Wave 1]
-- [ ] v2.0-03-02-PLAN.md — Multi-agent MCP tools: sessions_create/list/send/history, MultiAgentManager, Redis session schema [Wave 1]
-- [ ] v2.0-03-03-PLAN.md — Sub-agent execution: BullMQ worker, SdkAgentRunner integration, DAG enforcement, concurrency cap [Wave 2]
+- [x] v2.0-03-01-PLAN.md — Session compaction: compactSession(), critical fact pinning, auto-compact at 100k, /compact command [Wave 1]
+- [x] v2.0-03-02-PLAN.md — Multi-agent MCP tools: sessions_create/list/send/history, MultiAgentManager, Redis session schema [Wave 1]
+- [x] v2.0-03-03-PLAN.md — Sub-agent execution: BullMQ worker, SdkAgentRunner integration, DAG enforcement, concurrency cap [Wave 2]
 
 ### Phase 4: Voice Pipeline
 **Goal**: Users can press a button in the web UI to talk to the AI and hear spoken responses in real-time, with end-to-end latency under 1.2 seconds
@@ -592,7 +591,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Stability & Security Foundation | 4/4 | Complete | 2026-02-20 |
 | 2. Automation Infrastructure | 4/4 | Complete | 2026-02-20 |
-| 3. Intelligence Enhancements | 0/3 | Not started | - |
+| 3. Intelligence Enhancements | 3/3 | Complete | 2026-02-20 |
 | 4. Voice Pipeline | 0/4 | Not started | - |
 | 5. Live Canvas + LivHub | 0/4 | Not started | - |
 | 6. Onboarding CLI | 0/3 | Not started | - |

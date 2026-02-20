@@ -63,22 +63,22 @@
 
 ### Session Compaction
 
-- [ ] **COMP-01**: `SessionManager.compactSession()` summarizes old conversation history using Brain (haiku model)
-- [ ] **COMP-02**: Last 10 messages are always preserved verbatim; older messages are summarized
-- [ ] **COMP-03**: Critical facts (file paths, error codes, user preferences) are pinned and never compacted
-- [ ] **COMP-04**: `/compact` command triggers manual compaction and reports token savings percentage
-- [ ] **COMP-05**: Auto-compact triggers when session exceeds 100k token threshold
-- [ ] **COMP-06**: Compacted session state is stored in Redis alongside the session
+- [x] **COMP-01**: `SessionManager.compactSession()` summarizes old conversation history using Brain (haiku model)
+- [x] **COMP-02**: Last 10 messages are always preserved verbatim; older messages are summarized
+- [x] **COMP-03**: Critical facts (file paths, error codes, user preferences) are pinned and never compacted
+- [x] **COMP-04**: `/compact` command triggers manual compaction and reports token savings percentage
+- [x] **COMP-05**: Auto-compact triggers when session exceeds 100k token threshold
+- [x] **COMP-06**: Compacted session state is stored in Redis alongside the session
 
 ### Multi-Agent Sessions
 
-- [ ] **MULTI-01**: AI agent can spawn sub-agents via `sessions_create` MCP tool with a specific task
-- [ ] **MULTI-02**: AI agent can list active sessions via `sessions_list` MCP tool
-- [ ] **MULTI-03**: AI agent can send messages to other sessions via `sessions_send` MCP tool
-- [ ] **MULTI-04**: AI agent can read session history via `sessions_history` MCP tool
-- [ ] **MULTI-05**: Sub-agents are limited to max 8 turns and 50k token budget
-- [ ] **MULTI-06**: Maximum 2 concurrent sub-agents on the VPS (resource constraint)
-- [ ] **MULTI-07**: DAG topology enforced — sub-agents cannot spawn further sub-agents (fork bomb prevention)
+- [x] **MULTI-01**: AI agent can spawn sub-agents via `sessions_create` MCP tool with a specific task
+- [x] **MULTI-02**: AI agent can list active sessions via `sessions_list` MCP tool
+- [x] **MULTI-03**: AI agent can send messages to other sessions via `sessions_send` MCP tool
+- [x] **MULTI-04**: AI agent can read session history via `sessions_history` MCP tool
+- [x] **MULTI-05**: Sub-agents are limited to max 8 turns and 50k token budget
+- [x] **MULTI-06**: Maximum 2 concurrent sub-agents on the VPS (resource constraint)
+- [x] **MULTI-07**: DAG topology enforced — sub-agents cannot spawn further sub-agents (fork bomb prevention)
 
 ### Voice Pipeline
 
@@ -209,19 +209,19 @@
 | GMAIL-05 | v2.0 Phase 2 | Complete |
 | GMAIL-06 | v2.0 Phase 2 | Complete |
 | GMAIL-07 | v2.0 Phase 2 | Complete |
-| COMP-01 | v2.0 Phase 3 | Pending |
-| COMP-02 | v2.0 Phase 3 | Pending |
-| COMP-03 | v2.0 Phase 3 | Pending |
-| COMP-04 | v2.0 Phase 3 | Pending |
-| COMP-05 | v2.0 Phase 3 | Pending |
-| COMP-06 | v2.0 Phase 3 | Pending |
-| MULTI-01 | v2.0 Phase 3 | Pending |
-| MULTI-02 | v2.0 Phase 3 | Pending |
-| MULTI-03 | v2.0 Phase 3 | Pending |
-| MULTI-04 | v2.0 Phase 3 | Pending |
-| MULTI-05 | v2.0 Phase 3 | Pending |
-| MULTI-06 | v2.0 Phase 3 | Pending |
-| MULTI-07 | v2.0 Phase 3 | Pending |
+| COMP-01 | v2.0 Phase 3 | Complete |
+| COMP-02 | v2.0 Phase 3 | Complete |
+| COMP-03 | v2.0 Phase 3 | Complete |
+| COMP-04 | v2.0 Phase 3 | Complete |
+| COMP-05 | v2.0 Phase 3 | Complete |
+| COMP-06 | v2.0 Phase 3 | Complete |
+| MULTI-01 | v2.0 Phase 3 | Complete |
+| MULTI-02 | v2.0 Phase 3 | Complete |
+| MULTI-03 | v2.0 Phase 3 | Complete |
+| MULTI-04 | v2.0 Phase 3 | Complete |
+| MULTI-05 | v2.0 Phase 3 | Complete |
+| MULTI-06 | v2.0 Phase 3 | Complete |
+| MULTI-07 | v2.0 Phase 3 | Complete |
 | VOICE-01 | v2.0 Phase 4 | Pending |
 | VOICE-02 | v2.0 Phase 4 | Pending |
 | VOICE-03 | v2.0 Phase 4 | Pending |
