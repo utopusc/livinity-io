@@ -26,6 +26,7 @@ import { UsageTracker } from './usage-tracker.js';
 import { TaskManager } from './task-manager.js';
 import { SkillRegistryClient } from './skill-registry-client.js';
 import { SkillInstaller } from './skill-installer.js';
+import { WebhookManager } from './webhook-manager.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
@@ -384,7 +385,11 @@ Conversation:`;
   });
   logger.info('Cron worker initialized (BullMQ)');
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker });
+  // ── WebhookManager — secure webhook receiver with HMAC verification + BullMQ ──
+  const webhookManager = new WebhookManager({ redis, daemon, bullConnection });
+  logger.info('WebhookManager initialized');
+
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   const httpServer = apiApp.listen(apiPort, apiHost, () => {
@@ -443,6 +448,7 @@ Conversation:`;
     await channelManager.disconnectAll();
     await mcpClientManager.stop();
     await taskManager.cleanup();
+    await webhookManager.close();
     await daemon.stop();
     await redisSub.quit().catch(() => {}); // Close pub/sub subscriber connection
     await inboxRedis.quit().catch(() => {}); // Close blocking connection
