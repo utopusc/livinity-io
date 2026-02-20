@@ -44,22 +44,22 @@
 
 ### Webhook Triggers
 
-- [ ] **HOOK-01**: User can create webhook endpoints via MCP tool (`webhook_create`) with unique URL and optional secret
-- [ ] **HOOK-02**: Incoming webhook POST requests are authenticated via HMAC-SHA256 signature verification
-- [ ] **HOOK-03**: Authenticated webhook payloads are queued as BullMQ jobs and processed by the agent
-- [ ] **HOOK-04**: Webhook jobs are deduplicated by delivery ID to prevent retry storm duplicates
-- [ ] **HOOK-05**: Rate limiting per webhook source (30 req/min) and payload size limit (1MB)
-- [ ] **HOOK-06**: User can list, view, and delete webhooks via MCP tools and Settings UI
+- [x] **HOOK-01**: User can create webhook endpoints via MCP tool (`webhook_create`) with unique URL and optional secret
+- [x] **HOOK-02**: Incoming webhook POST requests are authenticated via HMAC-SHA256 signature verification
+- [x] **HOOK-03**: Authenticated webhook payloads are queued as BullMQ jobs and processed by the agent
+- [x] **HOOK-04**: Webhook jobs are deduplicated by delivery ID to prevent retry storm duplicates
+- [x] **HOOK-05**: Rate limiting per webhook source (30 req/min) and payload size limit (1MB)
+- [x] **HOOK-06**: User can list, view, and delete webhooks via MCP tools and Settings UI
 
 ### Gmail Integration
 
-- [ ] **GMAIL-01**: User can authenticate Gmail via OAuth 2.0 flow in the web UI Settings page
-- [ ] **GMAIL-02**: GmailProvider implements ChannelProvider interface (connect, disconnect, sendMessage, onMessage)
+- [x] **GMAIL-01**: User can authenticate Gmail via OAuth 2.0 flow in the web UI Settings page
+- [x] **GMAIL-02**: GmailProvider implements ChannelProvider interface (connect, disconnect, sendMessage, onMessage)
 - [x] **GMAIL-03**: ~~Gmail watch is set up via Pub/Sub and auto-renewed every 6 days via BullMQ repeatable job~~ — **Deferred to v2.1** (polling mode satisfies GMAIL-07; Pub/Sub is advanced optimization per STATE.md decision)
-- [ ] **GMAIL-04**: Incoming emails trigger agent tasks with email content as the message text
-- [ ] **GMAIL-05**: AI agent can read, reply, send, search, and archive emails via MCP tools
-- [ ] **GMAIL-06**: OAuth refresh token failures are detected and user is notified via Telegram/Discord
-- [ ] **GMAIL-07**: Polling mode available as simpler alternative to Pub/Sub (configurable)
+- [x] **GMAIL-04**: Incoming emails trigger agent tasks with email content as the message text
+- [x] **GMAIL-05**: AI agent can read, reply, send, search, and archive emails via MCP tools
+- [x] **GMAIL-06**: OAuth refresh token failures are detected and user is notified via Telegram/Discord
+- [x] **GMAIL-07**: Polling mode available as simpler alternative to Pub/Sub (configurable)
 
 ### Session Compaction
 
@@ -196,19 +196,19 @@
 | USAGE-04 | v2.0 Phase 1 | Complete |
 | USAGE-05 | v2.0 Phase 1 | Complete |
 | USAGE-06 | v2.0 Phase 1 | Complete |
-| HOOK-01 | v2.0 Phase 2 | Pending |
-| HOOK-02 | v2.0 Phase 2 | Pending |
-| HOOK-03 | v2.0 Phase 2 | Pending |
-| HOOK-04 | v2.0 Phase 2 | Pending |
-| HOOK-05 | v2.0 Phase 2 | Pending |
-| HOOK-06 | v2.0 Phase 2 | Pending |
-| GMAIL-01 | v2.0 Phase 2 | Pending |
-| GMAIL-02 | v2.0 Phase 2 | Pending |
+| HOOK-01 | v2.0 Phase 2 | Complete |
+| HOOK-02 | v2.0 Phase 2 | Complete |
+| HOOK-03 | v2.0 Phase 2 | Complete |
+| HOOK-04 | v2.0 Phase 2 | Complete |
+| HOOK-05 | v2.0 Phase 2 | Complete |
+| HOOK-06 | v2.0 Phase 2 | Complete |
+| GMAIL-01 | v2.0 Phase 2 | Complete |
+| GMAIL-02 | v2.0 Phase 2 | Complete |
 | GMAIL-03 | Deferred v2.1 | Deferred |
-| GMAIL-04 | v2.0 Phase 2 | Pending |
-| GMAIL-05 | v2.0 Phase 2 | Pending |
-| GMAIL-06 | v2.0 Phase 2 | Pending |
-| GMAIL-07 | v2.0 Phase 2 | Pending |
+| GMAIL-04 | v2.0 Phase 2 | Complete |
+| GMAIL-05 | v2.0 Phase 2 | Complete |
+| GMAIL-06 | v2.0 Phase 2 | Complete |
+| GMAIL-07 | v2.0 Phase 2 | Complete |
 | COMP-01 | v2.0 Phase 3 | Pending |
 | COMP-02 | v2.0 Phase 3 | Pending |
 | COMP-03 | v2.0 Phase 3 | Pending |

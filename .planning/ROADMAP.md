@@ -500,7 +500,12 @@ Plans:
   3. User can authenticate their Gmail account via OAuth flow in Settings, and incoming emails appear as messages to the AI agent
   4. AI agent can reply to, send, search, and archive emails via MCP tools, and the user sees the results in their Gmail inbox
   5. If Gmail OAuth credentials expire or are revoked, the user receives a notification in Telegram/Discord prompting re-authentication
+**Status**: COMPLETE (2026-02-20)
 **Plans**: 4 plans in 2 waves
+- [x] v2.0-02-01-PLAN.md — Webhook receiver: WebhookManager, HMAC-SHA256, BullMQ queue, Redis dedup, Express route [Wave 1]
+- [x] v2.0-02-02-PLAN.md — Webhook management: MCP tools (create/list/delete), rate limiting, CRUD endpoints, tRPC, Settings UI [Wave 2]
+- [x] v2.0-02-03-PLAN.md — Gmail OAuth + GmailProvider: OAuth 2.0 flow, polling-based email channel, Settings UI [Wave 1]
+- [x] v2.0-02-04-PLAN.md — Gmail MCP tools: read/reply/send/search/archive, token failure alerting [Wave 2]
 
 Plans:
 - [ ] v2.0-02-01-PLAN.md — Webhook receiver: WebhookManager class, HMAC-SHA256 verification, BullMQ job queuing, Redis deduplication [Wave 1]
