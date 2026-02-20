@@ -17,6 +17,7 @@ import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
 import { AppManager, createAppRoutes } from './modules/apps/index.js';
 import type { ChannelManager, ChannelId, ChannelConfig } from './channels/index.js';
+import type { GmailProvider } from './channels/gmail.js';
 import type { ApprovalManager } from './approval-manager.js';
 import type { TaskManager, TaskStatus } from './task-manager.js';
 import type { SkillInstaller } from './skill-installer.js';
@@ -75,8 +76,49 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
-export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker }: ApiDeps) {
+export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager }: ApiDeps) {
   const app = express();
+
+  // ── Dynamic Webhook Receiver (raw body, own HMAC auth — before json parser & API key auth) ──
+  app.post('/api/webhook/:id',
+    express.raw({ type: '*/*', limit: '1mb' }),
+    async (req, res) => {
+      // Skip UUID-shaped IDs only; let non-UUID paths (like 'git') fall through
+      const { id } = req.params;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return (req as any)._skipWebhook = true, res.status(404).json({ error: 'Not a dynamic webhook' });
+      }
+
+      if (!webhookManager) {
+        return res.status(503).json({ error: 'Webhook system not initialized' });
+      }
+
+      const signature = (req.headers['x-hub-signature-256'] || req.headers['x-signature-256'] || '') as string;
+      const deliveryId = (req.headers['x-delivery-id'] || req.headers['x-github-delivery'] || '') as string;
+
+      const payload = req.body as Buffer;
+
+      try {
+        const result = await webhookManager.handleIncoming(id, payload, signature, deliveryId || undefined);
+
+        if (result.ok) {
+          res.json({ ok: true, message: 'Webhook received and queued' });
+        } else {
+          const statusMap: Record<string, number> = {
+            'not_found': 404,
+            'invalid_signature': 401,
+            'duplicate': 200, // Return 200 for dupes to prevent retries
+          };
+          const status = statusMap[result.reason || ''] || 400;
+          res.status(status).json({ ok: result.reason === 'duplicate', message: result.reason });
+        }
+      } catch (err) {
+        logger.error('Webhook receiver error', { id, error: formatErrorMessage(err) });
+        res.status(500).json({ error: 'Internal webhook processing error' });
+      }
+    }
+  );
+
   app.use(express.json());
 
   // ── Health Check (public, no auth required) ───────────────────
