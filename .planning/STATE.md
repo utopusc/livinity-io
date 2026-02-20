@@ -2,96 +2,41 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-15)
+See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
-**Current milestone:** v1.5 — Claude Migration & AI Platform
-**Current focus:** COMPLETE
+**Current milestone:** v2.0 — OpenClaw-Class AI Platform
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Milestone: v1.5 (Claude Migration & AI Platform)
-Phase: 5 of 5 (Skill Marketplace + Parallel Execution)
-Plan: 3 of 3 complete (01, 02, 03)
-Status: MILESTONE COMPLETE
-Last activity: 2026-02-15 — Completed v1.5-05-02-PLAN.md (final plan)
+Milestone: v2.0 (OpenClaw-Class AI Platform)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-20 — Milestone v2.0 started
 
-Progress: [██████████] 100%
-
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 18 (v1.5)
-- Average duration: —
-- Total execution time: —
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1 - Provider Abstraction | 3/3 | — | — |
-| 2 - Native Tool Calling + Auth UI | 3/3 | — | — |
-| 3 - Hybrid Memory + Channel Expansion | 5/5 | — | ~5min |
-| 4 - WebSocket Gateway + HITL | 4/4 | ~21min | ~5min |
-| 5 - Skill Marketplace + Parallel Execution | 3/3 | ~13min | ~4.3min |
-
-*Updated after each plan completion*
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
 ### Decisions
 
-v1.5 decisions:
-- [Milestone]: Claude as primary AI provider, Gemini as fallback (not replacement)
-- [Milestone]: Standard API keys only — subscription OAuth tokens blocked by Anthropic (Jan 2026)
-- [Milestone]: Multi-provider abstraction built natively (no Vercel AI SDK, no LangChain)
-- [Milestone]: Keep existing AgentEvent SSE format — no frontend streaming changes
-- [Milestone]: sqlite-vec for vector search enhancement, keep Gemini for embeddings
-- [Milestone]: Git-based skill registries (no centralized marketplace server)
-- [Milestone]: 5 channels max (WhatsApp, Telegram, Discord, Slack, Matrix)
-- [Tech]: Tier mapping: flash/haiku -> claude-haiku-4-5, sonnet -> claude-sonnet-4-5, opus -> claude-opus-4-6
-- [Tech]: Dual-mode tool calling: native tool_use for Claude, JSON-in-text for Gemini
-- [Tech]: API key stored in Redis: nexus:config:anthropic_api_key
-- [Phase1]: @anthropic-ai/sdk upgraded to v0.74.0 (verified working)
-- [Phase1]: Brain refactored as thin wrapper — all callers unchanged
-- [Phase1]: ProviderManager hasYielded guard prevents fallback after partial stream delivery
-- [Phase2]: Dual-mode AgentLoop: Claude native tool_use + Gemini JSON-in-text preserved
-- [Phase2]: rawClaudeMessages bypass for pre-formatted content blocks (tool_use/tool_result)
-- [Phase2]: validateKey mutation tests API keys before saving (Claude max_tokens:1, Gemini models.list)
-- [Phase2]: Provider selection stored in Redis nexus:config:primary_provider
-- [Phase3]: SlackProvider uses @slack/bolt Socket Mode (no public URL required)
-- [Phase3]: ChannelId forward-extended with 'slack' + 'matrix' to avoid second type change
-- [Phase3]: ChannelConfig extended with appToken, homeserverUrl, roomId for Slack/Matrix
-- [Phase3]: Memory dedup threshold 0.92, time-decay 30-day half-life, 70/30 relevance/recency weighting
-- [Phase3]: Memory extraction uses flash tier, max 5 memories per conversation, fire-and-forget via BullMQ
-- [Phase3]: MatrixProvider uses matrix-js-sdk v40 with sync-based listening, initialSyncLimit: 0
-- [Phase3]: Memory /context endpoint with 2000 token budget, best-effort 2s timeout injection into agent prompts
-- [Phase3]: CHAN-05 response routing uses per-request closures (not instance state) — race-condition free
-- [Phase3]: tRPC integration routes expanded to 4 channels (telegram, discord, slack, matrix)
-- [Phase4]: Manual HS256 JWT verification using Node crypto (no jsonwebtoken dependency)
-- [Phase4]: noServer mode WebSocket with custom upgrade auth (proper HTTP 401 for rejected clients)
-- [Phase4]: Max 5 concurrent WS sessions per client
-- [Phase4]: Cancellation via status flag (AgentLoop lacks native abort)
-- [Phase4]: BLPOP on per-request Redis key for approval wait (duplicated connection, auto-disconnect)
-- [Phase4]: Three-level approval policy: 'always', 'destructive' (default), 'never'
-- [Phase4]: Approval timeout 5min, resolved requests kept 24h for audit trail
-- [Phase4]: Redis psubscribe('nexus:notify:*') pattern subscription for notification fanout
-- [Phase4]: Three notification routing patterns: global (all), approval (all), agent:sessionId (targeted)
-- [Phase4]: Empty per-client notifyFilter = receive all notifications (opt-in filtering)
-- [Phase4]: Redis sorted set (ZADD) for approval audit trail, trimmed to 1000 entries
-- [Phase4]: Express route ordering: /api/approvals/audit before /:id to avoid param collision
-- [Phase4]: Shell tool marked requiresApproval — primary destructive tool for HITL gating
-- [Phase5]: SKILL.md manifest: YAML frontmatter with permissions (name/reason/required), tools, triggers, marketplace metadata
-- [Phase5]: Simple YAML parser for SKILL.md (no js-yaml dependency), extended to handle nested objects
-- [Phase5]: Git-based registry: GitHub Contents API for directory listing, raw.githubusercontent.com for file fetch
-- [Phase5]: File-based catalog caching with MD5-hashed URL keys and configurable TTL
-- [Phase5]: BullMQ worker concurrency directly controls parallel task limit (no custom scheduler)
-- [Phase5]: Task cancellation via Redis flag (cooperative, checked between agent events)
-- [Phase5]: Task events published to nexus:notify:task:{id} for WebSocket real-time routing
-- [Phase5]: TaskConfigSchema: maxConcurrent=4, perTaskTokenBudget=100K, perTaskMaxTurns=15, perTaskTimeoutMs=300s, resultTtlSec=3600
-- [Phase5]: Permission gate: required permissions must be accepted before skill install
-- [Phase5]: Redis SCAN for listing installed skills (production-safe)
-- [Phase5]: SkillsPanel lazy-loaded in AI Chat sidebar (three tabs: Chat, MCP, Skills)
+v1.5 decisions (carried forward):
+- [Milestone]: Claude Code SDK subscription mode (dontAsk permissionMode)
+- [Milestone]: SdkAgentRunner as primary agent execution engine
+- [Milestone]: Nexus tools via MCP (nexus-tools server)
+- [Tech]: Chrome DevTools MCP for browser control
+- [Tech]: Telegram dedup via Redis NX + stale message filter
+- [Tech]: Channel conversation history for all providers
+- [Tech]: AI-generated live updates (agent's own text, not hardcoded descriptions)
+
+v2.0 decisions:
+- [Milestone]: Claude Code Auth ONLY — no API keys, no Gemini, no OpenAI
+- [Milestone]: Telegram + Discord only (WhatsApp deferred)
+- [Milestone]: Cartesia for TTS, Deepgram for STT
+- [Milestone]: Web-based Live Canvas (no native apps)
+- [Milestone]: LivHub branding for skill registry
 
 ### Pending Todos
 
@@ -99,10 +44,12 @@ None.
 
 ### Blockers/Concerns
 
-- sqlite-vec is alpha-versioned (v0.1.7) — needs stability testing in Phase 3
+- nexus-core: 153 PM2 restarts in 47h — must investigate root cause
+- Memory service empty results — needs debugging
+- SdkAgentRunner tools:[] doesn't disable built-in tools
 
 ## Session Continuity
 
-Last session: 2026-02-15
-Stopped at: v1.5 MILESTONE COMPLETE
+Last session: 2026-02-20
+Stopped at: Defining v2.0 milestone requirements
 Resume file: None

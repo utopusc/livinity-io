@@ -2,7 +2,7 @@
 
 ## What This Is
 
-LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users can manage Docker applications, files, backups through a web UI, and interact with the AI via WhatsApp, Telegram, Discord, or the web interface. The goal is to make this an open-source project that anyone can install with a single terminal command.
+LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users interact via Telegram, Discord, and a web UI. The AI agent runs through Claude Code SDK (subscription mode), with MCP tools for shell, Docker, files, browser control, and more. The goal is an OpenClaw-class personal AI platform that anyone can install with a single command.
 
 ## Core Value
 
@@ -19,7 +19,6 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ File manager with upload, download, rename, delete — existing
 - ✓ User authentication with JWT — existing
 - ✓ AI chat via web UI with SSE streaming — existing
-- ✓ WhatsApp bot integration — existing
 - ✓ Telegram bot integration — existing
 - ✓ Discord bot integration — existing
 - ✓ MCP server for Claude/Cursor integration — existing
@@ -48,38 +47,73 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ App Store integration (gallery manifest + builtin featured listing) — v1.3
 - ✓ Crash recovery with stale lock file cleanup — v1.3
 
-### Active (v1.5 — Claude Migration & AI Platform)
+### Validated (v1.5 — Claude Migration & AI Platform)
 
-**Goal:** Replace Gemini AI backend with Claude subscription-based auth, integrate OpenClaw-inspired features (multi-provider, hybrid memory, skill marketplace, expanded channels), and add one-click Claude auth flow in the LivOS UI.
+- ✓ Claude Code SDK subscription mode (SdkAgentRunner with dontAsk) — v1.5
+- ✓ Multi-provider AI abstraction (AIProvider interface, ProviderManager) — v1.5
+- ✓ Claude native tool calling (tool_use content blocks) — v1.5
+- ✓ Gemini fallback with dual-mode AgentLoop — v1.5
+- ✓ Hybrid memory (extraction, dedup, temporal scoring, session binding) — v1.5
+- ✓ Slack channel provider (@slack/bolt Socket Mode) — v1.5
+- ✓ Matrix channel provider (matrix-js-sdk) — v1.5
+- ✓ WebSocket JSON-RPC 2.0 gateway with auth — v1.5
+- ✓ Human-in-the-loop tool approval system — v1.5
+- ✓ Git-based skill marketplace (LivHub) — v1.5
+- ✓ BullMQ parallel agent execution — v1.5
+- ✓ Telegram dedup + stale message filter — v1.5-fix
+- ✓ Channel conversation history (all channels) — v1.5-fix
+- ✓ AI-generated live updates to channels — v1.5-fix
+
+### Active (v2.0 — OpenClaw-Class AI Platform)
+
+**Goal:** Transform LivOS into an OpenClaw-class personal AI platform with voice interaction, visual canvas, multi-agent coordination, webhook automation, Gmail integration, chat commands, DM security, onboarding CLI, session compaction, usage tracking, and stability fixes. Telegram + Discord only. Claude Code Auth exclusively.
 
 **Target features:**
-- [ ] Claude Code CLI auto-install via install.sh
-- [ ] One-click Claude subscription auth in LivOS UI (wrap `claude setup-token`)
-- [ ] Brain class rewrite: @google/genai → @anthropic-ai/sdk with subscription token
-- [ ] Multi-provider AI support (Claude primary, OpenAI/Gemini fallback)
-- [ ] Hybrid memory system (session + long-term + vector + graph)
-- [ ] Skill marketplace with community skill discovery and install
-- [ ] Enhanced channel system (WhatsApp, Telegram, Discord, Slack, Matrix, Web, API, CLI)
-- [ ] Agent capabilities: sub-agents, parallel execution, human-in-the-loop
-- [ ] OpenClaw-inspired gateway pattern for WebSocket RPC communication
-- [ ] Security: localhost-only services, Docker isolation, JWT auth preserved
+- [ ] Voice Wake/Talk Mode (Cartesia TTS, Deepgram STT) with UI API key setup
+- [ ] Live Canvas (A2UI-inspired web-based visual AI workspace)
+- [ ] WebSocket Gateway improvements (real-time streaming, replace polling)
+- [ ] Multi-Agent Sessions (coordination, session tools)
+- [ ] LivHub Skills Registry (ClawHub-inspired, marketplace with gating)
+- [ ] Webhook Triggers (external events trigger agent tasks)
+- [ ] Gmail Integration (Pub/Sub listener, email as channel)
+- [ ] Chat Commands (/status, /think, /usage, /new, /reset, /compact, /activation)
+- [ ] DM Pairing Security (activation code for new users)
+- [ ] Onboarding CLI (livinity onboard --install-daemon guided setup)
+- [ ] Session Compaction (summarize long conversations to save tokens)
+- [ ] Usage Tracking (per-user token/cost tracking)
+- [ ] Fix existing broken features (process stability, memory service, built-in tool leak)
 
 ### Out of Scope
 
+- WhatsApp — disabled for v2.0, only Telegram + Discord
+- Slack/Matrix — already built in v1.5, maintenance only
 - Mobile app — web-first approach, mobile later
 - Multi-tenancy — single-user home server focus
-- Cloud hosting option — self-hosted only for v1
-- Video calling/real-time features — messaging sufficient for now
+- Cloud hosting option — self-hosted only
+- Native desktop/mobile apps — web-based only for now
 - Payment/billing system — free open source project
+- Self-hosted LLM support — Claude Code Auth only
+- Gemini/OpenAI as primary — Claude Code Auth exclusively
 
 ## Context
 
-**Current State:**
+**Current State (post v1.5):**
 - Running in production on Contabo VPS (45.137.194.103)
-- Monorepo with pnpm (livos/) and npm (nexus/) workspaces
-- 80% code duplication across 3 AI daemon implementations
-- Hardcoded domain (livinity.cloud) and paths (/opt/livos, /opt/nexus)
-- Security concerns: exposed secrets, incomplete shell blocklist
+- AI runs via Claude Code SDK (SdkAgentRunner, subscription mode, dontAsk)
+- Nexus tools exposed via MCP (nexus-tools server)
+- Chrome DevTools MCP for browser control
+- 5 channel providers (WhatsApp, Telegram, Discord, Slack, Matrix)
+- Skill marketplace with Git-based registries
+- WebSocket JSON-RPC 2.0 gateway
+- Human-in-the-loop approval system
+- Parallel agent execution via BullMQ
+
+**Known Issues:**
+- nexus-core: 153 PM2 restarts in 47 hours (stability problem)
+- Memory service returns empty results frequently
+- SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write
+- Agent runs 6-13 turns for simple greetings (should be 1-2)
+- grammy loses polling offsets on restart (mitigated with dedup)
 
 **Technical Environment:**
 - Node.js 22+, TypeScript 5.7+
@@ -89,6 +123,7 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - PostgreSQL for persistent data
 - Docker for containerized apps
 - Caddy for reverse proxy
+- Claude Code SDK (@anthropic-ai/claude-agent-sdk)
 
 **Target Users:**
 - Self-hosters who want a personal server with AI
@@ -97,7 +132,9 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 ## Constraints
 
-- **Tech Stack**: Keep existing Node.js/TypeScript stack — extensive existing code
+- **Auth**: Claude Code Auth ONLY — no API keys, no Gemini, no OpenAI
+- **Channels**: Telegram + Discord only for v2.0
+- **Tech Stack**: Keep existing Node.js/TypeScript stack
 - **Compatibility**: Must work on standard Linux VPS (Ubuntu 22.04+)
 - **Resources**: Single VPS deployment (2-4 CPU, 4-8GB RAM typical)
 - **Zero Breaking Changes**: Existing installations should upgrade smoothly
@@ -106,14 +143,16 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Keep Nexus as single AI daemon | Most complete implementation, already multi-channel | — Pending |
-| Event-driven over polling | Reduces latency from 30s to instant | — Pending |
-| Environment variables over .env files | Standard deployment practice, secrets manager compatible | — Pending |
-| Single install script | Lowers barrier to entry for non-technical users | — Pending |
-
-| Browser as App Store app | Install from store, not hardcoded into UI | — Pending |
-| KasmVNC over iframe | Web viewer embedded in LivOS window | — Pending |
-| Playwright MCP via hooks | Auto-register/deregister on app lifecycle | — Pending |
+| Keep Nexus as single AI daemon | Most complete implementation, already multi-channel | ✓ Good |
+| Event-driven over polling | Reduces latency from 30s to instant | ✓ Good |
+| Single install script | Lowers barrier to entry for non-technical users | ✓ Good |
+| Claude Code SDK subscription mode | No API keys needed, uses user's Claude subscription | ✓ Good |
+| SdkAgentRunner with dontAsk | Auto-approve all MCP tools, Claude handles permissions | ✓ Good |
+| Telegram + Discord only (v2.0) | Focus on two working channels, WhatsApp deferred | — Pending |
+| Cartesia for TTS | High quality, low latency voice synthesis | — Pending |
+| Deepgram for STT | Real-time speech recognition, WebSocket API | — Pending |
+| Web-based Live Canvas | No native app needed, A2UI-inspired visual workspace | — Pending |
+| LivHub (not ClawHub) | Own branding for skill registry | — Pending |
 
 ---
-*Last updated: 2026-02-15 — v1.5 milestone (Claude Migration & AI Platform)*
+*Last updated: 2026-02-20 — v2.0 milestone (OpenClaw-Class AI Platform)*
