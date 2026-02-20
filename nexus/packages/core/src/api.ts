@@ -22,6 +22,7 @@ import type { TaskManager, TaskStatus } from './task-manager.js';
 import type { SkillInstaller } from './skill-installer.js';
 import type { SkillRegistryClient } from './skill-registry-client.js';
 import type { SkillLoader } from './skill-loader.js';
+import type { DmPairingManager } from './dm-pairing.js';
 import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 
@@ -39,6 +40,7 @@ interface ApiDeps {
   skillInstaller?: SkillInstaller;
   skillRegistryClient?: SkillRegistryClient;
   skillLoader?: SkillLoader;
+  dmPairingManager?: DmPairingManager;
 }
 
 
@@ -69,7 +71,7 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
-export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader }: ApiDeps) {
+export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager }: ApiDeps) {
   const app = express();
   app.use(express.json());
 

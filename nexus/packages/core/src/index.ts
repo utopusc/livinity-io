@@ -21,6 +21,7 @@ import { HeartbeatRunner } from './heartbeat-runner.js';
 import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
 import { ApprovalManager } from './approval-manager.js';
+import { DmPairingManager } from './dm-pairing.js';
 import { TaskManager } from './task-manager.js';
 import { SkillRegistryClient } from './skill-registry-client.js';
 import { SkillInstaller } from './skill-installer.js';
@@ -139,6 +140,15 @@ async function main() {
   // User session manager for per-user preferences (thinking, verbose, model)
   const userSessionManager = new UserSessionManager(redis);
   logger.info('UserSessionManager initialized');
+
+  // DM pairing manager for activation code flow on DM channels
+  const dmPairingManager = new DmPairingManager(redis);
+  // Wire into Telegram and Discord providers
+  const telegramProvider = channelManager.getProvider('telegram') as any;
+  if (telegramProvider?.setDmPairing) telegramProvider.setDmPairing(dmPairingManager);
+  const discordProvider = channelManager.getProvider('discord') as any;
+  if (discordProvider?.setDmPairing) discordProvider.setDmPairing(dmPairingManager);
+  logger.info('DmPairingManager initialized');
 
   // Heartbeat runner
   const workspaceDir = process.env.WORKSPACE_DIR || NEXUS_BASE_DIR;
@@ -368,7 +378,7 @@ Conversation:`;
   });
   logger.info('Cron worker initialized (BullMQ)');
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader });
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   const httpServer = apiApp.listen(apiPort, apiHost, () => {
