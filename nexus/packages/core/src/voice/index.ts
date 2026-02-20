@@ -18,12 +18,14 @@ import { logger } from '../logger.js';
 import { verifyApiKey, verifyJwt } from '../auth.js';
 import { VoiceSession } from './voice-session.js';
 import type { Daemon } from '../daemon.js';
+import type { VoiceConfig } from '../config/schema.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface VoiceGatewayDeps {
   redis: Redis;
   daemon: Daemon;
+  voiceConfig?: VoiceConfig;
 }
 
 // ── VoiceGateway Class ───────────────────────────────────────────────────────
@@ -125,6 +127,22 @@ export class VoiceGateway {
       ws,
       sessionId,
       redis: this.deps.redis,
+      deepgramApiKey: this.deps.voiceConfig?.deepgramApiKey,
+      sttModel: this.deps.voiceConfig?.sttModel,
+      sttLanguage: this.deps.voiceConfig?.sttLanguage,
+      onTranscript: (sid: string, text: string) => {
+        logger.info('[VoiceGateway] Transcript -> daemon.addToInbox', {
+          sessionId: sid.slice(0, 8),
+          text: text.slice(0, 80),
+        });
+        this.deps.daemon.addToInbox(
+          text,
+          'voice' as any, // 'voice' source type — will be added to Intent union in future
+          undefined,
+          { voiceSessionId: sid },
+          sid,
+        );
+      },
     });
 
     this.sessions.set(sessionId, session);
