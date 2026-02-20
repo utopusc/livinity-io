@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 1 — Stability & Security Foundation
+**Current focus:** Phase 1 complete. Ready for Phase 2.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 1 of 6 (Stability & Security Foundation)
-Plan: 3 of 4 in phase (v2.0-01-01, v2.0-01-02, v2.0-01-03 complete)
-Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-01-02-PLAN.md (DM Pairing Security)
+Phase: 1 of 6 (Stability & Security Foundation) — COMPLETE
+Plan: 4 of 4 in phase (all complete)
+Status: Phase complete
+Last activity: 2026-02-20 — Completed v2.0-01-04-PLAN.md (Usage Tracking & Dashboard)
 
-Progress: [███░░░░░░░░░░░░░░░░░░░] 3/22 (~14%)
+Progress: [████░░░░░░░░░░░░░░░░░░] 4/22 (~18%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3 (v2.0)
-- Average duration: 7min
-- Total execution time: 18min
+- Total plans completed: 4 (v2.0)
+- Average duration: 7.5min
+- Total execution time: 27min
 
 ## Accumulated Context
 
@@ -57,6 +57,9 @@ v2.0 Phase 1 decisions:
 - [Security]: Max 3 pending activation codes per channel, 1-hour TTL
 - [Security]: DM check runs after dedup/stale filters, before AI handler
 - [Security]: Group messages bypass DM pairing entirely
+- [Usage]: Cost stored as integer cents in Redis to avoid float precision
+- [Usage]: Daily usage keys have 90-day TTL for automatic cleanup
+- [Usage]: tRPC proxy routes for usage dashboard (consistent with existing patterns)
 
 ### Pending Todos
 
@@ -72,5 +75,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-01-02-PLAN.md (DM Pairing Security)
-Resume file: .planning/phases/v2.0-p01-stability-security/v2.0-01-04-PLAN.md
+Stopped at: Completed v2.0-01-04-PLAN.md (Usage Tracking & Dashboard) — Phase 1 COMPLETE
+Resume file: None (begin Phase 2 planning)
