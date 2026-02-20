@@ -513,6 +513,7 @@ export class Daemon {
           channelId: item.from,
           redis: this.config.redis,
           usageTracker: this.config.usageTracker,
+          brain: this.config.brain,
         });
 
         if (cmdResult?.handled && cmdResult.response) {
@@ -1114,6 +1115,24 @@ ${task}`;
           timestamp: Date.now(),
           success: result.success,
         }).catch(() => {});
+      }
+
+      // COMP-05: Auto-compact when session exceeds 100k token threshold
+      if (this.config.sessionManager && intent.from) {
+        try {
+          const sessionTokens = await this.config.sessionManager.getSessionTokenCount(intent.from);
+          if (sessionTokens > 100_000) {
+            logger.info('Auto-compact triggered', { senderId: intent.from, sessionTokens });
+            const compactResult = await this.config.sessionManager.compactSession(intent.from, this.config.brain);
+            logger.info('Auto-compact complete', {
+              senderId: intent.from,
+              savedTokens: compactResult.savedTokens,
+              compactedMessages: compactResult.compactedMessages,
+            });
+          }
+        } catch (err: any) {
+          logger.error('Auto-compact failed', { senderId: intent.from, error: err.message });
+        }
       }
 
       // Fire-and-forget: enqueue memory extraction for this conversation
