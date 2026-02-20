@@ -42,6 +42,7 @@ import {
 	TbAlertCircle,
 	TbCircleCheck,
 	TbLogout,
+	TbChartBar,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -80,6 +81,9 @@ import {SettingsToggleRow} from './settings-toggle-row'
 const DmPairingContentLazy = React.lazy(() =>
 	import('@/routes/settings/dm-pairing').then((m) => ({default: m.DmPairingContent})),
 )
+const UsageDashboardLazy = React.lazy(() =>
+	import('@/routes/settings/usage-dashboard').then((m) => ({default: m.UsageDashboard})),
+)
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +99,7 @@ type SettingsSection =
 	| 'nexus-config'
 	| 'integrations'
 	| 'dm-pairing'
+	| 'usage'
 	| 'domain'
 	| 'backups'
 	| 'migration'
@@ -118,6 +123,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
 	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
 	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
+	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL'},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore'},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi'},
@@ -319,6 +325,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <IntegrationsSection />
 		case 'dm-pairing':
 			return <DmPairingSection />
+		case 'usage':
+			return <UsageSection />
 		case 'domain':
 			return <DomainSection />
 		case 'backups':
@@ -1329,6 +1337,18 @@ function DmPairingSection() {
 	return (
 		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 			<DmPairingContentLazy />
+		</Suspense>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Usage Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UsageSection() {
+	return (
+		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
+			<UsageDashboardLazy />
 		</Suspense>
 	)
 }
