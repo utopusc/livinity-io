@@ -29,6 +29,7 @@ import { SkillInstaller } from './skill-installer.js';
 import { WebhookManager } from './webhook-manager.js';
 import { MultiAgentManager } from './multi-agent.js';
 import { createApiServer, setupWsGateway } from './api.js';
+import { VoiceGateway } from './voice/index.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
 import { CircuitBreaker } from './infra/circuit-breaker.js';
@@ -472,6 +473,10 @@ Conversation:`;
   // Attach JSON-RPC 2.0 WebSocket gateway for streaming
   const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis, redisSub, taskManager });
 
+  // Voice WebSocket gateway for real-time voice pipeline (/ws/voice)
+  const voiceGateway = new VoiceGateway(httpServer, { redis, daemon });
+  logger.info('VoiceGateway initialized');
+
   // Event-driven inbox processing using Redis BLPOP (no polling overhead)
   const inboxRedis = redis.duplicate(); // Separate connection for blocking operations
   const processInboxQueue = async () => {
@@ -509,6 +514,7 @@ Conversation:`;
   const shutdown = async () => {
     logger.info('Shutting down...');
     redisCircuitBreaker.destroy();
+    voiceGateway.stop();
     wsGateway.stop();
     heartbeatRunner.stop();
     await cronWorker.close();
