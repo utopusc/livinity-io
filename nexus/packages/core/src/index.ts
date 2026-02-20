@@ -401,6 +401,7 @@ Conversation:`;
 
   // ── WebhookManager — secure webhook receiver with HMAC verification + BullMQ ──
   const webhookManager = new WebhookManager({ redis, daemon, bullConnection });
+  daemon.setWebhookManager(webhookManager);
   logger.info('WebhookManager initialized');
 
   const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager });

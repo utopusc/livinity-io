@@ -93,6 +93,22 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         return res.status(503).json({ error: 'Webhook system not initialized' });
       }
 
+      // ── Rate limiting: 30 requests/minute per webhook ID ──
+      const rateKey = `nexus:webhook:rate:${id}`;
+      try {
+        const count = await redis.incr(rateKey);
+        if (count === 1) {
+          await redis.expire(rateKey, 60);
+        }
+        if (count > 30) {
+          res.setHeader('Retry-After', '60');
+          return res.status(429).json({ error: 'Rate limit exceeded (30 requests/minute)' });
+        }
+      } catch (err) {
+        // Rate limiter failure should not block webhook processing
+        logger.warn('Webhook rate limiter error (allowing request)', { id, error: formatErrorMessage(err) });
+      }
+
       const signature = (req.headers['x-hub-signature-256'] || req.headers['x-signature-256'] || '') as string;
       const deliveryId = (req.headers['x-delivery-id'] || req.headers['x-github-delivery'] || '') as string;
 
@@ -1228,6 +1244,81 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     try {
       const overview = await usageTracker.getOverview();
       res.json(overview);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Webhook CRUD Endpoints ───────────────────────────────────
+
+  /** List all webhooks */
+  app.get('/api/webhooks', async (_req, res) => {
+    if (!webhookManager) {
+      res.status(503).json({ error: 'Webhook system not initialized' });
+      return;
+    }
+    try {
+      const webhooks = await webhookManager.listWebhooks();
+      // Strip secrets from list response for safety
+      const safe = webhooks.map(({ secret, ...rest }) => rest);
+      res.json({ webhooks: safe });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Create a new webhook */
+  app.post('/api/webhooks', async (req, res) => {
+    if (!webhookManager) {
+      res.status(503).json({ error: 'Webhook system not initialized' });
+      return;
+    }
+    const { name, secret } = req.body as { name?: string; secret?: string };
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ error: '"name" is required and must be a string' });
+      return;
+    }
+    try {
+      const result = await webhookManager.createWebhook(name, secret);
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get a single webhook by ID */
+  app.get('/api/webhooks/:id', async (req, res) => {
+    if (!webhookManager) {
+      res.status(503).json({ error: 'Webhook system not initialized' });
+      return;
+    }
+    try {
+      const webhook = await webhookManager.getWebhook(req.params.id);
+      if (!webhook) {
+        res.status(404).json({ error: 'Webhook not found' });
+        return;
+      }
+      // Strip secret from GET response
+      const { secret, ...safe } = webhook;
+      res.json(safe);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Delete a webhook by ID */
+  app.delete('/api/webhooks/:id', async (req, res) => {
+    if (!webhookManager) {
+      res.status(503).json({ error: 'Webhook system not initialized' });
+      return;
+    }
+    try {
+      const deleted = await webhookManager.deleteWebhook(req.params.id);
+      if (deleted) {
+        res.json({ ok: true, message: 'Webhook deleted' });
+      } else {
+        res.status(404).json({ error: 'Webhook not found' });
+      }
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }

@@ -34,6 +34,8 @@ import { handleCommand, isCommand } from './commands.js';
 import { getThinkingPromptModifier, getVerbosePromptModifier, type ThinkLevel, type VerboseLevel } from './thinking.js';
 import type { ApprovalManager } from './approval-manager.js';
 import type { UsageTracker } from './usage-tracker.js';
+import type { WebhookManager } from './webhook-manager.js';
+import type { GmailProvider } from './channels/gmail.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
@@ -62,6 +64,8 @@ interface DaemonConfig {
   cronQueue?: Queue;
   approvalManager?: ApprovalManager;
   usageTracker?: UsageTracker;
+  webhookManager?: WebhookManager;
+  gmailProvider?: GmailProvider;
   intervalMs: number;
 }
 
@@ -136,6 +140,11 @@ export class Daemon {
   /** Expose usage tracker for external consumers (API, commands) */
   get usageTracker(): UsageTracker | undefined {
     return this.config.usageTracker;
+  }
+
+  /** Set webhook manager after construction (circular dependency: WebhookManager needs Daemon) */
+  setWebhookManager(webhookManager: WebhookManager): void {
+    this.config.webhookManager = webhookManager;
   }
 
   /** Get current Nexus config (from ConfigManager or defaults) */
@@ -2147,6 +2156,79 @@ ${task}`;
           return { success: false, output: '', error: `Unknown operation: ${operation}` };
         } catch (err) {
           return { success: false, output: '', error: `Config error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    // ── Webhook Management Tools ───────────────────────────────
+
+    toolRegistry.register({
+      name: 'webhook_create',
+      description: 'Create a new webhook endpoint with a unique URL and HMAC secret. Returns the URL, ID, and secret (secret is shown only once).',
+      parameters: [
+        { name: 'name', type: 'string', description: 'Human-readable name for this webhook', required: true },
+        { name: 'secret', type: 'string', description: 'Custom HMAC secret (optional — auto-generated if omitted)', required: false },
+      ],
+      execute: async (params) => {
+        const webhookMgr = this.config.webhookManager;
+        if (!webhookMgr) return { success: false, output: '', error: 'Webhook system not initialized.' };
+        const name = params.name as string;
+        if (!name) return { success: false, output: '', error: 'Webhook name is required.' };
+        try {
+          const result = await webhookMgr.createWebhook(name, params.secret as string | undefined);
+          return {
+            success: true,
+            output: `Webhook "${name}" created.\nID: ${result.id}\nURL: ${result.url}\nSecret: ${result.secret}\n\nSave the secret now — it will not be shown again.`,
+            data: result,
+          };
+        } catch (err) {
+          return { success: false, output: '', error: `Failed to create webhook: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    toolRegistry.register({
+      name: 'webhook_list',
+      description: 'List all registered webhook endpoints with their name, ID, delivery count, and last used time.',
+      parameters: [],
+      execute: async () => {
+        const webhookMgr = this.config.webhookManager;
+        if (!webhookMgr) return { success: false, output: '', error: 'Webhook system not initialized.' };
+        try {
+          const webhooks = await webhookMgr.listWebhooks();
+          if (webhooks.length === 0) {
+            return { success: true, output: 'No webhooks configured.' };
+          }
+          const lines = webhooks.map((w) =>
+            `- ${w.name} (ID: ${w.id})\n  URL: /api/webhook/${w.id}\n  Deliveries: ${w.deliveryCount} | Last used: ${w.lastUsed || 'never'}`
+          );
+          return { success: true, output: `Webhooks (${webhooks.length}):\n${lines.join('\n')}`, data: webhooks };
+        } catch (err) {
+          return { success: false, output: '', error: `Failed to list webhooks: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    toolRegistry.register({
+      name: 'webhook_delete',
+      description: 'Delete a webhook endpoint by ID. This permanently removes the endpoint and its secret.',
+      parameters: [
+        { name: 'id', type: 'string', description: 'Webhook ID (UUID) to delete', required: true },
+      ],
+      execute: async (params) => {
+        const webhookMgr = this.config.webhookManager;
+        if (!webhookMgr) return { success: false, output: '', error: 'Webhook system not initialized.' };
+        const id = params.id as string;
+        if (!id) return { success: false, output: '', error: 'Webhook ID is required.' };
+        try {
+          const deleted = await webhookMgr.deleteWebhook(id);
+          if (deleted) {
+            return { success: true, output: `Webhook ${id} deleted successfully.` };
+          } else {
+            return { success: false, output: '', error: `Webhook ${id} not found.` };
+          }
+        } catch (err) {
+          return { success: false, output: '', error: `Failed to delete webhook: ${formatErrorMessage(err)}` };
         }
       },
     });
