@@ -66,6 +66,9 @@ v2.0 Phase 2 decisions:
 - [Webhook]: UUID validation on route IDs to avoid intercepting /api/webhook/git
 - [Webhook]: Duplicate deliveries return HTTP 200 to prevent external service retries
 - [Webhook]: BullMQ webhook worker concurrency 2 (matches memory extraction pattern)
+- [Webhook]: WebhookManager injected post-construction via setWebhookManager() (circular dependency resolution)
+- [Webhook]: Secrets stripped from GET/LIST responses; only returned once at POST creation
+- [Webhook]: Rate limiter uses Redis INCR+EXPIRE; failure doesn't block processing (graceful degradation)
 - [Gmail]: OAuth callback is public (before requireApiKey) — Google redirects browser directly
 - [Gmail]: Polling interval default 60s, configurable via GMAIL_POLL_INTERVAL_SEC
 - [Gmail]: Seen message IDs stored in Redis SET with 500-entry cap
@@ -90,5 +93,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-02-04-PLAN.md (Phase 2 complete)
+Stopped at: Completed v2.0-02-02-PLAN.md (webhook management — Phase 2 fully complete)
 Resume file: None
