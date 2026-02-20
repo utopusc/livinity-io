@@ -119,12 +119,21 @@ export class TelegramProvider implements ChannelProvider {
         const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
         const userName = msg.from?.username || msg.from?.first_name || 'Unknown';
 
-        // In groups, only respond if mentioned
+        // In groups, check activation mode (mention or always)
         if (isGroup) {
-          const botUsername = this.status.botName;
-          if (botUsername && !msg.text.includes(`@${botUsername}`)) {
-            return;
+          let activationMode = 'mention'; // default
+          if (this.redis) {
+            const mode = await this.redis.get(`nexus:activation:${msg.chat.id}`);
+            if (mode) activationMode = mode;
           }
+
+          if (activationMode === 'mention') {
+            const botUsername = this.status.botName;
+            if (botUsername && !msg.text.includes(`@${botUsername}`)) {
+              return;
+            }
+          }
+          // If 'always', skip mention check and process all messages
         }
 
         // ── DM Pairing: check unknown DM users ──
