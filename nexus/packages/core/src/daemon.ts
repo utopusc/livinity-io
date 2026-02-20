@@ -33,6 +33,7 @@ import { UserSessionManager } from './user-session.js';
 import { handleCommand, isCommand } from './commands.js';
 import { getThinkingPromptModifier, getVerbosePromptModifier, type ThinkLevel, type VerboseLevel } from './thinking.js';
 import type { ApprovalManager } from './approval-manager.js';
+import type { UsageTracker } from './usage-tracker.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
@@ -60,6 +61,7 @@ interface DaemonConfig {
   memoryExtractionQueue?: Queue;
   cronQueue?: Queue;
   approvalManager?: ApprovalManager;
+  usageTracker?: UsageTracker;
   intervalMs: number;
 }
 
@@ -129,6 +131,11 @@ export class Daemon {
   /** Expose approval manager for external consumers (API, WS) */
   get approvalManager(): ApprovalManager | undefined {
     return this.config.approvalManager;
+  }
+
+  /** Expose usage tracker for external consumers (API, commands) */
+  get usageTracker(): UsageTracker | undefined {
+    return this.config.usageTracker;
   }
 
   /** Get current Nexus config (from ConfigManager or defaults) */
@@ -291,6 +298,7 @@ export class Daemon {
             sessionManager: this.config.sessionManager,
             channelId: item.from,
             redis: this.config.redis,
+            usageTracker: this.config.usageTracker,
           });
 
           if (cmdResult?.handled && cmdResult.response) {
@@ -1071,6 +1079,23 @@ ${task}`;
       if (intent.from && this.config.userSessionManager) {
         const totalTokens = result.totalInputTokens + result.totalOutputTokens;
         await this.config.userSessionManager.recordUsage(intent.from, totalTokens).catch(() => {});
+      }
+
+      // Record detailed usage metrics in UsageTracker
+      if (this.config.usageTracker) {
+        this.config.usageTracker.recordSession({
+          sessionId: agentConfig.sessionId || 'unknown',
+          userId: intent.from || 'web',
+          model: effectiveTier,
+          inputTokens: result.totalInputTokens,
+          outputTokens: result.totalOutputTokens,
+          turns: result.turns,
+          toolCalls: result.toolCallCount ?? result.toolCalls.length,
+          ttfbMs: result.ttfbMs ?? 0,
+          durationMs: result.durationMs ?? 0,
+          timestamp: Date.now(),
+          success: result.success,
+        }).catch(() => {});
       }
 
       // Fire-and-forget: enqueue memory extraction for this conversation

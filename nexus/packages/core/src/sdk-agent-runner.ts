@@ -140,6 +140,7 @@ export class SdkAgentRunner extends EventEmitter {
   }
 
   async run(task: string): Promise<AgentResult> {
+    const runStartTime = Date.now();
     const sessionId = this.config.sessionId || randomUUID();
     const nexusConfig = this.config.nexusConfig;
     const agentDefaults = nexusConfig?.agent;
@@ -225,6 +226,9 @@ CRITICAL RULES:
     let turns = 0;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let ttfbMs = 0;
+    let firstContentReceived = false;
+    let toolCallCount = 0;
 
     try {
       const messages = query({
@@ -259,6 +263,11 @@ CRITICAL RULES:
           if (betaMessage && Array.isArray(betaMessage.content)) {
             for (const block of betaMessage.content) {
               if (block.type === 'text' && block.text) {
+                // Track TTFB — time to first text content from start of run
+                if (!firstContentReceived) {
+                  ttfbMs = Date.now() - runStartTime;
+                  firstContentReceived = true;
+                }
                 this.emitEvent({ type: 'chunk', turn: turns, data: block.text });
                 answer = block.text;
 
@@ -273,6 +282,7 @@ CRITICAL RULES:
                   } catch { /* callback errors don't break the loop */ }
                 }
               } else if (block.type === 'tool_use') {
+                toolCallCount++;
                 this.emitEvent({
                   type: 'tool_call',
                   turn: turns,
@@ -308,7 +318,8 @@ CRITICAL RULES:
         // Other message types (system, stream_event, tool_progress, etc.) are logged but not emitted
       }
 
-      logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length, turnLimitReached });
+      const durationMs = Date.now() - runStartTime;
+      logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length, turnLimitReached, ttfbMs, toolCallCount, durationMs });
 
       return {
         success: !turnLimitReached,
@@ -318,6 +329,9 @@ CRITICAL RULES:
         totalOutputTokens,
         toolCalls,
         stoppedReason: turnLimitReached ? 'max_turns' : 'complete',
+        ttfbMs,
+        toolCallCount,
+        durationMs,
       };
     } catch (err: any) {
       logger.error('SdkAgentRunner: error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });

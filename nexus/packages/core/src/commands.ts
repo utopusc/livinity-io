@@ -19,6 +19,7 @@ import {
   type VerboseLevel,
 } from './thinking.js';
 import type { ModelTier } from './brain.js';
+import type { UsageTracker } from './usage-tracker.js';
 
 export interface CommandContext {
   jid: string;
@@ -32,6 +33,8 @@ export interface CommandContext {
   channelId?: string;
   /** Redis instance for reading/writing activation settings */
   redis?: Redis;
+  /** Usage tracker for /usage command */
+  usageTracker?: UsageTracker;
 }
 
 export interface CommandResult {

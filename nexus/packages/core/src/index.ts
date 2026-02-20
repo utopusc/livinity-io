@@ -22,6 +22,7 @@ import { ChannelManager } from './channels/index.js';
 import { UserSessionManager } from './user-session.js';
 import { ApprovalManager } from './approval-manager.js';
 import { DmPairingManager } from './dm-pairing.js';
+import { UsageTracker } from './usage-tracker.js';
 import { TaskManager } from './task-manager.js';
 import { SkillRegistryClient } from './skill-registry-client.js';
 import { SkillInstaller } from './skill-installer.js';
@@ -149,6 +150,10 @@ async function main() {
   const discordProvider = channelManager.getProvider('discord') as any;
   if (discordProvider?.setDmPairing) discordProvider.setDmPairing(dmPairingManager);
   logger.info('DmPairingManager initialized');
+
+  // Usage tracker for per-session and cumulative token usage
+  const usageTracker = new UsageTracker(redis);
+  logger.info('UsageTracker initialized');
 
   // Heartbeat runner
   const workspaceDir = process.env.WORKSPACE_DIR || NEXUS_BASE_DIR;
@@ -360,6 +365,7 @@ Conversation:`;
     memoryExtractionQueue,
     cronQueue,
     approvalManager,
+    usageTracker,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
@@ -378,7 +384,7 @@ Conversation:`;
   });
   logger.info('Cron worker initialized (BullMQ)');
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager });
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   const httpServer = apiApp.listen(apiPort, apiHost, () => {
