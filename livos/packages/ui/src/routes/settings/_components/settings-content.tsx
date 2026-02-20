@@ -75,6 +75,11 @@ import {cn} from '@/shadcn-lib/utils'
 import {ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
+
+// Lazy-loaded DM Pairing content
+const DmPairingContentLazy = React.lazy(() =>
+	import('@/routes/settings/dm-pairing').then((m) => ({default: m.DmPairingContent})),
+)
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +94,7 @@ type SettingsSection =
 	| 'ai-config'
 	| 'nexus-config'
 	| 'integrations'
+	| 'dm-pairing'
 	| 'domain'
 	| 'backups'
 	| 'migration'
@@ -111,6 +117,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'API keys & provider'},
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
 	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
+	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL'},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore'},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi'},
@@ -310,6 +317,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <NexusConfigSection />
 		case 'integrations':
 			return <IntegrationsSection />
+		case 'dm-pairing':
+			return <DmPairingSection />
 		case 'domain':
 			return <DomainSection />
 		case 'backups':
@@ -1309,6 +1318,18 @@ function DiscordPanel() {
 				)}
 			</div>
 		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DM Pairing Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DmPairingSection() {
+	return (
+		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
+			<DmPairingContentLazy />
+		</Suspense>
 	)
 }
 

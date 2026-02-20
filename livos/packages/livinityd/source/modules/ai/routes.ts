@@ -947,4 +947,116 @@ export default router({
 			return {success: true, message: `Container ${input.name} ${input.operation}ed successfully`}
 		}),
 
+	// ── DM Pairing ─────────────────────────────────────────
+
+	/** Get pending DM pairing requests */
+	getDmPairingPending: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/dm-pairing/pending`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) return {pending: []}
+		return await response.json() as {pending: Array<{channel: string; userId: string; userName: string; code: string; createdAt: number; channelChatId: string}>}
+	}),
+
+	/** Get DM pairing allowlist for a channel */
+	getDmPairingAllowlist: privateProcedure
+		.input(z.object({channel: z.string()}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/dm-pairing/allowlist/${input.channel}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) return {channel: input.channel, users: []}
+			return await response.json() as {channel: string; users: string[]}
+		}),
+
+	/** Get DM pairing policy for a channel */
+	getDmPairingPolicy: privateProcedure
+		.input(z.object({channel: z.string()}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/dm-pairing/policy/${input.channel}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) return {channel: input.channel, policy: 'pairing'}
+			return await response.json() as {channel: string; policy: string}
+		}),
+
+	/** Update DM pairing policy for a channel */
+	setDmPairingPolicy: privateProcedure
+		.input(z.object({channel: z.string(), policy: z.enum(['pairing', 'allowlist', 'open', 'disabled'])}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/dm-pairing/policy/${input.channel}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({policy: input.policy}),
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || 'Failed to update policy'})
+			}
+			return await response.json()
+		}),
+
+	/** Approve a DM pairing request */
+	approveDmPairing: privateProcedure
+		.input(z.object({channel: z.string(), userId: z.string()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/dm-pairing/approve`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({channel: input.channel, userId: input.userId}),
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || 'Failed to approve'})
+			}
+			return await response.json()
+		}),
+
+	/** Deny a DM pairing request */
+	denyDmPairing: privateProcedure
+		.input(z.object({channel: z.string(), userId: z.string()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/dm-pairing/deny`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({channel: input.channel, userId: input.userId}),
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || 'Failed to deny'})
+			}
+			return await response.json()
+		}),
+
+	/** Remove a user from the DM pairing allowlist */
+	removeDmPairingAllowlist: privateProcedure
+		.input(z.object({channel: z.string(), userId: z.string()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/dm-pairing/allowlist/${input.channel}/${input.userId}`, {
+				method: 'DELETE',
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || 'Failed to remove'})
+			}
+			return await response.json()
+		}),
+
 })

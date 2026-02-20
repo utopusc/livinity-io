@@ -40,6 +40,7 @@ const NexusConfigPage = React.lazy(() => import('@/routes/settings/nexus-config'
 const AiConfigPage = React.lazy(() => import('@/routes/settings/ai-config'))
 const IntegrationsPage = React.lazy(() => import('@/routes/settings/integrations'))
 const DomainSetupPage = React.lazy(() => import('@/routes/settings/domain-setup'))
+const DmPairingPage = React.lazy(() => import('@/routes/settings/dm-pairing'))
 
 // drawers
 const StartMigrationDrawerOrDialog = React.lazy(() =>
@@ -145,6 +146,7 @@ export function Settings() {
 						<Route path='/ai-config' Component={AiConfigPage} />
 						<Route path='/integrations' Component={IntegrationsPage} />
 						<Route path='/domain-setup' Component={DomainSetupPage} />
+						<Route path='/dm-pairing' Component={DmPairingPage} />
 					</Routes>
 					<QueryStringDialog />
 				</Suspense>
