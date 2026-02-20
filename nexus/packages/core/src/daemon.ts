@@ -495,6 +495,7 @@ export class Daemon {
           sessionManager: this.config.sessionManager,
           channelId: item.from,
           redis: this.config.redis,
+          usageTracker: this.config.usageTracker,
         });
 
         if (cmdResult?.handled && cmdResult.response) {

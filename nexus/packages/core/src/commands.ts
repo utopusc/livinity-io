@@ -475,7 +475,10 @@ async function handleUsage(args: string[], ctx: CommandContext): Promise<Command
   const summary = await ctx.usageTracker.getUserSummary(ctx.jid);
   const { currentSession, today, cumulative } = summary;
 
-  const totalCost = estimateCost('sonnet', cumulative.inputTokens, cumulative.outputTokens);
+  const haikuCost = estimateCost('haiku', cumulative.inputTokens, cumulative.outputTokens);
+  const sonnetCost = estimateCost('sonnet', cumulative.inputTokens, cumulative.outputTokens);
+  const opusCost = estimateCost('opus', cumulative.inputTokens, cumulative.outputTokens);
+  const totalCost = sonnetCost; // Default estimate using sonnet pricing
 
   let response = `*Token Usage*\n\n`;
 
@@ -493,7 +496,8 @@ async function handleUsage(args: string[], ctx: CommandContext): Promise<Command
   response += `*All Time*\n`;
   response += `Input: ${cumulative.inputTokens.toLocaleString()} | Output: ${cumulative.outputTokens.toLocaleString()}\n`;
   response += `Sessions: ${cumulative.sessions} | Turns: ${cumulative.turns} | Tools: ${cumulative.toolCalls}\n`;
-  response += `Est. cost: $${totalCost.toFixed(2)}\n\n`;
+  response += `*Cost by Model* (est. all-time)\n`;
+  response += `Haiku: $${haikuCost.toFixed(4)} | Sonnet: $${sonnetCost.toFixed(4)} | Opus: $${opusCost.toFixed(4)}\n\n`;
 
   response += `Display mode: *${summary.displayMode}*\n`;
   response += `Set with: \`/usage off|tokens|full|cost\``;
