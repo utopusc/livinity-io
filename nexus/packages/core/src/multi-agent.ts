@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
+import { ToolRegistry } from './tool-registry.js';
+import type { Brain } from './brain.js';
+import type { NexusConfig } from './config/schema.js';
 import { logger } from './logger.js';
 
 // ── Redis key patterns ──────────────────────────────────────────────
@@ -50,10 +54,22 @@ export interface SubAgentMessage {
 export class MultiAgentManager {
   private redis: Redis;
   private maxConcurrent: number;
+  private brain?: Brain;
+  private toolRegistry?: ToolRegistry;
+  private nexusConfig?: NexusConfig;
 
-  constructor(config: { redis: Redis; maxConcurrent?: number }) {
+  constructor(config: {
+    redis: Redis;
+    maxConcurrent?: number;
+    brain?: Brain;
+    toolRegistry?: ToolRegistry;
+    nexusConfig?: NexusConfig;
+  }) {
     this.redis = config.redis;
     this.maxConcurrent = config.maxConcurrent ?? 2; // MULTI-06: VPS resource constraint
+    this.brain = config.brain;
+    this.toolRegistry = config.toolRegistry;
+    this.nexusConfig = config.nexusConfig;
   }
 
   // ── Key helpers ──────────────────────────────────────────────────
@@ -293,5 +309,111 @@ export class MultiAgentManager {
 
     await this.updateStatus(sessionId, { status: 'cancelled' });
     return true;
+  }
+
+  // ── Sub-agent execution ──────────────────────────────────────────
+
+  /**
+   * Execute a sub-agent session through SdkAgentRunner.
+   *
+   * MULTI-07 (DAG topology): Sub-agents CANNOT spawn further sub-agents.
+   * This is enforced by building a restricted ToolRegistry that excludes all
+   * sessions_* tools, and by setting a system prompt that explicitly states
+   * the sub-agent cannot create sessions.
+   *
+   * MULTI-05: Turn limit (maxTurns) and token budget (maxTokens) are
+   * enforced via the SdkAgentRunner config inherited from the session.
+   */
+  async executeSubAgent(sessionId: string): Promise<void> {
+    const session = await this.get(sessionId);
+    if (!session) throw new Error(`Session ${sessionId} not found`);
+    if (!this.brain || !this.toolRegistry) {
+      throw new Error('Execution dependencies not configured (brain, toolRegistry required)');
+    }
+
+    // Update status to running
+    await this.updateStatus(sessionId, { status: 'running', updatedAt: Date.now() });
+
+    try {
+      // MULTI-07: Build a restricted ToolRegistry — exclude sessions_* tools
+      // to prevent fork bombs (sub-agents cannot spawn further sub-agents)
+      const restrictedRegistry = new ToolRegistry();
+      const allToolNames = this.toolRegistry.list();
+      for (const name of allToolNames) {
+        if (name.startsWith('sessions_')) continue; // DAG enforcement
+        const tool = this.toolRegistry.get(name);
+        if (tool) {
+          restrictedRegistry.register(tool);
+        }
+      }
+
+      // Build context from session history (messages sent to this sub-agent)
+      const history = await this.getHistory(sessionId);
+      const historyContext = history.length > 0
+        ? history.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n\n')
+        : '';
+
+      const taskWithContext = historyContext
+        ? `## Prior Context\n${historyContext}\n\n## Task\n${session.task}`
+        : session.task;
+
+      // Create SdkAgentRunner with restricted config
+      // MULTI-05: maxTurns and maxTokens from session (hard-capped at 8 turns / 50k tokens)
+      const runner = new SdkAgentRunner({
+        brain: this.brain,
+        toolRegistry: restrictedRegistry,
+        nexusConfig: this.nexusConfig,
+        maxTurns: session.maxTurns,
+        maxTokens: session.maxTokens,
+        tier: 'sonnet',
+        stream: false, // Sub-agents don't stream to channels
+        systemPromptOverride: `You are a focused sub-agent working on a specific task. Complete the task efficiently and provide a clear, concise result. You do NOT have access to session management tools — you cannot spawn further sub-agents. Focus only on the task assigned to you.`,
+      });
+
+      const result = await runner.run(taskWithContext);
+
+      // Store result in session state
+      await this.updateStatus(sessionId, {
+        status: result.success ? 'completed' : 'failed',
+        result: result.answer,
+        error: result.success ? undefined : result.answer,
+        turns: result.turns,
+        inputTokens: result.totalInputTokens,
+        outputTokens: result.totalOutputTokens,
+        updatedAt: Date.now(),
+      });
+
+      // Add the result as an assistant message in history
+      await this.addMessage(sessionId, {
+        role: 'assistant',
+        content: result.answer,
+        timestamp: Date.now(),
+      });
+
+      logger.info('MultiAgent: sub-agent completed', {
+        sessionId: sessionId.slice(0, 8),
+        success: result.success,
+        turns: result.turns,
+        inputTokens: result.totalInputTokens,
+        outputTokens: result.totalOutputTokens,
+      });
+    } catch (err: any) {
+      await this.updateStatus(sessionId, {
+        status: 'failed',
+        error: err.message,
+        updatedAt: Date.now(),
+      });
+
+      await this.addMessage(sessionId, {
+        role: 'assistant',
+        content: `Sub-agent error: ${err.message}`,
+        timestamp: Date.now(),
+      });
+
+      logger.error('MultiAgent: sub-agent execution failed', {
+        sessionId: sessionId.slice(0, 8),
+        error: err.message,
+      });
+    }
   }
 }

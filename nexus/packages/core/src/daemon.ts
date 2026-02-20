@@ -68,6 +68,7 @@ interface DaemonConfig {
   webhookManager?: WebhookManager;
   gmailProvider?: GmailProvider;
   multiAgentManager?: MultiAgentManager;
+  multiAgentQueue?: Queue;
   intervalMs: number;
 }
 
