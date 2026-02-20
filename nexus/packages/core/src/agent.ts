@@ -132,6 +132,12 @@ export interface AgentResult {
   totalOutputTokens: number;
   toolCalls: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }>;
   stoppedReason: 'complete' | 'max_turns' | 'max_tokens' | 'timeout' | 'error';
+  /** Time-to-first-byte in milliseconds (SDK mode only) */
+  ttfbMs?: number;
+  /** Number of tool calls made during this session */
+  toolCallCount?: number;
+  /** Total duration of the agent run in milliseconds */
+  durationMs?: number;
 }
 
 interface AgentAction {
