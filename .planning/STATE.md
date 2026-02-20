@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 4 in progress (Voice Pipeline). Plan 01 complete, Plans 02-04 remaining.
+**Current focus:** Phase 4 in progress (Voice Pipeline). Plans 01-02 complete, Plans 03-04 remaining.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 4 of 6 (Voice Pipeline)
-Plan: 1 of 4 in phase
+Plan: 2 of 4 in phase
 Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-04-01-PLAN.md (Voice WebSocket Gateway)
+Last activity: 2026-02-20 — Completed v2.0-04-02-PLAN.md (Deepgram STT Integration)
 
-Progress: [████████████░░░░░░░░░░] 12/22 (~55%)
+Progress: [█████████████░░░░░░░░░] 13/22 (~59%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12 (v2.0)
-- Average duration: 5.6min
-- Total execution time: 60min
+- Total plans completed: 13 (v2.0)
+- Average duration: 5.3min
+- Total execution time: 63min
 
 ## Accumulated Context
 
@@ -94,6 +94,10 @@ v2.0 Phase 4 decisions:
 - [Voice]: Keep-alive 25s ping interval (under typical 30s proxy timeout)
 - [Voice]: Any state can reset to idle (graceful cancel/error recovery)
 - [Voice]: Binary audio only processed in 'listening' state; other states ignore frames
+- [Voice]: 'voice' source type uses `as any` cast — Intent union update deferred
+- [Voice]: speechFinal triggers AI processing (not just isFinal)
+- [Voice]: Deepgram auth via Token header (more secure than query param)
+- [Voice]: Stop-listening transitions to 'processing' only if transcript was received
 
 ### Pending Todos
 
@@ -111,5 +115,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-04-01-PLAN.md (Voice WebSocket Gateway)
+Stopped at: Completed v2.0-04-02-PLAN.md (Deepgram STT Integration)
 Resume file: None
