@@ -539,13 +539,12 @@ Plans:
   3. User can configure Deepgram and Cartesia API keys in the web UI Settings page, and voice mode activates only when both keys are present
   4. Voice sessions maintain stable WebSocket connections with automatic reconnection on network interruptions (no manual page refresh needed)
   5. A latency dashboard (or log) shows timestamps at each pipeline stage: mic capture, STT transcript, LLM first token, TTS first audio, browser playback
-**Plans**: 4 plans (estimated)
-
+**Plans**: 4 plans in 3 waves
 Plans:
-- [ ] v2.0-04-01: Voice WebSocket gateway — /ws/voice binary endpoint, VoiceSession lifecycle, connection state machine, keep-alive
-- [ ] v2.0-04-02: STT integration — DeepgramRelay class, persistent WebSocket, audio relay, transcript events, daemon.addToInbox() wiring
-- [ ] v2.0-04-03: TTS integration — CartesiaRelay class, text-to-speech streaming, context_id continuity, audio relay back to browser
-- [ ] v2.0-04-04: Voice UI + instrumentation — push-to-talk component, MediaRecorder capture, AudioWorklet playback, API key settings, latency pipeline timestamps
+- [ ] v2.0-04-01-PLAN.md — Voice WebSocket gateway: /ws/voice binary endpoint, VoiceSession state machine, VoiceGateway class, voice config schema [Wave 1]
+- [ ] v2.0-04-02-PLAN.md — STT integration: DeepgramRelay class, persistent WebSocket to Deepgram, audio relay, transcript events, daemon.addToInbox() wiring [Wave 2]
+- [ ] v2.0-04-03-PLAN.md — TTS integration: CartesiaRelay class, text-to-speech streaming, context_id continuity, sentence buffering, audio relay back to browser [Wave 2]
+- [ ] v2.0-04-04-PLAN.md — Voice UI + instrumentation: VoiceButton push-to-talk component, MediaRecorder capture, AudioContext playback, API key settings, latency pipeline timestamps [Wave 3]
 
 ### Phase 5: Live Canvas + LivHub
 **Goal**: The AI can generate and update interactive visual content (React components, charts, diagrams) displayed alongside the chat, and users can discover and manage skills through an improved marketplace
