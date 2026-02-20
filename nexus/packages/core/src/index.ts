@@ -139,6 +139,20 @@ async function main() {
   await channelManager.init(redis);
   logger.info('ChannelManager initialized');
 
+  // Configure Gmail provider with OAuth credentials from env
+  if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
+    const gmailProvider = channelManager.getProvider('gmail') as any;
+    if (gmailProvider?.updateConfig) {
+      await gmailProvider.updateConfig({
+        enabled: true,
+        gmailClientId: process.env.GMAIL_CLIENT_ID,
+        gmailClientSecret: process.env.GMAIL_CLIENT_SECRET,
+        gmailPollIntervalSec: parseInt(process.env.GMAIL_POLL_INTERVAL_SEC || '60'),
+      });
+      logger.info('GmailProvider configured from env vars');
+    }
+  }
+
   // User session manager for per-user preferences (thinking, verbose, model)
   const userSessionManager = new UserSessionManager(redis);
   logger.info('UserSessionManager initialized');
