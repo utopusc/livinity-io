@@ -1,10 +1,13 @@
 /**
- * WhatsApp Command Handler
- * Handles slash commands like /think, /verbose, /model, /help, /reset
+ * Chat Command Handler
+ * Handles slash commands like /think, /verbose, /model, /help, /reset, /new, /compact, /activation
+ * Works identically across Telegram, Discord, and WhatsApp.
  */
 
 import { logger } from './logger.js';
 import type { UserSessionManager } from './user-session.js';
+import type { SessionManager } from './session-manager.js';
+import type Redis from 'ioredis';
 import {
   normalizeThinkLevel,
   normalizeVerboseLevel,
@@ -23,6 +26,12 @@ export interface CommandContext {
   currentThink?: ThinkLevel;
   currentVerbose?: VerboseLevel;
   currentModel?: ModelTier;
+  /** Session manager for conversation session reset (/new) */
+  sessionManager?: SessionManager;
+  /** Channel/chat ID for activation mode (/activation) */
+  channelId?: string;
+  /** Redis instance for reading/writing activation settings */
+  redis?: Redis;
 }
 
 export interface CommandResult {
@@ -83,6 +92,19 @@ export async function handleCommand(
     case 'sıfırla':
       return handleReset(ctx);
 
+    case 'new':
+    case 'yeni':
+      return handleNew(args, ctx);
+
+    case 'compact':
+    case 'sikistir':
+    case 'sıkıştır':
+      return handleCompact();
+
+    case 'activation':
+    case 'aktivasyon':
+      return handleActivation(args, ctx);
+
     case 'status':
     case 'durum':
       return handleStatus(ctx);
@@ -125,12 +147,19 @@ Tiers: flash | haiku | sonnet | opus
 • sonnet - Balanced (default)
 • opus - Most powerful, complex tasks
 
+*Session*
+\`/new [model]\` - Start a new conversation (optionally switch model)
+\`/compact\` - Compact conversation context (coming soon)
+
+*Group Settings*
+\`/activation [mention|always]\` - Set group trigger mode
+
 *Other*
 \`/status\` - Show current settings
-\`/reset\` - Reset settings
+\`/reset\` - Reset all preferences
 \`/stats\` - Usage statistics
 
-💡 Example: \`/think high\` or \`/verbose full\``;
+💡 Examples: \`/think high\`, \`/verbose full\`, \`/new opus\``;
 
   return { handled: true, response };
 }
@@ -241,6 +270,111 @@ Tiers: flash | haiku | sonnet | opus`;
   };
 }
 
+async function handleNew(args: string[], ctx: CommandContext): Promise<CommandResult> {
+  const validTiers: ModelTier[] = ['flash', 'haiku', 'sonnet', 'opus'];
+  const tierDescriptions: Record<ModelTier, string> = {
+    none: 'AI disabled',
+    flash: 'Fastest - for simple tasks',
+    haiku: 'Light - for short responses',
+    sonnet: 'Balanced - general use (default)',
+    opus: 'Most powerful - for complex analysis',
+  };
+
+  // Reset conversation session if session manager is available
+  if (ctx.sessionManager) {
+    await ctx.sessionManager.resetSession(ctx.jid);
+  }
+
+  // Reset user preferences to defaults
+  await ctx.userSession.reset(ctx.jid);
+
+  // Optionally switch model tier
+  let newTier: ModelTier = 'sonnet';
+  if (args.length > 0) {
+    const requestedTier = args[0].toLowerCase() as ModelTier;
+    if (validTiers.includes(requestedTier)) {
+      newTier = requestedTier;
+      await ctx.userSession.setModelTier(ctx.jid, newTier);
+    } else {
+      return {
+        handled: true,
+        response: `❌ Invalid model tier: "${args[0]}"\n\nValid tiers: ${validTiers.join(' | ')}\n\nSession was still reset with default model (sonnet).`,
+        modelTier: 'sonnet',
+      };
+    }
+  }
+
+  const desc = tierDescriptions[newTier];
+  return {
+    handled: true,
+    response: `🆕 New conversation started!\n\nModel: *${newTier}* - ${desc}\n\nAll settings reset. Context cleared.`,
+    modelTier: newTier,
+    thinkLevel: 'medium',
+    verboseLevel: 'on',
+  };
+}
+
+async function handleCompact(): Promise<CommandResult> {
+  return {
+    handled: true,
+    response: `📦 *Compact*\n\nContext compaction will be available in a future update.\n\nFor now, use \`/new\` to start a fresh conversation.`,
+  };
+}
+
+const ACTIVATION_REDIS_PREFIX = 'nexus:activation:';
+
+async function handleActivation(args: string[], ctx: CommandContext): Promise<CommandResult> {
+  if (!ctx.redis) {
+    return {
+      handled: true,
+      response: `❌ Activation mode is not available (no Redis connection).`,
+    };
+  }
+
+  if (!ctx.channelId) {
+    return {
+      handled: true,
+      response: `❌ Activation mode is only available in group chats.`,
+    };
+  }
+
+  const redisKey = `${ACTIVATION_REDIS_PREFIX}${ctx.channelId}`;
+  const validModes = ['mention', 'always'];
+
+  if (args.length === 0) {
+    // Show current mode
+    const current = await ctx.redis.get(redisKey) || 'mention';
+    return {
+      handled: true,
+      response: `📡 *Activation Mode*\n\nCurrent: *${current}*\n\n• \`mention\` - Only respond when @mentioned (default)\n• \`always\` - Respond to all messages in group\n\nTo change: \`/activation <mode>\``,
+    };
+  }
+
+  const mode = args[0].toLowerCase();
+  if (!validModes.includes(mode)) {
+    return {
+      handled: true,
+      response: `❌ Invalid mode: "${args[0]}"\n\nValid modes: mention | always`,
+    };
+  }
+
+  if (mode === 'mention') {
+    // Default mode — remove key
+    await ctx.redis.del(redisKey);
+  } else {
+    await ctx.redis.set(redisKey, mode);
+  }
+
+  const modeDesc = mode === 'always'
+    ? 'Responding to all messages in this group'
+    : 'Only responding when @mentioned';
+
+  return {
+    handled: true,
+    response: `✅ Activation mode: *${mode}*\n${modeDesc}`,
+  };
+}
+
 async function handleReset(ctx: CommandContext): Promise<CommandResult> {
   await ctx.userSession.reset(ctx.jid);
 
@@ -311,6 +445,9 @@ export function listCommands(): string[] {
     '/think',
     '/verbose',
     '/model',
+    '/new',
+    '/compact',
+    '/activation',
     '/status',
     '/reset',
     '/stats',
