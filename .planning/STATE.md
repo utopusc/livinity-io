@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 1 complete. Ready for Phase 2.
+**Current focus:** Phase 2 in progress. Webhook receiver infrastructure complete.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 1 of 6 (Stability & Security Foundation) — COMPLETE
-Plan: 4 of 4 in phase (all complete)
-Status: Phase complete
-Last activity: 2026-02-20 — Completed v2.0-01-04-PLAN.md (Usage Tracking & Dashboard)
+Phase: 2 of 6 (Automation Infrastructure)
+Plan: 1 of 4 in phase (complete)
+Status: In progress
+Last activity: 2026-02-20 — Completed v2.0-02-01-PLAN.md (Webhook Receiver Infrastructure)
 
-Progress: [████░░░░░░░░░░░░░░░░░░] 4/22 (~18%)
+Progress: [█████░░░░░░░░░░░░░░░░░] 5/22 (~23%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4 (v2.0)
-- Average duration: 7.5min
-- Total execution time: 27min
+- Total plans completed: 5 (v2.0)
+- Average duration: 6.8min
+- Total execution time: 31min
 
 ## Accumulated Context
 
@@ -61,6 +61,12 @@ v2.0 Phase 1 decisions:
 - [Usage]: Daily usage keys have 90-day TTL for automatic cleanup
 - [Usage]: tRPC proxy routes for usage dashboard (consistent with existing patterns)
 
+v2.0 Phase 2 decisions:
+- [Webhook]: Route registered before express.json() and requireApiKey — uses own HMAC-SHA256 auth
+- [Webhook]: UUID validation on route IDs to avoid intercepting /api/webhook/git
+- [Webhook]: Duplicate deliveries return HTTP 200 to prevent external service retries
+- [Webhook]: BullMQ webhook worker concurrency 2 (matches memory extraction pattern)
+
 ### Pending Todos
 
 None.
@@ -71,9 +77,10 @@ None.
 - Memory service empty results — needs debugging
 - SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write (SDK issue #115)
 - SDK token visibility in subscription mode — MEDIUM confidence, verify before Phase 3 usage schema
+- Pre-existing TS errors in channels/types.ts (gmail channel type) — does not block builds
 
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-01-04-PLAN.md (Usage Tracking & Dashboard) — Phase 1 COMPLETE
-Resume file: None (begin Phase 2 planning)
+Stopped at: Completed v2.0-02-01-PLAN.md (Webhook Receiver Infrastructure)
+Resume file: None
