@@ -116,6 +116,11 @@ export async function handleCommand(
     case 'istatistik':
       return handleStats(ctx);
 
+    case 'usage':
+    case 'kullanim':
+    case 'kullanım':
+      return handleUsage(args, ctx);
+
     default:
       // Not a recognized command, let it pass to the agent
       return null;
@@ -157,12 +162,19 @@ Tiers: flash | haiku | sonnet | opus
 *Group Settings*
 \`/activation [mention|always]\` - Set group trigger mode
 
+*Usage Tracking*
+\`/usage\` - Show token usage summary
+\`/usage off\` - Hide usage display
+\`/usage tokens\` - Show token counts
+\`/usage full\` - Show all metrics
+\`/usage cost\` - Show cost estimates
+
 *Other*
 \`/status\` - Show current settings
 \`/reset\` - Reset all preferences
 \`/stats\` - Usage statistics
 
-💡 Examples: \`/think high\`, \`/verbose full\`, \`/new opus\``;
+💡 Examples: \`/think high\`, \`/verbose full\`, \`/new opus\`, \`/usage cost\``;
 
   return { handled: true, response };
 }
@@ -431,6 +443,64 @@ async function handleStats(ctx: CommandContext): Promise<CommandResult> {
   return { handled: true, response };
 }
 
+import { estimateCost, type UsageDisplayMode } from './usage-tracker.js';
+
+async function handleUsage(args: string[], ctx: CommandContext): Promise<CommandResult> {
+  if (!ctx.usageTracker) {
+    return {
+      handled: true,
+      response: `Usage tracking is not available.`,
+    };
+  }
+
+  const validModes: UsageDisplayMode[] = ['off', 'tokens', 'full', 'cost'];
+  const subcommand = args[0]?.toLowerCase();
+
+  // Handle display mode changes
+  if (subcommand && validModes.includes(subcommand as UsageDisplayMode)) {
+    await ctx.usageTracker.setDisplayMode(ctx.jid, subcommand as UsageDisplayMode);
+    const modeDescriptions: Record<UsageDisplayMode, string> = {
+      off: 'Usage display hidden',
+      tokens: 'Showing token counts after each response',
+      full: 'Showing all metrics (tokens, TTFB, cost)',
+      cost: 'Showing cost estimates after each response',
+    };
+    return {
+      handled: true,
+      response: `Usage display: *${subcommand}*\n${modeDescriptions[subcommand as UsageDisplayMode]}`,
+    };
+  }
+
+  // Default: show usage summary
+  const summary = await ctx.usageTracker.getUserSummary(ctx.jid);
+  const { currentSession, today, cumulative } = summary;
+
+  const totalCost = estimateCost('sonnet', cumulative.inputTokens, cumulative.outputTokens);
+
+  let response = `*Token Usage*\n\n`;
+
+  if (currentSession) {
+    response += `*Last Session*\n`;
+    response += `Input: ${currentSession.inputTokens.toLocaleString()} | Output: ${currentSession.outputTokens.toLocaleString()}\n`;
+    response += `Turns: ${currentSession.turns} | Tools: ${currentSession.toolCalls} | TTFB: ${currentSession.ttfbMs}ms\n\n`;
+  }
+
+  response += `*Today* (${today.date})\n`;
+  response += `Input: ${today.inputTokens.toLocaleString()} | Output: ${today.outputTokens.toLocaleString()}\n`;
+  response += `Sessions: ${today.sessions} | Turns: ${today.turns}\n`;
+  response += `Est. cost: $${today.estimatedCostUsd.toFixed(2)}\n\n`;
+
+  response += `*All Time*\n`;
+  response += `Input: ${cumulative.inputTokens.toLocaleString()} | Output: ${cumulative.outputTokens.toLocaleString()}\n`;
+  response += `Sessions: ${cumulative.sessions} | Turns: ${cumulative.turns} | Tools: ${cumulative.toolCalls}\n`;
+  response += `Est. cost: $${totalCost.toFixed(2)}\n\n`;
+
+  response += `Display mode: *${summary.displayMode}*\n`;
+  response += `Set with: \`/usage off|tokens|full|cost\``;
+
+  return { handled: true, response };
+}
+
 /**
  * Check if a message is a slash command.
  */
@@ -451,6 +521,7 @@ export function listCommands(): string[] {
     '/new',
     '/compact',
     '/activation',
+    '/usage',
     '/status',
     '/reset',
     '/stats',

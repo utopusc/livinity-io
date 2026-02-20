@@ -1043,6 +1043,51 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── Usage Tracking API ─────────────────────────────────────────
+
+  /** Get usage summary for a specific user */
+  app.get('/api/usage/summary/:userId', async (req, res) => {
+    if (!usageTracker) {
+      res.status(503).json({ error: 'Usage tracking not configured' });
+      return;
+    }
+    try {
+      const summary = await usageTracker.getUserSummary(req.params.userId);
+      res.json(summary);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get daily usage for a user over a range of days */
+  app.get('/api/usage/daily/:userId', async (req, res) => {
+    if (!usageTracker) {
+      res.status(503).json({ error: 'Usage tracking not configured' });
+      return;
+    }
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const daily = await usageTracker.getDailyRange(req.params.userId, Math.min(days, 90));
+      res.json({ daily });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get overall usage overview across all users */
+  app.get('/api/usage/overview', async (_req, res) => {
+    if (!usageTracker) {
+      res.status(503).json({ error: 'Usage tracking not configured' });
+      return;
+    }
+    try {
+      const overview = await usageTracker.getOverview();
+      res.json(overview);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {

@@ -1059,4 +1059,71 @@ export default router({
 			return await response.json()
 		}),
 
+	// ── Usage Tracking ─────────────────────────────────────────
+
+	/** Get overall usage overview */
+	getUsageOverview: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/usage/overview`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			return {totalInputTokens: 0, totalOutputTokens: 0, totalSessions: 0, totalTurns: 0, estimatedCostUsd: 0, activeUsers: 0}
+		}
+		return await response.json() as {
+			totalInputTokens: number
+			totalOutputTokens: number
+			totalSessions: number
+			totalTurns: number
+			estimatedCostUsd: number
+			activeUsers: number
+		}
+	}),
+
+	/** Get daily usage for a user */
+	getUsageDaily: privateProcedure
+		.input(z.object({userId: z.string(), days: z.number().int().min(1).max(90).optional()}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const days = input.days || 30
+			const response = await fetch(`${nexusUrl}/api/usage/daily/${encodeURIComponent(input.userId)}?days=${days}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				return {daily: []}
+			}
+			return await response.json() as {
+				daily: Array<{
+					date: string
+					userId: string
+					inputTokens: number
+					outputTokens: number
+					sessions: number
+					turns: number
+					toolCalls: number
+					avgTtfbMs: number
+					estimatedCostUsd: number
+				}>
+			}
+		}),
+
+	/** Get usage summary for a user */
+	getUsageSummary: privateProcedure
+		.input(z.object({userId: z.string()}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/usage/summary/${encodeURIComponent(input.userId)}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				return {
+					currentSession: null,
+					today: {date: '', userId: '', inputTokens: 0, outputTokens: 0, sessions: 0, turns: 0, toolCalls: 0, avgTtfbMs: 0, estimatedCostUsd: 0},
+					cumulative: {inputTokens: 0, outputTokens: 0, sessions: 0, turns: 0, toolCalls: 0, firstSeen: 0, lastSeen: 0},
+					displayMode: 'off' as const,
+				}
+			}
+			return await response.json()
+		}),
+
 })
