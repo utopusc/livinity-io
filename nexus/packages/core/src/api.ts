@@ -26,6 +26,7 @@ import type { DmPairingManager } from './dm-pairing.js';
 import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 import type { UsageTracker } from './usage-tracker.js';
+import type { WebhookManager } from './webhook-manager.js';
 
 interface ApiDeps {
   daemon: Daemon;
@@ -43,6 +44,7 @@ interface ApiDeps {
   skillLoader?: SkillLoader;
   dmPairingManager?: DmPairingManager;
   usageTracker?: UsageTracker;
+  webhookManager?: WebhookManager;
 }
 
 
