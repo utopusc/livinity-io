@@ -465,7 +465,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 
 ### v2.0 Phases
 
-- [ ] **Phase 1: Stability & Security Foundation** - Process hardening, DM pairing security, chat commands, usage tracking
+- [x] **Phase 1: Stability & Security Foundation** - Process hardening, DM pairing security, chat commands, usage tracking ✓
 - [ ] **Phase 2: Automation Infrastructure** - Webhook triggers with HMAC auth, Gmail as a channel provider
 - [ ] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration
 - [ ] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS
@@ -485,10 +485,10 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] v2.0-01-01-PLAN.md — Process stability: global error handlers, BullMQ repeatable crons, Redis circuit breaker, PM2 config, grammy offset persistence, agent turn cap [Wave 1]
-- [ ] v2.0-01-02-PLAN.md — DM pairing security: activation code flow, TTL/rate limit, admin approval UI, Redis allowlist, per-channel DM policy, group bypass [Wave 2]
-- [ ] v2.0-01-03-PLAN.md — Chat commands: /new, /compact (stub), /activation, cross-channel parity, pre-agent command parsing [Wave 2]
-- [ ] v2.0-01-04-PLAN.md — Usage tracking: per-session metrics, Redis counters, /usage command, TTFB tracking, Settings dashboard [Wave 3]
+- [x] v2.0-01-01-PLAN.md — Process stability: global error handlers, BullMQ repeatable crons, Redis circuit breaker, PM2 config, grammy offset persistence, agent turn cap [Wave 1]
+- [x] v2.0-01-02-PLAN.md — DM pairing security: activation code flow, TTL/rate limit, admin approval UI, Redis allowlist, per-channel DM policy, group bypass [Wave 2]
+- [x] v2.0-01-03-PLAN.md — Chat commands: /new, /compact (stub), /activation, cross-channel parity, pre-agent command parsing [Wave 2]
+- [x] v2.0-01-04-PLAN.md — Usage tracking: per-session metrics, Redis counters, /usage command, TTFB tracking, Settings dashboard [Wave 3]
 
 ### Phase 2: Automation Infrastructure
 **Goal**: External services can trigger AI agent tasks via authenticated webhooks, and the AI can read, reply, search, and manage Gmail as a full communication channel
@@ -585,7 +585,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Stability & Security Foundation | 0/4 | Planning complete | - |
+| 1. Stability & Security Foundation | 4/4 | Complete | 2026-02-20 |
 | 2. Automation Infrastructure | 0/4 | Not started | - |
 | 3. Intelligence Enhancements | 0/3 | Not started | - |
 | 4. Voice Pipeline | 0/4 | Not started | - |
