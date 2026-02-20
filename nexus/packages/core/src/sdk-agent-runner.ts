@@ -195,15 +195,17 @@ export class SdkAgentRunner extends EventEmitter {
     }
 
     // Build system prompt
-    let systemPrompt = this.config.systemPromptOverride || `You are Nexus, an autonomous AI assistant. You manage a Linux server and interact with users via WhatsApp, Telegram, Discord, and a web UI.
+    let systemPrompt = this.config.systemPromptOverride || `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.
 
-You have access to tools for shell commands, Docker management, file operations, web browsing, memory, and messaging. Use them to accomplish the user's task.
+You have access to MCP tools (prefixed with mcp__nexus-tools__) for shell commands, Docker management, file operations, web browsing, memory, and messaging.
 
-Rules:
-1. Think before acting
-2. If a tool fails, try a different approach
-3. When the task is complete, provide your final answer
-4. Be concise in your final answer`;
+CRITICAL RULES:
+1. ONLY do what the user explicitly asks. Do NOT invent tasks, repeat previous work, or act on conversation history unless the user specifically requests it.
+2. If the user sends a greeting or simple message, respond conversationally — do NOT run tools.
+3. Conversation history (if provided) is CONTEXT ONLY. Do NOT re-execute tasks from history.
+4. Be concise. For simple questions, respond in 1-2 sentences without using tools.
+5. If a tool fails, try ONE alternative approach, then report the issue.
+6. When the task is complete, provide your final answer immediately — do not keep exploring.`;
 
     if (this.config.contextPrefix) {
       task = `${this.config.contextPrefix}\n\n## Current Task\n${task}`;
@@ -250,6 +252,17 @@ Rules:
               if (block.type === 'text' && block.text) {
                 this.emitEvent({ type: 'chunk', turn: turns, data: block.text });
                 answer = block.text;
+
+                // Send the AI's own reasoning text to channels as a live update
+                if (this.config.onAction && block.text.trim()) {
+                  try {
+                    this.config.onAction({
+                      type: 'thinking',
+                      thought: block.text,
+                      turn: turns,
+                    });
+                  } catch { /* callback errors don't break the loop */ }
+                }
               } else if (block.type === 'tool_use') {
                 this.emitEvent({
                   type: 'tool_call',
@@ -258,17 +271,6 @@ Rules:
                 });
               }
             }
-          }
-
-          // Fire onAction callback
-          if (this.config.onAction && answer) {
-            try {
-              this.config.onAction({
-                type: 'thinking',
-                thought: answer.slice(0, 200),
-                turn: turns,
-              });
-            } catch { /* callback errors don't break the loop */ }
           }
         } else if (message.type === 'result') {
           // Final result from the SDK

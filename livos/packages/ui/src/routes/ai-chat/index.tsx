@@ -181,7 +181,7 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 				{(!isExecuting || steps.length === 0) && (
 					<div className='flex items-start gap-2.5 text-body-sm text-text-secondary'>
 						<IconLoader2 size={14} className='mt-0.5 flex-shrink-0 animate-spin text-violet-400' />
-						<span>Thinking through the best approach...</span>
+						<span>Thinking...</span>
 						<span className='ml-auto flex-shrink-0 text-caption text-text-tertiary'>{elapsed}s</span>
 					</div>
 				)}

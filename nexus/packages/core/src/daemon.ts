@@ -269,9 +269,13 @@ export class Daemon {
           await this.config.heartbeatRunner.setLastRecipient(item.from);
         }
 
-        // Fetch conversation history for WhatsApp messages
-        if (item.source === 'whatsapp' && item.from) {
-          item.conversationHistory = await this.getWhatsAppHistory(item.from);
+        // Fetch conversation history for WhatsApp and channel messages
+        if (item.from) {
+          if (item.source === 'whatsapp') {
+            item.conversationHistory = await this.getWhatsAppHistory(item.from);
+          } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+            item.conversationHistory = await this.getChannelHistory(item.source, item.from);
+          }
         }
 
         // Handle slash commands (/think, /verbose, /model, /help, /reset, /status)
@@ -321,9 +325,13 @@ export class Daemon {
           await this.sendWhatsAppResponse(item, skillResult.message);
           await this.sendChannelResponse(item, skillResult.message);
 
-          // Save conversation turn for WhatsApp history
-          if (item.source === 'whatsapp' && item.from) {
-            await this.saveWhatsAppTurn(item.from, item.message, skillResult.message);
+          // Save conversation turn for history
+          if (item.from) {
+            if (item.source === 'whatsapp') {
+              await this.saveWhatsAppTurn(item.from, item.message, skillResult.message);
+            } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+              await this.saveChannelTurn(item.source, item.from, item.message, skillResult.message);
+            }
           }
 
           logger.info('Inbox processed (skill)', { skill: matchedSkill.meta.name, success: skillResult.success });
@@ -362,9 +370,13 @@ export class Daemon {
         await this.sendWhatsAppResponse(item, responseText);
         await this.sendChannelResponse(item, responseText);
 
-        // Save conversation turn for WhatsApp history
-        if (item.source === 'whatsapp' && item.from) {
-          await this.saveWhatsAppTurn(item.from, item.message, responseText);
+        // Save conversation turn for history
+        if (item.from) {
+          if (item.source === 'whatsapp') {
+            await this.saveWhatsAppTurn(item.from, item.message, responseText);
+          } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+            await this.saveChannelTurn(item.source, item.from, item.message, responseText);
+          }
         }
       } catch (err) {
         // Per-item error handling — ALWAYS send a response to the user
@@ -450,9 +462,13 @@ export class Daemon {
         await this.config.heartbeatRunner.setLastRecipient(item.from);
       }
 
-      // Fetch conversation history for WhatsApp messages
-      if (item.source === 'whatsapp' && item.from) {
-        item.conversationHistory = await this.getWhatsAppHistory(item.from);
+      // Fetch conversation history for WhatsApp and channel messages
+      if (item.from) {
+        if (item.source === 'whatsapp') {
+          item.conversationHistory = await this.getWhatsAppHistory(item.from);
+        } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+          item.conversationHistory = await this.getChannelHistory(item.source, item.from);
+        }
       }
 
       // Handle slash commands (/think, /verbose, /model, /help, /reset, /status)
@@ -502,9 +518,13 @@ export class Daemon {
         await this.sendWhatsAppResponse(item, skillResult.message);
         await this.sendChannelResponse(item, skillResult.message);
 
-        // Save conversation turn for WhatsApp history
-        if (item.source === 'whatsapp' && item.from) {
-          await this.saveWhatsAppTurn(item.from, item.message, skillResult.message);
+        // Save conversation turn for history
+        if (item.from) {
+          if (item.source === 'whatsapp') {
+            await this.saveWhatsAppTurn(item.from, item.message, skillResult.message);
+          } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+            await this.saveChannelTurn(item.source, item.from, item.message, skillResult.message);
+          }
         }
 
         logger.info('Inbox processed (skill)', { skill: matchedSkill.meta.name, success: skillResult.success });
@@ -543,9 +563,13 @@ export class Daemon {
       await this.sendWhatsAppResponse(item, responseText);
       await this.sendChannelResponse(item, responseText);
 
-      // Save conversation turn for WhatsApp history
-      if (item.source === 'whatsapp' && item.from) {
-        await this.saveWhatsAppTurn(item.from, item.message, responseText);
+      // Save conversation turn for history
+      if (item.from) {
+        if (item.source === 'whatsapp') {
+          await this.saveWhatsAppTurn(item.from, item.message, responseText);
+        } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+          await this.saveChannelTurn(item.source, item.from, item.message, responseText);
+        }
       }
     } catch (err) {
       // Per-item error handling — ALWAYS send a response to the user
@@ -1838,6 +1862,7 @@ ${task}`;
             case 'stop': {
               if (!id) return { success: false, output: '', error: 'Subagent ID required.' };
               this.config.loopRunner.stopOne(id);
+              await this.config.subagentManager.update(id, { status: 'stopped' });
               return { success: true, output: `Loop stopped for ${id}` };
             }
             case 'list': {
@@ -2250,6 +2275,49 @@ ${task}`;
     }
   }
 
+  /** Fetch recent channel conversation history (Telegram, Discord, etc.) */
+  private async getChannelHistory(channel: string, chatId: string): Promise<string> {
+    try {
+      const key = `nexus:${channel}_history:${chatId}`;
+      const items = await this.config.redis.lrange(key, 0, 19); // last 10 turns (20 entries)
+      if (items.length === 0) return '';
+
+      const entries: Array<{ role: string; text: string; ts: number }> = [];
+      for (const item of items) {
+        try {
+          entries.push(JSON.parse(item));
+        } catch { /* skip malformed */ }
+      }
+
+      // Sort oldest first
+      entries.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+
+      return entries
+        .map((e) => e.role === 'assistant' ? `Nexus: ${e.text}` : `User: ${e.text}`)
+        .filter(Boolean)
+        .join('\n');
+    } catch (err) {
+      logger.error('Failed to fetch channel history', { channel, error: formatErrorMessage(err) });
+      return '';
+    }
+  }
+
+  /** Save a conversation turn to channel history */
+  private async saveChannelTurn(channel: string, chatId: string, userMsg: string, response: string) {
+    try {
+      const key = `nexus:${channel}_history:${chatId}`;
+      await this.config.redis.lpush(key,
+        JSON.stringify({ role: 'assistant', text: response.slice(0, 2000), ts: Date.now() }),
+        JSON.stringify({ role: 'user', text: userMsg.slice(0, 500), ts: Date.now() }),
+      );
+      // Keep only last 20 entries (10 turns) and set TTL of 24h
+      await this.config.redis.ltrim(key, 0, 19);
+      await this.config.redis.expire(key, 86400);
+    } catch (err) {
+      logger.error('Failed to save channel turn', { channel, error: formatErrorMessage(err) });
+    }
+  }
+
   /** Build an onAction callback that sends live action updates to the appropriate channel.
    *
    *  CHAN-05: Uses per-request closure context (chatId, source parameters) for routing,
@@ -2257,6 +2325,7 @@ ${task}`;
    *  Do NOT replace these parameters with this.currentChannelContext or similar instance state. */
   private buildActionCallback(chatId?: string, source?: Intent['source']) {
     if (!chatId) return undefined;
+    let lastSentText = '';
     return (action: {
       type: 'thinking' | 'tool_call' | 'final_answer';
       tool?: string;
@@ -2267,41 +2336,36 @@ ${task}`;
       turn: number;
       answer?: string;
     }) => {
-      let line: string;
+      // Only send the AI's own reasoning text
+      if (action.type !== 'thinking' || !action.thought) return;
 
-      if (action.type === 'thinking' && action.thought) {
-        // Show AI reasoning before tool execution
-        const thought = action.thought.length > 200 ? action.thought.slice(0, 200) + '...' : action.thought;
-        line = `[Step ${action.turn}] ${thought}`;
-      } else if (action.type === 'tool_call' && action.tool) {
-        // Show tool call result after execution
-        const paramSummary = action.params
-          ? Object.entries(action.params).map(([k, v]) => {
-              const val = typeof v === 'string' ? v.slice(0, 60) : JSON.stringify(v).slice(0, 60);
-              return `${k}=${val}`;
-            }).join(', ')
-          : '';
-        const status = action.success ? '✓' : '✗';
-        line = `  ↳ ${action.tool}(${paramSummary.slice(0, 80)}) ${status}`;
-      } else if (action.type === 'final_answer') {
-        line = `[Done] Completed in ${action.turn} turns`;
-      } else {
-        return; // Unknown type, skip
+      let text = action.thought.trim();
+      if (!text) return;
+
+      // Take first sentence or max 150 chars
+      const sentenceEnd = text.search(/[.!?]\s/);
+      if (sentenceEnd > 0 && sentenceEnd < 150) {
+        text = text.slice(0, sentenceEnd + 1);
+      } else if (text.length > 150) {
+        text = text.slice(0, 147) + '...';
       }
 
+      // Don't send if identical to last
+      if (text === lastSentText) return;
+      lastSentText = text;
+
+      const line = `💭 ${text}`;
       this.actionMessageCount++;
 
       // Route to appropriate channel
       const channelSources = ['telegram', 'discord', 'slack', 'matrix'] as const;
       if (source && channelSources.includes(source as any) && this.config.channelManager) {
-        // Send via channel manager for Telegram/Discord/Slack/Matrix
         this.config.channelManager.sendMessage(
           source as 'telegram' | 'discord' | 'slack' | 'matrix',
           chatId,
           line
         ).catch(() => {});
       } else {
-        // Default: send via WhatsApp outbox
         this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
           jid: chatId,
           text: line,

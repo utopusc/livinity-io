@@ -339,10 +339,13 @@ export default class AiModule {
 						const desc = describeToolCall(toolName, event.data.params || {})
 						const cmd = formatCommand(toolName, event.data.params || {})
 						const prev = this.chatStatus.get(conversationId)
+						const prevSteps = prev?.steps ?? []
+						// Skip if this exact description already exists anywhere in steps
+						const newSteps = prevSteps.includes(desc) ? prevSteps : [...prevSteps, desc]
 						this.chatStatus.set(conversationId, {
 							status: desc,
 							tool: toolName,
-							steps: [...(prev?.steps ?? []), desc],
+							steps: newSteps,
 							commands: [...(prev?.commands ?? []), cmd],
 							turn: event.turn,
 						})
