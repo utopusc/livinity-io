@@ -27,6 +27,7 @@ import { TaskManager } from './task-manager.js';
 import { SkillRegistryClient } from './skill-registry-client.js';
 import { SkillInstaller } from './skill-installer.js';
 import { WebhookManager } from './webhook-manager.js';
+import { MultiAgentManager } from './multi-agent.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
@@ -177,6 +178,13 @@ async function main() {
   // Usage tracker for per-session and cumulative token usage
   const usageTracker = new UsageTracker(redis);
   logger.info('UsageTracker initialized');
+
+  // Multi-agent session manager for sub-agent orchestration
+  const multiAgentManager = new MultiAgentManager({
+    redis,
+    maxConcurrent: 2, // MULTI-06: VPS resource constraint
+  });
+  logger.info('MultiAgentManager initialized', { maxConcurrent: 2 });
 
   // Heartbeat runner
   const workspaceDir = process.env.WORKSPACE_DIR || NEXUS_BASE_DIR;
@@ -390,6 +398,7 @@ Conversation:`;
     approvalManager,
     usageTracker,
     gmailProvider,
+    multiAgentManager,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
