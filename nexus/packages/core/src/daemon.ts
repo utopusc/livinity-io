@@ -2399,9 +2399,23 @@ ${task}`;
               task: params.task as string,
               maxTurns: params.max_turns as number | undefined,
             });
+
+            // Enqueue BullMQ job for sub-agent execution
+            if (this.config.multiAgentQueue) {
+              await this.config.multiAgentQueue.add('execute-sub-agent', {
+                sessionId: session.id,
+              }, {
+                removeOnComplete: { count: 50 },
+                removeOnFail: { count: 25 },
+              });
+              logger.info('Sub-agent job enqueued', { sessionId: session.id.slice(0, 8), task: session.task.slice(0, 80) });
+            } else {
+              logger.warn('sessions_create: multiAgentQueue not available, sub-agent will not execute');
+            }
+
             return {
               success: true,
-              output: `Sub-agent session created.\nID: ${session.id}\nTask: ${session.task}\nMax turns: ${session.maxTurns}\nStatus: ${session.status}`,
+              output: `Sub-agent session created and queued for execution.\nID: ${session.id}\nTask: ${session.task}\nMax turns: ${session.maxTurns}\nStatus: pending\n\nUse sessions_history with this ID to check progress and results.`,
               data: session,
             };
           } catch (err: any) {
@@ -2456,18 +2470,27 @@ ${task}`;
               timestamp: Date.now(),
             });
 
-            // Note: Actual sub-agent execution is handled by Plan 03's BullMQ worker.
-            // For now, the message is queued in the session history. Plan 03 will add
-            // a BullMQ job that picks up pending sessions and runs them through SdkAgentRunner.
-            // Mark session as pending for the worker to pick up.
+            // Mark session as pending for the worker to pick up
             await mam.updateStatus(params.session_id as string, {
               status: 'pending',
               updatedAt: Date.now(),
             });
 
+            // Enqueue BullMQ job for the sub-agent to process the new message
+            // Only enqueue if session is not already running (avoid duplicate execution)
+            if (this.config.multiAgentQueue && session.status !== 'running') {
+              await this.config.multiAgentQueue.add('execute-sub-agent', {
+                sessionId: params.session_id as string,
+              }, {
+                jobId: `sub-agent-send-${params.session_id}-${Date.now()}`,
+                removeOnComplete: { count: 50 },
+                removeOnFail: { count: 25 },
+              });
+            }
+
             return {
               success: true,
-              output: `Message sent to session ${(params.session_id as string).slice(0, 8)}. Sub-agent will process it.`,
+              output: `Message sent to session ${(params.session_id as string).slice(0, 8)}. Sub-agent will process it.\n\nUse sessions_history to check progress and results.`,
             };
           } catch (err: any) {
             return { success: false, output: '', error: err.message };
