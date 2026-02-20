@@ -1126,6 +1126,70 @@ export default router({
 			return await response.json()
 		}),
 
+	// ── Webhook Management ─────────────────────────────────────
+
+	/** List all webhooks (secrets stripped by API) */
+	getWebhooks: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/webhooks`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			return {webhooks: []}
+		}
+		return await response.json() as {
+			webhooks: Array<{
+				id: string
+				name: string
+				createdAt: string
+				lastUsed: string | null
+				deliveryCount: number
+			}>
+		}
+	}),
+
+	/** Create a new webhook — returns id, url, and secret (shown only once) */
+	createWebhook: privateProcedure
+		.input(z.object({name: z.string().min(1).max(100), secret: z.string().optional()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/webhooks`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({name: input.name, secret: input.secret}),
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return await response.json() as {id: string; url: string; secret: string}
+		}),
+
+	/** Delete a webhook by ID */
+	deleteWebhook: privateProcedure
+		.input(z.object({id: z.string().uuid()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/webhooks/${encodeURIComponent(input.id)}`, {
+				method: 'DELETE',
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return await response.json() as {ok: boolean; message: string}
+		}),
+
 	// ── Gmail OAuth ─────────────────────────────────────────────
 
 	/** Get Gmail connection status */
