@@ -153,6 +153,7 @@ export class SdkAgentRunner extends EventEmitter {
     } as ToolPolicy : undefined;
 
     const maxTurns = Math.min(this.config.maxTurns ?? agentDefaults?.maxTurns ?? 15, 25);
+    const maxTokenBudget = this.config.maxTokens ?? 0; // 0 = unlimited
     const tier = this.config.tier ?? agentDefaults?.tier ?? 'sonnet';
 
     // Build MCP tool definitions from Nexus ToolRegistry
@@ -229,6 +230,8 @@ CRITICAL RULES:
     let ttfbMs = 0;
     let firstContentReceived = false;
     let toolCallCount = 0;
+    let estimatedTokens = 0; // Running estimate for token budget enforcement
+    let tokenBudgetExceeded = false;
 
     try {
       const messages = query({
@@ -257,6 +260,14 @@ CRITICAL RULES:
           break;
         }
 
+        // Token budget enforcement (MULTI-05): estimate tokens from content length
+        // SDK only reports actual usage in the final 'result' message, so we estimate mid-run
+        if (maxTokenBudget > 0 && estimatedTokens > maxTokenBudget) {
+          logger.warn('SdkAgentRunner: token budget exceeded, stopping', { estimatedTokens, maxTokenBudget });
+          tokenBudgetExceeded = true;
+          break;
+        }
+
         if (message.type === 'assistant') {
           // Assistant message — extract text from BetaMessage.content
           const betaMessage = (message as SDKAssistantMessage).message;
@@ -270,6 +281,8 @@ CRITICAL RULES:
                 }
                 this.emitEvent({ type: 'chunk', turn: turns, data: block.text });
                 answer = block.text;
+                // Estimate tokens: ~4 chars per token (input prompt + output)
+                estimatedTokens += Math.ceil(block.text.length / 4);
 
                 // Send the AI's own reasoning text to channels as a live update
                 if (this.config.onAction && block.text.trim()) {
@@ -283,6 +296,8 @@ CRITICAL RULES:
                 }
               } else if (block.type === 'tool_use') {
                 toolCallCount++;
+                // Estimate tokens for tool call input
+                estimatedTokens += Math.ceil(JSON.stringify(block.input || {}).length / 4);
                 this.emitEvent({
                   type: 'tool_call',
                   turn: turns,
@@ -319,16 +334,16 @@ CRITICAL RULES:
       }
 
       const durationMs = Date.now() - runStartTime;
-      logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length, turnLimitReached, ttfbMs, toolCallCount, durationMs });
+      logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length, turnLimitReached, tokenBudgetExceeded, ttfbMs, toolCallCount, durationMs });
 
       return {
-        success: !turnLimitReached,
+        success: !turnLimitReached && !tokenBudgetExceeded,
         answer: answer || 'Task completed (no text response).',
         turns,
         totalInputTokens,
         totalOutputTokens,
         toolCalls,
-        stoppedReason: turnLimitReached ? 'max_turns' : 'complete',
+        stoppedReason: turnLimitReached ? 'max_turns' : tokenBudgetExceeded ? 'max_tokens' : 'complete',
         ttfbMs,
         toolCallCount,
         durationMs,
