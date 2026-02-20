@@ -11,6 +11,8 @@ import { EventEmitter } from 'events';
 import { WebSocket } from 'ws';
 import type { Redis } from 'ioredis';
 import { logger } from '../logger.js';
+import { DeepgramRelay } from './deepgram-relay.js';
+import type { DeepgramTranscript } from './deepgram-relay.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,14 @@ export interface VoiceSessionOpts {
   ws: WebSocket;
   sessionId: string;
   redis: Redis;
+  /** Deepgram API key for STT. If missing, start-listening will error. */
+  deepgramApiKey?: string;
+  /** Deepgram STT model (default: 'nova-3') */
+  sttModel?: string;
+  /** Deepgram STT language (default: 'en') */
+  sttLanguage?: string;
+  /** Callback invoked when a complete utterance (speechFinal) is transcribed. */
+  onTranscript?: (sessionId: string, text: string) => void;
 }
 
 export class VoiceSession extends EventEmitter {
@@ -55,11 +65,23 @@ export class VoiceSession extends EventEmitter {
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private closed = false;
 
+  // STT integration
+  private sttRelay: DeepgramRelay | null = null;
+  private deepgramApiKey?: string;
+  private sttModel?: string;
+  private sttLanguage?: string;
+  private onTranscript?: (sessionId: string, text: string) => void;
+  private receivedTranscript = false; // Track if any transcript was received during listening
+
   constructor(opts: VoiceSessionOpts) {
     super();
     this.ws = opts.ws;
     this.sessionId = opts.sessionId;
     this.redis = opts.redis;
+    this.deepgramApiKey = opts.deepgramApiKey;
+    this.sttModel = opts.sttModel;
+    this.sttLanguage = opts.sttLanguage;
+    this.onTranscript = opts.onTranscript;
   }
 
   // ── State Machine ────────────────────────────────────────────────────────
@@ -111,6 +133,10 @@ export class VoiceSession extends EventEmitter {
 
     if (this.state === 'listening') {
       this.emit('audio-in', data);
+      // Relay audio to Deepgram STT
+      if (this.sttRelay) {
+        this.sttRelay.send(data);
+      }
     } else {
       logger.debug('[VoiceSession] ignoring binary data in state', {
         sessionId: this.sessionId.slice(0, 8),
@@ -140,14 +166,14 @@ export class VoiceSession extends EventEmitter {
 
     switch (msg.type) {
       case 'start-listening':
-        this.setState('listening');
+        this.startListening();
         break;
       case 'stop-listening':
-        if (this.state === 'listening') {
-          this.setState('processing');
-        }
+        this.stopListening();
         break;
       case 'cancel':
+        this.closeSttRelay();
+        this.receivedTranscript = false;
         this.setState('idle');
         break;
       default:
@@ -155,6 +181,112 @@ export class VoiceSession extends EventEmitter {
           sessionId: this.sessionId.slice(0, 8),
           type: (msg as any).type,
         });
+    }
+  }
+
+  // ── STT Integration ────────────────────────────────────────────────────────
+
+  /**
+   * Start listening: create DeepgramRelay, wire transcript events, connect.
+   * Sends error to browser if Deepgram API key is not configured.
+   */
+  private startListening(): void {
+    if (!this.deepgramApiKey) {
+      this.sendControl({ type: 'error', message: 'Deepgram API key not configured' });
+      logger.warn('[VoiceSession] start-listening failed: no Deepgram API key', {
+        sessionId: this.sessionId.slice(0, 8),
+      });
+      return;
+    }
+
+    // Close any existing relay
+    this.closeSttRelay();
+    this.receivedTranscript = false;
+
+    // Create a new DeepgramRelay
+    this.sttRelay = new DeepgramRelay({
+      apiKey: this.deepgramApiKey,
+      model: this.sttModel,
+      language: this.sttLanguage,
+    });
+
+    // Wire transcript events
+    this.sttRelay.on('transcript', (t: DeepgramTranscript) => {
+      // Send all transcripts (interim + final) to the browser for visual feedback
+      this.sendControl({
+        type: 'transcript',
+        text: t.text,
+        isFinal: t.isFinal,
+        confidence: t.confidence,
+      });
+
+      // On speechFinal (end of complete utterance), trigger AI processing
+      if (t.speechFinal) {
+        this.receivedTranscript = true;
+
+        logger.info('[VoiceSession] Speech-final transcript received', {
+          sessionId: this.sessionId.slice(0, 8),
+          text: t.text.slice(0, 80),
+          confidence: t.confidence.toFixed(2),
+        });
+
+        // Send to daemon for AI processing
+        if (this.onTranscript) {
+          this.onTranscript(this.sessionId, t.text);
+        }
+
+        // Transition to processing state
+        this.setState('processing');
+      }
+    });
+
+    this.sttRelay.on('error', (err: Error) => {
+      this.sendControl({ type: 'error', message: `STT error: ${err.message}` });
+      logger.error('[VoiceSession] DeepgramRelay error', {
+        sessionId: this.sessionId.slice(0, 8),
+        error: err.message,
+      });
+    });
+
+    // Connect to Deepgram
+    this.sttRelay.connect();
+
+    // Transition to listening
+    this.setState('listening');
+
+    logger.info('[VoiceSession] Started listening with Deepgram STT', {
+      sessionId: this.sessionId.slice(0, 8),
+      model: this.sttModel ?? 'nova-3',
+      language: this.sttLanguage ?? 'en',
+    });
+  }
+
+  /**
+   * Stop listening: close the STT relay and transition state.
+   * If a transcript was received, transition to 'processing'.
+   * If no transcript was received, transition to 'idle'.
+   */
+  private stopListening(): void {
+    if (this.state !== 'listening') return;
+
+    this.closeSttRelay();
+
+    if (this.receivedTranscript) {
+      this.setState('processing');
+    } else {
+      this.setState('idle');
+    }
+
+    this.receivedTranscript = false;
+  }
+
+  /**
+   * Close the DeepgramRelay if it exists.
+   */
+  private closeSttRelay(): void {
+    if (this.sttRelay) {
+      this.sttRelay.close();
+      this.sttRelay = null;
     }
   }
 
@@ -224,6 +356,7 @@ export class VoiceSession extends EventEmitter {
     this.closed = true;
 
     this.stopKeepAlive();
+    this.closeSttRelay();
 
     if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
       this.ws.close(1000, 'Session closed');

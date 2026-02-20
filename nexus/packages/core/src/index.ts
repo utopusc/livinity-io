@@ -474,8 +474,12 @@ Conversation:`;
   const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis, redisSub, taskManager });
 
   // Voice WebSocket gateway for real-time voice pipeline (/ws/voice)
-  const voiceGateway = new VoiceGateway(httpServer, { redis, daemon });
-  logger.info('VoiceGateway initialized');
+  const voiceConfig = configManager.get().voice;
+  const voiceGateway = new VoiceGateway(httpServer, { redis, daemon, voiceConfig });
+  logger.info('VoiceGateway initialized', {
+    enabled: voiceConfig?.enabled,
+    hasDeepgramKey: !!voiceConfig?.deepgramApiKey,
+  });
 
   // Event-driven inbox processing using Redis BLPOP (no polling overhead)
   const inboxRedis = redis.duplicate(); // Separate connection for blocking operations
