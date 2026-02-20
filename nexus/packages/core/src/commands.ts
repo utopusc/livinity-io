@@ -18,7 +18,7 @@ import {
   type ThinkLevel,
   type VerboseLevel,
 } from './thinking.js';
-import type { ModelTier } from './brain.js';
+import type { Brain, ModelTier } from './brain.js';
 import type { UsageTracker } from './usage-tracker.js';
 
 export interface CommandContext {
@@ -35,6 +35,8 @@ export interface CommandContext {
   redis?: Redis;
   /** Usage tracker for /usage command */
   usageTracker?: UsageTracker;
+  /** Brain instance for session compaction (/compact) */
+  brain?: Brain;
 }
 
 export interface CommandResult {
@@ -102,7 +104,7 @@ export async function handleCommand(
     case 'compact':
     case 'sikistir':
     case 'sıkıştır':
-      return handleCompact();
+      return handleCompact(ctx);
 
     case 'activation':
     case 'aktivasyon':
@@ -157,7 +159,7 @@ Tiers: flash | haiku | sonnet | opus
 
 *Session*
 \`/new [model]\` - Start a new conversation (optionally switch model)
-\`/compact\` - Compact conversation context (coming soon)
+\`/compact\` - Compact conversation context
 
 *Group Settings*
 \`/activation [mention|always]\` - Set group trigger mode
@@ -329,11 +331,37 @@ async function handleNew(args: string[], ctx: CommandContext): Promise<CommandRe
   };
 }
 
-async function handleCompact(): Promise<CommandResult> {
-  return {
-    handled: true,
-    response: `📦 *Compact*\n\nContext compaction will be available in a future update.\n\nFor now, use \`/new\` to start a fresh conversation.`,
-  };
+async function handleCompact(ctx: CommandContext): Promise<CommandResult> {
+  if (!ctx.sessionManager || !ctx.brain) {
+    return { handled: true, response: 'Session compaction is not available.' };
+  }
+
+  try {
+    const result = await ctx.sessionManager.compactSession(ctx.jid, ctx.brain);
+
+    if (result.savedTokens === 0) {
+      return {
+        handled: true,
+        response: `Compact\n\nConversation is already compact (<=10 messages). Nothing to compact.`,
+      };
+    }
+
+    const savingsPercent = Math.round((result.savedTokens / result.originalTokens) * 100);
+    const response =
+      `Compact Complete\n\n` +
+      `Messages compacted: ${result.compactedMessages}\n` +
+      `Original tokens: ~${result.originalTokens.toLocaleString()}\n` +
+      `Saved tokens: ~${result.savedTokens.toLocaleString()} (${savingsPercent}%)\n` +
+      `Last 10 messages preserved verbatim.\n` +
+      `Critical facts pinned.`;
+
+    return { handled: true, response };
+  } catch (err: any) {
+    return {
+      handled: true,
+      response: `Compact Failed\n\n${err.message}`,
+    };
+  }
 }
 
 const ACTIVATION_REDIS_PREFIX = 'nexus:activation:';
