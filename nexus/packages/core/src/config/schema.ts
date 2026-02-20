@@ -266,6 +266,18 @@ export const BrowserConfigSchema = z.object({
   cdpUrl: z.string().default('ws://127.0.0.1:9223'),
 }).strict().optional();
 
+// ─── Voice Pipeline Configuration ───────────────────────────────────────────
+
+export const VoiceConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  deepgramApiKey: z.string().optional(),
+  cartesiaApiKey: z.string().optional(),
+  cartesiaVoiceId: z.string().default('a0e99841-438c-4a64-b679-ae501e7d6091'), // Cartesia "Barbershop Man"
+  cartesiaModelId: z.string().default('sonic-2'),
+  sttLanguage: z.string().default('en'),
+  sttModel: z.string().default('nova-3'),
+}).strict().optional();
+
 // ─── Main Nexus Configuration Schema ───────────────────────────────────────
 
 export const NexusConfigSchema = z.object({
@@ -313,6 +325,9 @@ export const NexusConfigSchema = z.object({
 
   // Browser Control
   browser: BrowserConfigSchema,
+
+  // Voice Pipeline
+  voice: VoiceConfigSchema,
 }).strict();
 
 export type NexusConfig = z.infer<typeof NexusConfigSchema>;
@@ -325,6 +340,7 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 export type ResponseConfig = z.infer<typeof ResponseConfigSchema>;
 export type ApprovalConfig = z.infer<typeof ApprovalConfigSchema>;
 export type TaskConfig = z.infer<typeof TaskConfigSchema>;
+export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
 
 // ─── Default Configuration ───────────────────────────────────────────────────
 
@@ -456,6 +472,13 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
   browser: {
     enabled: true,
     cdpUrl: 'ws://127.0.0.1:9223',
+  },
+  voice: {
+    enabled: false,
+    cartesiaVoiceId: 'a0e99841-438c-4a64-b679-ae501e7d6091',
+    cartesiaModelId: 'sonic-2',
+    sttLanguage: 'en',
+    sttModel: 'nova-3',
   },
 };
 
