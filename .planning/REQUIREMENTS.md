@@ -168,95 +168,95 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STAB-01 | Phase 1 | Pending |
-| STAB-02 | Phase 1 | Pending |
-| STAB-03 | Phase 1 | Pending |
-| STAB-04 | Phase 1 | Pending |
-| STAB-05 | Phase 1 | Pending |
-| STAB-06 | Phase 1 | Pending |
-| STAB-07 | Phase 1 | Pending |
-| DM-01 | Phase 1 | Pending |
-| DM-02 | Phase 1 | Pending |
-| DM-03 | Phase 1 | Pending |
-| DM-04 | Phase 1 | Pending |
-| DM-05 | Phase 1 | Pending |
-| DM-06 | Phase 1 | Pending |
-| CMD-01 | Phase 1 | Pending |
-| CMD-02 | Phase 1 | Pending |
-| CMD-03 | Phase 1 | Pending |
-| CMD-04 | Phase 1 | Pending |
-| CMD-05 | Phase 1 | Pending |
-| CMD-06 | Phase 1 | Pending |
-| USAGE-01 | Phase 1 | Pending |
-| USAGE-02 | Phase 1 | Pending |
-| USAGE-03 | Phase 1 | Pending |
-| USAGE-04 | Phase 1 | Pending |
-| USAGE-05 | Phase 1 | Pending |
-| USAGE-06 | Phase 1 | Pending |
-| HOOK-01 | Phase 2 | Pending |
-| HOOK-02 | Phase 2 | Pending |
-| HOOK-03 | Phase 2 | Pending |
-| HOOK-04 | Phase 2 | Pending |
-| HOOK-05 | Phase 2 | Pending |
-| HOOK-06 | Phase 2 | Pending |
-| GMAIL-01 | Phase 2 | Pending |
-| GMAIL-02 | Phase 2 | Pending |
-| GMAIL-03 | Phase 2 | Pending |
-| GMAIL-04 | Phase 2 | Pending |
-| GMAIL-05 | Phase 2 | Pending |
-| GMAIL-06 | Phase 2 | Pending |
-| GMAIL-07 | Phase 2 | Pending |
-| COMP-01 | Phase 3 | Pending |
-| COMP-02 | Phase 3 | Pending |
-| COMP-03 | Phase 3 | Pending |
-| COMP-04 | Phase 3 | Pending |
-| COMP-05 | Phase 3 | Pending |
-| COMP-06 | Phase 3 | Pending |
-| MULTI-01 | Phase 3 | Pending |
-| MULTI-02 | Phase 3 | Pending |
-| MULTI-03 | Phase 3 | Pending |
-| MULTI-04 | Phase 3 | Pending |
-| MULTI-05 | Phase 3 | Pending |
-| MULTI-06 | Phase 3 | Pending |
-| MULTI-07 | Phase 3 | Pending |
-| VOICE-01 | Phase 4 | Pending |
-| VOICE-02 | Phase 4 | Pending |
-| VOICE-03 | Phase 4 | Pending |
-| VOICE-04 | Phase 4 | Pending |
-| VOICE-05 | Phase 4 | Pending |
-| VOICE-06 | Phase 4 | Pending |
-| VOICE-07 | Phase 4 | Pending |
-| VOICE-08 | Phase 4 | Pending |
-| VOICE-09 | Phase 4 | Pending |
-| VOICE-10 | Phase 4 | Pending |
-| CANVAS-01 | Phase 5 | Pending |
-| CANVAS-02 | Phase 5 | Pending |
-| CANVAS-03 | Phase 5 | Pending |
-| CANVAS-04 | Phase 5 | Pending |
-| CANVAS-05 | Phase 5 | Pending |
-| CANVAS-06 | Phase 5 | Pending |
-| CANVAS-07 | Phase 5 | Pending |
-| CANVAS-08 | Phase 5 | Pending |
-| HUB-01 | Phase 5 | Pending |
-| HUB-02 | Phase 5 | Pending |
-| HUB-03 | Phase 5 | Pending |
-| HUB-04 | Phase 5 | Pending |
-| HUB-05 | Phase 5 | Pending |
-| CLI-01 | Phase 6 | Pending |
-| CLI-02 | Phase 6 | Pending |
-| CLI-03 | Phase 6 | Pending |
-| CLI-04 | Phase 6 | Pending |
-| CLI-05 | Phase 6 | Pending |
-| CLI-06 | Phase 6 | Pending |
-| CLI-07 | Phase 6 | Pending |
-| CLI-08 | Phase 6 | Pending |
-| CLI-09 | Phase 6 | Pending |
+| STAB-01 | v2.0 Phase 1 | Pending |
+| STAB-02 | v2.0 Phase 1 | Pending |
+| STAB-03 | v2.0 Phase 1 | Pending |
+| STAB-04 | v2.0 Phase 1 | Pending |
+| STAB-05 | v2.0 Phase 1 | Pending |
+| STAB-06 | v2.0 Phase 1 | Pending |
+| STAB-07 | v2.0 Phase 1 | Pending |
+| DM-01 | v2.0 Phase 1 | Pending |
+| DM-02 | v2.0 Phase 1 | Pending |
+| DM-03 | v2.0 Phase 1 | Pending |
+| DM-04 | v2.0 Phase 1 | Pending |
+| DM-05 | v2.0 Phase 1 | Pending |
+| DM-06 | v2.0 Phase 1 | Pending |
+| CMD-01 | v2.0 Phase 1 | Pending |
+| CMD-02 | v2.0 Phase 1 | Pending |
+| CMD-03 | v2.0 Phase 1 | Pending |
+| CMD-04 | v2.0 Phase 1 | Pending |
+| CMD-05 | v2.0 Phase 1 | Pending |
+| CMD-06 | v2.0 Phase 1 | Pending |
+| USAGE-01 | v2.0 Phase 1 | Pending |
+| USAGE-02 | v2.0 Phase 1 | Pending |
+| USAGE-03 | v2.0 Phase 1 | Pending |
+| USAGE-04 | v2.0 Phase 1 | Pending |
+| USAGE-05 | v2.0 Phase 1 | Pending |
+| USAGE-06 | v2.0 Phase 1 | Pending |
+| HOOK-01 | v2.0 Phase 2 | Pending |
+| HOOK-02 | v2.0 Phase 2 | Pending |
+| HOOK-03 | v2.0 Phase 2 | Pending |
+| HOOK-04 | v2.0 Phase 2 | Pending |
+| HOOK-05 | v2.0 Phase 2 | Pending |
+| HOOK-06 | v2.0 Phase 2 | Pending |
+| GMAIL-01 | v2.0 Phase 2 | Pending |
+| GMAIL-02 | v2.0 Phase 2 | Pending |
+| GMAIL-03 | v2.0 Phase 2 | Pending |
+| GMAIL-04 | v2.0 Phase 2 | Pending |
+| GMAIL-05 | v2.0 Phase 2 | Pending |
+| GMAIL-06 | v2.0 Phase 2 | Pending |
+| GMAIL-07 | v2.0 Phase 2 | Pending |
+| COMP-01 | v2.0 Phase 3 | Pending |
+| COMP-02 | v2.0 Phase 3 | Pending |
+| COMP-03 | v2.0 Phase 3 | Pending |
+| COMP-04 | v2.0 Phase 3 | Pending |
+| COMP-05 | v2.0 Phase 3 | Pending |
+| COMP-06 | v2.0 Phase 3 | Pending |
+| MULTI-01 | v2.0 Phase 3 | Pending |
+| MULTI-02 | v2.0 Phase 3 | Pending |
+| MULTI-03 | v2.0 Phase 3 | Pending |
+| MULTI-04 | v2.0 Phase 3 | Pending |
+| MULTI-05 | v2.0 Phase 3 | Pending |
+| MULTI-06 | v2.0 Phase 3 | Pending |
+| MULTI-07 | v2.0 Phase 3 | Pending |
+| VOICE-01 | v2.0 Phase 4 | Pending |
+| VOICE-02 | v2.0 Phase 4 | Pending |
+| VOICE-03 | v2.0 Phase 4 | Pending |
+| VOICE-04 | v2.0 Phase 4 | Pending |
+| VOICE-05 | v2.0 Phase 4 | Pending |
+| VOICE-06 | v2.0 Phase 4 | Pending |
+| VOICE-07 | v2.0 Phase 4 | Pending |
+| VOICE-08 | v2.0 Phase 4 | Pending |
+| VOICE-09 | v2.0 Phase 4 | Pending |
+| VOICE-10 | v2.0 Phase 4 | Pending |
+| CANVAS-01 | v2.0 Phase 5 | Pending |
+| CANVAS-02 | v2.0 Phase 5 | Pending |
+| CANVAS-03 | v2.0 Phase 5 | Pending |
+| CANVAS-04 | v2.0 Phase 5 | Pending |
+| CANVAS-05 | v2.0 Phase 5 | Pending |
+| CANVAS-06 | v2.0 Phase 5 | Pending |
+| CANVAS-07 | v2.0 Phase 5 | Pending |
+| CANVAS-08 | v2.0 Phase 5 | Pending |
+| HUB-01 | v2.0 Phase 5 | Pending |
+| HUB-02 | v2.0 Phase 5 | Pending |
+| HUB-03 | v2.0 Phase 5 | Pending |
+| HUB-04 | v2.0 Phase 5 | Pending |
+| HUB-05 | v2.0 Phase 5 | Pending |
+| CLI-01 | v2.0 Phase 6 | Pending |
+| CLI-02 | v2.0 Phase 6 | Pending |
+| CLI-03 | v2.0 Phase 6 | Pending |
+| CLI-04 | v2.0 Phase 6 | Pending |
+| CLI-05 | v2.0 Phase 6 | Pending |
+| CLI-06 | v2.0 Phase 6 | Pending |
+| CLI-07 | v2.0 Phase 6 | Pending |
+| CLI-08 | v2.0 Phase 6 | Pending |
+| CLI-09 | v2.0 Phase 6 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 80 total
-- Mapped to phases: 80
-- Unmapped: 0 ✓
+- v2.0 requirements: 83 total
+- Mapped to phases: 83
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 — initial definition*
+*Last updated: 2026-02-20 — roadmap created, traceability updated with v2.0 phase prefix*

@@ -458,6 +458,141 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 | 5. Skill Marketplace + Parallel Execution | 0/3 | Not started | - |
 
 ---
+
+## Milestone: v2.0 — OpenClaw-Class AI Platform
+
+**Overview**: Transform LivOS into an OpenClaw-class personal AI platform. Phase 1 stabilizes the crashing nexus-core process, closes the DM security gap, adds chat commands, and instruments usage tracking. Phase 2 builds automation infrastructure with webhook receivers and Gmail as a channel. Phase 3 adds session compaction to prevent context window exhaustion, then multi-agent session orchestration on top. Phase 4 delivers a full voice pipeline (Deepgram STT + Cartesia TTS) via push-to-talk in the web UI. Phase 5 creates Live Canvas for AI-generated visual artifacts and upgrades the LivHub skill marketplace. Phase 6 wraps everything in a guided onboarding CLI for one-command deployment.
+
+### v2.0 Phases
+
+- [ ] **Phase 1: Stability & Security Foundation** - Process hardening, DM pairing security, chat commands, usage tracking
+- [ ] **Phase 2: Automation Infrastructure** - Webhook triggers with HMAC auth, Gmail as a channel provider
+- [ ] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration
+- [ ] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS
+- [ ] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace
+- [ ] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool
+
+### Phase 1: Stability & Security Foundation
+**Goal**: The server runs reliably for days without crashing, unknown users cannot interact with the bot without activation, and every user has visibility into their token consumption and session control via chat commands
+**Depends on**: Nothing (first v2.0 phase)
+**Requirements**: STAB-01, STAB-02, STAB-03, STAB-04, STAB-05, STAB-06, STAB-07, DM-01, DM-02, DM-03, DM-04, DM-05, DM-06, CMD-01, CMD-02, CMD-03, CMD-04, CMD-05, CMD-06, USAGE-01, USAGE-02, USAGE-03, USAGE-04, USAGE-05, USAGE-06
+**Success Criteria** (what must be TRUE):
+  1. nexus-core process runs for 24+ hours under normal usage without a single PM2 restart (verified via `pm2 show nexus-core` uptime)
+  2. An unknown Telegram/Discord user who DMs the bot receives a 6-digit activation code prompt instead of having their message processed by the AI, and the server owner can approve or deny the pairing in the web UI
+  3. User can send `/new`, `/compact`, `/usage`, and `/activation` commands in both Telegram and Discord, and each command executes without hitting the AI agent (zero token cost)
+  4. After any AI conversation, user can send `/usage` and see input tokens, output tokens, turn count, and estimated cost for the current session and cumulative totals
+  5. Web UI Settings page shows a usage dashboard with daily token consumption charts
+**Plans**: 4 plans (estimated)
+
+Plans:
+- [ ] v2.0-01-01: Process stability — global error handlers, BullMQ repeatable crons, Redis circuit breaker, PM2 config, grammy offset persistence, agent turn cap
+- [ ] v2.0-01-02: DM pairing security — activation code flow, TTL/rate limit, admin approval UI, Redis allowlist, per-channel DM policy, group bypass
+- [ ] v2.0-01-03: Chat commands — /new, /compact (stub), /usage, /activation, cross-channel parity, pre-agent command parsing
+- [ ] v2.0-01-04: Usage tracking — per-session metrics, Redis counters, PostgreSQL daily rollup, /usage command integration, TTFB tracking, Settings dashboard
+
+### Phase 2: Automation Infrastructure
+**Goal**: External services can trigger AI agent tasks via authenticated webhooks, and the AI can read, reply, search, and manage Gmail as a full communication channel
+**Depends on**: Phase 1 (stable process required before adding webhook/email event sources)
+**Requirements**: HOOK-01, HOOK-02, HOOK-03, HOOK-04, HOOK-05, HOOK-06, GMAIL-01, GMAIL-02, GMAIL-03, GMAIL-04, GMAIL-05, GMAIL-06, GMAIL-07
+**Success Criteria** (what must be TRUE):
+  1. User can create a webhook endpoint via MCP tool, send a signed POST request to the generated URL, and the AI agent receives and processes the payload as a task
+  2. Duplicate webhook deliveries (retries from the same source) are silently deduplicated and do not trigger multiple agent tasks
+  3. User can authenticate their Gmail account via OAuth flow in Settings, and incoming emails appear as messages to the AI agent
+  4. AI agent can reply to, send, search, and archive emails via MCP tools, and the user sees the results in their Gmail inbox
+  5. If Gmail OAuth credentials expire or are revoked, the user receives a notification in Telegram/Discord prompting re-authentication
+**Plans**: 4 plans (estimated)
+
+Plans:
+- [ ] v2.0-02-01: Webhook receiver — Express routes, HMAC-SHA256 verification, BullMQ job queuing, deduplication by delivery ID
+- [ ] v2.0-02-02: Webhook management — MCP tools (create/list/delete), rate limiting, payload size limit, Settings UI panel
+- [ ] v2.0-02-03: Gmail OAuth + GmailProvider — OAuth flow in Settings, ChannelProvider implementation, watch renewal via BullMQ, polling fallback
+- [ ] v2.0-02-04: Gmail MCP tools — read, reply, send, search, archive tools, token refresh failure alerting
+
+### Phase 3: Intelligence Enhancements
+**Goal**: Long conversations are automatically summarized to prevent context window exhaustion, and the AI agent can spawn and coordinate sub-agents for complex multi-step tasks
+**Depends on**: Phase 1 (usage tracking needed for token budget enforcement), Phase 2 (not strictly required, but stable BullMQ patterns established)
+**Requirements**: COMP-01, COMP-02, COMP-03, COMP-04, COMP-05, COMP-06, MULTI-01, MULTI-02, MULTI-03, MULTI-04, MULTI-05, MULTI-06, MULTI-07
+**Success Criteria** (what must be TRUE):
+  1. When a conversation exceeds 100k tokens, older messages are automatically summarized while the last 10 messages and critical facts (file paths, error codes, user preferences) are preserved verbatim
+  2. User can send `/compact` and see a report showing how many tokens were saved and what percentage of the conversation was compressed
+  3. AI agent can spawn a sub-agent to perform a specific task (e.g., "research this topic") and receive results back, visible in the chat as a coordinated workflow
+  4. Sub-agents are limited to 8 turns and 50k tokens, and cannot spawn further sub-agents (no fork bombs)
+  5. Maximum 2 sub-agents can run concurrently on the VPS, with additional requests queued until a slot opens
+**Plans**: 3 plans (estimated)
+
+Plans:
+- [ ] v2.0-03-01: Session compaction — SessionManager.compactSession(), tiered summarization, critical fact pinning, auto-trigger at 100k, /compact command full implementation
+- [ ] v2.0-03-02: Multi-agent MCP tools — sessions_create, sessions_list, sessions_send, sessions_history, Redis session schema
+- [ ] v2.0-03-03: Sub-agent execution — BullMQ spawning, DAG topology enforcement, turn/token limits, concurrency cap, result delivery
+
+### Phase 4: Voice Pipeline
+**Goal**: Users can press a button in the web UI to talk to the AI and hear spoken responses in real-time, with end-to-end latency under 1.2 seconds
+**Depends on**: Phase 1 (stable process required — voice WebSocket connections drop on every restart)
+**Requirements**: VOICE-01, VOICE-02, VOICE-03, VOICE-04, VOICE-05, VOICE-06, VOICE-07, VOICE-08, VOICE-09, VOICE-10
+**Success Criteria** (what must be TRUE):
+  1. User can click a push-to-talk button in the AI chat, speak a question, and hear the AI respond with natural-sounding voice within ~1 second of finishing their sentence
+  2. Voice audio streams in real-time — the user hears the AI's response word-by-word as it is generated, not after the full response is complete
+  3. User can configure Deepgram and Cartesia API keys in the web UI Settings page, and voice mode activates only when both keys are present
+  4. Voice sessions maintain stable WebSocket connections with automatic reconnection on network interruptions (no manual page refresh needed)
+  5. A latency dashboard (or log) shows timestamps at each pipeline stage: mic capture, STT transcript, LLM first token, TTS first audio, browser playback
+**Plans**: 4 plans (estimated)
+
+Plans:
+- [ ] v2.0-04-01: Voice WebSocket gateway — /ws/voice binary endpoint, VoiceSession lifecycle, connection state machine, keep-alive
+- [ ] v2.0-04-02: STT integration — DeepgramRelay class, persistent WebSocket, audio relay, transcript events, daemon.addToInbox() wiring
+- [ ] v2.0-04-03: TTS integration — CartesiaRelay class, text-to-speech streaming, context_id continuity, audio relay back to browser
+- [ ] v2.0-04-04: Voice UI + instrumentation — push-to-talk component, MediaRecorder capture, AudioWorklet playback, API key settings, latency pipeline timestamps
+
+### Phase 5: Live Canvas + LivHub
+**Goal**: The AI can generate and update interactive visual content (React components, charts, diagrams) displayed alongside the chat, and users can discover and manage skills through an improved marketplace
+**Depends on**: Phase 1 (stable process), Phase 3 (compaction prevents canvas sessions from exhausting context)
+**Requirements**: CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04, CANVAS-05, CANVAS-06, CANVAS-07, CANVAS-08, HUB-01, HUB-02, HUB-03, HUB-04, HUB-05
+**Success Criteria** (what must be TRUE):
+  1. User asks the AI to "create a dashboard showing my Docker containers" and a live, interactive React component appears in a split-pane next to the chat
+  2. The AI can update the canvas content in-place (e.g., "add a memory usage chart to the dashboard") without replacing the entire artifact
+  3. Canvas content runs in a sandboxed iframe that cannot access the parent page's cookies, localStorage, or DOM (security verified by attempting postMessage with same-origin access)
+  4. User can browse the LivHub marketplace, see skill names, descriptions, versions, and required permissions, and install or uninstall skills with immediate effect on the AI's available tools
+  5. LivHub supports multiple Git-based registries, and the skill catalog refreshes on a configurable schedule
+**Plans**: 4 plans (estimated)
+
+Plans:
+- [ ] v2.0-05-01: Canvas MCP tools — canvas_render and canvas_update tools, Redis artifact storage, tRPC endpoints
+- [ ] v2.0-05-02: Canvas UI — CanvasPanel split-pane component, sandboxed iframe renderer, CDN template injection, postMessage protocol, error boundary
+- [ ] v2.0-05-03: Canvas artifact types — React components, HTML/CSS/JS, Mermaid diagrams, SVG, Recharts charts, type detection and routing
+- [ ] v2.0-05-04: LivHub marketplace — marketplace UI with permissions review, install/uninstall flow, multi-registry support, cached catalog with TTL
+
+### Phase 6: Onboarding CLI
+**Goal**: A new user can run a single command on a fresh Ubuntu server and have LivOS fully installed and configured through a guided interactive wizard, with all v2.0 features wired up
+**Depends on**: Phase 1 through Phase 5 (CLI must know the complete feature set to configure it)
+**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, CLI-05, CLI-06, CLI-07, CLI-08, CLI-09
+**Success Criteria** (what must be TRUE):
+  1. Running `npx livinity onboard` on a fresh Ubuntu 22.04+ server launches a guided interactive setup that installs all prerequisites, configures the domain, and starts all services
+  2. The CLI checks system requirements (Docker, Node.js 22+, Redis, PostgreSQL, disk 10GB+, RAM 4GB+) and clearly reports what is missing before proceeding
+  3. After setup completes, `livinity status` shows the health of all PM2 services with green/red indicators
+  4. Non-interactive mode (`livinity onboard --config setup.json`) completes the full installation without any user prompts
+  5. If the installation fails partway through, completed steps are rolled back (created files removed, started services stopped) leaving the server in a clean state
+**Plans**: 3 plans (estimated)
+
+Plans:
+- [ ] v2.0-06-01: CLI package scaffolding — nexus/packages/cli with commander + clack, system prerequisite checks, livinity status command
+- [ ] v2.0-06-02: Interactive onboard flow — domain/SSL, Claude Code auth, Telegram/Discord tokens, optional voice/Gmail config, secret generation, .env writing
+- [ ] v2.0-06-03: Service setup + resilience — PM2 ecosystem setup, health verification, non-interactive mode, partial rollback on failure
+
+### v2.0 Progress
+
+**Execution Order:**
+Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Stability & Security Foundation | 0/4 | Not started | - |
+| 2. Automation Infrastructure | 0/4 | Not started | - |
+| 3. Intelligence Enhancements | 0/3 | Not started | - |
+| 4. Voice Pipeline | 0/4 | Not started | - |
+| 5. Live Canvas + LivHub | 0/4 | Not started | - |
+| 6. Onboarding CLI | 0/3 | Not started | - |
+
+---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) | Total plans: 51 (estimated)*
-*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 requirements mapped*
+*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) | Total plans: 73 (estimated)*
+*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 requirements mapped*
