@@ -12,18 +12,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 1 of 6 (Stability & Security Foundation)
-Plan: 3 of 4 in phase (v2.0-01-01, v2.0-01-03 complete)
+Plan: 3 of 4 in phase (v2.0-01-01, v2.0-01-02, v2.0-01-03 complete)
 Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-01-03-PLAN.md (Chat Commands: /new, /compact, /activation)
+Last activity: 2026-02-20 — Completed v2.0-01-02-PLAN.md (DM Pairing Security)
 
-Progress: [██░░░░░░░░░░░░░░░░░░░░] 2/22 (~9%)
+Progress: [███░░░░░░░░░░░░░░░░░░░] 3/22 (~14%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2 (v2.0)
-- Average duration: 4min
-- Total execution time: 8min
+- Total plans completed: 3 (v2.0)
+- Average duration: 7min
+- Total execution time: 18min
 
 ## Accumulated Context
 
@@ -53,6 +53,10 @@ v2.0 Phase 1 decisions:
 - [Commands]: Activation mode stored in Redis key nexus:activation:{channelId} (not channel config)
 - [Commands]: /new resets both SessionManager and UserSessionManager, optionally switches model
 - [Commands]: /compact is stub until session compaction ships in Phase 3
+- [Security]: Default DM policy is 'pairing' (activation code flow) for maximum security
+- [Security]: Max 3 pending activation codes per channel, 1-hour TTL
+- [Security]: DM check runs after dedup/stale filters, before AI handler
+- [Security]: Group messages bypass DM pairing entirely
 
 ### Pending Todos
 
@@ -68,5 +72,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-01-03-PLAN.md (Chat Commands: /new, /compact, /activation)
+Stopped at: Completed v2.0-01-02-PLAN.md (DM Pairing Security)
 Resume file: .planning/phases/v2.0-p01-stability-security/v2.0-01-04-PLAN.md
