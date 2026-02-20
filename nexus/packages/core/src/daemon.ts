@@ -58,6 +58,7 @@ interface DaemonConfig {
   channelManager?: ChannelManager;
   userSessionManager?: UserSessionManager;
   memoryExtractionQueue?: Queue;
+  cronQueue?: Queue;
   approvalManager?: ApprovalManager;
   intervalMs: number;
 }
@@ -643,16 +644,27 @@ export class Daemon {
       const scheduledParams = intent.params?.chatId ? { chatId: intent.params.chatId } : undefined;
       const scheduledTask = task || `Scheduled reminder (set ${delayStr} ago)`;
 
-      setTimeout(() => {
-        this.addToInbox(scheduledTask, scheduledSource as any, undefined, scheduledParams, scheduledFrom);
-        logger.info('Cron (tool) fired', { task: scheduledTask, source: scheduledSource, from: scheduledFrom });
-      }, ms);
+      // Use BullMQ delayed job instead of setTimeout — survives process restarts
+      if (this.config.cronQueue) {
+        await this.config.cronQueue.add('cron-task', {
+          task: scheduledTask,
+          source: scheduledSource,
+          from: scheduledFrom,
+          params: scheduledParams,
+        }, { delay: ms, removeOnComplete: true, removeOnFail: true });
+      } else {
+        // Fallback: use setTimeout if cronQueue not available (shouldn't happen in production)
+        setTimeout(() => {
+          this.addToInbox(scheduledTask, scheduledSource as any, undefined, scheduledParams, scheduledFrom);
+          logger.info('Cron (tool) fired via setTimeout fallback', { task: scheduledTask, source: scheduledSource, from: scheduledFrom });
+        }, ms);
+      }
 
       const confirmMsg = task
         ? `Scheduled in ${delayStr}: "${task}"`
         : `Reminder set for ${delayStr} from now.`;
 
-      logger.info('Cron scheduled', { delay, unit, task: scheduledTask, source: scheduledSource, from: scheduledFrom });
+      logger.info('Cron scheduled', { delay, unit, task: scheduledTask, source: scheduledSource, from: scheduledFrom, viaBullMQ: !!this.config.cronQueue });
       return { success: true, message: confirmMsg };
     });
 

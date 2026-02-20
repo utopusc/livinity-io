@@ -92,6 +92,13 @@ export class TelegramProvider implements ChannelProvider {
           }
         }
 
+        // Persist polling offset for restart recovery (even for stale/skipped messages)
+        if (this.redis) {
+          await this.redis.set('nexus:telegram:offset', String(msgUpdateId + 1)).catch((err: any) => {
+            logger.warn('TelegramProvider: failed to persist offset', { error: err.message });
+          });
+        }
+
         // ── Drop stale messages (older than 2 minutes) ──
         const msgAge = Date.now() - msg.date * 1000;
         if (msgAge > 120_000) {
@@ -142,12 +149,24 @@ export class TelegramProvider implements ChannelProvider {
         this.saveStatus().catch(() => {});
       });
 
+      // Load persisted polling offset from Redis for restart recovery
+      let pollingOffset: number | undefined;
+      if (this.redis) {
+        const savedOffset = await this.redis.get('nexus:telegram:offset');
+        if (savedOffset) {
+          pollingOffset = parseInt(savedOffset, 10);
+          if (isNaN(pollingOffset)) pollingOffset = undefined;
+          else logger.info('TelegramProvider: restored polling offset', { offset: pollingOffset });
+        }
+      }
+
       // Start polling
       this.pollingActive = true;
       this.bot.start({
         onStart: () => {
           logger.info('TelegramProvider: polling started', { botName: this.status.botName });
         },
+        ...(pollingOffset ? { offset: pollingOffset } : {}),
       });
 
       await this.saveStatus();

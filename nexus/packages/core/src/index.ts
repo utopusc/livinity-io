@@ -316,6 +316,16 @@ Conversation:`;
   await skillLoader.loadMarketplaceSkills(skillInstallDir);
   logger.info('SkillInstaller initialized', { installDir: skillInstallDir, registry: defaultSkillRegistry });
 
+  // ── BullMQ cron queue (replaces setTimeout-based scheduling) ──────────
+  const cronQueue = new Queue('nexus-cron', {
+    connection: bullConnection,
+    defaultJobOptions: {
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
+  });
+  logger.info('Cron queue initialized (BullMQ)');
+
   const daemon = new Daemon({
     brain,
     router,
@@ -338,9 +348,25 @@ Conversation:`;
     channelManager,
     userSessionManager,
     memoryExtractionQueue,
+    cronQueue,
     approvalManager,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
+
+  // ── BullMQ cron worker — processes delayed cron jobs by injecting into daemon inbox ──
+  const cronWorker = new Worker(
+    'nexus-cron',
+    async (job) => {
+      const { task, source, from, params } = job.data;
+      logger.info('Cron (BullMQ) fired', { task, source, from, jobId: job.id });
+      daemon.addToInbox(task, source || 'cron', undefined, params, from);
+    },
+    { connection: bullConnection, concurrency: 1 },
+  );
+  cronWorker.on('failed', (job, err) => {
+    logger.error('Cron worker: job failed', { jobId: job?.id, error: err.message });
+  });
+  logger.info('Cron worker initialized (BullMQ)');
 
   const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader });
   const apiPort = parseInt(process.env.API_PORT || '3200');
@@ -394,6 +420,8 @@ Conversation:`;
     redisCircuitBreaker.destroy();
     wsGateway.stop();
     heartbeatRunner.stop();
+    await cronWorker.close();
+    await cronQueue.close();
     await memoryExtractionWorker.close();
     await memoryExtractionQueue.close();
     await channelManager.disconnectAll();

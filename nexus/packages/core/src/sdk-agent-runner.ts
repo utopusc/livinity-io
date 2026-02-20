@@ -151,7 +151,7 @@ export class SdkAgentRunner extends EventEmitter {
       alsoAllow: toolsConfig.alsoAllow,
     } as ToolPolicy : undefined;
 
-    const maxTurns = this.config.maxTurns ?? agentDefaults?.maxTurns ?? 30;
+    const maxTurns = Math.min(this.config.maxTurns ?? agentDefaults?.maxTurns ?? 15, 25);
     const tier = this.config.tier ?? agentDefaults?.tier ?? 'sonnet';
 
     // Build MCP tool definitions from Nexus ToolRegistry
@@ -241,8 +241,17 @@ CRITICAL RULES:
         },
       });
 
+      let turnLimitReached = false;
+
       for await (const message of messages) {
         turns++;
+
+        // Safety: break if turn limit exceeded (SDK may keep running)
+        if (turns > maxTurns) {
+          logger.warn('SdkAgentRunner: turn limit reached, stopping', { turns, maxTurns });
+          turnLimitReached = true;
+          break;
+        }
 
         if (message.type === 'assistant') {
           // Assistant message — extract text from BetaMessage.content
@@ -299,16 +308,16 @@ CRITICAL RULES:
         // Other message types (system, stream_event, tool_progress, etc.) are logged but not emitted
       }
 
-      logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length });
+      logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length, turnLimitReached });
 
       return {
-        success: true,
+        success: !turnLimitReached,
         answer: answer || 'Task completed (no text response).',
         turns,
         totalInputTokens,
         totalOutputTokens,
         toolCalls,
-        stoppedReason: 'complete',
+        stoppedReason: turnLimitReached ? 'max_turns' : 'complete',
       };
     } catch (err: any) {
       logger.error('SdkAgentRunner: error', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
