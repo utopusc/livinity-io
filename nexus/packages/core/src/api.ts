@@ -128,6 +128,39 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     res.json({ status: 'ok', uptime: Math.floor(uptime), redis: redisOk === 'PONG' ? 'ok' : 'error' });
   });
 
+  // ── Gmail OAuth Callback (public — Google redirects user browser here) ──
+  app.get('/api/gmail/oauth/callback', async (req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.status(503).send('Gmail not configured');
+      return;
+    }
+
+    const code = req.query.code as string;
+    if (!code) {
+      res.status(400).send('Missing authorization code');
+      return;
+    }
+
+    try {
+      const clientId = process.env.GMAIL_CLIENT_ID || '';
+      const clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+      const publicUrl = process.env.NEXUS_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
+      const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
+
+      const { tokens, profile } = await gmailProvider.exchangeCode(clientId, clientSecret, redirectUri, code);
+      await gmailProvider.finishOAuth(tokens, profile);
+
+      // Redirect back to LivOS Settings UI
+      const uiBase = process.env.LIVOS_UI_URL || 'http://localhost:2017';
+      res.redirect(`${uiBase}/settings?gmail=connected`);
+    } catch (err) {
+      logger.error('Gmail OAuth callback error', { error: formatErrorMessage(err) });
+      const uiBase = process.env.LIVOS_UI_URL || 'http://localhost:2017';
+      res.redirect(`${uiBase}/settings?gmail=error&message=${encodeURIComponent(formatErrorMessage(err))}`);
+    }
+  });
+
   // ── API Key Authentication (all /api/* routes below require auth) ──
   app.use('/api', requireApiKey);
 
@@ -190,6 +223,74 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       }
       const result = await claudeProvider.logout();
       res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Gmail OAuth API (authenticated) ────────────────────────────
+  /** Start Gmail OAuth — returns URL for Google consent screen */
+  app.get('/api/gmail/oauth/start', async (_req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.status(503).json({ error: 'Gmail provider not available' });
+      return;
+    }
+
+    const clientId = process.env.GMAIL_CLIENT_ID || '';
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+    if (!clientId || !clientSecret) {
+      res.status(400).json({ error: 'GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables are required' });
+      return;
+    }
+
+    const publicUrl = process.env.NEXUS_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
+    const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
+
+    try {
+      const url = gmailProvider.getAuthUrl(clientId, clientSecret, redirectUri);
+      res.json({ url });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get Gmail connection status */
+  app.get('/api/gmail/oauth/status', async (_req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.json({ connected: false, configured: false });
+      return;
+    }
+
+    try {
+      const status = await gmailProvider.getStatus();
+      const profile = await gmailProvider.getProfile();
+      const configured = !!(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET);
+      res.json({
+        connected: status.connected,
+        enabled: status.enabled,
+        configured,
+        email: profile?.email || null,
+        error: status.error || null,
+        lastMessage: status.lastMessage || null,
+      });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Disconnect Gmail — clears tokens and stops polling */
+  app.post('/api/gmail/oauth/disconnect', async (_req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.status(503).json({ error: 'Gmail provider not available' });
+      return;
+    }
+
+    try {
+      await gmailProvider.clearOAuth();
+      res.json({ ok: true, message: 'Gmail disconnected' });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }

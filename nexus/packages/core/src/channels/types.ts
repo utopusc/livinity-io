@@ -4,7 +4,7 @@ import type Redis from 'ioredis';
 // Channel Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ChannelId = 'telegram' | 'discord' | 'slack' | 'matrix';
+export type ChannelId = 'telegram' | 'discord' | 'slack' | 'matrix' | 'gmail';
 
 export interface ChannelConfig {
   enabled: boolean;
@@ -15,6 +15,12 @@ export interface ChannelConfig {
   homeserverUrl?: string;
   /** Matrix room ID */
   roomId?: string;
+  /** Gmail OAuth 2.0 client ID */
+  gmailClientId?: string;
+  /** Gmail OAuth 2.0 client secret */
+  gmailClientSecret?: string;
+  /** Gmail polling interval in seconds (default: 60) */
+  gmailPollIntervalSec?: number;
 }
 
 export interface ChannelStatus {
@@ -84,6 +90,7 @@ export const CHANNEL_META: Record<ChannelId, { name: string; color: string; text
   discord: { name: 'Discord', color: '#5865F2', textLimit: 2000 },
   slack: { name: 'Slack', color: '#4A154B', textLimit: 4000 },
   matrix: { name: 'Matrix', color: '#0DBD8B', textLimit: 65536 },
+  gmail: { name: 'Gmail', color: '#EA4335', textLimit: 50000 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
