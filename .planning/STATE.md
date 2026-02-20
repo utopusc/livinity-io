@@ -6,15 +6,15 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 3 in progress (Intelligence Enhancements).
+**Current focus:** Phase 3 in progress (Intelligence Enhancements). Wave 1 complete (03-01 + 03-02). Wave 2 (03-03) remaining.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 3 of 6 (Intelligence Enhancements)
-Plan: 2 of 3 in phase
+Plan: 2 of 3 in phase (Wave 1 complete)
 Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-03-02-PLAN.md (Multi-Agent Session Management)
+Last activity: 2026-02-20 — Completed v2.0-03-01-PLAN.md (Session Compaction)
 
 Progress: [█████████░░░░░░░░░░░░░] 10/22 (~45%)
 
@@ -52,7 +52,7 @@ v2.0 Phase 1 decisions:
 - [Infra]: Telegram polling offset persisted to Redis for restart recovery
 - [Commands]: Activation mode stored in Redis key nexus:activation:{channelId} (not channel config)
 - [Commands]: /new resets both SessionManager and UserSessionManager, optionally switches model
-- [Commands]: /compact is stub until session compaction ships in Phase 3
+- [Commands]: /compact now calls compactSession() with token savings report (implemented in Phase 3)
 - [Security]: Default DM policy is 'pairing' (activation code flow) for maximum security
 - [Security]: Max 3 pending activation codes per channel, 1-hour TTL
 - [Security]: DM check runs after dedup/stale filters, before AI handler
@@ -79,6 +79,9 @@ v2.0 Phase 2 decisions:
 - [Gmail]: Reply emails use In-Reply-To and References headers for proper threading
 
 v2.0 Phase 3 decisions:
+- [Compaction]: Brain passed as parameter to compactSession(), not stored on SessionManager
+- [Compaction]: Token estimation via Math.ceil(text.length/4) — no tokenizer dependency
+- [Compaction]: Auto-compact threshold 100k tokens, triggers after agent runs
 - [Multi-Agent]: Redis with 1-hour TTL for session state, history as list
 - [Multi-Agent]: Max 2 concurrent sub-agents via SCARD check (MULTI-06)
 - [Multi-Agent]: Tools conditionally registered when multiAgentManager exists
@@ -98,5 +101,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-03-02-PLAN.md (Multi-Agent Session Management)
+Stopped at: Completed v2.0-03-01-PLAN.md (Session Compaction)
 Resume file: None
