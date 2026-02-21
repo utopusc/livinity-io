@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 5 complete, Phase 6 next (Onboarding CLI).
+**Current focus:** Phase 6 in progress (Onboarding CLI). Plan 01 complete.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 5 of 6 (Live Canvas + LivHub) -- Complete, verified (14/14 must-haves)
-Plan: Ready for Phase 6
-Status: Phase 5 verified and complete. Phase 6 (Onboarding CLI) next.
-Last activity: 2026-02-21 — Phase 5 verified (14/14 must-haves passed)
+Phase: 6 of 6 (Onboarding CLI) -- In progress
+Plan: 1 of 3 in phase
+Status: Plan 01 complete (CLI scaffold + status command). Plans 02-03 remaining.
+Last activity: 2026-02-21 — Completed v2.0-06-01-PLAN.md
 
-Progress: [████████████████████░] 20/22 (~91%)
+Progress: [█████████████████████░] 21/22 (~95%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20 (v2.0)
-- Average duration: 4.6min
-- Total execution time: 91min
+- Total plans completed: 21 (v2.0)
+- Average duration: 4.5min
+- Total execution time: 94min
 
 ## Accumulated Context
 
@@ -127,6 +127,11 @@ v2.0 Phase 5 decisions:
 - [Canvas]: Mermaid themeVariables use indigo palette (#6366f1 primary, #1e1b4b backgrounds)
 - [Canvas]: HTML full-doc detection injects error boundary into existing <head> tag
 
+v2.0 Phase 6 decisions:
+- [CLI]: Standalone tsconfig (NodeNext module) — CLI runs as direct Node binary, not bundled
+- [CLI]: registerXCommand(program) pattern — each command file exports registration function
+- [CLI]: picocolors only for Plan 01; @clack/prompts deferred to Plan 02
+
 ### Pending Todos
 
 None.
@@ -143,5 +148,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Phase 5 complete, proceeding to Phase 6
+Stopped at: Completed v2.0-06-01-PLAN.md (CLI scaffold + status command)
 Resume file: None
