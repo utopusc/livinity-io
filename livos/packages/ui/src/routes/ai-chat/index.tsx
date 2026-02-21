@@ -17,6 +17,7 @@ import {
 	IconCheck,
 	IconPlayerStop,
 	IconTerminal2,
+	IconMicrophone,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -29,6 +30,7 @@ import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
+const VoiceButton = lazy(() => import('./voice-button').then((m) => ({default: m.VoiceButton})))
 
 type ToolCall = {
 	tool: string
@@ -600,6 +602,21 @@ export default function AiChat() {
 									target.style.height = Math.min(target.scrollHeight, 120) + 'px'
 								}}
 							/>
+							<Suspense fallback={null}>
+								<VoiceButton
+									disabled={isLoading}
+									onTranscript={(text) => {
+										// Display voice transcript as a user message for visual feedback
+										const voiceMsg: Message = {
+											id: `msg_${Date.now()}_voice`,
+											role: 'user',
+											content: text,
+											timestamp: Date.now(),
+										}
+										setMessages((prev) => [...prev, voiceMsg])
+									}}
+								/>
+							</Suspense>
 							{isLoading ? (
 								<button
 									onClick={handleStop}
