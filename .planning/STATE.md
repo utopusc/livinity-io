@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 4 in progress (Voice Pipeline). Plans 01-03 complete, Plan 04 remaining.
+**Current focus:** Phase 4 complete (Voice Pipeline). Ready for Phase 5 (Live Canvas + LivHub).
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 4 of 6 (Voice Pipeline)
-Plan: 3 of 4 in phase
-Status: In progress
-Last activity: 2026-02-20 — Completed v2.0-04-03-PLAN.md (Cartesia TTS Integration)
+Phase: 4 of 6 (Voice Pipeline) -- COMPLETE
+Plan: 4 of 4 in phase
+Status: Phase complete
+Last activity: 2026-02-20 — Completed v2.0-04-04-PLAN.md (Voice UI + Latency Instrumentation)
 
-Progress: [██████████████░░░░░░░░] 14/22 (~64%)
+Progress: [███████████████░░░░░░░] 15/22 (~68%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14 (v2.0)
+- Total plans completed: 15 (v2.0)
 - Average duration: 5.1min
-- Total execution time: 68min
+- Total execution time: 76min
 
 ## Accumulated Context
 
@@ -102,6 +102,12 @@ v2.0 Phase 4 decisions:
 - [Voice]: Sentence-boundary buffering for natural TTS speech output
 - [Voice]: Lazy TTS init — CartesiaRelay created on first speakText() call
 - [Voice]: context_id per CartesiaRelay for voice continuity within session
+- [Voice]: WebSocket JWT auth via query param (?token=) for browser compatibility
+- [Voice]: MediaRecorder webm/opus format with Deepgram encoding=opus (no re-encoding)
+- [Voice]: AudioPlaybackQueue chains AudioBufferSourceNode.onended for gapless playback
+- [Voice]: VoiceButton renders null when unconfigured (zero UI impact for non-voice users)
+- [Voice]: tRPC proxy routes for voice config (consistent with existing settings pattern)
+- [Voice]: PipelineTimestamps reset per utterance, durations sent at tts-done
 
 ### Pending Todos
 
@@ -119,5 +125,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed v2.0-04-03-PLAN.md (Cartesia TTS Integration)
+Stopped at: Completed v2.0-04-04-PLAN.md (Voice UI + Latency Instrumentation) — Phase 4 complete
 Resume file: None
