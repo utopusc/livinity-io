@@ -557,13 +557,13 @@ Plans:
   3. Canvas content runs in a sandboxed iframe that cannot access the parent page's cookies, localStorage, or DOM (security verified by attempting postMessage with same-origin access)
   4. User can browse the LivHub marketplace, see skill names, descriptions, versions, and required permissions, and install or uninstall skills with immediate effect on the AI's available tools
   5. LivHub supports multiple Git-based registries, and the skill catalog refreshes on a configurable schedule
-**Plans**: 4 plans (estimated)
+**Plans**: 4 plans in 2 waves
 
 Plans:
-- [ ] v2.0-05-01: Canvas MCP tools — canvas_render and canvas_update tools, Redis artifact storage, tRPC endpoints
-- [ ] v2.0-05-02: Canvas UI — CanvasPanel split-pane component, sandboxed iframe renderer, CDN template injection, postMessage protocol, error boundary
-- [ ] v2.0-05-03: Canvas artifact types — React components, HTML/CSS/JS, Mermaid diagrams, SVG, Recharts charts, type detection and routing
-- [ ] v2.0-05-04: LivHub marketplace — marketplace UI with permissions review, install/uninstall flow, multi-registry support, cached catalog with TTL
+- [ ] v2.0-05-01-PLAN.md — Canvas MCP tools: CanvasManager class, canvas_render + canvas_update tools, Redis artifact storage, REST endpoints, tRPC proxy routes [Wave 1]
+- [ ] v2.0-05-02-PLAN.md — Canvas UI: CanvasPanel split-pane, CanvasIframe sandboxed renderer, CDN template injection, postMessage protocol, error boundary [Wave 2]
+- [ ] v2.0-05-03-PLAN.md — Canvas artifact types: per-type srcdoc templates (React/HTML/SVG/Mermaid/Recharts), type auto-detection, enhanced tool descriptions [Wave 2]
+- [ ] v2.0-05-04-PLAN.md — LivHub marketplace: LivHub branding, multi-registry management, catalog refresh, Registries tab [Wave 1]
 
 ### Phase 6: Onboarding CLI
 **Goal**: A new user can run a single command on a fresh Ubuntu server and have LivOS fully installed and configured through a guided interactive wizard, with all v2.0 features wired up
