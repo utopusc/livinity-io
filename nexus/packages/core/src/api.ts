@@ -1081,6 +1081,90 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── Skill Registry Management API ────────────────────────────
+
+  /** List all configured registries */
+  app.get('/api/skills/registries', async (_req, res) => {
+    if (!skillRegistryClient) {
+      res.status(503).json({ error: 'Skill registry not configured' });
+      return;
+    }
+    try {
+      const registries = skillRegistryClient.getRegistries();
+      res.json({ registries });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Add a new registry */
+  app.post('/api/skills/registries', async (req, res) => {
+    if (!skillRegistryClient) {
+      res.status(503).json({ error: 'Skill registry not configured' });
+      return;
+    }
+    try {
+      const { url } = req.body;
+      if (!url || typeof url !== 'string') {
+        res.status(400).json({ error: 'url is required' });
+        return;
+      }
+      // Validate GitHub URL format
+      if (!url.match(/github\.com\/[^/]+\/[^/]+/)) {
+        res.status(400).json({ error: 'URL must be a GitHub repository (e.g. https://github.com/user/repo)' });
+        return;
+      }
+      skillRegistryClient.addRegistry(url);
+      // Persist to Redis so registries survive restarts
+      if (redis) {
+        const registries = skillRegistryClient.getRegistries();
+        await redis.set('nexus:skills:registries', JSON.stringify(registries));
+      }
+      res.json({ success: true, registries: skillRegistryClient.getRegistries() });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Remove a registry */
+  app.delete('/api/skills/registries', async (req, res) => {
+    if (!skillRegistryClient) {
+      res.status(503).json({ error: 'Skill registry not configured' });
+      return;
+    }
+    try {
+      const { url } = req.body;
+      if (!url || typeof url !== 'string') {
+        res.status(400).json({ error: 'url is required' });
+        return;
+      }
+      skillRegistryClient.removeRegistry(url);
+      // Persist to Redis
+      if (redis) {
+        const registries = skillRegistryClient.getRegistries();
+        await redis.set('nexus:skills:registries', JSON.stringify(registries));
+      }
+      res.json({ success: true, registries: skillRegistryClient.getRegistries() });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Force refresh skill catalog (clears cache and re-fetches) */
+  app.post('/api/skills/refresh', async (_req, res) => {
+    if (!skillRegistryClient) {
+      res.status(503).json({ error: 'Skill registry not configured' });
+      return;
+    }
+    try {
+      skillRegistryClient.clearCache();
+      const skills = await skillRegistryClient.fetchCatalog();
+      res.json({ success: true, count: skills.length });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── DM Pairing Management API ────────────────────────────────
 
   /** Get all pending DM pairing requests */
