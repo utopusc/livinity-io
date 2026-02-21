@@ -126,8 +126,16 @@ class Server {
 		this.app.use(
 			helmet.contentSecurityPolicy({
 				directives: {
-					// Allow inline scripts ONLY in development for vite dev server
-					scriptSrc: this.livinityd.developmentMode ? ["'self'", "'unsafe-inline'"] : null,
+					// Allow inline scripts for dev (vite) and canvas iframe (Babel transpilation)
+					// CDN domains needed for Live Canvas srcdoc iframe (React, Recharts, Mermaid, Tailwind, Babel)
+					scriptSrc: [
+						"'self'",
+						"'unsafe-inline'",
+						"'unsafe-eval'",
+						'https://unpkg.com',
+						'https://cdn.tailwindcss.com',
+						'https://cdn.jsdelivr.net',
+					],
 					// Allow 3rd party app images (remove this if we serve them locally in the future)
 					// Also allow blob: URLs for images being uploaded in Files (since their thumbnails don't exist yet)
 					// Also allow data: URLs for base64 images (e.g., WhatsApp QR code)
@@ -136,6 +144,10 @@ class Server {
 					connectSrc: ["'self'"],
 					// Allow iframes from marketplace and self
 					frameSrc: ["'self'", `https://${domains.marketplace}`, `https://*.${domains.primary}`],
+					// Allow CDN stylesheets for canvas iframe
+					styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
+					// Allow CDN fonts
+					fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.gstatic.com'],
 					// Allow plain text access over the local network
 					upgradeInsecureRequests: null,
 				},
