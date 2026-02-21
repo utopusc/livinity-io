@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 5 in progress (Live Canvas + LivHub). Plan 01 complete, Wave 1 executing.
+**Current focus:** Phase 5 in progress (Live Canvas + LivHub). Plans 01, 02, 04 complete, Wave 2 executing.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 5 of 6 (Live Canvas + LivHub) -- In progress
-Plan: 1 of 4 in phase (complete)
-Status: In progress (Wave 1 plans executing)
-Last activity: 2026-02-21 — Completed v2.0-05-01-PLAN.md (Canvas MCP Tools)
+Plan: 2 of 4 in phase (complete)
+Status: In progress (Wave 2 plans executing)
+Last activity: 2026-02-21 — Completed v2.0-05-02-PLAN.md (Canvas UI)
 
-Progress: [█████████████████░░░░] 17/22 (~77%)
+Progress: [██████████████████░░░] 19/22 (~86%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17 (v2.0)
-- Average duration: 5.0min
-- Total execution time: 85min
+- Total plans completed: 19 (v2.0)
+- Average duration: 4.7min
+- Total execution time: 88min
 
 ## Accumulated Context
 
@@ -117,6 +117,11 @@ v2.0 Phase 5 decisions:
 - [Canvas]: conversationId plumbed from frontend chat() through SSE body to daemon instance state
 - [Canvas]: Frontend polls listCanvasArtifacts tRPC route (not chatStatus) to detect artifacts
 - [Canvas]: Canvas tools conditionally registered when canvasManager exists in DaemonConfig
+- [Canvas]: srcdoc attribute for iframe content injection (never src URL) — CANVAS-03 security
+- [Canvas]: sandbox='allow-scripts allow-popups' with NO allow-same-origin
+- [Canvas]: CDN-loaded React 18 + Babel standalone + Tailwind CSS + Mermaid + Recharts inside iframe
+- [Canvas]: Desktop split-pane (50/50), mobile full overlay for canvas panel
+- [Canvas]: Dual polling: 1s during AI loading + one-time fetch on conversation load
 
 ### Pending Todos
 
@@ -134,5 +139,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed v2.0-05-01-PLAN.md (Canvas MCP Tools)
+Stopped at: Completed v2.0-05-02-PLAN.md (Canvas UI)
 Resume file: None
