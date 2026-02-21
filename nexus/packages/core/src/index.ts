@@ -387,6 +387,20 @@ Conversation:`;
   const defaultSkillRegistry = process.env.SKILL_REGISTRY_URL || 'https://github.com/utopusc/livinity-skills';
   skillRegistryClient.addRegistry(defaultSkillRegistry);
 
+  // Load persisted registries from Redis (user-added registries survive restarts)
+  try {
+    const savedRegistries = await redis.get('nexus:skills:registries');
+    if (savedRegistries) {
+      const urls: string[] = JSON.parse(savedRegistries);
+      for (const url of urls) {
+        skillRegistryClient.addRegistry(url);
+      }
+      logger.info('SkillRegistryClient: loaded persisted registries', { count: urls.length });
+    }
+  } catch (err) {
+    logger.warn('SkillRegistryClient: failed to load persisted registries', { error: formatErrorMessage(err) });
+  }
+
   const skillInstallDir = process.env.SKILL_INSTALL_DIR || '/opt/nexus/skills/marketplace';
   const skillInstaller = new SkillInstaller({
     skillLoader,

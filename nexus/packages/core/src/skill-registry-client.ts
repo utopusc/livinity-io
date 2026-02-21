@@ -178,6 +178,23 @@ export class SkillRegistryClient {
     return skillDir;
   }
 
+  /** Get list of all configured registry URLs */
+  getRegistries(): string[] {
+    return [...this.registries];
+  }
+
+  /** Remove a registry URL. Returns true if it was present. */
+  removeRegistry(url: string): boolean {
+    const normalized = url.replace(/\/+$/, '').replace(/\.git$/, '');
+    const idx = this.registries.indexOf(normalized);
+    if (idx !== -1) {
+      this.registries.splice(idx, 1);
+      logger.info('SkillRegistryClient: registry removed', { url: normalized });
+      return true;
+    }
+    return false;
+  }
+
   /** Remove all cached catalog files */
   clearCache(): void {
     this.clearCacheAsync().catch((err) => {
