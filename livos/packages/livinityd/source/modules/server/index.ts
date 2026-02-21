@@ -250,7 +250,13 @@ class Server {
 					this.logger.verbose(`WS voice proxy: connecting to nexus-core`)
 
 					// Create upstream WebSocket to nexus-core
-					const upstream = new WebSocket(`ws://localhost:3200/ws/voice?token=${token}`)
+					// Use API key auth (JWT won't work because nexus-core reads
+					// /data/secrets/jwt which may differ from livinityd's data dir)
+					const wsOpts: {headers?: Record<string, string>} = {}
+					if (process.env.LIV_API_KEY) {
+						wsOpts.headers = {'X-API-Key': process.env.LIV_API_KEY}
+					}
+					const upstream = new WebSocket('ws://localhost:3200/ws/voice', wsOpts)
 					const proxyWss = new WebSocketServer({noServer: true})
 
 					// Wait for upstream to be ready before upgrading the client
