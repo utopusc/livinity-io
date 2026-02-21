@@ -229,6 +229,13 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 							break
 						}
 
+						case 'interrupted':
+							// TTS was interrupted by new utterance
+							if (audioQueueRef.current) {
+								audioQueueRef.current.clear()
+							}
+							break
+
 						case 'error':
 							console.error('[VoiceButton] Server error:', msg.message)
 							break
@@ -303,8 +310,36 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 
 	// ── Push-to-Talk ────────────────────────────────────────────────────────
 
+	const interruptAndListen = useCallback(() => {
+		if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+
+		// Stop audio playback immediately
+		if (audioQueueRef.current) {
+			audioQueueRef.current.clear()
+		}
+
+		// Clean up any existing MediaRecorder/MediaStream to prevent dual streams
+		if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+			mediaRecorderRef.current.stop()
+			mediaRecorderRef.current = null
+		}
+		if (mediaStreamRef.current) {
+			mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+			mediaStreamRef.current = null
+		}
+
+		// Server will handle the TTS cancellation when it receives start-listening
+		// while in speaking/processing state
+	}, [])
+
 	const startListening = useCallback(async () => {
-		if (state !== 'idle' || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+		// Allow interruption: if speaking or processing, clear audio and start new listen
+		if ((state === 'speaking' || state === 'processing') && wsRef.current?.readyState === WebSocket.OPEN) {
+			interruptAndListen()
+			// Fall through to start listening below
+		} else if (state !== 'idle' || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+			return
+		}
 
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({
@@ -400,8 +435,8 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 		disconnected: 'bg-surface-3 text-text-tertiary cursor-wait',
 		idle: 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 cursor-pointer',
 		listening: 'bg-red-500/30 text-red-400 cursor-pointer',
-		processing: 'bg-amber-500/20 text-amber-400 cursor-wait',
-		speaking: 'bg-green-500/20 text-green-400 cursor-default',
+		processing: 'bg-amber-500/20 text-amber-400 cursor-pointer',
+		speaking: 'bg-green-500/20 text-green-400 cursor-pointer',
 	}
 
 	const pulseStyles: Record<string, string> = {
@@ -427,7 +462,7 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 					onPointerDown={handlePointerDown}
 					onPointerUp={handlePointerUp}
 					onPointerLeave={handlePointerUp}
-					disabled={disabled || state === 'disconnected' || state === 'processing' || state === 'speaking'}
+					disabled={disabled || state === 'disconnected'}
 					className={cn(
 						'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md transition-colors',
 						stateStyles[state],
@@ -440,9 +475,9 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 							: state === 'listening'
 								? 'Release to send'
 								: state === 'processing'
-									? 'Processing...'
+									? 'Hold to interrupt'
 									: state === 'speaking'
-										? 'AI is speaking...'
+										? 'Hold to interrupt'
 										: state === 'disconnected'
 											? 'Reconnecting...'
 											: 'Voice'

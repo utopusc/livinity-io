@@ -42,7 +42,7 @@ const VALID_TRANSITIONS: Record<VoiceState, VoiceState[]> = {
   idle: ['listening'],
   listening: ['processing', 'idle'],
   processing: ['speaking', 'idle'],
-  speaking: ['idle'],
+  speaking: ['idle', 'listening'],
 };
 
 // ── VoiceSession Class ───────────────────────────────────────────────────────
@@ -234,6 +234,7 @@ export class VoiceSession extends EventEmitter {
   /**
    * Start listening: create DeepgramRelay, wire transcript events, connect.
    * Sends error to browser if Deepgram API key is not configured.
+   * Supports interruption: if called while speaking/processing, cancels TTS first.
    * @param format - Audio format from browser ('webm-opus' or 'linear16')
    * @param micCapture - Client-side microphone capture timestamp
    */
@@ -244,6 +245,18 @@ export class VoiceSession extends EventEmitter {
         sessionId: this.sessionId.slice(0, 8),
       });
       return;
+    }
+
+    // Interruption: if we're speaking or processing, cancel TTS and transition
+    if (this.state === 'speaking' || this.state === 'processing') {
+      logger.info('[VoiceSession] Interruption: cancelling TTS for new utterance', {
+        sessionId: this.sessionId.slice(0, 8),
+        previousState: this.state,
+      });
+      this.closeTtsRelay();
+      this.sendControl({ type: 'interrupted' });
+      // Reset to idle first so the listening transition is valid
+      this.setState('idle');
     }
 
     // Close any existing relay
