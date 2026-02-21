@@ -452,7 +452,7 @@ export class Daemon {
     const item: InboxItem = { message, source, requestId, params, from };
 
     // Real-time messaging sources - process immediately (event-driven)
-    const realtimeSources = ['telegram', 'discord', 'slack', 'matrix'];
+    const realtimeSources = ['telegram', 'discord', 'slack', 'matrix', 'voice'];
     if (realtimeSources.includes(source)) {
       // Process immediately without waiting for polling loop
       this.processInboxItem(item).catch((err) => {
@@ -1077,6 +1077,65 @@ export class Daemon {
 
       if (useSdk) {
         logger.info('Daemon: using SDK subscription mode for task');
+      }
+
+      // Voice TTS streaming: buffer agent text at sentence boundaries and publish to Redis
+      const voiceSessionId = intent.params?.voiceSessionId as string | undefined;
+      if (intent.source === 'voice' && voiceSessionId) {
+        let voiceTextBuffer = '';
+
+        const flushVoiceBuffer = (isFinal: boolean) => {
+          const text = voiceTextBuffer.trim();
+          if (!text) return;
+          voiceTextBuffer = '';
+
+          this.config.redis.publish('nexus:voice:response', JSON.stringify({
+            sessionId: voiceSessionId,
+            text,
+            isFinal,
+          })).catch((err) => {
+            logger.error('Failed to publish voice response', { error: (err as Error).message });
+          });
+
+          logger.debug('Voice TTS: published text', {
+            sessionId: voiceSessionId.slice(0, 8),
+            textLength: text.length,
+            isFinal,
+          });
+        };
+
+        // Listen for agent events to stream text to TTS
+        agent.on('event', (event: { type: string; data?: unknown }) => {
+          if (event.type === 'final_answer' && typeof event.data === 'string') {
+            // Final answer: send the full response text for TTS
+            voiceTextBuffer += event.data;
+            flushVoiceBuffer(true);
+          } else if (event.type === 'chunk' && typeof event.data === 'string') {
+            // Text chunk: buffer and flush at sentence boundaries
+            voiceTextBuffer += event.data;
+
+            // Check for sentence boundary (period, question mark, exclamation, or 100+ chars without)
+            const sentenceMatch = voiceTextBuffer.match(/^([\s\S]*?[.!?])\s/);
+            if (sentenceMatch) {
+              const sentence = sentenceMatch[1].trim();
+              voiceTextBuffer = voiceTextBuffer.slice(sentenceMatch[0].length);
+              if (sentence) {
+                this.config.redis.publish('nexus:voice:response', JSON.stringify({
+                  sessionId: voiceSessionId,
+                  text: sentence,
+                  isFinal: false,
+                })).catch(() => {});
+              }
+            } else if (voiceTextBuffer.length > 100) {
+              // No punctuation found but buffer is large — flush what we have
+              flushVoiceBuffer(false);
+            }
+          }
+        });
+
+        logger.info('Voice TTS streaming enabled for agent', {
+          sessionId: voiceSessionId.slice(0, 8),
+        });
       }
 
       // For complex tasks (4-5), prepend autonomous guidance context

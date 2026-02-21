@@ -13,6 +13,7 @@ import type { Redis } from 'ioredis';
 import { logger } from '../logger.js';
 import { DeepgramRelay } from './deepgram-relay.js';
 import type { DeepgramTranscript } from './deepgram-relay.js';
+import { CartesiaRelay } from './cartesia-relay.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,12 @@ export interface VoiceSessionOpts {
   sttLanguage?: string;
   /** Callback invoked when a complete utterance (speechFinal) is transcribed. */
   onTranscript?: (sessionId: string, text: string) => void;
+  /** Cartesia API key for TTS. If missing, TTS will be skipped. */
+  cartesiaApiKey?: string;
+  /** Cartesia voice ID (UUID). */
+  cartesiaVoiceId?: string;
+  /** Cartesia model ID (default: 'sonic-2'). */
+  cartesiaModelId?: string;
 }
 
 export class VoiceSession extends EventEmitter {
@@ -73,6 +80,12 @@ export class VoiceSession extends EventEmitter {
   private onTranscript?: (sessionId: string, text: string) => void;
   private receivedTranscript = false; // Track if any transcript was received during listening
 
+  // TTS integration
+  private ttsRelay: CartesiaRelay | null = null;
+  private cartesiaApiKey?: string;
+  private cartesiaVoiceId?: string;
+  private cartesiaModelId?: string;
+
   constructor(opts: VoiceSessionOpts) {
     super();
     this.ws = opts.ws;
@@ -82,6 +95,9 @@ export class VoiceSession extends EventEmitter {
     this.sttModel = opts.sttModel;
     this.sttLanguage = opts.sttLanguage;
     this.onTranscript = opts.onTranscript;
+    this.cartesiaApiKey = opts.cartesiaApiKey;
+    this.cartesiaVoiceId = opts.cartesiaVoiceId;
+    this.cartesiaModelId = opts.cartesiaModelId;
   }
 
   // ── State Machine ────────────────────────────────────────────────────────
@@ -290,6 +306,112 @@ export class VoiceSession extends EventEmitter {
     }
   }
 
+  // ── TTS Integration ────────────────────────────────────────────────────────
+
+  /**
+   * Initialize Cartesia TTS relay. Creates the WebSocket connection
+   * and wires audio/done/error events to the browser WebSocket.
+   */
+  private startTts(): void {
+    if (!this.cartesiaApiKey) {
+      logger.warn('[VoiceSession] TTS skipped: no Cartesia API key', {
+        sessionId: this.sessionId.slice(0, 8),
+      });
+      return;
+    }
+
+    if (!this.cartesiaVoiceId) {
+      logger.warn('[VoiceSession] TTS skipped: no Cartesia voice ID', {
+        sessionId: this.sessionId.slice(0, 8),
+      });
+      return;
+    }
+
+    // Close any existing TTS relay
+    this.closeTtsRelay();
+
+    this.ttsRelay = new CartesiaRelay({
+      apiKey: this.cartesiaApiKey,
+      voiceId: this.cartesiaVoiceId,
+      modelId: this.cartesiaModelId,
+    });
+
+    // Relay audio chunks to browser as binary WebSocket frames
+    this.ttsRelay.on('audio', (chunk: Buffer) => {
+      this.sendAudio(chunk);
+      // Transition processing -> speaking on first audio chunk
+      if (this.state === 'processing') {
+        this.setState('speaking');
+      }
+    });
+
+    // TTS synthesis complete
+    this.ttsRelay.on('done', () => {
+      this.sendControl({ type: 'tts-done' });
+      this.setState('idle');
+      this.closeTtsRelay();
+    });
+
+    // TTS errors
+    this.ttsRelay.on('error', (err: Error) => {
+      this.sendControl({ type: 'error', message: `TTS error: ${err.message}` });
+      logger.error('[VoiceSession] CartesiaRelay error', {
+        sessionId: this.sessionId.slice(0, 8),
+        error: err.message,
+      });
+    });
+
+    // Connect to Cartesia
+    this.ttsRelay.connect();
+
+    logger.info('[VoiceSession] Started TTS with Cartesia', {
+      sessionId: this.sessionId.slice(0, 8),
+      voiceId: this.cartesiaVoiceId?.slice(0, 8),
+      modelId: this.cartesiaModelId ?? 'sonic-2',
+    });
+  }
+
+  /**
+   * Send text for TTS synthesis. Lazy-initializes the TTS relay on first call.
+   * @param text - Text to synthesize into speech
+   * @param isFinal - If true, flushes the TTS buffer after sending
+   */
+  speakText(text: string, isFinal?: boolean): void {
+    // Lazy-init TTS on first speakText call
+    if (!this.ttsRelay || !this.ttsRelay.isConnected()) {
+      this.startTts();
+    }
+
+    if (!this.ttsRelay) {
+      logger.warn('[VoiceSession] speakText: TTS relay not available', {
+        sessionId: this.sessionId.slice(0, 8),
+      });
+      return;
+    }
+
+    this.ttsRelay.synthesize(text);
+
+    // If this is the last text chunk, flush after a short delay
+    // to ensure the text message is sent before the flush
+    if (isFinal) {
+      setTimeout(() => {
+        if (this.ttsRelay?.isConnected()) {
+          this.ttsRelay.flush();
+        }
+      }, 50);
+    }
+  }
+
+  /**
+   * Close the CartesiaRelay if it exists.
+   */
+  private closeTtsRelay(): void {
+    if (this.ttsRelay) {
+      this.ttsRelay.close();
+      this.ttsRelay = null;
+    }
+  }
+
   // ── Outbound ─────────────────────────────────────────────────────────────
 
   /**
@@ -357,6 +479,7 @@ export class VoiceSession extends EventEmitter {
 
     this.stopKeepAlive();
     this.closeSttRelay();
+    this.closeTtsRelay();
 
     if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
       this.ws.close(1000, 'Session closed');
