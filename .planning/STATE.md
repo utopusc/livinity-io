@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 5 in progress (Live Canvas + LivHub). Plan 04 of 04 complete.
+**Current focus:** Phase 5 in progress (Live Canvas + LivHub). Plan 01 complete, Wave 1 executing.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 5 of 6 (Live Canvas + LivHub) -- In progress
-Plan: 4 of 4 in phase
-Status: In progress (Wave 1 plans executing in parallel)
-Last activity: 2026-02-21 — Completed v2.0-05-04-PLAN.md (LivHub Marketplace)
+Plan: 1 of 4 in phase (complete)
+Status: In progress (Wave 1 plans executing)
+Last activity: 2026-02-21 — Completed v2.0-05-01-PLAN.md (Canvas MCP Tools)
 
-Progress: [████████████████░░░░░] 16/22 (~73%)
+Progress: [█████████████████░░░░] 17/22 (~77%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16 (v2.0)
+- Total plans completed: 17 (v2.0)
 - Average duration: 5.0min
-- Total execution time: 80min
+- Total execution time: 85min
 
 ## Accumulated Context
 
@@ -113,6 +113,10 @@ v2.0 Phase 5 decisions:
 - [LivHub]: LivHub branding with indigo/purple gradient replaces emerald/teal Skills branding
 - [LivHub]: UI uses skillFetch direct API pattern for registry/refresh (not tRPC from UI)
 - [LivHub]: Registries stored in Redis key nexus:skills:registries as JSON array of URLs
+- [Canvas]: Artifacts stored in Redis nexus:canvas:{id} with 2h TTL (ephemeral session data)
+- [Canvas]: conversationId plumbed from frontend chat() through SSE body to daemon instance state
+- [Canvas]: Frontend polls listCanvasArtifacts tRPC route (not chatStatus) to detect artifacts
+- [Canvas]: Canvas tools conditionally registered when canvasManager exists in DaemonConfig
 
 ### Pending Todos
 
@@ -130,5 +134,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed v2.0-05-04-PLAN.md (LivHub Marketplace) — Phase 5 Wave 1 plans in parallel
+Stopped at: Completed v2.0-05-01-PLAN.md (Canvas MCP Tools)
 Resume file: None
