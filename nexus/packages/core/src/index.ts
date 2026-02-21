@@ -28,6 +28,7 @@ import { SkillRegistryClient } from './skill-registry-client.js';
 import { SkillInstaller } from './skill-installer.js';
 import { WebhookManager } from './webhook-manager.js';
 import { MultiAgentManager } from './multi-agent.js';
+import { CanvasManager } from './canvas-manager.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { VoiceGateway } from './voice/index.js';
 import { Queue, Worker } from 'bullmq';
@@ -189,6 +190,10 @@ async function main() {
     nexusConfig: configManager.get(),
   });
   logger.info('MultiAgentManager initialized', { maxConcurrent: 2 });
+
+  // Canvas manager for Live Canvas artifact storage
+  const canvasManager = new CanvasManager({ redis });
+  logger.info('CanvasManager initialized');
 
   // Heartbeat runner
   const workspaceDir = process.env.WORKSPACE_DIR || NEXUS_BASE_DIR;
@@ -451,6 +456,7 @@ Conversation:`;
     gmailProvider,
     multiAgentManager,
     multiAgentQueue,
+    canvasManager,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 

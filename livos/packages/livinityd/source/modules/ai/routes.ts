@@ -1370,4 +1370,70 @@ export default router({
 		return await response.json()
 	}),
 
+	// ── Canvas Artifacts (Live Canvas) ─────────────────────────────
+
+	/** Get a canvas artifact by ID (proxied from Nexus) */
+	getCanvasArtifact: privateProcedure
+		.input(z.object({id: z.string().min(1)}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/canvas/${encodeURIComponent(input.id)}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				if (response.status === 404) return null
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Nexus API error: ${response.status}`})
+			}
+			return await response.json() as {
+				id: string
+				type: string
+				title: string
+				content: string
+				conversationId: string
+				createdAt: number
+				updatedAt: number
+				version: number
+			}
+		}),
+
+	/** List canvas artifacts for a conversation (proxied from Nexus) */
+	listCanvasArtifacts: privateProcedure
+		.input(z.object({conversationId: z.string().min(1)}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(
+				`${nexusUrl}/api/canvas?conversationId=${encodeURIComponent(input.conversationId)}`,
+				{headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}},
+			)
+			if (!response.ok) {
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Nexus API error: ${response.status}`})
+			}
+			const data = await response.json() as {artifacts: Array<{
+				id: string
+				type: string
+				title: string
+				content: string
+				conversationId: string
+				createdAt: number
+				updatedAt: number
+				version: number
+			}>}
+			return data.artifacts || []
+		}),
+
+	/** Delete a canvas artifact (proxied from Nexus) */
+	deleteCanvasArtifact: privateProcedure
+		.input(z.object({id: z.string().min(1)}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/canvas/${encodeURIComponent(input.id)}`, {
+				method: 'DELETE',
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Nexus API error: ${response.status}`})
+			}
+			return await response.json() as {success: boolean}
+		}),
+
 })

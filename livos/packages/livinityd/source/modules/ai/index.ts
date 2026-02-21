@@ -295,7 +295,7 @@ export default class AiModule {
 			const response = await fetch(`${livApiUrl}/api/agent/stream`, {
 				method: 'POST',
 				headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
-				body: JSON.stringify({task, max_turns: 30}),
+				body: JSON.stringify({task, max_turns: 30, conversationId}),
 				signal: AbortSignal.timeout(600_000),
 			})
 
