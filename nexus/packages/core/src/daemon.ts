@@ -37,6 +37,8 @@ import type { UsageTracker } from './usage-tracker.js';
 import type { WebhookManager } from './webhook-manager.js';
 import type { GmailProvider } from './channels/gmail.js';
 import type { MultiAgentManager } from './multi-agent.js';
+import { CanvasManager } from './canvas-manager.js';
+import type { CanvasArtifact } from './canvas-manager.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
@@ -69,6 +71,7 @@ interface DaemonConfig {
   gmailProvider?: GmailProvider;
   multiAgentManager?: MultiAgentManager;
   multiAgentQueue?: Queue;
+  canvasManager?: CanvasManager;
   intervalMs: number;
 }
 
@@ -95,6 +98,8 @@ export class Daemon {
   private currentChannelContext: { source: string; chatId: string; params?: Record<string, any> } | undefined;
   /** Count of action feed messages sent during current inbox item processing */
   private actionMessageCount = 0;
+  /** Current conversation ID for canvas tools — set from SSE request context */
+  private currentCanvasConversationId: string | undefined;
 
   constructor(config: DaemonConfig) {
     this.config = config;
@@ -150,9 +155,24 @@ export class Daemon {
     return this.config.multiAgentManager;
   }
 
+  /** Expose canvas manager for external consumers (API) */
+  get canvasManager(): CanvasManager | undefined {
+    return this.config.canvasManager;
+  }
+
   /** Set webhook manager after construction (circular dependency: WebhookManager needs Daemon) */
   setWebhookManager(webhookManager: WebhookManager): void {
     this.config.webhookManager = webhookManager;
+  }
+
+  /** Set current canvas conversation ID (called from SSE endpoint before agent runs) */
+  setCanvasConversationId(conversationId: string): void {
+    this.currentCanvasConversationId = conversationId;
+  }
+
+  /** Clear current canvas conversation ID (called after agent run completes) */
+  clearCanvasConversationId(): void {
+    this.currentCanvasConversationId = undefined;
   }
 
   /** Get current Nexus config (from ConfigManager or defaults) */
@@ -2602,6 +2622,74 @@ ${task}`;
       });
 
       logger.info('Multi-agent session tools registered (sessions_create, sessions_list, sessions_send, sessions_history)');
+    }
+
+    // ── Canvas Tools (Live Canvas artifact creation/update) ──────────────
+    if (this.config.canvasManager) {
+      const canvasManager = this.config.canvasManager;
+
+      toolRegistry.register({
+        name: 'canvas_render',
+        description: 'Render interactive content (React component, HTML, SVG, Mermaid diagram, or Recharts chart) in the Live Canvas panel next to the chat. The content will appear as a split-pane alongside the conversation. Use this when the user asks for visual output like dashboards, charts, diagrams, or interactive UI.',
+        parameters: [
+          { name: 'type', type: 'string', description: 'Artifact type', required: true, enum: ['react', 'html', 'svg', 'mermaid', 'recharts'] },
+          { name: 'title', type: 'string', description: 'Short title for the artifact (e.g. "Docker Dashboard", "Memory Usage Chart")', required: true },
+          { name: 'content', type: 'string', description: 'The full source code. For react: a React component using JSX (function App() {...}). For html: complete HTML. For svg: SVG markup. For mermaid: Mermaid diagram definition. For recharts: a React component using Recharts library.', required: true },
+        ],
+        execute: async (params) => {
+          const { type, title, content } = params as { type: string; title: string; content: string };
+          if (!type || !title || !content) {
+            return { success: false, output: '', error: 'type, title, and content are required' };
+          }
+          const convId = this.currentCanvasConversationId || 'unknown';
+          try {
+            const artifact = await canvasManager.create({
+              type: type as CanvasArtifact['type'],
+              title,
+              content,
+              conversationId: convId,
+            });
+            return {
+              success: true,
+              output: `Canvas artifact "${title}" created (ID: ${artifact.id}, type: ${type}). The user can now see it in the Live Canvas panel.`,
+              data: { artifactId: artifact.id, type, title, version: artifact.version },
+            };
+          } catch (err: any) {
+            return { success: false, output: '', error: `Canvas render failed: ${err.message}` };
+          }
+        },
+      });
+
+      toolRegistry.register({
+        name: 'canvas_update',
+        description: 'Update the content of an existing Live Canvas artifact. Use this to modify a previously rendered artifact (e.g., "add a memory chart to the dashboard"). The artifact ID is returned by canvas_render.',
+        parameters: [
+          { name: 'artifactId', type: 'string', description: 'The artifact ID from a previous canvas_render call', required: true },
+          { name: 'content', type: 'string', description: 'The complete updated source code (replaces the entire content)', required: true },
+          { name: 'title', type: 'string', description: 'Optional: update the title', required: false },
+        ],
+        execute: async (params) => {
+          const { artifactId, content, title } = params as { artifactId: string; content: string; title?: string };
+          if (!artifactId || !content) {
+            return { success: false, output: '', error: 'artifactId and content are required' };
+          }
+          try {
+            const artifact = await canvasManager.update(artifactId, content, title);
+            if (!artifact) {
+              return { success: false, output: '', error: `Artifact "${artifactId}" not found or expired` };
+            }
+            return {
+              success: true,
+              output: `Canvas artifact "${artifact.title}" updated (version ${artifact.version}).`,
+              data: { artifactId: artifact.id, version: artifact.version, title: artifact.title },
+            };
+          } catch (err: any) {
+            return { success: false, output: '', error: `Canvas update failed: ${err.message}` };
+          }
+        },
+      });
+
+      logger.info('Canvas tools registered (canvas_render, canvas_update)');
     }
 
     // Mark destructive tools for human-in-the-loop approval

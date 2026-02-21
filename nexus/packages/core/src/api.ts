@@ -1472,13 +1472,74 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── Canvas API ──────────────────────────────────────────────────
+
+  /** Get a single canvas artifact by ID */
+  app.get('/api/canvas/:id', async (req, res) => {
+    const canvasManager = daemon.canvasManager;
+    if (!canvasManager) {
+      res.status(503).json({ error: 'Canvas not available' });
+      return;
+    }
+    try {
+      const artifact = await canvasManager.get(req.params.id);
+      if (!artifact) {
+        res.status(404).json({ error: 'Artifact not found' });
+        return;
+      }
+      res.json(artifact);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** List canvas artifacts for a conversation */
+  app.get('/api/canvas', async (req, res) => {
+    const canvasManager = daemon.canvasManager;
+    if (!canvasManager) {
+      res.status(503).json({ error: 'Canvas not available' });
+      return;
+    }
+    try {
+      const conversationId = req.query.conversationId as string;
+      if (!conversationId) {
+        res.status(400).json({ error: 'conversationId query param required' });
+        return;
+      }
+      const artifacts = await canvasManager.listByConversation(conversationId);
+      res.json({ artifacts });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Delete a canvas artifact by ID */
+  app.delete('/api/canvas/:id', async (req, res) => {
+    const canvasManager = daemon.canvasManager;
+    if (!canvasManager) {
+      res.status(503).json({ error: 'Canvas not available' });
+      return;
+    }
+    try {
+      const deleted = await canvasManager.delete(req.params.id);
+      res.json({ success: deleted });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {
-    const { task, max_turns } = req.body;
+    const { task, max_turns, conversationId } = req.body;
     if (!task) {
       res.status(400).json({ error: 'task is required' });
       return;
+    }
+
+    // Set canvas conversation context so canvas_render/canvas_update tools can tag artifacts
+    if (conversationId) {
+      daemon.setCanvasConversationId(conversationId);
     }
 
     // SSE headers — keep connection alive
@@ -1565,6 +1626,11 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       clearInterval(heartbeat);
       sendEvent({ type: 'error', data: formatErrorMessage(err) });
       res.end();
+    } finally {
+      // Clear canvas conversation context
+      if (conversationId) {
+        daemon.clearCanvasConversationId();
+      }
     }
   });
 
