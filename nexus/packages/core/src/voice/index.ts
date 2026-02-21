@@ -24,6 +24,7 @@ import type { VoiceConfig } from '../config/schema.js';
 
 export interface VoiceGatewayDeps {
   redis: Redis;
+  redisSub: Redis;  // Dedicated subscriber for voice response channel
   daemon: Daemon;
   voiceConfig?: VoiceConfig;
 }
@@ -37,6 +38,9 @@ export class VoiceGateway {
 
   constructor(server: Server, deps: VoiceGatewayDeps) {
     this.deps = deps;
+
+    // Subscribe to voice response channel for TTS routing
+    this.subscribeVoiceResponse();
 
     // Create WebSocket server with noServer mode for custom upgrade handling
     this.wss = new WebSocketServer({ noServer: true });
@@ -130,6 +134,9 @@ export class VoiceGateway {
       deepgramApiKey: this.deps.voiceConfig?.deepgramApiKey,
       sttModel: this.deps.voiceConfig?.sttModel,
       sttLanguage: this.deps.voiceConfig?.sttLanguage,
+      cartesiaApiKey: this.deps.voiceConfig?.cartesiaApiKey,
+      cartesiaVoiceId: this.deps.voiceConfig?.cartesiaVoiceId,
+      cartesiaModelId: this.deps.voiceConfig?.cartesiaModelId,
       onTranscript: (sid: string, text: string) => {
         logger.info('[VoiceGateway] Transcript -> daemon.addToInbox', {
           sessionId: sid.slice(0, 8),
@@ -137,7 +144,7 @@ export class VoiceGateway {
         });
         this.deps.daemon.addToInbox(
           text,
-          'voice' as any, // 'voice' source type — will be added to Intent union in future
+          'voice',
           undefined,
           { voiceSessionId: sid },
           sid,
@@ -190,6 +197,57 @@ export class VoiceGateway {
     });
   }
 
+  // ── Voice Response Pub/Sub ──────────────────────────────────────────────
+
+  /**
+   * Subscribe to nexus:voice:response Redis channel.
+   * When the daemon publishes AI response text, route it to the
+   * correct VoiceSession's CartesiaRelay for TTS synthesis.
+   */
+  private subscribeVoiceResponse(): void {
+    const sub = this.deps.redisSub;
+
+    sub.subscribe('nexus:voice:response').catch((err) => {
+      logger.error('[VoiceGateway] Failed to subscribe to voice response channel', {
+        error: (err as Error).message,
+      });
+    });
+
+    sub.on('message', (channel: string, message: string) => {
+      if (channel !== 'nexus:voice:response') return;
+
+      try {
+        const data = JSON.parse(message) as {
+          sessionId: string;
+          text: string;
+          isFinal: boolean;
+        };
+
+        const session = this.sessions.get(data.sessionId);
+        if (!session) {
+          logger.debug('[VoiceGateway] Voice response for unknown session', {
+            sessionId: data.sessionId.slice(0, 8),
+          });
+          return;
+        }
+
+        session.speakText(data.text, data.isFinal);
+
+        logger.debug('[VoiceGateway] Routed voice response to session', {
+          sessionId: data.sessionId.slice(0, 8),
+          textLength: data.text.length,
+          isFinal: data.isFinal,
+        });
+      } catch (err) {
+        logger.error('[VoiceGateway] Failed to handle voice response', {
+          error: (err as Error).message,
+        });
+      }
+    });
+
+    logger.info('[VoiceGateway] Subscribed to nexus:voice:response channel');
+  }
+
   // ── Public API ──────────────────────────────────────────────────────────
 
   /** Get the number of active voice sessions. */
@@ -197,8 +255,16 @@ export class VoiceGateway {
     return this.sessions.size;
   }
 
-  /** Gracefully stop: close all sessions and the WSS. */
+  /** Look up an active voice session by ID. */
+  getSession(sessionId: string): VoiceSession | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  /** Gracefully stop: close all sessions, unsubscribe, and close the WSS. */
   stop(): void {
+    // Unsubscribe from voice response channel
+    this.deps.redisSub.unsubscribe('nexus:voice:response').catch(() => {});
+
     for (const [id, session] of this.sessions) {
       session.close();
       this.sessions.delete(id);

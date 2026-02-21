@@ -473,12 +473,16 @@ Conversation:`;
   // Attach JSON-RPC 2.0 WebSocket gateway for streaming
   const wsGateway = setupWsGateway(httpServer, { brain, toolRegistry, daemon, redis, redisSub, taskManager });
 
+  // Dedicated Redis subscriber for voice response pub/sub (TTS routing)
+  const voiceRedisSub = redis.duplicate();
+
   // Voice WebSocket gateway for real-time voice pipeline (/ws/voice)
   const voiceConfig = configManager.get().voice;
-  const voiceGateway = new VoiceGateway(httpServer, { redis, daemon, voiceConfig });
+  const voiceGateway = new VoiceGateway(httpServer, { redis, redisSub: voiceRedisSub, daemon, voiceConfig });
   logger.info('VoiceGateway initialized', {
     enabled: voiceConfig?.enabled,
     hasDeepgramKey: !!voiceConfig?.deepgramApiKey,
+    hasCartesiaKey: !!voiceConfig?.cartesiaApiKey,
   });
 
   // Event-driven inbox processing using Redis BLPOP (no polling overhead)
@@ -532,6 +536,7 @@ Conversation:`;
     await taskManager.cleanup();
     await webhookManager.close();
     await daemon.stop();
+    await voiceRedisSub.quit().catch(() => {}); // Close voice pub/sub subscriber connection
     await redisSub.quit().catch(() => {}); // Close pub/sub subscriber connection
     await inboxRedis.quit().catch(() => {}); // Close blocking connection
     await redis.quit();
