@@ -12,6 +12,9 @@ import {
 	IconPuzzle,
 	IconPuzzleOff,
 	IconTag,
+	IconRefresh,
+	IconPlus,
+	IconDatabase,
 } from '@tabler/icons-react'
 import {cn} from '@/shadcn-lib/utils'
 
@@ -222,6 +225,7 @@ function MarketplaceTab({
 	const [catalog, setCatalog] = useState<CatalogEntry[]>([])
 	const [loading, setLoading] = useState(true)
 	const [reviewTarget, setReviewTarget] = useState<CatalogEntry | null>(null)
+	const [refreshing, setRefreshing] = useState(false)
 
 	const fetchCatalog = useCallback(async (search?: string) => {
 		setLoading(true)
@@ -265,22 +269,45 @@ function MarketplaceTab({
 		fetchCatalog()
 	}
 
+	const handleRefresh = async () => {
+		setRefreshing(true)
+		try {
+			await skillFetch('/refresh', {method: 'POST'})
+			await fetchCatalog()
+		} catch (err) {
+			console.error('Refresh error:', err)
+		} finally {
+			setRefreshing(false)
+		}
+	}
+
 	return (
 		<div className='flex flex-col'>
-			{/* Search */}
+			{/* Search + Refresh */}
 			<div className='border-b border-border-subtle px-4 py-3'>
-				<div className='relative'>
-					<IconSearch size={15} className='absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary' />
-					<input
-						type='text'
-						value={query}
-						onChange={(e) => setQuery(e.target.value)}
-						placeholder='Search skills...'
-						className='w-full rounded-radius-lg border border-border-default bg-surface-base py-2.5 pl-9 pr-3 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
-					/>
-					{loading && (
-						<IconLoader2 size={14} className='absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-text-tertiary' />
-					)}
+				<div className='flex items-center gap-2'>
+					<div className='relative flex-1'>
+						<IconSearch size={15} className='absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary' />
+						<input
+							type='text'
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							placeholder='Search skills...'
+							className='w-full rounded-radius-lg border border-border-default bg-surface-base py-2.5 pl-9 pr-3 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
+						/>
+						{loading && (
+							<IconLoader2 size={14} className='absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-text-tertiary' />
+						)}
+					</div>
+					<button
+						onClick={handleRefresh}
+						disabled={refreshing}
+						className='flex items-center gap-1.5 rounded-radius-lg bg-surface-1 px-3 py-2.5 text-caption font-medium text-text-secondary transition-all hover:bg-surface-2 hover:text-text-primary disabled:opacity-40'
+						title='Refresh catalog'
+					>
+						{refreshing ? <IconLoader2 size={13} className='animate-spin' /> : <IconRefresh size={13} />}
+						Refresh
+					</button>
 				</div>
 			</div>
 
@@ -310,8 +337,8 @@ function MarketplaceTab({
 									className='group flex flex-col gap-3 rounded-radius-xl border border-border-subtle bg-surface-base p-4 transition-all hover:border-border-emphasis hover:bg-surface-1'
 								>
 									<div className='flex items-start gap-3'>
-										<div className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-radius-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/20'>
-											<IconPuzzle size={20} className='text-emerald-400' />
+										<div className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-radius-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20'>
+											<IconPuzzle size={20} className='text-indigo-400' />
 										</div>
 										<div className='min-w-0 flex-1'>
 											<div className='flex items-center gap-2'>
@@ -450,8 +477,8 @@ function InstalledTab({onUninstalled}: {onUninstalled: () => void}) {
 								className='rounded-radius-lg border border-border-subtle bg-surface-base p-3.5 transition-all hover:border-border-default'
 							>
 								<div className='flex items-start gap-3'>
-									<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-lg bg-gradient-to-br from-emerald-500/15 to-teal-500/15'>
-										<IconPuzzle size={16} className='text-emerald-400/70' />
+									<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-lg bg-gradient-to-br from-indigo-500/15 to-purple-500/15'>
+										<IconPuzzle size={16} className='text-indigo-400/70' />
 									</div>
 									<div className='min-w-0 flex-1'>
 										<div className='flex items-center gap-2'>
@@ -532,9 +559,141 @@ function InstalledTab({onUninstalled}: {onUninstalled: () => void}) {
 	)
 }
 
-// ─── Main Skills Panel ──────────────────────────────────────────
+// ─── Registries Tab ─────────────────────────────────────────────
 
-type SkillTab = 'marketplace' | 'installed'
+function RegistriesTab() {
+	const [registries, setRegistries] = useState<string[]>([])
+	const [loading, setLoading] = useState(true)
+	const [newUrl, setNewUrl] = useState('')
+	const [adding, setAdding] = useState(false)
+	const [error, setError] = useState('')
+
+	const fetchRegistries = useCallback(async () => {
+		try {
+			const data = await skillFetch<{registries: string[]}>('/registries')
+			setRegistries(data.registries || [])
+		} catch (err) {
+			console.error('Failed to fetch registries:', err)
+		} finally {
+			setLoading(false)
+		}
+	}, [])
+
+	useEffect(() => {
+		fetchRegistries()
+	}, [fetchRegistries])
+
+	const handleAdd = async () => {
+		if (!newUrl.trim()) return
+		setError('')
+		setAdding(true)
+		try {
+			const result = await skillFetch<{success: boolean; registries: string[]; error?: string}>('/registries', {
+				method: 'POST',
+				body: JSON.stringify({url: newUrl.trim()}),
+			})
+			if (result.registries) setRegistries(result.registries)
+			setNewUrl('')
+		} catch (err: any) {
+			setError(err.message || 'Failed to add registry')
+		} finally {
+			setAdding(false)
+		}
+	}
+
+	const handleRemove = async (url: string) => {
+		try {
+			const result = await skillFetch<{success: boolean; registries: string[]}>('/registries', {
+				method: 'DELETE',
+				body: JSON.stringify({url}),
+			})
+			if (result.registries) setRegistries(result.registries)
+		} catch (err) {
+			console.error('Failed to remove registry:', err)
+		}
+	}
+
+	if (loading) {
+		return (
+			<div className='flex items-center justify-center py-16'>
+				<IconLoader2 size={20} className='animate-spin text-text-tertiary' />
+			</div>
+		)
+	}
+
+	return (
+		<div className='p-4'>
+			<p className='mb-4 text-caption leading-relaxed text-text-tertiary'>
+				Registries are GitHub repositories that contain skill packages.
+				LivHub fetches SKILL.md manifests from each registry&apos;s <code className='rounded bg-surface-2 px-1 py-0.5 text-caption-sm'>skills/</code> directory.
+			</p>
+
+			{/* Add registry form */}
+			<div className='mb-5 flex gap-2'>
+				<input
+					type='text'
+					value={newUrl}
+					onChange={(e) => setNewUrl(e.target.value)}
+					placeholder='https://github.com/user/repo'
+					className='flex-1 rounded-radius-lg border border-border-default bg-surface-base py-2.5 px-3 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
+					onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+				/>
+				<button
+					onClick={handleAdd}
+					disabled={adding || !newUrl.trim()}
+					className='flex items-center gap-1.5 rounded-radius-lg bg-brand px-4 py-2 text-body-sm font-medium text-white transition-all hover:bg-brand-lighter disabled:opacity-40'
+				>
+					{adding ? <IconLoader2 size={14} className='animate-spin' /> : <IconPlus size={14} />}
+					Add
+				</button>
+			</div>
+
+			{error && (
+				<div className='mb-4 flex items-start gap-2 rounded-radius-lg bg-red-500/10 px-3 py-2.5 text-caption text-red-400'>
+					<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
+					<span>{error}</span>
+				</div>
+			)}
+
+			{/* Registry list */}
+			<div className='space-y-2'>
+				{registries.length === 0 ? (
+					<div className='py-8 text-center text-caption text-text-tertiary'>
+						No registries configured. Add a GitHub repository URL above.
+					</div>
+				) : (
+					registries.map((url) => {
+						// Parse owner/repo from URL
+						const match = url.match(/github\.com\/([^/]+\/[^/]+)/)
+						const repoName = match ? match[1] : url
+						return (
+							<div key={url} className='flex items-center gap-3 rounded-radius-lg border border-border-subtle bg-surface-base p-3 transition-all hover:border-border-default'>
+								<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-radius-sm bg-surface-2'>
+									<IconDatabase size={14} className='text-text-tertiary' />
+								</div>
+								<div className='min-w-0 flex-1'>
+									<span className='text-body-sm font-medium text-text-primary'>{repoName}</span>
+									<p className='truncate text-caption-sm text-text-tertiary'>{url}</p>
+								</div>
+								<button
+									onClick={() => handleRemove(url)}
+									className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-red-500/10 hover:text-red-400'
+									title='Remove registry'
+								>
+									<IconTrash size={15} />
+								</button>
+							</div>
+						)
+					})
+				)}
+			</div>
+		</div>
+	)
+}
+
+// ─── Main Skills Panel (LivHub) ─────────────────────────────────
+
+type SkillTab = 'marketplace' | 'installed' | 'registries'
 
 export default function SkillsPanel() {
 	const [activeTab, setActiveTab] = useState<SkillTab>('installed')
@@ -555,6 +714,7 @@ export default function SkillsPanel() {
 	const tabs: {id: SkillTab; label: string; icon: React.ReactNode}[] = [
 		{id: 'marketplace', label: 'Marketplace', icon: <IconSearch size={13} />},
 		{id: 'installed', label: 'Installed', icon: <IconPuzzle size={13} />},
+		{id: 'registries', label: 'Registries', icon: <IconDatabase size={13} />},
 	]
 
 	return (
@@ -562,14 +722,13 @@ export default function SkillsPanel() {
 			{/* Sticky header */}
 			<div className='flex-shrink-0 border-b border-border-subtle px-5 py-4'>
 				<div className='flex items-center gap-3'>
-					<div className='flex h-9 w-9 items-center justify-center rounded-radius-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/20'>
-						<IconPuzzle size={18} className='text-emerald-400' />
+					<div className='flex h-9 w-9 items-center justify-center rounded-radius-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20'>
+						<IconPuzzle size={18} className='text-indigo-400' />
 					</div>
 					<div>
-						<h2 className='text-body font-semibold text-text-primary'>Skills</h2>
+						<h2 className='text-body font-semibold text-text-primary'>LivHub</h2>
 						<p className='text-caption-sm leading-relaxed text-text-tertiary'>
-							Skills extend Liv&apos;s capabilities with specialized tools and workflows.
-							Browse the marketplace to discover skills, or manage your installed ones.
+							Discover and manage skills that extend Liv&apos;s capabilities.
 						</p>
 					</div>
 				</div>
@@ -605,6 +764,7 @@ export default function SkillsPanel() {
 				{activeTab === 'installed' && (
 					<InstalledTab onUninstalled={refreshInstalledNames} />
 				)}
+				{activeTab === 'registries' && <RegistriesTab />}
 			</div>
 		</div>
 	)
