@@ -145,9 +145,9 @@ class Server {
 					// Allow iframes from marketplace and self
 					frameSrc: ["'self'", `https://${domains.marketplace}`, `https://*.${domains.primary}`],
 					// Allow CDN stylesheets for canvas iframe
-					styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
-					// Allow CDN fonts
-					fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.gstatic.com'],
+					styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://unpkg.com', 'https://fonts.googleapis.com'],
+					// Allow CDN fonts + Google Fonts
+					fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.gstatic.com', 'https://fonts.googleapis.com'],
 					// Allow plain text access over the local network
 					upgradeInsecureRequests: null,
 				},
