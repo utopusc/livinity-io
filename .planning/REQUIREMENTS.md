@@ -95,22 +95,22 @@
 
 ### Live Canvas
 
-- [ ] **CANVAS-01**: AI agent can render interactive HTML/React/charts via `canvas_render` MCP tool
-- [ ] **CANVAS-02**: Canvas panel appears as split-pane in AI chat route when first artifact is rendered
-- [ ] **CANVAS-03**: Canvas content is displayed in sandboxed iframe (`sandbox="allow-scripts allow-popups"`, never `allow-same-origin`)
-- [ ] **CANVAS-04**: iframe loads React 18, Babel standalone, and Tailwind CSS from CDN
-- [ ] **CANVAS-05**: AI can update existing canvas content via `canvas_update` MCP tool
-- [ ] **CANVAS-06**: Parent-iframe communication uses typed postMessage protocol with origin validation
-- [ ] **CANVAS-07**: Supported artifact types: React components, HTML/CSS/JS, Mermaid diagrams, SVG, Recharts charts
-- [ ] **CANVAS-08**: Error boundary inside iframe posts errors to parent for display
+- [x] **CANVAS-01**: AI agent can render interactive HTML/React/charts via `canvas_render` MCP tool
+- [x] **CANVAS-02**: Canvas panel appears as split-pane in AI chat route when first artifact is rendered
+- [x] **CANVAS-03**: Canvas content is displayed in sandboxed iframe (`sandbox="allow-scripts allow-popups"`, never `allow-same-origin`)
+- [x] **CANVAS-04**: iframe loads React 18, Babel standalone, and Tailwind CSS from CDN
+- [x] **CANVAS-05**: AI can update existing canvas content via `canvas_update` MCP tool
+- [x] **CANVAS-06**: Parent-iframe communication uses typed postMessage protocol with origin validation
+- [x] **CANVAS-07**: Supported artifact types: React components, HTML/CSS/JS, Mermaid diagrams, SVG, Recharts charts
+- [x] **CANVAS-08**: Error boundary inside iframe posts errors to parent for display
 
 ### LivHub Skills Registry
 
-- [ ] **HUB-01**: LivHub marketplace UI shows available skills with name, description, version, and required permissions
-- [ ] **HUB-02**: Skills can be installed from LivHub with permission review before installation
-- [ ] **HUB-03**: Skills can be uninstalled and immediately removed from agent's available tools
-- [ ] **HUB-04**: LivHub supports multiple Git-based registries (not just one source)
-- [ ] **HUB-05**: Skill catalog is cached with configurable TTL and manual refresh
+- [x] **HUB-01**: LivHub marketplace UI shows available skills with name, description, version, and required permissions
+- [x] **HUB-02**: Skills can be installed from LivHub with permission review before installation
+- [x] **HUB-03**: Skills can be uninstalled and immediately removed from agent's available tools
+- [x] **HUB-04**: LivHub supports multiple Git-based registries (not just one source)
+- [x] **HUB-05**: Skill catalog is cached with configurable TTL and manual refresh
 
 ### Onboarding CLI
 
@@ -232,19 +232,19 @@
 | VOICE-08 | v2.0 Phase 4 | Complete |
 | VOICE-09 | v2.0 Phase 4 | Complete |
 | VOICE-10 | v2.0 Phase 4 | Complete |
-| CANVAS-01 | v2.0 Phase 5 | Pending |
-| CANVAS-02 | v2.0 Phase 5 | Pending |
-| CANVAS-03 | v2.0 Phase 5 | Pending |
-| CANVAS-04 | v2.0 Phase 5 | Pending |
-| CANVAS-05 | v2.0 Phase 5 | Pending |
-| CANVAS-06 | v2.0 Phase 5 | Pending |
-| CANVAS-07 | v2.0 Phase 5 | Pending |
-| CANVAS-08 | v2.0 Phase 5 | Pending |
-| HUB-01 | v2.0 Phase 5 | Pending |
-| HUB-02 | v2.0 Phase 5 | Pending |
-| HUB-03 | v2.0 Phase 5 | Pending |
-| HUB-04 | v2.0 Phase 5 | Pending |
-| HUB-05 | v2.0 Phase 5 | Pending |
+| CANVAS-01 | v2.0 Phase 5 | Complete |
+| CANVAS-02 | v2.0 Phase 5 | Complete |
+| CANVAS-03 | v2.0 Phase 5 | Complete |
+| CANVAS-04 | v2.0 Phase 5 | Complete |
+| CANVAS-05 | v2.0 Phase 5 | Complete |
+| CANVAS-06 | v2.0 Phase 5 | Complete |
+| CANVAS-07 | v2.0 Phase 5 | Complete |
+| CANVAS-08 | v2.0 Phase 5 | Complete |
+| HUB-01 | v2.0 Phase 5 | Complete |
+| HUB-02 | v2.0 Phase 5 | Complete |
+| HUB-03 | v2.0 Phase 5 | Complete |
+| HUB-04 | v2.0 Phase 5 | Complete |
+| HUB-05 | v2.0 Phase 5 | Complete |
 | CLI-01 | v2.0 Phase 6 | Pending |
 | CLI-02 | v2.0 Phase 6 | Pending |
 | CLI-03 | v2.0 Phase 6 | Pending |

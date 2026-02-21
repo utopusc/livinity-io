@@ -469,7 +469,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 - [ ] **Phase 2: Automation Infrastructure** - Webhook triggers with HMAC auth, Gmail as a channel provider
 - [x] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration ✓
 - [x] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS ✓
-- [ ] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace
+- [x] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace ✓
 - [ ] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool
 
 ### Phase 1: Stability & Security Foundation
@@ -557,13 +557,14 @@ Plans:
   3. Canvas content runs in a sandboxed iframe that cannot access the parent page's cookies, localStorage, or DOM (security verified by attempting postMessage with same-origin access)
   4. User can browse the LivHub marketplace, see skill names, descriptions, versions, and required permissions, and install or uninstall skills with immediate effect on the AI's available tools
   5. LivHub supports multiple Git-based registries, and the skill catalog refreshes on a configurable schedule
-**Plans**: 4 plans in 2 waves
+**Status**: COMPLETE (2026-02-21)
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] v2.0-05-01-PLAN.md — Canvas MCP tools: CanvasManager class, canvas_render + canvas_update tools, Redis artifact storage, REST endpoints, tRPC proxy routes [Wave 1]
-- [ ] v2.0-05-02-PLAN.md — Canvas UI: CanvasPanel split-pane, CanvasIframe sandboxed renderer, CDN template injection, postMessage protocol, error boundary [Wave 2]
-- [ ] v2.0-05-03-PLAN.md — Canvas artifact types: per-type srcdoc templates (React/HTML/SVG/Mermaid/Recharts), type auto-detection, enhanced tool descriptions [Wave 2]
-- [ ] v2.0-05-04-PLAN.md — LivHub marketplace: LivHub branding, multi-registry management, catalog refresh, Registries tab [Wave 1]
+- [x] v2.0-05-01-PLAN.md — Canvas MCP tools: CanvasManager class, canvas_render + canvas_update tools, Redis artifact storage, REST endpoints, tRPC proxy routes [Wave 1]
+- [x] v2.0-05-02-PLAN.md — Canvas UI: CanvasPanel split-pane, CanvasIframe sandboxed renderer, CDN template injection, postMessage protocol, error boundary [Wave 2]
+- [x] v2.0-05-03-PLAN.md — Canvas artifact types: per-type srcdoc templates (React/HTML/SVG/Mermaid/Recharts), type auto-detection, enhanced tool descriptions [Wave 3]
+- [x] v2.0-05-04-PLAN.md — LivHub marketplace: LivHub branding, multi-registry management, catalog refresh, Registries tab [Wave 1]
 
 ### Phase 6: Onboarding CLI
 **Goal**: A new user can run a single command on a fresh Ubuntu server and have LivOS fully installed and configured through a guided interactive wizard, with all v2.0 features wired up
@@ -593,7 +594,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Automation Infrastructure | 4/4 | Complete | 2026-02-20 |
 | 3. Intelligence Enhancements | 3/3 | Complete | 2026-02-20 |
 | 4. Voice Pipeline | 4/4 | Complete | 2026-02-20 |
-| 5. Live Canvas + LivHub | 0/4 | Not started | - |
+| 5. Live Canvas + LivHub | 4/4 | Complete | 2026-02-21 |
 | 6. Onboarding CLI | 0/3 | Not started | - |
 
 ---
