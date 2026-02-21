@@ -18,6 +18,7 @@ import {
 	IconPlayerStop,
 	IconTerminal2,
 	IconMicrophone,
+	IconCode,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -31,6 +32,7 @@ import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
 const VoiceButton = lazy(() => import('./voice-button').then((m) => ({default: m.VoiceButton})))
+const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
 
 type ToolCall = {
 	tool: string
@@ -380,11 +382,64 @@ export default function AiChat() {
 	const sendMutation = trpcReact.ai.send.useMutation()
 	const deleteMutation = trpcReact.ai.deleteConversation.useMutation()
 
+	// Canvas state
+	const [canvasArtifact, setCanvasArtifact] = useState<{
+		id: string; type: string; title: string; content: string; version: number;
+	} | null>(null)
+	const [canvasMinimized, setCanvasMinimized] = useState(false)
+
+	// Poll for canvas artifacts while AI is loading
+	const canvasQuery = trpcReact.ai.listCanvasArtifacts.useQuery(
+		{conversationId: activeConversationId},
+		{
+			enabled: isLoading,
+			refetchInterval: isLoading ? 1000 : false,
+		},
+	)
+
+	// One-time fetch when conversation is loaded (for re-opening conversations with canvas)
+	const canvasLoadQuery = trpcReact.ai.listCanvasArtifacts.useQuery(
+		{conversationId: activeConversationId},
+		{
+			enabled: !!searchParams.get('conv') && !isLoading,
+			refetchInterval: false,
+			staleTime: 30000,
+		},
+	)
+
 	useEffect(() => {
 		if (conversationQuery.data) {
 			setMessages(conversationQuery.data.messages)
 		}
 	}, [conversationQuery.data])
+
+	// Update canvas artifact when polling returns data
+	useEffect(() => {
+		if (canvasQuery.data && Array.isArray(canvasQuery.data) && canvasQuery.data.length > 0) {
+			const latest = canvasQuery.data[0] as any
+			setCanvasArtifact({
+				id: latest.id,
+				type: latest.type,
+				title: latest.title,
+				content: latest.content,
+				version: latest.version,
+			})
+		}
+	}, [canvasQuery.data])
+
+	// Update canvas artifact when loading existing conversation
+	useEffect(() => {
+		if (canvasLoadQuery.data && Array.isArray(canvasLoadQuery.data) && canvasLoadQuery.data.length > 0) {
+			const latest = canvasLoadQuery.data[0] as any
+			setCanvasArtifact({
+				id: latest.id,
+				type: latest.type,
+				title: latest.title,
+				content: latest.content,
+				version: latest.version,
+			})
+		}
+	}, [canvasLoadQuery.data])
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
@@ -474,6 +529,8 @@ export default function AiChat() {
 
 	const handleNewConversation = () => {
 		setMessages([])
+		setCanvasArtifact(null)
+		setCanvasMinimized(false)
 		setSearchParams({conv: `conv_${Date.now()}`})
 		setActiveView('chat')
 	}
@@ -516,126 +573,167 @@ export default function AiChat() {
 			)}
 
 			{activeView === 'chat' && (
-				<div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
-					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
-							<div className='flex items-center justify-between'>
-								<button
-									onClick={() => setSidebarOpen(true)}
-									className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
-								>
-									<IconMenu2 size={20} />
-								</button>
-								<span className='text-body font-semibold text-text-primary'>Liv AI</span>
-								<button
-									onClick={handleNewConversation}
-									className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
-								>
-									<IconPlus size={18} />
-								</button>
-							</div>
-						</div>
-					)}
-
-					<div className='flex-1 overflow-y-auto overscroll-contain p-3 md:p-6'>
-						{messages.length === 0 ? (
-							<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
-								<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
-									<IconBrain size={32} className='text-violet-400' />
+				<div className='relative flex min-h-0 min-w-0 flex-1'>
+					{/* Chat area */}
+					<div className={cn(
+						'flex min-h-0 flex-col',
+						canvasArtifact && !canvasMinimized && !isMobile ? 'w-1/2 min-w-[360px]' : 'flex-1',
+					)}>
+						{isMobile && (
+							<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+								<div className='flex items-center justify-between'>
+									<button
+										onClick={() => setSidebarOpen(true)}
+										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+									>
+										<IconMenu2 size={20} />
+									</button>
+									<span className='text-body font-semibold text-text-primary'>Liv AI</span>
+									<button
+										onClick={handleNewConversation}
+										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+									>
+										<IconPlus size={18} />
+									</button>
 								</div>
-								<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
-								<p className='max-w-md text-center text-body text-text-tertiary'>
-									Your autonomous AI assistant. I can manage your server, Docker containers, run commands,
-									create subagents, schedule tasks, and more.
-								</p>
-								<div className='mt-6 flex flex-wrap justify-center gap-2'>
-									{[
-										'Show system health',
-										'List subagents',
-										'Check Docker containers',
-										'Search memory',
-									].map((suggestion) => (
-										<button
-											key={suggestion}
-											onClick={() => {
-												setInput(suggestion)
-												inputRef.current?.focus()
-											}}
-											className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
-										>
-											{suggestion}
-										</button>
-									))}
-								</div>
-							</div>
-						) : (
-							<div className='mx-auto max-w-3xl space-y-4'>
-								{messages.map((msg) => (
-									<ChatMessage key={msg.id} message={msg} />
-								))}
-								{isLoading && (
-									<StatusIndicator
-										conversationId={activeConversationId}
-										isLoading={isLoading}
-									/>
-								)}
-								<div ref={messagesEndRef} />
 							</div>
 						)}
-					</div>
 
-					<div className='flex-shrink-0 border-t border-border-default bg-surface-base p-3 md:p-4'>
-						<div className='mx-auto flex max-w-3xl items-end gap-3'>
-							<textarea
-								ref={inputRef}
-								value={input}
-								onChange={(e) => setInput(e.target.value)}
-								onKeyDown={handleKeyDown}
-								placeholder={isLoading ? 'Working...' : 'Message Liv...'}
-								disabled={isLoading}
-								rows={1}
-								className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:opacity-50'
-								style={{maxHeight: '120px'}}
-								onInput={(e) => {
-									const target = e.target as HTMLTextAreaElement
-									target.style.height = 'auto'
-									target.style.height = Math.min(target.scrollHeight, 120) + 'px'
-								}}
-							/>
-							<Suspense fallback={null}>
-								<VoiceButton
-									disabled={isLoading}
-									onTranscript={(text) => {
-										// Display voice transcript as a user message for visual feedback
-										const voiceMsg: Message = {
-											id: `msg_${Date.now()}_voice`,
-											role: 'user',
-											content: text,
-											timestamp: Date.now(),
-										}
-										setMessages((prev) => [...prev, voiceMsg])
-									}}
-								/>
-							</Suspense>
-							{isLoading ? (
-								<button
-									onClick={handleStop}
-									className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
-									title='Stop'
-								>
-									<IconPlayerStop size={18} />
-								</button>
+						<div className='flex-1 overflow-y-auto overscroll-contain p-3 md:p-6'>
+							{messages.length === 0 ? (
+								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
+									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
+										<IconBrain size={32} className='text-violet-400' />
+									</div>
+									<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
+									<p className='max-w-md text-center text-body text-text-tertiary'>
+										Your autonomous AI assistant. I can manage your server, Docker containers, run commands,
+										create subagents, schedule tasks, and more.
+									</p>
+									<div className='mt-6 flex flex-wrap justify-center gap-2'>
+										{[
+											'Show system health',
+											'List subagents',
+											'Check Docker containers',
+											'Search memory',
+										].map((suggestion) => (
+											<button
+												key={suggestion}
+												onClick={() => {
+													setInput(suggestion)
+													inputRef.current?.focus()
+												}}
+												className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
+											>
+												{suggestion}
+											</button>
+										))}
+									</div>
+								</div>
 							) : (
-								<button
-									onClick={handleSend}
-									disabled={!input.trim()}
-									className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
-								>
-									<IconSend size={18} />
-								</button>
+								<div className='mx-auto max-w-3xl space-y-4'>
+									{messages.map((msg) => (
+										<ChatMessage key={msg.id} message={msg} />
+									))}
+									{isLoading && (
+										<StatusIndicator
+											conversationId={activeConversationId}
+											isLoading={isLoading}
+										/>
+									)}
+									<div ref={messagesEndRef} />
+								</div>
 							)}
 						</div>
+
+						<div className='flex-shrink-0 border-t border-border-default bg-surface-base p-3 md:p-4'>
+							<div className='mx-auto flex max-w-3xl items-end gap-3'>
+								<textarea
+									ref={inputRef}
+									value={input}
+									onChange={(e) => setInput(e.target.value)}
+									onKeyDown={handleKeyDown}
+									placeholder={isLoading ? 'Working...' : 'Message Liv...'}
+									disabled={isLoading}
+									rows={1}
+									className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:opacity-50'
+									style={{maxHeight: '120px'}}
+									onInput={(e) => {
+										const target = e.target as HTMLTextAreaElement
+										target.style.height = 'auto'
+										target.style.height = Math.min(target.scrollHeight, 120) + 'px'
+									}}
+								/>
+								<Suspense fallback={null}>
+									<VoiceButton
+										disabled={isLoading}
+										onTranscript={(text) => {
+											// Display voice transcript as a user message for visual feedback
+											const voiceMsg: Message = {
+												id: `msg_${Date.now()}_voice`,
+												role: 'user',
+												content: text,
+												timestamp: Date.now(),
+											}
+											setMessages((prev) => [...prev, voiceMsg])
+										}}
+									/>
+								</Suspense>
+								{isLoading ? (
+									<button
+										onClick={handleStop}
+										className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
+										title='Stop'
+									>
+										<IconPlayerStop size={18} />
+									</button>
+								) : (
+									<button
+										onClick={handleSend}
+										disabled={!input.trim()}
+										className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
+									>
+										<IconSend size={18} />
+									</button>
+								)}
+							</div>
+						</div>
 					</div>
+
+					{/* Canvas panel — desktop split-pane */}
+					{canvasArtifact && !canvasMinimized && !isMobile && (
+						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+							<div className='w-1/2 min-w-[360px]'>
+								<CanvasPanel
+									artifact={canvasArtifact}
+									onClose={() => setCanvasMinimized(true)}
+								/>
+							</div>
+						</Suspense>
+					)}
+
+					{/* Canvas panel — mobile full overlay */}
+					{canvasArtifact && !canvasMinimized && isMobile && (
+						<Suspense fallback={null}>
+							<div className='fixed inset-0 z-50 bg-surface-base'>
+								<CanvasPanel
+									artifact={canvasArtifact}
+									onClose={() => setCanvasMinimized(true)}
+								/>
+							</div>
+						</Suspense>
+					)}
+
+					{/* Minimized canvas indicator */}
+					{canvasArtifact && canvasMinimized && (
+						<button
+							onClick={() => setCanvasMinimized(false)}
+							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
+						>
+							<IconCode size={16} className='text-cyan-400' />
+							{canvasArtifact.title}
+						</button>
+					)}
 				</div>
 			)}
 
