@@ -28,6 +28,7 @@ import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 import type { UsageTracker } from './usage-tracker.js';
 import type { WebhookManager } from './webhook-manager.js';
+import { isCommand, handleCommand } from './commands.js';
 
 interface ApiDeps {
   daemon: Daemon;
@@ -1535,6 +1536,35 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     if (!task) {
       res.status(400).json({ error: 'task is required' });
       return;
+    }
+
+    // ── Handle slash commands (/usage, /new, /status, etc.) ──────────
+    if (isCommand(task) && daemon.userSessionManager) {
+      try {
+        const webJid = 'web-ui';
+        const session = await daemon.userSessionManager.get(webJid);
+        const cmdResult = await handleCommand(task, {
+          jid: webJid,
+          userSession: daemon.userSessionManager,
+          currentThink: session.thinkLevel,
+          currentVerbose: session.verboseLevel,
+          currentModel: session.modelTier,
+          sessionManager: daemon.sessionManager,
+          redis: redis,
+          usageTracker: usageTracker,
+          brain: brain,
+        });
+
+        if (cmdResult?.handled && cmdResult.response) {
+          // Return as a simple JSON response (not SSE) for commands
+          res.json({ command: true, response: cmdResult.response });
+          return;
+        }
+        // If command returned null (unrecognized), fall through to agent
+      } catch (err) {
+        logger.warn('Command handler error in stream endpoint', { error: formatErrorMessage(err) });
+        // Fall through to agent on error
+      }
     }
 
     // Set canvas conversation context so canvas_render/canvas_update tools can tag artifacts

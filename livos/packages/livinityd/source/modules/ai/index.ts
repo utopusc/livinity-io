@@ -303,6 +303,29 @@ export default class AiModule {
 				throw new Error(`Liv API error: ${response.status} ${response.statusText}`)
 			}
 
+			// Handle slash command responses (JSON, not SSE)
+			const contentType = response.headers.get('content-type') || ''
+			if (contentType.includes('application/json')) {
+				const json = await response.json() as {command?: boolean; response?: string; error?: string}
+				if (json.command && json.response) {
+					finalAnswer = json.response
+					this.chatStatus.delete(conversationId)
+
+					const assistantMsg: ChatMessage = {
+						id: `msg_${Date.now()}_assistant`,
+						role: 'assistant',
+						content: finalAnswer,
+						timestamp: Date.now(),
+					}
+					conversation.messages.push(assistantMsg)
+					await this.saveConversation(conversation)
+					return assistantMsg
+				}
+				// JSON response but not a command — treat as an error
+				// (body already consumed, can't read as SSE stream)
+				throw new Error(json.error || 'Unexpected JSON response from agent stream')
+			}
+
 			const reader = response.body.getReader()
 			const decoder = new TextDecoder()
 			let buffer = ''

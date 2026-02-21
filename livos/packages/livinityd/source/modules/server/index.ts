@@ -11,7 +11,7 @@ import express from 'express'
 import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
 
-import {WebSocketServer} from 'ws'
+import {WebSocketServer, WebSocket} from 'ws'
 import {createProxyMiddleware} from 'http-proxy-middleware'
 
 import getOrCreateFile from '../utilities/get-or-create-file.js'
@@ -227,6 +227,69 @@ class Server {
 			try {
 				// Grab the path and search params from the request
 				const {pathname, searchParams} = new URL(`https://localhost${request.url}`)
+
+				// ── Voice WebSocket Proxy ──────────────────────────────────
+				// /ws/voice lives on nexus-core (port 3200), not livinityd.
+				// We proxy the upgrade directly to nexus-core, forwarding the
+				// original JWT token which both services share.
+				if (pathname === '/ws/voice') {
+					const token = searchParams.get('token')
+					if (!token) {
+						this.logger.verbose(`WS voice proxy rejected: no token`)
+						socket.destroy()
+						return
+					}
+
+					const isValid = await this.verifyToken(token)
+					if (!isValid) {
+						this.logger.verbose(`WS voice proxy rejected: invalid token`)
+						socket.destroy()
+						return
+					}
+
+					this.logger.verbose(`WS voice proxy: connecting to nexus-core`)
+
+					// Create upstream WebSocket to nexus-core
+					const upstream = new WebSocket(`ws://localhost:3200/ws/voice?token=${token}`)
+					const proxyWss = new WebSocketServer({noServer: true})
+
+					// Wait for upstream to be ready before upgrading the client
+					upstream.on('open', () => {
+						this.logger.verbose(`WS voice proxy: upstream connected`)
+
+						proxyWss.handleUpgrade(request, socket, head, (clientWs) => {
+							// Cleanup: proxyWss only needed for the upgrade
+							proxyWss.close()
+
+							// Bidirectional frame relay
+							clientWs.on('message', (data, isBinary) => {
+								if (upstream.readyState === WebSocket.OPEN) {
+									upstream.send(data, {binary: isBinary})
+								}
+							})
+
+							upstream.on('message', (data, isBinary) => {
+								if (clientWs.readyState === WebSocket.OPEN) {
+									clientWs.send(data, {binary: isBinary})
+								}
+							})
+
+							clientWs.on('close', () => upstream.close())
+							upstream.on('close', () => clientWs.close())
+							clientWs.on('error', () => upstream.close())
+							upstream.on('error', () => clientWs.close())
+						})
+					})
+
+					// If upstream fails before upgrade, destroy the raw socket
+					upstream.on('error', (err) => {
+						this.logger.error(`WS voice proxy: upstream error`, err)
+						proxyWss.close()
+						socket.destroy()
+					})
+
+					return
+				}
 
 				// See if we have a WebSocket server for this path in our router
 				const wss = this.webSocketRouter.get(pathname)

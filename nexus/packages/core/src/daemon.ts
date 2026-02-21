@@ -160,6 +160,11 @@ export class Daemon {
     return this.config.canvasManager;
   }
 
+  /** Expose user session manager for external consumers (API commands) */
+  get userSessionManager(): UserSessionManager | undefined {
+    return this.config.userSessionManager;
+  }
+
   /** Set webhook manager after construction (circular dependency: WebhookManager needs Daemon) */
   setWebhookManager(webhookManager: WebhookManager): void {
     this.config.webhookManager = webhookManager;
@@ -1062,7 +1067,10 @@ export class Daemon {
 
       // High complexity (4-5): Give agent more turns and use sonnet tier
       // User's model preference takes priority if set
-      const baseTier = complexity >= 4 ? 'sonnet' : ((process.env.AGENT_TIER as any) || 'sonnet');
+      // Voice mode defaults to haiku for lowest latency
+      const baseTier = intent.source === 'voice'
+        ? 'haiku'
+        : (complexity >= 4 ? 'sonnet' : ((process.env.AGENT_TIER as any) || 'sonnet'));
       const effectiveTier = userModelTier || baseTier;
       const effectiveMaxTurns = complexity >= 4 ? Math.max(maxTurns, 20) : maxTurns;
 
@@ -1170,6 +1178,11 @@ You should approach this methodically:
 5. Save learnings to memory when done (memory_add)
 
 ${task}`;
+      }
+
+      // Voice mode: prepend voice-optimized system instruction
+      if (intent.source === 'voice') {
+        agentTask = `[VOICE MODE] You are in a real-time voice conversation. Keep responses under 2 sentences. No markdown, no code blocks, no lists, no bullet points. Speak naturally and conversationally. If the user asks something that requires tools, do it quickly and summarize the result in one brief sentence.\n\n${agentTask}`;
       }
 
       const result = await agent.run(agentTask);

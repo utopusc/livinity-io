@@ -62,7 +62,6 @@ import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
-import {RadioGroup, RadioGroupItem} from '@/shadcn-components/ui/radio-group'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {
 	DropdownMenu,
@@ -134,7 +133,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'API keys & provider'},
+	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Claude subscription'},
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
 	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
 	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
@@ -473,38 +472,24 @@ function TwoFaSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AiConfigSection() {
-	const [anthropicKey, setAnthropicKey] = useState('')
-	const [geminiKey, setGeminiKey] = useState('')
-	const [anthropicSaved, setAnthropicSaved] = useState(false)
-	const [geminiSaved, setGeminiSaved] = useState(false)
-	const [anthropicValidating, setAnthropicValidating] = useState(false)
-	const [geminiValidating, setGeminiValidating] = useState(false)
-	const [anthropicError, setAnthropicError] = useState('')
-	const [geminiError, setGeminiError] = useState('')
-
-	const configQ = trpcReact.ai.getConfig.useQuery()
 	const cliStatusQ = trpcReact.ai.getClaudeCliStatus.useQuery()
 	const utils = trpcReact.useUtils()
-
-	const validateKeyMutation = trpcReact.ai.validateKey.useMutation()
-
-	const setConfigMutation = trpcReact.ai.setConfig.useMutation({
-		onSuccess: () => {
-			utils.ai.getConfig.invalidate()
-		},
-	})
-
-	// Auth method state
-	const serverAuthMethod = cliStatusQ.data?.authMethod ?? 'api-key'
-	const [authMethod, setAuthMethod] = useState<'api-key' | 'sdk-subscription'>('api-key')
-
-	useEffect(() => {
-		if (serverAuthMethod) setAuthMethod(serverAuthMethod)
-	}, [serverAuthMethod])
 
 	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
 	const [loginUrl, setLoginUrl] = useState('')
 	const [loginCode, setLoginCode] = useState('')
+
+	// Ensure auth method is set to sdk-subscription on mount
+	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
+		onSuccess: () => { utils.ai.getClaudeCliStatus.invalidate() },
+	})
+
+	useEffect(() => {
+		const serverMethod = cliStatusQ.data?.authMethod
+		if (serverMethod && serverMethod !== 'sdk-subscription') {
+			setAuthMethodMutation.mutate({method: 'sdk-subscription'})
+		}
+	}, [cliStatusQ.data?.authMethod])
 
 	// Clear login UI when auth succeeds
 	useEffect(() => {
@@ -514,25 +499,19 @@ function AiConfigSection() {
 		}
 	}, [cliAuthenticated])
 
-	// Poll CLI status every 5s when subscription mode selected but not authenticated
+	// Poll CLI status every 5s when not authenticated
 	useEffect(() => {
-		if (authMethod !== 'sdk-subscription' || cliAuthenticated) return
+		if (cliAuthenticated) return
 		const interval = setInterval(() => { cliStatusQ.refetch() }, 5000)
 		return () => clearInterval(interval)
-	}, [authMethod, cliAuthenticated])
+	}, [cliAuthenticated])
 
-	// When login URL is shown, poll more frequently (every 3s) to detect auth completion
+	// When login URL is shown, poll more frequently (every 3s)
 	useEffect(() => {
 		if (!loginUrl) return
-		const interval = setInterval(() => {
-			cliStatusQ.refetch()
-		}, 3000)
+		const interval = setInterval(() => { cliStatusQ.refetch() }, 3000)
 		return () => clearInterval(interval)
 	}, [loginUrl])
-
-	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
-		onSuccess: () => { utils.ai.getClaudeCliStatus.invalidate() },
-	})
 
 	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
 		onSuccess: (data) => {
@@ -562,328 +541,128 @@ function AiConfigSection() {
 		},
 	})
 
-	const handleAuthMethodChange = (value: string) => {
-		const method = value as 'api-key' | 'sdk-subscription'
-		setAuthMethod(method)
-		setAuthMethodMutation.mutate({method})
-	}
-
 	const cliUser = cliStatusQ.data?.user
 
-	const handleSaveAnthropicKey = async () => {
-		if (!anthropicKey.trim()) return
-		setAnthropicError('')
-		setAnthropicValidating(true)
-
-		try {
-			const result = await validateKeyMutation.mutateAsync({
-				provider: 'claude',
-				apiKey: anthropicKey.trim(),
-			})
-
-			if (!result.valid) {
-				setAnthropicError(result.error || 'Invalid API key')
-				setAnthropicValidating(false)
-				return
-			}
-
-			await setConfigMutation.mutateAsync({anthropicApiKey: anthropicKey.trim()})
-			setAnthropicSaved(true)
-			setAnthropicKey('')
-			setAnthropicValidating(false)
-			setTimeout(() => setAnthropicSaved(false), 2000)
-		} catch {
-			setAnthropicError('Failed to validate key')
-			setAnthropicValidating(false)
-		}
-	}
-
-	const handleSaveGeminiKey = async () => {
-		if (!geminiKey.trim()) return
-		setGeminiError('')
-		setGeminiValidating(true)
-
-		try {
-			const result = await validateKeyMutation.mutateAsync({
-				provider: 'gemini',
-				apiKey: geminiKey.trim(),
-			})
-
-			if (!result.valid) {
-				setGeminiError(result.error || 'Invalid API key')
-				setGeminiValidating(false)
-				return
-			}
-
-			await setConfigMutation.mutateAsync({geminiApiKey: geminiKey.trim()})
-			setGeminiSaved(true)
-			setGeminiKey('')
-			setGeminiValidating(false)
-			setTimeout(() => setGeminiSaved(false), 2000)
-		} catch {
-			setGeminiError('Failed to validate key')
-			setGeminiValidating(false)
-		}
-	}
-
 	return (
-		<div className='max-w-lg space-y-8'>
-			{/* ── Claude Provider ─────────────────── */}
-			<div className='space-y-4'>
-				<h3 className='text-body font-medium text-text-primary'>Claude Provider</h3>
+		<div className='max-w-lg space-y-4'>
+			<h3 className='text-body font-medium text-text-primary'>Claude Subscription</h3>
+			<p className='text-body-sm text-text-secondary'>
+				Use your Claude Pro/Max subscription. No API key needed.
+			</p>
 
-				<RadioGroup value={authMethod} onValueChange={handleAuthMethodChange} className='gap-0'>
-					{/* SDK Subscription Option */}
-					<label
-						className={cn(
-							'flex cursor-pointer gap-3 rounded-t-radius-md border p-4 transition-colors',
-							authMethod === 'sdk-subscription'
-								? 'border-brand/50 bg-brand/5'
-								: 'border-border-default bg-surface-base hover:bg-surface-1',
-						)}
-					>
-						<RadioGroupItem value='sdk-subscription' className='mt-0.5 shrink-0' />
-						<div className='flex-1 space-y-2'>
-							<div className='flex items-center gap-2'>
-								<span className='text-body font-medium'>Claude Subscription</span>
-								<span className='rounded-full bg-brand/20 px-2 py-0.5 text-caption-sm text-brand'>Recommended</span>
-							</div>
-							<p className='text-body-sm text-text-secondary'>
-								Use your Claude Pro/Max subscription. No API key needed.
-							</p>
-
-							{authMethod === 'sdk-subscription' && (
-								<div className='mt-3 space-y-3'>
-									{cliStatusQ.isLoading ? (
-										<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
-											<TbLoader2 className='h-4 w-4 animate-spin' />
-											Checking status...
-										</div>
-									) : cliAuthenticated ? (
-										<div className='space-y-3'>
-											<div className='flex items-center gap-2 text-body-sm text-green-400'>
-												<TbCircleCheck className='h-4 w-4' />
-												Authenticated{cliUser ? ` as ${cliUser}` : ''}
-											</div>
-											<Button
-												variant='secondary'
-												size='sm'
-												onClick={() => logoutMutation.mutate()}
-												disabled={logoutMutation.isPending}
-											>
-												{logoutMutation.isPending ? (
-													<><TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...</>
-												) : (
-													<><TbLogout className='h-4 w-4' /> Sign Out</>
-												)}
-											</Button>
-											{logoutMutation.isError && (
-												<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
-											)}
-										</div>
-									) : (
-										<div className='space-y-3'>
-											<div className='flex items-center gap-2 text-body-sm text-amber-400'>
-												<TbAlertCircle className='h-4 w-4' />
-												Not authenticated
-											</div>
-
-											{/* Step 1: Open auth page */}
-											<Button
-												variant='primary'
-												size='sm'
-												onClick={() => startLoginMutation.mutate()}
-												disabled={startLoginMutation.isPending}
-											>
-												{startLoginMutation.isPending ? (
-													<><TbLoader2 className='h-4 w-4 animate-spin' /> Opening...</>
-												) : (
-													<><TbExternalLink className='h-4 w-4' /> {loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}</>
-												)}
-											</Button>
-											{startLoginMutation.isError && (
-												<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
-											)}
-
-											{/* Step 2: Code input - always visible */}
-											<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
-												<p className='text-caption text-text-secondary'>
-													1. Click &quot;Sign in with Claude&quot; above to open the auth page.
-													<br />
-													2. Log in with your Claude account.
-													<br />
-													3. Copy the code you receive and paste it below:
-												</p>
-												{loginUrl && (
-													<a
-														href={loginUrl}
-														target='_blank'
-														rel='noopener noreferrer'
-														className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-													>
-														<TbExternalLink className='h-3.5 w-3.5' />
-														Re-open auth page
-													</a>
-												)}
-												<div className='flex gap-2'>
-													<Input
-														placeholder='Paste auth code here...'
-														value={loginCode}
-														onValueChange={setLoginCode}
-														className='font-mono text-caption'
-													/>
-													<Button
-														variant='primary'
-														size='sm'
-														onClick={() => {
-															if (!loginUrl) {
-																startLoginMutation.mutate(undefined, {
-																	onSuccess: () => {
-																		submitCodeMutation.mutate({code: loginCode})
-																	},
-																})
-															} else {
-																submitCodeMutation.mutate({code: loginCode})
-															}
-														}}
-														disabled={!loginCode.trim() || submitCodeMutation.isPending}
-													>
-														{submitCodeMutation.isPending ? (
-															<TbLoader2 className='h-4 w-4 animate-spin' />
-														) : (
-															'Submit'
-														)}
-													</Button>
-												</div>
-												{submitCodeMutation.isError && (
-													<p className='text-caption text-red-400'>
-														{submitCodeMutation.error.message}
-													</p>
-												)}
-												{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
-													<p className='text-caption text-red-400'>
-														{submitCodeMutation.data?.error || 'Code exchange failed'}
-													</p>
-												)}
-											</div>
-										</div>
-									)}
-								</div>
-							)}
-						</div>
-					</label>
-
-					{/* API Key Option */}
-					<label
-						className={cn(
-							'flex cursor-pointer gap-3 rounded-b-radius-md border border-t-0 p-4 transition-colors',
-							authMethod === 'api-key'
-								? 'border-brand/50 bg-brand/5'
-								: 'border-border-default bg-surface-base hover:bg-surface-1',
-						)}
-					>
-						<RadioGroupItem value='api-key' className='mt-0.5 shrink-0' />
-						<div className='flex-1 space-y-2'>
-							<span className='text-body font-medium'>API Key</span>
-							<p className='text-body-sm text-text-secondary'>
-								Enter your Anthropic API key directly.
-							</p>
-
-							{authMethod === 'api-key' && (
-								<div className='mt-3 space-y-3'>
-									{configQ.data?.hasAnthropicKey && (
-										<div className='flex items-center gap-2 text-body-sm text-green-400'>
-											<TbCircleCheck className='h-4 w-4' />
-											Current: {configQ.data.anthropicApiKey}
-										</div>
-									)}
-									<Input
-										placeholder='sk-ant-...'
-										value={anthropicKey}
-										onValueChange={(v) => { setAnthropicKey(v); setAnthropicError('') }}
-										onKeyDown={(e) => e.key === 'Enter' && handleSaveAnthropicKey()}
-										className='font-mono'
-									/>
-									{anthropicError && (
-										<p className='text-caption-sm text-red-400'>{anthropicError}</p>
-									)}
-									<a
-										href='https://console.anthropic.com/settings/keys'
-										target='_blank'
-										rel='noopener noreferrer'
-										className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-									>
-										<TbExternalLink className='h-3.5 w-3.5' />
-										Get API key from Anthropic Console
-									</a>
-									<Button
-										variant='primary'
-										size='sm'
-										onClick={handleSaveAnthropicKey}
-										disabled={!anthropicKey.trim() || anthropicValidating}
-									>
-										{anthropicSaved ? (
-											<><TbCheck className='h-4 w-4' /> Saved</>
-										) : anthropicValidating ? (
-											'Validating...'
-										) : (
-											'Save API Key'
-										)}
-									</Button>
-								</div>
-							)}
-						</div>
-					</label>
-				</RadioGroup>
-			</div>
-
-			<div className='border-t border-border-subtle' />
-
-			{/* ── Gemini (Fallback) ─────────────────── */}
-			<div className='space-y-4'>
-				<h3 className='text-body font-medium text-text-primary'>Gemini (Fallback)</h3>
-
-				<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
-					{configQ.data?.hasGeminiKey && (
+			<div className='rounded-radius-md border border-brand/50 bg-brand/5 p-4 space-y-3'>
+				{cliStatusQ.isLoading ? (
+					<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
+						<TbLoader2 className='h-4 w-4 animate-spin' />
+						Checking status...
+					</div>
+				) : cliAuthenticated ? (
+					<div className='space-y-3'>
 						<div className='flex items-center gap-2 text-body-sm text-green-400'>
 							<TbCircleCheck className='h-4 w-4' />
-							Current: {configQ.data.geminiApiKey}
+							Authenticated{cliUser ? ` as ${cliUser}` : ''}
 						</div>
-					)}
-					<Input
-						placeholder='AIzaSy...'
-						value={geminiKey}
-						onValueChange={(v) => { setGeminiKey(v); setGeminiError('') }}
-						onKeyDown={(e) => e.key === 'Enter' && handleSaveGeminiKey()}
-						className='font-mono'
-					/>
-					{geminiError && (
-						<p className='text-caption-sm text-red-400'>{geminiError}</p>
-					)}
-					<a
-						href='https://aistudio.google.com/app/apikey'
-						target='_blank'
-						rel='noopener noreferrer'
-						className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-					>
-						<TbExternalLink className='h-3.5 w-3.5' />
-						Get API key from Google AI Studio
-					</a>
-					<Button
-						variant='primary'
-						size='sm'
-						onClick={handleSaveGeminiKey}
-						disabled={!geminiKey.trim() || geminiValidating}
-					>
-						{geminiSaved ? (
-							<><TbCheck className='h-4 w-4' /> Saved</>
-						) : geminiValidating ? (
-							'Validating...'
-						) : (
-							'Save API Key'
+						<Button
+							variant='secondary'
+							size='sm'
+							onClick={() => logoutMutation.mutate()}
+							disabled={logoutMutation.isPending}
+						>
+							{logoutMutation.isPending ? (
+								<><TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...</>
+							) : (
+								<><TbLogout className='h-4 w-4' /> Sign Out</>
+							)}
+						</Button>
+						{logoutMutation.isError && (
+							<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
 						)}
-					</Button>
-				</div>
+					</div>
+				) : (
+					<div className='space-y-3'>
+						<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+							<TbAlertCircle className='h-4 w-4' />
+							Not authenticated
+						</div>
+
+						<Button
+							variant='primary'
+							size='sm'
+							onClick={() => startLoginMutation.mutate()}
+							disabled={startLoginMutation.isPending}
+						>
+							{startLoginMutation.isPending ? (
+								<><TbLoader2 className='h-4 w-4 animate-spin' /> Opening...</>
+							) : (
+								<><TbExternalLink className='h-4 w-4' /> {loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}</>
+							)}
+						</Button>
+						{startLoginMutation.isError && (
+							<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
+						)}
+
+						<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
+							<p className='text-caption text-text-secondary'>
+								1. Click &quot;Sign in with Claude&quot; above to open the auth page.
+								<br />
+								2. Log in with your Claude account.
+								<br />
+								3. Copy the code you receive and paste it below:
+							</p>
+							{loginUrl && (
+								<a
+									href={loginUrl}
+									target='_blank'
+									rel='noopener noreferrer'
+									className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+								>
+									<TbExternalLink className='h-3.5 w-3.5' />
+									Re-open auth page
+								</a>
+							)}
+							<div className='flex gap-2'>
+								<Input
+									placeholder='Paste auth code here...'
+									value={loginCode}
+									onValueChange={setLoginCode}
+									className='font-mono text-caption'
+								/>
+								<Button
+									variant='primary'
+									size='sm'
+									onClick={() => {
+										if (!loginUrl) {
+											startLoginMutation.mutate(undefined, {
+												onSuccess: () => {
+													submitCodeMutation.mutate({code: loginCode})
+												},
+											})
+										} else {
+											submitCodeMutation.mutate({code: loginCode})
+										}
+									}}
+									disabled={!loginCode.trim() || submitCodeMutation.isPending}
+								>
+									{submitCodeMutation.isPending ? (
+										<TbLoader2 className='h-4 w-4 animate-spin' />
+									) : (
+										'Submit'
+									)}
+								</Button>
+							</div>
+							{submitCodeMutation.isError && (
+								<p className='text-caption text-red-400'>
+									{submitCodeMutation.error.message}
+								</p>
+							)}
+							{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
+								<p className='text-caption text-red-400'>
+									{submitCodeMutation.data?.error || 'Code exchange failed'}
+								</p>
+							)}
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	)
