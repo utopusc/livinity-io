@@ -42,7 +42,20 @@ function checkDocker(): CheckResult {
 
 function checkRedis(): CheckResult {
   try {
-    const raw = runCmd('redis-cli ping');
+    // Try with password from REDIS_URL if set
+    const redisUrl = process.env.REDIS_URL;
+    let raw: string;
+    if (redisUrl) {
+      try {
+        const url = new URL(redisUrl);
+        const pass = decodeURIComponent(url.password);
+        raw = pass ? runCmd(`redis-cli -a '${pass}' ping 2>/dev/null`) : runCmd('redis-cli ping');
+      } catch {
+        raw = runCmd('redis-cli ping');
+      }
+    } else {
+      raw = runCmd('redis-cli ping');
+    }
     if (raw === 'PONG') {
       return { name: 'Redis', ok: true, message: 'Redis is reachable (PONG)' };
     }
