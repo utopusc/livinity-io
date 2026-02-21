@@ -1,0 +1,23 @@
+{
+  "name": "livinity",
+  "version": "2.0.0",
+  "description": "LivOS Onboarding & Management CLI",
+  "type": "module",
+  "bin": {
+    "livinity": "./dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0"
+  }
+}
