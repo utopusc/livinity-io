@@ -2630,11 +2630,29 @@ ${task}`;
 
       toolRegistry.register({
         name: 'canvas_render',
-        description: 'Render interactive content (React component, HTML, SVG, Mermaid diagram, or Recharts chart) in the Live Canvas panel next to the chat. The content will appear as a split-pane alongside the conversation. Use this when the user asks for visual output like dashboards, charts, diagrams, or interactive UI.',
+        description: `Render interactive content in the Live Canvas panel next to the chat. Content appears as a split-pane alongside the conversation.
+
+Types and content format:
+- react: A React functional component using JSX. Must define a function named App (or Main/Dashboard). Available: React 18, Tailwind CSS, useState/useEffect/useRef/useMemo/useCallback.
+  Example: function App() { const [count, setCount] = useState(0); return <div className="p-8"><h1 className="text-2xl font-bold">{count}</h1><button onClick={() => setCount(c => c+1)} className="bg-blue-500 px-4 py-2 rounded text-white">+</button></div> }
+
+- html: Complete HTML document or HTML fragment. Tailwind CSS available via CDN.
+  Example: <div class="p-8 text-center"><h1 class="text-3xl font-bold text-blue-400">Hello World</h1></div>
+
+- svg: SVG markup. Will be centered on dark background.
+  Example: <svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="#6366f1"/></svg>
+
+- mermaid: Mermaid diagram definition (graph, flowchart, sequence, class, ER, gantt, pie, etc). Renders with dark theme.
+  Example: graph TD; A[Start] --> B{Decision}; B -->|Yes| C[OK]; B -->|No| D[End]
+
+- recharts: React component using Recharts library. All Recharts components (LineChart, BarChart, PieChart, AreaChart, ResponsiveContainer, etc) are available as globals.
+  Example: function App() { const data = [{name:'Jan',value:400},{name:'Feb',value:300}]; return <ResponsiveContainer width="100%" height={400}><BarChart data={data}><XAxis dataKey="name"/><YAxis/><Bar dataKey="value" fill="#6366f1"/></BarChart></ResponsiveContainer> }
+
+Use this when users ask for visual output: dashboards, charts, diagrams, UI mockups, interactive widgets.`,
         parameters: [
           { name: 'type', type: 'string', description: 'Artifact type', required: true, enum: ['react', 'html', 'svg', 'mermaid', 'recharts'] },
           { name: 'title', type: 'string', description: 'Short title for the artifact (e.g. "Docker Dashboard", "Memory Usage Chart")', required: true },
-          { name: 'content', type: 'string', description: 'The full source code. For react: a React component using JSX (function App() {...}). For html: complete HTML. For svg: SVG markup. For mermaid: Mermaid diagram definition. For recharts: a React component using Recharts library.', required: true },
+          { name: 'content', type: 'string', description: 'The source code. For react/recharts: define a function App() component. For html: full HTML or fragment. For svg: SVG markup. For mermaid: diagram definition text. Do NOT wrap in markdown code blocks.', required: true },
         ],
         execute: async (params) => {
           const { type, title, content } = params as { type: string; title: string; content: string };
