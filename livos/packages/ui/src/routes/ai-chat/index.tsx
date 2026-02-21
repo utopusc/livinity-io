@@ -311,7 +311,7 @@ function ConversationSidebar({
 					)}
 				>
 					<IconPuzzle size={14} />
-					Skills
+					LivHub
 				</button>
 			</div>
 

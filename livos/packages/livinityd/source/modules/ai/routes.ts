@@ -1305,4 +1305,69 @@ export default router({
 		return await response.json() as {ok: boolean; message: string}
 	}),
 
+	// ── LivHub Registry Management ─────────────────────────────
+
+	/** List skill registries (proxied from Nexus) */
+	listRegistries: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/skills/registries`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) return {registries: []}
+		const data = await response.json() as {registries: string[]}
+		return data
+	}),
+
+	/** Add a skill registry (proxied from Nexus) */
+	addRegistry: privateProcedure
+		.input(z.object({url: z.string().url()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/skills/registries`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({url: input.url}),
+			})
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({error: 'Failed'})) as {error?: string}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: data.error || `Error: ${response.status}`})
+			}
+			return await response.json()
+		}),
+
+	/** Remove a skill registry (proxied from Nexus) */
+	removeRegistry: privateProcedure
+		.input(z.object({url: z.string()}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/skills/registries`, {
+				method: 'DELETE',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({url: input.url}),
+			})
+			if (!response.ok) {
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Error: ${response.status}`})
+			}
+			return await response.json()
+		}),
+
+	/** Refresh skill catalog (proxied from Nexus) */
+	refreshCatalog: privateProcedure.mutation(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/skills/refresh`, {
+			method: 'POST',
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Error: ${response.status}`})
+		}
+		return await response.json()
+	}),
+
 })
