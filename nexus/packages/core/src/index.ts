@@ -34,6 +34,7 @@ import { VoiceGateway } from './voice/index.js';
 import { Queue, Worker } from 'bullmq';
 import { logger } from './logger.js';
 import { CircuitBreaker } from './infra/circuit-breaker.js';
+import { formatErrorMessage } from './infra/errors.js';
 
 const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
 const NEXUS_SKILLS_DIR = process.env.NEXUS_SKILLS_DIR || '/opt/nexus/app/skills';
