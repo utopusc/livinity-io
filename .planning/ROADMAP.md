@@ -470,7 +470,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 - [x] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration ✓
 - [x] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS ✓
 - [x] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace ✓
-- [ ] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool
+- [x] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool ✓
 
 ### Phase 1: Stability & Security Foundation
 **Goal**: The server runs reliably for days without crashing, unknown users cannot interact with the bot without activation, and every user has visibility into their token consumption and session control via chat commands
@@ -576,12 +576,13 @@ Plans:
   3. After setup completes, `livinity status` shows the health of all PM2 services with green/red indicators
   4. Non-interactive mode (`livinity onboard --config setup.json`) completes the full installation without any user prompts
   5. If the installation fails partway through, completed steps are rolled back (created files removed, started services stopped) leaving the server in a clean state
+**Status**: COMPLETE (2026-02-21)
 **Plans**: 3 plans in 3 waves (sequential)
 
 Plans:
-- [ ] v2.0-06-01-PLAN.md — CLI package scaffolding: nexus/packages/cli with commander + picocolors, system prerequisite checks (Node/Docker/Redis/PM2/disk/RAM), livinity status command with PM2 health table [Wave 1]
-- [ ] v2.0-06-02-PLAN.md — Interactive onboard wizard: @clack/prompts UX, domain/SSL config, Telegram/Discord tokens, optional voice/Gmail, secret generation (crypto.randomBytes), .env writer [Wave 2]
-- [ ] v2.0-06-03-PLAN.md — Service setup + resilience: PM2 ecosystem generation, dep install + build + start, health verification, non-interactive mode (--config setup.json), RollbackStack for partial failure cleanup [Wave 3]
+- [x] v2.0-06-01-PLAN.md — CLI package scaffolding: nexus/packages/cli with commander + picocolors, system prerequisite checks (Node/Docker/Redis/PM2/disk/RAM), livinity status command with PM2 health table [Wave 1]
+- [x] v2.0-06-02-PLAN.md — Interactive onboard wizard: @clack/prompts UX, domain/SSL config, Telegram/Discord tokens, optional voice/Gmail, secret generation (crypto.randomBytes), .env writer [Wave 2]
+- [x] v2.0-06-03-PLAN.md — Service setup + resilience: PM2 ecosystem generation, dep install + build + start, health verification, non-interactive mode (--config setup.json), RollbackStack for partial failure cleanup [Wave 3]
 
 ### v2.0 Progress
 
@@ -595,7 +596,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Intelligence Enhancements | 3/3 | Complete | 2026-02-20 |
 | 4. Voice Pipeline | 4/4 | Complete | 2026-02-20 |
 | 5. Live Canvas + LivHub | 4/4 | Complete | 2026-02-21 |
-| 6. Onboarding CLI | 0/3 | Not started | - |
+| 6. Onboarding CLI | 3/3 | Complete | 2026-02-21 |
 
 ---
 *Roadmap created: 2026-02-03*

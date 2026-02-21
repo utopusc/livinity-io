@@ -7,40 +7,40 @@
 
 ### Stability & Process Hardening
 
-- [ ] **STAB-01**: nexus-core process runs for 24+ hours without a single PM2 restart under normal load
-- [ ] **STAB-02**: Unhandled promise rejections and uncaught exceptions are caught globally and logged without crashing the process
-- [ ] **STAB-03**: setTimeout-based cron jobs (heartbeat, schedule runner) are replaced with BullMQ repeatable jobs
-- [ ] **STAB-04**: Redis connection failures trigger circuit breaker (exponential backoff reconnect) instead of crashing
-- [ ] **STAB-05**: grammy Telegram polling offset is persisted to Redis so restarts don't re-deliver old messages
-- [ ] **STAB-06**: SdkAgentRunner agent turn count is capped (max 15 turns) to prevent runaway execution
-- [ ] **STAB-07**: PM2 ecosystem config includes max_memory_restart (512MB) and exponential backoff restart delay
+- [x] **STAB-01**: nexus-core process runs for 24+ hours without a single PM2 restart under normal load
+- [x] **STAB-02**: Unhandled promise rejections and uncaught exceptions are caught globally and logged without crashing the process
+- [x] **STAB-03**: setTimeout-based cron jobs (heartbeat, schedule runner) are replaced with BullMQ repeatable jobs
+- [x] **STAB-04**: Redis connection failures trigger circuit breaker (exponential backoff reconnect) instead of crashing
+- [x] **STAB-05**: grammy Telegram polling offset is persisted to Redis so restarts don't re-deliver old messages
+- [x] **STAB-06**: SdkAgentRunner agent turn count is capped (max 15 turns) to prevent runaway execution
+- [x] **STAB-07**: PM2 ecosystem config includes max_memory_restart (512MB) and exponential backoff restart delay
 
 ### DM Pairing / Activation Security
 
-- [ ] **DM-01**: Unknown users who DM the Telegram/Discord bot receive a 6-digit activation code and their message is not processed
-- [ ] **DM-02**: Activation codes expire after 1 hour with max 3 pending codes per channel
-- [ ] **DM-03**: Server owner can approve/deny pairing requests via the web UI Settings page
-- [ ] **DM-04**: Approved users are stored in Redis allowlist and persist across restarts
-- [ ] **DM-05**: DM policy is configurable per channel: pairing (default), allowlist, open, disabled
-- [ ] **DM-06**: Group messages bypass DM pairing (use @mention activation instead)
+- [x] **DM-01**: Unknown users who DM the Telegram/Discord bot receive a 6-digit activation code and their message is not processed
+- [x] **DM-02**: Activation codes expire after 1 hour with max 3 pending codes per channel
+- [x] **DM-03**: Server owner can approve/deny pairing requests via the web UI Settings page
+- [x] **DM-04**: Approved users are stored in Redis allowlist and persist across restarts
+- [x] **DM-05**: DM policy is configurable per channel: pairing (default), allowlist, open, disabled
+- [x] **DM-06**: Group messages bypass DM pairing (use @mention activation instead)
 
 ### Chat Commands
 
-- [ ] **CMD-01**: User can send `/new [model]` to reset session and optionally switch model tier
-- [ ] **CMD-02**: User can send `/compact [instructions]` to summarize conversation and report token savings
-- [ ] **CMD-03**: User can send `/usage [off|tokens|full|cost]` to control usage display in responses
-- [ ] **CMD-04**: User can send `/activation [mention|always]` in groups to control bot trigger mode
-- [ ] **CMD-05**: All new commands work identically in Telegram and Discord
-- [ ] **CMD-06**: Commands are parsed and handled before reaching the AI agent (no token cost)
+- [x] **CMD-01**: User can send `/new [model]` to reset session and optionally switch model tier
+- [x] **CMD-02**: User can send `/compact [instructions]` to summarize conversation and report token savings
+- [x] **CMD-03**: User can send `/usage [off|tokens|full|cost]` to control usage display in responses
+- [x] **CMD-04**: User can send `/activation [mention|always]` in groups to control bot trigger mode
+- [x] **CMD-05**: All new commands work identically in Telegram and Discord
+- [x] **CMD-06**: Commands are parsed and handled before reaching the AI agent (no token cost)
 
 ### Usage Tracking
 
-- [ ] **USAGE-01**: Every agent session records input tokens, output tokens, turn count, and tool call count
-- [ ] **USAGE-02**: Per-user cumulative usage is tracked in Redis with daily rollup to PostgreSQL
-- [ ] **USAGE-03**: `/usage` command shows current session and cumulative token counts
-- [ ] **USAGE-04**: `/usage cost` shows estimated cost breakdown by model tier
-- [ ] **USAGE-05**: Web UI Settings page shows usage dashboard with daily charts
-- [ ] **USAGE-06**: TTFB (time-to-first-byte) latency is tracked per agent request
+- [x] **USAGE-01**: Every agent session records input tokens, output tokens, turn count, and tool call count
+- [x] **USAGE-02**: Per-user cumulative usage is tracked in Redis with daily rollup to PostgreSQL
+- [x] **USAGE-03**: `/usage` command shows current session and cumulative token counts
+- [x] **USAGE-04**: `/usage cost` shows estimated cost breakdown by model tier
+- [x] **USAGE-05**: Web UI Settings page shows usage dashboard with daily charts
+- [x] **USAGE-06**: TTFB (time-to-first-byte) latency is tracked per agent request
 
 ### Webhook Triggers
 
@@ -114,15 +114,15 @@
 
 ### Onboarding CLI
 
-- [ ] **CLI-01**: `npx livinity onboard` runs guided interactive setup on a fresh Ubuntu 22.04+ server
-- [ ] **CLI-02**: CLI checks system prerequisites (Docker, Node.js ≥22, Redis, PostgreSQL, disk ≥10GB, RAM ≥4GB)
-- [ ] **CLI-03**: CLI prompts for domain, SSL (Caddy), Claude Code auth, Telegram/Discord bot tokens
-- [ ] **CLI-04**: CLI optionally configures voice API keys (Deepgram, Cartesia) and Gmail OAuth
-- [ ] **CLI-05**: CLI generates secure secrets (JWT, API keys) and writes .env file
-- [ ] **CLI-06**: CLI sets up PM2 services and verifies all processes are running
-- [ ] **CLI-07**: `livinity status` shows health of all services
-- [ ] **CLI-08**: Non-interactive mode: `livinity onboard --config setup.json`
-- [ ] **CLI-09**: Partial install rollback: cleanup completed steps on failure
+- [x] **CLI-01**: `npx livinity onboard` runs guided interactive setup on a fresh Ubuntu 22.04+ server
+- [x] **CLI-02**: CLI checks system prerequisites (Docker, Node.js ≥22, Redis, PostgreSQL, disk ≥10GB, RAM ≥4GB)
+- [x] **CLI-03**: CLI prompts for domain, SSL (Caddy), Claude Code auth, Telegram/Discord bot tokens
+- [x] **CLI-04**: CLI optionally configures voice API keys (Deepgram, Cartesia) and Gmail OAuth
+- [x] **CLI-05**: CLI generates secure secrets (JWT, API keys) and writes .env file
+- [x] **CLI-06**: CLI sets up PM2 services and verifies all processes are running
+- [x] **CLI-07**: `livinity status` shows health of all services
+- [x] **CLI-08**: Non-interactive mode: `livinity onboard --config setup.json`
+- [x] **CLI-09**: Partial install rollback: cleanup completed steps on failure
 
 ## Future Requirements (v2.1+)
 
@@ -245,15 +245,15 @@
 | HUB-03 | v2.0 Phase 5 | Complete |
 | HUB-04 | v2.0 Phase 5 | Complete |
 | HUB-05 | v2.0 Phase 5 | Complete |
-| CLI-01 | v2.0 Phase 6 | Pending |
-| CLI-02 | v2.0 Phase 6 | Pending |
-| CLI-03 | v2.0 Phase 6 | Pending |
-| CLI-04 | v2.0 Phase 6 | Pending |
-| CLI-05 | v2.0 Phase 6 | Pending |
-| CLI-06 | v2.0 Phase 6 | Pending |
-| CLI-07 | v2.0 Phase 6 | Pending |
-| CLI-08 | v2.0 Phase 6 | Pending |
-| CLI-09 | v2.0 Phase 6 | Pending |
+| CLI-01 | v2.0 Phase 6 | Complete |
+| CLI-02 | v2.0 Phase 6 | Complete |
+| CLI-03 | v2.0 Phase 6 | Complete |
+| CLI-04 | v2.0 Phase 6 | Complete |
+| CLI-05 | v2.0 Phase 6 | Complete |
+| CLI-06 | v2.0 Phase 6 | Complete |
+| CLI-07 | v2.0 Phase 6 | Complete |
+| CLI-08 | v2.0 Phase 6 | Complete |
+| CLI-09 | v2.0 Phase 6 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 83 total
