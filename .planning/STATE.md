@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 6 in progress (Onboarding CLI). Plan 01 complete.
+**Current focus:** Phase 6 in progress (Onboarding CLI). Plans 01-02 complete.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
 Phase: 6 of 6 (Onboarding CLI) -- In progress
-Plan: 1 of 3 in phase
-Status: Plan 01 complete (CLI scaffold + status command). Plans 02-03 remaining.
-Last activity: 2026-02-21 — Completed v2.0-06-01-PLAN.md
+Plan: 2 of 3 in phase
+Status: Plans 01-02 complete. Plan 03 remaining (setup command).
+Last activity: 2026-02-21 — Completed v2.0-06-02-PLAN.md
 
-Progress: [█████████████████████░] 21/22 (~95%)
+Progress: [██████████████████████░] 22/23 (~96%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21 (v2.0)
+- Total plans completed: 22 (v2.0)
 - Average duration: 4.5min
-- Total execution time: 94min
+- Total execution time: 98min
 
 ## Accumulated Context
 
@@ -131,6 +131,10 @@ v2.0 Phase 6 decisions:
 - [CLI]: Standalone tsconfig (NodeNext module) — CLI runs as direct Node binary, not bundled
 - [CLI]: registerXCommand(program) pattern — each command file exports registration function
 - [CLI]: picocolors only for Plan 01; @clack/prompts deferred to Plan 02
+- [CLI]: guard<T>() generic cancel pattern for @clack/prompts type narrowing
+- [CLI]: No API keys in .env — v2.0 is Claude Code Auth subscription mode only
+- [CLI]: Redis password hex-only (no URL-encoding needed in REDIS_URL)
+- [CLI]: EnvConfig typed interface for all v2.0 env variables
 
 ### Pending Todos
 
@@ -148,5 +152,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed v2.0-06-01-PLAN.md (CLI scaffold + status command)
+Stopped at: Completed v2.0-06-02-PLAN.md (onboard wizard + secrets + env writer)
 Resume file: None
