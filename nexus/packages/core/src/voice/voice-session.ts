@@ -31,6 +31,10 @@ export interface VoiceSessionEvents {
 /** Control message types sent from the browser */
 interface ControlMessage {
   type: 'start-listening' | 'stop-listening' | 'cancel';
+  /** Audio format hint from browser MediaRecorder */
+  format?: 'webm-opus' | 'linear16';
+  /** Client-side microphone capture timestamp for latency tracking */
+  micCapture?: number;
 }
 
 /** Valid state transitions (from -> allowed targets) */
@@ -63,6 +67,19 @@ export interface VoiceSessionOpts {
   cartesiaModelId?: string;
 }
 
+/** Latency timestamps tracked at each pipeline stage */
+interface PipelineTimestamps {
+  micCapture?: number;       // When browser started recording (reported by client)
+  serverReceive?: number;    // When first audio chunk arrived at server
+  sttStart?: number;         // When audio was first sent to Deepgram
+  sttTranscript?: number;    // When final transcript was received
+  llmStart?: number;         // When daemon.addToInbox was called
+  llmFirstToken?: number;    // When first text chunk arrived from AI (set by VoiceGateway)
+  ttsStart?: number;         // When first text was sent to Cartesia
+  ttsFirstAudio?: number;    // When first audio chunk came back from Cartesia
+  browserPlayback?: number;  // When browser started playing audio (reported by client)
+}
+
 export class VoiceSession extends EventEmitter {
   private state: VoiceState = 'idle';
   private ws: WebSocket;
@@ -85,6 +102,10 @@ export class VoiceSession extends EventEmitter {
   private cartesiaApiKey?: string;
   private cartesiaVoiceId?: string;
   private cartesiaModelId?: string;
+
+  // Latency tracking
+  private currentTimestamps: PipelineTimestamps = {};
+  private firstAudioChunkReceived = false;
 
   constructor(opts: VoiceSessionOpts) {
     super();
@@ -148,9 +169,17 @@ export class VoiceSession extends EventEmitter {
     this.lastActivity = Date.now();
 
     if (this.state === 'listening') {
+      // Track first audio chunk for latency
+      if (!this.currentTimestamps.serverReceive) {
+        this.currentTimestamps.serverReceive = Date.now();
+      }
+
       this.emit('audio-in', data);
       // Relay audio to Deepgram STT
       if (this.sttRelay) {
+        if (!this.currentTimestamps.sttStart) {
+          this.currentTimestamps.sttStart = Date.now();
+        }
         this.sttRelay.send(data);
       }
     } else {
@@ -182,7 +211,7 @@ export class VoiceSession extends EventEmitter {
 
     switch (msg.type) {
       case 'start-listening':
-        this.startListening();
+        this.startListening(msg.format, msg.micCapture);
         break;
       case 'stop-listening':
         this.stopListening();
@@ -205,8 +234,10 @@ export class VoiceSession extends EventEmitter {
   /**
    * Start listening: create DeepgramRelay, wire transcript events, connect.
    * Sends error to browser if Deepgram API key is not configured.
+   * @param format - Audio format from browser ('webm-opus' or 'linear16')
+   * @param micCapture - Client-side microphone capture timestamp
    */
-  private startListening(): void {
+  private startListening(format?: string, micCapture?: number): void {
     if (!this.deepgramApiKey) {
       this.sendControl({ type: 'error', message: 'Deepgram API key not configured' });
       logger.warn('[VoiceSession] start-listening failed: no Deepgram API key', {
@@ -219,11 +250,24 @@ export class VoiceSession extends EventEmitter {
     this.closeSttRelay();
     this.receivedTranscript = false;
 
+    // Reset timestamps for new utterance
+    this.currentTimestamps = {};
+    this.firstAudioChunkReceived = false;
+
+    // Store micCapture for latency tracking
+    if (micCapture) {
+      this.currentTimestamps.micCapture = micCapture;
+    }
+
+    // Configure encoding based on browser audio format
+    const isWebmOpus = format === 'webm-opus';
+
     // Create a new DeepgramRelay
     this.sttRelay = new DeepgramRelay({
       apiKey: this.deepgramApiKey,
       model: this.sttModel,
       language: this.sttLanguage,
+      ...(isWebmOpus ? { encoding: 'opus', sampleRate: 48000 } : {}),
     });
 
     // Wire transcript events
@@ -239,6 +283,7 @@ export class VoiceSession extends EventEmitter {
       // On speechFinal (end of complete utterance), trigger AI processing
       if (t.speechFinal) {
         this.receivedTranscript = true;
+        this.currentTimestamps.sttTranscript = Date.now();
 
         logger.info('[VoiceSession] Speech-final transcript received', {
           sessionId: this.sessionId.slice(0, 8),
@@ -248,6 +293,7 @@ export class VoiceSession extends EventEmitter {
 
         // Send to daemon for AI processing
         if (this.onTranscript) {
+          this.currentTimestamps.llmStart = Date.now();
           this.onTranscript(this.sessionId, t.text);
         }
 
@@ -338,6 +384,10 @@ export class VoiceSession extends EventEmitter {
 
     // Relay audio chunks to browser as binary WebSocket frames
     this.ttsRelay.on('audio', (chunk: Buffer) => {
+      // Track first TTS audio chunk for latency
+      if (!this.currentTimestamps.ttsFirstAudio) {
+        this.currentTimestamps.ttsFirstAudio = Date.now();
+      }
       this.sendAudio(chunk);
       // Transition processing -> speaking on first audio chunk
       if (this.state === 'processing') {
@@ -347,6 +397,9 @@ export class VoiceSession extends EventEmitter {
 
     // TTS synthesis complete
     this.ttsRelay.on('done', () => {
+      // Send latency data before tts-done
+      this.sendLatencyData();
+
       this.sendControl({ type: 'tts-done' });
       this.setState('idle');
       this.closeTtsRelay();
@@ -377,6 +430,11 @@ export class VoiceSession extends EventEmitter {
    * @param isFinal - If true, flushes the TTS buffer after sending
    */
   speakText(text: string, isFinal?: boolean): void {
+    // Track first text from LLM for latency
+    if (!this.currentTimestamps.llmFirstToken) {
+      this.currentTimestamps.llmFirstToken = Date.now();
+    }
+
     // Lazy-init TTS on first speakText call
     if (!this.ttsRelay || !this.ttsRelay.isConnected()) {
       this.startTts();
@@ -387,6 +445,11 @@ export class VoiceSession extends EventEmitter {
         sessionId: this.sessionId.slice(0, 8),
       });
       return;
+    }
+
+    // Track when first text is sent to TTS
+    if (!this.currentTimestamps.ttsStart) {
+      this.currentTimestamps.ttsStart = Date.now();
     }
 
     this.ttsRelay.synthesize(text);
@@ -410,6 +473,44 @@ export class VoiceSession extends EventEmitter {
       this.ttsRelay.close();
       this.ttsRelay = null;
     }
+  }
+
+  // ── Latency ──────────────────────────────────────────────────────────────
+
+  /**
+   * Send latency data to the browser and log it.
+   */
+  private sendLatencyData(): void {
+    const ts = this.currentTimestamps;
+    const durations: Record<string, number | undefined> = {};
+
+    if (ts.sttTranscript && ts.serverReceive) {
+      durations.sttMs = ts.sttTranscript - ts.serverReceive;
+    }
+    if (ts.llmFirstToken && ts.sttTranscript) {
+      durations.llmMs = ts.llmFirstToken - ts.sttTranscript;
+    }
+    if (ts.ttsFirstAudio && ts.ttsStart) {
+      durations.ttsMs = ts.ttsFirstAudio - ts.ttsStart;
+    }
+    if (ts.ttsFirstAudio && ts.serverReceive) {
+      durations.totalServerMs = ts.ttsFirstAudio - ts.serverReceive;
+    }
+
+    this.sendControl({
+      type: 'latency',
+      timestamps: ts,
+      durations,
+    });
+
+    logger.info('[VoiceSession] Voice pipeline latency', {
+      sessionId: this.sessionId.slice(0, 8),
+      ...durations,
+    });
+
+    // Reset timestamps for next utterance
+    this.currentTimestamps = {};
+    this.firstAudioChunkReceived = false;
   }
 
   // ── Outbound ─────────────────────────────────────────────────────────────

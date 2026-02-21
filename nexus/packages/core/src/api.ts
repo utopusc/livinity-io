@@ -1324,6 +1324,70 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── Voice Config API ─────────────────────────────────────────
+
+  /** Get voice pipeline configuration (API keys masked for security) */
+  app.get('/api/voice/config', async (_req, res) => {
+    try {
+      const configRaw = await redis.get('nexus:config');
+      const config = configRaw ? JSON.parse(configRaw) : {};
+      const voice = config.voice || {};
+      res.json({
+        enabled: voice.enabled ?? false,
+        hasDeepgramKey: !!voice.deepgramApiKey,
+        hasCartesiaKey: !!voice.cartesiaApiKey,
+        cartesiaVoiceId: voice.cartesiaVoiceId || 'a0e99841-438c-4a64-b679-ae501e7d6091',
+        sttLanguage: voice.sttLanguage || 'en',
+        sttModel: voice.sttModel || 'nova-3',
+      });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Update voice pipeline configuration */
+  app.put('/api/voice/config', async (req, res) => {
+    try {
+      const { deepgramApiKey, cartesiaApiKey, cartesiaVoiceId, sttLanguage, sttModel, enabled } = req.body;
+
+      // Read current config
+      const configRaw = await redis.get('nexus:config');
+      const config = configRaw ? JSON.parse(configRaw) : {};
+      const voice = config.voice || {};
+
+      // Merge voice section
+      if (deepgramApiKey !== undefined) voice.deepgramApiKey = deepgramApiKey;
+      if (cartesiaApiKey !== undefined) voice.cartesiaApiKey = cartesiaApiKey;
+      if (cartesiaVoiceId !== undefined) voice.cartesiaVoiceId = cartesiaVoiceId;
+      if (sttLanguage !== undefined) voice.sttLanguage = sttLanguage;
+      if (sttModel !== undefined) voice.sttModel = sttModel;
+      if (enabled !== undefined) voice.enabled = enabled;
+
+      config.voice = voice;
+      await redis.set('nexus:config', JSON.stringify(config));
+
+      // Publish config update so VoiceGateway can hot-reload
+      await redis.publish('nexus:config:updated', 'voice');
+
+      logger.info('[Voice Config] Updated voice configuration', {
+        enabled: voice.enabled,
+        hasDeepgramKey: !!voice.deepgramApiKey,
+        hasCartesiaKey: !!voice.cartesiaApiKey,
+      });
+
+      res.json({
+        enabled: voice.enabled ?? false,
+        hasDeepgramKey: !!voice.deepgramApiKey,
+        hasCartesiaKey: !!voice.cartesiaApiKey,
+        cartesiaVoiceId: voice.cartesiaVoiceId || 'a0e99841-438c-4a64-b679-ae501e7d6091',
+        sttLanguage: voice.sttLanguage || 'en',
+        sttModel: voice.sttModel || 'nova-3',
+      });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {
