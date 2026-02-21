@@ -82,16 +82,16 @@
 
 ### Voice Pipeline
 
-- [ ] **VOICE-01**: User can click a push-to-talk button in the web UI to speak to the AI
-- [ ] **VOICE-02**: Browser audio is captured via MediaRecorder and streamed over WebSocket to server
-- [ ] **VOICE-03**: Server relays audio to Deepgram STT via persistent WebSocket and receives transcripts
-- [ ] **VOICE-04**: Transcribed text is sent to the AI agent via daemon.addToInbox()
-- [ ] **VOICE-05**: AI response text is streamed to Cartesia TTS via WebSocket and audio is relayed back to browser
-- [ ] **VOICE-06**: Browser plays TTS audio in real-time via AudioContext/AudioWorklet
-- [ ] **VOICE-07**: End-to-end voice latency (mic → STT → AI → TTS → speaker) targets p95 < 1200ms
-- [ ] **VOICE-08**: Deepgram and Cartesia API keys are configured via web UI Settings page
-- [ ] **VOICE-09**: Voice sessions maintain connection state with keep-alive and exponential reconnect backoff
-- [ ] **VOICE-10**: Full latency pipeline is instrumented with timestamps at each stage
+- [x] **VOICE-01**: User can click a push-to-talk button in the web UI to speak to the AI
+- [x] **VOICE-02**: Browser audio is captured via MediaRecorder and streamed over WebSocket to server
+- [x] **VOICE-03**: Server relays audio to Deepgram STT via persistent WebSocket and receives transcripts
+- [x] **VOICE-04**: Transcribed text is sent to the AI agent via daemon.addToInbox()
+- [x] **VOICE-05**: AI response text is streamed to Cartesia TTS via WebSocket and audio is relayed back to browser
+- [x] **VOICE-06**: Browser plays TTS audio in real-time via AudioContext/AudioWorklet
+- [x] **VOICE-07**: End-to-end voice latency (mic → STT → AI → TTS → speaker) targets p95 < 1200ms
+- [x] **VOICE-08**: Deepgram and Cartesia API keys are configured via web UI Settings page
+- [x] **VOICE-09**: Voice sessions maintain connection state with keep-alive and exponential reconnect backoff
+- [x] **VOICE-10**: Full latency pipeline is instrumented with timestamps at each stage
 
 ### Live Canvas
 
@@ -222,16 +222,16 @@
 | MULTI-05 | v2.0 Phase 3 | Complete |
 | MULTI-06 | v2.0 Phase 3 | Complete |
 | MULTI-07 | v2.0 Phase 3 | Complete |
-| VOICE-01 | v2.0 Phase 4 | Pending |
-| VOICE-02 | v2.0 Phase 4 | Pending |
-| VOICE-03 | v2.0 Phase 4 | Pending |
-| VOICE-04 | v2.0 Phase 4 | Pending |
-| VOICE-05 | v2.0 Phase 4 | Pending |
-| VOICE-06 | v2.0 Phase 4 | Pending |
-| VOICE-07 | v2.0 Phase 4 | Pending |
-| VOICE-08 | v2.0 Phase 4 | Pending |
-| VOICE-09 | v2.0 Phase 4 | Pending |
-| VOICE-10 | v2.0 Phase 4 | Pending |
+| VOICE-01 | v2.0 Phase 4 | Complete |
+| VOICE-02 | v2.0 Phase 4 | Complete |
+| VOICE-03 | v2.0 Phase 4 | Complete |
+| VOICE-04 | v2.0 Phase 4 | Complete |
+| VOICE-05 | v2.0 Phase 4 | Complete |
+| VOICE-06 | v2.0 Phase 4 | Complete |
+| VOICE-07 | v2.0 Phase 4 | Complete |
+| VOICE-08 | v2.0 Phase 4 | Complete |
+| VOICE-09 | v2.0 Phase 4 | Complete |
+| VOICE-10 | v2.0 Phase 4 | Complete |
 | CANVAS-01 | v2.0 Phase 5 | Pending |
 | CANVAS-02 | v2.0 Phase 5 | Pending |
 | CANVAS-03 | v2.0 Phase 5 | Pending |

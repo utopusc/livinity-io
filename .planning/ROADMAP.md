@@ -468,7 +468,7 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
 - [x] **Phase 1: Stability & Security Foundation** - Process hardening, DM pairing security, chat commands, usage tracking ✓
 - [ ] **Phase 2: Automation Infrastructure** - Webhook triggers with HMAC auth, Gmail as a channel provider
 - [x] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration ✓
-- [ ] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS
+- [x] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS ✓
 - [ ] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace
 - [ ] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool
 
@@ -540,11 +540,12 @@ Plans:
   4. Voice sessions maintain stable WebSocket connections with automatic reconnection on network interruptions (no manual page refresh needed)
   5. A latency dashboard (or log) shows timestamps at each pipeline stage: mic capture, STT transcript, LLM first token, TTS first audio, browser playback
 **Plans**: 4 plans in 3 waves
+**Status**: COMPLETE (2026-02-20)
 Plans:
-- [ ] v2.0-04-01-PLAN.md — Voice WebSocket gateway: /ws/voice binary endpoint, VoiceSession state machine, VoiceGateway class, voice config schema [Wave 1]
-- [ ] v2.0-04-02-PLAN.md — STT integration: DeepgramRelay class, persistent WebSocket to Deepgram, audio relay, transcript events, daemon.addToInbox() wiring [Wave 2]
-- [ ] v2.0-04-03-PLAN.md — TTS integration: CartesiaRelay class, text-to-speech streaming, context_id continuity, sentence buffering, audio relay back to browser [Wave 2]
-- [ ] v2.0-04-04-PLAN.md — Voice UI + instrumentation: VoiceButton push-to-talk component, MediaRecorder capture, AudioContext playback, API key settings, latency pipeline timestamps [Wave 3]
+- [x] v2.0-04-01-PLAN.md — Voice WebSocket gateway: /ws/voice binary endpoint, VoiceSession state machine, VoiceGateway class, voice config schema [Wave 1]
+- [x] v2.0-04-02-PLAN.md — STT integration: DeepgramRelay class, persistent WebSocket to Deepgram, audio relay, transcript events, daemon.addToInbox() wiring [Wave 2]
+- [x] v2.0-04-03-PLAN.md — TTS integration: CartesiaRelay class, text-to-speech streaming, context_id continuity, sentence buffering, audio relay back to browser [Wave 2]
+- [x] v2.0-04-04-PLAN.md — Voice UI + instrumentation: VoiceButton push-to-talk component, MediaRecorder capture, AudioContext playback, API key settings, latency pipeline timestamps [Wave 3]
 
 ### Phase 5: Live Canvas + LivHub
 **Goal**: The AI can generate and update interactive visual content (React components, charts, diagrams) displayed alongside the chat, and users can discover and manage skills through an improved marketplace
