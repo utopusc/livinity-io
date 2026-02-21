@@ -576,12 +576,12 @@ Plans:
   3. After setup completes, `livinity status` shows the health of all PM2 services with green/red indicators
   4. Non-interactive mode (`livinity onboard --config setup.json`) completes the full installation without any user prompts
   5. If the installation fails partway through, completed steps are rolled back (created files removed, started services stopped) leaving the server in a clean state
-**Plans**: 3 plans (estimated)
+**Plans**: 3 plans in 3 waves (sequential)
 
 Plans:
-- [ ] v2.0-06-01: CLI package scaffolding — nexus/packages/cli with commander + clack, system prerequisite checks, livinity status command
-- [ ] v2.0-06-02: Interactive onboard flow — domain/SSL, Claude Code auth, Telegram/Discord tokens, optional voice/Gmail config, secret generation, .env writing
-- [ ] v2.0-06-03: Service setup + resilience — PM2 ecosystem setup, health verification, non-interactive mode, partial rollback on failure
+- [ ] v2.0-06-01-PLAN.md — CLI package scaffolding: nexus/packages/cli with commander + picocolors, system prerequisite checks (Node/Docker/Redis/PM2/disk/RAM), livinity status command with PM2 health table [Wave 1]
+- [ ] v2.0-06-02-PLAN.md — Interactive onboard wizard: @clack/prompts UX, domain/SSL config, Telegram/Discord tokens, optional voice/Gmail, secret generation (crypto.randomBytes), .env writer [Wave 2]
+- [ ] v2.0-06-03-PLAN.md — Service setup + resilience: PM2 ecosystem generation, dep install + build + start, health verification, non-interactive mode (--config setup.json), RollbackStack for partial failure cleanup [Wave 3]
 
 ### v2.0 Progress
 
