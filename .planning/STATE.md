@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 4 complete (Voice Pipeline). Ready for Phase 5 (Live Canvas + LivHub).
+**Current focus:** Phase 5 in progress (Live Canvas + LivHub). Plan 04 of 04 complete.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 4 of 6 (Voice Pipeline) -- COMPLETE
+Phase: 5 of 6 (Live Canvas + LivHub) -- In progress
 Plan: 4 of 4 in phase
-Status: Phase complete
-Last activity: 2026-02-20 — Completed v2.0-04-04-PLAN.md (Voice UI + Latency Instrumentation)
+Status: In progress (Wave 1 plans executing in parallel)
+Last activity: 2026-02-21 — Completed v2.0-05-04-PLAN.md (LivHub Marketplace)
 
-Progress: [███████████████░░░░░░░] 15/22 (~68%)
+Progress: [████████████████░░░░░] 16/22 (~73%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15 (v2.0)
-- Average duration: 5.1min
-- Total execution time: 76min
+- Total plans completed: 16 (v2.0)
+- Average duration: 5.0min
+- Total execution time: 80min
 
 ## Accumulated Context
 
@@ -109,6 +109,11 @@ v2.0 Phase 4 decisions:
 - [Voice]: tRPC proxy routes for voice config (consistent with existing settings pattern)
 - [Voice]: PipelineTimestamps reset per utterance, durations sent at tts-done
 
+v2.0 Phase 5 decisions:
+- [LivHub]: LivHub branding with indigo/purple gradient replaces emerald/teal Skills branding
+- [LivHub]: UI uses skillFetch direct API pattern for registry/refresh (not tRPC from UI)
+- [LivHub]: Registries stored in Redis key nexus:skills:registries as JSON array of URLs
+
 ### Pending Todos
 
 None.
@@ -124,6 +129,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-20
-Stopped at: Completed v2.0-04-04-PLAN.md (Voice UI + Latency Instrumentation) — Phase 4 complete
+Last session: 2026-02-21
+Stopped at: Completed v2.0-05-04-PLAN.md (LivHub Marketplace) — Phase 5 Wave 1 plans in parallel
 Resume file: None
