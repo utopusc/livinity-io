@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** Phase 6 in progress (Onboarding CLI). Plans 01-02 complete.
+**Current focus:** v2.0 COMPLETE. All 6 phases, 23 plans executed.
 
 ## Current Position
 
 Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 6 of 6 (Onboarding CLI) -- In progress
-Plan: 2 of 3 in phase
-Status: Plans 01-02 complete. Plan 03 remaining (setup command).
-Last activity: 2026-02-21 — Completed v2.0-06-02-PLAN.md
+Phase: 6 of 6 (Onboarding CLI) -- COMPLETE
+Plan: 3 of 3 in phase -- COMPLETE
+Status: v2.0 milestone fully complete. All phases and plans executed.
+Last activity: 2026-02-21 — Completed v2.0-06-03-PLAN.md
 
-Progress: [██████████████████████░] 22/23 (~96%)
+Progress: [███████████████████████] 23/23 (100%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22 (v2.0)
+- Total plans completed: 23 (v2.0)
 - Average duration: 4.5min
-- Total execution time: 98min
+- Total execution time: ~103min
 
 ## Accumulated Context
 
@@ -135,6 +135,10 @@ v2.0 Phase 6 decisions:
 - [CLI]: No API keys in .env — v2.0 is Claude Code Auth subscription mode only
 - [CLI]: Redis password hex-only (no URL-encoding needed in REDIS_URL)
 - [CLI]: EnvConfig typed interface for all v2.0 env variables
+- [CLI]: PM2 ecosystem CJS with runtime venv detection for Python interpreter
+- [CLI]: RollbackStack continues on individual undo failure (fault-tolerant cleanup)
+- [CLI]: Non-interactive config auto-generates secrets (security by default)
+- [CLI]: .env rollback restores backup rather than deleting
 
 ### Pending Todos
 
@@ -152,5 +156,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed v2.0-06-02-PLAN.md (onboard wizard + secrets + env writer)
+Stopped at: Completed v2.0-06-03-PLAN.md — v2.0 MILESTONE COMPLETE
 Resume file: None
