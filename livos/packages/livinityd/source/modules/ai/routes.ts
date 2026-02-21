@@ -1190,6 +1190,64 @@ export default router({
 			return await response.json() as {ok: boolean; message: string}
 		}),
 
+	// ── Voice Config ─────────────────────────────────────────────
+
+	/** Get voice pipeline configuration (keys masked) */
+	getVoiceConfig: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/voice/config`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			return {enabled: false, hasDeepgramKey: false, hasCartesiaKey: false, cartesiaVoiceId: '', sttLanguage: 'en', sttModel: 'nova-3'}
+		}
+		return await response.json() as {
+			enabled: boolean
+			hasDeepgramKey: boolean
+			hasCartesiaKey: boolean
+			cartesiaVoiceId: string
+			sttLanguage: string
+			sttModel: string
+		}
+	}),
+
+	/** Update voice pipeline configuration */
+	updateVoiceConfig: privateProcedure
+		.input(z.object({
+			deepgramApiKey: z.string().optional(),
+			cartesiaApiKey: z.string().optional(),
+			cartesiaVoiceId: z.string().optional(),
+			sttLanguage: z.string().optional(),
+			sttModel: z.string().optional(),
+			enabled: z.boolean().optional(),
+		}))
+		.mutation(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/voice/config`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify(input),
+			})
+			if (!response.ok) {
+				const err = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return await response.json() as {
+				enabled: boolean
+				hasDeepgramKey: boolean
+				hasCartesiaKey: boolean
+				cartesiaVoiceId: string
+				sttLanguage: string
+				sttModel: string
+			}
+		}),
+
 	// ── Gmail OAuth ─────────────────────────────────────────────
 
 	/** Get Gmail connection status */

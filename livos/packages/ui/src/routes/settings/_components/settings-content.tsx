@@ -45,6 +45,7 @@ import {
 	TbChartBar,
 	TbMail,
 	TbWebhook,
+	TbMicrophone,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -92,6 +93,9 @@ const GmailContentLazy = React.lazy(() =>
 const WebhooksContentLazy = React.lazy(() =>
 	import('@/routes/settings/webhooks').then((m) => ({default: m.WebhooksContent})),
 )
+const VoiceContentLazy = React.lazy(() =>
+	import('@/routes/settings/voice').then((m) => ({default: m.VoiceContent})),
+)
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,6 +114,7 @@ type SettingsSection =
 	| 'dm-pairing'
 	| 'usage'
 	| 'webhooks'
+	| 'voice'
 	| 'domain'
 	| 'backups'
 	| 'migration'
@@ -136,6 +141,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
 	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets'},
+	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL'},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore'},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi'},
@@ -343,6 +349,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <UsageSection />
 		case 'webhooks':
 			return <WebhooksSection />
+		case 'voice':
+			return <VoiceSection />
 		case 'domain':
 			return <DomainSection />
 		case 'backups':
@@ -1385,6 +1393,14 @@ function WebhooksSection() {
 	return (
 		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 			<WebhooksContentLazy />
+		</Suspense>
+	)
+}
+
+function VoiceSection() {
+	return (
+		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
+			<VoiceContentLazy />
 		</Suspense>
 	)
 }
