@@ -5,6 +5,7 @@ import { Loader2, Construction } from 'lucide-react';
 import { type WindowState } from '@/providers/window-manager';
 
 const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m => ({ default: m.SettingsLayout })));
+const AppStoreLayout = lazy(() => import('@/components/app-store/layout').then(m => ({ default: m.AppStoreLayout })));
 
 /* ------------------------------------------------------------------ */
 /*  Loading fallback                                                   */
@@ -39,7 +40,7 @@ function ComingSoon({ name }: { name: string }) {
 /* ------------------------------------------------------------------ */
 
 /** Full-height apps (no scroll wrapper) */
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings']);
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings', 'LIVINITY_app-store']);
 
 export function WindowContent({ window: win }: { window: WindowState }) {
   const content = getContentForApp(win.appId, win.title);
@@ -61,7 +62,7 @@ function getContentForApp(appId: string, title: string): ReactNode {
     case 'LIVINITY_settings':
       return <SettingsLayout />;
     case 'LIVINITY_app-store':
-      return <ComingSoon name="App Store" />;
+      return <AppStoreLayout />;
     case 'LIVINITY_files':
       return <ComingSoon name="Files" />;
     case 'LIVINITY_ai-chat':
