@@ -10,6 +10,9 @@ node_modules/
 .env.local
 .env.production
 
+# Static assets (copied from livinityd/ui at build time)
+public/wallpapers/
+
 # Debug
 npm-debug.log*
 
