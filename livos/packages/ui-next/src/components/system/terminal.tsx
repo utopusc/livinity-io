@@ -78,7 +78,7 @@ export function TerminalLayout() {
 
       // Connect WebSocket
       setStatus('connecting');
-      const token = localStorage.getItem('livinity-token');
+      const token = localStorage.getItem('jwt');
       const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${wsProto}//${window.location.host}/terminal?token=${token}`);
       ws.binaryType = 'arraybuffer';
