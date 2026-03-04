@@ -2,143 +2,41 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-20)
+See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
-**Current milestone:** v2.0 — OpenClaw-Class AI Platform
-**Current focus:** v2.0 COMPLETE. All 6 phases, 23 plans executed.
+**Current milestone:** v3.0 — Next.js 16 UI Rewrite
+**Current focus:** Phase 01 — Project Scaffolding & Design System
 
 ## Current Position
 
-Milestone: v2.0 (OpenClaw-Class AI Platform)
-Phase: 6 of 6 (Onboarding CLI) -- COMPLETE
-Plan: 3 of 3 in phase -- COMPLETE
-Status: v2.0 milestone fully complete. All phases and plans executed.
-Last activity: 2026-02-21 — Completed v2.0-06-03-PLAN.md
+Milestone: v3.0 (Next.js 16 UI Rewrite)
+Phase: 1 of 10 (Scaffolding & Design System) -- NOT STARTED
+Plan: 0 of 3 in phase
+Status: Milestone created, requirements and roadmap defined.
+Last activity: 2026-03-04 — Created v3.0 milestone
 
-Progress: [███████████████████████] 23/23 (100%)
+Progress: [░░░░░░░░░░░░░░░░░░░░░] 0/24 (0%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 23 (v2.0)
-- Average duration: 4.5min
-- Total execution time: ~103min
+- Total plans completed: 0 (v3.0)
 
 ## Accumulated Context
 
 ### Decisions
 
-v1.5 decisions (carried forward):
-- [Milestone]: Claude Code SDK subscription mode (dontAsk permissionMode)
-- [Milestone]: SdkAgentRunner as primary agent execution engine
-- [Milestone]: Nexus tools via MCP (nexus-tools server)
-- [Tech]: Telegram dedup via Redis NX + stale message filter
-
-v2.0 decisions:
-- [Milestone]: Claude Code Auth ONLY — no API keys, no Gemini, no OpenAI
-- [Milestone]: Telegram + Discord only (WhatsApp deferred)
-- [Milestone]: Cartesia for TTS, Deepgram for STT
-- [Milestone]: Web-based Live Canvas via iframe srcdoc (no A2UI, no Sandpack)
-- [Milestone]: LivHub branding for skill registry
-- [Milestone]: Session compaction via SessionManager (not native Compaction API — incompatible with subscription mode)
-- [Milestone]: DAG topology for multi-agent (no recursive sub-agents)
-- [Milestone]: Gmail polling default, Pub/Sub as advanced option
-
-v2.0 Phase 1 decisions:
-- [Infra]: CircuitBreaker wraps Redis error events, not individual commands (non-invasive)
-- [Infra]: BullMQ delayed jobs for cron scheduling (replaces setTimeout)
-- [Infra]: Agent turn cap: default 15, hard max 25
-- [Infra]: Telegram polling offset persisted to Redis for restart recovery
-- [Commands]: Activation mode stored in Redis key nexus:activation:{channelId} (not channel config)
-- [Commands]: /new resets both SessionManager and UserSessionManager, optionally switches model
-- [Commands]: /compact now calls compactSession() with token savings report (implemented in Phase 3)
-- [Security]: Default DM policy is 'pairing' (activation code flow) for maximum security
-- [Security]: Max 3 pending activation codes per channel, 1-hour TTL
-- [Security]: DM check runs after dedup/stale filters, before AI handler
-- [Security]: Group messages bypass DM pairing entirely
-- [Usage]: Cost stored as integer cents in Redis to avoid float precision
-- [Usage]: Daily usage keys have 90-day TTL for automatic cleanup
-- [Usage]: tRPC proxy routes for usage dashboard (consistent with existing patterns)
-
-v2.0 Phase 2 decisions:
-- [Webhook]: Route registered before express.json() and requireApiKey — uses own HMAC-SHA256 auth
-- [Webhook]: UUID validation on route IDs to avoid intercepting /api/webhook/git
-- [Webhook]: Duplicate deliveries return HTTP 200 to prevent external service retries
-- [Webhook]: BullMQ webhook worker concurrency 2 (matches memory extraction pattern)
-- [Webhook]: WebhookManager injected post-construction via setWebhookManager() (circular dependency resolution)
-- [Webhook]: Secrets stripped from GET/LIST responses; only returned once at POST creation
-- [Webhook]: Rate limiter uses Redis INCR+EXPIRE; failure doesn't block processing (graceful degradation)
-- [Gmail]: OAuth callback is public (before requireApiKey) — Google redirects browser directly
-- [Gmail]: Polling interval default 60s, configurable via GMAIL_POLL_INTERVAL_SEC
-- [Gmail]: Seen message IDs stored in Redis SET with 500-entry cap
-- [Gmail]: GmailProvider registered in ChannelManager alongside existing providers
-- [Gmail]: MCP tools only registered when gmailProvider exists (graceful no-op without config)
-- [Gmail]: Token failure notifications sent to Telegram/Discord via channelManager
-- [Gmail]: Notifications stored in Redis nexus:notifications list (capped at 100)
-- [Gmail]: Reply emails use In-Reply-To and References headers for proper threading
-
-v2.0 Phase 3 decisions:
-- [Compaction]: Brain passed as parameter to compactSession(), not stored on SessionManager
-- [Compaction]: Token estimation via Math.ceil(text.length/4) — no tokenizer dependency
-- [Compaction]: Auto-compact threshold 100k tokens, triggers after agent runs
-- [Multi-Agent]: Redis with 1-hour TTL for session state, history as list
-- [Multi-Agent]: Max 2 concurrent sub-agents via SCARD check (MULTI-06)
-- [Multi-Agent]: Tools conditionally registered when multiAgentManager exists
-- [Multi-Agent]: DAG enforcement via restricted ToolRegistry (exclude sessions_* tools) + system prompt
-- [Multi-Agent]: Sub-agents use sonnet tier, stream disabled (background BullMQ execution)
-- [Multi-Agent]: sessions_send only enqueues if session not already running (prevent duplicates)
-
-v2.0 Phase 4 decisions:
-- [Voice]: Auth strategy same as WsGateway — X-API-Key, JWT query, Sec-WebSocket-Protocol
-- [Voice]: Keep-alive 25s ping interval (under typical 30s proxy timeout)
-- [Voice]: Any state can reset to idle (graceful cancel/error recovery)
-- [Voice]: Binary audio only processed in 'listening' state; other states ignore frames
-- [Voice]: 'voice' added to Intent source union type (no more `as any` cast)
-- [Voice]: speechFinal triggers AI processing (not just isFinal)
-- [Voice]: Deepgram auth via Token header (more secure than query param)
-- [Voice]: Stop-listening transitions to 'processing' only if transcript was received
-- [Voice]: Redis pub/sub decouples daemon from VoiceGateway for TTS response routing
-- [Voice]: Sentence-boundary buffering for natural TTS speech output
-- [Voice]: Lazy TTS init — CartesiaRelay created on first speakText() call
-- [Voice]: context_id per CartesiaRelay for voice continuity within session
-- [Voice]: WebSocket JWT auth via query param (?token=) for browser compatibility
-- [Voice]: MediaRecorder webm/opus format with Deepgram encoding=opus (no re-encoding)
-- [Voice]: AudioPlaybackQueue chains AudioBufferSourceNode.onended for gapless playback
-- [Voice]: VoiceButton renders null when unconfigured (zero UI impact for non-voice users)
-- [Voice]: tRPC proxy routes for voice config (consistent with existing settings pattern)
-- [Voice]: PipelineTimestamps reset per utterance, durations sent at tts-done
-
-v2.0 Phase 5 decisions:
-- [LivHub]: LivHub branding with indigo/purple gradient replaces emerald/teal Skills branding
-- [LivHub]: UI uses skillFetch direct API pattern for registry/refresh (not tRPC from UI)
-- [LivHub]: Registries stored in Redis key nexus:skills:registries as JSON array of URLs
-- [Canvas]: Artifacts stored in Redis nexus:canvas:{id} with 2h TTL (ephemeral session data)
-- [Canvas]: conversationId plumbed from frontend chat() through SSE body to daemon instance state
-- [Canvas]: Frontend polls listCanvasArtifacts tRPC route (not chatStatus) to detect artifacts
-- [Canvas]: Canvas tools conditionally registered when canvasManager exists in DaemonConfig
-- [Canvas]: srcdoc attribute for iframe content injection (never src URL) — CANVAS-03 security
-- [Canvas]: sandbox='allow-scripts allow-popups' with NO allow-same-origin
-- [Canvas]: CDN-loaded React 18 + Babel standalone + Tailwind CSS + Mermaid + Recharts inside iframe
-- [Canvas]: Desktop split-pane (50/50), mobile full overlay for canvas panel
-- [Canvas]: Dual polling: 1s during AI loading + one-time fetch on conversation load
-- [Canvas]: Per-type builder functions (buildReactSrcdoc, etc.) instead of monolithic switch
-- [Canvas]: Type auto-detection priority: SVG > Mermaid > HTML > Recharts > React (default)
-- [Canvas]: Mermaid themeVariables use indigo palette (#6366f1 primary, #1e1b4b backgrounds)
-- [Canvas]: HTML full-doc detection injects error boundary into existing <head> tag
-
-v2.0 Phase 6 decisions:
-- [CLI]: Standalone tsconfig (NodeNext module) — CLI runs as direct Node binary, not bundled
-- [CLI]: registerXCommand(program) pattern — each command file exports registration function
-- [CLI]: picocolors only for Plan 01; @clack/prompts deferred to Plan 02
-- [CLI]: guard<T>() generic cancel pattern for @clack/prompts type narrowing
-- [CLI]: No API keys in .env — v2.0 is Claude Code Auth subscription mode only
-- [CLI]: Redis password hex-only (no URL-encoding needed in REDIS_URL)
-- [CLI]: EnvConfig typed interface for all v2.0 env variables
-- [CLI]: PM2 ecosystem CJS with runtime venv detection for Python interpreter
-- [CLI]: RollbackStack continues on individual undo failure (fault-tolerant cleanup)
-- [CLI]: Non-interactive config auto-generates secrets (security by default)
-- [CLI]: .env rollback restores backup rather than deleting
+v3.0 decisions:
+- [Milestone]: New package `livos/packages/ui-next` (old UI preserved)
+- [Milestone]: Next.js 16 (App Router, Turbopack, React 19.2)
+- [Milestone]: Tailwind CSS 4.2+ (CSS-first config)
+- [Milestone]: Motion Primitives + Framer Motion for animations
+- [Milestone]: Modern minimal Apple-vari design language
+- [Milestone]: AI Chat adapted (not rewritten) to new design system
+- [Milestone]: Zero Umbrel visual resemblance
+- [Milestone]: Dark mode primary, light mode secondary
+- [Milestone]: Lucide React for icons (replacing react-icons/tb)
 
 ### Pending Todos
 
@@ -146,15 +44,12 @@ None.
 
 ### Blockers/Concerns
 
-- nexus-core: 153 PM2 restarts in 47h — ADDRESSED in v2.0-01-01 (expanded error handlers, circuit breaker, PM2 backoff); verify after deployment
-- Memory service empty results — needs debugging
-- SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write (SDK issue #115)
-- SDK token visibility in subscription mode — MEDIUM confidence, verify before Phase 3 usage schema
-- Gmail requires GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET env vars + Google Cloud Console OAuth setup before verification
-- Voice pipeline requires DEEPGRAM_API_KEY and CARTESIA_API_KEY env vars before voice features work
+- Motion Primitives Pro components may be needed for advanced animations (free tier may suffice)
+- tRPC client must remain client-side only (Next.js SSR not used for auth pages)
+- Tailwind CSS 4 uses CSS-first config (no tailwind.config.js) — different from v3
 
 ## Session Continuity
 
-Last session: 2026-02-21
-Stopped at: Completed v2.0-06-03-PLAN.md — v2.0 MILESTONE COMPLETE
+Last session: 2026-03-04
+Stopped at: Created v3.0 milestone, ready to start Phase 01
 Resume file: None

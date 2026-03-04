@@ -29,8 +29,15 @@
 
 **Last phase number:** 5 (v1.5)
 
+### v2.0 — OpenClaw-Class AI Platform
+**Completed:** 2026-02-21
+**Phases:** 1-6 (23 plans)
+**Summary:** Voice interaction (Cartesia/Deepgram), Live Canvas, multi-agent sessions, LivHub, webhooks, Gmail, chat commands, DM security, onboarding CLI, session compaction, usage tracking, stability fixes.
+
+**Last phase number:** 6 (v2.0)
+
 ## Active
 
-### v2.0 — OpenClaw-Class AI Platform
-**Started:** 2026-02-20
-**Goal:** Voice interaction (Cartesia/Deepgram), Live Canvas, multi-agent sessions, LivHub, webhooks, Gmail, chat commands, DM security, onboarding CLI, session compaction, usage tracking, stability fixes. Claude Code Auth only. Telegram + Discord only.
+### v3.0 — Next.js 16 UI Rewrite
+**Started:** 2026-03-04
+**Goal:** Complete UI rewrite using Next.js 16 (App Router) + Tailwind CSS 4 + Motion Primitives. Zero Umbrel resemblance. Modern minimal Apple-vari design. New package `livos/packages/ui-next`. All screens rebuilt from scratch (Desktop, Dock, Window Manager, File Manager, Settings, App Store). AI Chat adapted to new design system.
