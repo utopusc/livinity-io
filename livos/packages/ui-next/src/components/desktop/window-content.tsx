@@ -8,6 +8,11 @@ const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m 
 const AppStoreLayout = lazy(() => import('@/components/app-store/layout').then(m => ({ default: m.AppStoreLayout })));
 const FileManagerLayout = lazy(() => import('@/components/file-manager/layout').then(m => ({ default: m.FileManagerLayout })));
 const AiChatLayout = lazy(() => import('@/components/ai-chat/layout').then(m => ({ default: m.AiChatLayout })));
+const ServerControlLayout = lazy(() => import('@/components/system/server-control').then(m => ({ default: m.ServerControlLayout })));
+const SubagentsLayout = lazy(() => import('@/components/system/subagents').then(m => ({ default: m.SubagentsLayout })));
+const SchedulesLayout = lazy(() => import('@/components/system/schedules').then(m => ({ default: m.SchedulesLayout })));
+const TerminalLayout = lazy(() => import('@/components/system/terminal').then(m => ({ default: m.TerminalLayout })));
+const LiveUsageLayout = lazy(() => import('@/components/system/live-usage').then(m => ({ default: m.LiveUsageLayout })));
 
 /* ------------------------------------------------------------------ */
 /*  Loading fallback                                                   */
@@ -42,7 +47,7 @@ function ComingSoon({ name }: { name: string }) {
 /* ------------------------------------------------------------------ */
 
 /** Full-height apps (no scroll wrapper) */
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings', 'LIVINITY_app-store', 'LIVINITY_files']);
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings', 'LIVINITY_app-store', 'LIVINITY_files', 'LIVINITY_subagents', 'LIVINITY_schedules', 'LIVINITY_live-usage', 'LIVINITY_server-control']);
 
 export function WindowContent({ window: win }: { window: WindowState }) {
   const content = getContentForApp(win.appId, win.title);
@@ -70,15 +75,15 @@ function getContentForApp(appId: string, title: string): ReactNode {
     case 'LIVINITY_ai-chat':
       return <AiChatLayout />;
     case 'LIVINITY_server-control':
-      return <ComingSoon name="Server Control" />;
+      return <ServerControlLayout />;
     case 'LIVINITY_subagents':
-      return <ComingSoon name="Agents" />;
+      return <SubagentsLayout />;
     case 'LIVINITY_schedules':
-      return <ComingSoon name="Schedules" />;
+      return <SchedulesLayout />;
     case 'LIVINITY_terminal':
-      return <ComingSoon name="Terminal" />;
+      return <TerminalLayout />;
     case 'LIVINITY_live-usage':
-      return <ComingSoon name="Live Usage" />;
+      return <LiveUsageLayout />;
     default:
       return <ComingSoon name={title || 'Unknown App'} />;
   }
