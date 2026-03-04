@@ -3,6 +3,7 @@
 import { Suspense, lazy, type ReactNode } from 'react';
 import { Loader2, Construction } from 'lucide-react';
 import { type WindowState } from '@/providers/window-manager';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m => ({ default: m.SettingsLayout })));
 const AppStoreLayout = lazy(() => import('@/components/app-store/layout').then(m => ({ default: m.AppStoreLayout })));
@@ -54,11 +55,13 @@ export function WindowContent({ window: win }: { window: WindowState }) {
   const isFullHeight = fullHeightApps.has(win.appId);
 
   return (
-    <Suspense fallback={<WindowLoading />}>
-      <div className={isFullHeight ? 'h-full' : 'h-full overflow-y-auto'}>
-        {content}
-      </div>
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<WindowLoading />}>
+        <div className={isFullHeight ? 'h-full' : 'h-full overflow-y-auto'}>
+          {content}
+        </div>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
