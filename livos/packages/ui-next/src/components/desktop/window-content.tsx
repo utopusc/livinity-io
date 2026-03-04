@@ -6,6 +6,7 @@ import { type WindowState } from '@/providers/window-manager';
 
 const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m => ({ default: m.SettingsLayout })));
 const AppStoreLayout = lazy(() => import('@/components/app-store/layout').then(m => ({ default: m.AppStoreLayout })));
+const FileManagerLayout = lazy(() => import('@/components/file-manager/layout').then(m => ({ default: m.FileManagerLayout })));
 
 /* ------------------------------------------------------------------ */
 /*  Loading fallback                                                   */
@@ -40,7 +41,7 @@ function ComingSoon({ name }: { name: string }) {
 /* ------------------------------------------------------------------ */
 
 /** Full-height apps (no scroll wrapper) */
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings', 'LIVINITY_app-store']);
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings', 'LIVINITY_app-store', 'LIVINITY_files']);
 
 export function WindowContent({ window: win }: { window: WindowState }) {
   const content = getContentForApp(win.appId, win.title);
@@ -64,7 +65,7 @@ function getContentForApp(appId: string, title: string): ReactNode {
     case 'LIVINITY_app-store':
       return <AppStoreLayout />;
     case 'LIVINITY_files':
-      return <ComingSoon name="Files" />;
+      return <FileManagerLayout />;
     case 'LIVINITY_ai-chat':
       return <ComingSoon name="AI Chat" />;
     case 'LIVINITY_server-control':
