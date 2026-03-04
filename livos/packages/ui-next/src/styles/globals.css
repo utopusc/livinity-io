@@ -71,23 +71,22 @@
   --text-caption: 0.75rem;       /* 12px */
   --text-caption-sm: 0.6875rem;  /* 11px */
 
-  /* ── Spacing ─────────────────────────────────────────────────────────────── */
-  --spacing-xs: 0.25rem;   /* 4px */
-  --spacing-sm: 0.5rem;    /* 8px */
-  --spacing-md: 0.75rem;   /* 12px */
-  --spacing-lg: 1rem;      /* 16px */
-  --spacing-xl: 1.5rem;    /* 24px */
-  --spacing-2xl: 2rem;     /* 32px */
-  --spacing-3xl: 3rem;     /* 48px */
+  /* ── Spacing (custom tokens — prefixed to avoid Tailwind v4 collision) ──── */
+  --space-xs: 0.25rem;   /* 4px */
+  --space-sm: 0.5rem;    /* 8px */
+  --space-md: 0.75rem;   /* 12px */
+  --space-lg: 1rem;      /* 16px */
+  --space-xl: 1.5rem;    /* 24px */
+  --space-2xl: 2rem;     /* 32px */
+  --space-3xl: 3rem;     /* 48px */
 
-  /* ── Radius ──────────────────────────────────────────────────────────────── */
-  --radius-sm: 0.375rem;   /* 6px */
-  --radius-md: 0.5rem;     /* 8px */
-  --radius-lg: 0.75rem;    /* 12px */
-  --radius-xl: 1rem;       /* 16px */
-  --radius-2xl: 1.25rem;   /* 20px */
-  --radius-3xl: 1.5rem;    /* 24px */
-  --radius-full: 9999px;
+  /* ── Radius (custom tokens — prefixed to avoid Tailwind v4 collision) ──── */
+  --radius-ui-sm: 0.375rem;   /* 6px */
+  --radius-ui-md: 0.5rem;     /* 8px */
+  --radius-ui-lg: 0.75rem;    /* 12px */
+  --radius-ui-xl: 1rem;       /* 16px */
+  --radius-ui-2xl: 1.25rem;   /* 20px */
+  --radius-ui-3xl: 1.5rem;    /* 24px */
 
   /* ── Shadows ─────────────────────────────────────────────────────────────── */
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
@@ -97,10 +96,10 @@
   --shadow-float: 0 16px 48px oklch(0 0 0 / 0.5), 0 4px 12px oklch(0 0 0 / 0.3);
   --shadow-glow: 0 0 24px oklch(0.585 0.233 277.12 / 0.25);
 
-  /* ── Animation ───────────────────────────────────────────────────────────── */
+  /* ── Animation (custom — avoid overriding Tailwind defaults) ─────────── */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-smooth-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-smooth-in: cubic-bezier(0.4, 0, 1, 1);
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-slow: 400ms;
@@ -152,7 +151,7 @@
 
   ::-webkit-scrollbar-thumb {
     background: oklch(1 0 0 / 0.15);
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -199,7 +198,7 @@
   &:focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
-    border-radius: var(--radius-md);
+    border-radius: 0.5rem;
   }
 }
 
@@ -208,14 +207,14 @@
 @layer components {
   .input-field {
     width: 100%;
-    border-radius: var(--radius-lg);
+    border-radius: 0.75rem;
     background: oklch(1 0 0 / 0.05);
     border: 1px solid oklch(1 0 0 / 0.1);
     padding: 0.5rem 0.75rem;
     font-size: var(--text-body-sm);
     color: var(--color-text);
     outline: none;
-    transition: border-color var(--duration-fast) var(--ease-out);
+    transition: border-color var(--duration-fast) var(--ease-smooth-out);
   }
 
   .input-field::placeholder {
