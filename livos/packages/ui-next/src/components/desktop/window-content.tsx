@@ -7,6 +7,7 @@ import { type WindowState } from '@/providers/window-manager';
 const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m => ({ default: m.SettingsLayout })));
 const AppStoreLayout = lazy(() => import('@/components/app-store/layout').then(m => ({ default: m.AppStoreLayout })));
 const FileManagerLayout = lazy(() => import('@/components/file-manager/layout').then(m => ({ default: m.FileManagerLayout })));
+const AiChatLayout = lazy(() => import('@/components/ai-chat/layout').then(m => ({ default: m.AiChatLayout })));
 
 /* ------------------------------------------------------------------ */
 /*  Loading fallback                                                   */
@@ -67,7 +68,7 @@ function getContentForApp(appId: string, title: string): ReactNode {
     case 'LIVINITY_files':
       return <FileManagerLayout />;
     case 'LIVINITY_ai-chat':
-      return <ComingSoon name="AI Chat" />;
+      return <AiChatLayout />;
     case 'LIVINITY_server-control':
       return <ComingSoon name="Server Control" />;
     case 'LIVINITY_subagents':
