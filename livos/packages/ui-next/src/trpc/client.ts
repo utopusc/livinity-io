@@ -19,17 +19,9 @@ export const removeJwt = () => {
   localStorage.removeItem(JWT_KEY);
 };
 
-// Build tRPC URL from current window location
-function getTrpcUrl() {
-  if (typeof window === 'undefined') return '/trpc';
-  const { protocol, hostname, port } = window.location;
-  const portPart = port ? `:${port}` : '';
-  return `${protocol}//${hostname}${portPart}/trpc`;
-}
-
-// Single HTTP batch link with auth header
+// Single HTTP batch link — same origin, so /trpc is sufficient
 const link = httpBatchLink<AppRouter>({
-  url: getTrpcUrl,
+  url: '/trpc',
   headers: () => {
     const token = getJwt();
     return token ? { Authorization: `Bearer ${token}` } : {};
