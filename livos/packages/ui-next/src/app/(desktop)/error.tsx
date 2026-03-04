@@ -29,7 +29,7 @@ export default function DesktopError({
         <Button
           variant="ghost"
           onClick={() => {
-            localStorage.removeItem('livinity-token');
+            localStorage.removeItem('jwt');
             window.location.href = '/login';
           }}
         >
