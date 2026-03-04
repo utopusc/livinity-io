@@ -1,8 +1,10 @@
 'use client';
 
-import { Suspense, type ReactNode } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 import { Loader2, Construction } from 'lucide-react';
 import { type WindowState } from '@/providers/window-manager';
+
+const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m => ({ default: m.SettingsLayout })));
 
 /* ------------------------------------------------------------------ */
 /*  Loading fallback                                                   */
@@ -37,7 +39,7 @@ function ComingSoon({ name }: { name: string }) {
 /* ------------------------------------------------------------------ */
 
 /** Full-height apps (no scroll wrapper) */
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal']);
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_settings']);
 
 export function WindowContent({ window: win }: { window: WindowState }) {
   const content = getContentForApp(win.appId, win.title);
@@ -57,7 +59,7 @@ function getContentForApp(appId: string, title: string): ReactNode {
   // For now, show placeholder screens
   switch (appId) {
     case 'LIVINITY_settings':
-      return <ComingSoon name="Settings" />;
+      return <SettingsLayout />;
     case 'LIVINITY_app-store':
       return <ComingSoon name="App Store" />;
     case 'LIVINITY_files':
