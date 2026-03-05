@@ -71,7 +71,7 @@ export function WifiIcon2Circled({bars = 4, isConnected}: {bars: number; isConne
 	return (
 		<div
 			className={cn(
-				'grid size-6 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 bg-white/6',
+				'grid size-6 shrink-0 place-items-center rounded-full border border-border-default bg-surface-base',
 				isConnected && 'bg-brand',
 			)}
 		>
@@ -79,7 +79,7 @@ export function WifiIcon2Circled({bars = 4, isConnected}: {bars: number; isConne
 				className='size-5'
 				bars={bars}
 				style={{
-					filter: 'drop-shadow(0px 0px 2px rgba(255,255,255,.5))',
+					filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,.15))',
 				}}
 			/>
 		</div>

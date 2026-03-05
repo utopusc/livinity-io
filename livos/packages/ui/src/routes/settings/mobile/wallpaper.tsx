@@ -83,7 +83,7 @@ function WallpaperItem({
 	return (
 		<button
 			ref={ref}
-			className={cn('relative aspect-1.9 overflow-hidden rounded-10 bg-white/10', className)}
+			className={cn('relative aspect-1.9 overflow-hidden rounded-10 bg-surface-1', className)}
 			style={{
 				...style,
 			}}
@@ -94,7 +94,7 @@ function WallpaperItem({
 			<div
 				className={cn(
 					'absolute inset-0 rounded-10 border-4 transition-colors',
-					active ? ' border-white' : 'border-transparent',
+					active ? ' border-brand' : 'border-transparent',
 				)}
 			/>
 		</button>

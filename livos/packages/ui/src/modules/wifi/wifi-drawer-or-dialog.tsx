@@ -190,7 +190,7 @@ export function EnabledContent({
 	return (
 		<ScrollArea
 			scrollbarClass='my-3'
-			className={cn('flex h-[380px] flex-col rounded-12 bg-white/5 transition-opacity', isLoading && 'opacity-50')}
+			className={cn('flex h-[380px] flex-col rounded-12 bg-surface-base transition-opacity', isLoading && 'opacity-50')}
 			viewportRef={scrollRef}
 		>
 			{connectedNetwork && (
@@ -433,10 +433,10 @@ export function Connect({network, status, onConnect, error, passwordInputRef}: C
 
 export function Message({children}: {children?: React.ReactNode}) {
 	return (
-		<div className='grid h-32 place-items-center rounded-12 bg-white/6 p-4'>
+		<div className='grid h-32 place-items-center rounded-12 bg-surface-base p-4'>
 			<div className='text-center text-14 font-medium -tracking-2 opacity-60'>{children}</div>
 		</div>
 	)
 }
 
-export const wifiListItemClass = tw`w-full p-3 hover:bg-white/6 focus-within:bg-white/6 transition-colors border-b border-t first:border-t-0 last:border-b-0 mb-[-1px] border-white/6 outline-none flex flex-col gap-3`
+export const wifiListItemClass = tw`w-full p-3 hover:bg-surface-1 focus-within:bg-surface-1 transition-colors border-b border-t first:border-t-0 last:border-b-0 mb-[-1px] border-border-subtle outline-none flex flex-col gap-3`

@@ -399,13 +399,13 @@ function WallpaperSection() {
 					key={w.id}
 					onClick={() => setWallpaperId(w.id)}
 					className={cn(
-						'relative aspect-video overflow-hidden rounded-radius-md bg-surface-base bg-cover bg-center transition-all hover:ring-2 hover:ring-white/40 hover:scale-[1.02]',
-						wallpaper.id === w.id && 'ring-3 ring-white'
+						'relative aspect-video overflow-hidden rounded-radius-md bg-surface-base bg-cover bg-center transition-all hover:ring-2 hover:ring-brand/40 hover:scale-[1.02]',
+						wallpaper.id === w.id && 'ring-3 ring-brand'
 					)}
 					style={{backgroundImage: `url(${getWallpaperThumbUrl(w)})`}}
 				>
 					{wallpaper.id === w.id && (
-						<div className='absolute inset-0 flex items-center justify-center bg-black/40'>
+						<div className='absolute inset-0 flex items-center justify-center bg-black/20'>
 							<TbCheck className='h-8 w-8 text-white' />
 						</div>
 					)}
@@ -1477,7 +1477,7 @@ function TroubleshootSection() {
 								View Full Logs
 							</button>
 						</div>
-						<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-black p-3'>
+						<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-neutral-100 p-3'>
 							<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
 								{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 							</pre>
@@ -1521,7 +1521,7 @@ function TroubleshootSection() {
 									View Full Logs
 								</button>
 							</div>
-							<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-black p-3'>
+							<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-neutral-100 p-3'>
 								<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
 									{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 								</pre>
@@ -1551,8 +1551,8 @@ function TroubleshootSection() {
 
 			{/* Full Logs Dialog */}
 			{showFullLogs && (
-				<div className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/80' onClick={() => setShowFullLogs(false)}>
-					<div className='max-h-[80vh] w-[90vw] max-w-4xl overflow-hidden rounded-20 border border-border-default bg-neutral-900' onClick={(e) => e.stopPropagation()}>
+				<div className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/20' onClick={() => setShowFullLogs(false)}>
+					<div className='max-h-[80vh] w-[90vw] max-w-4xl overflow-hidden rounded-20 border border-border-default bg-surface-base' onClick={(e) => e.stopPropagation()}>
 						<div className='flex items-center justify-between border-b border-border-default px-6 py-4'>
 							<h2 className='text-18 font-semibold'>{logType === 'system' ? 'System Logs' : 'App Logs'}</h2>
 							<button

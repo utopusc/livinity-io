@@ -81,7 +81,7 @@ export const XTermTerminal = ({appId}: {appId?: string}) => {
 	return (
 		<div
 			ref={parentContainerRef as React.LegacyRef<HTMLDivElement>}
-			className='h-full w-full overflow-hidden overflow-x-auto rounded-12 bg-black/50 pb-4 pr-3'
+			className='h-full w-full overflow-hidden overflow-x-auto rounded-12 bg-neutral-100 pb-4 pr-3'
 		>
 			{/* Hidden character to calculate correct cols/rows based on its dimensions */}
 			<div

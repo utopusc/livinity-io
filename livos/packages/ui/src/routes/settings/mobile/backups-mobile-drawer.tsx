@@ -81,13 +81,13 @@ export function BackupsMobileDrawer() {
 							<DropdownMenuItem onSelect={() => navigate('/settings/backups/restore', {preventScrollReset: true})}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-restore-full')}</div>
-									<div className='text-12 text-white/40'>{t('backups-restore-full-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-restore-full-description')}</div>
 								</div>
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={() => navigate('/files/Home?rewind=open', {preventScrollReset: true})}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-rewind')}</div>
-									<div className='text-12 text-white/40'>{t('backups-rewind-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-rewind-description')}</div>
 								</div>
 							</DropdownMenuItem>
 						</DropdownMenuContent>

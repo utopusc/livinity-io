@@ -17,7 +17,7 @@ export function DomainSetupDialog({open, onOpenChange}: {open: boolean; onOpenCh
 				<Suspense
 					fallback={
 						<div className='flex items-center justify-center py-12'>
-							<Loader2 className='size-6 animate-spin text-white/30' />
+							<Loader2 className='size-6 animate-spin text-text-tertiary' />
 						</div>
 					}
 				>
