@@ -37,18 +37,18 @@ html {
 
 /* Show track background on hover */
 ::-webkit-scrollbar:hover {
-	background: rgba(255, 255, 255, 0.05);
+	background: rgba(0, 0, 0, 0.02);
 }
 
 ::-webkit-scrollbar-thumb {
-	background-color: rgba(255, 255, 255, 0.15);
+	background-color: rgba(0, 0, 0, 0.12);
 	background-clip: padding-box; /* Ensure the background only applies within the content box */
 	border: 4px solid transparent; /* Key trick for obtaining a thin scrollbar */
 	border-radius: 20px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background-color: rgba(255, 255, 255, 0.4);
+	background-color: rgba(0, 0, 0, 0.25);
 }
 
 @supports (font-variation-settings: normal) {
@@ -114,7 +114,7 @@ a {
 }
 .livinity-divide-y > * + *::before {
 	content: '';
-	@apply absolute inset-x-0 top-0 h-[1px] w-full bg-gradient-to-r from-transparent via-white/5 to-transparent;
+	@apply absolute inset-x-0 top-0 h-[1px] w-full bg-gradient-to-r from-transparent via-black/5 to-transparent;
 }
 
 @keyframes blink-caret {
@@ -159,7 +159,7 @@ a {
 }
 
 .livinity-bouncing-gradient {
-	background: linear-gradient(to right, transparent, white, transparent);
+	background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.08), transparent);
 	background-size: 200% 100%;
 	animation: bounce-gradient 2s ease infinite;
 }
@@ -292,8 +292,8 @@ a {
 }
 
 @keyframes logo-glow-pulse {
-	0%, 100% { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.15)); }
-	50% { filter: drop-shadow(0 0 40px rgba(255, 255, 255, 0.3)); }
+	0%, 100% { filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.05)); }
+	50% { filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.10)); }
 }
 
 /* Permanent Marker self-hosted font */
