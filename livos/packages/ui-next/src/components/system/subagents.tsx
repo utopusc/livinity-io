@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Plus, Bot, Trash2, Play, Pause, Square, Loader2, ChevronRight, Pencil, Zap } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
 import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
@@ -60,8 +61,17 @@ function AgentList({ onSelect, onCreate }: { onSelect: (id: string) => void; onC
 
       <div className="flex-1 overflow-y-auto p-4">
         {isLoading && (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+          <div className="space-y-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl bg-surface-0 border border-border shadow-sm p-3">
+                <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3.5 w-2/5" />
+                  <Skeleton className="h-3 w-3/5" />
+                </div>
+                <Skeleton className="h-5 w-14 rounded-full" />
+              </div>
+            ))}
           </div>
         )}
 
@@ -78,7 +88,7 @@ function AgentList({ onSelect, onCreate }: { onSelect: (id: string) => void; onC
             {(agents as Subagent[]).map((agent) => (
               <button
                 key={agent.id}
-                className="flex w-full items-center gap-3 rounded-xl bg-white border border-border shadow-sm p-3 text-left hover:bg-neutral-50 transition-colors"
+                className="flex w-full items-center gap-3 rounded-xl bg-surface-0 border border-border shadow-sm p-3 text-left hover:bg-surface-1 transition-colors"
                 onClick={() => onSelect(agent.id)}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
@@ -262,8 +272,30 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
   if (!agent) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-3">
+          <Skeleton className="h-7 w-12 rounded-lg" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-5 max-w-xl">
+          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4 space-y-3">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4 space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4 space-y-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -283,7 +315,7 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
       <div className="flex-1 overflow-y-auto p-5 space-y-5 max-w-xl">
         {/* Info */}
-        <div className="rounded-xl bg-white border border-border shadow-sm p-4 space-y-2">
+        <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4 space-y-2">
           <InfoRow label="ID" value={agent.id} />
           <InfoRow label="Tier" value={agent.tier} />
           <InfoRow label="Max Turns" value={String(agent.maxTurns)} />
@@ -292,14 +324,14 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
 
         {agent.description && (
-          <div className="rounded-xl bg-white border border-border shadow-sm p-4">
+          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4">
             <p className="text-[11px] text-text-tertiary mb-1">Description</p>
             <p className="text-xs text-text">{agent.description}</p>
           </div>
         )}
 
         {agent.systemPrompt && (
-          <div className="rounded-xl bg-white border border-border shadow-sm p-4">
+          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4">
             <p className="text-[11px] text-text-tertiary mb-1">System Prompt</p>
             <pre className="text-xs text-text whitespace-pre-wrap font-mono">{agent.systemPrompt}</pre>
           </div>

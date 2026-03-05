@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Check, RotateCcw, Loader2 } from 'lucide-react';
+import { Check, RotateCcw } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { trpcReact } from '@/trpc/client';
@@ -47,9 +48,20 @@ export default function NexusConfigSection() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-text-tertiary">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-xs">Loading config...</span>
+      <div className="space-y-4">
+        <div className="flex gap-1">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-8 w-20 rounded-lg" />
+          ))}
+        </div>
+        <div className="space-y-3 pt-1">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center justify-between">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-8 w-24 rounded-lg" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

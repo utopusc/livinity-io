@@ -23,11 +23,11 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Loader2,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 /* ------------------------------------------------------------------ */
@@ -108,8 +108,16 @@ const SoftwareUpdateSection = lazy(() => import('./sections/software-update'));
 
 function SectionContent({ section }: { section: SettingsSection }) {
   const fallback = (
-    <div className="flex h-40 items-center justify-center">
-      <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+    <div className="space-y-4 p-1">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-start gap-3">
+          <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+          <div className="flex-1 space-y-2 pt-1">
+            <Skeleton className="h-3 w-2/5" />
+            <Skeleton className="h-3 w-3/5" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 
@@ -149,7 +157,7 @@ export function SettingsLayout() {
   return (
     <div className="flex h-full">
       {/* Sidebar */}
-      <div className="w-56 shrink-0 border-r border-border bg-neutral-50">
+      <div className="w-56 shrink-0 border-r border-border bg-surface-1">
         <div className="px-4 py-3">
           <h2 className="text-sm font-semibold text-text">Settings</h2>
         </div>
@@ -234,7 +242,7 @@ function SettingsHome({
               key={item.id}
               className={cn(
                 'flex items-center gap-3 rounded-xl p-3 text-left',
-                'bg-white transition-colors hover:bg-neutral-50',
+                'bg-surface-0 transition-colors hover:bg-surface-1',
                 'border border-border shadow-sm',
               )}
               onClick={() => onSelectSection(item.id)}

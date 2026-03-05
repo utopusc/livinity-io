@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { BarChart3, Cpu, Zap, MessageCircle, DollarSign, Loader2, Calendar, TrendingUp } from 'lucide-react';
+import { BarChart3, Cpu, Zap, MessageCircle, DollarSign, Calendar, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
 import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
+import { InView } from '@/components/motion-primitives/in-view';
 
 export function LiveUsageLayout() {
   const [days, setDays] = useState(30);
@@ -43,8 +45,26 @@ export function LiveUsageLayout() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center flex-1">
-          <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 space-y-2">
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-6 w-2/3" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 space-y-2 text-center">
+                <Skeleton className="h-2.5 w-3/4 mx-auto" />
+                <Skeleton className="h-4 w-1/2 mx-auto" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4">
+            <Skeleton className="h-32 w-full rounded-lg" />
+          </div>
         </div>
       )}
 
@@ -88,100 +108,118 @@ export function LiveUsageLayout() {
           )}
 
           {/* Usage Chart */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-text-tertiary" />
-              <span className="text-xs font-medium text-text">Daily Token Usage</span>
+          <InView
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              visible: { opacity: 1, y: 0 },
+            }}
+            transition={{ duration: 0.3 }}
+            once
+          >
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-text-tertiary" />
+                <span className="text-xs font-medium text-text">Daily Token Usage</span>
+              </div>
+
+              {daily.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-text-tertiary">
+                  <Calendar className="h-8 w-8" />
+                  <p className="mt-2 text-xs">No usage data yet</p>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4">
+                  {/* Bar chart */}
+                  <div className="flex items-end gap-[2px] h-32">
+                    {daily.map((day: any, i: number) => {
+                      const total = (day.inputTokens ?? 0) + (day.outputTokens ?? 0);
+                      const inputH = (day.inputTokens ?? 0) / maxTokens * 100;
+                      const outputH = (day.outputTokens ?? 0) / maxTokens * 100;
+                      const dateStr = day.date?.slice(5) ?? '';
+
+                      return (
+                        <div
+                          key={i}
+                          className="flex-1 flex flex-col justify-end items-center gap-0 group relative"
+                          title={`${dateStr}: ${formatNumber(total)} tokens`}
+                        >
+                          <div
+                            className="w-full rounded-t-sm bg-brand/50"
+                            style={{ height: `${outputH}%`, minHeight: total > 0 ? 2 : 0 }}
+                          />
+                          <div
+                            className="w-full bg-brand"
+                            style={{ height: `${inputH}%`, minHeight: total > 0 ? 1 : 0 }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* X-axis labels */}
+                  <div className="flex justify-between mt-2">
+                    {daily.length > 0 && (
+                      <>
+                        <span className="text-[9px] text-text-tertiary">{(daily[0] as any).date?.slice(5)}</span>
+                        <span className="text-[9px] text-text-tertiary">{(daily[daily.length - 1] as any).date?.slice(5)}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex items-center gap-4 mt-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2 w-2 rounded-sm bg-brand" />
+                      <span className="text-[10px] text-text-tertiary">Input</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2 w-2 rounded-sm bg-brand/50" />
+                      <span className="text-[10px] text-text-tertiary">Output</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {daily.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-text-tertiary">
-                <Calendar className="h-8 w-8" />
-                <p className="mt-2 text-xs">No usage data yet</p>
-              </div>
-            ) : (
-              <div className="rounded-xl bg-white border border-border shadow-sm p-4">
-                {/* Bar chart */}
-                <div className="flex items-end gap-[2px] h-32">
-                  {daily.map((day: any, i: number) => {
-                    const total = (day.inputTokens ?? 0) + (day.outputTokens ?? 0);
-                    const inputH = (day.inputTokens ?? 0) / maxTokens * 100;
-                    const outputH = (day.outputTokens ?? 0) / maxTokens * 100;
-                    const dateStr = day.date?.slice(5) ?? '';
-
-                    return (
-                      <div
-                        key={i}
-                        className="flex-1 flex flex-col justify-end items-center gap-0 group relative"
-                        title={`${dateStr}: ${formatNumber(total)} tokens`}
-                      >
-                        <div
-                          className="w-full rounded-t-sm bg-brand/50"
-                          style={{ height: `${outputH}%`, minHeight: total > 0 ? 2 : 0 }}
-                        />
-                        <div
-                          className="w-full bg-brand"
-                          style={{ height: `${inputH}%`, minHeight: total > 0 ? 1 : 0 }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* X-axis labels */}
-                <div className="flex justify-between mt-2">
-                  {daily.length > 0 && (
-                    <>
-                      <span className="text-[9px] text-text-tertiary">{(daily[0] as any).date?.slice(5)}</span>
-                      <span className="text-[9px] text-text-tertiary">{(daily[daily.length - 1] as any).date?.slice(5)}</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Legend */}
-                <div className="flex items-center gap-4 mt-3">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-sm bg-brand" />
-                    <span className="text-[10px] text-text-tertiary">Input</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-sm bg-brand/50" />
-                    <span className="text-[10px] text-text-tertiary">Output</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          </InView>
 
           {/* Daily breakdown table */}
           {daily.length > 0 && (
-            <div className="space-y-2">
-              <span className="text-xs font-medium text-text">Daily Breakdown</span>
-              <div className="rounded-xl bg-white border border-border shadow-sm overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-neutral-50 text-text-tertiary">
-                      <th className="px-3 py-2 text-left font-medium">Date</th>
-                      <th className="px-3 py-2 text-right font-medium">Input</th>
-                      <th className="px-3 py-2 text-right font-medium">Output</th>
-                      <th className="px-3 py-2 text-right font-medium">Sessions</th>
-                      <th className="px-3 py-2 text-right font-medium">Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...daily].reverse().slice(0, 14).map((day: any, i: number) => (
-                      <tr key={i} className="border-b border-border last:border-0 text-text-secondary">
-                        <td className="px-3 py-1.5 font-mono">{day.date}</td>
-                        <td className="px-3 py-1.5 text-right">{formatNumber(day.inputTokens ?? 0)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatNumber(day.outputTokens ?? 0)}</td>
-                        <td className="px-3 py-1.5 text-right">{day.sessions ?? 0}</td>
-                        <td className="px-3 py-1.5 text-right">${(day.estimatedCostUsd ?? 0).toFixed(3)}</td>
+            <InView
+              variants={{
+                hidden: { opacity: 0, y: 20 },
+                visible: { opacity: 1, y: 0 },
+              }}
+              transition={{ duration: 0.3 }}
+              once
+            >
+              <div className="space-y-2">
+                <span className="text-xs font-medium text-text">Daily Breakdown</span>
+                <div className="rounded-xl bg-surface-0 border border-border shadow-sm overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-neutral-50 text-text-tertiary">
+                        <th className="px-3 py-2 text-left font-medium">Date</th>
+                        <th className="px-3 py-2 text-right font-medium">Input</th>
+                        <th className="px-3 py-2 text-right font-medium">Output</th>
+                        <th className="px-3 py-2 text-right font-medium">Sessions</th>
+                        <th className="px-3 py-2 text-right font-medium">Cost</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {[...daily].reverse().slice(0, 14).map((day: any, i: number) => (
+                        <tr key={i} className="border-b border-border last:border-0 text-text-secondary">
+                          <td className="px-3 py-1.5 font-mono">{day.date}</td>
+                          <td className="px-3 py-1.5 text-right">{formatNumber(day.inputTokens ?? 0)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatNumber(day.outputTokens ?? 0)}</td>
+                          <td className="px-3 py-1.5 text-right">{day.sessions ?? 0}</td>
+                          <td className="px-3 py-1.5 text-right">${(day.estimatedCostUsd ?? 0).toFixed(3)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </InView>
           )}
         </div>
       )}
@@ -195,7 +233,7 @@ export function LiveUsageLayout() {
 
 function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-text-tertiary" />
         <span className="text-[11px] text-text-tertiary">{label}</span>
@@ -211,7 +249,7 @@ function StatCard({ icon: Icon, label, value }: { icon: any; label: string; valu
 
 function CostCard({ value }: { value: number }) {
   return (
-    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
       <div className="flex items-center gap-2">
         <DollarSign className="h-4 w-4 text-text-tertiary" />
         <span className="text-[11px] text-text-tertiary">Est. Cost</span>
@@ -223,7 +261,7 @@ function CostCard({ value }: { value: number }) {
 
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-white border border-border shadow-sm p-3 text-center">
+    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 text-center">
       <p className="text-[11px] text-text-tertiary">{label}</p>
       <AnimatedNumber
         value={value}

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Check, Loader2, ExternalLink } from 'lucide-react';
+import { Check, ExternalLink } from 'lucide-react';
 import { Button, Input, Badge } from '@/components/ui';
 import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
 
 export default function VoiceSection() {
@@ -36,9 +37,18 @@ export default function VoiceSection() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-text-tertiary">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-xs">Loading voice config...</span>
+      <div className="space-y-5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-8 w-full rounded-lg" />
+          </div>
+        ))}
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-5 w-9 rounded-full" />
+        </div>
+        <Skeleton className="h-8 w-20 rounded-lg" />
       </div>
     );
   }

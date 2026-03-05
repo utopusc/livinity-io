@@ -158,7 +158,7 @@ export function TerminalLayout() {
     return (
       <div className="flex h-full flex-col">
         {/* Light title bar */}
-        <div className="flex items-center gap-2 border-b border-border bg-white px-4 py-2.5">
+        <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-4 py-2.5">
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
             <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
@@ -185,7 +185,7 @@ export function TerminalLayout() {
   return (
     <div className="flex h-full flex-col">
       {/* Light title bar with traffic light dots */}
-      <div className="flex items-center justify-between border-b border-border bg-white px-4 py-2.5 shrink-0">
+      <div className="flex items-center justify-between border-b border-border bg-surface-0 px-4 py-2.5 shrink-0">
         <div className="flex items-center gap-1.5">
           <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
           <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />

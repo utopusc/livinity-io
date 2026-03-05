@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, type DragEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,7 +13,6 @@ import {
   Grid3X3,
   List,
   Home,
-  Loader2,
   File,
   Folder,
   Image,
@@ -30,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button, Input } from '@/components/ui';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
 import { getJwt } from '@/trpc/client';
 
@@ -359,8 +360,13 @@ export function FileManagerLayout() {
       {/* Content */}
       <ScrollArea className="relative flex-1">
         {isLoading ? (
-          <div className="flex h-40 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+          <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-border-subtle bg-surface-0 p-2 shadow-sm">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="h-2.5 w-3/4" />
+              </div>
+            ))}
           </div>
         ) : sortedEntries.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-tertiary">
@@ -368,7 +374,7 @@ export function FileManagerLayout() {
             <p className="text-xs">This folder is empty</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
+          <AnimatedGroup preset="fade" className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
             {sortedEntries.map((entry) => (
               <GridItem
                 key={entry.name}
@@ -390,9 +396,9 @@ export function FileManagerLayout() {
                 onStartRename={() => { setRenaming(entry.name); setRenameValue(entry.name); }}
               />
             ))}
-          </div>
+          </AnimatedGroup>
         ) : (
-          <div className="divide-y divide-border-subtle">
+          <AnimatedGroup preset="fade" className="divide-y divide-border-subtle">
             {sortedEntries.map((entry) => (
               <ListItem
                 key={entry.name}
@@ -403,7 +409,7 @@ export function FileManagerLayout() {
                 onStartRename={() => { setRenaming(entry.name); setRenameValue(entry.name); }}
               />
             ))}
-          </div>
+          </AnimatedGroup>
         )}
       </ScrollArea>
 
@@ -474,7 +480,7 @@ function GridItem({
           onChange={(e) => onRenameChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onRenameSubmit(); if (e.key === 'Escape') onRenameCancel(); }}
           onBlur={onRenameSubmit}
-          className="w-full rounded-md border border-brand bg-white px-1 text-center text-[11px] text-text outline-none focus:ring-1 focus:ring-brand/40"
+          className="w-full rounded-md border border-brand bg-surface-0 px-1 text-center text-[11px] text-text outline-none focus:ring-1 focus:ring-brand/40"
         />
       ) : (
         <span className="w-full truncate text-center text-[11px] text-text-secondary">

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Copy, Check, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Copy, Check } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 export default function WebhooksSection() {
   const { data, isLoading } = trpcReact.ai.getWebhooks.useQuery();
@@ -30,9 +32,16 @@ export default function WebhooksSection() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-text-tertiary">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-xs">Loading webhooks...</span>
+      <div className="space-y-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center justify-between rounded-xl bg-surface-0 border border-border shadow-sm p-3">
+            <div className="space-y-1.5">
+              <Skeleton className="h-3.5 w-28" />
+              <Skeleton className="h-3 w-36" />
+            </div>
+            <Skeleton className="h-7 w-7 rounded-lg" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -49,7 +58,7 @@ export default function WebhooksSection() {
 
       {/* Create form */}
       {showCreate && (
-        <div className="space-y-2 rounded-xl bg-white border border-border shadow-sm p-3">
+        <div className="space-y-2 rounded-xl bg-surface-0 border border-border shadow-sm p-3">
           <Input placeholder="Webhook name" value={name} onChange={(e) => setName(e.target.value)} />
           <Input placeholder="Secret (optional, auto-generated)" value={secret} onChange={(e) => setSecret(e.target.value)} />
           <div className="flex gap-2">
@@ -77,9 +86,9 @@ export default function WebhooksSection() {
       )}
 
       {/* Webhook list */}
-      <div className="space-y-2">
+      <AnimatedGroup preset="fade" className="space-y-2">
         {data?.webhooks?.map((wh: any) => (
-          <div key={wh.id} className="flex items-center justify-between rounded-xl bg-white border border-border shadow-sm p-3">
+          <div key={wh.id} className="flex items-center justify-between rounded-xl bg-surface-0 border border-border shadow-sm p-3">
             <div>
               <p className="text-xs font-medium text-text">{wh.name}</p>
               <p className="text-[11px] text-text-tertiary">
@@ -99,7 +108,7 @@ export default function WebhooksSection() {
         {(!data?.webhooks || data.webhooks.length === 0) && (
           <p className="text-xs text-text-tertiary">No webhooks configured.</p>
         )}
-      </div>
+      </AnimatedGroup>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   useMemo,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 import {
   Send,
   Square,
@@ -190,7 +191,7 @@ export function AiChatLayout() {
               </button>
             </div>
             <ScrollArea className="flex-1">
-              <div className="space-y-0.5 p-1.5">
+              <AnimatedGroup preset="fade" className="space-y-0.5 p-1.5">
                 {(conversations ?? []).map((conv: any) => (
                   <div
                     key={conv.id}
@@ -221,7 +222,7 @@ export function AiChatLayout() {
                     </button>
                   </div>
                 ))}
-              </div>
+              </AnimatedGroup>
             </ScrollArea>
           </motion.div>
         )}
@@ -387,7 +388,7 @@ function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
         <ChevronRight className={cn('h-3 w-3 text-text-tertiary transition-transform', expanded && 'rotate-90')} />
       </button>
       {expanded && (
-        <div className="border-t border-border px-2.5 py-2 space-y-1.5 bg-white">
+        <div className="border-t border-border px-2.5 py-2 space-y-1.5 bg-surface-0">
           <pre className="text-[10px] text-text-secondary overflow-x-auto font-mono">
             {JSON.stringify(toolCall.params, null, 2).slice(0, 500)}
           </pre>

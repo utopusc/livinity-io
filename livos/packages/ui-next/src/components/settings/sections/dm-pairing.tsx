@@ -43,7 +43,7 @@ function PendingTab() {
   return (
     <div className="space-y-2 pt-3">
       {pending.map((req: any) => (
-        <div key={`${req.channel}-${req.userId}`} className="flex items-center justify-between rounded-xl bg-white border border-border shadow-sm p-3">
+        <div key={`${req.channel}-${req.userId}`} className="flex items-center justify-between rounded-xl bg-surface-0 border border-border shadow-sm p-3">
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="warning">{req.channel}</Badge>

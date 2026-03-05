@@ -1,9 +1,10 @@
 'use client';
 
 import { Suspense, lazy, type ReactNode } from 'react';
-import { Loader2, Construction } from 'lucide-react';
+import { Construction } from 'lucide-react';
 import { type WindowState } from '@/providers/window-manager';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const SettingsLayout = lazy(() => import('@/components/settings/layout').then(m => ({ default: m.SettingsLayout })));
 const AppStoreLayout = lazy(() => import('@/components/app-store/layout').then(m => ({ default: m.AppStoreLayout })));
@@ -21,8 +22,26 @@ const LiveUsageLayout = lazy(() => import('@/components/system/live-usage').then
 
 function WindowLoading() {
   return (
-    <div className="flex h-full items-center justify-center">
-      <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+    <div className="flex h-full flex-col gap-4 p-5">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-8 w-8 rounded-lg" />
+        <div className="space-y-2">
+          <Skeleton className="h-3.5 w-36" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      </div>
+      <Skeleton className="h-px w-full" />
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-5/6" />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-3">
+        <Skeleton className="h-16 rounded-xl" />
+        <Skeleton className="h-16 rounded-xl" />
+        <Skeleton className="h-16 rounded-xl" />
+        <Skeleton className="h-16 rounded-xl" />
+      </div>
     </div>
   );
 }

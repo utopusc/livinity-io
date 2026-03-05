@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CalendarClock, Plus, Trash2, Loader2, Clock, Bot } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
 import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
@@ -45,8 +46,20 @@ export function SchedulesLayout() {
         )}
 
         {isLoading && (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-xl bg-surface-0 border border-border shadow-sm p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-3.5 w-32" />
+                </div>
+                <Skeleton className="h-3 w-4/5" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -65,7 +78,7 @@ export function SchedulesLayout() {
               return (
                 <div
                   key={sched.subagentId}
-                  className="rounded-xl bg-white border border-border shadow-sm p-4 space-y-3"
+                  className="rounded-xl bg-surface-0 border border-border shadow-sm p-4 space-y-3"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
@@ -145,7 +158,7 @@ function CreateSchedule({
   };
 
   return (
-    <div className="rounded-xl bg-white border border-brand/20 shadow-sm p-4 space-y-3">
+    <div className="rounded-xl bg-surface-0 border border-brand/20 shadow-sm p-4 space-y-3">
       <p className="text-xs font-medium text-text">New Schedule</p>
 
       <div className="space-y-1.5">

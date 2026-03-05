@@ -196,7 +196,7 @@ export function AppStoreLayout() {
         : (selectedApp?.name ?? 'App');
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full flex-col bg-surface-0">
       {/* Top bar */}
       <div className="flex items-center gap-2.5 border-b border-border px-4 py-2.5">
         {view !== 'discover' && (
@@ -440,8 +440,8 @@ function AppCard({ app, onClick }: { app: CatalogApp; onClick: () => void }) {
     <button
       className={cn(
         'flex flex-col items-center gap-2 rounded-xl p-3 text-center text-left',
-        'bg-white border border-border shadow-sm',
-        'transition-all duration-150 hover:shadow-md hover:border-border-subtle hover:bg-neutral-50',
+        'bg-surface-0 border border-border shadow-sm',
+        'transition-all duration-150 hover:shadow-md hover:border-border-subtle hover:bg-surface-1',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
       )}
       onClick={onClick}
@@ -748,7 +748,7 @@ function AppStoreSkeleton() {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-3 shadow-sm"
+                className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface-0 p-3 shadow-sm"
               >
                 <Skeleton className="h-12 w-12 rounded-xl" />
                 <Skeleton className="h-3 w-20 rounded" />
