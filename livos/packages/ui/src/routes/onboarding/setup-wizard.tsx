@@ -34,19 +34,19 @@ import {
 const TOTAL_STEPS = 6
 
 const glassCardStyle = {
-	background: 'rgba(255, 255, 255, 0.03)',
+	background: 'rgba(255, 255, 255, 0.85)',
 	backdropFilter: 'blur(24px)',
 	WebkitBackdropFilter: 'blur(24px)',
-	boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+	boxShadow: '0 8px 32px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04)',
 } as const
 
 const primaryButtonClass =
-	'flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-body font-medium text-white shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
+	'flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-body font-medium text-white shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
 
 const secondaryButtonClass =
-	'flex items-center justify-center gap-2 rounded-full bg-white/[0.06] border border-white/[0.08] px-6 py-3 backdrop-blur-md text-white/70 hover:bg-white/[0.1] hover:text-white transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
+	'flex items-center justify-center gap-2 rounded-full bg-surface-1 border border-border-default px-6 py-3 text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
 
-const skipButtonClass = 'text-white/40 hover:text-white/60 text-body-sm underline underline-offset-4 transition-colors'
+const skipButtonClass = 'text-text-tertiary hover:text-text-secondary text-body-sm underline underline-offset-4 transition-colors'
 
 const panelVariants = {
 	enter: (direction: number) => ({
@@ -109,7 +109,7 @@ function CopyButton({text}: {text: string}) {
 	}
 
 	return (
-		<button onClick={handleCopy} className='p-1.5 rounded text-white/40 hover:text-white/60 transition-colors' title='Copy'>
+		<button onClick={handleCopy} className='p-1.5 rounded text-text-tertiary hover:text-text-secondary transition-colors' title='Copy'>
 			{copied ? <IconCheck size={14} className='text-green-400' /> : <IconCopy size={14} />}
 		</button>
 	)
@@ -150,7 +150,7 @@ function StepWelcome({onNext}: {onNext: () => void}) {
 				<TextEffect
 					preset='fade-in-blur'
 					per='word'
-					className='text-center text-display-sm font-bold leading-tight -tracking-2 text-white md:text-56'
+					className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'
 					delay={0.3}
 				>
 					Welcome to Livinity
@@ -159,7 +159,7 @@ function StepWelcome({onNext}: {onNext: () => void}) {
 					initial={{opacity: 0, y: 10}}
 					animate={{opacity: 1, y: 0}}
 					transition={{delay: 0.8, duration: 0.5}}
-					className='text-center text-body font-medium text-white/60 md:text-body-lg'
+					className='text-center text-body font-medium text-text-secondary md:text-body-lg'
 				>
 					{t('onboarding.start.subtitle', {defaultValue: 'Your personal AI-powered home server'})}
 				</motion.p>
@@ -248,10 +248,10 @@ function StepCreateAccount({onSuccess}: {onSuccess: () => void}) {
 	return (
 		<div className='flex flex-col items-center gap-5 w-full'>
 			<div className='flex flex-col items-center gap-2'>
-				<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-white md:text-56'>
+				<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
 					{t('onboarding.create-account', {defaultValue: 'Create your account'})}
 				</h2>
-				<p className='text-center text-body font-medium text-white/60 md:text-body-lg' style={{maxWidth: 400}}>
+				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg' style={{maxWidth: 400}}>
 					{t('onboarding.create-account.subtitle', {defaultValue: 'Set up your name and password to get started'})}
 				</p>
 			</div>
@@ -309,22 +309,22 @@ function StepPersonalize({onNext}: {onNext: () => void}) {
 	return (
 		<div className='flex flex-col items-center gap-5 w-full'>
 			<div className='flex flex-col items-center gap-2'>
-				<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-white md:text-56'>
+				<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
 					{t('onboarding.personalize.title', {defaultValue: 'Make it yours'})}
 				</h2>
-				<p className='text-center text-body font-medium text-white/60 md:text-body-lg'>
+				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg'>
 					{t('onboarding.personalize.subtitle', {defaultValue: 'Choose a wallpaper for your dashboard'})}
 				</p>
 			</div>
 
-			<div className='grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto w-full pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10'>
+			<div className='grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto w-full pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border-default'>
 				{wallpapers.map((w) => (
 					<motion.button
 						key={w.id}
 						onClick={() => setWallpaperId(w.id)}
 						className={cn(
 							'aspect-video rounded-xl bg-cover bg-center transition-all duration-200 ring-2',
-							wallpaper.id === w.id ? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(139,92,246,0.4)]' : 'ring-transparent hover:ring-white/20',
+							wallpaper.id === w.id ? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(139,92,246,0.4)]' : 'ring-transparent hover:ring-border-default',
 						)}
 						style={{backgroundImage: `url(/wallpapers/generated-thumbs/${w.id}.jpg)`}}
 						whileHover={{scale: wallpaper.id === w.id ? 1.02 : 1.04}}
@@ -405,11 +405,11 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 			<div className='flex flex-col items-center gap-2'>
 				<div className='flex items-center gap-2'>
 					<IconGlobe size={20} className='text-blue-400' />
-					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-white md:text-56'>
+					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
 						{t('onboarding.domain.title', {defaultValue: 'Connect your domain'})}
 					</h2>
 				</div>
-				<p className='text-center text-body font-medium text-white/60 md:text-body-lg'>
+				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg'>
 					{t('onboarding.domain.subtitle', {defaultValue: 'Set up a custom domain with HTTPS for your server'})}
 				</p>
 			</div>
@@ -422,7 +422,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					className='w-full space-y-4'
 				>
 					<div>
-						<label className='mb-1.5 block text-caption font-medium text-white/50'>Domain name</label>
+						<label className='mb-1.5 block text-caption font-medium text-text-tertiary'>Domain name</label>
 						<Input
 							type='text'
 							value={domain}
@@ -434,10 +434,10 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					</div>
 
 					{serverIp && (
-						<div className='flex items-center gap-2 rounded-xl bg-white/[0.04] border border-white/[0.06] px-4 py-3'>
+						<div className='flex items-center gap-2 rounded-xl bg-surface-1 border border-border-subtle px-4 py-3'>
 							<IconGlobe size={14} className='text-blue-400' />
-							<span className='text-caption text-white/50'>Server IP:</span>
-							<span className='font-mono text-caption text-white/80'>{serverIp}</span>
+							<span className='text-caption text-text-tertiary'>Server IP:</span>
+							<span className='font-mono text-caption text-text-primary'>{serverIp}</span>
 							<CopyButton text={serverIp} />
 						</div>
 					)}
@@ -464,20 +464,20 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					className='w-full space-y-4'
 				>
 					<div>
-						<h3 className='text-body font-semibold text-white'>Add DNS record</h3>
-						<p className='mt-1 text-caption text-white/40'>
+						<h3 className='text-body font-semibold text-text-primary'>Add DNS record</h3>
+						<p className='mt-1 text-caption text-text-tertiary'>
 							Go to your domain registrar and add the following DNS record:
 						</p>
 					</div>
 
-					<div className='overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]'>
+					<div className='overflow-hidden rounded-xl border border-border-default bg-surface-base'>
 						<table className='w-full text-left text-caption'>
 							<thead>
-								<tr className='border-b border-white/[0.06]'>
-									<th className='px-4 py-2.5 font-medium text-white/50'>Type</th>
-									<th className='px-4 py-2.5 font-medium text-white/50'>Name</th>
-									<th className='px-4 py-2.5 font-medium text-white/50'>Value</th>
-									<th className='px-4 py-2.5 font-medium text-white/50'>TTL</th>
+								<tr className='border-b border-border-subtle'>
+									<th className='px-4 py-2.5 font-medium text-text-tertiary'>Type</th>
+									<th className='px-4 py-2.5 font-medium text-text-tertiary'>Name</th>
+									<th className='px-4 py-2.5 font-medium text-text-tertiary'>Value</th>
+									<th className='px-4 py-2.5 font-medium text-text-tertiary'>TTL</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -487,18 +487,18 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 									</td>
 									<td className='px-4 py-3'>
 										<div className='flex items-center gap-1.5'>
-											<span className='font-mono text-white/80'>{hostName}</span>
+											<span className='font-mono text-text-primary'>{hostName}</span>
 											<CopyButton text={hostName} />
 										</div>
 									</td>
 									<td className='px-4 py-3'>
 										<div className='flex items-center gap-1.5'>
-											<span className='font-mono text-white/80'>{serverIp}</span>
+											<span className='font-mono text-text-primary'>{serverIp}</span>
 											<CopyButton text={serverIp} />
 										</div>
 									</td>
 									<td className='px-4 py-3'>
-										<span className='font-mono text-white/50'>300</span>
+										<span className='font-mono text-text-tertiary'>300</span>
 									</td>
 								</tr>
 							</tbody>
@@ -531,17 +531,17 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					className='w-full space-y-4'
 				>
 					<div>
-						<h3 className='text-body font-semibold text-white'>Verify DNS</h3>
-						<p className='mt-1 text-caption text-white/40'>
-							Checking if <span className='font-mono text-white/60'>{domain}</span> points to your server...
+						<h3 className='text-body font-semibold text-text-primary'>Verify DNS</h3>
+						<p className='mt-1 text-caption text-text-tertiary'>
+							Checking if <span className='font-mono text-text-secondary'>{domain}</span> points to your server...
 						</p>
 					</div>
 
-					<div className='rounded-xl border border-white/[0.08] bg-white/[0.02] p-4'>
+					<div className='rounded-xl border border-border-default bg-surface-base p-4'>
 						{verifyQuery.isFetching ? (
 							<div className='flex items-center gap-3'>
 								<IconLoader2 size={18} className='animate-spin text-brand' />
-								<span className='text-body text-white/60'>Checking DNS records...</span>
+								<span className='text-body text-text-secondary'>Checking DNS records...</span>
 							</div>
 						) : isMatch ? (
 							<div className='flex items-center gap-3'>
@@ -555,7 +555,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 								</motion.div>
 								<div>
 									<span className='text-body font-medium text-green-400'>DNS verified!</span>
-									<p className='mt-0.5 text-caption text-white/40'>
+									<p className='mt-0.5 text-caption text-text-tertiary'>
 										<span className='font-mono'>{domain}</span> resolves to{' '}
 										<span className='font-mono'>{verifyQuery.data?.currentIp ?? ''}</span>
 									</p>
@@ -569,24 +569,24 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 									</div>
 									<div>
 										<span className='text-body font-medium text-amber-400'>Not yet resolved</span>
-										<p className='mt-0.5 text-caption text-white/40'>DNS records may need more time to propagate.</p>
+										<p className='mt-0.5 text-caption text-text-tertiary'>DNS records may need more time to propagate.</p>
 									</div>
 								</div>
 
 								{verifyQuery.data && (
-									<div className='rounded-lg bg-white/[0.03] px-3 py-2 text-caption'>
+									<div className='rounded-lg bg-surface-1 px-3 py-2 text-caption'>
 										<div className='flex items-center justify-between'>
-											<span className='text-white/40'>Current:</span>
-											<span className='font-mono text-white/60'>{verifyQuery.data.currentIp || 'No A record found'}</span>
+											<span className='text-text-tertiary'>Current:</span>
+											<span className='font-mono text-text-secondary'>{verifyQuery.data.currentIp || 'No A record found'}</span>
 										</div>
 										<div className='mt-1 flex items-center justify-between'>
-											<span className='text-white/40'>Expected:</span>
-											<span className='font-mono text-white/60'>{verifyQuery.data.expected}</span>
+											<span className='text-text-tertiary'>Expected:</span>
+											<span className='font-mono text-text-secondary'>{verifyQuery.data.expected}</span>
 										</div>
 									</div>
 								)}
 
-								<p className='text-caption-sm text-white/30'>Auto-checking every 10 seconds...</p>
+								<p className='text-caption-sm text-text-tertiary'>Auto-checking every 10 seconds...</p>
 							</div>
 						)}
 					</div>
@@ -594,7 +594,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					{!isMatch && (
 						<button
 							onClick={() => verifyQuery.refetch()}
-							className='flex items-center gap-2 text-caption text-white/40 transition-colors hover:text-white/60'
+							className='flex items-center gap-2 text-caption text-text-tertiary transition-colors hover:text-text-secondary'
 						>
 							<IconRefresh size={14} />
 							Check again
@@ -627,18 +627,18 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					className='w-full space-y-4'
 				>
 					<div>
-						<h3 className='text-body font-semibold text-white'>Activate HTTPS</h3>
-						<p className='mt-1 text-caption text-white/40'>
-							DNS is verified. Ready to enable HTTPS for <span className='font-mono text-white/60'>{domain}</span>.
+						<h3 className='text-body font-semibold text-text-primary'>Activate HTTPS</h3>
+						<p className='mt-1 text-caption text-text-tertiary'>
+							DNS is verified. Ready to enable HTTPS for <span className='font-mono text-text-secondary'>{domain}</span>.
 						</p>
 					</div>
 
-					<div className='space-y-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4'>
+					<div className='space-y-3 rounded-xl border border-border-default bg-surface-base p-4'>
 						<div className='flex items-start gap-3'>
 							<IconLock size={16} className='mt-0.5 flex-shrink-0 text-green-400' />
 							<div>
-								<p className='text-body text-white/80'>Free SSL certificate from Let's Encrypt</p>
-								<p className='mt-0.5 text-caption text-white/40'>
+								<p className='text-body text-text-primary'>Free SSL certificate from Let's Encrypt</p>
+								<p className='mt-0.5 text-caption text-text-tertiary'>
 									Caddy will automatically obtain and renew a certificate.
 								</p>
 							</div>
@@ -646,8 +646,8 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 						<div className='flex items-start gap-3'>
 							<IconGlobe size={16} className='mt-0.5 flex-shrink-0 text-blue-400' />
 							<div>
-								<p className='text-body text-white/80'>HTTP to HTTPS redirect</p>
-								<p className='mt-0.5 text-caption text-white/40'>
+								<p className='text-body text-text-primary'>HTTP to HTTPS redirect</p>
+								<p className='mt-0.5 text-caption text-text-tertiary'>
 									All HTTP traffic will be automatically redirected to HTTPS.
 								</p>
 							</div>
@@ -752,18 +752,18 @@ function StepClaudeAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => voi
 			<div className='flex flex-col items-center gap-2'>
 				<div className='flex items-center gap-2'>
 					<IconSparkles size={20} className='text-brand' />
-					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-white md:text-56'>
+					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
 						{t('onboarding.claude.title', {defaultValue: 'Connect Claude AI'})}
 					</h2>
 				</div>
-				<p className='text-center text-body font-medium text-white/60 md:text-body-lg' style={{maxWidth: 420}}>
+				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg' style={{maxWidth: 420}}>
 					{t('onboarding.claude.subtitle', {defaultValue: 'Sign in with your Claude subscription to enable AI features'})}
 				</p>
 			</div>
 
-			<div className='w-full rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 space-y-4'>
+			<div className='w-full rounded-xl border border-border-default bg-surface-base p-5 space-y-4'>
 				{cliStatusQ.isLoading ? (
-					<div className='flex items-center justify-center gap-2 py-4 text-white/60'>
+					<div className='flex items-center justify-center gap-2 py-4 text-text-secondary'>
 						<IconLoader2 size={18} className='animate-spin' />
 						<span className='text-body'>Checking status...</span>
 					</div>
@@ -784,8 +784,8 @@ function StepClaudeAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => voi
 						<div className='text-center'>
 							<p className='text-body font-medium text-green-400'>Authenticated</p>
 							{cliStatusQ.data?.user && (
-								<p className='mt-0.5 text-caption text-white/40'>
-									Signed in as <span className='text-white/60'>{cliStatusQ.data.user}</span>
+								<p className='mt-0.5 text-caption text-text-tertiary'>
+									Signed in as <span className='text-text-secondary'>{cliStatusQ.data.user}</span>
 								</p>
 							)}
 						</div>
@@ -816,8 +816,8 @@ function StepClaudeAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => voi
 						)}
 
 						{/* Step 2: Code input */}
-						<div className='space-y-3 rounded-lg bg-white/[0.03] border border-white/[0.05] p-4'>
-							<p className='text-caption text-white/40'>
+						<div className='space-y-3 rounded-lg bg-surface-1 border border-border-subtle p-4'>
+							<p className='text-caption text-text-tertiary'>
 								1. Click the button above to open the auth page.
 								<br />
 								2. Log in with your Claude account.
@@ -959,7 +959,7 @@ function StepAllDone({name}: {name: string}) {
 				<TextEffect
 					preset='fade-in-blur'
 					per='word'
-					className='text-center text-display-sm font-bold leading-tight -tracking-2 text-white md:text-56'
+					className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'
 					delay={0.4}
 				>
 					{`You're all set, ${firstName}!`}
@@ -968,7 +968,7 @@ function StepAllDone({name}: {name: string}) {
 					initial={{opacity: 0, y: 10}}
 					animate={{opacity: 1, y: 0}}
 					transition={{delay: 0.9, duration: 0.5}}
-					className='text-center text-body font-medium text-white/60 md:text-body-lg'
+					className='text-center text-body font-medium text-text-secondary md:text-body-lg'
 				>
 					{t('onboarding.done.subtitle', {defaultValue: 'Your Livinity server is ready'})}
 				</motion.p>
@@ -1033,7 +1033,7 @@ export default function SetupWizard() {
 			{/* Glassmorphic card */}
 			<div
 				className={cn(
-					'flex w-full flex-col items-center gap-6 rounded-3xl border border-white/[0.08] px-6 py-8 md:px-10 md:py-12',
+					'flex w-full flex-col items-center gap-6 rounded-3xl border border-border-default px-6 py-8 md:px-10 md:py-12',
 					activeStep === 3 ? 'max-w-[600px]' : 'max-w-[520px]',
 				)}
 				style={glassCardStyle}

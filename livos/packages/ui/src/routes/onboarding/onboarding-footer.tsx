@@ -24,12 +24,12 @@ export function OnboardingFooter({action}: OnboardingFooterProps) {
 		<div className='flex flex-row flex-wrap items-center justify-center gap-3'>
 			<Link to={route} unstable_viewTransition>
 				{/* Small screens: with short text */}
-				<IconButton icon={Icon} size='default' className='border-white/[0.06] bg-white/[0.04] text-white/60 backdrop-blur-md hover:bg-white/[0.08] hover:text-white/80 sm:hidden'>
+				<IconButton icon={Icon} size='default' className='border-border-subtle bg-surface-base text-text-secondary hover:bg-surface-1 hover:text-text-primary sm:hidden'>
 					{/* Using explicit conditionals instead of dynamic keys so GitHub Action for translations can detect translation keys */}
 					{isCreateAccount ? t('onboarding.create-instead-short') : t('onboarding.restore-short')}
 				</IconButton>
 				{/* Larger screens: with full text */}
-				<IconButton icon={Icon} size='default' className='hidden border-white/[0.06] bg-white/[0.04] text-white/60 backdrop-blur-md hover:bg-white/[0.08] hover:text-white/80 sm:flex'>
+				<IconButton icon={Icon} size='default' className='hidden border-border-subtle bg-surface-base text-text-secondary hover:bg-surface-1 hover:text-text-primary sm:flex'>
 					{/* Using explicit conditionals instead of dynamic keys so GitHub Action for translations can detect translation keys */}
 					{isCreateAccount ? t('onboarding.create-instead-long') : t('onboarding.restore-long')}
 				</IconButton>
@@ -37,7 +37,7 @@ export function OnboardingFooter({action}: OnboardingFooterProps) {
 			{/* TODO: consider adding drawer on mobile */}
 			<LanguageDropdown />
 			<Link to={links.support} target='_blank'>
-				<IconButton icon={TbMessageCircle} size='default' className='border-white/[0.06] bg-white/[0.04] text-white/60 backdrop-blur-md hover:bg-white/[0.08] hover:text-white/80'>
+				<IconButton icon={TbMessageCircle} size='default' className='border-border-subtle bg-surface-base text-text-secondary hover:bg-surface-1 hover:text-text-primary'>
 					{t('onboarding.contact-support')}
 				</IconButton>
 			</Link>
