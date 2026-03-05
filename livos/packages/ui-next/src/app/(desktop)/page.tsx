@@ -111,7 +111,7 @@ export default function DesktopPage() {
               as="h1"
               per="word"
               preset="fade-in-blur"
-              className="text-display-sm font-bold tracking-tight text-white drop-shadow-sm sm:text-display-md"
+              className="text-3xl font-bold tracking-tight text-white drop-shadow-sm sm:text-4xl"
               speedReveal={1.4}
             >
               {greeting}
