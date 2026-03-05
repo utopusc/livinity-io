@@ -76,65 +76,65 @@ export default {
 				'destructive2-lightest': '#F45A5A',
 				success: '#299E16',
 				'success-light': '#51CB41',
-				'dialog-content': '#1E1E1E',
-				// Semantic surface colors (dark theme, static)
-				'surface-base': 'rgba(255, 255, 255, 0.06)',
-				'surface-1': 'rgba(255, 255, 255, 0.10)',
-				'surface-2': 'rgba(255, 255, 255, 0.16)',
-				'surface-3': 'rgba(255, 255, 255, 0.22)',
+				'dialog-content': '#FFFFFF',
+				// Semantic surface colors (light theme)
+				'surface-base': 'rgba(0, 0, 0, 0.03)',
+				'surface-1': 'rgba(0, 0, 0, 0.05)',
+				'surface-2': 'rgba(0, 0, 0, 0.08)',
+				'surface-3': 'rgba(0, 0, 0, 0.12)',
 				// Semantic border colors
-				'border-subtle': 'rgba(255, 255, 255, 0.10)',
-				'border-default': 'rgba(255, 255, 255, 0.16)',
-				'border-emphasis': 'rgba(255, 255, 255, 0.30)',
+				'border-subtle': 'rgba(0, 0, 0, 0.06)',
+				'border-default': 'rgba(0, 0, 0, 0.12)',
+				'border-emphasis': 'rgba(0, 0, 0, 0.20)',
 				// Semantic text colors
-				'text-primary': 'rgba(255, 255, 255, 0.92)',
-				'text-secondary': 'rgba(255, 255, 255, 0.65)',
-				'text-tertiary': 'rgba(255, 255, 255, 0.45)',
+				'text-primary': 'rgba(15, 23, 42, 0.92)',
+				'text-secondary': 'rgba(15, 23, 42, 0.60)',
+				'text-tertiary': 'rgba(15, 23, 42, 0.40)',
 				// Semantic status colors
 				info: '#3B82F6',
-				'info-surface': 'rgba(59, 130, 246, 0.08)',
+				'info-surface': 'rgba(59, 130, 246, 0.06)',
 				warning: '#F59E0B',
-				'warning-surface': 'rgba(245, 158, 11, 0.08)',
+				'warning-surface': 'rgba(245, 158, 11, 0.06)',
 			},
 			borderWidth: {
 				px: '1px',
 				hpx: '0.5px',
 			},
 			boxShadow: {
-				// Semantic elevation shadows
-				'elevation-sm': '0px 2px 8px rgba(0, 0, 0, 0.25), 0px 0.5px 0px 0px rgba(255, 255, 255, 0.06) inset',
-				'elevation-md': '0px 4px 16px rgba(0, 0, 0, 0.35), 0px 1px 0px 0px rgba(255, 255, 255, 0.08) inset',
-				'elevation-lg': '0px 8px 24px rgba(0, 0, 0, 0.45), 0px 1px 0px 0px rgba(255, 255, 255, 0.10) inset',
-				'elevation-xl': '0px 16px 48px rgba(0, 0, 0, 0.55), 0px 1px 0px 0px rgba(255, 255, 255, 0.12) inset',
-				// Component-specific shadows (preserved for backward compatibility)
-				dock: '1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 1.06058px 0px 0px rgba(255, 255, 255, 0.20) inset, 0px 0.53029px 0px 0px rgba(255, 255, 255, 0.10) inset, 0px 4.04029px 24.24174px 0px rgba(0, 0, 0, 0.56)',
+				// Semantic elevation shadows (light theme)
+				'elevation-sm': '0px 1px 3px rgba(0, 0, 0, 0.08), 0px 1px 2px rgba(0, 0, 0, 0.06)',
+				'elevation-md': '0px 4px 6px -1px rgba(0, 0, 0, 0.08), 0px 2px 4px -2px rgba(0, 0, 0, 0.06)',
+				'elevation-lg': '0px 10px 15px -3px rgba(0, 0, 0, 0.08), 0px 4px 6px -4px rgba(0, 0, 0, 0.04)',
+				'elevation-xl': '0px 20px 25px -5px rgba(0, 0, 0, 0.08), 0px 8px 10px -6px rgba(0, 0, 0, 0.04)',
+				// Component-specific shadows (light theme)
+				dock: '0px 4px 24px rgba(0, 0, 0, 0.08), 0px 1px 3px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
 				'floating-island':
-					'1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.06058px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 1.06058px 0px 0px rgba(255, 255, 255, 0.14) inset, 0px 0.53029px 0px 0px rgba(255, 255, 255, 0.07) inset, 0px 4.04029px 24.24174px 0px rgba(0, 0, 0, 0.56)',
+					'0px 4px 24px rgba(0, 0, 0, 0.10), 0px 1px 3px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
 				'glass-button':
-					'1px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 1px 0px 0px rgba(255, 255, 255, 0.20) inset, 0px 0.5px 0px 0px rgba(255, 255, 255, 0.10) inset',
+					'0px 1px 2px rgba(0, 0, 0, 0.05), 0px 0px 0px 1px rgba(0, 0, 0, 0.06)',
 				widget:
-					'0px 20px 30px 0px rgba(0, 0, 0, 0.30), 0 1px 0 0 rgba(255, 255, 255, 0.2) inset, 1px 0 0 0 rgba(255, 255, 255, 0.04) inset, -1px 0 0 0 rgba(255, 255, 255, 0.04) inset',
+					'0px 8px 24px rgba(0, 0, 0, 0.08), 0px 2px 4px rgba(0, 0, 0, 0.04), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
 				'context-menu':
-					'1.05px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, -1.05px 0px 0px 0px rgba(255, 255, 255, 0.04) inset, 0px 0.525px 0px 0px rgba(255, 255, 255, 0.10) inset, 0px 24px 36px 0px rgba(0, 0, 0, 0.50)',
-				'sheet-shadow': '0px 1px 0px 0px rgba(255, 255, 255, 0.10) inset',
+					'0px 8px 24px rgba(0, 0, 0, 0.12), 0px 2px 4px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.06)',
+				'sheet-shadow': '0px -1px 0px 0px rgba(0, 0, 0, 0.06)',
 				dropdown:
-					'0px 60px 24px -40px rgba(0, 0, 0, 0.25), 1px 1px 0px 0px rgba(255, 255, 255, 0.08) inset, -1px -1px 1px 0px rgba(0, 0, 0, 0.20) inset',
-				dialog: '0px 24px 48px 0px rgba(0, 0, 0, 0.35), 0px 1px 0px 0px rgba(255, 255, 255, 0.12) inset',
-				'button-highlight': '0px 1px 0px 0px rgba(255, 255, 255, 0.3) inset',
-				'button-highlight-hpx': '0px 0.5px 0px 0px rgba(255, 255, 255, 0.3) inset',
-				'button-highlight-soft': '0px 1px 0px 0px rgba(255, 255, 255, 0.1) inset',
-				'button-highlight-soft-hpx': '0px 0.5px 0px 0px rgba(255, 255, 255, 0.1) inset',
+					'0px 8px 16px rgba(0, 0, 0, 0.10), 0px 2px 4px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.06)',
+				dialog: '0px 16px 48px rgba(0, 0, 0, 0.12), 0px 4px 8px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.06)',
+				'button-highlight': '0px 1px 0px 0px rgba(255, 255, 255, 0.8) inset',
+				'button-highlight-hpx': '0px 0.5px 0px 0px rgba(255, 255, 255, 0.8) inset',
+				'button-highlight-soft': '0px 1px 0px 0px rgba(255, 255, 255, 0.4) inset',
+				'button-highlight-soft-hpx': '0px 0.5px 0px 0px rgba(255, 255, 255, 0.4) inset',
 				'immersive-dialog-close':
-					'0px 32px 32px 0px rgba(0, 0, 0, 0.32), 1px 1px 1px 0px rgba(255, 255, 255, 0.08) inset',
-				'radio-outline': '0 0 0 1px rgba(255, 255, 255, 0.2) inset',
+					'0px 8px 24px rgba(0, 0, 0, 0.12), 0px 0px 0px 1px rgba(0, 0, 0, 0.06)',
+				'radio-outline': '0 0 0 1px rgba(0, 0, 0, 0.12) inset',
 				// Professional card shadows
-				'card-elevated': '0px 8px 24px -4px rgba(0, 0, 0, 0.25), 0px 1px 0px 0px rgba(255, 255, 255, 0.06) inset',
-				'card-hover': '0px 12px 32px -4px rgba(0, 0, 0, 0.35), 0px 1px 0px 0px rgba(255, 255, 255, 0.08) inset',
+				'card-elevated': '0px 4px 12px rgba(0, 0, 0, 0.06), 0px 1px 3px rgba(0, 0, 0, 0.04), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
+				'card-hover': '0px 8px 24px rgba(0, 0, 0, 0.10), 0px 2px 4px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.06)',
 				// Input focus shadow
-				'input-focus': '0px 0px 0px 3px rgba(var(--color-brand), 0.15)',
+				'input-focus': '0px 0px 0px 3px rgba(var(--color-brand), 0.12)',
 			},
 			dropShadow: {
-				'desktop-label': '0px 2px 4px rgba(0, 0, 0, 0.60)',
+				'desktop-label': '0px 1px 2px rgba(0, 0, 0, 0.10)',
 			},
 			opacity: {
 				3: '0.03',
@@ -256,8 +256,8 @@ export default {
 			typography: () => ({
 				neutral: {
 					css: {
-						'--tw-prose-invert-bullets': 'rgb(255 255 255 / 50%)',
-						'--tw-prose-invert-pre-bg': 'rgb(255 255 255 / 10%)',
+						'--tw-prose-bullets': 'rgb(0 0 0 / 50%)',
+						'--tw-prose-pre-bg': 'rgb(0 0 0 / 5%)',
 					},
 				},
 			}),
