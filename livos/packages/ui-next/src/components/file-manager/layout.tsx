@@ -233,7 +233,7 @@ export function FileManagerLayout() {
       onDrop={handleDrop}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-3 py-2 shrink-0">
         <button
           className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text disabled:opacity-30"
           onClick={goBack}
@@ -310,115 +310,171 @@ export function FileManagerLayout() {
         </div>
       </div>
 
-      {/* New folder input */}
-      {showNewFolder && (
-        <div className="flex items-center gap-2 border-b border-border bg-surface-1 px-3 py-2">
-          <Folder className="h-4 w-4 text-brand" />
-          <Input
-            autoFocus
-            placeholder="Folder name"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newFolderName.trim()) {
-                mkdirMutation.mutate({ path: `${currentPath}/${newFolderName.trim()}` });
-              }
-              if (e.key === 'Escape') setShowNewFolder(false);
-            }}
-            className="h-7 max-w-xs text-xs"
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              if (newFolderName.trim()) mkdirMutation.mutate({ path: `${currentPath}/${newFolderName.trim()}` });
-            }}
-            loading={mkdirMutation.isPending}
-          >
-            Create
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setShowNewFolder(false)}>Cancel</Button>
-        </div>
-      )}
+      {/* Body: sidebar + content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <FileSidebar currentPath={currentPath} navigate={navigate} />
 
-      {/* Drag overlay */}
-      <AnimatePresence>
-        {isDraggingOver && (
-          <motion.div
-            className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand/30 bg-brand/5"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div className="text-center">
-              <Upload className="mx-auto h-8 w-8 text-brand" />
-              <p className="mt-2 text-sm font-medium text-brand">Drop files to upload</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Content */}
-      <ScrollArea className="relative flex-1">
-        {isLoading ? (
-          <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-border-subtle bg-surface-0 p-2 shadow-sm">
-                <Skeleton className="h-8 w-8 rounded-lg" />
-                <Skeleton className="h-2.5 w-3/4" />
-              </div>
-            ))}
-          </div>
-        ) : sortedEntries.length === 0 ? (
-          <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-tertiary">
-            <Folder className="h-8 w-8" />
-            <p className="text-xs">This folder is empty</p>
-          </div>
-        ) : viewMode === 'grid' ? (
-          <AnimatedGroup preset="fade" className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
-            {sortedEntries.map((entry) => (
-              <GridItem
-                key={entry.name}
-                entry={entry}
-                isSelected={selected.has(entry.name)}
-                onClick={(e) => toggleSelect(entry.name, e)}
-                onDoubleClick={() => handleItemDoubleClick(entry)}
-                isRenaming={renaming === entry.name}
-                renameValue={renameValue}
-                onRenameChange={setRenameValue}
-                onRenameSubmit={() => {
-                  if (renameValue.trim() && renameValue !== entry.name) {
-                    renameMutation.mutate({ path: `${currentPath}/${entry.name}`, newName: renameValue.trim() });
-                  } else {
-                    setRenaming(null);
+        {/* Main content column */}
+        <div className="relative flex flex-1 flex-col overflow-hidden">
+          {/* New folder input */}
+          {showNewFolder && (
+            <div className="flex items-center gap-2 border-b border-border bg-surface-1 px-3 py-2 shrink-0">
+              <Folder className="h-4 w-4 text-brand" />
+              <Input
+                autoFocus
+                placeholder="Folder name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newFolderName.trim()) {
+                    mkdirMutation.mutate({ path: `${currentPath}/${newFolderName.trim()}` });
                   }
+                  if (e.key === 'Escape') setShowNewFolder(false);
                 }}
-                onRenameCancel={() => setRenaming(null)}
-                onStartRename={() => { setRenaming(entry.name); setRenameValue(entry.name); }}
+                className="h-7 max-w-xs text-xs"
               />
-            ))}
-          </AnimatedGroup>
-        ) : (
-          <AnimatedGroup preset="fade" className="divide-y divide-border-subtle">
-            {sortedEntries.map((entry) => (
-              <ListItem
-                key={entry.name}
-                entry={entry}
-                isSelected={selected.has(entry.name)}
-                onClick={(e) => toggleSelect(entry.name, e)}
-                onDoubleClick={() => handleItemDoubleClick(entry)}
-                onStartRename={() => { setRenaming(entry.name); setRenameValue(entry.name); }}
-              />
-            ))}
-          </AnimatedGroup>
-        )}
-      </ScrollArea>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (newFolderName.trim()) mkdirMutation.mutate({ path: `${currentPath}/${newFolderName.trim()}` });
+                }}
+                loading={mkdirMutation.isPending}
+              >
+                Create
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowNewFolder(false)}>Cancel</Button>
+            </div>
+          )}
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between border-t border-border bg-surface-1 px-3 py-1.5 text-[11px] text-text-tertiary">
-        <span>{sortedEntries.length} items</span>
-        {selected.size > 0 && <span className="text-text-secondary">{selected.size} selected</span>}
+          {/* Drag overlay */}
+          <AnimatePresence>
+            {isDraggingOver && (
+              <motion.div
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand/30 bg-brand/5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <div className="text-center">
+                  <Upload className="mx-auto h-8 w-8 text-brand" />
+                  <p className="mt-2 text-sm font-medium text-brand">Drop files to upload</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Content */}
+          <ScrollArea className="relative flex-1">
+            {isLoading ? (
+              <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-border-subtle bg-surface-0 p-2 shadow-sm">
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                    <Skeleton className="h-2.5 w-3/4" />
+                  </div>
+                ))}
+              </div>
+            ) : sortedEntries.length === 0 ? (
+              <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-tertiary">
+                <Folder className="h-8 w-8" />
+                <p className="text-xs">This folder is empty</p>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <AnimatedGroup preset="fade" className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
+                {sortedEntries.map((entry) => (
+                  <GridItem
+                    key={entry.name}
+                    entry={entry}
+                    isSelected={selected.has(entry.name)}
+                    onClick={(e) => toggleSelect(entry.name, e)}
+                    onDoubleClick={() => handleItemDoubleClick(entry)}
+                    isRenaming={renaming === entry.name}
+                    renameValue={renameValue}
+                    onRenameChange={setRenameValue}
+                    onRenameSubmit={() => {
+                      if (renameValue.trim() && renameValue !== entry.name) {
+                        renameMutation.mutate({ path: `${currentPath}/${entry.name}`, newName: renameValue.trim() });
+                      } else {
+                        setRenaming(null);
+                      }
+                    }}
+                    onRenameCancel={() => setRenaming(null)}
+                    onStartRename={() => { setRenaming(entry.name); setRenameValue(entry.name); }}
+                  />
+                ))}
+              </AnimatedGroup>
+            ) : (
+              <AnimatedGroup preset="fade" className="divide-y divide-border-subtle">
+                {sortedEntries.map((entry) => (
+                  <ListItem
+                    key={entry.name}
+                    entry={entry}
+                    isSelected={selected.has(entry.name)}
+                    onClick={(e) => toggleSelect(entry.name, e)}
+                    onDoubleClick={() => handleItemDoubleClick(entry)}
+                    onStartRename={() => { setRenaming(entry.name); setRenameValue(entry.name); }}
+                  />
+                ))}
+              </AnimatedGroup>
+            )}
+          </ScrollArea>
+
+          {/* Status bar */}
+          <div className="flex items-center justify-between border-t border-border bg-surface-1 px-3 py-1.5 text-[11px] text-text-tertiary shrink-0">
+            <span>{sortedEntries.length} items</span>
+            {selected.size > 0 && <span className="text-text-secondary">{selected.size} selected</span>}
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sidebar                                                            */
+/* ------------------------------------------------------------------ */
+
+const SIDEBAR_LOCATIONS: { label: string; icon: LucideIcon; path: string }[] = [
+  { label: 'Home', icon: Home, path: '/Home' },
+  { label: 'Documents', icon: FileText, path: '/Home/Documents' },
+  { label: 'Downloads', icon: Download, path: '/Home/Downloads' },
+  { label: 'Trash', icon: Trash2, path: '/Trash' },
+];
+
+function FileSidebar({
+  currentPath,
+  navigate,
+}: {
+  currentPath: string;
+  navigate: (path: string) => void;
+}) {
+  return (
+    <aside className="flex w-[200px] shrink-0 flex-col border-r border-border bg-surface-1 overflow-y-auto">
+      <div className="px-2 py-2.5 space-y-0.5">
+        <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+          Locations
+        </p>
+        {SIDEBAR_LOCATIONS.map(({ label, icon: Icon, path }) => {
+          const isActive = currentPath === path;
+          return (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs transition-colors',
+                isActive
+                  ? 'bg-brand/8 text-brand font-medium'
+                  : 'text-text-secondary hover:bg-neutral-100 hover:text-text',
+              )}
+            >
+              <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-brand' : 'text-text-tertiary')} />
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
   );
 }
 
