@@ -1,1 +1,0 @@
-export { FileManagerLayout } from './layout';
