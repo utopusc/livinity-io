@@ -8,7 +8,7 @@ import LivinityLogo from '@/assets/livinity-logo'
 import {StepIndicator} from '@/components/ui/step-indicator'
 import {useLanguage} from '@/hooks/use-language'
 import {useWallpaper, wallpapers} from '@/providers/wallpaper'
-import {trpcReact} from '@/trpc/trpc'
+import {trpcReact, wsClient} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 import {cn} from '@/shadcn-lib/utils'
 import {Input, PasswordInput, AnimatedInputError} from '@/shadcn-components/ui/input'
@@ -205,6 +205,10 @@ function StepCreateAccount({onSuccess}: {onSuccess: () => void}) {
 			setIsNavigating(true)
 			// Set JWT directly without triggering navigation -- stay in wizard
 			localStorage.setItem(JWT_LOCAL_STORAGE_KEY, jwt)
+			// Force WebSocket to reconnect with the new JWT token
+			// Without this, the WS was established at page load without auth,
+			// and subsequent privateProcedure calls through WS would get 401
+			wsClient.close()
 			onSuccess()
 		},
 	})

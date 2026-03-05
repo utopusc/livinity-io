@@ -32,7 +32,7 @@ const trpcWsUrl = `${wsProtocol}//${hostname}${portPart}/trpc`
 // TODO: Getting jwt from `localStorage` like this means auth flow require a page refresh
 const getJwt = () => localStorage.getItem(JWT_LOCAL_STORAGE_KEY)
 
-const wsClient = createWSClient({
+export const wsClient = createWSClient({
 	url: () => {
 		const token = getJwt()
 		return token ? `${trpcWsUrl}?token=${token}` : `${trpcWsUrl}`
