@@ -154,3 +154,16 @@ export function DesktopDock() {
     </motion.div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Returns the default route to open when launching a system app window.
+ * Route is not used for rendering (content is determined by appId in
+ * window-content.tsx), so we always return '/'.
+ */
+function getDefaultRoute(_appId: string): string {
+  return '/';
+}

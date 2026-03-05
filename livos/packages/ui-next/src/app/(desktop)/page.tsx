@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Package } from 'lucide-react';
 import { trpcReact } from '@/trpc/client';
 import {
   Dock,
@@ -14,6 +15,7 @@ import {
 import { TextEffect } from '@/components/motion-primitives/text-effect';
 import { SlidingNumber } from '@/components/motion-primitives/sliding-number';
 import { type WindowState } from '@/providers/window-manager';
+import { useApps, type UserApp } from '@/providers/apps';
 
 /* ------------------------------------------------------------------ */
 /*  Live Clock                                                         */
@@ -81,6 +83,7 @@ function LiveClock() {
 export default function DesktopPage() {
   const { data: version } = trpcReact.system.version.useQuery();
   const { data: user } = trpcReact.user.get.useQuery();
+  const { userApps } = useApps();
 
   const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
 
@@ -104,8 +107,9 @@ export default function DesktopPage() {
   return (
     <DesktopContextMenu onChangeWallpaper={() => setWallpaperPickerOpen(true)}>
       <div className="flex min-h-dvh flex-col">
-        {/* Desktop content — greeting + clock */}
+        {/* Desktop content — greeting + clock + app grid */}
         <div className="flex flex-1 flex-col items-center justify-center px-4 pb-20">
+          {/* Greeting & clock */}
           <div className="text-center">
             <TextEffect
               as="h1"
@@ -130,6 +134,20 @@ export default function DesktopPage() {
               </motion.p>
             )}
           </div>
+
+          {/* Installed app grid */}
+          {userApps.length > 0 && (
+            <motion.div
+              className="mt-10 grid grid-cols-4 gap-6 sm:grid-cols-5 md:grid-cols-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.0, duration: 0.4 }}
+            >
+              {userApps.map((app, i) => (
+                <AppGridItem key={app.id} app={app} index={i} />
+              ))}
+            </motion.div>
+          )}
         </div>
 
         {/* Windows layer */}
@@ -152,8 +170,68 @@ export default function DesktopPage() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  App Grid Item                                                      */
+/* ------------------------------------------------------------------ */
+
+type AppGridItemProps = {
+  app: UserApp;
+  index: number;
+};
+
+function AppGridItem({ app, index }: AppGridItemProps) {
+  const [imgError, setImgError] = useState(false);
+
+  const handleClick = () => {
+    window.open(getAppUrl(app), '_blank')?.focus();
+  };
+
+  return (
+    <motion.button
+      className="flex flex-col items-center gap-2 rounded-2xl p-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 1.0 + index * 0.06, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ scale: 1.08 }}
+      whileTap={{ scale: 0.96 }}
+      onClick={handleClick}
+      aria-label={`Open ${app.name}`}
+      title={app.name}
+    >
+      {/* Icon */}
+      <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/20 shadow-lg ring-1 ring-white/10 backdrop-blur-sm transition-all duration-150 hover:ring-2 hover:ring-white/40">
+        {app.icon && !imgError ? (
+          <img
+            src={app.icon}
+            alt={app.name}
+            className="h-full w-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <Package className="h-7 w-7 text-white/70" strokeWidth={1.5} aria-hidden="true" />
+        )}
+      </div>
+
+      {/* Label */}
+      <span className="max-w-[72px] truncate text-center text-xs font-medium text-white/80 drop-shadow-sm">
+        {app.name}
+      </span>
+    </motion.button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+function getAppUrl(app: UserApp): string {
+  const { protocol, hostname } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${protocol}//${hostname}:${app.port}`;
+  }
+  // Production: subdomain-based routing
+  const domain = hostname.split('.').slice(-2).join('.');
+  return `${protocol}//${app.id}.${domain}${app.path ?? ''}`;
+}
 
 function getGreeting(name: string): string {
   const hour = new Date().getHours();
