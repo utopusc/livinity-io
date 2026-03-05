@@ -1,4 +1,5 @@
 import {Loader2} from 'lucide-react'
+import {AnimatePresence, motion} from 'motion/react'
 import React, {Suspense, useEffect, useState} from 'react'
 import {FaRegSave} from 'react-icons/fa'
 import {
@@ -189,11 +190,14 @@ export function SettingsContent() {
 					{/* Menu Items */}
 					<Card className='!p-2'>
 						<div className='space-y-0.5'>
-							{MENU_ITEMS.map((item) => (
-								<button
+							{MENU_ITEMS.map((item, i) => (
+								<motion.button
 									key={item.id}
 									onClick={() => setActiveSection(item.id)}
 									className='flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
+									initial={{opacity: 0, x: -10}}
+									animate={{opacity: 1, x: 0}}
+									transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
 								>
 									<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-surface-2'>
 										<item.icon className='h-4 w-4 text-text-secondary' />
@@ -203,7 +207,7 @@ export function SettingsContent() {
 										<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
 									</div>
 									<TbChevronRight className='h-4 w-4 text-text-tertiary' />
-								</button>
+								</motion.button>
 							))}
 						</div>
 					</Card>
@@ -275,13 +279,17 @@ function SettingsDetailView({
 							<button
 								key={item.id}
 								onClick={() => onNavigate(item.id)}
-								className={cn(
-									'flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2',
-									item.id === section && 'bg-surface-3'
-								)}
+								className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
 							>
+								{item.id === section && (
+									<motion.div
+										layoutId='settings-sidebar-active'
+										className='absolute inset-0 rounded-radius-sm bg-surface-3'
+										transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
+									/>
+								)}
 								<div className={cn(
-									'flex h-8 w-8 items-center justify-center rounded-radius-sm',
+									'relative z-10 flex h-8 w-8 items-center justify-center rounded-radius-sm',
 									item.id === section ? 'bg-surface-3' : 'bg-surface-2'
 								)}>
 									<item.icon className={cn(
@@ -289,10 +297,10 @@ function SettingsDetailView({
 										item.id === section ? 'text-text-primary' : 'text-text-secondary'
 									)} />
 								</div>
-								<div className='flex-1 min-w-0'>
+								<div className='relative z-10 flex-1 min-w-0'>
 									<div className='text-body-sm font-medium truncate'>{item.label}</div>
 								</div>
-								{item.id === section && <TbChevronRight className='h-4 w-4 text-text-secondary' />}
+								{item.id === section && <TbChevronRight className='relative z-10 h-4 w-4 text-text-secondary' />}
 							</button>
 						))}
 					</div>
@@ -315,8 +323,18 @@ function SettingsDetailView({
 					</div>
 				</div>
 
-				{/* Content based on section */}
-				<SectionContent section={section} onBack={onBack} />
+				{/* Content based on section — animated transition */}
+				<AnimatePresence mode='wait'>
+					<motion.div
+						key={section}
+						initial={{opacity: 0, y: 8}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: -8}}
+						transition={{duration: 0.2, ease: 'easeOut'}}
+					>
+						<SectionContent section={section} onBack={onBack} />
+					</motion.div>
+				</AnimatePresence>
 			</Card>
 		</div>
 	)
