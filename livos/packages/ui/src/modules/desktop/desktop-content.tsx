@@ -1,6 +1,7 @@
 import {motion, Variant} from 'framer-motion'
 import {useLocation} from 'react-router-dom'
 
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {useApps} from '@/providers/apps'
 import {trpcReact} from '@/trpc/trpc'
 
@@ -73,7 +74,9 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 								ease: 'easeOut',
 							}}
 						>
-							<AppIconConnected appId={app.id} />
+							<Tilt rotationFactor={6} springOptions={{stiffness: 300, damping: 20}}>
+								<AppIconConnected appId={app.id} />
+							</Tilt>
 						</motion.div>
 					))}
 				/>
