@@ -32,17 +32,17 @@ export function SubTitle({
 	className?: string
 } & HTMLProps<HTMLParagraphElement>) {
 	return (
-		<p className={cn('text-center text-body font-medium text-white/60 md:text-body-lg', className)} {...props}>
+		<p className={cn('text-center text-body font-medium text-text-secondary md:text-body-lg', className)} {...props}>
 			{children}
 		</p>
 	)
 }
 
 export const footerClass = tw`flex items-center justify-center gap-4`
-export const footerLinkClass = tw`text-body-sm transition-colors font-normal text-white/50 -tracking-3 hover:text-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20`
+export const footerLinkClass = tw`text-body-sm transition-colors font-normal text-text-tertiary -tracking-3 hover:text-text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20`
 
 export const buttonClass = tw`flex h-12 items-center rounded-full bg-brand px-6 text-body font-medium -tracking-1 text-white transition-all duration-300 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50 shadow-[0_0_20px_rgba(139,92,246,0.3)]`
-export const secondaryButtonClasss = tw`flex h-12 items-center rounded-full bg-white/[0.06] backdrop-blur-md border border-white/[0.08] px-6 text-body font-medium -tracking-1 text-white transition-all duration-300 hover:bg-white/[0.1] hover:border-white/[0.15] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
+export const secondaryButtonClasss = tw`flex h-12 items-center rounded-full bg-surface-1 border border-border-default px-6 text-body font-medium -tracking-1 text-text-primary transition-all duration-300 hover:bg-surface-2 hover:border-border-emphasis focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
 
 export const formGroupClass = tw`flex w-full max-w-sm flex-col gap-2.5`
 
@@ -71,12 +71,12 @@ export function Layout({
 			<div className='flex-1' />
 			{/* Glassmorphic card */}
 			<div
-				className='flex w-full max-w-[520px] flex-col items-center gap-6 rounded-3xl border border-white/[0.08] px-8 py-10 md:px-12 md:py-14'
+				className='flex w-full max-w-[520px] flex-col items-center gap-6 rounded-3xl border border-border-subtle px-8 py-10 md:px-12 md:py-14'
 				style={{
-					background: 'rgba(255, 255, 255, 0.03)',
+					background: 'rgba(255, 255, 255, 0.85)',
 					backdropFilter: 'blur(24px)',
 					WebkitBackdropFilter: 'blur(24px)',
-					boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+					boxShadow: '0 8px 32px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04)',
 				}}
 			>
 				<LivinityLogoLarge />
