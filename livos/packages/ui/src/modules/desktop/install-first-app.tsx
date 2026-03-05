@@ -155,6 +155,6 @@ function App({
 	)
 }
 
-const cardClass = tw`rounded-radius-xl backdrop-blur-md contrast-more:backdrop-blur-none bg-blend-soft-light bg-gradient-to-b from-black/50 via-black/50 to-black contrast-more:bg-neutral-800 px-4 py-8 shadow-elevation-lg flex flex-col gap-4 min-w-0`
+const cardClass = tw`rounded-radius-xl backdrop-blur-md contrast-more:backdrop-blur-none bg-white/80 contrast-more:bg-white px-4 py-8 shadow-elevation-lg border border-border-subtle flex flex-col gap-4 min-w-0`
 
 const cardHeadingClass = tw`text-center text-heading font-bold leading-tight -tracking-2`
