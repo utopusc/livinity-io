@@ -45,8 +45,8 @@ type DockItemProps = {
 	className?: string
 	style?: React.CSSProperties
 	onClick?: (e: React.MouseEvent) => void
-	/** Called when item is clicked. If provided, navigation is always prevented and window opens instead. */
-	onOpenWindow?: () => boolean
+	/** Called when item is clicked. If provided, navigation is always prevented and window opens instead. Returns the dock icon's bounding rect for morph animation. */
+	onOpenWindow?: (originRect: {x: number; y: number; width: number; height: number}) => boolean
 } & HTMLDivProps
 
 const BOUNCE_DURATION = 0.4
@@ -160,7 +160,11 @@ export function DockItem({
 					<button
 						className='absolute inset-0 outline-none rounded-xl'
 						onClick={() => {
-							onOpenWindow()
+							const rect = ref.current?.getBoundingClientRect()
+							const originRect = rect
+								? {x: rect.x, y: rect.y, width: rect.width, height: rect.height}
+								: {x: window.innerWidth / 2, y: window.innerHeight - 80, width: 50, height: 50}
+							onOpenWindow(originRect)
 						}}
 					/>
 				) : (

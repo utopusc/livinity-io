@@ -31,6 +31,7 @@ export function WindowsContainer() {
 						position={window.position}
 						size={window.size}
 						zIndex={window.zIndex}
+						originRect={window.originRect}
 					>
 						<WindowContent route={window.route} appId={window.appId} />
 					</Window>

@@ -1,7 +1,7 @@
 import {motion} from 'framer-motion'
 import React, {forwardRef, useCallback, useEffect, useRef, useState} from 'react'
 
-import {Position, Size, useWindowManager, WindowId} from '@/providers/window-manager'
+import {OriginRect, Position, Size, useWindowManager, WindowId} from '@/providers/window-manager'
 import {tw} from '@/utils/tw'
 
 import {WindowChrome} from './window-chrome'
@@ -14,10 +14,11 @@ type WindowProps = {
 	size: Size
 	zIndex: number
 	children: React.ReactNode
+	originRect?: OriginRect
 }
 
 export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
-	{id, title, icon, position, size, zIndex, children},
+	{id, title, icon, position, size, zIndex, children, originRect},
 	ref,
 ) {
 	const {closeWindow, focusWindow, updateWindowPosition, updateWindowSize} = useWindowManager()
@@ -147,6 +148,33 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 	const currentX = position.x + dragOffset.x
 	const currentY = position.y + dragOffset.y
 
+	// Morph animation: if we have an originRect (dock icon position), morph from it
+	const hasMorphOrigin = !!originRect
+	const morphInitial = hasMorphOrigin
+		? {
+				left: originRect!.x,
+				top: originRect!.y,
+				width: originRect!.width,
+				height: originRect!.height,
+				opacity: 0.6,
+				borderRadius: '16px',
+			}
+		: {opacity: 0, scale: 0.95}
+
+	const morphExit = hasMorphOrigin
+		? {
+				left: originRect!.x + originRect!.width / 2 - size.width * 0.15,
+				top: originRect!.y + originRect!.height / 2 - size.height * 0.15,
+				scale: 0.3,
+				opacity: 0,
+				borderRadius: '20px',
+			}
+		: {opacity: 0, scale: 0.95}
+
+	const morphTransition = hasMorphOrigin
+		? {type: 'spring' as const, stiffness: 280, damping: 26, mass: 0.8}
+		: {type: 'spring' as const, stiffness: 500, damping: 35}
+
 	return (
 		<>
 			{/* Floating title bar - draggable */}
@@ -162,7 +190,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				initial={{opacity: 0, y: -10, scale: 0.9}}
 				animate={{opacity: isDragging ? 0.9 : 1, y: 0, scale: 1}}
 				exit={{opacity: 0, y: -10, scale: 0.9}}
-				transition={{type: 'spring', stiffness: 500, damping: 35}}
+				transition={{type: 'spring', stiffness: 500, damping: 35, delay: hasMorphOrigin ? 0.15 : 0}}
 			>
 				<WindowChrome title={title} icon={icon} onClose={handleClose} />
 			</motion.div>
@@ -181,14 +209,10 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 						? '0 35px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.06)'
 						: undefined,
 				}}
-				initial={{opacity: 0, scale: 0.95, y: 20}}
-				animate={{opacity: isDragging ? 0.95 : 1, scale: 1, y: 0}}
-				exit={{opacity: 0, scale: 0.95, y: 20}}
-				transition={{
-					type: 'spring',
-					stiffness: 500,
-					damping: 35,
-				}}
+				initial={morphInitial}
+				animate={{opacity: isDragging ? 0.95 : 1, scale: 1, left: currentX, top: currentY, width: size.width, height: size.height, borderRadius: '20px'}}
+				exit={morphExit}
+				transition={morphTransition}
 				onPointerDown={handleFocus}
 			>
 				<div className={windowContentClass}>{children}</div>

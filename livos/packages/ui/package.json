@@ -91,6 +91,7 @@
 		"react-qr-code": "2.0.12",
 		"react-router-dom": "6.17.0",
 		"react-use": "17.4.0",
+		"react-use-measure": "^2.1.7",
 		"react-virtualized-auto-sizer": "^1.0.25",
 		"react-window": "^1.8.11",
 		"react-window-infinite-loader": "^1.0.10",

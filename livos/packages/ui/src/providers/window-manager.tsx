@@ -13,6 +13,13 @@ export type Size = {
 	height: number
 }
 
+export type OriginRect = {
+	x: number
+	y: number
+	width: number
+	height: number
+}
+
 export type WindowState = {
 	id: WindowId
 	appId: string
@@ -23,6 +30,7 @@ export type WindowState = {
 	isMinimized: boolean
 	title: string
 	icon: string
+	originRect?: OriginRect
 }
 
 type WindowManagerState = {
@@ -32,7 +40,7 @@ type WindowManagerState = {
 
 type WindowManagerContextT = {
 	windows: WindowState[]
-	openWindow: (appId: string, route: string, title: string, icon: string) => WindowId
+	openWindow: (appId: string, route: string, title: string, icon: string, originRect?: OriginRect) => WindowId
 	closeWindow: (windowId: WindowId) => void
 	focusWindow: (windowId: WindowId) => void
 	minimizeWindow: (windowId: WindowId) => void
@@ -171,7 +179,7 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		nextZIndex: 40, // Start at z-40, below dock at z-50
 	})
 
-	const openWindow = useCallback((appId: string, route: string, title: string, icon: string): WindowId => {
+	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect): WindowId => {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
 		const baseSize = DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default
 		const size = getResponsiveSize(baseSize.width, baseSize.height)
@@ -189,6 +197,7 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				isMinimized: false,
 				title,
 				icon,
+				originRect,
 			},
 		})
 
