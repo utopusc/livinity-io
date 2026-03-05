@@ -80,7 +80,7 @@ function StepDomain({
 					onChange={(e) => setDomain(e.target.value)}
 					onKeyDown={(e) => e.key === 'Enter' && valid && onNext()}
 					placeholder='myserver.example.com'
-					className='w-full rounded-radius-md border border-border-default bg-surface-base px-4 py-2.5 text-body text-white placeholder-white/20 outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25'
+					className='w-full rounded-radius-md border border-border-default bg-surface-base px-4 py-2.5 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25'
 					autoFocus
 				/>
 			</div>
@@ -89,7 +89,7 @@ function StepDomain({
 				<div className='flex items-center gap-2 rounded-radius-md bg-surface-base px-4 py-3'>
 					<IconGlobe size={14} className='text-blue-400' />
 					<span className='text-caption text-text-secondary'>Server IP:</span>
-					<span className='font-mono text-caption text-white/80'>{serverIp}</span>
+					<span className='font-mono text-caption text-text-primary'>{serverIp}</span>
 					<CopyButton text={serverIp} />
 				</div>
 			)}
@@ -152,13 +152,13 @@ function StepDnsRecords({
 							</td>
 							<td className='px-4 py-3'>
 								<div className='flex items-center gap-1.5'>
-									<span className='font-mono text-white/80'>{hostName}</span>
+									<span className='font-mono text-text-primary'>{hostName}</span>
 									<CopyButton text={hostName} />
 								</div>
 							</td>
 							<td className='px-4 py-3'>
 								<div className='flex items-center gap-1.5'>
-									<span className='font-mono text-white/80'>{serverIp}</span>
+									<span className='font-mono text-text-primary'>{serverIp}</span>
 									<CopyButton text={serverIp} />
 								</div>
 							</td>
@@ -368,7 +368,7 @@ function StepActivate({
 				<div className='flex items-start gap-3'>
 					<IconLock size={16} className='mt-0.5 flex-shrink-0 text-green-400' />
 					<div>
-						<p className='text-body text-white/80'>Free SSL certificate from Let's Encrypt</p>
+						<p className='text-body text-text-primary'>Free SSL certificate from Let's Encrypt</p>
 						<p className='mt-0.5 text-caption text-text-tertiary'>
 							Caddy will automatically obtain and renew a certificate.
 						</p>
@@ -377,7 +377,7 @@ function StepActivate({
 				<div className='flex items-start gap-3'>
 					<IconGlobe size={16} className='mt-0.5 flex-shrink-0 text-blue-400' />
 					<div>
-						<p className='text-body text-white/80'>HTTP to HTTPS redirect</p>
+						<p className='text-body text-text-primary'>HTTP to HTTPS redirect</p>
 						<p className='mt-0.5 text-caption text-text-tertiary'>
 							All HTTP traffic will be automatically redirected to HTTPS.
 						</p>

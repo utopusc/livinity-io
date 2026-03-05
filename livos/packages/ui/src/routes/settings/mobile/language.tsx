@@ -43,7 +43,7 @@ export function LanguageDrawer() {
 				</DrawerHeader>
 
 				<DrawerScroller>
-					<div className='divide-y divide-white/6 rounded-12 bg-white/6'>
+					<div className='divide-y divide-border-subtle rounded-12 bg-surface-base'>
 						{languages.map(({code, name}) => (
 							<ListRadioItem
 								key={code}

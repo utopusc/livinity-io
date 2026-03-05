@@ -13,7 +13,7 @@ export function DesktopWifiButtonConnected({className}: {className?: string}) {
 	return (
 		<Link
 			className={cn(
-				'rounded-6 outline-none ring-white/20 transition-[background,shadow] animate-in fade-in focus-visible:bg-white/6 focus-visible:ring-2 focus-visible:backdrop-blur-sm',
+				'rounded-6 outline-none ring-brand/20 transition-[background,shadow] animate-in fade-in focus-visible:bg-surface-1 focus-visible:ring-2 focus-visible:backdrop-blur-sm',
 				className,
 			)}
 			to='/settings/wifi'

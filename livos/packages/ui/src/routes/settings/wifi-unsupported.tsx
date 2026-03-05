@@ -39,8 +39,8 @@ function Icon() {
 	return (
 		// Stolen from factory reset sidebar icon
 		<div
-			className='grid h-[67px] w-[67px] place-items-center rounded-15 bg-white/6'
-			style={{boxShadow: '0 1px 1px #ffffff33 inset'}}
+			className='grid h-[67px] w-[67px] place-items-center rounded-15 bg-surface-base'
+			style={{boxShadow: '0 1px 1px rgba(0,0,0,0.08) inset'}}
 		>
 			<TbWifi className='h-[40px] w-[40px]' />
 		</div>

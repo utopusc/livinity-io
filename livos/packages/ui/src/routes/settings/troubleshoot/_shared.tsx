@@ -41,11 +41,11 @@ export function LogResults({children}: {children: string}) {
 	useScrollToBottom(ref, [children])
 
 	return (
-		<div ref={ref} className='w-full flex-1 overflow-auto rounded-10 bg-black px-5 py-4'>
+		<div ref={ref} className='w-full flex-1 overflow-auto rounded-10 bg-neutral-100 px-5 py-4'>
 			<div
 				key={children}
 				className={cn(
-					'whitespace-pre font-mono text-xs text-white/50',
+					'whitespace-pre font-mono text-xs text-text-secondary',
 					children && 'delay-500 animate-in fade-in fill-mode-both',
 				)}
 			>

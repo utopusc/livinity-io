@@ -47,14 +47,14 @@ export function AiConfigDialog({open, onOpenChange}: {open: boolean; onOpenChang
 
 				<div className='flex flex-col gap-4 py-2'>
 					<div className='flex flex-col gap-1.5'>
-						<div className='px-[5px] text-12 -tracking-2 text-white/50'>Current key</div>
-						<div className='rounded-12 border border-white/10 bg-white/5 px-5 py-3 font-mono text-13 text-white/40'>
+						<div className='px-[5px] text-12 -tracking-2 text-text-secondary'>Current key</div>
+						<div className='rounded-12 border border-border-default bg-surface-base px-5 py-3 font-mono text-13 text-text-tertiary'>
 							{configQ.isLoading ? '...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not set'}
 						</div>
 					</div>
 
 					<div className='flex flex-col gap-1.5'>
-						<div className='px-[5px] text-12 -tracking-2 text-white/50'>New API key</div>
+						<div className='px-[5px] text-12 -tracking-2 text-text-secondary'>New API key</div>
 						<Input
 							placeholder='AIzaSy...'
 							value={apiKey}

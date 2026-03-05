@@ -54,7 +54,7 @@ export function DeviceInfoContent({
 		</div>
 	)
 }
-const listClass = tw`divide-y divide-white/6 overflow-hidden rounded-12 bg-white/6`
+const listClass = tw`divide-y divide-border-subtle overflow-hidden rounded-12 bg-surface-base`
 const listItemClass = tw`flex items-center gap-3 px-3 h-[50px] text-15 font-medium -tracking-3 justify-between`
 const listItemClassNarrow = cn(listItemClass, tw`h-[42px]`)
 
@@ -86,7 +86,7 @@ export const HostEnvironmentIcon = ({
 				height={iconDimensions[environment]}
 			/>
 		) : (
-			<TbQuestionMark className='h-12 w-12 text-white/50' />
+			<TbQuestionMark className='h-12 w-12 text-text-tertiary' />
 		)
 
 	// Only wrap in IconContainer for raspberry-pi and docker-container
@@ -99,9 +99,9 @@ export const HostEnvironmentIcon = ({
 
 const IconContainer = ({children}: {children: React.ReactNode}) => (
 	<div
-		className='grid h-32 w-32 place-items-center rounded-[27px] bg-[#52525252]'
+		className='grid h-32 w-32 place-items-center rounded-[27px] bg-surface-2'
 		style={{
-			boxShadow: '0 1px 2px #ffffff55 inset',
+			boxShadow: '0 1px 2px rgba(0,0,0,0.1) inset',
 		}}
 	>
 		{children}
