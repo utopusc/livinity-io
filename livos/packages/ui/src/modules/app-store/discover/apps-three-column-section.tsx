@@ -104,7 +104,7 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 				)}
 				style={{
 					background: `
-						linear-gradient(180deg, ${gradientStart}60 0%, ${gradientEnd}40 50%, rgba(0,0,0,0.4) 100%)
+						linear-gradient(180deg, ${gradientStart}60 0%, ${gradientEnd}40 50%, rgba(0,0,0,0.1) 100%)
 					`,
 				}}
 			>
@@ -126,7 +126,7 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 				</div>
 
 				{/* Content */}
-				<div className='relative bg-black/30 p-4 backdrop-blur-sm'>
+				<div className='relative bg-surface-base/80 p-4 backdrop-blur-sm'>
 					<h4 className='truncate text-body-lg font-bold text-text-primary'>{app.name}</h4>
 					<p className='mt-0.5 truncate text-caption text-text-tertiary'>{app.developer}</p>
 					<button
@@ -134,7 +134,7 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 							'mt-3 w-full rounded-lg py-2 text-body-sm font-semibold',
 							'bg-surface-2 text-text-primary',
 							'transition-colors duration-200',
-							'group-hover:bg-white group-hover:text-black',
+							'group-hover:bg-surface-3 group-hover:text-text-primary',
 						)}
 					>
 						{t('app.view')}
@@ -200,7 +200,7 @@ export function FeaturedCategorySection({
 								<h4 className='truncate font-semibold text-text-primary'>{app.name}</h4>
 								<p className='truncate text-body-sm text-text-tertiary'>{app.developer}</p>
 							</div>
-							<span className='rounded-full bg-surface-2 px-3 py-1 text-caption font-medium text-text-secondary transition-colors group-hover:bg-white group-hover:text-black'>
+							<span className='rounded-full bg-surface-2 px-3 py-1 text-caption font-medium text-text-secondary transition-colors group-hover:bg-surface-3 group-hover:text-text-primary'>
 								View
 							</span>
 						</Link>
@@ -210,7 +210,7 @@ export function FeaturedCategorySection({
 				{categorySlug && (
 					<Link
 						to={`/app-store/category/${categorySlug}`}
-						className='mt-6 inline-flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors hover:text-white'
+						className='mt-6 inline-flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors hover:text-text-primary'
 					>
 						Browse all apps
 						<svg className='h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>

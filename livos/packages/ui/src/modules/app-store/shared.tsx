@@ -241,8 +241,8 @@ export function CategoryPill({
 				'transition-all duration-200',
 				'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/20',
 				isActive
-					? 'bg-white text-black shadow-lg'
-					: 'bg-surface-2 text-text-primary hover:bg-surface-3 hover:text-white',
+					? 'bg-brand text-white shadow-lg'
+					: 'bg-surface-2 text-text-primary hover:bg-surface-3 hover:text-text-primary',
 			)}
 		>
 			{icon}

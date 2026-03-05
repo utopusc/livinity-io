@@ -80,12 +80,12 @@ function SearchInput({
 	inputRef?: React.Ref<HTMLInputElement>
 }) {
 	return (
-		<div className='-ml-2 flex min-w-0 items-center rounded-full border border-transparent bg-transparent pl-2 transition-colors focus-within:border-white/5 focus-within:bg-white/6 hover:border-white/5 hover:bg-white/6'>
+		<div className='-ml-2 flex min-w-0 items-center rounded-full border border-transparent bg-transparent pl-2 transition-colors focus-within:border-border-subtle focus-within:bg-surface-base hover:border-border-subtle hover:bg-surface-base'>
 			<TbSearch className='h-4 w-4 shrink-0 opacity-50' />
 			{/* Set specific input width so it's consistent across browsers */}
 			<input
 				ref={inputRef}
-				className='w-[160px] bg-transparent p-1 text-15 outline-none placeholder:text-white/40'
+				className='w-[160px] bg-transparent p-1 text-15 outline-none placeholder:text-text-tertiary'
 				placeholder={t('app-store.search-apps')}
 				value={value}
 				onChange={(e) => onValueChange(e.target.value)}

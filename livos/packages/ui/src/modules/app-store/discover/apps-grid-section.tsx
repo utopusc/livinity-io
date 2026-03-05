@@ -99,7 +99,7 @@ export function AppWithDescription({
 			</div>
 
 			<div className='flex min-w-0 flex-1 flex-col gap-1'>
-				<h3 className='truncate text-body font-semibold tracking-tight text-text-primary transition-colors group-hover:text-white'>
+				<h3 className='truncate text-body font-semibold tracking-tight text-text-primary transition-colors group-hover:text-text-primary'>
 					{app.name}
 				</h3>
 				<p className='line-clamp-2 text-body-sm leading-snug text-text-tertiary transition-colors group-hover:text-text-secondary'>

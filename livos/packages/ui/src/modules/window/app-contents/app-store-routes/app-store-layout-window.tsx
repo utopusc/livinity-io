@@ -38,12 +38,12 @@ export default function AppStoreLayoutWindow({children}: AppStoreLayoutWindowPro
 	return (
 		<div className='flex h-full flex-col'>
 			{/* Header */}
-			<div className='flex items-center justify-between border-b border-white/5 px-4 py-3'>
+			<div className='flex items-center justify-between border-b border-border-subtle px-4 py-3'>
 				<div className='flex items-center gap-3'>
 					{showBackButton && (
 						<button
 							onClick={handleBack}
-							className='flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/10 transition-colors'
+							className='flex h-8 w-8 items-center justify-center rounded-full hover:bg-surface-1 transition-colors'
 						>
 							<TbArrowLeft className='h-5 w-5' />
 						</button>
@@ -80,11 +80,11 @@ function SearchInput({
 	inputRef?: React.Ref<HTMLInputElement>
 }) {
 	return (
-		<div className='-ml-2 flex min-w-0 items-center rounded-full border border-transparent bg-transparent pl-2 transition-colors focus-within:border-white/5 focus-within:bg-white/6 hover:border-white/5 hover:bg-white/6'>
+		<div className='-ml-2 flex min-w-0 items-center rounded-full border border-transparent bg-transparent pl-2 transition-colors focus-within:border-border-subtle focus-within:bg-surface-base hover:border-border-subtle hover:bg-surface-base'>
 			<TbSearch className='h-4 w-4 shrink-0 opacity-50' />
 			<input
 				ref={inputRef}
-				className='w-[160px] bg-transparent p-1 text-15 outline-none placeholder:text-white/40'
+				className='w-[160px] bg-transparent p-1 text-15 outline-none placeholder:text-text-tertiary'
 				placeholder={t('app-store.search-apps')}
 				value={value}
 				onChange={(e) => onValueChange(e.target.value)}

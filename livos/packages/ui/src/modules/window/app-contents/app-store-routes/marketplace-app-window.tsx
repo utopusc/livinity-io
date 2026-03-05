@@ -69,12 +69,12 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 	}
 
 	return (
-		<div className='flex h-full flex-col bg-black/20'>
+		<div className='flex h-full flex-col bg-surface-base'>
 			{/* Header */}
-			<div className='flex items-center justify-between border-b border-border-subtle bg-black/30 px-4 py-2.5'>
+			<div className='flex items-center justify-between border-b border-border-subtle bg-surface-1 px-4 py-2.5'>
 				<button
 					onClick={goBack}
-					className='flex items-center gap-2 rounded-radius-sm px-2 py-1 text-text-secondary transition-colors hover:bg-surface-base hover:text-white'
+					className='flex items-center gap-2 rounded-radius-sm px-2 py-1 text-text-secondary transition-colors hover:bg-surface-base hover:text-text-primary'
 				>
 					<TbArrowLeft className='h-4 w-4' />
 					<span className='text-body-sm'>Back</span>
@@ -94,7 +94,7 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 			{/* Marketplace iframe */}
 			<div className='relative flex-1'>
 				{isLoading && (
-					<div className='absolute inset-0 flex items-center justify-center bg-black/50'>
+					<div className='absolute inset-0 flex items-center justify-center bg-black/10'>
 						<TbLoader2 className='h-8 w-8 animate-spin text-text-secondary' />
 					</div>
 				)}
