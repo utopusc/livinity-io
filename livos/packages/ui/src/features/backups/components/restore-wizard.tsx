@@ -237,8 +237,8 @@ export function BackupsRestoreWizard() {
 						const h = headerMetaForStep(step)
 						return (
 							<>
-								<div className='text-24 font-medium text-white'>{h.title}</div>
-								{h.subtitle ? <div className='text-15 text-white/60'>{h.subtitle}</div> : null}
+								<div className='text-24 font-medium text-text-primary'>{h.title}</div>
+								{h.subtitle ? <div className='text-15 text-text-secondary'>{h.subtitle}</div> : null}
 							</>
 						)
 					})()}
@@ -419,8 +419,8 @@ function RepositoryStep({
 													selected
 														? 'border-brand bg-brand/15'
 														: isConnected(repo.path)
-															? 'cursor-pointer border-white/10 bg-white/5 hover:bg-white/10'
-															: 'cursor-not-allowed border-white/10 bg-white/5 opacity-60',
+															? 'cursor-pointer border-border-default bg-surface-base hover:bg-surface-1'
+															: 'cursor-not-allowed border-border-default bg-surface-base opacity-60',
 												].join(' ')}
 												onClick={() => {
 													if (!isConnected(repo.path)) return
@@ -464,12 +464,12 @@ function RepositoryStep({
 						) : null}
 						{/* Manual add callout row (always shown in known mode) */}
 						<div
-							className='flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/10 bg-white/5 p-4 transition-colors hover:border-brand hover:bg-brand/15'
+							className='flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-border-default bg-surface-base p-4 transition-colors hover:border-brand hover:bg-brand/15'
 							onClick={() => onModeChange('manual')}
 						>
 							<div className='flex h-10 w-10 shrink-0 items-center justify-center'>
-								<div className='flex size-10 items-center justify-center rounded-full bg-white/10'>
-									<div className='flex size-7 items-center justify-center rounded-full bg-white/20'>
+								<div className='flex size-10 items-center justify-center rounded-full bg-surface-1'>
+									<div className='flex size-7 items-center justify-center rounded-full bg-surface-2'>
 										<Plus className='size-4' />
 									</div>
 								</div>
@@ -486,7 +486,7 @@ function RepositoryStep({
 						<div className='mb-1 flex items-center gap-2'>
 							<button
 								type='button'
-								className='inline-flex items-center justify-center text-white/70 hover:text-white'
+								className='inline-flex items-center justify-center text-text-secondary hover:text-text-primary'
 								onClick={() => onModeChange('known')}
 							>
 								<ArrowLeft className='h-4 w-4' />
@@ -597,7 +597,7 @@ function BackupsStep({
 					<EmptyCard text={t('backups-restore.no-backups-found')} />
 				) : (
 					<div
-						className='max-h-[45vh] overflow-hidden overflow-y-auto rounded-2xl bg-gradient-to-b from-white/[0.03] to-transparent pb-8 pl-1 pt-1 md:max-h-[min(60vh,560px)]'
+						className='max-h-[45vh] overflow-hidden overflow-y-auto rounded-2xl bg-gradient-to-b from-surface-base to-transparent pb-8 pl-1 pt-1 md:max-h-[min(60vh,560px)]'
 						style={{
 							maskImage: 'linear-gradient(to bottom, red 50px calc(100% - 80px), transparent)',
 						}}
@@ -628,7 +628,7 @@ function BackupsStep({
 											'group relative flex w-full cursor-pointer items-center gap-4 rounded-12 px-3 py-2 md:px-4 md:py-3.5',
 											selected
 												? 'bg-gradient-to-r from-brand/20 to-brand/10 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
-												: 'hover:bg-white/[0.06]',
+												: 'hover:bg-surface-base',
 										].join(' ')}
 										onClick={() => id && onSelect(id)}
 										title={id}
@@ -641,7 +641,7 @@ function BackupsStep({
 													'absolute inset-0 rounded-full',
 													selected
 														? 'bg-gradient-to-br from-brand to-brand/60 shadow-[0_0_20px_rgba(var(--color-brand-rgb),0.3)]'
-														: 'bg-white/10 group-hover:bg-white/15',
+														: 'bg-surface-1 group-hover:bg-surface-2',
 												].join(' ')}
 											/>
 
@@ -650,14 +650,14 @@ function BackupsStep({
 												className={[
 													'relative size-4 rounded-full',
 													selected
-														? 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)]'
-														: 'bg-white/20 group-hover:bg-white/30',
+														? 'bg-brand shadow-[0_0_10px_rgba(var(--color-brand-rgb),0.5)]'
+														: 'bg-surface-2 group-hover:bg-border-emphasis',
 												].join(' ')}
 											/>
 
 											{/* Connecting line */}
 											{!isLast && (
-												<div className='absolute left-1/2 top-full h-[calc(100%+0.25rem)] w-px -translate-x-1/2 bg-gradient-to-b from-white/10 to-transparent' />
+												<div className='absolute left-1/2 top-full h-[calc(100%+0.25rem)] w-px -translate-x-1/2 bg-gradient-to-b from-border-default to-transparent' />
 											)}
 										</div>
 
@@ -667,7 +667,7 @@ function BackupsStep({
 												<div
 													className={[
 														'truncate font-medium transition-colors duration-200 max-md:text-sm',
-														selected ? 'text-white' : 'text-white/90',
+														selected ? 'text-text-primary' : 'text-text-primary',
 													].join(' ')}
 												>
 													{dateLabel}
@@ -676,7 +676,7 @@ function BackupsStep({
 													<div
 														className={[
 															'shrink-0 text-xs transition-colors duration-200 max-md:hidden',
-															selected ? 'text-white/70' : 'text-white/50',
+															selected ? 'text-text-secondary' : 'text-text-secondary',
 														].join(' ')}
 													>
 														{timeAgo}
@@ -687,7 +687,7 @@ function BackupsStep({
 												<div
 													className={[
 														'mt-0.5 text-xs transition-colors duration-200',
-														selected ? 'text-white/60' : 'text-white/40',
+														selected ? 'text-text-secondary' : 'text-text-tertiary',
 													].join(' ')}
 												>
 													{sizeTxt}
@@ -700,7 +700,7 @@ function BackupsStep({
 											<div
 												className={[
 													'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-all duration-200',
-													selected ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60',
+													selected ? 'bg-surface-2 text-text-primary' : 'bg-surface-1 text-text-secondary',
 												].join(' ')}
 											>
 												{t('backups-restore.latest')}

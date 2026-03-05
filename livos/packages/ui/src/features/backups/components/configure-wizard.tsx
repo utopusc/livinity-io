@@ -94,13 +94,13 @@ export function BackupsConfigureWizard() {
 	return (
 		<div className='flex h-full flex-col gap-4'>
 			<div>
-				<h2 className='text-24 font-medium text-white'>{t('backups')}</h2>
+				<h2 className='text-24 font-medium text-text-primary'>{t('backups')}</h2>
 			</div>
 			<ImmersiveDialogSeparator />
 
 			{!viewRepo ? (
 				<>
-					<span className='mb-4 text-13 text-white/60'>{t('backups.schedule-description')}</span>
+					<span className='mb-4 text-13 text-text-secondary'>{t('backups.schedule-description')}</span>
 					<LocationsSection
 						repositories={repositories || []}
 						doesHostHaveMountedShares={doesHostHaveMountedShares}
@@ -220,7 +220,7 @@ function LocationsSection({
 		<>
 			<div className='space-y-2'>
 				<div className='flex items-center justify-between'>
-					<span className='text-13 font-medium text-white/90'>{t('backups-configure.locations')}</span>
+					<span className='text-13 font-medium text-text-primary'>{t('backups-configure.locations')}</span>
 					{/* Dropdown menu to add a NAS or External drive */}
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
@@ -233,28 +233,28 @@ function LocationsSection({
 							<DropdownMenuItem onSelect={onAddNas}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-setup-livinity-or-nas')}</div>
-									<div className='text-12 text-white/40'>{t('backups-setup-nas-or-livinity-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-nas-or-livinity-description')}</div>
 								</div>
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={onAddExternal}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('external-drive')}</div>
-									<div className='text-12 text-white/40'>{t('backups-setup-external-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-external-description')}</div>
 								</div>
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={onAddLivinityPrivateCloud}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-setup-livinity-private-cloud')}</div>
-									<div className='text-12 text-white/40'>{t('backups-setup-livinity-private-cloud-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-livinity-private-cloud-description')}</div>
 								</div>
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
 				{/* List of backup repositories */}
-				<div className='divide-y divide-white/6 rounded-12 bg-white/5'>
+				<div className='divide-y divide-border-subtle rounded-12 bg-surface-base'>
 					{repositories.length === 0 ? (
-						<div className='p-5 text-sm text-white/50'>{t('backups-configure.no-backup-locations')}</div>
+						<div className='p-5 text-sm text-text-secondary'>{t('backups-configure.no-backup-locations')}</div>
 					) : (
 						repositories.map((repo) => {
 							const deviceName = repo.path.split('/').filter(Boolean)[1] || repo.path
@@ -267,7 +267,7 @@ function LocationsSection({
 										<div className='min-w-0 flex-1 truncate'>
 											<span className='block text-sm font-medium'>{deviceName}</span>
 											{isConnected && repo.lastBackup ? (
-												<span className='block text-11 text-white/40'>
+												<span className='block text-11 text-text-tertiary'>
 													{backupProgressByRepo.has(repo.id)
 														? t('backups-configure.backing-up-now')
 														: `${t('backups-configure.last-backup')}: ${formatFilesystemDate(Number(repo.lastBackup), lang)}`}
@@ -339,17 +339,17 @@ function RepositoryDetails({
 						}
 					}}
 					aria-label={t('back')}
-					className='inline-flex h-6 w-6 cursor-pointer items-center justify-center text-white'
+					className='inline-flex h-6 w-6 cursor-pointer items-center justify-center text-text-primary'
 				>
 					<ArrowLeft className='h-4 w-4' />
 				</span>
 				<BackupDeviceIcon path={repo.path} className='h-5 w-5 opacity-90' />
 				<span className='text-15 font-medium'>{deviceName}</span>
 			</div>
-			<div className='divide-y divide-white/6 rounded-12 bg-white/5'>
+			<div className='divide-y divide-border-subtle rounded-12 bg-surface-base'>
 				{/* Connection row */}
 				<div className='flex items-center justify-between p-3 text-sm'>
-					<div className='text-white/60'>{t('backups-configure.connection')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.connection')}</div>
 					<div className='flex items-center justify-end gap-2'>
 						<ConnectivityDot connected={isConnected} />
 						<div className='text-right'>
@@ -358,11 +358,11 @@ function RepositoryDetails({
 					</div>
 				</div>
 				<div className='flex items-center justify-between p-3 text-sm'>
-					<div className='text-white/60'>{t('backups-configure.path')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.path')}</div>
 					<div className='min-w-0 flex-1 truncate text-right'>{getDisplayRepositoryPath(repo.path)}</div>
 				</div>
 				<div className='flex items-center justify-between p-3 text-sm'>
-					<div className='text-white/60'>{t('backups-configure.last-backup')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.last-backup')}</div>
 					<div className='text-right'>
 						{repo.lastBackup
 							? formatFilesystemDate(Number(repo.lastBackup), lang)
@@ -370,7 +370,7 @@ function RepositoryDetails({
 					</div>
 				</div>
 				<div className='flex items-center justify-between p-3 text-sm'>
-					<div className='text-white/60'>{t('backups-configure.status')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.status')}</div>
 					<div className='flex items-center justify-end gap-2 text-right'>
 						{typeof inProgressPercent === 'number' ? (
 							<InlineBackupProgress percent={inProgressPercent} />
@@ -380,13 +380,13 @@ function RepositoryDetails({
 					</div>
 				</div>
 				<div className='flex items-center justify-between p-3 text-sm'>
-					<div className='text-white/60'>{t('backups-configure.used')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.used')}</div>
 					<div className='flex items-center justify-end text-right'>
 						{isConnected ? (
 							sizeUsed !== undefined ? (
 								formatFilesystemSize(sizeUsed)
 							) : (
-								<Loader2 className='size-4 animate-spin text-white/60' aria-label={t('loading')} />
+								<Loader2 className='size-4 animate-spin text-text-secondary' aria-label={t('loading')} />
 							)
 						) : (
 							'—'
@@ -394,13 +394,13 @@ function RepositoryDetails({
 					</div>
 				</div>
 				<div className='flex items-center justify-between p-3 text-sm'>
-					<div className='text-white/60'>{t('backups-configure.available')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.available')}</div>
 					<div className='flex items-center justify-end text-right'>
 						{isConnected ? (
 							sizeAvailable !== undefined ? (
 								formatFilesystemSize(sizeAvailable)
 							) : (
-								<Loader2 className='size-4 animate-spin text-white/60' aria-label={t('loading')} />
+								<Loader2 className='size-4 animate-spin text-text-secondary' aria-label={t('loading')} />
 							)
 						) : (
 							'—'
@@ -411,17 +411,17 @@ function RepositoryDetails({
 					className={`flex items-center justify-between p-3 text-sm transition-colors ${
 						isLoadingBackups || (backups?.length || 0) === 0
 							? ''
-							: `cursor-pointer hover:bg-white/5 ${!showAllBackups ? 'hover:rounded-b-12' : ''}`
+							: `cursor-pointer hover:bg-surface-base ${!showAllBackups ? 'hover:rounded-b-12' : ''}`
 					}`}
 					onClick={
 						isLoadingBackups || (backups?.length || 0) === 0 ? undefined : () => setShowAllBackups(!showAllBackups)
 					}
 				>
-					<div className='text-white/60'>{t('backups-configure.total-backups')}</div>
+					<div className='text-text-secondary'>{t('backups-configure.total-backups')}</div>
 					<div className='flex items-center gap-2'>
 						<div className='text-right'>
 							{isLoadingBackups ? (
-								<Loader2 className='size-4 animate-spin text-white/60' aria-label={t('loading')} />
+								<Loader2 className='size-4 animate-spin text-text-secondary' aria-label={t('loading')} />
 							) : (
 								backups?.length || 0
 							)}
@@ -440,7 +440,7 @@ function RepositoryDetails({
 							animate={{height: 'auto', opacity: 1}}
 							exit={{height: 0, opacity: 0}}
 							transition={{duration: 0.3, ease: [0.4, 0.0, 0.2, 1]}}
-							className='overflow-hidden border-t border-white/6'
+							className='overflow-hidden border-t border-border-subtle'
 						>
 							<BackupsList backups={backups} isLoading={isLoadingBackups} />
 						</motion.div>
@@ -503,13 +503,13 @@ function BackupsList({
 	if (isLoading) {
 		return (
 			<div className='flex items-center justify-center p-4'>
-				<Loader2 className='size-4 animate-spin text-white/60' aria-label={t('loading')} />
+				<Loader2 className='size-4 animate-spin text-text-secondary' aria-label={t('loading')} />
 			</div>
 		)
 	}
 
 	if (!backups || backups.length === 0) {
-		return <div className='p-3 text-center text-sm text-white/40'>{t('backups-restore.no-backups-found')}</div>
+		return <div className='p-3 text-center text-sm text-text-tertiary'>{t('backups-restore.no-backups-found')}</div>
 	}
 
 	// Show max 5 backups with scroll
@@ -517,7 +517,7 @@ function BackupsList({
 
 	return (
 		<div className={shouldScroll ? 'max-h-[200px] overflow-y-auto' : ''}>
-			<div className='divide-y divide-white/6'>
+			<div className='divide-y divide-border-subtle'>
 				{backups.map((backup, index) => {
 					const id = backup.id ?? ''
 					const when = backup.time
@@ -531,14 +531,14 @@ function BackupsList({
 					return (
 						<div key={id || Math.random()} className='flex items-center justify-between p-3 text-sm'>
 							<div className='flex items-center gap-2'>
-								<div className='text-white/60'>{dateLabel}</div>
+								<div className='text-text-secondary'>{dateLabel}</div>
 								{isLatest && (
 									<span className='rounded-full bg-green-500/20 px-2 text-[8px] font-medium uppercase tracking-wider text-green-500'>
 										{t('backups-restore.latest')}
 									</span>
 								)}
 							</div>
-							<div className='text-right text-white/90'>{sizeTxt || '—'}</div>
+							<div className='text-right text-text-primary'>{sizeTxt || '—'}</div>
 						</div>
 					)
 				})}

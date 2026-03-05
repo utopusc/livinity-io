@@ -11,13 +11,13 @@ export function MinimizedContent({count, progress}: {count: number; progress: nu
 				<TbHistory size={12} />
 			</CircularProgress>
 			<div className='min-w-0 flex-1'>
-				<span className='block truncate text-center text-xs text-white/90'>
+				<span className='block truncate text-center text-xs text-text-primary'>
 					{t('backups-floating-island.backing-up')}
 				</span>
 			</div>
 			{/* Reserve right-side space to match other islands' layout (invisible) */}
 			<div className='flex shrink-0 items-center gap-2'>
-				<span className='text-xs text-white/60'>{progress}%</span>
+				<span className='text-xs text-text-secondary'>{progress}%</span>
 			</div>
 		</div>
 	)
