@@ -53,7 +53,7 @@ function NotificationContent({children}: {children: string}) {
 			>
 				<div className={cn('text-sm')}>
 					{children.split('\n').map((paragraph, index) => (
-						<AlertDialogDescription key={index} className={`${index > 0 ? 'mt-4' : ''} text-white/70`}>
+						<AlertDialogDescription key={index} className={`${index > 0 ? 'mt-4' : ''} text-text-secondary`}>
 							{paragraph}
 						</AlertDialogDescription>
 					))}

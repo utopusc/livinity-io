@@ -242,8 +242,8 @@ function UsageCard({
 			/>
 			<motion.div
 				className='relative translate-x-0 translate-y-0 transform overflow-hidden rounded-12'
-				initial={{backgroundColor: 'rgba(30, 30, 30, 0)'}}
-				animate={{backgroundColor: active ? 'rgba(30, 30, 30, 1)' : 'rgba(30, 30, 30, 0)'}}
+				initial={{backgroundColor: 'rgba(0, 0, 0, 0)'}}
+				animate={{backgroundColor: active ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0)'}}
 				transition={active ? {duration: 0.3} : {duration: 0.3, delay: 0.1}}
 			>
 				<motion.div
@@ -263,7 +263,7 @@ function UsageCard({
 								<linearGradient id={`${title}GradientChartColor`} x1='0' y1='0' x2='0' y2='1'>
 									<stop
 										offset='5%'
-										style={{stopColor: active ? 'hsl(var(--color-brand) / 0.3)' : 'rgba(255, 255, 255, 0.05)'}}
+										style={{stopColor: active ? 'hsl(var(--color-brand) / 0.3)' : 'rgba(0, 0, 0, 0.05)'}}
 									/>
 									<stop
 										offset='95%'
@@ -277,7 +277,7 @@ function UsageCard({
 								isAnimationActive={false}
 								type='monotone'
 								dataKey='value'
-								style={{stroke: active ? 'hsl(var(--color-brand) / 0.2)' : 'rgba(255, 255, 255, 0.05)'}}
+								style={{stroke: active ? 'hsl(var(--color-brand) / 0.2)' : 'rgba(0, 0, 0, 0.05)'}}
 								fillOpacity={1}
 								fill={`url(#${title}GradientChartColor)`}
 								legendType='none'
@@ -354,7 +354,7 @@ export function AppListSkeleton({systemApps}: {systemApps?: Array<AppT>}) {
 	)
 }
 
-const appListClass = tw`divide-y divide-white/6 rounded-12 bg-white/5`
+const appListClass = tw`divide-y divide-border-subtle rounded-12 bg-surface-base`
 
 function AppListRow({icon, title, value, disabled}: {icon?: string; title: string; value: string; disabled?: boolean}) {
 	return (

@@ -28,54 +28,54 @@ export default function Schedules() {
 	return (
 		<div className='space-y-6'>
 			<div>
-				<h1 className='text-2xl font-bold text-white'>Schedules</h1>
-				<p className='mt-1 text-sm text-white/50'>Cron-based recurring tasks managed by Nexus</p>
+				<h1 className='text-2xl font-bold text-text-primary'>Schedules</h1>
+				<p className='mt-1 text-sm text-text-secondary'>Cron-based recurring tasks managed by Nexus</p>
 			</div>
 
 			{schedulesQuery.isLoading ? (
-				<div className='py-8 text-center text-sm text-white/40'>Loading schedules...</div>
+				<div className='py-8 text-center text-sm text-text-tertiary'>Loading schedules...</div>
 			) : schedules.length === 0 ? (
-				<div className='rounded-xl border border-white/10 bg-white/5 p-8 text-center'>
-					<IconCalendar size={48} className='mx-auto mb-4 text-white/20' />
-					<p className='text-sm text-white/40'>No scheduled tasks yet.</p>
-					<p className='mt-1 text-xs text-white/30'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-8 text-center'>
+					<IconCalendar size={48} className='mx-auto mb-4 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No scheduled tasks yet.</p>
+					<p className='mt-1 text-xs text-text-tertiary'>
 						Ask the AI to create a subagent with a cron schedule, or use the Subagents page.
 					</p>
 				</div>
 			) : (
 				<div className='space-y-3'>
 					{schedules.map((s: any) => (
-						<div key={s.subagentId || s.jobName} className='rounded-xl border border-white/10 bg-white/5 p-4'>
+						<div key={s.subagentId || s.jobName} className='rounded-xl border border-border-default bg-surface-base p-4'>
 							<div className='flex items-start justify-between'>
 								<div className='flex items-center gap-3'>
 									<div className='flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/20'>
 										<IconRobot size={20} className='text-violet-400' />
 									</div>
 									<div>
-										<div className='font-medium text-white'>{s.subagentId || s.jobName}</div>
+										<div className='font-medium text-text-primary'>{s.subagentId || s.jobName}</div>
 										{s.task && (
-											<div className='mt-0.5 max-w-md truncate text-xs text-white/40'>{s.task}</div>
+											<div className='mt-0.5 max-w-md truncate text-xs text-text-tertiary'>{s.task}</div>
 										)}
 									</div>
 								</div>
 								<button
 									onClick={() => handleRemove(s.subagentId || s.jobName)}
 									disabled={removeMutation.isPending}
-									className='rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-red-400 disabled:opacity-50'
+									className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-red-400 disabled:opacity-50'
 									title='Remove schedule'
 								>
 									<IconTrash size={16} />
 								</button>
 							</div>
 
-							<div className='mt-3 flex flex-wrap gap-4 text-xs text-white/50'>
+							<div className='mt-3 flex flex-wrap gap-4 text-xs text-text-secondary'>
 								<span className='flex items-center gap-1'>
 									<IconClock size={12} />
 									<span className='font-mono'>{s.cron}</span>
 								</span>
 								{s.timezone && <span>TZ: {s.timezone}</span>}
 								{s.next && (
-									<span className='text-white/30'>
+									<span className='text-text-tertiary'>
 										Next: {formatNextRun(s.next)}
 									</span>
 								)}

@@ -39,7 +39,7 @@ export function Markdown({className, ...props}: React.ComponentProps<typeof Mark
 				h6: 'h4',
 				a: (props) => (
 					<a
-						className='decoration-white/30 underline-offset-2 outline-none transition-opacity hover:opacity-80 focus:opacity-80'
+						className='decoration-border-default underline-offset-2 outline-none transition-opacity hover:opacity-80 focus:opacity-80'
 						target='_blank'
 						{...props}
 					/>
@@ -74,4 +74,4 @@ export function Markdown({className, ...props}: React.ComponentProps<typeof Mark
 	)
 }
 
-const textClass = tw`prose prose-sm prose-neutral prose-invert overflow-x-hidden`
+const textClass = tw`prose prose-sm prose-neutral overflow-x-hidden`
