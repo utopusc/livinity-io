@@ -56,7 +56,7 @@ function EnableTwoFa() {
         <p className="text-xs text-text-secondary">
           Scan this URI in your authenticator app, then enter the 6-digit code:
         </p>
-        <code className="block rounded-lg bg-white/5 p-2 text-xs text-text-secondary break-all">
+        <code className="block rounded-lg bg-neutral-50 border border-border p-2 text-xs text-text-secondary break-all">
           {uri}
         </code>
         <div className="flex gap-2">

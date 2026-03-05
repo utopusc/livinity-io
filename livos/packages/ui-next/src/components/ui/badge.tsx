@@ -8,12 +8,12 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const variants: Record<BadgeVariant, string> = {
-  default: 'bg-surface-2 text-text-secondary',
-  brand: 'bg-brand-surface text-brand-light',
-  success: 'bg-success-surface text-success',
-  warning: 'bg-warning-surface text-warning',
-  error: 'bg-error-surface text-error',
-  outline: 'border border-border-emphasis text-text-secondary',
+  default: 'bg-neutral-100 text-text-secondary border border-border',
+  brand: 'bg-brand-surface text-brand border border-brand/15',
+  success: 'bg-success-surface text-success border border-success/15',
+  warning: 'bg-warning-surface text-warning border border-warning/15',
+  error: 'bg-error-surface text-error border border-error/15',
+  outline: 'border border-border-emphasis text-text-secondary bg-transparent',
 };
 
 function Badge({ className, variant = 'default', ...props }: BadgeProps) {

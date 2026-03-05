@@ -50,26 +50,31 @@ function TitleBar({ title, onClose, onMinimize, onPointerDown }: TitleBarProps) 
       className={cn(
         'flex h-10 shrink-0 items-center justify-between px-3',
         'cursor-grab select-none active:cursor-grabbing',
-        'border-b border-white/5',
+        'border-b border-border',
+        'bg-surface-1/60',
       )}
       onPointerDown={onPointerDown}
     >
       {/* Title */}
       <span className="text-xs font-medium text-text-secondary">{title}</span>
 
-      {/* Window controls */}
-      <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+      {/* Window controls — macOS-style colored dots */}
+      <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+        {/* Minimize — yellow */}
         <button
-          className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-white/10 hover:text-text"
+          className="group flex h-3 w-3 items-center justify-center rounded-full bg-warning/70 transition-colors hover:bg-warning"
           onClick={onMinimize}
+          aria-label="Minimize window"
         >
-          <Minus className="h-3 w-3" />
+          <Minus className="h-2 w-2 text-warning-foreground opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
+        {/* Close — red */}
         <button
-          className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-error/20 hover:text-error"
+          className="group flex h-3 w-3 items-center justify-center rounded-full bg-error/70 transition-colors hover:bg-error"
           onClick={onClose}
+          aria-label="Close window"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-2 w-2 text-error-foreground opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
       </div>
     </div>
@@ -249,9 +254,9 @@ export function Window({ window: win, children }: WindowProps) {
     <motion.div
       className={cn(
         'fixed overflow-hidden rounded-2xl',
-        'bg-bg/90 backdrop-blur-2xl',
-        'border border-white/8',
-        'shadow-float',
+        'bg-surface-0/95 backdrop-blur-2xl',
+        'border border-border',
+        'shadow-xl',
         'flex flex-col',
       )}
       style={{

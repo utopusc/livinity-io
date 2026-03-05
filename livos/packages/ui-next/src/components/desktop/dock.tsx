@@ -31,8 +31,8 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
         'relative flex h-11 w-11 items-center justify-center rounded-xl',
         'transition-colors duration-150',
         isActive
-          ? 'bg-white/15 text-white'
-          : 'text-white/70 hover:bg-white/10 hover:text-white',
+          ? 'bg-brand/10 text-brand'
+          : 'text-text-tertiary hover:bg-black/5 hover:text-text',
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -46,7 +46,7 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
       <AnimatePresence>
         {hovered && (
           <motion.div
-            className="pointer-events-none absolute -top-9 left-1/2 z-50 whitespace-nowrap rounded-lg bg-surface-2/95 px-2.5 py-1 text-xs font-medium text-text backdrop-blur-sm"
+            className="pointer-events-none absolute -top-9 left-1/2 z-50 whitespace-nowrap rounded-lg bg-surface-0 px-2.5 py-1 text-xs font-medium text-text shadow-lg border border-border backdrop-blur-sm"
             initial={{ opacity: 0, y: 4, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: 4, x: '-50%' }}
@@ -60,7 +60,7 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
       {/* Active indicator dot */}
       {isActive && (
         <motion.div
-          className="absolute -bottom-1 left-1/2 h-1 w-1 rounded-full bg-white"
+          className="absolute -bottom-1 left-1/2 h-1 w-1 rounded-full bg-brand"
           layoutId="dock-active-dot"
           style={{ x: '-50%' }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
@@ -75,7 +75,7 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
 /* ------------------------------------------------------------------ */
 
 function DockDivider() {
-  return <div className="mx-1 h-6 w-px bg-white/15" />;
+  return <div className="mx-1 h-6 w-px bg-black/8" />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -130,9 +130,9 @@ export function Dock() {
       <div
         className={cn(
           'flex items-center gap-0.5 rounded-2xl px-2 py-1.5',
-          'bg-black/40 backdrop-blur-2xl',
-          'border border-white/10',
-          'shadow-xl shadow-black/20',
+          'bg-white/80 backdrop-blur-2xl',
+          'border border-black/8',
+          'shadow-float',
         )}
       >
         {/* Group 1: Home, Files, Settings, Usage, App Store */}

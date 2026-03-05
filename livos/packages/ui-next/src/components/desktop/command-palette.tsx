@@ -96,9 +96,9 @@ export function CommandPalette() {
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — light overlay */}
           <motion.div
-            className="fixed inset-0 z-[var(--z-overlay)] bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-[var(--z-overlay)] bg-black/20 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -110,9 +110,9 @@ export function CommandPalette() {
             className={cn(
               'fixed left-1/2 top-[15%] z-[var(--z-modal)] w-full max-w-lg -translate-x-1/2',
               'rounded-2xl overflow-hidden',
-              'bg-surface-1/95 backdrop-blur-2xl',
-              'border border-white/10',
-              'shadow-xl shadow-black/40',
+              'bg-surface-0 backdrop-blur-2xl',
+              'border border-border',
+              'shadow-float',
             )}
             initial={{ opacity: 0, y: -10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -120,8 +120,8 @@ export function CommandPalette() {
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
             {/* Search input */}
-            <div className="flex items-center gap-3 border-b border-white/5 px-4 py-3">
-              <Search className="h-4 w-4 text-text-tertiary" />
+            <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+              <Search className="h-4 w-4 shrink-0 text-text-tertiary" />
               <input
                 ref={inputRef}
                 type="text"
@@ -131,7 +131,7 @@ export function CommandPalette() {
                 placeholder="Search apps..."
                 className="flex-1 bg-transparent text-sm text-text placeholder:text-text-tertiary outline-none"
               />
-              <kbd className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] text-text-tertiary">
+              <kbd className="rounded-md bg-black/5 px-1.5 py-0.5 text-[10px] text-text-tertiary">
                 ESC
               </kbd>
             </div>
@@ -152,14 +152,14 @@ export function CommandPalette() {
                         'flex w-full items-center gap-3 px-4 py-2 text-left text-sm',
                         'transition-colors',
                         i === selectedIndex
-                          ? 'bg-white/8 text-text'
-                          : 'text-text-secondary hover:bg-white/5',
+                          ? 'bg-brand/8 text-text'
+                          : 'text-text-secondary hover:bg-black/4',
                       )}
                       onClick={() => handleSelect(app)}
                       onMouseEnter={() => setSelectedIndex(i)}
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5">
-                        <Icon className="h-4 w-4" />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/5">
+                        <Icon className="h-4 w-4 text-text-secondary" />
                       </div>
                       <span className="font-medium">{app.name}</span>
                     </button>

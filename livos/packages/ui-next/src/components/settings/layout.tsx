@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 /* ------------------------------------------------------------------ */
 /*  Menu items                                                         */
@@ -148,7 +149,7 @@ export function SettingsLayout() {
   return (
     <div className="flex h-full">
       {/* Sidebar */}
-      <div className="w-56 shrink-0 border-r border-white/5">
+      <div className="w-56 shrink-0 border-r border-border bg-neutral-50">
         <div className="px-4 py-3">
           <h2 className="text-sm font-semibold text-text">Settings</h2>
         </div>
@@ -164,8 +165,8 @@ export function SettingsLayout() {
                     'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm',
                     'transition-colors',
                     isActive
-                      ? 'bg-white/8 text-text'
-                      : 'text-text-secondary hover:bg-white/5 hover:text-text',
+                      ? 'bg-brand/8 text-brand'
+                      : 'text-text-secondary hover:bg-neutral-100 hover:text-text',
                   )}
                   onClick={() => setActiveSection(item.id)}
                 >
@@ -179,7 +180,7 @@ export function SettingsLayout() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-surface-0">
         {activeSection === 'home' ? (
           <SettingsHome onSelectSection={setActiveSection} />
         ) : (
@@ -187,7 +188,7 @@ export function SettingsLayout() {
             {/* Back + title header */}
             <div className="mb-5 flex items-center gap-3">
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-white/8 hover:text-text"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text"
                 onClick={() => setActiveSection('home')}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -222,7 +223,10 @@ function SettingsHome({
   return (
     <div className="p-5">
       <h3 className="mb-4 text-sm font-semibold text-text">All Settings</h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <AnimatedGroup
+        preset="fade"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+      >
         {MENU_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -230,12 +234,12 @@ function SettingsHome({
               key={item.id}
               className={cn(
                 'flex items-center gap-3 rounded-xl p-3 text-left',
-                'bg-white/3 transition-colors hover:bg-white/6',
-                'border border-white/5',
+                'bg-white transition-colors hover:bg-neutral-50',
+                'border border-border shadow-sm',
               )}
               onClick={() => onSelectSection(item.id)}
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100">
                 <Icon className="h-4 w-4 text-text-secondary" strokeWidth={1.8} />
               </div>
               <div className="min-w-0">
@@ -247,7 +251,7 @@ function SettingsHome({
             </button>
           );
         })}
-      </div>
+      </AnimatedGroup>
     </div>
   );
 }

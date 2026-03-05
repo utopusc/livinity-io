@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react';
 import { BarChart3, Cpu, Zap, MessageCircle, DollarSign, Loader2, Calendar, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { trpcReact } from '@/trpc/client';
+import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 export function LiveUsageLayout() {
   const [days, setDays] = useState(30);
@@ -26,10 +28,10 @@ export function LiveUsageLayout() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-white/5 px-5 py-3">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <h3 className="text-sm font-semibold text-text">Live Usage</h3>
         <select
-          className="rounded-lg bg-white/5 border border-white/10 px-2 py-1 text-xs text-text outline-none"
+          className="rounded-lg bg-neutral-50 border border-border px-2 py-1 text-xs text-text outline-none"
           value={days}
           onChange={(e) => setDays(parseInt(e.target.value))}
         >
@@ -50,40 +52,36 @@ export function LiveUsageLayout() {
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Overview Cards */}
           {overview && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <AnimatedGroup preset="fade" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatCard
                 icon={Zap}
                 label="Input Tokens"
-                value={formatNumber(overview.totalInputTokens)}
+                value={overview.totalInputTokens}
               />
               <StatCard
                 icon={TrendingUp}
                 label="Output Tokens"
-                value={formatNumber(overview.totalOutputTokens)}
+                value={overview.totalOutputTokens}
               />
               <StatCard
                 icon={MessageCircle}
                 label="Sessions"
-                value={formatNumber(overview.totalSessions)}
+                value={overview.totalSessions}
               />
-              <StatCard
-                icon={DollarSign}
-                label="Est. Cost"
-                value={`$${(overview.estimatedCostUsd ?? 0).toFixed(2)}`}
-              />
-            </div>
+              <CostCard value={overview.estimatedCostUsd ?? 0} />
+            </AnimatedGroup>
           )}
 
           {/* Additional Stats */}
           {overview && (
             <div className="grid grid-cols-3 gap-3">
-              <MiniStat label="Total Turns" value={formatNumber(overview.totalTurns)} />
-              <MiniStat label="Active Users" value={String(overview.activeUsers ?? 1)} />
+              <MiniStat label="Total Turns" value={overview.totalTurns} />
+              <MiniStat label="Active Users" value={overview.activeUsers ?? 1} />
               <MiniStat
                 label="Avg Tokens/Session"
                 value={overview.totalSessions > 0
-                  ? formatNumber(Math.round((overview.totalInputTokens + overview.totalOutputTokens) / overview.totalSessions))
-                  : '0'
+                  ? Math.round((overview.totalInputTokens + overview.totalOutputTokens) / overview.totalSessions)
+                  : 0
                 }
               />
             </div>
@@ -102,7 +100,7 @@ export function LiveUsageLayout() {
                 <p className="mt-2 text-xs">No usage data yet</p>
               </div>
             ) : (
-              <div className="rounded-xl bg-white/3 border border-white/5 p-4">
+              <div className="rounded-xl bg-white border border-border shadow-sm p-4">
                 {/* Bar chart */}
                 <div className="flex items-end gap-[2px] h-32">
                   {daily.map((day: any, i: number) => {
@@ -118,7 +116,7 @@ export function LiveUsageLayout() {
                         title={`${dateStr}: ${formatNumber(total)} tokens`}
                       >
                         <div
-                          className="w-full rounded-t-sm bg-brand/60"
+                          className="w-full rounded-t-sm bg-brand/50"
                           style={{ height: `${outputH}%`, minHeight: total > 0 ? 2 : 0 }}
                         />
                         <div
@@ -130,7 +128,7 @@ export function LiveUsageLayout() {
                   })}
                 </div>
 
-                {/* X-axis labels (show every N days) */}
+                {/* X-axis labels */}
                 <div className="flex justify-between mt-2">
                   {daily.length > 0 && (
                     <>
@@ -147,7 +145,7 @@ export function LiveUsageLayout() {
                     <span className="text-[10px] text-text-tertiary">Input</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-sm bg-brand/60" />
+                    <div className="h-2 w-2 rounded-sm bg-brand/50" />
                     <span className="text-[10px] text-text-tertiary">Output</span>
                   </div>
                 </div>
@@ -159,10 +157,10 @@ export function LiveUsageLayout() {
           {daily.length > 0 && (
             <div className="space-y-2">
               <span className="text-xs font-medium text-text">Daily Breakdown</span>
-              <div className="rounded-xl bg-white/3 border border-white/5 overflow-hidden">
+              <div className="rounded-xl bg-white border border-border shadow-sm overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-white/5 text-text-tertiary">
+                    <tr className="border-b border-border bg-neutral-50 text-text-tertiary">
                       <th className="px-3 py-2 text-left font-medium">Date</th>
                       <th className="px-3 py-2 text-right font-medium">Input</th>
                       <th className="px-3 py-2 text-right font-medium">Output</th>
@@ -172,7 +170,7 @@ export function LiveUsageLayout() {
                   </thead>
                   <tbody>
                     {[...daily].reverse().slice(0, 14).map((day: any, i: number) => (
-                      <tr key={i} className="border-b border-white/3 text-text-secondary">
+                      <tr key={i} className="border-b border-border last:border-0 text-text-secondary">
                         <td className="px-3 py-1.5 font-mono">{day.date}</td>
                         <td className="px-3 py-1.5 text-right">{formatNumber(day.inputTokens ?? 0)}</td>
                         <td className="px-3 py-1.5 text-right">{formatNumber(day.outputTokens ?? 0)}</td>
@@ -195,23 +193,43 @@ export function LiveUsageLayout() {
 /*  Shared                                                             */
 /* ------------------------------------------------------------------ */
 
-function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-white/3 border border-white/5 p-3">
+    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-text-tertiary" />
         <span className="text-[11px] text-text-tertiary">{label}</span>
       </div>
-      <p className="mt-1.5 text-lg font-semibold text-text">{value}</p>
+      <AnimatedNumber
+        value={value}
+        className="mt-1.5 block text-lg font-semibold text-text"
+        springOptions={{ stiffness: 150, damping: 22 }}
+      />
     </div>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function CostCard({ value }: { value: number }) {
   return (
-    <div className="rounded-xl bg-white/3 border border-white/5 p-3 text-center">
+    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+      <div className="flex items-center gap-2">
+        <DollarSign className="h-4 w-4 text-text-tertiary" />
+        <span className="text-[11px] text-text-tertiary">Est. Cost</span>
+      </div>
+      <p className="mt-1.5 text-lg font-semibold text-text">${value.toFixed(2)}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-white border border-border shadow-sm p-3 text-center">
       <p className="text-[11px] text-text-tertiary">{label}</p>
-      <p className="mt-0.5 text-sm font-medium text-text">{value}</p>
+      <AnimatedNumber
+        value={value}
+        className="mt-0.5 block text-sm font-medium text-text"
+        springOptions={{ stiffness: 150, damping: 22 }}
+      />
     </div>
   );
 }

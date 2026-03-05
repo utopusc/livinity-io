@@ -168,22 +168,23 @@ export function AiChatLayout() {
   );
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full overflow-hidden bg-surface-0">
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
-            className="w-56 shrink-0 border-r border-white/5 flex flex-col"
+            className="w-56 shrink-0 border-r border-border bg-surface-1 flex flex-col"
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 224, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/5">
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
               <span className="text-xs font-semibold text-text">Conversations</span>
               <button
-                className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-white/8 hover:text-text"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-neutral-100 hover:text-text transition-colors"
                 onClick={handleNewConversation}
+                aria-label="New conversation"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -194,21 +195,27 @@ export function AiChatLayout() {
                   <div
                     key={conv.id}
                     className={cn(
-                      'group flex items-center gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer',
+                      'group flex items-center gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors',
                       conv.id === conversationId
-                        ? 'bg-white/8 text-text'
-                        : 'text-text-secondary hover:bg-white/5',
+                        ? 'bg-brand/8 text-brand'
+                        : 'text-text-secondary hover:bg-neutral-100 hover:text-text',
                     )}
                     onClick={() => {
                       setConversationId(conv.id);
                       setLocalMessages([]);
                     }}
                   >
-                    <MessageCircle className="h-3 w-3 shrink-0 text-text-tertiary" />
+                    <MessageCircle
+                      className={cn(
+                        'h-3 w-3 shrink-0',
+                        conv.id === conversationId ? 'text-brand' : 'text-text-tertiary',
+                      )}
+                    />
                     <span className="flex-1 truncate text-[11px]">{conv.title || 'Untitled'}</span>
                     <button
-                      className="hidden h-5 w-5 items-center justify-center rounded text-text-tertiary hover:text-error group-hover:flex"
+                      className="hidden h-5 w-5 items-center justify-center rounded text-text-tertiary hover:text-error group-hover:flex transition-colors"
                       onClick={(e) => { e.stopPropagation(); deleteMutation.mutate({ id: conv.id }); }}
+                      aria-label="Delete conversation"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
@@ -221,20 +228,22 @@ export function AiChatLayout() {
       </AnimatePresence>
 
       {/* Chat area */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 bg-surface-0">
         {/* Header */}
-        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+        <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-3 py-2">
           <button
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:bg-white/8 hover:text-text"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:bg-neutral-100 hover:text-text transition-colors"
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle sidebar"
           >
             <Menu className="h-4 w-4" />
           </button>
           <span className="text-xs font-medium text-text">AI Chat</span>
           <div className="flex-1" />
           <button
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:bg-white/8 hover:text-text"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:bg-neutral-100 hover:text-text transition-colors"
             onClick={handleNewConversation}
+            aria-label="New conversation"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -271,7 +280,7 @@ export function AiChatLayout() {
         </ScrollArea>
 
         {/* Input */}
-        <div className="shrink-0 border-t border-white/5 p-3">
+        <div className="shrink-0 border-t border-border bg-surface-0 p-3">
           <div className="mx-auto flex max-w-3xl items-end gap-2">
             <textarea
               ref={inputRef}
@@ -282,9 +291,10 @@ export function AiChatLayout() {
               placeholder={isLoading ? 'Working...' : 'Message Liv...'}
               disabled={isLoading}
               className={cn(
-                'flex-1 resize-none rounded-xl bg-white/5 px-3 py-2.5 text-sm text-text',
-                'placeholder:text-text-tertiary outline-none border border-white/10',
-                'focus:ring-1 focus:ring-brand',
+                'flex-1 resize-none rounded-xl bg-surface-1 px-3 py-2.5 text-sm text-text',
+                'placeholder:text-text-tertiary outline-none border border-border',
+                'focus:ring-2 focus:ring-brand/30 focus:border-brand',
+                'disabled:opacity-50 transition-colors duration-fast',
                 'max-h-[120px] min-h-[40px]',
               )}
               style={{ height: 'auto' }}
@@ -295,7 +305,7 @@ export function AiChatLayout() {
               }}
             />
             {isLoading ? (
-              <Button size="icon" variant="destructive" onClick={handleStop}>
+              <Button size="icon" variant="destructive" onClick={handleStop} aria-label="Stop">
                 <Square className="h-4 w-4" />
               </Button>
             ) : (
@@ -303,6 +313,7 @@ export function AiChatLayout() {
                 size="icon"
                 onClick={handleSend}
                 disabled={!input.trim()}
+                aria-label="Send message"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -328,13 +339,13 @@ function MessageBubble({ message }: { message: Message }) {
           'max-w-[85%] rounded-2xl px-4 py-2.5',
           isUser
             ? 'bg-brand text-white'
-            : 'bg-white/5 border border-white/5',
+            : 'bg-surface-1 border border-border shadow-sm',
         )}
       >
         {isUser ? (
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose prose-sm prose-invert max-w-none">
+          <div className="prose prose-sm max-w-none text-text [&_code]:bg-neutral-100 [&_code]:text-text [&_pre]:bg-neutral-100 [&_pre]:border [&_pre]:border-border [&_a]:text-brand">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content}
             </ReactMarkdown>
@@ -363,12 +374,12 @@ function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
   const shortName = formatToolName(toolCall.tool);
 
   return (
-    <div className="rounded-lg bg-black/20 border border-white/5 overflow-hidden">
+    <div className="rounded-lg bg-neutral-50 border border-border overflow-hidden">
       <button
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[11px]"
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[11px] hover:bg-neutral-100 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <Wrench className="h-3 w-3 text-text-tertiary" />
+        <Wrench className="h-3 w-3 text-text-tertiary shrink-0" />
         <span className="flex-1 text-text-secondary font-mono">{shortName}</span>
         <Badge variant={toolCall.result.success ? 'success' : 'error'}>
           {toolCall.result.success ? 'OK' : 'FAIL'}
@@ -376,11 +387,11 @@ function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
         <ChevronRight className={cn('h-3 w-3 text-text-tertiary transition-transform', expanded && 'rotate-90')} />
       </button>
       {expanded && (
-        <div className="border-t border-white/5 px-2.5 py-2 space-y-1.5">
-          <pre className="text-[10px] text-text-tertiary overflow-x-auto">
+        <div className="border-t border-border px-2.5 py-2 space-y-1.5 bg-white">
+          <pre className="text-[10px] text-text-secondary overflow-x-auto font-mono">
             {JSON.stringify(toolCall.params, null, 2).slice(0, 500)}
           </pre>
-          <pre className="text-[10px] text-text-tertiary overflow-x-auto">
+          <pre className="text-[10px] text-text-secondary overflow-x-auto font-mono">
             {toolCall.result.output.slice(0, 2000)}
           </pre>
         </div>
@@ -399,21 +410,21 @@ function StatusIndicator({ status }: { status: any }) {
   const currentTool = status?.tool;
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 rounded-xl bg-surface-1 border border-border px-3 py-2.5">
       {lastSteps.map((step: string, i: number) => (
         <div key={i} className="flex items-center gap-2 text-[11px]">
           {i < lastSteps.length - 1 ? (
-            <Check className="h-3 w-3 text-success" />
+            <Check className="h-3 w-3 text-success shrink-0" />
           ) : (
-            <Loader2 className="h-3 w-3 animate-spin text-brand" />
+            <Loader2 className="h-3 w-3 animate-spin text-brand shrink-0" />
           )}
-          <span className="text-text-tertiary">{step}</span>
+          <span className="text-text-secondary">{step}</span>
         </div>
       ))}
       {currentTool && lastSteps.length === 0 && (
         <div className="flex items-center gap-2 text-[11px]">
-          <Loader2 className="h-3 w-3 animate-spin text-brand" />
-          <span className="text-text-tertiary font-mono">{formatToolName(currentTool)}</span>
+          <Loader2 className="h-3 w-3 animate-spin text-brand shrink-0" />
+          <span className="text-text-secondary font-mono">{formatToolName(currentTool)}</span>
         </div>
       )}
     </div>

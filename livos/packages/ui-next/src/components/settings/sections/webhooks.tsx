@@ -49,7 +49,7 @@ export default function WebhooksSection() {
 
       {/* Create form */}
       {showCreate && (
-        <div className="space-y-2 rounded-xl bg-white/3 p-3 border border-white/5">
+        <div className="space-y-2 rounded-xl bg-white border border-border shadow-sm p-3">
           <Input placeholder="Webhook name" value={name} onChange={(e) => setName(e.target.value)} />
           <Input placeholder="Secret (optional, auto-generated)" value={secret} onChange={(e) => setSecret(e.target.value)} />
           <div className="flex gap-2">
@@ -79,7 +79,7 @@ export default function WebhooksSection() {
       {/* Webhook list */}
       <div className="space-y-2">
         {data?.webhooks?.map((wh: any) => (
-          <div key={wh.id} className="flex items-center justify-between rounded-xl bg-white/3 p-3 border border-white/5">
+          <div key={wh.id} className="flex items-center justify-between rounded-xl bg-white border border-border shadow-sm p-3">
             <div>
               <p className="text-xs font-medium text-text">{wh.name}</p>
               <p className="text-[11px] text-text-tertiary">

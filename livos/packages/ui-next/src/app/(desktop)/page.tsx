@@ -11,6 +11,7 @@ import {
   CommandPalette,
   WallpaperPicker,
 } from '@/components/desktop';
+import { TextEffect } from '@/components/motion-primitives/text-effect';
 import { type WindowState } from '@/providers/window-manager';
 
 export default function DesktopPage() {
@@ -41,31 +42,38 @@ export default function DesktopPage() {
       <div className="flex min-h-dvh flex-col">
         {/* Desktop content — greeting area */}
         <div className="flex flex-1 flex-col items-center justify-center px-4 pb-20">
-          <motion.div
-            className="text-center"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <h1 className="text-display-sm font-bold tracking-tight text-white drop-shadow-lg sm:text-display-md">
+          <div className="text-center">
+            <TextEffect
+              as="h1"
+              per="word"
+              preset="fade-in-blur"
+              className="text-display-sm font-bold tracking-tight text-text sm:text-display-md"
+              speedReveal={1.4}
+            >
               {greeting}
-            </h1>
+            </TextEffect>
+
             {version && (
-              <p className="mt-2 text-sm text-white/60 drop-shadow">
+              <motion.p
+                className="mt-2 text-sm text-text-tertiary"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.4 }}
+              >
                 {version.name} v{version.version}
-              </p>
+              </motion.p>
             )}
-          </motion.div>
+          </div>
 
           {/* Cmd+K hint */}
           <motion.div
             className="mt-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.4 }}
+            transition={{ delay: 0.7, duration: 0.4 }}
           >
             <button
-              className="flex items-center gap-2 rounded-xl bg-white/8 px-4 py-2 text-sm text-white/50 backdrop-blur-sm transition-colors hover:bg-white/12 hover:text-white/70"
+              className="flex items-center gap-2 rounded-xl bg-black/5 px-4 py-2 text-sm text-text-secondary backdrop-blur-sm transition-colors hover:bg-black/8 hover:text-text"
               onClick={() => {
                 // Dispatch Cmd+K
                 window.dispatchEvent(
@@ -74,7 +82,7 @@ export default function DesktopPage() {
               }}
             >
               <span>Search</span>
-              <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium">
+              <kbd className="rounded bg-black/8 px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary">
                 Ctrl+K
               </kbd>
             </button>

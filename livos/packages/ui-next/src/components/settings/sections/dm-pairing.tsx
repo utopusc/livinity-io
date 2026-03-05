@@ -43,7 +43,7 @@ function PendingTab() {
   return (
     <div className="space-y-2 pt-3">
       {pending.map((req: any) => (
-        <div key={`${req.channel}-${req.userId}`} className="flex items-center justify-between rounded-xl bg-white/3 p-3 border border-white/5">
+        <div key={`${req.channel}-${req.userId}`} className="flex items-center justify-between rounded-xl bg-white border border-border shadow-sm p-3">
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="warning">{req.channel}</Badge>
@@ -91,7 +91,7 @@ function AllowlistTab() {
         <p className="text-[11px] text-text-tertiary">No users</p>
       ) : (
         users.map((userId) => (
-          <div key={userId} className="flex items-center justify-between rounded-lg bg-white/3 px-3 py-1.5">
+          <div key={userId} className="flex items-center justify-between rounded-lg bg-neutral-50 border border-border px-3 py-1.5">
             <span className="text-xs text-text-secondary">{userId}</span>
             <Button
               size="icon"
@@ -138,7 +138,7 @@ function PolicySelector({ channel }: { channel: string }) {
     <div className="flex items-center justify-between">
       <span className="text-xs text-text-secondary capitalize">{channel} Policy</span>
       <select
-        className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+        className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
         value={data?.policy ?? 'pairing'}
         onChange={(e) => mutation.mutate({ channel, policy: e.target.value })}
       >

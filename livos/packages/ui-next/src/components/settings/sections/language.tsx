@@ -19,7 +19,7 @@ export default function LanguageSection() {
         {LANGUAGES.map((lang) => (
           <button
             key={lang.code}
-            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-white/5"
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-neutral-100"
           >
             <span className="text-text-secondary">{lang.name}</span>
             {lang.code === 'en' && <Check className="h-3.5 w-3.5 text-brand" />}

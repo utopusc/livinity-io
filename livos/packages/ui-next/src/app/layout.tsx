@@ -12,12 +12,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0a0a0b',
+  themeColor: '#f5f5f7',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

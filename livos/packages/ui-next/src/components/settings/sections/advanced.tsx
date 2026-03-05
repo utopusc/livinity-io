@@ -10,9 +10,9 @@ export default function AdvancedSection() {
   return (
     <div className="space-y-6">
       <BetaChannel />
-      <div className="border-t border-white/5" />
+      <div className="border-t border-border" />
       <ExternalDns />
-      <div className="border-t border-white/5" />
+      <div className="border-t border-border" />
       <DangerZone />
     </div>
   );

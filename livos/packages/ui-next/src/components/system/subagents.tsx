@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Plus, Bot, Trash2, Play, Pause, Square, Loader2, ChevronRight, Pencil, Zap } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
 import { trpcReact } from '@/trpc/client';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 type Subagent = {
   id: string;
@@ -49,7 +50,7 @@ function AgentList({ onSelect, onCreate }: { onSelect: (id: string) => void; onC
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-white/5 px-5 py-3">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <h3 className="text-sm font-semibold text-text">Agents</h3>
         <Button size="sm" onClick={onCreate}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -72,25 +73,27 @@ function AgentList({ onSelect, onCreate }: { onSelect: (id: string) => void; onC
           </div>
         )}
 
-        <div className="space-y-2">
-          {(agents as Subagent[] | undefined)?.map((agent) => (
-            <button
-              key={agent.id}
-              className="flex w-full items-center gap-3 rounded-xl bg-white/3 border border-white/5 p-3 text-left hover:bg-white/5 transition-colors"
-              onClick={() => onSelect(agent.id)}
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
-                <Bot className="h-4 w-4 text-brand" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text truncate">{agent.name}</p>
-                <p className="text-[11px] text-text-tertiary truncate">{agent.description}</p>
-              </div>
-              <StatusBadge status={agent.status} />
-              <ChevronRight className="h-4 w-4 text-text-tertiary" />
-            </button>
-          ))}
-        </div>
+        {!isLoading && agents && (agents as Subagent[]).length > 0 && (
+          <AnimatedGroup preset="slide" className="space-y-2">
+            {(agents as Subagent[]).map((agent) => (
+              <button
+                key={agent.id}
+                className="flex w-full items-center gap-3 rounded-xl bg-white border border-border shadow-sm p-3 text-left hover:bg-neutral-50 transition-colors"
+                onClick={() => onSelect(agent.id)}
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
+                  <Bot className="h-4 w-4 text-brand" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text truncate">{agent.name}</p>
+                  <p className="text-[11px] text-text-tertiary truncate">{agent.description}</p>
+                </div>
+                <StatusBadge status={agent.status} />
+                <ChevronRight className="h-4 w-4 text-text-tertiary" />
+              </button>
+            ))}
+          </AnimatedGroup>
+        )}
       </div>
     </div>
   );
@@ -133,7 +136,7 @@ function CreateAgent({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 border-b border-white/5 px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-border px-5 py-3">
         <Button size="sm" variant="ghost" onClick={onBack}>Back</Button>
         <h3 className="text-sm font-semibold text-text">Create Agent</h3>
       </div>
@@ -272,7 +275,7 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 border-b border-white/5 px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-border px-5 py-3">
         <Button size="sm" variant="ghost" onClick={onBack}>Back</Button>
         <h3 className="text-sm font-semibold text-text flex-1">{agent.name}</h3>
         <StatusBadge status={agent.status} />
@@ -280,7 +283,7 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
       <div className="flex-1 overflow-y-auto p-5 space-y-5 max-w-xl">
         {/* Info */}
-        <div className="rounded-xl bg-white/3 border border-white/5 p-4 space-y-2">
+        <div className="rounded-xl bg-white border border-border shadow-sm p-4 space-y-2">
           <InfoRow label="ID" value={agent.id} />
           <InfoRow label="Tier" value={agent.tier} />
           <InfoRow label="Max Turns" value={String(agent.maxTurns)} />
@@ -289,14 +292,14 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
 
         {agent.description && (
-          <div className="rounded-xl bg-white/3 border border-white/5 p-4">
+          <div className="rounded-xl bg-white border border-border shadow-sm p-4">
             <p className="text-[11px] text-text-tertiary mb-1">Description</p>
             <p className="text-xs text-text">{agent.description}</p>
           </div>
         )}
 
         {agent.systemPrompt && (
-          <div className="rounded-xl bg-white/3 border border-white/5 p-4">
+          <div className="rounded-xl bg-white border border-border shadow-sm p-4">
             <p className="text-[11px] text-text-tertiary mb-1">System Prompt</p>
             <pre className="text-xs text-text whitespace-pre-wrap font-mono">{agent.systemPrompt}</pre>
           </div>
@@ -330,7 +333,7 @@ function AgentDetail({ id, onBack }: { id: string; onBack: () => void }) {
             </Button>
           </div>
           {result && (
-            <div className="rounded-lg bg-white/3 border border-white/5 p-3">
+            <div className="rounded-lg bg-neutral-50 border border-border p-3">
               <pre className="text-xs text-text whitespace-pre-wrap">{result}</pre>
             </div>
           )}

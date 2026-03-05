@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Loader2, Terminal as TerminalIcon, AlertCircle } from 'lucide-react';
+import { Loader2, Terminal as TerminalIcon, AlertCircle, RefreshCw } from 'lucide-react';
 
 export function TerminalLayout() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -156,30 +156,74 @@ export function TerminalLayout() {
 
   if (status === 'error') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#0a0a0a] text-text-tertiary">
-        <AlertCircle className="h-8 w-8 text-error" />
-        <p className="text-sm text-error">{error ?? 'Terminal error'}</p>
-        <button
-          className="text-xs text-brand hover:underline"
-          onClick={() => { setError(null); connect(); }}
-        >
-          Retry
-        </button>
+      <div className="flex h-full flex-col">
+        {/* Light title bar */}
+        <div className="flex items-center gap-2 border-b border-border bg-white px-4 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+            <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+            <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          </div>
+          <span className="ml-1 text-xs text-text-tertiary">Terminal</span>
+        </div>
+        {/* Dark terminal area */}
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-neutral-900">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+          <p className="text-sm text-red-400">{error ?? 'Terminal error'}</p>
+          <button
+            className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 transition-colors"
+            onClick={() => { setError(null); connect(); }}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative h-full bg-[#0a0a0a]">
-      {(status === 'loading' || status === 'connecting') && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-          <span className="text-xs text-text-tertiary">
-            {status === 'loading' ? 'Loading terminal...' : 'Connecting...'}
-          </span>
+    <div className="flex h-full flex-col">
+      {/* Light title bar with traffic light dots */}
+      <div className="flex items-center justify-between border-b border-border bg-white px-4 py-2.5 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
         </div>
-      )}
-      <div ref={containerRef} className="h-full w-full p-1" />
+        <div className="flex items-center gap-1.5">
+          <TerminalIcon className="h-3.5 w-3.5 text-text-tertiary" />
+          <span className="text-xs text-text-tertiary">Terminal</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {status === 'connected' ? (
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="text-[10px] text-text-tertiary">Connected</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin text-text-tertiary" />
+              <span className="text-[10px] text-text-tertiary">
+                {status === 'loading' ? 'Loading...' : 'Connecting...'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Dark terminal body */}
+      <div className="relative flex-1 bg-neutral-900">
+        {(status === 'loading' || status === 'connecting') && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
+            <span className="text-xs text-neutral-400">
+              {status === 'loading' ? 'Loading terminal...' : 'Connecting...'}
+            </span>
+          </div>
+        )}
+        <div ref={containerRef} className="h-full w-full p-1" />
+      </div>
     </div>
   );
 }

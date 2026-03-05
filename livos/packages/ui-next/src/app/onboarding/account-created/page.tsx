@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui';
+import { TextEffect } from '@/components/motion-primitives/text-effect';
 
 export default function AccountCreatedPage() {
   const router = useRouter();
@@ -25,35 +26,65 @@ export default function AccountCreatedPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-bg p-4">
+    <div
+      className="flex min-h-dvh items-center justify-center p-4"
+      style={{
+        background:
+          'radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.85 0.08 149) / 0.15), oklch(0.985 0.002 247.84)',
+      }}
+    >
       <motion.div
         className="w-full max-w-md text-center"
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
+        {/* Success icon */}
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: 'spring', stiffness: 200, damping: 15 }}
-          className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success/10"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.15, type: 'spring', stiffness: 220, damping: 16 }}
+          className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success/10 shadow-sm"
         >
-          <CheckCircle2 className="h-10 w-10 text-success" />
+          <CheckCircle2 className="h-10 w-10 text-success" strokeWidth={1.75} />
         </motion.div>
 
-        <h1 className="text-display-sm font-bold text-text">You're all set!</h1>
-        <p className="mt-2 text-body-lg text-text-secondary">
-          Your LivOS account has been created successfully.
-        </p>
+        {/* Heading */}
+        <TextEffect
+          as="h1"
+          per="word"
+          preset="fade-in-blur"
+          delay={0.2}
+          className="text-display-sm font-bold text-text"
+        >
+          You're all set!
+        </TextEffect>
 
-        <div className="mt-8">
+        {/* Subtitle */}
+        <TextEffect
+          as="p"
+          per="word"
+          preset="fade"
+          delay={0.45}
+          className="mt-2 text-body-lg text-text-secondary"
+        >
+          Your LivOS account has been created successfully.
+        </TextEffect>
+
+        {/* Action */}
+        <motion.div
+          className="mt-8"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.65, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        >
           <Button size="lg" onClick={() => router.push('/')}>
             Go to Desktop
           </Button>
           <p className="mt-3 text-caption text-text-tertiary">
             Redirecting in {countdown}s...
           </p>
-        </div>
+        </motion.div>
       </motion.div>
     </div>
   );

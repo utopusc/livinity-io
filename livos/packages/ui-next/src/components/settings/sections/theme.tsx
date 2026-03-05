@@ -21,7 +21,7 @@ export default function ThemeSection() {
                 'ring-2 transition-all',
                 isActive
                   ? 'ring-brand'
-                  : 'ring-transparent hover:ring-white/20',
+                  : 'ring-transparent hover:ring-neutral-300',
               )}
               onClick={() => setWallpaperId(wp.id)}
             >
