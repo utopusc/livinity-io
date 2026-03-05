@@ -79,7 +79,7 @@ function DialogContent({ children, className }: DialogContentProps) {
           <motion.div
             className={cn(
               'fixed left-1/2 top-1/2 z-[var(--z-modal)]',
-              'w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-float',
+              'w-full max-w-lg rounded-2xl border border-border bg-surface-0 p-6 shadow-float',
               className,
             )}
             initial={{ opacity: 0, scale: 0.95, x: '-50%', y: '-48%' }}

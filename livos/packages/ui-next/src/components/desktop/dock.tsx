@@ -32,7 +32,7 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
         'transition-colors duration-150',
         isActive
           ? 'bg-brand/10 text-brand'
-          : 'text-text-tertiary hover:bg-black/5 hover:text-text',
+          : 'text-text-tertiary hover:bg-neutral-100 hover:text-text',
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -75,7 +75,7 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
 /* ------------------------------------------------------------------ */
 
 function DockDivider() {
-  return <div className="mx-1 h-6 w-px bg-black/8" />;
+  return <div className="mx-1 h-6 w-px bg-border" />;
 }
 
 /* ------------------------------------------------------------------ */

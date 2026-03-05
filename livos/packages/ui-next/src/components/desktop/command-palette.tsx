@@ -131,7 +131,7 @@ export function CommandPalette() {
                 placeholder="Search apps..."
                 className="flex-1 bg-transparent text-sm text-text placeholder:text-text-tertiary outline-none"
               />
-              <kbd className="rounded-md bg-black/5 px-1.5 py-0.5 text-[10px] text-text-tertiary">
+              <kbd className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] text-text-tertiary">
                 ESC
               </kbd>
             </div>
@@ -153,12 +153,12 @@ export function CommandPalette() {
                         'transition-colors',
                         i === selectedIndex
                           ? 'bg-brand/8 text-text'
-                          : 'text-text-secondary hover:bg-black/4',
+                          : 'text-text-secondary hover:bg-neutral-50',
                       )}
                       onClick={() => handleSelect(app)}
                       onMouseEnter={() => setSelectedIndex(i)}
                     >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100">
                         <Icon className="h-4 w-4 text-text-secondary" />
                       </div>
                       <span className="font-medium">{app.name}</span>

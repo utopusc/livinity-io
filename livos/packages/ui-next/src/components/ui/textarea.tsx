@@ -9,7 +9,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLText
       <textarea
         ref={ref}
         className={cn(
-          'flex min-h-[80px] w-full rounded-lg border border-border bg-white px-3 py-2',
+          'flex min-h-[80px] w-full rounded-lg border border-border bg-surface-0 px-3 py-2',
           'text-body text-text placeholder:text-text-tertiary',
           'transition-colors duration-fast resize-none',
           'hover:border-border-emphasis',

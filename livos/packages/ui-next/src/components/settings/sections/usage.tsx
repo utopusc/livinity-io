@@ -1,8 +1,10 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { trpcReact } from '@/trpc/client';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
+import { InView } from '@/components/motion-primitives/in-view';
 
 export default function UsageSection() {
   const { data: overview, isLoading } = trpcReact.ai.getUsageOverview.useQuery();
@@ -10,9 +12,20 @@ export default function UsageSection() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-text-tertiary">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-xs">Loading usage data...</span>
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 space-y-2">
+              <Skeleton className="h-3 w-2/5" />
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="h-2.5 w-3/5" />
+            </div>
+          ))}
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="h-32 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -22,7 +35,7 @@ export default function UsageSection() {
   return (
     <div className="space-y-6">
       {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3">
+      <AnimatedGroup preset="fade" className="grid grid-cols-2 gap-3">
         <StatCard
           label="Total Tokens"
           value={totalTokens}
@@ -35,57 +48,75 @@ export default function UsageSection() {
         />
         <CostCard value={overview?.estimatedCostUsd ?? 0} />
         <StatCard label="Active Users" value={overview?.activeUsers ?? 0} />
-      </div>
+      </AnimatedGroup>
 
       {/* Daily chart */}
       {daily?.daily && daily.daily.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-text">Daily Usage (30 days)</h4>
-          <div className="flex h-32 items-end gap-px">
-            {daily.daily.map((d: any, i: number) => {
-              const total = (d.inputTokens ?? 0) + (d.outputTokens ?? 0);
-              const max = Math.max(...daily.daily.map((dd: any) => (dd.inputTokens ?? 0) + (dd.outputTokens ?? 0)), 1);
-              const height = (total / max) * 100;
-              return (
-                <div
-                  key={i}
-                  className="flex-1 rounded-t bg-brand/60 transition-all hover:bg-brand"
-                  style={{ height: `${Math.max(height, 2)}%` }}
-                  title={`${d.date}: ${formatNumber(total)} tokens`}
-                />
-              );
-            })}
+        <InView
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: { opacity: 1, y: 0 },
+          }}
+          transition={{ duration: 0.3 }}
+          once
+        >
+          <div className="space-y-2">
+            <h4 className="text-xs font-medium text-text">Daily Usage (30 days)</h4>
+            <div className="flex h-32 items-end gap-px">
+              {daily.daily.map((d: any, i: number) => {
+                const total = (d.inputTokens ?? 0) + (d.outputTokens ?? 0);
+                const max = Math.max(...daily.daily.map((dd: any) => (dd.inputTokens ?? 0) + (dd.outputTokens ?? 0)), 1);
+                const height = (total / max) * 100;
+                return (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-t bg-brand/60 transition-all hover:bg-brand"
+                    style={{ height: `${Math.max(height, 2)}%` }}
+                    title={`${d.date}: ${formatNumber(total)} tokens`}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </InView>
       )}
 
       {/* Model pricing reference */}
-      <div className="space-y-2">
-        <h4 className="text-xs font-medium text-text">Model Pricing (per 1M tokens)</h4>
-        <div className="overflow-hidden rounded-lg border border-border shadow-sm">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border bg-neutral-50">
-                <th className="px-3 py-1.5 text-left text-text-tertiary font-medium">Model</th>
-                <th className="px-3 py-1.5 text-right text-text-tertiary font-medium">Input</th>
-                <th className="px-3 py-1.5 text-right text-text-tertiary font-medium">Output</th>
-              </tr>
-            </thead>
-            <tbody className="text-text-secondary">
-              <tr className="border-b border-border"><td className="px-3 py-1.5">Haiku</td><td className="px-3 py-1.5 text-right">$0.25</td><td className="px-3 py-1.5 text-right">$1.25</td></tr>
-              <tr className="border-b border-border"><td className="px-3 py-1.5">Sonnet</td><td className="px-3 py-1.5 text-right">$3.00</td><td className="px-3 py-1.5 text-right">$15.00</td></tr>
-              <tr><td className="px-3 py-1.5">Opus</td><td className="px-3 py-1.5 text-right">$15.00</td><td className="px-3 py-1.5 text-right">$75.00</td></tr>
-            </tbody>
-          </table>
+      <InView
+        variants={{
+          hidden: { opacity: 0, y: 20 },
+          visible: { opacity: 1, y: 0 },
+        }}
+        transition={{ duration: 0.3 }}
+        once
+      >
+        <div className="space-y-2">
+          <h4 className="text-xs font-medium text-text">Model Pricing (per 1M tokens)</h4>
+          <div className="overflow-hidden rounded-lg border border-border shadow-sm">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-neutral-50">
+                  <th className="px-3 py-1.5 text-left text-text-tertiary font-medium">Model</th>
+                  <th className="px-3 py-1.5 text-right text-text-tertiary font-medium">Input</th>
+                  <th className="px-3 py-1.5 text-right text-text-tertiary font-medium">Output</th>
+                </tr>
+              </thead>
+              <tbody className="text-text-secondary">
+                <tr className="border-b border-border"><td className="px-3 py-1.5">Haiku</td><td className="px-3 py-1.5 text-right">$0.25</td><td className="px-3 py-1.5 text-right">$1.25</td></tr>
+                <tr className="border-b border-border"><td className="px-3 py-1.5">Sonnet</td><td className="px-3 py-1.5 text-right">$3.00</td><td className="px-3 py-1.5 text-right">$15.00</td></tr>
+                <tr><td className="px-3 py-1.5">Opus</td><td className="px-3 py-1.5 text-right">$15.00</td><td className="px-3 py-1.5 text-right">$75.00</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </InView>
     </div>
   );
 }
 
 function StatCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (
-    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
       <p className="text-[11px] text-text-tertiary">{label}</p>
       <AnimatedNumber
         value={value}
@@ -99,7 +130,7 @@ function StatCard({ label, value, sub }: { label: string; value: number; sub?: s
 
 function CostCard({ value }: { value: number }) {
   return (
-    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
       <p className="text-[11px] text-text-tertiary">Est. Cost</p>
       <p className="mt-0.5 text-lg font-semibold text-text">${value.toFixed(2)}</p>
     </div>

@@ -22,7 +22,7 @@ const variants: Record<ButtonVariant, string> = {
   destructive:
     'bg-error text-white hover:brightness-110 active:brightness-90 shadow-sm',
   outline:
-    'border border-border-emphasis text-text bg-white hover:bg-neutral-50 active:bg-neutral-100',
+    'border border-border-emphasis text-text bg-surface-0 hover:bg-surface-1 active:bg-neutral-100',
 };
 
 const sizes: Record<ButtonSize, string> = {

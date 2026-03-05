@@ -5,6 +5,7 @@ import { Power, RotateCcw, AlertTriangle, Loader2, Server, Clock, Wifi } from 'l
 import { Button, Badge } from '@/components/ui';
 import { trpcReact } from '@/trpc/client';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 export function ServerControlLayout() {
   const { data: version } = trpcReact.system.version.useQuery();
@@ -16,11 +17,11 @@ export function ServerControlLayout() {
       <h3 className="text-sm font-semibold text-text">Server Control</h3>
 
       {/* System info */}
-      <div className="grid grid-cols-2 gap-3">
+      <AnimatedGroup preset="fade" className="grid grid-cols-2 gap-3">
         <InfoCard icon={Server} label="Version" value={version ? `${version.name} v${version.version}` : '...'} />
         <UptimeCard uptime={uptime} />
         <InfoCard icon={Wifi} label="Local IP" value={ips?.[0] ?? '...'} className="col-span-2" />
-      </div>
+      </AnimatedGroup>
 
       {/* Actions */}
       <div className="space-y-3">
@@ -85,7 +86,7 @@ function ShutdownButton() {
 
 function InfoCard({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) {
   return (
-    <div className={`rounded-xl bg-white border border-border shadow-sm p-3 ${className ?? ''}`}>
+    <div className={`rounded-xl bg-surface-0 border border-border shadow-sm p-3 ${className ?? ''}`}>
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-text-tertiary" />
         <span className="text-[11px] text-text-tertiary">{label}</span>
@@ -103,7 +104,7 @@ function UptimeCard({ uptime }: { uptime: number | string | undefined }) {
     : 0;
 
   return (
-    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
       <div className="flex items-center gap-2">
         <Clock className="h-4 w-4 text-text-tertiary" />
         <span className="text-[11px] text-text-tertiary">Uptime</span>
