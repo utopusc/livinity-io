@@ -8,6 +8,16 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 **One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use.
 
+## Current Milestone: v5.0 — Light Theme UI Redesign
+
+**Goal:** Complete light theme redesign of the Vite/React UI using motion-primitives, covering every single screen piece by piece with professional quality.
+
+**Target features:**
+- Light theme across ALL screens (no dark mode, fully light)
+- motion-primitives components from motion-primitives.com/docs
+- Full i18n support (all strings through t() function)
+- Piece-by-piece approach: Setup/Onboarding → Login → Desktop → Dock → Window Manager → App Store → AI Chat → Settings → File Manager → Server Control → Spotlight → Subagents → Schedules → Live Usage → Factory Reset → Context Menus
+
 ## Requirements
 
 ### Validated
@@ -64,24 +74,31 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Channel conversation history (all channels) — v1.5-fix
 - ✓ AI-generated live updates to channels — v1.5-fix
 
-### Active (v2.0 — OpenClaw-Class AI Platform)
+### Validated (v2.0 — OpenClaw-Class AI Platform)
 
-**Goal:** Transform LivOS into an OpenClaw-class personal AI platform with voice interaction, visual canvas, multi-agent coordination, webhook automation, Gmail integration, chat commands, DM security, onboarding CLI, session compaction, usage tracking, and stability fixes. Telegram + Discord only. Claude Code Auth exclusively.
+- ✓ All v2.0 features (83 requirements complete) — v2.0
 
-**Target features:**
-- [ ] Voice Wake/Talk Mode (Cartesia TTS, Deepgram STT) with UI API key setup
-- [ ] Live Canvas (A2UI-inspired web-based visual AI workspace)
-- [ ] WebSocket Gateway improvements (real-time streaming, replace polling)
-- [ ] Multi-Agent Sessions (coordination, session tools)
-- [ ] LivHub Skills Registry (ClawHub-inspired, marketplace with gating)
-- [ ] Webhook Triggers (external events trigger agent tasks)
-- [ ] Gmail Integration (Pub/Sub listener, email as channel)
-- [ ] Chat Commands (/status, /think, /usage, /new, /reset, /compact, /activation)
-- [ ] DM Pairing Security (activation code for new users)
-- [ ] Onboarding CLI (livinity onboard --install-daemon guided setup)
-- [ ] Session Compaction (summarize long conversations to save tokens)
-- [ ] Usage Tracking (per-user token/cost tracking)
-- [ ] Fix existing broken features (process stability, memory service, built-in tool leak)
+### Active (v5.0 — Light Theme UI Redesign)
+
+- [ ] Light theme design system (tailwind tokens, CSS variables)
+- [ ] motion-primitives integration (TextEffect, AnimatedGroup, TransitionPanel, GlowEffect, etc.)
+- [ ] Full i18n coverage (every string wrapped in t())
+- [ ] Setup/Onboarding — 6-step wizard with light theme
+- [ ] Login screen — light theme redesign
+- [ ] Desktop — light wallpaper, light overlays
+- [ ] Dock — frosted light glass
+- [ ] Window Manager — light chrome, shadows
+- [ ] App Store — light cards, animations
+- [ ] AI Chat — light sidebar, white chat area
+- [ ] Settings — light sidebar, all sections
+- [ ] File Manager — light toolbar, animated grid
+- [ ] Server Control — light cards, AnimatedNumber
+- [ ] Spotlight/Command Palette — light overlay
+- [ ] Subagents panel — light theme
+- [ ] Schedules — light theme
+- [ ] Live Usage Dashboard — light charts
+- [ ] Factory Reset — light theme
+- [ ] Context Menus — light theme
 
 ### Out of Scope
 
@@ -93,66 +110,48 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - Native desktop/mobile apps — web-based only for now
 - Payment/billing system — free open source project
 - Self-hosted LLM support — Claude Code Auth only
-- Gemini/OpenAI as primary — Claude Code Auth exclusively
+- New backend features — UI only for v5.0
+- Dark theme — fully light theme only
 
 ## Context
 
-**Current State (post v1.5):**
-- Running in production on Contabo VPS (45.137.194.103)
-- AI runs via Claude Code SDK (SdkAgentRunner, subscription mode, dontAsk)
-- Nexus tools exposed via MCP (nexus-tools server)
-- Chrome DevTools MCP for browser control
-- 5 channel providers (WhatsApp, Telegram, Discord, Slack, Matrix)
-- Skill marketplace with Git-based registries
-- WebSocket JSON-RPC 2.0 gateway
-- Human-in-the-loop approval system
-- Parallel agent execution via BullMQ
-
-**Known Issues:**
-- nexus-core: 153 PM2 restarts in 47 hours (stability problem)
-- Memory service returns empty results frequently
-- SdkAgentRunner tools:[] doesn't disable built-in Bash/Read/Write
-- Agent runs 6-13 turns for simple greetings (should be 1-2)
-- grammy loses polling offsets on restart (mitigated with dedup)
+**Current State (post v4.0 revert):**
+- Running production on Contabo VPS (45.137.194.103)
+- UI: Vite + React 18 + Tailwind 3.4 + shadcn/ui
+- v4.0 ui-next (Next.js 16) was built but reverted back to Vite/React
+- Current UI has dark theme with semantic tokens in tailwind.config.ts
+- Glassmorphic onboarding wizard exists but has hardcoded English and dark-only colors
+- motion-primitives already partially installed (5 components in src/components/motion-primitives/)
+- Tailwind config has semantic tokens (text-primary, text-secondary, surface-base, etc.) but all hardcoded to dark values
 
 **Technical Environment:**
 - Node.js 22+, TypeScript 5.7+
 - React 18 + Vite for frontend
+- Tailwind CSS 3.4 with semantic design tokens
+- shadcn/ui components
+- Framer Motion for animations
+- motion-primitives (partially installed)
 - Express + tRPC for backend
-- Redis for state, queues, pub/sub
-- PostgreSQL for persistent data
-- Docker for containerized apps
-- Caddy for reverse proxy
-- Claude Code SDK (@anthropic-ai/claude-agent-sdk)
-
-**Target Users:**
-- Self-hosters who want a personal server with AI
-- Developers who want to extend with custom tools/skills
-- Privacy-conscious users avoiding cloud services
 
 ## Constraints
 
-- **Auth**: Claude Code Auth ONLY — no API keys, no Gemini, no OpenAI
-- **Channels**: Telegram + Discord only for v2.0
-- **Tech Stack**: Keep existing Node.js/TypeScript stack
-- **Compatibility**: Must work on standard Linux VPS (Ubuntu 22.04+)
-- **Resources**: Single VPS deployment (2-4 CPU, 4-8GB RAM typical)
-- **Zero Breaking Changes**: Existing installations should upgrade smoothly
+- **UI Framework**: Vite + React 18 (NOT Next.js)
+- **Theme**: Light theme ONLY (no dark mode toggle)
+- **Component Library**: motion-primitives.com/docs as primary source
+- **Design System**: Update existing tailwind semantic tokens for light values
+- **i18n**: All user-facing strings must use t() function
+- **Compatibility**: Must work with existing tRPC backend (no backend changes)
+- **Piece-by-piece**: Each screen is a separate phase, approved individually
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Keep Nexus as single AI daemon | Most complete implementation, already multi-channel | ✓ Good |
-| Event-driven over polling | Reduces latency from 30s to instant | ✓ Good |
-| Single install script | Lowers barrier to entry for non-technical users | ✓ Good |
-| Claude Code SDK subscription mode | No API keys needed, uses user's Claude subscription | ✓ Good |
-| SdkAgentRunner with dontAsk | Auto-approve all MCP tools, Claude handles permissions | ✓ Good |
-| Telegram + Discord only (v2.0) | Focus on two working channels, WhatsApp deferred | — Pending |
-| Cartesia for TTS | High quality, low latency voice synthesis | — Pending |
-| Deepgram for STT | Real-time speech recognition, WebSocket API | — Pending |
-| Web-based Live Canvas | No native app needed, A2UI-inspired visual workspace | — Pending |
-| LivHub (not ClawHub) | Own branding for skill registry | — Pending |
+| Keep Vite/React over Next.js | v4.0 Next.js rewrite was reverted; Vite/React is proven stable | ✓ Good |
+| Light theme only | User preference, cleaner professional look | — Pending |
+| motion-primitives | Professional animations, referenced by user | — Pending |
+| Piece-by-piece phases | User wants to approve each screen individually | — Pending |
+| Full i18n | Current wizard has hardcoded strings, must fix | — Pending |
 
 ---
-*Last updated: 2026-02-20 — v2.0 milestone (OpenClaw-Class AI Platform)*
+*Last updated: 2026-03-05 — v5.0 milestone (Light Theme UI Redesign)*

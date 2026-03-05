@@ -36,8 +36,22 @@
 
 **Last phase number:** 6 (v2.0)
 
+### v3.0 — Next.js 16 UI Rewrite
+**Completed:** 2026-03-04
+**Phases:** 1-10
+**Summary:** Complete UI rewrite using Next.js 16 + Tailwind 4 + Motion Primitives. Reverted back to Vite/React in v4.0.
+
+**Last phase number:** 10 (v3.0)
+
+### v4.0 — UI Polish, Fixes & Motion Primitives
+**Completed:** 2026-03-04
+**Phases:** 01-10 (10 phases)
+**Summary:** Design system + motion-primitives install, App Store fix + redesign, auth pages polish, desktop + dock + windows, AI chat light theme, file manager, settings, system pages, skeletons, final deploy. 99 files changed. Deployed to livinity.cloud. Reverted from Next.js back to Vite/React.
+
+**Last phase number:** 10 (v4.0)
+
 ## Active
 
-### v3.0 — Next.js 16 UI Rewrite
-**Started:** 2026-03-04
-**Goal:** Complete UI rewrite using Next.js 16 (App Router) + Tailwind CSS 4 + Motion Primitives. Zero Umbrel resemblance. Modern minimal Apple-vari design. New package `livos/packages/ui-next`. All screens rebuilt from scratch (Desktop, Dock, Window Manager, File Manager, Settings, App Store). AI Chat adapted to new design system.
+### v5.0 — Light Theme UI Redesign
+**Started:** 2026-03-05
+**Goal:** Complete light theme redesign of the Vite/React UI using motion-primitives, covering every screen piece by piece with professional quality. Full i18n support. All semantic tokens updated from dark to light.
