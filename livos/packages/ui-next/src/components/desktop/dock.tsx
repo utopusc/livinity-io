@@ -29,25 +29,27 @@ function AppDockItem({ app, isActive, onClick }: AppDockItemProps) {
   const Icon = app.icon;
 
   return (
-    <DockItem
-      className="relative flex flex-col items-center justify-end pb-1"
-      onClick={onClick}
-    >
-      <DockLabel
-        className="bg-white border border-black/[0.06] shadow-md text-neutral-700 text-xs font-medium rounded-lg px-2 py-0.5"
+    <div className="relative flex flex-col items-center">
+      <DockItem
+        className="flex flex-col items-center justify-end pb-1"
+        onClick={onClick}
       >
-        {app.name}
-      </DockLabel>
+        <DockLabel
+          className="bg-white border border-black/[0.06] shadow-md text-neutral-700 text-xs font-medium rounded-lg px-2 py-0.5"
+        >
+          {app.name}
+        </DockLabel>
 
-      <DockIcon className="flex items-center justify-center">
-        <Icon
-          className="h-5 w-5 text-neutral-600"
-          strokeWidth={1.8}
-          aria-hidden="true"
-        />
-      </DockIcon>
+        <DockIcon className="flex items-center justify-center">
+          <Icon
+            className="h-5 w-5 text-neutral-600"
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
+        </DockIcon>
+      </DockItem>
 
-      {/* Active indicator dot */}
+      {/* Active indicator dot — outside DockItem to avoid cloneElement on false */}
       {isActive && (
         <motion.div
           className="absolute -bottom-0.5 left-1/2 h-1 w-1 rounded-full bg-brand"
@@ -56,7 +58,7 @@ function AppDockItem({ app, isActive, onClick }: AppDockItemProps) {
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         />
       )}
-    </DockItem>
+    </div>
   );
 }
 
