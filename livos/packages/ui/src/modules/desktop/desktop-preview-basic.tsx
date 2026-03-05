@@ -80,7 +80,7 @@ export function DesktopPreview({
 								className={cn('grid place-items-center', 'duration-200 animate-in fade-in zoom-in-50 fill-mode-both')}
 							>
 								<div className='flex w-full min-w-0 flex-col items-center'>
-									<div className='overflow-hidden rounded-3 bg-white/20'>
+									<div className='overflow-hidden rounded-3 bg-surface-2'>
 										<FadeInImg src={app.icon} className='h-3 w-3' />
 									</div>
 									<AppLabel>{app.name}</AppLabel>
@@ -111,7 +111,7 @@ function DockItemPreview({icon}: {icon: string}) {
 	return <FadeInImg src={icon} className='h-3 w-3' />
 }
 
-const dockPreviewClass = tw`mx-auto animate-in slide-in-from-bottom-2 flex gap-1 rounded-5 bg-neutral-900/70 p-[3px] shrink-0 border-hpx border-border-default`
+const dockPreviewClass = tw`mx-auto animate-in slide-in-from-bottom-2 flex gap-1 rounded-5 bg-white/80 backdrop-blur-md p-[3px] shrink-0 border-hpx border-border-default`
 
 function Header({userName}: {userName: string}) {
 	return (

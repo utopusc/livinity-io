@@ -178,7 +178,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 					top: currentY,
 					zIndex,
 					boxShadow: isDragging
-						? '0 35px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08)'
+						? '0 35px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.06)'
 						: undefined,
 				}}
 				initial={{opacity: 0, scale: 0.95, y: 20}}
@@ -213,7 +213,7 @@ const windowClass = tw`
 	flex
 	flex-col
 	rounded-radius-xl
-	bg-black/90
+	bg-white/95
 	backdrop-blur-xl
 	overflow-hidden
 	shadow-elevation-lg

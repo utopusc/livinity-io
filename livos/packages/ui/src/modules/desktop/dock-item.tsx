@@ -153,7 +153,7 @@ export function DockItem({
 						style={{backgroundImage: `url(${bg})`}}
 					/>
 				) : (
-					<div className='h-full w-full rounded-xl bg-gradient-to-br from-white/20 to-black/20' />
+					<div className='h-full w-full rounded-xl bg-gradient-to-br from-surface-2 to-surface-3' />
 				)}
 
 				{onOpenWindow ? (
@@ -180,7 +180,7 @@ export function DockItem({
 function OpenPill() {
 	return (
 		<motion.div
-			className='absolute -bottom-[7px] left-1/2 h-[2px] w-[10px] -translate-x-1/2 rounded-full bg-white'
+			className='absolute -bottom-[7px] left-1/2 h-[2px] w-[10px] -translate-x-1/2 rounded-full bg-text-primary'
 			initial={{
 				opacity: 0,
 			}}
