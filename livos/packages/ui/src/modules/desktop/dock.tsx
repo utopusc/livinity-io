@@ -69,9 +69,9 @@ export function Dock() {
 	const lastFilesPath = sessionStorage.getItem('lastFilesPath')
 
 	const handleOpenWindow = useCallback(
-		(appId: string, route: string, title: string, icon: string) => {
+		(appId: string, route: string, title: string, icon: string, originRect?: {x: number; y: number; width: number; height: number}) => {
 			if (!windowManager) return false
-			windowManager.openWindow(appId, route, title, icon)
+			windowManager.openWindow(appId, route, title, icon, originRect)
 			return true
 		},
 		[windowManager],
@@ -106,12 +106,13 @@ export function Dock() {
 					to={lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo}
 					open={pathname.startsWith('/files')}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_files',
 							lastFilesPath || '/files/Home',
 							'Files',
 							systemAppsKeyed['LIVINITY_files'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -123,12 +124,13 @@ export function Dock() {
 					open={pathname.startsWith(systemAppsKeyed['LIVINITY_settings'].systemAppTo)}
 					notificationCount={settingsNotificationCount}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_settings',
 							'/settings',
 							'Settings',
 							systemAppsKeyed['LIVINITY_settings'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -146,12 +148,13 @@ export function Dock() {
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_app-store',
 							'/app-store',
 							'App Store',
 							systemAppsKeyed['LIVINITY_app-store'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -162,12 +165,13 @@ export function Dock() {
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_ai-chat',
 							'/ai-chat',
 							'AI Chat',
 							systemAppsKeyed['LIVINITY_ai-chat'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -177,12 +181,13 @@ export function Dock() {
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_server-control',
 							'/server-control',
 							'Server',
 							systemAppsKeyed['LIVINITY_server-control'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -192,12 +197,13 @@ export function Dock() {
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_subagents',
 							'/subagents',
 							'Agents',
 							systemAppsKeyed['LIVINITY_subagents'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -207,12 +213,13 @@ export function Dock() {
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_schedules',
 							'/schedules',
 							'Schedules',
 							systemAppsKeyed['LIVINITY_schedules'].icon,
+							originRect,
 						)
 					}
 				/>
@@ -222,12 +229,13 @@ export function Dock() {
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
-					onOpenWindow={() =>
+					onOpenWindow={(originRect) =>
 						handleOpenWindow(
 							'LIVINITY_terminal',
 							'/terminal',
 							'Terminal',
 							systemAppsKeyed['LIVINITY_terminal'].icon,
+							originRect,
 						)
 					}
 				/>
