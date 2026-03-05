@@ -29,11 +29,9 @@ const AppStoreCategoryPage = React.lazy(() => import('./routes/app-store/categor
 const AppStoreAppPage = React.lazy(() => import('./routes/app-store/app-page'))
 const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'))
 const Login = React.lazy(() => import('./routes/login'))
-const OnboardingStart = React.lazy(() => import('./routes/onboarding'))
-const CreateAccount = React.lazy(() => import('./routes/onboarding/create-account'))
-const AccountCreated = React.lazy(() => import('./routes/onboarding/account-created'))
-const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
+const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
+const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
 
 // NOTE: AI pages (ai-chat, server-control, subagents, schedules) are window-only.
 // They are NOT registered as routes - they open exclusively as draggable windows from the dock.
@@ -150,11 +148,7 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: (
-					<EnsureUserDoesntExist>
-						<OnboardingStart />
-					</EnsureUserDoesntExist>
-				),
+				element: <SetupWizard />,
 			},
 			{
 				path: 'restore',
@@ -162,22 +156,6 @@ export const router = createBrowserRouter([
 					<EnsureUserDoesntExist>
 						<OnboardingRestore />
 					</EnsureUserDoesntExist>
-				),
-			},
-			{
-				path: 'create-account',
-				element: (
-					<EnsureUserDoesntExist>
-						<CreateAccount />
-					</EnsureUserDoesntExist>
-				),
-			},
-			{
-				path: 'account-created',
-				element: (
-					<EnsureLoggedIn>
-						<AccountCreated />
-					</EnsureLoggedIn>
 				),
 			},
 		],

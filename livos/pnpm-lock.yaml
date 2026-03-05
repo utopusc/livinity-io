@@ -436,6 +436,9 @@ importers:
       match-sorter:
         specifier: 6.3.1
         version: 6.3.1
+      motion:
+        specifier: ^12.35.0
+        version: 12.35.0(@emotion/is-prop-valid@0.8.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       photoswipe:
         specifier: ^5.4.2
         version: 5.4.4
@@ -6203,6 +6206,20 @@ packages:
 
   motion-utils@12.29.2:
     resolution: {integrity: sha512-G3kc34H2cX2gI63RqU+cZq+zWRRPSsNIOjpdl9TN4AQwC4sgwYPl/Q/Obf/d53nOm569T0fYK+tcoSV50BWx8A==}
+
+  motion@12.35.0:
+    resolution: {integrity: sha512-BQUhNUIGvUcwXCzwmnT1JpjUqab34lIwxHnXUyWRht1WC1vAyp7/4qgMiUXxN3K6hgUhyoR+HNnLeQMwUZjVjw==}
+    peerDependencies:
+      '@emotion/is-prop-valid': '*'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   ms@2.0.0:
     resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
@@ -12811,6 +12828,16 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
+  framer-motion@12.35.0(@emotion/is-prop-valid@0.8.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      motion-dom: 12.35.0
+      motion-utils: 12.29.2
+      tslib: 2.8.1
+    optionalDependencies:
+      '@emotion/is-prop-valid': 0.8.8
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
   framer-motion@12.35.0(@emotion/is-prop-valid@0.8.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       motion-dom: 12.35.0
@@ -14227,6 +14254,15 @@ snapshots:
       - encoding
 
   motion-utils@12.29.2: {}
+
+  motion@12.35.0(@emotion/is-prop-valid@0.8.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      framer-motion: 12.35.0(@emotion/is-prop-valid@0.8.8)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      tslib: 2.8.1
+    optionalDependencies:
+      '@emotion/is-prop-valid': 0.8.8
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   ms@2.0.0: {}
 
