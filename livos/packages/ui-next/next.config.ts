@@ -4,9 +4,9 @@ const nextConfig: NextConfig = {
   // Standalone output for production deployment (self-contained server)
   output: 'standalone',
 
-  // Turbopack root — needed for monorepo builds
+  // Turbopack root — needed for monorepo builds (pnpm workspace root)
   turbopack: {
-    root: '..',
+    root: '../..',
   },
 
   // tRPC proxy to livinityd backend
