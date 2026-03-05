@@ -36,7 +36,7 @@ export function LivOSInstructions({username, password, sharename}: Props) {
 				<InstructionItem>
 					<Trans i18nKey='files-share.instructions.livos.select-device' />
 					{sharename ? (
-						<div className='mt-1 text-[11px] text-white/60'>
+						<div className='mt-1 text-[11px] text-text-secondary'>
 							<Trans i18nKey='files-share.instructions.livos.cant-find-note' />
 						</div>
 					) : null}

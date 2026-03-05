@@ -8,8 +8,8 @@ import {t} from '@/utils/i18n'
 import {tw} from '@/utils/tw'
 
 const selectedClass = tw`
-  bg-gradient-to-b from-white/[0.04] to-white/[0.08]
-  border-white/6
+  bg-gradient-to-b from-surface-base to-surface-1
+  border-border-subtle
   shadow-button-highlight-soft-hpx
 `
 
@@ -30,8 +30,8 @@ export function SidebarNetworkShareItem({host, rootPath, onEject, disabled}: Sid
 			path={rootPath}
 			onClick={() => navigateToDirectory(rootPath)}
 			className={cn(
-				'flex items-center gap-1.5 rounded-lg border border-transparent from-white/[0.04] to-white/[0.08] px-2 py-1.5 text-12 hover:bg-gradient-to-b',
-				isActive ? selectedClass : 'text-white/60 transition-colors hover:bg-white/10 hover:text-white',
+				'flex items-center gap-1.5 rounded-lg border border-transparent from-surface-base to-surface-1 px-2 py-1.5 text-12 hover:bg-gradient-to-b',
+				isActive ? selectedClass : 'text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary',
 			)}
 			role='button'
 		>
@@ -52,9 +52,9 @@ export function SidebarNetworkShareItem({host, rootPath, onEject, disabled}: Sid
 				}}
 				aria-label={t('files-action.eject-disk')}
 				disabled={disabled}
-				className={cn(disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-white')}
+				className={cn(disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-text-primary')}
 			>
-				<FaEject className='text-white/60' />
+				<FaEject className='text-text-secondary' />
 			</button>
 		</Droppable>
 	)

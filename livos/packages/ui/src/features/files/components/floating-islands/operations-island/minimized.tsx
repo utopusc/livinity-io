@@ -18,17 +18,17 @@ export function MinimizedContent({
 	return (
 		<div className='flex h-full w-full items-center gap-2 px-2'>
 			<CircularProgress progress={progress}>
-				{type === 'copy' && <RiFileCopyFill className='h-3 w-3 text-white/60' />}
-				{type === 'move' && <RiFileTransferFill className='h-3 w-3 text-white/60' />}
-				{type === 'mixed' && <RiTimeLine className='h-3 w-3 text-white/60' />}
+				{type === 'copy' && <RiFileCopyFill className='h-3 w-3 text-text-secondary' />}
+				{type === 'move' && <RiFileTransferFill className='h-3 w-3 text-text-secondary' />}
+				{type === 'mixed' && <RiTimeLine className='h-3 w-3 text-text-secondary' />}
 			</CircularProgress>
 			<div className='min-w-0 flex-1'>
-				<span className='block truncate text-center text-xs text-white/90'>
+				<span className='block truncate text-center text-xs text-text-primary'>
 					{t('files-listing.item-count', {formattedCount: formatNumberI18n({n: count, showDecimals: false}), count})}
 				</span>
 			</div>
 			<div className='flex flex-shrink-0 items-center gap-2'>
-				<span className='text-xs text-white/60'>{eta}</span>
+				<span className='text-xs text-text-secondary'>{eta}</span>
 			</div>
 		</div>
 	)

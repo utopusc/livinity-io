@@ -87,11 +87,11 @@ export function PreRewindDialog({
 				<div className='flex flex-col items-start gap-1'>
 					<RewindIcon className='size-20' />
 					<DialogTitle>{t('backups-rewind')}</DialogTitle>
-					<DialogDescription className='text-white/80'>{t('rewind.preflight.description')}</DialogDescription>
+					<DialogDescription className='text-text-primary'>{t('rewind.preflight.description')}</DialogDescription>
 				</div>
 				<div className='mt-2'>
 					{list.length === 0 ? (
-						<div className='flex w-full min-w-0 flex-wrap items-start gap-1 rounded-xl border border-white/10 bg-white/5 p-3 text-left text-white/80'>
+						<div className='flex w-full min-w-0 flex-wrap items-start gap-1 rounded-xl border border-border-default bg-surface-base p-3 text-left text-text-primary'>
 							<TbHistory className='mt-[1px] size-4 shrink-0' />
 							<span className='min-w-0 flex-1 whitespace-normal break-words text-[13px] md:truncate md:whitespace-nowrap'>
 								{t('rewind.preflight.enable-backups')}
@@ -99,12 +99,12 @@ export function PreRewindDialog({
 						</div>
 					) : (
 						<>
-							<div className='mb-2 text-13 font-medium text-white/90'>{t('backups.backup-location')}</div>
+							<div className='mb-2 text-13 font-medium text-text-primary'>{t('backups.backup-location')}</div>
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
 									<button
 										type='button'
-										className='flex w-full min-w-0 items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 text-left hover:bg-white/10'
+										className='flex w-full min-w-0 items-center justify-between rounded-xl border border-border-default bg-surface-base p-3 text-left hover:bg-surface-1'
 									>
 										<span className='flex min-w-0 items-center gap-3'>
 											{iconNode}
@@ -155,7 +155,7 @@ export function PreRewindDialog({
 													key={r.id}
 													className={[
 														'w-full px-2 py-1.5',
-														sel ? 'border border-brand bg-brand/15' : 'border border-transparent hover:bg-white/10',
+														sel ? 'border border-brand bg-brand/15' : 'border border-transparent hover:bg-surface-1',
 														!connected ? 'opacity-60' : '',
 													].join(' ')}
 													onClick={() => {

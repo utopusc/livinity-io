@@ -131,7 +131,7 @@ const SidebarSection = ({children, label = ''}: {children: React.ReactNode; labe
 const SidebarDivider = () => {
 	return (
 		<div
-			className='my-3 h-px w-full bg-[radial-gradient(35%_35%_at_35%_35%,rgba(255,255,255,0.35)_0%,transparent_70%)]'
+			className='my-3 h-px w-full bg-[radial-gradient(35%_35%_at_35%_35%,rgba(0,0,0,0.15)_0%,transparent_70%)]'
 			role='separator'
 		/>
 	)

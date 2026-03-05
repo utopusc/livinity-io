@@ -12,10 +12,10 @@ export function ExpandedContent() {
 	return (
 		<div className='flex h-full w-full flex-col overflow-hidden py-5'>
 			<div className='mb-4 flex items-center justify-between px-5'>
-				<span className='text-sm text-white/60'>
+				<span className='text-sm text-text-secondary'>
 					{t('files-upload-island.uploading-count', {count: uploadingItems.length})}
 				</span>
-				<span className='text-xs text-white/60'>
+				<span className='text-xs text-text-secondary'>
 					{formatFilesystemSize(uploadStats.totalUploaded)} / {formatFilesystemSize(uploadStats.totalSize)}
 				</span>
 			</div>
@@ -29,12 +29,12 @@ export function ExpandedContent() {
 							</div>
 							<div className='min-w-0 flex-1'>
 								<div className='mb-1 flex items-center justify-between gap-2'>
-									<span className='block max-w-36 truncate text-xs text-white/90'>{item.name}</span>
-									<span className='flex-shrink-0 text-right text-xs text-white/60'>
+									<span className='block max-w-36 truncate text-xs text-text-primary'>{item.name}</span>
+									<span className='flex-shrink-0 text-right text-xs text-text-secondary'>
 										{formatFilesystemSize(item.speed || 0)}/s - {formatFilesystemSize(item.size ?? 0)}
 									</span>
 								</div>
-								<div className='relative h-1 overflow-hidden rounded-full bg-white/20'>
+								<div className='relative h-1 overflow-hidden rounded-full bg-surface-2'>
 									<div
 										className='absolute left-0 top-0 h-full rounded-full bg-brand transition-all duration-300'
 										style={{width: `${item.progress}%`}}
@@ -42,11 +42,11 @@ export function ExpandedContent() {
 								</div>
 							</div>
 							<button
-								className='flex-shrink-0 rounded-full bg-white/10 p-1 transition-colors hover:bg-white/20'
+								className='flex-shrink-0 rounded-full bg-surface-1 p-1 transition-colors hover:bg-surface-2'
 								onClick={() => cancelUpload(item.tempId ?? '')}
 								aria-label={t('files-action.cancel-upload')}
 							>
-								<RiCloseLine className='h-3 w-3 text-white' />
+								<RiCloseLine className='h-3 w-3 text-text-primary' />
 							</button>
 						</div>
 					))}

@@ -69,9 +69,9 @@ export function SidebarTrash() {
 							layout
 							className={`flex flex-col items-center ${
 								isExpanded
-									? 'rounded-xl border border-white/6 bg-gradient-to-b from-white/[0.04] to-white/[0.08] p-3'
+									? 'rounded-xl border border-border-subtle bg-gradient-to-b from-surface-base to-surface-1 p-3'
 									: 'h-[35px] cursor-pointer rounded-lg'
-							} ${isTrash && 'border-white/6 bg-gradient-to-b !from-white/[0.04] !to-white/[0.08] shadow-button-highlight-soft-hpx'}`}
+							} ${isTrash && 'border-border-subtle bg-gradient-to-b !from-surface-base !to-surface-1 shadow-button-highlight-soft-hpx'}`}
 							initial={false}
 							onClick={() => {
 								if (isMobile) {
@@ -86,7 +86,7 @@ export function SidebarTrash() {
 								{/* "Trash" text */}
 								<motion.div
 									layout='position'
-									className={`text-12 text-white/60 ${isExpanded ? 'mb-2' : 'ml-[-18px] mt-[10px]'}`}
+									className={`text-12 text-text-secondary ${isExpanded ? 'mb-2' : 'ml-[-18px] mt-[10px]'}`}
 								>
 									{t('files-sidebar.trash')}
 								</motion.div>
@@ -283,7 +283,7 @@ export function SidebarTrash() {
 								<>
 									{isHovering && (
 										<motion.div
-											className='mt-4 h-px w-full bg-[radial-gradient(80%_50%_at_50%_50%,rgba(255,255,255,0.35)_0%,transparent_70%)]'
+											className='mt-4 h-px w-full bg-[radial-gradient(80%_50%_at_50%_50%,rgba(0,0,0,0.15)_0%,transparent_70%)]'
 											initial={{scaleX: 0, opacity: 0}}
 											animate={{scaleX: 1, opacity: 1}}
 										/>

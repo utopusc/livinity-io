@@ -45,15 +45,15 @@ function FilesystemCard({
 			tabIndex={-1}
 			className={cn(
 				'flex min-h-[80px] cursor-pointer flex-col items-start justify-between rounded-xl border p-3 text-left transition-colors duration-100 sm:min-h-[120px] sm:p-4',
-				selected ? 'border-brand bg-brand/15' : 'border-white/10 bg-white/5 hover:bg-white/10',
+				selected ? 'border-brand bg-brand/15' : 'border-border-default bg-surface-base hover:bg-surface-1',
 				disabled && 'cursor-not-allowed opacity-50',
 			)}
 		>
 			<div className='flex items-baseline gap-1'>
-				<span className='text-16 font-medium text-white/90'>{name}</span>
-				<span className='text-12 lowercase text-white/50'>{t('files-format.filesystem')}</span>
+				<span className='text-16 font-medium text-text-primary'>{name}</span>
+				<span className='text-12 lowercase text-text-secondary'>{t('files-format.filesystem')}</span>
 			</div>
-			<span className='text-12 text-white/70'>{description}</span>
+			<span className='text-12 text-text-secondary'>{description}</span>
 		</button>
 	)
 }
@@ -120,7 +120,7 @@ export default function FormatDriveDialog() {
 							<AlertDialogTitle className='text-left'>
 								{requiresFormat ? t('files-format.title-requires-format') : t('files-format.title')}
 							</AlertDialogTitle>
-							<span className='text-left text-sm text-white/70'>
+							<span className='text-left text-sm text-text-secondary'>
 								{requiresFormat
 									? t('files-format.description-unreadable', {driveName: drive.name})
 									: t('files-format.description', {driveName: drive.name})}
@@ -131,7 +131,7 @@ export default function FormatDriveDialog() {
 				<AlertDialogDescription className='flex flex-col gap-5 text-left'>
 					{/* Filesystem selection */}
 					<div className='flex flex-col gap-2'>
-						<Label className='text-left text-13 text-white'>{t('files-format.filesystem-label')}</Label>
+						<Label className='text-left text-13 text-text-primary'>{t('files-format.filesystem-label')}</Label>
 						<div className='grid gap-4 max-sm:grid-cols-1 sm:grid-cols-2'>
 							<FilesystemCard
 								id='ext4'
@@ -164,7 +164,7 @@ export default function FormatDriveDialog() {
 
 					{/* Drive label input */}
 					<div className='flex flex-col gap-2'>
-						<Label htmlFor='label' className='text-left text-13 text-white'>
+						<Label htmlFor='label' className='text-left text-13 text-text-primary'>
 							{t('files-format.drive-label')}
 						</Label>
 						<Input
@@ -177,7 +177,7 @@ export default function FormatDriveDialog() {
 								}
 							}}
 							placeholder={drive.name.slice(0, MAX_LABEL_LENGTH)}
-							className='w-full bg-white/5'
+							className='w-full bg-surface-base'
 							disabled={isFormatting}
 							autoFocus
 							maxLength={MAX_LABEL_LENGTH}

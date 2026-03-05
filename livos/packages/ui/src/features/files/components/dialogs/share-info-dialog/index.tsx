@@ -153,7 +153,7 @@ export default function ShareInfoDialog() {
 										className='my-4 h-[1px] w-full'
 										style={{
 											background:
-												'radial-gradient(50% 50% at 50% 50%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 100%)',
+												'radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0) 100%)',
 										}}
 									/>
 									<div className='flex flex-col gap-4'>

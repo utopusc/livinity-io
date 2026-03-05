@@ -23,7 +23,7 @@ export function FilesDndOverlay() {
 					)}
 					<div className='flex w-full items-center gap-1.5 rounded-lg border border-brand/90 bg-brand/20 p-1.5'>
 						<FileItemIcon item={firstItem} className='h-6 w-6 flex-shrink-0' />
-						<span className='overflow-hidden text-ellipsis whitespace-nowrap text-caption text-white'>
+						<span className='overflow-hidden text-ellipsis whitespace-nowrap text-caption text-text-primary'>
 							{firstItem?.name}
 						</span>
 					</div>

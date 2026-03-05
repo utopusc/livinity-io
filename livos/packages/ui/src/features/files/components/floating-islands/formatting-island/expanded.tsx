@@ -20,9 +20,9 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 			<div className='flex size-full items-center justify-between overflow-hidden px-8 py-6'>
 				{/* Left side */}
 				<div className='flex min-w-0 flex-1 flex-col gap-2 pr-2'>
-					<div className='truncate text-sm tracking-tight text-white/60'>{t('files-formatting-island.formatting')}</div>
-					<div className='truncate text-3xl font-light tracking-tight text-white'>{`${device.name.slice(0, 9)}${device.name.length > 9 ? '...' : ''}`}</div>
-					<div className='truncate text-sm tracking-tight text-white/60'>{formatFilesystemSize(device.size)}</div>
+					<div className='truncate text-sm tracking-tight text-text-secondary'>{t('files-formatting-island.formatting')}</div>
+					<div className='truncate text-3xl font-light tracking-tight text-text-primary'>{`${device.name.slice(0, 9)}${device.name.length > 9 ? '...' : ''}`}</div>
+					<div className='truncate text-sm tracking-tight text-text-secondary'>{formatFilesystemSize(device.size)}</div>
 				</div>
 
 				{/* Right side - Spinning progress indicator */}
@@ -77,7 +77,7 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 							stroke='currentColor'
 							strokeWidth='3'
 							fill='none'
-							className='text-white/10'
+							className='text-border-subtle'
 						/>
 						{/* Partial progress arc - clean spinner */}
 						<circle
@@ -106,7 +106,7 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 						}}
 					>
 						<motion.div
-							className='relative rounded-full border border-white/10 bg-white/5 p-3'
+							className='relative rounded-full border border-border-default bg-surface-base p-3'
 							initial={{scale: 0.8, opacity: 0}}
 							animate={{scale: 1, opacity: 1}}
 							exit={{scale: 0.8, opacity: 0}}
@@ -129,7 +129,7 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 	return (
 		<div className='flex h-full w-full flex-col overflow-hidden py-5'>
 			<div className='mb-4 flex items-center justify-between px-5'>
-				<span className='text-xs text-white/60'>
+				<span className='text-xs text-text-secondary'>
 					{devices.length > 1
 						? t('files-formatting-island.formatting-drives', {count: devices.length})
 						: t('files-formatting-island.formatting')}
@@ -142,11 +142,11 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 						<div key={device.id} className='flex items-center gap-3'>
 							<img src={externalStorageIcon} alt='External Storage' className='size-7 shrink-0' draggable={false} />
 							<div className='min-w-0 flex-1'>
-								<div className='flex items-center justify-between text-xs text-white/70'>
+								<div className='flex items-center justify-between text-xs text-text-secondary'>
 									<span className='truncate'>{device.name}</span>
 								</div>
 								{/* Indeterminate progress bar with sliding animation */}
-								<div className='relative mt-1 h-1 overflow-hidden rounded-full bg-white/20'>
+								<div className='relative mt-1 h-1 overflow-hidden rounded-full bg-surface-2'>
 									<motion.div
 										className='absolute left-0 top-0 h-full w-1/3 rounded-full bg-brand'
 										animate={{

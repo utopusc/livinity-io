@@ -43,8 +43,8 @@ export function SidebarRewind() {
 		<div className='mr-4 mt-2 flex flex-col rounded-xl'>
 			<div
 				className={cn(
-					'flex w-full items-center gap-1.5 rounded-lg border border-transparent from-white/[0.04] to-white/[0.08] text-12',
-					'text-white/60 transition-colors hover:bg-white/10 hover:bg-gradient-to-b hover:text-white',
+					'flex w-full items-center gap-1.5 rounded-lg border border-transparent from-surface-base to-surface-1 text-12',
+					'text-text-secondary transition-colors hover:bg-surface-1 hover:bg-gradient-to-b hover:text-text-primary',
 				)}
 			>
 				<button
@@ -206,9 +206,9 @@ export function RewindOverlay() {
 								<div className='flex w-full max-w-[980px] flex-col items-center gap-4'>
 									{/* Date indicator */}
 									<div className='text-center text-sm'>
-										<span className='text-white/60'>{t('rewind.files-as-of')} </span>
+										<span className='text-text-secondary'>{t('rewind.files-as-of')} </span>
 										{/* Desktop: static date label */}
-										<span className='hidden text-white md:inline'>
+										<span className='hidden text-text-primary md:inline'>
 											{getSnapshotDateLabel(selectedBackupId, backupsRaw as any[], lang as any)}
 										</span>
 										{/* Mobile: inline dropdown selector */}
@@ -270,11 +270,11 @@ export function RewindOverlay() {
 									<div className='flex flex-col items-center text-center md:items-start md:text-left'>
 										<div className='hidden items-center gap-2 md:flex'>
 											<RewindIcon className='size-5 md:size-6' />
-											<div className='text-base font-semibold leading-none text-white md:text-lg'>
+											<div className='text-base font-semibold leading-none text-text-primary md:text-lg'>
 												{t('backups-rewind')}
 											</div>
 										</div>
-										<div className='mt-1 hidden min-w-0 items-center gap-1 text-xs text-white/70 md:block md:h-8'>
+										<div className='mt-1 hidden min-w-0 items-center gap-1 text-xs text-text-secondary md:block md:h-8'>
 											<div className='flex flex-col'>
 												<span className={backupsLoading ? 'opacity-50' : ''}>{countLabel}</span>
 												{snapshotsCount > 0 && earliestDateLabel && !backupsLoading ? (
@@ -303,7 +303,7 @@ export function RewindOverlay() {
 											return (
 												<>
 													<button
-														className='inline-flex h-8 items-center justify-center rounded-full bg-white/10 px-3 text-white shadow-[inset_0.5px_0.5px_1px_0px_#FFFFFF3D,inset_-0.5px_-0.5px_1px_0px_#FFFFFF1F] hover:bg-white/20 disabled:opacity-40'
+														className='inline-flex h-8 items-center justify-center rounded-full bg-surface-1 px-3 text-text-primary shadow-[inset_0.5px_0.5px_1px_0px_#FFFFFF3D,inset_-0.5px_-0.5px_1px_0px_#FFFFFF1F] hover:bg-surface-2 disabled:opacity-40'
 														disabled={isSwitching || isRestoring || !canPrev}
 														onClick={() => {
 															if (!canPrev) return
@@ -314,7 +314,7 @@ export function RewindOverlay() {
 														<ChevronLeftIcon className='size-4' />
 													</button>
 													<button
-														className='inline-flex h-8 items-center justify-center rounded-full bg-white/10 px-3 text-white shadow-[inset_0.5px_0.5px_1px_0px_#FFFFFF3D,inset_-0.5px_-0.5px_1px_0px_#FFFFFF1F] hover:bg-white/20 disabled:opacity-40'
+														className='inline-flex h-8 items-center justify-center rounded-full bg-surface-1 px-3 text-text-primary shadow-[inset_0.5px_0.5px_1px_0px_#FFFFFF3D,inset_-0.5px_-0.5px_1px_0px_#FFFFFF1F] hover:bg-surface-2 disabled:opacity-40'
 														disabled={isSwitching || isRestoring || !canNext}
 														onClick={() => {
 															if (!canNext) return
@@ -328,7 +328,7 @@ export function RewindOverlay() {
 														{/* We always allow closing the dialog*/}
 														<button
 															aria-label={t('close')}
-															className='inline-flex h-8 items-center justify-center rounded-full bg-white/10 px-3 text-white shadow-[inset_0.5px_0.5px_1px_0px_#FFFFFF3D,inset_-0.5px_-0.5px_1px_0px_#FFFFFF1F] hover:bg-white/20 disabled:opacity-40'
+															className='inline-flex h-8 items-center justify-center rounded-full bg-surface-1 px-3 text-text-primary shadow-[inset_0.5px_0.5px_1px_0px_#FFFFFF3D,inset_-0.5px_-0.5px_1px_0px_#FFFFFF1F] hover:bg-surface-2 disabled:opacity-40'
 														>
 															<RiCloseLine className='size-4' />
 														</button>

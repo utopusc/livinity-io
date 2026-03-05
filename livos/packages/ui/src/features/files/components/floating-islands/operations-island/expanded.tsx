@@ -19,11 +19,11 @@ export function ExpandedContent({progress, count, speed}: {progress: number; cou
 	return (
 		<div className='flex h-full w-full flex-col overflow-hidden py-5'>
 			<div className='mb-4 flex items-center justify-between px-5'>
-				<span className='text-xs text-white/60'>
+				<span className='text-xs text-text-secondary'>
 					{t('files-listing.item-count', {formattedCount: formatNumberI18n({n: count, showDecimals: false}), count})}{' '}
 					&bull; {progress}%
 				</span>
-				<span className='text-xs text-white/60'>{formatFilesystemSize(speed)}/s</span>
+				<span className='text-xs text-text-secondary'>{formatFilesystemSize(speed)}/s</span>
 			</div>
 
 			<ScrollArea className='flex-1 px-5 pb-2'>
@@ -43,16 +43,16 @@ export function ExpandedContent({progress, count, speed}: {progress: number; cou
 								<div className='min-w-0 flex-1'>
 									<div className='mb-1 flex items-center justify-between gap-2'>
 										{operation.type === 'copy' && (
-											<span className='block max-w-[16rem] whitespace-nowrap text-xs text-white/90'>
+											<span className='block max-w-[16rem] whitespace-nowrap text-xs text-text-primary'>
 												{operation.file.path.startsWith('/Backups/') ? (
-													<span className='text-white/60'>
+													<span className='text-text-secondary'>
 														{t('files-operations-island.restoring', {
 															from: formatItemName({name: operation.file.name, maxLength: 12}),
 															to: formatItemName({name: destinationFolderName, maxLength: 12}),
 														})}
 													</span>
 												) : (
-													<span className='text-white/60'>
+													<span className='text-text-secondary'>
 														{t('files-operations-island.copying', {
 															from: formatItemName({name: operation.file.name, maxLength: 12}),
 															to: formatItemName({name: destinationFolderName, maxLength: 12}),
@@ -62,18 +62,18 @@ export function ExpandedContent({progress, count, speed}: {progress: number; cou
 											</span>
 										)}
 										{operation.type === 'move' && (
-											<span className='block max-w-[16rem] whitespace-nowrap text-xs text-white/90'>
+											<span className='block max-w-[16rem] whitespace-nowrap text-xs text-text-primary'>
 												{t('files-operations-island.moving', {
 													from: formatItemName({name: operation.file.name, maxLength: 12}),
 													to: formatItemName({name: destinationFolderName, maxLength: 12}),
 												})}
 											</span>
 										)}
-										<span className='flex-shrink-0 text-right text-xs text-white/60'>
+										<span className='flex-shrink-0 text-right text-xs text-text-secondary'>
 											{secondsToEta(operation.secondsRemaining)}
 										</span>
 									</div>
-									<div className='relative h-1 overflow-hidden rounded-full bg-white/20'>
+									<div className='relative h-1 overflow-hidden rounded-full bg-surface-2'>
 										<div
 											className='transition-w absolute left-0 top-0 h-full rounded-full bg-brand duration-300'
 											style={{width: `${operation.percent}%`}}

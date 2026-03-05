@@ -1,7 +1,7 @@
 import {type ReactNode} from 'react'
 
 export function InstructionContainer({children}: {children: ReactNode}) {
-	return <div className='divide-y divide-white/6 overflow-hidden rounded-12 bg-white/6'>{children}</div>
+	return <div className='divide-y divide-border-subtle overflow-hidden rounded-12 bg-surface-base'>{children}</div>
 }
 export function InstructionItem({children}: {children: ReactNode}) {
 	return (

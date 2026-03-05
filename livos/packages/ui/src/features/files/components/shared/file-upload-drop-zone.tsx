@@ -35,8 +35,8 @@ export function FileUploadDropZone({children}: FileUploadDropZoneProps) {
 
 const DropOverlay = () => {
 	return (
-		<div className='absolute inset-0 flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-12 border-2 border-[hsl(var(--color-brand))]/30 bg-black/50'>
-			<span className='z-10 whitespace-pre-wrap text-center text-5xl font-medium tracking-tighter text-white'>
+		<div className='absolute inset-0 flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-12 border-2 border-[hsl(var(--color-brand))]/30 bg-black/20'>
+			<span className='z-10 whitespace-pre-wrap text-center text-5xl font-medium tracking-tighter text-text-primary'>
 				{t('files-action.drop-to-upload')}
 			</span>
 			<Ripple />

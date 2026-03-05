@@ -32,7 +32,7 @@ export function TimelineBar({
 			<div className='relative h-2 w-full rounded-full bg-[#D9D9D9]/20'>
 				{selectedPct !== null ? (
 					<div className='absolute inset-y-0 -translate-x-1/2' style={{left: `${selectedPct}%`}}>
-						<div className='h-full w-px bg-white/30' />
+						<div className='h-full w-px bg-text-tertiary' />
 					</div>
 				) : null}
 

@@ -35,8 +35,8 @@ export const ExpandedContent: React.FC<ExpandedContentProps> = ({
 		<>
 			<div className='flex justify-between py-6 pt-10'>
 				<div className='my-auto ml-6 flex-1 overflow-hidden text-left'>
-					<p className='mb-0 truncate text-sm text-white/60'>{t('files-audio-island.now-playing')}</p>
-					<span className='text-md my-0 block truncate text-white/90'>{fileName}</span>
+					<p className='mb-0 truncate text-sm text-text-secondary'>{t('files-audio-island.now-playing')}</p>
+					<span className='text-md my-0 block truncate text-text-primary'>{fileName}</span>
 				</div>
 				<div className='relative mr-6 mt-2'>
 					<MusicEqualizer isPlaying={isPlaying} analyserNode={analyserNode} />
@@ -45,11 +45,11 @@ export const ExpandedContent: React.FC<ExpandedContentProps> = ({
 
 			<div className='mb-2 grid grid-cols-8 items-center gap-2 px-6'>
 				<div className='text-left'>
-					<p className='text-sm text-white/60'>{formatTime(currentTime)}</p>
+					<p className='text-sm text-text-secondary'>{formatTime(currentTime)}</p>
 				</div>
 
 				<div className='col-span-6'>
-					<div className='relative h-2 w-full overflow-hidden rounded-full bg-white/10'>
+					<div className='relative h-2 w-full overflow-hidden rounded-full bg-surface-1'>
 						<div
 							className='absolute left-0 top-0 h-full rounded-full bg-brand'
 							style={{width: `${progressPercentage}%`}}
@@ -68,7 +68,7 @@ export const ExpandedContent: React.FC<ExpandedContentProps> = ({
 				</div>
 
 				<div className='text-right'>
-					<p className='text-sm text-white/60'>{formatTime(duration)}</p>
+					<p className='text-sm text-text-secondary'>{formatTime(duration)}</p>
 				</div>
 			</div>
 
@@ -78,7 +78,7 @@ export const ExpandedContent: React.FC<ExpandedContentProps> = ({
 					className='flex items-center justify-center'
 					aria-label={isPlaying ? t('files-audio-island.pause') : t('files-audio-island.play')}
 				>
-					{isPlaying ? <RiPauseFill className='h-5 w-5 text-white' /> : <RiPlayFill className='h-5 w-5 text-white' />}
+					{isPlaying ? <RiPauseFill className='h-5 w-5 text-text-primary' /> : <RiPlayFill className='h-5 w-5 text-text-primary' />}
 				</button>
 			</div>
 		</>

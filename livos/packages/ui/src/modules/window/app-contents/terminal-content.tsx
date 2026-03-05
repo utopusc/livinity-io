@@ -25,16 +25,16 @@ export default function TerminalWindowContent() {
 		<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
 			<div className='flex h-full flex-col'>
 				{/* Tab Header */}
-				<div className='flex items-center gap-2 border-b border-white/10 px-4 py-3'>
+				<div className='flex items-center gap-2 border-b border-border-default px-4 py-3'>
 					{/* Mode Tabs */}
-					<div className='flex gap-1 rounded-lg bg-white/5 p-1'>
+					<div className='flex gap-1 rounded-lg bg-surface-base p-1'>
 						<button
 							onClick={() => setMode('livos')}
 							className={cn(
 								'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
 								mode === 'livos'
-									? 'bg-white/15 text-white'
-									: 'text-white/60 hover:text-white/80',
+									? 'bg-surface-2 text-text-primary'
+									: 'text-text-secondary hover:text-text-primary',
 							)}
 						>
 							<TbServer className='h-4 w-4' />
@@ -45,8 +45,8 @@ export default function TerminalWindowContent() {
 							className={cn(
 								'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
 								mode === 'app'
-									? 'bg-white/15 text-white'
-									: 'text-white/60 hover:text-white/80',
+									? 'bg-surface-2 text-text-primary'
+									: 'text-text-secondary hover:text-text-primary',
 							)}
 						>
 							<TbApps className='h-4 w-4' />
@@ -57,11 +57,11 @@ export default function TerminalWindowContent() {
 					{/* App Selector (only show when app mode is selected) */}
 					{mode === 'app' && (
 						<div className='ml-auto flex items-center gap-2'>
-							<span className='text-sm text-white/50'>Run commands in:</span>
+							<span className='text-sm text-text-secondary'>Run commands in:</span>
 							<select
 								value={selectedAppId || ''}
 								onChange={(e) => setSelectedAppId(e.target.value || null)}
-								className='rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-white/30'
+								className='rounded-md border border-border-default bg-surface-base px-3 py-1.5 text-sm text-text-primary outline-none focus:border-border-emphasis'
 								disabled={isLoading}
 							>
 								<option value=''>Select an app...</option>
@@ -85,9 +85,9 @@ export default function TerminalWindowContent() {
 						) : (
 							<div className='flex h-full items-center justify-center'>
 								<div className='text-center'>
-									<TbApps className='mx-auto h-12 w-12 text-white/20' />
-									<p className='mt-3 text-white/50'>Select an app to open its terminal</p>
-									<p className='mt-1 text-sm text-white/30'>
+									<TbApps className='mx-auto h-12 w-12 text-text-tertiary' />
+									<p className='mt-3 text-text-secondary'>Select an app to open its terminal</p>
+									<p className='mt-1 text-sm text-text-tertiary'>
 										Run custom commands within a specific Docker container
 									</p>
 								</div>

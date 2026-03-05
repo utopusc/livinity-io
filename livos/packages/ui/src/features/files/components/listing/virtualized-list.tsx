@@ -198,7 +198,7 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 					}}
 					key={getItemKey(item)}
 					data-marquee-selection-item-path={item.path}
-					className={`files-list-view-file-item relative rounded-lg ${isEvenRow ? 'bg-white/3' : ''}`}
+					className={`files-list-view-file-item relative rounded-lg ${isEvenRow ? 'bg-surface-base' : ''}`}
 				>
 					<FileItem item={item} items={items} />
 				</div>
