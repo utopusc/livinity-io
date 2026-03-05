@@ -23,6 +23,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import { VoiceButton } from './voice-button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -304,6 +305,12 @@ export function AiChatLayout() {
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
               }}
+            />
+            <VoiceButton
+              onTranscript={(text) =>
+                setInput((prev) => (prev ? `${prev} ${text}` : text))
+              }
+              disabled={isLoading}
             />
             {isLoading ? (
               <Button size="icon" variant="destructive" onClick={handleStop} aria-label="Stop">

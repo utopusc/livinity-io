@@ -35,6 +35,13 @@ export function ServerControlLayout() {
 function RestartButton() {
   const [confirming, setConfirming] = useState(false);
 
+  const restart = trpcReact.system.restart.useMutation({
+    onSuccess: () => {
+      // Server is restarting — nothing further to do in the UI
+      setConfirming(false);
+    },
+  });
+
   if (!confirming) {
     return (
       <Button size="sm" variant="secondary" onClick={() => setConfirming(true)} className="w-full justify-start">
@@ -49,17 +56,44 @@ function RestartButton() {
       <p className="text-xs text-warning font-medium">Restart the server?</p>
       <p className="text-[11px] text-text-tertiary">All running apps and connections will be interrupted.</p>
       <div className="flex gap-2">
-        <Button size="sm" variant="secondary" onClick={() => { /* TODO: system.restart mutation */ setConfirming(false); }}>
-          Confirm Restart
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={restart.isPending}
+          onClick={() => restart.mutate()}
+        >
+          {restart.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              Restarting...
+            </>
+          ) : (
+            'Confirm Restart'
+          )}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+        <Button size="sm" variant="ghost" disabled={restart.isPending} onClick={() => setConfirming(false)}>
+          Cancel
+        </Button>
       </div>
+      {restart.isError && (
+        <p className="text-[11px] text-error flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          {restart.error.message}
+        </p>
+      )}
     </div>
   );
 }
 
 function ShutdownButton() {
   const [confirming, setConfirming] = useState(false);
+
+  const shutdown = trpcReact.system.shutdown.useMutation({
+    onSuccess: () => {
+      // Server is shutting down — nothing further to do in the UI
+      setConfirming(false);
+    },
+  });
 
   if (!confirming) {
     return (
@@ -75,11 +109,31 @@ function ShutdownButton() {
       <p className="text-xs text-error font-medium">Shut down the server?</p>
       <p className="text-[11px] text-text-tertiary">The server will become inaccessible until physically restarted.</p>
       <div className="flex gap-2">
-        <Button size="sm" variant="destructive" onClick={() => { /* TODO: system.shutdown mutation */ setConfirming(false); }}>
-          Confirm Shutdown
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={shutdown.isPending}
+          onClick={() => shutdown.mutate()}
+        >
+          {shutdown.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              Shutting down...
+            </>
+          ) : (
+            'Confirm Shutdown'
+          )}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+        <Button size="sm" variant="ghost" disabled={shutdown.isPending} onClick={() => setConfirming(false)}>
+          Cancel
+        </Button>
       </div>
+      {shutdown.isError && (
+        <p className="text-[11px] text-error flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          {shutdown.error.message}
+        </p>
+      )}
     </div>
   );
 }

@@ -6,16 +6,16 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v4.0 — UI Polish, Fixes & Motion Primitives Overhaul
-**Current focus:** Phase 01-04 COMPLETE — Deployed to server4
+**Current focus:** Phases 01-09 COMPLETE — Deployed to server4
 
 ## Current Position
 
 Milestone: v4.0 (UI Polish, Fixes & Motion Primitives)
-Phase: Phases 01-04 complete (design system + all components)
+Phase: Phases 01-09 complete (design system + components + polish)
 Status: Deployed to livinity.cloud
 Last activity: 2026-03-04
 
-Progress: [████████████░░░░░░░░░] 4/10 (40%)
+Progress: [██████████████████░░░] 9/10 (90%)
 
 ## Completed Work
 
@@ -46,11 +46,19 @@ Progress: [████████████░░░░░░░░░] 4/10
 - System pages: AnimatedNumber for stats, light cards with shadows
 - Terminal: light chrome with dark terminal body (intentional)
 
+### Phase 05-09: Design Token Consistency, Skeletons & Animations
+- Replaced all `bg-white` with `bg-surface-0` across 6 base UI components + 15+ page components
+- Replaced all `bg-neutral-50` with `bg-surface-1` for secondary surfaces
+- Replaced `bg-black/X` opacity hacks with proper tokens (`bg-neutral-100`, `bg-border`)
+- Replaced 10+ spinner loading states with skeleton placeholders (settings sections, file manager, system pages, window content)
+- Added AnimatedGroup stagger to file grid, chat sidebar, webhooks list, usage stats, server control cards
+- Added InView scroll-triggered animations to usage chart, daily breakdown, model pricing sections
+
 ## Performance Metrics
 
 **Velocity:**
 - v3.0: 10 phases complete (UI rewrite)
-- v4.0: 4 phases deployed in single session (74 files changed)
+- v4.0: 9 phases deployed across 2 sessions (99 files changed total)
 
 ## Accumulated Context
 
@@ -61,8 +69,10 @@ Progress: [████████████░░░░░░░░░] 4/10
 - Terminal keeps dark background
 - turbopack.root set to `../..` for monorepo builds
 - Server uses `pnpm install` from workspace root, not `npm install` in package dir
+- `bg-surface-0` for cards/panels, `bg-surface-1` for secondary surfaces (not raw `bg-white`/`bg-neutral-50`)
+- Standalone build path on server: `.next/standalone/packages/ui-next/` (not `livos/packages/...`)
 
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: v4.0 phases 01-04 deployed, awaiting user feedback
+Stopped at: v4.0 phases 01-09 deployed, phase 10 (final verification) remaining

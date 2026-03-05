@@ -4,6 +4,15 @@ import { useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { trpcReact } from '@/trpc/client';
 
 export default function AdvancedSection() {
@@ -73,7 +82,36 @@ function ExternalDns() {
 }
 
 function DangerZone() {
-  const [confirm, setConfirm] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const mutation = trpcReact.system.factoryReset.useMutation({
+    onError: (err) => {
+      if (err.data?.code === 'UNAUTHORIZED') {
+        setPasswordError('Incorrect password. Please try again.');
+      } else {
+        setPasswordError(err.message ?? 'An error occurred. Please try again.');
+      }
+    },
+  });
+
+  const handleOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      setPassword('');
+      setPasswordError('');
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!password.trim()) {
+      setPasswordError('Password is required.');
+      return;
+    }
+    setPasswordError('');
+    mutation.mutate({ password });
+  };
 
   return (
     <div className="space-y-3">
@@ -84,21 +122,63 @@ function DangerZone() {
       <p className="text-[11px] text-text-tertiary">
         Factory reset will erase all data and settings. This cannot be undone.
       </p>
-      {!confirm ? (
-        <Button size="sm" variant="destructive" onClick={() => setConfirm(true)}>
-          Factory Reset
-        </Button>
-      ) : (
-        <div className="space-y-2 rounded-xl bg-error/10 p-3 border border-error/20">
-          <p className="text-xs text-error font-medium">Are you absolutely sure?</p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="destructive" onClick={() => window.location.href = '/factory-reset'}>
+      <Button size="sm" variant="destructive" onClick={() => setDialogOpen(true)}>
+        Factory Reset
+      </Button>
+
+      <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-error/10">
+              <AlertTriangle className="h-5 w-5 text-error" />
+            </div>
+            <DialogTitle>Factory Reset</DialogTitle>
+            <DialogDescription>
+              This will erase all data and settings. This action cannot be undone.
+              Enter your password to confirm.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Input
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPasswordError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirm();
+              }}
+              className={passwordError ? 'border-error focus-visible:ring-error/30' : ''}
+              autoFocus
+            />
+            {passwordError && (
+              <p className="text-[11px] text-error">{passwordError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleOpenChange(false)}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleConfirm}
+              loading={mutation.isPending}
+            >
               Yes, Reset Everything
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>Cancel</Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
