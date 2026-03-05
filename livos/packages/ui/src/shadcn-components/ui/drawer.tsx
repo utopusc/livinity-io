@@ -19,7 +19,7 @@ const DrawerOverlay = React.forwardRef<
 	React.ElementRef<typeof DrawerPrimitive.Overlay>,
 	React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
 >(({className, style, ...props}, ref) => (
-	<DrawerPrimitive.Overlay ref={ref} className={cn('fixed inset-0 z-[500] bg-black/50', className)} {...props} style={{...style, zIndex: 99999}} />
+	<DrawerPrimitive.Overlay ref={ref} className={cn('fixed inset-0 z-[500] bg-black/20', className)} {...props} style={{...style, zIndex: 99999}} />
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
@@ -32,18 +32,18 @@ const DrawerContent = React.forwardRef<
 		<DrawerPrimitive.Content
 			ref={ref}
 			className={cn(
-				'fixed inset-x-0 bottom-0 z-[500] mt-24 flex flex h-auto flex-col flex-col gap-5 rounded-t-20 bg-black/90 p-5 outline-none',
+				'fixed inset-x-0 bottom-0 z-[500] mt-24 flex flex h-auto flex-col flex-col gap-5 rounded-t-20 bg-white p-5 outline-none',
 				fullHeight && 'top-0',
 				className,
 			)}
 			{...props}
 			style={{
-				boxShadow: '0px 2px 2px 0px hsla(0, 0%, 100%, 0.05) inset',
+				boxShadow: '0px -1px 0px 0px rgba(0, 0, 0, 0.06)',
 				zIndex: 99999,
 			}}
 		>
 			{/* -mb-[4px] so height is effectively zero */}
-			<div className='top-6 mx-auto -mb-[4px] h-[4px] w-[40px] shrink-0 rounded-full bg-white/10' />
+			<div className='top-6 mx-auto -mb-[4px] h-[4px] w-[40px] shrink-0 rounded-full bg-surface-3' />
 			{!withScroll && children}
 			{withScroll && <DrawerScroller>{children}</DrawerScroller>}
 		</DrawerPrimitive.Content>

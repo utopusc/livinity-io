@@ -165,7 +165,7 @@ export function InputError({children}: {children: React.ReactNode}) {
 const iconRightClasses = {
 	root: tw`relative`,
 	input: tw`pr-11`,
-	// Using `text-white opacity-40` instead of `text-white/40` because the latter applies to strokes and displays incorrectly
-	button: tw`absolute inset-y-0 right-0 h-full pl-2 pr-4 text-white opacity-40 outline-none hover:opacity-80 transition-opacity`,
+	// Using opacity instead of color/40 because the latter applies to strokes and displays incorrectly
+	button: tw`absolute inset-y-0 right-0 h-full pl-2 pr-4 text-text-primary opacity-40 outline-none hover:opacity-80 transition-opacity`,
 	icon: tw`h-icon-md w-icon-md`,
 }

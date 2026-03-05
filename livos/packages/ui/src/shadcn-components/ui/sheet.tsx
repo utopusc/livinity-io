@@ -30,7 +30,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
 
 const sheetVariants = cva(
-	'fixed z-30 gap-4 bg-black/70 contrast-more:bg-black overflow-hidden transition-[opacity,transform] ease-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-100 data-[state=open]:duration-100 outline-none data-[state=closed]:fade-out data-[state=closed]:ease-in',
+	'fixed z-30 gap-4 bg-white/90 contrast-more:bg-white overflow-hidden transition-[opacity,transform] ease-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-100 data-[state=open]:duration-100 outline-none data-[state=closed]:fade-out data-[state=closed]:ease-in',
 	{
 		variants: {
 			side: {
@@ -69,7 +69,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
 				<SheetPrimitive.Content ref={ref} className={cn(sheetVariants({side}), className)} {...props}>
 					{/* Keep before other elements to prevent auto-focus on other elements. Some element must be focused for accessibility */}
 					{closeButton}
-					<div className='absolute inset-0 bg-black contrast-more:hidden'>
+					<div className='absolute inset-0 bg-white/80 contrast-more:hidden'>
 						{/* Fade in sheet background to avoid white flash when sheet opens */}
 						<div
 							className='absolute inset-0 opacity-0 delay-200 duration-700 ease-out fill-mode-both'
@@ -81,7 +81,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
 								transform: 'scale(1.2) rotate(180deg)',
 							}}
 						/>
-						<div className='absolute inset-0 transform-gpu backdrop-blur-xl md:backdrop-blur-3xl backdrop-brightness-[0.38] backdrop-saturate-[1.2]' />
+						<div className='absolute inset-0 transform-gpu backdrop-blur-xl md:backdrop-blur-3xl backdrop-brightness-[1.2] backdrop-saturate-[0.5]' />
 					</div>
 					{children}
 					{/* Sheet inner glow highlight */}
