@@ -28,9 +28,9 @@ const HANDLE_SIZE = 6;
 
 const springTransition = {
   type: 'spring' as const,
-  stiffness: 500,
-  damping: 35,
-  mass: 0.8,
+  stiffness: 480,
+  damping: 38,
+  mass: 0.75,
 };
 
 /* ------------------------------------------------------------------ */
@@ -39,44 +39,77 @@ const springTransition = {
 
 type TitleBarProps = {
   title: string;
+  isFocused: boolean;
   onClose: () => void;
   onMinimize: () => void;
   onPointerDown: (e: ReactPointerEvent) => void;
 };
 
-function TitleBar({ title, onClose, onMinimize, onPointerDown }: TitleBarProps) {
+function TitleBar({ title, isFocused, onClose, onMinimize, onPointerDown }: TitleBarProps) {
+  const [hovering, setHovering] = useState(false);
+
   return (
     <div
       className={cn(
-        'flex h-10 shrink-0 items-center justify-between px-3',
+        'flex h-10 shrink-0 items-center px-3',
         'cursor-grab select-none active:cursor-grabbing',
-        'border-b border-border',
-        'bg-surface-1/60',
+        'border-b border-black/[0.05]',
+        isFocused ? 'bg-white/80' : 'bg-neutral-50/80',
+        'transition-colors duration-150',
       )}
       onPointerDown={onPointerDown}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
     >
-      {/* Title */}
-      <span className="text-xs font-medium text-text-secondary">{title}</span>
-
-      {/* Window controls — macOS-style colored dots */}
-      <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
-        {/* Minimize — yellow */}
-        <button
-          className="group flex h-3 w-3 items-center justify-center rounded-full bg-warning/70 transition-colors hover:bg-warning"
-          onClick={onMinimize}
-          aria-label="Minimize window"
-        >
-          <Minus className="h-2 w-2 text-warning-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-        </button>
+      {/* macOS-style window controls — left side */}
+      <div
+        className="flex items-center gap-1.5"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseEnter={() => setHovering(true)}
+      >
         {/* Close — red */}
         <button
-          className="group flex h-3 w-3 items-center justify-center rounded-full bg-error/70 transition-colors hover:bg-error"
+          className={cn(
+            'group flex h-2.5 w-2.5 items-center justify-center rounded-full',
+            'transition-all duration-150',
+            isFocused ? 'bg-[#ff5f57]' : 'bg-neutral-300',
+          )}
           onClick={onClose}
           aria-label="Close window"
         >
-          <X className="h-2 w-2 text-error-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+          <X
+            className={cn(
+              'h-1.5 w-1.5 text-[#820005] transition-opacity duration-100',
+              hovering && isFocused ? 'opacity-100' : 'opacity-0',
+            )}
+            strokeWidth={2.5}
+          />
+        </button>
+
+        {/* Minimize — yellow */}
+        <button
+          className={cn(
+            'group flex h-2.5 w-2.5 items-center justify-center rounded-full',
+            'transition-all duration-150',
+            isFocused ? 'bg-[#febc2e]' : 'bg-neutral-300',
+          )}
+          onClick={onMinimize}
+          aria-label="Minimize window"
+        >
+          <Minus
+            className={cn(
+              'h-1.5 w-1.5 text-[#714e00] transition-opacity duration-100',
+              hovering && isFocused ? 'opacity-100' : 'opacity-0',
+            )}
+            strokeWidth={2.5}
+          />
         </button>
       </div>
+
+      {/* Title — centered absolutely so dots don't affect it */}
+      <span className="pointer-events-none absolute inset-x-0 text-center text-xs font-medium text-neutral-400">
+        {title}
+      </span>
     </div>
   );
 }
@@ -106,9 +139,6 @@ type ResizeHandleProps = {
 };
 
 function ResizeHandle({ direction, onPointerDown }: ResizeHandleProps) {
-  const isCorner = direction.length === 2;
-  const size = isCorner ? HANDLE_SIZE * 2 : HANDLE_SIZE;
-
   const positionStyles: Record<ResizeDirection, string> = {
     n: 'top-0 left-0 right-0 h-[6px]',
     s: 'bottom-0 left-0 right-0 h-[6px]',
@@ -135,9 +165,10 @@ function ResizeHandle({ direction, onPointerDown }: ResizeHandleProps) {
 type WindowProps = {
   window: WindowState;
   children: ReactNode;
+  isFocused: boolean;
 };
 
-export function Window({ window: win, children }: WindowProps) {
+export function Window({ window: win, children, isFocused }: WindowProps) {
   const {
     closeWindow,
     focusWindow,
@@ -253,11 +284,13 @@ export function Window({ window: win, children }: WindowProps) {
   return (
     <motion.div
       className={cn(
-        'fixed overflow-hidden rounded-2xl',
-        'bg-surface-0/95 backdrop-blur-2xl',
-        'border border-border',
-        'shadow-xl',
-        'flex flex-col',
+        'fixed flex flex-col overflow-hidden rounded-xl',
+        'bg-white/95 backdrop-blur-xl',
+        'border border-black/[0.06]',
+        isFocused
+          ? 'shadow-[0_8px_32px_oklch(0_0_0/0.12),0_2px_8px_oklch(0_0_0/0.06),0_0_0_0.5px_oklch(0_0_0/0.06)]'
+          : 'shadow-[0_4px_16px_oklch(0_0_0/0.07),0_1px_4px_oklch(0_0_0/0.04),0_0_0_0.5px_oklch(0_0_0/0.04)]',
+        'transition-shadow duration-200',
       )}
       style={{
         left: win.position.x,
@@ -266,9 +299,9 @@ export function Window({ window: win, children }: WindowProps) {
         height: win.size.height,
         zIndex: win.zIndex,
       }}
-      initial={{ opacity: 0, scale: 0.92, y: 20 }}
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.92, y: 20 }}
+      exit={{ opacity: 0, scale: 0.95, y: 10 }}
       transition={springTransition}
       onPointerDown={() => focusWindow(win.id)}
       onPointerMove={(e) => {
@@ -279,16 +312,18 @@ export function Window({ window: win, children }: WindowProps) {
         handleDragEnd();
         handleResizeEnd();
       }}
+      data-no-context-menu
     >
       <TitleBar
         title={win.title}
+        isFocused={isFocused}
         onClose={() => closeWindow(win.id)}
         onMinimize={() => minimizeWindow(win.id)}
         onPointerDown={handleDragStart}
       />
 
       {/* Content area */}
-      <div className="flex-1 overflow-auto">{children}</div>
+      <div className="relative flex-1 overflow-auto">{children}</div>
 
       {/* Resize handles */}
       {(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as ResizeDirection[]).map(
@@ -315,11 +350,19 @@ export function WindowsContainer({
 }) {
   const { windows } = useWindowManager();
   const visibleWindows = windows.filter((w) => !w.isMinimized);
+  const maxZIndex = visibleWindows.reduce(
+    (max, w) => Math.max(max, w.zIndex),
+    0,
+  );
 
   return (
     <AnimatePresence mode="popLayout">
       {visibleWindows.map((win) => (
-        <Window key={win.id} window={win}>
+        <Window
+          key={win.id}
+          window={win}
+          isFocused={win.zIndex === maxZIndex}
+        >
           {renderContent(win)}
         </Window>
       ))}

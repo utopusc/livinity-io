@@ -1,4 +1,4 @@
-export { Dock } from './dock';
+export { DesktopDock as Dock } from './dock';
 export { Window, WindowsContainer } from './window';
 export { WindowContent } from './window-content';
 export { DesktopContextMenu } from './context-menu';

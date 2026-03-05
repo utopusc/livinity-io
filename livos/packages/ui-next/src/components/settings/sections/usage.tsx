@@ -8,7 +8,7 @@ import { InView } from '@/components/motion-primitives/in-view';
 
 export default function UsageSection() {
   const { data: overview, isLoading } = trpcReact.ai.getUsageOverview.useQuery();
-  const { data: daily } = trpcReact.ai.getUsageDaily.useQuery({ days: 30 });
+  const { data: daily } = trpcReact.ai.getUsageDaily.useQuery({ userId: 'default', days: 30 });
 
   if (isLoading) {
     return (

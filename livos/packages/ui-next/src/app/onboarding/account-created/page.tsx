@@ -26,13 +26,7 @@ export default function AccountCreatedPage() {
   }, [router]);
 
   return (
-    <div
-      className="flex min-h-dvh items-center justify-center p-4"
-      style={{
-        background:
-          'radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.85 0.08 149) / 0.15), oklch(0.985 0.002 247.84)',
-      }}
-    >
+    <div className="flex min-h-dvh items-center justify-center bg-neutral-50 p-4">
       <motion.div
         className="w-full max-w-md text-center"
         initial={{ opacity: 0, scale: 0.96 }}
@@ -44,9 +38,9 @@ export default function AccountCreatedPage() {
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.15, type: 'spring', stiffness: 220, damping: 16 }}
-          className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success/10 shadow-sm"
+          className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-success/8 border border-success/15"
         >
-          <CheckCircle2 className="h-10 w-10 text-success" strokeWidth={1.75} />
+          <CheckCircle2 className="h-8 w-8 text-success" strokeWidth={1.75} />
         </motion.div>
 
         {/* Heading */}
@@ -55,7 +49,7 @@ export default function AccountCreatedPage() {
           per="word"
           preset="fade-in-blur"
           delay={0.2}
-          className="text-display-sm font-bold text-text"
+          className="text-[1.875rem] font-semibold text-neutral-900"
         >
           You're all set!
         </TextEffect>
@@ -66,7 +60,7 @@ export default function AccountCreatedPage() {
           per="word"
           preset="fade"
           delay={0.45}
-          className="mt-2 text-body-lg text-text-secondary"
+          className="mt-2 text-base text-neutral-500"
         >
           Your LivOS account has been created successfully.
         </TextEffect>
@@ -81,7 +75,7 @@ export default function AccountCreatedPage() {
           <Button size="lg" onClick={() => router.push('/')}>
             Go to Desktop
           </Button>
-          <p className="mt-3 text-caption text-text-tertiary">
+          <p className="mt-3 text-xs text-neutral-400">
             Redirecting in {countdown}s...
           </p>
         </motion.div>

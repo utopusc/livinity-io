@@ -14,7 +14,7 @@ export function ServerControlLayout() {
 
   return (
     <div className="space-y-6 p-5">
-      <h3 className="text-sm font-semibold text-text">Server Control</h3>
+      <h3 className="text-sm font-semibold text-neutral-900">Server Control</h3>
 
       {/* System info */}
       <AnimatedGroup preset="fade" className="grid grid-cols-2 gap-3">
@@ -44,7 +44,7 @@ function RestartButton() {
 
   if (!confirming) {
     return (
-      <Button size="sm" variant="secondary" onClick={() => setConfirming(true)} className="w-full justify-start">
+      <Button size="sm" variant="secondary" onClick={() => setConfirming(true)} className="w-full justify-start rounded-lg">
         <RotateCcw className="mr-2 h-4 w-4" />
         Restart Server
       </Button>
@@ -52,15 +52,16 @@ function RestartButton() {
   }
 
   return (
-    <div className="rounded-xl bg-warning/10 p-3 border border-warning/20 space-y-2">
+    <div className="rounded-xl bg-warning/[0.07] p-3 border border-warning/[0.18] space-y-2">
       <p className="text-xs text-warning font-medium">Restart the server?</p>
-      <p className="text-[11px] text-text-tertiary">All running apps and connections will be interrupted.</p>
+      <p className="text-[11px] text-neutral-500">All running apps and connections will be interrupted.</p>
       <div className="flex gap-2">
         <Button
           size="sm"
           variant="secondary"
           disabled={restart.isPending}
           onClick={() => restart.mutate()}
+          className="rounded-lg"
         >
           {restart.isPending ? (
             <>
@@ -71,7 +72,7 @@ function RestartButton() {
             'Confirm Restart'
           )}
         </Button>
-        <Button size="sm" variant="ghost" disabled={restart.isPending} onClick={() => setConfirming(false)}>
+        <Button size="sm" variant="ghost" disabled={restart.isPending} onClick={() => setConfirming(false)} className="rounded-lg">
           Cancel
         </Button>
       </div>
@@ -97,7 +98,7 @@ function ShutdownButton() {
 
   if (!confirming) {
     return (
-      <Button size="sm" variant="destructive" onClick={() => setConfirming(true)} className="w-full justify-start">
+      <Button size="sm" variant="destructive" onClick={() => setConfirming(true)} className="w-full justify-start rounded-lg">
         <Power className="mr-2 h-4 w-4" />
         Shutdown Server
       </Button>
@@ -105,15 +106,16 @@ function ShutdownButton() {
   }
 
   return (
-    <div className="rounded-xl bg-error/10 p-3 border border-error/20 space-y-2">
+    <div className="rounded-xl bg-error/[0.06] p-3 border border-error/[0.15] space-y-2">
       <p className="text-xs text-error font-medium">Shut down the server?</p>
-      <p className="text-[11px] text-text-tertiary">The server will become inaccessible until physically restarted.</p>
+      <p className="text-[11px] text-neutral-500">The server will become inaccessible until physically restarted.</p>
       <div className="flex gap-2">
         <Button
           size="sm"
           variant="destructive"
           disabled={shutdown.isPending}
           onClick={() => shutdown.mutate()}
+          className="rounded-lg"
         >
           {shutdown.isPending ? (
             <>
@@ -124,7 +126,7 @@ function ShutdownButton() {
             'Confirm Shutdown'
           )}
         </Button>
-        <Button size="sm" variant="ghost" disabled={shutdown.isPending} onClick={() => setConfirming(false)}>
+        <Button size="sm" variant="ghost" disabled={shutdown.isPending} onClick={() => setConfirming(false)} className="rounded-lg">
           Cancel
         </Button>
       </div>
@@ -140,12 +142,12 @@ function ShutdownButton() {
 
 function InfoCard({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) {
   return (
-    <div className={`rounded-xl bg-surface-0 border border-border shadow-sm p-3 ${className ?? ''}`}>
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-text-tertiary" />
-        <span className="text-[11px] text-text-tertiary">{label}</span>
+    <div className={`rounded-xl bg-white border border-black/[0.06] p-4 ${className ?? ''}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="h-3.5 w-3.5 text-neutral-400" />
+        <span className="text-xs text-neutral-500">{label}</span>
       </div>
-      <p className="mt-1 text-xs font-medium text-text">{value}</p>
+      <p className="text-sm font-medium text-neutral-900">{value}</p>
     </div>
   );
 }
@@ -158,12 +160,12 @@ function UptimeCard({ uptime }: { uptime: number | string | undefined }) {
     : 0;
 
   return (
-    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
-      <div className="flex items-center gap-2">
-        <Clock className="h-4 w-4 text-text-tertiary" />
-        <span className="text-[11px] text-text-tertiary">Uptime</span>
+    <div className="rounded-xl bg-white border border-black/[0.06] p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Clock className="h-3.5 w-3.5 text-neutral-400" />
+        <span className="text-xs text-neutral-500">Uptime</span>
       </div>
-      <p className="mt-1 text-xs font-medium text-text">
+      <p className="text-sm font-medium text-neutral-900">
         {uptime ? formatUptime(uptimeSeconds) : '...'}
       </p>
     </div>

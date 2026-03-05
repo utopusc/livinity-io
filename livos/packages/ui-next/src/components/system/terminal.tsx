@@ -156,15 +156,15 @@ export function TerminalLayout() {
 
   if (status === 'error') {
     return (
-      <div className="flex h-full flex-col">
-        {/* Light title bar */}
-        <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-4 py-2.5">
+      <div className="flex h-full flex-col rounded-xl overflow-hidden">
+        {/* Clean title bar */}
+        <div className="flex items-center gap-2 border-b border-black/[0.06] bg-white px-4 py-2.5">
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-            <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-            <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+            <div className="h-2 w-2 rounded-full bg-neutral-200" />
+            <div className="h-2 w-2 rounded-full bg-neutral-200" />
+            <div className="h-2 w-2 rounded-full bg-neutral-200" />
           </div>
-          <span className="ml-1 text-xs text-text-tertiary">Terminal</span>
+          <span className="ml-1 text-xs text-neutral-400">Terminal</span>
         </div>
         {/* Dark terminal area */}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-neutral-900">
@@ -183,28 +183,28 @@ export function TerminalLayout() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Light title bar with traffic light dots */}
-      <div className="flex items-center justify-between border-b border-border bg-surface-0 px-4 py-2.5 shrink-0">
+    <div className="flex h-full flex-col rounded-xl overflow-hidden">
+      {/* Clean title bar with traffic light dots */}
+      <div className="flex items-center justify-between border-b border-black/[0.06] bg-white px-4 py-2.5 shrink-0">
         <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          <div className="h-2 w-2 rounded-full bg-neutral-200" />
+          <div className="h-2 w-2 rounded-full bg-neutral-200" />
+          <div className="h-2 w-2 rounded-full bg-neutral-200" />
         </div>
         <div className="flex items-center gap-1.5">
-          <TerminalIcon className="h-3.5 w-3.5 text-text-tertiary" />
-          <span className="text-xs text-text-tertiary">Terminal</span>
+          <TerminalIcon className="h-3.5 w-3.5 text-neutral-400" />
+          <span className="text-xs text-neutral-400">Terminal</span>
         </div>
         <div className="flex items-center gap-1.5">
           {status === 'connected' ? (
             <div className="flex items-center gap-1.5">
               <div className="h-1.5 w-1.5 rounded-full bg-success" />
-              <span className="text-[10px] text-text-tertiary">Connected</span>
+              <span className="text-[10px] text-neutral-400">Connected</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <Loader2 className="h-3 w-3 animate-spin text-text-tertiary" />
-              <span className="text-[10px] text-text-tertiary">
+              <Loader2 className="h-3 w-3 animate-spin text-neutral-400" />
+              <span className="text-[10px] text-neutral-400">
                 {status === 'loading' ? 'Loading...' : 'Connecting...'}
               </span>
             </div>

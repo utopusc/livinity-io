@@ -19,8 +19,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
 import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 import { InView } from '@/components/motion-primitives/in-view';
-import { TextEffect } from '@/components/motion-primitives/text-effect';
 import { TransitionPanel } from '@/components/motion-primitives/transition-panel';
+import { Tilt } from '@/components/motion-primitives/tilt';
+import { AnimatedBackground } from '@/components/motion-primitives/animated-background';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -61,6 +62,8 @@ const FEATURED_SECTIONS = [
   { heading: 'AI & ML', apps: ['ollama', 'open-webui', 'localai'] },
   { heading: 'Media & Creators', apps: ['immich', 'photoprism', 'jellyfin', 'navidrome'] },
 ];
+
+const CATEGORIES = ['All', 'Media', 'Developer', 'Productivity', 'Home Automation', 'Security'];
 
 /* ------------------------------------------------------------------ */
 /*  View index map for TransitionPanel                                 */
@@ -196,29 +199,29 @@ export function AppStoreLayout() {
         : (selectedApp?.name ?? 'App');
 
   return (
-    <div className="flex h-full flex-col bg-surface-0">
+    <div className="flex h-full flex-col bg-white">
       {/* Top bar */}
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-2.5">
+      <div className="flex items-center gap-2.5 border-b border-black/[0.06] px-4 py-2.5">
         {view !== 'discover' && (
           <button
             aria-label="Go back"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
             onClick={goBack}
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
         )}
-        <h2 className="text-sm font-semibold text-text">{topBarTitle}</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">{topBarTitle}</h2>
         <div className="flex-1" />
         {/* Search */}
         <div className="relative w-48">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
           <input
             type="text"
             placeholder="Search apps..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 w-full rounded-lg border border-border bg-neutral-50 pl-8 pr-3 text-xs text-text placeholder:text-text-tertiary outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 transition-shadow"
+            className="h-8 w-full rounded-lg border border-black/[0.06] bg-neutral-50 pl-8 pr-3 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 transition-shadow"
             aria-label="Search apps"
           />
         </div>
@@ -241,8 +244,10 @@ export function AppStoreLayout() {
               catalogById={catalogById}
               searchQuery={searchQuery}
               filteredApps={filteredApps}
+              selectedCategory={selectedCategory}
               onOpenDetail={openDetail}
               onOpenCategory={openCategory}
+              onSelectCategory={setSelectedCategory}
             />
 
             {/* Panel 1: Category */}
@@ -275,21 +280,25 @@ function DiscoverView({
   catalogById,
   searchQuery,
   filteredApps,
+  selectedCategory,
   onOpenDetail,
   onOpenCategory,
+  onSelectCategory,
 }: {
   catalog: CatalogApp[];
   catalogById: Map<string, CatalogApp>;
   searchQuery: string;
   filteredApps: CatalogApp[];
+  selectedCategory: string;
   onOpenDetail: (id: string) => void;
   onOpenCategory: (cat: string) => void;
+  onSelectCategory: (cat: string) => void;
 }) {
   // If a search query is active, show flat search results instead
   if (searchQuery.trim()) {
     return (
-      <div className="p-4">
-        <p className="mb-3 text-xs text-text-tertiary">
+      <div className="p-5">
+        <p className="mb-4 text-xs text-neutral-400">
           {filteredApps.length} result{filteredApps.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
         </p>
         {filteredApps.length > 0 ? (
@@ -302,25 +311,42 @@ function DiscoverView({
             ))}
           </AnimatedGroup>
         ) : (
-          <p className="py-12 text-center text-xs text-text-tertiary">No apps match your search.</p>
+          <p className="py-12 text-center text-xs text-neutral-400">No apps match your search.</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4">
-      {/* Category pills */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {['Media', 'Developer', 'Productivity', 'Home Automation', 'Security'].map((cat) => (
-          <button
-            key={cat}
-            onClick={() => onOpenCategory(cat)}
-            className="shrink-0 rounded-full border border-border bg-neutral-100 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-brand hover:text-white hover:border-brand"
-          >
-            {cat}
-          </button>
-        ))}
+    <div className="space-y-7 p-5">
+      {/* Category pills with AnimatedBackground sliding highlight */}
+      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+        <AnimatedBackground
+          defaultValue={selectedCategory}
+          className="rounded-md bg-neutral-900"
+          transition={{ type: 'spring', bounce: 0.2, duration: 0.3 }}
+          onValueChange={(id) => {
+            if (!id) return;
+            if (id === 'All') {
+              onSelectCategory('All');
+            } else {
+              onOpenCategory(id);
+            }
+          }}
+        >
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              data-id={cat}
+              className={cn(
+                'shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                'text-neutral-500 data-[checked=true]:text-white',
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </AnimatedBackground>
       </div>
 
       {/* Featured sections */}
@@ -344,14 +370,7 @@ function DiscoverView({
           >
             <section>
               <div className="mb-3 flex items-center justify-between">
-                <TextEffect
-                  as="h3"
-                  preset="fade"
-                  className="text-sm font-semibold text-text"
-                  speedReveal={2}
-                >
-                  {section.heading}
-                </TextEffect>
+                <h3 className="text-sm font-semibold text-neutral-900">{section.heading}</h3>
               </div>
               <AnimatedGroup
                 preset="blur-slide"
@@ -376,7 +395,7 @@ function DiscoverView({
           once
         >
           <section>
-            <h3 className="mb-3 text-sm font-semibold text-text">All Apps</h3>
+            <h3 className="mb-3 text-sm font-semibold text-neutral-900">All Apps</h3>
             <AnimatedGroup
               preset="blur-slide"
               className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
@@ -390,7 +409,7 @@ function DiscoverView({
       )}
 
       {catalog.length === 0 && (
-        <p className="py-12 text-center text-xs text-text-tertiary">No apps available.</p>
+        <p className="py-12 text-center text-xs text-neutral-400">No apps available.</p>
       )}
     </div>
   );
@@ -412,7 +431,7 @@ function CategoryView({
   onOpenDetail: (id: string) => void;
 }) {
   return (
-    <div className="p-4">
+    <div className="p-5">
       {filteredApps.length > 0 ? (
         <AnimatedGroup
           preset="blur-slide"
@@ -423,7 +442,7 @@ function CategoryView({
           ))}
         </AnimatedGroup>
       ) : (
-        <p className="py-12 text-center text-xs text-text-tertiary">
+        <p className="py-12 text-center text-xs text-neutral-400">
           {searchQuery ? 'No apps match your search.' : `No apps in ${category}.`}
         </p>
       )}
@@ -437,34 +456,36 @@ function CategoryView({
 
 function AppCard({ app, onClick }: { app: CatalogApp; onClick: () => void }) {
   return (
-    <button
-      className={cn(
-        'flex flex-col items-center gap-2 rounded-xl p-3 text-center text-left',
-        'bg-surface-0 border border-border shadow-sm',
-        'transition-all duration-150 hover:shadow-md hover:border-border-subtle hover:bg-surface-1',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
-      )}
-      onClick={onClick}
-      aria-label={`View ${app.name}`}
-    >
-      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100 shadow-sm">
-        {app.icon ? (
-          <img src={app.icon} alt={app.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-text-tertiary">
-            <Grid2X2 className="h-5 w-5" />
-          </div>
+    <Tilt rotationFactor={6} isRevese>
+      <button
+        className={cn(
+          'flex w-full flex-col items-center gap-2.5 rounded-xl p-4 text-center',
+          'border border-black/[0.06] bg-white',
+          'transition-shadow duration-200 hover:shadow-md',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
         )}
-      </div>
-      <div className="min-w-0 w-full">
-        <p className="truncate text-xs font-medium text-text">{app.name}</p>
-        {app.tagline && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-tight text-text-tertiary">
-            {app.tagline}
-          </p>
-        )}
-      </div>
-    </button>
+        onClick={onClick}
+        aria-label={`View ${app.name}`}
+      >
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
+          {app.icon ? (
+            <img src={app.icon} alt={app.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-neutral-400">
+              <Grid2X2 className="h-5 w-5" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 w-full">
+          <p className="truncate text-xs font-medium text-neutral-900">{app.name}</p>
+          {app.tagline && (
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-tight text-neutral-400">
+              {app.tagline}
+            </p>
+          )}
+        </div>
+      </button>
+    </Tilt>
   );
 }
 
@@ -474,42 +495,44 @@ function AppCard({ app, onClick }: { app: CatalogApp; onClick: () => void }) {
 
 function AppDetail({ app }: { app: CatalogApp }) {
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-6 p-5">
       {/* Hero */}
       <InView
         variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}
         transition={{ duration: 0.25 }}
         once
       >
-        <div className="flex items-start gap-4">
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-neutral-100 border border-border shadow-sm">
+        <div className="flex items-start gap-5">
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-neutral-100 border border-black/[0.06]">
             {app.icon ? (
               <img src={app.icon} alt={app.name} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-text-tertiary">
-                <Grid2X2 className="h-6 w-6" />
+              <div className="flex h-full w-full items-center justify-center text-neutral-400">
+                <Grid2X2 className="h-7 w-7" />
               </div>
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold text-text">{app.name}</h3>
+          <div className="min-w-0 flex-1 pt-1">
+            <h3 className="text-lg font-semibold text-neutral-900">{app.name}</h3>
             {app.developer && (
-              <p className="text-xs text-text-tertiary">{app.developer}</p>
+              <p className="mt-0.5 text-xs text-neutral-400">{app.developer}</p>
             )}
             {app.tagline && (
-              <p className="mt-1 text-xs text-text-secondary">{app.tagline}</p>
+              <p className="mt-1.5 text-sm text-neutral-500">{app.tagline}</p>
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {app.version && <Badge>{app.version}</Badge>}
               {app.category && <Badge variant="outline">{app.category}</Badge>}
             </div>
           </div>
-          <AppInstallButton appId={app.id} />
+          <div className="shrink-0 pt-1">
+            <AppInstallButton appId={app.id} />
+          </div>
         </div>
       </InView>
 
       {/* Divider */}
-      <div className="h-px bg-border" />
+      <div className="h-px bg-black/[0.06]" />
 
       {/* Gallery */}
       {app.gallery && app.gallery.length > 0 && (
@@ -518,15 +541,15 @@ function AppDetail({ app }: { app: CatalogApp }) {
           transition={{ duration: 0.25, delay: 0.05 }}
           once
         >
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-text">Screenshots</h4>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="space-y-2.5">
+            <h4 className="text-sm font-semibold text-neutral-900">Screenshots</h4>
+            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
               {app.gallery.map((url, i) => (
                 <img
                   key={i}
                   src={url}
                   alt={`Screenshot ${i + 1}`}
-                  className="h-32 rounded-xl border border-border object-cover shadow-sm"
+                  className="h-36 flex-shrink-0 rounded-xl border border-black/[0.06] object-cover"
                 />
               ))}
             </div>
@@ -541,9 +564,9 @@ function AppDetail({ app }: { app: CatalogApp }) {
           transition={{ duration: 0.25, delay: 0.08 }}
           once
         >
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-text">About</h4>
-            <p className="text-xs leading-relaxed text-text-secondary">{app.description}</p>
+          <div className="space-y-2.5">
+            <h4 className="text-sm font-semibold text-neutral-900">About</h4>
+            <p className="text-xs leading-relaxed text-neutral-500">{app.description}</p>
           </div>
         </InView>
       )}
@@ -555,9 +578,9 @@ function AppDetail({ app }: { app: CatalogApp }) {
           transition={{ duration: 0.25, delay: 0.1 }}
           once
         >
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-text">Release Notes</h4>
-            <p className="text-xs text-text-tertiary">{app.releaseNotes}</p>
+          <div className="space-y-2.5">
+            <h4 className="text-sm font-semibold text-neutral-900">Release Notes</h4>
+            <p className="text-xs leading-relaxed text-neutral-400">{app.releaseNotes}</p>
           </div>
         </InView>
       )}
@@ -569,9 +592,9 @@ function AppDetail({ app }: { app: CatalogApp }) {
           transition={{ duration: 0.25, delay: 0.1 }}
           once
         >
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-text">Dependencies</h4>
-            <div className="flex flex-wrap gap-1">
+          <div className="space-y-2.5">
+            <h4 className="text-sm font-semibold text-neutral-900">Dependencies</h4>
+            <div className="flex flex-wrap gap-1.5">
               {app.dependencies.map((dep) => (
                 <Badge key={dep} variant="outline">{dep}</Badge>
               ))}
@@ -586,30 +609,30 @@ function AppDetail({ app }: { app: CatalogApp }) {
         transition={{ duration: 0.25, delay: 0.12 }}
         once
       >
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-text">Info</h4>
-          <div className="rounded-xl border border-border bg-neutral-50 divide-y divide-border">
+        <div className="space-y-2.5">
+          <h4 className="text-sm font-semibold text-neutral-900">Info</h4>
+          <div className="overflow-hidden rounded-xl border border-black/[0.06] divide-y divide-black/[0.06]">
             {app.port && (
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-xs text-text-tertiary">Port</span>
-                <span className="text-xs font-medium text-text-secondary">{app.port}</span>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs text-neutral-400">Port</span>
+                <span className="text-xs font-medium text-neutral-600">{app.port}</span>
               </div>
             )}
             {app.version && (
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-xs text-text-tertiary">Version</span>
-                <span className="text-xs font-medium text-text-secondary">{app.version}</span>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs text-neutral-400">Version</span>
+                <span className="text-xs font-medium text-neutral-600">{app.version}</span>
               </div>
             )}
             {app.developer && (
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-xs text-text-tertiary">Developer</span>
-                <span className="text-xs font-medium text-text-secondary">{app.developer}</span>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs text-neutral-400">Developer</span>
+                <span className="text-xs font-medium text-neutral-600">{app.developer}</span>
               </div>
             )}
             {app.website && (
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-xs text-text-tertiary">Website</span>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs text-neutral-400">Website</span>
                 <a
                   href={app.website}
                   target="_blank"
@@ -650,79 +673,89 @@ function AppInstallButton({ appId }: { appId: string }) {
 
   if (isInstalling) {
     return (
-      <Button size="sm" disabled>
-        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+      <button
+        disabled
+        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-medium text-white opacity-70"
+      >
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Installing...
-      </Button>
+      </button>
     );
   }
 
   if (isRunning) {
     return (
-      <div className="flex shrink-0 gap-1">
-        <Button
-          size="sm"
-          variant="ghost"
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white">
+          <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
+          Running
+        </span>
+        <button
           onClick={() => stopMutation.mutate({ appId })}
           disabled={stopMutation.isPending}
           aria-label="Stop app"
+          className="inline-flex items-center gap-1 rounded-lg border border-black/[0.06] bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-200 disabled:opacity-50"
         >
-          <Square className="mr-1 h-3 w-3" />
+          <Square className="h-3 w-3" />
           Stop
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
+        </button>
+        <button
           onClick={() => {
             if (confirm('Uninstall this app?')) uninstallMutation.mutate({ appId });
           }}
           disabled={uninstallMutation.isPending}
           aria-label="Uninstall app"
+          className="inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-neutral-100 p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
         >
-          <Trash2 className="h-3 w-3 text-error" />
-        </Button>
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
     );
   }
 
   if (isStopped) {
     return (
-      <div className="flex shrink-0 gap-1">
-        <Button
-          size="sm"
-          variant="secondary"
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600">
+          Stopped
+        </span>
+        <button
           onClick={() => startMutation.mutate({ appId })}
           disabled={startMutation.isPending}
           aria-label="Start app"
+          className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          <Play className="mr-1 h-3 w-3" />
+          <Play className="h-3 w-3" />
           Start
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
+        </button>
+        <button
           onClick={() => {
             if (confirm('Uninstall this app?')) uninstallMutation.mutate({ appId });
           }}
           disabled={uninstallMutation.isPending}
           aria-label="Uninstall app"
+          className="inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-neutral-100 p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
         >
-          <Trash2 className="h-3 w-3 text-error" />
-        </Button>
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
     );
   }
 
   return (
-    <Button
-      size="sm"
+    <button
       onClick={() => installMutation.mutate({ appId })}
-      loading={installMutation.isPending}
+      disabled={installMutation.isPending}
       aria-label={`Install ${appId}`}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
     >
-      <Download className="mr-1.5 h-3.5 w-3.5" />
+      {installMutation.isPending ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
       Install
-    </Button>
+    </button>
   );
 }
 
@@ -732,27 +765,27 @@ function AppInstallButton({ appId }: { appId: string }) {
 
 function AppStoreSkeleton() {
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-7 p-5">
       {/* Category pills skeleton */}
       <div className="flex gap-1.5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-7 rounded-full" style={{ width: `${60 + i * 8}px` }} />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-7 rounded-md bg-neutral-100" style={{ width: `${56 + i * 8}px` }} />
         ))}
       </div>
 
       {/* Section skeleton x2 */}
       {[0, 1].map((s) => (
         <div key={s} className="space-y-3">
-          <Skeleton className="h-4 w-32 rounded" />
+          <Skeleton className="h-4 w-28 rounded bg-neutral-100" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface-0 p-3 shadow-sm"
+                className="flex flex-col items-center gap-2.5 rounded-xl border border-black/[0.06] bg-white p-4"
               >
-                <Skeleton className="h-12 w-12 rounded-xl" />
-                <Skeleton className="h-3 w-20 rounded" />
-                <Skeleton className="h-2.5 w-16 rounded" />
+                <Skeleton className="h-12 w-12 rounded-xl bg-neutral-100" />
+                <Skeleton className="h-3 w-20 rounded bg-neutral-100" />
+                <Skeleton className="h-2.5 w-16 rounded bg-neutral-100" />
               </div>
             ))}
           </div>
