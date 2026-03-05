@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Milestone: v5.0 (Light Theme UI Redesign)
-Phase: Not started (defining requirements)
+Phase: 01 — Design Foundation
 Plan: --
-Status: Defining requirements
-Last activity: 2026-03-05 -- Milestone v5.0 started
+Status: Ready to plan Phase 01
+Last activity: 2026-03-05 -- Milestone v5.0 roadmap complete
 
 ## Accumulated Context
 

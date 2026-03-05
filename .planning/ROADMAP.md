@@ -599,6 +599,145 @@ Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 6. Onboarding CLI | 3/3 | Complete | 2026-02-21 |
 
 ---
+
+## Milestone: v5.0 — Light Theme UI Redesign
+
+**Overview**: Complete light theme redesign of the Vite/React UI using motion-primitives. Every screen gets professional light-mode styling. All semantic tokens converted from dark to light. All hardcoded color references replaced with semantic tokens. Full i18n coverage for all user-visible strings. Piece-by-piece approach with each phase covering a logical group of screens.
+
+### v5.0 Phases
+
+- [ ] **Phase 01: Design Foundation** — Semantic tokens, CSS globals, shadows → light theme
+- [ ] **Phase 02: Base Components** — shadcn + custom UI components + raw color elimination
+- [ ] **Phase 03: Login & Onboarding** — Login page + 6-step setup wizard + i18n
+- [ ] **Phase 04: Desktop & Window Manager** — Dock, app grid, window chrome, wallpaper
+- [ ] **Phase 05: App Store** — Discover, category, app page, community, window variants
+- [ ] **Phase 06: AI Chat** — Chat area, sidebar, canvas, skills, MCP, voice, input
+- [ ] **Phase 07: Settings Hub** — Main settings + all 20+ sub-pages + mobile variants
+- [ ] **Phase 08: File Manager** — Listing, sidebar, cards, floating islands, rewind, dialogs
+- [ ] **Phase 09: Remaining Screens** — Server control, notifications, subagents, schedules, factory reset, terminal, live usage, misc pages
+- [ ] **Phase 10: i18n Audit + Quality** — Screen-level i18n audit, visual consistency, build verification
+
+### Phase 01: Design Foundation
+**Goal**: Convert the entire design token system from dark-on-black to light-on-white, establishing the visual foundation for all subsequent phases
+**Depends on**: Nothing (first phase)
+**Requirements**: REQ-DF-01, REQ-DF-02, REQ-DF-03, REQ-DF-04
+**Success Criteria** (what must be TRUE):
+  1. All semantic color tokens in tailwind.config.ts produce light-appropriate values (dark text on light backgrounds)
+  2. CSS globals (scrollbars, selection, dividers) render correctly on light backgrounds
+  3. All box shadows produce natural-looking elevation on light surfaces (no white inner glows)
+  4. Any new motion-primitives components needed for the foundation are installed
+
+### Phase 02: Base Components
+**Goal**: Update every reusable UI component (shadcn + custom) to look correct on light backgrounds, and eliminate raw `text-white`/`bg-white` references in shared components
+**Depends on**: Phase 01 (needs light tokens defined)
+**Requirements**: REQ-BC-01, REQ-BC-02, REQ-BC-03, REQ-QA-01 (partial — shared components only)
+**Success Criteria** (what must be TRUE):
+  1. All 27 shadcn components render correctly with light theme tokens
+  2. All custom UI components (card, toast, loading, etc.) render correctly on light backgrounds
+  3. Command palette, markdown renderer, install buttons work with light theme
+  4. No raw `text-white`/`bg-white` references remain in `shadcn-components/` or `components/` directories
+
+### Phase 03: Login & Onboarding
+**Goal**: Redesign login and the 6-step onboarding wizard with professional light theme, motion-primitives animations, and full i18n coverage
+**Depends on**: Phase 02 (needs light-themed base components)
+**Requirements**: REQ-SR-01, REQ-SR-02, REQ-I18N-01
+**Success Criteria** (what must be TRUE):
+  1. Login page has professional light theme styling with motion-primitives
+  2. All 6 setup wizard steps render with light theme (no dark remnants)
+  3. All hardcoded English strings in setup wizard are wrapped in `t()` for i18n
+  4. Language selection in setup wizard actually changes the UI language
+
+### Phase 04: Desktop & Window Manager
+**Goal**: Light theme desktop environment with frosted glass dock, clean app grid, and macOS-style window chrome
+**Depends on**: Phase 02 (needs light-themed base components)
+**Requirements**: REQ-SR-03, REQ-SR-04
+**Success Criteria** (what must be TRUE):
+  1. Dock renders with frosted glass effect appropriate for light backgrounds
+  2. Desktop app icons and grid look clean on light wallpapers
+  3. Window chrome has light title bar with colored macOS-style dots
+  4. Window content area uses light surface colors
+
+### Phase 05: App Store
+**Goal**: Light theme App Store with all variants (discover, category, app detail, community, window-embedded)
+**Depends on**: Phase 02 (needs light base components)
+**Requirements**: REQ-SR-05
+**Success Criteria** (what must be TRUE):
+  1. Discover page featured sections render with light theme
+  2. App detail page with install button works on light background
+  3. Community app store variant matches light theme
+  4. Window-embedded app store variants (discover-window, app-page-window, etc.) are consistent
+
+### Phase 06: AI Chat
+**Goal**: Professional light theme AI chat with all panels, voice button, and canvas
+**Depends on**: Phase 02 (needs light base components)
+**Requirements**: REQ-SR-06
+**Success Criteria** (what must be TRUE):
+  1. Chat area has light-themed message bubbles with clear user/AI differentiation
+  2. Sidebar conversation list renders on light background
+  3. Canvas panel, skills panel, MCP panel all use light theme
+  4. Voice button and input area styled for light theme
+
+### Phase 07: Settings Hub
+**Goal**: Light theme for the entire settings section — main index, all sub-pages, shared components, mobile variants
+**Depends on**: Phase 02 (needs light base components)
+**Requirements**: REQ-SR-07
+**Success Criteria** (what must be TRUE):
+  1. Main settings index with sidebar renders in light theme
+  2. All 20+ settings sub-pages (account, system, network, AI, integrations, data) use light theme
+  3. All 8 mobile settings variants match light theme
+  4. Shared settings components (list-row, toggle-row, info-card) are light-themed
+
+### Phase 08: File Manager
+**Goal**: Light theme file manager with all views, sidebar, floating islands, rewind, and dialogs
+**Depends on**: Phase 02 (needs light base components)
+**Requirements**: REQ-SR-08
+**Success Criteria** (what must be TRUE):
+  1. File listing (grid + list views) renders with light theme
+  2. Sidebar with all locations uses light styling
+  3. All floating islands (minimized + expanded states) are light-themed
+  4. Rewind timeline, dialogs (share, format, delete, network share) match light theme
+
+### Phase 09: Remaining Screens
+**Goal**: Light theme for all remaining screens not covered in previous phases
+**Depends on**: Phase 02 (needs light base components)
+**Requirements**: REQ-SR-09, REQ-SR-10, REQ-SR-11, REQ-SR-12, REQ-SR-13, REQ-SR-14, REQ-SR-15, REQ-SR-16
+**Success Criteria** (what must be TRUE):
+  1. Server control dashboard uses light theme with AnimatedNumber stats
+  2. Notifications, subagents, schedules pages render in light theme
+  3. Factory reset page has appropriate light-themed warning styling
+  4. Terminal keeps dark body but has light chrome
+  5. Live usage, what's new modal, not-found, error boundaries all light-themed
+
+### Phase 10: i18n Audit + Quality
+**Goal**: Ensure every user-visible string uses i18n, verify visual consistency across all screens, clean build
+**Depends on**: All previous phases
+**Requirements**: REQ-I18N-02, REQ-QA-01 (remaining), REQ-QA-02, REQ-QA-03
+**Success Criteria** (what must be TRUE):
+  1. Every user-visible string across all screens uses `t()` function
+  2. Zero raw `text-white`/`bg-white`/`border-white` references remain in any .tsx file
+  3. Visual audit confirms no dark remnants or broken contrast on any screen
+  4. `pnpm --filter ui build` succeeds with zero errors
+
+### v5.0 Progress
+
+**Execution Order:**
+Phase 01 first (foundation), Phase 02 next (components), then Phases 03-09 in order (screens), Phase 10 last (quality).
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 01. Design Foundation | 0/? | Not started | - |
+| 02. Base Components | 0/? | Not started | - |
+| 03. Login & Onboarding | 0/? | Not started | - |
+| 04. Desktop & Window Manager | 0/? | Not started | - |
+| 05. App Store | 0/? | Not started | - |
+| 06. AI Chat | 0/? | Not started | - |
+| 07. Settings Hub | 0/? | Not started | - |
+| 08. File Manager | 0/? | Not started | - |
+| 09. Remaining Screens | 0/? | Not started | - |
+| 10. i18n Audit + Quality | 0/? | Not started | - |
+
+---
 *Roadmap created: 2026-02-03*
-*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) | Total plans: 73 (estimated)*
-*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 requirements mapped*
+*Last updated: 2026-03-05 — v5.0 Light Theme UI Redesign added*
+*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) + 10 (v5.0) | Total plans: ~93 (estimated)*
+*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 + 28/28 v5.0 requirements mapped*
