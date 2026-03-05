@@ -5,6 +5,7 @@ import 'photoswipe/style.css'
 
 import {useEffect} from 'react'
 
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {FadeInImg} from '@/components/ui/fade-in-img'
 import {Banner} from '@/routes/app-store/use-discover-query'
 import {cn} from '@/shadcn-lib/utils'
@@ -16,30 +17,31 @@ export const AppsGallerySection: React.FC<{banners: Banner[]}> = ({banners}) => 
 	return (
 		<div className={galleryRootClass}>
 			{banners.map((banner, i) => (
-				<Link
-					key={banner.id}
-					to={`/app-store/${banner.id}`}
-					className={cn(
-						galleryItemClass,
-						'group relative aspect-[2.2] h-[160px] overflow-hidden rounded-2xl md:h-[320px] md:rounded-3xl',
-					)}
-					style={{
-						animationDelay: `${i * 100}ms`,
-					}}
-				>
-					{/* Background image */}
-					<FadeInImg
-						src={banner.image}
-						className='h-full w-full object-cover transition-transform duration-700 group-hover:scale-105'
-						alt={banner.id}
-					/>
+				<Tilt key={banner.id} rotationFactor={3} springOptions={{stiffness: 300, damping: 25}}>
+					<Link
+						to={`/app-store/${banner.id}`}
+						className={cn(
+							galleryItemClass,
+							'group relative aspect-[2.2] h-[160px] overflow-hidden rounded-2xl md:h-[320px] md:rounded-3xl',
+						)}
+						style={{
+							animationDelay: `${i * 100}ms`,
+						}}
+					>
+						{/* Background image */}
+						<FadeInImg
+							src={banner.image}
+							className='h-full w-full object-cover transition-transform duration-700 group-hover:scale-105'
+							alt={banner.id}
+						/>
 
-					{/* Single gradient overlay for text readability */}
-					<div className='absolute inset-0 bg-gradient-to-t from-black/20 via-black/5 to-transparent' />
+						{/* Single gradient overlay for text readability */}
+						<div className='absolute inset-0 bg-gradient-to-t from-black/20 via-black/5 to-transparent' />
 
-					{/* Border highlight on hover */}
-					<div className='absolute inset-0 rounded-2xl border-2 border-transparent transition-colors duration-300 group-hover:border-border-emphasis md:rounded-3xl' />
-				</Link>
+						{/* Border highlight on hover */}
+						<div className='absolute inset-0 rounded-2xl border-2 border-transparent transition-colors duration-300 group-hover:border-border-emphasis md:rounded-3xl' />
+					</Link>
+				</Tilt>
 			))}
 		</div>
 	)

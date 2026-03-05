@@ -3,6 +3,7 @@ import {Link} from 'react-router-dom'
 
 import {AppIcon} from '@/components/app-icon'
 import {FadeScroller} from '@/components/fade-scroller'
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {useColorThief} from '@/hooks/use-color-thief'
 import {slideInFromBottomClass} from '@/modules/app-store/shared'
 import {preloadFirstFewGalleryImages} from '@/modules/app-store/utils'
@@ -93,57 +94,58 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 			unstable_viewTransition
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
-			<div
-				className={cn(
-					'relative flex h-[280px] w-[180px] flex-col overflow-hidden rounded-2xl',
-					'border border-border-default',
-					'transition-all duration-500',
-					'group-hover:border-border-emphasis',
-					'group-hover:shadow-elevation-lg',
-					'group-hover:scale-105',
-				)}
-				style={{
-					background: `
-						linear-gradient(180deg, ${gradientStart}60 0%, ${gradientEnd}40 50%, rgba(0,0,0,0.1) 100%)
-					`,
-				}}
-			>
-				{/* Icon */}
-				<div className='flex flex-1 items-center justify-center p-6'>
-					<AppIcon
-						ref={iconRef}
-						src={app.icon}
-						crossOrigin='anonymous'
-						size={100}
-						className={cn(
-							'rounded-2xl',
-							'shadow-elevation-lg',
-							'ring-2 ring-border-emphasis',
-							'transition-all duration-500',
-							'group-hover:scale-110 group-hover:shadow-elevation-xl',
-						)}
-					/>
-				</div>
+			<Tilt rotationFactor={8} springOptions={{stiffness: 300, damping: 20}}>
+				<div
+					className={cn(
+						'relative flex h-[280px] w-[180px] flex-col overflow-hidden rounded-2xl',
+						'border border-border-default',
+						'transition-all duration-500',
+						'group-hover:border-border-emphasis',
+						'group-hover:shadow-elevation-lg',
+					)}
+					style={{
+						background: `
+							linear-gradient(180deg, ${gradientStart}60 0%, ${gradientEnd}40 50%, rgba(0,0,0,0.1) 100%)
+						`,
+					}}
+				>
+					{/* Icon */}
+					<div className='flex flex-1 items-center justify-center p-6'>
+						<AppIcon
+							ref={iconRef}
+							src={app.icon}
+							crossOrigin='anonymous'
+							size={100}
+							className={cn(
+								'rounded-2xl',
+								'shadow-elevation-lg',
+								'ring-2 ring-border-emphasis',
+								'transition-all duration-500',
+								'group-hover:scale-110 group-hover:shadow-elevation-xl',
+							)}
+						/>
+					</div>
 
-				{/* Content */}
-				<div className='relative bg-surface-base/80 p-4 backdrop-blur-sm'>
-					<h4 className='truncate text-body-lg font-bold text-text-primary'>{app.name}</h4>
-					<p className='mt-0.5 truncate text-caption text-text-tertiary'>{app.developer}</p>
-					<button
-						className={cn(
-							'mt-3 w-full rounded-lg py-2 text-body-sm font-semibold',
-							'bg-surface-2 text-text-primary',
-							'transition-colors duration-200',
-							'group-hover:bg-surface-3 group-hover:text-text-primary',
-						)}
-					>
-						{t('app.view')}
-					</button>
-				</div>
+					{/* Content */}
+					<div className='relative bg-surface-base/80 p-4 backdrop-blur-sm'>
+						<h4 className='truncate text-body-lg font-bold text-text-primary'>{app.name}</h4>
+						<p className='mt-0.5 truncate text-caption text-text-tertiary'>{app.developer}</p>
+						<button
+							className={cn(
+								'mt-3 w-full rounded-lg py-2 text-body-sm font-semibold',
+								'bg-surface-2 text-text-primary',
+								'transition-colors duration-200',
+								'group-hover:bg-surface-3 group-hover:text-text-primary',
+							)}
+						>
+							{t('app.view')}
+						</button>
+					</div>
 
-				{/* Shine effect */}
-				<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
-			</div>
+					{/* Shine effect */}
+					<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
+				</div>
+			</Tilt>
 		</Link>
 	)
 }

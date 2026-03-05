@@ -3,6 +3,7 @@ import {useEffect, useRef} from 'react'
 import {useParams} from 'react-router-dom'
 
 import {FadeScroller} from '@/components/fade-scroller'
+import {AnimatedBackground} from '@/components/motion-primitives/animated-background'
 import {ButtonLink} from '@/components/ui/button-link'
 import {useAvailableApps} from '@/providers/available-apps'
 import {useBreakpoint} from '@/utils/tw'
@@ -60,18 +61,25 @@ export function AppStoreNav({activeId, allCategories}: {activeId: string; allCat
 			direction='x'
 			className='livinity-hide-scrollbar -my-2 flex gap-[5px] overflow-x-auto py-2'
 		>
-			{allCategories.map((categoryId) => (
-				<ButtonLink
-					key={categoryId}
-					to={categoryIdToPath(categoryId)}
-					variant={categoryId === activeId ? 'secondary' : 'default'}
-					ref={categoryId === activeId ? scrollToRef : undefined}
-					size={size}
-					unstable_viewTransition
-				>
-					{getCategoryLabel(categoryId)}
-				</ButtonLink>
-			))}
+			<AnimatedBackground
+				defaultValue={activeId}
+				className='rounded-full bg-surface-2'
+				transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
+			>
+				{allCategories.map((categoryId) => (
+					<ButtonLink
+						key={categoryId}
+						data-id={categoryId}
+						to={categoryIdToPath(categoryId)}
+						variant='default'
+						ref={categoryId === activeId ? scrollToRef : undefined}
+						size={size}
+						unstable_viewTransition
+					>
+						{getCategoryLabel(categoryId)}
+					</ButtonLink>
+				))}
+			</AnimatedBackground>
 		</FadeScroller>
 	)
 }

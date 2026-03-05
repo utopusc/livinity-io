@@ -2,6 +2,8 @@ import {useRef} from 'react'
 import {Link} from 'react-router-dom'
 
 import {AppIcon} from '@/components/app-icon'
+import {Spotlight} from '@/components/motion-primitives/spotlight'
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {useColorThief} from '@/hooks/use-color-thief'
 import {SectionTitle, slideInFromBottomClass} from '@/modules/app-store/shared'
 import {preloadFirstFewGalleryImages} from '@/modules/app-store/utils'
@@ -49,50 +51,52 @@ function AppCard({app, index}: {app: RegistryApp; index: number}) {
 			)}
 			style={{animationDelay: `${index * 80}ms`}}
 		>
-			{/* Main card container */}
-			<div
-				className={cn(
-					'relative flex h-[180px] w-[280px] flex-col overflow-hidden rounded-2xl md:h-[220px] md:w-[360px]',
-					'border border-border-default',
-					'transition-all duration-500 ease-out',
-					'group-hover:border-border-emphasis',
-					'group-hover:shadow-elevation-lg',
-					'group-hover:scale-[1.02]',
-				)}
-				style={{
-					background: `linear-gradient(135deg, ${gradientStart}20 0%, ${gradientEnd}10 50%, transparent 100%)`,
-				}}
-			>
-				{/* Floating icon */}
-				<div className='absolute left-6 top-6 z-10'>
-					<AppIcon
-						ref={iconRef}
-						src={app.icon}
-						crossOrigin='anonymous'
-						size={64}
-						className={cn(
-							'rounded-2xl',
-							'shadow-elevation-md',
-							'ring-2 ring-border-emphasis',
-							'transition-all duration-500',
-							'group-hover:scale-110 group-hover:shadow-elevation-lg',
-						)}
-					/>
-				</div>
+			<Tilt rotationFactor={5} springOptions={{stiffness: 300, damping: 20}}>
+				{/* Main card container */}
+				<div
+					className={cn(
+						'relative flex h-[180px] w-[280px] flex-col overflow-hidden rounded-2xl md:h-[220px] md:w-[360px]',
+						'border border-border-default',
+						'transition-all duration-500 ease-out',
+						'group-hover:border-border-emphasis',
+						'group-hover:shadow-elevation-lg',
+					)}
+					style={{
+						background: `linear-gradient(135deg, ${gradientStart}20 0%, ${gradientEnd}10 50%, transparent 100%)`,
+					}}
+				>
+					<Spotlight className='from-white/25 via-white/10 to-transparent' size={250} springOptions={{stiffness: 200, damping: 20}} />
+					{/* Floating icon */}
+					<div className='absolute left-6 top-6 z-10'>
+						<AppIcon
+							ref={iconRef}
+							src={app.icon}
+							crossOrigin='anonymous'
+							size={64}
+							className={cn(
+								'rounded-2xl',
+								'shadow-elevation-md',
+								'ring-2 ring-border-emphasis',
+								'transition-all duration-500',
+								'group-hover:scale-110 group-hover:shadow-elevation-lg',
+							)}
+						/>
+					</div>
 
-				{/* Content */}
-				<div className='relative mt-auto p-6'>
-					<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>
-						{app.name}
-					</h3>
-					<p className='mt-1 line-clamp-2 text-body-sm leading-snug text-text-secondary md:text-body-lg'>
-						{app.tagline}
-					</p>
-				</div>
+					{/* Content */}
+					<div className='relative mt-auto p-6'>
+						<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>
+							{app.name}
+						</h3>
+						<p className='mt-1 line-clamp-2 text-body-sm leading-snug text-text-secondary md:text-body-lg'>
+							{app.tagline}
+						</p>
+					</div>
 
-				{/* Shine effect */}
-				<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
-			</div>
+					{/* Shine effect */}
+					<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
+				</div>
+			</Tilt>
 		</Link>
 	)
 }
