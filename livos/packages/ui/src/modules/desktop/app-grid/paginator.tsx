@@ -89,7 +89,7 @@ export function ArrowButton({
 }
 
 const glassButtonCva = cva(
-	'shrink-0 w-10 h-10 rounded-full backdrop-blur-sm contrast-more:bg-neutral-800 contrast-more:backdrop-blur-none grid place-items-center bg-surface-base shadow-glass-button text-text-secondary disabled:text-text-tertiary transition-all hover:bg-surface-2 contrast-more:hover:bg-neutral-700 active:bg-surface-base cursor-default',
+	'shrink-0 w-10 h-10 rounded-full backdrop-blur-xl contrast-more:bg-white contrast-more:backdrop-blur-none grid place-items-center bg-white/80 shadow-glass-button text-text-secondary disabled:text-text-tertiary transition-all hover:bg-white/90 contrast-more:hover:bg-neutral-200 active:bg-white/70 cursor-default',
 )
 
 // ---
@@ -105,7 +105,7 @@ function PaginatorPill({active, onClick}: {active?: boolean; onClick: () => void
 			<div
 				className={cn(
 					'h-1 w-3 rounded-full bg-border-emphasis transition-all group-hover:bg-surface-3',
-					active && 'w-5 bg-white',
+					active && 'w-5 bg-text-primary',
 				)}
 			/>
 		</button>
