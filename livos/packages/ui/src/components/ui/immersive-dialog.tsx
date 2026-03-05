@@ -95,7 +95,7 @@ function ForwardedImmersiveDialogSplitContent(
 				)}
 				{...contentProps}
 			>
-				<section className='hidden w-[210px] flex-col items-center justify-center bg-black/40 md:flex md:rounded-l-20'>
+				<section className='hidden w-[210px] flex-col items-center justify-center bg-surface-1 md:flex md:rounded-l-20'>
 					{side}
 				</section>
 				<section className='flex-1 bg-dialog-content/70 max-md:rounded-20 md:rounded-r-20'>
@@ -119,7 +119,7 @@ function ForwardedImmersiveDialogOverlay(props: unknown, ref: ForwardedRef<HTMLD
 	return (
 		<DialogOverlay
 			ref={ref}
-			className={cn(dialogOverlayClass, 'bg-black/30 backdrop-blur-xl contrast-more:backdrop-blur-none')}
+			className={cn(dialogOverlayClass, 'bg-black/10 backdrop-blur-xl contrast-more:backdrop-blur-none')}
 		/>
 	)
 }

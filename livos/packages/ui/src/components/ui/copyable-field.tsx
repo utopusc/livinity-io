@@ -29,7 +29,7 @@ export function CopyableField({
 		<div
 			className={cn(
 				// 'items-stretch' to make sure button is the same height as the field
-				'flex max-w-full items-stretch rounded-4 border border-dashed border-white/5 bg-white/4 text-14 leading-none text-white/40 outline-none focus-visible:border-white/40',
+				'flex max-w-full items-stretch rounded-4 border border-dashed border-border-subtle bg-surface-base text-14 leading-none text-text-secondary outline-none focus-visible:border-border-emphasis',
 				className,
 			)}
 		>
@@ -48,7 +48,7 @@ export function CopyableField({
 			<Tooltip open={showCopied}>
 				<TooltipTrigger asChild>
 					<button
-						className='rounded-4 px-1.5 ring-inset transition-colors hover:text-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40'
+						className='rounded-4 px-1.5 ring-inset transition-colors hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30'
 						onClick={async () => {
 							copyToClipboard(value)
 							setShowCopied(true)

@@ -21,7 +21,7 @@ export function BareCoverMessage({
 
 	return (
 		<CoverMessageContent>
-			<div className='absolute inset-0 z-50 bg-black' onClick={onClick}>
+			<div className='absolute inset-0 z-50 bg-white' onClick={onClick}>
 				<div className={coverMessageBodyClass}>{!delayed ? children : show() && children}</div>
 			</div>
 		</CoverMessageContent>
@@ -68,7 +68,7 @@ export function CoverMessageContent({children}: {children: React.ReactNode}) {
 }
 
 export function CoverMessageParagraph({children, className}: {children: React.ReactNode; className?: string}) {
-	return <p className={cn(tw`max-sm: px-4 text-center text-13 text-white/60`, className)}>{children}</p>
+	return <p className={cn(tw`max-sm: px-4 text-center text-13 text-text-secondary`, className)}>{children}</p>
 }
 
 export const coverMessageBodyClass = tw`fixed inset-0 z-50 flex flex-col items-center justify-center gap-1 duration-700 animate-in fade-in fill-mode-both`

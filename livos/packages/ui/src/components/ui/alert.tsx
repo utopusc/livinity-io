@@ -34,10 +34,10 @@ const alertVariants = cva(
 	{
 		variants: {
 			variant: {
-				default: 'bg-white/10',
-				warning: 'bg-[#4B2D00] text-[#F27400]',
-				destructive: 'bg-[#3C1C1C] text-[#F23737]',
-				success: 'bg-[#142F14] text-[#18CE15]',
+				default: 'bg-surface-1',
+				warning: 'bg-amber-50 text-amber-700',
+				destructive: 'bg-red-50 text-red-600',
+				success: 'bg-green-50 text-green-700',
 			},
 		},
 		defaultVariants: {
