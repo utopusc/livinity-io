@@ -8,17 +8,17 @@ interface StepIndicatorProps {
 
 export function StepIndicator({steps, currentStep, className}: StepIndicatorProps) {
 	return (
-		<div className={cn('flex items-center gap-2', className)}>
+		<div className={cn('flex items-center gap-2.5', className)}>
 			{Array.from({length: steps}, (_, i) => (
 				<div
 					key={i}
 					className={cn(
-						'h-1.5 rounded-full transition-all duration-300',
+						'h-1.5 rounded-full transition-all duration-500',
 						i === currentStep
-							? 'w-6 bg-brand'
+							? 'w-8 bg-brand shadow-[0_0_10px_rgba(139,92,246,0.5)]'
 							: i < currentStep
-								? 'w-1.5 bg-brand/50'
-								: 'w-1.5 bg-surface-3',
+								? 'w-2 bg-brand/40'
+								: 'w-2 bg-white/10',
 					)}
 				/>
 			))}

@@ -9,7 +9,7 @@ import {DesktopContextMenu} from '@/modules/desktop/desktop-context-menu'
 import {WindowsContainer} from '@/modules/window'
 
 import {ErrorBoundaryPageFallback} from './components/ui/error-boundary-page-fallback'
-import {BareLayout} from './layouts/bare/bare'
+import {BareLayout, GradientLayout} from './layouts/bare/bare'
 import {Desktop} from './layouts/desktop'
 import {SheetLayout} from './layouts/sheet'
 import {EnsureLoggedIn, EnsureLoggedOut} from './modules/auth/ensure-logged-in'
@@ -119,7 +119,7 @@ export const router = createBrowserRouter([
 		],
 	},
 
-	// bare
+	// bare (login, factory reset)
 	{
 		path: '/',
 		Component: BareLayout,
@@ -136,45 +136,49 @@ export const router = createBrowserRouter([
 				),
 			},
 			{
-				path: 'onboarding',
-				children: [
-					{
-						index: true,
-						element: (
-							<EnsureUserDoesntExist>
-								<OnboardingStart />
-							</EnsureUserDoesntExist>
-						),
-					},
-					{
-						path: 'restore',
-						element: (
-							<EnsureUserDoesntExist>
-								<OnboardingRestore />
-							</EnsureUserDoesntExist>
-						),
-					},
-					{
-						path: 'create-account',
-						element: (
-							<EnsureUserDoesntExist>
-								<CreateAccount />
-							</EnsureUserDoesntExist>
-						),
-					},
-					{
-						path: 'account-created',
-						element: (
-							<EnsureLoggedIn>
-								<AccountCreated />
-							</EnsureLoggedIn>
-						),
-					},
-				],
-			},
-			{
 				path: 'factory-reset/*',
 				element: <FactoryReset />,
+			},
+		],
+	},
+
+	// onboarding (gradient glassmorphism background)
+	{
+		path: '/onboarding',
+		Component: GradientLayout,
+		ErrorBoundary: ErrorBoundaryPageFallback,
+		children: [
+			{
+				index: true,
+				element: (
+					<EnsureUserDoesntExist>
+						<OnboardingStart />
+					</EnsureUserDoesntExist>
+				),
+			},
+			{
+				path: 'restore',
+				element: (
+					<EnsureUserDoesntExist>
+						<OnboardingRestore />
+					</EnsureUserDoesntExist>
+				),
+			},
+			{
+				path: 'create-account',
+				element: (
+					<EnsureUserDoesntExist>
+						<CreateAccount />
+					</EnsureUserDoesntExist>
+				),
+			},
+			{
+				path: 'account-created',
+				element: (
+					<EnsureLoggedIn>
+						<AccountCreated />
+					</EnsureLoggedIn>
+				),
 			},
 		],
 	},

@@ -1,7 +1,7 @@
 import {Suspense} from 'react'
 import {Outlet} from 'react-router-dom'
 
-import {BarePage} from '@/layouts/bare/bare-page'
+import {BarePage, GradientPage} from '@/layouts/bare/bare-page'
 
 export function BareLayout() {
 	return (
@@ -10,5 +10,15 @@ export function BareLayout() {
 				<Outlet />
 			</Suspense>
 		</BarePage>
+	)
+}
+
+export function GradientLayout() {
+	return (
+		<GradientPage>
+			<Suspense>
+				<Outlet />
+			</Suspense>
+		</GradientPage>
 	)
 }
