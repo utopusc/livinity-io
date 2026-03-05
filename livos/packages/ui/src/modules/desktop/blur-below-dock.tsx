@@ -3,7 +3,7 @@ export const BlurBelowDock = () => (
 	<div
 		className='pointer-events-none fixed inset-0 top-0 backdrop-blur-2xl duration-500 animate-in fade-in fill-mode-both'
 		style={{
-			background: '#00000044',
+			background: 'rgba(255, 255, 255, 0.25)',
 			WebkitMaskImage: 'linear-gradient(transparent calc(100% - 200px), black calc(100% - 30px))',
 		}}
 	/>

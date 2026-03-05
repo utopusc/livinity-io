@@ -101,13 +101,13 @@ export function AppIcon({
 				)}
 				{isStopped && (
 					<div className='absolute inset-0 flex items-center justify-center'>
-						<FaRegCirclePause className='h-6 w-6 text-white/90 group-hover:hidden md:h-8 md:w-8' />
-						<FaRegPlayCircle className='hidden h-6 w-6 text-white/90 group-hover:block md:h-8 md:w-8' />
+						<FaRegCirclePause className='h-6 w-6 text-text-primary group-hover:hidden md:h-8 md:w-8' />
+						<FaRegPlayCircle className='hidden h-6 w-6 text-text-primary group-hover:block md:h-8 md:w-8' />
 					</div>
 				)}
 			</div>
 			<div className='max-w-full text-caption-sm leading-normal drop-shadow-desktop-label md:text-body-sm'>
-				<div className='truncate contrast-more:bg-black contrast-more:px-1'>
+				<div className='truncate contrast-more:bg-white contrast-more:px-1'>
 					<AppLabel state={state} label={label} />
 				</div>
 			</div>
