@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   // Standalone output for production deployment (self-contained server)
   output: 'standalone',
 
+  // Turbopack root — needed for monorepo builds
+  turbopack: {
+    root: '..',
+  },
+
   // tRPC proxy to livinityd backend
   async rewrites() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:80';
