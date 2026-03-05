@@ -6,16 +6,16 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v4.0 — UI Polish, Fixes & Motion Primitives Overhaul
-**Current focus:** Phases 01-09 COMPLETE — Deployed to server4
+**Current focus:** Phases 01-10 COMPLETE — v4.0 Deployed to server4
 
 ## Current Position
 
 Milestone: v4.0 (UI Polish, Fixes & Motion Primitives)
-Phase: Phases 01-09 complete (design system + components + polish)
+Phase: v4.0 COMPLETE — all 10 phases
 Status: Deployed to livinity.cloud
 Last activity: 2026-03-04
 
-Progress: [██████████████████░░░] 9/10 (90%)
+Progress: [█████████████████████] 10/10 (100%)
 
 ## Completed Work
 
@@ -54,6 +54,14 @@ Progress: [██████████████████░░░] 9/10
 - Added AnimatedGroup stagger to file grid, chat sidebar, webhooks list, usage stats, server control cards
 - Added InView scroll-triggered animations to usage chart, daily breakdown, model pricing sections
 
+### Phase 10: Functional Gaps & Final Deploy
+- Server Control: wired restart/shutdown buttons to tRPC mutations with loading/error states
+- Software Update: connected check button to system.checkUpdate, added install flow
+- Factory Reset: replaced dead /factory-reset link with inline Dialog confirmation + password
+- File Manager: added sidebar with Home, Documents, Downloads, Trash locations
+- AI Chat: added VoiceButton with push-to-talk, WebSocket audio capture, transcript insertion
+- Final build verified and deployed to livinity.cloud
+
 ## Performance Metrics
 
 **Velocity:**
@@ -75,4 +83,4 @@ Progress: [██████████████████░░░] 9/10
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: v4.0 phases 01-09 deployed, phase 10 (final verification) remaining
+Stopped at: v4.0 COMPLETE — all 10 phases deployed to livinity.cloud

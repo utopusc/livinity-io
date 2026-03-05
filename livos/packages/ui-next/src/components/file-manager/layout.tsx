@@ -227,15 +227,15 @@ export function FileManagerLayout() {
 
   return (
     <div
-      className="flex h-full flex-col bg-surface-0"
+      className="flex h-full flex-col bg-white"
       onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
       onDragLeave={() => setIsDraggingOver(false)}
       onDrop={handleDrop}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-3 py-2 shrink-0">
+      <div className="flex items-center gap-2 border-b border-black/[0.06] bg-white px-3 py-2 shrink-0">
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text disabled:opacity-30"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-700 disabled:opacity-30"
           onClick={goBack}
           disabled={historyIndex === 0}
           aria-label="Go back"
@@ -243,7 +243,7 @@ export function FileManagerLayout() {
           <ChevronLeft className="h-4 w-4" />
         </button>
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text disabled:opacity-30"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-700 disabled:opacity-30"
           onClick={goForward}
           disabled={historyIndex >= history.length - 1}
           aria-label="Go forward"
@@ -252,9 +252,9 @@ export function FileManagerLayout() {
         </button>
 
         {/* Breadcrumb */}
-        <div className="flex flex-1 items-center gap-1 overflow-hidden text-xs">
+        <div className="flex flex-1 items-center gap-1 overflow-hidden text-sm text-neutral-500">
           <button
-            className="shrink-0 text-text-tertiary hover:text-text transition-colors"
+            className="shrink-0 text-neutral-400 hover:text-neutral-700 transition-colors"
             onClick={() => navigate('/Home')}
             aria-label="Home"
           >
@@ -262,13 +262,13 @@ export function FileManagerLayout() {
           </button>
           {pathParts.map((part, i) => (
             <div key={part.path} className="flex items-center gap-1">
-              <span className="text-text-tertiary">/</span>
+              <span className="text-neutral-300">/</span>
               <button
                 className={cn(
                   'truncate transition-colors',
                   i === pathParts.length - 1
-                    ? 'text-text font-medium'
-                    : 'text-text-tertiary hover:text-text',
+                    ? 'text-neutral-900 font-medium'
+                    : 'text-neutral-500 hover:text-neutral-700',
                 )}
                 onClick={() => navigate(part.path)}
               >
@@ -285,7 +285,7 @@ export function FileManagerLayout() {
               <ToolbarBtn icon={Copy} label="Copy" onClick={handleCopy} />
               <ToolbarBtn icon={Scissors} label="Cut" onClick={handleCut} />
               <ToolbarBtn icon={Trash2} label="Delete" onClick={handleDelete} destructive />
-              <div className="mx-1 h-4 w-px bg-border-emphasis" />
+              <div className="mx-1 h-4 w-px bg-black/[0.08]" />
             </>
           )}
           {clipboard && (
@@ -294,7 +294,7 @@ export function FileManagerLayout() {
           <ToolbarBtn icon={FolderPlus} label="New Folder" onClick={() => setShowNewFolder(true)} />
           <ToolbarBtn icon={Upload} label="Upload" onClick={() => fileInputRef.current?.click()} />
           <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
-          <div className="mx-1 h-4 w-px bg-border-emphasis" />
+          <div className="mx-1 h-4 w-px bg-black/[0.08]" />
           <ToolbarBtn
             icon={Grid3X3}
             label="Grid"
@@ -319,7 +319,7 @@ export function FileManagerLayout() {
         <div className="relative flex flex-1 flex-col overflow-hidden">
           {/* New folder input */}
           {showNewFolder && (
-            <div className="flex items-center gap-2 border-b border-border bg-surface-1 px-3 py-2 shrink-0">
+            <div className="flex items-center gap-2 border-b border-black/[0.06] bg-neutral-50 px-3 py-2 shrink-0">
               <Folder className="h-4 w-4 text-brand" />
               <Input
                 autoFocus
@@ -369,14 +369,14 @@ export function FileManagerLayout() {
             {isLoading ? (
               <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-5 lg:grid-cols-6">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-border-subtle bg-surface-0 p-2 shadow-sm">
+                  <div key={i} className="flex flex-col items-center gap-1.5 rounded-lg border border-black/[0.06] bg-white p-2">
                     <Skeleton className="h-8 w-8 rounded-lg" />
                     <Skeleton className="h-2.5 w-3/4" />
                   </div>
                 ))}
               </div>
             ) : sortedEntries.length === 0 ? (
-              <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-tertiary">
+              <div className="flex h-40 flex-col items-center justify-center gap-2 text-neutral-400">
                 <Folder className="h-8 w-8" />
                 <p className="text-xs">This folder is empty</p>
               </div>
@@ -405,7 +405,7 @@ export function FileManagerLayout() {
                 ))}
               </AnimatedGroup>
             ) : (
-              <AnimatedGroup preset="fade" className="divide-y divide-border-subtle">
+              <AnimatedGroup preset="fade" className="divide-y divide-black/[0.04]">
                 {sortedEntries.map((entry) => (
                   <ListItem
                     key={entry.name}
@@ -421,9 +421,9 @@ export function FileManagerLayout() {
           </ScrollArea>
 
           {/* Status bar */}
-          <div className="flex items-center justify-between border-t border-border bg-surface-1 px-3 py-1.5 text-[11px] text-text-tertiary shrink-0">
+          <div className="flex items-center justify-between border-t border-black/[0.06] bg-neutral-50 px-3 py-1.5 text-[11px] text-neutral-500 shrink-0">
             <span>{sortedEntries.length} items</span>
-            {selected.size > 0 && <span className="text-text-secondary">{selected.size} selected</span>}
+            {selected.size > 0 && <span className="text-neutral-700">{selected.size} selected</span>}
           </div>
         </div>
       </div>
@@ -450,9 +450,9 @@ function FileSidebar({
   navigate: (path: string) => void;
 }) {
   return (
-    <aside className="flex w-[200px] shrink-0 flex-col border-r border-border bg-surface-1 overflow-y-auto">
+    <aside className="flex w-[200px] shrink-0 flex-col border-r border-black/[0.06] bg-white overflow-y-auto">
       <div className="px-2 py-2.5 space-y-0.5">
-        <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+        <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
           Locations
         </p>
         {SIDEBAR_LOCATIONS.map(({ label, icon: Icon, path }) => {
@@ -464,11 +464,11 @@ function FileSidebar({
               className={cn(
                 'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs transition-colors',
                 isActive
-                  ? 'bg-brand/8 text-brand font-medium'
-                  : 'text-text-secondary hover:bg-neutral-100 hover:text-text',
+                  ? 'bg-brand/[0.07] text-brand font-medium'
+                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900',
               )}
             >
-              <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-brand' : 'text-text-tertiary')} />
+              <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-brand' : 'text-neutral-400')} />
               <span className="truncate">{label}</span>
             </button>
           );
@@ -510,11 +510,11 @@ function GridItem({
   return (
     <div
       className={cn(
-        'group flex flex-col items-center gap-1.5 rounded-xl p-2 cursor-pointer',
-        'transition-colors border',
+        'group flex flex-col items-center gap-1.5 rounded-lg p-2 cursor-pointer',
+        'transition-all border',
         isSelected
-          ? 'bg-brand/8 border-brand/25 ring-1 ring-brand/20 shadow-sm'
-          : 'bg-surface-0 border-border-subtle hover:bg-neutral-50 hover:border-border shadow-sm',
+          ? 'bg-brand/[0.05] border-brand/20 ring-1 ring-brand/[0.15]'
+          : 'bg-white border-black/[0.06] hover:shadow-sm hover:border-black/[0.08]',
       )}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -526,7 +526,7 @@ function GridItem({
       <Icon
         className={cn(
           'h-8 w-8',
-          entry.type === 'directory' ? 'text-brand' : 'text-text-tertiary',
+          entry.type === 'directory' ? 'text-brand' : 'text-neutral-400',
         )}
       />
       {isRenaming ? (
@@ -536,10 +536,10 @@ function GridItem({
           onChange={(e) => onRenameChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onRenameSubmit(); if (e.key === 'Escape') onRenameCancel(); }}
           onBlur={onRenameSubmit}
-          className="w-full rounded-md border border-brand bg-surface-0 px-1 text-center text-[11px] text-text outline-none focus:ring-1 focus:ring-brand/40"
+          className="w-full rounded-md border border-brand bg-white px-1 text-center text-[11px] text-neutral-900 outline-none focus:ring-1 focus:ring-brand/40"
         />
       ) : (
-        <span className="w-full truncate text-center text-[11px] text-text-secondary">
+        <span className="w-full truncate text-center text-[11px] text-neutral-600">
           {entry.name}
         </span>
       )}
@@ -571,7 +571,7 @@ function ListItem({
       className={cn(
         'group flex items-center gap-3 px-3 py-2 cursor-pointer',
         'transition-colors',
-        isSelected ? 'bg-brand/8' : 'hover:bg-neutral-50',
+        isSelected ? 'bg-brand/[0.05]' : 'hover:bg-neutral-50',
       )}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -579,15 +579,15 @@ function ListItem({
       <Icon
         className={cn(
           'h-4 w-4 shrink-0',
-          entry.type === 'directory' ? 'text-brand' : 'text-text-tertiary',
+          entry.type === 'directory' ? 'text-brand' : 'text-neutral-400',
         )}
       />
-      <span className="flex-1 truncate text-xs text-text-secondary">{entry.name}</span>
+      <span className="flex-1 truncate text-xs text-neutral-700">{entry.name}</span>
       {entry.size != null && entry.type === 'file' && (
-        <span className="text-[11px] text-text-tertiary">{formatSize(entry.size)}</span>
+        <span className="text-[11px] text-neutral-400">{formatSize(entry.size)}</span>
       )}
       <button
-        className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary opacity-0 transition-all group-hover:opacity-100 hover:bg-neutral-100 hover:text-text"
+        className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-neutral-100 hover:text-neutral-700"
         onClick={(e) => { e.stopPropagation(); onStartRename(); }}
         aria-label="Rename"
       >
@@ -617,11 +617,11 @@ function ToolbarBtn({
   return (
     <button
       className={cn(
-        'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
-        active ? 'bg-neutral-200 text-text' : '',
+        'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+        active ? 'bg-neutral-100 text-neutral-900' : '',
         destructive
-          ? 'text-error/70 hover:bg-error/8 hover:text-error'
-          : 'text-text-tertiary hover:bg-neutral-100 hover:text-text',
+          ? 'text-error/70 hover:bg-error/[0.08] hover:text-error'
+          : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700',
       )}
       onClick={onClick}
       title={label}

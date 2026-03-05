@@ -90,37 +90,45 @@ export function DesktopContextMenu({
           <motion.div
             ref={menuRef}
             className={cn(
-              'fixed z-[var(--z-popover)] min-w-[180px] rounded-xl py-1',
-              'bg-surface-0 backdrop-blur-xl',
-              'border border-border',
-              'shadow-lg',
+              'fixed z-[var(--z-popover)] min-w-[172px] overflow-hidden rounded-lg py-1',
+              'bg-white',
+              'border border-black/[0.06]',
+              'shadow-[0_8px_32px_oklch(0_0_0/0.12),0_2px_8px_oklch(0_0_0/0.06),0_0_0_0.5px_oklch(0_0_0/0.05)]',
             )}
             style={{
               left: Math.min(position.x, window.innerWidth - 200),
               top: Math.min(position.y, window.innerHeight - 120),
             }}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.12 }}
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+            data-no-context-menu
           >
-            {menuItems.map((item, i) => (
+            {menuItems.map((item) => (
               <div key={item.label}>
                 <button
                   className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
-                    'transition-colors',
+                    'flex w-full items-center gap-2.5 px-3 py-1.5 text-left',
+                    'text-[13px] transition-colors duration-100',
                     item.destructive
-                      ? 'text-error hover:bg-error/8'
-                      : 'text-text-secondary hover:bg-black/5 hover:text-text',
+                      ? 'text-red-500 hover:bg-red-50'
+                      : 'text-neutral-700 hover:bg-neutral-50',
                   )}
                   onClick={item.onClick}
                 >
-                  {item.icon && <item.icon className="h-4 w-4" />}
+                  {item.icon && (
+                    <item.icon
+                      className={cn(
+                        'h-3.5 w-3.5 shrink-0',
+                        item.destructive ? 'text-red-400' : 'text-neutral-400',
+                      )}
+                    />
+                  )}
                   {item.label}
                 </button>
                 {item.dividerAfter && (
-                  <div className="my-1 border-t border-border" />
+                  <div className="my-1 border-t border-black/[0.05]" />
                 )}
               </div>
             ))}

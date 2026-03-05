@@ -15,20 +15,21 @@ export default function TwoFaSection() {
 
 function EnableTwoFa() {
   const utils = trpcReact.useUtils();
-  const [step, setStep] = useState<'idle' | 'setup' | 'verify'>('idle');
+  const [step, setStep] = useState<'idle' | 'setup'>('idle');
   const [uri, setUri] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
-  const enableMutation = trpcReact.user.enable2fa.useMutation({
+  const generateMutation = trpcReact.user.generateTotpUri.useMutation({
     onSuccess: (data: any) => {
-      setUri(data.uri ?? data.totpUri ?? '');
+      setUri(data.uri ?? data.totpUri ?? data);
       setStep('setup');
+      setError('');
     },
     onError: (err) => setError(err.message),
   });
 
-  const verifyMutation = trpcReact.user.verify2fa.useMutation({
+  const enableMutation = trpcReact.user.enable2fa.useMutation({
     onSuccess: () => {
       utils.user.is2faEnabled.invalidate();
     },
@@ -42,7 +43,7 @@ function EnableTwoFa() {
           <ShieldOff className="h-4 w-4" />
           <span className="text-xs">2FA is not enabled</span>
         </div>
-        <Button size="sm" onClick={() => enableMutation.mutate()} loading={enableMutation.isPending}>
+        <Button size="sm" onClick={() => generateMutation.mutate()} loading={generateMutation.isPending}>
           Enable 2FA
         </Button>
         {error && <p className="text-xs text-error">{error}</p>}
@@ -50,38 +51,34 @@ function EnableTwoFa() {
     );
   }
 
-  if (step === 'setup') {
-    return (
-      <div className="space-y-3">
-        <p className="text-xs text-text-secondary">
-          Scan this URI in your authenticator app, then enter the 6-digit code:
-        </p>
-        <code className="block rounded-lg bg-neutral-50 border border-border p-2 text-xs text-text-secondary break-all">
-          {uri}
-        </code>
-        <div className="flex gap-2">
-          <Input
-            placeholder="6-digit code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="max-w-[160px]"
-            maxLength={6}
-          />
-          <Button
-            size="sm"
-            onClick={() => verifyMutation.mutate({ token: code })}
-            loading={verifyMutation.isPending}
-            disabled={code.length !== 6}
-          >
-            Verify
-          </Button>
-        </div>
-        {error && <p className="text-xs text-error">{error}</p>}
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-text-secondary">
+        Scan this URI in your authenticator app, then enter the 6-digit code:
+      </p>
+      <code className="block rounded-lg bg-neutral-50 border border-border p-2 text-xs text-text-secondary break-all">
+        {uri}
+      </code>
+      <div className="flex gap-2">
+        <Input
+          placeholder="6-digit code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          className="max-w-[160px]"
+          maxLength={6}
+        />
+        <Button
+          size="sm"
+          onClick={() => enableMutation.mutate({ totpUri: uri, totpToken: code })}
+          loading={enableMutation.isPending}
+          disabled={code.length !== 6}
+        >
+          Verify
+        </Button>
       </div>
-    );
-  }
-
-  return null;
+      {error && <p className="text-xs text-error">{error}</p>}
+    </div>
+  );
 }
 
 function DisableTwoFa() {
@@ -116,7 +113,7 @@ function DisableTwoFa() {
         <Button
           size="sm"
           variant="destructive"
-          onClick={() => mutation.mutate({ token: code })}
+          onClick={() => mutation.mutate({ totpToken: code })}
           loading={mutation.isPending}
           disabled={code.length !== 6}
         >

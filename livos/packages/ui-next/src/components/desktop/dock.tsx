@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useCallback, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { type LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useCallback } from 'react';
+import { motion } from 'motion/react';
+import {
+  Dock,
+  DockItem,
+  DockLabel,
+  DockIcon,
+} from '@/components/motion-primitives/dock';
 import {
   dockAppsGroup1,
   dockAppsGroup2,
@@ -15,58 +19,44 @@ import { useWindowManager } from '@/providers/window-manager';
 /*  Dock Item                                                          */
 /* ------------------------------------------------------------------ */
 
-type DockItemProps = {
+type AppDockItemProps = {
   app: SystemApp;
-  isActive?: boolean;
+  isActive: boolean;
   onClick: () => void;
 };
 
-function DockItem({ app, isActive, onClick }: DockItemProps) {
-  const [hovered, setHovered] = useState(false);
+function AppDockItem({ app, isActive, onClick }: AppDockItemProps) {
   const Icon = app.icon;
 
   return (
-    <motion.button
-      className={cn(
-        'relative flex h-11 w-11 items-center justify-center rounded-xl',
-        'transition-colors duration-150',
-        isActive
-          ? 'bg-brand/10 text-brand'
-          : 'text-text-tertiary hover:bg-neutral-100 hover:text-text',
-      )}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <DockItem
+      className="relative flex flex-col items-center justify-end pb-1"
       onClick={onClick}
-      whileTap={{ scale: 0.92 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
     >
-      <Icon className="h-5 w-5" strokeWidth={1.8} />
+      <DockLabel
+        className="bg-white border border-black/[0.06] shadow-md text-neutral-700 text-xs font-medium rounded-lg px-2 py-0.5"
+      >
+        {app.name}
+      </DockLabel>
 
-      {/* Label tooltip on hover */}
-      <AnimatePresence>
-        {hovered && (
-          <motion.div
-            className="pointer-events-none absolute -top-9 left-1/2 z-50 whitespace-nowrap rounded-lg bg-surface-0 px-2.5 py-1 text-xs font-medium text-text shadow-lg border border-border backdrop-blur-sm"
-            initial={{ opacity: 0, y: 4, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: 4, x: '-50%' }}
-            transition={{ duration: 0.15 }}
-          >
-            {app.name}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <DockIcon className="flex items-center justify-center">
+        <Icon
+          className="h-5 w-5 text-neutral-600"
+          strokeWidth={1.8}
+          aria-hidden="true"
+        />
+      </DockIcon>
 
       {/* Active indicator dot */}
       {isActive && (
         <motion.div
-          className="absolute -bottom-1 left-1/2 h-1 w-1 rounded-full bg-brand"
+          className="absolute -bottom-0.5 left-1/2 h-1 w-1 rounded-full bg-brand"
           layoutId="dock-active-dot"
           style={{ x: '-50%' }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         />
       )}
-    </motion.button>
+    </DockItem>
   );
 }
 
@@ -75,14 +65,19 @@ function DockItem({ app, isActive, onClick }: DockItemProps) {
 /* ------------------------------------------------------------------ */
 
 function DockDivider() {
-  return <div className="mx-1 h-6 w-px bg-border" />;
+  return (
+    <div
+      className="self-center mx-0.5 h-6 w-px bg-black/[0.08] shrink-0"
+      aria-hidden="true"
+    />
+  );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Dock                                                               */
+/*  Desktop Dock                                                       */
 /* ------------------------------------------------------------------ */
 
-export function Dock() {
+export function DesktopDock() {
   const wm = useWindowManager();
 
   const handleAppClick = useCallback(
@@ -121,23 +116,20 @@ export function Dock() {
 
   return (
     <motion.div
-      className="fixed bottom-3 left-1/2 z-[var(--z-sticky)]"
-      style={{ x: '-50%' }}
+      className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
     >
-      <div
-        className={cn(
-          'flex items-center gap-0.5 rounded-2xl px-2 py-1.5',
-          'bg-white/80 backdrop-blur-2xl',
-          'border border-black/8',
-          'shadow-float',
-        )}
+      <Dock
+        className="bg-white/70 backdrop-blur-2xl border border-black/[0.06] shadow-lg"
+        magnification={68}
+        distance={140}
+        panelHeight={52}
       >
         {/* Group 1: Home, Files, Settings, Usage, App Store */}
         {dockAppsGroup1.map((app) => (
-          <DockItem
+          <AppDockItem
             key={app.id}
             app={app}
             isActive={isWindowOpen(app.id)}
@@ -149,43 +141,14 @@ export function Dock() {
 
         {/* Group 2: AI Chat, Server, Agents, Schedules, Terminal */}
         {dockAppsGroup2.map((app) => (
-          <DockItem
+          <AppDockItem
             key={app.id}
             app={app}
             isActive={isWindowOpen(app.id)}
             onClick={() => handleAppClick(app)}
           />
         ))}
-      </div>
+      </Dock>
     </motion.div>
   );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-function getDefaultRoute(appId: string): string {
-  switch (appId) {
-    case 'LIVINITY_files':
-      return '/files/Home';
-    case 'LIVINITY_settings':
-      return '/settings';
-    case 'LIVINITY_app-store':
-      return '/app-store';
-    case 'LIVINITY_ai-chat':
-      return '/ai-chat';
-    case 'LIVINITY_server-control':
-      return '/server-control';
-    case 'LIVINITY_subagents':
-      return '/subagents';
-    case 'LIVINITY_schedules':
-      return '/schedules';
-    case 'LIVINITY_terminal':
-      return '/terminal';
-    case 'LIVINITY_live-usage':
-      return '/live-usage';
-    default:
-      return '/';
-  }
 }

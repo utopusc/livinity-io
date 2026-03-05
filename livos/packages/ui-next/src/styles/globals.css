@@ -20,12 +20,12 @@
   --color-neutral-900: oklch(0.208 0.042 265.75);
   --color-neutral-950: oklch(0.129 0.042 264.70);
 
-  /* Brand (blue-violet — premium & vibrant) */
-  --color-brand: oklch(0.623 0.214 259.13);
-  --color-brand-light: oklch(0.707 0.165 254.62);
-  --color-brand-lighter: oklch(0.809 0.105 251.81);
-  --color-brand-dark: oklch(0.511 0.262 263.83);
-  --color-brand-surface: oklch(0.623 0.214 259.13 / 0.08);
+  /* Brand (Ocean Blue — deep, trustworthy, clean) */
+  --color-brand: oklch(0.588 0.158 241.97);        /* Deep ocean blue */
+  --color-brand-light: oklch(0.680 0.130 238.50);   /* Lighter blue */
+  --color-brand-lighter: oklch(0.790 0.085 235.00); /* Very light blue */
+  --color-brand-dark: oklch(0.480 0.180 245.00);    /* Dark ocean */
+  --color-brand-surface: oklch(0.588 0.158 241.97 / 0.06); /* Subtle surface tint */
 
   /* Semantic */
   --color-success: oklch(0.627 0.194 149.21);
@@ -34,8 +34,8 @@
   --color-warning-surface: oklch(0.750 0.183 55.93 / 0.08);
   --color-error: oklch(0.577 0.245 27.33);
   --color-error-surface: oklch(0.577 0.245 27.33 / 0.08);
-  --color-info: oklch(0.623 0.214 259.13);
-  --color-info-surface: oklch(0.623 0.214 259.13 / 0.08);
+  --color-info: oklch(0.588 0.158 241.97);
+  --color-info-surface: oklch(0.588 0.158 241.97 / 0.06);
 
   /* Surface layers (LIGHT mode) */
   --color-bg: oklch(0.985 0.002 247.84);
@@ -45,9 +45,9 @@
   --color-surface-3: oklch(0.869 0.022 252.89);
 
   /* Border */
-  --color-border: oklch(0 0 0 / 0.08);
-  --color-border-subtle: oklch(0 0 0 / 0.04);
-  --color-border-emphasis: oklch(0 0 0 / 0.14);
+  --color-border: oklch(0 0 0 / 0.06);
+  --color-border-subtle: oklch(0 0 0 / 0.03);
+  --color-border-emphasis: oklch(0 0 0 / 0.10);
 
   /* Text */
   --color-text: oklch(0.145 0.03 261.28);
@@ -89,13 +89,13 @@
   --radius-ui-3xl: 1.5rem;
 
   /* ── Shadows (lighter for light mode) ──────────────────────────────────── */
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.04), 0 1px 1px oklch(0 0 0 / 0.03);
-  --shadow-md: 0 2px 4px oklch(0 0 0 / 0.04), 0 4px 8px oklch(0 0 0 / 0.06);
-  --shadow-lg: 0 4px 8px oklch(0 0 0 / 0.04), 0 8px 24px oklch(0 0 0 / 0.08);
-  --shadow-xl: 0 8px 16px oklch(0 0 0 / 0.06), 0 16px 48px oklch(0 0 0 / 0.1);
-  --shadow-float: 0 24px 48px oklch(0 0 0 / 0.12), 0 8px 16px oklch(0 0 0 / 0.06);
-  --shadow-glow: 0 0 24px oklch(0.623 0.214 259.13 / 0.2);
-  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.04), 0 2px 8px oklch(0 0 0 / 0.04), 0 0 0 1px oklch(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.03), 0 1px 1px oklch(0 0 0 / 0.02);
+  --shadow-md: 0 2px 4px oklch(0 0 0 / 0.03), 0 4px 8px oklch(0 0 0 / 0.05);
+  --shadow-lg: 0 4px 8px oklch(0 0 0 / 0.03), 0 8px 24px oklch(0 0 0 / 0.06);
+  --shadow-xl: 0 8px 16px oklch(0 0 0 / 0.05), 0 16px 48px oklch(0 0 0 / 0.08);
+  --shadow-float: 0 24px 48px oklch(0 0 0 / 0.10), 0 8px 16px oklch(0 0 0 / 0.05);
+  --shadow-glow: 0 0 24px oklch(0.588 0.158 241.97 / 0.18);
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.03), 0 2px 8px oklch(0 0 0 / 0.03), 0 0 0 1px oklch(0 0 0 / 0.03);
 
   /* ── Animation ─────────────────────────────────────────────────────────── */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
@@ -161,7 +161,7 @@
 
   /* Selection */
   ::selection {
-    background-color: oklch(0.623 0.214 259.13 / 0.2);
+    background-color: oklch(0.588 0.158 241.97 / 0.18);
     color: var(--color-text);
   }
 }
@@ -230,7 +230,7 @@
 
   .input-field:focus {
     border-color: var(--color-brand);
-    box-shadow: 0 0 0 3px oklch(0.623 0.214 259.13 / 0.12);
+    box-shadow: 0 0 0 3px oklch(0.588 0.158 241.97 / 0.10);
     background: oklch(1 0 0);
   }
 

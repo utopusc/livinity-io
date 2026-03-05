@@ -30,10 +30,10 @@ export function LiveUsageLayout() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <h3 className="text-sm font-semibold text-text">Live Usage</h3>
+      <div className="flex items-center justify-between border-b border-black/[0.06] px-5 py-3">
+        <h3 className="text-sm font-semibold text-neutral-900">Live Usage</h3>
         <select
-          className="rounded-lg bg-neutral-50 border border-border px-2 py-1 text-xs text-text outline-none"
+          className="rounded-lg bg-neutral-50 border border-black/[0.06] px-2 py-1 text-xs text-neutral-700 outline-none cursor-pointer hover:bg-neutral-100 transition-colors"
           value={days}
           onChange={(e) => setDays(parseInt(e.target.value))}
         >
@@ -48,7 +48,7 @@ export function LiveUsageLayout() {
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 space-y-2">
+              <div key={i} className="rounded-xl bg-white border border-black/[0.06] p-4 space-y-2">
                 <Skeleton className="h-3 w-1/2" />
                 <Skeleton className="h-6 w-2/3" />
               </div>
@@ -56,13 +56,13 @@ export function LiveUsageLayout() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 space-y-2 text-center">
+              <div key={i} className="rounded-xl bg-white border border-black/[0.06] p-4 space-y-2 text-center">
                 <Skeleton className="h-2.5 w-3/4 mx-auto" />
                 <Skeleton className="h-4 w-1/2 mx-auto" />
               </div>
             ))}
           </div>
-          <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4">
+          <div className="rounded-xl bg-white border border-black/[0.06] p-5">
             <Skeleton className="h-32 w-full rounded-lg" />
           </div>
         </div>
@@ -118,17 +118,17 @@ export function LiveUsageLayout() {
           >
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-text-tertiary" />
-                <span className="text-xs font-medium text-text">Daily Token Usage</span>
+                <BarChart3 className="h-4 w-4 text-neutral-400" />
+                <span className="text-xs font-medium text-neutral-900">Daily Token Usage</span>
               </div>
 
               {daily.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-text-tertiary">
+                <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
                   <Calendar className="h-8 w-8" />
                   <p className="mt-2 text-xs">No usage data yet</p>
                 </div>
               ) : (
-                <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-4">
+                <div className="rounded-xl bg-white border border-black/[0.06] p-5">
                   {/* Bar chart */}
                   <div className="flex items-end gap-[2px] h-32">
                     {daily.map((day: any, i: number) => {
@@ -144,7 +144,7 @@ export function LiveUsageLayout() {
                           title={`${dateStr}: ${formatNumber(total)} tokens`}
                         >
                           <div
-                            className="w-full rounded-t-sm bg-brand/50"
+                            className="w-full rounded-t-sm bg-brand/40"
                             style={{ height: `${outputH}%`, minHeight: total > 0 ? 2 : 0 }}
                           />
                           <div
@@ -160,8 +160,8 @@ export function LiveUsageLayout() {
                   <div className="flex justify-between mt-2">
                     {daily.length > 0 && (
                       <>
-                        <span className="text-[9px] text-text-tertiary">{(daily[0] as any).date?.slice(5)}</span>
-                        <span className="text-[9px] text-text-tertiary">{(daily[daily.length - 1] as any).date?.slice(5)}</span>
+                        <span className="text-[9px] text-neutral-400">{(daily[0] as any).date?.slice(5)}</span>
+                        <span className="text-[9px] text-neutral-400">{(daily[daily.length - 1] as any).date?.slice(5)}</span>
                       </>
                     )}
                   </div>
@@ -170,11 +170,11 @@ export function LiveUsageLayout() {
                   <div className="flex items-center gap-4 mt-3">
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-sm bg-brand" />
-                      <span className="text-[10px] text-text-tertiary">Input</span>
+                      <span className="text-[10px] text-neutral-400">Input</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-sm bg-brand/50" />
-                      <span className="text-[10px] text-text-tertiary">Output</span>
+                      <div className="h-2 w-2 rounded-sm bg-brand/40" />
+                      <span className="text-[10px] text-neutral-400">Output</span>
                     </div>
                   </div>
                 </div>
@@ -193,11 +193,11 @@ export function LiveUsageLayout() {
               once
             >
               <div className="space-y-2">
-                <span className="text-xs font-medium text-text">Daily Breakdown</span>
-                <div className="rounded-xl bg-surface-0 border border-border shadow-sm overflow-hidden">
+                <span className="text-xs font-medium text-neutral-900">Daily Breakdown</span>
+                <div className="rounded-xl bg-white border border-black/[0.06] overflow-hidden">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-border bg-neutral-50 text-text-tertiary">
+                      <tr className="border-b border-black/[0.06] bg-neutral-50 text-neutral-500">
                         <th className="px-3 py-2 text-left font-medium">Date</th>
                         <th className="px-3 py-2 text-right font-medium">Input</th>
                         <th className="px-3 py-2 text-right font-medium">Output</th>
@@ -205,9 +205,9 @@ export function LiveUsageLayout() {
                         <th className="px-3 py-2 text-right font-medium">Cost</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-black/[0.04]">
                       {[...daily].reverse().slice(0, 14).map((day: any, i: number) => (
-                        <tr key={i} className="border-b border-border last:border-0 text-text-secondary">
+                        <tr key={i} className="text-neutral-700 hover:bg-neutral-50 transition-colors">
                           <td className="px-3 py-1.5 font-mono">{day.date}</td>
                           <td className="px-3 py-1.5 text-right">{formatNumber(day.inputTokens ?? 0)}</td>
                           <td className="px-3 py-1.5 text-right">{formatNumber(day.outputTokens ?? 0)}</td>
@@ -233,14 +233,14 @@ export function LiveUsageLayout() {
 
 function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-text-tertiary" />
-        <span className="text-[11px] text-text-tertiary">{label}</span>
+    <div className="rounded-xl bg-white border border-black/[0.06] p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="h-3.5 w-3.5 text-neutral-400" />
+        <span className="text-xs text-neutral-500">{label}</span>
       </div>
       <AnimatedNumber
         value={value}
-        className="mt-1.5 block text-lg font-semibold text-text"
+        className="mt-0.5 block text-lg font-semibold text-neutral-900"
         springOptions={{ stiffness: 150, damping: 22 }}
       />
     </div>
@@ -249,23 +249,23 @@ function StatCard({ icon: Icon, label, value }: { icon: any; label: string; valu
 
 function CostCard({ value }: { value: number }) {
   return (
-    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3">
-      <div className="flex items-center gap-2">
-        <DollarSign className="h-4 w-4 text-text-tertiary" />
-        <span className="text-[11px] text-text-tertiary">Est. Cost</span>
+    <div className="rounded-xl bg-white border border-black/[0.06] p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <DollarSign className="h-3.5 w-3.5 text-neutral-400" />
+        <span className="text-xs text-neutral-500">Est. Cost</span>
       </div>
-      <p className="mt-1.5 text-lg font-semibold text-text">${value.toFixed(2)}</p>
+      <p className="mt-0.5 text-lg font-semibold text-neutral-900">${value.toFixed(2)}</p>
     </div>
   );
 }
 
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-surface-0 border border-border shadow-sm p-3 text-center">
-      <p className="text-[11px] text-text-tertiary">{label}</p>
+    <div className="rounded-xl bg-white border border-black/[0.06] p-4 text-center">
+      <p className="text-xs text-neutral-500">{label}</p>
       <AnimatedNumber
         value={value}
-        className="mt-0.5 block text-sm font-medium text-text"
+        className="mt-0.5 block text-sm font-medium text-neutral-900"
         springOptions={{ stiffness: 150, damping: 22 }}
       />
     </div>
