@@ -159,7 +159,7 @@ function FeaturedHeroCard({
 			<div className={cn('absolute inset-0 bg-gradient-to-br', gradient.from, gradient.via, gradient.to)} />
 			<div className={cn('absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb1)} />
 			<div className={cn('absolute -bottom-16 -left-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb2)} />
-			<div className='absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-transparent' />
+			<div className='absolute inset-0 bg-gradient-to-r from-black/5 via-transparent to-transparent' />
 
 			<div className='relative flex items-center gap-5 p-5 md:p-6'>
 				<div className='relative shrink-0'>
@@ -178,8 +178,8 @@ function FeaturedHeroCard({
 							{badge}
 						</span>
 					)}
-					<h3 className='truncate text-xl font-bold tracking-tight text-white md:text-2xl'>{app.name}</h3>
-					<p className='mt-1 line-clamp-2 text-body-sm text-white/70'>{app.tagline}</p>
+					<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>{app.name}</h3>
+					<p className='mt-1 line-clamp-2 text-body-sm text-text-secondary'>{app.tagline}</p>
 				</div>
 
 				<svg className={cn('h-5 w-5 shrink-0 transition-all duration-300 group-hover:translate-x-1', gradient.accent)} fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>

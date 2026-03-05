@@ -35,7 +35,7 @@ export const AppsGallerySection: React.FC<{banners: Banner[]}> = ({banners}) => 
 					/>
 
 					{/* Single gradient overlay for text readability */}
-					<div className='absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent' />
+					<div className='absolute inset-0 bg-gradient-to-t from-black/20 via-black/5 to-transparent' />
 
 					{/* Border highlight on hover */}
 					<div className='absolute inset-0 rounded-2xl border-2 border-transparent transition-colors duration-300 group-hover:border-border-emphasis md:rounded-3xl' />
@@ -84,9 +84,9 @@ export const AppGallerySection: React.FC<{gallery: string[]; galleryId: string}>
 						alt=''
 					/>
 					{/* Zoom indicator */}
-					<div className='absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100'>
+					<div className='absolute inset-0 flex items-center justify-center bg-black/15 opacity-0 transition-opacity duration-300 group-hover:opacity-100'>
 						<div className='rounded-full bg-surface-3 p-3 backdrop-blur-sm'>
-							<svg className='h-6 w-6 text-white' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+							<svg className='h-6 w-6 text-text-primary' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
 								<path
 									strokeLinecap='round'
 									strokeLinejoin='round'
@@ -145,7 +145,7 @@ export function HeroBanner({
 			)}
 
 			{/* Single overlay for text readability */}
-			<div className='absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent' />
+			<div className='absolute inset-0 bg-gradient-to-r from-black/10 via-black/5 to-transparent' />
 
 			{/* Content */}
 			<div className='relative flex min-h-[200px] flex-col justify-end p-6 md:min-h-[280px] md:p-10'>
@@ -153,9 +153,9 @@ export function HeroBanner({
 					<span className='h-1.5 w-1.5 rounded-full bg-brand' />
 					Featured
 				</span>
-				<h2 className='text-3xl font-bold tracking-tight text-white md:text-5xl'>{title}</h2>
+				<h2 className='text-3xl font-bold tracking-tight text-text-primary md:text-5xl'>{title}</h2>
 				<p className='mt-2 max-w-xl text-body-lg text-text-primary md:text-lg'>{tagline}</p>
-				<div className='mt-4 flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors group-hover:text-white'>
+				<div className='mt-4 flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors group-hover:text-text-primary'>
 					<span>Explore now</span>
 					<svg
 						className='h-4 w-4 transition-transform group-hover:translate-x-1'

@@ -77,7 +77,7 @@ function TopHeaderWindow({app, childrenRight}: {app: RegistryApp; childrenRight:
 
 	return (
 		<div className='space-y-5'>
-			<button onClick={goBack} className='flex items-center gap-2 text-text-secondary hover:text-white transition-colors'>
+			<button onClick={goBack} className='flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors'>
 				<TbArrowLeft className='h-5 w-5' />
 				<span className='text-body-sm'>Back</span>
 			</button>

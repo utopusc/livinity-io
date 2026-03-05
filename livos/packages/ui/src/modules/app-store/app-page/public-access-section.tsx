@@ -165,7 +165,7 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 									href={`https://${fullDomain}`}
 									target='_blank'
 									rel='noopener noreferrer'
-									className='flex items-center gap-1 font-mono text-body-sm text-text-primary hover:text-white'
+									className='flex items-center gap-1 font-mono text-body-sm text-text-primary hover:text-brand'
 								>
 									{fullDomain}
 									<TbExternalLink className='h-3.5 w-3.5' />

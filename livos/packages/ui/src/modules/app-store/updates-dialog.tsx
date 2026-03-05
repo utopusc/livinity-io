@@ -125,7 +125,7 @@ function AppItem({app}: {app: RegistryApp}) {
 					state={appState}
 					progress={progress}
 					style={{
-						['--progress-button-bg' as string]: 'hsl(0 0 30%)',
+						['--progress-button-bg' as string]: 'hsl(0 0 90%)',
 					}}
 				>
 					{inProgress ? appStateToString(appState) + '...' : t('app-updates.update')}

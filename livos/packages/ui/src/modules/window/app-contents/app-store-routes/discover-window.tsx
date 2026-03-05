@@ -106,7 +106,7 @@ function DiscoverContent() {
 						>
 							{section.category && (
 								<button
-									className='inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-body-sm font-semibold text-black transition-colors hover:bg-white/90'
+									className='inline-flex items-center justify-center rounded-full bg-brand px-4 py-2 text-body-sm font-semibold text-white transition-colors hover:bg-brand/90'
 									onClick={() => navigate(`/category/${section.category}`)}
 								>
 									{t('app-store.browse-category-apps', {
@@ -160,7 +160,7 @@ function FeaturedHeroCard({
 			<div className={cn('absolute inset-0 bg-gradient-to-br', gradient.from, gradient.via, gradient.to)} />
 			<div className={cn('absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb1)} />
 			<div className={cn('absolute -bottom-16 -left-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb2)} />
-			<div className='absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-transparent' />
+			<div className='absolute inset-0 bg-gradient-to-r from-black/20 via-black/10 to-transparent' />
 
 			<div className='relative flex items-center gap-5 p-5 md:p-6'>
 				<div className='relative shrink-0'>
@@ -179,8 +179,8 @@ function FeaturedHeroCard({
 							{badge}
 						</span>
 					)}
-					<h3 className='truncate text-xl font-bold tracking-tight text-white md:text-2xl'>{app.name}</h3>
-					<p className='mt-1 line-clamp-2 text-body-sm text-white/70'>{app.tagline}</p>
+					<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>{app.name}</h3>
+					<p className='mt-1 line-clamp-2 text-body-sm text-text-secondary'>{app.tagline}</p>
 				</div>
 
 				<svg className={cn('h-5 w-5 shrink-0 transition-all duration-300 group-hover:translate-x-1', gradient.accent)} fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
@@ -188,7 +188,7 @@ function FeaturedHeroCard({
 				</svg>
 			</div>
 
-			<div className='absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/8 to-transparent transition-transform duration-1000 group-hover:translate-x-full' />
+			<div className='absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-black/5 to-transparent transition-transform duration-1000 group-hover:translate-x-full' />
 		</WindowAwareLink>
 	)
 }

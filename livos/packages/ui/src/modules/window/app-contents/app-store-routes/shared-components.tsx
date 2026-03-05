@@ -239,8 +239,8 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 				}}
 			>
 				{/* Decorative blobs — asymmetric shapes */}
-				<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/[0.06]' />
-				<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-white/[0.04]' />
+				<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-surface-base' />
+				<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-surface-base' />
 
 				{/* Icon — left-aligned, vertically centered */}
 				<div className='relative z-10 pl-5'>
@@ -261,10 +261,10 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 
 				{/* Text — right side */}
 				<div className='relative z-10 flex min-w-0 flex-1 flex-col pr-5'>
-					<h3 className='truncate text-body font-bold tracking-tight text-white md:text-lg'>
+					<h3 className='truncate text-body font-bold tracking-tight text-text-primary md:text-lg'>
 						{app.name}
 					</h3>
-					<p className='mt-0.5 line-clamp-2 text-caption text-white/65 md:text-body-sm'>
+					<p className='mt-0.5 line-clamp-2 text-caption text-text-secondary md:text-body-sm'>
 						{app.tagline}
 					</p>
 				</div>
@@ -367,7 +367,7 @@ function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number
 					'group-hover:scale-110',
 				)}
 				style={{
-					background: `radial-gradient(circle at 50% 30%, rgba(255,255,255,0.12), transparent 70%), linear-gradient(180deg, ${c1}, ${c2})`,
+					background: `radial-gradient(circle at 50% 30%, rgba(0,0,0,0.03), transparent 70%), linear-gradient(180deg, ${c1}, ${c2})`,
 				}}
 			>
 				{/* Icon centered */}
@@ -388,9 +388,9 @@ function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number
 
 				{/* Info at bottom */}
 				<div className='px-3 pb-3'>
-					<h4 className='truncate text-body-sm font-bold text-white'>{app.name}</h4>
-					<p className='truncate text-caption text-white/55'>{app.developer}</p>
-					<div className='mt-1.5 flex items-center justify-center rounded-lg bg-white/10 py-1.5 text-caption font-medium text-white/90 backdrop-blur-sm transition-colors group-hover:bg-white/20'>
+					<h4 className='truncate text-body-sm font-bold text-text-primary'>{app.name}</h4>
+					<p className='truncate text-caption text-text-secondary'>{app.developer}</p>
+					<div className='mt-1.5 flex items-center justify-center rounded-lg bg-surface-1 py-1.5 text-caption font-medium text-text-primary backdrop-blur-sm transition-colors group-hover:bg-surface-2'>
 						{t('app.view')}
 					</div>
 				</div>
