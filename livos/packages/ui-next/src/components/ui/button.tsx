@@ -16,13 +16,13 @@ const variants: Record<ButtonVariant, string> = {
   primary:
     'bg-brand text-white hover:bg-brand-light active:bg-brand-dark shadow-sm',
   secondary:
-    'bg-surface-1 text-text hover:bg-surface-2 active:bg-surface-3',
+    'bg-neutral-100 text-text hover:bg-neutral-200 active:bg-neutral-300 border border-border',
   ghost:
-    'text-text-secondary hover:text-text hover:bg-surface-1 active:bg-surface-2',
+    'text-text-secondary hover:text-text hover:bg-neutral-100 active:bg-neutral-200',
   destructive:
-    'bg-error text-white hover:brightness-110 active:brightness-90',
+    'bg-error text-white hover:brightness-110 active:brightness-90 shadow-sm',
   outline:
-    'border border-border-emphasis text-text hover:bg-surface-1 active:bg-surface-2',
+    'border border-border-emphasis text-text bg-white hover:bg-neutral-50 active:bg-neutral-100',
 };
 
 const sizes: Record<ButtonSize, string> = {

@@ -61,7 +61,7 @@ function AppLogs() {
           placeholder="Enter app ID..."
           value={appId}
           onChange={(e) => setAppId(e.target.value)}
-          className="h-8 rounded-md bg-white/5 px-2.5 text-xs text-text border border-white/10 outline-none focus:ring-1 focus:ring-brand"
+          className="h-8 rounded-md bg-neutral-50 border border-border px-2.5 text-xs text-text outline-none focus:ring-1 focus:ring-brand"
         />
         <Button size="sm" variant="secondary" onClick={() => refetch()} disabled={!appId}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -86,10 +86,19 @@ function LogViewer({ logs, isLoading }: { logs: string | undefined; isLoading: b
   if (!logs) return <p className="text-xs text-text-tertiary">No logs available.</p>;
 
   return (
-    <div className="max-h-[400px] overflow-auto rounded-lg bg-black p-3">
-      <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-white/50">
-        {logs}
-      </pre>
+    <div className="overflow-hidden rounded-lg border border-border shadow-sm">
+      {/* Terminal-style title bar */}
+      <div className="flex items-center gap-1.5 border-b border-border bg-neutral-100 px-3 py-2">
+        <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+        <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+        <div className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+        <span className="ml-2 text-[10px] text-text-tertiary">logs</span>
+      </div>
+      <div className="max-h-[400px] overflow-auto bg-neutral-900 p-3">
+        <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-neutral-300">
+          {logs}
+        </pre>
+      </div>
     </div>
   );
 }

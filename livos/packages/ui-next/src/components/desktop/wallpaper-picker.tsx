@@ -24,7 +24,7 @@ export function WallpaperPicker({
         <>
           {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 z-[var(--z-overlay)] bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-[var(--z-overlay)] bg-black/20 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -36,9 +36,9 @@ export function WallpaperPicker({
             className={cn(
               'fixed left-1/2 top-1/2 z-[var(--z-modal)] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2',
               'rounded-2xl overflow-hidden',
-              'bg-surface-1/95 backdrop-blur-2xl',
-              'border border-white/10',
-              'shadow-xl shadow-black/40',
+              'bg-surface-0',
+              'border border-border',
+              'shadow-float',
             )}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -46,11 +46,12 @@ export function WallpaperPicker({
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/5 px-5 py-3">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <h2 className="text-sm font-semibold text-text">Choose Wallpaper</h2>
               <button
                 onClick={onClose}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-white/10 hover:text-text"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-black/5 hover:text-text"
+                aria-label="Close wallpaper picker"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -68,9 +69,11 @@ export function WallpaperPicker({
                       'ring-2 transition-all',
                       isActive
                         ? 'ring-brand shadow-glow'
-                        : 'ring-transparent hover:ring-white/20',
+                        : 'ring-transparent hover:ring-black/20',
                     )}
                     onClick={() => setWallpaperId(wp.id)}
+                    aria-label={`Select wallpaper ${wp.id}`}
+                    aria-pressed={isActive}
                   >
                     <img
                       src={wp.thumbUrl}
@@ -79,11 +82,11 @@ export function WallpaperPicker({
                     />
                     {isActive && (
                       <motion.div
-                        className="absolute inset-0 flex items-center justify-center bg-black/30"
+                        className="absolute inset-0 flex items-center justify-center bg-black/20"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                       >
-                        <Check className="h-4 w-4 text-white" />
+                        <Check className="h-4 w-4 text-white drop-shadow" />
                       </motion.div>
                     )}
                   </button>

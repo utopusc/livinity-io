@@ -118,7 +118,7 @@ export default function VoiceSection() {
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-secondary">STT Language</span>
         <select
-          className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+          className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
           value={sttLanguage}
           onChange={(e) => setSttLanguage(e.target.value)}
         >
@@ -135,7 +135,7 @@ export default function VoiceSection() {
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-secondary">STT Model</span>
         <select
-          className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+          className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
           value={sttModel}
           onChange={(e) => setSttModel(e.target.value)}
         >

@@ -226,24 +226,26 @@ export function FileManagerLayout() {
 
   return (
     <div
-      className="flex h-full flex-col"
+      className="flex h-full flex-col bg-surface-0"
       onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
       onDragLeave={() => setIsDraggingOver(false)}
       onDrop={handleDrop}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-border bg-surface-0 px-3 py-2">
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-white/8 hover:text-text disabled:opacity-30"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text disabled:opacity-30"
           onClick={goBack}
           disabled={historyIndex === 0}
+          aria-label="Go back"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-white/8 hover:text-text disabled:opacity-30"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-text disabled:opacity-30"
           onClick={goForward}
           disabled={historyIndex >= history.length - 1}
+          aria-label="Go forward"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -251,8 +253,9 @@ export function FileManagerLayout() {
         {/* Breadcrumb */}
         <div className="flex flex-1 items-center gap-1 overflow-hidden text-xs">
           <button
-            className="shrink-0 text-text-tertiary hover:text-text"
+            className="shrink-0 text-text-tertiary hover:text-text transition-colors"
             onClick={() => navigate('/Home')}
+            aria-label="Home"
           >
             <Home className="h-3.5 w-3.5" />
           </button>
@@ -261,7 +264,7 @@ export function FileManagerLayout() {
               <span className="text-text-tertiary">/</span>
               <button
                 className={cn(
-                  'truncate',
+                  'truncate transition-colors',
                   i === pathParts.length - 1
                     ? 'text-text font-medium'
                     : 'text-text-tertiary hover:text-text',
@@ -281,7 +284,7 @@ export function FileManagerLayout() {
               <ToolbarBtn icon={Copy} label="Copy" onClick={handleCopy} />
               <ToolbarBtn icon={Scissors} label="Cut" onClick={handleCut} />
               <ToolbarBtn icon={Trash2} label="Delete" onClick={handleDelete} destructive />
-              <div className="mx-1 h-4 w-px bg-white/10" />
+              <div className="mx-1 h-4 w-px bg-border-emphasis" />
             </>
           )}
           {clipboard && (
@@ -290,7 +293,7 @@ export function FileManagerLayout() {
           <ToolbarBtn icon={FolderPlus} label="New Folder" onClick={() => setShowNewFolder(true)} />
           <ToolbarBtn icon={Upload} label="Upload" onClick={() => fileInputRef.current?.click()} />
           <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
-          <div className="mx-1 h-4 w-px bg-white/10" />
+          <div className="mx-1 h-4 w-px bg-border-emphasis" />
           <ToolbarBtn
             icon={Grid3X3}
             label="Grid"
@@ -308,8 +311,8 @@ export function FileManagerLayout() {
 
       {/* New folder input */}
       {showNewFolder && (
-        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
-          <Folder className="h-4 w-4 text-text-tertiary" />
+        <div className="flex items-center gap-2 border-b border-border bg-surface-1 px-3 py-2">
+          <Folder className="h-4 w-4 text-brand" />
           <Input
             autoFocus
             placeholder="Folder name"
@@ -340,14 +343,14 @@ export function FileManagerLayout() {
       <AnimatePresence>
         {isDraggingOver && (
           <motion.div
-            className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand/40 bg-brand/5"
+            className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand/30 bg-brand/5"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <div className="text-center">
               <Upload className="mx-auto h-8 w-8 text-brand" />
-              <p className="mt-2 text-sm text-brand">Drop files to upload</p>
+              <p className="mt-2 text-sm font-medium text-brand">Drop files to upload</p>
             </div>
           </motion.div>
         )}
@@ -389,7 +392,7 @@ export function FileManagerLayout() {
             ))}
           </div>
         ) : (
-          <div className="divide-y divide-white/3">
+          <div className="divide-y divide-border-subtle">
             {sortedEntries.map((entry) => (
               <ListItem
                 key={entry.name}
@@ -405,9 +408,9 @@ export function FileManagerLayout() {
       </ScrollArea>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between border-t border-white/5 px-3 py-1.5 text-[11px] text-text-tertiary">
+      <div className="flex items-center justify-between border-t border-border bg-surface-1 px-3 py-1.5 text-[11px] text-text-tertiary">
         <span>{sortedEntries.length} items</span>
-        {selected.size > 0 && <span>{selected.size} selected</span>}
+        {selected.size > 0 && <span className="text-text-secondary">{selected.size} selected</span>}
       </div>
     </div>
   );
@@ -446,8 +449,10 @@ function GridItem({
     <div
       className={cn(
         'group flex flex-col items-center gap-1.5 rounded-xl p-2 cursor-pointer',
-        'transition-colors',
-        isSelected ? 'bg-brand/15 ring-1 ring-brand/30' : 'hover:bg-white/5',
+        'transition-colors border',
+        isSelected
+          ? 'bg-brand/8 border-brand/25 ring-1 ring-brand/20 shadow-sm'
+          : 'bg-surface-0 border-border-subtle hover:bg-neutral-50 hover:border-border shadow-sm',
       )}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -456,7 +461,12 @@ function GridItem({
         onStartRename();
       }}
     >
-      <Icon className={cn('h-8 w-8', entry.type === 'directory' ? 'text-brand/70' : 'text-text-tertiary')} />
+      <Icon
+        className={cn(
+          'h-8 w-8',
+          entry.type === 'directory' ? 'text-brand' : 'text-text-tertiary',
+        )}
+      />
       {isRenaming ? (
         <input
           autoFocus
@@ -464,7 +474,7 @@ function GridItem({
           onChange={(e) => onRenameChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onRenameSubmit(); if (e.key === 'Escape') onRenameCancel(); }}
           onBlur={onRenameSubmit}
-          className="w-full rounded bg-white/10 px-1 text-center text-[11px] text-text outline-none"
+          className="w-full rounded-md border border-brand bg-white px-1 text-center text-[11px] text-text outline-none focus:ring-1 focus:ring-brand/40"
         />
       ) : (
         <span className="w-full truncate text-center text-[11px] text-text-secondary">
@@ -497,21 +507,27 @@ function ListItem({
   return (
     <div
       className={cn(
-        'flex items-center gap-3 px-3 py-2 cursor-pointer',
+        'group flex items-center gap-3 px-3 py-2 cursor-pointer',
         'transition-colors',
-        isSelected ? 'bg-brand/10' : 'hover:bg-white/3',
+        isSelected ? 'bg-brand/8' : 'hover:bg-neutral-50',
       )}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      <Icon className={cn('h-4 w-4 shrink-0', entry.type === 'directory' ? 'text-brand/70' : 'text-text-tertiary')} />
+      <Icon
+        className={cn(
+          'h-4 w-4 shrink-0',
+          entry.type === 'directory' ? 'text-brand' : 'text-text-tertiary',
+        )}
+      />
       <span className="flex-1 truncate text-xs text-text-secondary">{entry.name}</span>
       {entry.size != null && entry.type === 'file' && (
         <span className="text-[11px] text-text-tertiary">{formatSize(entry.size)}</span>
       )}
       <button
-        className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary opacity-0 transition-all group-hover:opacity-100 hover:bg-white/10"
+        className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary opacity-0 transition-all group-hover:opacity-100 hover:bg-neutral-100 hover:text-text"
         onClick={(e) => { e.stopPropagation(); onStartRename(); }}
+        aria-label="Rename"
       >
         <Pencil className="h-3 w-3" />
       </button>
@@ -540,13 +556,14 @@ function ToolbarBtn({
     <button
       className={cn(
         'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
-        active ? 'bg-white/10 text-text' : '',
+        active ? 'bg-neutral-200 text-text' : '',
         destructive
-          ? 'text-error/70 hover:bg-error/10 hover:text-error'
-          : 'text-text-tertiary hover:bg-white/8 hover:text-text',
+          ? 'text-error/70 hover:bg-error/8 hover:text-error'
+          : 'text-text-tertiary hover:bg-neutral-100 hover:text-text',
       )}
       onClick={onClick}
       title={label}
+      aria-label={label}
     >
       <Icon className="h-3.5 w-3.5" />
     </button>

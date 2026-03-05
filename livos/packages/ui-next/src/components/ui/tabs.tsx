@@ -47,7 +47,7 @@ function TabsList({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1 rounded-xl bg-surface-0 p-1',
+        'inline-flex items-center gap-1 rounded-xl bg-neutral-100 border border-border p-1',
         className,
       )}
       role="tablist"
@@ -80,7 +80,7 @@ function TabsTrigger({ value, className, children, ...props }: TabsTriggerProps)
     >
       {isSelected && (
         <motion.div
-          className="absolute inset-0 rounded-lg bg-surface-2"
+          className="absolute inset-0 rounded-lg bg-white shadow-sm border border-border"
           layoutId="tabs-indicator"
           transition={{ type: 'spring', duration: 0.3, bounce: 0.15 }}
         />

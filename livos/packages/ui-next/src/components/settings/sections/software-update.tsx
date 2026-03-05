@@ -18,7 +18,7 @@ export default function SoftwareUpdateSection() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-white/3 p-4 border border-white/5">
+      <div className="rounded-xl bg-white border border-border shadow-sm p-4">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-text">{version?.name ?? 'LivOS'}</p>

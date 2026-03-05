@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Power, RotateCcw, AlertTriangle, Loader2, Server, Clock, Wifi } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
 import { trpcReact } from '@/trpc/client';
+import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
 
 export function ServerControlLayout() {
   const { data: version } = trpcReact.system.version.useQuery();
@@ -17,7 +18,7 @@ export function ServerControlLayout() {
       {/* System info */}
       <div className="grid grid-cols-2 gap-3">
         <InfoCard icon={Server} label="Version" value={version ? `${version.name} v${version.version}` : '...'} />
-        <InfoCard icon={Clock} label="Uptime" value={uptime ? formatUptime(uptime) : '...'} />
+        <UptimeCard uptime={uptime} />
         <InfoCard icon={Wifi} label="Local IP" value={ips?.[0] ?? '...'} className="col-span-2" />
       </div>
 
@@ -84,7 +85,7 @@ function ShutdownButton() {
 
 function InfoCard({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) {
   return (
-    <div className={`rounded-xl bg-white/3 p-3 border border-white/5 ${className ?? ''}`}>
+    <div className={`rounded-xl bg-white border border-border shadow-sm p-3 ${className ?? ''}`}>
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-text-tertiary" />
         <span className="text-[11px] text-text-tertiary">{label}</span>
@@ -94,12 +95,31 @@ function InfoCard({ icon: Icon, label, value, className }: { icon: any; label: s
   );
 }
 
-function formatUptime(seconds: number | string): string {
-  const s = typeof seconds === 'string' ? parseInt(seconds) : seconds;
-  if (isNaN(s)) return String(seconds);
-  const days = Math.floor(s / 86400);
-  const hours = Math.floor((s % 86400) / 3600);
-  const mins = Math.floor((s % 3600) / 60);
+function UptimeCard({ uptime }: { uptime: number | string | undefined }) {
+  const uptimeSeconds = uptime
+    ? typeof uptime === 'string'
+      ? parseInt(uptime)
+      : uptime
+    : 0;
+
+  return (
+    <div className="rounded-xl bg-white border border-border shadow-sm p-3">
+      <div className="flex items-center gap-2">
+        <Clock className="h-4 w-4 text-text-tertiary" />
+        <span className="text-[11px] text-text-tertiary">Uptime</span>
+      </div>
+      <p className="mt-1 text-xs font-medium text-text">
+        {uptime ? formatUptime(uptimeSeconds) : '...'}
+      </p>
+    </div>
+  );
+}
+
+function formatUptime(seconds: number): string {
+  if (isNaN(seconds)) return '...';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;

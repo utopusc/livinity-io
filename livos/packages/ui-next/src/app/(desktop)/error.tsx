@@ -11,7 +11,7 @@ export default function DesktopError({
   reset: () => void;
 }) {
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-bg/80 backdrop-blur-2xl p-6">
+    <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-surface-0/90 backdrop-blur-2xl p-6">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-error/10 border border-error/20">
         <AlertTriangle className="h-8 w-8 text-error" />
       </div>

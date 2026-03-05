@@ -70,7 +70,7 @@ export default function NexusConfigSection() {
           <div className="space-y-3 pt-3">
             <Field label="Style">
               <select
-                className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+                className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
                 value={config.response?.style ?? 'detailed'}
                 onChange={(e) => updateField('response.style', e.target.value)}
               >
@@ -91,7 +91,7 @@ export default function NexusConfigSection() {
             />
             <Field label="Language">
               <select
-                className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+                className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
                 value={config.response?.language ?? 'en'}
                 onChange={(e) => updateField('response.language', e.target.value)}
               >
@@ -151,7 +151,7 @@ export default function NexusConfigSection() {
             <NumberField label="Interval (min)" value={config.heartbeat?.intervalMinutes ?? 60} onChange={(v) => updateField('heartbeat.intervalMinutes', v)} />
             <Field label="Delivery Target">
               <select
-                className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+                className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
                 value={config.heartbeat?.target ?? 'none'}
                 onChange={(e) => updateField('heartbeat.target', e.target.value)}
               >
@@ -168,7 +168,7 @@ export default function NexusConfigSection() {
           <div className="space-y-3 pt-3">
             <Field label="Log Level">
               <select
-                className="h-8 rounded-md bg-white/5 px-2 text-xs text-text border border-white/10"
+                className="h-8 rounded-md bg-neutral-50 border border-border px-2 text-xs text-text"
                 value={config.logging?.level ?? 'info'}
                 onChange={(e) => updateField('logging.level', e.target.value)}
               >
@@ -185,7 +185,7 @@ export default function NexusConfigSection() {
               checked={config.logging?.redactSensitive ?? true}
               onChange={(v) => updateField('logging.redactSensitive', v)}
             />
-            <div className="border-t border-white/5 pt-3">
+            <div className="border-t border-border pt-3">
               <Button
                 size="sm"
                 variant="destructive"
@@ -200,7 +200,7 @@ export default function NexusConfigSection() {
         </TabsContent>
       </Tabs>
 
-      <div className="flex items-center gap-2 border-t border-white/5 pt-4">
+      <div className="flex items-center gap-2 border-t border-border pt-4">
         <Button
           size="sm"
           onClick={() => updateMutation.mutate(config)}

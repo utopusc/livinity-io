@@ -37,7 +37,7 @@ function Tooltip({ content, children, side = 'top', className, delay = 300 }: To
           <motion.span
             className={cn(
               'absolute left-1/2 z-[var(--z-tooltip)] whitespace-nowrap',
-              'rounded-lg bg-surface-2 px-2.5 py-1 text-caption text-text shadow-md',
+              'rounded-lg bg-neutral-900 px-2.5 py-1 text-caption text-white shadow-md',
               side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
               className,
             )}

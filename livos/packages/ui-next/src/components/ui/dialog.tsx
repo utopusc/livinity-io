@@ -67,7 +67,7 @@ function DialogContent({ children, className }: DialogContentProps) {
         <>
           {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 z-[var(--z-modal)] bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[var(--z-modal)] bg-black/30 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -79,7 +79,7 @@ function DialogContent({ children, className }: DialogContentProps) {
           <motion.div
             className={cn(
               'fixed left-1/2 top-1/2 z-[var(--z-modal)]',
-              'w-full max-w-lg rounded-2xl border border-border bg-surface-0 p-6 shadow-float',
+              'w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-float',
               className,
             )}
             initial={{ opacity: 0, scale: 0.95, x: '-50%', y: '-48%' }}
@@ -88,8 +88,9 @@ function DialogContent({ children, className }: DialogContentProps) {
             transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
           >
             <button
-              className="absolute right-4 top-4 rounded-lg p-1 text-text-tertiary hover:text-text hover:bg-surface-1 transition-colors cursor-pointer"
+              className="absolute right-4 top-4 rounded-lg p-1 text-text-tertiary hover:text-text hover:bg-neutral-100 transition-colors cursor-pointer"
               onClick={() => onOpenChange(false)}
+              aria-label="Close dialog"
             >
               <X size={18} />
             </button>

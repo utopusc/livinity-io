@@ -115,7 +115,7 @@ function LoginFlow() {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg bg-white/3 p-3">
+      <div className="rounded-lg bg-neutral-50 border border-border p-3">
         <p className="mb-2 text-xs text-text-secondary">
           1. Open this link to sign in:
         </p>

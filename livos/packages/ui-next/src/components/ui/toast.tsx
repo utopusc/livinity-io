@@ -8,7 +8,7 @@ function Toaster() {
       position="bottom-right"
       toastOptions={{
         className:
-          'bg-surface-1 border-border text-text rounded-xl shadow-lg',
+          'bg-white border border-border text-text rounded-xl shadow-lg',
         descriptionClassName: 'text-text-secondary',
       }}
       gap={8}

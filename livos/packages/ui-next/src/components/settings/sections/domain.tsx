@@ -86,8 +86,8 @@ function DomainSetupWizard() {
       <div className="flex items-center gap-2 mb-4">
         {['domain', 'dns-records', 'verify', 'activate', 'done'].map((s, i) => (
           <div key={s} className="flex items-center gap-1">
-            <div className={`h-2 w-2 rounded-full ${s === step ? 'bg-brand' : 'bg-white/10'}`} />
-            {i < 4 && <div className="h-px w-4 bg-white/10" />}
+            <div className={`h-2 w-2 rounded-full ${s === step ? 'bg-brand' : 'bg-neutral-200'}`} />
+            {i < 4 && <div className="h-px w-4 bg-neutral-200" />}
           </div>
         ))}
       </div>
@@ -111,9 +111,9 @@ function DomainSetupWizard() {
       {step === 'dns-records' && (
         <div className="space-y-3">
           <p className="text-xs text-text-secondary">Add this DNS A record to your domain:</p>
-          <div className="overflow-hidden rounded-lg border border-white/5">
+          <div className="overflow-hidden rounded-lg border border-border shadow-sm">
             <table className="w-full text-xs">
-              <thead><tr className="border-b border-white/5 bg-white/3">
+              <thead><tr className="border-b border-border bg-neutral-50">
                 <th className="px-3 py-1.5 text-left text-text-tertiary font-medium">Type</th>
                 <th className="px-3 py-1.5 text-left text-text-tertiary font-medium">Name</th>
                 <th className="px-3 py-1.5 text-left text-text-tertiary font-medium">Value</th>

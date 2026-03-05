@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CalendarClock, Plus, Trash2, Loader2, Clock, Bot } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
 import { trpcReact } from '@/trpc/client';
+import { AnimatedGroup } from '@/components/motion-primitives/animated-group';
 
 type Schedule = {
   subagentId: string;
@@ -26,7 +27,7 @@ export function SchedulesLayout() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-white/5 px-5 py-3">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <h3 className="text-sm font-semibold text-text">Schedules</h3>
         <Button size="sm" onClick={() => setShowCreate(!showCreate)}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -57,51 +58,53 @@ export function SchedulesLayout() {
           </div>
         )}
 
-        <div className="space-y-2">
-          {(schedules as Schedule[] | undefined)?.map((sched) => {
-            const agent = (agents as any[] | undefined)?.find((a: any) => a.id === sched.subagentId);
-            return (
-              <div
-                key={sched.subagentId}
-                className="rounded-xl bg-white/3 border border-white/5 p-4 space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-brand" />
-                    <span className="text-sm font-medium text-text">
-                      {agent?.name ?? sched.subagentId}
-                    </span>
+        {!isLoading && schedules && (schedules as Schedule[]).length > 0 && (
+          <AnimatedGroup preset="slide" className="space-y-2">
+            {(schedules as Schedule[]).map((sched) => {
+              const agent = (agents as any[] | undefined)?.find((a: any) => a.id === sched.subagentId);
+              return (
+                <div
+                  key={sched.subagentId}
+                  className="rounded-xl bg-white border border-border shadow-sm p-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4 text-brand" />
+                      <span className="text-sm font-medium text-text">
+                        {agent?.name ?? sched.subagentId}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeMutation.mutate({ subagentId: sched.subagentId })}
+                      disabled={removeMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-text-tertiary hover:text-error" />
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => removeMutation.mutate({ subagentId: sched.subagentId })}
-                    disabled={removeMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-text-tertiary hover:text-error" />
-                  </Button>
-                </div>
 
-                <p className="text-xs text-text-secondary">{sched.task}</p>
+                  <p className="text-xs text-text-secondary">{sched.task}</p>
 
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">
-                    <Clock className="mr-1 h-3 w-3" />
-                    {sched.cron}
-                  </Badge>
-                  {sched.timezone && (
-                    <Badge variant="secondary">{sched.timezone}</Badge>
-                  )}
-                  {sched.nextRun && (
+                  <div className="flex flex-wrap gap-2">
                     <Badge variant="secondary">
-                      Next: {new Date(sched.nextRun).toLocaleString()}
+                      <Clock className="mr-1 h-3 w-3" />
+                      {sched.cron}
                     </Badge>
-                  )}
+                    {sched.timezone && (
+                      <Badge variant="secondary">{sched.timezone}</Badge>
+                    )}
+                    {sched.nextRun && (
+                      <Badge variant="secondary">
+                        Next: {new Date(sched.nextRun).toLocaleString()}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </AnimatedGroup>
+        )}
       </div>
     </div>
   );
@@ -142,7 +145,7 @@ function CreateSchedule({
   };
 
   return (
-    <div className="rounded-xl bg-white/3 border border-brand/20 p-4 space-y-3">
+    <div className="rounded-xl bg-white border border-brand/20 shadow-sm p-4 space-y-3">
       <p className="text-xs font-medium text-text">New Schedule</p>
 
       <div className="space-y-1.5">

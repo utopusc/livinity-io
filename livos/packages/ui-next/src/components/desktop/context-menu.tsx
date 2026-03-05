@@ -91,9 +91,9 @@ export function DesktopContextMenu({
             ref={menuRef}
             className={cn(
               'fixed z-[var(--z-popover)] min-w-[180px] rounded-xl py-1',
-              'bg-surface-2/95 backdrop-blur-xl',
-              'border border-white/10',
-              'shadow-xl shadow-black/30',
+              'bg-surface-0 backdrop-blur-xl',
+              'border border-border',
+              'shadow-lg',
             )}
             style={{
               left: Math.min(position.x, window.innerWidth - 200),
@@ -111,8 +111,8 @@ export function DesktopContextMenu({
                     'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
                     'transition-colors',
                     item.destructive
-                      ? 'text-error hover:bg-error/10'
-                      : 'text-text-secondary hover:bg-white/8 hover:text-text',
+                      ? 'text-error hover:bg-error/8'
+                      : 'text-text-secondary hover:bg-black/5 hover:text-text',
                   )}
                   onClick={item.onClick}
                 >
@@ -120,7 +120,7 @@ export function DesktopContextMenu({
                   {item.label}
                 </button>
                 {item.dividerAfter && (
-                  <div className="my-1 border-t border-white/5" />
+                  <div className="my-1 border-t border-border" />
                 )}
               </div>
             ))}
