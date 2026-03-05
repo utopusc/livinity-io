@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Dock,
   DockItem,
@@ -29,36 +29,38 @@ function AppDockItem({ app, isActive, onClick }: AppDockItemProps) {
   const Icon = app.icon;
 
   return (
-    <div className="relative flex flex-col items-center">
-      <DockItem
-        className="flex flex-col items-center justify-end pb-1"
-        onClick={onClick}
+    <DockItem
+      className="relative flex flex-col items-center justify-end pb-1"
+      onClick={onClick}
+    >
+      <DockLabel
+        className="bg-white border border-black/[0.06] shadow-md text-neutral-700 text-xs font-medium rounded-lg px-2 py-0.5"
       >
-        <DockLabel
-          className="bg-white border border-black/[0.06] shadow-md text-neutral-700 text-xs font-medium rounded-lg px-2 py-0.5"
-        >
-          {app.name}
-        </DockLabel>
+        {app.name}
+      </DockLabel>
 
-        <DockIcon className="flex items-center justify-center">
-          <Icon
-            className="h-5 w-5 text-neutral-600"
-            strokeWidth={1.8}
-            aria-hidden="true"
-          />
-        </DockIcon>
-      </DockItem>
-
-      {/* Active indicator dot — outside DockItem to avoid cloneElement on false */}
-      {isActive && (
-        <motion.div
-          className="absolute -bottom-0.5 left-1/2 h-1 w-1 rounded-full bg-brand"
-          layoutId="dock-active-dot"
-          style={{ x: '-50%' }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      <DockIcon className="flex items-center justify-center">
+        <Icon
+          className="h-5 w-5 text-neutral-600"
+          strokeWidth={1.8}
+          aria-hidden="true"
         />
-      )}
-    </div>
+      </DockIcon>
+
+      {/* Active indicator dot */}
+      <AnimatePresence>
+        {isActive && (
+          <motion.div
+            key="active-dot"
+            className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-brand"
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          />
+        )}
+      </AnimatePresence>
+    </DockItem>
   );
 }
 
@@ -66,10 +68,11 @@ function AppDockItem({ app, isActive, onClick }: AppDockItemProps) {
 /*  Dock Divider                                                       */
 /* ------------------------------------------------------------------ */
 
-function DockDivider() {
+// Accepts and discards any extra props injected by parent wrappers (e.g. width, isHovered).
+function DockDivider(_props: Record<string, unknown>) {
   return (
     <div
-      className="self-center mx-0.5 h-6 w-px bg-black/[0.08] shrink-0"
+      className="self-center mx-0.5 h-6 w-px shrink-0 bg-black/[0.08]"
       aria-hidden="true"
     />
   );

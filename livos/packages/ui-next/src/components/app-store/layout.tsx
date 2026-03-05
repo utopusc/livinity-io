@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import {
   Search,
   ChevronLeft,
@@ -11,9 +11,10 @@ import {
   ExternalLink,
   Trash2,
   Grid2X2,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button, Badge } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpcReact } from '@/trpc/client';
@@ -22,6 +23,14 @@ import { InView } from '@/components/motion-primitives/in-view';
 import { TransitionPanel } from '@/components/motion-primitives/transition-panel';
 import { Tilt } from '@/components/motion-primitives/tilt';
 import { AnimatedBackground } from '@/components/motion-primitives/animated-background';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -40,6 +49,7 @@ type CatalogApp = {
   version?: string;
   category?: string;
   port?: number;
+  path?: string;
   gallery?: string[];
   dependencies?: string[];
   releaseNotes?: string;
@@ -64,6 +74,19 @@ const FEATURED_SECTIONS = [
 ];
 
 const CATEGORIES = ['All', 'Media', 'Developer', 'Productivity', 'Home Automation', 'Security'];
+
+/* ------------------------------------------------------------------ */
+/*  URL generation (mirrors desktop logic)                            */
+/* ------------------------------------------------------------------ */
+
+function getAppUrl(app: { id: string; port?: number; path?: string }): string {
+  const { protocol, hostname } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${protocol}//${hostname}:${app.port}`;
+  }
+  const domain = hostname.split('.').slice(-2).join('.');
+  return `${protocol}//${app.id}.${domain}${app.path ?? ''}`;
+}
 
 /* ------------------------------------------------------------------ */
 /*  View index map for TransitionPanel                                 */
@@ -93,15 +116,17 @@ export function AppStoreLayout() {
   const [selectedAppId, setSelectedAppId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch both builtin apps (primary) and registry (community)
+  // Fetch both builtin apps (priority) and registry (community)
   const { data: builtinData, isLoading: builtinLoading } =
     trpcReact.appStore.builtinApps.useQuery();
+  // Registry returns Array<{ url, meta, apps: AppManifest[] }>
   const { data: registryData, isLoading: registryLoading } =
     trpcReact.appStore.registry.useQuery();
 
   const isLoading = builtinLoading || registryLoading;
 
-  // Merge: builtinApps first, then add registry apps that aren't already present
+  // Merge: builtinApps first, then add registry apps not already present.
+  // registryData is an array of repo objects, each with an `apps` array.
   const catalog: CatalogApp[] = useMemo(() => {
     const builtins: CatalogApp[] = (builtinData ?? []).map((app: any) => ({
       id: app.id,
@@ -114,6 +139,7 @@ export function AppStoreLayout() {
       version: app.version,
       category: app.category,
       port: app.port,
+      path: app.path,
       gallery: app.gallery,
       dependencies: app.dependencies,
       releaseNotes: app.releaseNotes,
@@ -121,9 +147,12 @@ export function AppStoreLayout() {
 
     const builtinIds = new Set(builtins.map((a) => a.id));
 
-    const registryApps: CatalogApp[] = registryData
-      ? Object.values(registryData)
-          .filter((app: any) => !builtinIds.has(app.id))
+    // registryData is Array<{ url, meta, apps: AppManifest[] }>
+    // Flatten all apps from all repos, deduplicate against builtins.
+    const registryApps: CatalogApp[] = Array.isArray(registryData)
+      ? registryData
+          .flatMap((repo: any) => (Array.isArray(repo?.apps) ? repo.apps : []))
+          .filter((app: any) => app?.id && !builtinIds.has(app.id))
           .map((app: any) => ({
             id: app.id,
             name: app.name,
@@ -135,6 +164,7 @@ export function AppStoreLayout() {
             version: app.version,
             category: app.category,
             port: app.port,
+            path: app.path,
             gallery: app.gallery,
             dependencies: app.dependencies,
             releaseNotes: app.releaseNotes,
@@ -151,6 +181,9 @@ export function AppStoreLayout() {
     return map;
   }, [catalog]);
 
+  // Search filters against name, tagline, and description.
+  // Category filter only applies when not on the discover view (or when a
+  // non-All category is explicitly selected).
   const filteredApps = useMemo(() => {
     let apps = catalog;
     if (selectedCategory !== 'All') {
@@ -169,6 +202,18 @@ export function AppStoreLayout() {
     }
     return apps;
   }, [catalog, selectedCategory, searchQuery]);
+
+  // When searching from discover, we want all-category search results.
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return catalog.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.tagline?.toLowerCase().includes(q) ||
+        a.description?.toLowerCase().includes(q),
+    );
+  }, [catalog, searchQuery]);
 
   const selectedApp = catalogById.get(selectedAppId);
 
@@ -243,6 +288,7 @@ export function AppStoreLayout() {
               catalog={catalog}
               catalogById={catalogById}
               searchQuery={searchQuery}
+              searchResults={searchResults}
               filteredApps={filteredApps}
               selectedCategory={selectedCategory}
               onOpenDetail={openDetail}
@@ -279,6 +325,7 @@ function DiscoverView({
   catalog,
   catalogById,
   searchQuery,
+  searchResults,
   filteredApps,
   selectedCategory,
   onOpenDetail,
@@ -288,25 +335,26 @@ function DiscoverView({
   catalog: CatalogApp[];
   catalogById: Map<string, CatalogApp>;
   searchQuery: string;
+  searchResults: CatalogApp[];
   filteredApps: CatalogApp[];
   selectedCategory: string;
   onOpenDetail: (id: string) => void;
   onOpenCategory: (cat: string) => void;
   onSelectCategory: (cat: string) => void;
 }) {
-  // If a search query is active, show flat search results instead
+  // If a search query is active, show flat search results across all apps
   if (searchQuery.trim()) {
     return (
       <div className="p-5">
         <p className="mb-4 text-xs text-neutral-400">
-          {filteredApps.length} result{filteredApps.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+          {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
         </p>
-        {filteredApps.length > 0 ? (
+        {searchResults.length > 0 ? (
           <AnimatedGroup
             preset="blur-slide"
             className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
           >
-            {filteredApps.map((app) => (
+            {searchResults.map((app) => (
               <AppCard key={app.id} app={app} onClick={() => onOpenDetail(app.id)} />
             ))}
           </AnimatedGroup>
@@ -385,7 +433,7 @@ function DiscoverView({
         );
       })}
 
-      {/* All apps fallback if no sections matched */}
+      {/* All apps fallback if no featured sections matched any catalog app */}
       {FEATURED_SECTIONS.every(
         (s) => s.apps.every((id) => !catalogById.has(id)),
       ) && catalog.length > 0 && (
@@ -454,7 +502,7 @@ function CategoryView({
 /*  App Card                                                           */
 /* ------------------------------------------------------------------ */
 
-function AppCard({ app, onClick }: { app: CatalogApp; onClick: () => void }) {
+const AppCard = memo(function AppCard({ app, onClick }: { app: CatalogApp; onClick: () => void }) {
   return (
     <Tilt rotationFactor={6} isRevese>
       <button
@@ -487,7 +535,7 @@ function AppCard({ app, onClick }: { app: CatalogApp; onClick: () => void }) {
       </button>
     </Tilt>
   );
-}
+});
 
 /* ------------------------------------------------------------------ */
 /*  App Detail                                                         */
@@ -526,7 +574,7 @@ function AppDetail({ app }: { app: CatalogApp }) {
             </div>
           </div>
           <div className="shrink-0 pt-1">
-            <AppInstallButton appId={app.id} />
+            <AppInstallButton app={app} />
           </div>
         </div>
       </InView>
@@ -651,97 +699,208 @@ function AppDetail({ app }: { app: CatalogApp }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Uninstall Confirmation Dialog                                      */
+/* ------------------------------------------------------------------ */
+
+function UninstallDialog({
+  appName,
+  open,
+  onOpenChange,
+  onConfirm,
+  isPending,
+}: {
+  appName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+          </div>
+          <DialogTitle>Uninstall {appName}?</DialogTitle>
+          <DialogDescription>
+            This will stop and remove the app along with its data. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-4 py-2 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+            Uninstall
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Install Button                                                     */
 /* ------------------------------------------------------------------ */
 
-function AppInstallButton({ appId }: { appId: string }) {
-  const { data: stateData } = trpcReact.apps.state.useQuery({ appId }, { refetchInterval: 2000 });
+const TRANSITIONING_STATES = new Set([
+  'installing',
+  'updating',
+  'starting',
+  'restarting',
+  'stopping',
+  'uninstalling',
+]);
+
+function AppInstallButton({ app }: { app: CatalogApp }) {
+  const appId = app.id;
+  const [uninstallDialogOpen, setUninstallDialogOpen] = useState(false);
+
+  const { data: stateData } = trpcReact.apps.state.useQuery(
+    { appId },
+    {
+      // Poll while an operation is in-flight; otherwise hold still.
+      refetchInterval: (query) => {
+        const s = (query.state.data as any)?.state ?? '';
+        return TRANSITIONING_STATES.has(s) ? 2000 : false;
+      },
+    },
+  );
   const utils = trpcReact.useUtils();
 
   const invalidate = useCallback(() => utils.apps.state.invalidate({ appId }), [utils, appId]);
 
   const installMutation = trpcReact.apps.install.useMutation({ onSuccess: invalidate });
-  const uninstallMutation = trpcReact.apps.uninstall.useMutation({ onSuccess: invalidate });
+  const uninstallMutation = trpcReact.apps.uninstall.useMutation({
+    onSuccess: () => {
+      setUninstallDialogOpen(false);
+      invalidate();
+    },
+  });
   const startMutation = trpcReact.apps.start.useMutation({ onSuccess: invalidate });
   const stopMutation = trpcReact.apps.stop.useMutation({ onSuccess: invalidate });
 
-  const state = stateData?.state ?? stateData ?? 'unknown';
+  // stateData is always { state: string, progress: number } from the server
+  const state: string = (stateData as any)?.state ?? 'unknown';
 
-  const isInstalling = state === 'installing' || state === 'updating';
+  const isTransitioning = TRANSITIONING_STATES.has(state);
   const isRunning = state === 'running' || state === 'ready';
   const isStopped = state === 'stopped';
 
-  if (isInstalling) {
+  if (isTransitioning) {
+    const label =
+      state === 'installing' ? 'Installing...' :
+      state === 'updating'   ? 'Updating...'   :
+      state === 'starting'   ? 'Starting...'   :
+      state === 'restarting' ? 'Restarting...' :
+      state === 'stopping'   ? 'Stopping...'   :
+      state === 'uninstalling' ? 'Uninstalling...' :
+      'Working...';
+
     return (
       <button
         disabled
         className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-medium text-white opacity-70"
       >
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Installing...
+        {label}
       </button>
     );
   }
 
   if (isRunning) {
     return (
-      <div className="flex shrink-0 items-center gap-1.5">
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white">
-          <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
-          Running
-        </span>
-        <button
-          onClick={() => stopMutation.mutate({ appId })}
-          disabled={stopMutation.isPending}
-          aria-label="Stop app"
-          className="inline-flex items-center gap-1 rounded-lg border border-black/[0.06] bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-200 disabled:opacity-50"
-        >
-          <Square className="h-3 w-3" />
-          Stop
-        </button>
-        <button
-          onClick={() => {
-            if (confirm('Uninstall this app?')) uninstallMutation.mutate({ appId });
-          }}
-          disabled={uninstallMutation.isPending}
-          aria-label="Uninstall app"
-          className="inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-neutral-100 p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      <>
+        <UninstallDialog
+          appName={app.name}
+          open={uninstallDialogOpen}
+          onOpenChange={setUninstallDialogOpen}
+          onConfirm={() => uninstallMutation.mutate({ appId })}
+          isPending={uninstallMutation.isPending}
+        />
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
+            Running
+          </span>
+          <a
+            href={getAppUrl(app)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open app in new tab"
+            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.06] bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-200"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open
+          </a>
+          <button
+            onClick={() => stopMutation.mutate({ appId })}
+            disabled={stopMutation.isPending}
+            aria-label="Stop app"
+            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.06] bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-200 disabled:opacity-50"
+          >
+            <Square className="h-3 w-3" />
+            Stop
+          </button>
+          <button
+            onClick={() => setUninstallDialogOpen(true)}
+            disabled={uninstallMutation.isPending}
+            aria-label="Uninstall app"
+            className="inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-neutral-100 p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </>
     );
   }
 
   if (isStopped) {
     return (
-      <div className="flex shrink-0 items-center gap-1.5">
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600">
-          Stopped
-        </span>
-        <button
-          onClick={() => startMutation.mutate({ appId })}
-          disabled={startMutation.isPending}
-          aria-label="Start app"
-          className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <Play className="h-3 w-3" />
-          Start
-        </button>
-        <button
-          onClick={() => {
-            if (confirm('Uninstall this app?')) uninstallMutation.mutate({ appId });
-          }}
-          disabled={uninstallMutation.isPending}
-          aria-label="Uninstall app"
-          className="inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-neutral-100 p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      <>
+        <UninstallDialog
+          appName={app.name}
+          open={uninstallDialogOpen}
+          onOpenChange={setUninstallDialogOpen}
+          onConfirm={() => uninstallMutation.mutate({ appId })}
+          isPending={uninstallMutation.isPending}
+        />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600">
+            Stopped
+          </span>
+          <button
+            onClick={() => startMutation.mutate({ appId })}
+            disabled={startMutation.isPending}
+            aria-label="Start app"
+            className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            <Play className="h-3 w-3" />
+            Start
+          </button>
+          <button
+            onClick={() => setUninstallDialogOpen(true)}
+            disabled={uninstallMutation.isPending}
+            aria-label="Uninstall app"
+            className="inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-neutral-100 p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </>
     );
   }
 
+  // Not installed state
   return (
     <button
       onClick={() => installMutation.mutate({ appId })}

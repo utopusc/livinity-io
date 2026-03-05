@@ -113,7 +113,7 @@ function Dock({
           mouseX.set(Infinity);
         }}
         className={cn(
-          'mx-auto flex w-fit gap-4 rounded-2xl bg-gray-50 px-4',
+          'mx-auto flex w-fit gap-4 rounded-2xl px-4',
           className
         )}
         style={{ height: panelHeight }}

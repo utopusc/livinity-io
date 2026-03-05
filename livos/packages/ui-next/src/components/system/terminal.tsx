@@ -28,7 +28,7 @@ export function TerminalLayout() {
         const link = document.createElement('link');
         link.id = 'xterm-css';
         link.rel = 'stylesheet';
-        link.href = '/node_modules/@xterm/xterm/css/xterm.css';
+        link.href = 'https://cdn.jsdelivr.net/npm/@xterm/xterm@6/css/xterm.min.css';
         document.head.appendChild(link);
       }
 
