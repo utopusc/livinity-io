@@ -18,13 +18,13 @@ export function ExpandedContent({progresses}: {progresses: Progress[]}) {
 			<div className='flex size-full items-center justify-between overflow-hidden px-8 py-6'>
 				{/* Left side */}
 				<div className='flex flex-col gap-1'>
-					<div className='truncate text-sm tracking-tight text-white/90'>
+					<div className='truncate text-sm tracking-tight text-text-primary'>
 						{t('backups-floating-island.backing-up-to')}
 					</div>
-					<div className='truncate text-xs font-normal text-white/50'>{progress.name}</div>
+					<div className='truncate text-xs font-normal text-text-secondary'>{progress.name}</div>
 					<div className='mt-2 flex items-baseline gap-1'>
-						<div className='text-5xl font-light tracking-tight text-white'>{progress.percent.toFixed(0)}</div>
-						<div className='font-medium text-white/40'>%</div>
+						<div className='text-5xl font-light tracking-tight text-text-primary'>{progress.percent.toFixed(0)}</div>
+						<div className='font-medium text-text-tertiary'>%</div>
 					</div>
 				</div>
 
@@ -78,7 +78,7 @@ export function ExpandedContent({progresses}: {progresses: Progress[]}) {
 							stroke='currentColor'
 							strokeWidth='3'
 							fill='none'
-							className='text-white/10'
+							className='text-border-default'
 						/>
 						{/* Progress circle with gradient */}
 						<circle
@@ -110,7 +110,7 @@ export function ExpandedContent({progresses}: {progresses: Progress[]}) {
 						}}
 					>
 						<motion.div
-							className='relative rounded-full border border-white/10 bg-white/5 p-3'
+							className='relative rounded-full border border-border-default bg-surface-base p-3'
 							initial={{scale: 0.8, opacity: 0}}
 							animate={{scale: 1, opacity: 1}}
 							exit={{scale: 0.8, opacity: 0}}
@@ -137,7 +137,7 @@ export function ExpandedContent({progresses}: {progresses: Progress[]}) {
 	return (
 		<div className='flex h-full w-full flex-col overflow-hidden py-5'>
 			<div className='mb-4 flex items-center justify-between px-5'>
-				<span className='text-xs text-white/60'>{t('backups-floating-island.backing-up-to')}</span>
+				<span className='text-xs text-text-secondary'>{t('backups-floating-island.backing-up-to')}</span>
 			</div>
 
 			<ScrollArea className='flex-1 px-5 pb-1'>
@@ -150,11 +150,11 @@ export function ExpandedContent({progresses}: {progresses: Progress[]}) {
 								<div className='size-6 shrink-0' />
 							)}
 							<div className='min-w-0 flex-1'>
-								<div className='flex items-center justify-between text-xs text-white/70'>
+								<div className='flex items-center justify-between text-xs text-text-secondary'>
 									<span className='truncate'>{p.name}</span>
-									<span className='shrink-0 text-white/60'>{p.percent.toFixed(0)}%</span>
+									<span className='shrink-0 text-text-secondary'>{p.percent.toFixed(0)}%</span>
 								</div>
-								<div className='relative mt-1 h-1 overflow-hidden rounded-full bg-white/20'>
+								<div className='relative mt-1 h-1 overflow-hidden rounded-full bg-surface-2'>
 									<div
 										className='absolute left-0 top-0 h-full rounded-full bg-brand transition-all duration-300'
 										style={{width: `${p.percent}%`}}

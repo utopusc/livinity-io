@@ -16,7 +16,7 @@ export function SelectableTile({
 		<div
 			className={[
 				'flex h-[120px] cursor-pointer flex-col items-center justify-center rounded-xl p-4 text-center',
-				selected ? 'border border-brand bg-brand/15' : 'border border-white/10 bg-white/5 hover:bg-white/10',
+				selected ? 'border border-brand bg-brand/15' : 'border border-border-default bg-surface-base hover:bg-surface-1',
 			].join(' ')}
 			onClick={onClick}
 		>
@@ -28,7 +28,7 @@ export function SelectableTile({
 export function ClickableTile({children, onClick}: {children: React.ReactNode; onClick?: () => void}) {
 	return (
 		<div
-			className='flex h-[120px] cursor-pointer flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-4 text-center hover:bg-white/10'
+			className='flex h-[120px] cursor-pointer flex-col items-center justify-center rounded-xl border border-border-default bg-surface-base p-4 text-center hover:bg-surface-1'
 			onClick={onClick}
 		>
 			{children}
@@ -38,7 +38,7 @@ export function ClickableTile({children, onClick}: {children: React.ReactNode; o
 
 export function LoadingTile() {
 	return (
-		<div className='flex h-[120px] items-center justify-center rounded-xl border border-white/10 bg-white/5'>
+		<div className='flex h-[120px] items-center justify-center rounded-xl border border-border-default bg-surface-base'>
 			<Loader2 className='h-6 w-6 animate-spin opacity-60' />
 		</div>
 	)
@@ -46,7 +46,7 @@ export function LoadingTile() {
 
 export function EmptyTile({text}: {text: string}) {
 	return (
-		<div className='flex h-[120px] items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm opacity-60'>
+		<div className='flex h-[120px] items-center justify-center rounded-xl border border-border-default bg-surface-base text-sm opacity-60'>
 			{text}
 		</div>
 	)
@@ -78,7 +78,7 @@ export function RadioTile({
 			}}
 			className={[
 				'flex cursor-pointer items-center gap-3 rounded-xl border p-4',
-				selected ? 'border-brand bg-brand/15' : 'border-white/10 bg-white/5 hover:bg-white/10',
+				selected ? 'border-brand bg-brand/15' : 'border-border-default bg-surface-base hover:bg-surface-1',
 			].join(' ')}
 		>
 			<RadioGroupItem id={`radio-${value}`} value={value} />

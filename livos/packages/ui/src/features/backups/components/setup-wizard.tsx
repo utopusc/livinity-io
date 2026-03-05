@@ -284,8 +284,8 @@ export function BackupsSetupWizard() {
 						const h = headerMetaForStep(step)
 						return (
 							<>
-								<h2 className='text-24 font-medium text-white'>{h.title}</h2>
-								{h.subtitle ? <span className='text-13 text-white/60'>{h.subtitle}</span> : null}
+								<h2 className='text-24 font-medium text-text-primary'>{h.title}</h2>
+								{h.subtitle ? <span className='text-13 text-text-secondary'>{h.subtitle}</span> : null}
 							</>
 						)
 					})()}
@@ -469,19 +469,19 @@ function DestinationStep({
 							<DropdownMenuItem onSelect={() => switchTab('nas')}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-setup-livinity-or-nas')}</div>
-									<div className='text-12 text-white/40'>{t('backups-setup-nas-or-livinity-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-nas-or-livinity-description')}</div>
 								</div>
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={() => switchTab('external')}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('external-drive')}</div>
-									<div className='text-12 text-white/40'>{t('backups-setup-external-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-external-description')}</div>
 								</div>
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={() => switchTab('livinity-private-cloud')}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-setup-livinity-private-cloud')}</div>
-									<div className='text-12 text-white/40'>{t('backups-setup-livinity-private-cloud-description')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-livinity-private-cloud-description')}</div>
 								</div>
 							</DropdownMenuItem>
 						</DropdownMenuContent>
@@ -538,13 +538,13 @@ function DestinationStep({
 			) : tab === 'external' ? (
 				<div className='grid grid-cols-[repeat(auto-fill,125px)] gap-3'>
 					{isLoadingExternalStorage ? (
-						<div className='col-span-full flex items-center justify-start gap-2 py-2 text-sm text-white/60'>
+						<div className='col-span-full flex items-center justify-start gap-2 py-2 text-sm text-text-secondary'>
 							<Loader2 className='size-4 animate-spin will-change-transform' />
 							<span>{t('backups.scanning-for-external-drives')}</span>
 						</div>
 					) : !disks || disks.length === 0 ? (
 						<div className='col-span-full flex items-center justify-start py-2'>
-							<span className='text-sm text-white/40'>{t('backups.no-external-drives-detected')}</span>
+							<span className='text-sm text-text-tertiary'>{t('backups.no-external-drives-detected')}</span>
 						</div>
 					) : (
 						<>
@@ -567,7 +567,7 @@ function DestinationStep({
 													<BackupDeviceIcon path={firstMount} connected className='size-11' />
 												</div>
 												<div className='w-full truncate text-center text-[12px]'>{label}</div>
-												<div className='w-full truncate text-center text-[11px] text-white/40'>
+												<div className='w-full truncate text-center text-[11px] text-text-tertiary'>
 													{formatFilesystemSize(p.size)}
 												</div>
 											</ServerCard>,
@@ -592,7 +592,7 @@ function DestinationStep({
 												<BackupDeviceIcon path='' connected={false} className='size-11' />
 											</div>
 											<div className='w-full truncate text-center text-[12px]'>{label}</div>
-											<div className='w-full truncate text-center text-[11px] text-white/40'>
+											<div className='w-full truncate text-center text-[11px] text-text-tertiary'>
 												{disk.isFormatting ? t('files-format.formatting') : t('files-format.title-requires-format')}
 											</div>
 										</ServerCard>
@@ -602,10 +602,10 @@ function DestinationStep({
 					)}
 				</div>
 			) : tab === 'livinity-private-cloud' ? (
-				<div className='flex flex-col items-center justify-center gap-7 rounded-20 border border border-white/10 bg-black/30 px-3 pb-10 pt-8'>
+				<div className='flex flex-col items-center justify-center gap-7 rounded-20 border border border-border-default bg-black/10 px-3 pb-10 pt-8'>
 					<div className='flex flex-col items-center justify-center gap-1 text-center'>
-						<h2 className='mb-0 text-2xl text-white'>{t('backups-setup-livinity-private-cloud')}</h2>
-						<span className='mt-0  text-sm text-white/80'>{t('backups-setup-livinity-private-cloud-subtitle')}</span>
+						<h2 className='mb-0 text-2xl text-text-primary'>{t('backups-setup-livinity-private-cloud')}</h2>
+						<span className='mt-0  text-sm text-text-primary'>{t('backups-setup-livinity-private-cloud-subtitle')}</span>
 					</div>
 					<img
 						src={livinityPrivateCloudIcon}
@@ -614,11 +614,11 @@ function DestinationStep({
 						draggable={false}
 					/>
 					<div className='flex flex-col items-center justify-center gap-2'>
-						<p className='max-w-md text-center text-sm text-white/80'>
+						<p className='max-w-md text-center text-sm text-text-primary'>
 							<Trans
 								i18nKey='backups-setup-livinity-private-cloud-cta'
 								components={{
-									bold: <span className='font-bold text-white' />,
+									bold: <span className='font-bold text-text-primary' />,
 								}}
 							/>
 						</p>
@@ -696,7 +696,7 @@ function FolderPickerStep({
 						type='text'
 						value={shownValue}
 						readOnly
-						className='cursor-pointer select-none pr-28 text-white/90'
+						className='cursor-pointer select-none pr-28 text-text-primary'
 						title={shownValue}
 						onClick={() => setBrowserOpen(true)}
 					/>
@@ -867,7 +867,7 @@ function ReviewStep({values}: {values: FormValues}) {
 								value={showPw ? plainPw : masked}
 								size={Math.min((showPw ? plainPw : masked).length, 32)}
 								type={showPw ? 'text' : 'text'}
-								className='flex h-6 w-auto max-w-[120px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-[#ffffff0a] bg-white/10 px-1 font-mono text-12 leading-none outline-none'
+								className='flex h-6 w-auto max-w-[120px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-border-subtle bg-surface-1 px-1 font-mono text-12 leading-none outline-none'
 							/>
 							<span
 								className='group inline-flex h-6 w-6 cursor-pointer items-center justify-center'

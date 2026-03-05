@@ -58,20 +58,20 @@ export function BackupsExclusions({showTitle = false}: {showTitle?: boolean}) {
 
 	return (
 		<div className='space-y-3'>
-			{showTitle && <span className='text-13 font-medium text-white/90'>{t('backups.exclude-from-backups')}</span>}
+			{showTitle && <span className='text-13 font-medium text-text-primary'>{t('backups.exclude-from-backups')}</span>}
 
 			{/* Folders */}
 			<div className='space-y-2'>
 				<div className='flex items-center justify-between'>
-					<div className='text-13 text-white/60'>{t('backups-exclusions.files-and-folders')}</div>
+					<div className='text-13 text-text-secondary'>{t('backups-exclusions.files-and-folders')}</div>
 					<Button size='sm' onClick={() => setAddFolderOpen(true)}>
 						{t('backups-exclusions.add')}
 						<PlusCircle className='h-3 w-3' />
 					</Button>
 				</div>
-				<div className='divide-y divide-white/6 rounded-12 bg-white/5'>
+				<div className='divide-y divide-border-subtle rounded-12 bg-surface-base'>
 					{filteredIgnoredPaths.length === 0 ? (
-						<div className='p-4 text-sm text-white/50'>{t('backups-exclusions.no-excluded-files-or-folders')}</div>
+						<div className='p-4 text-sm text-text-secondary'>{t('backups-exclusions.no-excluded-files-or-folders')}</div>
 					) : (
 						<>
 							{filteredIgnoredPaths.map((p: string) => (
@@ -105,7 +105,7 @@ export function BackupsExclusions({showTitle = false}: {showTitle?: boolean}) {
 			{/* Apps */}
 			<div className='space-y-2'>
 				<div className='flex items-center justify-between'>
-					<div className='text-13 text-white/60'>{t('backups-exclusions.excluded-apps')}</div>
+					<div className='text-13 text-text-secondary'>{t('backups-exclusions.excluded-apps')}</div>
 					<DropdownMenu
 						open={appPickerOpen}
 						onOpenChange={(o) => {
@@ -120,7 +120,7 @@ export function BackupsExclusions({showTitle = false}: {showTitle?: boolean}) {
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align='end' className='flex max-h-72 min-w-64 flex-col gap-3'>
-							{isLoadingApps && <div className='p-2 text-sm text-white/50'>{t('loading')}</div>}
+							{isLoadingApps && <div className='p-2 text-sm text-text-secondary'>{t('loading')}</div>}
 							{!isLoadingApps && (
 								<>
 									<Input
@@ -142,7 +142,7 @@ export function BackupsExclusions({showTitle = false}: {showTitle?: boolean}) {
 											threshold: matchSorter.rankings.WORD_STARTS_WITH,
 										})
 										if (results.length === 0) {
-											return <div className='px-2 text-14 text-white/50'>{t('no-results-found')}</div>
+											return <div className='px-2 text-14 text-text-secondary'>{t('no-results-found')}</div>
 										}
 										return (
 											<ScrollArea className='relative -mx-2.5 flex h-full flex-col px-2.5'>
@@ -168,16 +168,16 @@ export function BackupsExclusions({showTitle = false}: {showTitle?: boolean}) {
 					</DropdownMenu>
 				</div>
 				{/* Existing app exclusions list */}
-				<div className='divide-y divide-white/6 rounded-12 bg-white/5'>
+				<div className='divide-y divide-border-subtle rounded-12 bg-surface-base'>
 					{(isLoadingApps || isIgnoredLoading || isAutoExcludedLoading) && (
-						<div className='p-3 text-sm text-white/50'>{t('loading')}</div>
+						<div className='p-3 text-sm text-text-secondary'>{t('loading')}</div>
 					)}
 					{!isLoadingApps &&
 					!isIgnoredLoading &&
 					!isAutoExcludedLoading &&
 					excludedAppsCount === 0 &&
 					autoExcludedAppsCount === 0 ? (
-						<div className='p-4 text-sm text-white/50'>{t('backups-exclusions.no-excluded-apps')}</div>
+						<div className='p-4 text-sm text-text-secondary'>{t('backups-exclusions.no-excluded-apps')}</div>
 					) : (
 						!isLoadingApps &&
 						(userApps || []).map((app) => (
@@ -283,7 +283,7 @@ function AppRow({
 					{!isIgnored && hasDefaultIgnores && (
 						<button
 							onClick={() => setOpen((v) => !v)}
-							className='flex items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 text-12 text-white/70 hover:text-white'
+							className='flex items-center gap-1 rounded-md bg-surface-1 px-2 py-0.5 text-12 text-text-secondary hover:text-text-primary'
 							type='button'
 						>
 							{t('backups-exclusions.auto-excluded')} ({paths.length})
@@ -310,9 +310,9 @@ function AppRow({
 				</div>
 			</div>
 			{!isIgnored && open && hasDefaultIgnores && (
-				<div className='mt-2 space-y-1 rounded-md bg-white/5 p-2'>
-					<div className='text-12 text-white/60'>{t('backups-exclusions.app-paths-explanation')}</div>
-					<div className='text-12 text-white/60'>{t('backups-exclusions.app-paths-cannot-be-modified')}</div>
+				<div className='mt-2 space-y-1 rounded-md bg-surface-base p-2'>
+					<div className='text-12 text-text-secondary'>{t('backups-exclusions.app-paths-explanation')}</div>
+					<div className='text-12 text-text-secondary'>{t('backups-exclusions.app-paths-cannot-be-modified')}</div>
 					{paths.map((p: string) => (
 						<FilePathRow key={p} path={formatAppPathForDisplay(p)} />
 					))}
