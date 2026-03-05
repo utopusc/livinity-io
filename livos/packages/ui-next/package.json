@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --turbopack --port 3001",
-    "build": "next build",
+    "build": "next build && node -e \"const fs=require('fs'),p=require('path');const s=p.join('.next','standalone','packages','ui-next');fs.cpSync('.next/static',p.join(s,'.next','static'),{recursive:true});fs.cpSync('public',p.join(s,'public'),{recursive:true});console.log('Standalone: static + public copied')\"",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
