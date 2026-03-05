@@ -1,4 +1,5 @@
 import LivinityLogo from '@/assets/livinity-logo'
+import {TextShimmerWave} from '@/components/motion-primitives/text-shimmer-wave'
 import {greetingMessage} from '@/modules/desktop/greeting-message'
 import {cn} from '@/shadcn-lib/utils'
 
@@ -16,7 +17,18 @@ export function Header({userName}: {userName: string}) {
 						ref?.style?.removeProperty('view-transition-name')
 					}}
 				/>
-				<h1 className='text-center text-heading font-bold md:text-display-lg'>{greetingMessage(name)}</h1>
+				<TextShimmerWave
+					as='h1'
+					className='text-center text-heading font-bold md:text-display-lg [--base-color:rgba(15,23,42,0.6)] [--base-gradient-color:rgba(15,23,42,0.92)]'
+					duration={1.5}
+					spread={1.2}
+					zDistance={4}
+					yDistance={-1}
+					scaleDistance={1.02}
+					rotateYDistance={4}
+				>
+					{greetingMessage(name)}
+				</TextShimmerWave>
 			</div>
 		</div>
 	)
