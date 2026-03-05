@@ -2,14 +2,14 @@
 
 import {
   useCallback,
-  useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useWindowManager,
@@ -41,17 +41,16 @@ type TitleBarProps = {
   title: string;
   isFocused: boolean;
   onClose: () => void;
-  onMinimize: () => void;
   onPointerDown: (e: ReactPointerEvent) => void;
 };
 
-function TitleBar({ title, isFocused, onClose, onMinimize, onPointerDown }: TitleBarProps) {
+function TitleBar({ title, isFocused, onClose, onPointerDown }: TitleBarProps) {
   const [hovering, setHovering] = useState(false);
 
   return (
     <div
       className={cn(
-        'flex h-10 shrink-0 items-center px-3',
+        'relative flex h-10 shrink-0 items-center px-3',
         'cursor-grab select-none active:cursor-grabbing',
         'border-b border-black/[0.05]',
         isFocused ? 'bg-white/80' : 'bg-neutral-50/80',
@@ -61,16 +60,14 @@ function TitleBar({ title, isFocused, onClose, onMinimize, onPointerDown }: Titl
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      {/* macOS-style window controls — left side */}
+      {/* Close button — left side */}
       <div
-        className="flex items-center gap-1.5"
         onPointerDown={(e) => e.stopPropagation()}
         onMouseEnter={() => setHovering(true)}
       >
-        {/* Close — red */}
         <button
           className={cn(
-            'group flex h-2.5 w-2.5 items-center justify-center rounded-full',
+            'flex h-2.5 w-2.5 items-center justify-center rounded-full',
             'transition-all duration-150',
             isFocused ? 'bg-[#ff5f57]' : 'bg-neutral-300',
           )}
@@ -85,28 +82,9 @@ function TitleBar({ title, isFocused, onClose, onMinimize, onPointerDown }: Titl
             strokeWidth={2.5}
           />
         </button>
-
-        {/* Minimize — yellow */}
-        <button
-          className={cn(
-            'group flex h-2.5 w-2.5 items-center justify-center rounded-full',
-            'transition-all duration-150',
-            isFocused ? 'bg-[#febc2e]' : 'bg-neutral-300',
-          )}
-          onClick={onMinimize}
-          aria-label="Minimize window"
-        >
-          <Minus
-            className={cn(
-              'h-1.5 w-1.5 text-[#714e00] transition-opacity duration-100',
-              hovering && isFocused ? 'opacity-100' : 'opacity-0',
-            )}
-            strokeWidth={2.5}
-          />
-        </button>
       </div>
 
-      {/* Title — centered absolutely so dots don't affect it */}
+      {/* Title — centered absolutely so the close button doesn't affect alignment */}
       <span className="pointer-events-none absolute inset-x-0 text-center text-xs font-medium text-neutral-400">
         {title}
       </span>
@@ -172,7 +150,6 @@ export function Window({ window: win, children, isFocused }: WindowProps) {
   const {
     closeWindow,
     focusWindow,
-    minimizeWindow,
     updateWindowPosition,
     updateWindowSize,
   } = useWindowManager();
@@ -318,7 +295,6 @@ export function Window({ window: win, children, isFocused }: WindowProps) {
         title={win.title}
         isFocused={isFocused}
         onClose={() => closeWindow(win.id)}
-        onMinimize={() => minimizeWindow(win.id)}
         onPointerDown={handleDragStart}
       />
 
@@ -349,10 +325,13 @@ export function WindowsContainer({
   renderContent: (win: WindowState) => ReactNode;
 }) {
   const { windows } = useWindowManager();
-  const visibleWindows = windows.filter((w) => !w.isMinimized);
-  const maxZIndex = visibleWindows.reduce(
-    (max, w) => Math.max(max, w.zIndex),
-    0,
+  const visibleWindows = useMemo(
+    () => windows.filter((w) => !w.isMinimized),
+    [windows],
+  );
+  const maxZIndex = useMemo(
+    () => visibleWindows.reduce((max, w) => Math.max(max, w.zIndex), 0),
+    [visibleWindows],
   );
 
   return (

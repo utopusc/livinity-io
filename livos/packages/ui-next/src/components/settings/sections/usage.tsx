@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { trpcReact } from '@/trpc/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AnimatedNumber } from '@/components/motion-primitives/animated-number';
@@ -9,6 +10,15 @@ import { InView } from '@/components/motion-primitives/in-view';
 export default function UsageSection() {
   const { data: overview, isLoading } = trpcReact.ai.getUsageOverview.useQuery();
   const { data: daily } = trpcReact.ai.getUsageDaily.useQuery({ userId: 'default', days: 30 });
+
+  // Pre-compute max once; avoids O(n²) inside the bar chart map below.
+  const dailyMax = useMemo(() => {
+    if (!daily?.daily) return 1;
+    return Math.max(
+      ...daily.daily.map((d: any) => (d.inputTokens ?? 0) + (d.outputTokens ?? 0)),
+      1,
+    );
+  }, [daily]);
 
   if (isLoading) {
     return (
@@ -65,8 +75,7 @@ export default function UsageSection() {
             <div className="flex h-32 items-end gap-px">
               {daily.daily.map((d: any, i: number) => {
                 const total = (d.inputTokens ?? 0) + (d.outputTokens ?? 0);
-                const max = Math.max(...daily.daily.map((dd: any) => (dd.inputTokens ?? 0) + (dd.outputTokens ?? 0)), 1);
-                const height = (total / max) * 100;
+                const height = (total / dailyMax) * 100;
                 return (
                   <div
                     key={i}
