@@ -24,6 +24,11 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {formatDistanceToNow} from 'date-fns'
 
+import {AnimatedGroup} from '@/components/motion-primitives/animated-group'
+import {BorderTrail} from '@/components/motion-primitives/border-trail'
+import {GlowEffect} from '@/components/motion-primitives/glow-effect'
+import {TextEffect} from '@/components/motion-primitives/text-effect'
+import {TextScramble} from '@/components/motion-primitives/text-scramble'
 import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
@@ -67,7 +72,7 @@ function ToolCallDisplay({toolCall}: {toolCall: ToolCall}) {
 			>
 				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
 				<IconTool size={14} className='text-blue-400' />
-				<span className='font-mono font-medium text-blue-400'>{short}</span>
+				<TextScramble className='font-mono font-medium text-blue-400' as='span' duration={0.6} speed={0.03}>{short}</TextScramble>
 				<span className={cn('ml-auto text-caption-sm', toolCall.result.success ? 'text-green-400' : 'text-red-400')}>
 					{toolCall.result.success ? 'OK' : 'FAIL'}
 				</span>
@@ -607,11 +612,18 @@ export default function AiChat() {
 										<IconBrain size={32} className='text-violet-400' />
 									</div>
 									<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
-									<p className='max-w-md text-center text-body text-text-tertiary'>
-										Your autonomous AI assistant. I can manage your server, Docker containers, run commands,
-										create subagents, schedule tasks, and more.
-									</p>
-									<div className='mt-6 flex flex-wrap justify-center gap-2'>
+									<TextEffect
+										as='p'
+										per='word'
+										preset='fade'
+										className='max-w-md text-center text-body text-text-tertiary'
+									>
+										Your autonomous AI assistant. I can manage your server, Docker containers, run commands, create subagents, schedule tasks, and more.
+									</TextEffect>
+									<AnimatedGroup
+										preset='blur-slide'
+										className='mt-6 flex flex-wrap justify-center gap-2'
+									>
 										{[
 											'Show system health',
 											'List subagents',
@@ -629,7 +641,7 @@ export default function AiChat() {
 												{suggestion}
 											</button>
 										))}
-									</div>
+									</AnimatedGroup>
 								</div>
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
@@ -649,22 +661,29 @@ export default function AiChat() {
 
 						<div className='flex-shrink-0 border-t border-border-default bg-surface-base p-3 md:p-4'>
 							<div className='mx-auto flex max-w-3xl items-end gap-3'>
-								<textarea
-									ref={inputRef}
-									value={input}
-									onChange={(e) => setInput(e.target.value)}
-									onKeyDown={handleKeyDown}
-									placeholder={isLoading ? 'Working...' : 'Message Liv...'}
-									disabled={isLoading}
-									rows={1}
-									className='flex-1 resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20 disabled:opacity-50'
-									style={{maxHeight: '120px'}}
-									onInput={(e) => {
-										const target = e.target as HTMLTextAreaElement
-										target.style.height = 'auto'
-										target.style.height = Math.min(target.scrollHeight, 120) + 'px'
-									}}
-								/>
+								<div className='relative flex-1'>
+									<textarea
+										ref={inputRef}
+										value={input}
+										onChange={(e) => setInput(e.target.value)}
+										onKeyDown={handleKeyDown}
+										placeholder={isLoading ? 'Working...' : 'Message Liv...'}
+										disabled={isLoading}
+										rows={1}
+										className='w-full resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-within:border-brand focus-within:ring-3 focus-within:ring-brand/20 disabled:opacity-50'
+										style={{maxHeight: '120px'}}
+										onInput={(e) => {
+											const target = e.target as HTMLTextAreaElement
+											target.style.height = 'auto'
+											target.style.height = Math.min(target.scrollHeight, 120) + 'px'
+										}}
+									/>
+									<BorderTrail
+										className='bg-gradient-to-l from-brand via-brand/50 to-transparent'
+										size={80}
+										transition={{repeat: Infinity, duration: 4, ease: 'linear'}}
+									/>
+								</div>
 								<Suspense fallback={null}>
 									<VoiceButton
 										disabled={isLoading}
@@ -689,13 +708,24 @@ export default function AiChat() {
 										<IconPlayerStop size={18} />
 									</button>
 								) : (
-									<button
-										onClick={handleSend}
-										disabled={!input.trim()}
-										className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
-									>
-										<IconSend size={18} />
-									</button>
+									<div className='relative'>
+										{input.trim() && (
+											<GlowEffect
+												colors={['#3b82f6', '#60a5fa', '#93c5fd', '#3b82f6']}
+												mode='colorShift'
+												blur='soft'
+												duration={3}
+												className='rounded-radius-md'
+											/>
+										)}
+										<button
+											onClick={handleSend}
+											disabled={!input.trim()}
+											className='relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md bg-brand text-white transition-colors hover:bg-brand-lighter disabled:opacity-40 disabled:hover:bg-brand'
+										>
+											<IconSend size={18} />
+										</button>
+									</div>
 								)}
 							</div>
 						</div>
