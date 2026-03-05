@@ -363,7 +363,7 @@ export default function AddNetworkShareDialog(props?: {
 													name={field}
 													render={({field: f}) => (
 														<FormItem>
-															<FormLabel className='text-13 text-white/60'>{labels[field]}</FormLabel>
+															<FormLabel className='text-13 text-text-secondary'>{labels[field]}</FormLabel>
 															<FormControl>
 																{field === 'password' ? (
 																	<PasswordInput value={f.value} onValueChange={f.onChange} />
@@ -454,17 +454,17 @@ function DiscoverStep({
 			{isLoading ? (
 				<ServerCard>
 					<div className='mb-2 flex size-12 items-center justify-center'>
-						<Loader className='size-8 animate-spin text-white/60' />
+						<Loader className='size-8 animate-spin text-text-secondary' />
 					</div>
-					<span className='text-[12px] text-white/60'>{t('files-add-network-share.discovering')}</span>
+					<span className='text-[12px] text-text-secondary'>{t('files-add-network-share.discovering')}</span>
 				</ServerCard>
 			) : (servers?.length ?? 0) === 0 ? (
 				<ServerCard onClick={isLoading ? undefined : onRetry}>
 					<div className='mb-2 flex size-12 items-center justify-center'>
-						<div className='flex size-12 items-center justify-center rounded-full bg-white/10'>
-							<div className='flex size-8 items-center justify-center rounded-full bg-white/20'>
+						<div className='flex size-12 items-center justify-center rounded-full bg-surface-1'>
+							<div className='flex size-8 items-center justify-center rounded-full bg-surface-2'>
 								{isLoading ? (
-									<Loader2 className='size-4 animate-spin text-white/60' />
+									<Loader2 className='size-4 animate-spin text-text-secondary' />
 								) : (
 									<RotateCcw className='size-4' />
 								)}
@@ -472,7 +472,7 @@ function DiscoverStep({
 						</div>
 					</div>
 					<span
-						className='w-full truncate text-center text-[12px] text-white/60'
+						className='w-full truncate text-center text-[12px] text-text-secondary'
 						title={t('files-add-network-share.retry-discovery')}
 					>
 						{t('files-add-network-share.retry-discovery')}
@@ -520,7 +520,7 @@ function CredentialsStep() {
 						name={field}
 						render={({field: f}) => (
 							<FormItem>
-								<FormLabel className='text-13 text-white/60'>{labels[field]}</FormLabel>
+								<FormLabel className='text-13 text-text-secondary'>{labels[field]}</FormLabel>
 								<FormControl>
 									{field === 'password' ? (
 										<PasswordInput value={f.value} onValueChange={f.onChange} />
@@ -576,22 +576,22 @@ function SelectShareStep({
 
 			{isLoading ? (
 				<div className='flex flex-col items-center justify-center space-y-3 py-8'>
-					<Loader2 className='h-8 w-8 animate-spin text-white/60 will-change-transform' />
-					<p className='text-sm text-white/40'>{t('files-add-network-share.retrieving-shares')}</p>
+					<Loader2 className='h-8 w-8 animate-spin text-text-secondary will-change-transform' />
+					<p className='text-sm text-text-tertiary'>{t('files-add-network-share.retrieving-shares')}</p>
 				</div>
 			) : (
 				<div className='space-y-3'>
 					{/* Discovered shares list */}
 					{shares.length > 0 ? (
-						<ScrollArea className={cn('rounded-12 bg-white/6', shares.length > 4 && 'h-[200px]')}>
-							<div className='divide-y divide-white/6'>
+						<ScrollArea className={cn('rounded-12 bg-surface-base', shares.length > 4 && 'h-[200px]')}>
+							<div className='divide-y divide-border-subtle'>
 								{shares.map((s) => (
 									<div
 										key={s}
 										onClick={disabled ? undefined : () => onSelect(s)}
 										className={cn(
 											'flex h-[50px] cursor-pointer items-center gap-2 px-3 text-15 font-medium -tracking-3 transition-colors',
-											selectedShare === s ? 'text-white' : 'hover:bg-white/5',
+											selectedShare === s ? 'text-text-primary' : 'hover:bg-surface-base',
 											disabled && 'cursor-not-allowed opacity-50',
 										)}
 									>
@@ -599,7 +599,7 @@ function SelectShareStep({
 										<span className='flex-1 truncate'>{s}</span>
 										{selectedShare === s && (
 											<div className='flex size-5 shrink-0 items-center justify-center rounded-full bg-brand'>
-												<Check className='size-3 text-white' />
+												<Check className='size-3 text-text-primary' />
 											</div>
 										)}
 									</div>
@@ -608,7 +608,7 @@ function SelectShareStep({
 						</ScrollArea>
 					) : (
 						<div className='flex flex-col items-center justify-center space-y-3 py-8'>
-							<p className='text-sm text-white/40'>{t('files-add-network-share.no-shares-found')}</p>
+							<p className='text-sm text-text-tertiary'>{t('files-add-network-share.no-shares-found')}</p>
 						</div>
 					)}
 
@@ -637,7 +637,7 @@ function SelectShareStep({
 										name='manual-share'
 										render={() => (
 											<FormItem>
-												<FormLabel className='text-13 text-white/60'>
+												<FormLabel className='text-13 text-text-secondary'>
 													{t('files-add-network-share.manual-share-help')}
 												</FormLabel>
 												<FormControl>

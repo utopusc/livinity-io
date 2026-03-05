@@ -157,7 +157,7 @@ export function SnapshotCarousel({
 											explorerVisible ? 'pointer-events-none opacity-0' : 'opacity-100',
 										)}
 									>
-										<TbLoader className='h-8 w-8 animate-spin text-white/60' />
+										<TbLoader className='h-8 w-8 animate-spin text-text-secondary' />
 									</div>
 
 									{/* Without drag-and-drop, we make sure to disable all text selection in the embedded Files feature with select-none. */}

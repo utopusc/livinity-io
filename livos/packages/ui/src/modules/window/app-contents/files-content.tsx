@@ -110,11 +110,11 @@ function FilesWindowRouter() {
 
 					<div className='flex h-full flex-col'>
 						{/* Header */}
-						<div className='flex shrink-0 items-center gap-3 border-b border-white/5 px-4 py-3'>
+						<div className='flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-3'>
 							{showBackButton && (
 								<button
 									onClick={goBack}
-									className='flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/10 transition-colors'
+									className='flex h-8 w-8 items-center justify-center rounded-full hover:bg-surface-1 transition-colors'
 								>
 									<TbArrowLeft className='h-5 w-5' />
 								</button>
@@ -122,7 +122,7 @@ function FilesWindowRouter() {
 							{isMobile && (
 								<HiMenuAlt2
 									role='button'
-									className='h-5 w-5 cursor-pointer text-white/90'
+									className='h-5 w-5 cursor-pointer text-text-primary'
 									onClick={() => setIsMobileSidebarOpen(true)}
 								/>
 							)}

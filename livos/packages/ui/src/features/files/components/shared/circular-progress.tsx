@@ -40,7 +40,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({progress, siz
 					}}
 				/>
 			</svg>
-			<div className='absolute inset-0 flex items-center justify-center text-white'>{children}</div>
+			<div className='absolute inset-0 flex items-center justify-center text-text-primary'>{children}</div>
 		</div>
 	)
 }

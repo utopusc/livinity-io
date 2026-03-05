@@ -30,10 +30,10 @@ export default function PermanentlyDeleteConfirmationDialog() {
 			{selectedItems.map((item, index) => (
 				<div
 					key={`${item.path}-permanently-delete-confirmation`}
-					className={`flex items-center gap-2 rounded-lg p-3 ${needsScroll && index % 2 === 0 ? 'bg-white/3' : ''}`}
+					className={`flex items-center gap-2 rounded-lg p-3 ${needsScroll && index % 2 === 0 ? 'bg-surface-base' : ''}`}
 				>
 					<FileItemIcon item={item} className='h-8 w-8' />
-					<span className='truncate text-12 text-white'>{formatItemName({name: item.name})}</span>
+					<span className='truncate text-12 text-text-primary'>{formatItemName({name: item.name})}</span>
 				</div>
 			))}
 		</div>

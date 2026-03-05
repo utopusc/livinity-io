@@ -36,7 +36,7 @@ export function SidebarItem({item, isActive, onClick, disabled = false}: Sidebar
 					? selectedClass
 					: disabled
 						? 'text-text-tertiary'
-						: 'text-text-secondary transition-colors hover:bg-surface-2 hover:text-white',
+						: 'text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary',
 			)}
 			disabled={disabled || item.path === RECENTS_PATH} // Disable dropping on recents and when disabled
 		>

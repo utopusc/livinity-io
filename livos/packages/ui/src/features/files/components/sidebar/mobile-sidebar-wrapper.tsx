@@ -34,7 +34,7 @@ export function MobileSidebarWrapper({children, isOpen, onClose}: MobileSidebarP
 						animate={{opacity: 1}}
 						exit={{opacity: 0}}
 						transition={{duration: 0.2}}
-						className='fixed inset-0 z-40 h-[100svh] w-[100svw] bg-black/50'
+						className='fixed inset-0 z-40 h-[100svh] w-[100svw] bg-black/20'
 						onClick={onClose}
 					/>
 					{/* Sidebar */}
@@ -49,13 +49,13 @@ export function MobileSidebarWrapper({children, isOpen, onClose}: MobileSidebarP
 						exit={{x: '-100%'}}
 						transition={{type: 'spring', damping: 20, stiffness: 200}}
 						style={{x}}
-						className='fixed inset-y-0 left-0 z-50 -ml-10 w-[256px] border-r border-white/10 bg-black pl-14 md:-ml-3'
+						className='fixed inset-y-0 left-0 z-50 -ml-10 w-[256px] border-r border-border-default bg-white pl-14 md:-ml-3'
 					>
 						{/* Close button */}
 						<div className='absolute right-3 top-8 sm:top-10 md:top-12'>
 							<ChevronLeft
 								role='button'
-								className='h-4 w-4 cursor-pointer text-white/60 transition-colors'
+								className='h-4 w-4 cursor-pointer text-text-secondary transition-colors'
 								onClick={onClose}
 							/>
 						</div>
@@ -68,7 +68,7 @@ export function MobileSidebarWrapper({children, isOpen, onClose}: MobileSidebarP
 							<div className='absolute inset-0 w-full' />
 							{/* Visual handle centered */}
 							<div className='absolute left-0 top-1/2 flex h-16 w-full -translate-y-1/2 items-center justify-center'>
-								<div className='h-12 w-1 rounded-full bg-white/20' />
+								<div className='h-12 w-1 rounded-full bg-surface-2' />
 							</div>
 						</div>
 					</motion.div>

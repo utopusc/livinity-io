@@ -24,7 +24,7 @@ export function MinimizedContent({count}: {count: number}) {
 						</linearGradient>
 					</defs>
 					{/* Background circle */}
-					<circle cx='8' cy='8' r='6' stroke='currentColor' strokeWidth='1.5' fill='none' className='text-white/10' />
+					<circle cx='8' cy='8' r='6' stroke='currentColor' strokeWidth='1.5' fill='none' className='text-border-subtle' />
 					{/* Progress arc */}
 					<circle
 						cx='8'
@@ -39,13 +39,13 @@ export function MinimizedContent({count}: {count: number}) {
 				</motion.svg>
 			</div>
 			<div className='min-w-0 flex-1'>
-				<span className='block truncate text-center text-xs text-white/90'>
+				<span className='block truncate text-center text-xs text-text-primary'>
 					{t('files-formatting-island.formatting')}
 				</span>
 			</div>
 			{/* Reserve right-side space to match other islands' layout */}
 			<div className='flex shrink-0 items-center gap-2'>
-				<span className='text-xs text-white/60'>{count}</span>
+				<span className='text-xs text-text-secondary'>{count}</span>
 			</div>
 		</div>
 	)

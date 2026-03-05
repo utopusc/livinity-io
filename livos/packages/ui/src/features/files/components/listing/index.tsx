@@ -76,7 +76,7 @@ function ListingContent({
 
 			{/* Display total item count (or truncated count) when no items are selected */}
 			{totalItems && !selectedItems.length ? (
-				<span className='absolute bottom-2 right-4 text-12 font-semibold text-white/60'>
+				<span className='absolute bottom-2 right-4 text-12 font-semibold text-text-secondary'>
 					{truncatedAt
 						? t('files-listing.item-count-truncated', {
 								formattedCount: formatNumberI18n({n: truncatedAt, showDecimals: false}),
@@ -90,7 +90,7 @@ function ListingContent({
 
 			{/* Display selected count vs total (or truncated count) when items are selected */}
 			{selectedItems.length > 0 && (
-				<span className='absolute bottom-2 right-4 text-12 font-semibold text-white/60'>
+				<span className='absolute bottom-2 right-4 text-12 font-semibold text-text-secondary'>
 					{truncatedAt
 						? t('files-listing.selected-count-truncated', {
 								selectedCount: selectedItems.length,
@@ -193,10 +193,10 @@ function ErrorView({error}: {error: unknown}) {
 			message.startsWith('EIO') ? (
 				<div className='flex flex-col items-center gap-2'>
 					<FolderX className='h-6 w-6 opacity-50' />
-					<span className='text-12 text-white/40'>{t('files-listing.no-such-file')}</span>
+					<span className='text-12 text-text-tertiary'>{t('files-listing.no-such-file')}</span>
 				</div>
 			) : (
-				<span className='text-12 text-white/40'>{message}</span>
+				<span className='text-12 text-text-tertiary'>{message}</span>
 			)}
 		</div>
 	)
@@ -213,7 +213,7 @@ function LoadingView() {
 function EmptyView() {
 	return (
 		<div className='flex h-full items-center justify-center p-4 text-center'>
-			<div className='text-12 text-white/40'>{t('files-listing.empty')}</div>
+			<div className='text-12 text-text-tertiary'>{t('files-listing.empty')}</div>
 		</div>
 	)
 }

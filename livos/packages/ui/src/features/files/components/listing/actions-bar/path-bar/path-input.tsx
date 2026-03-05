@@ -38,7 +38,7 @@ export function PathInput({path, onClose}: PathInputProps) {
 	return (
 		<div
 			className={cn(
-				'border-[0.5px] bg-white/6',
+				'border-[0.5px] bg-surface-base',
 				'flex h-8 items-center rounded-full border-[hsl(var(--color-brand))] p-3 py-1',
 			)}
 			role='group'
@@ -52,7 +52,7 @@ export function PathInput({path, onClose}: PathInputProps) {
 					onKeyDown={handleKeyDown}
 					onBlur={onClose}
 					className={cn(
-						'h-8 bg-transparent text-xs text-white',
+						'h-8 bg-transparent text-xs text-text-primary',
 						'p-0 [border:none] [outline:none]',
 						'focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0',
 						'[&:active]:bg-transparent [&:focus]:bg-transparent [&:hover]:bg-transparent',

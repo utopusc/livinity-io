@@ -27,7 +27,7 @@ export const MinimizedContent: React.FC<MinimizedContentProps> = ({
 				{isPlaying ? <RiPauseFill className='h-3 w-3' /> : <RiPlayFill className='ml-0.5 h-3 w-3' />}
 			</CircularProgress>
 			<div className='min-w-0 flex-1'>
-				<span className='block truncate text-xs text-white/90'>{fileName}</span>
+				<span className='block truncate text-xs text-text-primary'>{fileName}</span>
 			</div>
 			<MusicEqualizer isPlaying={isPlaying} analyserNode={analyserNode} />
 		</div>

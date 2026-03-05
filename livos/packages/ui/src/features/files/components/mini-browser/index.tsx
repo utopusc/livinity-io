@@ -181,14 +181,14 @@ export function MiniBrowser({
 					<div className='flex items-center justify-between gap-2'>
 						<div className='min-w-0 flex-1'>
 							<DialogTitle>{title}</DialogTitle>
-							{subtitle ? <p className='mt-1 text-xs text-white/60'>{subtitle}</p> : null}
+							{subtitle ? <p className='mt-1 text-xs text-text-secondary'>{subtitle}</p> : null}
 						</div>
 						{/* Show new folder button on mobile in header */}
 						{isMobile && newFolderButton}
 					</div>
 				</DialogHeader>
 
-				<div className='h-[min(60vh,480px)] overflow-y-auto overflow-x-hidden rounded-xl border border-white/10 bg-white/5 p-2'>
+				<div className='h-[min(60vh,480px)] overflow-y-auto overflow-x-hidden rounded-xl border border-border-default bg-surface-base p-2'>
 					{/* Optional actions to render in the browser. e.g., "add NAS" button to open the add NAS dialog */}
 					{actions ? <div className='flex items-center justify-end'>{actions}</div> : null}
 
@@ -277,14 +277,14 @@ function Tree({
 	return (
 		<div className='space-y-1'>
 			{isLoading ? (
-				<div className='py-6 text-center text-white/60'>{t('files-listing.loading')}</div>
+				<div className='py-6 text-center text-text-secondary'>{t('files-listing.loading')}</div>
 			) : entries.length === 0 && !isNewFolderAtThisLevel ? (
 				<div className='mt-28 flex flex-col items-center justify-center gap-3 text-center'>
 					<div className='flex flex-col items-center gap-3'>
 						<div className='inline-flex size-[60px] items-center justify-center'>
 							<EmptyIcon className={'max-h-full max-w-full opacity-40'} />
 						</div>
-						<div className='w-3/4 text-12 text-white/40'>{emptyStateText}</div>
+						<div className='w-3/4 text-12 text-text-tertiary'>{emptyStateText}</div>
 					</div>
 				</div>
 			) : (
@@ -388,7 +388,7 @@ function Node({
 				className={cn(
 					'flex min-w-0 items-center gap-2 rounded-md p-2',
 					isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-					isSelected ? 'border border-brand bg-brand/15' : 'border border-transparent hover:bg-white/10',
+					isSelected ? 'border border-brand bg-brand/15' : 'border border-transparent hover:bg-surface-1',
 					isFaded && 'opacity-50',
 				)}
 				style={{paddingLeft: 8 + Math.min(depth, maxIndentLevels) * INDENT_PER_LEVEL}}
@@ -510,7 +510,7 @@ function Subtree({
 							setIsLoadingMore(false)
 						}
 					}}
-					className='flex w-full items-center gap-2 rounded-md p-2 text-sm text-white/80 hover:bg-white/10'
+					className='flex w-full items-center gap-2 rounded-md p-2 text-sm text-text-primary hover:bg-surface-1'
 					style={{paddingLeft: leftPad}}
 					aria-label={t('mini-browser.load-more-in-folder', {name: folderName})}
 				>

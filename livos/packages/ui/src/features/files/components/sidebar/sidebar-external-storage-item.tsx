@@ -14,8 +14,8 @@ import {t} from '@/utils/i18n'
 import {tw} from '@/utils/tw'
 
 const selectedClass = tw`
-  bg-gradient-to-b from-white/[0.04] to-white/[0.08]
-  border-white/6  
+  bg-gradient-to-b from-surface-base to-surface-1
+  border-border-subtle  
   shadow-button-highlight-soft-hpx 
 `
 
@@ -78,7 +78,7 @@ export function SidebarExternalStorageItem({item}: SidebarExternalStorageItemPro
 					</span>
 				</div>
 				<div className='flex flex-shrink-0 items-center gap-2'>
-					<span className='text-white/30'>{formatFilesystemSize(item.size)}</span>
+					<span className='text-text-tertiary'>{formatFilesystemSize(item.size)}</span>
 					{item.isMounted && (
 						<button
 							onClick={(e) => {
@@ -87,7 +87,7 @@ export function SidebarExternalStorageItem({item}: SidebarExternalStorageItemPro
 							}}
 							aria-label={t('files-action.eject-disk')}
 						>
-							<FaEject className='text-white/60 hover:text-white' />
+							<FaEject className='text-text-secondary hover:text-text-primary' />
 						</button>
 					)}
 				</div>
@@ -101,7 +101,7 @@ export function SidebarExternalStorageItem({item}: SidebarExternalStorageItemPro
 				<>
 					<div
 						className={cn(
-							'flex w-full rounded-lg border border-transparent from-white/[0.04] to-white/[0.08] text-12 text-white/60',
+							'flex w-full rounded-lg border border-transparent from-surface-base to-surface-1 text-12 text-text-secondary',
 						)}
 					>
 						{ExternalStorageDisk}
@@ -114,10 +114,10 @@ export function SidebarExternalStorageItem({item}: SidebarExternalStorageItemPro
 								path={partition.mountpoints[0]}
 								onClick={() => navigateToDirectory(partition.mountpoints[0])}
 								className={cn(
-									'flex items-center gap-1.5 rounded-lg border border-transparent from-white/[0.04] to-white/[0.08] px-2 py-1.5 text-12 hover:bg-gradient-to-b',
+									'flex items-center gap-1.5 rounded-lg border border-transparent from-surface-base to-surface-1 px-2 py-1.5 text-12 hover:bg-gradient-to-b',
 									currentPath === partition.mountpoints[0]
 										? selectedClass
-										: 'text-white/60 transition-colors hover:bg-white/10 hover:text-white',
+										: 'text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary',
 								)}
 								role='button'
 							>
@@ -125,7 +125,7 @@ export function SidebarExternalStorageItem({item}: SidebarExternalStorageItemPro
 								<span className='min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-11'>
 									{partition.label || partition.mountpoints[0]}
 								</span>
-								<span className='text-11 text-white/30'>{formatFilesystemSize(partition.size)}</span>
+								<span className='text-11 text-text-tertiary'>{formatFilesystemSize(partition.size)}</span>
 							</Droppable>
 						))}
 					</div>
@@ -135,8 +135,8 @@ export function SidebarExternalStorageItem({item}: SidebarExternalStorageItemPro
 					id={`sidebar-${item.id}`}
 					path={item.partitions[0]?.mountpoints[0]}
 					className={cn(
-						'flex w-full rounded-lg border border-transparent from-white/[0.04] to-white/[0.08] text-12 hover:bg-gradient-to-b',
-						isDiskActive ? selectedClass : 'text-white/60 transition-colors hover:bg-white/10 hover:text-white',
+						'flex w-full rounded-lg border border-transparent from-surface-base to-surface-1 text-12 hover:bg-gradient-to-b',
+						isDiskActive ? selectedClass : 'text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary',
 					)}
 				>
 					{ExternalStorageDisk}
