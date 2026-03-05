@@ -294,15 +294,15 @@ const ICON_MAP: Record<FeaturedMcp['icon'], React.ElementType> = {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-	Search: 'bg-orange-500/15 text-orange-300',
-	'Dev Tools': 'bg-gray-500/15 text-gray-300',
-	'File System': 'bg-blue-500/15 text-blue-300',
-	Browser: 'bg-green-500/15 text-green-300',
-	Database: 'bg-indigo-500/15 text-indigo-300',
-	AI: 'bg-purple-500/15 text-purple-300',
-	Web: 'bg-teal-500/15 text-teal-300',
-	Productivity: 'bg-yellow-500/15 text-yellow-300',
-	Cloud: 'bg-amber-500/15 text-amber-300',
+	Search: 'bg-orange-500/15 text-orange-700',
+	'Dev Tools': 'bg-gray-500/15 text-gray-700',
+	'File System': 'bg-blue-500/15 text-blue-700',
+	Browser: 'bg-green-500/15 text-green-700',
+	Database: 'bg-indigo-500/15 text-indigo-700',
+	AI: 'bg-purple-500/15 text-purple-700',
+	Web: 'bg-teal-500/15 text-teal-700',
+	Productivity: 'bg-yellow-500/15 text-yellow-700',
+	Cloud: 'bg-amber-500/15 text-amber-700',
 }
 
 // ─── API helpers ────────────────────────────────────────────────
@@ -651,7 +651,7 @@ function InstallDialog({
 	}
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm' onClick={onClose}>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm' onClick={onClose}>
 			<div
 				className='w-[460px] rounded-radius-xl border border-border-default bg-dialog-content p-5 shadow-2xl'
 				onClick={(e) => e.stopPropagation()}

@@ -105,7 +105,7 @@ function PermissionDialog({
 	}
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm' onClick={onClose}>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm' onClick={onClose}>
 			<div
 				className='w-[460px] rounded-radius-xl border border-border-default bg-dialog-content p-5 shadow-2xl'
 				onClick={(e) => e.stopPropagation()}
