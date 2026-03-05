@@ -30,15 +30,15 @@ const BASE_STYLES = `<style>
   body {
     margin: 0;
     padding: 16px;
-    color: #e5e5e5;
-    background: #0a0a0a;
+    color: #1a1a1a;
+    background: #ffffff;
     font-family: system-ui, -apple-system, sans-serif;
     line-height: 1.5;
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 </style>`
 
 const ERROR_BOUNDARY_SCRIPT = `<script>
@@ -125,7 +125,7 @@ function buildReactSrcdoc(content: string): string {
   <script src="${CDN.reactDom}"></script>
   <script src="${CDN.babel}"></script>
 </head>
-<body class="dark">
+<body>
   <div id="root"></div>
   <script type="text/babel" data-type="module">
     const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, createContext, Fragment } = React;
@@ -163,7 +163,7 @@ function buildHtmlSrcdoc(content: string): string {
   ${ERROR_BOUNDARY_SCRIPT}
   <script src="${CDN.tailwind}"></script>
 </head>
-<body class="dark">
+<body>
   ${content}
 </body>
 </html>`
@@ -183,7 +183,7 @@ function buildSvgSrcdoc(content: string): string {
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      background: #0a0a0a;
+      background: #ffffff;
       padding: 16px;
     }
     svg {
@@ -213,7 +213,7 @@ function buildMermaidSrcdoc(content: string): string {
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      background: #0a0a0a;
+      background: #ffffff;
       padding: 24px;
     }
     .mermaid { font-family: system-ui, sans-serif; }
@@ -228,21 +228,21 @@ ${content}
   <script>
     mermaid.initialize({
       startOnLoad: true,
-      theme: 'dark',
+      theme: 'default',
       themeVariables: {
-        darkMode: true,
-        background: '#0a0a0a',
+        darkMode: false,
+        background: '#ffffff',
         primaryColor: '#6366f1',
-        primaryTextColor: '#e5e5e5',
+        primaryTextColor: '#1a1a1a',
         primaryBorderColor: '#4f46e5',
         lineColor: '#6366f1',
-        secondaryColor: '#1e1b4b',
-        tertiaryColor: '#1e1b4b',
+        secondaryColor: '#ede9fe',
+        tertiaryColor: '#ede9fe',
         fontFamily: 'system-ui, sans-serif',
         fontSize: '14px',
         nodeBorder: '#4f46e5',
-        mainBkg: '#1e1b4b',
-        clusterBkg: '#1e1b4b',
+        mainBkg: '#ede9fe',
+        clusterBkg: '#ede9fe',
       }
     });
   </script>
@@ -264,7 +264,7 @@ function buildRechartsSrcdoc(content: string): string {
   <script src="${CDN.recharts}"></script>
   <script src="${CDN.babel}"></script>
 </head>
-<body class="dark">
+<body>
   <div id="root"></div>
   <script type="text/babel" data-type="module">
     const { useState, useEffect, useRef, useMemo, useCallback, Fragment } = React;
@@ -329,7 +329,7 @@ export function CanvasIframe({content, type, onError, className}: CanvasIframePr
 			sandbox="allow-scripts allow-popups"
 			title="Canvas Preview"
 			className={cn('h-full w-full border-0', className)}
-			style={{colorScheme: 'dark'}}
+			style={{colorScheme: 'light'}}
 		/>
 	)
 }

@@ -106,7 +106,7 @@ function ChatMessage({message}: {message: Message}) {
 					{isUser ? (
 						<p className='whitespace-pre-wrap text-body'>{message.content}</p>
 					) : (
-						<div className='prose prose-sm prose-invert max-w-none'>
+						<div className='prose prose-sm max-w-none'>
 							<ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
 						</div>
 					)}
@@ -216,8 +216,8 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 
 			{/* Terminal — only visible when there are commands */}
 			{commands.length > 0 && (
-				<div className='border-t border-border-default bg-[#0d0d0d]'>
-					<div className='flex items-center gap-2 border-b border-white/5 px-3 py-1.5'>
+				<div className='border-t border-border-default bg-surface-base'>
+					<div className='flex items-center gap-2 border-b border-border-subtle px-3 py-1.5'>
 						<IconTerminal2 size={12} className='text-text-tertiary' />
 						<span className='text-caption-sm text-text-tertiary'>Running</span>
 						<span className='ml-auto flex items-center gap-1 text-caption-sm text-green-500'>
