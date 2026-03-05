@@ -4,7 +4,7 @@ import * as React from 'react'
 
 import {cn} from '@/shadcn-lib/utils'
 
-const progressVariants = cva('relative w-full overflow-hidden rounded-full bg-white/10', {
+const progressVariants = cva('relative w-full overflow-hidden rounded-full bg-surface-2', {
 	variants: {
 		size: {
 			default: 'h-1.5',
@@ -16,10 +16,10 @@ const progressVariants = cva('relative w-full overflow-hidden rounded-full bg-wh
 	},
 })
 
-const progressIndicatorVariants = cva('h-full w-full flex-1 bg-white transition-all duration-700 rounded-full', {
+const progressIndicatorVariants = cva('h-full w-full flex-1 bg-text-primary transition-all duration-700 rounded-full', {
 	variants: {
 		variant: {
-			default: 'bg-white',
+			default: 'bg-text-primary',
 			primary: 'bg-brand',
 		},
 	},

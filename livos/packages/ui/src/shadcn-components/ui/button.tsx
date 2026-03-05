@@ -8,19 +8,19 @@ import {cn} from '@/shadcn-lib/utils'
 
 const buttonVariants = cva(
 	// `bg-clip-padding` to make button bg (especially in progress button) not be clipped by invisible border
-	'inline-flex items-center justify-center font-semibold transition-all disabled:pointer-events-none disabled:opacity-50 -tracking-2 gap-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/20 shrink-0 disabled:shadow-none duration-200 livinity-button bg-clip-padding',
+	'inline-flex items-center justify-center font-semibold transition-all disabled:pointer-events-none disabled:opacity-50 -tracking-2 gap-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/20 shrink-0 disabled:shadow-none duration-200 livinity-button bg-clip-padding',
 	{
 		variants: {
 			variant: {
 				default:
-					'bg-surface-1 hover:bg-surface-2 active:bg-surface-base border border-border-default ring-white/20 data-[state=open]:bg-surface-2 hover:border-border-emphasis focus-visible:border-border-emphasis data-[state=open]:border-border-emphasis shadow-button-highlight-soft',
+					'bg-surface-1 hover:bg-surface-2 active:bg-surface-base border border-border-default ring-brand/20 data-[state=open]:bg-surface-2 hover:border-border-emphasis focus-visible:border-border-emphasis data-[state=open]:border-border-emphasis shadow-button-highlight-soft',
 				primary:
 					'bg-brand hover:bg-brand-lighter focus-visible:bg-brand-lighter active:bg-brand ring-brand/40 data-[state=open]:bg-brand-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98]',
 				secondary:
-					'bg-white/90 hover:bg-white focus-visible:bg-white active:bg-white/95 ring-white/40 data-[state=open]:bg-white text-black hover:scale-[1.02] active:scale-[0.98]',
+					'bg-slate-900 hover:bg-slate-800 focus-visible:bg-slate-800 active:bg-slate-900 ring-slate-900/40 data-[state=open]:bg-slate-800 text-white hover:scale-[1.02] active:scale-[0.98]',
 				destructive:
 					'bg-destructive2 hover:bg-destructive2-lighter focus-visible:bg-destructive2-lighter active:bg-destructive2 ring-destructive/40 data-[state=open]:bg-destructive2-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98]',
-				ghost: 'hover:bg-surface-1 active:bg-surface-base border border-transparent hover:border-border-subtle ring-white/20',
+				ghost: 'hover:bg-surface-1 active:bg-surface-base border border-transparent hover:border-border-subtle ring-brand/20',
 			},
 			size: {
 				sm: 'rounded-radius-sm h-[44px] md:h-[30px] px-3 text-caption gap-1.5',
@@ -35,7 +35,7 @@ const buttonVariants = cva(
 				'icon-only': 'rounded-radius-md h-[44px] w-[44px] md:h-[34px] md:w-[34px]',
 			},
 			text: {
-				default: 'text-white',
+				default: 'text-text-primary',
 				destructive: 'text-destructive/90 hover:text-destructive2-lightest focus-visible:text-destructive2-lightest',
 			},
 		},

@@ -94,7 +94,7 @@ const CommandGroup = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Group>,
 	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group>
 >(({className, ...props}, ref) => (
-	<CommandPrimitive.Group ref={ref} className={cn('overflow-hidden text-neutral-50', className)} {...props} />
+	<CommandPrimitive.Group ref={ref} className={cn('overflow-hidden text-text-primary', className)} {...props} />
 ))
 
 CommandGroup.displayName = CommandPrimitive.Group.displayName
@@ -103,7 +103,7 @@ const CommandSeparator = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Separator>,
 	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
 >(({className, ...props}, ref) => (
-	<CommandPrimitive.Separator ref={ref} className={cn('-mx-1 h-px bg-white', className)} {...props} />
+	<CommandPrimitive.Separator ref={ref} className={cn('-mx-1 h-px bg-border-default', className)} {...props} />
 ))
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName
 
@@ -169,7 +169,7 @@ function ForwardedBlurOverlay(props: unknown, ref: React.ForwardedRef<HTMLDivEle
 	return (
 		<DialogPrimitive.DialogOverlay
 			ref={ref}
-			className={cn(dialogOverlayClass, 'z-[999] bg-black/30 backdrop-blur-xl contrast-more:backdrop-blur-none')}
+			className={cn(dialogOverlayClass, 'z-[999] bg-black/10 backdrop-blur-xl contrast-more:backdrop-blur-none')}
 		/>
 	)
 }
@@ -177,7 +177,7 @@ function ForwardedBlurOverlay(props: unknown, ref: React.ForwardedRef<HTMLDivEle
 const BlurOverlay = React.forwardRef(ForwardedBlurOverlay)
 
 const CommandCloseButton = () => (
-	<DialogPrimitive.Close className='rounded-full opacity-30 outline-none ring-white/60 transition-opacity hover:opacity-40 focus-visible:opacity-40 focus-visible:ring-2'>
+	<DialogPrimitive.Close className='rounded-full opacity-30 outline-none ring-brand/30 transition-opacity hover:opacity-40 focus-visible:opacity-40 focus-visible:ring-2'>
 		<RiCloseCircleFill className='h-[18px] w-[18px] md:h-5 md:w-5' />
 		<span className='sr-only'>Close</span>
 	</DialogPrimitive.Close>
