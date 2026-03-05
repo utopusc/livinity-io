@@ -1,6 +1,8 @@
 import {ReactNode, useRef} from 'react'
 
 import {AppIcon} from '@/components/app-icon'
+import {Spotlight} from '@/components/motion-primitives/spotlight'
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {WindowAwareLink} from '@/components/window-aware-link'
 import {useColorThief} from '@/hooks/use-color-thief'
 import {useIsMobile} from '@/hooks/use-is-mobile'
@@ -224,51 +226,53 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 			)}
 			style={{animationDelay: `${index * 80}ms`}}
 		>
-			<div
-				className={cn(
-					'relative flex h-[110px] w-[270px] items-center gap-4 overflow-hidden rounded-2xl',
-					'md:h-[120px] md:w-[310px]',
-					'border border-border-subtle',
-					'transition-all duration-400 ease-out',
-					'group-hover:border-border-default',
-					'group-hover:shadow-elevation-lg',
-					'group-hover:scale-[1.03]',
-				)}
-				style={{
-					background: `linear-gradient(135deg, ${c1}, ${c2})`,
-				}}
-			>
-				{/* Decorative blobs — asymmetric shapes */}
-				<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-surface-base' />
-				<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-surface-base' />
+			<Tilt rotationFactor={5} springOptions={{stiffness: 300, damping: 20}}>
+				<div
+					className={cn(
+						'relative flex h-[110px] w-[270px] items-center gap-4 overflow-hidden rounded-2xl',
+						'md:h-[120px] md:w-[310px]',
+						'border border-border-subtle',
+						'transition-all duration-400 ease-out',
+						'group-hover:border-border-default',
+						'group-hover:shadow-elevation-lg',
+					)}
+					style={{
+						background: `linear-gradient(135deg, ${c1}, ${c2})`,
+					}}
+				>
+					<Spotlight className='from-white/20 via-white/10 to-transparent' size={200} springOptions={{stiffness: 200, damping: 20}} />
+					{/* Decorative blobs — asymmetric shapes */}
+					<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-surface-base' />
+					<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-surface-base' />
 
-				{/* Icon — left-aligned, vertically centered */}
-				<div className='relative z-10 pl-5'>
-					<AppIcon
-						ref={iconRef}
-						src={app.icon}
-						crossOrigin='anonymous'
-						size={48}
-						className={cn(
-							'flex-shrink-0 rounded-xl',
-							'shadow-elevation-md',
-							'transition-transform duration-400',
-							'group-hover:scale-110',
-							'md:w-[56px] md:h-[56px]',
-						)}
-					/>
-				</div>
+					{/* Icon — left-aligned, vertically centered */}
+					<div className='relative z-10 pl-5'>
+						<AppIcon
+							ref={iconRef}
+							src={app.icon}
+							crossOrigin='anonymous'
+							size={48}
+							className={cn(
+								'flex-shrink-0 rounded-xl',
+								'shadow-elevation-md',
+								'transition-transform duration-400',
+								'group-hover:scale-110',
+								'md:w-[56px] md:h-[56px]',
+							)}
+						/>
+					</div>
 
-				{/* Text — right side */}
-				<div className='relative z-10 flex min-w-0 flex-1 flex-col pr-5'>
-					<h3 className='truncate text-body font-bold tracking-tight text-text-primary md:text-lg'>
-						{app.name}
-					</h3>
-					<p className='mt-0.5 line-clamp-2 text-caption text-text-secondary md:text-body-sm'>
-						{app.tagline}
-					</p>
+					{/* Text — right side */}
+					<div className='relative z-10 flex min-w-0 flex-1 flex-col pr-5'>
+						<h3 className='truncate text-body font-bold tracking-tight text-text-primary md:text-lg'>
+							{app.name}
+						</h3>
+						<p className='mt-0.5 line-clamp-2 text-caption text-text-secondary md:text-body-sm'>
+							{app.tagline}
+						</p>
+					</div>
 				</div>
-			</div>
+			</Tilt>
 		</WindowAwareLink>
 	)
 }
@@ -355,46 +359,47 @@ function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number
 			}}
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
-			<div
-				className={cn(
-					'relative flex flex-col overflow-hidden rounded-2xl',
-					config.width,
-					config.height,
-					'border border-border-subtle',
-					'transition-all duration-400',
-					'group-hover:border-border-default',
-					'group-hover:shadow-elevation-lg',
-					'group-hover:scale-110',
-				)}
-				style={{
-					background: `radial-gradient(circle at 50% 30%, rgba(0,0,0,0.03), transparent 70%), linear-gradient(180deg, ${c1}, ${c2})`,
-				}}
-			>
-				{/* Icon centered */}
-				<div className='flex flex-1 items-center justify-center p-4'>
-					<AppIcon
-						ref={iconRef}
-						src={app.icon}
-						crossOrigin='anonymous'
-						size={config.iconSize}
-						className={cn(
-							'rounded-2xl',
-							'shadow-elevation-md',
-							'transition-transform duration-400',
-							'group-hover:scale-110',
-						)}
-					/>
-				</div>
+			<Tilt rotationFactor={8} springOptions={{stiffness: 300, damping: 20}}>
+				<div
+					className={cn(
+						'relative flex flex-col overflow-hidden rounded-2xl',
+						config.width,
+						config.height,
+						'border border-border-subtle',
+						'transition-all duration-400',
+						'group-hover:border-border-default',
+						'group-hover:shadow-elevation-lg',
+					)}
+					style={{
+						background: `radial-gradient(circle at 50% 30%, rgba(0,0,0,0.03), transparent 70%), linear-gradient(180deg, ${c1}, ${c2})`,
+					}}
+				>
+					{/* Icon centered */}
+					<div className='flex flex-1 items-center justify-center p-4'>
+						<AppIcon
+							ref={iconRef}
+							src={app.icon}
+							crossOrigin='anonymous'
+							size={config.iconSize}
+							className={cn(
+								'rounded-2xl',
+								'shadow-elevation-md',
+								'transition-transform duration-400',
+								'group-hover:scale-110',
+							)}
+						/>
+					</div>
 
-				{/* Info at bottom */}
-				<div className='px-3 pb-3'>
-					<h4 className='truncate text-body-sm font-bold text-text-primary'>{app.name}</h4>
-					<p className='truncate text-caption text-text-secondary'>{app.developer}</p>
-					<div className='mt-1.5 flex items-center justify-center rounded-lg bg-surface-1 py-1.5 text-caption font-medium text-text-primary backdrop-blur-sm transition-colors group-hover:bg-surface-2'>
-						{t('app.view')}
+					{/* Info at bottom */}
+					<div className='px-3 pb-3'>
+						<h4 className='truncate text-body-sm font-bold text-text-primary'>{app.name}</h4>
+						<p className='truncate text-caption text-text-secondary'>{app.developer}</p>
+						<div className='mt-1.5 flex items-center justify-center rounded-lg bg-surface-1 py-1.5 text-caption font-medium text-text-primary backdrop-blur-sm transition-colors group-hover:bg-surface-2'>
+							{t('app.view')}
+						</div>
 					</div>
 				</div>
-			</div>
+			</Tilt>
 		</WindowAwareLink>
 	)
 }

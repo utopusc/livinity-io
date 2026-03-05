@@ -2,6 +2,8 @@ import {useRef} from 'react'
 import {ErrorBoundary} from 'react-error-boundary'
 
 import {AppIcon} from '@/components/app-icon'
+import {Spotlight} from '@/components/motion-primitives/spotlight'
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {ErrorBoundaryCardFallback} from '@/components/ui/error-boundary-card-fallback'
 import {Loading} from '@/components/ui/loading'
 import {WindowAwareLink} from '@/components/window-aware-link'
@@ -148,47 +150,50 @@ function FeaturedHeroCard({
 	gradient: typeof GRADIENTS[number]
 }) {
 	return (
-		<WindowAwareLink
-			to={`/${app.id}`}
-			className={cn(
-				'group relative block w-full overflow-hidden rounded-2xl',
-				'border border-border-default',
-				'transition-all duration-500',
-				'hover:border-border-emphasis hover:shadow-elevation-lg',
-			)}
-		>
-			<div className={cn('absolute inset-0 bg-gradient-to-br', gradient.from, gradient.via, gradient.to)} />
-			<div className={cn('absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb1)} />
-			<div className={cn('absolute -bottom-16 -left-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb2)} />
-			<div className='absolute inset-0 bg-gradient-to-r from-black/20 via-black/10 to-transparent' />
+		<Tilt rotationFactor={4} springOptions={{stiffness: 300, damping: 20}}>
+			<WindowAwareLink
+				to={`/${app.id}`}
+				className={cn(
+					'group relative block w-full overflow-hidden rounded-2xl',
+					'border border-border-default',
+					'transition-all duration-500',
+					'hover:border-border-emphasis hover:shadow-elevation-lg',
+				)}
+			>
+				<Spotlight className='from-white/30 via-white/15 to-transparent' size={280} springOptions={{stiffness: 200, damping: 20}} />
+				<div className={cn('absolute inset-0 bg-gradient-to-br', gradient.from, gradient.via, gradient.to)} />
+				<div className={cn('absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb1)} />
+				<div className={cn('absolute -bottom-16 -left-16 h-40 w-40 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-125', gradient.orb2)} />
+				<div className='absolute inset-0 bg-gradient-to-r from-black/20 via-black/10 to-transparent' />
 
-			<div className='relative flex items-center gap-5 p-5 md:p-6'>
-				<div className='relative shrink-0'>
-					<div className={cn('absolute inset-0 rounded-2xl blur-xl transition-all duration-500 group-hover:blur-2xl', gradient.glow)} />
-					<AppIcon
-						src={app.icon}
-						size={64}
-						className='relative z-10 rounded-2xl shadow-xl transition-transform duration-500 group-hover:scale-110'
-					/>
+				<div className='relative flex items-center gap-5 p-5 md:p-6'>
+					<div className='relative shrink-0'>
+						<div className={cn('absolute inset-0 rounded-2xl blur-xl transition-all duration-500 group-hover:blur-2xl', gradient.glow)} />
+						<AppIcon
+							src={app.icon}
+							size={64}
+							className='relative z-10 rounded-2xl shadow-xl transition-transform duration-500 group-hover:scale-110'
+						/>
+					</div>
+
+					<div className='flex flex-1 flex-col justify-center min-w-0'>
+						{badge && (
+							<span className={cn('mb-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-sm ring-1', gradient.badge)}>
+								<span className={cn('h-1.5 w-1.5 animate-pulse rounded-full', gradient.dot)} />
+								{badge}
+							</span>
+						)}
+						<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>{app.name}</h3>
+						<p className='mt-1 line-clamp-2 text-body-sm text-text-secondary'>{app.tagline}</p>
+					</div>
+
+					<svg className={cn('h-5 w-5 shrink-0 transition-all duration-300 group-hover:translate-x-1', gradient.accent)} fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
+					</svg>
 				</div>
 
-				<div className='flex flex-1 flex-col justify-center min-w-0'>
-					{badge && (
-						<span className={cn('mb-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-sm ring-1', gradient.badge)}>
-							<span className={cn('h-1.5 w-1.5 animate-pulse rounded-full', gradient.dot)} />
-							{badge}
-						</span>
-					)}
-					<h3 className='truncate text-xl font-bold tracking-tight text-text-primary md:text-2xl'>{app.name}</h3>
-					<p className='mt-1 line-clamp-2 text-body-sm text-text-secondary'>{app.tagline}</p>
-				</div>
-
-				<svg className={cn('h-5 w-5 shrink-0 transition-all duration-300 group-hover:translate-x-1', gradient.accent)} fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2.5}>
-					<path strokeLinecap='round' strokeLinejoin='round' d='M9 5l7 7-7 7' />
-				</svg>
-			</div>
-
-			<div className='absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-black/5 to-transparent transition-transform duration-1000 group-hover:translate-x-full' />
-		</WindowAwareLink>
+				<div className='absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-black/5 to-transparent transition-transform duration-1000 group-hover:translate-x-full' />
+			</WindowAwareLink>
+		</Tilt>
 	)
 }
