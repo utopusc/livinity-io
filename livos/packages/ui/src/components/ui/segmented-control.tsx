@@ -30,7 +30,7 @@ export function SegmentedControl<T extends string>({
 			// `layoutRoot` to prevent it from animating when the layout shifts
 			layoutRoot
 			className={cn(
-				'flex shrink-0 gap-0 rounded-full border-[0.5px] border-white/6 bg-white/3',
+				'flex shrink-0 gap-0 rounded-full border-[0.5px] border-border-subtle bg-surface-base',
 				justTwo && value !== undefined && 'cursor-pointer',
 				size === 'sm' && 'h-[24px] p-1 text-[9px]',
 				size === 'default' && 'h-[30px] p-1 text-12',
@@ -52,7 +52,7 @@ export function SegmentedControl<T extends string>({
 					className={cn(
 						'group relative flex-grow rounded-full leading-inter-trimmed outline-none transition-[box-shadow,background]',
 						value === tab.id && variant === 'primary' && 'focus-visible:ring-2 focus-visible:ring-brand/40',
-						value !== tab.id && 'outline-1 -outline-offset-2 outline-transparent focus-visible:outline-white/10',
+						value !== tab.id && 'outline-1 -outline-offset-2 outline-transparent focus-visible:outline-border-default',
 						size === 'sm' && 'px-2',
 						size === 'default' && 'px-2.5',
 						size === 'lg' && 'px-[14px]',
@@ -65,7 +65,7 @@ export function SegmentedControl<T extends string>({
 							layoutId={id}
 							className={cn(
 								'absolute inset-0 z-10 rounded-full',
-								variant === 'default' && 'bg-white/10',
+								variant === 'default' && 'bg-surface-2',
 								variant === 'primary' && 'bg-brand',
 							)}
 							transition={{type: 'spring', bounce: 0.2, duration: 0.4}}

@@ -146,7 +146,7 @@ export function AiQuickDialog() {
 		<Dialog open={open} onOpenChange={handleClose}>
 			<DialogPrimitive.DialogOverlay
 				className={cn(
-					'fixed inset-0 z-[999] bg-black/30 backdrop-blur-xl contrast-more:backdrop-blur-none',
+					'fixed inset-0 z-[999] bg-black/10 backdrop-blur-xl contrast-more:backdrop-blur-none',
 					'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
 				)}
 			/>

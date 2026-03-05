@@ -25,7 +25,7 @@ function ForwardedAppIcon({src, style, size, className, ...props}: AppIconProps,
 			alt=''
 			ref={ref}
 			className={cn(
-				'aspect-square shrink-0 border-[1px] border-slate-100/10 bg-white/10 bg-cover bg-center',
+				'aspect-square shrink-0 border-[1px] border-border-subtle bg-surface-base bg-cover bg-center',
 				className,
 			)}
 			onError={() => setImgSrc(APP_ICON_PLACEHOLDER_SRC)}

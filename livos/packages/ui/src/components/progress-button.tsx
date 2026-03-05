@@ -55,7 +55,7 @@ export function ProgressButton({variant, size, progress, state, children, classN
 			className={cn(
 				buttonVariants({size, variant}),
 				'select-none whitespace-nowrap disabled:bg-opacity-60 disabled:opacity-100',
-				state === 'loading' && '!bg-white/10',
+				state === 'loading' && '!bg-surface-1',
 				// Disable transition right when installing done for a sec to prevent flicker
 				state === 'ready' && !progressingDone && 'transition-none',
 				className,

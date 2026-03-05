@@ -6,7 +6,7 @@ export const NumberedList = ({children}: {children: ReactNode}) => {
 
 export const NumberedListItem = ({children}: {children: ReactNode}) => {
 	return (
-		<li className='relative py-3 leading-tight before:absolute before:grid before:h-5 before:w-5 before:-translate-x-7 before:place-items-center before:rounded-full before:bg-white/10 before:content-[counter(list-item)]'>
+		<li className='relative py-3 leading-tight before:absolute before:grid before:h-5 before:w-5 before:-translate-x-7 before:place-items-center before:rounded-full before:bg-surface-1 before:content-[counter(list-item)]'>
 			{children}
 		</li>
 	)
