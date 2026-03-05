@@ -80,7 +80,7 @@ function DotIndicators({
 						<div
 							className={cn(
 								'relative h-1.5 overflow-hidden rounded-full transition-all duration-300',
-								isActive ? 'w-10 bg-white/40 group-hover:bg-white/60' : 'w-1.5 bg-white/40 group-hover:bg-white/60',
+								isActive ? 'w-10 bg-black/20 group-hover:bg-black/30' : 'w-1.5 bg-black/20 group-hover:bg-black/30',
 							)}
 						>
 							{isActive && (
@@ -211,7 +211,7 @@ export function WhatsNewModal() {
 							<CarouselContent className='-ml-0'>
 								{FEATURES.map((feature, index) => (
 									<CarouselItem key={feature.id} className='pl-0'>
-										<div className='relative aspect-[4/3] max-h-[calc(100dvh-440px)] min-h-[200px] w-full overflow-hidden bg-neutral-900'>
+										<div className='relative aspect-[4/3] max-h-[calc(100dvh-440px)] min-h-[200px] w-full overflow-hidden bg-surface-2'>
 											<video
 												ref={(el) => (videoRefs.current[index] = el)}
 												src={feature.video}
@@ -228,7 +228,7 @@ export function WhatsNewModal() {
 							{canScrollPrev && (
 								<button
 									onClick={handlePrevious}
-									className='absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60 max-sm:hidden md:left-6'
+									className='absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/70 p-2 text-text-primary backdrop-blur-sm transition-all hover:scale-110 hover:bg-white/90 max-sm:hidden md:left-6'
 									aria-label='Previous slide'
 								>
 									<TbChevronLeft className='size-6' />
@@ -238,7 +238,7 @@ export function WhatsNewModal() {
 							{canScrollNext && (
 								<button
 									onClick={handleNext}
-									className='absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60 max-sm:hidden md:right-6'
+									className='absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/70 p-2 text-text-primary backdrop-blur-sm transition-all hover:scale-110 hover:bg-white/90 max-sm:hidden md:right-6'
 									aria-label='Next slide'
 								>
 									<TbChevronRight className='size-6' />
@@ -262,9 +262,9 @@ export function WhatsNewModal() {
 								<h3 className='text-2xl font-semibold -tracking-3 md:text-3xl'>
 									{t(FEATURES[currentIndex].titleTKey)}
 								</h3>
-								<p className='text-base leading-tight text-white/70'>{t(FEATURES[currentIndex].descriptionTKey)}</p>
+								<p className='text-base leading-tight text-text-secondary'>{t(FEATURES[currentIndex].descriptionTKey)}</p>
 								{FEATURES[currentIndex].helperTextTKey && (
-									<p className='text-xs leading-tight text-white/70'>{t(FEATURES[currentIndex].helperTextTKey)}</p>
+									<p className='text-xs leading-tight text-text-secondary'>{t(FEATURES[currentIndex].helperTextTKey)}</p>
 								)}
 							</div>
 						</div>

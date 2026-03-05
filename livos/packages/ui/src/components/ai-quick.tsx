@@ -222,7 +222,7 @@ export function AiQuickDialog() {
 
 						{/* AI Response */}
 						<div className='px-4 py-4'>
-							<div className='prose prose-sm prose-invert max-w-none text-sm'>
+							<div className='prose prose-sm max-w-none text-sm'>
 								<ReactMarkdown remarkPlugins={[remarkGfm]}>{response}</ReactMarkdown>
 							</div>
 						</div>

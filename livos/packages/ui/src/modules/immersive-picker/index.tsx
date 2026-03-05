@@ -16,7 +16,7 @@ import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 import {tw} from '@/utils/tw'
 
-export const radioButtonClass = tw`rounded-12 bg-white/5 p-5 text-left flex justify-between items-center gap-2 flex-wrap shadow-button-highlight-soft-hpx outline-none duration-300 hover:bg-white/6 transition-[background,color,box-shadow] focus-visible:ring-4 ring-white/5 focus-visible:ring-offset-1 ring-offset-white/20`
+export const radioButtonClass = tw`rounded-12 bg-surface-base p-5 text-left flex justify-between items-center gap-2 flex-wrap shadow-button-highlight-soft-hpx outline-none duration-300 hover:bg-surface-1 transition-[background,color,box-shadow] focus-visible:ring-4 ring-brand/10 focus-visible:ring-offset-1 ring-offset-brand/10`
 export const radioTitleClass = tw`text-15 font-medium -tracking-2`
 export const radioDescriptionClass = tw`text-13 opacity-90 -tracking-2`
 
@@ -167,7 +167,7 @@ export function AppDropdown({
 					placeholder={t('app-picker.search')}
 					ref={inputRef}
 				/>
-				{appResults.length === 0 && <div className='text-14 text-white/50'>{t('no-results-found')}</div>}
+				{appResults.length === 0 && <div className='text-14 text-text-secondary'>{t('no-results-found')}</div>}
 				{appResults.length > 0 && (
 					<ScrollArea className='relative -mx-2.5 flex h-full flex-col px-2.5'>
 						{appResults.map((app, i) => (

@@ -274,7 +274,7 @@ export function Wallpaper({
 					src={wallpaper.url}
 					className={cn(
 						// Using black bg by default because sometimes we want to show the wallpaper before it's loaded, and over other elements
-						tw`pointer-events-none fixed inset-0 w-full bg-black object-cover object-center duration-500 animate-in fade-in`,
+						tw`pointer-events-none fixed inset-0 w-full bg-white object-cover object-center duration-500 animate-in fade-in`,
 						isPreview && 'absolute h-full',
 						!isPreview && 'h-lvh',
 						className,

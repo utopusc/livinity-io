@@ -47,59 +47,59 @@ function CreateSubagentForm({onClose}: {onClose: () => void}) {
 	}
 
 	return (
-		<form onSubmit={handleSubmit} className='space-y-4 rounded-xl border border-white/10 bg-white/5 p-6'>
-			<h3 className='text-lg font-semibold text-white'>Create Subagent</h3>
+		<form onSubmit={handleSubmit} className='space-y-4 rounded-xl border border-border-default bg-surface-base p-6'>
+			<h3 className='text-lg font-semibold text-text-primary'>Create Subagent</h3>
 
 			<div className='grid grid-cols-2 gap-4'>
 				<div>
-					<label className='mb-1 block text-xs font-medium text-white/50'>Name *</label>
+					<label className='mb-1 block text-xs font-medium text-text-secondary'>Name *</label>
 					<input
 						value={form.name}
 						onChange={(e) => setForm((f) => ({...f, name: e.target.value}))}
-						className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
+						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-primary outline-none focus:border-brand'
 						required
 					/>
 				</div>
 				<div>
-					<label className='mb-1 block text-xs font-medium text-white/50'>ID (auto-generated)</label>
+					<label className='mb-1 block text-xs font-medium text-text-secondary'>ID (auto-generated)</label>
 					<input
 						value={form.id}
 						onChange={(e) => setForm((f) => ({...f, id: e.target.value}))}
 						placeholder={form.name.toLowerCase().replace(/\s+/g, '-')}
-						className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 outline-none focus:border-blue-500'
+						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-secondary outline-none focus:border-brand'
 					/>
 				</div>
 			</div>
 
 			<div>
-				<label className='mb-1 block text-xs font-medium text-white/50'>Description *</label>
+				<label className='mb-1 block text-xs font-medium text-text-secondary'>Description *</label>
 				<textarea
 					value={form.description}
 					onChange={(e) => setForm((f) => ({...f, description: e.target.value}))}
 					rows={2}
-					className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
+					className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-primary outline-none focus:border-brand'
 					required
 				/>
 			</div>
 
 			<div>
-				<label className='mb-1 block text-xs font-medium text-white/50'>System Prompt</label>
+				<label className='mb-1 block text-xs font-medium text-text-secondary'>System Prompt</label>
 				<textarea
 					value={form.systemPrompt}
 					onChange={(e) => setForm((f) => ({...f, systemPrompt: e.target.value}))}
 					rows={3}
-					className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
+					className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-primary outline-none focus:border-brand'
 					placeholder='Optional custom system prompt...'
 				/>
 			</div>
 
 			<div className='grid grid-cols-2 gap-4'>
 				<div>
-					<label className='mb-1 block text-xs font-medium text-white/50'>Model Tier</label>
+					<label className='mb-1 block text-xs font-medium text-text-secondary'>Model Tier</label>
 					<select
 						value={form.tier}
 						onChange={(e) => setForm((f) => ({...f, tier: e.target.value as any}))}
-						className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
+						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-primary outline-none focus:border-brand'
 					>
 						<option value='flash'>Flash (fast, cheap)</option>
 						<option value='sonnet'>Sonnet (balanced)</option>
@@ -107,33 +107,33 @@ function CreateSubagentForm({onClose}: {onClose: () => void}) {
 					</select>
 				</div>
 				<div>
-					<label className='mb-1 block text-xs font-medium text-white/50'>Max Turns</label>
+					<label className='mb-1 block text-xs font-medium text-text-secondary'>Max Turns</label>
 					<input
 						type='number'
 						value={form.maxTurns}
 						onChange={(e) => setForm((f) => ({...f, maxTurns: parseInt(e.target.value) || 10}))}
-						className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-blue-500'
+						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-primary outline-none focus:border-brand'
 					/>
 				</div>
 			</div>
 
 			<div className='grid grid-cols-2 gap-4'>
 				<div>
-					<label className='mb-1 block text-xs font-medium text-white/50'>Cron Schedule</label>
+					<label className='mb-1 block text-xs font-medium text-text-secondary'>Cron Schedule</label>
 					<input
 						value={form.schedule}
 						onChange={(e) => setForm((f) => ({...f, schedule: e.target.value}))}
 						placeholder='e.g. 0 9 * * MON-FRI'
-						className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 outline-none focus:border-blue-500'
+						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-secondary outline-none focus:border-brand'
 					/>
 				</div>
 				<div>
-					<label className='mb-1 block text-xs font-medium text-white/50'>Scheduled Task</label>
+					<label className='mb-1 block text-xs font-medium text-text-secondary'>Scheduled Task</label>
 					<input
 						value={form.scheduledTask}
 						onChange={(e) => setForm((f) => ({...f, scheduledTask: e.target.value}))}
 						placeholder='Task to run on schedule'
-						className='w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 outline-none focus:border-blue-500'
+						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-secondary outline-none focus:border-brand'
 					/>
 				</div>
 			</div>
@@ -142,7 +142,7 @@ function CreateSubagentForm({onClose}: {onClose: () => void}) {
 				<button
 					type='button'
 					onClick={onClose}
-					className='rounded-lg px-4 py-2 text-sm text-white/60 hover:text-white'
+					className='rounded-lg px-4 py-2 text-sm text-text-secondary hover:text-text-primary'
 				>
 					Cancel
 				</button>
@@ -188,8 +188,8 @@ export default function Subagents() {
 		<div className='space-y-6'>
 			<div className='flex items-center justify-between'>
 				<div>
-					<h1 className='text-2xl font-bold text-white'>Subagents</h1>
-					<p className='mt-1 text-sm text-white/50'>Create and manage autonomous AI agents</p>
+					<h1 className='text-2xl font-bold text-text-primary'>Subagents</h1>
+					<p className='mt-1 text-sm text-text-secondary'>Create and manage autonomous AI agents</p>
 				</div>
 				<button
 					onClick={() => setShowCreate(!showCreate)}
@@ -204,24 +204,24 @@ export default function Subagents() {
 
 			{/* Subagent List */}
 			{subagentsQuery.isLoading ? (
-				<div className='py-8 text-center text-sm text-white/40'>Loading subagents...</div>
+				<div className='py-8 text-center text-sm text-text-tertiary'>Loading subagents...</div>
 			) : !subagentsQuery.data || (Array.isArray(subagentsQuery.data) && subagentsQuery.data.length === 0) ? (
-				<div className='rounded-xl border border-white/10 bg-white/5 p-8 text-center'>
-					<IconRobot size={48} className='mx-auto mb-4 text-white/20' />
-					<p className='text-sm text-white/40'>No subagents yet. Create one to get started.</p>
+				<div className='rounded-xl border border-border-default bg-surface-base p-8 text-center'>
+					<IconRobot size={48} className='mx-auto mb-4 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No subagents yet. Create one to get started.</p>
 				</div>
 			) : (
 				<div className='space-y-3'>
 					{(Array.isArray(subagentsQuery.data) ? subagentsQuery.data : []).map((agent: any) => (
-						<div key={agent.id} className='rounded-xl border border-white/10 bg-white/5 p-4'>
+						<div key={agent.id} className='rounded-xl border border-border-default bg-surface-base p-4'>
 							<div className='flex items-start justify-between'>
 								<div className='flex items-center gap-3'>
 									<div className='flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20'>
 										<IconRobot size={20} className='text-blue-400' />
 									</div>
 									<div>
-										<div className='font-medium text-white'>{agent.name || agent.id}</div>
-										<div className='text-xs text-white/40'>{agent.description || 'No description'}</div>
+										<div className='font-medium text-text-primary'>{agent.name || agent.id}</div>
+										<div className='text-xs text-text-tertiary'>{agent.description || 'No description'}</div>
 									</div>
 								</div>
 								<div className='flex items-center gap-1'>
@@ -236,21 +236,21 @@ export default function Subagents() {
 									</span>
 									<button
 										onClick={() => handleExecute(agent.id)}
-										className='rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-green-400'
+										className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-green-400'
 										title='Execute'
 									>
 										<IconPlayerPlay size={16} />
 									</button>
 									<button
 										onClick={() => handleDelete(agent.id)}
-										className='rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-red-400'
+										className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-red-400'
 										title='Delete'
 									>
 										<IconTrash size={16} />
 									</button>
 								</div>
 							</div>
-							<div className='mt-3 flex flex-wrap gap-3 text-xs text-white/40'>
+							<div className='mt-3 flex flex-wrap gap-3 text-xs text-text-tertiary'>
 								<span>Tier: {agent.tier || 'sonnet'}</span>
 								<span>Max Turns: {agent.maxTurns || 10}</span>
 								{agent.schedule && (
@@ -268,16 +268,16 @@ export default function Subagents() {
 
 			{/* Execute Result */}
 			{executeResult && (
-				<div className='rounded-xl border border-white/10 bg-white/5 p-4'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
 					<div className='mb-2 flex items-center justify-between'>
-						<div className='text-xs font-medium uppercase text-white/40'>
+						<div className='text-xs font-medium uppercase text-text-tertiary'>
 							Execution Result — {executeResult.id}
 						</div>
-						<button onClick={() => setExecuteResult(null)} className='text-xs text-white/40 hover:text-white'>
+						<button onClick={() => setExecuteResult(null)} className='text-xs text-text-tertiary hover:text-text-primary'>
 							Dismiss
 						</button>
 					</div>
-					<pre className='max-h-60 overflow-auto whitespace-pre-wrap text-sm text-white/70'>
+					<pre className='max-h-60 overflow-auto whitespace-pre-wrap text-sm text-text-secondary'>
 						{executeResult.result}
 					</pre>
 				</div>

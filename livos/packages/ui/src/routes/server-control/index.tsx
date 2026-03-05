@@ -60,9 +60,9 @@ function ResourceCard({
 					transition={active ? {duration: 0.3, delay: 0.1} : {duration: 0.3}}
 				/>
 				<motion.div
-					className='relative overflow-hidden rounded-[14px] border border-white/10 bg-neutral-900/80 backdrop-blur-xl'
-					initial={{backgroundColor: 'rgba(23, 23, 23, 0.8)'}}
-					animate={{backgroundColor: active ? 'rgba(23, 23, 23, 1)' : 'rgba(23, 23, 23, 0.8)'}}
+					className='relative overflow-hidden rounded-[14px] border border-border-default bg-surface-base backdrop-blur-xl'
+					initial={{backgroundColor: 'rgba(255, 255, 255, 0.5)'}}
+					animate={{backgroundColor: active ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.5)'}}
 				>
 					{/* Background Chart */}
 					{chart && (
@@ -76,11 +76,11 @@ function ResourceCard({
 									<linearGradient id={`${title}GradientChartColor`} x1='0' y1='0' x2='0' y2='1'>
 										<stop
 											offset='5%'
-											style={{stopColor: active ? 'hsl(var(--color-brand) / 0.3)' : 'rgba(255, 255, 255, 0.05)'}}
+											style={{stopColor: active ? 'hsl(var(--color-brand) / 0.3)' : 'rgba(0, 0, 0, 0.05)'}}
 										/>
 										<stop
 											offset='95%'
-											style={{stopColor: active ? 'hsl(var(--color-brand) / 0)' : 'rgba(255, 255, 255, 0)'}}
+											style={{stopColor: active ? 'hsl(var(--color-brand) / 0)' : 'rgba(0, 0, 0, 0)'}}
 										/>
 									</linearGradient>
 								</defs>
@@ -90,7 +90,7 @@ function ResourceCard({
 									isAnimationActive={false}
 									type='monotone'
 									dataKey='value'
-									style={{stroke: active ? 'hsl(var(--color-brand) / 0.2)' : 'rgba(255, 255, 255, 0.05)'}}
+									style={{stroke: active ? 'hsl(var(--color-brand) / 0.2)' : 'rgba(0, 0, 0, 0.05)'}}
 									fillOpacity={1}
 									fill={`url(#${title}GradientChartColor)`}
 									legendType='none'
@@ -102,15 +102,15 @@ function ResourceCard({
 
 					<div className='relative z-10 p-4'>
 						<div className='mb-3 flex items-center gap-2'>
-							<Icon size={16} className='text-white/50' />
-							<span className='text-xs font-bold uppercase tracking-wider text-white/50'>{title}</span>
+							<Icon size={16} className='text-text-secondary' />
+							<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>{title}</span>
 						</div>
 						<div className='flex min-w-0 items-end gap-1.5'>
-							<span className='text-2xl font-semibold leading-none tracking-tight text-white/90'>{value}</span>
-							{valueSub && <span className='text-sm font-medium text-white/40'>{valueSub}</span>}
+							<span className='text-2xl font-semibold leading-none tracking-tight text-text-primary'>{value}</span>
+							{valueSub && <span className='text-sm font-medium text-text-tertiary'>{valueSub}</span>}
 						</div>
 						<div className='mt-3 space-y-2'>
-							{progressLabel && <div className='text-xs font-medium text-white/40'>{progressLabel}</div>}
+							{progressLabel && <div className='text-xs font-medium text-text-tertiary'>{progressLabel}</div>}
 							<Progress value={progress * 100} variant='primary' />
 						</div>
 					</div>
@@ -143,7 +143,7 @@ function DockerContainer({
 			initial={{opacity: 0, y: 10}}
 			animate={{opacity: 1, y: 0}}
 			exit={{opacity: 0, y: -10}}
-			className='overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm'
+			className='overflow-hidden rounded-xl border border-border-default bg-surface-base backdrop-blur-sm'
 		>
 			{/* Main Row */}
 			<div className='flex items-center gap-4 px-4 py-3'>
@@ -158,7 +158,7 @@ function DockerContainer({
 				</div>
 				<div className='flex-1 min-w-0'>
 					<div className='flex items-center gap-2'>
-						<span className='font-medium text-white truncate'>{container.name}</span>
+						<span className='font-medium text-text-primary truncate'>{container.name}</span>
 						<span className={cn(
 							'px-2 py-0.5 text-[10px] font-medium rounded-full uppercase tracking-wide',
 							isRunning ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
@@ -166,7 +166,7 @@ function DockerContainer({
 							{container.state}
 						</span>
 					</div>
-					<div className='text-xs text-white/40 truncate mt-0.5'>{container.status}</div>
+					<div className='text-xs text-text-tertiary truncate mt-0.5'>{container.status}</div>
 				</div>
 
 				{/* Action Buttons */}
@@ -204,7 +204,7 @@ function DockerContainer({
 					/>
 					<button
 						onClick={onToggle}
-						className='rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/60 transition-colors'
+						className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-text-secondary transition-colors'
 					>
 						{expanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
 					</button>
@@ -220,15 +220,15 @@ function DockerContainer({
 						exit={{height: 0, opacity: 0}}
 						className='overflow-hidden'
 					>
-						<div className='border-t border-white/5 px-4 py-3 bg-black/20'>
+						<div className='border-t border-border-subtle px-4 py-3 bg-surface-base'>
 							<div className='grid grid-cols-2 gap-4 text-xs'>
 								<div>
-									<span className='text-white/40'>Container ID</span>
-									<div className='font-mono text-white/70 mt-1'>{shortId}</div>
+									<span className='text-text-tertiary'>Container ID</span>
+									<div className='font-mono text-text-secondary mt-1'>{shortId}</div>
 								</div>
 								<div>
-									<span className='text-white/40'>Image</span>
-									<div className='text-white/70 mt-1 truncate' title={container.image}>
+									<span className='text-text-tertiary'>Image</span>
+									<div className='text-text-secondary mt-1 truncate' title={container.image}>
 										{container.image.split('@')[0]}
 									</div>
 								</div>
@@ -268,7 +268,7 @@ function ActionButton({
 			disabled={disabled}
 			title={title}
 			className={cn(
-				'rounded-lg p-1.5 text-white/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
+				'rounded-lg p-1.5 text-text-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
 				colorClasses[color]
 			)}
 		>
@@ -282,8 +282,8 @@ function SectionHeader({icon: Icon, title, action}: {icon: React.ComponentType<{
 	return (
 		<div className='flex items-center justify-between mb-4'>
 			<div className='flex items-center gap-2'>
-				<Icon size={20} className='text-white/60' />
-				<h2 className='text-lg font-semibold text-white'>{title}</h2>
+				<Icon size={20} className='text-text-secondary' />
+				<h2 className='text-lg font-semibold text-text-primary'>{title}</h2>
 			</div>
 			{action}
 		</div>
@@ -343,8 +343,8 @@ export default function ServerControl() {
 			{/* Header */}
 			<div className='flex items-center justify-between'>
 				<div>
-					<h1 className='text-2xl font-bold text-white'>Server Control</h1>
-					<p className='mt-1 text-sm text-white/50'>Monitor and manage your server infrastructure</p>
+					<h1 className='text-2xl font-bold text-text-primary'>Server Control</h1>
+					<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
 				</div>
 			</div>
 
@@ -384,7 +384,7 @@ export default function ServerControl() {
 					title='Docker Containers'
 					action={
 						<div className='flex items-center gap-3'>
-							<div className='text-sm text-white/50'>
+							<div className='text-sm text-text-secondary'>
 								<span className='text-emerald-400 font-medium'>{runningCount}</span>
 								<span className='mx-1'>/</span>
 								<span>{totalCount}</span>
@@ -393,7 +393,7 @@ export default function ServerControl() {
 							<button
 								onClick={() => containersQuery.refetch()}
 								disabled={containersQuery.isFetching}
-								className='flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/15 disabled:opacity-50'
+								className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
 							>
 								<IconRefresh size={14} className={containersQuery.isFetching ? 'animate-spin' : ''} />
 								Refresh
@@ -423,9 +423,9 @@ export default function ServerControl() {
 
 				{/* Container List */}
 				{containersQuery.isLoading ? (
-					<div className='rounded-xl border border-white/10 bg-white/5 p-12 text-center'>
-						<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-white/30' />
-						<p className='text-sm text-white/40'>Loading containers...</p>
+					<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+						<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+						<p className='text-sm text-text-tertiary'>Loading containers...</p>
 					</div>
 				) : containersQuery.isError ? (
 					<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
@@ -434,10 +434,10 @@ export default function ServerControl() {
 						<p className='mt-1 text-xs text-red-400/60'>{containersQuery.error.message}</p>
 					</div>
 				) : !containersQuery.data?.length ? (
-					<div className='rounded-xl border border-white/10 bg-white/5 p-12 text-center'>
-						<IconBox size={32} className='mx-auto mb-3 text-white/20' />
-						<p className='text-sm text-white/40'>No Docker containers found</p>
-						<p className='mt-1 text-xs text-white/30'>Install an app from the App Store to get started</p>
+					<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+						<IconBox size={32} className='mx-auto mb-3 text-text-tertiary' />
+						<p className='text-sm text-text-tertiary'>No Docker containers found</p>
+						<p className='mt-1 text-xs text-text-tertiary'>Install an app from the App Store to get started</p>
 					</div>
 				) : (
 					<div className='space-y-2'>

@@ -86,7 +86,7 @@ export const Island = ({children, onClose, nonDismissable}: IslandProps) => {
 		<div className='flex justify-center md:block'>
 			<motion.div
 				ref={islandRef}
-				className='relative select-none bg-black text-white shadow-floating-island'
+				className='relative select-none bg-surface-3 text-text-primary shadow-floating-island'
 				style={{
 					// TODO: debug using var in color-mix on macOS safari
 					// backgroundColor: 'color-mix(in srgb, #000000 95%, rgb(var(--color-brand)) 5%)',
@@ -112,7 +112,7 @@ export const Island = ({children, onClose, nonDismissable}: IslandProps) => {
 								onClose()
 							}}
 						>
-							<RiCloseLine className='h-4 w-4 text-white' />
+							<RiCloseLine className='h-4 w-4 text-text-primary' />
 						</motion.button>
 					)}
 				</div>

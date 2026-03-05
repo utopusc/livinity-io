@@ -97,7 +97,7 @@ export const GenericConfirmationDialog: React.FC<GenericConfirmationDialogProps>
 								onCheckedChange={(checked) => setApplyToAllChecked(!!checked)}
 								className='h-4 w-4 rounded-4'
 							/>
-							<label htmlFor={checkboxId} className={cn(checkboxLabelClass, 'text-12 text-white/40')}>
+							<label htmlFor={checkboxId} className={cn(checkboxLabelClass, 'text-12 text-text-tertiary')}>
 								Apply to all
 							</label>
 						</div>

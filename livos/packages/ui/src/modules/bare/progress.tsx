@@ -9,12 +9,12 @@ export function Progress({value, children}: {value?: number; children?: ReactNod
 		<div className='flex w-full flex-col items-center gap-5'>
 			<ProgressPrimitive.Root
 				className={cn(
-					'relative h-1.5 w-full overflow-hidden rounded-full bg-white/10 sm:w-[80%]',
+					'relative h-1.5 w-full overflow-hidden rounded-full bg-border-default sm:w-[80%]',
 					isNil(value) && 'livinity-bouncing-gradient',
 				)}
 			>
 				<ProgressPrimitive.Indicator
-					className='h-full w-full flex-1 rounded-full bg-white transition-all duration-700'
+					className='h-full w-full flex-1 rounded-full bg-brand transition-all duration-700'
 					style={{transform: `translateX(-${100 - (value || 0)}%)`}}
 				/>
 			</ProgressPrimitive.Root>
