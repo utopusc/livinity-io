@@ -33,9 +33,9 @@ export const AppsThreeColumnSection: React.FC<AppsThreeColumnSectionProps> = ({
 			className={cn(
 				slideInFromBottomClass,
 				'relative overflow-hidden rounded-3xl',
-				'border border-border-subtle',
-				'bg-surface-1',
-				'p-6 md:p-10',
+				'border border-neutral-200/80',
+				'bg-gradient-to-br from-white to-neutral-50/80',
+				'p-8 md:p-12',
 			)}
 		>
 			<div className='relative flex flex-col gap-8 lg:flex-row lg:items-center lg:gap-12'>
@@ -47,14 +47,14 @@ export const AppsThreeColumnSection: React.FC<AppsThreeColumnSectionProps> = ({
 					)}
 				>
 					{overline && (
-						<p className='text-caption font-semibold uppercase tracking-wider text-brand'>
+						<p className='text-[11px] font-bold uppercase tracking-[0.08em] text-brand'>
 							{overline}
 						</p>
 					)}
-					<h3 className='mt-2 text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>
+					<h3 className='mt-2 text-2xl font-bold tracking-tight text-neutral-900 md:text-3xl'>
 						{title}
 					</h3>
-					<p className='mt-3 text-body-sm leading-relaxed text-text-secondary md:text-body-lg'>
+					<p className='mt-3 text-body-sm leading-relaxed text-neutral-500 md:text-body'>
 						{description}
 					</p>
 					<div className='mt-6'>{children}</div>
@@ -98,15 +98,13 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 				<div
 					className={cn(
 						'relative flex h-[280px] w-[180px] flex-col overflow-hidden rounded-2xl',
-						'border border-border-default',
+						'border border-neutral-200/80',
 						'transition-all duration-500',
-						'group-hover:border-border-emphasis',
-						'group-hover:shadow-elevation-lg',
+						'group-hover:border-neutral-300',
+						'group-hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]',
 					)}
 					style={{
-						background: `
-							linear-gradient(180deg, ${gradientStart}60 0%, ${gradientEnd}40 50%, rgba(0,0,0,0.1) 100%)
-						`,
+						background: `linear-gradient(180deg, ${gradientStart}25 0%, ${gradientEnd}15 50%, rgba(255,255,255,0.98) 100%)`,
 					}}
 				>
 					{/* Icon */}
@@ -118,24 +116,24 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 							size={100}
 							className={cn(
 								'rounded-2xl',
-								'shadow-elevation-lg',
-								'ring-2 ring-border-emphasis',
+								'shadow-[0_4px_16px_rgba(0,0,0,0.12)]',
+								'ring-1 ring-neutral-200/80',
 								'transition-all duration-500',
-								'group-hover:scale-110 group-hover:shadow-elevation-xl',
+								'group-hover:scale-110 group-hover:shadow-[0_6px_24px_rgba(0,0,0,0.15)]',
 							)}
 						/>
 					</div>
 
 					{/* Content */}
-					<div className='relative bg-surface-base/80 p-4 backdrop-blur-sm'>
-						<h4 className='truncate text-body-lg font-bold text-text-primary'>{app.name}</h4>
-						<p className='mt-0.5 truncate text-caption text-text-tertiary'>{app.developer}</p>
+					<div className='relative bg-white/90 p-4 backdrop-blur-sm border-t border-neutral-100'>
+						<h4 className='truncate text-body-lg font-bold text-neutral-900'>{app.name}</h4>
+						<p className='mt-0.5 truncate text-caption text-neutral-500'>{app.developer}</p>
 						<button
 							className={cn(
 								'mt-3 w-full rounded-lg py-2 text-body-sm font-semibold',
-								'bg-surface-2 text-text-primary',
+								'bg-neutral-100 text-neutral-700',
 								'transition-colors duration-200',
-								'group-hover:bg-surface-3 group-hover:text-text-primary',
+								'group-hover:bg-neutral-200 group-hover:text-neutral-900',
 							)}
 						>
 							{t('app.view')}
@@ -143,7 +141,7 @@ function FeaturedAppCard({app, index}: {app: RegistryApp | undefined; index: num
 					</div>
 
 					{/* Shine effect */}
-					<div className='absolute inset-0 bg-gradient-to-br from-surface-2 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
+					<div className='absolute inset-0 bg-gradient-to-br from-white/50 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
 				</div>
 			</Tilt>
 		</Link>
@@ -169,14 +167,14 @@ export function FeaturedCategorySection({
 			className={cn(
 				slideInFromBottomClass,
 				'relative overflow-hidden rounded-3xl p-6 md:p-8',
-				'border border-border-subtle',
-				gradient || 'bg-surface-1',
+				'border border-neutral-200/80',
+				gradient || 'bg-gradient-to-br from-white to-neutral-50',
 			)}
 		>
 			<div className='relative'>
 				<div className='mb-6'>
-					<h3 className='text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>{title}</h3>
-					<p className='mt-2 max-w-xl text-body-sm text-text-secondary md:text-body-lg'>{description}</p>
+					<h3 className='text-2xl font-bold tracking-tight text-neutral-900 md:text-3xl'>{title}</h3>
+					<p className='mt-2 max-w-xl text-body-sm text-neutral-500 md:text-body'>{description}</p>
 				</div>
 
 				<div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
@@ -186,9 +184,9 @@ export function FeaturedCategorySection({
 							to={`/app-store/${app.id}`}
 							className={cn(
 								'group flex items-center gap-4 rounded-xl p-4',
-								'bg-surface-base border border-transparent',
+								'bg-transparent border border-transparent',
 								'transition-all duration-300',
-								'hover:bg-surface-2 hover:border-border-default',
+								'hover:bg-neutral-50 hover:border-neutral-200/60',
 								'animate-in fade-in slide-in-from-bottom-4',
 							)}
 							style={{animationDelay: `${i * 80}ms`}}
@@ -199,10 +197,10 @@ export function FeaturedCategorySection({
 								className='rounded-xl shadow-lg transition-transform duration-300 group-hover:scale-105'
 							/>
 							<div className='flex-1 min-w-0'>
-								<h4 className='truncate font-semibold text-text-primary'>{app.name}</h4>
-								<p className='truncate text-body-sm text-text-tertiary'>{app.developer}</p>
+								<h4 className='truncate font-semibold text-neutral-900'>{app.name}</h4>
+								<p className='truncate text-body-sm text-neutral-500'>{app.developer}</p>
 							</div>
-							<span className='rounded-full bg-surface-2 px-3 py-1 text-caption font-medium text-text-secondary transition-colors group-hover:bg-surface-3 group-hover:text-text-primary'>
+							<span className='rounded-full bg-neutral-100 px-3 py-1 text-caption font-medium text-neutral-600 transition-colors group-hover:bg-neutral-200 group-hover:text-neutral-900'>
 								View
 							</span>
 						</Link>
@@ -212,7 +210,7 @@ export function FeaturedCategorySection({
 				{categorySlug && (
 					<Link
 						to={`/app-store/category/${categorySlug}`}
-						className='mt-6 inline-flex items-center gap-2 text-body-sm font-medium text-text-secondary transition-colors hover:text-text-primary'
+						className='mt-6 inline-flex items-center gap-2 text-body-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900'
 					>
 						Browse all apps
 						<svg className='h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
