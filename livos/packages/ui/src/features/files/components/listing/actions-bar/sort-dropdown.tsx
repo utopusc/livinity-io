@@ -18,8 +18,12 @@ export function SortDropdown() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant='default' size='default'>
-					<ArrowUpDown className='h-3 w-3' />
+				<Button
+					variant='default'
+					size='default'
+					className='h-7 px-2 rounded-lg text-caption text-text-secondary hover:bg-surface-1 hover:text-text-primary transition-colors'
+				>
+					<ArrowUpDown className='h-3.5 w-3.5' />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align='end' className='w-24'>

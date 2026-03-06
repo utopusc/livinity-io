@@ -21,17 +21,27 @@ export function ActionsBar() {
 	const showSortUi = isEmbedded || !isReadOnly
 
 	return (
-		<nav className={cn('flex h-8 w-full min-w-0 gap-3', !isEmbedded && 'lg:-mt-14')} aria-label='File browser actions'>
+		<nav
+			className={cn(
+				'flex h-10 w-full min-w-0 items-center gap-2 rounded-xl',
+				'bg-white/60 backdrop-blur-md',
+				'border border-border-subtle',
+				'px-2',
+				!isEmbedded && 'lg:-mt-14',
+			)}
+			aria-label='File browser actions'
+		>
 			{/* Left side: Navigation and Path */}
 			<div className='flex min-w-0 flex-1 items-center gap-2 overflow-hidden'>
 				<NavigationControls />
+				<div className='h-5 w-px bg-border-subtle mx-1' />
 				{hidePath ? null : <PathBar />}
 			</div>
 
 			{/* Right side: View Controls and Actions */}
 			<div className='ml-auto flex items-center'>
 				{/* Desktop view - show toggle for view and separate buttons for each action */}
-				<div className='hidden items-center gap-2 md:flex'>
+				<div className='hidden items-center gap-1.5 md:flex'>
 					{desktopActions && !isReadOnly ? (
 						<>
 							{desktopActions}

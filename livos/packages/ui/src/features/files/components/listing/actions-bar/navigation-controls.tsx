@@ -103,28 +103,36 @@ export function NavigationControls() {
 	const canGoForward = Boolean(navigation.paths[navigation.currentPathIndex + 1])
 
 	return (
-		<div className='flex items-center gap-2'>
+		<div className='flex items-center gap-1'>
 			<motion.button
 				onClick={handleBack}
 				disabled={!canGoBack}
-				className={cn('p-0 hover:bg-transparent focus:ring-0 focus-visible:ring-0', {
-					'text-text-secondary': !canGoBack,
-				})}
-				whileTap={{scale: 0.85}}
+				className={cn(
+					'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+					'focus:ring-0 focus-visible:ring-0',
+					canGoBack
+						? 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+						: 'opacity-30 cursor-default',
+				)}
+				whileTap={canGoBack ? {scale: 0.85} : undefined}
 				aria-label='Go back'
 			>
-				<ChevronLeftIcon className='h-5 w-5' />
+				<ChevronLeftIcon className='h-4 w-4' />
 			</motion.button>
 			<motion.button
 				onClick={handleForward}
 				disabled={!canGoForward}
-				className={cn('p-0 hover:bg-transparent focus:ring-0 focus-visible:ring-0', {
-					'text-text-secondary': !canGoForward,
-				})}
-				whileTap={{scale: 0.85}}
+				className={cn(
+					'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+					'focus:ring-0 focus-visible:ring-0',
+					canGoForward
+						? 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+						: 'opacity-30 cursor-default',
+				)}
+				whileTap={canGoForward ? {scale: 0.85} : undefined}
 				aria-label='Go forward'
 			>
-				<ChevronRightIcon className='h-5 w-5' />
+				<ChevronRightIcon className='h-4 w-4' />
 			</motion.button>
 		</div>
 	)
