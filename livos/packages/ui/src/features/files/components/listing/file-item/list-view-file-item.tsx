@@ -37,9 +37,9 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 	// Mobile view
 	if (isMobile) {
 		return (
-			<div className={cn('flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2', isUploading && 'opacity-70')}>
+			<div className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5', isUploading && 'opacity-70')}>
 				<div className='flex-shrink-0'>
-					<FileItemIcon item={item} className='h-7 w-7' />
+					<FileItemIcon item={item} className='h-8 w-8' />
 				</div>
 				<div className={cn('flex flex-1 items-center justify-between overflow-hidden', fadedContent && 'opacity-50')}>
 					<div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
@@ -49,7 +49,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 							<TruncatedFilename
 								filename={item.name}
 								view='list'
-								className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap pr-2 text-caption'
+								className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap pr-2 font-medium text-caption'
 							/>
 						)}
 						<span className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-caption-sm text-text-tertiary'>
@@ -77,12 +77,12 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 	}
 
 	// Desktop view
-	const tableStyles = 'text-caption p-2.5 whitespace-nowrap overflow-hidden text-ellipsis'
+	const tableStyles = 'text-[13px] px-3 py-2.5 whitespace-nowrap overflow-hidden text-ellipsis'
 
 	return (
-		<div className={cn('flex items-center', isUploading && 'opacity-70')}>
+		<div className={cn('flex items-center rounded-lg transition-colors duration-100', isUploading && 'opacity-70')}>
 			<div className={`flex-[5] ${tableStyles}`}>
-				<div className='flex items-center gap-1.5'>
+				<div className='flex items-center gap-2.5'>
 					<div className='flex-shrink-0'>
 						<FileItemIcon item={item} className='h-6 w-6' />
 					</div>
@@ -96,11 +96,11 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 				</div>
 			</div>
 
-			<div className={cn(`flex-[2] ${tableStyles} text-text-secondary`, fadedContent && 'opacity-50')}>
+			<div className={cn(`flex-[2] ${tableStyles} text-text-tertiary`, fadedContent && 'opacity-50')}>
 				{isUploading ? <Progress value={uploadingProgress} /> : formatFilesystemDate(item.modified, languageCode)}
 			</div>
 
-			<div className={cn(`flex-1 ${tableStyles} text-text-secondary`, fadedContent && 'opacity-50')}>
+			<div className={cn(`flex-1 ${tableStyles} text-text-tertiary`, fadedContent && 'opacity-50')}>
 				{isUploading
 					? `${formatFilesystemSize(
 							((item.size ?? 0) * (uploadingProgress ?? 0)) / 100,
@@ -113,7 +113,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 				{isUploading ? `${formatFilesystemSize(item.speed ?? 0)}/s` : formatFilesystemDate(item.created, languageCode)}
 			</div> */}
 
-			<div className={cn(`flex-[2] ${tableStyles} text-text-secondary`, fadedContent && 'opacity-50')}>
+			<div className={cn(`flex-[2] ${tableStyles} text-text-tertiary`, fadedContent && 'opacity-50')}>
 				{isUploading
 					? uploadingProgress !== 0
 						? t('files-state.uploading')
