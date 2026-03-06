@@ -1,3 +1,4 @@
+import {TbHome2} from 'react-icons/tb'
 import {useNavigate as useRouterNavigate} from 'react-router-dom'
 
 import {SidebarItem} from '@/features/files/components/sidebar/sidebar-item'
@@ -40,6 +41,9 @@ export function SidebarHome() {
 						}}
 						isActive={currentPath === HOME_PATH}
 						onClick={() => navigateToDirectory(HOME_PATH)}
+						icon={TbHome2}
+						iconBg='bg-blue-100'
+						iconColor='text-blue-600'
 					/>
 				</div>
 			</ContextMenuTrigger>

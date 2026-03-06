@@ -1,8 +1,7 @@
-import {GridLayoutIcon} from '@/features/files/assets/grid-layout-icon'
-import {ListLayoutIcon} from '@/features/files/assets/list-layout-icon'
+import {TbLayoutGrid, TbList} from 'react-icons/tb'
+
 import {usePreferences} from '@/features/files/hooks/use-preferences'
 import {ViewPreferences} from '@/features/files/types'
-import {Tabs, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
@@ -14,31 +13,24 @@ export function ViewToggle() {
 	const {view} = preferences ?? {view: 'list'}
 
 	return (
-		// Hide the view toggle while loading preferences or if there's an error
-		<Tabs
-			value={view}
-			onValueChange={(value) => setView(value as ViewPreferences['view'])}
-			className={cn(isLoading || (isError && 'opacity-0'))}
-		>
-			<TabsList className='h-7 rounded-lg bg-surface-1 p-0.5'>
-				{viewModes.map((mode) => (
-					<TabsTrigger
-						key={mode}
-						value={mode}
-						className={cn(
-							'h-6 w-7 flex items-center justify-center transition-all duration-150 rounded-md',
-							view === mode ? 'bg-white shadow-sm' : 'hover:text-text-primary text-text-tertiary',
-						)}
-						aria-label={t(`files-view.${mode}`)}
-					>
-						{mode === 'icons' ? (
-							<GridLayoutIcon className={cn('h-3.5 w-3.5', view === mode ? 'text-text-primary' : 'text-text-tertiary')} />
-						) : (
-							<ListLayoutIcon className={cn('h-3.5 w-3.5', view === mode ? 'text-text-primary' : 'text-text-tertiary')} />
-						)}
-					</TabsTrigger>
-				))}
-			</TabsList>
-		</Tabs>
+		<div className={cn('flex items-center rounded-lg bg-neutral-100 p-0.5', (isLoading || isError) && 'opacity-0')}>
+			{viewModes.map((mode) => (
+				<button
+					key={mode}
+					onClick={() => setView(mode)}
+					className={cn(
+						'flex h-7 w-8 items-center justify-center rounded-md transition-all duration-150',
+						view === mode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-400 hover:text-neutral-600',
+					)}
+					aria-label={t(`files-view.${mode}`)}
+				>
+					{mode === 'icons' ? (
+						<TbLayoutGrid className='h-4 w-4' strokeWidth={2} />
+					) : (
+						<TbList className='h-4 w-4' strokeWidth={2} />
+					)}
+				</button>
+			))}
+		</div>
 	)
 }

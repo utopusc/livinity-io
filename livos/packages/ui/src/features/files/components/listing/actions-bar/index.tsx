@@ -23,38 +23,33 @@ export function ActionsBar() {
 	return (
 		<nav
 			className={cn(
-				'flex h-10 w-full min-w-0 items-center gap-2 rounded-xl',
-				'bg-white/60 backdrop-blur-md',
-				'border border-border-subtle',
-				'px-2',
+				'flex h-11 w-full min-w-0 items-center gap-1.5',
+				'px-1',
 				!isEmbedded && 'lg:-mt-14',
 			)}
 			aria-label='File browser actions'
 		>
 			{/* Left side: Navigation and Path */}
-			<div className='flex min-w-0 flex-1 items-center gap-2 overflow-hidden'>
+			<div className='flex min-w-0 items-center gap-1'>
 				<NavigationControls />
-				<div className='h-5 w-px bg-border-subtle mx-1' />
 				{hidePath ? null : <PathBar />}
 			</div>
 
 			{/* Right side: View Controls and Actions */}
-			<div className='ml-auto flex items-center'>
-				{/* Desktop view - show toggle for view and separate buttons for each action */}
-				<div className='hidden items-center gap-1.5 md:flex'>
+			<div className='ml-auto flex items-center gap-1'>
+				{/* Desktop view */}
+				<div className='hidden items-center gap-1 md:flex'>
 					{desktopActions && !isReadOnly ? (
 						<>
 							{desktopActions}
-							<Separator orientation='vertical' className='h-6' />
 						</>
 					) : null}
-					{/* Search */}
 					{showSearchUi ? <SearchInput /> : null}
 					{showViewToggleUi ? <ViewToggle /> : null}
 					{showSortUi ? <SortDropdown /> : null}
 				</div>
 
-				{/* Mobile view - show menu with all actions */}
+				{/* Mobile view */}
 				<div className='md:hidden'>
 					<MobileActions DropdownItems={!isReadOnly ? mobileActions : null} />
 				</div>
