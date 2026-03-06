@@ -122,7 +122,12 @@ export function Sidebar({className}: {className?: string}) {
 const SidebarSection = ({children, label = ''}: {children: React.ReactNode; label?: string}) => {
 	return (
 		<section className='flex flex-col gap-0.5 px-3' aria-label={label}>
-			<div className='px-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary/70'>{label}</div>
+			{label && (
+				<div className='flex items-center gap-2 px-1 py-2'>
+					<span className='text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-400'>{label}</span>
+					<div className='h-px flex-1 bg-gradient-to-r from-neutral-200/60 to-transparent' />
+				</div>
+			)}
 			{children}
 		</section>
 	)
@@ -131,7 +136,7 @@ const SidebarSection = ({children, label = ''}: {children: React.ReactNode; labe
 const SidebarDivider = () => {
 	return (
 		<div
-			className='my-2 mx-3 h-px bg-border-subtle'
+			className='my-1.5 mx-4 h-px bg-gradient-to-r from-neutral-200/50 via-neutral-200/30 to-transparent'
 			role='separator'
 		/>
 	)

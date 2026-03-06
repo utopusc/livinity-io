@@ -1,5 +1,4 @@
-import {ArrowUpDown} from 'lucide-react'
-import {RiArrowDropDownLine, RiArrowDropUpLine} from 'react-icons/ri'
+import {TbArrowsSort, TbChevronDown, TbChevronUp} from 'react-icons/tb'
 
 import {SORT_BY_OPTIONS} from '@/features/files/constants'
 import {usePreferences} from '@/features/files/hooks/use-preferences'
@@ -21,26 +20,26 @@ export function SortDropdown() {
 				<Button
 					variant='default'
 					size='default'
-					className='h-7 px-2 rounded-lg text-caption text-text-secondary hover:bg-surface-1 hover:text-text-primary transition-colors'
+					className='h-8 w-8 rounded-xl text-neutral-400 hover:bg-neutral-100/80 hover:text-neutral-600 transition-all duration-200'
 				>
-					<ArrowUpDown className='h-3.5 w-3.5' />
+					<TbArrowsSort className='h-[15px] w-[15px]' strokeWidth={2.5} />
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align='end' className='w-24'>
-				<span className='block px-2 pb-2 text-body-sm text-text-tertiary'>Sort by</span>
+			<DropdownMenuContent align='end' className='w-28 rounded-xl p-1'>
+				<span className='block px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-400'>Sort by</span>
 				{SORT_BY_OPTIONS.map((option) => (
 					<DropdownMenuItem
 						key={option.sortBy}
 						onClick={() => setSortBy(option.sortBy)}
-						className='flex items-center justify-between'
+						className='flex items-center justify-between rounded-lg text-[13px]'
 					>
 						{t(option.labelTKey)}
 						{option.sortBy === preferences?.sortBy && (
 							<>
 								{preferences.sortOrder === 'ascending' ? (
-									<RiArrowDropUpLine className='h-5 w-5' />
+									<TbChevronUp className='h-3.5 w-3.5 text-neutral-500' strokeWidth={2.5} />
 								) : (
-									<RiArrowDropDownLine className='h-5 w-5' />
+									<TbChevronDown className='h-3.5 w-3.5 text-neutral-500' strokeWidth={2.5} />
 								)}
 							</>
 						)}

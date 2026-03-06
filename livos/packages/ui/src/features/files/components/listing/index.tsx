@@ -57,7 +57,7 @@ function ListingContent({
 }) {
 	const selectedItems = useFilesStore((s) => s.selectedItems)
 	return (
-		<Card className='h-[calc(100svh-214px)] !p-0 !pt-4 lg:h-[calc(100vh-300px)]'>
+		<Card className='h-[calc(100svh-214px)] !border-transparent !p-0 !pt-4 !shadow-none bg-white/40 lg:h-[calc(100vh-300px)]'>
 			{(() => {
 				if (isLoading) return <LoadingView />
 				if (error) return <ErrorView error={error} />
@@ -76,7 +76,7 @@ function ListingContent({
 
 			{/* Display total item count (or truncated count) when no items are selected */}
 			{totalItems && !selectedItems.length ? (
-				<span className='absolute bottom-2 right-4 text-12 font-semibold text-text-secondary'>
+				<span className='absolute bottom-2 right-4 text-[11px] font-medium text-neutral-400'>
 					{truncatedAt
 						? t('files-listing.item-count-truncated', {
 								formattedCount: formatNumberI18n({n: truncatedAt, showDecimals: false}),
@@ -90,7 +90,7 @@ function ListingContent({
 
 			{/* Display selected count vs total (or truncated count) when items are selected */}
 			{selectedItems.length > 0 && (
-				<span className='absolute bottom-2 right-4 text-12 font-semibold text-text-secondary'>
+				<span className='absolute bottom-2 right-4 text-[11px] font-medium text-neutral-400'>
 					{truncatedAt
 						? t('files-listing.selected-count-truncated', {
 								selectedCount: selectedItems.length,

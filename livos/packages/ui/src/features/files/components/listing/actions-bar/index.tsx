@@ -6,7 +6,6 @@ import {SearchInput} from '@/features/files/components/listing/actions-bar/searc
 import {SortDropdown} from '@/features/files/components/listing/actions-bar/sort-dropdown'
 import {ViewToggle} from '@/features/files/components/listing/actions-bar/view-toggle'
 import {useIsFilesEmbedded, useIsFilesReadOnly} from '@/features/files/providers/files-capabilities-context'
-import {Separator} from '@/shadcn-components/ui/separator'
 import {cn} from '@/shadcn-lib/utils'
 
 // Actions/navigation bar displayed above every files listing.  Its
@@ -23,27 +22,35 @@ export function ActionsBar() {
 	return (
 		<nav
 			className={cn(
-				'flex h-11 w-full min-w-0 items-center gap-1.5',
-				'px-1',
+				'flex h-12 w-full min-w-0 items-center',
+				'px-1.5',
 				!isEmbedded && 'lg:-mt-14',
 			)}
 			aria-label='File browser actions'
 		>
-			{/* Left side: Navigation and Path */}
+			{/* Left: Navigation + Path */}
 			<div className='flex min-w-0 items-center gap-1'>
 				<NavigationControls />
 				{hidePath ? null : <PathBar />}
 			</div>
 
-			{/* Right side: View Controls and Actions */}
-			<div className='ml-auto flex items-center gap-1'>
+			{/* Right: Controls grouped with visual separators */}
+			<div className='ml-auto flex items-center gap-1.5'>
 				{/* Desktop view */}
-				<div className='hidden items-center gap-1 md:flex'>
+				<div className='hidden items-center gap-1.5 md:flex'>
+					{/* Action buttons */}
 					{desktopActions && !isReadOnly ? (
-						<>
+						<div className='flex items-center gap-1'>
 							{desktopActions}
-						</>
+						</div>
 					) : null}
+
+					{/* Separator between actions and controls */}
+					{desktopActions && !isReadOnly && (showSearchUi || showViewToggleUi || showSortUi) ? (
+						<div className='mx-0.5 h-5 w-px bg-neutral-200/80' />
+					) : null}
+
+					{/* Search + View + Sort controls */}
 					{showSearchUi ? <SearchInput /> : null}
 					{showViewToggleUi ? <ViewToggle /> : null}
 					{showSortUi ? <SortDropdown /> : null}
