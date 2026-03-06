@@ -26,15 +26,17 @@ export function EmptyStateDirectory() {
 	const isOfflineNetworkHost = isViewingNetworkShares && !doesHostHaveMountedShares?.(currentPath)
 
 	return (
-		<div className='flex h-full flex-col items-center justify-center gap-3 p-4 pt-0 text-center'>
+		<div className='flex h-full flex-col items-center justify-center gap-4 p-8 pt-0 text-center'>
 			<div className='flex flex-col items-center gap-3'>
 				{isOfflineNetworkHost ? (
-					<img src={nasIconInactive} alt='Network offline' className='h-12 w-12' />
+					<img src={nasIconInactive} alt='Network offline' className='h-16 w-16' />
 				) : (
-					<EmptyFolderIcon className='h-15 w-15' />
+					<EmptyFolderIcon className='h-20 w-20' />
 				)}
-				<div className='text-caption text-text-tertiary'>
-					{isOfflineNetworkHost ? t('files-empty.network-host-offline') : t('files-empty.directory')}
+				<div className='max-w-[240px]'>
+					<p className='text-body-sm text-text-tertiary'>
+						{isOfflineNetworkHost ? t('files-empty.network-host-offline') : t('files-empty.directory')}
+					</p>
 				</div>
 			</div>
 			{/* in read-only mode, we don't render the upload and new folder buttons */}
@@ -55,8 +57,8 @@ export function EmptyStateDirectory() {
 
 export function EmptyStateNetwork() {
 	return (
-		<div className='flex h-full items-center justify-center p-4 pt-0 text-center'>
-			<div className='text-caption text-text-tertiary'>{t('files-empty.network')}</div>
+		<div className='flex h-full items-center justify-center p-8 pt-0 text-center'>
+			<div className='text-body-sm text-text-tertiary'>{t('files-empty.network')}</div>
 		</div>
 	)
 }
