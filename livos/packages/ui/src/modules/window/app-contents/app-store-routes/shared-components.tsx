@@ -8,7 +8,6 @@ import {useColorThief} from '@/hooks/use-color-thief'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {
 	appsGridClass,
-	sectionOverlineClass,
 	SectionTitle,
 	sectionTitleClass,
 	cardFaintClass,
@@ -26,8 +25,8 @@ export function AppWithDescriptionWindow({app, to}: {app: RegistryApp; to?: stri
 			className={cn(
 				'group flex w-full items-start gap-3 rounded-xl p-3',
 				'transition-all duration-200 ease-out',
-				'hover:bg-surface-2',
-				'outline-none focus-visible:ring-2 focus-visible:ring-brand/20',
+				'hover:bg-neutral-50',
+				'outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
 			)}
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
@@ -36,16 +35,16 @@ export function AppWithDescriptionWindow({app, to}: {app: RegistryApp; to?: stri
 				size={48}
 				className={cn(
 					'rounded-xl md:w-[52px]',
-					'shadow-sm',
+					'shadow-[0_1px_4px_rgba(0,0,0,0.08)]',
 					'transition-transform duration-200',
 					'group-hover:scale-105',
 				)}
 			/>
 			<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
-				<h3 className='truncate text-body-sm font-semibold tracking-tight text-text-primary md:text-body'>
+				<h3 className='truncate text-body-sm font-semibold tracking-tight text-neutral-900 md:text-body'>
 					{app.name}
 				</h3>
-				<p className='line-clamp-2 w-full min-w-0 text-caption leading-snug text-text-tertiary md:text-body-sm'>
+				<p className='line-clamp-2 w-full min-w-0 text-caption leading-snug text-neutral-500 md:text-body-sm'>
 					{app.tagline}
 				</p>
 			</div>
@@ -64,11 +63,11 @@ function FeaturedGridCard({app}: {app: RegistryApp}) {
 			to={`/${app.id}`}
 			className={cn(
 				'group flex items-center gap-4 overflow-hidden rounded-2xl',
-				'bg-surface-2/50',
-				'border border-border-subtle',
+				'bg-neutral-50/50',
+				'border border-neutral-200/60',
 				'p-4',
 				'transition-all duration-300',
-				'hover:border-border-default hover:shadow-elevation-md',
+				'hover:border-neutral-300 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]',
 				'hover:-translate-y-0.5',
 			)}
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
@@ -84,17 +83,17 @@ function FeaturedGridCard({app}: {app: RegistryApp}) {
 				size={52}
 				className={cn(
 					'flex-shrink-0 rounded-xl',
-					'shadow-sm',
+					'shadow-[0_1px_4px_rgba(0,0,0,0.08)]',
 					'transition-transform duration-300',
 					'group-hover:scale-110',
 					'md:w-[56px] md:h-[56px]',
 				)}
 			/>
 			<div className='flex min-w-0 flex-1 flex-col gap-0.5'>
-				<h3 className='truncate text-body font-bold tracking-tight text-text-primary'>
+				<h3 className='truncate text-body font-bold tracking-tight text-neutral-900'>
 					{app.name}
 				</h3>
-				<p className='line-clamp-2 text-body-sm leading-snug text-text-secondary'>
+				<p className='line-clamp-2 text-body-sm leading-snug text-neutral-600'>
 					{app.tagline}
 				</p>
 			</div>
@@ -110,7 +109,7 @@ function CompactAppCard({app}: {app: RegistryApp}) {
 			className={cn(
 				'group flex flex-col items-center gap-2 rounded-xl p-3',
 				'transition-all duration-200',
-				'hover:bg-surface-2',
+				'hover:bg-neutral-50',
 			)}
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
@@ -119,12 +118,12 @@ function CompactAppCard({app}: {app: RegistryApp}) {
 				size={44}
 				className={cn(
 					'rounded-[12px]',
-					'shadow-sm',
+					'shadow-[0_1px_3px_rgba(0,0,0,0.06)]',
 					'transition-all duration-200',
-					'group-hover:scale-110 group-hover:shadow-elevation-sm',
+					'group-hover:scale-110 group-hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]',
 				)}
 			/>
-			<span className='max-w-full truncate text-center text-caption font-medium text-text-primary'>
+			<span className='max-w-full truncate text-center text-caption font-medium text-neutral-800'>
 				{app.name}
 			</span>
 		</WindowAwareLink>
@@ -150,8 +149,9 @@ export function AppsGridSectionWindow({
 		<section
 			className={cn(
 				'rounded-2xl p-4 md:p-6',
-				'bg-surface-1',
-				'border border-border-subtle',
+				'bg-white',
+				'border border-neutral-200/80',
+				'shadow-[0_1px_3px_rgba(0,0,0,0.04)]',
 				'animate-in fade-in slide-in-from-bottom-6 duration-500',
 			)}
 		>
@@ -213,8 +213,8 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 	const iconRef = useRef<HTMLImageElement>(null)
 	const colors = useColorThief(iconRef)
 
-	const c1 = colors?.[0] || 'rgba(80,80,120,0.8)'
-	const c2 = colors?.[1] || 'rgba(50,50,80,0.8)'
+	const c1 = colors?.[0] || '#6366f1'
+	const c2 = colors?.[1] || '#8b5cf6'
 
 	return (
 		<WindowAwareLink
@@ -229,21 +229,21 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 			<Tilt rotationFactor={5} springOptions={{stiffness: 300, damping: 20}}>
 				<div
 					className={cn(
-						'relative flex h-[110px] w-[270px] items-center gap-4 overflow-hidden rounded-2xl',
-						'md:h-[120px] md:w-[310px]',
-						'border border-border-subtle',
+						'relative flex h-[120px] w-[280px] items-center gap-4 overflow-hidden rounded-2xl',
+						'md:h-[140px] md:w-[320px]',
+						'border border-neutral-200/80',
 						'transition-all duration-400 ease-out',
-						'group-hover:border-border-default',
-						'group-hover:shadow-elevation-lg',
+						'group-hover:border-neutral-300',
+						'group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]',
 					)}
 					style={{
-						background: `linear-gradient(135deg, ${c1}, ${c2})`,
+						background: `linear-gradient(135deg, ${c1}15, ${c2}08, rgba(255,255,255,0.95))`,
 					}}
 				>
-					<Spotlight className='from-white/20 via-white/10 to-transparent' size={200} springOptions={{stiffness: 200, damping: 20}} />
+					<Spotlight className='from-white/30 via-white/15 to-transparent' size={200} springOptions={{stiffness: 200, damping: 20}} />
 					{/* Decorative blobs — asymmetric shapes */}
-					<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-surface-base' />
-					<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-surface-base' />
+					<div className='absolute -right-10 -top-10 h-28 w-28 rounded-full bg-neutral-100/60' />
+					<div className='absolute -bottom-6 right-1/4 h-20 w-20 rounded-full bg-neutral-100/60' />
 
 					{/* Icon — left-aligned, vertically centered */}
 					<div className='relative z-10 pl-5'>
@@ -254,7 +254,7 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 							size={48}
 							className={cn(
 								'flex-shrink-0 rounded-xl',
-								'shadow-elevation-md',
+								'shadow-[0_2px_8px_rgba(0,0,0,0.1)]',
 								'transition-transform duration-400',
 								'group-hover:scale-110',
 								'md:w-[56px] md:h-[56px]',
@@ -264,10 +264,10 @@ function PanoramicCard({app, index}: {app: RegistryApp; index: number}) {
 
 					{/* Text — right side */}
 					<div className='relative z-10 flex min-w-0 flex-1 flex-col pr-5'>
-						<h3 className='truncate text-body font-bold tracking-tight text-text-primary md:text-lg'>
+						<h3 className='truncate text-body font-bold tracking-tight text-neutral-900 md:text-lg'>
 							{app.name}
 						</h3>
-						<p className='mt-0.5 line-clamp-2 text-caption text-text-secondary md:text-body-sm'>
+						<p className='mt-0.5 line-clamp-2 text-caption text-neutral-500 md:text-body-sm'>
 							{app.tagline}
 						</p>
 					</div>
@@ -298,9 +298,9 @@ export function AppsThreeColumnSectionWindow({
 	return (
 		<section
 			className={cn(
-				'overflow-hidden rounded-2xl',
-				'bg-surface-1',
-				'border border-border-subtle',
+				'overflow-hidden rounded-3xl',
+				'bg-gradient-to-br from-white to-neutral-50/80',
+				'border border-neutral-200/80',
 				'p-5 md:p-8',
 				'animate-in fade-in slide-in-from-bottom-6 duration-500',
 			)}
@@ -313,9 +313,9 @@ export function AppsThreeColumnSectionWindow({
 						textLocation === 'right' && 'lg:order-2',
 					)}
 				>
-					<p className={sectionOverlineClass}>{overline}</p>
-					<h3 className='mt-1 text-2xl font-bold tracking-tight text-text-primary md:text-3xl'>{title}</h3>
-					<p className='mt-3 text-body-sm leading-relaxed text-text-secondary md:text-body'>{description}</p>
+					<p className='text-[11px] font-bold uppercase tracking-[0.08em] text-brand'>{overline}</p>
+					<h3 className='mt-2 text-2xl font-bold tracking-tight text-neutral-900 md:text-3xl'>{title}</h3>
+					<p className='mt-3 text-body-sm leading-relaxed text-neutral-500 md:text-body'>{description}</p>
 					<div className='mt-6'>{children}</div>
 				</div>
 
@@ -342,8 +342,8 @@ function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number
 
 	if (!app) return null
 
-	const c1 = colors?.[0] || 'rgba(80,80,120,0.9)'
-	const c2 = colors?.[1] || 'rgba(50,50,80,0.9)'
+	const c1 = colors?.[0] || '#6366f1'
+	const c2 = colors?.[1] || '#8b5cf6'
 	const config = SHOWCASE_CONFIGS[index] || SHOWCASE_CONFIGS[0]
 
 	return (
@@ -365,13 +365,13 @@ function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number
 						'relative flex flex-col overflow-hidden rounded-2xl',
 						config.width,
 						config.height,
-						'border border-border-subtle',
-						'transition-all duration-400',
-						'group-hover:border-border-default',
-						'group-hover:shadow-elevation-lg',
+						'border border-neutral-200/80',
+						'transition-all duration-500',
+						'group-hover:border-neutral-300',
+						'group-hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]',
 					)}
 					style={{
-						background: `radial-gradient(circle at 50% 30%, rgba(0,0,0,0.03), transparent 70%), linear-gradient(180deg, ${c1}, ${c2})`,
+						background: `linear-gradient(180deg, ${c1}25, ${c2}15, rgba(255,255,255,0.98))`,
 					}}
 				>
 					{/* Icon centered */}
@@ -383,21 +383,32 @@ function ShowcaseCard({app, index}: {app: RegistryApp | undefined; index: number
 							size={config.iconSize}
 							className={cn(
 								'rounded-2xl',
-								'shadow-elevation-md',
-								'transition-transform duration-400',
-								'group-hover:scale-110',
+								'shadow-[0_4px_12px_rgba(0,0,0,0.1)]',
+								'ring-1 ring-neutral-200/80',
+								'transition-all duration-500',
+								'group-hover:scale-110 group-hover:shadow-[0_6px_24px_rgba(0,0,0,0.15)]',
 							)}
 						/>
 					</div>
 
 					{/* Info at bottom */}
-					<div className='px-3 pb-3'>
-						<h4 className='truncate text-body-sm font-bold text-text-primary'>{app.name}</h4>
-						<p className='truncate text-caption text-text-secondary'>{app.developer}</p>
-						<div className='mt-1.5 flex items-center justify-center rounded-lg bg-surface-1 py-1.5 text-caption font-medium text-text-primary backdrop-blur-sm transition-colors group-hover:bg-surface-2'>
+					<div className='relative bg-white/90 px-3 pb-3 pt-2 backdrop-blur-sm border-t border-neutral-100'>
+						<h4 className='truncate text-body-sm font-bold text-neutral-900'>{app.name}</h4>
+						<p className='truncate text-caption text-neutral-500'>{app.developer}</p>
+						<button
+							className={cn(
+								'mt-2 w-full rounded-lg py-1.5 text-caption font-semibold',
+								'bg-neutral-100 text-neutral-700',
+								'transition-colors duration-200',
+								'group-hover:bg-neutral-200 group-hover:text-neutral-900',
+							)}
+						>
 							{t('app.view')}
-						</div>
+						</button>
 					</div>
+
+					{/* Shine effect */}
+					<div className='absolute inset-0 bg-gradient-to-br from-white/50 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100' />
 				</div>
 			</Tilt>
 		</WindowAwareLink>
