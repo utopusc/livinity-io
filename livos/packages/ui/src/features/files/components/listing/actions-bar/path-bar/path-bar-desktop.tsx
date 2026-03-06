@@ -174,7 +174,7 @@ export function PathBarDesktop({path}: {path: string}) {
 
 	return (
 		<FadeScroller direction='x' className='livinity-hide-scrollbar overflow-x-auto' ref={fadeScrollerRef}>
-			<ul className='flex h-8 items-center whitespace-nowrap border border-transparent py-1' ref={breadcrumbsRef}>
+			<ul className='flex items-center gap-0.5 min-w-0 overflow-hidden whitespace-nowrap py-1' ref={breadcrumbsRef}>
 				{segments.map((segment, i) => {
 					/* First and last two segments are static, they always be fully visible */
 					const isStatic = i === 0 || i > segments.length - 3 ? true : undefined
@@ -209,7 +209,7 @@ const PathSegment = ({segment, hasArrow, onClick, isStatic, path, type}: PathSeg
 			id={`path-segment-${path}`}
 			path={path}
 			onClick={onClick}
-			className='group inline-flex w-[--item-width] min-w-[42px] cursor-pointer items-center gap-1 rounded p-1 transition-[width] duration-300 ease-in-out hover:w-[--natural-width]'
+			className='group inline-flex w-[--item-width] min-w-[42px] cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-body-sm text-text-secondary transition-all duration-200 ease-in-out hover:w-[--natural-width] hover:bg-surface-1 hover:text-text-primary'
 		>
 			<FileItemIcon
 				item={{
@@ -233,12 +233,12 @@ const PathSegment = ({segment, hasArrow, onClick, isStatic, path, type}: PathSeg
 				className={cn(
 					'group-hover:[mask-image:none] [.has-overflow_&]:[mask-image:linear-gradient(to_left,transparent_0%,black_40px)]',
 					'overflow-hidden text-xs',
-					segment && 'ml-1',
+					segment && 'ml-0.5',
 				)}
 			>
 				{segment && formatItemName({name: segment})}
 			</span>
-			{hasArrow && <CaretRightIcon className='ml-1 mt-[1px] shrink-0 text-text-secondary' />}
+			{hasArrow && <CaretRightIcon className='ml-0.5 shrink-0 h-3 w-3 text-text-tertiary' />}
 		</Droppable>
 	</li>
 )
