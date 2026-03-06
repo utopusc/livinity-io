@@ -212,7 +212,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				initial={morphInitial}
 				animate={{opacity: isDragging ? 0.95 : 1, scale: 1, left: currentX, top: currentY, width: size.width, height: size.height, borderRadius: '20px'}}
 				exit={morphExit}
-				transition={morphTransition}
+				transition={isDragging || isResizing ? {type: 'tween', duration: 0} : morphTransition}
 				onPointerDown={handleFocus}
 			>
 				<div className={windowContentClass}>{children}</div>
