@@ -1,9 +1,11 @@
 import '@/features/files/components/listing/file-item/list-view-file-item.css'
 
+import {TbDownload, TbFileText, TbFolder, TbMusic, TbPhoto, TbVideo} from 'react-icons/tb'
+
 import {EditableName} from '@/features/files/components/listing/file-item/editable-name'
 import {TruncatedFilename} from '@/features/files/components/listing/file-item/truncated-filename'
 import {FileItemIcon} from '@/features/files/components/shared/file-item-icon'
-import {FILE_TYPE_MAP} from '@/features/files/constants'
+import {FILE_TYPE_MAP, HOME_PATH} from '@/features/files/constants'
 import type {FileSystemItem} from '@/features/files/types'
 import {formatFilesystemDate} from '@/features/files/utils/format-filesystem-date'
 import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-size'
@@ -15,6 +17,27 @@ import {useLanguage} from '@/hooks/use-language'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
+
+const LIST_FOLDER_ICONS: Record<string, {icon: typeof TbFolder; bg: string; color: string}> = {
+	[`${HOME_PATH}/Downloads`]: {icon: TbDownload, bg: 'bg-green-100', color: 'text-green-600'},
+	[`${HOME_PATH}/Documents`]: {icon: TbFileText, bg: 'bg-sky-100', color: 'text-sky-600'},
+	[`${HOME_PATH}/Photos`]: {icon: TbPhoto, bg: 'bg-pink-100', color: 'text-pink-600'},
+	[`${HOME_PATH}/Videos`]: {icon: TbVideo, bg: 'bg-rose-100', color: 'text-rose-600'},
+	[`${HOME_PATH}/Music`]: {icon: TbMusic, bg: 'bg-purple-100', color: 'text-purple-600'},
+}
+const DEFAULT_FOLDER_STYLE = {icon: TbFolder, bg: 'bg-neutral-100', color: 'text-neutral-500'}
+
+function FolderListIcon({item, size}: {item: FileSystemItem; size: 'sm' | 'md'}) {
+	const style = LIST_FOLDER_ICONS[item.path] || DEFAULT_FOLDER_STYLE
+	const Icon = style.icon
+	const containerSize = size === 'md' ? 'h-8 w-8' : 'h-6 w-6'
+	const iconSize = size === 'md' ? 'h-4.5 w-4.5' : 'h-3.5 w-3.5'
+	return (
+		<div className={cn(`flex shrink-0 items-center justify-center rounded-lg ${containerSize}`, style.bg)}>
+			<Icon className={cn(iconSize, style.color)} strokeWidth={2} />
+		</div>
+	)
+}
 
 interface ListViewFileItemProps {
 	item: FileSystemItem
@@ -39,7 +62,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 		return (
 			<div className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5', isUploading && 'opacity-70')}>
 				<div className='flex-shrink-0'>
-					<FileItemIcon item={item} className='h-8 w-8' />
+					{item.type === 'directory' ? <FolderListIcon item={item} size='md' /> : <FileItemIcon item={item} className='h-8 w-8' />}
 				</div>
 				<div className={cn('flex flex-1 items-center justify-between overflow-hidden', fadedContent && 'opacity-50')}>
 					<div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
@@ -84,7 +107,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 			<div className={`flex-[5] ${tableStyles}`}>
 				<div className='flex items-center gap-2.5'>
 					<div className='flex-shrink-0'>
-						<FileItemIcon item={item} className='h-6 w-6' />
+						{item.type === 'directory' ? <FolderListIcon item={item} size='sm' /> : <FileItemIcon item={item} className='h-6 w-6' />}
 					</div>
 					<div className={cn(fadedContent && 'opacity-50')}>
 						{isEditingName ? (

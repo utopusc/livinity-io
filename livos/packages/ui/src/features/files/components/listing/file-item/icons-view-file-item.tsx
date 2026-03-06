@@ -45,6 +45,7 @@ export const IconsViewFileItem = ({
 
 	const folderStyle = item.type === 'directory' ? FOLDER_CARD_STYLES[item.path] : undefined
 	const isKnownFolder = !!folderStyle
+	const isGenericFolder = item.type === 'directory' && !isKnownFolder
 
 	return (
 		<div
@@ -52,7 +53,9 @@ export const IconsViewFileItem = ({
 				'relative flex h-full w-32 flex-col items-center gap-1 overflow-hidden text-ellipsis break-all rounded-2xl p-2.5 text-center transition-all duration-200',
 				isKnownFolder
 					? folderStyle.bg
-					: 'hover:bg-neutral-50',
+					: isGenericFolder
+						? 'bg-neutral-50 hover:bg-neutral-100/80'
+						: 'hover:bg-neutral-50',
 			)}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
@@ -60,6 +63,10 @@ export const IconsViewFileItem = ({
 			{isKnownFolder ? (
 				<div className='flex h-[72px] w-[72px] items-center justify-center'>
 					<folderStyle.icon className={cn('h-12 w-12 transition-transform duration-200', folderStyle.iconColor, isHovered && 'scale-110')} strokeWidth={1.5} />
+				</div>
+			) : isGenericFolder ? (
+				<div className='flex h-[72px] w-[72px] items-center justify-center'>
+					<TbFolder className={cn('h-12 w-12 transition-transform duration-200 text-neutral-400', isHovered && 'scale-110')} strokeWidth={1.5} />
 				</div>
 			) : (
 				<div className='flex justify-center'>
