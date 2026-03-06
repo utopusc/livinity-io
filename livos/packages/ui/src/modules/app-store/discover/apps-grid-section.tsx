@@ -74,10 +74,9 @@ export function AppWithDescription({
 				'group relative flex w-full items-start gap-4 rounded-2xl p-4',
 				'border border-transparent',
 				'bg-transparent',
-				'transition-all duration-300 ease-out',
-				'hover:border-border-default hover:bg-surface-1',
-				'hover:shadow-elevation-sm',
-				'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/20',
+				'transition-all duration-200 ease-out',
+				'hover:bg-white hover:border-neutral-200/80 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]',
+				'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
 				'animate-in fade-in slide-in-from-bottom-4',
 			)}
 			style={style}
@@ -89,20 +88,20 @@ export function AppWithDescription({
 					src={app.icon}
 					size={56}
 					className={cn(
-						'rounded-xl',
-						'shadow-elevation-sm',
-						'ring-1 ring-border-default',
-						'transition-all duration-300',
-						'group-hover:scale-105 group-hover:shadow-elevation-md',
+						'rounded-[14px]',
+						'shadow-[0_1px_4px_rgba(0,0,0,0.08)]',
+						'ring-1 ring-neutral-200/60',
+						'transition-all duration-200',
+						'group-hover:scale-105 group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.1)]',
 					)}
 				/>
 			</div>
 
 			<div className='flex min-w-0 flex-1 flex-col gap-1'>
-				<h3 className='truncate text-body font-semibold tracking-tight text-text-primary transition-colors group-hover:text-text-primary'>
+				<h3 className='truncate text-body font-semibold tracking-tight text-neutral-900'>
 					{app.name}
 				</h3>
-				<p className='line-clamp-2 text-body-sm leading-snug text-text-tertiary transition-colors group-hover:text-text-secondary'>
+				<p className='line-clamp-2 text-body-sm leading-snug text-neutral-500 group-hover:text-neutral-600'>
 					{app.tagline}
 				</p>
 			</div>
@@ -110,7 +109,7 @@ export function AppWithDescription({
 			{/* Arrow indicator on hover */}
 			<div className='absolute right-4 top-1/2 -translate-y-1/2 opacity-0 transition-all duration-300 group-hover:opacity-100'>
 				<svg
-					className='h-5 w-5 text-text-tertiary'
+					className='h-5 w-5 text-neutral-400'
 					fill='none'
 					viewBox='0 0 24 24'
 					stroke='currentColor'
@@ -129,31 +128,32 @@ export function FeaturedAppCard({app, gradient}: {app: RegistryApp; gradient?: s
 			to={`/app-store/${app.id}`}
 			className={cn(
 				'group relative flex flex-col overflow-hidden rounded-3xl p-6',
-				'border border-border-default',
+				'bg-gradient-to-br from-neutral-50 to-white',
+				'border border-neutral-200/80',
 				'transition-all duration-500',
-				'hover:border-border-emphasis hover:shadow-elevation-lg',
-				gradient || 'bg-surface-2',
+				'hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]',
+				gradient,
 			)}
 			unstable_viewTransition
 			onMouseEnter={() => preloadFirstFewGalleryImages(app)}
 		>
 			{/* Background glow */}
-			<div className='absolute -right-10 -top-10 h-32 w-32 rounded-full bg-surface-1 blur-3xl transition-all duration-500 group-hover:bg-surface-2' />
+			<div className='absolute -right-10 -top-10 h-32 w-32 rounded-full bg-neutral-100/60 blur-3xl transition-all duration-500 group-hover:bg-neutral-200/40' />
 
 			<div className='relative flex items-start gap-4'>
 				<AppIcon
 					src={app.icon}
 					size={72}
-					className='rounded-2xl shadow-elevation-md ring-1 ring-border-emphasis transition-transform duration-300 group-hover:scale-105'
+					className='rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] ring-1 ring-neutral-200/80 transition-transform duration-300 group-hover:scale-105'
 				/>
 				<div className='flex-1'>
-					<h3 className='text-xl font-bold tracking-tight text-text-primary'>{app.name}</h3>
-					<p className='mt-1 text-body-sm text-text-secondary'>{app.tagline}</p>
+					<h3 className='text-xl font-bold tracking-tight text-neutral-900'>{app.name}</h3>
+					<p className='mt-1 text-body-sm text-neutral-500'>{app.tagline}</p>
 				</div>
 			</div>
 
 			{app.description && (
-				<p className='mt-4 line-clamp-2 text-body-sm text-text-tertiary'>{app.description}</p>
+				<p className='mt-4 line-clamp-2 text-body-sm text-neutral-500'>{app.description}</p>
 			)}
 		</Link>
 	)
