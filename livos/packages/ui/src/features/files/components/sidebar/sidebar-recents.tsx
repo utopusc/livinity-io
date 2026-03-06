@@ -1,3 +1,5 @@
+import {TbClock} from 'react-icons/tb'
+
 import {SidebarItem} from '@/features/files/components/sidebar/sidebar-item'
 import {RECENTS_PATH} from '@/features/files/constants'
 import {useNavigate} from '@/features/files/hooks/use-navigate'
@@ -6,7 +8,6 @@ import {t} from '@/utils/i18n'
 
 export function SidebarRecents() {
 	const {navigateToDirectory, currentPath} = useNavigate()
-	// We disable (but still show) the recents sidebar item in read-only mode
 	const isReadOnly = useIsFilesReadOnly()
 
 	return (
@@ -19,6 +20,9 @@ export function SidebarRecents() {
 			isActive={currentPath === RECENTS_PATH}
 			onClick={() => navigateToDirectory(RECENTS_PATH)}
 			disabled={isReadOnly}
+			icon={TbClock}
+			iconBg='bg-amber-100'
+			iconColor='text-amber-600'
 		/>
 	)
 }

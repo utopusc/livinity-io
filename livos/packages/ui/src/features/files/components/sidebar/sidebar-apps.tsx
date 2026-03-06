@@ -1,3 +1,5 @@
+import {TbApps} from 'react-icons/tb'
+
 import {SidebarItem} from '@/features/files/components/sidebar/sidebar-item'
 import {APPS_PATH} from '@/features/files/constants'
 import {useNavigate as useFilesNavigate} from '@/features/files/hooks/use-navigate'
@@ -15,6 +17,9 @@ export function SidebarApps() {
 			}}
 			isActive={currentPath === APPS_PATH}
 			onClick={() => navigateToDirectory(APPS_PATH)}
+			icon={TbApps}
+			iconBg='bg-violet-100'
+			iconColor='text-violet-600'
 		/>
 	)
 }

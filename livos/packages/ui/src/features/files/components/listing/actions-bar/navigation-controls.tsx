@@ -1,9 +1,7 @@
 import {motion} from 'framer-motion'
 import {useEffect, useState} from 'react'
+import {TbChevronLeft, TbChevronRight} from 'react-icons/tb'
 import {useLocation, useNavigate} from 'react-router-dom'
-
-import {ChevronLeftIcon} from '@/features/files/assets/chevron-left'
-import {ChevronRightIcon} from '@/features/files/assets/chevron-right'
 import {BASE_ROUTE_PATH, SEARCH_PATH} from '@/features/files/constants'
 import {useNavigate as useFilesNavigate} from '@/features/files/hooks/use-navigate'
 import {useIsFilesEmbedded} from '@/features/files/providers/files-capabilities-context'
@@ -103,36 +101,36 @@ export function NavigationControls() {
 	const canGoForward = Boolean(navigation.paths[navigation.currentPathIndex + 1])
 
 	return (
-		<div className='flex items-center gap-1'>
+		<div className='flex items-center'>
 			<motion.button
 				onClick={handleBack}
 				disabled={!canGoBack}
 				className={cn(
-					'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+					'flex h-8 w-8 items-center justify-center rounded-full transition-colors',
 					'focus:ring-0 focus-visible:ring-0',
 					canGoBack
-						? 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
-						: 'opacity-30 cursor-default',
+						? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+						: 'opacity-25 cursor-default',
 				)}
 				whileTap={canGoBack ? {scale: 0.85} : undefined}
 				aria-label='Go back'
 			>
-				<ChevronLeftIcon className='h-4 w-4' />
+				<TbChevronLeft className='h-[18px] w-[18px]' strokeWidth={2.5} />
 			</motion.button>
 			<motion.button
 				onClick={handleForward}
 				disabled={!canGoForward}
 				className={cn(
-					'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+					'flex h-8 w-8 items-center justify-center rounded-full transition-colors',
 					'focus:ring-0 focus-visible:ring-0',
 					canGoForward
-						? 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
-						: 'opacity-30 cursor-default',
+						? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+						: 'opacity-25 cursor-default',
 				)}
 				whileTap={canGoForward ? {scale: 0.85} : undefined}
 				aria-label='Go forward'
 			>
-				<ChevronRightIcon className='h-4 w-4' />
+				<TbChevronRight className='h-[18px] w-[18px]' strokeWidth={2.5} />
 			</motion.button>
 		</div>
 	)
