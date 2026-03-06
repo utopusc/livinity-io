@@ -741,3 +741,25 @@ Phase 01 first (foundation), Phase 02 next (components), then Phases 03-09 in or
 *Last updated: 2026-03-05 — v5.0 Light Theme UI Redesign added*
 *Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) + 10 (v5.0) | Total plans: ~93 (estimated)*
 *Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 + 28/28 v5.0 requirements mapped*
+
+## v5.2 — Comprehensive UI Overhaul
+
+### Phase v5.2: UI Overhaul — Files, App Store, Settings Window Redesign
+**Goal**: Redesign Files and App Store visuals for a premium, editorial aesthetic. Fix Settings window routing and button inconsistencies. Revert window chrome drag cursor.
+**Depends on**: v5.0 Light Theme (completed), v5.1 Motion Primitives (components available)
+**Plans:** 6 plans in 3 waves
+
+Plans:
+- [ ] v5.2-01-PLAN.md — Quick fixes: window chrome cursor, Settings routing, button consistency
+- [ ] v5.2-02-PLAN.md — Files redesign: layout, sidebar, toolbar
+- [ ] v5.2-03-PLAN.md — Files redesign: grid/list items, empty states, virtualization
+- [ ] v5.2-04-PLAN.md — App Store sheet redesign: shared styles, hero cards, gallery, sections
+- [ ] v5.2-05-PLAN.md — App Store window redesign: mirror sheet design to window components
+- [ ] v5.2-06-PLAN.md — Build verification and visual checkpoint
+
+**Wave Structure:**
+| Wave | Plans | Parallel |
+|------|-------|----------|
+| 1 | 01, 02, 03, 04 | Yes (independent) |
+| 2 | 05 | Sequential (depends on 04) |
+| 3 | 06 | Sequential (depends on all) |

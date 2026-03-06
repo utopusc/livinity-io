@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
-**Current milestone:** v5.1 — Motion Primitives Integration
-**Current focus:** Executing phases
+**Current milestone:** v5.2 — Comprehensive UI Overhaul
+**Current focus:** Files redesign, App Store redesign, Settings fixes, Window chrome revert
 
 ## Current Position
 
-Milestone: v5.1 (Motion Primitives Integration)
-Phase: 01 — Foundation (dependencies + components)
-Plan: .planning/phases/v5.1-motion-primitives/ROADMAP.md
-Status: v5.0 light theme COMPLETE, starting v5.1
+Milestone: v5.2 (Comprehensive UI Overhaul)
+Phase: v5.2-ui-overhaul — Files, App Store, Settings Window Redesign
+Plan: .planning/phases/v5.2-ui-overhaul/
+Status: Plans created (6 plans, 3 waves), ready for execution
 Last activity: 2026-03-05
 
 ## Accumulated Context
@@ -32,8 +32,13 @@ Last activity: 2026-03-05
 - Brand blue accent only on CTAs and active states
 - All strings must use t() for i18n
 - motion-primitives.com/docs as primary component source
+- v5.2: Files sidebar widened to 220px with vertical divider
+- v5.2: Files grid items enlarged to 128px width with 72px icons
+- v5.2: App Store uses pastel gradients on light theme (no dark overlays)
+- v5.2: Settings window gets WindowRouterProvider for correct in-window routing
+- v5.2: Window chrome grab cursor removed (drag handled by parent)
 
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: v5.1 Phase 01 starting
+Stopped at: v5.2 plans created, ready for /gsd:execute-phase v5.2
