@@ -34,8 +34,8 @@ export const IconsViewFileItem = ({
 
 	return (
 		<div
-			// w-28 is 112px and corresponds to the fixed width of the icons view item
-			className='relative flex h-full w-28 flex-col items-center gap-1 overflow-hidden text-ellipsis break-all p-2 text-center'
+			// w-32 is 128px and corresponds to the fixed width of the icons view item
+			className='relative flex h-full w-32 flex-col items-center gap-1.5 overflow-hidden text-ellipsis break-all rounded-xl p-3 text-center transition-colors duration-150 hover:bg-surface-1'
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
@@ -43,7 +43,7 @@ export const IconsViewFileItem = ({
 			{/* We pass in isActive so that the trigger for hovering can be on a parent div */}
 			{/* TODO: set isHovered to true when the item's context menu is open */}
 			<div className='flex justify-center'>
-				<FileItemIcon item={item} className='h-14 w-14' useAnimatedIcon={!isTouchDevice} isHovered={isHovered} />
+				<FileItemIcon item={item} className='h-[72px] w-[72px]' useAnimatedIcon={!isTouchDevice} isHovered={isHovered} />
 			</div>
 			<div className={cn('relative w-full flex-col items-center', fadedContent && 'opacity-50')}>
 				{isEditingName ? (
@@ -52,7 +52,7 @@ export const IconsViewFileItem = ({
 					<TruncatedFilename
 						filename={item.name}
 						view='icons'
-						className='mt-1 line-clamp-2 w-full text-center text-caption leading-tight'
+						className='mt-1 line-clamp-2 w-full text-center text-[12px] leading-tight'
 					/>
 				)}
 				<span className='w-full text-center text-caption text-text-tertiary'>
@@ -73,7 +73,7 @@ export const IconsViewFileItem = ({
 			</div>
 
 			{!!isUploading && (
-				<div className='absolute inset-0 rounded-lg bg-surface-1'>
+				<div className='absolute inset-0 rounded-xl bg-surface-1'>
 					<CircularProgress progress={uploadingProgress} />
 				</div>
 			)}

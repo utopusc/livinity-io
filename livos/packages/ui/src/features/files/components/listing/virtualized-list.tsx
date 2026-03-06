@@ -210,10 +210,10 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 	// Calculate grid dimensions based on container width
 	// We cannot use simple flexbox css because we are using react-window for virtualization
 	const getGridDimensions = useCallback((width: number) => {
-		const itemWidth = 112 // Fixed item width of 112px
+		const itemWidth = 128 // Fixed item width of 128px
 		const minGap = 8 // Prevents borders overlapping at certain screen sizes
 		const borderAllowance = 2 // Extra space on each side for selection borders
-		const fixedVerticalGap = 24 // Prevents multi-line file name items from overlapping
+		const fixedVerticalGap = 16 // Prevents multi-line file name items from overlapping
 
 		// Adjust item width to include border allowance
 		const containerWidth = itemWidth + borderAllowance * 2
@@ -242,7 +242,7 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 		const verticalGap = fixedVerticalGap
 
 		// Set item height and row height separately - row height includes the gap
-		const itemHeight = 120 // Height of each item itself
+		const itemHeight = 140 // Height of each item itself
 		const rowHeight = itemHeight + verticalGap // Row height includes vertical gap
 
 		return {
