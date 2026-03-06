@@ -12,9 +12,11 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 Milestone: v5.2 (Comprehensive UI Overhaul)
 Phase: v5.2-ui-overhaul — Files, App Store, Settings Window Redesign
-Plan: .planning/phases/v5.2-ui-overhaul/
-Status: Plans created (6 plans, 3 waves), ready for execution
-Last activity: 2026-03-05
+Plan: v5.2-05 complete (App Store window version light-theme redesign)
+Status: In progress — v5.2-05 done, continuing execution
+Last activity: 2026-03-06
+
+Progress: [##########..........] ~50% (plans 01-05 of ~6 complete)
 
 ## Accumulated Context
 
@@ -37,8 +39,9 @@ Last activity: 2026-03-05
 - v5.2: App Store uses pastel gradients on light theme (no dark overlays)
 - v5.2: Settings window gets WindowRouterProvider for correct in-window routing
 - v5.2: Window chrome grab cursor removed (drag handled by parent)
+- v5.2: Window App Store components match sheet version's light-theme exactly
 
 ## Session Continuity
 
-Last session: 2026-03-05
-Stopped at: v5.2 plans created, ready for /gsd:execute-phase v5.2
+Last session: 2026-03-06
+Stopped at: Completed v5.2-05-PLAN.md (App Store window version light-theme redesign)
