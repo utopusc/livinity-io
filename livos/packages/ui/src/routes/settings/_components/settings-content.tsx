@@ -53,6 +53,8 @@ import {IconType} from 'react-icons'
 import {Card} from '@/components/ui/card'
 import {IconButton} from '@/components/ui/icon-button'
 import {IconButtonLink} from '@/components/ui/icon-button-link'
+import {usePassword} from '@/hooks/use-password'
+import {useUserName} from '@/hooks/use-user-name'
 import {useBackups} from '@/features/backups/hooks/use-backups'
 import {useApps} from '@/providers/apps'
 import {DesktopPreviewFrame} from '@/modules/desktop/desktop-preview'
@@ -61,7 +63,15 @@ import {useWallpaper, wallpapers, getWallpaperThumbUrl} from '@/providers/wallpa
 import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/settings/_components/language-dropdown'
 import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
 import {Button} from '@/shadcn-components/ui/button'
-import {Input} from '@/shadcn-components/ui/input'
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogPortal,
+	DialogTitle,
+} from '@/shadcn-components/ui/dialog'
+import {AnimatedInputError, Input, PasswordInput} from '@/shadcn-components/ui/input'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {
@@ -76,7 +86,7 @@ import {t} from '@/utils/i18n'
 import {firstNameFromFullName} from '@/utils/misc'
 import {cn} from '@/shadcn-lib/utils'
 
-import {ContactSupportLink} from './shared'
+import {ChangePasswordWarning, ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
 
@@ -227,13 +237,13 @@ export function SettingsContent() {
 							<SettingsSummary />
 						</div>
 						<div className='flex w-full flex-col items-stretch gap-2.5 md:w-auto md:flex-row'>
-							<IconButtonLink to={linkToDialog('logout')} size='xl' icon={RiLogoutCircleRLine}>
+							<IconButtonLink to={linkToDialog('logout')} icon={RiLogoutCircleRLine}>
 								{t('logout')}
 							</IconButtonLink>
-							<IconButtonLink to={linkToDialog('restart')} size='xl' icon={RiRestartLine}>
+							<IconButtonLink to={linkToDialog('restart')} icon={RiRestartLine}>
 								{t('restart')}
 							</IconButtonLink>
-							<IconButtonLink to={linkToDialog('shutdown')} size='xl' text='destructive' icon={RiShutDownLine}>
+							<IconButtonLink to={linkToDialog('shutdown')} text='destructive' icon={RiShutDownLine}>
 								{t('shut-down')}
 							</IconButtonLink>
 						</div>
@@ -392,18 +402,119 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AccountSection() {
+	const [showChangeName, setShowChangeName] = useState(false)
+	const [showChangePassword, setShowChangePassword] = useState(false)
+
 	return (
 		<div className='space-y-4'>
 			<p className='text-body-sm text-text-secondary'>{t('account-description')}</p>
 			<div className='flex flex-wrap gap-3'>
-				<IconButtonLink to='/settings/account/change-name' icon={RiUserLine}>
+				<IconButton onClick={() => setShowChangeName(true)} icon={RiUserLine}>
 					{t('change-name')}
-				</IconButtonLink>
-				<IconButtonLink to='/settings/account/change-password' icon={RiKeyLine}>
+				</IconButton>
+				<IconButton onClick={() => setShowChangePassword(true)} icon={RiKeyLine}>
 					{t('change-password')}
-				</IconButtonLink>
+				</IconButton>
 			</div>
+			<InlineChangeNameDialog open={showChangeName} onOpenChange={setShowChangeName} />
+			<InlineChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
 		</div>
+	)
+}
+
+function InlineChangeNameDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open: boolean) => void}) {
+	const {name, setName, handleSubmit, formError, isLoading} = useUserName({
+		onSuccess: () => onOpenChange(false),
+	})
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogPortal>
+				<DialogContent asChild>
+					<form onSubmit={handleSubmit}>
+						<fieldset disabled={isLoading} className='flex flex-col gap-5'>
+							<DialogHeader>
+								<DialogTitle>{t('change-name')}</DialogTitle>
+							</DialogHeader>
+							<Input placeholder={t('change-name.input-placeholder')} value={name} onValueChange={setName} />
+							<div className='-my-2.5'>
+								<AnimatedInputError>{formError}</AnimatedInputError>
+							</div>
+							<DialogFooter>
+								<Button type='submit' size='dialog' variant='primary'>
+									{t('confirm')}
+								</Button>
+								<Button type='button' size='dialog' onClick={() => onOpenChange(false)}>
+									{t('cancel')}
+								</Button>
+							</DialogFooter>
+						</fieldset>
+					</form>
+				</DialogContent>
+			</DialogPortal>
+		</Dialog>
+	)
+}
+
+function InlineChangePasswordDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open: boolean) => void}) {
+	const {
+		password,
+		setPassword,
+		newPassword,
+		setNewPassword,
+		newPasswordRepeat,
+		setNewPasswordRepeat,
+		handleSubmit,
+		fieldErrors,
+		formError,
+		isLoading,
+	} = usePassword({
+		onSuccess: () => onOpenChange(false),
+	})
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogPortal>
+				<DialogContent asChild>
+					<form onSubmit={handleSubmit}>
+						<fieldset disabled={isLoading} className='flex flex-col gap-5'>
+							<DialogHeader>
+								<DialogTitle>{t('change-password')}</DialogTitle>
+							</DialogHeader>
+							<ChangePasswordWarning />
+							<PasswordInput
+								label={t('change-password.current-password')}
+								value={password}
+								onValueChange={setPassword}
+								error={fieldErrors.oldPassword}
+							/>
+							<PasswordInput
+								label={t('change-password.new-password')}
+								value={newPassword}
+								onValueChange={setNewPassword}
+								error={fieldErrors.newPassword}
+							/>
+							<PasswordInput
+								label={t('change-password.repeat-password')}
+								value={newPasswordRepeat}
+								onValueChange={setNewPasswordRepeat}
+							/>
+							<div className='-my-2.5'>
+								<AnimatedInputError>{formError}</AnimatedInputError>
+							</div>
+							<DialogFooter>
+								<Button type='submit' size='dialog' variant='primary'>
+									{t('confirm')}
+								</Button>
+								<Button type='button' size='dialog' onClick={() => onOpenChange(false)}>
+									{t('cancel')}
+								</Button>
+							</DialogFooter>
+						</fieldset>
+					</form>
+				</DialogContent>
+			</DialogPortal>
+		</Dialog>
 	)
 }
 
