@@ -2,6 +2,7 @@ import {motion} from 'framer-motion'
 import {useEffect, useState} from 'react'
 import {TbChevronLeft, TbChevronRight} from 'react-icons/tb'
 import {useLocation, useNavigate} from 'react-router-dom'
+import {Magnetic} from '@/components/motion-primitives/magnetic'
 import {BASE_ROUTE_PATH, SEARCH_PATH} from '@/features/files/constants'
 import {useNavigate as useFilesNavigate} from '@/features/files/hooks/use-navigate'
 import {useIsFilesEmbedded} from '@/features/files/providers/files-capabilities-context'
@@ -101,37 +102,41 @@ export function NavigationControls() {
 	const canGoForward = Boolean(navigation.paths[navigation.currentPathIndex + 1])
 
 	return (
-		<div className='flex items-center'>
-			<motion.button
-				onClick={handleBack}
-				disabled={!canGoBack}
-				className={cn(
-					'flex h-8 w-8 items-center justify-center rounded-full transition-colors',
-					'focus:ring-0 focus-visible:ring-0',
-					canGoBack
-						? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-						: 'opacity-25 cursor-default',
-				)}
-				whileTap={canGoBack ? {scale: 0.85} : undefined}
-				aria-label='Go back'
-			>
-				<TbChevronLeft className='h-[18px] w-[18px]' strokeWidth={2.5} />
-			</motion.button>
-			<motion.button
-				onClick={handleForward}
-				disabled={!canGoForward}
-				className={cn(
-					'flex h-8 w-8 items-center justify-center rounded-full transition-colors',
-					'focus:ring-0 focus-visible:ring-0',
-					canGoForward
-						? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-						: 'opacity-25 cursor-default',
-				)}
-				whileTap={canGoForward ? {scale: 0.85} : undefined}
-				aria-label='Go forward'
-			>
-				<TbChevronRight className='h-[18px] w-[18px]' strokeWidth={2.5} />
-			</motion.button>
+		<div className='flex items-center gap-0.5'>
+			<Magnetic intensity={0.3} range={50} springOptions={{stiffness: 200, damping: 15, mass: 0.1}}>
+				<motion.button
+					onClick={handleBack}
+					disabled={!canGoBack}
+					className={cn(
+						'flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200',
+						'focus:ring-0 focus-visible:ring-0',
+						canGoBack
+							? 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 hover:shadow-sm'
+							: 'opacity-20 cursor-default',
+					)}
+					whileTap={canGoBack ? {scale: 0.88} : undefined}
+					aria-label='Go back'
+				>
+					<TbChevronLeft className='h-[17px] w-[17px]' strokeWidth={2.5} />
+				</motion.button>
+			</Magnetic>
+			<Magnetic intensity={0.3} range={50} springOptions={{stiffness: 200, damping: 15, mass: 0.1}}>
+				<motion.button
+					onClick={handleForward}
+					disabled={!canGoForward}
+					className={cn(
+						'flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200',
+						'focus:ring-0 focus-visible:ring-0',
+						canGoForward
+							? 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 hover:shadow-sm'
+							: 'opacity-20 cursor-default',
+					)}
+					whileTap={canGoForward ? {scale: 0.88} : undefined}
+					aria-label='Go forward'
+				>
+					<TbChevronRight className='h-[17px] w-[17px]' strokeWidth={2.5} />
+				</motion.button>
+			</Magnetic>
 		</div>
 	)
 }

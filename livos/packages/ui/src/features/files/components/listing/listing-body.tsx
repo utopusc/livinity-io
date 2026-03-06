@@ -1,4 +1,4 @@
-import {RiArrowDropDownLine, RiArrowDropUpLine} from 'react-icons/ri'
+import {TbChevronDown, TbChevronUp} from 'react-icons/tb'
 
 import {VirtualizedList} from '@/features/files/components/listing/virtualized-list'
 import {SORT_BY_OPTIONS} from '@/features/files/constants'
@@ -49,7 +49,7 @@ export const ListingBody = ({scrollAreaRef, items, hasMore, isLoading, onLoadMor
 											<button
 												key={option.sortBy}
 												className={cn(
-													'flex items-center justify-between overflow-hidden text-ellipsis whitespace-nowrap p-2.5 text-caption text-text-primary',
+													'flex items-center justify-between overflow-hidden text-ellipsis whitespace-nowrap p-2.5 text-[12px] font-medium text-neutral-500 hover:text-neutral-700 transition-colors',
 													option.sortBy === 'name' && 'flex-[5]',
 													option.sortBy === 'modified' && 'flex-[2]',
 													option.sortBy === 'size' && 'flex-[1]',
@@ -61,10 +61,10 @@ export const ListingBody = ({scrollAreaRef, items, hasMore, isLoading, onLoadMor
 											>
 												{t(option.labelTKey)}
 												{option.sortBy === preferences.sortBy && preferences.sortOrder === 'ascending' && (
-													<RiArrowDropUpLine className='h-5 w-5' />
+													<TbChevronUp className='h-3 w-3' strokeWidth={2.5} />
 												)}
 												{option.sortBy === preferences.sortBy && preferences.sortOrder === 'descending' && (
-													<RiArrowDropDownLine className='h-5 w-5' />
+													<TbChevronDown className='h-3 w-3' strokeWidth={2.5} />
 												)}
 											</button>
 										))}

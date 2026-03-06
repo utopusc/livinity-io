@@ -1,6 +1,8 @@
 import {useState} from 'react'
 import {TbDownload, TbFileText, TbFolder, TbMusic, TbPhoto, TbVideo} from 'react-icons/tb'
 
+import {Spotlight} from '@/components/motion-primitives/spotlight'
+import {Tilt} from '@/components/motion-primitives/tilt'
 import {CircularProgress} from '@/features/files/components/listing/file-item/circular-progress'
 import {EditableName} from '@/features/files/components/listing/file-item/editable-name'
 import {TruncatedFilename} from '@/features/files/components/listing/file-item/truncated-filename'
@@ -15,13 +17,13 @@ import {isDirectoryALivinityBackup} from '@/features/files/utils/is-directory-a-
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
-// Color-coded backgrounds for known folders
-const FOLDER_CARD_STYLES: Record<string, {bg: string; iconColor: string; icon: typeof TbFolder}> = {
-	[`${HOME_PATH}/Downloads`]: {bg: 'bg-green-50 hover:bg-green-100/80', iconColor: 'text-green-500', icon: TbDownload},
-	[`${HOME_PATH}/Documents`]: {bg: 'bg-sky-50 hover:bg-sky-100/80', iconColor: 'text-sky-500', icon: TbFileText},
-	[`${HOME_PATH}/Photos`]: {bg: 'bg-pink-50 hover:bg-pink-100/80', iconColor: 'text-pink-500', icon: TbPhoto},
-	[`${HOME_PATH}/Videos`]: {bg: 'bg-rose-50 hover:bg-rose-100/80', iconColor: 'text-rose-500', icon: TbVideo},
-	[`${HOME_PATH}/Music`]: {bg: 'bg-purple-50 hover:bg-purple-100/80', iconColor: 'text-purple-500', icon: TbMusic},
+// Color-coded styles for known folders
+const FOLDER_CARD_STYLES: Record<string, {bg: string; iconColor: string; icon: typeof TbFolder; spotlightColor: string}> = {
+	[`${HOME_PATH}/Downloads`]: {bg: 'bg-green-50/80', iconColor: 'text-green-500', icon: TbDownload, spotlightColor: 'from-green-200/40 via-green-100/20 to-transparent'},
+	[`${HOME_PATH}/Documents`]: {bg: 'bg-sky-50/80', iconColor: 'text-sky-500', icon: TbFileText, spotlightColor: 'from-sky-200/40 via-sky-100/20 to-transparent'},
+	[`${HOME_PATH}/Photos`]: {bg: 'bg-pink-50/80', iconColor: 'text-pink-500', icon: TbPhoto, spotlightColor: 'from-pink-200/40 via-pink-100/20 to-transparent'},
+	[`${HOME_PATH}/Videos`]: {bg: 'bg-rose-50/80', iconColor: 'text-rose-500', icon: TbVideo, spotlightColor: 'from-rose-200/40 via-rose-100/20 to-transparent'},
+	[`${HOME_PATH}/Music`]: {bg: 'bg-purple-50/80', iconColor: 'text-purple-500', icon: TbMusic, spotlightColor: 'from-purple-200/40 via-purple-100/20 to-transparent'},
 }
 
 interface IconsViewFileItemProps {
@@ -47,30 +49,50 @@ export const IconsViewFileItem = ({
 	const isKnownFolder = !!folderStyle
 	const isGenericFolder = item.type === 'directory' && !isKnownFolder
 
-	return (
+	const cardContent = (
 		<div
 			className={cn(
-				'relative flex h-full w-32 flex-col items-center gap-1 overflow-hidden text-ellipsis break-all rounded-2xl p-2.5 text-center transition-all duration-200',
+				'relative flex h-full w-32 flex-col items-center gap-1.5 overflow-hidden text-ellipsis break-all rounded-[20px] p-3 text-center transition-all duration-200',
 				isKnownFolder
-					? folderStyle.bg
+					? cn(folderStyle.bg, 'border border-transparent', isHovered && 'border-black/[0.04] shadow-sm')
 					: isGenericFolder
-						? 'bg-neutral-50 hover:bg-neutral-100/80'
-						: 'hover:bg-neutral-50',
+						? cn('bg-neutral-50/60', isHovered && 'bg-neutral-100/80 shadow-sm')
+						: cn('bg-transparent', isHovered && 'bg-neutral-50/80 shadow-sm'),
 			)}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
+			{/* Spotlight glow follows cursor on hover */}
+			{!isTouchDevice && (
+				<Spotlight
+					className={cn(
+						'blur-2xl',
+						isKnownFolder
+							? folderStyle.spotlightColor
+							: 'from-neutral-300/30 via-neutral-200/15 to-transparent',
+					)}
+					size={100}
+					springOptions={{bounce: 0.1, duration: 0.1}}
+				/>
+			)}
+
 			{isKnownFolder ? (
-				<div className='flex h-[72px] w-[72px] items-center justify-center'>
-					<folderStyle.icon className={cn('h-12 w-12 transition-transform duration-200', folderStyle.iconColor, isHovered && 'scale-110')} strokeWidth={1.5} />
+				<div className='flex h-[68px] w-[68px] items-center justify-center'>
+					<folderStyle.icon
+						className={cn('h-11 w-11 transition-transform duration-300 ease-out', folderStyle.iconColor, isHovered && 'scale-110')}
+						strokeWidth={1.5}
+					/>
 				</div>
 			) : isGenericFolder ? (
-				<div className='flex h-[72px] w-[72px] items-center justify-center'>
-					<TbFolder className={cn('h-12 w-12 transition-transform duration-200 text-neutral-400', isHovered && 'scale-110')} strokeWidth={1.5} />
+				<div className='flex h-[68px] w-[68px] items-center justify-center'>
+					<TbFolder
+						className={cn('h-11 w-11 transition-transform duration-300 ease-out text-neutral-400', isHovered && 'scale-110 text-neutral-500')}
+						strokeWidth={1.5}
+					/>
 				</div>
 			) : (
-				<div className='flex justify-center'>
-					<FileItemIcon item={item} className='h-[72px] w-[72px]' useAnimatedIcon={!isTouchDevice} isHovered={isHovered} />
+				<div className='flex h-[68px] w-[68px] items-center justify-center'>
+					<FileItemIcon item={item} className='h-[68px] w-[68px]' useAnimatedIcon={!isTouchDevice} isHovered={isHovered} />
 				</div>
 			)}
 			<div className={cn('relative w-full flex-col items-center', fadedContent && 'opacity-50')}>
@@ -80,10 +102,10 @@ export const IconsViewFileItem = ({
 					<TruncatedFilename
 						filename={item.name}
 						view='icons'
-						className='mt-0.5 line-clamp-2 w-full text-center text-[12px] font-medium leading-tight text-neutral-800'
+						className='line-clamp-2 w-full text-center text-[12px] font-semibold leading-tight text-neutral-700'
 					/>
 				)}
-				<span className='w-full text-center text-[11px] text-neutral-400'>
+				<span className='mt-0.5 w-full text-center text-[10px] font-medium text-neutral-400'>
 					{isUploading
 						? uploadingProgress === 0
 							? t('files-state.waiting')
@@ -101,10 +123,23 @@ export const IconsViewFileItem = ({
 			</div>
 
 			{!!isUploading && (
-				<div className='absolute inset-0 rounded-2xl bg-white/80 backdrop-blur-sm'>
+				<div className='absolute inset-0 rounded-[20px] bg-white/80 backdrop-blur-sm'>
 					<CircularProgress progress={uploadingProgress} />
 				</div>
 			)}
 		</div>
+	)
+
+	// Tilt 3D effect on desktop, plain card on touch
+	if (isTouchDevice) return cardContent
+
+	return (
+		<Tilt
+			rotationFactor={8}
+			isRevese
+			springOptions={{stiffness: 300, damping: 20}}
+		>
+			{cardContent}
+		</Tilt>
 	)
 }

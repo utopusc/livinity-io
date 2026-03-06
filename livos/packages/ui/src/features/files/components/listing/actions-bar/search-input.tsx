@@ -1,7 +1,8 @@
 import {useEffect, useRef, useState} from 'react'
+import {TbSearch} from 'react-icons/tb'
 import {useLocation, useNavigate as useRouterNavigate, useSearchParams} from 'react-router-dom'
 
-import {SearchIcon} from '@/features/files/assets/search-icon'
+import {BorderTrail} from '@/components/motion-primitives/border-trail'
 import {BASE_ROUTE_PATH, SEARCH_PATH} from '@/features/files/constants'
 import {useIsTouchDevice} from '@/features/files/hooks/use-is-touch-device'
 import {Input} from '@/shadcn-components/ui/input'
@@ -16,6 +17,7 @@ export function SearchInput() {
 	const [searchParams] = useSearchParams()
 
 	const [query, setQuery] = useState('')
+	const [isFocused, setIsFocused] = useState(false)
 
 	const isTouchDevice = useIsTouchDevice()
 
@@ -56,14 +58,31 @@ export function SearchInput() {
 	}
 
 	return (
-		<div className='flex items-center gap-1.5 h-7 px-2 rounded-lg bg-surface-1 border border-border-subtle focus-within:border-brand/50 focus-within:ring-1 focus-within:ring-brand/20 transition-all'>
-			<SearchIcon
-				className='h-3.5 w-3.5 shrink-0 cursor-text text-text-tertiary'
+		<div
+			className={cn(
+				'relative flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-neutral-100/60 border border-transparent transition-all duration-300',
+				isFocused && 'bg-white border-neutral-200 shadow-sm',
+			)}
+		>
+			{isFocused && (
+				<BorderTrail
+					size={40}
+					className='bg-gradient-to-l from-blue-300/50 via-blue-200/30 to-transparent'
+					transition={{
+						repeat: Infinity,
+						duration: 3,
+						ease: 'linear',
+					}}
+				/>
+			)}
+			<TbSearch
+				className='h-3.5 w-3.5 shrink-0 cursor-text text-neutral-400'
+				strokeWidth={2.5}
 				onClick={() => inputRef.current?.focus()}
 			/>
 			<Input
 				className={cn(
-					'h-full !border-none !bg-transparent !p-0 text-caption text-text-primary placeholder:text-text-tertiary !outline-none !ring-0 transition-all duration-300 w-28 focus:w-36',
+					'h-full !border-none !bg-transparent !p-0 text-[13px] text-neutral-700 placeholder:text-neutral-400 !outline-none !ring-0 transition-all duration-300 w-24 focus:w-36',
 					{
 						'w-36': query.length > 0,
 					},
@@ -72,7 +91,8 @@ export function SearchInput() {
 				placeholder={t('files-search.placeholder')}
 				value={query}
 				onChange={onQueryChange}
-				// clear and blur the input on Escape
+				onFocus={() => setIsFocused(true)}
+				onBlur={() => setIsFocused(false)}
 				onKeyDown={(e) => {
 					if (e.key === 'Escape') {
 						setQuery('')

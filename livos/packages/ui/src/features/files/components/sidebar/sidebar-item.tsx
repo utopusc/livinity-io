@@ -28,15 +28,15 @@ export function SidebarItem({item, isActive, onClick, disabled = false, icon: Ic
 			id={`sidebar-${item.path}`}
 			path={item.path}
 			className={cn(
-				'flex w-full rounded-lg text-[13px] transition-all duration-150',
+				'group flex w-full rounded-xl text-[13px] transition-all duration-200',
 				disabled
 					? 'cursor-default opacity-50'
-					: 'hover:bg-neutral-100',
+					: 'hover:bg-neutral-100/80',
 				isActive && !disabled
-					? 'bg-neutral-100 font-medium text-neutral-900'
+					? 'bg-neutral-100 font-semibold text-neutral-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
 					: disabled
 						? 'text-neutral-400'
-						: 'text-neutral-600 hover:text-neutral-900',
+						: 'text-neutral-500 hover:text-neutral-800',
 			)}
 			disabled={disabled || item.path === RECENTS_PATH}
 		>
@@ -47,11 +47,15 @@ export function SidebarItem({item, isActive, onClick, disabled = false, icon: Ic
 				}}
 				aria-disabled={disabled}
 				disabled={disabled}
-				className={cn('flex w-full items-center gap-2.5 px-2 py-[6px]', disabled && 'cursor-default')}
+				className={cn('flex w-full items-center gap-2.5 px-2 py-[7px]', disabled && 'cursor-default')}
 			>
 				{Icon ? (
-					<div className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md', iconBg || 'bg-neutral-200')}>
-						<Icon className={cn('h-3.5 w-3.5', iconColor || 'text-neutral-600')} />
+					<div className={cn(
+						'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg transition-transform duration-200',
+						iconBg || 'bg-neutral-200',
+						!disabled && 'group-hover:scale-105',
+					)}>
+						<Icon className={cn('h-3.5 w-3.5', iconColor || 'text-neutral-600')} strokeWidth={2.5} />
 					</div>
 				) : (
 					<FileItemIcon item={{...item, modified: 0, size: 0, operations: []}} className='h-5 w-5' />
