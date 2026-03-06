@@ -6,9 +6,7 @@ import {cn} from '@/shadcn-lib/utils'
 import {tw} from '@/utils/tw'
 
 const selectedClass = tw`
-  bg-gradient-to-b from-surface-base to-surface-2
-  border-border-subtle
-  shadow-button-highlight-soft-hpx
+  bg-surface-1 border-border-subtle shadow-sm font-medium text-text-primary
 `
 
 type SidebarItem = {
@@ -30,13 +28,15 @@ export function SidebarItem({item, isActive, onClick, disabled = false}: Sidebar
 			id={`sidebar-${item.path}`}
 			path={item.path}
 			className={cn(
-				'flex w-full rounded-lg border border-transparent from-surface-base to-surface-2 text-caption',
-				disabled ? 'cursor-default opacity-50' : 'hover:bg-gradient-to-b',
+				'flex w-full rounded-10 border border-transparent text-caption transition-all duration-150',
+				disabled
+					? 'cursor-default opacity-50'
+					: 'hover:bg-surface-1',
 				isActive && !disabled
 					? selectedClass
 					: disabled
 						? 'text-text-tertiary'
-						: 'text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary',
+						: 'text-text-secondary hover:text-text-primary',
 			)}
 			disabled={disabled || item.path === RECENTS_PATH} // Disable dropping on recents and when disabled
 		>
@@ -47,7 +47,7 @@ export function SidebarItem({item, isActive, onClick, disabled = false}: Sidebar
 				}}
 				aria-disabled={disabled}
 				disabled={disabled}
-				className={cn('flex w-full items-center gap-1.5 px-2 py-1.5', disabled && 'cursor-default')}
+				className={cn('flex w-full items-center gap-2 px-2.5 py-[7px]', disabled && 'cursor-default')}
 			>
 				{/* We add default modified, size, and operations to satisfy FileItemIcon's expected FileSystemItem type */}
 				<FileItemIcon item={{...item, modified: 0, size: 0, operations: []}} className='h-5 w-5' />

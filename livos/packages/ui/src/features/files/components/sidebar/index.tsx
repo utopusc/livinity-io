@@ -41,7 +41,7 @@ export function Sidebar({className}: {className?: string}) {
 	const showRewind = !hidden.rewind
 
 	return (
-		<nav className={cn('flex flex-col', className)} aria-label={t('files-sidebar.navigation')}>
+		<nav className={cn('flex flex-col pt-1', className)} aria-label={t('files-sidebar.navigation')}>
 			<ScrollArea className='h-full'>
 				{/* Hardcoded home link */}
 				<SidebarSection>
@@ -121,8 +121,8 @@ export function Sidebar({className}: {className?: string}) {
 
 const SidebarSection = ({children, label = ''}: {children: React.ReactNode; label?: string}) => {
 	return (
-		<section className='flex flex-col gap-0.5 pr-4' aria-label={label}>
-			<div className='px-2 py-1 text-caption-sm font-medium text-text-tertiary'>{label}</div>
+		<section className='flex flex-col gap-0.5 px-3' aria-label={label}>
+			<div className='px-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary/70'>{label}</div>
 			{children}
 		</section>
 	)
@@ -131,7 +131,7 @@ const SidebarSection = ({children, label = ''}: {children: React.ReactNode; labe
 const SidebarDivider = () => {
 	return (
 		<div
-			className='my-3 h-px w-full bg-[radial-gradient(35%_35%_at_35%_35%,rgba(0,0,0,0.15)_0%,transparent_70%)]'
+			className='my-2 mx-3 h-px bg-border-subtle'
 			role='separator'
 		/>
 	)
