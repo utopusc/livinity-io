@@ -1,5 +1,5 @@
-import {Pencil} from 'lucide-react'
 import {useState} from 'react'
+import {TbPencil} from 'react-icons/tb'
 
 import {PathBarDesktop} from '@/features/files/components/listing/actions-bar/path-bar/path-bar-desktop'
 import {PathBarMobile} from '@/features/files/components/listing/actions-bar/path-bar/path-bar-mobile'
@@ -26,9 +26,9 @@ export function PathBar() {
 					onInputClose={() => setIsEditing(false)}
 				/>
 			</ContextMenuTrigger>
-			<ContextMenuContent>
-				<ContextMenuItem onSelect={handleEdit}>
-					<Pencil className='mr-2 h-3 w-3' />
+			<ContextMenuContent className='rounded-xl'>
+				<ContextMenuItem onSelect={handleEdit} className='rounded-lg text-[13px]'>
+					<TbPencil className='mr-2 h-3.5 w-3.5' strokeWidth={2.5} />
 					{t('files-action.go-to-path')}
 				</ContextMenuItem>
 			</ContextMenuContent>

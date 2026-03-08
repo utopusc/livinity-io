@@ -1,10 +1,8 @@
-import {Upload} from 'lucide-react'
 import {useRef} from 'react'
+import {TbCloudOff, TbFolder, TbFolderPlus, TbSearch, TbUpload} from 'react-icons/tb'
 
+import {AnimatedGroup} from '@/components/motion-primitives/animated-group'
 import {IconButton} from '@/components/ui/icon-button'
-import {AddFolderIcon} from '@/features/files/assets/add-folder-icon'
-import {EmptyFolderIcon} from '@/features/files/assets/empty-folder-icon'
-import nasIconInactive from '@/features/files/assets/nas-icon-inactive.png'
 import {UploadInput} from '@/features/files/components/shared/upload-input'
 import {useNavigate} from '@/features/files/hooks/use-navigate'
 import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
@@ -26,31 +24,37 @@ export function EmptyStateDirectory() {
 	const isOfflineNetworkHost = isViewingNetworkShares && !doesHostHaveMountedShares?.(currentPath)
 
 	return (
-		<div className='flex h-full flex-col items-center justify-center gap-4 p-8 pt-0 text-center'>
-			<div className='flex flex-col items-center gap-3'>
-				{isOfflineNetworkHost ? (
-					<img src={nasIconInactive} alt='Network offline' className='h-16 w-16' />
-				) : (
-					<EmptyFolderIcon className='h-20 w-20' />
-				)}
+		<div className='flex h-full flex-col items-center justify-center gap-5 p-8 pt-0 text-center'>
+			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
+				{/* Icon */}
+				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+					{isOfflineNetworkHost ? (
+						<TbCloudOff className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
+					) : (
+						<TbFolder className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
+					)}
+				</div>
+
+				{/* Text */}
 				<div className='max-w-[240px]'>
-					<p className='text-body-sm text-text-tertiary'>
+					<p className='text-[13px] font-medium text-neutral-500'>
 						{isOfflineNetworkHost ? t('files-empty.network-host-offline') : t('files-empty.directory')}
 					</p>
 				</div>
-			</div>
-			{/* in read-only mode, we don't render the upload and new folder buttons */}
-			{!isViewingNetworkShares && !isReadOnly && (
-				<div className='flex items-center gap-2'>
-					<IconButton icon={Upload} variant='primary' onClick={handleUploadClick}>
-						{t('files-action.upload')}
-					</IconButton>
-					<IconButton icon={AddFolderIcon} onClick={startNewFolder}>
-						{t('files-folder')}
-					</IconButton>
-					<UploadInput ref={uploadInputRef} />
-				</div>
-			)}
+
+				{/* Action buttons */}
+				{!isViewingNetworkShares && !isReadOnly && (
+					<div className='flex items-center gap-2'>
+						<IconButton icon={TbUpload} variant='primary' onClick={handleUploadClick}>
+							{t('files-action.upload')}
+						</IconButton>
+						<IconButton icon={TbFolderPlus} onClick={startNewFolder}>
+							{t('files-folder')}
+						</IconButton>
+						<UploadInput ref={uploadInputRef} />
+					</div>
+				)}
+			</AnimatedGroup>
 		</div>
 	)
 }
@@ -58,7 +62,25 @@ export function EmptyStateDirectory() {
 export function EmptyStateNetwork() {
 	return (
 		<div className='flex h-full items-center justify-center p-8 pt-0 text-center'>
-			<div className='text-body-sm text-text-tertiary'>{t('files-empty.network')}</div>
+			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
+				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+					<TbCloudOff className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
+				</div>
+				<p className='text-[13px] font-medium text-neutral-500'>{t('files-empty.network')}</p>
+			</AnimatedGroup>
+		</div>
+	)
+}
+
+export function EmptyStateSearch() {
+	return (
+		<div className='flex h-full items-center justify-center p-8 pt-0 text-center'>
+			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
+				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+					<TbSearch className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
+				</div>
+				<p className='text-[13px] font-medium text-neutral-500'>{t('files-empty.no-results')}</p>
+			</AnimatedGroup>
 		</div>
 	)
 }
