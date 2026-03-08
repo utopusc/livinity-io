@@ -19,11 +19,11 @@ export function ExpandedContent({progress, count, speed}: {progress: number; cou
 	return (
 		<div className='flex h-full w-full flex-col overflow-hidden py-5'>
 			<div className='mb-4 flex items-center justify-between px-5'>
-				<span className='text-xs text-text-secondary'>
+				<span className='text-[12px] font-medium text-neutral-600'>
 					{t('files-listing.item-count', {formattedCount: formatNumberI18n({n: count, showDecimals: false}), count})}{' '}
 					&bull; {progress}%
 				</span>
-				<span className='text-xs text-text-secondary'>{formatFilesystemSize(speed)}/s</span>
+				<span className='text-[11px] font-medium text-neutral-400'>{formatFilesystemSize(speed)}/s</span>
 			</div>
 
 			<ScrollArea className='flex-1 px-5 pb-2'>
@@ -73,9 +73,9 @@ export function ExpandedContent({progress, count, speed}: {progress: number; cou
 											{secondsToEta(operation.secondsRemaining)}
 										</span>
 									</div>
-									<div className='relative h-1 overflow-hidden rounded-full bg-surface-2'>
+									<div className='relative h-1.5 overflow-hidden rounded-full bg-neutral-100'>
 										<div
-											className='transition-w absolute left-0 top-0 h-full rounded-full bg-brand duration-300'
+											className='absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-500 transition-[width] duration-300'
 											style={{width: `${operation.percent}%`}}
 										/>
 									</div>

@@ -38,8 +38,10 @@ export function PathInput({path, onClose}: PathInputProps) {
 	return (
 		<div
 			className={cn(
-				'border-[0.5px] bg-surface-base',
-				'flex h-8 items-center rounded-full border-[hsl(var(--color-brand))] p-3 py-1',
+				'relative overflow-hidden',
+				'flex h-8 items-center rounded-xl bg-white px-3 py-1',
+				'border border-blue-200 shadow-sm',
+				'transition-all duration-200',
 			)}
 			role='group'
 			aria-label={t('files-path.input-group')}
@@ -52,7 +54,7 @@ export function PathInput({path, onClose}: PathInputProps) {
 					onKeyDown={handleKeyDown}
 					onBlur={onClose}
 					className={cn(
-						'h-8 bg-transparent text-xs text-text-primary',
+						'h-8 bg-transparent text-[12px] font-medium text-neutral-800',
 						'p-0 [border:none] [outline:none]',
 						'focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0',
 						'[&:active]:bg-transparent [&:focus]:bg-transparent [&:hover]:bg-transparent',

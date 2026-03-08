@@ -1,7 +1,7 @@
 import {useCallback, useLayoutEffect, useMemo, useRef} from 'react'
+import {TbChevronRight} from 'react-icons/tb'
 
 import {FadeScroller} from '@/components/fade-scroller'
-import {CaretRightIcon} from '@/features/files/assets/caret-right'
 import {Droppable} from '@/features/files/components/shared/drag-and-drop'
 import {FileItemIcon} from '@/features/files/components/shared/file-item-icon'
 import {
@@ -173,26 +173,30 @@ export function PathBarDesktop({path}: {path: string}) {
 	}, [deriveIsOverflow, path])
 
 	return (
-		<FadeScroller direction='x' className='livinity-hide-scrollbar overflow-x-auto' ref={fadeScrollerRef}>
-			<ul className='flex items-center gap-0.5 min-w-0 overflow-hidden whitespace-nowrap py-1' ref={breadcrumbsRef}>
-				{segments.map((segment, i) => {
-					/* First and last two segments are static, they always be fully visible */
-					const isStatic = i === 0 || i > segments.length - 3 ? true : undefined
+		<div className='rounded-xl bg-neutral-100/60 px-1 py-0.5 transition-colors duration-200 hover:bg-neutral-100/80'>
+			<FadeScroller direction='x' className='livinity-hide-scrollbar overflow-x-auto' ref={fadeScrollerRef}>
+				<ul className='flex items-center gap-0 min-w-0 overflow-hidden whitespace-nowrap' ref={breadcrumbsRef}>
+					{segments.map((segment, i) => {
+						/* First and last two segments are static, they always be fully visible */
+						const isStatic = i === 0 || i > segments.length - 3 ? true : undefined
+						const isLast = i === segments.length - 1
 
-					return (
-						<PathSegment
-							key={segment.id}
-							type={segment.type}
-							segment={segment.segment}
-							hasArrow={i < segments.length - 1}
-							onClick={() => navigateToDirectory(segment.path)}
-							path={segment.path}
-							isStatic={isStatic}
-						/>
-					)
-				})}
-			</ul>
-		</FadeScroller>
+						return (
+							<PathSegment
+								key={segment.id}
+								type={segment.type}
+								segment={segment.segment}
+								hasArrow={i < segments.length - 1}
+								onClick={() => navigateToDirectory(segment.path)}
+								path={segment.path}
+								isStatic={isStatic}
+								isLast={isLast}
+							/>
+						)
+					})}
+				</ul>
+			</FadeScroller>
+		</div>
 	)
 }
 
@@ -200,16 +204,22 @@ type PathSegmentProps = Omit<PathSegment, 'id'> & {
 	hasArrow: boolean
 	onClick: () => void
 	isStatic?: boolean
+	isLast?: boolean
 }
 
-const PathSegment = ({segment, hasArrow, onClick, isStatic, path, type}: PathSegmentProps) => (
-	<li className='inline-flex' data-static={isStatic}>
+const PathSegment = ({segment, hasArrow, onClick, isStatic, path, type, isLast}: PathSegmentProps) => (
+	<li className='inline-flex items-center' data-static={isStatic}>
 		<Droppable
 			as='button'
 			id={`path-segment-${path}`}
 			path={path}
 			onClick={onClick}
-			className='group inline-flex w-[--item-width] min-w-[42px] cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-body-sm text-text-secondary transition-all duration-200 ease-in-out hover:w-[--natural-width] hover:bg-surface-1 hover:text-text-primary'
+			className={cn(
+				'group inline-flex w-[--item-width] min-w-[38px] cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[12px] transition-all duration-200 ease-in-out hover:w-[--natural-width] hover:bg-white/80 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
+				isLast
+					? 'font-semibold text-neutral-800'
+					: 'font-medium text-neutral-500 hover:text-neutral-700',
+			)}
 		>
 			<FileItemIcon
 				item={{
@@ -227,18 +237,18 @@ const PathSegment = ({segment, hasArrow, onClick, isStatic, path, type}: PathSeg
 					size: 0,
 					modified: 0,
 				}}
-				className='h-4 w-4'
+				className='h-4 w-4 shrink-0'
 			/>
 			<span
 				className={cn(
 					'group-hover:[mask-image:none] [.has-overflow_&]:[mask-image:linear-gradient(to_left,transparent_0%,black_40px)]',
-					'overflow-hidden text-xs',
+					'overflow-hidden',
 					segment && 'ml-0.5',
 				)}
 			>
 				{segment && formatItemName({name: segment})}
 			</span>
-			{hasArrow && <CaretRightIcon className='ml-0.5 shrink-0 h-3 w-3 text-text-tertiary' />}
 		</Droppable>
+		{hasArrow && <TbChevronRight className='mx-0.5 h-3 w-3 shrink-0 text-neutral-300' strokeWidth={2} />}
 	</li>
 )
