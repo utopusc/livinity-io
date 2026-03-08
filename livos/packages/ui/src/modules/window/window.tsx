@@ -236,13 +236,13 @@ const windowClass = tw`
 	fixed
 	flex
 	flex-col
-	rounded-radius-xl
+	rounded-[20px]
 	bg-white/95
 	backdrop-blur-xl
 	overflow-hidden
-	shadow-elevation-lg
+	shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]
 	border
-	border-border-emphasis
+	border-neutral-200/50
 `
 
 const windowContentClass = tw`
