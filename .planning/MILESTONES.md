@@ -50,8 +50,15 @@
 
 **Last phase number:** 10 (v4.0)
 
+### v5.0/v5.2 — Light Theme & UI Overhaul
+**Completed:** 2026-03-07
+**Phases:** v5.0 (10 phases) + v5.2 (1 phase, 6 plans)
+**Summary:** Complete light theme redesign with semantic tokens, motion-primitives integration (Tilt, Spotlight, Magnetic, AnimatedBackground, BorderTrail). Files A-to-Z redesign (sidebar, toolbar, grid/list items). App Store redesign. Settings routing fix. Window chrome fix. Tabler Icons throughout.
+
+**Last phase number:** 10 (v5.0) + v5.2
+
 ## Active
 
-### v5.0 — Light Theme UI Redesign
-**Started:** 2026-03-05
-**Goal:** Complete light theme redesign of the Vite/React UI using motion-primitives, covering every screen piece by piece with professional quality. Full i18n support. All semantic tokens updated from dark to light.
+### v5.3 — UI Polish & Consistency
+**Started:** 2026-03-07
+**Goal:** Polish Files (path bar, empty states, loading animations). Extend motion-primitives design language to Dashboard/Home. Visual consistency across all windows. Performance audit for motion-heavy components.

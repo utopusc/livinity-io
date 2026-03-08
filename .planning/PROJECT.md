@@ -8,15 +8,15 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 **One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use.
 
-## Current Milestone: v5.0 — Light Theme UI Redesign
+## Current Milestone: v5.3 — UI Polish & Consistency
 
-**Goal:** Complete light theme redesign of the Vite/React UI using motion-primitives, covering every single screen piece by piece with professional quality.
+**Goal:** Apply motion-primitives and light theme polish across remaining modules. Polish Files (path bar, empty states, loading animations). Extend design language to Dashboard/Home. Ensure visual consistency across all windows. Performance audit for motion-heavy components.
 
 **Target features:**
-- Light theme across ALL screens (no dark mode, fully light)
-- motion-primitives components from motion-primitives.com/docs
-- Full i18n support (all strings through t() function)
-- Piece-by-piece approach: Setup/Onboarding → Login → Desktop → Dock → Window Manager → App Store → AI Chat → Settings → File Manager → Server Control → Spotlight → Subagents → Schedules → Live Usage → Factory Reset → Context Menus
+- Files polish: path bar breadcrumbs, empty states with illustrations, loading skeletons, file operation animations
+- Dashboard/Home: motion-primitives integration (Tilt, Spotlight, AnimatedGroup, AnimatedNumber)
+- Visual consistency: cross-module audit for colors, typography, spacing, border radius, window chrome
+- Performance: audit motion-heavy components, reduce re-renders, lazy-load where needed
 
 ## Requirements
 
@@ -78,27 +78,29 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 - ✓ All v2.0 features (83 requirements complete) — v2.0
 
-### Active (v5.0 — Light Theme UI Redesign)
+### Validated (v5.0/v5.2 — Light Theme & UI Overhaul)
 
-- [ ] Light theme design system (tailwind tokens, CSS variables)
-- [ ] motion-primitives integration (TextEffect, AnimatedGroup, TransitionPanel, GlowEffect, etc.)
-- [ ] Full i18n coverage (every string wrapped in t())
-- [ ] Setup/Onboarding — 6-step wizard with light theme
-- [ ] Login screen — light theme redesign
-- [ ] Desktop — light wallpaper, light overlays
-- [ ] Dock — frosted light glass
-- [ ] Window Manager — light chrome, shadows
-- [ ] App Store — light cards, animations
-- [ ] AI Chat — light sidebar, white chat area
-- [ ] Settings — light sidebar, all sections
-- [ ] File Manager — light toolbar, animated grid
-- [ ] Server Control — light cards, AnimatedNumber
-- [ ] Spotlight/Command Palette — light overlay
-- [ ] Subagents panel — light theme
-- [ ] Schedules — light theme
-- [ ] Live Usage Dashboard — light charts
-- [ ] Factory Reset — light theme
-- [ ] Context Menus — light theme
+- ✓ Light theme design system (tailwind tokens, CSS variables) — v5.0
+- ✓ motion-primitives integration (Tilt, Spotlight, Magnetic, AnimatedBackground, BorderTrail) — v5.2
+- ✓ Files redesign: sidebar icons, grid/list items, toolbar, sort dropdown, search, view toggle — v5.2
+- ✓ App Store redesign: sheet + window versions with light theme — v5.2
+- ✓ Settings window routing fix — v5.2
+- ✓ Window chrome cursor fix — v5.2
+
+### Active (v5.3 — UI Polish & Consistency)
+
+- [ ] Files polish: path bar breadcrumbs with transitions
+- [ ] Files polish: empty states with illustrations/animations
+- [ ] Files polish: loading skeletons with staggered reveal
+- [ ] Files polish: file operation animations (copy, move, delete)
+- [ ] Dashboard/Home: motion-primitives integration
+- [ ] Dashboard/Home: widget cards with Tilt/Spotlight effects
+- [ ] Dashboard/Home: stats with AnimatedNumber
+- [ ] Visual consistency: window chrome audit across all apps
+- [ ] Visual consistency: shared component styling (buttons, inputs, dropdowns)
+- [ ] Visual consistency: color palette, typography, spacing audit
+- [ ] Performance: motion component audit (Tilt, Spotlight, animations)
+- [ ] Performance: reduce re-renders in animated components
 
 ### Out of Scope
 
@@ -154,4 +156,4 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 | Full i18n | Current wizard has hardcoded strings, must fix | — Pending |
 
 ---
-*Last updated: 2026-03-05 — v5.0 milestone (Light Theme UI Redesign)*
+*Last updated: 2026-03-07 — v5.3 milestone (UI Polish & Consistency)*
