@@ -69,7 +69,7 @@ export function AppIcon({
 		>
 			<div
 				className={cn(
-					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-radius-sm bg-surface-2 bg-cover bg-center ring-border-emphasis backdrop-blur-sm transition-all duration-300 group-hover:scale-110 group-hover:ring-6 group-focus-visible:ring-6 group-active:scale-95 group-data-[state=open]:ring-6 md:w-16 md:rounded-radius-md',
+					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100/60 bg-cover bg-center shadow-sm ring-white/50 backdrop-blur-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:ring-4 group-focus-visible:ring-4 group-active:scale-95 group-data-[state=open]:ring-4 md:w-16 md:rounded-2xl',
 				)}
 			>
 				{appIconSrc && (
@@ -87,7 +87,7 @@ export function AppIcon({
 				)}
 				{inProgress && (
 					<div className='absolute inset-0 flex items-center justify-center'>
-						<div className='relative h-1 w-[75%] overflow-hidden rounded-full bg-surface-3'>
+						<div className='relative h-1.5 w-[75%] overflow-hidden rounded-full bg-white/30'>
 							{arrayIncludes(progressBarStates, state) ? (
 								<div
 									className='absolute inset-0 w-0 rounded-full bg-text-primary transition-[width] delay-200 duration-700 animate-in slide-in-from-left-full fill-mode-both'
@@ -106,8 +106,8 @@ export function AppIcon({
 					</div>
 				)}
 			</div>
-			<div className='max-w-full text-caption-sm leading-normal drop-shadow-desktop-label md:text-body-sm'>
-				<div className='truncate contrast-more:bg-white contrast-more:px-1'>
+			<div className='max-w-full text-[11px] font-medium leading-normal text-neutral-700 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)] md:text-[12px]'>
+				<div className='truncate'>
 					<AppLabel state={state} label={label} />
 				</div>
 			</div>
