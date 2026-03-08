@@ -1,7 +1,8 @@
 import React, {Suspense, useState} from 'react'
 import {ErrorBoundary} from 'react-error-boundary'
-import {TbServer, TbApps} from 'react-icons/tb'
+import {TbServer, TbApps, TbTerminal2} from 'react-icons/tb'
 
+import {AnimatedGroup} from '@/components/motion-primitives/animated-group'
 import {ErrorBoundaryCardFallback} from '@/components/ui/error-boundary-card-fallback'
 import {Loading} from '@/components/ui/loading'
 import {useApps} from '@/providers/apps'
@@ -23,33 +24,33 @@ export default function TerminalWindowContent() {
 
 	return (
 		<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
-			<div className='flex h-full flex-col'>
+			<div className='flex h-full flex-col bg-neutral-900'>
 				{/* Tab Header */}
-				<div className='flex items-center gap-2 border-b border-border-default px-4 py-3'>
+				<div className='flex items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-4 py-2.5'>
 					{/* Mode Tabs */}
-					<div className='flex gap-1 rounded-lg bg-surface-base p-1'>
+					<div className='flex gap-0.5 rounded-lg bg-neutral-800/80 p-0.5'>
 						<button
 							onClick={() => setMode('livos')}
 							className={cn(
-								'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+								'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
 								mode === 'livos'
-									? 'bg-surface-2 text-text-primary'
-									: 'text-text-secondary hover:text-text-primary',
+									? 'bg-neutral-700 text-neutral-100 shadow-sm'
+									: 'text-neutral-400 hover:text-neutral-200',
 							)}
 						>
-							<TbServer className='h-4 w-4' />
+							<TbServer className='h-3.5 w-3.5' />
 							LivOS
 						</button>
 						<button
 							onClick={() => setMode('app')}
 							className={cn(
-								'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+								'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
 								mode === 'app'
-									? 'bg-surface-2 text-text-primary'
-									: 'text-text-secondary hover:text-text-primary',
+									? 'bg-neutral-700 text-neutral-100 shadow-sm'
+									: 'text-neutral-400 hover:text-neutral-200',
 							)}
 						>
-							<TbApps className='h-4 w-4' />
+							<TbApps className='h-3.5 w-3.5' />
 							App
 						</button>
 					</div>
@@ -57,11 +58,11 @@ export default function TerminalWindowContent() {
 					{/* App Selector (only show when app mode is selected) */}
 					{mode === 'app' && (
 						<div className='ml-auto flex items-center gap-2'>
-							<span className='text-sm text-text-secondary'>Run commands in:</span>
+							<span className='text-[12px] font-medium text-neutral-500'>Run in:</span>
 							<select
 								value={selectedAppId || ''}
 								onChange={(e) => setSelectedAppId(e.target.value || null)}
-								className='rounded-md border border-border-default bg-surface-base px-3 py-1.5 text-sm text-text-primary outline-none focus:border-border-emphasis'
+								className='rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-[12px] font-medium text-neutral-200 outline-none transition-colors focus:border-neutral-600'
 								disabled={isLoading}
 							>
 								<option value=''>Select an app...</option>
@@ -76,7 +77,7 @@ export default function TerminalWindowContent() {
 				</div>
 
 				{/* Terminal Content */}
-				<div className='flex-1 overflow-hidden p-4'>
+				<div className='flex-1 overflow-hidden'>
 					<Suspense fallback={<Loading />}>
 						{mode === 'livos' ? (
 							<XTermTerminal />
@@ -84,13 +85,19 @@ export default function TerminalWindowContent() {
 							<XTermTerminal key={selectedAppId} appId={selectedAppId} />
 						) : (
 							<div className='flex h-full items-center justify-center'>
-								<div className='text-center'>
-									<TbApps className='mx-auto h-12 w-12 text-text-tertiary' />
-									<p className='mt-3 text-text-secondary'>Select an app to open its terminal</p>
-									<p className='mt-1 text-sm text-text-tertiary'>
-										Run custom commands within a specific Docker container
-									</p>
-								</div>
+								<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
+									<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-800/80'>
+										<TbTerminal2 className='h-8 w-8 text-neutral-500' strokeWidth={1.5} />
+									</div>
+									<div className='text-center'>
+										<p className='text-[13px] font-medium text-neutral-400'>
+											Select an app to open its terminal
+										</p>
+										<p className='mt-1 text-[12px] text-neutral-600'>
+											Run commands within a Docker container
+										</p>
+									</div>
+								</AnimatedGroup>
 							</div>
 						)}
 					</Suspense>

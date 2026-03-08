@@ -1,3 +1,4 @@
+import {TbSearch} from 'react-icons/tb'
 import {useLocation} from 'react-router-dom'
 
 import {useIsSmallMobile} from '@/hooks/use-is-mobile'
@@ -9,11 +10,16 @@ export function Search({onClick}: {onClick?: () => void}) {
 	const isMobile = useIsSmallMobile()
 	return (
 		<button
-			className='z-10 select-none rounded-full border border-white/60 bg-white/80 px-3 py-2.5 text-caption leading-inter-trimmed text-text-primary backdrop-blur-xl shadow-elevation-sm transition-colors delay-300 duration-300 animate-in fade-in fill-mode-both hover:bg-white/90 active:bg-white/70'
+			className='z-10 flex select-none items-center gap-2 rounded-full border border-neutral-200/60 bg-white/90 px-4 py-2.5 text-[13px] font-medium leading-tight text-neutral-500 shadow-[0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-xl transition-all duration-200 animate-in fade-in fill-mode-both hover:bg-white hover:text-neutral-700 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] active:scale-[0.98]'
 			onClick={onClick}
 		>
-			{/* TODO: ideally, centralize shortcut preview and shortcut event listener so always in sync */}
-			{t('search')} {platform() !== 'other' && !isMobile && <span className='text-text-tertiary'>{cmdOrCtrl()}K</span>}
+			<TbSearch className='h-4 w-4' strokeWidth={2} />
+			{t('search')}
+			{platform() !== 'other' && !isMobile && (
+				<span className='ml-1 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] font-medium text-neutral-400'>
+					{cmdOrCtrl()}K
+				</span>
+			)}
 		</button>
 	)
 }

@@ -39,6 +39,28 @@ export const XTermTerminal = ({appId}: {appId?: string}) => {
 		terminalRef.current = new Terminal({
 			fontSize,
 			fontFamily,
+			theme: {
+				background: '#171717',
+				foreground: '#e5e5e5',
+				cursor: '#a3a3a3',
+				selectionBackground: '#404040',
+				black: '#171717',
+				red: '#f87171',
+				green: '#4ade80',
+				yellow: '#facc15',
+				blue: '#60a5fa',
+				magenta: '#c084fc',
+				cyan: '#22d3ee',
+				white: '#e5e5e5',
+				brightBlack: '#525252',
+				brightRed: '#fca5a5',
+				brightGreen: '#86efac',
+				brightYellow: '#fde68a',
+				brightBlue: '#93c5fd',
+				brightMagenta: '#d8b4fe',
+				brightCyan: '#67e8f9',
+				brightWhite: '#fafafa',
+			},
 		})
 
 		const terminal = terminalRef.current
@@ -81,7 +103,7 @@ export const XTermTerminal = ({appId}: {appId?: string}) => {
 	return (
 		<div
 			ref={parentContainerRef as React.LegacyRef<HTMLDivElement>}
-			className='h-full w-full overflow-hidden overflow-x-auto rounded-12 bg-neutral-100 pb-4 pr-3'
+			className='h-full w-full overflow-hidden overflow-x-auto rounded-xl bg-neutral-900 pb-4 pr-3'
 		>
 			{/* Hidden character to calculate correct cols/rows based on its dimensions */}
 			<div

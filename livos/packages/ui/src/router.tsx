@@ -1,7 +1,8 @@
 import React, {Suspense} from 'react'
 import {createBrowserRouter, Outlet} from 'react-router-dom'
 
-import {CmdkMenu, CmdkProvider} from '@/components/cmdk'
+import {AppleSpotlight} from '@/components/apple-spotlight'
+import {CmdkProvider, useCmdkOpen} from '@/components/cmdk'
 import {AiQuickProvider, AiQuickDialog} from '@/components/ai-quick'
 import {ErrorBoundaryComponentFallback} from '@/components/ui/error-boundary-component-fallback'
 import {filesRoutes} from '@/features/files/routes'
@@ -33,6 +34,11 @@ const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
 
+function SpotlightConnected() {
+	const {open, setOpen} = useCmdkOpen()
+	return <AppleSpotlight isOpen={open} onClose={() => setOpen(false)} />
+}
+
 // NOTE: AI pages (ai-chat, server-control, subagents, schedules) are window-only.
 // They are NOT registered as routes - they open exclusively as draggable windows from the dock.
 
@@ -54,8 +60,8 @@ export const router = createBrowserRouter([
 								<DesktopContextMenu>
 									<Desktop />
 								</DesktopContextMenu>
-								<CmdkMenu />
-															<AiQuickDialog />
+								<SpotlightConnected />
+								<AiQuickDialog />
 							</AiQuickProvider>
 							</CmdkProvider>
 							<Suspense>
