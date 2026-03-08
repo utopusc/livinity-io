@@ -57,8 +57,15 @@
 
 **Last phase number:** 10 (v5.0) + v5.2
 
+### v5.3 — UI Polish & Consistency + Apple Spotlight + Strategic Research
+**Completed:** 2026-03-07
+**Phases:** 4 phases (files polish, dashboard, visual consistency, performance)
+**Summary:** Files path bar, empty states, loading skeletons. Dashboard Tilt/Spotlight effects. Visual consistency audit (borders, menus, shadows). Terminal dark theme fix. Apple Spotlight search integration (replaced cmdk). Desktop search button redesign. Comprehensive strategic research (8 reports, ~270KB) covering competitive analysis, product strategy, UX trends, feature roadmap, go-to-market, priority matrix.
+
+**Last phase number:** 4 (v5.3)
+
+**Strategic research output:** `.planning/research/strategic/` (SYNTHESIS.md for overview)
+
 ## Active
 
-### v5.3 — UI Polish & Consistency
-**Started:** 2026-03-07
-**Goal:** Polish Files (path bar, empty states, loading animations). Extend motion-primitives design language to Dashboard/Home. Visual consistency across all windows. Performance audit for motion-heavy components.
+*No active milestone — next: v6.0 (Backup & Monitoring) based on strategic research*
