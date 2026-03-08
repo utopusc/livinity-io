@@ -1,215 +1,155 @@
-# Requirements — v5.0 Light Theme UI Redesign
+# Requirements — v5.3 UI Polish & Consistency
 
-**Defined:** 2026-03-05
+**Defined:** 2026-03-07
 **Core Value:** One-command deployment of a personal AI-powered server that just works.
 
-## Category: Design Foundation (DF)
+## Category: Files Polish (FP)
 
-### REQ-DF-01: Light Theme Semantic Tokens
-Convert all semantic color tokens in `tailwind.config.ts` from dark (white-on-black) to light (dark-on-white).
-- `text-primary`: dark text on light bg (e.g., `rgba(15,23,42,0.92)`)
-- `text-secondary`, `text-tertiary`: slate gray shades
-- `surface-base/1/2/3`: light surfaces with subtle gray fills
-- `border-subtle/default/emphasis`: light gray borders
-- `info-surface`, `warning-surface`: light tinted surfaces
-- `dialog-content`: light value
+### REQ-FP-01: Path Bar Redesign
+Redesign the desktop path bar with motion-primitives transitions:
+- Rounded container with subtle bg and border
+- Animated breadcrumb segment transitions when navigating
+- Hover effects on path segments with Magnetic or subtle scale
+- Improved overflow handling with gradient fades
+- Consistent styling with v5.2 search input (rounded-xl, borderTrail-on-focus equivalent)
 
-### REQ-DF-02: Light Theme CSS Variables & Globals
-Update `index.css` for light theme:
-- Scrollbar colors (from `white/15%` to `slate/20%`)
-- Selection colors
-- Divide styling (`via-white/5` to dark equivalent)
-- Logo glow, gradient blobs for onboarding — light-appropriate colors
-- Typography prose colors for light backgrounds
+### REQ-FP-02: Empty States with Illustrations
+Replace plain text empty states with visually rich illustrations:
+- Empty folder: animated icon with gentle bounce, descriptive message, action buttons with hover effects
+- Empty network: network-specific illustration with connection status
+- Search with no results: search icon animation with helpful message
+- AnimatedGroup staggered entry for empty state elements
 
-### REQ-DF-03: Light Theme Shadows
-Convert all box shadows from dark-mode (white inner glow + heavy black drop) to light-mode:
-- `elevation-sm/md/lg/xl`: lighter drop shadows with minimal inner glow
-- `dock`, `floating-island`, `widget`: frosted glass on light
-- `dialog`, `dropdown`, `context-menu`: soft gray shadows
-- `card-elevated/hover`: subtle lift
-- `button-highlight*`: top-edge highlights appropriate for light surfaces
+### REQ-FP-03: Loading Skeletons
+Replace spinner-only loading with skeleton placeholders:
+- Grid view: skeleton cards matching file item dimensions with shimmer animation
+- List view: skeleton rows matching list item layout
+- Staggered reveal as real items load (AnimatedGroup)
+- Smooth transition from skeleton to loaded content
 
-### REQ-DF-04: Install Additional motion-primitives
-Install components from motion-primitives.com/docs as needed per screen. Evaluate per phase.
+### REQ-FP-04: File Operation Animations
+Polish floating island animations for file operations:
+- Smooth entry/exit animations for operations island
+- Progress indicator with gradient animation
+- Success/error state transitions
+- Upload island visual polish with consistent styling
 
-## Category: Base Components (BC)
+## Category: Dashboard & Home (DH)
 
-### REQ-BC-01: shadcn Component Light Theme
-Update all 27 shadcn components for light theme consistency:
-- button, input, select, checkbox, switch, radio-group
-- dialog, drawer, sheet, alert-dialog, popover
-- dropdown-menu, context-menu, command
-- badge, alert, tooltip, tabs, table
-- progress, scroll-area, separator, pagination, carousel
-- form, label, sheet-scroll-area
+### REQ-DH-01: Desktop Content Redesign
+Apply motion-primitives to the main desktop content area:
+- Header greeting with improved TextShimmerWave or TextEffect
+- Content area transitions with AnimatedGroup staggered entry
+- Improved spacing and layout for light theme
 
-### REQ-BC-02: Custom UI Component Light Theme
-Update all custom UI components for light theme:
-- card, loading, alert, toast, step-indicator
-- icon-button, button-link, copy-button, copyable-field
-- cover-message, error-boundary fallbacks
-- list, segmented-control, numbered-list
-- animated-number, arc, pin-input, notification-badge
-- immersive-dialog, dialog-close-button, fade-in-img
+### REQ-DH-02: App Icon Cards
+Apply v5.2-style motion effects to desktop app icons:
+- Tilt 3D effect on hover (matching Files grid cards)
+- Spotlight cursor-following glow per icon
+- Consistent rounded corners and shadows
+- Improved app name typography
 
-### REQ-BC-03: Shared Module Components
-Update shared/module-level components:
-- install-button, progress-button, app-icon
-- cmdk (command palette)
-- markdown renderer
-- darken-layer, fade-scroller
+### REQ-DH-03: Stats & Metrics Widgets
+Polish stats display with motion-primitives:
+- AnimatedNumber for CPU, Memory, Storage values
+- Stat cards with subtle Tilt or Spotlight effects
+- Progress bars with gradient animation
+- Consistent card styling with v5.2 design language
 
-## Category: Screen Redesign (SR)
+### REQ-DH-04: Dock Visual Polish
+Ensure dock consistency with v5.2 design language:
+- Frosted glass container matching light theme
+- Consistent icon sizing and hover magnification
+- Separator styling consistency
+- Active indicator consistency
 
-### REQ-SR-01: Login Page
-Light theme with professional styling, motion-primitives animations.
+## Category: Visual Consistency (VC)
 
-### REQ-SR-02: Onboarding / Setup Wizard
-- 6-step wizard: Account, Language, Domain, Claude Auth, AI Config, Complete
-- Replace all 60+ `text-white`/`bg-white/X` references with semantic tokens
-- All hardcoded English strings wrapped in `t()` i18n
-- Professional light theme cards with subtle shadows
-- motion-primitives transitions between steps
+### REQ-VC-01: Window Chrome Audit
+Audit and fix window chrome across all app windows:
+- Title bar styling consistency (background, text, controls)
+- Window border and shadow consistency
+- Close/minimize button positioning and styling
+- Resize handle visibility
 
-### REQ-SR-03: Desktop Environment
-- Dock: frosted glass on light background
-- App grid: clean icons on light desktop
-- Desktop app icons: light-appropriate text shadows
-- Wallpaper integration with light chrome
+### REQ-VC-02: Shared Component Alignment
+Audit buttons, inputs, dropdowns across all modules:
+- Button sizes, border radius, hover states
+- Input field styling (height, padding, focus states)
+- Dropdown menu styling (width, item height, hover)
+- Icon button sizes and spacing
 
-### REQ-SR-04: Window Manager
-- Window chrome: light title bar with colored dots (macOS-style)
-- Window content area: white/light surface
-- Resize handles, drag zones: light styling
+### REQ-VC-03: Color & Typography Consistency
+Ensure consistent use of design tokens across modules:
+- Neutral scale usage (text-neutral-400/500/600/700/800/900)
+- Accent color usage (only on CTAs and active states)
+- Font size scale consistency (text-[10px] to text-[15px])
+- Font weight consistency (medium for labels, semibold for active)
 
-### REQ-SR-05: App Store
-- Discover page: featured sections, category cards — light theme
-- Category page: grid layout
-- App page: detail view with install button
-- Community app store variant
-- Window-embedded variants (discover-window, app-page-window, marketplace-app-window, etc.)
+### REQ-VC-04: Border Radius & Spacing
+Consistent rounded corners and spacing:
+- Cards: rounded-xl or rounded-[20px]
+- Buttons: rounded-xl
+- Inputs: rounded-xl
+- Dropdowns: rounded-xl
+- Consistent gap/padding scale
 
-### REQ-SR-06: AI Chat
-- Main chat area: light bubbles, user/AI differentiation
-- Sidebar: conversation list on light background
-- Canvas panel + iframe
-- Skills panel, MCP panel
-- Voice button
-- Input area with light styling
+## Category: Performance (PERF)
 
-### REQ-SR-07: Settings Hub
-Main settings index + all sub-pages:
-- Account: change-name, change-password, 2fa, 2fa-enable, 2fa-disable
-- System: device-info, software-update, restart, shutdown, advanced
-- Network: domain-setup, wifi, wifi-unsupported
-- AI: ai-config, nexus-config, voice
-- Integrations: integrations, dm-pairing, gmail, webhooks
-- Data: usage-dashboard, migration-assistant, app-store-preferences
-- Mobile variants (8 pages)
-- Settings shared components (list-row, toggle-row, info-card, page-layout, summary, content)
+### REQ-PERF-01: Motion Component Performance Audit
+Profile motion-primitives components for performance:
+- Measure Tilt/Spotlight overhead per card in Files grid (100+ items)
+- Measure AnimatedBackground re-renders on view toggle
+- Identify any jank on lower-end devices
+- Document performance baselines
 
-### REQ-SR-08: File Manager
-- Main listing (grid + list views)
-- Sidebar (home, docs, downloads, trash, network storage)
-- Server cards
-- Floating islands (uploading, operations, formatting, audio — both minimized + expanded)
-- Rewind (timeline, snapshots, restore dialog)
-- Mini browser
-- Dialogs (share, format-drive, permanently-delete, add-network-share)
-- DnD overlay, file upload drop zone
+### REQ-PERF-02: Re-render Optimization
+Reduce unnecessary re-renders in animated components:
+- Memoize heavy motion wrappers (Tilt, Spotlight)
+- Debounce mouse move handlers where needed
+- Use CSS transforms over layout properties
+- Lazy-load motion components for off-screen items
 
-### REQ-SR-09: Server Control
-Light theme dashboard with status cards, action buttons, AnimatedNumber stats.
-
-### REQ-SR-10: Notifications
-Light notification cards with read/unread states.
-
-### REQ-SR-11: Subagents Page
-Light theme agent cards (37 white/bg-white references to fix).
-
-### REQ-SR-12: Schedules
-Light theme schedule cards and creation UI.
-
-### REQ-SR-13: Factory Reset
-Light theme with appropriate warning styling for destructive action.
-
-### REQ-SR-14: Terminal
-Light chrome with dark terminal body (intentional — keep terminal dark).
-
-### REQ-SR-15: Live Usage
-Light usage statistics page with charts.
-
-### REQ-SR-16: Miscellaneous Pages
-- What's New modal
-- Not Found page
-- Error boundary fallbacks (page, card, component levels)
-
-## Category: i18n (I18N)
-
-### REQ-I18N-01: Setup Wizard i18n
-Wrap all hardcoded English strings in setup-wizard.tsx with `t()`. Focus: domain labels, Claude auth instructions, AI config text.
-
-### REQ-I18N-02: Screen-Level i18n Audit
-Ensure every user-visible string across all redesigned screens uses `t()`. Priority: settings sub-pages, app store, server control, schedules, subagents.
-
-## Category: Quality (QA)
-
-### REQ-QA-01: Remove All Raw Color References
-Eliminate all `text-white`, `bg-white/X`, `border-white/X` references (539 occurrences, 133 files). Replace with semantic tokens.
-
-### REQ-QA-02: Visual Consistency Verification
-Every screen must look intentionally light-themed — no dark remnants, no broken contrast.
-
-### REQ-QA-03: Build Verification
-Clean build with no TypeScript errors after all changes.
+### REQ-PERF-03: Build Verification
+Clean build with no TypeScript errors after all changes:
+- `pnpm --filter ui build` succeeds with zero errors
+- No console warnings from motion-primitives
+- Visual regression spot-check
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Dark theme toggle | Light only for v5.0 |
-| New backend features | UI-only redesign |
-| New pages/routes | Redesign existing only |
-| Mobile-first responsive rewrite | Keep existing responsive behavior |
+| New app features | UI polish only |
+| Backend changes | Frontend-only milestone |
+| Dark theme | Light theme only |
+| New motion-primitives components | Use already-installed 34 components |
+| Mobile-specific redesign | Desktop-first polish |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REQ-DF-01 | Phase 01 | Pending |
-| REQ-DF-02 | Phase 01 | Pending |
-| REQ-DF-03 | Phase 01 | Pending |
-| REQ-DF-04 | Phase 01 | Pending |
-| REQ-BC-01 | Phase 02 | Pending |
-| REQ-BC-02 | Phase 02 | Pending |
-| REQ-BC-03 | Phase 02 | Pending |
-| REQ-SR-01 | Phase 03 | Pending |
-| REQ-SR-02 | Phase 03 | Pending |
-| REQ-SR-03 | Phase 04 | Pending |
-| REQ-SR-04 | Phase 04 | Pending |
-| REQ-SR-05 | Phase 05 | Pending |
-| REQ-SR-06 | Phase 06 | Pending |
-| REQ-SR-07 | Phase 07 | Pending |
-| REQ-SR-08 | Phase 08 | Pending |
-| REQ-SR-09 | Phase 09 | Pending |
-| REQ-SR-10 | Phase 09 | Pending |
-| REQ-SR-11 | Phase 09 | Pending |
-| REQ-SR-12 | Phase 09 | Pending |
-| REQ-SR-13 | Phase 09 | Pending |
-| REQ-SR-14 | Phase 09 | Pending |
-| REQ-SR-15 | Phase 09 | Pending |
-| REQ-SR-16 | Phase 09 | Pending |
-| REQ-I18N-01 | Phase 03 | Pending |
-| REQ-I18N-02 | Phase 10 | Pending |
-| REQ-QA-01 | Phase 02+10 | Pending |
-| REQ-QA-02 | Phase 10 | Pending |
-| REQ-QA-03 | Phase 10 | Pending |
+| REQ-FP-01 | Phase 1 | Pending |
+| REQ-FP-02 | Phase 1 | Pending |
+| REQ-FP-03 | Phase 1 | Pending |
+| REQ-FP-04 | Phase 1 | Pending |
+| REQ-DH-01 | Phase 2 | Pending |
+| REQ-DH-02 | Phase 2 | Pending |
+| REQ-DH-03 | Phase 2 | Pending |
+| REQ-DH-04 | Phase 2 | Pending |
+| REQ-VC-01 | Phase 3 | Pending |
+| REQ-VC-02 | Phase 3 | Pending |
+| REQ-VC-03 | Phase 3 | Pending |
+| REQ-VC-04 | Phase 3 | Pending |
+| REQ-PERF-01 | Phase 4 | Pending |
+| REQ-PERF-02 | Phase 4 | Pending |
+| REQ-PERF-03 | Phase 4 | Pending |
 
 **Coverage:**
-- v5.0 requirements: 28 total
-- Mapped to phases: 28/28
+- v5.3 requirements: 15 total
+- Mapped to phases: 15/15
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-03-05*
+*Requirements defined: 2026-03-07*

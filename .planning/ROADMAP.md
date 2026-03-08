@@ -738,9 +738,9 @@ Phase 01 first (foundation), Phase 02 next (components), then Phases 03-09 in or
 
 ---
 *Roadmap created: 2026-02-03*
-*Last updated: 2026-03-05 — v5.0 Light Theme UI Redesign added*
-*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) + 10 (v5.0) | Total plans: ~93 (estimated)*
-*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 + 28/28 v5.0 requirements mapped*
+*Last updated: 2026-03-07 — v5.3 UI Polish & Consistency added*
+*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) + 10 (v5.0) + 1 (v5.2) + 4 (v5.3) | Total plans: ~97 (estimated)*
+*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 + 28/28 v5.0 + 15/15 v5.3 requirements mapped*
 
 ## v5.2 — Comprehensive UI Overhaul
 
@@ -763,3 +763,86 @@ Plans:
 | 1 | 01, 02, 03, 04 | Yes (independent) |
 | 2 | 05 | Sequential (depends on 04) |
 | 3 | 06 | Sequential (depends on all) |
+
+---
+
+## v5.3 — UI Polish & Consistency
+
+**Overview**: Polish Files with path bar redesign, empty states with illustrations, loading skeletons, and file operation animations. Extend motion-primitives design language to Dashboard/Home. Audit visual consistency across all windows. Performance audit for motion-heavy components.
+
+### v5.3 Phases
+
+- [ ] **Phase 1: Files Polish** — Path bar, empty states, loading skeletons, file operation animations
+- [ ] **Phase 2: Dashboard & Home** — Motion-primitives integration, app icon cards, stats widgets, dock polish
+- [ ] **Phase 3: Visual Consistency** — Window chrome audit, shared component alignment, color/typography/spacing consistency
+- [ ] **Phase 4: Performance & Quality** — Motion component profiling, re-render optimization, build verification
+
+### Phase 1: Files Polish
+**Goal**: Transform Files loading, empty, and navigation states from basic to polished with motion-primitives animations and skeleton loading
+**Depends on**: v5.2 (Files redesign completed)
+**Requirements**: REQ-FP-01, REQ-FP-02, REQ-FP-03, REQ-FP-04
+**Success Criteria** (what must be TRUE):
+  1. Path bar has rounded container with animated breadcrumb transitions and hover effects
+  2. Empty folder state shows animated icon with staggered entry for text and action buttons
+  3. Grid/list loading shows skeleton placeholders with shimmer instead of spinner
+  4. Floating islands for file operations have smooth entry/exit and progress animations
+**Plans**: 2 plans in 1 wave
+
+Plans:
+- [ ] v5.3-01-01-PLAN.md — Path bar redesign: rounded container, segment transitions, hover effects (REQ-FP-01)
+- [ ] v5.3-01-02-PLAN.md — Empty states, loading skeletons, operation animations (REQ-FP-02, REQ-FP-03, REQ-FP-04)
+
+### Phase 2: Dashboard & Home
+**Goal**: Extend v5.2 motion-primitives design language to the desktop home screen — app icons, stats, header, dock
+**Depends on**: Phase 1 (establishes additional motion patterns)
+**Requirements**: REQ-DH-01, REQ-DH-02, REQ-DH-03, REQ-DH-04
+**Success Criteria** (what must be TRUE):
+  1. Desktop header greeting uses polished TextEffect or TextShimmerWave animation
+  2. App grid icons have Tilt 3D and Spotlight glow on hover (matching Files grid)
+  3. Live usage stats display AnimatedNumber for CPU/Memory/Storage values
+  4. Dock styling is consistent with v5.2 light theme design language
+**Plans**: 2 plans in 1 wave
+
+Plans:
+- [ ] v5.3-02-01-PLAN.md — Desktop content, header, app icon cards with Tilt/Spotlight (REQ-DH-01, REQ-DH-02)
+- [ ] v5.3-02-02-PLAN.md — Stats widgets with AnimatedNumber, dock polish (REQ-DH-03, REQ-DH-04)
+
+### Phase 3: Visual Consistency
+**Goal**: Audit and fix visual inconsistencies across all modules — window chrome, shared components, colors, typography, spacing
+**Depends on**: Phase 2 (all motion-primitives work completed)
+**Requirements**: REQ-VC-01, REQ-VC-02, REQ-VC-03, REQ-VC-04
+**Success Criteria** (what must be TRUE):
+  1. All app windows use identical chrome styling (title bar, controls, borders, shadows)
+  2. Buttons, inputs, dropdowns have consistent sizing and styling across all modules
+  3. Color token usage is consistent (no hardcoded neutrals where tokens exist)
+  4. Border radius and spacing follow a consistent scale across the entire UI
+**Plans**: 2 plans in 1 wave
+
+Plans:
+- [ ] v5.3-03-01-PLAN.md — Window chrome and shared component audit/fix (REQ-VC-01, REQ-VC-02)
+- [ ] v5.3-03-02-PLAN.md — Color, typography, spacing consistency audit/fix (REQ-VC-03, REQ-VC-04)
+
+### Phase 4: Performance & Quality
+**Goal**: Ensure motion-heavy components perform well and the build is clean
+**Depends on**: Phase 3 (all UI changes completed)
+**Requirements**: REQ-PERF-01, REQ-PERF-02, REQ-PERF-03
+**Success Criteria** (what must be TRUE):
+  1. Files grid with 100+ items scrolls at 60fps with Tilt/Spotlight effects
+  2. No unnecessary re-renders detected in motion-wrapped components
+  3. `pnpm --filter ui build` succeeds with zero errors
+**Plans**: 1 plan in 1 wave
+
+Plans:
+- [ ] v5.3-04-01-PLAN.md — Performance profiling, re-render optimization, build verification (REQ-PERF-01, REQ-PERF-02, REQ-PERF-03)
+
+### v5.3 Progress
+
+**Execution Order:**
+Phases execute sequentially: 1 -> 2 -> 3 -> 4
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Files Polish | 0/2 | Not started | - |
+| 2. Dashboard & Home | 0/2 | Not started | - |
+| 3. Visual Consistency | 0/2 | Not started | - |
+| 4. Performance & Quality | 0/1 | Not started | - |
