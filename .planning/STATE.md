@@ -5,18 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
-**Current milestone:** v6.0 -- Claude Code to Kimi Code Migration
-**Current focus:** Phase 4 - Onboarding & Cleanup (COMPLETE)
+**Current milestone:** v6.0 -- Claude Code to Kimi Code Migration (COMPLETE)
+**Current focus:** Post-v6.0 hardening complete
 
 ## Current Position
 
-Milestone: v6.0 (Claude Code to Kimi Code Migration)
-Phase: 4 of 4 (Onboarding & Cleanup)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-09 -- Completed 04-02-PLAN.md (Claude/Anthropic/Gemini cleanup)
+Milestone: v6.0 (Claude Code to Kimi Code Migration) — COMPLETE
+Phase: All 4 phases complete + post-migration hardening
+Status: Deployed and production-verified
+Last activity: 2026-03-09 -- Post-migration fixes: 9 bugs fixed, settings UI simplified, Redis cleaned
 
-Progress: [##########] 100% (8/8 plans)
+Progress: [##########] 100%
 
 ## Performance Metrics
 
@@ -69,20 +68,28 @@ Progress: [##########] 100% (8/8 plans)
 
 ### Pending Todos
 
-- Run `nexus/scripts/install-kimi.sh` on server4 (45.137.194.103) to complete server setup
-- Run `npm install` in nexus/ to regenerate package-lock.json without Anthropic/Google packages
-- Verify end-to-end Kimi agent flow on production server
+- None — v6.0 complete and deployed
+
+### Post-Migration Fixes (2026-03-09)
+
+1. Fixed 403 "only available for Coding Agents" — wrong model names + missing headers in chatStream
+2. Fixed empty response — SSE parser expected `data: ` (with space) but Kimi sends `data:` (no space)
+3. Fixed token refresh — Content-Type override was being overridden by getKimiHeaders spread
+4. Fixed tool_use format error — Anthropic-format messages converted to OpenAI format in convertRawMessages()
+5. Fixed reasoning_content missing — captured reasoning tokens from stream, attached as _reasoning to assistant messages
+6. Fixed config schema — all model defaults updated to kimi-for-coding
+7. Fixed Settings UI — replaced misleading K2.5 Flash/K2.5/K2.5 Pro tier selector with honest "Kimi for Coding" display
+8. Fixed KimiAgentRunner — stale model mapping (kimi-k2.5, kimi-latest) updated to kimi-for-coding
+9. Added stream_options.include_usage for accurate streaming token counts
+10. Cleaned stale Redis key nexus:config:claude_auth_method
 
 ### Blockers/Concerns
 
 - Kimi Agent SDK is v0.1.5 (pre-stable) -- using print mode fallback mitigates this
-- Model IDs need runtime verification via `kimi info` on server
 - Pre-existing TypeScript errors in livinityd (toolRegistry, subagent typing, apps.ts) -- unrelated to migration
-- Install script needs to be run on server before KimiAgentRunner can be tested end-to-end
-- package-lock.json still has stale Anthropic references (will clear on next npm install)
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 04-02-PLAN.md (Claude/Anthropic/Gemini cleanup) -- v6.0 migration complete
+Stopped at: v6.0 migration complete + hardening deployed — all agent flows verified on production
 Resume file: None
