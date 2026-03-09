@@ -456,6 +456,7 @@ export class AgentLoop extends EventEmitter {
       // === NATIVE TOOL CALLING MODE ===
       if (useNativeTools && nativeTools) {
         let nativeToolUseBlocks: ToolUseBlock[] = [];
+        let reasoningText = '';
 
         for (let attempt = 0; attempt <= resolved.maxRetries; attempt++) {
           try {
@@ -470,6 +471,7 @@ export class AgentLoop extends EventEmitter {
               });
 
               const textChunks: string[] = [];
+              const reasoningChunks: string[] = [];
               nativeToolUseBlocks = [];
               let lastStopReason = '';
 
@@ -477,6 +479,9 @@ export class AgentLoop extends EventEmitter {
                 if (chunk.text) {
                   textChunks.push(chunk.text);
                   this.emitEvent({ type: 'chunk', turn: turn + 1, data: chunk.text });
+                }
+                if (chunk.reasoning) {
+                  reasoningChunks.push(chunk.reasoning);
                 }
                 if (chunk.toolUse) {
                   nativeToolUseBlocks.push(chunk.toolUse);
@@ -487,6 +492,7 @@ export class AgentLoop extends EventEmitter {
               }
 
               responseText = textChunks.join('');
+              reasoningText = reasoningChunks.join('');
               const usage = getUsage();
               totalInputTokens += usage.inputTokens;
               totalOutputTokens += usage.outputTokens;
@@ -548,7 +554,10 @@ export class AgentLoop extends EventEmitter {
           for (const tc of nativeToolUseBlocks) {
             assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
           }
-          providerMessages.push({ role: 'assistant', content: assistantContent });
+          const assistantMsg: Record<string, unknown> = { role: 'assistant', content: assistantContent };
+          // Attach reasoning content for providers that require it (e.g. Kimi's reasoning_content)
+          if (reasoningText) assistantMsg._reasoning = reasoningText;
+          providerMessages.push(assistantMsg);
           messages.push({ role: 'model', text: responseText });
 
           // Execute each tool and collect results

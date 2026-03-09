@@ -156,7 +156,7 @@ function translateToolDefinition(tool: ToolDefinition): OpenAIFunctionTool {
 function convertRawMessages(raw: unknown[]): OpenAIChatMessage[] {
   const out: OpenAIChatMessage[] = [];
 
-  for (const msg of raw as Array<{ role: string; content: unknown }>) {
+  for (const msg of raw as Array<{ role: string; content: unknown; _reasoning?: string }>) {
     // Plain text message — pass through
     if (typeof msg.content === 'string') {
       out.push({ role: msg.role as any, content: msg.content });
@@ -191,11 +191,13 @@ function convertRawMessages(raw: unknown[]): OpenAIChatMessage[] {
         }
       }
 
-      const assistantMsg: OpenAIChatMessage = {
+      const assistantMsg: any = {
         role: 'assistant',
         content: textParts.join('\n') || null,
       };
       if (toolCalls.length > 0) assistantMsg.tool_calls = toolCalls;
+      // Kimi's thinking model requires reasoning_content in assistant messages
+      if (msg._reasoning) assistantMsg.reasoning_content = msg._reasoning;
       out.push(assistantMsg);
 
     } else if (msg.role === 'user') {
@@ -677,6 +679,11 @@ export class KimiProvider implements AIProvider {
             // Track finish reason
             if (choice.finish_reason) {
               lastStopReason = mapStopReason(choice.finish_reason);
+            }
+
+            // Handle reasoning_content (Kimi's thinking/CoT)
+            if ((choice.delta as any).reasoning_content) {
+              yield { text: '', done: false, reasoning: (choice.delta as any).reasoning_content };
             }
 
             // Handle text content delta
