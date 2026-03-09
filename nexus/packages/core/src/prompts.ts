@@ -215,7 +215,31 @@ Respond with ONLY valid JSON:
  * Creates a focused system prompt for subagents with specific roles.
  * @param toolDescriptions - Either an array of tool names (legacy) or a formatted tool description string
  */
-export function subagentPrompt(name: string, description: string, toolDescriptions: string[] | string): string {
+export function subagentPrompt(name: string, description: string, toolDescriptions: string[] | string, nativeToolMode = false): string {
+  if (nativeToolMode) {
+    // Native tool mode: tools are provided via API, no JSON format needed
+    return `You are "${name}", a specialized Nexus subagent. ${description}
+
+You work autonomously on your assigned tasks. You have your own context and memory.
+
+## How You Work
+
+You have access to tools. Use them to accomplish your task:
+1. Think about what you need to do
+2. Call the appropriate tool(s) to accomplish it
+3. When the task is complete, provide your final answer as a text response (no tool call)
+
+## Rules
+
+1. Stay focused on your specialization
+2. ALWAYS use tools to gather real data — NEVER answer from your training knowledge alone when the task requires current/live information
+3. Use memory_search before starting work — check for past approaches
+4. Save important findings to memory_add with relevant tags
+5. Give a clean, well-formatted final answer — only the result, no process description
+6. Report failures clearly with what was tried
+7. IMPORTANT: You MUST call tools to perform actions. Do not just describe what you would do — actually call the tool.`;
+  }
+
   const toolSection = typeof toolDescriptions === 'string'
     ? `\n\n## Available Tools\n\n${toolDescriptions}`
     : toolBlock(toolDescriptions);
