@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import express from 'express';
 import type { Server } from 'http';
 import Redis from 'ioredis';
@@ -191,6 +194,25 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     error?: string;
   }>();
 
+  /** Read Kimi OAuth token from CLI credentials file and save to Redis */
+  async function syncKimiOAuthToken(): Promise<void> {
+    try {
+      const credPath = join(homedir(), '.kimi', 'credentials', 'kimi-code.json');
+      const raw = await readFile(credPath, 'utf-8');
+      const creds = JSON.parse(raw) as { access_token?: string; expires_at?: number };
+      if (creds.access_token) {
+        await redis.set('nexus:config:kimi_api_key', creds.access_token);
+        await redis.set('nexus:kimi:authenticated', '1');
+        logger.info('Kimi OAuth token synced to Redis from credentials file');
+      }
+    } catch (err) {
+      logger.warn('Failed to sync Kimi OAuth token', { error: formatErrorMessage(err) });
+    }
+  }
+
+  // Sync OAuth token on startup (in case kimi CLI is already logged in)
+  syncKimiOAuthToken().catch(() => {});
+
   /** Check if Kimi CLI is authenticated (uses Redis flag — no process spawn) */
   app.get('/api/kimi/status', async (_req, res) => {
     try {
@@ -270,7 +292,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
               }
               if (event.type === 'success' || event.type === 'login_success') {
                 (session as any).status = 'success';
-                redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+                syncKimiOAuthToken().catch(() => {});
                 logger.info('Kimi CLI login completed successfully');
               }
             } catch { /* skip non-JSON lines */ }
