@@ -6,11 +6,15 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import type Redis from 'ioredis';
 import { logger } from './logger.js';
 import type { Brain } from './brain.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { NexusConfig } from './config/schema.js';
+
+const execAsync = promisify(exec);
 
 export const HEARTBEAT_TOKEN = 'HEARTBEAT_OK';
 export const DEFAULT_HEARTBEAT_INTERVAL_MINUTES = 30;
@@ -174,13 +178,17 @@ export class HeartbeatRunner {
       // Read HEARTBEAT.md
       const heartbeatContent = await this.readHeartbeatFile();
 
-      // Build context with heartbeat content
+      // Collect live system health data before calling LLM
+      const systemHealth = await this.collectSystemHealth();
+
+      // Build context with heartbeat content + live data
       let contextMessage = this.config.prompt;
       if (heartbeatContent) {
         contextMessage += `\n\n## HEARTBEAT.md Contents:\n${heartbeatContent}`;
       } else {
         contextMessage += `\n\nNote: No HEARTBEAT.md file found or file is empty.`;
       }
+      contextMessage += `\n\n## Live System Health Data:\n${systemHealth}`;
 
       // Run agent with heartbeat prompt
       const response = await this.executeHeartbeat(contextMessage);
@@ -260,24 +268,50 @@ export class HeartbeatRunner {
   }
 
   /**
+   * Collect live system health data via shell commands
+   */
+  private async collectSystemHealth(): Promise<string> {
+    const results: string[] = [];
+
+    const runCmd = async (label: string, cmd: string): Promise<void> => {
+      try {
+        const { stdout } = await execAsync(cmd, { timeout: 10_000 });
+        results.push(`### ${label}\n\`\`\`\n${stdout.trim()}\n\`\`\``);
+      } catch (err: any) {
+        results.push(`### ${label}\nError: ${err.message}`);
+      }
+    };
+
+    await Promise.all([
+      runCmd('PM2 Processes', 'pm2 jlist 2>/dev/null | node -e "const d=JSON.parse(require(\'fs\').readFileSync(\'/dev/stdin\',\'utf8\'));d.forEach(p=>console.log(p.name+\': \'+p.pm2_env.status+\' (pid:\'+p.pid+\', restarts:\'+p.pm2_env.restart_time+\', uptime:\'+Math.round((Date.now()-p.pm2_env.pm_uptime)/60000)+\'m)\'))"'),
+      runCmd('Disk Usage', 'df -h / | tail -1'),
+      runCmd('Memory', 'free -h | head -2'),
+      runCmd('Load Average', 'uptime'),
+      runCmd('Redis Ping', 'redis-cli -a "LivRedis2024!" ping 2>/dev/null || echo "FAILED"'),
+    ]);
+
+    return results.join('\n\n');
+  }
+
+  /**
    * Execute heartbeat via Brain
    */
   private async executeHeartbeat(prompt: string): Promise<string> {
-    const systemPrompt = `You are Nexus performing a periodic heartbeat check.
+    const systemPrompt = `You are Nexus performing a periodic heartbeat check. Live system data is provided.
 
 ## Heartbeat Protocol
 
-1. Check the HEARTBEAT.md contents (if provided)
-2. Determine if any tasks need attention
-3. If nothing needs attention, reply with exactly: HEARTBEAT_OK
-4. If something needs attention, describe what needs to be done
+1. Analyze the live system health data provided
+2. Check HEARTBEAT.md tasks against the live data
+3. If ALL checks pass and nothing needs attention, reply with exactly: HEARTBEAT_OK
+4. If ANY issue is found OR HEARTBEAT.md requests a health summary, provide a brief report
 
 ## Rules
 
-- Be concise - heartbeats run frequently
-- Only alert for actionable items
-- Don't repeat tasks that were already completed
-- HEARTBEAT_OK means "all clear, nothing to report"
+- Be concise — this runs every ${this.config.intervalMinutes} minutes
+- Use the live data to make real assessments (disk > 80%, memory > 90%, processes down, etc.)
+- If HEARTBEAT.md asks for a summary/report every cycle, always provide one (never HEARTBEAT_OK)
+- Format alerts clearly: what's wrong, current value, threshold
 `;
 
     // NOTE: tier 'flash' maps to kimi-for-coding which is a thinking model.
