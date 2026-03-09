@@ -8,6 +8,7 @@ import {
 	TbAlertCircle,
 	TbCircleCheck,
 	TbLoader2,
+	TbKey,
 } from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
@@ -19,11 +20,21 @@ import {trpcReact} from '@/trpc/trpc'
 
 export function GmailContent() {
 	const [connectUrl, setConnectUrl] = useState<string | null>(null)
+	const [clientId, setClientId] = useState('')
+	const [clientSecret, setClientSecret] = useState('')
 
 	const statusQ = trpcReact.ai.getGmailStatus.useQuery(undefined, {
 		refetchInterval: 10000, // Poll every 10s (user may be in OAuth flow)
 	})
 	const utils = trpcReact.useUtils()
+
+	const saveCredentialsMutation = trpcReact.ai.saveGmailCredentials.useMutation({
+		onSuccess: () => {
+			setClientId('')
+			setClientSecret('')
+			utils.ai.getGmailStatus.invalidate()
+		},
+	})
 
 	const startOAuthMutation = trpcReact.ai.startGmailOauth.useMutation({
 		onSuccess: (data) => {
@@ -106,7 +117,7 @@ export function GmailContent() {
 								? `Connected as ${status.email}`
 								: status?.configured
 									? 'Credentials configured — not connected'
-									: 'Set up GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET to get started'}
+									: 'Enter your Google OAuth credentials to get started'}
 						</div>
 					</div>
 					{status?.connected ? (
@@ -136,29 +147,68 @@ export function GmailContent() {
 
 			{/* Actions */}
 			{!status?.configured ? (
-				/* Not configured — show setup instructions */
-				<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
-					<div className='text-body font-medium'>Setup Required</div>
-					<div className='text-body-sm text-text-secondary space-y-2'>
-						<p>To connect Gmail, you need Google Cloud OAuth 2.0 credentials:</p>
-						<ol className='list-decimal ml-4 space-y-1'>
-							<li>Go to the Google Cloud Console</li>
-							<li>Navigate to APIs &amp; Services &gt; Credentials</li>
-							<li>Create an OAuth 2.0 Client ID (Web application)</li>
-							<li>Add your callback URL as an authorized redirect URI</li>
-							<li>Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables</li>
-							<li>Restart the Nexus service</li>
-						</ol>
+				/* Not configured — show credential input form */
+				<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-4'>
+					<div className='flex items-center gap-2'>
+						<TbKey className='h-4 w-4 text-text-secondary' />
+						<div className='text-body font-medium'>Google OAuth Credentials</div>
 					</div>
-					<a
-						href='https://console.cloud.google.com/apis/credentials'
-						target='_blank'
-						rel='noopener noreferrer'
-						className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-					>
-						<TbExternalLink className='h-3.5 w-3.5' />
-						Open Google Cloud Console
-					</a>
+					<div className='text-body-sm text-text-secondary'>
+						Create OAuth 2.0 credentials in the Google Cloud Console, then paste them here.
+					</div>
+					<div className='space-y-3'>
+						<div className='space-y-1.5'>
+							<label className='text-caption text-text-secondary'>Client ID</label>
+							<input
+								type='text'
+								value={clientId}
+								onChange={(e) => setClientId(e.target.value)}
+								placeholder='123456789-abc.apps.googleusercontent.com'
+								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-blue-500 focus:outline-none'
+							/>
+						</div>
+						<div className='space-y-1.5'>
+							<label className='text-caption text-text-secondary'>Client Secret</label>
+							<input
+								type='password'
+								value={clientSecret}
+								onChange={(e) => setClientSecret(e.target.value)}
+								placeholder='GOCSPX-...'
+								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-blue-500 focus:outline-none'
+							/>
+						</div>
+					</div>
+					<div className='flex items-center gap-3'>
+						<Button
+							variant='primary'
+							size='sm'
+							onClick={() => saveCredentialsMutation.mutate({clientId, clientSecret})}
+							disabled={!clientId.trim() || !clientSecret.trim() || saveCredentialsMutation.isPending}
+						>
+							{saveCredentialsMutation.isPending ? (
+								<><TbLoader2 className='h-4 w-4 animate-spin' /> Saving...</>
+							) : (
+								'Save Credentials'
+							)}
+						</Button>
+						<a
+							href='https://console.cloud.google.com/apis/credentials'
+							target='_blank'
+							rel='noopener noreferrer'
+							className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+						>
+							<TbExternalLink className='h-3.5 w-3.5' />
+							Google Cloud Console
+						</a>
+					</div>
+					{saveCredentialsMutation.isError && (
+						<p className='text-caption text-red-400'>{saveCredentialsMutation.error.message}</p>
+					)}
+					<div className='text-caption text-text-tertiary space-y-1'>
+						<p>1. Go to Google Cloud Console &gt; APIs &amp; Services &gt; Credentials</p>
+						<p>2. Create an OAuth 2.0 Client ID (Web application)</p>
+						<p>3. Add your callback URL as an authorized redirect URI</p>
+					</div>
 				</div>
 			) : status?.connected ? (
 				/* Connected — show disconnect */

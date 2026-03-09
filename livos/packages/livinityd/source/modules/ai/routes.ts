@@ -1185,6 +1185,30 @@ export default router({
 		}
 	}),
 
+	/** Save Gmail OAuth credentials (Client ID + Secret) from UI */
+	saveGmailCredentials: privateProcedure.input(z.object({
+		clientId: z.string().min(1),
+		clientSecret: z.string().min(1),
+	})).mutation(async ({input}) => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/gmail/credentials`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+			},
+			body: JSON.stringify({clientId: input.clientId, clientSecret: input.clientSecret}),
+		})
+		if (!response.ok) {
+			const err = (await response.json().catch(() => ({}))) as {error?: string}
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err.error || `Nexus API error: ${response.status}`,
+			})
+		}
+		return await response.json() as {ok: boolean}
+	}),
+
 	/** Start Gmail OAuth flow — returns consent screen URL */
 	startGmailOauth: privateProcedure.mutation(async ({ctx}) => {
 		const nexusUrl = getNexusApiUrl()

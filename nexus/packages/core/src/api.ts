@@ -163,8 +163,17 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
 
     try {
-      const clientId = process.env.GMAIL_CLIENT_ID || '';
-      const clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+      // Read credentials from Redis config (with env var fallback)
+      const configStr = await redis.get('nexus:gmail:config');
+      let clientId = process.env.GMAIL_CLIENT_ID || '';
+      let clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+      if (configStr) {
+        try {
+          const config = JSON.parse(configStr);
+          if (config.gmailClientId) clientId = config.gmailClientId;
+          if (config.gmailClientSecret) clientSecret = config.gmailClientSecret;
+        } catch { /* use env vars */ }
+      }
       const publicUrl = process.env.NEXUS_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
       const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
 
@@ -373,6 +382,50 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   });
 
   // ── Gmail OAuth API (authenticated) ────────────────────────────
+
+  /** Helper: get Gmail credentials from Redis config (with env var fallback) */
+  async function getGmailCredentials(): Promise<{ clientId: string; clientSecret: string }> {
+    const configStr = await redis.get('nexus:gmail:config');
+    if (configStr) {
+      try {
+        const config = JSON.parse(configStr);
+        if (config.gmailClientId && config.gmailClientSecret) {
+          return { clientId: config.gmailClientId, clientSecret: config.gmailClientSecret };
+        }
+      } catch { /* fall through to env vars */ }
+    }
+    return {
+      clientId: process.env.GMAIL_CLIENT_ID || '',
+      clientSecret: process.env.GMAIL_CLIENT_SECRET || '',
+    };
+  }
+
+  /** Save Gmail OAuth credentials (Client ID + Secret) from UI */
+  app.post('/api/gmail/credentials', async (req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.status(503).json({ error: 'Gmail provider not available' });
+      return;
+    }
+
+    const { clientId, clientSecret } = req.body as { clientId?: string; clientSecret?: string };
+    if (!clientId || !clientSecret) {
+      res.status(400).json({ error: 'clientId and clientSecret are required' });
+      return;
+    }
+
+    try {
+      await gmailProvider.updateConfig({
+        enabled: true,
+        gmailClientId: clientId.trim(),
+        gmailClientSecret: clientSecret.trim(),
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   /** Start Gmail OAuth — returns URL for Google consent screen */
   app.get('/api/gmail/oauth/start', async (_req, res) => {
     const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
@@ -381,10 +434,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       return;
     }
 
-    const clientId = process.env.GMAIL_CLIENT_ID || '';
-    const clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
+    const { clientId, clientSecret } = await getGmailCredentials();
     if (!clientId || !clientSecret) {
-      res.status(400).json({ error: 'GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables are required' });
+      res.status(400).json({ error: 'Gmail credentials not configured. Set them in Settings > Gmail.' });
       return;
     }
 
@@ -410,7 +462,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     try {
       const status = await gmailProvider.getStatus();
       const profile = await gmailProvider.getProfile();
-      const configured = !!(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET);
+      const { clientId, clientSecret } = await getGmailCredentials();
+      const configured = !!(clientId && clientSecret);
       res.json({
         connected: status.connected,
         enabled: status.enabled,
