@@ -4,6 +4,9 @@
  * Uses raw fetch() against api.kimi.com/coding/v1 (no SDK dependency).
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir, hostname, platform, release } from 'node:os';
 import type { Redis } from 'ioredis';
 import type {
   AIProvider,
@@ -33,6 +36,28 @@ const BASE_URL = 'https://api.kimi.com/coding/v1';
 const API_KEY_REDIS_KEY = 'nexus:config:kimi_api_key';
 const MODELS_REDIS_KEY = 'nexus:config:kimi_models';
 const MODEL_CACHE_TTL_MS = 60_000; // 60 seconds
+const KIMI_CLI_VERSION = '1.17.0';
+
+// Read device ID once at startup
+let DEVICE_ID = '';
+try {
+  DEVICE_ID = readFileSync(join(homedir(), '.kimi', 'device_id'), 'utf-8').trim();
+} catch { /* no device_id file */ }
+
+/** Headers required by Kimi API to identify as a coding agent */
+function getKimiHeaders(apiKey: string): Record<string, string> {
+  return {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'User-Agent': `KimiCLI/${KIMI_CLI_VERSION}`,
+    'X-Msh-Platform': 'kimi_cli',
+    'X-Msh-Version': KIMI_CLI_VERSION,
+    'X-Msh-Device-Name': hostname(),
+    'X-Msh-Device-Model': `${platform()} ${release()}`,
+    'X-Msh-Os-Version': release(),
+    ...(DEVICE_ID ? { 'X-Msh-Device-Id': DEVICE_ID } : {}),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // OpenAI-compatible types (internal, not exported)
@@ -295,10 +320,7 @@ export class KimiProvider implements AIProvider {
     try {
       response = await fetch(`${BASE_URL}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: getKimiHeaders(apiKey),
         body: JSON.stringify(body),
       });
     } catch (err: any) {
