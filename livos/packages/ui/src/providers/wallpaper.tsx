@@ -2,11 +2,9 @@ import {createContext, ReactNode, useCallback, useContext, useEffect, useLayoutE
 import {usePreviousDistinct} from 'react-use'
 import {arrayIncludes} from 'ts-extras'
 
-import {FadeInImg} from '@/components/ui/fade-in-img'
+import {animatedWallpapers, animatedWallpaperIds, type AnimatedWallpaperId} from '@/components/animated-wallpapers'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
-import {keyBy, preloadImage} from '@/utils/misc'
-import {tw} from '@/utils/tw'
 
 type WallpaperBase = {
 	id: string | undefined
@@ -14,122 +12,20 @@ type WallpaperBase = {
 	brandColorHsl: string
 }
 
-export const wallpapers = [
-	{
-		id: '1',
-		url: '/wallpapers/1.jpg',
-		brandColorHsl: '259 100% 59%',
-	},
-	{
-		id: '2',
-		url: '/wallpapers/2.jpg',
-		brandColorHsl: '6 56% 54%',
-	},
-	{
-		id: '3',
-		url: '/wallpapers/3.jpg',
-		brandColorHsl: '22 88% 40%',
-	},
-	{
-		id: '4',
-		url: '/wallpapers/4.jpg',
-		brandColorHsl: '198 100% 31%',
-	},
-	{
-		id: '5',
-		url: '/wallpapers/5.jpg',
-		brandColorHsl: '202 100% 33%',
-	},
-	{
-		id: '6',
-		url: '/wallpapers/6.jpg',
-		brandColorHsl: '160 100% 27%',
-	},
-	{
-		id: '7',
-		url: '/wallpapers/7.jpg',
-		brandColorHsl: '79 100% 25%',
-	},
-	{
-		id: '8',
-		url: '/wallpapers/8.jpg',
-		brandColorHsl: '185 100% 29%',
-	},
-	{
-		id: '9',
-		url: '/wallpapers/9.jpg',
-		brandColorHsl: '359 64% 62%',
-	},
-	{
-		id: '10',
-		url: '/wallpapers/10.jpg',
-		brandColorHsl: '18 75% 52%',
-	},
-	{
-		id: '11',
-		url: '/wallpapers/11.jpg',
-		brandColorHsl: '185 100% 29%',
-	},
-	{
-		id: '12',
-		url: '/wallpapers/12.jpg',
-		brandColorHsl: '332 84% 47%',
-	},
-	{
-		id: '13',
-		url: '/wallpapers/13.jpg',
-		brandColorHsl: '194 81% 39%',
-	},
-	{
-		id: '14',
-		url: '/wallpapers/14.jpg',
-		brandColorHsl: '328 87% 49%',
-	},
-	{
-		id: '15',
-		url: '/wallpapers/15.jpg',
-		brandColorHsl: '32 100% 36%',
-	},
-	{
-		id: '16',
-		url: '/wallpapers/16.jpg',
-		brandColorHsl: '265 100% 42%',
-	},
-	{
-		id: '17',
-		url: '/wallpapers/17.jpg',
-		brandColorHsl: '184 100% 25%',
-	},
-	{
-		id: '18',
-		url: '/wallpapers/18.jpg',
-		brandColorHsl: '259 100% 59%',
-	},
-	{
-		id: '19',
-		url: '/wallpapers/19.jpg',
-		brandColorHsl: '204 100% 41%',
-	},
-	{
-		id: '20',
-		url: '/wallpapers/20.jpg',
-		brandColorHsl: '259 100% 59%',
-	},
-	{
-		id: '21',
-		url: '/wallpapers/21.jpg',
-		brandColorHsl: '12 78% 50%',
-	},
-] as const satisfies readonly WallpaperBase[]
+export type WallpaperId = AnimatedWallpaperId
 
-export function getWallpaperThumbUrl(wallpaper: WallpaperBase) {
-	return `/wallpapers/generated-thumbs/${wallpaper.id}.jpg`
+export const wallpapersKeyed: Record<string, WallpaperBase> = Object.fromEntries(
+	animatedWallpaperIds.map((id) => [id, {id, url: '', brandColorHsl: animatedWallpapers[id].brandColorHsl}]),
+)
+
+export const wallpaperIds: string[] = [...animatedWallpaperIds]
+
+export function isAnimatedWallpaper(id: string | undefined): id is AnimatedWallpaperId {
+	return !!id && id in animatedWallpapers
 }
 
-export type Wallpaper = (typeof wallpapers)[number]
-export type WallpaperId = (typeof wallpapers)[number]['id']
-export const wallpapersKeyed = keyBy(wallpapers, 'id')
-export const wallpaperIds = wallpapers.map((w) => w.id)
+const defaultWallpaperId: WallpaperId = animatedWallpaperIds[0]
+const defaultWallpaper = wallpapersKeyed[defaultWallpaperId]
 
 // ---
 
@@ -139,42 +35,70 @@ const nullWallpaper = {
 	brandColorHsl: '0 0% 50%',
 } as const satisfies WallpaperBase
 
+// ─── Wallpaper animation settings ───────────────────────────────
+
+export type WallpaperSettings = {
+	paused: boolean
+	speed: number // 0.25 to 3
+	hueRotate: number // 0 to 360
+	brightness: number // 0.5 to 1.5
+	saturation: number // 0 to 2
+}
+
+const SETTINGS_KEY = 'livinity-wallpaper-settings'
+
+const defaultSettings: WallpaperSettings = {
+	paused: false,
+	speed: 1,
+	hueRotate: 0,
+	brightness: 1,
+	saturation: 1,
+}
+
+function loadSettings(): WallpaperSettings {
+	try {
+		const stored = localStorage.getItem(SETTINGS_KEY)
+		if (!stored) return defaultSettings
+		return {...defaultSettings, ...JSON.parse(stored)}
+	} catch {
+		return defaultSettings
+	}
+}
+
+function saveSettings(settings: WallpaperSettings) {
+	try {
+		localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+	} catch {}
+}
+
+// ---
+
 type WallpaperType = {
-	wallpaper: Wallpaper | typeof nullWallpaper
+	wallpaper: WallpaperBase
 	isLoading: boolean
-	prevWallpaper: Wallpaper | undefined
+	prevWallpaper: WallpaperBase | undefined
 	setWallpaperId: (id: WallpaperId) => void
 	wallpaperFullyVisible: boolean
 	setWallpaperFullyVisible: () => void
+	settings: WallpaperSettings
+	updateSettings: (partial: Partial<WallpaperSettings>) => void
 }
 
 const WallPaperContext = createContext<WallpaperType>(null as any)
-
-/*
-Scenarios:
-- First load, nothing in localStorage yet
-- Waiting for remote call
-	* Always show either local or null wallpaper
-- Remote and local are different
-	* Always 
-- Logged out vs. logged in
-	* When logged out, use the local storage value
-	* After logged in, use remote value
-*/
 
 export function WallpaperProviderConnected({children}: {children: ReactNode}) {
 	const remote = useRemoteWallpaper()
 
 	const remoteWallpaper = remote.wallpaper
-
-	// We want to avoid showing a wallpaper and then changing it later, unless we already had one cached locally
-	// since that's most likely going to be the right one. But after the remote call returns, we show the remote
-	// one if it returns (usually when user is logged in), and otherwise we show either the local one.
-	// The default one is loaded when nothing is in local storage yet.
-	const wallpaper = remote.isLoading ? nullWallpaper : remoteWallpaper || nullWallpaper
+	const wallpaper = remote.isLoading ? nullWallpaper : remoteWallpaper || defaultWallpaper
 
 	return (
-		<WallpaperProvider wallpaper={wallpaper} onWallpaperChange={(w) => remote.setWallpaperId(w.id)}>
+		<WallpaperProvider
+			wallpaper={wallpaper}
+			onWallpaperChange={(w) => {
+				if (w.id) remote.setWallpaperId(w.id as WallpaperId)
+			}}
+		>
 			{children}
 		</WallpaperProvider>
 	)
@@ -185,12 +109,13 @@ export function WallpaperProvider({
 	onWallpaperChange,
 	children,
 }: {
-	wallpaper: Wallpaper | typeof nullWallpaper
-	onWallpaperChange: (wallpaper: Wallpaper) => void
+	wallpaper: WallpaperBase
+	onWallpaperChange: (wallpaper: WallpaperBase) => void
 	children: ReactNode
 }) {
-	const [isLoading, setIsLoading] = useState(true)
-	const [wallpaperFullyVisible, setWallpaperFullyVisible] = useState(false)
+	const [isLoading, setIsLoading] = useState(false)
+	const [wallpaperFullyVisible, setWallpaperFullyVisible] = useState(true)
+	const [settings, setSettings] = useState<WallpaperSettings>(loadSettings)
 
 	const prevId = usePreviousDistinct(wallpaper.id)
 
@@ -198,12 +123,17 @@ export function WallpaperProvider({
 
 	useLayoutEffect(() => {
 		if (wallpaper.id === prevId) return
-		setWallpaperFullyVisible(false)
-		setIsLoading(true)
+		setWallpaperFullyVisible(true)
+		setIsLoading(false)
+	}, [wallpaper.id, prevId])
 
-		// preload image
-		preloadImage(wallpaper.url).then(() => setIsLoading(false))
-	}, [wallpaper.url, wallpaper.id, prevId])
+	const updateSettings = useCallback((partial: Partial<WallpaperSettings>) => {
+		setSettings((prev) => {
+			const next = {...prev, ...partial}
+			saveSettings(next)
+			return next
+		})
+	}, [])
 
 	return (
 		<WallPaperContext.Provider
@@ -216,6 +146,8 @@ export function WallpaperProvider({
 				},
 				wallpaperFullyVisible,
 				setWallpaperFullyVisible: () => setWallpaperFullyVisible(true),
+				settings,
+				updateSettings,
 			}}
 		>
 			{children}
@@ -223,8 +155,9 @@ export function WallpaperProvider({
 	)
 }
 
-export function useWallpaperCssVars(wallpaperId?: WallpaperId) {
-	const {brandColorHsl} = wallpaperId ? wallpapersKeyed[wallpaperId] : nullWallpaper
+export function useWallpaperCssVars(wallpaperId?: string) {
+	const entry = wallpaperId ? wallpapersKeyed[wallpaperId] : undefined
+	const brandColorHsl = entry?.brandColorHsl ?? nullWallpaper.brandColorHsl
 
 	useLayoutEffect(() => {
 		const el = document.documentElement
@@ -234,9 +167,6 @@ export function useWallpaperCssVars(wallpaperId?: WallpaperId) {
 	}, [brandColorHsl])
 }
 
-/**
- * Get the wallpaper from the user's settings. However, we want to preserve the wallpaper after logout locally so they see it when they log in again.
- */
 export const useWallpaper = () => {
 	const ctx = useContext(WallPaperContext)
 	if (!ctx) throw new Error('useWallpaper must be used within WallpaperProvider')
@@ -252,69 +182,36 @@ export function Wallpaper({
 	stayBlurred?: boolean
 	isPreview?: boolean
 }) {
-	const {wallpaper, prevWallpaper, isLoading, wallpaperFullyVisible, setWallpaperFullyVisible} = useWallpaper()
+	const {wallpaper, settings} = useWallpaper()
 
 	if (!wallpaper || !wallpaper.id) return null
 
-	return (
-		<>
-			<FadeInImg
-				key={wallpaper.url + '-loading'}
-				src={getWallpaperThumbUrl(wallpaper)}
-				className={cn(
-					'pointer-events-none fixed inset-0 w-full scale-125 object-cover object-center blur-[var(--wallpaper-blur)] duration-500',
-					isPreview && 'absolute h-full',
-					!isPreview && 'h-lvh',
-					className,
-				)}
-			/>
-			{!isLoading && !stayBlurred && (
-				<FadeInImg
-					key={wallpaper.url}
-					src={wallpaper.url}
-					className={cn(
-						// Using black bg by default because sometimes we want to show the wallpaper before it's loaded, and over other elements
-						tw`pointer-events-none fixed inset-0 w-full bg-white object-cover object-center duration-500 animate-in fade-in`,
-						isPreview && 'absolute h-full',
-						!isPreview && 'h-lvh',
-						className,
-					)}
-					style={{
-						animation: !stayBlurred && 'animate-unblur 0.7s',
-					}}
-					onAnimationEnd={setWallpaperFullyVisible}
-				/>
-			)}
-			{/* Put this last so that we can see it exiting over the new wallpaper */}
-			{prevWallpaper && !wallpaperFullyVisible && (
-				<div
-					key={prevWallpaper.url}
-					className={cn(
-						'pointer-events-none fixed inset-0 bg-cover bg-center duration-500 animate-out fade-out zoom-out-125 fill-mode-both',
-						isPreview && 'absolute',
-						className,
-					)}
-					style={{
-						backgroundImage: `url(${prevWallpaper.url})`,
-					}}
-				/>
-			)}
-			{/* {isLoading && <div className='fixed left-0 top-0 '>Loading...</div>} */}
-		</>
-	)
+	if (isAnimatedWallpaper(wallpaper.id)) {
+		const AnimatedComponent = animatedWallpapers[wallpaper.id].component
+		const hasFilter = settings.hueRotate !== 0 || settings.brightness !== 1 || settings.saturation !== 1
+		const filterStyle = hasFilter
+			? {filter: `hue-rotate(${settings.hueRotate}deg) brightness(${settings.brightness}) saturate(${settings.saturation})`}
+			: undefined
+
+		return (
+			<div style={filterStyle} className={cn(isPreview && 'absolute inset-0 overflow-hidden')}>
+				<AnimatedComponent paused={settings.paused} speed={settings.speed} />
+			</div>
+		)
+	}
+
+	return null
 }
 
 function useRemoteWallpaper(onSuccess?: (id: WallpaperId) => void) {
-	// Refetching causes lots of failed calls to the backend on bare pages before we're logged in.
 	const userQ = trpcReact.user.wallpaper.useQuery(undefined, {
 		retry: false,
 	})
 	const wallpaperQId = userQ.data
 
-	// Handle the onSuccess side effect
 	useEffect(() => {
 		if (userQ.isSuccess && wallpaperQId && arrayIncludes(wallpaperIds, wallpaperQId)) {
-			onSuccess?.(wallpaperQId)
+			onSuccess?.(wallpaperQId as WallpaperId)
 		}
 	}, [userQ.isSuccess, wallpaperQId, onSuccess])
 
@@ -334,13 +231,6 @@ function useRemoteWallpaper(onSuccess?: (id: WallpaperId) => void) {
 	}
 }
 
-/**
- * Updates local storage with the wallpaper id from the backend.
- *
- * There's a little dance that needs to happen with wallpapers. When we first load the page, we don't have the TRPC context yet, and we determine the wallpaper from
- * local storage. Usually, this id will be correct. However, if the user changed the wallpaper on another browser,
- * the local storage value will be out of date. So we load the old wallpaper and wait until the TRPC context is available to load the correct one.
- */
 export function RemoteWallpaperInjector() {
 	const remote = useRemoteWallpaper()
 	const {wallpaper, setWallpaperId} = useWallpaper()
@@ -348,9 +238,8 @@ export function RemoteWallpaperInjector() {
 	const localId = wallpaper?.id
 	const remoteId = remote.wallpaper?.id
 
-	// Chance of circular dependency here, so it's important to ensure that the dependencies do not invalidate unless absolutely necessary.
 	useEffect(() => {
-		if (remoteId && remoteId !== localId) setWallpaperId(remoteId)
+		if (remoteId && remoteId !== localId) setWallpaperId(remoteId as WallpaperId)
 	}, [remoteId, localId, setWallpaperId])
 
 	return null

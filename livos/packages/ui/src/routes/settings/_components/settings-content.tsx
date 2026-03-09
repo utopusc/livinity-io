@@ -59,7 +59,8 @@ import {useBackups} from '@/features/backups/hooks/use-backups'
 import {useApps} from '@/providers/apps'
 import {DesktopPreviewFrame} from '@/modules/desktop/desktop-preview'
 import {DesktopPreviewConnected} from '@/modules/desktop/desktop-preview-basic'
-import {useWallpaper, wallpapers, getWallpaperThumbUrl} from '@/providers/wallpaper'
+import {animatedWallpapers, animatedWallpaperIds} from '@/components/animated-wallpapers'
+import {useWallpaper} from '@/providers/wallpaper'
 import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/settings/_components/language-dropdown'
 import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
 import {Button} from '@/shadcn-components/ui/button'
@@ -519,27 +520,134 @@ function InlineChangePasswordDialog({open, onOpenChange}: {open: boolean; onOpen
 }
 
 function WallpaperSection() {
-	const {wallpaper, setWallpaperId} = useWallpaper()
+	const {wallpaper, setWallpaperId, settings, updateSettings} = useWallpaper()
 
 	return (
-		<div className='grid grid-cols-2 gap-4 md:grid-cols-3'>
-			{wallpapers.map((w) => (
-				<button
-					key={w.id}
-					onClick={() => setWallpaperId(w.id)}
-					className={cn(
-						'relative aspect-video overflow-hidden rounded-radius-md bg-surface-base bg-cover bg-center transition-all hover:ring-2 hover:ring-brand/40 hover:scale-[1.02]',
-						wallpaper.id === w.id && 'ring-3 ring-brand'
-					)}
-					style={{backgroundImage: `url(${getWallpaperThumbUrl(w)})`}}
-				>
-					{wallpaper.id === w.id && (
-						<div className='absolute inset-0 flex items-center justify-center bg-black/20'>
-							<TbCheck className='h-8 w-8 text-white' />
+		<div className='flex flex-col gap-6'>
+			{/* Wallpaper grid */}
+			<div className='grid grid-cols-2 gap-4 md:grid-cols-3'>
+				{animatedWallpaperIds.map((id) => (
+					<button
+						key={id}
+						onClick={() => setWallpaperId(id)}
+						className={cn(
+							'relative aspect-video overflow-hidden rounded-radius-md transition-all hover:ring-2 hover:ring-brand/40 hover:scale-[1.02]',
+							wallpaper.id === id && 'ring-3 ring-brand'
+						)}
+						style={{backgroundColor: `hsl(${animatedWallpapers[id].brandColorHsl})`}}
+					>
+						<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-2 pb-1.5 pt-4'>
+							<span className='text-[11px] font-medium text-white/90'>{animatedWallpapers[id].name}</span>
 						</div>
-					)}
-				</button>
-			))}
+						{wallpaper.id === id && (
+							<div className='absolute inset-0 flex items-center justify-center bg-black/20'>
+								<TbCheck className='h-8 w-8 text-white' />
+							</div>
+						)}
+					</button>
+				))}
+			</div>
+
+			{/* Animation settings */}
+			<div className='flex flex-col gap-4 rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='flex items-center justify-between'>
+					<span className='text-sm font-medium text-text-primary'>Animation</span>
+					<button
+						onClick={() => updateSettings({paused: !settings.paused})}
+						className={cn(
+							'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+							settings.paused
+								? 'bg-brand/20 text-brand hover:bg-brand/30'
+								: 'bg-surface-2 text-text-secondary hover:bg-surface-2/80'
+						)}
+					>
+						{settings.paused ? 'Resume' : 'Pause'}
+					</button>
+				</div>
+
+				<WallpaperSlider
+					label='Speed'
+					value={settings.speed}
+					min={0.25}
+					max={3}
+					step={0.25}
+					displayValue={`${settings.speed}x`}
+					onChange={(speed) => updateSettings({speed})}
+				/>
+
+				<WallpaperSlider
+					label='Color'
+					value={settings.hueRotate}
+					min={0}
+					max={360}
+					step={10}
+					displayValue={`${settings.hueRotate}°`}
+					onChange={(hueRotate) => updateSettings({hueRotate})}
+				/>
+
+				<WallpaperSlider
+					label='Brightness'
+					value={settings.brightness}
+					min={0.5}
+					max={1.5}
+					step={0.1}
+					displayValue={`${Math.round(settings.brightness * 100)}%`}
+					onChange={(brightness) => updateSettings({brightness})}
+				/>
+
+				<WallpaperSlider
+					label='Saturation'
+					value={settings.saturation}
+					min={0}
+					max={2}
+					step={0.1}
+					displayValue={`${Math.round(settings.saturation * 100)}%`}
+					onChange={(saturation) => updateSettings({saturation})}
+				/>
+
+				{(settings.speed !== 1 || settings.hueRotate !== 0 || settings.brightness !== 1 || settings.saturation !== 1) && (
+					<button
+						onClick={() => updateSettings({speed: 1, hueRotate: 0, brightness: 1, saturation: 1})}
+						className='self-start text-xs font-medium text-text-tertiary hover:text-text-secondary transition-colors'
+					>
+						Reset to defaults
+					</button>
+				)}
+			</div>
+		</div>
+	)
+}
+
+function WallpaperSlider({
+	label,
+	value,
+	min,
+	max,
+	step,
+	displayValue,
+	onChange,
+}: {
+	label: string
+	value: number
+	min: number
+	max: number
+	step: number
+	displayValue: string
+	onChange: (value: number) => void
+}) {
+	return (
+		<div className='flex items-center gap-3'>
+			<span className='w-20 shrink-0 text-xs text-text-secondary'>{label}</span>
+			<input
+				type='range'
+				min={min}
+				max={max}
+				step={step}
+				value={value}
+				onChange={(e) => onChange(parseFloat(e.target.value))}
+				className='h-1 flex-1 cursor-pointer appearance-none rounded-full bg-surface-2 accent-brand [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand'
+			/>
+			<span className='w-10 shrink-0 text-right text-xs tabular-nums text-text-tertiary'>{displayValue}</span>
 		</div>
 	)
 }

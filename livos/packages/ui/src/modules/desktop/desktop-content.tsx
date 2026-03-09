@@ -1,10 +1,7 @@
 import {motion, Variant} from 'framer-motion'
 import {useLocation} from 'react-router-dom'
 
-import {Spotlight} from '@/components/motion-primitives/spotlight'
-import {Tilt} from '@/components/motion-primitives/tilt'
 import {useApps} from '@/providers/apps'
-import {useIsTouchDevice} from '@/features/files/hooks/use-is-touch-device'
 import {trpcReact} from '@/trpc/trpc'
 
 import {AppGrid} from './app-grid/app-grid'
@@ -20,7 +17,6 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	const name = getQuery.data?.name
 
 	const {userApps, isLoading} = useApps()
-	const isTouchDevice = useIsTouchDevice()
 
 	if (isLoading) return null
 	if (!userApps) return null
@@ -77,19 +73,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 								ease: 'easeOut',
 							}}
 						>
-							{isTouchDevice ? (
-								<AppIconConnected appId={app.id} />
-							) : (
-								<Tilt rotationFactor={6} isRevese springOptions={{stiffness: 300, damping: 20}}>
-									<div className='relative'>
-										<Spotlight
-											className='from-blue-200/40 via-transparent to-transparent blur-xl'
-											size={120}
-										/>
-										<AppIconConnected appId={app.id} />
-									</div>
-								</Tilt>
-							)}
+							<AppIconConnected appId={app.id} />
 						</motion.div>
 					))}
 				/>
