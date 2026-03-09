@@ -48,6 +48,11 @@ const SVGFilter = () => (
 			<feColorMatrix values='1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -9' result='blob' />
 			<feBlend in='SourceGraphic' in2='blob' />
 		</filter>
+		<filter id='liquid-glass' x='-20%' y='-20%' width='140%' height='140%'>
+			<feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='42' result='noise' />
+			<feDisplacementMap in='SourceGraphic' in2='noise' scale='6' xChannelSelector='R' yChannelSelector='G' result='displaced' />
+			<feGaussianBlur in='displaced' stdDeviation='0.6' result='blurred' />
+		</filter>
 	</svg>
 )
 
@@ -58,7 +63,15 @@ const SVGFilter = () => (
 function ShortcutButton({icon, onSelect}: {icon: React.ReactNode; onSelect: () => void}) {
 	return (
 		<button type='button' onClick={onSelect}>
-			<div className='cursor-pointer rounded-full opacity-30 transition-[opacity,shadow] duration-200 hover:opacity-100 hover:shadow-lg'>
+			<div
+				className='cursor-pointer rounded-full opacity-30 transition-[opacity,shadow] duration-200 hover:opacity-100 hover:shadow-lg'
+				style={{
+					backdropFilter: 'blur(50px) saturate(200%)',
+					WebkitBackdropFilter: 'blur(50px) saturate(200%)',
+					background: 'rgba(255,255,255,0.45)',
+					boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.6), inset 0 -1px 2px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.08)',
+				}}
+			>
 				<div className='flex aspect-square size-16 items-center justify-center'>{icon}</div>
 			</div>
 		</button>
@@ -139,7 +152,7 @@ function SearchResultCard({
 			onClick={onSelect}
 			className={cn(
 				'group/card flex w-full items-center justify-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150',
-				isSelected ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'hover:bg-white/60',
+				isSelected ? 'bg-white/50 shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.5)]' : 'hover:bg-white/30',
 			)}
 		>
 			<div className='flex aspect-square size-8 shrink-0 items-center justify-center [&_svg]:size-5 [&_svg]:stroke-[1.5]'>
@@ -177,7 +190,7 @@ function SearchResultsContainer({
 			layout
 			ref={listRef as React.RefObject<HTMLDivElement>}
 			onMouseLeave={() => onHover(null)}
-			className='flex max-h-80 w-full flex-col overflow-y-auto border-t border-neutral-200/60 bg-neutral-50/80 px-2 py-1.5'
+			className='flex max-h-80 w-full flex-col overflow-y-auto border-t border-white/30 bg-white/30 px-2 py-1.5'
 		>
 			{searchResults.map((result, index) => (
 				<motion.div
@@ -610,7 +623,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 						style={{filter: 'url(#blob)'}}
 						className={cn(
 							'z-20 flex w-full max-w-2xl items-center justify-end gap-4 group',
-							'[&>div]:rounded-full [&>div]:bg-white/95 [&>div]:text-neutral-800 [&>div]:backdrop-blur-2xl',
+							'[&>div]:rounded-[28px] [&>div]:text-neutral-800',
 							'[&_svg]:size-6 [&_svg]:stroke-[1.4]',
 						)}
 					>
@@ -620,8 +633,13 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 								transition={{
 									layout: {duration: 0.5, type: 'spring', bounce: 0.2},
 								}}
-								style={{borderRadius: '24px'}}
-								className='relative z-10 flex h-full w-full flex-col items-center justify-start overflow-hidden border border-neutral-200/60 shadow-[0_8px_40px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.03)]'
+								style={{
+									borderRadius: '28px',
+									filter: 'url(#liquid-glass)',
+									backdropFilter: 'blur(50px) saturate(200%)',
+									WebkitBackdropFilter: 'blur(50px) saturate(200%)',
+								}}
+								className='relative z-10 flex h-full w-full flex-col items-center justify-start overflow-hidden border border-white/40 bg-white/45 shadow-[inset_0_1px_3px_rgba(255,255,255,0.7),inset_0_-1px_3px_rgba(0,0,0,0.08),inset_0_0_20px_rgba(255,255,255,0.12),0_8px_32px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.06)]'
 							>
 								<SpotlightInput
 									placeholder={
@@ -653,7 +671,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 								{searchValue && searchResults.length === 0 && !appsLoading && (
 									<motion.div
 										layout
-										className='border-t border-neutral-200/60 bg-neutral-50/80 px-5 py-6 text-center text-[13px] text-neutral-400'
+										className='border-t border-white/30 bg-white/30 px-5 py-6 text-center text-[13px] text-neutral-400'
 									>
 										{t('no-results-found')}
 									</motion.div>
