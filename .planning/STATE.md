@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v6.0 -- Claude Code to Kimi Code Migration
-**Current focus:** Phase 2 - Configuration Layer (COMPLETE)
+**Current focus:** Phase 3 - Kimi Agent Runner (IN PROGRESS)
 
 ## Current Position
 
 Milestone: v6.0 (Claude Code to Kimi Code Migration)
-Phase: 2 of 4 (Configuration Layer)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-09 -- Completed 02-02-PLAN.md (Settings UI redesign for Kimi)
+Phase: 3 of 4 (Kimi Agent Runner)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-09 -- Completed 03-01-PLAN.md (Server setup: Python 3.12, uv, Kimi CLI)
 
-Progress: [#####.....] 50% (4/8 plans)
+Progress: [######....] 62% (5/8 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 3 min
-- Total execution time: 12 min
+- Total plans completed: 5
+- Average duration: 2.8 min
+- Total execution time: 14 min
 
 **By Phase:**
 
@@ -31,6 +31,7 @@ Progress: [#####.....] 50% (4/8 plans)
 |-------|-------|-------|----------|
 | 01-kimi-provider | 2/2 | 5 min | 2.5 min |
 | 02-configuration-layer | 2/2 | 7 min | 3.5 min |
+| 03-kimi-agent-runner | 1/2 | 2 min | 2 min |
 
 ## Accumulated Context
 
@@ -52,10 +53,13 @@ Progress: [#####.....] 50% (4/8 plans)
 - Model tier stored as Nexus config agent.tier using existing flash/sonnet/opus enum values (02-02)
 - Tier mapping: fast=K2.5 Flash, balanced=K2.5, powerful=K2.5 Pro (02-02)
 - Compact AiConfigSection omits model selection; full page only (02-02)
+- Deploy script pattern for server setup -- repeatable, version-controlled, idempotent (03-01)
+- uv tool install kimi-code as primary install method, official installer as fallback (03-01)
+- PATH in both .profile and .bashrc for PM2 and interactive shell coverage (03-01)
 
 ### Pending Todos
 
-None yet.
+- Run `nexus/scripts/install-kimi.sh` on server4 (45.137.194.103) to complete server setup
 
 ### Blockers/Concerns
 
@@ -63,9 +67,10 @@ None yet.
 - Device auth API endpoints found in GitHub issues, not official docs -- needs verification in Phase 2
 - Model IDs need runtime verification via `kimi info` on server
 - Pre-existing TypeScript errors in livinityd (toolRegistry, subagent typing, apps.ts) -- unrelated to migration
+- Install script needs to be run on server before Plan 03-02 can be fully tested
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 02-02-PLAN.md (Settings UI redesign for Kimi) -- Phase 2 complete
+Stopped at: Completed 03-01-PLAN.md (Server setup: Python 3.12, uv, Kimi CLI)
 Resume file: None
