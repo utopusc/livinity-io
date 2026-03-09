@@ -71,48 +71,27 @@ export default router({
 	/** Get current AI configuration (keys are masked) */
 	getConfig: privateProcedure.query(async ({ctx}) => {
 		const redis = ctx.livinityd.ai.redis
-		const geminiKey = await redis.get('livos:config:gemini_api_key') || process.env.GEMINI_API_KEY || ''
-		const anthropicKey = await redis.get('nexus:config:anthropic_api_key') || process.env.ANTHROPIC_API_KEY || ''
-		const primaryProvider = await redis.get('nexus:config:primary_provider') || 'claude'
+		const kimiKey = await redis.get('nexus:config:kimi_api_key') || ''
 		return {
-			geminiApiKey: maskKey(geminiKey),
-			hasGeminiKey: geminiKey.length > 0,
-			anthropicApiKey: maskKey(anthropicKey),
-			hasAnthropicKey: anthropicKey.length > 0,
-			primaryProvider,
+			kimiApiKey: maskKey(kimiKey),
+			hasKimiKey: kimiKey.length > 0,
 		}
 	}),
 
-	/** Set AI configuration (API keys and provider selection) */
+	/** Set AI configuration (Kimi API key) */
 	setConfig: privateProcedure
 		.input(
 			z.object({
-				geminiApiKey: z.string().min(1).max(256).optional(),
-				anthropicApiKey: z.string().min(1).max(256).optional(),
-				primaryProvider: z.enum(['claude', 'gemini']).optional(),
+				kimiApiKey: z.string().min(1).max(256).optional(),
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
 			const redis = ctx.livinityd.ai.redis
-
-			if (input.geminiApiKey) {
-				await redis.set('livos:config:gemini_api_key', input.geminiApiKey)
-				await redis.publish('livos:config:updated', 'gemini_api_key')
-				ctx.livinityd.logger.log('Gemini API key updated via Settings UI')
+			if (input.kimiApiKey) {
+				await redis.set('nexus:config:kimi_api_key', input.kimiApiKey)
+				await redis.publish('livos:config:updated', 'kimi_api_key')
+				ctx.livinityd.logger.log('Kimi API key updated via Settings UI')
 			}
-
-			if (input.anthropicApiKey) {
-				await redis.set('nexus:config:anthropic_api_key', input.anthropicApiKey)
-				await redis.publish('livos:config:updated', 'anthropic_api_key')
-				ctx.livinityd.logger.log('Anthropic API key updated via Settings UI')
-			}
-
-			if (input.primaryProvider) {
-				await redis.set('nexus:config:primary_provider', input.primaryProvider)
-				await redis.publish('livos:config:updated', 'primary_provider')
-				ctx.livinityd.logger.log(`Primary provider set to ${input.primaryProvider} via Settings UI`)
-			}
-
 			return {success: true}
 		}),
 
@@ -120,130 +99,71 @@ export default router({
 	validateKey: privateProcedure
 		.input(
 			z.object({
-				provider: z.enum(['claude', 'gemini']),
+				provider: z.enum(['kimi']),
 				apiKey: z.string().min(1).max(256),
 			}),
 		)
 		.mutation(async ({ctx, input}): Promise<{valid: boolean; error?: string}> => {
 			try {
-				if (input.provider === 'claude') {
-					const response = await fetch('https://api.anthropic.com/v1/messages', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'x-api-key': input.apiKey,
-							'anthropic-version': '2023-06-01',
-						},
-						body: JSON.stringify({
-							model: 'claude-haiku-4-5-20250610',
-							max_tokens: 1,
-							messages: [{role: 'user', content: 'Hi'}],
-						}),
-					})
-
-					if (response.status === 401) {
-						return {valid: false, error: 'Invalid API key'}
-					}
-					if (response.status === 403) {
-						return {valid: false, error: 'API key does not have permission'}
-					}
-					// 200 or 429 (rate limited) both mean the key is valid
-					if (response.ok || response.status === 429) {
-						return {valid: true}
-					}
-					const data = (await response.json().catch(() => ({}))) as {error?: {message?: string}}
-					return {valid: false, error: data.error?.message || `Unexpected status: ${response.status}`}
-				} else if (input.provider === 'gemini') {
-					const response = await fetch(
-						`https://generativelanguage.googleapis.com/v1beta/models?key=${input.apiKey}`,
-					)
-
-					if (response.status === 400 || response.status === 403) {
-						return {valid: false, error: 'Invalid API key'}
-					}
-					if (response.ok) {
-						return {valid: true}
-					}
-					return {valid: false, error: `Unexpected status: ${response.status}`}
+				// Validate by listing models -- lightweight API call
+				const response = await fetch('https://api.kimi.com/coding/v1/models', {
+					headers: {
+						'Authorization': `Bearer ${input.apiKey}`,
+					},
+				})
+				if (response.status === 401) {
+					return {valid: false, error: 'Invalid API key'}
 				}
-
-				return {valid: false, error: 'Unknown provider'}
+				if (response.status === 403) {
+					return {valid: false, error: 'API key does not have permission'}
+				}
+				if (response.ok || response.status === 429) {
+					return {valid: true}
+				}
+				const data = (await response.json().catch(() => ({}))) as {error?: {message?: string}}
+				return {valid: false, error: data.error?.message || `Unexpected status: ${response.status}`}
 			} catch (error) {
-				ctx.livinityd.logger.error('API key validation failed', error)
+				ctx.livinityd.logger.error('Kimi API key validation failed', error)
 				return {valid: false, error: getErrorMessage(error)}
 			}
 		}),
 
-	// ── Claude CLI / SDK Auth ─────────────────────────────────
+	// ── Kimi Auth ────────────────────────────────────────────
 
-	/** Check Claude CLI installation and auth status (for SDK subscription mode) */
-	getClaudeCliStatus: privateProcedure.query(async ({ctx}) => {
+	/** Check Kimi auth status (proxies to Nexus /api/kimi/status) */
+	getKimiStatus: privateProcedure.query(async ({ctx}) => {
 		try {
 			const nexusUrl = getNexusApiUrl()
-			const response = await fetch(`${nexusUrl}/api/claude-cli/status`, {
+			const response = await fetch(`${nexusUrl}/api/kimi/status`, {
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
 				throw new Error(`Nexus API error: ${response.status}`)
 			}
 			return (await response.json()) as {
-				installed: boolean
 				authenticated: boolean
-				user?: string
-				authMethod: 'api-key' | 'sdk-subscription'
+				hasApiKey: boolean
+				provider: string
 			}
 		} catch (error) {
-			ctx.livinityd.logger.error('Failed to get Claude CLI status', error)
-			return {installed: false, authenticated: false, authMethod: 'api-key' as const}
+			ctx.livinityd.logger.error('Failed to get Kimi status', error)
+			return {authenticated: false, hasApiKey: false, provider: 'kimi'}
 		}
 	}),
 
-	/** Start Claude CLI OAuth login — returns URL user opens in browser to authenticate */
-	startClaudeLogin: privateProcedure.mutation(async ({ctx}) => {
-		try {
-			const nexusUrl = getNexusApiUrl()
-			const response = await fetch(`${nexusUrl}/api/claude-cli/login`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
-				},
-			})
-			if (!response.ok) {
-				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: errorData.error || `Nexus API error: ${response.status}`,
-				})
-			}
-			return (await response.json()) as {
-				url?: string
-				error?: string
-				alreadyAuthenticated?: boolean
-			}
-		} catch (error) {
-			if (error instanceof TRPCError) throw error
-			ctx.livinityd.logger.error('Failed to start Claude login', error)
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: getErrorMessage(error) || 'Failed to start Claude login',
-			})
-		}
-	}),
-
-	/** Submit OAuth code to the running claude auth login process */
-	submitClaudeLoginCode: privateProcedure
-		.input(z.object({code: z.string().min(1)}))
+	/** Save Kimi API key (proxies to Nexus /api/kimi/login) */
+	kimiLogin: privateProcedure
+		.input(z.object({apiKey: z.string().min(1)}))
 		.mutation(async ({ctx, input}) => {
 			try {
 				const nexusUrl = getNexusApiUrl()
-				const response = await fetch(`${nexusUrl}/api/claude-cli/login-code`, {
+				const response = await fetch(`${nexusUrl}/api/kimi/login`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
 						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
 					},
-					body: JSON.stringify({code: input.code}),
+					body: JSON.stringify({apiKey: input.apiKey}),
 				})
 				if (!response.ok) {
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
@@ -252,21 +172,22 @@ export default router({
 						message: errorData.error || `Nexus API error: ${response.status}`,
 					})
 				}
-				return (await response.json()) as {success: boolean; error?: string}
+				return (await response.json()) as {success: boolean}
 			} catch (error) {
 				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to save Kimi API key', error)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: getErrorMessage(error) || 'Failed to submit login code',
+					message: getErrorMessage(error) || 'Failed to save Kimi API key',
 				})
 			}
 		}),
 
-	/** Log out from Claude (delete credentials) */
-	claudeLogout: privateProcedure.mutation(async ({ctx}) => {
+	/** Remove Kimi API key (proxies to Nexus /api/kimi/logout) */
+	kimiLogout: privateProcedure.mutation(async ({ctx}) => {
 		try {
 			const nexusUrl = getNexusApiUrl()
-			const response = await fetch(`${nexusUrl}/api/claude-cli/logout`, {
+			const response = await fetch(`${nexusUrl}/api/kimi/logout`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -280,27 +201,16 @@ export default router({
 					message: errorData.error || `Nexus API error: ${response.status}`,
 				})
 			}
-			return (await response.json()) as {success: boolean; error?: string}
+			return (await response.json()) as {success: boolean}
 		} catch (error) {
 			if (error instanceof TRPCError) throw error
-			ctx.livinityd.logger.error('Failed to logout from Claude', error)
+			ctx.livinityd.logger.error('Failed to remove Kimi API key', error)
 			throw new TRPCError({
 				code: 'INTERNAL_SERVER_ERROR',
-				message: getErrorMessage(error) || 'Failed to logout',
+				message: getErrorMessage(error) || 'Failed to remove Kimi API key',
 			})
 		}
 	}),
-
-	/** Set Claude auth method (api-key or sdk-subscription) */
-	setClaudeAuthMethod: privateProcedure
-		.input(z.object({method: z.enum(['api-key', 'sdk-subscription'])}))
-		.mutation(async ({ctx, input}) => {
-			const redis = ctx.livinityd.ai.redis
-			await redis.set('nexus:config:claude_auth_method', input.method)
-			await redis.publish('livos:config:updated', 'claude_auth_method')
-			ctx.livinityd.logger.log(`Claude auth method set to ${input.method} via Settings UI`)
-			return {success: true}
-		}),
 
 	// ── Nexus Config ─────────────────────────────────────────
 
