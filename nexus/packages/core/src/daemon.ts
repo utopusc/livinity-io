@@ -1628,7 +1628,7 @@ ${task}`;
             return { success: false, output: '', error: `No chat ID for ${channel}. Send a message to the bot first to register a chat.` };
           }
 
-          const success = await this.config.channelManager.sendMessage(
+          const success = await this.config.channelManager!.sendMessage(
             channel as 'telegram' | 'discord' | 'slack' | 'matrix',
             targetChatId,
             text,
