@@ -181,65 +181,43 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   // ── API Key Authentication (all /api/* routes below require auth) ──
   app.use('/api', requireApiKey);
 
-  // ── Claude CLI Status & Login ────────────────────────────────
-  app.get('/api/claude-cli/status', async (_req, res) => {
+  // ── Kimi Auth ────────────────────────────────────────────────
+  app.get('/api/kimi/status', async (_req, res) => {
     try {
-      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-      if (!claudeProvider || typeof claudeProvider.getCliStatus !== 'function') {
-        res.json({ installed: false, authenticated: false, authMethod: 'api-key' });
-        return;
-      }
-      const status = await claudeProvider.getCliStatus();
-      const authMethod = await claudeProvider.getAuthMethod();
-      res.json({ ...status, authMethod });
+      const apiKey = await redis.get('nexus:config:kimi_api_key');
+      const hasApiKey = !!apiKey && apiKey.length > 0;
+      res.json({
+        authenticated: hasApiKey,
+        hasApiKey,
+        provider: 'kimi',
+      });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
   });
 
-  /** Start Claude CLI OAuth login — returns a URL the user opens in browser */
-  app.post('/api/claude-cli/login', async (_req, res) => {
+  app.post('/api/kimi/login', async (req, res) => {
     try {
-      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-      if (!claudeProvider || typeof claudeProvider.startLogin !== 'function') {
-        res.status(503).json({ error: 'Claude provider not available' });
+      const { apiKey } = req.body as { apiKey?: string };
+      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        res.status(400).json({ error: 'Missing or empty "apiKey" in request body' });
         return;
       }
-      const result = await claudeProvider.startLogin();
-      res.json(result);
+      await redis.set('nexus:config:kimi_api_key', apiKey.trim());
+      await redis.publish('livos:config:updated', 'kimi_api_key');
+      logger.info('Kimi API key saved via /api/kimi/login');
+      res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
   });
 
-  app.post('/api/claude-cli/login-code', async (req, res) => {
+  app.post('/api/kimi/logout', async (_req, res) => {
     try {
-      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-      if (!claudeProvider || typeof claudeProvider.submitLoginCode !== 'function') {
-        res.status(503).json({ error: 'Claude provider not available' });
-        return;
-      }
-      const { code } = req.body as { code?: string };
-      if (!code || typeof code !== 'string') {
-        res.status(400).json({ error: 'Missing "code" in request body' });
-        return;
-      }
-      const result = await claudeProvider.submitLoginCode(code);
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: formatErrorMessage(err) });
-    }
-  });
-
-  app.post('/api/claude-cli/logout', async (_req, res) => {
-    try {
-      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-      if (!claudeProvider || typeof claudeProvider.logout !== 'function') {
-        res.status(503).json({ error: 'Claude provider not available' });
-        return;
-      }
-      const result = await claudeProvider.logout();
-      res.json(result);
+      await redis.del('nexus:config:kimi_api_key');
+      await redis.publish('livos:config:updated', 'kimi_api_key');
+      logger.info('Kimi API key removed via /api/kimi/logout');
+      res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
