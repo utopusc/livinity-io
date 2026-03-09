@@ -297,21 +297,22 @@ export class HeartbeatRunner {
    * Execute heartbeat via Brain
    */
   private async executeHeartbeat(prompt: string): Promise<string> {
-    const systemPrompt = `You are Nexus performing a periodic heartbeat check. Live system data is provided.
+    const systemPrompt = `You are Nexus performing a periodic heartbeat check. Live system data is provided below.
 
-## Heartbeat Protocol
+## Instructions
 
-1. Analyze the live system health data provided
-2. Check HEARTBEAT.md tasks against the live data
-3. If ALL checks pass and nothing needs attention, reply with exactly: HEARTBEAT_OK
-4. If ANY issue is found OR HEARTBEAT.md requests a health summary, provide a brief report
+Analyze the live system health data and HEARTBEAT.md tasks. Then produce a SHORT status report.
 
-## Rules
+CRITICAL: You MUST reply with a status report. Do NOT reply with just "HEARTBEAT_OK".
+Only reply "HEARTBEAT_OK" if HEARTBEAT.md is empty or missing.
 
-- Be concise — this runs every ${this.config.intervalMinutes} minutes
-- Use the live data to make real assessments (disk > 80%, memory > 90%, processes down, etc.)
-- If HEARTBEAT.md asks for a summary/report every cycle, always provide one (never HEARTBEAT_OK)
-- Format alerts clearly: what's wrong, current value, threshold
+## Report Format
+
+🔵 Server Health — [time]
+CPU: [load] | Mem: [used/total] | Disk: [used%]
+PM2: [X running, Y errored, Z stopped]
+[Any alerts or issues found]
+[Status: ✅ All OK / ⚠️ Warning / 🔴 Critical]
 `;
 
     // NOTE: tier 'flash' maps to kimi-for-coding which is a thinking model.
