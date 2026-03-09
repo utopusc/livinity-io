@@ -69,7 +69,7 @@ export function GmailContent() {
 	const status = statusQ.data
 
 	const handleConnect = () => {
-		startOAuthMutation.mutate()
+		startOAuthMutation.mutate({publicUrl: window.location.origin})
 	}
 
 	const handleDisconnect = () => {
