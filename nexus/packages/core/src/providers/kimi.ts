@@ -269,11 +269,12 @@ export class KimiProvider implements AIProvider {
     }
 
     logger.info('KimiProvider: refreshing OAuth token...');
+    const kimiHeaders = getKimiHeaders('');
     const response = await fetch(`${KIMI_OAUTH_HOST}/api/oauth/token`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        ...getKimiHeaders(''),  // no auth needed for refresh, but include platform headers
+        ...kimiHeaders,
+        'Content-Type': 'application/x-www-form-urlencoded',  // must override JSON for OAuth
       },
       body: new URLSearchParams({
         client_id: KIMI_CLIENT_ID,
