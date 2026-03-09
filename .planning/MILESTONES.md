@@ -68,4 +68,14 @@
 
 ## Active
 
-*No active milestone — next: v6.0 (Backup & Monitoring) based on strategic research*
+### v6.0 — Claude Code → Kimi Code Migration
+**Started:** 2026-03-09
+**Phases:** 1-4 (29 requirements)
+**Goal:** Complete migration from Claude Code to Kimi Code as sole AI provider. Remove all Anthropic/Claude dependencies, replace with Kimi Code CLI + auth system, adapt MCP tools, update UI.
+
+| Phase | Name | Requirements |
+|-------|------|-------------|
+| 1 | KimiProvider | CORE-01..05 |
+| 2 | Configuration Layer | API-01..03, UI-01..03, AUTH-01..02 |
+| 3 | KimiAgentRunner | AGENT-01..05, AUTH-03 |
+| 4 | Onboarding + Cleanup | ONBOARD-01..02, AUTH-04, CLEAN-01..07 |
