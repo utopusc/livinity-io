@@ -310,8 +310,8 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 	)
 }
 
-const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-white/50 contrast-more:bg-neutral-700 backdrop-blur-2xl saturate-[1.8] contrast-more:backdrop-blur-none px-3 shadow-[0_8px_32px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.06),inset_0_1px_0_0_rgba(255,255,255,0.6),inset_0_-1px_0_0_rgba(255,255,255,0.15)] shrink-0 will-change-transform transform-gpu border-px border-white/50`
-const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-white/50 backdrop-blur-md saturate-[1.8] px-3 shadow-[0_8px_32px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.06),inset_0_1px_0_0_rgba(255,255,255,0.6),inset_0_-1px_0_0_rgba(255,255,255,0.15)] shrink-0 border-hpx border-white/50`
+const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-white/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
+const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-white/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
 const DockDivider = ({iconSize}: {iconSize: number}) => (
 	<div className='br grid w-1 place-items-center' style={{height: iconSize}}>
