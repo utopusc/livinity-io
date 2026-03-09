@@ -59,7 +59,7 @@ import {useBackups} from '@/features/backups/hooks/use-backups'
 import {useApps} from '@/providers/apps'
 import {DesktopPreviewFrame} from '@/modules/desktop/desktop-preview'
 import {DesktopPreviewConnected} from '@/modules/desktop/desktop-preview-basic'
-import {animatedWallpapers, animatedWallpaperIds} from '@/components/animated-wallpapers'
+import {animatedWallpapers, animatedWallpaperIds, type AnimatedWallpaperId} from '@/components/animated-wallpapers'
 import {useWallpaper} from '@/providers/wallpaper'
 import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/settings/_components/language-dropdown'
 import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
@@ -521,27 +521,59 @@ function InlineChangePasswordDialog({open, onOpenChange}: {open: boolean; onOpen
 
 function WallpaperSection() {
 	const {wallpaper, setWallpaperId, settings, updateSettings} = useWallpaper()
+	const [hoveredId, setHoveredId] = useState<AnimatedWallpaperId | null>(null)
+
+	const previewId = (hoveredId || wallpaper.id || animatedWallpaperIds[0]) as AnimatedWallpaperId
+	const PreviewComponent = animatedWallpapers[previewId]?.component
+
+	const hasFilter = settings.hueRotate !== 0 || settings.brightness !== 1 || settings.saturation !== 1
+	const filterStyle = hasFilter
+		? {filter: `hue-rotate(${settings.hueRotate}deg) brightness(${settings.brightness}) saturate(${settings.saturation})`}
+		: undefined
 
 	return (
-		<div className='flex flex-col gap-6'>
-			{/* Wallpaper grid */}
-			<div className='grid grid-cols-2 gap-4 md:grid-cols-3'>
+		<div className='flex flex-col gap-4'>
+			{/* Live preview */}
+			<div className='relative aspect-video overflow-hidden rounded-radius-md border border-border-default'>
+				<div className='absolute inset-0' style={filterStyle}>
+					{PreviewComponent && (
+						<PreviewComponent
+							key={previewId}
+							paused={settings.paused}
+							speed={settings.speed}
+							className='h-full w-full'
+						/>
+					)}
+				</div>
+				<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-3 pb-2 pt-6'>
+					<span className='text-sm font-medium text-white/90'>{animatedWallpapers[previewId]?.name}</span>
+				</div>
+			</div>
+
+			{/* Wallpaper selection grid */}
+			<div className='grid grid-cols-4 gap-2 sm:grid-cols-6'>
 				{animatedWallpaperIds.map((id) => (
 					<button
 						key={id}
+						onMouseEnter={() => setHoveredId(id)}
+						onMouseLeave={() => setHoveredId(null)}
 						onClick={() => setWallpaperId(id)}
 						className={cn(
-							'relative aspect-video overflow-hidden rounded-radius-md transition-all hover:ring-2 hover:ring-brand/40 hover:scale-[1.02]',
-							wallpaper.id === id && 'ring-3 ring-brand'
+							'relative aspect-square overflow-hidden rounded-lg transition-all',
+							wallpaper.id === id
+								? 'ring-2 ring-brand scale-105'
+								: hoveredId === id
+									? 'ring-1 ring-brand/40 scale-[1.03]'
+									: 'hover:ring-1 hover:ring-white/20'
 						)}
 						style={{backgroundColor: `hsl(${animatedWallpapers[id].brandColorHsl})`}}
 					>
-						<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-2 pb-1.5 pt-4'>
-							<span className='text-[11px] font-medium text-white/90'>{animatedWallpapers[id].name}</span>
-						</div>
+						<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent pt-3 pb-0.5 text-center text-[9px] font-medium text-white/80'>
+							{animatedWallpapers[id].name}
+						</span>
 						{wallpaper.id === id && (
-							<div className='absolute inset-0 flex items-center justify-center bg-black/20'>
-								<TbCheck className='h-8 w-8 text-white' />
+							<div className='absolute top-1 right-1'>
+								<TbCheck className='h-3 w-3 text-white drop-shadow-md' />
 							</div>
 						)}
 					</button>
