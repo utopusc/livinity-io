@@ -1603,6 +1603,47 @@ ${task}`;
       },
     });
 
+    // ── Channel messaging tool (Telegram, Discord, Slack, etc.) ──────
+
+    toolRegistry.register({
+      name: 'channel_send',
+      description: 'Send a message via a connected messaging channel (Telegram, Discord, Slack). Use this when the user asks to send a Telegram/Discord message or test a channel. Defaults to the last active chat for that channel.',
+      parameters: [
+        { name: 'channel', type: 'string', description: 'Channel ID: "telegram", "discord", "slack", or "matrix"', required: true },
+        { name: 'text', type: 'string', description: 'Message text to send', required: true },
+        { name: 'chatId', type: 'string', description: 'Specific chat/channel ID (optional, defaults to last active chat)', required: false },
+      ],
+      execute: async (params) => {
+        const { channel, text, chatId: explicitChatId } = params as { channel: string; text: string; chatId?: string };
+        if (!channel || !text) return { success: false, output: '', error: 'Channel and text are required.' };
+
+        const validChannels = ['telegram', 'discord', 'slack', 'matrix'];
+        if (!validChannels.includes(channel)) {
+          return { success: false, output: '', error: `Invalid channel "${channel}". Use: ${validChannels.join(', ')}` };
+        }
+
+        try {
+          const targetChatId = explicitChatId || await this.config.redis.get(`nexus:${channel}:last_chat_id`);
+          if (!targetChatId) {
+            return { success: false, output: '', error: `No chat ID for ${channel}. Send a message to the bot first to register a chat.` };
+          }
+
+          const success = await this.config.channelManager.sendMessage(
+            channel as 'telegram' | 'discord' | 'slack' | 'matrix',
+            targetChatId,
+            text,
+          );
+
+          if (success) {
+            return { success: true, output: `Message sent via ${channel} to chat ${targetChatId}: "${text.slice(0, 100)}"` };
+          }
+          return { success: false, output: '', error: `Failed to send via ${channel} — channel may not be connected.` };
+        } catch (err) {
+          return { success: false, output: '', error: `Channel send error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
     // ── Memory tools (Cognee integration via localhost:3300) ──────────
 
     toolRegistry.register({
