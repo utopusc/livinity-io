@@ -121,4 +121,10 @@ export const PROVIDER_COST_DEFAULTS = {
     sonnet: { input: 0.10, output: 0.40 },
     opus: { input: 1.25, output: 5.0 },
   },
+  kimi: {
+    flash: { input: 0.10, output: 0.40 },
+    haiku: { input: 0.10, output: 0.40 },
+    sonnet: { input: 0.30, output: 1.20 },
+    opus: { input: 0.60, output: 2.40 },
+  },
 } as const;

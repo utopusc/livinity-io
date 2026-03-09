@@ -92,7 +92,7 @@ export function validateAlternation(messages: ProviderMessage[]): { valid: boole
  * Applies mergeConsecutiveRoles before conversion.
  * For Claude, also validates alternation and throws if invalid.
  */
-export function prepareForProvider(messages: ProviderMessage[], provider: 'claude' | 'gemini'): unknown[] {
+export function prepareForProvider(messages: ProviderMessage[], provider: 'claude' | 'gemini' | 'kimi'): unknown[] {
   const merged = mergeConsecutiveRoles(messages);
 
   if (provider === 'claude') {
@@ -122,6 +122,14 @@ export function prepareForProvider(messages: ProviderMessage[], provider: 'claud
     });
   }
 
+  if (provider === 'kimi') {
+    // OpenAI format: { role, content } — no alternation requirement, no images (supportsVision = false)
+    return merged.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+  }
+
   // Gemini format
   return merged.map((msg) => ({
     role: msg.role === 'assistant' ? 'model' : msg.role,
@@ -139,7 +147,7 @@ export function prepareForProvider(messages: ProviderMessage[], provider: 'claud
  */
 export function normalizeAndPrepare(
   rawMessages: Array<{ role: string; text?: string; content?: string; images?: Array<{ base64: string; mimeType: string }> }>,
-  provider: 'claude' | 'gemini',
+  provider: 'claude' | 'gemini' | 'kimi',
 ): unknown[] {
   const normalized = normalizeMessages(rawMessages);
   return prepareForProvider(normalized, provider);
