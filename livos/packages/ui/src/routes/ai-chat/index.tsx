@@ -19,6 +19,8 @@ import {
 	IconTerminal2,
 	IconMicrophone,
 	IconCode,
+	IconShieldCheck,
+	IconShieldX,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -171,6 +173,27 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 	const commands: string[] = (statusQuery.data as any)?.commands ?? []
 	const activeTool: string | undefined = (statusQuery.data as any)?.tool
 	const isExecuting = !!activeTool
+	const awaitingApproval = (statusQuery.data as any)?.awaitingApproval as {tool: string; params: Record<string, unknown>; thought?: string} | undefined
+
+	// Poll for pending approvals when we detect awaitingApproval state
+	const pendingQuery = trpcReact.ai.getPendingApprovals.useQuery(undefined, {
+		enabled: !!awaitingApproval,
+		refetchInterval: awaitingApproval ? 1000 : false,
+	})
+	const resolveMutation = trpcReact.ai.resolveApproval.useMutation()
+	const [resolving, setResolving] = useState(false)
+
+	const handleApproval = async (decision: 'approve' | 'deny') => {
+		const pending = pendingQuery.data
+		if (!pending || pending.length === 0) return
+		setResolving(true)
+		try {
+			await resolveMutation.mutateAsync({requestId: pending[0].id, decision})
+		} catch {
+			// Ignore — will show updated status on next poll
+		}
+		setResolving(false)
+	}
 
 	// Auto-scroll terminal to bottom when new commands arrive
 	useEffect(() => {
@@ -193,6 +216,45 @@ function StatusIndicator({conversationId, isLoading}: {conversationId: string; i
 						<IconLoader2 size={14} className='mt-0.5 flex-shrink-0 animate-spin text-violet-400' />
 						<TextShimmer className='text-body-sm' duration={1.5}>Thinking...</TextShimmer>
 						<span className='ml-auto flex-shrink-0 text-caption text-text-tertiary'>{elapsed}s</span>
+					</div>
+				)}
+
+				{/* Approval prompt */}
+				{awaitingApproval && (
+					<div className='rounded-radius-sm border border-amber-500/30 bg-amber-500/5 p-3'>
+						<div className='mb-2 flex items-center gap-2 text-body-sm font-medium text-amber-400'>
+							<IconShieldCheck size={16} />
+							Tool Approval Required
+						</div>
+						<div className='mb-1 text-caption text-text-secondary'>
+							<span className='font-medium text-text-primary'>{awaitingApproval.tool}</span>
+							{!!awaitingApproval.params?.command && (
+								<pre className='mt-1 max-h-20 overflow-auto rounded bg-surface-1 px-2 py-1 font-mono text-caption-sm text-text-tertiary'>
+									{String(awaitingApproval.params.command).slice(0, 300)}
+								</pre>
+							)}
+						</div>
+						{awaitingApproval.thought && (
+							<p className='mb-2 text-caption-sm italic text-text-tertiary'>{awaitingApproval.thought.slice(0, 200)}</p>
+						)}
+						<div className='flex gap-2'>
+							<button
+								onClick={() => handleApproval('approve')}
+								disabled={resolving || !pendingQuery.data?.length}
+								className='flex items-center gap-1.5 rounded-radius-sm bg-green-600 px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-green-500 disabled:opacity-50'
+							>
+								<IconShieldCheck size={14} />
+								Approve
+							</button>
+							<button
+								onClick={() => handleApproval('deny')}
+								disabled={resolving || !pendingQuery.data?.length}
+								className='flex items-center gap-1.5 rounded-radius-sm bg-red-600/80 px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50'
+							>
+								<IconShieldX size={14} />
+								Reject
+							</button>
+						</div>
 					</div>
 				)}
 
