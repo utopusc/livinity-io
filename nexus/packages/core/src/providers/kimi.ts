@@ -474,9 +474,10 @@ export class KimiProvider implements AIProvider {
       body.max_tokens = options.maxOutputTokens;
     }
 
-    // Translate tools if provided
+    // Translate tools if provided (Kimi only supports tool_choice: 'auto', not 'required')
     if (options.tools && options.tools.length > 0) {
       body.tools = options.tools.map(translateToolDefinition);
+      body.tool_choice = 'auto';
     }
 
     // Make request
@@ -486,6 +487,7 @@ export class KimiProvider implements AIProvider {
         method: 'POST',
         headers: getKimiHeaders(apiKey),
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(120_000), // 2 minute timeout to prevent hanging on thinking model
       });
     } catch (err: any) {
       logger.error('KimiProvider: fetch failed', { error: err.message });
@@ -575,8 +577,10 @@ export class KimiProvider implements AIProvider {
         body.max_tokens = options.maxOutputTokens;
       }
 
+      // Kimi only supports tool_choice: 'auto', not 'required'
       if (options.tools && options.tools.length > 0) {
         body.tools = options.tools.map(translateToolDefinition);
+        body.tool_choice = 'auto';
       }
 
       // Make streaming request
@@ -586,6 +590,7 @@ export class KimiProvider implements AIProvider {
           method: 'POST',
           headers: getKimiHeaders(apiKey),
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(120_000), // 2 minute timeout to prevent hanging on thinking model
         });
       } catch (err: any) {
         logger.error('KimiProvider: stream fetch failed', { error: err.message });
