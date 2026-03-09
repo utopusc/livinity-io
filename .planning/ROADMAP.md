@@ -1,848 +1,93 @@
-# Roadmap: LivOS Open Source Release
+# Roadmap: LivOS v6.0 — Claude Code to Kimi Code Migration
 
 ## Overview
 
-This roadmap transforms LivOS from a production codebase with hardcoded values and duplicate AI implementations into a clean, secure, open-source project that anyone can install with a single command. The journey moves through foundation work (config system, cleanup), security hardening, AI consolidation, code quality improvements, documentation, and finally the installer script that makes it all accessible.
+This milestone replaces Claude Code with Kimi Code as the sole AI backbone across the Nexus backend and LivOS frontend. The migration follows a four-phase dependency chain: build the new provider first (lowest risk, gets chat working), wire up configuration UI and API routes second, tackle the complex CLI subprocess agent runner third, and clean up all Claude/Anthropic/Gemini dead code last. This ordering ensures the system is never deployed in a half-migrated state -- Claude stays intact until Kimi is fully verified.
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+- Integer phases (1, 2, 3, 4): Planned milestone work
+- Decimal phases (e.g., 2.1): Urgent insertions if needed (marked with INSERTED)
 
-Decimal phases appear between their surrounding integers in numeric order.
-
-- [x] **Phase 1: Foundation** - Config system and repository cleanup ✓
-- [x] **Phase 2: Security Foundation** - Remove exposed secrets and prevent future leaks ✓
-- [x] **Phase 3: AI Exports** - Export shared managers from Nexus for LivOS consumption ✓
-- [ ] **Phase 4: AI Migration** - Update imports and delete duplicate packages
-- [x] **Phase 5: Configurability** - Remove hardcoded domains and paths ✓
-- [x] **Phase 6: TypeScript Quality** - Reduce any types and fix error handling ✓
-- [x] **Phase 7: Security Hardening** - API authentication and secret rotation ✓
-- [x] **Phase 8: Documentation** - README, CONTRIBUTING, and community files ✓
-- [x] **Phase 9: Installer** - One-command install script with setup wizard ✓
-- [ ] **Phase 10: Release** - Final validation and public release preparation
+- [ ] **Phase 1: KimiProvider** - Implement Kimi AI provider with OpenAI-compatible API for chat and tool calling
+- [ ] **Phase 2: Configuration Layer** - API routes, tRPC proxies, and Settings UI for Kimi auth and model selection
+- [ ] **Phase 3: KimiAgentRunner** - CLI subprocess agent runner with MCP tool bridging and streaming events
+- [ ] **Phase 4: Onboarding and Cleanup** - Update setup wizard, remove all Claude/Anthropic/Gemini code
 
 ## Phase Details
 
-### Phase 1: Foundation
-**Goal**: Establish centralized configuration system and clean up repository cruft
+### Phase 1: KimiProvider
+**Goal**: Users can chat with Kimi AI through the existing web UI with tool calling working end-to-end
 **Depends on**: Nothing (first phase)
-**Requirements**: QUAL-03, AICON-08
+**Requirements**: CORE-01, CORE-02, CORE-03, CORE-04, CORE-05
 **Success Criteria** (what must be TRUE):
-  1. Centralized config module exists that other code can import
-  2. Config module supports paths, domains, and service URLs
-  3. All .bak files removed from repository
-  4. Repository is clean of temporary/backup artifacts
-**Plans**: 2 plans in 1 wave (parallel execution)
-
-Plans:
-- [x] 01-01-PLAN.md - Create @livos/config package with Zod schemas for paths, domains, services
-- [x] 01-02-PLAN.md - Delete 4 .bak files and add *.bak to .gitignore
-
-### Phase 2: Security Foundation
-**Goal**: Remove exposed secrets and establish secure configuration patterns
-**Depends on**: Phase 1
-**Requirements**: SEC-01, SEC-02, SEC-03
-**Success Criteria** (what must be TRUE):
-  1. No hardcoded secrets exist in committed .env files
-  2. .env.example exists with all required variables documented
-  3. .env is in .gitignore preventing future secret commits
-  4. Developer can set up environment from .env.example alone
-**Plans**: 1 plan
-
-Plans:
-- [x] 02-01-PLAN.md - Complete .gitignore coverage and create canonical .env.example template
-
-### Phase 3: AI Exports
-**Goal**: Export SubagentManager, ScheduleManager, and AgentEvent from Nexus
-**Depends on**: Phase 1
-**Requirements**: AICON-03, AICON-04, AICON-05
-**Success Criteria** (what must be TRUE):
-  1. SubagentManager is exported from Nexus core package
-  2. ScheduleManager is exported from Nexus core package
-  3. AgentEvent type is exported from Nexus core package
-  4. Exports are importable by external packages
-**Plans**: 1 plan
-
-Plans:
-- [x] 03-01-PLAN.md - Create lib.ts exports and update package.json with exports field
-
-### Phase 4: AI Migration
-**Goal**: Migrate LivOS to use Nexus exports and delete duplicate packages
-**Depends on**: Phase 3
-**Requirements**: AICON-06, AICON-07, AICON-01, AICON-02
-**Success Criteria** (what must be TRUE):
-  1. LivOS AiModule imports from Nexus exports (not livcoreai)
-  2. AI chat functionality works end-to-end after migration
-  3. livcoreai package (1,499 LOC) is deleted
-  4. liv/core package (2,039 LOC) is deleted
-  5. No orphaned imports or broken references remain
+  1. User sends a message in the chat UI and receives a streaming response from Kimi's API
+  2. AI can call existing MCP tools (shell, docker, files) through the Kimi provider with correct argument parsing
+  3. Model tier dropdown (fast/balanced/powerful) maps to actual Kimi K2.5 model IDs and the selection persists
+  4. Token usage (input/output counts) displays correctly in chat after each response
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: Update LivOS imports to use Nexus
-- [ ] 04-02: Delete duplicate AI packages
+- [ ] 01-01: KimiProvider implementation and tool format translation
+- [ ] 01-02: Streaming integration and model tier mapping
 
-### Phase 5: Configurability
-**Goal**: Remove all hardcoded domains and paths, use config system
+### Phase 2: Configuration Layer
+**Goal**: Users can configure Kimi credentials, view auth status, and select models through the Settings UI and API
 **Depends on**: Phase 1
-**Requirements**: QUAL-01, QUAL-02
+**Requirements**: API-01, API-02, API-03, UI-01, UI-02, UI-03, AUTH-01, AUTH-02
 **Success Criteria** (what must be TRUE):
-  1. No hardcoded "livinity.cloud" references in codebase
-  2. No hardcoded "/opt/livos" or "/opt/nexus" paths in codebase
-  3. All domains and paths read from centralized config
-  4. Application works with custom domain/path configuration
-**Plans**: 4 plans in 2 waves
+  1. User can enter a Kimi API key in Settings and it persists in Redis across server restarts
+  2. Settings AI Configuration page shows Kimi auth status (connected/disconnected) and has no Claude or Gemini sections
+  3. Express routes `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` respond correctly
+  4. tRPC routes for Kimi status/login/logout work through the livinityd proxy
+  5. User can select between Kimi model tiers (fast/balanced/powerful) in the Settings UI
+**Plans**: TBD
 
 Plans:
-- [x] 05-01-PLAN.md - Extend @livos/config and replace backend domain references
-- [x] 05-02-PLAN.md - Replace frontend domains and infrastructure paths
-- [x] 05-03-PLAN.md - Replace Nexus hardcoded paths
-- [x] 05-04-PLAN.md - Replace skills hardcoded output paths
+- [ ] 02-01: Express and tRPC API routes for Kimi auth
+- [ ] 02-02: Settings UI redesign for Kimi configuration
 
-### Phase 6: TypeScript Quality
-**Goal**: Improve type safety and error handling across codebase
-**Depends on**: Phase 4 (proceeding independently - typing work is isolated)
-**Requirements**: QUAL-04, QUAL-05, QUAL-06, QUAL-07
-**Success Criteria** (what must be TRUE):
-  1. any type usage reduced in Nexus daemon modules
-  2. any type usage reduced in livinityd modules
-  3. Catch blocks have proper error logging (not silent swallowing)
-  4. Error aggregation hooks exist for monitoring
-**Plans**: 3 plans in 2 waves
-
-Plans:
-- [x] 06-01-PLAN.md - Error infrastructure: aggregation hooks and fix silent catch
-- [x] 06-02-PLAN.md - Nexus type improvements: daemon.ts, api.ts, router.ts
-- [x] 06-03-PLAN.md - livinityd type improvements: ai/routes.ts, ai/index.ts, logger.ts
-
-### Phase 7: Security Hardening
-**Goal**: Add authentication to internal APIs and rotate production secrets
+### Phase 3: KimiAgentRunner
+**Goal**: AI agent tasks execute through Kimi CLI subprocess with full MCP tool access and streaming output
 **Depends on**: Phase 2
-**Requirements**: SEC-04, SEC-05, SEC-06
+**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, AGENT-05, AUTH-03
 **Success Criteria** (what must be TRUE):
-  1. Memory service (port 3300) requires API key authentication
-  2. Internal Nexus endpoints require API key authentication
-  3. All production secrets have been rotated
-  4. New secrets are documented in .env.example
-  5. Daemon memory service calls include X-API-Key header
-**Plans**: 4 plans in 2 waves
-
-Plans:
-- [x] 07-01-PLAN.md - Add API key auth to Memory service (port 3300)
-- [x] 07-02-PLAN.md - Add API key auth to Nexus API (port 3200)
-- [x] 07-03-PLAN.md - Rotate production secrets (GEMINI_API_KEY, JWT_SECRET, LIV_API_KEY)
-- [x] 07-04-PLAN.md - Update daemon.ts memory service calls with X-API-Key header
-
-### Phase 8: Documentation
-**Goal**: Create comprehensive documentation for open source release
-**Depends on**: Phase 5, Phase 6
-**Requirements**: OSS-06, OSS-07, OSS-08, OSS-09, OSS-10, OSS-11, OSS-12, OSS-13
-**Success Criteria** (what must be TRUE):
-  1. README.md exists with quick start, features, and configuration docs
-  2. CONTRIBUTING.md exists with development setup and PR process
-  3. LICENSE file exists (AGPL-3.0)
-  4. SECURITY.md exists with vulnerability reporting process
-  5. CHANGELOG.md exists with version history
-**Plans**: 3 plans in 2 waves
-
-Plans:
-- [x] 08-01-PLAN.md — Rewrite README.md with comprehensive documentation
-- [x] 08-02-PLAN.md — Create CONTRIBUTING.md and CODE_OF_CONDUCT.md
-- [x] 08-03-PLAN.md — Create LICENSE, SECURITY.md, and CHANGELOG.md
-
-### Phase 9: Installer
-**Goal**: Create one-command install script with interactive setup
-**Depends on**: Phase 2, Phase 5, Phase 7, Phase 8
-**Requirements**: OSS-01, OSS-02, OSS-03, OSS-04, OSS-05, OSS-14
-**Success Criteria** (what must be TRUE):
-  1. install.sh detects OS and architecture
-  2. install.sh checks and installs dependencies (Docker, Node.js)
-  3. install.sh runs interactive configuration wizard
-  4. install.sh sets up systemd service
-  5. install.sh generates secure secrets automatically
-  6. .env.example includes all installer-required variables
-  7. Fresh install works end-to-end on Ubuntu 22.04
-**Plans**: 3 plans in 3 waves (sequential)
-
-Plans:
-- [x] 09-01-PLAN.md — Core installer with OS detection, error handling, and dependencies
-- [x] 09-02-PLAN.md — Interactive configuration wizard with whiptail TUI
-- [x] 09-03-PLAN.md — systemd services, Redis config, and complete installation flow
-
-### Phase 10: Release
-**Goal**: Final validation and preparation for public GitHub release
-**Depends on**: All previous phases
-**Requirements**: None (validation phase)
-**Success Criteria** (what must be TRUE):
-  1. All 29 v1 requirements marked complete
-  2. Install script tested on fresh Ubuntu 22.04 VPS
-  3. AI chat works end-to-end on fresh install
-  4. No hardcoded secrets or personal references in codebase
-  5. Repository ready for public visibility
+  1. Kimi CLI is installed on the production server and `kimi --version` returns successfully
+  2. Agent stream endpoint (`/api/agent/stream`) spawns Kimi CLI subprocess and streams events to the UI in real time
+  3. MCP tools (shell, docker, files, browser) are passed to Kimi CLI via `--mcp-config` and the agent can invoke them
+  4. System prompt is written as temporary YAML + markdown files per session and cleaned up after completion
+  5. Token usage from Kimi CLI responses is extracted and tracked correctly
 **Plans**: TBD
 
 Plans:
-- [ ] 10-01: End-to-end validation on fresh VPS
-- [ ] 10-02: Final cleanup and release preparation
+- [ ] 03-01: Server setup (Python 3.12, uv, Kimi CLI installation)
+- [ ] 03-02: KimiAgentRunner implementation with JSONL event parsing and MCP bridging
 
----
-
-## Milestone: v1.2 — Visual Impact Redesign
-
-**Overview**: v1.1 established semantic tokens but kept identical CSS output. v1.2 changes actual token VALUES to make every component visibly improved.
-
-### v1.2 Phases
-
-- [x] **Phase 1: Token Foundation** - Update semantic token values for surfaces, borders, text, and shadows
-- [x] **Phase 2: Component Visual Fixes** - Apply targeted visual fixes to components that need more than token value changes
-- [x] **Phase 3: Design Enhancements** - Add new tokens (radius-2xl/3xl, info/warning colors) and AI chat accent
-
-### Phase 1: Token Foundation
-**Goal**: Change the actual CSS values behind semantic tokens so every component in the UI becomes visibly improved
-**Depends on**: Nothing (first phase)
-**Requirements**: TF-01, TF-02, TF-03, TF-04, TF-05, TF-06
+### Phase 4: Onboarding and Cleanup
+**Goal**: New users can set up Kimi through the onboarding wizard, and zero Claude/Anthropic/Gemini references remain in the codebase
+**Depends on**: Phase 3
+**Requirements**: ONBOARD-01, ONBOARD-02, AUTH-04, CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05, CLEAN-06, CLEAN-07
 **Success Criteria** (what must be TRUE):
-  1. Surface opacities increased: surface-base 0.06, surface-1 0.10, surface-2 0.16, surface-3 0.22
-  2. Border opacities increased: border-subtle 0.10, border-default 0.16, border-emphasis 0.30
-  3. Elevation shadows have white inset glow highlights and stronger outer opacity
-  4. Text secondary/tertiary more readable: 0.65 and 0.45
-  5. Sheet-shadow and dialog shadow insets use proper top-edge highlight technique
-**Plans**: 1 plan in 1 wave
+  1. Setup wizard AI step accepts Kimi API key or device auth and validates the connection before proceeding
+  2. `grep -r "claude\|anthropic\|Claude\|Anthropic" --include="*.ts" --include="*.tsx"` returns zero matches in active source files
+  3. `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk` are absent from package.json and node_modules
+  4. No Redis keys with "claude" or "anthropic" prefix exist in production
+  5. End-to-end test passes: fresh onboarding -> Kimi setup -> chat message -> tool execution -> streaming response
+**Plans**: TBD
 
 Plans:
-- [x] 01-01-PLAN.md — Update all token values in tailwind.config.ts (TF-01 to TF-06)
-
-### Phase 2: Component Visual Fixes
-**Goal**: Apply targeted visual fixes to components that need more than just token value changes
-**Depends on**: Phase 1
-**Requirements**: CV-01, CV-02, CV-03, CV-04, CV-05, CV-06, CV-07, CV-08
-**Success Criteria** (what must be TRUE):
-  1. Dock has 1px border, surface-1 background, 12px padding
-  2. Dock items have 60% icon ratio, visible glow, smoother spring
-  3. Sheet shows wallpaper color (brightness 0.38), has top border
-  4. Dialog uses border-default for visible edges
-  5. File list has hover states and larger icons
-  6. Menus have visible hover and larger radius
-  7. Windows have border-emphasis for clear floating edges
-  8. Buttons have 1px highlight and taller desktop heights
-**Plans**: 4 plans in 1 wave (parallel execution)
-
-Plans:
-- [x] 02-01-PLAN.md — Dock container + dock items visual fixes (CV-01, CV-02)
-- [x] 02-02-PLAN.md — Sheet + Dialog + Window visual fixes (CV-03, CV-04, CV-07)
-- [x] 02-03-PLAN.md — File Manager + Menu visual fixes (CV-05, CV-06)
-- [x] 02-04-PLAN.md — Button highlight and height adjustments (CV-08)
-
-### Phase 3: Design Enhancements
-**Goal**: Add new semantic tokens and visual enhancements
-**Depends on**: Phase 1
-**Requirements**: DE-01, DE-02, DE-03
-**Success Criteria** (what must be TRUE):
-  1. radius-2xl (24px) and radius-3xl (28px) semantic tokens exist
-  2. info (#3B82F6) and warning (#F59E0B) colors with surface variants defined
-  3. AI Chat assistant messages have left border accent
-**Plans**: 1 plan in 1 wave
-
-Plans:
-- [x] 03-01-PLAN.md — Add radius/color tokens and AI chat assistant accent (DE-01, DE-02, DE-03)
+- [ ] 04-01: Onboarding wizard update and device auth flow
+- [ ] 04-02: Full Claude/Anthropic/Gemini cleanup and verification
 
 ## Progress
 
-### v1.0 Progress
-
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation | 2/2 | Complete | 2026-02-04 |
-| 2. Security Foundation | 1/1 | Complete | 2026-02-04 |
-| 3. AI Exports | 1/1 | Complete | 2026-02-03 |
-| 4. AI Migration | 0/2 | Not started | - |
-| 5. Configurability | 4/4 | Complete | 2026-02-04 |
-| 6. TypeScript Quality | 3/3 | Complete | 2026-02-04 |
-| 7. Security Hardening | 4/4 | Complete | 2026-02-04 |
-| 8. Documentation | 3/3 | Complete | 2026-02-04 |
-| 9. Installer | 3/3 | Complete | 2026-02-05 |
-| 10. Release | 0/2 | Not started | - |
-
-### v1.2 Progress
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Token Foundation | 1/1 | Complete | 2026-02-07 |
-| 2. Component Visual Fixes | 4/4 | Complete | 2026-02-07 |
-| 3. Design Enhancements | 1/1 | Complete | 2026-02-07 |
-
----
-
-## Milestone: v1.3 — Browser App
-
-**Overview**: Add a persistent Docker-based Chromium browser as an App Store app. Access via subdomain (browser.domain.com), AI controls via Playwright MCP, SOCKS5/HTTP proxy support. No LivOS UI embedding — pure App Store template with gallery hooks for MCP registration.
-
-### v1.3 Phases
-
-- [ ] **Phase 1: Container & App Store** - Docker image, gallery template, builtin-apps entry, installable from store
-- [ ] **Phase 2: MCP Integration** - Playwright MCP auto-registration, CDP connection, AI browser control
-- [ ] **Phase 3: Proxy & Anti-Detection** - SOCKS5/HTTP proxy support, anti-detection flags, security hardening
-
-### Phase 1: Container & App Store
-**Goal**: Create installable Chromium browser app in LivOS App Store with persistent sessions and subdomain access
-**Depends on**: Nothing (first phase)
-**Requirements**: CONT-01, CONT-02, CONT-03, CONT-04, CONT-05, STORE-01, STORE-02, STORE-03, STORE-04, SEC-01, SEC-02, SEC-04
-**Success Criteria** (what must be TRUE):
-  1. User can find "Chromium Browser" in App Store
-  2. User can install the app and it builds the custom Docker image
-  3. User can assign subdomain and access browser at browser.domain.com
-  4. Browser sessions persist across container restarts (logged-in sites stay logged in)
-  5. Container recovers from crashes (stale lock files cleaned, restart policy works)
-**Plans**: 2 plans in 1 wave
-
-Plans:
-- [ ] v1.3-01-01-PLAN.md — Gallery template (Dockerfile, docker-compose.yml, livinity-app.yml, clean-singletonlock.sh)
-- [ ] v1.3-01-02-PLAN.md — builtin-apps.ts entry + verify install flow works
-
-### Phase 2: MCP Integration
-**Goal**: Enable AI agent to control the browser via Playwright MCP with auto-registration lifecycle
-**Depends on**: Phase 1
-**Requirements**: MCP-01, MCP-02, MCP-03, MCP-04, MCP-05, SEC-03
-**Success Criteria** (what must be TRUE):
-  1. When browser app starts, Playwright MCP server is auto-registered in Nexus
-  2. When browser app stops, Playwright MCP server is auto-deregistered
-  3. AI agent can navigate to URLs via MCP tools
-  4. AI agent can click, type, and take screenshots via MCP tools
-  5. CDP port 9222 is internal only (not exposed to host network)
-**Plans**: 2 plans in 2 waves
-
-Plans:
-- [ ] v1.3-02-01-PLAN.md — Update hooks for MCP registration/deregistration via Redis + verify CDP security
-- [ ] v1.3-02-02-PLAN.md — Verify Playwright MCP connection, tool discovery, and AI agent browser control
-
-### Phase 3: Proxy & Anti-Detection
-**Goal**: Add SOCKS5/HTTP proxy support and anti-detection flags for privacy and automation
-**Depends on**: Phase 1
-**Requirements**: PROXY-01, PROXY-02, PROXY-03, SEC-01, SEC-02
-**Success Criteria** (what must be TRUE):
-  1. User can configure SOCKS5 proxy via environment variable
-  2. User can configure HTTP proxy via environment variable
-  3. Anti-detection flags prevent basic automation fingerprinting
-  4. Browser remains stable with all flags enabled
-**Plans**: 1 plan in 1 wave
-
-Plans:
-- [ ] v1.3-03-01-PLAN.md — Dynamic CHROME_CLI assembly with PROXY_URL support, anti-detection flags, builtin-apps.ts update
-
-### v1.3 Progress
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Container & App Store | 0/2 | Not started | - |
-| 2. MCP Integration | 0/2 | Not started | - |
-| 3. Proxy & Anti-Detection | 0/1 | Not started | - |
-
----
-
-## Milestone: v1.5 — Claude Migration & AI Platform
-
-**Overview**: Replace Gemini as the sole AI backend with a multi-provider architecture where Claude is primary and Gemini serves as fallback. Integrate OpenClaw-inspired features: hybrid memory with automatic extraction, skill marketplace with Git-based registries, expanded channel support (Slack, Matrix), WebSocket RPC gateway, human-in-the-loop tool approval, and parallel agent execution. The result is LivOS as a serious AI platform, not just a Gemini wrapper.
-
-### v1.5 Phases
-
-- [ ] **Phase 1: Provider Abstraction + Claude Integration** - Multi-provider AI backend with Claude primary, Gemini fallback
-- [ ] **Phase 2: Native Tool Calling + Auth UI** - Claude native tool_use, dual-mode AgentLoop, API key management UI
-- [ ] **Phase 3: Hybrid Memory + Channel Expansion** - Automatic memory extraction, Slack and Matrix channels
-- [ ] **Phase 4: WebSocket Gateway + Human-in-the-Loop** - JSON-RPC 2.0 over WebSocket, tool approval system
-- [ ] **Phase 5: Skill Marketplace + Parallel Execution** - Git-based skill registry, concurrent agent tasks
-
-### Phase 1: Provider Abstraction + Claude Integration
-**Goal**: Users can chat with Claude as the primary AI and automatically fall back to Gemini when Claude is unavailable, with no change to the existing UI or streaming experience
-**Depends on**: Nothing (first v1.5 phase)
-**Requirements**: PROV-01, PROV-02, PROV-03, PROV-04, PROV-05, PROV-06, PROV-07, CLAUDE-01, CLAUDE-02, CLAUDE-03, CLAUDE-04, CLAUDE-05, GEM-01, GEM-02, GEM-03
-**Success Criteria** (what must be TRUE):
-  1. User can send a message in web chat and receive a streaming response from Claude (Sonnet by default)
-  2. If the Claude API returns 429/503 or times out, the same message automatically retries with Gemini and the user sees a response (not an error)
-  3. Existing Gemini conversations continue to work identically after the migration (no regression)
-  4. Token usage (input/output tokens) is displayed consistently regardless of which provider handled the request
-  5. The AI chat streaming experience (chunks appearing, tool call indicators, done events) is visually identical to before the migration
-**Plans**: 3 plans in 3 waves (sequential)
-
-Plans:
-- [ ] v1.5-01-01-PLAN.md — AIProvider interface, provider-neutral message types, message normalization layer
-- [ ] v1.5-01-02-PLAN.md — ClaudeProvider implementation with streaming, model tier mapping, SDK upgrade
-- [ ] v1.5-01-03-PLAN.md — GeminiProvider extraction, ProviderManager fallback logic, Brain refactor as thin wrapper
-
-### Phase 2: Native Tool Calling + Auth UI
-**Goal**: AI agent uses Claude's native tool calling for reliable tool execution, and users can configure API keys and provider preferences through the Settings UI
-**Depends on**: Phase 1 (provider abstraction must exist)
-**Requirements**: TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05, AUTH-01, AUTH-02, AUTH-03, AUTH-04
-**Success Criteria** (what must be TRUE):
-  1. User asks the AI to perform a tool action (e.g., "list my Docker containers") and sees the tool call execute successfully with Claude's native tool_use format
-  2. When the AI uses extended thinking, the user can expand a collapsible section in the chat UI to see the reasoning
-  3. User can navigate to Settings, enter an Anthropic API key, and the system validates it before saving
-  4. User can select a primary provider (Claude or Gemini) and configure a fallback chain in Settings
-  5. A fresh install via install.sh prompts for an Anthropic API key during the setup wizard
-**Plans**: 3 plans in 2 waves
-
-Plans:
-- [ ] v1.5-02-01-PLAN.md — ToolRegistry.toClaudeTools(), ClaudeProvider native tool_use support (TOOL-01) [Wave 1]
-- [ ] v1.5-02-02-PLAN.md — Dual-mode AgentLoop, Brain/ProviderManager tools passthrough, extended thinking (TOOL-02, TOOL-03, TOOL-04, TOOL-05) [Wave 2]
-- [ ] v1.5-02-03-PLAN.md — Settings UI for API keys, provider selection, key validation, install.sh update (AUTH-01, AUTH-02, AUTH-03, AUTH-04) [Wave 1]
-
-### Phase 3: Hybrid Memory + Channel Expansion
-**Goal**: The AI remembers important facts from past conversations automatically, and users can interact with the AI through Slack and Matrix in addition to existing channels
-**Depends on**: Phase 1 (needs provider abstraction for memory extraction LLM calls)
-**Requirements**: MEM-01, MEM-02, MEM-03, MEM-04, MEM-05, CHAN-01, CHAN-02, CHAN-03, CHAN-04, CHAN-05
-**Success Criteria** (what must be TRUE):
-  1. After a conversation where the user mentions a preference (e.g., "I prefer dark mode"), the AI recalls this in a future conversation without being reminded
-  2. Duplicate memories are not accumulated (telling the AI the same fact twice does not create two memory entries)
-  3. Recent memories are prioritized over old ones in the AI's context (time-decay scoring)
-  4. User can add a Slack workspace in Settings and send messages to the AI via Slack, receiving responses in the same Slack channel
-  5. User can configure a Matrix room in Settings and interact with the AI through Matrix messages
-**Plans**: 5 plans in 2 waves
-
-Plans:
-- [ ] v1.5-03-01-PLAN.md — Memory extraction (BullMQ job), deduplication, session binding, temporal scoring [Wave 1]
-- [ ] v1.5-03-02-PLAN.md — Context window optimization (/context endpoint, memory injection into agent prompt) [Wave 2]
-- [ ] v1.5-03-03-PLAN.md — SlackProvider, ChannelId update, register in ChannelManager [Wave 1]
-- [ ] v1.5-03-04-PLAN.md — MatrixProvider, matrix-js-sdk install, register in ChannelManager [Wave 1]
-- [ ] v1.5-03-05-PLAN.md — Per-channel Settings UI (Slack + Matrix panels), response routing race fix [Wave 2]
-
-### Phase 4: WebSocket Gateway + Human-in-the-Loop
-**Goal**: External clients can interact with the AI agent over a standardized WebSocket protocol, and destructive tool operations require explicit user approval before execution
-**Depends on**: Phase 2 (needs tool calling infrastructure for approval gates)
-**Requirements**: WS-01, WS-02, WS-03, WS-04, WS-05, HITL-01, HITL-02, HITL-03, HITL-04, HITL-05
-**Success Criteria** (what must be TRUE):
-  1. A client can connect to the WebSocket endpoint with a valid API key or JWT, send a JSON-RPC request to run an agent task, and receive streaming results
-  2. Multiple concurrent agent tasks can run over a single WebSocket connection (multiplexed by session ID)
-  3. When the AI attempts to run a destructive tool (e.g., delete a file), the user receives an approval prompt and the agent pauses until the user approves or denies
-  4. A user can approve a pending tool action from any connected channel (web, Telegram, Slack), not just the channel where the task originated
-  5. All tool approval decisions are logged with who approved, what was approved, and when
-**Plans**: 4 plans in 2 waves
-
-Plans:
-- [ ] v1.5-04-01-PLAN.md — JSON-RPC 2.0 WebSocket gateway: auth, framing, method routing, multiplexed sessions (WS-01, WS-02, WS-03, WS-04)
-- [ ] v1.5-04-02-PLAN.md — Server-initiated notifications via Redis pub/sub to WebSocket push (WS-05)
-- [ ] v1.5-04-03-PLAN.md — HITL core: tool approval metadata, ApprovalManager, agent loop pause/resume (HITL-01, HITL-02, HITL-03)
-- [ ] v1.5-04-04-PLAN.md — HITL wiring: approval policy config, API endpoints, audit trail, destructive tool marking (HITL-04, HITL-05)
-
-### Phase 5: Skill Marketplace + Parallel Execution
-**Goal**: Users can discover and install community skills from a Git-based marketplace, and the AI can run multiple independent tasks in parallel
-**Depends on**: Phase 2 (needs tool calling for skills), Phase 4 (needs WebSocket for task monitoring)
-**Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04, SKILL-05, SKILL-06, PARA-01, PARA-02, PARA-03, PARA-04
-**Success Criteria** (what must be TRUE):
-  1. User can browse available skills in a marketplace UI within LivOS, seeing name, description, and required permissions for each skill
-  2. User can install a skill from the marketplace and it becomes immediately available to the AI agent without restart
-  3. Installed skills declare permissions upfront and the user reviews them before confirming installation
-  4. User can ask the AI to perform two independent tasks simultaneously (e.g., "scan my Docker containers AND check disk usage") and both run in parallel
-  5. User can view the status of running tasks and cancel any task mid-execution
-**Plans**: 3 plans in 2 waves
-
-Plans:
-- [ ] v1.5-05-01-PLAN.md -- SKILL.md manifest schema, directory-based format, Git registry client [Wave 1]
-- [ ] v1.5-05-02-PLAN.md -- Skill install/uninstall flow, permission review, progressive loading, marketplace UI [Wave 2]
-- [ ] v1.5-05-03-PLAN.md -- BullMQ parallel agent tasks, status monitoring API, cancellation, resource-aware scheduling [Wave 1]
-
-### v1.5 Progress
-
-**Execution Order:**
-Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Provider Abstraction + Claude Integration | 0/3 | Not started | - |
-| 2. Native Tool Calling + Auth UI | 0/3 | Not started | - |
-| 3. Hybrid Memory + Channel Expansion | 0/3 | Not started | - |
-| 4. WebSocket Gateway + Human-in-the-Loop | 0/4 | Not started | - |
-| 5. Skill Marketplace + Parallel Execution | 0/3 | Not started | - |
-
----
-
-## Milestone: v2.0 — OpenClaw-Class AI Platform
-
-**Overview**: Transform LivOS into an OpenClaw-class personal AI platform. Phase 1 stabilizes the crashing nexus-core process, closes the DM security gap, adds chat commands, and instruments usage tracking. Phase 2 builds automation infrastructure with webhook receivers and Gmail as a channel. Phase 3 adds session compaction to prevent context window exhaustion, then multi-agent session orchestration on top. Phase 4 delivers a full voice pipeline (Deepgram STT + Cartesia TTS) via push-to-talk in the web UI. Phase 5 creates Live Canvas for AI-generated visual artifacts and upgrades the LivHub skill marketplace. Phase 6 wraps everything in a guided onboarding CLI for one-command deployment.
-
-### v2.0 Phases
-
-- [x] **Phase 1: Stability & Security Foundation** - Process hardening, DM pairing security, chat commands, usage tracking ✓
-- [ ] **Phase 2: Automation Infrastructure** - Webhook triggers with HMAC auth, Gmail as a channel provider
-- [x] **Phase 3: Intelligence Enhancements** - Session compaction to manage context, multi-agent session orchestration ✓
-- [x] **Phase 4: Voice Pipeline** - Push-to-talk voice interaction via Deepgram STT and Cartesia TTS ✓
-- [x] **Phase 5: Live Canvas + LivHub** - AI-generated visual artifacts in sandboxed iframe, upgraded skill marketplace ✓
-- [x] **Phase 6: Onboarding CLI** - Guided interactive server setup with livinity CLI tool ✓
-
-### Phase 1: Stability & Security Foundation
-**Goal**: The server runs reliably for days without crashing, unknown users cannot interact with the bot without activation, and every user has visibility into their token consumption and session control via chat commands
-**Depends on**: Nothing (first v2.0 phase)
-**Requirements**: STAB-01, STAB-02, STAB-03, STAB-04, STAB-05, STAB-06, STAB-07, DM-01, DM-02, DM-03, DM-04, DM-05, DM-06, CMD-01, CMD-02, CMD-03, CMD-04, CMD-05, CMD-06, USAGE-01, USAGE-02, USAGE-03, USAGE-04, USAGE-05, USAGE-06
-**Success Criteria** (what must be TRUE):
-  1. nexus-core process runs for 24+ hours under normal usage without a single PM2 restart (verified via `pm2 show nexus-core` uptime)
-  2. An unknown Telegram/Discord user who DMs the bot receives a 6-digit activation code prompt instead of having their message processed by the AI, and the server owner can approve or deny the pairing in the web UI
-  3. User can send `/new`, `/compact`, `/usage`, and `/activation` commands in both Telegram and Discord, and each command executes without hitting the AI agent (zero token cost)
-  4. After any AI conversation, user can send `/usage` and see input tokens, output tokens, turn count, and estimated cost for the current session and cumulative totals
-  5. Web UI Settings page shows a usage dashboard with daily token consumption charts
-**Plans**: 4 plans in 3 waves
-
-Plans:
-- [x] v2.0-01-01-PLAN.md — Process stability: global error handlers, BullMQ repeatable crons, Redis circuit breaker, PM2 config, grammy offset persistence, agent turn cap [Wave 1]
-- [x] v2.0-01-02-PLAN.md — DM pairing security: activation code flow, TTL/rate limit, admin approval UI, Redis allowlist, per-channel DM policy, group bypass [Wave 2]
-- [x] v2.0-01-03-PLAN.md — Chat commands: /new, /compact (stub), /activation, cross-channel parity, pre-agent command parsing [Wave 2]
-- [x] v2.0-01-04-PLAN.md — Usage tracking: per-session metrics, Redis counters, /usage command, TTFB tracking, Settings dashboard [Wave 3]
-
-### Phase 2: Automation Infrastructure
-**Goal**: External services can trigger AI agent tasks via authenticated webhooks, and the AI can read, reply, search, and manage Gmail as a full communication channel
-**Depends on**: Phase 1 (stable process required before adding webhook/email event sources)
-**Requirements**: HOOK-01, HOOK-02, HOOK-03, HOOK-04, HOOK-05, HOOK-06, GMAIL-01, GMAIL-02, GMAIL-04, GMAIL-05, GMAIL-06, GMAIL-07
-**Success Criteria** (what must be TRUE):
-  1. User can create a webhook endpoint via MCP tool, send a signed POST request to the generated URL, and the AI agent receives and processes the payload as a task
-  2. Duplicate webhook deliveries (retries from the same source) are silently deduplicated and do not trigger multiple agent tasks
-  3. User can authenticate their Gmail account via OAuth flow in Settings, and incoming emails appear as messages to the AI agent
-  4. AI agent can reply to, send, search, and archive emails via MCP tools, and the user sees the results in their Gmail inbox
-  5. If Gmail OAuth credentials expire or are revoked, the user receives a notification in Telegram/Discord prompting re-authentication
-**Status**: COMPLETE (2026-02-20)
-**Plans**: 4 plans in 2 waves
-- [x] v2.0-02-01-PLAN.md — Webhook receiver: WebhookManager, HMAC-SHA256, BullMQ queue, Redis dedup, Express route [Wave 1]
-- [x] v2.0-02-02-PLAN.md — Webhook management: MCP tools (create/list/delete), rate limiting, CRUD endpoints, tRPC, Settings UI [Wave 2]
-- [x] v2.0-02-03-PLAN.md — Gmail OAuth + GmailProvider: OAuth 2.0 flow, polling-based email channel, Settings UI [Wave 1]
-- [x] v2.0-02-04-PLAN.md — Gmail MCP tools: read/reply/send/search/archive, token failure alerting [Wave 2]
-
-Plans:
-- [ ] v2.0-02-01-PLAN.md — Webhook receiver: WebhookManager class, HMAC-SHA256 verification, BullMQ job queuing, Redis deduplication [Wave 1]
-- [ ] v2.0-02-02-PLAN.md — Webhook management: MCP tools (create/list/delete), rate limiting (30/min), REST CRUD, Settings UI [Wave 2]
-- [ ] v2.0-02-03-PLAN.md — Gmail OAuth + GmailProvider: OAuth flow in Settings, ChannelProvider polling, token refresh, Gmail Settings UI [Wave 1]
-- [ ] v2.0-02-04-PLAN.md — Gmail MCP tools: read, reply, send, search, archive tools, token refresh failure alerting [Wave 2]
-
-### Phase 3: Intelligence Enhancements
-**Goal**: Long conversations are automatically summarized to prevent context window exhaustion, and the AI agent can spawn and coordinate sub-agents for complex multi-step tasks
-**Depends on**: Phase 1 (usage tracking needed for token budget enforcement), Phase 2 (not strictly required, but stable BullMQ patterns established)
-**Requirements**: COMP-01, COMP-02, COMP-03, COMP-04, COMP-05, COMP-06, MULTI-01, MULTI-02, MULTI-03, MULTI-04, MULTI-05, MULTI-06, MULTI-07
-**Success Criteria** (what must be TRUE):
-  1. When a conversation exceeds 100k tokens, older messages are automatically summarized while the last 10 messages and critical facts (file paths, error codes, user preferences) are preserved verbatim
-  2. User can send `/compact` and see a report showing how many tokens were saved and what percentage of the conversation was compressed
-  3. AI agent can spawn a sub-agent to perform a specific task (e.g., "research this topic") and receive results back, visible in the chat as a coordinated workflow
-  4. Sub-agents are limited to 8 turns and 50k tokens, and cannot spawn further sub-agents (no fork bombs)
-  5. Maximum 2 sub-agents can run concurrently on the VPS, with additional requests queued until a slot opens
-**Status**: COMPLETE (2026-02-20)
-**Plans**: 3 plans in 2 waves
-- [x] v2.0-03-01-PLAN.md — Session compaction: compactSession(), critical fact pinning, auto-compact at 100k, /compact command [Wave 1]
-- [x] v2.0-03-02-PLAN.md — Multi-agent MCP tools: sessions_create/list/send/history, MultiAgentManager, Redis session schema [Wave 1]
-- [x] v2.0-03-03-PLAN.md — Sub-agent execution: BullMQ worker, SdkAgentRunner integration, DAG enforcement, concurrency cap [Wave 2]
-
-### Phase 4: Voice Pipeline
-**Goal**: Users can press a button in the web UI to talk to the AI and hear spoken responses in real-time, with end-to-end latency under 1.2 seconds
-**Depends on**: Phase 1 (stable process required — voice WebSocket connections drop on every restart)
-**Requirements**: VOICE-01, VOICE-02, VOICE-03, VOICE-04, VOICE-05, VOICE-06, VOICE-07, VOICE-08, VOICE-09, VOICE-10
-**Success Criteria** (what must be TRUE):
-  1. User can click a push-to-talk button in the AI chat, speak a question, and hear the AI respond with natural-sounding voice within ~1 second of finishing their sentence
-  2. Voice audio streams in real-time — the user hears the AI's response word-by-word as it is generated, not after the full response is complete
-  3. User can configure Deepgram and Cartesia API keys in the web UI Settings page, and voice mode activates only when both keys are present
-  4. Voice sessions maintain stable WebSocket connections with automatic reconnection on network interruptions (no manual page refresh needed)
-  5. A latency dashboard (or log) shows timestamps at each pipeline stage: mic capture, STT transcript, LLM first token, TTS first audio, browser playback
-**Plans**: 4 plans in 3 waves
-**Status**: COMPLETE (2026-02-20)
-Plans:
-- [x] v2.0-04-01-PLAN.md — Voice WebSocket gateway: /ws/voice binary endpoint, VoiceSession state machine, VoiceGateway class, voice config schema [Wave 1]
-- [x] v2.0-04-02-PLAN.md — STT integration: DeepgramRelay class, persistent WebSocket to Deepgram, audio relay, transcript events, daemon.addToInbox() wiring [Wave 2]
-- [x] v2.0-04-03-PLAN.md — TTS integration: CartesiaRelay class, text-to-speech streaming, context_id continuity, sentence buffering, audio relay back to browser [Wave 2]
-- [x] v2.0-04-04-PLAN.md — Voice UI + instrumentation: VoiceButton push-to-talk component, MediaRecorder capture, AudioContext playback, API key settings, latency pipeline timestamps [Wave 3]
-
-### Phase 5: Live Canvas + LivHub
-**Goal**: The AI can generate and update interactive visual content (React components, charts, diagrams) displayed alongside the chat, and users can discover and manage skills through an improved marketplace
-**Depends on**: Phase 1 (stable process), Phase 3 (compaction prevents canvas sessions from exhausting context)
-**Requirements**: CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04, CANVAS-05, CANVAS-06, CANVAS-07, CANVAS-08, HUB-01, HUB-02, HUB-03, HUB-04, HUB-05
-**Success Criteria** (what must be TRUE):
-  1. User asks the AI to "create a dashboard showing my Docker containers" and a live, interactive React component appears in a split-pane next to the chat
-  2. The AI can update the canvas content in-place (e.g., "add a memory usage chart to the dashboard") without replacing the entire artifact
-  3. Canvas content runs in a sandboxed iframe that cannot access the parent page's cookies, localStorage, or DOM (security verified by attempting postMessage with same-origin access)
-  4. User can browse the LivHub marketplace, see skill names, descriptions, versions, and required permissions, and install or uninstall skills with immediate effect on the AI's available tools
-  5. LivHub supports multiple Git-based registries, and the skill catalog refreshes on a configurable schedule
-**Status**: COMPLETE (2026-02-21)
-**Plans**: 4 plans in 3 waves
-
-Plans:
-- [x] v2.0-05-01-PLAN.md — Canvas MCP tools: CanvasManager class, canvas_render + canvas_update tools, Redis artifact storage, REST endpoints, tRPC proxy routes [Wave 1]
-- [x] v2.0-05-02-PLAN.md — Canvas UI: CanvasPanel split-pane, CanvasIframe sandboxed renderer, CDN template injection, postMessage protocol, error boundary [Wave 2]
-- [x] v2.0-05-03-PLAN.md — Canvas artifact types: per-type srcdoc templates (React/HTML/SVG/Mermaid/Recharts), type auto-detection, enhanced tool descriptions [Wave 3]
-- [x] v2.0-05-04-PLAN.md — LivHub marketplace: LivHub branding, multi-registry management, catalog refresh, Registries tab [Wave 1]
-
-### Phase 6: Onboarding CLI
-**Goal**: A new user can run a single command on a fresh Ubuntu server and have LivOS fully installed and configured through a guided interactive wizard, with all v2.0 features wired up
-**Depends on**: Phase 1 through Phase 5 (CLI must know the complete feature set to configure it)
-**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, CLI-05, CLI-06, CLI-07, CLI-08, CLI-09
-**Success Criteria** (what must be TRUE):
-  1. Running `npx livinity onboard` on a fresh Ubuntu 22.04+ server launches a guided interactive setup that installs all prerequisites, configures the domain, and starts all services
-  2. The CLI checks system requirements (Docker, Node.js 22+, Redis, PostgreSQL, disk 10GB+, RAM 4GB+) and clearly reports what is missing before proceeding
-  3. After setup completes, `livinity status` shows the health of all PM2 services with green/red indicators
-  4. Non-interactive mode (`livinity onboard --config setup.json`) completes the full installation without any user prompts
-  5. If the installation fails partway through, completed steps are rolled back (created files removed, started services stopped) leaving the server in a clean state
-**Status**: COMPLETE (2026-02-21)
-**Plans**: 3 plans in 3 waves (sequential)
-
-Plans:
-- [x] v2.0-06-01-PLAN.md — CLI package scaffolding: nexus/packages/cli with commander + picocolors, system prerequisite checks (Node/Docker/Redis/PM2/disk/RAM), livinity status command with PM2 health table [Wave 1]
-- [x] v2.0-06-02-PLAN.md — Interactive onboard wizard: @clack/prompts UX, domain/SSL config, Telegram/Discord tokens, optional voice/Gmail, secret generation (crypto.randomBytes), .env writer [Wave 2]
-- [x] v2.0-06-03-PLAN.md — Service setup + resilience: PM2 ecosystem generation, dep install + build + start, health verification, non-interactive mode (--config setup.json), RollbackStack for partial failure cleanup [Wave 3]
-
-### v2.0 Progress
-
-**Execution Order:**
-Phases execute sequentially: 1 -> 2 -> 3 -> 4 -> 5 -> 6
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Stability & Security Foundation | 4/4 | Complete | 2026-02-20 |
-| 2. Automation Infrastructure | 4/4 | Complete | 2026-02-20 |
-| 3. Intelligence Enhancements | 3/3 | Complete | 2026-02-20 |
-| 4. Voice Pipeline | 4/4 | Complete | 2026-02-20 |
-| 5. Live Canvas + LivHub | 4/4 | Complete | 2026-02-21 |
-| 6. Onboarding CLI | 3/3 | Complete | 2026-02-21 |
-
----
-
-## Milestone: v5.0 — Light Theme UI Redesign
-
-**Overview**: Complete light theme redesign of the Vite/React UI using motion-primitives. Every screen gets professional light-mode styling. All semantic tokens converted from dark to light. All hardcoded color references replaced with semantic tokens. Full i18n coverage for all user-visible strings. Piece-by-piece approach with each phase covering a logical group of screens.
-
-### v5.0 Phases
-
-- [ ] **Phase 01: Design Foundation** — Semantic tokens, CSS globals, shadows → light theme
-- [ ] **Phase 02: Base Components** — shadcn + custom UI components + raw color elimination
-- [ ] **Phase 03: Login & Onboarding** — Login page + 6-step setup wizard + i18n
-- [ ] **Phase 04: Desktop & Window Manager** — Dock, app grid, window chrome, wallpaper
-- [ ] **Phase 05: App Store** — Discover, category, app page, community, window variants
-- [ ] **Phase 06: AI Chat** — Chat area, sidebar, canvas, skills, MCP, voice, input
-- [ ] **Phase 07: Settings Hub** — Main settings + all 20+ sub-pages + mobile variants
-- [ ] **Phase 08: File Manager** — Listing, sidebar, cards, floating islands, rewind, dialogs
-- [ ] **Phase 09: Remaining Screens** — Server control, notifications, subagents, schedules, factory reset, terminal, live usage, misc pages
-- [ ] **Phase 10: i18n Audit + Quality** — Screen-level i18n audit, visual consistency, build verification
-
-### Phase 01: Design Foundation
-**Goal**: Convert the entire design token system from dark-on-black to light-on-white, establishing the visual foundation for all subsequent phases
-**Depends on**: Nothing (first phase)
-**Requirements**: REQ-DF-01, REQ-DF-02, REQ-DF-03, REQ-DF-04
-**Success Criteria** (what must be TRUE):
-  1. All semantic color tokens in tailwind.config.ts produce light-appropriate values (dark text on light backgrounds)
-  2. CSS globals (scrollbars, selection, dividers) render correctly on light backgrounds
-  3. All box shadows produce natural-looking elevation on light surfaces (no white inner glows)
-  4. Any new motion-primitives components needed for the foundation are installed
-
-### Phase 02: Base Components
-**Goal**: Update every reusable UI component (shadcn + custom) to look correct on light backgrounds, and eliminate raw `text-white`/`bg-white` references in shared components
-**Depends on**: Phase 01 (needs light tokens defined)
-**Requirements**: REQ-BC-01, REQ-BC-02, REQ-BC-03, REQ-QA-01 (partial — shared components only)
-**Success Criteria** (what must be TRUE):
-  1. All 27 shadcn components render correctly with light theme tokens
-  2. All custom UI components (card, toast, loading, etc.) render correctly on light backgrounds
-  3. Command palette, markdown renderer, install buttons work with light theme
-  4. No raw `text-white`/`bg-white` references remain in `shadcn-components/` or `components/` directories
-
-### Phase 03: Login & Onboarding
-**Goal**: Redesign login and the 6-step onboarding wizard with professional light theme, motion-primitives animations, and full i18n coverage
-**Depends on**: Phase 02 (needs light-themed base components)
-**Requirements**: REQ-SR-01, REQ-SR-02, REQ-I18N-01
-**Success Criteria** (what must be TRUE):
-  1. Login page has professional light theme styling with motion-primitives
-  2. All 6 setup wizard steps render with light theme (no dark remnants)
-  3. All hardcoded English strings in setup wizard are wrapped in `t()` for i18n
-  4. Language selection in setup wizard actually changes the UI language
-
-### Phase 04: Desktop & Window Manager
-**Goal**: Light theme desktop environment with frosted glass dock, clean app grid, and macOS-style window chrome
-**Depends on**: Phase 02 (needs light-themed base components)
-**Requirements**: REQ-SR-03, REQ-SR-04
-**Success Criteria** (what must be TRUE):
-  1. Dock renders with frosted glass effect appropriate for light backgrounds
-  2. Desktop app icons and grid look clean on light wallpapers
-  3. Window chrome has light title bar with colored macOS-style dots
-  4. Window content area uses light surface colors
-
-### Phase 05: App Store
-**Goal**: Light theme App Store with all variants (discover, category, app detail, community, window-embedded)
-**Depends on**: Phase 02 (needs light base components)
-**Requirements**: REQ-SR-05
-**Success Criteria** (what must be TRUE):
-  1. Discover page featured sections render with light theme
-  2. App detail page with install button works on light background
-  3. Community app store variant matches light theme
-  4. Window-embedded app store variants (discover-window, app-page-window, etc.) are consistent
-
-### Phase 06: AI Chat
-**Goal**: Professional light theme AI chat with all panels, voice button, and canvas
-**Depends on**: Phase 02 (needs light base components)
-**Requirements**: REQ-SR-06
-**Success Criteria** (what must be TRUE):
-  1. Chat area has light-themed message bubbles with clear user/AI differentiation
-  2. Sidebar conversation list renders on light background
-  3. Canvas panel, skills panel, MCP panel all use light theme
-  4. Voice button and input area styled for light theme
-
-### Phase 07: Settings Hub
-**Goal**: Light theme for the entire settings section — main index, all sub-pages, shared components, mobile variants
-**Depends on**: Phase 02 (needs light base components)
-**Requirements**: REQ-SR-07
-**Success Criteria** (what must be TRUE):
-  1. Main settings index with sidebar renders in light theme
-  2. All 20+ settings sub-pages (account, system, network, AI, integrations, data) use light theme
-  3. All 8 mobile settings variants match light theme
-  4. Shared settings components (list-row, toggle-row, info-card) are light-themed
-
-### Phase 08: File Manager
-**Goal**: Light theme file manager with all views, sidebar, floating islands, rewind, and dialogs
-**Depends on**: Phase 02 (needs light base components)
-**Requirements**: REQ-SR-08
-**Success Criteria** (what must be TRUE):
-  1. File listing (grid + list views) renders with light theme
-  2. Sidebar with all locations uses light styling
-  3. All floating islands (minimized + expanded states) are light-themed
-  4. Rewind timeline, dialogs (share, format, delete, network share) match light theme
-
-### Phase 09: Remaining Screens
-**Goal**: Light theme for all remaining screens not covered in previous phases
-**Depends on**: Phase 02 (needs light base components)
-**Requirements**: REQ-SR-09, REQ-SR-10, REQ-SR-11, REQ-SR-12, REQ-SR-13, REQ-SR-14, REQ-SR-15, REQ-SR-16
-**Success Criteria** (what must be TRUE):
-  1. Server control dashboard uses light theme with AnimatedNumber stats
-  2. Notifications, subagents, schedules pages render in light theme
-  3. Factory reset page has appropriate light-themed warning styling
-  4. Terminal keeps dark body but has light chrome
-  5. Live usage, what's new modal, not-found, error boundaries all light-themed
-
-### Phase 10: i18n Audit + Quality
-**Goal**: Ensure every user-visible string uses i18n, verify visual consistency across all screens, clean build
-**Depends on**: All previous phases
-**Requirements**: REQ-I18N-02, REQ-QA-01 (remaining), REQ-QA-02, REQ-QA-03
-**Success Criteria** (what must be TRUE):
-  1. Every user-visible string across all screens uses `t()` function
-  2. Zero raw `text-white`/`bg-white`/`border-white` references remain in any .tsx file
-  3. Visual audit confirms no dark remnants or broken contrast on any screen
-  4. `pnpm --filter ui build` succeeds with zero errors
-
-### v5.0 Progress
-
-**Execution Order:**
-Phase 01 first (foundation), Phase 02 next (components), then Phases 03-09 in order (screens), Phase 10 last (quality).
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 01. Design Foundation | 0/? | Not started | - |
-| 02. Base Components | 0/? | Not started | - |
-| 03. Login & Onboarding | 0/? | Not started | - |
-| 04. Desktop & Window Manager | 0/? | Not started | - |
-| 05. App Store | 0/? | Not started | - |
-| 06. AI Chat | 0/? | Not started | - |
-| 07. Settings Hub | 0/? | Not started | - |
-| 08. File Manager | 0/? | Not started | - |
-| 09. Remaining Screens | 0/? | Not started | - |
-| 10. i18n Audit + Quality | 0/? | Not started | - |
-
----
-*Roadmap created: 2026-02-03*
-*Last updated: 2026-03-07 — v5.3 UI Polish & Consistency added*
-*Total phases: 10 (v1.0) + 3 (v1.2) + 3 (v1.3) + 5 (v1.5) + 6 (v2.0) + 10 (v5.0) + 1 (v5.2) + 4 (v5.3) | Total plans: ~97 (estimated)*
-*Coverage: 29/29 v1.0 + 21/21 v1.3 + 54/54 v1.5 + 83/83 v2.0 + 28/28 v5.0 + 15/15 v5.3 requirements mapped*
-
-## v5.2 — Comprehensive UI Overhaul
-
-### Phase v5.2: UI Overhaul — Files, App Store, Settings Window Redesign
-**Goal**: Redesign Files and App Store visuals for a premium, editorial aesthetic. Fix Settings window routing and button inconsistencies. Revert window chrome drag cursor.
-**Depends on**: v5.0 Light Theme (completed), v5.1 Motion Primitives (components available)
-**Plans:** 6 plans in 3 waves
-
-Plans:
-- [ ] v5.2-01-PLAN.md — Quick fixes: window chrome cursor, Settings routing, button consistency
-- [ ] v5.2-02-PLAN.md — Files redesign: layout, sidebar, toolbar
-- [ ] v5.2-03-PLAN.md — Files redesign: grid/list items, empty states, virtualization
-- [ ] v5.2-04-PLAN.md — App Store sheet redesign: shared styles, hero cards, gallery, sections
-- [ ] v5.2-05-PLAN.md — App Store window redesign: mirror sheet design to window components
-- [ ] v5.2-06-PLAN.md — Build verification and visual checkpoint
-
-**Wave Structure:**
-| Wave | Plans | Parallel |
-|------|-------|----------|
-| 1 | 01, 02, 03, 04 | Yes (independent) |
-| 2 | 05 | Sequential (depends on 04) |
-| 3 | 06 | Sequential (depends on all) |
-
----
-
-## v5.3 — UI Polish & Consistency
-
-**Overview**: Polish Files with path bar redesign, empty states with illustrations, loading skeletons, and file operation animations. Extend motion-primitives design language to Dashboard/Home. Audit visual consistency across all windows. Performance audit for motion-heavy components.
-
-### v5.3 Phases
-
-- [x] **Phase 1: Files Polish** — Path bar, empty states, loading skeletons, file operation animations ✓
-- [x] **Phase 2: Dashboard & Home** — Motion-primitives integration, app icon cards, stats widgets, dock polish ✓
-- [x] **Phase 3: Visual Consistency** — Window chrome audit, shared component alignment, color/typography/spacing consistency ✓
-- [x] **Phase 4: Performance & Quality** — Motion component profiling, re-render optimization, build verification ✓
-
-### Phase 1: Files Polish
-**Goal**: Transform Files loading, empty, and navigation states from basic to polished with motion-primitives animations and skeleton loading
-**Depends on**: v5.2 (Files redesign completed)
-**Requirements**: REQ-FP-01, REQ-FP-02, REQ-FP-03, REQ-FP-04
-**Success Criteria** (what must be TRUE):
-  1. Path bar has rounded container with animated breadcrumb transitions and hover effects
-  2. Empty folder state shows animated icon with staggered entry for text and action buttons
-  3. Grid/list loading shows skeleton placeholders with shimmer instead of spinner
-  4. Floating islands for file operations have smooth entry/exit and progress animations
-**Plans**: 2 plans in 1 wave
-
-Plans:
-- [x] v5.3-01-01-PLAN.md — Path bar redesign: rounded container, segment transitions, hover effects (REQ-FP-01) ✓
-- [x] v5.3-01-02-PLAN.md — Empty states, loading skeletons, operation animations (REQ-FP-02, REQ-FP-03, REQ-FP-04) ✓
-
-### Phase 2: Dashboard & Home
-**Goal**: Extend v5.2 motion-primitives design language to the desktop home screen — app icons, stats, header, dock
-**Depends on**: Phase 1 (establishes additional motion patterns)
-**Requirements**: REQ-DH-01, REQ-DH-02, REQ-DH-03, REQ-DH-04
-**Success Criteria** (what must be TRUE):
-  1. Desktop header greeting uses polished TextEffect or TextShimmerWave animation
-  2. App grid icons have Tilt 3D and Spotlight glow on hover (matching Files grid)
-  3. Live usage stats display AnimatedNumber for CPU/Memory/Storage values
-  4. Dock styling is consistent with v5.2 light theme design language
-**Plans**: 2 plans in 1 wave
-
-Plans:
-- [x] v5.3-02-01-PLAN.md — Desktop content, header, app icon cards with Tilt/Spotlight (REQ-DH-01, REQ-DH-02) ✓
-- [x] v5.3-02-02-PLAN.md — Stats widgets with AnimatedNumber, dock polish (REQ-DH-03, REQ-DH-04) ✓
-
-### Phase 3: Visual Consistency
-**Goal**: Audit and fix visual inconsistencies across all modules — window chrome, shared components, colors, typography, spacing
-**Depends on**: Phase 2 (all motion-primitives work completed)
-**Requirements**: REQ-VC-01, REQ-VC-02, REQ-VC-03, REQ-VC-04
-**Success Criteria** (what must be TRUE):
-  1. All app windows use identical chrome styling (title bar, controls, borders, shadows)
-  2. Buttons, inputs, dropdowns have consistent sizing and styling across all modules
-  3. Color token usage is consistent (no hardcoded neutrals where tokens exist)
-  4. Border radius and spacing follow a consistent scale across the entire UI
-**Plans**: 2 plans in 1 wave
-
-Plans:
-- [x] v5.3-03-01-PLAN.md — Window chrome and shared component audit/fix (REQ-VC-01, REQ-VC-02) ✓
-- [x] v5.3-03-02-PLAN.md — Color, typography, spacing consistency audit/fix (REQ-VC-03, REQ-VC-04) ✓
-
-### Phase 4: Performance & Quality
-**Goal**: Ensure motion-heavy components perform well and the build is clean
-**Depends on**: Phase 3 (all UI changes completed)
-**Requirements**: REQ-PERF-01, REQ-PERF-02, REQ-PERF-03
-**Success Criteria** (what must be TRUE):
-  1. Files grid with 100+ items scrolls at 60fps with Tilt/Spotlight effects
-  2. No unnecessary re-renders detected in motion-wrapped components
-  3. `pnpm --filter ui build` succeeds with zero errors
-**Plans**: 1 plan in 1 wave
-
-Plans:
-- [x] v5.3-04-01-PLAN.md — Performance profiling, re-render optimization, build verification (REQ-PERF-01, REQ-PERF-02, REQ-PERF-03) ✓
-
-### v5.3 Progress
-
-**Execution Order:**
-Phases execute sequentially: 1 -> 2 -> 3 -> 4
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Files Polish | 2/2 | Complete ✓ | 2026-03-07 |
-| 2. Dashboard & Home | 2/2 | Complete ✓ | 2026-03-07 |
-| 3. Visual Consistency | 2/2 | Complete ✓ | 2026-03-07 |
-| 4. Performance & Quality | 1/1 | Complete ✓ | 2026-03-07 |
+|-------|---------------|--------|-----------|
+| 1. KimiProvider | 0/2 | Not started | - |
+| 2. Configuration Layer | 0/2 | Not started | - |
+| 3. KimiAgentRunner | 0/2 | Not started | - |
+| 4. Onboarding and Cleanup | 0/2 | Not started | - |

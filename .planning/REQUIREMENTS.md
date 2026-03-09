@@ -80,14 +80,36 @@
 ## Traceability
 
 | Requirement | Phase | Status |
-|------------|-------|--------|
-| CORE-01..05 | TBD | Pending |
-| AGENT-01..05 | TBD | Pending |
-| AUTH-01..04 | TBD | Pending |
-| API-01..03 | TBD | Pending |
-| UI-01..03 | TBD | Pending |
-| ONBOARD-01..02 | TBD | Pending |
-| CLEAN-01..07 | TBD | Pending |
+|-------------|-------|--------|
+| CORE-01 | Phase 1 | Pending |
+| CORE-02 | Phase 1 | Pending |
+| CORE-03 | Phase 1 | Pending |
+| CORE-04 | Phase 1 | Pending |
+| CORE-05 | Phase 1 | Pending |
+| API-01 | Phase 2 | Pending |
+| API-02 | Phase 2 | Pending |
+| API-03 | Phase 2 | Pending |
+| UI-01 | Phase 2 | Pending |
+| UI-02 | Phase 2 | Pending |
+| UI-03 | Phase 2 | Pending |
+| AUTH-01 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Pending |
+| AGENT-01 | Phase 3 | Pending |
+| AGENT-02 | Phase 3 | Pending |
+| AGENT-03 | Phase 3 | Pending |
+| AGENT-04 | Phase 3 | Pending |
+| AGENT-05 | Phase 3 | Pending |
+| AUTH-03 | Phase 3 | Pending |
+| ONBOARD-01 | Phase 4 | Pending |
+| ONBOARD-02 | Phase 4 | Pending |
+| AUTH-04 | Phase 4 | Pending |
+| CLEAN-01 | Phase 4 | Pending |
+| CLEAN-02 | Phase 4 | Pending |
+| CLEAN-03 | Phase 4 | Pending |
+| CLEAN-04 | Phase 4 | Pending |
+| CLEAN-05 | Phase 4 | Pending |
+| CLEAN-06 | Phase 4 | Pending |
+| CLEAN-07 | Phase 4 | Pending |
 
 ---
-*29 requirements across 7 categories*
+*29 requirements across 7 categories, mapped to 4 phases*
