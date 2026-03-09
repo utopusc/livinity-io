@@ -194,10 +194,11 @@ export class HeartbeatRunner {
       const response = await this.executeHeartbeat(contextMessage);
 
       // Check if response is just HEARTBEAT_OK
+      logger.info('HeartbeatRunner: raw response', { length: response.length, preview: response.slice(0, 200) });
       const { shouldSkip, cleanedResponse } = this.processHeartbeatResponse(response);
 
       if (shouldSkip) {
-        logger.info('HeartbeatRunner: HEARTBEAT_OK received, nothing to deliver');
+        logger.info('HeartbeatRunner: skipped delivery', { reason: !response.trim() ? 'empty' : 'heartbeat_ok_or_short' });
         await this.saveState(response, false);
         return { delivered: false, response };
       }
