@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v6.0 -- Claude Code to Kimi Code Migration
-**Current focus:** Phase 4 - Onboarding & Cleanup (Plan 1 complete)
+**Current focus:** Phase 4 - Onboarding & Cleanup (COMPLETE)
 
 ## Current Position
 
 Milestone: v6.0 (Claude Code to Kimi Code Migration)
 Phase: 4 of 4 (Onboarding & Cleanup)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-09 -- Completed 04-01-PLAN.md (Onboarding wizard Kimi auth step)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-09 -- Completed 04-02-PLAN.md (Claude/Anthropic/Gemini cleanup)
 
-Progress: [########..] 87% (7/8 plans)
+Progress: [##########] 100% (8/8 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 3.3 min
-- Total execution time: 23 min
+- Total plans completed: 8
+- Average duration: 3.5 min
+- Total execution time: 28 min
 
 **By Phase:**
 
@@ -32,7 +32,7 @@ Progress: [########..] 87% (7/8 plans)
 | 01-kimi-provider | 2/2 | 5 min | 2.5 min |
 | 02-configuration-layer | 2/2 | 7 min | 3.5 min |
 | 03-kimi-agent-runner | 2/2 | 6 min | 3 min |
-| 04-onboarding-cleanup | 1/2 | 5 min | 5 min |
+| 04-onboarding-cleanup | 2/2 | 10 min | 5 min |
 
 ## Accumulated Context
 
@@ -63,21 +63,26 @@ Progress: [########..] 87% (7/8 plans)
 - Model IDs: kimi-for-coding (sonnet), kimi-latest (flash/haiku), kimi-k2.5 (opus) -- may need adjustment (03-02)
 - Kimi API key input replaces Claude OAuth PKCE flow in setup wizard (04-01)
 - PasswordInput label prop used as placeholder (component has no separate placeholder prop) (04-01)
+- AgentLoop as sole inline runner (not KimiAgentRunner for subprocess); all SdkAgentRunner paths removed (04-02)
+- ClaudeToolDefinition renamed to ToolDefinition; toClaudeTools renamed to toToolDefinitions (04-02)
+- Memory embeddings switched from Google API to Kimi OpenAI-compatible endpoint (04-02)
 
 ### Pending Todos
 
 - Run `nexus/scripts/install-kimi.sh` on server4 (45.137.194.103) to complete server setup
+- Run `npm install` in nexus/ to regenerate package-lock.json without Anthropic/Google packages
+- Verify end-to-end Kimi agent flow on production server
 
 ### Blockers/Concerns
 
 - Kimi Agent SDK is v0.1.5 (pre-stable) -- using print mode fallback mitigates this
-- Device auth API endpoints found in GitHub issues, not official docs -- needs verification in Phase 2
 - Model IDs need runtime verification via `kimi info` on server
 - Pre-existing TypeScript errors in livinityd (toolRegistry, subagent typing, apps.ts) -- unrelated to migration
 - Install script needs to be run on server before KimiAgentRunner can be tested end-to-end
+- package-lock.json still has stale Anthropic references (will clear on next npm install)
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 04-01-PLAN.md (Onboarding wizard Kimi auth step)
+Stopped at: Completed 04-02-PLAN.md (Claude/Anthropic/Gemini cleanup) -- v6.0 migration complete
 Resume file: None
