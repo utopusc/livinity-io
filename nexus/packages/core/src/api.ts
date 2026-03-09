@@ -191,67 +191,12 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     error?: string;
   }>();
 
-  /** Check if Kimi CLI is authenticated by running `kimi login --json` briefly */
+  /** Check if Kimi CLI is authenticated (uses Redis flag — no process spawn) */
   app.get('/api/kimi/status', async (_req, res) => {
     try {
-      // Check if ~/.kimi/ has auth credentials by attempting a quick model list
-      const result = await new Promise<{ authenticated: boolean }>((resolve) => {
-        const proc = spawn('kimi', ['login', '--json'], {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` },
-        });
-        let authenticated = false;
-        let output = '';
-        const timeout = setTimeout(() => {
-          proc.kill();
-          // If we got a verification_url, user is NOT authenticated (needs to login)
-          // If we got no verification_url event quickly, check output
-          resolve({ authenticated });
-        }, 3000);
-
-        proc.stdout?.on('data', (data: Buffer) => {
-          output += data.toString();
-          const lines = output.split('\n').filter(Boolean);
-          for (const line of lines) {
-            try {
-              const event = JSON.parse(line);
-              if (event.type === 'verification_url') {
-                // Got a login prompt = not authenticated
-                authenticated = false;
-                clearTimeout(timeout);
-                proc.kill();
-                resolve({ authenticated: false });
-                return;
-              }
-              if (event.type === 'success' || event.type === 'login_success') {
-                authenticated = true;
-                clearTimeout(timeout);
-                proc.kill();
-                resolve({ authenticated: true });
-                return;
-              }
-            } catch { /* skip non-JSON lines */ }
-          }
-        });
-
-        proc.on('error', () => {
-          clearTimeout(timeout);
-          resolve({ authenticated: false });
-        });
-
-        proc.on('close', (code) => {
-          clearTimeout(timeout);
-          // Exit code 0 with no verification_url means already authenticated
-          if (code === 0 && !output.includes('verification_url')) {
-            resolve({ authenticated: true });
-          } else {
-            resolve({ authenticated });
-          }
-        });
-      });
-
+      const flag = await redis.get('nexus:kimi:authenticated');
       res.json({
-        authenticated: result.authenticated,
+        authenticated: flag === '1',
         provider: 'kimi',
       });
     } catch (err) {
@@ -262,6 +207,12 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   /** Start Kimi CLI login — spawns `kimi login --json` and returns auth URL */
   app.post('/api/kimi/login', async (_req, res) => {
     try {
+      // Kill any existing login sessions to avoid conflicts
+      for (const [id, s] of kimiLoginSessions) {
+        s.process.kill();
+        kimiLoginSessions.delete(id);
+      }
+
       const sessionId = randomUUID();
 
       const proc = spawn('kimi', ['login', '--json'], {
@@ -288,23 +239,29 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       }, 5 * 60 * 1000);
 
       let output = '';
+      let urlResolved = false;
 
       // Wait for verification_url event (should come within a few seconds)
       const urlPromise = new Promise<{ verificationUrl: string; userCode: string }>((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Timeout waiting for Kimi login URL'));
-        }, 10000);
+        }, 15000);
 
         proc.stdout?.on('data', (data: Buffer) => {
           output += data.toString();
-          const lines = output.split('\n').filter(Boolean);
+          // Process only complete lines
+          const lines = output.split('\n');
+          // Keep the last incomplete line in output
+          output = lines.pop() || '';
           for (const line of lines) {
+            if (!line.trim()) continue;
             try {
               const event = JSON.parse(line);
-              if (event.type === 'verification_url' && event.data) {
+              if (event.type === 'verification_url' && event.data && !urlResolved) {
                 session.verificationUrl = event.data.verification_url;
                 session.userCode = event.data.user_code;
-                session.status = 'waiting' as any;
+                (session as any).status = 'waiting';
+                urlResolved = true;
                 clearTimeout(timeout);
                 resolve({
                   verificationUrl: event.data.verification_url,
@@ -312,7 +269,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
                 });
               }
               if (event.type === 'success' || event.type === 'login_success') {
-                session.status = 'success' as any;
+                (session as any).status = 'success';
+                redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+                logger.info('Kimi CLI login completed successfully');
               }
             } catch { /* skip non-JSON lines */ }
           }
@@ -320,18 +279,20 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
         proc.on('error', (err) => {
           clearTimeout(timeout);
-          session.status = 'error' as any;
+          (session as any).status = 'error';
           session.error = err.message;
-          reject(err);
+          if (!urlResolved) reject(err);
         });
 
         proc.on('close', (code) => {
           clearTimeout(timeout);
-          if (session.status !== 'success' as any) {
+          if ((session as any).status !== 'success') {
             if (code === 0) {
-              session.status = 'success' as any;
-            } else if (!session.verificationUrl) {
-              session.status = 'error' as any;
+              (session as any).status = 'success';
+              redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+              logger.info('Kimi CLI login process exited successfully (code 0)');
+            } else if (!urlResolved) {
+              (session as any).status = 'error';
               session.error = `kimi login exited with code ${code}`;
               reject(new Error(session.error));
             }
@@ -340,29 +301,6 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       });
 
       const { verificationUrl, userCode } = await urlPromise;
-
-      // Continue monitoring in background for auth completion
-      proc.stdout?.on('data', (data: Buffer) => {
-        const lines = data.toString().split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const event = JSON.parse(line);
-            if (event.type === 'success' || event.type === 'login_success') {
-              const s = kimiLoginSessions.get(sessionId);
-              if (s) s.status = 'success' as any;
-              logger.info('Kimi CLI login completed successfully');
-            }
-          } catch { /* skip */ }
-        }
-      });
-
-      proc.on('close', (code) => {
-        const s = kimiLoginSessions.get(sessionId);
-        if (s && code === 0) {
-          s.status = 'success' as any;
-          logger.info('Kimi CLI login process exited successfully');
-        }
-      });
 
       logger.info(`Kimi login started, session=${sessionId}, url=${verificationUrl}`);
       res.json({ sessionId, verificationUrl, userCode });
@@ -402,7 +340,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         // Timeout after 10s
         setTimeout(() => { proc.kill(); resolve(); }, 10000);
       });
-      // Also clear any stored API key
+      // Clear auth flag and any stored API key
+      await redis.del('nexus:kimi:authenticated');
       await redis.del('nexus:config:kimi_api_key');
       logger.info('Kimi CLI logout completed');
       res.json({ success: true });
