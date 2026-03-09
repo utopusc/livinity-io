@@ -10,8 +10,7 @@ import { Brain } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
 import type { AgentEvent } from './agent.js';
-import { SdkAgentRunner } from './sdk-agent-runner.js';
-import { ClaudeProvider } from './providers/claude.js';
+import { KimiAgentRunner } from './kimi-agent-runner.js';
 import type { McpConfigManager } from './mcp-config-manager.js';
 import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
@@ -1587,10 +1586,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-    // Check if we should use SDK subscription mode
-    const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-    const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
-    const useSdk = authMethod === 'sdk-subscription';
+    const authMethod = 'api-key'; // Kimi uses API key auth
 
     const agentConfig = {
       brain,
@@ -1607,11 +1603,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       sessionId: randomUUID(),
     };
 
-    const agent = useSdk
-      ? new SdkAgentRunner(agentConfig)
-      : new AgentLoop(agentConfig);
+    const agent = new AgentLoop(agentConfig);
 
-    logger.info('SSE: using agent mode', { mode: useSdk ? 'sdk-subscription' : 'api-key' });
+    logger.info('SSE: using agent mode', { mode: 'api-key' });
 
     agent.on('event', sendEvent);
 

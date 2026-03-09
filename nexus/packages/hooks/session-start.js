@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Runs on SessionStart - notifies daemon that a Claude Code session started
+// Runs on SessionStart - notifies daemon that an AI session started
 const NEXUS_URL = process.env.NEXUS_URL || 'http://45.137.194.103:3200';
 
 async function notifySessionStart() {

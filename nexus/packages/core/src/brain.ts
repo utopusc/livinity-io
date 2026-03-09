@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis';
 import { ProviderManager } from './providers/manager.js';
 import { normalizeMessages } from './providers/normalize.js';
-import type { ClaudeToolDefinition, ToolUseBlock, ProviderStreamChunk } from './providers/types.js';
+import type { ToolDefinition, ToolUseBlock, ProviderStreamChunk } from './providers/types.js';
 
 export type ModelTier = 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
 
@@ -17,10 +17,10 @@ interface ChatOptions {
   messages: ChatMessage[];
   tier?: ModelTier;
   maxTokens?: number;
-  /** Claude tool definitions for native tool calling */
-  tools?: ClaudeToolDefinition[];
-  /** Pre-formatted Claude messages (bypasses normalization, used for tool_result messages) */
-  rawClaudeMessages?: unknown[];
+  /** Tool definitions for native tool calling */
+  tools?: ToolDefinition[];
+  /** Pre-formatted provider messages (bypasses normalization, used for tool_result messages) */
+  rawProviderMessages?: unknown[];
 }
 
 interface ChatStreamChunk {
@@ -51,7 +51,7 @@ export class Brain {
   }
 
   async chat(options: ChatOptions): Promise<{ text: string; inputTokens: number; outputTokens: number; toolCalls?: ToolUseBlock[]; stopReason?: string }> {
-    const messages = options.rawClaudeMessages
+    const messages = options.rawProviderMessages
       ? undefined
       : normalizeMessages(options.messages);
     const result = await this.manager.chat({
@@ -60,7 +60,7 @@ export class Brain {
       tier: options.tier,
       maxOutputTokens: options.maxTokens,
       tools: options.tools,
-      rawMessages: options.rawClaudeMessages,
+      rawMessages: options.rawProviderMessages,
     });
     return {
       text: result.text,
@@ -72,7 +72,7 @@ export class Brain {
   }
 
   chatStream(options: ChatOptions): ChatStreamResult {
-    const messages = options.rawClaudeMessages
+    const messages = options.rawProviderMessages
       ? undefined
       : normalizeMessages(options.messages);
     const result = this.manager.chatStream({
@@ -81,7 +81,7 @@ export class Brain {
       tier: options.tier,
       maxOutputTokens: options.maxTokens,
       tools: options.tools,
-      rawMessages: options.rawClaudeMessages,
+      rawMessages: options.rawProviderMessages,
     });
     return {
       stream: result.stream as AsyncGenerator<ChatStreamChunk>,
@@ -101,7 +101,7 @@ export class Brain {
     return 'flash';
   }
 
-  /** Get the ID of the primary available provider ('kimi', 'claude', or 'gemini') */
+  /** Get the ID of the primary available provider */
   async getActiveProviderId(): Promise<string> {
     return this.manager.getActiveProviderId();
   }

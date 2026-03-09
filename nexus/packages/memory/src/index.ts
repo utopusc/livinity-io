@@ -1,6 +1,6 @@
 /**
  * Nexus Memory Service v2
- * Simple SQLite-based memory with Gemini embeddings
+ * Simple SQLite-based memory with vector embeddings
  * Inspired by OpenClaw's memory system
  */
 
@@ -82,32 +82,35 @@ function generateId(): string {
   return `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Helper: Get Gemini API key from Redis or env
-async function getGeminiKey(): Promise<string | null> {
+// Helper: Get Kimi API key from Redis or env
+async function getKimiKey(): Promise<string | null> {
   if (redis) {
-    const key = await redis.get('livos:config:gemini_api_key');
+    const key = await redis.get('livos:config:kimi_api_key');
     if (key) return key;
   }
-  return process.env.GEMINI_API_KEY || null;
+  return process.env.KIMI_API_KEY || null;
 }
 
-// Helper: Get embeddings from Gemini
+// Helper: Get embeddings via Kimi API (OpenAI-compatible)
 async function getEmbedding(text: string): Promise<number[] | null> {
-  const apiKey = await getGeminiKey();
+  const apiKey = await getKimiKey();
   if (!apiKey) {
-    console.warn('[Memory] No Gemini API key available for embeddings');
+    console.warn('[Memory] No Kimi API key available for embeddings');
     return null;
   }
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+      'https://api.kimi.com/coding/v1/embeddings',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
         body: JSON.stringify({
-          model: 'models/text-embedding-004',
-          content: { parts: [{ text }] },
+          model: 'kimi-embedding',
+          input: text,
         }),
       }
     );
@@ -117,8 +120,8 @@ async function getEmbedding(text: string): Promise<number[] | null> {
       return null;
     }
 
-    const data = await response.json() as { embedding?: { values?: number[] } };
-    return data.embedding?.values || null;
+    const data = await response.json() as { data?: Array<{ embedding?: number[] }> };
+    return data.data?.[0]?.embedding || null;
   } catch (err) {
     console.error('[Memory] Embedding error:', err);
     return null;

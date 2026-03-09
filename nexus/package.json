@@ -18,6 +18,5 @@
     "dev:memory": "npm run dev -w packages/memory"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.74.0"
   }
 }

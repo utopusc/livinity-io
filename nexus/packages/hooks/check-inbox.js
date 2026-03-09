@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// This runs on UserPromptSubmit hook in Claude Code
+// This runs on UserPromptSubmit hook
 // It checks if the Nexus daemon has pending notifications
 const NEXUS_URL = process.env.NEXUS_URL || 'http://45.137.194.103:3200';
 

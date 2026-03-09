@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
-import { SdkAgentRunner } from './sdk-agent-runner.js';
+import { AgentLoop } from './agent.js';
 import { ToolRegistry } from './tool-registry.js';
 import type { Brain } from './brain.js';
 import type { NexusConfig } from './config/schema.js';
@@ -314,7 +314,7 @@ export class MultiAgentManager {
   // ── Sub-agent execution ──────────────────────────────────────────
 
   /**
-   * Execute a sub-agent session through SdkAgentRunner.
+   * Execute a sub-agent session through AgentLoop.
    *
    * MULTI-07 (DAG topology): Sub-agents CANNOT spawn further sub-agents.
    * This is enforced by building a restricted ToolRegistry that excludes all
@@ -322,7 +322,7 @@ export class MultiAgentManager {
    * the sub-agent cannot create sessions.
    *
    * MULTI-05: Turn limit (maxTurns) and token budget (maxTokens) are
-   * enforced via the SdkAgentRunner config inherited from the session.
+   * enforced via the AgentLoop config inherited from the session.
    */
   async executeSubAgent(sessionId: string): Promise<void> {
     const session = await this.get(sessionId);
@@ -357,9 +357,9 @@ export class MultiAgentManager {
         ? `## Prior Context\n${historyContext}\n\n## Task\n${session.task}`
         : session.task;
 
-      // Create SdkAgentRunner with restricted config
+      // Create AgentLoop with restricted config
       // MULTI-05: maxTurns and maxTokens from session (hard-capped at 8 turns / 50k tokens)
-      const runner = new SdkAgentRunner({
+      const runner = new AgentLoop({
         brain: this.brain,
         toolRegistry: restrictedRegistry,
         nexusConfig: this.nexusConfig,

@@ -13,8 +13,6 @@ import { randomUUID } from 'node:crypto';
 import { Queue, Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { AgentLoop } from './agent.js';
-import { SdkAgentRunner } from './sdk-agent-runner.js';
-import { ClaudeProvider } from './providers/claude.js';
 import type { AgentEvent, AgentResult } from './agent.js';
 import type { Brain } from './brain.js';
 import type { ToolRegistry } from './tool-registry.js';
@@ -304,12 +302,8 @@ export class TaskManager {
       timestamp: Date.now(),
     }));
 
-    // Create agent for this task (SDK or AgentLoop based on auth method)
+    // Create agent for this task
     const approvalPolicy = this.nexusConfig?.approval?.policy ?? 'destructive';
-
-    const claudeProvider = this.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-    const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
-    const useSdk = authMethod === 'sdk-subscription';
 
     const agentConfig = {
       brain: this.brain,
@@ -325,13 +319,7 @@ export class TaskManager {
       sessionId: sessionId || taskId,
     };
 
-    const agent = useSdk
-      ? new SdkAgentRunner(agentConfig)
-      : new AgentLoop(agentConfig);
-
-    if (useSdk) {
-      logger.info('[TaskManager] using SDK subscription mode', { taskId });
-    }
+    const agent = new AgentLoop(agentConfig);
 
     // Forward agent events to Redis pub/sub and update progress
     const eventHandler = async (event: AgentEvent) => {

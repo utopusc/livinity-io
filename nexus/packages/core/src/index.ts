@@ -39,7 +39,7 @@ import { formatErrorMessage } from './infra/errors.js';
 const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
 const NEXUS_SKILLS_DIR = process.env.NEXUS_SKILLS_DIR || '/opt/nexus/app/skills';
 
-// Prevent unhandled errors from crashing the process (e.g. Gemini stream parse errors)
+// Prevent unhandled errors from crashing the process (e.g. stream parse errors)
 process.on('unhandledRejection', (reason: any) => {
   logger.error('Unhandled rejection (process kept alive)', {
     error: reason?.message || String(reason),

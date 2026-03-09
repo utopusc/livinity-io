@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Brain, ChatMessage } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
 import type { ToolResult } from './types.js';
-import type { ClaudeToolDefinition, ToolUseBlock, ToolResultBlock } from './providers/types.js';
+import type { ToolDefinition, ToolUseBlock, ToolResultBlock } from './providers/types.js';
 import { logger } from './logger.js';
 import type { NexusConfig } from './config/schema.js';
 import { getThinkingPromptModifier, getVerbosePromptModifier, getResponseStylePromptModifier, type ThinkLevel, type VerboseLevel, type ResponseConfig } from './thinking.js';
@@ -228,7 +228,7 @@ ${toolDescriptions}${canSpawnSubagent ? `
     - tools (array, optional): Tool names the subagent can use (defaults to all tools)
     - max_turns (number, optional): Max turns for the subagent [default: 5]` : ''}`;
 
-const CLAUDE_NATIVE_SYSTEM_PROMPT = (canSpawnSubagent: boolean) => `You are Nexus, an autonomous AI assistant. You manage a Linux server AND interact with the user via WhatsApp. You solve tasks by reasoning step-by-step and calling tools.
+const NATIVE_SYSTEM_PROMPT = (canSpawnSubagent: boolean) => `You are Nexus, an autonomous AI assistant. You manage a Linux server AND interact with the user via WhatsApp. You solve tasks by reasoning step-by-step and calling tools.
 
 ## WhatsApp Context
 
@@ -362,14 +362,14 @@ export class AgentLoop extends EventEmitter {
 
     // Detect active provider for tool calling mode
     const activeProvider = await brain.getActiveProviderId();
-    const useNativeTools = activeProvider === 'claude';
+    const useNativeTools = activeProvider === 'kimi';
 
-    // Prepare Claude tool definitions if using native tool calling
-    let claudeTools: ClaudeToolDefinition[] | undefined;
+    // Prepare tool definitions if using native tool calling
+    let nativeTools: ToolDefinition[] | undefined;
     if (useNativeTools) {
-      claudeTools = toolRegistry.toClaudeToolsFiltered(toolPolicy);
+      nativeTools = toolRegistry.toToolDefinitionsFiltered(toolPolicy);
       if (canSpawnSubagent) {
-        claudeTools.push({
+        nativeTools.push({
           name: 'spawn_subagent',
           description: 'Delegate a focused subtask to a subagent with its own tool loop',
           input_schema: {
@@ -383,15 +383,15 @@ export class AgentLoop extends EventEmitter {
           },
         });
       }
-      if (claudeTools.length === 0) claudeTools = undefined;
+      if (nativeTools.length === 0) nativeTools = undefined;
     }
 
-    // Build system prompt — different for Claude (native tools) vs Gemini (JSON-in-text)
+    // Build system prompt — different for native tools vs JSON-in-text
     let systemPrompt: string;
     if (this.config.systemPromptOverride) {
       systemPrompt = this.config.systemPromptOverride;
-    } else if (useNativeTools && claudeTools) {
-      systemPrompt = CLAUDE_NATIVE_SYSTEM_PROMPT(canSpawnSubagent);
+    } else if (useNativeTools && nativeTools) {
+      systemPrompt = NATIVE_SYSTEM_PROMPT(canSpawnSubagent);
     } else {
       systemPrompt = AGENT_SYSTEM_PROMPT(toolDescriptions, canSpawnSubagent);
     }
@@ -413,8 +413,8 @@ export class AgentLoop extends EventEmitter {
     }
 
     const messages: ChatMessage[] = [];
-    // Parallel Claude message array for native tool calling (proper content blocks)
-    const claudeMessages: unknown[] = [];
+    // Parallel provider message array for native tool calling (proper content blocks)
+    const providerMessages: unknown[] = [];
     const toolCalls: AgentResult['toolCalls'] = [];
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
@@ -428,7 +428,7 @@ export class AgentLoop extends EventEmitter {
       : `Task: ${task}`;
     messages.push({ role: 'user', text: taskWithContext });
     if (useNativeTools) {
-      claudeMessages.push({ role: 'user', content: taskWithContext });
+      providerMessages.push({ role: 'user', content: taskWithContext });
     }
 
     logger.info(`${prefix}: starting task`, { task: task.slice(0, 100), maxTurns, tier, depth, provider: activeProvider });
@@ -453,8 +453,8 @@ export class AgentLoop extends EventEmitter {
       let brainSuccess = false;
       let lastError: Error | null = null;
 
-      // === CLAUDE NATIVE TOOL CALLING MODE ===
-      if (useNativeTools && claudeTools) {
+      // === NATIVE TOOL CALLING MODE ===
+      if (useNativeTools && nativeTools) {
         let nativeToolUseBlocks: ToolUseBlock[] = [];
 
         for (let attempt = 0; attempt <= resolved.maxRetries; attempt++) {
@@ -465,8 +465,8 @@ export class AgentLoop extends EventEmitter {
                 messages,
                 tier,
                 maxTokens: 4096,
-                tools: claudeTools,
-                rawClaudeMessages: claudeMessages,
+                tools: nativeTools,
+                rawProviderMessages: providerMessages,
               });
 
               const textChunks: string[] = [];
@@ -496,8 +496,8 @@ export class AgentLoop extends EventEmitter {
                 messages,
                 tier,
                 maxTokens: 4096,
-                tools: claudeTools,
-                rawClaudeMessages: claudeMessages,
+                tools: nativeTools,
+                rawProviderMessages: providerMessages,
               });
               responseText = response.text;
               nativeToolUseBlocks = response.toolCalls || [];
@@ -535,20 +535,20 @@ export class AgentLoop extends EventEmitter {
           };
         }
 
-        // === Handle tool calls from Claude native response ===
+        // === Handle tool calls from native response ===
         if (nativeToolUseBlocks.length > 0) {
           // Emit thinking text if any
           if (responseText.trim()) {
             this.emitEvent({ type: 'thinking', turn: turn + 1, data: responseText });
           }
 
-          // Build assistant content blocks for Claude message history
+          // Build assistant content blocks for provider message history
           const assistantContent: unknown[] = [];
           if (responseText) assistantContent.push({ type: 'text', text: responseText });
           for (const tc of nativeToolUseBlocks) {
             assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
           }
-          claudeMessages.push({ role: 'assistant', content: assistantContent });
+          providerMessages.push({ role: 'assistant', content: assistantContent });
           messages.push({ role: 'model', text: responseText });
 
           // Execute each tool and collect results
@@ -619,8 +619,8 @@ export class AgentLoop extends EventEmitter {
             });
           }
 
-          // Add tool results as user message with content blocks for Claude
-          claudeMessages.push({ role: 'user', content: toolResultBlocks });
+          // Add tool results as user message with content blocks for provider
+          providerMessages.push({ role: 'user', content: toolResultBlocks });
 
           const toolResultText = toolResultBlocks.map(r => {
             const name = nativeToolUseBlocks.find(t => t.id === r.tool_use_id)?.name || 'unknown';
@@ -635,9 +635,9 @@ export class AgentLoop extends EventEmitter {
           continue; // Next turn
         }
 
-        // === No tool calls — final answer (Claude native mode) ===
+        // === No tool calls — final answer (native mode) ===
         messages.push({ role: 'model', text: responseText });
-        claudeMessages.push({ role: 'assistant', content: responseText });
+        providerMessages.push({ role: 'assistant', content: responseText });
         this.emitEvent({ type: 'final_answer', turn: turn + 1, data: responseText });
         if (this.config.onAction) {
           try {
@@ -652,7 +652,7 @@ export class AgentLoop extends EventEmitter {
         };
       }
 
-      // === GEMINI / JSON-IN-TEXT MODE (existing code path) ===
+      // === JSON-IN-TEXT MODE (fallback code path) ===
 
       // Retry loop for transient errors
       for (let attempt = 0; attempt <= resolved.maxRetries; attempt++) {
