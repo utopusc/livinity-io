@@ -199,7 +199,7 @@ export function UsageDashboard() {
 						</tbody>
 					</table>
 					<p className='mt-3 text-body-xs text-text-tertiary'>
-						Note: Cost estimates assume per-API pricing. Subscription plans (Claude Code) may have different billing.
+						Note: Cost estimates assume per-API pricing. Subscription plans may have different billing.
 					</p>
 				</div>
 			</Card>

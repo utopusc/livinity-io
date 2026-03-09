@@ -17,8 +17,7 @@ import { Redis } from 'ioredis';
 import { logger } from './logger.js';
 import { verifyApiKey, verifyJwt } from './auth.js';
 import { AgentLoop } from './agent.js';
-import { SdkAgentRunner } from './sdk-agent-runner.js';
-import { ClaudeProvider } from './providers/claude.js';
+import { KimiAgentRunner } from './kimi-agent-runner.js';
 import type { AgentEvent, AgentResult } from './agent.js';
 import type { Brain } from './brain.js';
 import type { ToolRegistry } from './tool-registry.js';
@@ -89,7 +88,7 @@ export interface NotificationPayload {
 
 interface WsSession {
   id: string;
-  agent: AgentLoop | SdkAgentRunner;
+  agent: AgentLoop | KimiAgentRunner;
   status: 'running' | 'complete' | 'cancelled' | 'error';
   startedAt: number;
   task: string;
@@ -471,10 +470,7 @@ export class WsGateway {
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-    // Check if we should use SDK subscription mode
-    const claudeProvider = this.deps.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-    const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
-    const useSdk = authMethod === 'sdk-subscription';
+    const authMethod = 'api-key'; // Kimi uses API key auth
 
     const agentConfig = {
       brain: this.deps.brain,
@@ -494,13 +490,7 @@ export class WsGateway {
       sessionId,
     };
 
-    const agent = useSdk
-      ? new SdkAgentRunner(agentConfig)
-      : new AgentLoop(agentConfig);
-
-    if (useSdk) {
-      logger.info('[WsGateway] using SDK subscription mode');
-    }
+    const agent = new AgentLoop(agentConfig);
 
     const session: WsSession = {
       id: sessionId,

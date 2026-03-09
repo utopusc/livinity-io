@@ -31,7 +31,7 @@ export function AiConfigDialog({open, onOpenChange}: {open: boolean; onOpenChang
 
 	const handleSave = () => {
 		if (!apiKey.trim()) return
-		setConfigMutation.mutate({geminiApiKey: apiKey.trim()})
+		setConfigMutation.mutate({kimiApiKey: apiKey.trim()})
 	}
 
 	return (
@@ -40,7 +40,7 @@ export function AiConfigDialog({open, onOpenChange}: {open: boolean; onOpenChang
 				<DialogHeader>
 					<DialogTitle>AI Configuration</DialogTitle>
 					<DialogDescription>
-						Set your Gemini API key to enable AI features. The key is stored securely in Redis and persists across
+						Set your Kimi API key to enable AI features. The key is stored securely in Redis and persists across
 						restarts.
 					</DialogDescription>
 				</DialogHeader>
@@ -49,14 +49,14 @@ export function AiConfigDialog({open, onOpenChange}: {open: boolean; onOpenChang
 					<div className='flex flex-col gap-1.5'>
 						<div className='px-[5px] text-12 -tracking-2 text-text-secondary'>Current key</div>
 						<div className='rounded-12 border border-border-default bg-surface-base px-5 py-3 font-mono text-13 text-text-tertiary'>
-							{configQ.isLoading ? '...' : configQ.data?.hasGeminiKey ? configQ.data.geminiApiKey : 'Not set'}
+							{configQ.isLoading ? '...' : configQ.data?.hasKimiKey ? configQ.data.kimiApiKey : 'Not set'}
 						</div>
 					</div>
 
 					<div className='flex flex-col gap-1.5'>
 						<div className='px-[5px] text-12 -tracking-2 text-text-secondary'>New API key</div>
 						<Input
-							placeholder='AIzaSy...'
+							placeholder='sk-...'
 							value={apiKey}
 							onValueChange={setApiKey}
 							onKeyDown={(e) => e.key === 'Enter' && handleSave()}

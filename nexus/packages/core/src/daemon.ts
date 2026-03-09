@@ -7,8 +7,7 @@ import { ShellExecutor } from './shell.js';
 import { Scheduler } from './scheduler.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
-import { SdkAgentRunner } from './sdk-agent-runner.js';
-import { ClaudeProvider } from './providers/claude.js';
+import { KimiAgentRunner } from './kimi-agent-runner.js';
 import { SkillLoader } from './skill-loader.js';
 import { SubagentManager } from './subagent-manager.js';
 import { ScheduleManager } from './schedule-manager.js';
@@ -1077,10 +1076,7 @@ export class Daemon {
       const nexusConfig = this.getNexusConfig();
       const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-      // Check if we should use SDK subscription mode
-      const claudeProvider = this.config.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-      const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
-      const useSdk = authMethod === 'sdk-subscription';
+      const authMethod = 'api-key'; // Kimi uses API key auth
 
       const agentConfig = {
         brain: this.config.brain,
@@ -1099,13 +1095,7 @@ export class Daemon {
         sessionId: randomUUID(),
       };
 
-      const agent = useSdk
-        ? new SdkAgentRunner(agentConfig)
-        : new AgentLoop(agentConfig);
-
-      if (useSdk) {
-        logger.info('Daemon: using SDK subscription mode for task');
-      }
+      const agent = new AgentLoop(agentConfig);
 
       // Voice TTS streaming: buffer agent text at sentence boundaries and publish to Redis
       const voiceSessionId = intent.params?.voiceSessionId as string | undefined;
@@ -3057,10 +3047,7 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
     const subNexusConfig = this.getNexusConfig();
     const subApprovalPolicy = subNexusConfig?.approval?.policy ?? 'destructive';
 
-    // Use SDK subscription mode if authenticated, same as main agent
-    const claudeProvider = this.config.brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-    const subAuthMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
-    const useSubSdk = subAuthMethod === 'sdk-subscription';
+    const subAuthMethod = 'api-key'; // Kimi uses API key auth
 
     const agentConfig = {
       brain: this.config.brain,
@@ -3077,13 +3064,7 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
       sessionId: randomUUID(),
     };
 
-    const agent = useSubSdk
-      ? new SdkAgentRunner(agentConfig)
-      : new AgentLoop(agentConfig);
-
-    if (useSubSdk) {
-      logger.info('executeSubagentTask: using SDK subscription mode', { subagentId });
-    }
+    const agent = new AgentLoop(agentConfig);
 
     // Record the user message in history
     await this.config.subagentManager.addMessage(subagentId, {

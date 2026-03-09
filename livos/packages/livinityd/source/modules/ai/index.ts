@@ -10,7 +10,7 @@ import type Livinityd from '../../index.js'
 export interface AiModuleOptions {
 	livinityd: Livinityd
 	redisUrl?: string
-	geminiApiKey?: string
+	kimiApiKey?: string
 }
 
 export interface ChatMessage {

@@ -13,7 +13,7 @@ import type {
   ProviderStreamChunk,
   ModelTier,
   ToolUseBlock,
-  ClaudeToolDefinition,
+  ToolDefinition,
 } from './types.js';
 import { prepareForProvider } from './normalize.js';
 import { logger } from '../logger.js';
@@ -96,14 +96,14 @@ interface OpenAIChatResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: Translate Anthropic tool definitions to OpenAI function format
+// Helper: Translate tool definitions to OpenAI function format
 // ---------------------------------------------------------------------------
 
 /**
- * Convert a Claude tool definition (input_schema) to an OpenAI function tool (parameters).
+ * Convert a tool definition (input_schema) to an OpenAI function tool (parameters).
  * This is a straightforward field rename: input_schema -> parameters.
  */
-function translateToolDefinition(tool: ClaudeToolDefinition): OpenAIFunctionTool {
+function translateToolDefinition(tool: ToolDefinition): OpenAIFunctionTool {
   return {
     type: 'function',
     function: {
@@ -146,7 +146,7 @@ function parseToolArguments(args: string | Record<string, unknown>): Record<stri
 }
 
 // ---------------------------------------------------------------------------
-// Helper: Map OpenAI finish_reason to Anthropic stop_reason
+// Helper: Map OpenAI finish_reason to internal stop_reason
 // ---------------------------------------------------------------------------
 
 function mapStopReason(finishReason: string | null): string {

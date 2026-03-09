@@ -20,7 +20,7 @@ export const BACKOFF_POLICIES = {
   standard: { initialMs: 300, maxMs: 30000, factor: 2, jitter: 0.15 },
   /** Slow retries for external APIs */
   conservative: { initialMs: 1000, maxMs: 60000, factor: 1.5, jitter: 0.2 },
-  /** Optimized for rate-limited APIs (like Gemini) */
+  /** Optimized for rate-limited APIs */
   api: { initialMs: 500, maxMs: 30000, factor: 2, jitter: 0.25 },
   /** For LLM calls - longer initial wait */
   llm: { initialMs: 1000, maxMs: 60000, factor: 2, jitter: 0.3 },

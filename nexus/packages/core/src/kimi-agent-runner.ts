@@ -6,7 +6,7 @@
  * JSONL output. Nexus tools are exposed via `--mcp-config` pointing to the
  * existing nexus-mcp HTTP server on port 3100.
  *
- * This mirrors SdkAgentRunner's public interface (extends EventEmitter,
+ * This mirrors AgentLoop's public interface (extends EventEmitter,
  * constructor takes AgentConfig, has `run(task): Promise<AgentResult>`).
  */
 

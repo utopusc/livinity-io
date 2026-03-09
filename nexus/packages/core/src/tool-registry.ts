@@ -1,6 +1,6 @@
 import { logger } from './logger.js';
 import type { Tool, ToolResult, ToolParameter } from './types.js';
-import type { ClaudeToolDefinition } from './providers/types.js';
+import type { ToolDefinition } from './providers/types.js';
 
 /**
  * Tool policy configuration for filtering available tools
@@ -269,17 +269,17 @@ export class ToolRegistry {
     });
   }
 
-  /** Convert all tools to Claude's native tool definition format (input_schema) */
-  toClaudeTools(): ClaudeToolDefinition[] {
-    return this.listAll().map((t) => this.toolToClaudeDefinition(t));
+  /** Convert all tools to native tool definition format (input_schema) */
+  toToolDefinitions(): ToolDefinition[] {
+    return this.listAll().map((t) => this.toolToDefinition(t));
   }
 
-  /** Convert filtered tools to Claude's native tool definition format */
-  toClaudeToolsFiltered(policy?: ToolPolicy): ClaudeToolDefinition[] {
-    return this.listAllFiltered(policy).map((t) => this.toolToClaudeDefinition(t));
+  /** Convert filtered tools to native tool definition format */
+  toToolDefinitionsFiltered(policy?: ToolPolicy): ToolDefinition[] {
+    return this.listAllFiltered(policy).map((t) => this.toolToDefinition(t));
   }
 
-  private toolToClaudeDefinition(t: Tool): ClaudeToolDefinition {
+  private toolToDefinition(t: Tool): ToolDefinition {
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
 

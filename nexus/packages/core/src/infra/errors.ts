@@ -244,7 +244,7 @@ export function extractRetryAfter(err: unknown): number | undefined {
     retryDelay?: number;
   };
 
-  // Direct retry delay property (Gemini SDK style)
+  // Direct retry delay property
   if (typeof errObj.retryAfter === 'number') {
     return errObj.retryAfter * 1000;
   }

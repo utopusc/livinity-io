@@ -4,8 +4,7 @@ import { pathToFileURL } from 'url';
 import { logger } from './logger.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
-import { SdkAgentRunner } from './sdk-agent-runner.js';
-import { ClaudeProvider } from './providers/claude.js';
+import { KimiAgentRunner } from './kimi-agent-runner.js';
 import { scanSkillDirectory } from './skill-manifest.js';
 import type { Brain } from './brain.js';
 import type Redis from 'ioredis';
@@ -255,10 +254,7 @@ export class SkillLoader {
         if (tool) scopedRegistry.register(tool);
       }
 
-      // Check if we should use SDK subscription mode
-      const claudeProvider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
-      const authMethod = claudeProvider ? await claudeProvider.getAuthMethod() : 'api-key';
-      const useSdk = authMethod === 'sdk-subscription';
+      const authMethod = 'api-key'; // Kimi uses API key auth
 
       const agentConfig = {
         brain,
@@ -272,9 +268,7 @@ export class SkillLoader {
         onAction,
       };
 
-      const agent = useSdk
-        ? new SdkAgentRunner(agentConfig)
-        : new AgentLoop(agentConfig);
+      const agent = new AgentLoop(agentConfig);
 
       return agent.run(agentOpts.task);
     };

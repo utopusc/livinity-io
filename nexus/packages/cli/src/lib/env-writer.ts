@@ -60,8 +60,8 @@ export function writeEnvFile(filePath: string, config: EnvConfig): void {
 
     // ── AI Configuration ──
     '# === AI Configuration ===',
-    '# v2.0 uses Claude Code Auth (subscription mode).',
-    '# No API keys needed — AI runs via Claude Code SDK subscription.',
+    '# Kimi API key is required for AI features.',
+    '# Get from: https://platform.moonshot.cn/console/api-keys',
     '',
 
     // ── Security ──
