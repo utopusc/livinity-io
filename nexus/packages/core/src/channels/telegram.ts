@@ -1,7 +1,8 @@
-import { Bot, Context } from 'grammy';
+import { Bot, Context, InlineKeyboard } from 'grammy';
 import type Redis from 'ioredis';
 import { logger } from '../logger.js';
 import type { DmPairingManager } from '../dm-pairing.js';
+import type { ApprovalManager } from '../approval-manager.js';
 import type {
   ChannelProvider,
   ChannelConfig,
@@ -21,9 +22,15 @@ export class TelegramProvider implements ChannelProvider {
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
   private pollingActive = false;
   private dmPairing: DmPairingManager | null = null;
+  private approvalManager: ApprovalManager | null = null;
+  private approvalSubRedis: Redis | null = null;
 
   setDmPairing(manager: DmPairingManager): void {
     this.dmPairing = manager;
+  }
+
+  setApprovalManager(manager: ApprovalManager): void {
+    this.approvalManager = manager;
   }
 
   async init(redis: Redis): Promise<void> {
@@ -156,6 +163,11 @@ export class TelegramProvider implements ChannelProvider {
           }
         }
 
+        // Track active chat for approval notifications
+        if (this.redis) {
+          await this.redis.set('nexus:telegram:active_chat', String(msg.chat.id)).catch(() => {});
+        }
+
         const incomingMsg: IncomingMessage = {
           channel: 'telegram',
           chatId: String(msg.chat.id),
@@ -176,6 +188,150 @@ export class TelegramProvider implements ChannelProvider {
           logger.error('TelegramProvider: message handler error', { error: err.message });
         }
       });
+
+      // ── Inline keyboard callback handler for approval buttons ──
+      this.bot.on('callback_query:data', async (ctx: Context) => {
+        const data = ctx.callbackQuery?.data;
+        if (!data || !data.startsWith('approval:')) {
+          await ctx.answerCallbackQuery().catch(() => {});
+          return;
+        }
+
+        // Format: approval:{requestId}:{decision}
+        const parts = data.split(':');
+        if (parts.length !== 3) {
+          await ctx.answerCallbackQuery({ text: 'Invalid action' }).catch(() => {});
+          return;
+        }
+
+        const [, requestId, decision] = parts;
+        if (decision !== 'approve' && decision !== 'deny') {
+          await ctx.answerCallbackQuery({ text: 'Invalid decision' }).catch(() => {});
+          return;
+        }
+
+        if (!this.approvalManager) {
+          await ctx.answerCallbackQuery({ text: 'Approval system unavailable' }).catch(() => {});
+          return;
+        }
+
+        const userName = ctx.callbackQuery?.from?.username || ctx.callbackQuery?.from?.first_name || 'Telegram User';
+        const resolved = await this.approvalManager.resolve({
+          requestId,
+          decision,
+          respondedBy: userName,
+          respondedFrom: 'telegram',
+        });
+
+        if (resolved) {
+          const emoji = decision === 'approve' ? '✅' : '❌';
+          const label = decision === 'approve' ? 'Approved' : 'Rejected';
+          await ctx.answerCallbackQuery({ text: `${emoji} ${label}` }).catch(() => {});
+
+          // Update the original message to show the decision
+          try {
+            const original = ctx.callbackQuery?.message;
+            if (original && 'text' in original) {
+              await ctx.editMessageText(
+                `${original.text}\n\n${emoji} *${label}* by ${userName}`,
+                { parse_mode: 'Markdown' },
+              );
+            }
+          } catch {
+            // Ignore edit failures (message too old, etc.)
+          }
+
+          logger.info('TelegramProvider: approval resolved via inline button', {
+            requestId,
+            decision,
+            by: userName,
+          });
+        } else {
+          await ctx.answerCallbackQuery({ text: 'Already resolved or expired' }).catch(() => {});
+        }
+      });
+
+      // ── Subscribe to approval requests and send inline keyboards ──
+      if (this.redis && this.approvalManager) {
+        this.approvalSubRedis = this.redis.duplicate();
+        this.approvalSubRedis.subscribe('nexus:notify:approval', (err) => {
+          if (err) {
+            logger.error('TelegramProvider: failed to subscribe to approvals', { error: err.message });
+          } else {
+            logger.info('TelegramProvider: subscribed to approval notifications');
+          }
+        });
+
+        this.approvalSubRedis.on('message', async (channel, message) => {
+          if (channel !== 'nexus:notify:approval') return;
+
+          try {
+            const notification = JSON.parse(message);
+            if (notification.event !== 'approval_request') return;
+
+            const request = notification.data;
+            if (!request?.id || !this.bot || !this.status.connected) return;
+
+            // Get the active chat ID to send approval to
+            const chatId = await this.redis?.get('nexus:telegram:active_chat');
+            if (!chatId) {
+              logger.warn('TelegramProvider: no active chat for approval notification');
+              return;
+            }
+
+            // Format the approval message
+            const toolName = request.tool || 'unknown';
+            const thought = request.thought || '';
+            let paramsStr = '';
+            if (request.params) {
+              try {
+                // Show key params concisely
+                const p = request.params;
+                if (p.command) paramsStr = `\`${String(p.command).slice(0, 200)}\``;
+                else if (p.path) paramsStr = `Path: \`${p.path}\``;
+                else paramsStr = `\`${JSON.stringify(p).slice(0, 200)}\``;
+              } catch {
+                paramsStr = '(complex params)';
+              }
+            }
+
+            let msg = `🔐 *Tool Approval Required*\n\n`;
+            msg += `*Tool:* \`${toolName}\`\n`;
+            if (paramsStr) msg += `*Params:* ${paramsStr}\n`;
+            if (thought) msg += `\n_${thought.slice(0, 300)}_\n`;
+            msg += `\n⏱ Expires in 5 minutes`;
+
+            const keyboard = new InlineKeyboard()
+              .text('✅ Approve', `approval:${request.id}:approve`)
+              .text('❌ Reject', `approval:${request.id}:deny`);
+
+            try {
+              await this.bot.api.sendMessage(chatId, msg, {
+                parse_mode: 'Markdown',
+                reply_markup: keyboard,
+              });
+            } catch (sendErr: any) {
+              // Retry without Markdown if parse fails
+              if (sendErr.message?.includes("can't parse entities")) {
+                const plainMsg = msg.replace(/[*_`]/g, '');
+                await this.bot.api.sendMessage(chatId, plainMsg, {
+                  reply_markup: keyboard,
+                });
+              } else {
+                throw sendErr;
+              }
+            }
+
+            logger.info('TelegramProvider: sent approval inline keyboard', {
+              requestId: request.id,
+              tool: toolName,
+              chatId,
+            });
+          } catch (err: any) {
+            logger.error('TelegramProvider: error handling approval notification', { error: err.message });
+          }
+        });
+      }
 
       // Error handler
       this.bot.catch((err) => {
@@ -218,6 +374,17 @@ export class TelegramProvider implements ChannelProvider {
   }
 
   async disconnect(): Promise<void> {
+    // Unsubscribe from approval notifications
+    if (this.approvalSubRedis) {
+      try {
+        await this.approvalSubRedis.unsubscribe('nexus:notify:approval');
+        await this.approvalSubRedis.quit();
+      } catch {
+        // Ignore
+      }
+      this.approvalSubRedis = null;
+    }
+
     if (this.bot && this.pollingActive) {
       try {
         await this.bot.stop();
