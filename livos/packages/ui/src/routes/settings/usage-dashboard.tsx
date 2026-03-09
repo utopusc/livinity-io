@@ -182,24 +182,24 @@ export function UsageDashboard() {
 						</thead>
 						<tbody>
 							<tr className='border-b border-border-default/50'>
-								<td className='py-2 pr-4 text-text-primary'>Haiku</td>
-								<td className='py-2 pr-4 text-right tabular-nums'>$0.25</td>
-								<td className='py-2 text-right tabular-nums'>$1.25</td>
+								<td className='py-2 pr-4 text-text-primary'>Flash / Haiku</td>
+								<td className='py-2 pr-4 text-right tabular-nums'>$0.10</td>
+								<td className='py-2 text-right tabular-nums'>$0.40</td>
 							</tr>
 							<tr className='border-b border-border-default/50'>
 								<td className='py-2 pr-4 text-text-primary'>Sonnet</td>
-								<td className='py-2 pr-4 text-right tabular-nums'>$3.00</td>
-								<td className='py-2 text-right tabular-nums'>$15.00</td>
+								<td className='py-2 pr-4 text-right tabular-nums'>$0.30</td>
+								<td className='py-2 text-right tabular-nums'>$1.20</td>
 							</tr>
 							<tr>
 								<td className='py-2 pr-4 text-text-primary'>Opus</td>
-								<td className='py-2 pr-4 text-right tabular-nums'>$15.00</td>
-								<td className='py-2 text-right tabular-nums'>$75.00</td>
+								<td className='py-2 pr-4 text-right tabular-nums'>$0.60</td>
+								<td className='py-2 text-right tabular-nums'>$2.40</td>
 							</tr>
 						</tbody>
 					</table>
 					<p className='mt-3 text-body-xs text-text-tertiary'>
-						Note: Cost estimates assume per-API pricing. Subscription plans may have different billing.
+						Kimi K2.5 pricing. Actual costs may vary based on your plan.
 					</p>
 				</div>
 			</Card>
