@@ -1037,9 +1037,12 @@ export class Daemon {
         logger.warn('Agent: complexity assessment failed, defaulting to 3');
       }
 
+      const nexusConfig = this.getNexusConfig();
+      const agentDefaults = nexusConfig?.agent;
+
       const maxTurns = Math.min(
-        intent.params.max_turns ? parseInt(intent.params.max_turns) : parseInt(process.env.AGENT_MAX_TURNS || '30'),
-        50, // Hard cap
+        intent.params.max_turns ? parseInt(intent.params.max_turns) : (agentDefaults?.maxTurns ?? parseInt(process.env.AGENT_MAX_TURNS || '30')),
+        100, // Hard cap
       );
 
       // Get user session for personalized settings (thinking, verbose, model)
@@ -1067,28 +1070,27 @@ export class Daemon {
       // High complexity (4-5): Give agent more turns and use sonnet tier
       // User's model preference takes priority if set
       // Voice mode defaults to haiku for lowest latency
+      const configTier = agentDefaults?.tier ?? ((process.env.AGENT_TIER as any) || 'sonnet');
       const baseTier = intent.source === 'voice'
         ? 'haiku'
-        : (complexity >= 4 ? 'sonnet' : ((process.env.AGENT_TIER as any) || 'sonnet'));
+        : (complexity >= 4 ? 'sonnet' : configTier);
       const effectiveTier = userModelTier || baseTier;
       const effectiveMaxTurns = complexity >= 4 ? Math.max(maxTurns, 20) : maxTurns;
 
-      const nexusConfig = this.getNexusConfig();
       const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
-
-      const authMethod = 'api-key'; // Kimi uses API key auth
+      const configThinkLevel = agentDefaults?.thinkingLevel !== 'off' ? agentDefaults?.thinkingLevel : undefined;
 
       const agentConfig = {
         brain: this.config.brain,
         toolRegistry: this.config.toolRegistry,
         nexusConfig,
         maxTurns: effectiveMaxTurns,
-        maxTokens: parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
-        timeoutMs: parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
+        maxTokens: agentDefaults?.maxTokens ?? parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
+        timeoutMs: agentDefaults?.timeoutMs ?? parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
         tier: effectiveTier as 'flash' | 'haiku' | 'sonnet' | 'opus',
-        maxDepth: parseInt(process.env.AGENT_MAX_DEPTH || '3'),
+        maxDepth: agentDefaults?.maxDepth ?? parseInt(process.env.AGENT_MAX_DEPTH || '3'),
         onAction: this.buildActionCallback(intent.from, intent.source),
-        thinkLevel: userThinkLevel,
+        thinkLevel: userThinkLevel ?? configThinkLevel,
         verboseLevel: userVerboseLevel,
         approvalManager: this.config.approvalManager,
         approvalPolicy: approvalPolicy as 'always' | 'destructive' | 'never',
