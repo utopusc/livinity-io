@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
 import express from 'express';
 import type { Server } from 'http';
 import Redis from 'ioredis';
@@ -180,14 +181,77 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   // ── API Key Authentication (all /api/* routes below require auth) ──
   app.use('/api', requireApiKey);
 
-  // ── Kimi Auth ────────────────────────────────────────────────
+  // ── Kimi Auth (CLI-based OAuth) ──────────────────────────────
+  // Active login sessions: sessionId → { process, verificationUrl, userCode, status }
+  const kimiLoginSessions = new Map<string, {
+    process: ChildProcess;
+    verificationUrl?: string;
+    userCode?: string;
+    status: 'starting' | 'waiting' | 'success' | 'error';
+    error?: string;
+  }>();
+
+  /** Check if Kimi CLI is authenticated by running `kimi login --json` briefly */
   app.get('/api/kimi/status', async (_req, res) => {
     try {
-      const apiKey = await redis.get('nexus:config:kimi_api_key');
-      const hasApiKey = !!apiKey && apiKey.length > 0;
+      // Check if ~/.kimi/ has auth credentials by attempting a quick model list
+      const result = await new Promise<{ authenticated: boolean }>((resolve) => {
+        const proc = spawn('kimi', ['login', '--json'], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` },
+        });
+        let authenticated = false;
+        let output = '';
+        const timeout = setTimeout(() => {
+          proc.kill();
+          // If we got a verification_url, user is NOT authenticated (needs to login)
+          // If we got no verification_url event quickly, check output
+          resolve({ authenticated });
+        }, 3000);
+
+        proc.stdout?.on('data', (data: Buffer) => {
+          output += data.toString();
+          const lines = output.split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'verification_url') {
+                // Got a login prompt = not authenticated
+                authenticated = false;
+                clearTimeout(timeout);
+                proc.kill();
+                resolve({ authenticated: false });
+                return;
+              }
+              if (event.type === 'success' || event.type === 'login_success') {
+                authenticated = true;
+                clearTimeout(timeout);
+                proc.kill();
+                resolve({ authenticated: true });
+                return;
+              }
+            } catch { /* skip non-JSON lines */ }
+          }
+        });
+
+        proc.on('error', () => {
+          clearTimeout(timeout);
+          resolve({ authenticated: false });
+        });
+
+        proc.on('close', (code) => {
+          clearTimeout(timeout);
+          // Exit code 0 with no verification_url means already authenticated
+          if (code === 0 && !output.includes('verification_url')) {
+            resolve({ authenticated: true });
+          } else {
+            resolve({ authenticated });
+          }
+        });
+      });
+
       res.json({
-        authenticated: hasApiKey,
-        hasApiKey,
+        authenticated: result.authenticated,
         provider: 'kimi',
       });
     } catch (err) {
@@ -195,27 +259,152 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
-  app.post('/api/kimi/login', async (req, res) => {
+  /** Start Kimi CLI login — spawns `kimi login --json` and returns auth URL */
+  app.post('/api/kimi/login', async (_req, res) => {
     try {
-      const { apiKey } = req.body as { apiKey?: string };
-      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-        res.status(400).json({ error: 'Missing or empty "apiKey" in request body' });
-        return;
-      }
-      await redis.set('nexus:config:kimi_api_key', apiKey.trim());
-      await redis.publish('livos:config:updated', 'kimi_api_key');
-      logger.info('Kimi API key saved via /api/kimi/login');
-      res.json({ success: true });
+      const sessionId = randomUUID();
+
+      const proc = spawn('kimi', ['login', '--json'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` },
+      });
+
+      const session = {
+        process: proc,
+        status: 'starting' as const,
+        verificationUrl: undefined as string | undefined,
+        userCode: undefined as string | undefined,
+        error: undefined as string | undefined,
+      };
+      kimiLoginSessions.set(sessionId, session);
+
+      // Auto-cleanup after 5 minutes
+      setTimeout(() => {
+        const s = kimiLoginSessions.get(sessionId);
+        if (s) {
+          s.process.kill();
+          kimiLoginSessions.delete(sessionId);
+        }
+      }, 5 * 60 * 1000);
+
+      let output = '';
+
+      // Wait for verification_url event (should come within a few seconds)
+      const urlPromise = new Promise<{ verificationUrl: string; userCode: string }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Timeout waiting for Kimi login URL'));
+        }, 10000);
+
+        proc.stdout?.on('data', (data: Buffer) => {
+          output += data.toString();
+          const lines = output.split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'verification_url' && event.data) {
+                session.verificationUrl = event.data.verification_url;
+                session.userCode = event.data.user_code;
+                session.status = 'waiting' as any;
+                clearTimeout(timeout);
+                resolve({
+                  verificationUrl: event.data.verification_url,
+                  userCode: event.data.user_code,
+                });
+              }
+              if (event.type === 'success' || event.type === 'login_success') {
+                session.status = 'success' as any;
+              }
+            } catch { /* skip non-JSON lines */ }
+          }
+        });
+
+        proc.on('error', (err) => {
+          clearTimeout(timeout);
+          session.status = 'error' as any;
+          session.error = err.message;
+          reject(err);
+        });
+
+        proc.on('close', (code) => {
+          clearTimeout(timeout);
+          if (session.status !== 'success' as any) {
+            if (code === 0) {
+              session.status = 'success' as any;
+            } else if (!session.verificationUrl) {
+              session.status = 'error' as any;
+              session.error = `kimi login exited with code ${code}`;
+              reject(new Error(session.error));
+            }
+          }
+        });
+      });
+
+      const { verificationUrl, userCode } = await urlPromise;
+
+      // Continue monitoring in background for auth completion
+      proc.stdout?.on('data', (data: Buffer) => {
+        const lines = data.toString().split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line);
+            if (event.type === 'success' || event.type === 'login_success') {
+              const s = kimiLoginSessions.get(sessionId);
+              if (s) s.status = 'success' as any;
+              logger.info('Kimi CLI login completed successfully');
+            }
+          } catch { /* skip */ }
+        }
+      });
+
+      proc.on('close', (code) => {
+        const s = kimiLoginSessions.get(sessionId);
+        if (s && code === 0) {
+          s.status = 'success' as any;
+          logger.info('Kimi CLI login process exited successfully');
+        }
+      });
+
+      logger.info(`Kimi login started, session=${sessionId}, url=${verificationUrl}`);
+      res.json({ sessionId, verificationUrl, userCode });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
   });
 
+  /** Poll login session status */
+  app.get('/api/kimi/login/poll/:sessionId', async (req, res) => {
+    const session = kimiLoginSessions.get(req.params.sessionId);
+    if (!session) {
+      res.status(404).json({ error: 'Login session not found or expired' });
+      return;
+    }
+    res.json({
+      status: session.status,
+      verificationUrl: session.verificationUrl,
+      userCode: session.userCode,
+      error: session.error,
+    });
+  });
+
+  /** Logout from Kimi CLI */
   app.post('/api/kimi/logout', async (_req, res) => {
     try {
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn('kimi', ['logout', '--json'], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` },
+        });
+        proc.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`kimi logout exited with code ${code}`));
+        });
+        proc.on('error', reject);
+        // Timeout after 10s
+        setTimeout(() => { proc.kill(); resolve(); }, 10000);
+      });
+      // Also clear any stored API key
       await redis.del('nexus:config:kimi_api_key');
-      await redis.publish('livos:config:updated', 'kimi_api_key');
-      logger.info('Kimi API key removed via /api/kimi/logout');
+      logger.info('Kimi CLI logout completed');
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });

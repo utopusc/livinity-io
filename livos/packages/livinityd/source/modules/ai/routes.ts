@@ -68,32 +68,10 @@ function getNexusApiUrl(): string {
 export default router({
 	// ── AI Config ─────────────────────────────────────────
 
-	/** Get current AI configuration (keys are masked) */
-	getConfig: privateProcedure.query(async ({ctx}) => {
-		const redis = ctx.livinityd.ai.redis
-		const kimiKey = await redis.get('nexus:config:kimi_api_key') || ''
-		return {
-			kimiApiKey: maskKey(kimiKey),
-			hasKimiKey: kimiKey.length > 0,
-		}
+	/** Get current AI configuration */
+	getConfig: privateProcedure.query(async () => {
+		return {}
 	}),
-
-	/** Set AI configuration (Kimi API key) */
-	setConfig: privateProcedure
-		.input(
-			z.object({
-				kimiApiKey: z.string().min(1).max(256).optional(),
-			}),
-		)
-		.mutation(async ({ctx, input}) => {
-			const redis = ctx.livinityd.ai.redis
-			if (input.kimiApiKey) {
-				await redis.set('nexus:config:kimi_api_key', input.kimiApiKey)
-				await redis.publish('livos:config:updated', 'kimi_api_key')
-				ctx.livinityd.logger.log('Kimi API key updated via Settings UI')
-			}
-			return {success: true}
-		}),
 
 	/** Validate an API key by making a lightweight test call */
 	validateKey: privateProcedure
@@ -130,7 +108,7 @@ export default router({
 
 	// ── Kimi Auth ────────────────────────────────────────────
 
-	/** Check Kimi auth status (proxies to Nexus /api/kimi/status) */
+	/** Check Kimi CLI auth status (proxies to Nexus /api/kimi/status) */
 	getKimiStatus: privateProcedure.query(async ({ctx}) => {
 		try {
 			const nexusUrl = getNexusApiUrl()
@@ -142,19 +120,17 @@ export default router({
 			}
 			return (await response.json()) as {
 				authenticated: boolean
-				hasApiKey: boolean
 				provider: string
 			}
 		} catch (error) {
 			ctx.livinityd.logger.error('Failed to get Kimi status', error)
-			return {authenticated: false, hasApiKey: false, provider: 'kimi'}
+			return {authenticated: false, provider: 'kimi'}
 		}
 	}),
 
-	/** Save Kimi API key (proxies to Nexus /api/kimi/login) */
+	/** Start Kimi CLI login — returns auth URL and session ID for polling */
 	kimiLogin: privateProcedure
-		.input(z.object({apiKey: z.string().min(1)}))
-		.mutation(async ({ctx, input}) => {
+		.mutation(async ({ctx}) => {
 			try {
 				const nexusUrl = getNexusApiUrl()
 				const response = await fetch(`${nexusUrl}/api/kimi/login`, {
@@ -163,7 +139,6 @@ export default router({
 						'Content-Type': 'application/json',
 						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
 					},
-					body: JSON.stringify({apiKey: input.apiKey}),
 				})
 				if (!response.ok) {
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
@@ -172,18 +147,49 @@ export default router({
 						message: errorData.error || `Nexus API error: ${response.status}`,
 					})
 				}
-				return (await response.json()) as {success: boolean}
+				return (await response.json()) as {
+					sessionId: string
+					verificationUrl: string
+					userCode: string
+				}
 			} catch (error) {
 				if (error instanceof TRPCError) throw error
-				ctx.livinityd.logger.error('Failed to save Kimi API key', error)
+				ctx.livinityd.logger.error('Failed to start Kimi login', error)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: getErrorMessage(error) || 'Failed to save Kimi API key',
+					message: getErrorMessage(error) || 'Failed to start Kimi login',
 				})
 			}
 		}),
 
-	/** Remove Kimi API key (proxies to Nexus /api/kimi/logout) */
+	/** Poll Kimi login session status */
+	kimiLoginPoll: privateProcedure
+		.input(z.object({sessionId: z.string()}))
+		.query(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(`${nexusUrl}/api/kimi/login/poll/${input.sessionId}`, {
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) {
+					if (response.status === 404) {
+						return {status: 'expired' as const}
+					}
+					throw new Error(`Nexus API error: ${response.status}`)
+				}
+				return (await response.json()) as {
+					status: 'starting' | 'waiting' | 'success' | 'error'
+					verificationUrl?: string
+					userCode?: string
+					error?: string
+				}
+			} catch (error) {
+				ctx.livinityd.logger.error('Failed to poll Kimi login', error)
+				return {status: 'error' as const, error: getErrorMessage(error)}
+			}
+		}),
+
+	/** Logout from Kimi CLI (proxies to Nexus /api/kimi/logout) */
 	kimiLogout: privateProcedure.mutation(async ({ctx}) => {
 		try {
 			const nexusUrl = getNexusApiUrl()
@@ -204,10 +210,10 @@ export default router({
 			return (await response.json()) as {success: boolean}
 		} catch (error) {
 			if (error instanceof TRPCError) throw error
-			ctx.livinityd.logger.error('Failed to remove Kimi API key', error)
+			ctx.livinityd.logger.error('Failed to logout from Kimi', error)
 			throw new TRPCError({
 				code: 'INTERNAL_SERVER_ERROR',
-				message: getErrorMessage(error) || 'Failed to remove Kimi API key',
+				message: getErrorMessage(error) || 'Failed to logout from Kimi',
 			})
 		}
 	}),
