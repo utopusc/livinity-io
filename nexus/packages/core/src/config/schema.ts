@@ -26,11 +26,11 @@ export const ModelConfigSchema = z.object({
 }).strict().optional();
 
 export const ModelsConfigSchema = z.object({
-  default: z.string().default('claude-haiku-4-5'),
-  flash: z.string().default('claude-haiku-4-5'),
-  haiku: z.string().default('claude-haiku-4-5'),
-  sonnet: z.string().default('claude-sonnet-4-5'),
-  opus: z.string().default('claude-opus-4-6'),
+  default: z.string().default('kimi-k2.5-flash'),
+  flash: z.string().default('kimi-k2.5-flash'),
+  haiku: z.string().default('kimi-k2.5-flash'),
+  sonnet: z.string().default('kimi-k2.5'),
+  opus: z.string().default('kimi-k2.5-pro'),
   fallbackEnabled: z.boolean().default(true),
   fallbackOrder: z.array(z.string()).default(['flash', 'haiku', 'sonnet', 'opus']),
 }).strict().optional();
@@ -354,11 +354,11 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
     jitter: 0.2,
   },
   models: {
-    default: 'claude-haiku-4-5',
-    flash: 'claude-haiku-4-5',
-    haiku: 'claude-haiku-4-5',
-    sonnet: 'claude-sonnet-4-5',
-    opus: 'claude-opus-4-6',
+    default: 'kimi-k2.5-flash',
+    flash: 'kimi-k2.5-flash',
+    haiku: 'kimi-k2.5-flash',
+    sonnet: 'kimi-k2.5',
+    opus: 'kimi-k2.5-pro',
     fallbackEnabled: true,
     fallbackOrder: ['flash', 'haiku', 'sonnet', 'opus'],
   },

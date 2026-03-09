@@ -101,7 +101,7 @@ export class Brain {
     return 'flash';
   }
 
-  /** Get the ID of the primary available provider ('claude' or 'gemini') */
+  /** Get the ID of the primary available provider ('kimi', 'claude', or 'gemini') */
   async getActiveProviderId(): Promise<string> {
     return this.manager.getActiveProviderId();
   }
