@@ -26,10 +26,10 @@ import { logger } from '../logger.js';
 // ---------------------------------------------------------------------------
 
 const KIMI_MODELS: Record<string, string> = {
-  flash: 'kimi-k2.5-flash',
-  haiku: 'kimi-k2.5-flash',
-  sonnet: 'kimi-k2.5',
-  opus: 'kimi-k2.5-pro',
+  flash: 'kimi-for-coding',
+  haiku: 'kimi-for-coding',
+  sonnet: 'kimi-for-coding',
+  opus: 'kimi-for-coding',
 };
 
 const BASE_URL = 'https://api.kimi.com/coding/v1';
@@ -501,10 +501,7 @@ export class KimiProvider implements AIProvider {
       try {
         response = await fetch(`${BASE_URL}/chat/completions`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
+          headers: getKimiHeaders(apiKey),
           body: JSON.stringify(body),
         });
       } catch (err: any) {
