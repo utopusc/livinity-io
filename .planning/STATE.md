@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v6.0 -- Claude Code to Kimi Code Migration
-**Current focus:** Phase 3 - Kimi Agent Runner (IN PROGRESS)
+**Current focus:** Phase 3 - Kimi Agent Runner (COMPLETE)
 
 ## Current Position
 
 Milestone: v6.0 (Claude Code to Kimi Code Migration)
 Phase: 3 of 4 (Kimi Agent Runner)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-09 -- Completed 03-01-PLAN.md (Server setup: Python 3.12, uv, Kimi CLI)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-09 -- Completed 03-02-PLAN.md (KimiAgentRunner implementation)
 
-Progress: [######....] 62% (5/8 plans)
+Progress: [#######...] 75% (6/8 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 2.8 min
-- Total execution time: 14 min
+- Total plans completed: 6
+- Average duration: 3 min
+- Total execution time: 18 min
 
 **By Phase:**
 
@@ -31,7 +31,7 @@ Progress: [######....] 62% (5/8 plans)
 |-------|-------|-------|----------|
 | 01-kimi-provider | 2/2 | 5 min | 2.5 min |
 | 02-configuration-layer | 2/2 | 7 min | 3.5 min |
-| 03-kimi-agent-runner | 1/2 | 2 min | 2 min |
+| 03-kimi-agent-runner | 2/2 | 6 min | 3 min |
 
 ## Accumulated Context
 
@@ -56,6 +56,10 @@ Progress: [######....] 62% (5/8 plans)
 - Deploy script pattern for server setup -- repeatable, version-controlled, idempotent (03-01)
 - uv tool install kimi-code as primary install method, official installer as fallback (03-01)
 - PATH in both .profile and .bashrc for PM2 and interactive shell coverage (03-01)
+- nexus-tools MCP via HTTP URL (port 3100) not inline server -- Kimi CLI cannot host in-process MCP (03-02)
+- Temp agent YAML + .md files in /tmp/nexus-agents/ with cleanup in finally block (03-02)
+- KimiAgentRunner exported from lib.ts barrel, not index.ts (which is main entry) (03-02)
+- Model IDs: kimi-for-coding (sonnet), kimi-latest (flash/haiku), kimi-k2.5 (opus) -- may need adjustment (03-02)
 
 ### Pending Todos
 
@@ -67,10 +71,10 @@ Progress: [######....] 62% (5/8 plans)
 - Device auth API endpoints found in GitHub issues, not official docs -- needs verification in Phase 2
 - Model IDs need runtime verification via `kimi info` on server
 - Pre-existing TypeScript errors in livinityd (toolRegistry, subagent typing, apps.ts) -- unrelated to migration
-- Install script needs to be run on server before Plan 03-02 can be fully tested
+- Install script needs to be run on server before KimiAgentRunner can be tested end-to-end
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 03-01-PLAN.md (Server setup: Python 3.12, uv, Kimi CLI)
+Stopped at: Completed 03-02-PLAN.md (KimiAgentRunner implementation)
 Resume file: None
