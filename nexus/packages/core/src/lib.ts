@@ -16,6 +16,9 @@ export type { ScheduleJob, ScheduleJobData } from './schedule-manager.js';
 export { AgentLoop } from './agent.js';
 export type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
 
+// ── Agent Runners ──────────────────────────────────────────────
+export { KimiAgentRunner } from './kimi-agent-runner.js';
+
 // ── Skill Types ─────────────────────────────────────────────
 export type {
   SkillFrontmatter,
