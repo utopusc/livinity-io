@@ -1178,7 +1178,8 @@ ${task}`;
       }
 
       // Inject channel source so the agent knows which platform the user is on
-      if (intent.source && intent.source !== 'web' && intent.source !== 'voice' && intent.source !== 'api') {
+      const messagingChannels = ['telegram', 'discord', 'whatsapp', 'slack', 'matrix', 'signal', 'line', 'gmail'];
+      if (messagingChannels.includes(intent.source)) {
         const channelLabel = intent.source.charAt(0).toUpperCase() + intent.source.slice(1);
         agentTask = `[Channel: ${channelLabel}] This message is from ${channelLabel}. When replying or sending messages, use the appropriate channel. To send messages on this channel, use the channel_send tool with channel="${intent.source}".\n\n${agentTask}`;
       }
