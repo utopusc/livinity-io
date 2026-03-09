@@ -5,9 +5,6 @@ import {FaRegSave} from 'react-icons/fa'
 import {
 	RiExpandRightFill,
 	RiKeyLine,
-	RiLogoutCircleRLine,
-	RiRestartLine,
-	RiShutDownLine,
 	RiUserLine,
 } from 'react-icons/ri'
 import {
@@ -61,7 +58,6 @@ import {useApps} from '@/providers/apps'
 import {animatedWallpapers, animatedWallpaperIds, type AnimatedWallpaperId} from '@/components/animated-wallpapers'
 import {useWallpaper} from '@/providers/wallpaper'
 import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/settings/_components/language-dropdown'
-import {SettingsSummary} from '@/routes/settings/_components/settings-summary'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -81,9 +77,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/shadcn-components/ui/dropdown-menu'
 import {trpcReact} from '@/trpc/trpc'
-import {useLinkToDialog} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
-import {firstNameFromFullName} from '@/utils/misc'
 import {cn} from '@/shadcn-lib/utils'
 
 import {ChangePasswordWarning, ContactSupportLink} from './shared'
@@ -167,9 +161,6 @@ const MENU_ITEMS: MenuItem[] = [
 
 export function SettingsContent() {
 	const [activeSection, setActiveSection] = useState<SettingsSection>('home')
-	const linkToDialog = useLinkToDialog()
-
-	const [userQ] = trpcReact.useQueries((t) => [t.user.get()])
 
 	// If a section is selected, show master-detail view
 	if (activeSection !== 'home') {
@@ -218,42 +209,8 @@ export function SettingsContent() {
 					<ContactSupportLink className='max-lg:hidden' />
 				</div>
 
-				{/* Right Side - Header Card */}
+				{/* Right Side */}
 				<div className='flex flex-col gap-5'>
-					<Card className='!p-0 overflow-hidden'>
-						{/* Top banner with name */}
-						<div className='bg-surface-2/50 px-6 py-5 border-b border-border-default/50'>
-							<div className='flex items-center justify-between'>
-								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-full bg-surface-3'>
-										<RiUserLine className='h-5 w-5 text-text-secondary' />
-									</div>
-									<div>
-										<h2 className='text-heading-sm font-semibold leading-none -tracking-2'>
-											{userQ.data?.name && `${firstNameFromFullName(userQ.data?.name)}'s`}{' '}
-											<span className='text-text-tertiary'>{t('livinity')}</span>
-										</h2>
-									</div>
-								</div>
-								<div className='flex items-center gap-1.5'>
-									<IconButtonLink to={linkToDialog('logout')} icon={RiLogoutCircleRLine}>
-										{t('logout')}
-									</IconButtonLink>
-									<IconButtonLink to={linkToDialog('restart')} icon={RiRestartLine}>
-										{t('restart')}
-									</IconButtonLink>
-									<IconButtonLink to={linkToDialog('shutdown')} text='destructive' icon={RiShutDownLine}>
-										{t('shut-down')}
-									</IconButtonLink>
-								</div>
-							</div>
-						</div>
-						{/* Device info grid */}
-						<div className='px-6 py-4'>
-							<SettingsSummary />
-						</div>
-					</Card>
-
 					{/* Quick Info */}
 					<Card>
 						<div className='text-center py-8'>
