@@ -430,6 +430,32 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  /** Get Gmail settings */
+  app.get('/api/gmail/settings', async (_req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.status(503).json({ error: 'Gmail provider not available' });
+      return;
+    }
+    res.json(gmailProvider.getSettings());
+  });
+
+  /** Update Gmail settings */
+  app.put('/api/gmail/settings', async (req, res) => {
+    const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
+    if (!gmailProvider) {
+      res.status(503).json({ error: 'Gmail provider not available' });
+      return;
+    }
+
+    try {
+      await gmailProvider.updateSettings(req.body);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   /** Start Gmail OAuth — returns URL for Google consent screen */
   app.get('/api/gmail/oauth/start', async (req, res) => {
     const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;

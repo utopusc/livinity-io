@@ -41,6 +41,32 @@ interface GmailConfig {
   gmailClientId?: string;
   gmailClientSecret?: string;
   gmailPollIntervalSec?: number;
+
+  // ── Security & Processing ──────────────────────────────────
+  /** How to handle incoming emails: 'disabled' | 'notify_only' | 'full' */
+  processingMode?: 'disabled' | 'notify_only' | 'full';
+  /** Block all automatic email sending — agent can NEVER send unless user explicitly commands */
+  sendProtection?: boolean;
+
+  // ── Filtering ──────────────────────────────────────────────
+  /** Only process emails from these addresses/domains (empty = all) */
+  senderWhitelist?: string[];
+  /** Never process emails from these addresses/domains */
+  senderBlacklist?: string[];
+  /** Only process if subject contains one of these keywords (empty = all) */
+  subjectKeywords?: string[];
+  /** Always notify for emails from these important senders */
+  importantSenders?: string[];
+
+  // ── Notifications ──────────────────────────────────────────
+  /** Channel to send email notifications to ('telegram' | 'discord' | 'none') */
+  notifyChannel?: string;
+  /** Specific chat ID for notifications (empty = use last active chat) */
+  notifyChatId?: string;
+
+  // ── Limits ─────────────────────────────────────────────────
+  /** Max emails to process per poll cycle (default: 5) */
+  maxEmailsPerPoll?: number;
 }
 
 export interface EmailDetail {
@@ -197,6 +223,11 @@ export class GmailProvider implements ChannelProvider {
   }
 
   async sendMessage(chatId: string, text: string, _replyTo?: string): Promise<boolean> {
+    // Send protection: block all automatic email sending
+    if (this.config.sendProtection !== false) {
+      logger.warn('GmailProvider: sendMessage blocked by send protection', { chatId });
+      return false;
+    }
     try {
       await this.sendEmail(chatId, 'Message from LivOS AI', text);
       return true;
@@ -212,6 +243,7 @@ export class GmailProvider implements ChannelProvider {
 
   async updateConfig(config: ChannelConfig): Promise<void> {
     const newConfig: GmailConfig = {
+      ...this.config,  // Preserve all existing settings
       enabled: config.enabled,
       gmailClientId: config.gmailClientId ?? this.config.gmailClientId,
       gmailClientSecret: config.gmailClientSecret ?? this.config.gmailClientSecret,
@@ -352,6 +384,39 @@ export class GmailProvider implements ChannelProvider {
     }
   }
 
+  /** Get current Gmail settings (for API/UI) */
+  getSettings(): Omit<GmailConfig, 'gmailClientId' | 'gmailClientSecret'> {
+    return {
+      enabled: this.config.enabled,
+      gmailPollIntervalSec: this.config.gmailPollIntervalSec ?? 60,
+      processingMode: this.config.processingMode ?? 'notify_only',
+      sendProtection: this.config.sendProtection ?? true,
+      senderWhitelist: this.config.senderWhitelist ?? [],
+      senderBlacklist: this.config.senderBlacklist ?? [],
+      subjectKeywords: this.config.subjectKeywords ?? [],
+      importantSenders: this.config.importantSenders ?? [],
+      notifyChannel: this.config.notifyChannel ?? 'none',
+      notifyChatId: this.config.notifyChatId ?? '',
+      maxEmailsPerPoll: this.config.maxEmailsPerPoll ?? 5,
+    };
+  }
+
+  /** Update Gmail settings (preserves credentials) */
+  async updateSettings(settings: Partial<GmailConfig>): Promise<void> {
+    // Merge settings but never allow overwriting credentials through this method
+    const { gmailClientId, gmailClientSecret, ...safeSettings } = settings;
+    this.config = { ...this.config, ...safeSettings };
+    if (this.redis) {
+      await this.redis.set(KEY_CONFIG, JSON.stringify(this.config));
+    }
+
+    // Restart polling if interval changed
+    if (settings.gmailPollIntervalSec !== undefined && this.status.connected) {
+      this.stopPolling();
+      this.startPolling();
+    }
+  }
+
   // ── Polling ───────────────────────────────────────────────────────────
 
   private startPolling(): void {
@@ -383,12 +448,17 @@ export class GmailProvider implements ChannelProvider {
   private async poll(): Promise<void> {
     if (!this.gmail || !this.redis) return;
 
+    const mode = this.config.processingMode ?? 'notify_only';
+    if (mode === 'disabled') return;
+
     try {
+      const maxResults = this.config.maxEmailsPerPoll ?? 5;
+
       // Fetch recent unread messages
       const response = await this.gmail.users.messages.list({
         userId: 'me',
         q: 'is:unread newer_than:1d',
-        maxResults: 10,
+        maxResults,
       });
 
       const messages = response.data.messages || [];
@@ -424,9 +494,56 @@ export class GmailProvider implements ChannelProvider {
           const from = headers.find((h) => h.name?.toLowerCase() === 'from')?.value || 'unknown';
           const body = this.extractBody(full.data.payload);
 
-          const text = `[Email] From: ${from}\nSubject: ${subject}\n\n${body}`;
+          // ── Apply filters ──────────────────────────────────────
+          const senderEmail = this.extractEmail(from);
 
-          if (this.messageHandler) {
+          // Blacklist check (always reject)
+          if (this.matchesList(senderEmail, this.config.senderBlacklist)) {
+            logger.info('GmailProvider: email blacklisted', { from: senderEmail, subject });
+            await this.redis.sadd(KEY_SEEN_IDS, msgRef.id);
+            continue;
+          }
+
+          // Whitelist check (if set, only allow listed senders)
+          const whitelist = this.config.senderWhitelist ?? [];
+          if (whitelist.length > 0 && !this.matchesList(senderEmail, whitelist)) {
+            // Not whitelisted — check if it's an important sender for notification
+            if (this.matchesList(senderEmail, this.config.importantSenders)) {
+              await this.sendNotification(from, subject, body);
+            }
+            logger.info('GmailProvider: email not whitelisted, skipped', { from: senderEmail, subject });
+            await this.redis.sadd(KEY_SEEN_IDS, msgRef.id);
+            continue;
+          }
+
+          // Subject keyword check (if set)
+          const keywords = this.config.subjectKeywords ?? [];
+          if (keywords.length > 0) {
+            const subjectLower = subject.toLowerCase();
+            const matched = keywords.some((kw) => subjectLower.includes(kw.toLowerCase()));
+            if (!matched) {
+              // Check important senders for notification even if keyword doesn't match
+              if (this.matchesList(senderEmail, this.config.importantSenders)) {
+                await this.sendNotification(from, subject, body);
+              }
+              logger.info('GmailProvider: email subject keywords not matched', { from: senderEmail, subject });
+              await this.redis.sadd(KEY_SEEN_IDS, msgRef.id);
+              continue;
+            }
+          }
+
+          // ── Check if important sender → always notify ──────────
+          if (this.matchesList(senderEmail, this.config.importantSenders)) {
+            await this.sendNotification(from, subject, body);
+          }
+
+          // ── Process based on mode ──────────────────────────────
+          if (mode === 'notify_only') {
+            // Only send notification, don't create agent task
+            await this.sendNotification(from, subject, body);
+          } else if (mode === 'full' && this.messageHandler) {
+            // Full processing — send to agent
+            const text = `[Email] From: ${from}\nSubject: ${subject}\n\n${body}`;
             const incomingMsg: IncomingMessage = {
               channel: 'gmail',
               chatId: `gmail:${msgRef.id}`,
@@ -557,6 +674,11 @@ export class GmailProvider implements ChannelProvider {
   async sendEmail(to: string, subject: string, body: string): Promise<{ messageId: string }> {
     if (!this.gmail) throw new Error('Gmail not connected');
 
+    // Send protection check
+    if (this.config.sendProtection !== false) {
+      throw new Error('Email sending is blocked by send protection. Disable it in Settings > Gmail to allow sending.');
+    }
+
     const profile = await this.getProfile();
     const from = profile?.email || 'me';
 
@@ -588,6 +710,11 @@ export class GmailProvider implements ChannelProvider {
    */
   async sendReply(messageId: string, body: string): Promise<{ messageId: string }> {
     if (!this.gmail) throw new Error('Gmail not connected');
+
+    // Send protection check
+    if (this.config.sendProtection !== false) {
+      throw new Error('Email sending is blocked by send protection. Disable it in Settings > Gmail to allow sending.');
+    }
 
     // Fetch original message for thread context
     const original = await this.gmail.users.messages.get({
@@ -753,6 +880,52 @@ export class GmailProvider implements ChannelProvider {
 
     // Stop polling — can't do anything without valid tokens
     this.stopPolling();
+  }
+
+  // ── Filtering Helpers ──────────────────────────────────────────────
+
+  /** Extract email address from "Name <email>" format */
+  private extractEmail(from: string): string {
+    const match = from.match(/<([^>]+)>/);
+    return (match ? match[1] : from).toLowerCase().trim();
+  }
+
+  /** Check if an email matches any entry in a list (supports full addresses and @domain) */
+  private matchesList(email: string, list?: string[]): boolean {
+    if (!list || list.length === 0) return false;
+    const emailLower = email.toLowerCase();
+    const domain = emailLower.split('@')[1] || '';
+    return list.some((entry) => {
+      const entryLower = entry.toLowerCase().trim();
+      if (!entryLower) return false;
+      // Match full email or @domain
+      if (entryLower.startsWith('@')) {
+        return domain === entryLower.slice(1);
+      }
+      return emailLower === entryLower;
+    });
+  }
+
+  /** Send a notification about an email to the configured channel */
+  private async sendNotification(from: string, subject: string, body: string): Promise<void> {
+    const channel = this.config.notifyChannel;
+    if (!channel || channel === 'none' || !this.channelManager) return;
+
+    try {
+      const chatId = this.config.notifyChatId
+        || (this.redis ? await this.redis.get(`nexus:${channel}:last_chat_id`) : null);
+      if (!chatId) {
+        logger.warn('GmailProvider: no chat ID for notification channel', { channel });
+        return;
+      }
+
+      const snippet = body.length > 200 ? body.slice(0, 200) + '...' : body;
+      const message = `📧 New Email\nFrom: ${from}\nSubject: ${subject}\n\n${snippet}`;
+      await this.channelManager.sendMessage(channel, chatId, message);
+      logger.info('GmailProvider: notification sent', { channel, from, subject });
+    } catch (err: any) {
+      logger.error('GmailProvider: failed to send notification', { channel, error: err.message });
+    }
   }
 
   // ── Redis Helpers ─────────────────────────────────────────────────────
