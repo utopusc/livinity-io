@@ -2,64 +2,49 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-07)
+See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
-**Current milestone:** v5.3 — UI Polish & Consistency (COMPLETE)
-**Current focus:** All phases complete — ready to deploy
+**Current milestone:** v6.0 — Claude Code → Kimi Code Migration
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Milestone: v5.3 (UI Polish & Consistency) — COMPLETE
-Phase: All phases complete
-Plan: All plans executed
-Status: Milestone complete. Strategic research complete. Ready for next milestone.
-Last activity: 2026-03-07 — v5.3 complete + Apple Spotlight integrated + strategic research (8 reports)
-
-Progress: [####################] 100% ✓
-
-## Completed Phases
-
-| Phase | Description | Commit |
-|-------|-------------|--------|
-| 1 | Files Polish — path bar, empty states, loading skeletons, operations | 68e577a |
-| 2 | Dashboard & Home — Tilt/Spotlight app icons, desktop content polish | 7a10624 |
-| 3 | Visual Consistency — window chrome, menus, borders alignment | 6f4dbc5 |
-| 4 | Performance & Quality — build verification passed (36.30s, zero errors) | — |
+Milestone: v6.0 (Claude Code → Kimi Code Migration)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-09 — Milestone v6.0 started
 
 ## Accumulated Context
 
 ### Decisions
 
-- motion-primitives installed to `src/components/motion-primitives/` (34 components)
-- Light theme is primary (color-scheme: light)
-- Vite + React 18 (NOT Next.js) -- v4.0 Next.js was reverted
-- White-on-white professional palette (depth via shadows)
-- Floating elements: bg-white/80 backdrop-blur-xl (frosted glass)
-- Cards: bg-white + shadow-elevation-sm + border-border-subtle
-- Brand blue accent only on CTAs and active states
-- All strings must use t() for i18n
-- motion-primitives.com/docs as primary component source
-- v5.2 Files: Tilt, Spotlight, Magnetic, AnimatedBackground, BorderTrail applied
-- v5.2 Files: Tabler Icons (react-icons/tb) for all sidebar and folder icons
-- v5.2 Files: rounded-xl buttons, h-8 w-8 icon buttons, gradient dividers
-- v5.2 App Store: pastel gradients on light theme
-- v5.2 Settings: WindowRouterProvider for correct in-window routing
-- v5.3 Files: path bar rounded container, segment hover effects, breadcrumb styling
-- v5.3 Files: AnimatedGroup blur-slide for empty states, fade for skeletons
-- v5.3 Desktop: Tilt + Spotlight on app icons (touch-device aware)
-- v5.3 Visual: neutral-200/60 borders, shadow-[0_4px_16px] menus, rounded-xl everywhere
-- v5.3 Performance: build clean at 36.30s, no new TS errors
+- Kimi Code replaces Claude Code as sole AI provider
+- Kimi Code CLI has OAuth-style auth (URL → code → paste) — same UX as Claude Code
+- MCP stays, adapter layer converts tool definitions to Kimi's format
+- Gemini fallback removed — single provider architecture
+- All Anthropic SDK dependencies will be removed
+- Redis keys and config schema updated for Kimi
+
+### Claude Code Integration Points (from inventory)
+
+| Category | Files | Status |
+|----------|-------|--------|
+| SDK imports | sdk-agent-runner.ts, claude.ts | To remove |
+| Models | claude.ts, schema.ts, sdk-agent-runner.ts | To replace |
+| OAuth | claude.ts, claude-oauth.mjs | To replace with Kimi auth |
+| Agent runners | sdk-agent-runner.ts, agent.ts | To rewrite |
+| MCP | sdk-agent-runner.ts | To adapt |
+| Provider | claude.ts (ClaudeProvider) | To replace with KimiProvider |
+| API endpoints | api.ts (/api/claude-cli/*) | To rename/rewrite |
+| UI config | ai-config.tsx, setup-wizard.tsx | To redesign |
+| tRPC routes | livinityd ai/routes.ts | To update |
+| Environment | .env, Redis keys | To clean |
+| Config schema | schema.ts | To update |
+| Packages | @anthropic-ai/sdk, @anthropic-ai/claude-agent-sdk | To remove |
 
 ## Session Continuity
 
-Last session: 2026-03-07
-Stopped at: v5.3 + strategic research complete. Next: v6.0 (Backup & Monitoring) or deploy current changes.
-
-## Strategic Research Summary
-
-8 reports in `.planning/research/strategic/` (~270KB):
-- Key insight: "AI + Self-Hosting" is an unoccupied market category
-- Competitive window: 6-12 months before Unraid/others add AI
-- Priority: Tier 1 (backup, monitoring, multi-user) → Tier 2 (AI server mgmt, NL compose) → Tier 3 (mobile, remote access)
-- See SYNTHESIS.md for full summary
+Last session: 2026-03-09
+Stopped at: Defining requirements for v6.0 migration

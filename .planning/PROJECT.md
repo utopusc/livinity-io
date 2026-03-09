@@ -2,21 +2,26 @@
 
 ## What This Is
 
-LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users interact via Telegram, Discord, and a web UI. The AI agent runs through Claude Code SDK (subscription mode), with MCP tools for shell, Docker, files, browser control, and more. The goal is an OpenClaw-class personal AI platform that anyone can install with a single command.
+LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users interact via Telegram, Discord, and a web UI. The AI agent runs through Kimi Code (replacing Claude Code), with MCP tools for shell, Docker, files, browser control, and more. The goal is an OpenClaw-class personal AI platform that anyone can install with a single command.
 
 ## Core Value
 
 **One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use.
 
-## Current Milestone: v5.3 — UI Polish & Consistency
+## Current Milestone: v6.0 — Claude Code → Kimi Code Migration
 
-**Goal:** Apply motion-primitives and light theme polish across remaining modules. Polish Files (path bar, empty states, loading animations). Extend design language to Dashboard/Home. Ensure visual consistency across all windows. Performance audit for motion-heavy components.
+**Goal:** Complete migration from Claude Code to Kimi Code as the AI backbone. Remove all Anthropic/Claude dependencies, replace with Kimi Code CLI + auth system, adapt MCP tools, update UI, remove Gemini fallback.
 
 **Target features:**
-- Files polish: path bar breadcrumbs, empty states with illustrations, loading skeletons, file operation animations
-- Dashboard/Home: motion-primitives integration (Tilt, Spotlight, AnimatedGroup, AnimatedNumber)
-- Visual consistency: cross-module audit for colors, typography, spacing, border radius, window chrome
-- Performance: audit motion-heavy components, reduce re-renders, lazy-load where needed
+- Replace Claude Code CLI with Kimi Code CLI installation and auth flow
+- Implement KimiProvider (replaces ClaudeProvider) with Kimi's OAuth-style auth
+- Replace SdkAgentRunner with Kimi Code equivalent agent runner
+- Write MCP adapter layer for Kimi Code's tool calling format
+- Remove Gemini fallback — Kimi as sole AI provider
+- Update Settings UI: Kimi auth flow (URL → code → paste), remove Claude/Gemini sections
+- Update onboarding wizard for Kimi Code setup
+- Remove @anthropic-ai/sdk and @anthropic-ai/claude-agent-sdk dependencies
+- Clean all Redis keys, env vars, config schema for Kimi
 
 ## Requirements
 
@@ -87,20 +92,24 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Settings window routing fix — v5.2
 - ✓ Window chrome cursor fix — v5.2
 
-### Active (v5.3 — UI Polish & Consistency)
+### Validated (v5.3 — UI Polish & Consistency)
 
-- [ ] Files polish: path bar breadcrumbs with transitions
-- [ ] Files polish: empty states with illustrations/animations
-- [ ] Files polish: loading skeletons with staggered reveal
-- [ ] Files polish: file operation animations (copy, move, delete)
-- [ ] Dashboard/Home: motion-primitives integration
-- [ ] Dashboard/Home: widget cards with Tilt/Spotlight effects
-- [ ] Dashboard/Home: stats with AnimatedNumber
-- [ ] Visual consistency: window chrome audit across all apps
-- [ ] Visual consistency: shared component styling (buttons, inputs, dropdowns)
-- [ ] Visual consistency: color palette, typography, spacing audit
-- [ ] Performance: motion component audit (Tilt, Spotlight, animations)
-- [ ] Performance: reduce re-renders in animated components
+- ✓ Files polish, Dashboard Tilt/Spotlight, visual consistency, performance audit — v5.3
+- ✓ Apple Spotlight search, terminal dark theme, desktop search button — v5.3
+- ✓ Strategic research (8 reports) — v5.3
+
+### Active (v6.0 — Claude Code → Kimi Code Migration)
+
+- [ ] Install Kimi Code CLI on server, verify it works
+- [ ] Implement KimiProvider with Kimi's OAuth auth flow (URL → code → paste)
+- [ ] Replace SdkAgentRunner with Kimi Code agent runner
+- [ ] Write MCP adapter for Kimi Code's tool calling format
+- [ ] Remove ClaudeProvider, Gemini fallback, all Anthropic SDK imports
+- [ ] Update config schema (models, auth methods, Redis keys)
+- [ ] Update Settings UI for Kimi auth and config
+- [ ] Update onboarding wizard for Kimi Code setup
+- [ ] Remove @anthropic-ai/sdk and @anthropic-ai/claude-agent-sdk packages
+- [ ] End-to-end test: UI chat → Kimi Code → tool execution → response
 
 ### Out of Scope
 
@@ -111,7 +120,7 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - Cloud hosting option — self-hosted only
 - Native desktop/mobile apps — web-based only for now
 - Payment/billing system — free open source project
-- Self-hosted LLM support — Claude Code Auth only
+- Self-hosted LLM support — Kimi Code only for now
 - New backend features — UI only for v5.0
 - Dark theme — fully light theme only
 
@@ -156,4 +165,4 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 | Full i18n | Current wizard has hardcoded strings, must fix | — Pending |
 
 ---
-*Last updated: 2026-03-07 — v5.3 milestone (UI Polish & Consistency)*
+*Last updated: 2026-03-09 — v6.0 milestone (Claude Code → Kimi Code Migration)*
