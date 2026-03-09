@@ -10,7 +10,7 @@ const ONE_HOUR = 60 * ONE_MINUTE
 const ONE_DAY = 24 * ONE_HOUR
 const ONE_WEEK = 7 * ONE_DAY
 
-const DEFAULT_WALLPAPER = '18'
+const DEFAULT_WALLPAPER = 'aurora'
 
 export default router({
 	// Registers a new user
