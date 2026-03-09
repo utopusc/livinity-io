@@ -571,6 +571,7 @@ export class KimiProvider implements AIProvider {
         model,
         messages: kimiMessages,
         stream: true,
+        stream_options: { include_usage: true },
       };
 
       if (options.maxOutputTokens) {
