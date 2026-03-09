@@ -313,8 +313,8 @@ export class Daemon {
         // Reset action feed counter for this item
         this.actionMessageCount = 0;
 
-        // Update heartbeat's last recipient for WhatsApp messages
-        if (item.source === 'whatsapp' && item.from && this.config.heartbeatRunner) {
+        // Update heartbeat's last recipient for messaging channels
+        if (item.from && this.config.heartbeatRunner && ['whatsapp', 'telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
           await this.config.heartbeatRunner.setLastRecipient(item.from);
         }
 
@@ -1175,6 +1175,12 @@ ${task}`;
       // Voice mode: prepend voice-optimized system instruction
       if (intent.source === 'voice') {
         agentTask = `[VOICE MODE] You are in a real-time voice conversation. Keep responses under 2 sentences. No markdown, no code blocks, no lists, no bullet points. Speak naturally and conversationally. If the user asks something that requires tools, do it quickly and summarize the result in one brief sentence.\n\n${agentTask}`;
+      }
+
+      // Inject channel source so the agent knows which platform the user is on
+      if (intent.source && intent.source !== 'web' && intent.source !== 'voice' && intent.source !== 'api') {
+        const channelLabel = intent.source.charAt(0).toUpperCase() + intent.source.slice(1);
+        agentTask = `[Channel: ${channelLabel}] This message is from ${channelLabel}. When replying or sending messages, use the appropriate channel. To send messages on this channel, use the channel_send tool with channel="${intent.source}".\n\n${agentTask}`;
       }
 
       const result = await agent.run(agentTask);
