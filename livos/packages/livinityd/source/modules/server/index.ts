@@ -371,6 +371,19 @@ class Server {
 			}),
 		}))
 
+		// Proxy Gmail OAuth callback to nexus-core (public — Google redirects browser here)
+		this.app.use('/api/gmail', createProxyMiddleware({
+			target: 'http://localhost:3200',
+			changeOrigin: true,
+			logProvider: () => ({
+				log: this.logger.verbose,
+				debug: this.logger.verbose,
+				info: this.logger.verbose,
+				warn: this.logger.verbose,
+				error: this.logger.error,
+			}),
+		}))
+
 		// Handle tRPC routes
 		this.app.use('/trpc', trpcExpressHandler)
 		this.mountWebSocketServer('/trpc', (wss) => {
