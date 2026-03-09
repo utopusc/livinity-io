@@ -131,8 +131,12 @@ export class HeartbeatRunner {
       }
     }, intervalMs);
 
-    // Run immediately on start (optional - can be disabled)
-    // await this.runOnce();
+    // Run first heartbeat after a short delay (gives daemon time to fully start)
+    setTimeout(() => {
+      if (this.running) {
+        this.runOnce().catch(err => logger.error('HeartbeatRunner: initial run failed', err));
+      }
+    }, 60_000); // 60s delay for first run
   }
 
   /**

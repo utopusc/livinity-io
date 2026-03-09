@@ -245,6 +245,10 @@ async function main() {
     intervalMinutes: configManager.get().heartbeat?.intervalMinutes,
   });
 
+  // Start heartbeat early (only needs Brain + Redis, both ready now)
+  // Previously at end of startup — never reached if MCP/channels hung
+  await heartbeatRunner.start();
+
   // ── Memory extraction pipeline (BullMQ) ──────────────────────────────
   const MEMORY_EXTRACTION_PROMPT = `Extract important facts, preferences, and knowledge from this conversation that would be useful to remember for future interactions. Return a JSON array of memory strings. Only include genuinely useful information — not greetings, acknowledgments, or task mechanics.
 
@@ -597,9 +601,6 @@ Conversation:`;
   });
 
   await daemon.start();
-
-  // Start heartbeat runner (after daemon is ready)
-  await heartbeatRunner.start();
 }
 
 main().catch((err) => {
