@@ -58,6 +58,10 @@ const NexusConfigSchema = z.object({
 		language: z.string().optional(),
 		maxLength: z.number().int().min(100).max(10000).optional(),
 	}).optional(),
+	approval: z.object({
+		policy: z.enum(['always', 'destructive', 'never']).optional(),
+		timeoutMs: z.number().int().min(10000).max(3600000).optional(),
+	}).optional(),
 })
 
 /** Get Nexus API URL from env */
