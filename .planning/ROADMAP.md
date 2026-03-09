@@ -26,11 +26,11 @@ This milestone replaces Claude Code with Kimi Code as the sole AI backbone acros
   2. AI can call existing MCP tools (shell, docker, files) through the Kimi provider with correct argument parsing
   3. Model tier dropdown (fast/balanced/powerful) maps to actual Kimi K2.5 model IDs and the selection persists
   4. Token usage (input/output counts) displays correctly in chat after each response
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: KimiProvider implementation and tool format translation
-- [ ] 01-02: Streaming integration and model tier mapping
+- [ ] 01-01-PLAN.md -- KimiProvider class with chat, streaming, tool format translation, and argument parsing
+- [ ] 01-02-PLAN.md -- Wire KimiProvider into ProviderManager and update config schema defaults
 
 ### Phase 2: Configuration Layer
 **Goal**: Users can configure Kimi credentials, view auth status, and select models through the Settings UI and API
@@ -87,7 +87,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. KimiProvider | 0/2 | Not started | - |
+| 1. KimiProvider | 0/2 | Planned | - |
 | 2. Configuration Layer | 0/2 | Not started | - |
 | 3. KimiAgentRunner | 0/2 | Not started | - |
 | 4. Onboarding and Cleanup | 0/2 | Not started | - |
