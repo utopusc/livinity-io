@@ -1209,6 +1209,50 @@ export default router({
 		return await response.json() as {ok: boolean}
 	}),
 
+	/** Get Gmail settings (processing mode, filters, notifications) */
+	getGmailSettings: privateProcedure.query(async () => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/gmail/settings`, {
+			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+		})
+		if (!response.ok) {
+			return null
+		}
+		return await response.json()
+	}),
+
+	/** Update Gmail settings */
+	updateGmailSettings: privateProcedure.input(z.object({
+		processingMode: z.enum(['disabled', 'notify_only', 'full']).optional(),
+		sendProtection: z.boolean().optional(),
+		senderWhitelist: z.array(z.string()).optional(),
+		senderBlacklist: z.array(z.string()).optional(),
+		subjectKeywords: z.array(z.string()).optional(),
+		importantSenders: z.array(z.string()).optional(),
+		notifyChannel: z.string().optional(),
+		notifyChatId: z.string().optional(),
+		gmailPollIntervalSec: z.number().min(30).max(3600).optional(),
+		maxEmailsPerPoll: z.number().min(1).max(50).optional(),
+	})).mutation(async ({input}) => {
+		const nexusUrl = getNexusApiUrl()
+		const response = await fetch(`${nexusUrl}/api/gmail/settings`, {
+			method: 'PUT',
+			headers: {
+				'Content-Type': 'application/json',
+				...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+			},
+			body: JSON.stringify(input),
+		})
+		if (!response.ok) {
+			const err = (await response.json().catch(() => ({}))) as {error?: string}
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err.error || `Nexus API error: ${response.status}`,
+			})
+		}
+		return await response.json() as {ok: boolean}
+	}),
+
 	/** Start Gmail OAuth flow — returns consent screen URL */
 	startGmailOauth: privateProcedure.input(z.object({
 		publicUrl: z.string().min(1),
