@@ -6,30 +6,30 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v6.0 -- Claude Code to Kimi Code Migration
-**Current focus:** Phase 1 - KimiProvider
+**Current focus:** Phase 2 - Configuration Layer
 
 ## Current Position
 
 Milestone: v6.0 (Claude Code to Kimi Code Migration)
-Phase: 1 of 4 (KimiProvider)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-09 -- Completed 01-01-PLAN.md (KimiProvider core implementation)
+Phase: 1 of 4 (KimiProvider) -- COMPLETE
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase 1 complete, ready for Phase 2
+Last activity: 2026-03-09 -- Completed 01-02-PLAN.md (ProviderManager wiring and config schema)
 
-Progress: [##........] 25% (1/4 plans)
+Progress: [####......] 25% (2/8 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3 min
-- Total execution time: 3 min
+- Total plans completed: 2
+- Average duration: 2.5 min
+- Total execution time: 5 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-kimi-provider | 1/2 | 3 min | 3 min |
+| 01-kimi-provider | 2/2 | 5 min | 2.5 min |
 
 ## Accumulated Context
 
@@ -43,6 +43,8 @@ Progress: [##........] 25% (1/4 plans)
 - Raw fetch over openai SDK for KimiProvider -- zero new dependencies (01-01)
 - 60s TTL cache for Redis model tier overrides (01-01)
 - supportsVision = false for Kimi until K2.5 vision verified (01-01)
+- Kimi primary, Claude secondary fallback -- three-provider coexistence until Phase 4 cleanup (01-02)
+- Config schema defaults changed from Claude to Kimi model IDs; runtime Redis overrides still take precedence (01-02)
 
 ### Pending Todos
 
@@ -57,5 +59,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 01-01-PLAN.md (KimiProvider core implementation)
+Stopped at: Completed 01-02-PLAN.md (ProviderManager wiring and config schema) -- Phase 1 complete
 Resume file: None
