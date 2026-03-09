@@ -458,9 +458,11 @@ export class KimiProvider implements AIProvider {
     const self = this;
 
     async function* generate(): AsyncGenerator<ProviderStreamChunk> {
+      logger.info('KimiProvider.chatStream: generator started', { tier });
       const model = await self.getModelForTier(tier);
       resolvedModel = model;
       const apiKey = await self.getApiKey();
+      logger.info('KimiProvider.chatStream: got API key, model=' + model);
 
       // Build messages
       const kimiMessages: OpenAIChatMessage[] = [];
@@ -516,6 +518,8 @@ export class KimiProvider implements AIProvider {
         yield { text: '', done: true };
         throw new Error(`KimiProvider: API error ${response.status}: ${errorBody.slice(0, 500)}`);
       }
+
+      logger.info('KimiProvider.chatStream: response status=' + response.status);
 
       if (!response.body) {
         logger.error('KimiProvider: no response body for stream');
