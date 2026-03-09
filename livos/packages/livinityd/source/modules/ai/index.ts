@@ -36,6 +36,8 @@ interface LivStreamEventData {
 	success?: boolean
 	output?: string
 	answer?: string
+	awaitingApproval?: boolean
+	thought?: string
 }
 
 /** SSE event from Liv AI daemon */
@@ -219,7 +221,7 @@ export default class AiModule {
 
 	private redisUrl: string
 	private conversations = new Map<string, Conversation>()
-	chatStatus = new Map<string, {status: string; tool?: string; steps?: string[]; commands?: string[]; turn?: number}>()
+	chatStatus = new Map<string, {status: string; tool?: string; steps?: string[]; commands?: string[]; turn?: number; awaitingApproval?: {tool: string; params: Record<string, unknown>; thought?: string}}>()
 
 	constructor({livinityd, redisUrl}: AiModuleOptions) {
 		this.livinityd = livinityd
@@ -366,11 +368,16 @@ export default class AiModule {
 						// Skip if this exact description already exists anywhere in steps
 						const newSteps = prevSteps.includes(desc) ? prevSteps : [...prevSteps, desc]
 						this.chatStatus.set(conversationId, {
-							status: desc,
+							status: event.data.awaitingApproval ? `Awaiting approval: ${toolName}` : desc,
 							tool: toolName,
 							steps: newSteps,
 							commands: [...(prev?.commands ?? []), cmd],
 							turn: event.turn,
+							awaitingApproval: event.data.awaitingApproval ? {
+								tool: toolName,
+								params: event.data.params || {},
+								thought: event.data.thought as string | undefined,
+							} : undefined,
 						})
 						pendingToolCalls.set(`${event.turn}-${rawName}`, {
 							tool: rawName,
@@ -388,6 +395,7 @@ export default class AiModule {
 							steps: prev?.steps ?? [],
 							commands: prev?.commands ?? [],
 							turn: event.turn,
+							awaitingApproval: undefined,
 						})
 						const key = `${event.turn}-${rawName}`
 						const pending = pendingToolCalls.get(key)

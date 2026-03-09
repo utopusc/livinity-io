@@ -304,6 +304,32 @@ export default router({
 		return status || null
 	}),
 
+	/** Get pending tool approvals */
+	getPendingApprovals: privateProcedure.query(async () => {
+		const apiUrl = getNexusApiUrl()
+		const resp = await fetch(`${apiUrl}/api/approvals`, {
+			headers: {'X-Api-Key': process.env.LIV_API_KEY || ''},
+		})
+		if (!resp.ok) return []
+		const data = await resp.json() as {approvals?: Array<{id: string; tool: string; params: Record<string, unknown>; thought: string; createdAt: number; expiresAt: number}>}
+		return data.approvals || []
+	}),
+
+	/** Resolve a pending tool approval from the chat UI */
+	resolveApproval: privateProcedure.input(z.object({
+		requestId: z.string(),
+		decision: z.enum(['approve', 'deny']),
+	})).mutation(async ({input}) => {
+		const apiUrl = getNexusApiUrl()
+		const resp = await fetch(`${apiUrl}/api/approvals/${input.requestId}/resolve`, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json', 'X-Api-Key': process.env.LIV_API_KEY || ''},
+			body: JSON.stringify({decision: input.decision}),
+		})
+		if (!resp.ok) throw new Error(`Approval resolve failed: ${resp.status}`)
+		return {ok: true}
+	}),
+
 	/** Send a message and get the AI response */
 	send: privateProcedure
 		.input(
