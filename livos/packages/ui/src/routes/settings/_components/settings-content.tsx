@@ -145,7 +145,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Claude subscription'},
+	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi API key'},
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
 	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
 	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
@@ -741,96 +741,63 @@ function TwoFaSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AiConfigSection() {
-	const cliStatusQ = trpcReact.ai.getClaudeCliStatus.useQuery()
+	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
+	const configQ = trpcReact.ai.getConfig.useQuery()
 	const utils = trpcReact.useUtils()
+	const [apiKey, setApiKey] = useState('')
+	const [saved, setSaved] = useState(false)
 
-	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
-	const [loginUrl, setLoginUrl] = useState('')
-	const [loginCode, setLoginCode] = useState('')
+	const isConnected = kimiStatusQ.data?.authenticated ?? false
 
-	// Ensure auth method is set to sdk-subscription on mount
-	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
-		onSuccess: () => { utils.ai.getClaudeCliStatus.invalidate() },
-	})
-
-	useEffect(() => {
-		const serverMethod = cliStatusQ.data?.authMethod
-		if (serverMethod && serverMethod !== 'sdk-subscription') {
-			setAuthMethodMutation.mutate({method: 'sdk-subscription'})
-		}
-	}, [cliStatusQ.data?.authMethod])
-
-	// Clear login UI when auth succeeds
-	useEffect(() => {
-		if (cliAuthenticated) {
-			setLoginUrl('')
-			setLoginCode('')
-		}
-	}, [cliAuthenticated])
-
-	// Poll CLI status every 5s when not authenticated
-	useEffect(() => {
-		if (cliAuthenticated) return
-		const interval = setInterval(() => { cliStatusQ.refetch() }, 5000)
-		return () => clearInterval(interval)
-	}, [cliAuthenticated])
-
-	// When login URL is shown, poll more frequently (every 3s)
-	useEffect(() => {
-		if (!loginUrl) return
-		const interval = setInterval(() => { cliStatusQ.refetch() }, 3000)
-		return () => clearInterval(interval)
-	}, [loginUrl])
-
-	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
-		onSuccess: (data) => {
-			if (data.url) {
-				setLoginUrl(data.url)
-				window.open(data.url, '_blank', 'noopener,noreferrer')
-			}
-			if (data.alreadyAuthenticated) {
-				utils.ai.getClaudeCliStatus.invalidate()
-			}
-		},
-	})
-
-	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
-		onSuccess: (data) => {
-			if (data.success) {
-				setLoginCode('')
-				setLoginUrl('')
-				utils.ai.getClaudeCliStatus.invalidate()
-			}
-		},
-	})
-
-	const logoutMutation = trpcReact.ai.claudeLogout.useMutation({
+	const loginMutation = trpcReact.ai.kimiLogin.useMutation({
 		onSuccess: () => {
-			utils.ai.getClaudeCliStatus.invalidate()
+			setSaved(true)
+			setApiKey('')
+			utils.ai.getKimiStatus.invalidate()
+			utils.ai.getConfig.invalidate()
+			setTimeout(() => setSaved(false), 2000)
 		},
 	})
 
-	const cliUser = cliStatusQ.data?.user
+	const logoutMutation = trpcReact.ai.kimiLogout.useMutation({
+		onSuccess: () => {
+			utils.ai.getKimiStatus.invalidate()
+			utils.ai.getConfig.invalidate()
+		},
+	})
+
+	const handleSave = () => {
+		if (!apiKey.trim()) return
+		loginMutation.mutate({apiKey: apiKey.trim()})
+	}
 
 	return (
 		<div className='max-w-lg space-y-4'>
-			<h3 className='text-body font-medium text-text-primary'>Claude Subscription</h3>
+			<h3 className='text-body font-medium text-text-primary'>Kimi AI</h3>
 			<p className='text-body-sm text-text-secondary'>
-				Use your Claude Pro/Max subscription. No API key needed.
+				Enter your Kimi API key to connect LivOS to Kimi AI.
 			</p>
 
-			<div className='rounded-radius-md border border-brand/50 bg-brand/5 p-4 space-y-3'>
-				{cliStatusQ.isLoading ? (
+			<div className={cn(
+				'rounded-radius-md border p-4 space-y-3',
+				isConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
+			)}>
+				{kimiStatusQ.isLoading ? (
 					<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
 						<TbLoader2 className='h-4 w-4 animate-spin' />
 						Checking status...
 					</div>
-				) : cliAuthenticated ? (
+				) : isConnected ? (
 					<div className='space-y-3'>
 						<div className='flex items-center gap-2 text-body-sm text-green-400'>
 							<TbCircleCheck className='h-4 w-4' />
-							Authenticated{cliUser ? ` as ${cliUser}` : ''}
+							Connected
 						</div>
+						{configQ.data?.kimiApiKey && (
+							<p className='text-caption text-text-secondary font-mono'>
+								Current: {configQ.data.kimiApiKey}
+							</p>
+						)}
 						<Button
 							variant='secondary'
 							size='sm'
@@ -838,9 +805,9 @@ function AiConfigSection() {
 							disabled={logoutMutation.isPending}
 						>
 							{logoutMutation.isPending ? (
-								<><TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...</>
+								<><TbLoader2 className='h-4 w-4 animate-spin' /> Disconnecting...</>
 							) : (
-								<><TbLogout className='h-4 w-4' /> Sign Out</>
+								<><TbLogout className='h-4 w-4' /> Disconnect</>
 							)}
 						</Button>
 						{logoutMutation.isError && (
@@ -851,85 +818,40 @@ function AiConfigSection() {
 					<div className='space-y-3'>
 						<div className='flex items-center gap-2 text-body-sm text-amber-400'>
 							<TbAlertCircle className='h-4 w-4' />
-							Not authenticated
+							Not connected
 						</div>
-
+						<Input
+							placeholder='Enter your Kimi API key...'
+							value={apiKey}
+							onValueChange={setApiKey}
+							className='font-mono'
+						/>
+						<a
+							href='https://platform.kimi.com'
+							target='_blank'
+							rel='noopener noreferrer'
+							className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+						>
+							<TbExternalLink className='h-3.5 w-3.5' />
+							Get API key from Kimi Platform
+						</a>
 						<Button
 							variant='primary'
 							size='sm'
-							onClick={() => startLoginMutation.mutate()}
-							disabled={startLoginMutation.isPending}
+							onClick={handleSave}
+							disabled={!apiKey.trim() || loginMutation.isPending}
 						>
-							{startLoginMutation.isPending ? (
-								<><TbLoader2 className='h-4 w-4 animate-spin' /> Opening...</>
+							{saved ? (
+								<><TbCheck className='h-4 w-4' /> Saved</>
+							) : loginMutation.isPending ? (
+								'Saving...'
 							) : (
-								<><TbExternalLink className='h-4 w-4' /> {loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}</>
+								'Save API Key'
 							)}
 						</Button>
-						{startLoginMutation.isError && (
-							<p className='text-caption text-red-400'>{startLoginMutation.error.message}</p>
+						{loginMutation.isError && (
+							<p className='text-caption text-red-400'>{loginMutation.error.message}</p>
 						)}
-
-						<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
-							<p className='text-caption text-text-secondary'>
-								1. Click &quot;Sign in with Claude&quot; above to open the auth page.
-								<br />
-								2. Log in with your Claude account.
-								<br />
-								3. Copy the code you receive and paste it below:
-							</p>
-							{loginUrl && (
-								<a
-									href={loginUrl}
-									target='_blank'
-									rel='noopener noreferrer'
-									className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-								>
-									<TbExternalLink className='h-3.5 w-3.5' />
-									Re-open auth page
-								</a>
-							)}
-							<div className='flex gap-2'>
-								<Input
-									placeholder='Paste auth code here...'
-									value={loginCode}
-									onValueChange={setLoginCode}
-									className='font-mono text-caption'
-								/>
-								<Button
-									variant='primary'
-									size='sm'
-									onClick={() => {
-										if (!loginUrl) {
-											startLoginMutation.mutate(undefined, {
-												onSuccess: () => {
-													submitCodeMutation.mutate({code: loginCode})
-												},
-											})
-										} else {
-											submitCodeMutation.mutate({code: loginCode})
-										}
-									}}
-									disabled={!loginCode.trim() || submitCodeMutation.isPending}
-								>
-									{submitCodeMutation.isPending ? (
-										<TbLoader2 className='h-4 w-4 animate-spin' />
-									) : (
-										'Submit'
-									)}
-								</Button>
-							</div>
-							{submitCodeMutation.isError && (
-								<p className='text-caption text-red-400'>
-									{submitCodeMutation.error.message}
-								</p>
-							)}
-							{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
-								<p className='text-caption text-red-400'>
-									{submitCodeMutation.data?.error || 'Code exchange failed'}
-								</p>
-							)}
-						</div>
 					</div>
 				)}
 			</div>
