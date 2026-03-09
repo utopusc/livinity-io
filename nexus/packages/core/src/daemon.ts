@@ -3055,9 +3055,13 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
       }
     }
 
+    // Detect if native tool mode is active (Kimi uses native tool calling)
+    const activeProvider = await this.config.brain.getActiveProviderId();
+    const useNativeTools = activeProvider === 'kimi';
+
     const systemPrompt = config.systemPrompt
-      ? subagentPrompt(config.name, config.systemPrompt, scopedRegistry.listForPrompt())
-      : subagentPrompt(config.name, config.description, scopedRegistry.listForPrompt());
+      ? subagentPrompt(config.name, config.systemPrompt, scopedRegistry.listForPrompt(), useNativeTools)
+      : subagentPrompt(config.name, config.description, scopedRegistry.listForPrompt(), useNativeTools);
 
     let contextPrefix = '';
     if (history) {
