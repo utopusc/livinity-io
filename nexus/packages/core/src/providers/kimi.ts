@@ -145,6 +145,86 @@ function translateToolDefinition(tool: ToolDefinition): OpenAIFunctionTool {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: Convert Anthropic-format raw messages to OpenAI format
+// ---------------------------------------------------------------------------
+
+/**
+ * The agent loop builds provider messages in Anthropic format (tool_use / tool_result
+ * content blocks). Kimi uses the OpenAI format (tool_calls on assistant, role: 'tool'
+ * for results). This function converts on the fly.
+ */
+function convertRawMessages(raw: unknown[]): OpenAIChatMessage[] {
+  const out: OpenAIChatMessage[] = [];
+
+  for (const msg of raw as Array<{ role: string; content: unknown }>) {
+    // Plain text message — pass through
+    if (typeof msg.content === 'string') {
+      out.push({ role: msg.role as any, content: msg.content });
+      continue;
+    }
+
+    // Array content — could be Anthropic-style content blocks
+    if (!Array.isArray(msg.content)) {
+      out.push(msg as OpenAIChatMessage);
+      continue;
+    }
+
+    const blocks = msg.content as Array<{ type: string; [k: string]: unknown }>;
+
+    if (msg.role === 'assistant') {
+      // Convert assistant content blocks → OpenAI assistant with tool_calls
+      const textParts: string[] = [];
+      const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
+
+      for (const b of blocks) {
+        if (b.type === 'text') {
+          textParts.push(b.text as string);
+        } else if (b.type === 'tool_use') {
+          toolCalls.push({
+            id: b.id as string,
+            type: 'function',
+            function: {
+              name: b.name as string,
+              arguments: typeof b.input === 'string' ? b.input : JSON.stringify(b.input),
+            },
+          });
+        }
+      }
+
+      const assistantMsg: OpenAIChatMessage = {
+        role: 'assistant',
+        content: textParts.join('\n') || null,
+      };
+      if (toolCalls.length > 0) assistantMsg.tool_calls = toolCalls;
+      out.push(assistantMsg);
+
+    } else if (msg.role === 'user') {
+      // Convert user tool_result blocks → OpenAI role: 'tool' messages
+      let hasToolResults = false;
+      for (const b of blocks) {
+        if (b.type === 'tool_result') {
+          hasToolResults = true;
+          out.push({
+            role: 'tool',
+            content: typeof b.content === 'string' ? b.content : JSON.stringify(b.content),
+            tool_call_id: b.tool_use_id as string,
+          });
+        }
+      }
+      // If no tool results, pass as regular user message
+      if (!hasToolResults) {
+        out.push({ role: 'user', content: blocks.map(b => (b as any).text || '').join('\n') });
+      }
+
+    } else {
+      out.push(msg as OpenAIChatMessage);
+    }
+  }
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Helper: Parse tool call arguments (string or object)
 // ---------------------------------------------------------------------------
 
@@ -370,7 +450,7 @@ export class KimiProvider implements AIProvider {
 
     // User/assistant messages
     if (options.rawMessages) {
-      kimiMessages.push(...(options.rawMessages as OpenAIChatMessage[]));
+      kimiMessages.push(...convertRawMessages(options.rawMessages as unknown[]));
     } else {
       const prepared = prepareForProvider(options.messages, 'kimi') as Array<{ role: string; content: string }>;
       for (const msg of prepared) {
@@ -471,7 +551,7 @@ export class KimiProvider implements AIProvider {
       }
 
       if (options.rawMessages) {
-        kimiMessages.push(...(options.rawMessages as OpenAIChatMessage[]));
+        kimiMessages.push(...convertRawMessages(options.rawMessages as unknown[]));
       } else {
         const prepared = prepareForProvider(options.messages, 'kimi') as Array<{ role: string; content: string }>;
         for (const msg of prepared) {
