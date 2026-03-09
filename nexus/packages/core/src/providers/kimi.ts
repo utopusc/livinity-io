@@ -458,11 +458,9 @@ export class KimiProvider implements AIProvider {
     const self = this;
 
     async function* generate(): AsyncGenerator<ProviderStreamChunk> {
-      logger.info('KimiProvider.chatStream: generator started', { tier });
       const model = await self.getModelForTier(tier);
       resolvedModel = model;
       const apiKey = await self.getApiKey();
-      logger.info('KimiProvider.chatStream: got API key, model=' + model);
 
       // Build messages
       const kimiMessages: OpenAIChatMessage[] = [];
@@ -519,8 +517,6 @@ export class KimiProvider implements AIProvider {
         throw new Error(`KimiProvider: API error ${response.status}: ${errorBody.slice(0, 500)}`);
       }
 
-      logger.info('KimiProvider.chatStream: response status=' + response.status);
-
       if (!response.body) {
         logger.error('KimiProvider: no response body for stream');
         yield { text: '', done: true };
@@ -553,10 +549,9 @@ export class KimiProvider implements AIProvider {
             // Skip empty lines and comments
             if (!trimmed || trimmed.startsWith(':')) continue;
 
-            // SSE data lines
-            if (!trimmed.startsWith('data: ')) continue;
-
-            const data = trimmed.slice(6); // Strip 'data: ' prefix
+            // SSE data lines — Kimi may send "data:" or "data: " (both valid SSE)
+            if (!trimmed.startsWith('data:')) continue;
+            const data = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5);
 
             // Check for stream end
             if (data === '[DONE]') {
@@ -601,17 +596,11 @@ export class KimiProvider implements AIProvider {
             // Track finish reason
             if (choice.finish_reason) {
               lastStopReason = mapStopReason(choice.finish_reason);
-              logger.info('KimiProvider: finish_reason', { raw: choice.finish_reason, mapped: lastStopReason });
             }
 
             // Handle text content delta
             if (choice.delta.content) {
-              logger.info('KimiProvider: content chunk', { content: choice.delta.content.slice(0, 50) });
               yield { text: choice.delta.content, done: false };
-            }
-            // Also capture reasoning_content for debug
-            if ((choice.delta as any).reasoning_content) {
-              logger.debug('KimiProvider: reasoning chunk', { len: (choice.delta as any).reasoning_content.length });
             }
 
             // Handle tool call deltas
