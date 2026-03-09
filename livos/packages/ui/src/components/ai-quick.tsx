@@ -45,15 +45,7 @@ export function AiQuickProvider({children}: {children: React.ReactNode}) {
 
 // ── SVG Liquid Glass Filter ────────────────────────────
 
-const LiquidGlassFilter = () => (
-	<svg width='0' height='0'>
-		<filter id='ai-liquid-glass' x='-20%' y='-20%' width='140%' height='140%'>
-			<feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='77' result='noise' />
-			<feDisplacementMap in='SourceGraphic' in2='noise' scale='6' xChannelSelector='R' yChannelSelector='G' result='displaced' />
-			<feGaussianBlur in='displaced' stdDeviation='0.6' result='blurred' />
-		</filter>
-	</svg>
-)
+// No SVG filter needed — glass effect is pure CSS (backdrop-filter + shadows)
 
 // ── Tool Call Display ──────────────────────────────────
 
@@ -172,8 +164,6 @@ export function AiQuickDialog() {
 					className='fixed inset-0 z-[999] flex flex-col items-center justify-start pt-[12vh]'
 					onClick={handleClose}
 				>
-					<LiquidGlassFilter />
-
 					{/* Backdrop */}
 					<motion.div
 						className='fixed inset-0 bg-black/5 backdrop-blur-sm'
@@ -191,14 +181,13 @@ export function AiQuickDialog() {
 						transition={{duration: 0.3, type: 'spring', bounce: 0.2}}
 						style={{
 							borderRadius: '28px',
-							filter: 'url(#ai-liquid-glass)',
-							backdropFilter: 'blur(50px) saturate(200%)',
-							WebkitBackdropFilter: 'blur(50px) saturate(200%)',
+							backdropFilter: 'blur(40px) saturate(180%)',
+							WebkitBackdropFilter: 'blur(40px) saturate(180%)',
 						}}
 						className={cn(
 							'relative z-20 flex w-full max-w-2xl flex-col overflow-hidden',
-							'border border-white/40 bg-white/45',
-							'shadow-[inset_0_1px_3px_rgba(255,255,255,0.7),inset_0_-1px_3px_rgba(0,0,0,0.08),inset_0_0_20px_rgba(255,255,255,0.12),0_8px_32px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.06)]',
+							'border border-white/30 bg-white/70',
+							'shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.8),inset_0_-1px_0_rgba(255,255,255,0.2)]',
 						)}
 					>
 						{/* Input area */}
