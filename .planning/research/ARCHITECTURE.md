@@ -1,988 +1,913 @@
-# Architecture Research: v2.0 OpenClaw-Class AI Platform
+# Architecture Research: Kimi Code Migration
 
 **Dimension:** Architecture
-**Milestone:** v2.0 -- Voice, Canvas, Multi-Agent, Webhooks, Gmail, CLI, Stability
-**Date:** 2026-02-20
-**Confidence:** HIGH (based on direct codebase analysis of 8+ source files)
+**Milestone:** Kimi Code Migration -- Replace Claude Code with Kimi Code in Nexus
+**Date:** 2026-03-09
+**Confidence:** HIGH (based on direct codebase analysis + official Kimi CLI docs + verified Kimi SDK info)
 
 ---
 
 ## Executive Summary
 
-v2.0 adds 11 feature groups to an already-functional LivOS/Nexus system. The existing architecture -- Daemon with inbox pattern, SdkAgentRunner with MCP tools, ChannelManager with provider pattern, Redis state layer, Express API + WsGateway -- provides clean integration seams for every proposed feature. No architectural rewrites are needed. The key insight: most features are either **new MCP tools** (multi-agent sessions, usage tracking), **new channel providers** (Gmail), **new Express routes** (webhooks), **new UI routes** (canvas), or **daemon-level middleware** (commands, DM pairing). The voice pipeline is the only feature requiring a genuinely new component pattern (bidirectional WebSocket audio streaming).
+Migrating from Claude Code to Kimi Code requires changes across four layers: provider, agent runner, API routes, and UI. The existing architecture is well-suited for this -- the AIProvider interface, ProviderManager fallback system, and SdkAgentRunner pattern all have clean seams. The critical insight: **Kimi offers three integration depths** -- direct API calls (OpenAI-compatible), CLI subprocess via Agent SDK, and a raw Wire protocol (JSON-RPC 2.0 over stdio). The recommended approach uses the Agent SDK (`@moonshot-ai/kimi-agent-sdk`) for subscription mode (replacing SdkAgentRunner) and the OpenAI-compatible API for API key mode (replacing ClaudeProvider.chat).
+
+The migration is **not a rewrite** -- it's a systematic replacement of Claude-specific components with Kimi equivalents while preserving the surrounding architecture (ToolRegistry, Brain, ProviderManager, tRPC routes, SSE streaming).
+
+**Key finding from research:** Kimi CLI also supports a `--print --output-format=stream-json` mode that streams JSONL to stdout without any SDK dependency. This provides a fallback if the `@moonshot-ai/kimi-agent-sdk` proves too immature (0.x version). The fallback approach spawns `kimi --print --output-format=stream-json -p "task"` directly and parses JSONL output.
 
 ---
 
-## Current Architecture (As Implemented)
-
-Based on direct reading of the production codebase:
+## Current Architecture (Claude Code)
 
 ```
-                    +------------------+
-                    |   LivOS Web UI   |  React 18 + Vite + Tailwind
-                    |   (port 5173)    |  Routes: ai-chat, schedules, apps, settings
-                    +--------+---------+
-                             |
-                    tRPC + SSE streaming
-                             |
-                    +--------+---------+
-                    |    livinityd     |  System daemon (TypeScript via tsx)
-                    |    (port 80)     |  Modules: ai, auth, system
-                    +--------+---------+
-                             |
-                    HTTP POST /api/agent/stream
-                             |
-+--------+          +--------+---------+          +-----------+
-|Telegram|--------->|   Nexus Core     |<-------->|   Redis   |
-|Discord |  grammy  |   (port 3200)    |  ioredis | State,    |
-|Slack   |  d.js    |                  |          | Queues,   |
-|Matrix  |  bolt    | Daemon           |          | Pub/Sub,  |
-+--------+  matrix  |  -> inbox[]      |          | History   |
-                    |  -> processItem  |          +-----------+
-                    |  -> router/agent |
-                    |                  |          +-----------+
-                    | SdkAgentRunner   |<-------->|PostgreSQL |
-                    |  -> query()      |          | Memory,   |
-                    |  -> MCP tools    |          | pgvector  |
-                    |                  |          +-----------+
-                    | Express API      |
-                    |  /api/*          |          +-----------+
-                    |                  |<-------->|  Docker   |
-                    | WsGateway        |          | Apps,     |
-                    |  /ws/agent       |          | Chromium  |
-                    +------------------+          +-----------+
++------------------+
+|   LivOS Web UI   |  React 18 + Vite
+|   ai-config.tsx  |  Claude auth method toggle (api-key / sdk-subscription)
++--------+---------+
+         |
+    tRPC routes (livinityd/modules/ai/routes.ts)
+         |
++--------+---------+
+|    livinityd     |  Proxies to Nexus API
+|   (port 80)     |  tRPC: ai.getClaudeCliStatus, ai.startClaudeLogin, etc.
++--------+---------+
+         |
+    HTTP fetch to Nexus API
+         |
++--------+---------+     +-------------------+
+|   Nexus Core     |---->|  SdkAgentRunner   |  Spawns Claude Code CLI subprocess
+|   api.ts         |     |  (sdk-agent-runner)|  via @anthropic-ai/claude-agent-sdk
+|   (port 3200)    |     +--------+----------+
++--------+---------+              |
+         |                   query() function
+         |                   spawns 'claude' CLI
++--------+---------+              |
+|  ClaudeProvider  |     +--------+----------+
+|  claude.ts       |     | Claude Code CLI   |
+|  - chat()        |     | - OAuth auth      |
+|  - chatStream()  |     | - MCP tools       |
+|  - startLogin()  |     | - permissionMode  |
+|  - submitCode()  |     +-------------------+
++------------------+
 ```
 
-### Critical Integration Points (from codebase)
+### Key Components to Replace
 
-| Component | File | Integration Surface |
-|-----------|------|-------------------|
-| **Daemon.addToInbox()** | `daemon.ts:421-435` | Single entry point for ALL message sources. Supports: mcp, cron, daemon, webhook, telegram, discord, slack, matrix, whatsapp |
-| **Daemon.processInboxItem()** | `daemon.ts:444-596` | Processing pipeline: commands -> skills -> router -> agent. Response routing via per-request closures |
-| **SdkAgentRunner.run()** | `sdk-agent-runner.ts:142-328` | Creates MCP server from ToolRegistry, runs Claude SDK query(), streams events |
-| **ChannelManager** | `channels/index.ts:15-241` | Provider registry pattern. Providers: init(), connect(), onMessage(), sendMessage() |
-| **ChannelProvider interface** | `channels/types.ts:49-76` | Contract: id, name, init(redis), connect(), disconnect(), getStatus(), sendMessage(), onMessage(), updateConfig(), testConnection() |
-| **handleCommand()** | `commands.ts:40-98` | Slash command interception: /help, /think, /verbose, /model, /reset, /status, /stats |
-| **SessionManager** | `session-manager.ts:40-351` | Redis-backed sessions with idle timeout, history, pruning. Scoped per-sender or global |
-| **WsGateway** | `ws-gateway.ts:110-168` | JSON-RPC 2.0 over WebSocket. Auth on upgrade. Redis pub/sub notifications |
-| **Express API** | `api.ts:72-1016` | REST + SSE. /api/agent/stream for web UI. /api/webhook/git existing webhook pattern |
-| **AiModule (livinityd)** | `livinityd/modules/ai/index.ts:213-400` | Bridges web UI to Nexus via SSE. Manages conversations, chatStatus tracking, step descriptions |
+| Component | File | What It Does | Migration Impact |
+|-----------|------|-------------|------------------|
+| ClaudeProvider | `providers/claude.ts` | API key auth, OAuth PKCE, chat/stream, CLI status | **REPLACE** with KimiProvider |
+| SdkAgentRunner | `sdk-agent-runner.ts` | Spawns Claude CLI, bridges MCP tools | **REPLACE** with KimiAgentRunner |
+| API routes | `api.ts` lines 185-246 | `/api/claude-cli/*` endpoints | **REPLACE** with `/api/kimi/*` |
+| Config schema | `config/schema.ts` | Model names (claude-*) | **MODIFY** model names |
+| Provider types | `providers/types.ts` | ClaudeToolDefinition, cost table | **MODIFY** add Kimi costs |
+| ProviderManager | `providers/manager.ts` | Fallback order [claude, gemini] | **MODIFY** -> [kimi, gemini] |
+| AI tRPC routes | `livinityd/.../ai/routes.ts` | Claude CLI status/login/logout | **REPLACE** with Kimi equivalents |
+| AI Config UI | `ui/.../ai-config.tsx` | Claude auth UI | **REPLACE** with Kimi auth UI |
+
+### Components That Stay Unchanged
+
+| Component | Why Unchanged |
+|-----------|--------------|
+| ToolRegistry | Provider-agnostic tool definitions |
+| Brain | Delegates to ProviderManager -- provider-agnostic |
+| AgentLoop | Direct API mode -- works with any AIProvider |
+| AgentConfig/AgentResult types | Provider-agnostic interfaces |
+| AgentEvent types | Provider-agnostic event interface |
+| SSE streaming in api.ts | Uses AgentEvent -- provider-agnostic |
+| Daemon, Redis, all channels | No AI provider dependency |
 
 ---
 
-## Feature Integration Architecture
+## Kimi Code Architecture
 
-### 1. Voice Pipeline
+### Three Integration Depths
 
-**Architecture Decision: WebSocket relay service within nexus-core, NOT a separate container.**
+Kimi Code offers **three distinct integration depths**, more than Claude's two:
 
-The voice pipeline requires real-time bidirectional audio streaming. The existing WsGateway handles JSON-RPC over WebSocket; voice needs a parallel binary-capable WebSocket path.
+#### Depth 1: Kimi API (Direct API Mode -- replaces ClaudeProvider.chat/chatStream)
 
-#### Data Flow
+- **Endpoint:** `https://api.kimi.com/coding/v1` (Kimi Code specific) or `https://api.moonshot.ai/v1` (general Moonshot API)
+- **Format:** OpenAI-compatible chat completions API
+- **Authentication:** API key (Bearer token) from Moonshot Platform or Kimi Code membership
+- **Tool calling:** OpenAI-format function calling (NOT Anthropic tool_use)
+- **Streaming:** SSE with `data: {...}` chunks (OpenAI format)
+- **Context window:** 262,144 tokens
+- **Max output:** 32,768 tokens
+- **Pricing:** ~$0.60/M input, $2.50/M output (significantly cheaper than Claude)
 
-```
-Browser (mic)                           Nexus Core                          External APIs
-+-----------+     +-----------+     +------------------+     +-----------+
-| MediaRecorder|-->| WebSocket |---->| /ws/voice        |---->| Deepgram  |
-| getUserMedia |   | binary    |     | VoiceGateway     |     | STT WS   |
-+-----------+     | frames    |     |                  |     | nova-3    |
-                  +-----------+     | 1. STT relay     |     +-----------+
-                                    | 2. Text to Daemon|
-                                    | 3. TTS relay     |     +-----------+
-+-----------+     +-----------+     | 4. Audio back    |---->| Cartesia  |
-| AudioContext|<--| WebSocket |<----| to client        |     | TTS WS   |
-| playback   |   | binary    |     +------------------+     | Sonic     |
-+-----------+     | PCM/opus  |                              +-----------+
-                  +-----------+
-```
+**Key difference from Claude API:** Kimi uses OpenAI function_call format, not Anthropic tool_use blocks. The KimiProvider must translate between Nexus's ClaudeToolDefinition format and OpenAI function format.
 
-#### New Components
+**Confidence:** HIGH -- OpenAI-compatible format is well-documented and widely used.
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `VoiceGateway` | `nexus/packages/core/src/voice-gateway.ts` | NEW. WebSocket server on `/ws/voice`. Manages STT/TTS connections per client |
-| `DeepgramRelay` | `nexus/packages/core/src/voice/deepgram-relay.ts` | NEW. Forwards browser audio to Deepgram WebSocket, returns transcript events |
-| `CartesiaRelay` | `nexus/packages/core/src/voice/cartesia-relay.ts` | NEW. Sends agent response text to Cartesia WebSocket, returns PCM audio chunks |
-| `VoiceSession` | `nexus/packages/core/src/voice/session.ts` | NEW. Ties one browser WS to one Deepgram + one Cartesia connection. Manages lifecycle |
-| Voice UI | `livos/packages/ui/src/routes/ai-chat/voice-mode.tsx` | NEW. Mic button in ai-chat route. MediaRecorder + AudioContext |
+#### Depth 2: Kimi Agent SDK (Subprocess Mode -- replaces SdkAgentRunner)
 
-#### Integration with SdkAgentRunner
+- **Package:** `@moonshot-ai/kimi-agent-sdk`
+- **Mechanism:** Spawns `kimi` CLI as subprocess, communicates via Wire protocol (JSON-RPC 2.0 over stdio)
+- **Authentication:** OAuth via `kimi login` or API key in `~/.kimi/config.toml`
+- **MCP support:** Reads from `~/.kimi/mcp.json` OR `--mcp-config-file` flag OR `--mcp-config` inline JSON
+- **Tool approval:** `yoloMode: true` auto-approves all tools (equivalent to Claude's `dontAsk`)
+- **Session API:** `createSession()` + `session.prompt()` (async iterator pattern)
+- **External tools:** `createExternalTool()` for registering custom tools with Zod schemas
 
-The VoiceGateway does NOT replace SdkAgentRunner. It wraps it:
+**Key difference from Claude SDK:** The Kimi SDK uses `createSession()` + `session.prompt()` instead of a single `query()` function. Sessions are stateful and persist across turns. Events use a different type system (TurnBegin, StepBegin, ContentPart, ToolCall, ToolResult, StatusUpdate, etc.).
 
-```
-1. Browser mic audio -> VoiceGateway (binary WS)
-2. VoiceGateway -> DeepgramRelay -> transcript text
-3. VoiceGateway calls daemon.addToInbox(transcript, 'voice', requestId)
-4. Daemon processes normally (commands, skills, agent)
-5. Agent result stored in Redis (nexus:answer:{requestId})
-6. VoiceGateway polls/subscribes for result
-7. Result text -> CartesiaRelay -> PCM audio
-8. Audio chunks -> browser WS -> AudioContext playback
-```
+**Confidence:** MEDIUM -- SDK is 0.x version; API surface documented but exact TypeScript signatures need testing.
 
-This means voice is "just another source" for the inbox. All existing processing (commands, skills, agent routing, memory) works unchanged.
+#### Depth 3: CLI Print Mode (Fallback / Direct Subprocess)
 
-#### Configuration
-
-```typescript
-// nexus.config.yaml additions
-voice:
-  enabled: true
-  deepgram:
-    apiKey: "redis:livos:config:deepgram_api_key"   # Stored in Redis like other keys
-    model: "nova-3"
-    language: "en"
-  cartesia:
-    apiKey: "redis:livos:config:cartesia_api_key"
-    voiceId: "default"                               # User-selectable voice
-    model: "sonic"
-    outputFormat: { container: "raw", encoding: "pcm_f32le", sampleRate: 24000 }
-```
-
-#### Key Libraries
-
-- `@deepgram/sdk` -- WebSocket STT client. npm package. Handles connection lifecycle, keepAlive.
-- `@cartesia/cartesia-js` -- WebSocket TTS client. npm package. Context-based streaming with prosody continuity.
-- Browser: `MediaRecorder` API (opus encoding), `AudioContext` + `AudioWorklet` for PCM playback.
-
-#### Why NOT a Separate Container
-
-- Latency: Inter-process/container hops add 5-20ms per hop. Voice needs sub-200ms total.
-- State: VoiceGateway needs access to Daemon.addToInbox() and Redis directly.
-- Complexity: No need for a message queue between voice service and nexus-core.
-- Scale: Single-user self-hosted system. One voice session at a time is fine.
-
----
-
-### 2. Live Canvas
-
-**Architecture Decision: Sandboxed iframe inside ai-chat route, NOT a separate window.**
-
-#### Approach
-
-The AI generates React/HTML code via a new MCP tool (`canvas_render`). The code is rendered in a sandboxed iframe using `srcdoc`. This is the same pattern used by Claude Artifacts, Vercel v0, and similar tools.
-
-#### Data Flow
-
-```
-1. User asks: "Show me a dashboard of server stats"
-2. SdkAgentRunner calls mcp__nexus-tools__canvas_render({ code: "<html>..." })
-3. Tool stores rendered code in Redis: nexus:canvas:{conversationId}
-4. Frontend polls/subscribes via tRPC: ai.getCanvasContent({ conversationId })
-5. Canvas component renders code in <iframe sandbox="allow-scripts" srcdoc={code}>
-6. postMessage bridge for data exchange between parent and iframe
-```
-
-#### New Components
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `canvas_render` tool | `daemon.ts` registerTools() | NEW tool. Stores HTML/React code in Redis for canvas display |
-| `canvas_update` tool | `daemon.ts` registerTools() | NEW tool. Incrementally updates existing canvas content |
-| Canvas panel | `livos/packages/ui/src/routes/ai-chat/canvas-panel.tsx` | NEW. Split-pane view in ai-chat. Sandboxed iframe renderer |
-| tRPC endpoints | `livinityd/modules/ai/index.ts` | NEW. `ai.getCanvasContent`, `ai.clearCanvas` |
-
-#### Sandbox Security
-
-```html
-<iframe
-  sandbox="allow-scripts"
-  srcdoc={generatedHtml}
-  style="width: 100%; height: 100%; border: none;"
-/>
-```
-
-The `sandbox="allow-scripts"` attribute:
-- Allows JavaScript execution
-- Blocks same-origin access (cannot read parent DOM)
-- Blocks form submission, popups, top navigation
-- Blocks access to localStorage, cookies of parent
-
-For React components, inject Tailwind CSS + React via CDN in the srcdoc template:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="text/babel">
-    ${generatedReactCode}
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
-</body>
-</html>
-```
-
-#### UI Layout
-
-```
-+---------------------------------------------------+
-|  AI Chat (existing)            |  Canvas Panel    |
-|                                |  (new, toggleable)|
-|  [User message]               |  +-------------+  |
-|  [AI response with code]      |  | Sandboxed   |  |
-|  [canvas_render tool call]    |  | iframe with  |  |
-|                                |  | live preview |  |
-|  [Input box]                  |  +-------------+  |
-+---------------------------------------------------+
-```
-
-Split-pane with draggable divider. Canvas panel hidden by default, appears when `canvas_render` tool is called. Persists per conversation.
-
----
-
-### 3. Multi-Agent Sessions
-
-**Architecture Decision: Extend SdkAgentRunner with session context. New MCP tools for session management. No separate SessionManager class needed -- use existing Redis patterns.**
-
-#### Concept
-
-"Sessions" in multi-agent context means: multiple named agent identities sharing a workspace where they can communicate. Each session has a shared message history and agents can be addressed by name.
-
-#### Implementation
-
-This is purely MCP tools + Redis state. No changes to SdkAgentRunner internals.
-
-#### New MCP Tools
-
-```typescript
-// Registered in daemon.ts registerTools()
-
-toolRegistry.register({
-  name: 'sessions_list',
-  description: 'List all active multi-agent sessions',
-  parameters: [],
-  execute: async () => {
-    const keys = await redis.keys('nexus:session:multi:*:meta');
-    // ... return session list
-  },
-});
-
-toolRegistry.register({
-  name: 'sessions_create',
-  description: 'Create a new multi-agent session with named participants',
-  parameters: [
-    { name: 'name', type: 'string', required: true },
-    { name: 'agents', type: 'array', description: 'Agent names', required: true },
-    { name: 'goal', type: 'string', required: false },
-  ],
-  execute: async (params) => {
-    const sessionId = randomUUID();
-    await redis.set(`nexus:session:multi:${sessionId}:meta`, JSON.stringify({
-      name: params.name, agents: params.agents, goal: params.goal, createdAt: Date.now(),
-    }));
-    return { success: true, output: `Session ${sessionId} created` };
-  },
-});
-
-toolRegistry.register({
-  name: 'sessions_send',
-  description: 'Send a message to a specific agent in a multi-agent session',
-  parameters: [
-    { name: 'sessionId', type: 'string', required: true },
-    { name: 'to', type: 'string', description: 'Target agent name', required: true },
-    { name: 'message', type: 'string', required: true },
-  ],
-  execute: async (params) => {
-    // Enqueue task for target agent via BullMQ or direct execution
-    // The "to" agent runs with the session context as system prompt prefix
-  },
-});
-
-toolRegistry.register({
-  name: 'sessions_history',
-  description: 'Get conversation history of a multi-agent session',
-  parameters: [
-    { name: 'sessionId', type: 'string', required: true },
-    { name: 'limit', type: 'number', required: false },
-  ],
-  execute: async (params) => {
-    const history = await redis.lrange(`nexus:session:multi:${params.sessionId}:history`, 0, params.limit || 50);
-    return { success: true, output: history.join('\n') };
-  },
-});
-```
-
-#### Redis Schema
-
-```
-nexus:session:multi:{id}:meta       -> JSON { name, agents[], goal, createdAt }
-nexus:session:multi:{id}:history    -> LIST of JSON { from, to, message, timestamp }
-nexus:session:multi:{id}:state      -> JSON { shared state/workspace data }
-```
-
-#### Inter-Agent Communication
-
-When `sessions_send` is called, it does NOT use Redis pub/sub. Instead:
-
-1. Appends message to session history list
-2. Spawns a new SdkAgentRunner with:
-   - System prompt override including session context + agent persona
-   - contextPrefix with session history
-   - The target agent's specific instructions
-3. Agent result is appended to session history
-4. Result returned to caller
-
-This is synchronous within a single inbox processing cycle. For async multi-agent, use existing BullMQ task queue.
-
----
-
-### 4. Webhook Triggers
-
-**Architecture Decision: New Express routes in api.ts following the existing /api/webhook/git pattern.**
-
-#### Integration Point
-
-The existing `api.ts:156-163` already has a webhook pattern:
-
-```typescript
-// EXISTING in api.ts
-app.post('/api/webhook/git', async (req, res) => {
-  daemon.addToInbox(`New commit pushed to ${ref}. Run tests.`, 'webhook');
-  res.json({ ok: true });
-});
-```
-
-New webhooks follow the exact same pattern.
-
-#### New Routes
-
-```typescript
-// api.ts additions
-
-// Generic webhook endpoint with routing
-app.post('/api/webhook/:hookId', async (req, res) => {
-  const hookId = req.params.hookId;
-  const hookConfig = await redis.get(`nexus:webhook:${hookId}`);
-  if (!hookConfig) { res.status(404).json({ error: 'Unknown webhook' }); return; }
-
-  const config = JSON.parse(hookConfig);
-  const task = config.template
-    ? config.template.replace('{{payload}}', JSON.stringify(req.body))
-    : `Webhook ${hookId} received: ${JSON.stringify(req.body).slice(0, 2000)}`;
-
-  daemon.addToInbox(task, 'webhook', randomUUID(), {
-    webhookId: hookId,
-    payload: req.body,
-    ...config.params,
-  });
-
-  res.json({ ok: true, message: 'Webhook processed' });
-});
-```
-
-#### Webhook Management Tools
-
-```typescript
-// New MCP tools for webhook CRUD
-toolRegistry.register({
-  name: 'webhook_create',
-  description: 'Create a webhook endpoint that triggers agent tasks',
-  parameters: [
-    { name: 'name', type: 'string', required: true },
-    { name: 'template', type: 'string', description: 'Task template (use {{payload}})', required: false },
-  ],
-  execute: async (params) => {
-    const hookId = randomUUID().slice(0, 8);
-    await redis.set(`nexus:webhook:${hookId}`, JSON.stringify({
-      name: params.name, template: params.template, createdAt: Date.now(),
-    }));
-    return { success: true, output: `Webhook created: /api/webhook/${hookId}` };
-  },
-});
-```
-
-#### Authentication
-
-Webhooks use the existing `requireApiKey` middleware on `/api/*`. External services include the API key in headers. For public webhooks (GitHub, Stripe), add optional HMAC signature verification per webhook config.
-
----
-
-### 5. Gmail Integration
-
-**Architecture Decision: New ChannelProvider following the existing pattern, NOT a separate service.**
-
-#### Architecture
-
-Gmail fits perfectly into the ChannelProvider interface:
-
-```typescript
-// nexus/packages/core/src/channels/gmail.ts
-export class GmailProvider implements ChannelProvider {
-  readonly id = 'gmail' as const;
-  readonly name = 'Gmail';
-
-  async init(redis: Redis): Promise<void> { /* load OAuth tokens from Redis */ }
-  async connect(): Promise<void> { /* start Gmail watch(), setup Pub/Sub */ }
-  async disconnect(): Promise<void> { /* stop watch */ }
-  async getStatus(): Promise<ChannelStatus> { /* return connection state */ }
-  async sendMessage(emailId: string, text: string): Promise<boolean> { /* reply to email */ }
-  onMessage(handler: (msg: IncomingMessage) => Promise<void>): void { /* register handler */ }
-  async updateConfig(config: ChannelConfig): Promise<void> { /* save OAuth config */ }
-  async testConnection(): Promise<{ ok: boolean; error?: string }> { /* verify OAuth */ }
-}
-```
-
-#### Type Extension
-
-The ChannelId type needs extension:
-
-```typescript
-// channels/types.ts
-export type ChannelId = 'telegram' | 'discord' | 'slack' | 'matrix' | 'gmail';
-```
-
-And the daemon.ts source handling needs to include 'gmail' in channel source arrays.
-
-#### Google Pub/Sub Flow
-
-```
-1. Gmail watch() -> Google Pub/Sub topic (cloud-hosted)
-2. Google Pub/Sub -> push webhook -> POST /api/webhook/gmail-notify
-3. Webhook handler -> GmailProvider.handleNotification()
-4. GmailProvider fetches new message via Gmail API
-5. GmailProvider.messageHandler(incomingMsg) -> daemon.addToInbox()
-6. Daemon processes normally
-7. Agent response -> GmailProvider.sendMessage() -> Gmail API reply
-```
-
-#### OAuth Token Storage
-
-```
-Redis keys:
-  nexus:gmail:config          -> JSON { enabled, clientId, clientSecret, ... }
-  nexus:gmail:tokens          -> JSON { access_token, refresh_token, expiry_date }
-  nexus:gmail:status          -> JSON { enabled, connected, email, lastSync }
-  nexus:gmail:watch_expiry    -> Unix timestamp (watch must be renewed every 7 days)
-```
-
-#### New Dependencies
-
-- `googleapis` -- Google API client. Already a well-established npm package.
-- Google Cloud Pub/Sub setup is cloud-side only (no npm package needed; push delivery to our webhook).
-
-#### OAuth Setup UI
-
-New settings panel in LivOS:
-```
-livos/packages/ui/src/routes/settings/gmail-settings.tsx
-```
-
-Flow: User provides Google Cloud project credentials -> UI redirects to Google OAuth consent -> Callback stores tokens in Redis.
-
----
-
-### 6. Chat Commands (Extended)
-
-**Architecture Decision: Extend the existing `commands.ts` handleCommand() function. No new middleware layer needed.**
-
-#### Current State
-
-`commands.ts` already handles: `/help`, `/think`, `/verbose`, `/model`, `/reset`, `/status`, `/stats`
-
-The interception point is in `daemon.ts:282` (processInboxItem):
-
-```typescript
-if (isCommand(item.message) && item.from && this.config.userSessionManager) {
-  const cmdResult = await handleCommand(item.message, { ... });
-  if (cmdResult?.handled && cmdResult.response) {
-    // Send response, skip agent processing
-    continue;
-  }
-}
-```
-
-#### New Commands
-
-Add to the `switch` in `handleCommand()`:
-
-```typescript
-// commands.ts additions
-case 'compact':
-  return handleCompact(args, ctx);      // Session compaction
-
-case 'usage':
-  return handleUsage(args, ctx);        // Usage stats for current user
-
-case 'sessions':
-  return handleSessions(args, ctx);     // List/manage multi-agent sessions
-
-case 'webhook':
-case 'hook':
-  return handleWebhook(args, ctx);      // Webhook management
-
-case 'voice':
-  return handleVoice(args, ctx);        // Voice settings (language, voice ID)
-
-case 'pair':
-  return handlePair(args, ctx);         // DM pairing activation code
-```
-
-Each handler follows the existing pattern:
-- Read-only commands: query Redis, format response, return `{ handled: true, response }`
-- State-change commands: update Redis/config, return confirmation
-
-#### No Middleware Needed
-
-The existing pattern works: commands are checked BEFORE agent processing. If `handled === true`, the response goes directly back without spawning an agent. This is already optimal.
-
----
-
-### 7. DM Pairing
-
-**Architecture Decision: Enforce in ChannelManager message handler, NOT in individual providers.**
-
-#### Current Message Flow
-
-```
-TelegramProvider.onMessage(handler) -> handler is set by ChannelManager.onMessage()
-ChannelManager.onMessage() -> handler is set in main.ts/entrypoint wiring
-handler = (msg) => daemon.addToInbox(msg.text, msg.channel, ...)
-```
-
-#### Where to Add Pairing Check
-
-Between ChannelManager receiving a message and forwarding to daemon. Add a method to ChannelManager:
-
-```typescript
-// channels/index.ts modification
-class ChannelManager {
-  private pairingEnabled = false;
-  private allowedUsers: Map<ChannelId, Set<string>> = new Map();
-
-  // Called when wiring message handlers
-  onMessage(handler: (msg: IncomingMessage) => Promise<void>): void {
-    this.messageHandler = async (msg: IncomingMessage) => {
-      // DM pairing check
-      if (this.pairingEnabled && !this.isAllowed(msg.channel, msg.userId)) {
-        const provider = this.providers.get(msg.channel);
-        await provider?.sendMessage(msg.chatId, 'Send /pair <code> to activate.');
-        return; // Drop message
-      }
-      await handler(msg);
-    };
-    // Apply to all providers
-    for (const provider of this.providers.values()) {
-      provider.onMessage(this.messageHandler);
-    }
-  }
-
-  private isAllowed(channel: ChannelId, userId: string): boolean {
-    const allowed = this.allowedUsers.get(channel);
-    return !allowed || allowed.has(userId);
-  }
-}
-```
-
-#### Activation Code Flow
-
-```
-1. Admin sends /pair in Telegram -> command handler generates code
-2. Code stored: Redis nexus:pair:{code} -> { channel: 'telegram', userId: '123', expiresAt }
-3. New user sends /pair ABC123 in Telegram
-4. Code validated, user added to allowlist
-5. Redis nexus:paired:{channel}:{userId} -> { pairedAt, pairedBy }
-```
-
-#### Redis Schema
-
-```
-nexus:pair:codes:{code}              -> JSON { channel, expiresAt }  TTL 1 hour
-nexus:paired:telegram:{userId}       -> JSON { pairedAt, pairedBy }  no TTL
-nexus:paired:discord:{userId}        -> JSON { pairedAt, pairedBy }  no TTL
-nexus:config:pairing_enabled         -> "true" / "false"
-```
-
----
-
-### 8. Onboarding CLI
-
-**Architecture Decision: Separate npm package `livinity` published to npm. NOT part of livos/ or nexus/.**
-
-#### Package Structure
-
-```
-livinity-cli/
-  package.json          # name: "livinity", bin: { livinity: "./dist/index.js" }
-  src/
-    index.ts            # CLI entrypoint
-    prompts/
-      domain.ts         # Domain/subdomain setup
-      ssl.ts            # SSL certificate (Caddy auto or manual)
-      database.ts       # PostgreSQL + Redis connection
-      auth.ts           # Claude Code CLI login
-      channels.ts       # Telegram/Discord token setup
-    actions/
-      install.ts        # apt install, Docker, etc.
-      configure.ts      # Generate .env, nexus.yaml, Caddyfile
-      deploy.ts         # git clone, pnpm install, pm2 setup
-      verify.ts         # Health check all services
-    templates/
-      env.template      # .env template with placeholders
-      nexus.yaml        # Default nexus config
-      Caddyfile         # Caddy reverse proxy config
-```
-
-#### User Experience
+If the Agent SDK proves unreliable, we can spawn `kimi` CLI directly in print mode:
 
 ```bash
-$ npx livinity
-
-  Livinity v2.0 - Self-hosted AI Server Setup
-
-  ? Domain name: livinity.cloud
-  ? SSL mode: (auto via Caddy / manual cert)
-  ? PostgreSQL: (install locally / use external)
-  ? Redis: (install locally / use external)
-
-  Installing dependencies...
-  Configuring services...
-  Starting LivOS + Nexus...
-
-  ? Claude Code login: Opening browser for OAuth...
-  ? Telegram bot token: (paste from @BotFather)
-
-  All services running!
-  Dashboard: https://livinity.cloud
+# Spawn as subprocess, get JSONL streaming output
+kimi --print --output-format=stream-json --yolo --max-steps-per-turn 25 \
+  --mcp-config '{"mcpServers":{"chrome-devtools":{"command":"chrome-devtools-mcp","args":["--browserUrl","http://127.0.0.1:9223"]}}}' \
+  -p "task description here"
 ```
 
-#### Key Dependencies
+**JSONL output format:**
+```json
+{"role": "assistant", "content": "I'll help with that..."}
+{"role": "assistant", "content": "...", "tool_calls": [{"id": "tc_1", "type": "function", "function": {"name": "shell", "arguments": "{\"cmd\":\"ls\"}"}}]}
+{"role": "tool", "tool_call_id": "tc_1", "content": "file1.txt\nfile2.txt"}
+{"role": "assistant", "content": "Here are the files..."}
+```
 
-- `@inquirer/prompts` -- Interactive CLI prompts
-- `chalk` -- Terminal colors
-- `ora` -- Spinners
-- `execa` -- Shell command execution
+**Key flags for programmatic use:**
+- `--print`: Non-interactive mode (implicitly enables `--yolo`)
+- `--output-format=stream-json`: JSONL output (one JSON object per line)
+- `--input-format=stream-json`: JSONL input via stdin (for multi-turn)
+- `--final-message-only`: Skip intermediate tool call messages, only output final answer
+- `--quiet`: Shortcut for `--print --output-format text --final-message-only`
+- `--yolo` / `-y` / `--auto-approve`: Auto-approve all operations
+- `--mcp-config JSON`: Pass MCP server config as inline JSON string (repeatable)
+- `--mcp-config-file PATH`: Load MCP config from file (repeatable)
+- `--model NAME`: Override model selection
+- `--max-steps-per-turn N`: Limit steps per turn
+- `--work-dir PATH`: Set working directory
+- `--no-thinking`: Disable thinking mode
 
-#### Integration with Existing System
+**Why this matters as a fallback:** This approach requires zero SDK dependency -- just spawn a child process and parse JSONL. The `--mcp-config` inline flag means we can pass MCP configuration programmatically without writing temp files. This is simpler than the SDK approach and equally capable, though it lacks the structured event types for finer-grained streaming.
 
-The CLI generates the same files that manual setup creates:
-- `/opt/livos/.env`
-- `/opt/nexus/.env`
-- `/opt/nexus/nexus.yaml`
-- `/etc/caddy/Caddyfile`
-- PM2 ecosystem file
+**Confidence:** HIGH -- CLI flags are documented in official Kimi CLI docs and GitHub README.
 
-It does NOT replace install.sh -- it wraps it with an interactive experience.
+#### Depth 4: Wire Mode (Advanced -- JSON-RPC 2.0 Protocol)
+
+Kimi CLI also supports `kimi --wire` which exposes a bidirectional JSON-RPC 2.0 protocol over stdin/stdout:
+
+- **Protocol version:** 1.4
+- **Methods:** `initialize`, `prompt`, `steer`, `cancel`, `replay`
+- **Events:** `TurnBegin`, `TurnEnd`, `StepBegin`, `StatusUpdate`, `ContentPart`, `ToolCall`, `ToolResult`, `ApprovalResponse`, `SubagentEvent`
+- **Tool registration:** Via `external_tools` parameter in the `initialize` request
+
+This is what the Agent SDK uses internally. Using it directly would give the most control but is more complex. **Not recommended unless the SDK proves inadequate.**
+
+**Confidence:** MEDIUM -- Wire mode is documented but marked "experimental" in the CLI reference.
+
+### Credential Storage
+
+| Item | Claude | Kimi |
+|------|--------|------|
+| Config directory | `~/.claude/` | `~/.kimi/` |
+| Credentials file | `~/.claude/.credentials.json` | `~/.kimi/config.toml` (provider section) |
+| MCP config | Inline via SDK | `~/.kimi/mcp.json` or `--mcp-config` inline JSON |
+| API key format | `sk-ant-...` | Bearer token from platform.moonshot.ai or api.kimi.com |
+| OAuth method | Custom PKCE flow to platform.claude.com | Device auth flow to auth.kimi.com + browser-based `/login` |
+| OAuth endpoints | `platform.claude.com/v1/oauth/token` | `auth.kimi.com/api/oauth/device_authorization` + `auth.kimi.com/api/oauth/token` |
+| Redis key (current) | `nexus:config:anthropic_api_key` | `nexus:config:kimi_api_key` (new) |
+| Auth method key | `nexus:config:claude_auth_method` | `nexus:config:kimi_auth_method` (new) |
+
+### OAuth Flow Comparison
+
+**Claude:** Custom PKCE flow handled entirely in `ClaudeProvider`:
+1. Generate code_verifier + code_challenge
+2. Return authorize URL to frontend
+3. User authenticates, gets a code
+4. User pastes code in UI
+5. Backend exchanges code for tokens via `platform.claude.com/v1/oauth/token`
+6. Save credentials to `~/.claude/.credentials.json`
+
+**Kimi:** Simpler -- CLI handles OAuth internally:
+1. Backend runs `kimi login` (or equivalent SDK call)
+2. CLI opens browser or returns device auth URL
+3. User authenticates in browser
+4. CLI stores credentials in `~/.kimi/config.toml` automatically
+5. No code-paste step needed (device auth flow auto-completes)
+
+**Key implication:** The Kimi login UI can be simpler. No code paste input field needed. Just "Sign in" button -> poll for auth completion.
 
 ---
 
-### 9. Session Compaction
+## New Component: KimiProvider
 
-**Architecture Decision: New command (/compact) + automatic trigger in SessionManager. NOT a separate service.**
+**File:** `nexus/packages/core/src/providers/kimi.ts`
 
-#### Integration Points
+### Interface Mapping
 
-1. **Manual trigger**: `/compact` command in `commands.ts`
-2. **Automatic trigger**: Token threshold check in SessionManager.updateSession()
-3. **Compaction logic**: Summarize old history, replace with summary, keep recent N messages
+```
+ClaudeProvider method     ->  KimiProvider equivalent
+------------------------     -----------------------
+chat()                    ->  chat() -- OpenAI chat completions format
+chatStream()              ->  chatStream() -- OpenAI streaming format
+think()                   ->  think() -- same wrapper pattern
+isAvailable()             ->  isAvailable() -- check API key in Redis/env
+getModels()               ->  getModels() -- Kimi model tiers
+getCliStatus()            ->  getCliStatus() -- check 'kimi' binary + auth
+getAuthMethod()           ->  getAuthMethod() -- api-key vs kimi-subscription
+startLogin()              ->  startLogin() -- trigger OAuth flow via CLI
+submitLoginCode()         ->  NOT NEEDED (Kimi uses device auth, no code paste)
+logout()                  ->  logout() -- run 'kimi logout' or delete config
+```
 
-#### Implementation
+**Note on `submitLoginCode`:** Claude's PKCE flow requires the user to paste a code back. Kimi's device auth flow completes automatically when the user authenticates in the browser. The `startLogin()` method should initiate `kimi login` (or the device auth API) and return a URL. The frontend polls `getCliStatus()` until `authenticated: true`. No code submission step needed.
+
+### Model Tier Mapping
 
 ```typescript
-// session-manager.ts addition
-async compactSession(senderId: string, options?: {
-  keepRecent?: number;      // Messages to keep verbatim (default: 10)
-  maxTokens?: number;       // Target token count after compaction
-}): Promise<{ compacted: boolean; messagesBefore: number; messagesAfter: number }> {
-  const history = await this.getHistory(senderId);
-  if (history.length <= (options?.keepRecent || 10)) {
-    return { compacted: false, messagesBefore: history.length, messagesAfter: history.length };
+const KIMI_MODELS: Record<string, string> = {
+  flash: 'kimi-latest',          // Fast, cheap model
+  haiku: 'kimi-latest',          // Map to same (Kimi doesn't have haiku equivalent)
+  sonnet: 'kimi-for-coding',     // Primary coding model (Kimi K2.5)
+  opus: 'kimi-for-coding',       // Map to same (Kimi K2.5 is top-tier)
+};
+```
+
+**Confidence:** MEDIUM -- Kimi's model tier naming may differ. The exact model IDs need verification from `kimi info` output or the `~/.kimi/config.toml` `[models]` section. At minimum, `kimi-for-coding` and `kimi-latest` are referenced in documentation.
+
+### Tool Definition Translation
+
+The existing Nexus system uses `ClaudeToolDefinition` format (Anthropic `input_schema`). Kimi's API uses OpenAI `function` format (`parameters`). Translation layer needed:
+
+```typescript
+// Nexus internal format (ClaudeToolDefinition)
+{
+  name: 'shell',
+  description: 'Execute a shell command',
+  input_schema: {
+    type: 'object',
+    properties: { command: { type: 'string' } },
+    required: ['command']
   }
-
-  const keepRecent = options?.keepRecent || 10;
-  const toSummarize = history.slice(0, -keepRecent);
-  const toKeep = history.slice(-keepRecent);
-
-  // Use Brain to summarize old messages
-  const summaryText = await this.summarize(toSummarize);
-
-  // Replace history: [summary] + [recent messages]
-  const historyKey = `${REDIS_HISTORY_PREFIX}${this.getSessionId(senderId)}`;
-  await this.redis.del(historyKey);
-
-  // Push summary as first entry
-  await this.redis.rpush(historyKey, JSON.stringify({
-    role: 'system', content: `[Compacted summary of ${toSummarize.length} messages]: ${summaryText}`,
-    timestamp: Date.now(),
-  }));
-
-  // Push recent messages
-  for (const msg of toKeep) {
-    await this.redis.rpush(historyKey, JSON.stringify(msg));
-  }
-
-  return { compacted: true, messagesBefore: history.length, messagesAfter: toKeep.length + 1 };
 }
-```
 
-#### Auto-Trigger
-
-In `Daemon.processInboxItem()`, after agent completes:
-
-```typescript
-// After result comes back from agent
-if (result.totalInputTokens + result.totalOutputTokens > 100_000) {
-  const session = await this.config.sessionManager?.getSession(item.from);
-  if (session && session.messageCount > 20) {
-    await this.config.sessionManager.compactSession(item.from);
-    logger.info('Auto-compacted session', { senderId: item.from });
+// Kimi API format (OpenAI function calling)
+{
+  type: 'function',
+  function: {
+    name: 'shell',
+    description: 'Execute a shell command',
+    parameters: {
+      type: 'object',
+      properties: { command: { type: 'string' } },
+      required: ['command']
+    }
   }
 }
 ```
 
+The translation is mechanical: `input_schema` becomes `function.parameters`, wrapped in `{type: 'function', function: {...}}`. Response tool calls come back as `function.name` + `function.arguments` (JSON string) instead of `tool_use` blocks with `input` objects.
+
+**Response parsing difference:**
+```typescript
+// Claude: tool_use block
+{ type: 'tool_use', id: 'toolu_123', name: 'shell', input: { command: 'ls' } }
+
+// Kimi: function call (OpenAI format)
+{ id: 'call_123', type: 'function', function: { name: 'shell', arguments: '{"command":"ls"}' } }
+// Note: arguments is a JSON string, needs JSON.parse()
+```
+
+### Authentication Flow
+
+Two modes, same as Claude but different mechanics:
+
+**API Key Mode:**
+1. User enters API key in Settings UI
+2. Stored in Redis: `nexus:config:kimi_api_key`
+3. KimiProvider reads from Redis, creates OpenAI-compatible client
+4. Uses `https://api.kimi.com/coding/v1` as base URL (or `https://api.moonshot.ai/v1`)
+
+**Kimi Subscription Mode (CLI):**
+1. User clicks "Sign in with Kimi" in Settings UI
+2. Backend invokes `kimi login` subprocess (or calls device auth API directly)
+3. Returns auth URL to frontend for display
+4. User opens URL, authenticates in browser
+5. CLI/device auth auto-completes, credentials stored in `~/.kimi/config.toml`
+6. Frontend polls `getCliStatus()` until authenticated
+7. KimiAgentRunner can then spawn `kimi` subprocess for tasks
+
+**Implementation choice for login flow:**
+
+Option A (simpler): Shell out to `kimi login` which handles browser-based OAuth. Parse its output for the auth URL. Problem: `kimi login` is interactive by default.
+
+Option B (recommended): Use the device authorization API directly:
+```typescript
+// POST https://auth.kimi.com/api/oauth/device_authorization
+// Returns: { device_code, user_code, verification_uri, expires_in, interval }
+// Then poll: POST https://auth.kimi.com/api/oauth/token with grant_type=urn:ietf:params:oauth:grant-type:device_code
+```
+This avoids spawning an interactive process and gives us full control.
+
 ---
 
-### 10. Usage Tracking
+## New Component: KimiAgentRunner
 
-**Architecture Decision: Redis counters (real-time) + PostgreSQL (historical). Integrated into SdkAgentRunner result handling.**
+**File:** `nexus/packages/core/src/kimi-agent-runner.ts`
 
-#### Integration Points
+### Recommended Implementation: Agent SDK with Print Mode Fallback
 
-Two places already track usage:
-1. `daemon.ts:1052-1056` -- `userSessionManager.recordUsage(intent.from, totalTokens)`
-2. `session-manager.ts:163-170` -- `session.inputTokens`, `session.outputTokens`
+**Primary approach:** Use `@moonshot-ai/kimi-agent-sdk` with `createSession()` + `session.prompt()`.
 
-Extend these, don't replace.
+**Fallback approach:** If the SDK proves unreliable, spawn `kimi --print --output-format=stream-json` directly and parse JSONL output. This is simpler but provides less structured events.
 
-#### Redis Schema (Real-Time)
-
-```
-nexus:usage:daily:{YYYY-MM-DD}:tokens     -> INCRBY per request
-nexus:usage:daily:{YYYY-MM-DD}:requests   -> INCR per request
-nexus:usage:daily:{YYYY-MM-DD}:tools      -> INCRBY (tool call count)
-nexus:usage:user:{userId}:tokens           -> INCRBY per request
-nexus:usage:user:{userId}:requests         -> INCR per request
-nexus:usage:model:{tier}:tokens            -> INCRBY per request (by model tier)
-```
-
-#### Reporting Endpoint
-
-New API route + tRPC endpoint:
+### Primary: Agent SDK Pattern
 
 ```typescript
-// api.ts addition
-app.get('/api/usage', async (req, res) => {
-  const days = parseInt(req.query.days as string) || 7;
-  const usage = [];
-  for (let i = 0; i < days; i++) {
-    const date = /* format YYYY-MM-DD for today - i */;
-    const tokens = await redis.get(`nexus:usage:daily:${date}:tokens`) || '0';
-    const requests = await redis.get(`nexus:usage:daily:${date}:requests`) || '0';
-    usage.push({ date, tokens: parseInt(tokens), requests: parseInt(requests) });
+import { createSession, createExternalTool } from '@moonshot-ai/kimi-agent-sdk';
+import { z } from 'zod';
+
+// Instead of Claude SDK's:
+//   query({ prompt, options: { mcpServers, tools, allowedTools, ... } })
+//
+// Kimi SDK uses:
+//   const session = createSession({ workDir, model, yoloMode, ... })
+//   const turn = session.prompt(task)
+//   for await (const event of turn) { ... }
+```
+
+### Fallback: Print Mode Pattern
+
+```typescript
+import { spawn } from 'node:child_process';
+import { createInterface } from 'node:readline';
+
+async run(task: string): Promise<AgentResult> {
+  const mcpConfig = JSON.stringify({
+    mcpServers: this.buildMcpConfig()
+  });
+
+  const child = spawn('kimi', [
+    '--print',
+    '--output-format=stream-json',
+    '--yolo',
+    '--model', tierToModel(this.config.tier),
+    '--max-steps-per-turn', String(this.config.maxTurns ?? 25),
+    '--work-dir', '/opt/livos',
+    '--mcp-config', mcpConfig,
+    '-p', taskWithContext,
+  ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+  const rl = createInterface({ input: child.stdout });
+
+  for await (const line of rl) {
+    const msg = JSON.parse(line);
+    if (msg.role === 'assistant' && msg.content) {
+      this.emitEvent({ type: 'chunk', data: msg.content });
+    }
+    if (msg.role === 'assistant' && msg.tool_calls) {
+      for (const tc of msg.tool_calls) {
+        this.emitEvent({ type: 'tool_call', data: { tool: tc.function.name } });
+      }
+    }
   }
-  res.json({ usage });
-});
-```
-
-#### /usage Command
-
-```typescript
-// commands.ts addition
-async function handleUsage(args: string[], ctx: CommandContext): Promise<CommandResult> {
-  const session = await ctx.userSession.get(ctx.jid);
-  const today = new Date().toISOString().split('T')[0];
-  // ... format usage stats
-  return { handled: true, response: `Usage stats: ${session.totalTokens} tokens, ...` };
+  // ...
 }
 ```
 
----
+### Key Differences from SdkAgentRunner
 
-### 11. Stability Fixes
+| Aspect | SdkAgentRunner (Claude) | KimiAgentRunner (SDK) | KimiAgentRunner (Print fallback) |
+|--------|------------------------|----------------------|-------------------------------|
+| SDK import | `@anthropic-ai/claude-agent-sdk` | `@moonshot-ai/kimi-agent-sdk` | None (child_process) |
+| Entry point | `query({ prompt, options })` | `createSession()` + `session.prompt()` | `spawn('kimi', ['--print', ...])` |
+| Tool registration | `tool()` + `createSdkMcpServer()` | `createExternalTool()` with Zod | `--mcp-config` inline JSON |
+| Auto-approve | `permissionMode: 'dontAsk'` | `yoloMode: true` | `--yolo` flag (implicit with --print) |
+| MCP config | Inline `mcpServers` object | `--mcp-config-file` or inline | `--mcp-config` JSON string |
+| Event types | `assistant`, `result` | `ContentPart`, `ToolCall`, `ToolResult`, etc. | JSONL messages with `role` field |
+| Session lifecycle | Stateless (one-shot query) | Stateful (session persists) | Stateless (one-shot subprocess) |
+| Result format | `SDKResultSuccess.result` | `RunResult.status` + accumulated text | Final JSONL message |
+| Usage tracking | `success.usage.input_tokens` | `StatusUpdate` events | Not available (use API separately) |
 
-#### 11a. nexus-core 153 Restarts
+### MCP Tool Bridging Strategy
 
-**Root Cause Analysis:** PM2 restart count accumulates over time. The real question is: is it crashing or being manually restarted?
+**Current (Claude):** SdkAgentRunner builds `SdkMcpToolDefinition[]` using `tool()` helper, then creates an in-process MCP server via `createSdkMcpServer()`. This MCP server is passed to `query()` as a `mcpServers` config entry.
 
-**Crash Guards to Add:**
+**Kimi approach -- three options:**
+
+**Option A: External Tools via SDK (RECOMMENDED for SDK path)**
+Use `createExternalTool()` to register Nexus tools directly with the Kimi session. Each Nexus tool becomes a Kimi external tool with a Zod schema and handler function. No MCP server needed.
 
 ```typescript
-// main.ts / entrypoint modifications
-
-// 1. Global uncaught exception handler
-process.on('uncaughtException', (err) => {
-  logger.fatal('Uncaught exception', { error: err.message, stack: err.stack });
-  // Graceful shutdown instead of instant crash
-  gracefulShutdown().then(() => process.exit(1));
+const externalTools = toolNames.map(name => {
+  const t = toolRegistry.get(name)!;
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const p of t.parameters) {
+    shape[p.name] = paramTypeToZod(p.type, p.description, p.enum);
+  }
+  return createExternalTool({
+    name: t.name,
+    description: t.description,
+    parameters: z.object(shape),
+    handler: async (params) => {
+      const result = await toolRegistry.execute(name, params);
+      return {
+        output: result.success ? result.output : `Error: ${result.error}`,
+        message: result.success ? 'Success' : 'Failed',
+      };
+    },
+  });
 });
-
-// 2. Unhandled promise rejection handler
-process.on('unhandledRejection', (reason) => {
-  logger.fatal('Unhandled rejection', { reason: String(reason) });
-  // Log but don't crash -- most are recoverable
-});
-
-// 3. SdkAgentRunner error isolation
-// Already implemented: sdk-agent-runner.ts:313-327 catches errors
-// BUT: errors in MCP tool execution can bubble up uncaught
-
-// 4. Redis reconnection handling
-redis.on('error', (err) => {
-  logger.error('Redis error (non-fatal)', { error: err.message });
-  // Don't crash -- ioredis auto-reconnects
-});
-
-// 5. Channel provider isolation
-// Each provider should catch its own errors in message handlers
-// Currently: TelegramProvider.bot.catch() exists (line 139)
-// Ensure all providers have equivalent error boundaries
 ```
 
-#### 11b. Memory Service Empty Results
+**Why Option A:** The Kimi SDK's `createExternalTool()` is purpose-built for this. It takes Zod schemas (same as what SdkAgentRunner already builds) and handler functions. This avoids the indirection of creating an MCP server just to bridge tools.
 
-**Integration Point:** `daemon.ts:921-947` fetches memory context with a 2-second timeout:
+**Option B: Wire Mode external_tools (RECOMMENDED for Wire path)**
+If using Wire mode directly, pass tool definitions in the `initialize` JSON-RPC request via the `external_tools` parameter, which accepts tool name, description, and JSON Schema parameter definitions.
+
+**Option C: MCP Config via --mcp-config inline JSON (RECOMMENDED for Print fallback)**
+Pass Nexus tools as an MCP stdio server and Chrome DevTools as another, all via `--mcp-config` inline JSON flag. No temp files needed.
 
 ```typescript
-const memoryFetchWithTimeout = Promise.race([
-  fetch('http://localhost:3300/context', { ... }),
-  new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
-]);
+const mcpConfig = {
+  mcpServers: {
+    'nexus-tools': {
+      command: 'node',
+      args: ['/opt/nexus/mcp-bridge.js'],  // small MCP server wrapping ToolRegistry
+    },
+    'chrome-devtools': {
+      command: 'chrome-devtools-mcp',
+      args: ['--browserUrl', 'http://127.0.0.1:9223', '--no-usage-statistics'],
+    }
+  }
+};
+// Pass as: --mcp-config JSON.stringify(mcpConfig)
 ```
 
-**Root Causes to Investigate:**
-1. Memory service (port 3300) might be down -- add health check
-2. pgvector embeddings might not be populated -- check embedding pipeline
-3. 2-second timeout might be too aggressive for cold queries
-4. The `query` field (task.slice(0, 500)) might not match stored embeddings well
+**Verdict:** Use Option A (SDK external tools) as primary. Have Option C (--mcp-config with Print mode) as fallback. Option C requires building a small MCP bridge server for Nexus tools, but this is straightforward.
 
-**Fixes:**
+### Chrome DevTools MCP
+
+For Chrome DevTools MCP (external process, not a Nexus tool), we still need MCP config. Strategies by integration depth:
+
+- **SDK path:** Write Chrome DevTools to `~/.kimi/mcp.json` on Nexus startup
+- **Print mode path:** Pass via `--mcp-config` inline JSON flag (no temp files needed)
+- **Wire path:** Include in the `initialize` request
+
+The `--mcp-config` inline JSON flag is the cleanest approach -- it requires no persistent config file and is passed per-invocation.
+
+### Event Mapping (SDK Path)
+
+```
+Kimi SDK Event          ->  Nexus AgentEvent
+------------------         -----------------
+TurnBegin               ->  { type: 'thinking', turn }
+StepBegin               ->  (internal, increment step counter)
+ContentPart(text)       ->  { type: 'chunk', turn, data: text }
+ContentPart(think)      ->  { type: 'thinking', turn, data: think }
+ToolCall                ->  { type: 'tool_call', turn, data: { tool, params } }
+ToolResult              ->  { type: 'observation', turn, data: { tool, success, output } }
+StatusUpdate            ->  (internal, track token usage and context)
+ApprovalRequest         ->  (auto-approve in yoloMode; else emit approval event)
+RunResult(finished)     ->  { type: 'final_answer', turn, data: answer }
+RunResult(cancelled)    ->  { type: 'error', turn, data: 'cancelled' }
+RunResult(max_steps)    ->  { type: 'done', data: { stoppedReason: 'max_turns' } }
+```
+
+### Event Mapping (Print Mode Fallback)
+
+```
+JSONL Message           ->  Nexus AgentEvent
+------------------         -----------------
+{role:"assistant", content:"text"}        ->  { type: 'chunk', data: text }
+{role:"assistant", tool_calls:[...]}      ->  { type: 'tool_call', data: { tool, params } }
+{role:"tool", tool_call_id, content}      ->  { type: 'observation', data: { output } }
+Last assistant message                    ->  { type: 'final_answer', data: content }
+Process exit code 0                       ->  { type: 'done', data: { success: true } }
+Process exit code != 0                    ->  { type: 'error', data: stderr }
+```
+
+### Session Lifecycle
+
+**Critical difference:** Claude SDK's `query()` is stateless -- each call is independent. Kimi SDK's `createSession()` creates a persistent session. For Nexus agent tasks:
+
+1. Create session per task (like `randomUUID()` sessionId)
+2. Send single prompt with the task
+3. Consume all events from the Turn
+4. Close session when done
+
 ```typescript
-// 1. Health check before query
-const memHealthy = await fetch('http://localhost:3300/health').then(r => r.ok).catch(() => false);
-if (!memHealthy) { logger.warn('Memory service unhealthy, skipping context'); }
+async run(task: string): Promise<AgentResult> {
+  const session = createSession({
+    workDir: '/opt/livos',  // or configured working directory
+    model: tierToModel(this.config.tier),
+    yoloMode: true,  // auto-approve all tools
+    executable: 'kimi',
+    env: { /* any needed env vars */ },
+  });
 
-// 2. Increase timeout to 5s
-setTimeout(() => reject(new Error('timeout')), 5000)
+  try {
+    const turn = session.prompt(taskWithContext);
+    let answer = '';
+    let turns = 0;
 
-// 3. Add fallback: if context returns empty, try with just the latest message
-if (!memData.context || memData.memoriesUsed === 0) {
-  // Retry with simpler query
+    for await (const event of turn) {
+      // Map events to AgentEvent emissions
+      if (event.type === 'ContentPart' && event.payload.type === 'text') {
+        answer += event.payload.text;
+        this.emitEvent({ type: 'chunk', turn: turns, data: event.payload.text });
+      }
+      // ... handle other event types
+    }
+
+    const result = await turn.result;
+    return { success: true, answer, turns, ... };
+  } finally {
+    await session.close();
+  }
 }
 ```
 
-#### 11c. SdkAgentRunner Built-in Tool Leak
+**Recommend:** New session per task for isolation. Do not reuse sessions across different web UI requests.
 
-**Current State:** `sdk-agent-runner.ts:235` already sets `tools: []` to disable built-in Claude Code tools:
+---
+
+## API Route Changes
+
+### Routes to Remove (Claude-specific)
+
+```
+GET  /api/claude-cli/status     -> becomes GET  /api/kimi/status
+POST /api/claude-cli/login      -> becomes POST /api/kimi/login
+POST /api/claude-cli/login-code -> REMOVE (Kimi uses device auth, no code paste)
+POST /api/claude-cli/logout     -> becomes POST /api/kimi/logout
+```
+
+**Note:** The `login-code` endpoint is not needed for Kimi. The device auth flow auto-completes when the user authenticates in the browser. The login flow becomes:
+
+1. `POST /api/kimi/login` -> returns `{ url: "auth URL", deviceCode: "..." }`
+2. Frontend opens URL in new tab, starts polling `GET /api/kimi/status`
+3. Backend polls `auth.kimi.com/api/oauth/token` with the device_code
+4. When authenticated, status returns `{ authenticated: true }`
+
+### Route Implementation
 
 ```typescript
-const messages = query({
-  prompt: task,
-  options: {
-    tools: [],        // Disable built-in Claude Code tools
-    allowedTools,     // Auto-approve all Nexus MCP tools
-    ...
-  },
+app.get('/api/kimi/status', async (_req, res) => {
+  const kimiProvider = brain.getProviderManager().getProvider('kimi') as KimiProvider;
+  if (!kimiProvider) { res.json({ installed: false, authenticated: false }); return; }
+  const status = await kimiProvider.getCliStatus();
+  const authMethod = await kimiProvider.getAuthMethod();
+  res.json({ ...status, authMethod });
+});
+
+app.post('/api/kimi/login', async (_req, res) => {
+  const kimiProvider = brain.getProviderManager().getProvider('kimi') as KimiProvider;
+  if (!kimiProvider) { res.status(503).json({ error: 'Kimi provider not available' }); return; }
+  const result = await kimiProvider.startLogin();
+  res.json(result);
+  // Note: no submitLoginCode needed -- frontend polls status instead
+});
+
+app.post('/api/kimi/logout', async (_req, res) => {
+  const kimiProvider = brain.getProviderManager().getProvider('kimi') as KimiProvider;
+  if (!kimiProvider) { res.status(503).json({ error: 'Kimi provider not available' }); return; }
+  const result = await kimiProvider.logout();
+  res.json(result);
 });
 ```
 
-**The Problem:** Claude Code SDK might still expose some built-in tools despite `tools: []`. The `allowedTools` list only auto-approves listed tools, but Claude might attempt to call unlisted ones.
+### Agent Stream Route
 
-**Fix:**
+The `/api/agent/stream` route (line 1534 in api.ts) already handles the switch between SDK and API modes:
 
 ```typescript
-// Option 1: Explicit deny in system prompt
-systemPrompt += `\n\nIMPORTANT: You may ONLY use tools prefixed with mcp__nexus-tools__ or mcp__chrome-devtools__. Do NOT attempt to use any other tools (Read, Write, Bash, etc.) -- they are not available.`;
+// CURRENT:
+const useSdk = authMethod === 'sdk-subscription';
+const agent = useSdk ? new SdkAgentRunner(agentConfig) : new AgentLoop(agentConfig);
 
-// Option 2: Filter tool_use blocks before execution
-// In the message processing loop, check if tool name matches allowed patterns
-if (block.type === 'tool_use' && !block.name.startsWith('mcp__')) {
-  logger.warn('Blocked unauthorized tool call', { tool: block.name });
-  // Skip or return error
-}
+// BECOMES:
+const useSdk = authMethod === 'kimi-subscription';
+const agent = useSdk ? new KimiAgentRunner(agentConfig) : new AgentLoop(agentConfig);
+```
+
+**AgentLoop stays.** When using API key mode, the existing AgentLoop + Brain + KimiProvider handles everything through the standard chat/chatStream interface. Only subscription mode uses KimiAgentRunner.
+
+---
+
+## tRPC Route Changes (livinityd)
+
+### Current Claude-specific tRPC Procedures
+
+From `livos/packages/livinityd/source/modules/ai/routes.ts`:
+
+```
+ai.getClaudeCliStatus    -> ai.getKimiCliStatus
+ai.setClaudeAuthMethod   -> ai.setKimiAuthMethod
+ai.startClaudeLogin      -> ai.startKimiLogin
+ai.submitClaudeLoginCode -> REMOVE (not needed for Kimi)
+ai.claudeLogout          -> ai.kimiLogout
+```
+
+These tRPC procedures proxy to Nexus API endpoints. The proxy pattern stays identical -- only the endpoint URLs change.
+
+### Config tRPC Procedures
+
+```typescript
+// CURRENT:
+const anthropicKey = await redis.get('nexus:config:anthropic_api_key')
+const primaryProvider = await redis.get('nexus:config:primary_provider') || 'claude'
+
+// BECOMES:
+const kimiKey = await redis.get('nexus:config:kimi_api_key')
+const primaryProvider = await redis.get('nexus:config:primary_provider') || 'kimi'
+```
+
+### Redis Key Migration
+
+| Current Key | New Key |
+|-------------|---------|
+| `nexus:config:anthropic_api_key` | `nexus:config:kimi_api_key` |
+| `nexus:config:claude_auth_method` | `nexus:config:kimi_auth_method` |
+| `nexus:config:primary_provider` (value: `claude`) | `nexus:config:primary_provider` (value: `kimi`) |
+
+---
+
+## UI Changes (ai-config.tsx)
+
+### Current UI Structure
+
+The Settings > AI Config page has:
+1. **Claude Provider** section with Radio Group:
+   - SDK Subscription (recommended) -- OAuth flow with code paste
+   - API Key -- input field for `sk-ant-...`
+2. **Gemini (Fallback)** section with API key input
+3. Save button
+
+### New UI Structure
+
+1. **Kimi Provider** section with Radio Group:
+   - Kimi Subscription (recommended) -- OAuth via browser (no code paste)
+   - API Key -- input field for Kimi API key
+2. **Gemini (Fallback)** section (unchanged)
+3. Save button
+
+### UI Changes Required
+
+- Replace all "Claude" text with "Kimi"
+- Change auth link from Anthropic Console to Kimi membership page
+- Update API key placeholder
+- Update tRPC hook names (getClaudeCliStatus -> getKimiCliStatus, etc.)
+- **Remove code paste UI** -- Kimi's device auth flow does not require it
+- Simplify subscription auth to: button + status indicator + poll
+
+**Simplified subscription UI flow:**
+
+```
+1. Click "Sign in with Kimi" button
+2. Browser opens auth URL in new tab
+3. Status indicator shows "Waiting for authentication..."
+4. Frontend polls getKimiCliStatus every 3-5 seconds
+5. When authenticated: show green checkmark + "Authenticated"
+```
+
+This is fewer components than Claude's flow (no code input, no submit button for code).
+
+---
+
+## Config Schema Changes
+
+### Model Names
+
+```typescript
+// CURRENT (config/schema.ts):
+export const ModelsConfigSchema = z.object({
+  default: z.string().default('claude-haiku-4-5'),
+  flash: z.string().default('claude-haiku-4-5'),
+  haiku: z.string().default('claude-haiku-4-5'),
+  sonnet: z.string().default('claude-sonnet-4-5'),
+  opus: z.string().default('claude-opus-4-6'),
+  // ...
+});
+
+// BECOMES:
+export const ModelsConfigSchema = z.object({
+  default: z.string().default('kimi-latest'),
+  flash: z.string().default('kimi-latest'),
+  haiku: z.string().default('kimi-latest'),
+  sonnet: z.string().default('kimi-for-coding'),
+  opus: z.string().default('kimi-for-coding'),
+  // ...
+});
+```
+
+### Provider Cost Defaults
+
+```typescript
+// ADD to types.ts PROVIDER_COST_DEFAULTS:
+kimi: {
+  flash: { input: 0.60, output: 2.50 },
+  haiku: { input: 0.60, output: 2.50 },
+  sonnet: { input: 0.60, output: 2.50 },
+  opus: { input: 0.60, output: 2.50 },
+},
 ```
 
 ---
 
-## Component Dependency Graph
+## Data Flow: Complete Path
+
+### API Key Mode (AgentLoop)
 
 ```
-INDEPENDENT (can build in parallel):
-  Webhook Routes ---------> daemon.addToInbox('webhook')
-  Chat Commands ----------> commands.ts switch cases
-  DM Pairing -------------> ChannelManager middleware
-  Usage Tracking ----------> Redis INCR + API route
-  Stability Fixes ---------> crash guards + error isolation
-  Onboarding CLI ----------> separate npm package
+UI (ai-chat) -> tRPC ai.send -> livinityd -> HTTP POST /api/agent/stream (Nexus)
+    -> AgentLoop.run(task)
+    -> Brain.chat() / Brain.chatStream()
+    -> ProviderManager.chat()
+    -> KimiProvider.chat()  [OpenAI-compatible API call]
+    -> https://api.kimi.com/coding/v1/chat/completions
+    -> Response with function_call -> ToolRegistry.execute() -> loop
+    -> Final answer -> SSE event -> UI
+```
 
-SEQUENTIAL DEPENDENCIES:
-  Voice Pipeline:
-    VoiceGateway (new WS path) -> DeepgramRelay -> CartesiaRelay
-    -> Voice UI component in ai-chat
+### Subscription Mode (KimiAgentRunner -- SDK)
 
-  Canvas:
-    canvas_render tool -> Redis storage -> Canvas UI panel
-    -> iframe sandbox template
+```
+UI (ai-chat) -> tRPC ai.send -> livinityd -> HTTP POST /api/agent/stream (Nexus)
+    -> KimiAgentRunner.run(task)
+    -> createSession({ workDir, model, yoloMode: true })
+    -> [spawns 'kimi' CLI subprocess via Wire protocol]
+    -> session.prompt(task)
+    -> Turn async iterator
+    -> ContentPart events -> SSE 'chunk' events -> UI
+    -> ToolCall events [Kimi calls its built-in tools + external tools]
+    -> External tool handler -> ToolRegistry.execute() -> ToolResult -> Kimi
+    -> RunResult -> SSE 'done' event -> UI
+    -> session.close()
+```
 
-  Gmail:
-    ChannelId type extension -> GmailProvider -> OAuth UI
-    -> Google Pub/Sub webhook -> daemon.addToInbox()
+### Subscription Mode (KimiAgentRunner -- Print Fallback)
 
-  Multi-Agent:
-    sessions_* MCP tools -> Redis schema
-    -> daemon integration for spawning sub-agents
+```
+UI (ai-chat) -> tRPC ai.send -> livinityd -> HTTP POST /api/agent/stream (Nexus)
+    -> KimiAgentRunner.run(task)
+    -> spawn('kimi', ['--print', '--output-format=stream-json', '--yolo', ...])
+    -> Parse JSONL from stdout line by line
+    -> {role:"assistant", content} -> SSE 'chunk' events -> UI
+    -> {role:"assistant", tool_calls} -> SSE 'tool_call' events -> UI
+    -> {role:"tool", content} -> SSE 'observation' events -> UI
+    -> Process exit -> SSE 'done' event -> UI
+```
 
-  Session Compaction:
-    SessionManager.compactSession() -> Brain.summarize()
-    -> /compact command -> auto-trigger in daemon
+### Streaming Event Flow to UI
+
+```
+Kimi Agent SDK         KimiAgentRunner          SSE/WebSocket          UI
+     |                      |                       |                   |
+     |--ContentPart(text)-->|                       |                   |
+     |                      |--AgentEvent(chunk)-->|                   |
+     |                      |                       |--SSE data:{}---->|
+     |                      |                       |                   |--update chatStatus
+     |--ToolCall----------->|                       |                   |
+     |                      |--AgentEvent(tool)---->|                   |
+     |                      |                       |--SSE data:{}---->|
+     |                      |                       |                   |--show step
+     |                      |                       |                   |
+     |                      |--ToolRegistry.exec()  |                   |
+     |                      |                       |                   |
+     |<--ToolResult---------|                       |                   |
+     |                      |--AgentEvent(obs)----->|                   |
+     |                      |                       |--SSE data:{}---->|
+     |                      |                       |                   |--update step
 ```
 
 ---
 
-## Suggested Build Order
+## Dependencies
 
-Based on dependencies, risk, and value delivery:
+### New npm Packages
 
-### Phase 1: Foundation (Stability + Commands + Tracking)
-**Rationale:** Fix what's broken before adding new features. Commands and tracking are low-risk, high-utility.
+```bash
+# In nexus/
+npm install @moonshot-ai/kimi-agent-sdk
+# zod already installed (peer dep)
+# 'openai' package may be useful for KimiProvider (OpenAI-compatible client)
+npm install openai  # for KimiProvider API key mode
+```
 
-1. **Stability fixes** -- crash guards, memory service diagnosis, tool leak fix
-2. **Chat commands extension** -- /compact, /usage, /sessions, /pair, /voice, /webhook
-3. **Usage tracking** -- Redis counters, /usage command, API endpoint
+### System Dependencies (Server)
 
-### Phase 2: Communication (Webhooks + Gmail + DM Pairing)
-**Rationale:** Expands how users interact with the system. Builds on existing patterns.
+```bash
+# Kimi CLI (Python-based, installed via uv)
+curl -LsSf https://code.kimi.com/install.sh | bash
+# OR: uv tool install --python 3.13 kimi-cli
 
-4. **Webhook triggers** -- Express routes, webhook management tools
-5. **DM pairing** -- ChannelManager middleware, activation codes
-6. **Gmail integration** -- GmailProvider, OAuth flow, Pub/Sub webhook
+# Verify:
+kimi --version
+kimi info  # shows available models and protocol version
+```
 
-### Phase 3: Intelligence (Multi-Agent + Session Compaction)
-**Rationale:** Enhances the AI capabilities. Depends on stable foundation.
+**Important:** The Kimi CLI requires Python 3.12-3.14 (3.13 recommended) and `uv` package manager. The production server needs these installed. This is a new system dependency that doesn't exist for Claude Code (which is a standalone binary).
 
-7. **Multi-agent sessions** -- MCP tools, Redis schema, session spawning
-8. **Session compaction** -- SessionManager extension, auto-trigger
+### Packages to Remove
 
-### Phase 4: Experience (Voice + Canvas)
-**Rationale:** Highest complexity features. Depend on everything else being stable.
-
-9. **Live canvas** -- canvas_render tool, iframe sandbox, split-pane UI
-10. **Voice pipeline** -- VoiceGateway, Deepgram relay, Cartesia relay, voice UI
-
-### Phase 5: Distribution (CLI)
-**Rationale:** Onboarding CLI is independent but should be built last when all features are stable.
-
-11. **Onboarding CLI** -- Interactive setup wizard, npm package
+```bash
+npm uninstall @anthropic-ai/sdk             # Anthropic SDK (used by ClaudeProvider)
+npm uninstall @anthropic-ai/claude-agent-sdk # Claude Agent SDK (used by SdkAgentRunner)
+```
 
 ---
 
-## What NOT to Build
+## Complete File Manifest
 
-| Skip | Reason |
-|------|--------|
-| Separate voice microservice | Latency-critical, needs direct daemon access. In-process is correct. |
-| Docker container for sandbox | Browser iframe is sufficient for AI-generated UI code. MicroVMs are overkill for self-hosted single-user. |
-| GraphQL API layer | Existing REST + tRPC + WebSocket + SSE covers all needs. Adding GraphQL adds complexity for no gain. |
-| Custom email server | Gmail API handles send/receive. No need for SMTP/IMAP infrastructure. |
-| Agent orchestration framework | The existing Daemon inbox + SdkAgentRunner + BullMQ pattern IS the orchestration. No need for LangGraph/CrewAI. |
-| WebRTC for voice | WebSocket is simpler and sufficient for single-user. WebRTC adds complexity (STUN/TURN) for no benefit. |
-| Kubernetes/Docker Swarm | Single-server deployment. PM2 + Docker Compose is correct. |
+### Files to CREATE
+
+| File | Purpose |
+|------|---------|
+| `nexus/packages/core/src/providers/kimi.ts` | KimiProvider implementing AIProvider interface |
+| `nexus/packages/core/src/kimi-agent-runner.ts` | KimiAgentRunner (subprocess mode) |
+
+### Files to MODIFY
+
+| File | What Changes |
+|------|-------------|
+| `nexus/packages/core/src/providers/manager.ts` | Replace `ClaudeProvider` with `KimiProvider`, update fallback order |
+| `nexus/packages/core/src/providers/index.ts` | Export `KimiProvider` instead of `ClaudeProvider` |
+| `nexus/packages/core/src/providers/types.ts` | Add Kimi cost defaults; optionally rename `ClaudeToolDefinition` to `ToolDefinition` |
+| `nexus/packages/core/src/api.ts` | Replace `/api/claude-cli/*` routes with `/api/kimi/*`; update agent stream to use KimiAgentRunner |
+| `nexus/packages/core/src/daemon.ts` | Replace `ClaudeProvider` import/usage with `KimiProvider`; update `SdkAgentRunner` to `KimiAgentRunner` |
+| `nexus/packages/core/src/config/schema.ts` | Update model defaults from `claude-*` to `kimi-*` |
+| `nexus/packages/core/package.json` | Add `@moonshot-ai/kimi-agent-sdk`, `openai`; remove `@anthropic-ai/sdk`, `@anthropic-ai/claude-agent-sdk` |
+| `livos/packages/livinityd/source/modules/ai/routes.ts` | Replace Claude tRPC procedures with Kimi equivalents |
+| `livos/packages/ui/src/routes/settings/ai-config.tsx` | Replace Claude auth UI with Kimi auth UI |
+
+### Files to DELETE
+
+| File | Why |
+|------|-----|
+| `nexus/packages/core/src/providers/claude.ts` | Replaced by `kimi.ts` |
+| `nexus/packages/core/src/sdk-agent-runner.ts` | Replaced by `kimi-agent-runner.ts` |
+
+---
+
+## Build Order (Suggested Phase Sequence)
+
+### Phase 1: KimiProvider (API Key Mode)
+
+**Rationale:** Get basic chat working first. No CLI dependency needed.
+
+1. Create `providers/kimi.ts` implementing AIProvider interface
+2. Use `openai` npm package with custom `baseURL: 'https://api.kimi.com/coding/v1'`
+3. Implement `chat()`, `chatStream()`, `think()`, `isAvailable()`, `getModels()`
+4. Translate ClaudeToolDefinition to OpenAI function format (and parse responses back)
+5. Register in ProviderManager with `kimi` key
+6. Update fallback order to `['kimi', 'gemini']`
+7. Add Redis keys: `nexus:config:kimi_api_key`
+8. Test: API key mode chat through existing AgentLoop
+
+**Files modified:** `providers/kimi.ts` (new), `providers/manager.ts`, `providers/index.ts`, `providers/types.ts`
+**Dependencies:** `npm install openai` (for OpenAI-compatible client)
+
+### Phase 2: API Routes + tRPC + UI
+
+**Rationale:** Users need to configure Kimi credentials through the UI.
+
+1. Add `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` routes in `api.ts`
+2. Remove `/api/claude-cli/*` routes
+3. Update tRPC procedures in livinityd `ai/routes.ts`
+4. Update `ai-config.tsx` to show Kimi configuration (simpler auth flow, no code paste)
+5. Update Redis config keys
+6. Test: Full settings flow (enter API key, see status, chat works)
+
+**Files modified:** `api.ts`, `livinityd/modules/ai/routes.ts`, `ui/routes/settings/ai-config.tsx`
+
+### Phase 3: KimiAgentRunner (Subscription Mode)
+
+**Rationale:** More complex, depends on Kimi CLI being installed on server.
+
+1. Install Kimi CLI on production server (`curl -LsSf https://code.kimi.com/install.sh | bash`)
+2. Authenticate Kimi CLI on server (`kimi login`)
+3. Create `kimi-agent-runner.ts` -- start with Print mode fallback (simpler, no SDK dep)
+4. Implement JSONL parsing from `kimi --print --output-format=stream-json`
+5. Map JSONL messages to AgentEvent interface
+6. Handle MCP tools via `--mcp-config` inline JSON flag
+7. Upgrade to SDK path (`createSession` + `createExternalTool`) if SDK is stable
+8. Test: Subscription mode agent tasks
+
+**Files modified:** `kimi-agent-runner.ts` (new), `api.ts` (agent stream switch), `daemon.ts` (import swap)
+
+### Phase 4: Config Schema + Cleanup
+
+**Rationale:** Final cleanup after core functionality works.
+
+1. Update model names in config schema defaults
+2. Update DEFAULT_NEXUS_CONFIG
+3. Remove Claude-specific code (claude.ts, sdk-agent-runner.ts)
+4. Remove `@anthropic-ai/*` packages
+5. Update any remaining references in codebase
+6. Migration script for Redis keys (anthropic -> kimi)
+7. Update server deployment scripts (install Kimi CLI, authenticate)
+8. Test: Full end-to-end on production
+
+**Files modified:** `config/schema.ts`, `package.json`, cleanup of old files
 
 ---
 
@@ -990,23 +915,74 @@ Based on dependencies, risk, and value delivery:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Voice latency exceeds 500ms | Medium | High | Direct WS relay (no queuing), Deepgram nova-3 (fastest model), Cartesia Sonic (135ms first chunk) |
-| Deepgram/Cartesia API costs | Medium | Medium | Usage tracking enables monitoring. Voice is opt-in. Consider offline STT (Whisper) as future fallback |
-| Gmail OAuth complexity | Medium | Medium | Google APIs are well-documented. Use googleapis npm package. Many examples available |
-| Canvas iframe security | Low | High | sandbox="allow-scripts" is battle-tested. No same-origin access, no storage access |
-| Multi-agent infinite loops | Medium | Medium | maxTurns limit on sub-agent execution. Session history size limit. Timeout per agent |
-| Onboarding CLI maintenance | Medium | Low | CLI is thin wrapper over existing setup. Changes to infra require CLI updates |
-| ChannelId type expansion breaking | Low | Medium | Add 'gmail' to union type. Update all switch/if statements referencing ChannelId |
+| Kimi Agent SDK is 0.x (immature API surface) | HIGH | MEDIUM | Start with Print mode fallback, upgrade to SDK once stable |
+| Python dependency on server | LOW | LOW | uv installer is reliable, Python 3.13 widely available |
+| Kimi API tool calling format differences cause bugs | MEDIUM | MEDIUM | Thorough test of function_call -> tool_use translation |
+| MCP config injection fails in SDK mode | MEDIUM | LOW | Use `--mcp-config` inline JSON via Print mode as fallback |
+| OAuth device auth flow doesn't work on headless server | MEDIUM | MEDIUM | Test early; may need API key mode as primary auth initially |
+| Model tier mapping imprecise | MEDIUM | LOW | Verify against `kimi info` output at runtime |
+| Kimi CLI not available as standalone binary | LOW | MEDIUM | Requires Python + uv, more deps than Claude's standalone binary |
+| OpenAI function_call arguments are JSON strings (not objects) | LOW | LOW | Always `JSON.parse(arguments)` in response handler |
+
+---
+
+## Anti-Patterns to Avoid
+
+### 1. Don't Write to ~/.kimi/mcp.json Per-Request
+Writing MCP config to disk on every agent request creates race conditions when multiple requests run simultaneously. Use `--mcp-config` inline JSON flag instead (no disk writes).
+
+### 2. Don't Reuse Sessions Across Web UI Requests
+Each web UI agent stream request should create its own session and close it when done. Reusing sessions creates state leakage between unrelated tasks.
+
+### 3. Don't Remove ClaudeProvider Before KimiProvider Is Fully Tested
+Keep ClaudeProvider code in place during development. Delete only in the final cleanup phase after Kimi is confirmed working end-to-end.
+
+### 4. Don't Hard-Code Model Names
+Use the tier mapping (flash/haiku/sonnet/opus -> kimi model IDs) consistently. Model names may change; the tier abstraction protects against this.
+
+### 5. Don't Assume Kimi's function_call Arguments Are Objects
+Claude returns `tool_use.input` as a parsed JSON object. Kimi (OpenAI format) returns `function.arguments` as a JSON string. Always parse it.
+
+---
+
+## Open Questions
+
+1. **External tool registration in SDK:** Does `createExternalTool()` integrate with `createSession()` directly? The SDK docs reference both but the exact wiring needs testing. **Fallback:** Use Print mode with `--mcp-config` instead.
+
+2. **Token usage reporting:** Kimi SDK reports usage via `StatusUpdate` events mid-stream. Does it also report total usage in `RunResult`? The current `AgentResult` expects final token counts. **Fallback:** Sum from StatusUpdate events.
+
+3. **Kimi CLI on Windows:** The production server is Linux, but development is Windows. Does the Kimi CLI work on Windows for local testing? The CLI is Python-based and should work, but needs verification.
+
+4. **Kimi API base URL:** Is it `https://api.kimi.com/coding/v1` or `https://api.moonshot.ai/v1`? Documentation references both. The "Kimi for Coding" specific endpoint may have different model availability. **Test both.**
+
+5. **Device auth on headless server:** The `kimi login` command may try to open a browser. On a headless server, we need the device auth API (`auth.kimi.com/api/oauth/device_authorization`) to get a URL without requiring a local browser.
 
 ---
 
 ## Sources
 
-- Codebase analysis: Direct reading of `daemon.ts`, `sdk-agent-runner.ts`, `telegram.ts`, `channels/types.ts`, `channels/index.ts`, `session-manager.ts`, `commands.ts`, `api.ts`, `ws-gateway.ts`, `ai-chat/index.tsx`, `livinityd/modules/ai/index.ts`
-- [Deepgram WebSocket STT docs](https://developers.deepgram.com/docs/getting-started-with-live-streaming-audio)
-- [Deepgram JS SDK](https://github.com/deepgram/deepgram-js-sdk)
-- [Cartesia TTS WebSocket docs](https://docs.cartesia.ai/api-reference/tts/tts)
-- [Cartesia JS SDK](https://github.com/cartesia-ai/cartesia-js)
-- [Gmail API Push Notifications](https://developers.google.com/workspace/gmail/api/guides/push)
-- [Redis multi-agent session management patterns](https://redis.io/blog/ai-agent-architecture-patterns/)
-- [Iframe sandbox security](https://medium.com/@muyiwamighty/building-a-secure-code-sandbox-what-i-learned-about-iframe-isolation-and-postmessage-a6e1c45966df)
+- [Kimi CLI GitHub](https://github.com/MoonshotAI/kimi-cli) -- CLI source, README, architecture
+- [Kimi Agent SDK GitHub](https://github.com/MoonshotAI/kimi-agent-sdk) -- Official SDK repo (Python, Node.js, Go)
+- [Kimi CLI MCP Docs](https://moonshotai.github.io/kimi-cli/en/customization/mcp.html) -- MCP server configuration [HIGH confidence]
+- [Kimi CLI Print Mode Docs](https://moonshotai.github.io/kimi-cli/en/customization/print-mode.html) -- Non-interactive mode, JSONL format [HIGH confidence]
+- [Kimi CLI Wire Mode Docs](https://moonshotai.github.io/kimi-cli/en/customization/wire-mode.html) -- JSON-RPC 2.0 bidirectional protocol [MEDIUM confidence]
+- [Kimi CLI Command Reference](https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html) -- All CLI flags [HIGH confidence]
+- [Kimi CLI Technical Deep Dive](https://llmmultiagents.com/en/blogs/kimi-cli-technical-deep-dive) -- Architecture analysis [MEDIUM confidence]
+- [Kimi CLI Auth Issue #757](https://github.com/MoonshotAI/kimi-cli/issues/757) -- OAuth/subscription auth implementation [HIGH confidence]
+- [Moonshot AI Platform](https://platform.moonshot.ai/) -- API documentation
+- [One Agent SDK](https://github.com/odysa/one-agent-sdk) -- Provider-agnostic wrapper showing Kimi SDK patterns [MEDIUM confidence]
+- [Kimi K2.5 Developer Guide](https://www.nxcode.io/resources/news/kimi-k2-5-developer-guide-kimi-code-cli-2026) -- Model capabilities and pricing [MEDIUM confidence]
+
+### Confidence Levels
+
+| Area | Level | Reason |
+|------|-------|--------|
+| KimiProvider (API key mode) | HIGH | OpenAI-compatible format is well-documented, standard pattern |
+| CLI flags (--print, --mcp-config, --yolo) | HIGH | Documented in official CLI reference, verified on multiple sources |
+| KimiAgentRunner (Print mode fallback) | HIGH | Spawn child process + parse JSONL is straightforward, well-documented |
+| KimiAgentRunner (SDK path) | MEDIUM | SDK is 0.x; createSession/createExternalTool API shape needs testing |
+| OAuth device auth flow | MEDIUM | Endpoints found in issue tracker, but not in official SDK docs |
+| External tool bridging via SDK | MEDIUM | createExternalTool documented but session integration unclear |
+| MCP inline config | HIGH | `--mcp-config JSON` flag documented in CLI reference |
+| Model tier mapping | LOW | Exact model IDs need runtime verification via `kimi info` |
+| Wire mode protocol | MEDIUM | Documented but marked "experimental" |

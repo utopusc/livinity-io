@@ -1,336 +1,198 @@
 # Project Research Summary
 
-**Project:** LivOS v2.0 — OpenClaw-Class AI Platform
-**Domain:** Self-hosted AI home server OS with voice, multi-agent, and automation capabilities
-**Researched:** 2026-02-20
-**Confidence:** HIGH (stack and architecture verified via direct codebase analysis; pitfalls verified against official docs and live GitHub issues)
-
----
+**Project:** LivOS v6.0 -- Claude Code to Kimi Code Migration
+**Domain:** AI provider migration in self-hosted home server OS
+**Researched:** 2026-03-09
+**Confidence:** MEDIUM-HIGH
 
 ## Executive Summary
 
-LivOS v2.0 is a significant feature expansion of an already-functional self-hosted AI platform. The milestone adds voice interaction (Cartesia TTS + Deepgram STT), a live canvas for AI-generated artifacts, multi-agent session orchestration, Gmail integration, webhooks, DM security pairing, session compaction, usage tracking, an onboarding CLI, and stability hardening. Research across all four dimensions confirms the existing architecture — Daemon inbox pattern, SdkAgentRunner with MCP tools, ChannelManager provider abstraction, Redis state layer, Express API — provides clean integration seams for every v2.0 feature. No architectural rewrites are required. Most features are either new MCP tools, new Express routes, new channel providers, or new UI components. Voice is the only feature requiring a genuinely novel component pattern (bidirectional WebSocket audio relay), and even it calls `daemon.addToInbox()` as its final step, making it "just another source" in the existing processing pipeline.
+This migration replaces Claude Code (Anthropic's CLI-based AI agent) with Kimi Code (Moonshot AI's equivalent) across the Nexus backend and LivOS frontend. The research confirms this is a **systematic component replacement, not a rewrite**. The existing architecture has clean seams: the AIProvider interface, ProviderManager, SdkAgentRunner pattern, ToolRegistry, and SSE streaming pipeline are all provider-agnostic. The Claude-specific surface is confined to roughly 10 files across four layers (provider, agent runner, API routes, UI). Kimi Code offers three integration depths -- direct OpenAI-compatible API, Agent SDK subprocess, and CLI print mode -- giving us flexibility and a reliable fallback chain.
 
-The recommended implementation strategy is to front-load stability and security work before adding high-complexity features. The nexus-core process currently restarts approximately 3.3 times per hour (153 restarts in 47 hours per project data), which would cause catastrophic degradation if voice WebSockets, multi-agent sub-processes, or canvas rendering are added before root causes are fixed. DM pairing is a critical security gap: without it, anyone who discovers the bot token can run commands on the server. These two concerns define Phase 1 — stabilize and secure before expanding. The subsequent phase order is driven by dependency chains: webhooks must precede Gmail (Pub/Sub pushes to webhook infrastructure), compaction should precede multi-agent (sub-agents burn tokens faster), and voice and canvas should come last because they carry the highest integration risk but are independent of all other features.
+The recommended approach is to build in four phases: (1) KimiProvider for API key mode first (fastest path to a working chat), (2) API routes and UI updates for configuration, (3) KimiAgentRunner for subscription/CLI mode (the more complex subprocess integration), and (4) cleanup of all Claude-specific code. The single most important architectural decision: **start with Kimi CLI's print mode (`--print --output-format=stream-json`) for the agent runner, not the SDK**. The `@moonshot-ai/kimi-agent-sdk` is version 0.1.5 (pre-stable), making it a risk for the primary integration path. Print mode is a stable, zero-dependency approach that spawns `kimi` as a child process and parses JSONL output. Upgrade to the SDK once it matures.
 
-The principal risk to the entire v2.0 effort is scope without sequencing. Voice alone has four distinct CRITICAL-rated failure modes: latency stacking, STT credit burn, browser autoplay policy blocking audio output, and WebSocket connection churn. Canvas has an iframe XSS trap that, if misconfigured, undermines the security of the entire application. Multi-agent has a recursive deadlock trap that can exhaust the Claude Code subscription window in minutes. None of these risks are exotic — all are well-documented and all have clear prevention patterns detailed in the research. The roadmap must keep voice, canvas, and multi-agent in separate phases so problems in one do not block the others.
-
----
+The key risks are: (1) the inline MCP server gap -- Claude's `createSdkMcpServer()` has no Kimi equivalent, requiring either `createExternalTool()` via the SDK or `--mcp-config` inline JSON via print mode; (2) the system prompt format change from inline strings to file-based agent YAML definitions; and (3) the new Python 3.12+ system dependency on the production server. All three have verified workarounds. On the upside, Kimi is 8-10x cheaper ($0.60/$3.00 vs $5/$25 per million tokens for top-tier models), offers cache-aware token tracking, and simplifies the OAuth flow (device auth instead of manual PKCE code paste).
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack requires minimal additions. Only four new npm packages are needed for core v2.0 functionality: `@cartesia/cartesia-js@^2.2.9` and `@deepgram/sdk@^4.11.3` for voice, `googleapis@^144.0.0` for Gmail OAuth and API calls, and `@google-cloud/pubsub@^4.8.0` for Gmail push notifications. The onboarding CLI is a new package (`nexus/packages/cli`) adding `commander@^13.1.0` and `@clack/prompts@^1.0.1`. The frontend requires zero new npm dependencies — voice uses browser-native `MediaRecorder` and `AudioContext`; canvas uses native `<iframe sandbox srcdoc>` with CDN-loaded React and Tailwind inside the sandbox.
+**Remove:** `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk` from nexus/packages/core.
 
-Two important constraints discovered in research: (1) LivOS uses Claude Code Auth (subscription mode) via `SdkAgentRunner`, not direct Anthropic API keys. This means the native Compaction API (`compact-2026-01-12` beta header) cannot be used — session compaction must be implemented as a `SessionManager` method and MCP tool. (2) A2UI (Google's declarative agent UI protocol) is at v0.8 public preview with v0.9 already introducing breaking changes. It should not be adopted until v1.0 stabilizes. Live Canvas must use the proven `srcdoc` iframe approach.
+**Add:** `@moonshot-ai/kimi-agent-sdk` (^0.1.5, pin exact version). Optionally add `openai` npm package for the KimiProvider API key mode, since Kimi exposes an OpenAI-compatible endpoint at `api.kimi.com/coding/v1`.
+
+**System dependency:** Kimi CLI requires Python 3.12+ and `uv` package manager on the production server. Install via `curl -LsSf https://code.kimi.com/install.sh | bash` or `uv tool install kimi-code`.
 
 **Core technologies:**
-- `@cartesia/cartesia-js` v2.2.9: TTS via persistent WebSocket — sub-100ms TTFB, Sonic-3 model, `context_id` maintains prosody across streaming text chunks
-- `@deepgram/sdk` v4.11.3: STT via WebSocket — Nova-3 model, interim results, VAD events, 50+ languages, $200 free credit
-- `googleapis` v144+: Gmail API + OAuth2 — official Google client, handles token refresh, widely used
-- `@google-cloud/pubsub` v4.8.0: Gmail push notifications — or polling fallback (simpler, no GCP dependency; recommended for self-hosted)
-- `commander` v13.1.0 + `@clack/prompts` v1.0.1: Onboarding CLI — clack chosen over Inquirer for modern UX, less boilerplate
-- `<iframe sandbox="allow-scripts" srcdoc>`: Canvas rendering — zero new dependencies, browser-native isolation, proven by Claude.ai Artifacts pattern
+- **Kimi Agent SDK** (`@moonshot-ai/kimi-agent-sdk`): Subprocess SDK mirroring Claude Agent SDK pattern -- `createSession()` + `session.prompt()` instead of `query()`
+- **Kimi CLI print mode**: Fallback integration via `kimi --print --output-format=stream-json` -- zero SDK dependency, parse JSONL stdout
+- **OpenAI-compatible API**: `api.kimi.com/coding/v1` for direct API key mode chat -- standard format, high confidence
+- **Existing stack unchanged**: Express + tRPC, Redis, React 18, Vite, BullMQ, MCP tools, SSE streaming, JWT auth
 
-**What NOT to add:**
-- `@anthropic-ai/sdk` direct API access: conflicts with subscription auth model; would require bypassing SdkAgentRunner
-- Sandpack / CodeSandbox: too heavy (5MB+); native iframe is sufficient and zero-dependency
-- tldraw: whiteboard framework, wrong tool for AI artifact rendering
-- Whisper or Piper (local STT/TTS): quality gap vs cloud APIs, GPU requirement, 500ms+ latency vs 40ms Cartesia
-- LangChain / LangGraph / CrewAI: conflicts with existing Daemon + SdkAgentRunner orchestration pattern
-- WebRTC for voice: WebSocket is sufficient for single-user self-hosted; WebRTC adds STUN/TURN complexity with no benefit
-- A2UI v0.8/v0.9: pre-stable spec, v0.9 already has breaking changes; migration cost high when v1.0 lands
-
----
+**What NOT to add:** Do not add the `openai` package if unnecessary complexity. Do not maintain dual Claude + Kimi support. Do not keep the dead GeminiProvider. Do not adopt LangChain.
 
 ### Expected Features
 
-Research benchmarked v2.0 against OpenClaw (the reference AI platform) and identified a clear two-tier feature structure.
+**Must have (table stakes):**
+- Agent runner spawning Kimi CLI subprocess with MCP tool access (FM-01, FM-02)
+- Streaming events from Kimi to web UI via SSE (FM-03)
+- Model tier selection mapping to Kimi model IDs (FM-04)
+- API key authentication with Moonshot platform (FM-05)
+- Auto-approval for Nexus tools via `yoloMode: true` (FM-07)
+- Chrome DevTools MCP integration via mcp.json stdio config (FM-10)
+- Settings UI with Kimi branding and auth flow (FM-11)
 
-**Must have (table stakes — missing makes product feel incomplete vs. OpenClaw):**
-- DM Pairing / Activation Code Security — critical security gap; without it anyone who discovers the bot token controls the server
-- Chat Commands `/new`, `/compact`, `/usage`, `/activation` — completes the command set; `/help`, `/think`, `/reset`, `/status` already exist
-- Session Compaction — without it, long conversations exhaust context windows and waste subscription rolling window budget
-- Usage Tracking — visibility into token consumption, turn counts, session costs; needed to detect and prevent rolling window exhaustion
-- Webhook Triggers — enables automation use cases; without webhooks the agent can only respond to direct messages
+**Should have (differentiators -- Kimi advantages):**
+- 8-10x cheaper inference costs (zero code change, immediate benefit)
+- Cache-aware token tracking with `input_cache_read` metrics (low effort)
+- Thinking mode toggle (`SessionOptions.thinking: true`) for chain-of-thought reasoning (low effort)
+- Granular approval system with per-request approve/reject (medium effort, better than Claude's all-or-nothing)
+- Vision capabilities via multimodal K2.5 model (low effort)
 
-**Should have (differentiators that set LivOS apart):**
-- Voice Mode (push-to-talk first, VAD later) — browser-based voice without app installation; OpenClaw requires native desktop app
-- Live Canvas (simplified artifacts via iframe srcdoc) — transforms chat from text terminal to dynamic workspace
-- Multi-Agent Sessions (`sessions_list`, `sessions_send`, sub-agent spawning) — structured coordination beyond basic parallel task execution
-- Gmail Integration (OAuth + Pub/Sub + MCP tools) — killer feature for personal AI assistant; few self-hosted alternatives do this well
-- Onboarding CLI (`livinity onboard`) — reduces "time to first chat" from hours to minutes
-
-**Defer to v2.1+:**
-- A2UI protocol (spec pre-stable, v1.0 not released)
-- Always-listening wake word detection (constant mic, privacy concern, on-device ML model — massive scope for marginal value)
-- Native desktop or mobile apps for voice (PWA + WebSocket from browser is sufficient; eliminates distribution burden)
-- Real-time voice for Telegram or Discord channels (bot APIs not designed for AI voice; web UI is the right surface)
-- Voice mode supporting multiple simultaneous users (single-user self-hosted context in v2.0)
-
----
+**Defer (v2+):**
+- Wire mode integration for advanced programmatic steering
+- Agent YAML files for different personas per use case
+- Self-hosted model weights from HuggingFace
+- Thinking mode UI (reasoning chain display)
 
 ### Architecture Approach
 
-Architecture research (based on direct reading of 10+ production source files) confirms that v2.0 is purely additive. The Daemon with inbox pattern is the central integration seam: `daemon.addToInbox()` is called by every message source and `processInboxItem()` routes to commands, skills, or agent. Voice becomes "just another source" after STT transcription. Gmail becomes a new `ChannelProvider` implementing the same interface as Telegram and Discord. Webhooks extend the existing `/api/webhook/git` route pattern already present in `api.ts`. Multi-agent sessions are new MCP tools plus Redis schema. Session compaction is a new `SessionManager.compactSession()` method with an auto-trigger hook in `processInboxItem`.
+The migration touches four layers with clean boundaries. **KimiProvider** (new file) implements the AIProvider interface for API key mode using OpenAI-compatible chat completions format. **KimiAgentRunner** (new file) replaces SdkAgentRunner for subscription mode, initially using print mode fallback (spawn child process, parse JSONL) with SDK upgrade path. API routes change from `/api/claude-cli/*` to `/api/kimi/*` with a simpler auth flow (device auth, no code paste). The UI simplifies: the "paste authorization code" step is eliminated entirely.
 
-**Major components and integration points:**
-1. **VoiceGateway** (`nexus/packages/core/src/voice-gateway.ts`) — NEW. Binary WebSocket on `/ws/voice`. Manages `DeepgramRelay` (STT), `CartesiaRelay` (TTS), and `VoiceSession` lifecycle. Calls `daemon.addToInbox()` on final transcript. Must run inside nexus-core process (not a separate container) to avoid inter-process latency hops on the VPS.
-2. **GmailProvider** (`nexus/packages/core/src/channels/gmail.ts`) — NEW. Implements `ChannelProvider` interface identically to `TelegramProvider`. Manages OAuth tokens, Gmail watch renewal (BullMQ repeatable job every 6 days), Pub/Sub notifications, and email-to-IncomingMessage conversion.
-3. **Canvas Tool + Panel** — NEW `canvas_render` MCP tool stores artifact HTML in Redis keyed by conversation ID; NEW `CanvasPanel` React component in ai-chat route renders it in `<iframe sandbox="allow-scripts" srcdoc>`. Panel is hidden until `canvas_render` is first called.
-4. **Session MCP Tools** — NEW `sessions_list`, `sessions_create`, `sessions_send`, `sessions_history` registered in `daemon.ts` `registerTools()`. Pure Redis reads/writes; no new infrastructure.
-5. **Extended `commands.ts`** — EXTENDED switch cases for `/compact`, `/usage`, `/activation`, `/pair`. Trivial additions to the existing pattern.
-6. **Extended `SessionManager`** — EXTENDED with `compactSession()` using Brain to summarize old history, plus auto-trigger at 100k token threshold in daemon.
-7. **Stability Hardening** — `process.on('unhandledRejection')` global handlers, replace `setTimeout`-based crons with BullMQ repeatable jobs, Redis circuit breaker, PM2 `max_memory_restart` config.
+**Major components:**
+1. **KimiProvider** (`providers/kimi.ts`) -- Implements `chat()`, `chatStream()`, `isAvailable()`, `getModels()`, `getCliStatus()`, `startLogin()`, `logout()` using OpenAI-compatible API and device auth
+2. **KimiAgentRunner** (`kimi-agent-runner.ts`) -- Spawns `kimi` CLI subprocess, handles MCP tools via `createExternalTool()` (SDK) or `--mcp-config` inline JSON (print mode), maps events to AgentEvent interface
+3. **API routes** (`api.ts`) -- `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` replacing Claude endpoints; agent stream switches to KimiAgentRunner for subscription mode
+4. **tRPC proxy routes** (`livinityd/ai/routes.ts`) -- `ai.getKimiCliStatus`, `ai.startKimiLogin`, `ai.kimiLogout` replacing Claude equivalents
+5. **Settings UI** (`ai-config.tsx`) -- Kimi branding, simplified subscription auth (button + poll, no code paste), API key input
 
----
+**Files to create:** 2 (kimi.ts, kimi-agent-runner.ts)
+**Files to modify:** 7 (manager.ts, index.ts, types.ts, api.ts, daemon.ts, routes.ts, ai-config.tsx, config/schema.ts)
+**Files to delete:** 2 (claude.ts, sdk-agent-runner.ts)
 
 ### Critical Pitfalls
 
-Research identified 24 domain-specific and 4 integration-specific pitfalls. The top 5 that can cause rewrites or sustained outages:
+1. **SDK maturity risk (P1, CRITICAL)** -- `@moonshot-ai/kimi-agent-sdk` is v0.1.5 (0.x = pre-stable). API may change without warning. **Prevention:** Build print mode fallback first (`kimi --print --output-format=stream-json`). Use SDK as an upgrade path, not the foundation. Pin exact version.
 
-1. **P-07 — Process instability (153 PM2 restarts in 47 hours):** The existing crash rate must be reduced before adding voice WebSockets, canvas rendering, or multi-agent sub-processes. Each new feature multiplies the blast radius of each restart — voice calls will drop mid-sentence, multi-agent sessions will lose progress. Prevention: add `process.on('unhandledRejection')` global handler, replace `setTimeout`-based crons with BullMQ repeatable jobs, add Redis circuit breaker, set PM2 `max_memory_restart`. Must be done before any other Phase 1 work.
+2. **Inline MCP server gap (P2, CRITICAL)** -- Claude's `createSdkMcpServer()` has no Kimi equivalent. Nexus tools must be exposed differently. **Prevention:** Use `createExternalTool()` for SDK path (register tools directly with Zod schemas and handlers) or `--mcp-config` inline JSON for print mode path. Both are verified workarounds.
 
-2. **P-01 — Voice pipeline latency stacking:** STT (150-300ms) + LLM (500-2000ms) + TTS (40-150ms) + network round-trips compound to 800ms-2800ms total. At the high end, conversations feel unnatural and users talk over the AI. Prevention: stream everything end-to-end (never wait for a complete LLM response before starting TTS), use Cartesia `context_id` continuations for prosody across streamed text chunks, instrument the full pipeline with timestamps from day one, target p95 < 1200ms end-to-end.
+3. **Tool format translation errors (P3, CRITICAL)** -- Kimi uses OpenAI function calling format: `parameters` instead of `input_schema`, tool arguments as JSON strings instead of parsed objects. Missing `JSON.parse()` causes silent failures. **Prevention:** Create explicit `translateToolDefinition()` and `parseToolArguments()` functions. Unit test with every MCP tool. Log raw payloads during development.
 
-3. **P-05 — iframe sandbox XSS trap:** `sandbox="allow-scripts"` is safe; adding `allow-same-origin` to the same sandbox effectively eliminates security (the iframe can remove its own sandbox attribute via the parent DOM). This combination is explicitly warned against in the HTML spec. Prevention: use `srcdoc` attribute (null origin), `sandbox="allow-scripts allow-popups"` only, never add `allow-same-origin`. Verify via security scan before any canvas code ships.
+4. **System prompt format change (P4, HIGH)** -- Kimi requires file-based agent YAML + markdown prompt instead of inline strings. **Prevention:** Write temporary agent YAML + system prompt files per session, clean up on close. Alternatively, API mode supports inline system prompts through the OpenAI-compatible format.
 
-4. **P-06 — Multi-agent recursive deadlock and token explosion:** Two agents can create circular dependencies and self-reinforcing reasoning loops that exhaust the Claude Code subscription window in minutes. Token costs multiply: 2 agents produce roughly 3-4x the tokens of 1 agent (not 2x), because of coordination overhead. Prevention: strict DAG topology (no agent delegates back to its parent), per-agent turn limits (5-8 max), session-level token budget hard stop (50k tokens for the entire multi-agent session), maximum 2 concurrent agents on the VPS.
-
-5. **P-11/P-12 — Gmail OAuth token expiry + watch expiration silent failures:** Google OAuth refresh tokens silently expire (password reset, 6-month inactivity, "Testing" consent screen status). Gmail watch expires after exactly 7 days with zero warning from Google. Prevention: BullMQ repeatable job to renew watch every 6 days, proactive access token refresh every 30 minutes, immediate alert via Telegram/Discord on `invalid_grant` error, graceful degradation when authentication fails (stop queuing email tasks, do not allow Pub/Sub notifications to pile up as failed jobs).
-
----
+5. **Breaking changes during migration (P10, MEDIUM)** -- System is unusable between removing Claude and having Kimi fully working. **Prevention:** Build Kimi alongside Claude first. Switch provider in config when verified. Remove Claude code last (Phase 4). Never deploy a half-migrated state.
 
 ## Implications for Roadmap
 
-Based on combined research across all four dimensions, the following phase structure is recommended. It is intentionally opinionated: stability and security must come first, then automation infrastructure, then intelligence enhancements, then high-complexity user-facing differentiators.
+Based on combined research, the migration should follow a four-phase structure driven by dependency order and risk management.
 
----
+### Phase 1: KimiProvider (API Key Mode)
 
-### Phase 1: Stability and Security Foundation
+**Rationale:** Establishes the foundation with the lowest-risk integration path. API key mode uses standard OpenAI-compatible chat completions -- no CLI dependency, no subprocess management, no MCP config complexity. Gets basic chat working immediately.
 
-**Rationale:** The 153-restart problem (P-07) and Redis cascade risk (P-20) are blocking conditions for every subsequent phase, not optional fixes. Voice calls drop mid-sentence on each restart. Multi-agent sessions lose all progress. Adding features to an unstable base multiplies technical debt exponentially. DM pairing (TS-02) is a critical security gap that must be closed before the user base grows. Chat commands and usage tracking are low-risk, high-utility completions that require no new infrastructure.
+**Delivers:** Working AI chat via Kimi API with tool calling through existing AgentLoop. Cost tracking with Kimi pricing. Model tier mapping.
 
-**Delivers:**
-- Stable nexus-core process: `unhandledRejection` and `uncaughtException` global handlers, BullMQ repeatable jobs replacing `setTimeout`-based crons, Redis circuit breaker, PM2 `max_memory_restart`, Grammy polling offset persisted to Redis
-- DM pairing/activation code security for Telegram and Discord (6-digit code, 1-hour TTL, admin-only approval, Redis allowlist)
-- Chat commands: `/new`, `/usage` (full), `/activation`, `/compact` (stub wiring only)
-- Usage tracking: Redis counters per user/day, `/usage` command, PostgreSQL daily aggregate table
+**Addresses:** FM-04 (model selection), FM-09 (token usage), P3 (tool format translation), P8 (model tier mapping), P11 (rate limiting)
 
-**Features addressed:** TS-01, TS-02, TS-04 (infrastructure)
-**Pitfalls mitigated:** P-07, P-09 (turn limits stub), P-15, P-16, P-19, P-20
-**Research flag:** Standard patterns — skip research-phase. All fixes are codebase-specific and already analyzed. DM pairing is directly adapted from OpenClaw's documented model (HIGH confidence).
+**Avoids:** P1 (SDK maturity) by not depending on the SDK yet. P10 (breaking changes) by keeping Claude code intact.
 
----
+**Files:** `providers/kimi.ts` (new), `providers/manager.ts`, `providers/index.ts`, `providers/types.ts`, `config/schema.ts`
 
-### Phase 2: Automation Infrastructure (Webhooks + Gmail)
+### Phase 2: API Routes + tRPC + UI
 
-**Rationale:** Webhooks are the dependency that unlocks Gmail — Gmail Pub/Sub pushes notifications to the webhook endpoint infrastructure. Both are additive Express route extensions of the existing `/api/webhook/git` pattern. Webhook security (HMAC signature verification, BullMQ job deduplication, rate limiting) must be implemented correctly before any webhook endpoint goes live — P-10 is HIGH severity and the existing Git webhook has no authentication. Gmail is more complex, requiring OAuth flow, GmailProvider implementation, watch renewal, and MCP tool registration, but builds cleanly on the webhook infrastructure from the same phase.
+**Rationale:** Users need to configure Kimi credentials through the UI before the migration is usable. The auth flow is simpler than Claude's (device auth, no code paste), making the UI work lighter.
 
-**Delivers:**
-- Generic webhook receiver (`POST /api/webhooks/:hookId`) with HMAC-SHA256 signature verification and timing-safe comparison
-- BullMQ job deduplication using delivery ID as job ID (eliminates retry storm duplicates)
-- Rate limiting per webhook source (30 req/min), payload size limit (1MB)
-- Webhook CRUD via MCP tools (`webhook_create`, `webhook_list`, `webhook_delete`) and Settings UI
-- Gmail OAuth flow and Settings panel (Google Cloud project credentials, consent screen)
-- `GmailProvider` implementing `ChannelProvider` interface (push notifications, watch renewal, email-to-message)
-- Gmail MCP tools: `gmail_read`, `gmail_reply`, `gmail_send`, `gmail_search`, `gmail_archive`
-- BullMQ repeatable job for Gmail watch renewal every 6 days
+**Delivers:** Full settings UI for Kimi configuration. API key input, CLI status display, subscription login flow. Redis key migration from `anthropic_api_key` to `kimi_api_key`.
 
-**Features addressed:** TS-05, DF-04
-**Pitfalls mitigated:** P-10, P-11, P-12
-**Stack additions:** `googleapis@^144.0.0`, `@google-cloud/pubsub@^4.8.0` (polling fallback as default)
-**Research flag:** Execution review recommended before Gmail sub-phase. OAuth self-hosted flow for Google Cloud projects has documented edge cases (P-11). Implement polling mode first, add Pub/Sub as advanced option for users who want instant notifications.
+**Addresses:** FM-05 (authentication), FM-06 (CLI status), FM-11 (settings UI), FM-12 (onboarding wizard), P6 (auth flow simplification)
 
----
+**Avoids:** P7 (incomplete cleanup) by not removing Claude code yet -- both coexist during development.
 
-### Phase 3: Intelligence Enhancements (Compaction + Multi-Agent)
+**Files:** `api.ts`, `livinityd/modules/ai/routes.ts`, `ui/routes/settings/ai-config.tsx`
 
-**Rationale:** Session compaction is infrastructure that all higher-complexity features depend on — multi-agent sessions burn tokens 3-4x faster than single-agent sessions and hit context limits rapidly without compaction. Compaction must be fully implemented before multi-agent ships. Multi-agent starts minimal: maximum 2 concurrent agents, DAG topology enforced, per-agent turn limits — because of the deadlock and token explosion risks (P-06).
+### Phase 3: KimiAgentRunner (Subscription Mode)
 
-**Delivers:**
-- `SessionManager.compactSession()` with tiered strategy: keep last 10 messages verbatim, summarize older messages using Brain (haiku model for cost), pin critical facts (file paths, error codes, user preferences) as a separate section that is never compacted
-- Auto-compact trigger in daemon at 100k token threshold
-- `/compact` command fully implemented (previously a stub from Phase 1)
-- Multi-agent MCP tools: `sessions_list`, `sessions_create`, `sessions_send`, `sessions_history`
-- Sub-agent spawning via BullMQ with max-depth-1 enforcement, 5-8 turn limit per sub-agent, 50k token session budget
-- Session token budget tracking (extends usage tracking from Phase 1)
+**Rationale:** The most complex phase. Depends on Kimi CLI being installed on the production server (Python 3.12+, uv). Start with print mode fallback for reliability, upgrade to SDK if stable.
 
-**Features addressed:** TS-03, DF-03
-**Pitfalls mitigated:** P-06, P-08 (tool leak), P-13, P-14
-**Research flag:** Research-phase review recommended before planning. SDK token visibility in subscription mode is MEDIUM confidence (P-14) — verify whether `SdkAgentRunner` result objects expose per-request token counts before committing to the usage schema. Multi-agent deadlock topology requires deliberate design review.
+**Delivers:** Full agent runner spawning Kimi CLI subprocess with MCP tool access. Streaming events to UI. External tool registration. Chrome DevTools MCP integration.
 
----
+**Addresses:** FM-01 (agent runner), FM-02 (MCP tools), FM-03 (streaming events), FM-07 (auto-approval), FM-08 (system prompt), FM-10 (Chrome DevTools)
 
-### Phase 4: Voice Pipeline
+**Avoids:** P1 (SDK maturity) by starting with print mode. P2 (MCP gap) by using `--mcp-config` inline JSON or `createExternalTool()`. P4 (system prompt) by writing temp agent YAML files. P5 (Python dependency) by installing requirements first.
 
-**Rationale:** Voice is the most complex feature in v2.0, with four CRITICAL-rated pitfalls, all specific to the voice phase. It is deliberately isolated as its own phase so problems here do not block canvas or other features. By Phase 4, nexus-core is stable (Phase 1), BullMQ infrastructure is mature, and voice has no dependencies on compaction, multi-agent, or Gmail.
+**Files:** `kimi-agent-runner.ts` (new), `api.ts` (agent stream switch), `daemon.ts` (import swap)
 
-**Delivers:**
-- `VoiceGateway` WebSocket server on `/ws/voice` (binary frame support)
-- `DeepgramRelay` class: persistent Deepgram WebSocket, keep-alive every 5s, exponential reconnect backoff, connection state machine
-- `CartesiaRelay` class: single Cartesia WebSocket reused across utterances (one `context_id` per utterance for prosody), reconnect logic
-- `VoiceSession` lifecycle: ties one browser WebSocket to one Deepgram connection and one Cartesia connection
-- Push-to-talk UI component in ai-chat route (`MediaRecorder` at 48kHz → downsampled to 16kHz PCM for Deepgram; `AudioContext` + `AudioWorkletNode` for 24kHz PCM playback from Cartesia)
-- Voice configuration in Redis: `deepgram_api_key`, `cartesia_api_key`, `voice_id`, `voice_enabled`
-- End-to-end latency instrumentation: timestamp at mic start, Deepgram transcript, LLM first chunk, TTS first audio, browser playback; target p95 < 1200ms
+**Server prerequisite:** Install Python 3.12+ and Kimi CLI on production server before this phase.
 
-**Features addressed:** DF-01
-**Pitfalls mitigated:** P-01, P-02, P-03, P-04, P-21
-**Stack additions:** `@cartesia/cartesia-js@^2.2.9`, `@deepgram/sdk@^4.11.3` (nexus/packages/core)
-**Research flag:** Research-phase review recommended before planning. Deepgram keep-alive protocol details, Cartesia `context_id` and continuation behavior, and AudioWorklet PCM scheduling edge cases all require API reference review before architecture is finalized. Plan for a latency measurement/tuning sprint within the phase.
+### Phase 4: Cleanup and Enhancement
 
----
+**Rationale:** Only after all functionality is verified working end-to-end. Remove all Claude-specific code, packages, and references. Add differentiator features.
 
-### Phase 5: Live Canvas
+**Delivers:** Clean codebase with no Claude dependencies. Redis key migration. Optionally: thinking mode UI, granular approval handler.
 
-**Rationale:** Canvas is placed after voice because it is independent of voice but shares the "high-risk UI feature" profile. Isolating them in separate phases means voice issues do not delay canvas delivery. Canvas is architecturally simpler than voice (no external APIs, no WebSocket management, zero new npm dependencies) but the iframe XSS trap (P-05) requires security architecture decisions before any rendering code is written.
+**Addresses:** P7 (incomplete cleanup), AF-01 (no dual support), AF-04 (remove dead Gemini code)
 
-**Delivers:**
-- `canvas_render` and `canvas_update` MCP tools (store artifact HTML/code in Redis keyed by `nexus:canvas:{conversationId}`)
-- `CanvasPanel` React component: split-pane layout in ai-chat route, hidden until first `canvas_render` call, draggable divider
-- Sandboxed iframe renderer: `sandbox="allow-scripts allow-popups"` on `srcdoc` content (null origin, never `allow-same-origin`)
-- CDN template injected into `srcdoc`: React 18 standalone, Babel standalone (for JSX), Tailwind CSS CDN, Recharts/Mermaid loaded on demand
-- `postMessage` typed protocol between parent and iframe (versioned `CanvasMessage` union type, origin validation)
-- Error boundary inside iframe that posts errors to parent instead of silently failing
-- tRPC endpoints: `ai.getCanvasContent`, `ai.clearCanvas`
-- Artifact type support: React components, HTML/CSS/JS, Mermaid diagrams, SVG, Chart.js/Recharts charts
+**Verification:** Run `grep -r "claude\|anthropic\|Claude\|Anthropic" --include="*.ts" --include="*.tsx"` to confirm complete removal. Check Redis keys. End-to-end test on production.
 
-**Features addressed:** DF-02
-**Pitfalls mitigated:** P-05, P-18
-**Stack additions:** None (browser-native)
-**Research flag:** Standard patterns — skip research-phase. iframe sandbox security is well-documented, proven by Claude.ai Artifacts and LibreChat. Main risk is implementation discipline (never adding `allow-same-origin`), not research gaps.
-
----
-
-### Phase 6: Onboarding CLI
-
-**Rationale:** The onboarding CLI is fully independent of all other features but must be built last — when all v2.0 features are stable and their configuration requirements are final. A CLI built before the feature set is complete requires constant updates. By Phase 6, the installer can wire up voice API keys, Gmail OAuth credentials, webhook secrets, and DM pairing in a single guided flow with full knowledge of what each step entails.
-
-**Delivers:**
-- New `nexus/packages/cli` npm package (`livinity` binary)
-- `livinity onboard` guided interactive setup: system prerequisite checks (Docker, Node, Redis, PostgreSQL, disk ≥10GB, RAM ≥4GB), domain + SSL (Caddy), Claude Code authentication, Telegram/Discord channel setup, optional voice configuration, optional Gmail setup guide, service startup and health verification
-- `livinity status` command (health check all services)
-- `livinity restart` command (PM2 restart wrapper)
-- Non-interactive mode: `livinity onboard --non-interactive --config setup.json`
-- Partial install rollback: cleanup stack that undoes completed steps on failure
-- Target scope: Ubuntu 22.04+, Debian 12+; Docker-first approach for other distributions
-
-**Features addressed:** DF-05
-**Pitfalls mitigated:** P-17
-**Stack additions:** `commander@^13.1.0`, `@clack/prompts@^1.0.1` (new package only)
-**Research flag:** Standard patterns — CLI frameworks are well-understood. Main complexity is Linux distribution detection and partial install rollback (P-17).
-
----
+**Files:** Delete `claude.ts`, `sdk-agent-runner.ts`. Remove `@anthropic-ai/*` packages. Update `package.json`.
 
 ### Phase Ordering Rationale
 
-The ordering is driven by three principles from combined research:
-
-1. **Dependency chain enforcement:** Stability precedes everything (P-07). Webhooks precede Gmail (Pub/Sub uses webhook endpoint). Compaction precedes multi-agent (sub-agents exhaust tokens without it). CLI must be last (needs complete, stable feature set to wire up correctly).
-
-2. **Risk isolation:** Voice and Canvas are high-risk, high-reward features that are independent of each other and the automation stack. Placing each in its own phase means a problem in voice does not delay canvas delivery, and neither delays the automation features.
-
-3. **Quick wins first:** Phase 1 delivers visible, testable improvements — a stable system, closed security gap, extended commands, usage visibility — within the first iteration. This builds confidence and provides a stable foundation before tackling high-complexity features.
-
----
+- **Phase 1 before Phase 2** because the provider must exist before routes and UI can reference it
+- **Phase 2 before Phase 3** because API key mode (Phase 1 + 2) provides a working system while the more complex CLI subprocess integration is built
+- **Phase 3 is the critical path** -- the MCP tool bridging and event mapping are where most bugs will surface
+- **Phase 4 last** because deleting Claude code before Kimi is fully verified risks downtime
+- Phases 2 and 3 could partially overlap (UI work is independent of agent runner work)
 
 ### Research Flags
 
-**Phases needing research-phase review during planning:**
-- **Phase 3 (Compaction + Multi-Agent):** SDK token visibility in subscription mode is MEDIUM confidence (P-14). Verify `SdkAgentRunner` result metadata against actual SDK response objects before designing usage schema. Multi-agent deadlock topology requires deliberate design review before implementation tasks are written.
-- **Phase 4 (Voice):** Deepgram keep-alive protocol, Cartesia `context_id` continuation behavior, and AudioWorklet PCM scheduling all have edge cases requiring API reference review. Plan explicit latency measurement sprint.
+**Phases likely needing deeper research during planning:**
+- **Phase 3 (KimiAgentRunner):** The SDK's `createExternalTool()` integration with `createSession()` is documented but not verified. The exact TypeScript signatures need testing. Print mode fallback is well-understood, but the SDK path needs runtime validation. Consider running `/gsd:research-phase` before executing.
+- **Phase 2 (Auth flow):** The device auth API endpoints (`auth.kimi.com/api/oauth/device_authorization`) were found in the GitHub issue tracker, not official docs. The exact request/response format needs verification.
 
-**Phases with standard patterns (research complete, skip research-phase):**
-- **Phase 1 (Stability + Security):** Fixes are codebase-specific; research is done. DM pairing is directly adapted from OpenClaw's documented model (HIGH confidence).
-- **Phase 2 (Webhooks + Gmail):** HMAC webhook pattern is industry standard. Gmail API is comprehensively documented. Main risk is execution (OAuth edge cases), not research gaps.
-- **Phase 5 (Canvas):** iframe sandbox security pattern is proven by Claude.ai Artifacts and LibreChat. Security properties are well-documented in the HTML spec.
-- **Phase 6 (CLI):** Commander + clack patterns are straightforward. Linux detection patterns are well-understood.
-
----
-
-## Technology Decisions Table
-
-| Decision | Choice | Alternative Considered | Rationale |
-|----------|--------|----------------------|-----------|
-| TTS service | Cartesia Sonic-3 | Piper (local), ElevenLabs, AWS Polly | Sub-100ms TTFB, WebSocket streaming, `context_id` prosody continuity across chunks. Local TTS quality gap is significant for conversational use. |
-| STT service | Deepgram Nova-3 | Whisper (local), AssemblyAI, Google STT | Best streaming accuracy, VAD events built-in, $200 free tier generous for personal use. Local Whisper requires GPU; batch mode adds 500ms+. |
-| Canvas rendering | `<iframe sandbox srcdoc>` | Sandpack, tldraw, A2UI | Zero new dependencies, browser-native, proven security model. A2UI spec pre-stable (v0.8 with breaking v0.9). Sandpack is 5MB+ overkill. |
-| CLI framework | Commander + @clack/prompts | Oclif, Inquirer, Ink | clack is modern-looking and minimal (released 7 days ago, v1.0.1). Oclif is enterprise overkill. Inquirer is dated-looking with more boilerplate. |
-| Gmail notifications | Polling default, Pub/Sub advanced | IMAP IDLE | Polling is simpler for self-hosted (no GCP dependency). Pub/Sub is faster but requires Google Cloud project setup. Offer both. |
-| Session compaction | `SessionManager` method + MCP tool | Native Compaction API | Native API requires raw Anthropic API; LivOS uses Claude Code subscription SDK. Manual compaction via Brain call is reliable fallback. |
-| Multi-agent topology | DAG with orchestrator pattern | Peer-to-peer mesh | Prevents circular deadlocks. Simpler to reason about. Matches OpenClaw's documented architecture for sub-agent isolation. |
-| Voice transport | WebSocket (new `/ws/voice` endpoint) | WebRTC | WebSocket is sufficient for single-user. No STUN/TURN infrastructure needed. Binary frame support in `ws` library is already available. |
-| Voice gateway location | Inside nexus-core process | Separate `nexus-voice` PM2 process | Latency-critical path: direct `daemon.addToInbox()` call eliminates inter-process hop. Single-user VPS doesn't need process isolation. |
-| Usage storage | Redis counters (real-time) + PostgreSQL (history) | Redis only | Redis for fast per-request increments. PostgreSQL for daily aggregates, long-term dashboards, and data that survives Redis flush. |
-
----
+**Phases with standard patterns (skip research-phase):**
+- **Phase 1 (KimiProvider):** OpenAI-compatible API is a well-documented, established pattern. Tool definition translation is mechanical (`input_schema` -> `parameters`). High confidence.
+- **Phase 4 (Cleanup):** Straightforward deletion and grep verification. No research needed.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified via official npm registries, API documentation, and existing codebase. Minor gap: Cartesia docs page didn't fully render; WebSocket format verified via third-party references. |
-| Features | HIGH | OpenClaw documentation verified directly for slash commands, DM pairing model, and session tools. A2UI research is HIGH but decision to defer is a judgment call based on spec maturity. |
-| Architecture | HIGH | Based on direct reading of 10+ production source files including `daemon.ts`, `sdk-agent-runner.ts`, `channels/types.ts`, `session-manager.ts`, `commands.ts`, `api.ts`. Integration points verified by reading actual function signatures. |
-| Pitfalls | HIGH | Voice/canvas/webhook/Gmail pitfalls verified against official documentation, GitHub issues, and community reports. One MEDIUM: SDK token visibility in subscription mode (P-14) requires live verification. |
+| Stack | MEDIUM-HIGH | SDK is 0.x but has fallback (print mode). OpenAI-compatible API is standard. |
+| Features | HIGH | 12 features mapped 1:1 with clear complexity ratings. Gaps identified with workarounds. |
+| Architecture | HIGH | Direct codebase analysis + official Kimi docs. Complete file manifest with exact changes. |
+| Pitfalls | HIGH | 12 pitfalls identified with prevention strategies. Informed by architecture + features research. |
 
-**Overall confidence:** HIGH
+**Overall confidence:** MEDIUM-HIGH
 
----
+The primary uncertainty is the Kimi Agent SDK's stability (0.x version) and the exact model IDs available at runtime. Both have clear fallback paths. The architecture is well-understood because the migration preserves the existing provider abstraction layer.
 
 ### Gaps to Address
 
-- **SDK token visibility (P-14, MEDIUM confidence):** The exact fields available in `SdkAgentRunner` result objects when using Claude Code subscription mode may not include per-request token counts. Before finalizing the usage tracking and compaction schemas in Phase 3, inspect actual SDK result objects in the development environment. Fallback options: estimate tokens from text length using tiktoken; or track turns and total characters as proxy metrics for budget enforcement.
-
-- **Cartesia `context_id` continuation behavior (MEDIUM confidence):** The Cartesia docs page did not fully render during research. The `context_id` feature for prosody continuity across streaming text chunks is documented in secondary sources. During Phase 4 planning, verify `context_id` and continuation behavior with a direct API call test before designing the `CartesiaRelay` architecture. Also verify the `max_buffer_delay_ms` parameter default (3000ms is too high for real-time conversation — needs lowering to 500-1000ms).
-
-- **Gmail OAuth "Testing" vs. "Published" consent screen:** Google's OAuth consent screen in "Testing" mode expires refresh tokens after 7 days. Self-hosted users who set up their own Google Cloud project will hit this unless they set the consent screen to "Published" (internal). Add explicit instruction during Phase 2 planning: move consent screen status before first production token is issued.
-
-- **nexus-core restart root causes:** The 153-restart count is documented in project context but root causes are partially known (setTimeout cron leak documented in CONCERNS.md, unhandled rejections suspected). Full root cause analysis requires a targeted diagnostic sprint with `pm2 logs nexus-core --err` and `process.memoryUsage()` monitoring. Phase 1 planning should include this diagnostic session before fix tasks are written.
-
-- **A2UI spec trajectory:** The recommendation to defer A2UI is sound for v2.0, but monitor the v1.0 release timeline. If A2UI v1.0 ships before v2.1 planning begins, reassess the canvas architecture — migrating from `srcdoc` iframe to A2UI declarative components may be worthwhile for the security and flexibility benefits at that point.
-
----
+- **Model IDs at runtime:** The exact Kimi model IDs (`kimi-for-coding`, `kimi-latest`, etc.) need verification via `kimi info` on the server. The tier mapping is approximate until validated.
+- **Device auth API format:** The OAuth device authorization endpoint was found in GitHub issues, not official documentation. Request/response format needs testing during Phase 2.
+- **`createExternalTool()` wiring:** The SDK docs show `createExternalTool()` usage but not how it integrates with `createSession()`. Needs runtime testing in Phase 3. Fallback: use print mode with `--mcp-config`.
+- **Kimi API base URL:** Documentation references both `api.kimi.com/coding/v1` and `api.moonshot.ai/v1`. Need to determine which endpoint has the correct model availability for coding tasks.
+- **Windows development:** Kimi CLI is Python-based and should work on Windows, but local development/testing has not been verified.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Codebase analysis (direct reading): `daemon.ts`, `sdk-agent-runner.ts`, `channels/types.ts`, `channels/index.ts`, `session-manager.ts`, `commands.ts`, `api.ts`, `ws-gateway.ts`, `ai-chat/index.tsx`, `livinityd/modules/ai/index.ts`
-- [Deepgram Live Audio API](https://developers.deepgram.com/reference/speech-to-text/listen-streaming) — WebSocket STT streaming, events, VAD, keep-alive protocol
-- [Deepgram Pricing](https://deepgram.com/pricing) — Nova-3 per-minute rates, $200 free tier
-- [Gmail Push Notifications](https://developers.google.com/workspace/gmail/api/guides/push) — Pub/Sub watch setup, historyId, 7-day expiration
-- [Gmail Watch API](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users/watch) — 7-day renewal requirement confirmed
-- [Claude Compaction API](https://platform.claude.com/docs/en/build-with-claude/compaction) — beta header, SDK constraints clarified
-- [@cartesia/cartesia-js npm](https://www.npmjs.com/package/@cartesia/cartesia-js) — v2.2.9 stable
-- [@deepgram/sdk npm](https://www.npmjs.com/package/@deepgram/sdk) — v4.11.3 stable
-- [@clack/prompts npm](https://www.npmjs.com/package/@clack/prompts) — v1.0.1, API surface
-- [OpenClaw Security Docs](https://docs.openclaw.ai/gateway/security) — DM pairing, allowlist, activation codes, DM policy modes
-- [OpenClaw Session Tools](https://docs.openclaw.ai/concepts/session-tool) — `sessions_list`, `sessions_send`, `sessions_history` full API
-- [Claude Agent SDK Issue #115](https://github.com/anthropics/claude-agent-sdk-typescript/issues/115) — `allowedTools` bypass confirmed, built-in tools not blocked by `tools: []`
-- [MDN Autoplay Guide](https://developer.mozilla.org/en-US/docs/Web/Media/Autoplay_guide) — AudioContext policy, browser restrictions
-- [BullMQ Deduplication](https://docs.bullmq.io/guide/jobs/deduplication) — webhook idempotency via job ID
-- [Anthropic Context Engineering Guide](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — compaction strategy, tiered approach
-- [Context Rot Research](https://research.trychroma.com/context-rot) — compaction quality degradation benchmarks
-- [HackTricks iframe XSS Analysis](https://book.hacktricks.xyz/pentesting-web/xss-cross-site-scripting/iframes-in-xss-and-csp) — `allow-scripts + allow-same-origin` attack vector confirmed
+- [Kimi Agent SDK GitHub](https://github.com/MoonshotAI/kimi-agent-sdk) -- Session API, Turn interface, event types, createExternalTool
+- [Kimi CLI GitHub](https://github.com/MoonshotAI/kimi-cli) -- CLI features, installation, MCP support
+- [Kimi CLI Official Docs](https://moonshotai.github.io/kimi-cli/en/) -- MCP config, print mode, wire mode, command reference, agent files
+- [Kimi CLI Auth Issue #757](https://github.com/MoonshotAI/kimi-cli/issues/757) -- OAuth device auth implementation details
+- [Kimi API Pricing](https://costgoat.com/pricing/kimi-api) -- Full model list with per-million-token pricing
 
 ### Secondary (MEDIUM confidence)
-- [Cartesia TTS Docs](https://docs.cartesia.ai/api-reference/tts/websocket) — WebSocket format (page didn't fully render; verified via Cartesia JS SDK source and third-party references)
-- [Cartesia Pricing](https://cartesia.ai/pricing) — credit tiers (JS-rendered page, verified via community references)
-- [LangChain open-canvas](https://github.com/langchain-ai/open-canvas) — artifact rendering patterns and iframe approach validation
-- [Google ADK Compaction](https://google.github.io/adk-docs/context/compaction/) — auto-compaction at 80% threshold, tiered strategy
-- [Multi-Agent 17x Error Trap](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) — token explosion and coordination overhead analysis
-- [Google OAuth invalid_grant Analysis](https://nango.dev/blog/google-oauth-invalid-grant-token-has-been-expired-or-revoked) — refresh token expiry triggers
-- [Voice AI Infrastructure Guide 2025](https://introl.com/blog/voice-ai-infrastructure-real-time-speech-agents-asr-tts-guide-2025) — end-to-end latency benchmarks
-- [Node.js WebSocket Memory Leak Patterns](https://oneuptime.com/blog/post/2026-01-24-websocket-memory-leak-issues/view) — listener accumulation without cleanup
+- [Kimi CLI Technical Deep Dive](https://llmmultiagents.com/en/blogs/kimi-cli-technical-deep-dive) -- Internal architecture analysis
+- [Kimi K2.5 Developer Guide](https://www.nxcode.io/resources/news/kimi-k2-5-developer-guide-kimi-code-cli-2026) -- Model capabilities
+- [Kimi Code vs Claude Code](https://medium.com/ai-software-engineer/i-finally-tested-new-kimi-code-cli-like-claude-code-dont-miss-my-hard-lesson-bc5d60a51578) -- Practical comparison
+- [One Agent SDK](https://github.com/odysa/one-agent-sdk) -- Provider-agnostic wrapper showing Kimi SDK patterns
 
-### Tertiary (LOW confidence — needs live verification)
-- [Claude Code SDK Cost Tracking](https://platform.claude.com/docs/en/agent-sdk/cost-tracking) — token visibility in subscription mode; must verify against actual SDK response objects
-- `googleapis` v144 exact minor version — latest stable on npm but verify with `npm install` before pinning
+### Tertiary (LOW confidence)
+- [SourceForge Claude vs Kimi](https://sourceforge.net/software/compare/Claude-Code-vs-Kimi-Code-CLI/) -- Feature comparison (marketing-oriented)
 
 ---
-
-*Research completed: 2026-02-20*
-*Synthesized from: STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md*
+*Research completed: 2026-03-09*
 *Ready for roadmap: yes*
