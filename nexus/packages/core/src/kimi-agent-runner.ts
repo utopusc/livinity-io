@@ -24,14 +24,9 @@ import { logger } from './logger.js';
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Map Nexus model tier to Kimi model ID */
-function tierToModel(tier?: string): string {
-  switch (tier) {
-    case 'opus': return 'kimi-k2.5';
-    case 'sonnet': return 'kimi-for-coding';
-    case 'haiku': return 'kimi-latest';
-    case 'flash': return 'kimi-latest';
-    default: return 'kimi-for-coding';
-  }
+function tierToModel(_tier?: string): string {
+  // All tiers map to kimi-for-coding (Kimi's only coding model)
+  return 'kimi-for-coding';
 }
 
 /** Check if Chrome CDP is reachable at the given HTTP URL */
