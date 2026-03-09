@@ -69,7 +69,7 @@ export function AppIcon({
 		>
 			<div
 				className={cn(
-					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100/60 bg-cover bg-center shadow-sm ring-white/50 backdrop-blur-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:ring-4 group-focus-visible:ring-4 group-active:scale-95 group-data-[state=open]:ring-4 md:w-16 md:rounded-2xl',
+					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100/60 bg-cover bg-center shadow-sm backdrop-blur-sm transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_0_16px_rgba(255,255,255,0.5)] group-hover:ring-2 group-hover:ring-white/60 group-focus-visible:ring-2 group-focus-visible:ring-white/60 group-active:scale-95 group-data-[state=open]:ring-2 group-data-[state=open]:ring-white/60 md:w-16 md:rounded-2xl',
 				)}
 			>
 				{appIconSrc && (
@@ -106,7 +106,7 @@ export function AppIcon({
 					</div>
 				)}
 			</div>
-			<div className='max-w-full text-[11px] font-medium leading-normal text-neutral-700 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)] md:text-[12px]'>
+			<div className='max-w-full text-[11px] font-medium leading-normal text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)] md:text-[12px]'>
 				<div className='truncate'>
 					<AppLabel state={state} label={label} />
 				</div>

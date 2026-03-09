@@ -19,7 +19,7 @@ export function Header({userName}: {userName: string}) {
 				/>
 				<TextShimmerWave
 					as='h1'
-					className='text-center text-heading font-bold md:text-display-lg [--base-color:rgba(15,23,42,0.6)] [--base-gradient-color:rgba(15,23,42,0.92)]'
+					className='text-center text-heading font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)] md:text-display-lg [--base-color:rgba(255,255,255,0.75)] [--base-gradient-color:rgba(255,255,255,1)]'
 					duration={1.5}
 					spread={1.2}
 					zDistance={4}

@@ -1,6 +1,7 @@
 import {forwardRef, useEffect, useRef} from 'react'
 
-import {useWallpaper, wallpapers} from '@/providers/wallpaper'
+import {animatedWallpapers, animatedWallpaperIds} from '@/components/animated-wallpapers'
+import {useWallpaper, wallpaperIds} from '@/providers/wallpaper'
 import {cn} from '@/shadcn-lib/utils'
 
 const ITEM_W = 40
@@ -11,12 +12,12 @@ const WallpaperItem = forwardRef(
 	(
 		{
 			active,
-			bg,
+			bgColor,
 			onSelect,
 			className,
 		}: {
 			active?: boolean
-			bg: string
+			bgColor: string
 			onSelect: () => void
 			className?: string
 		},
@@ -27,18 +28,16 @@ const WallpaperItem = forwardRef(
 				ref={ref}
 				onClick={onSelect}
 				className={cn(
-					'h-6 shrink-0 bg-surface-2 bg-cover bg-center outline-none ring-brand/30 transition-all duration-200 focus-visible:ring-1',
+					'h-6 shrink-0 bg-cover bg-center outline-none ring-brand/30 transition-all duration-200 focus-visible:ring-1',
 					active
-						? // NOTE: `mx-3` or whatever horizontal marging needs to be big enough to not cause the ring to get clipped from scrolling container
-							'mx-3 rounded-5 ring-2 ring-brand/30'
+						? 'mx-3 rounded-5 ring-2 ring-brand/30'
 						: 'rounded-3',
 					className,
 				)}
 				style={{
 					width: ITEM_W,
 					transform: `scale(${active ? ACTIVE_SCALE : 1})`,
-					backgroundImage: `url(${bg})`,
-					// transformOrigin: "left center",
+					backgroundColor: bgColor,
 				}}
 			/>
 		)
@@ -47,7 +46,6 @@ const WallpaperItem = forwardRef(
 
 WallpaperItem.displayName = 'WallpaperItem'
 
-// TODO: delay mounting for performance
 export function WallpaperPicker({maxW}: {maxW?: number}) {
 	const {wallpaper, setWallpaperId} = useWallpaper()
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -61,7 +59,7 @@ export function WallpaperPicker({maxW}: {maxW?: number}) {
 		}
 
 		const containerW = containerRef.current.clientWidth
-		const index = wallpapers.findIndex((w) => w.id === wallpaper.id)
+		const index = wallpaperIds.findIndex((id) => id === wallpaper.id)
 
 		scrollerRef.current.scrollTo({
 			behavior: 'smooth',
@@ -70,7 +68,6 @@ export function WallpaperPicker({maxW}: {maxW?: number}) {
 	}, [wallpaper.id])
 
 	return (
-		// h-7 so we don't affect height of parent, but make gap work when wrapping
 		<div ref={containerRef} className='flex-grow-1 flex h-7 max-w-full items-center animate-in fade-in'>
 			<div
 				className={cn(
@@ -82,18 +79,15 @@ export function WallpaperPicker({maxW}: {maxW?: number}) {
 					maxWidth: maxW,
 				}}
 			>
-				{/* NOTE: doing `items-center` here would cause the spacer items collapse because of a flex bug */}
 				<div ref={itemsRef} className='flex' style={{gap: GAP}}>
 					<div className='w-1 shrink-0' />
-					{wallpapers.map((w) => (
+					{animatedWallpaperIds.map((id) => (
 						<WallpaperItem
-							ref={w.id === wallpaper.id ? selectedItemRef : undefined}
-							key={w.id}
-							active={w.id === wallpaper.id}
-							onSelect={() => {
-								setWallpaperId(w.id)
-							}}
-							bg={`/wallpapers/generated-thumbs/${w.id}.jpg`}
+							ref={id === wallpaper.id ? selectedItemRef : undefined}
+							key={id}
+							active={id === wallpaper.id}
+							onSelect={() => setWallpaperId(id)}
+							bgColor={`hsl(${animatedWallpapers[id].brandColorHsl})`}
 						/>
 					))}
 					<div className='w-1 shrink-0' />

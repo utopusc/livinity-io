@@ -3,7 +3,6 @@ import {useEffect, useState} from 'react'
 
 import {trpcReact} from '@/trpc/trpc'
 
-import {getWallpaperThumbUrl, wallpapers} from './wallpaper'
 
 const prefetchStableMs = 500
 
@@ -51,15 +50,6 @@ export function Prefetcher() {
 		]
 
 		Promise.allSettled(prefetchQueries.map((q) => q.prefetch()))
-
-		const prefetchThumbnails = wallpapers.map((wallpaper) => getWallpaperThumbUrl(wallpaper))
-
-		prefetchThumbnails.forEach((url) => {
-			const link = document.createElement('link')
-			link.rel = 'prefetch'
-			link.href = url
-			document.head.appendChild(link)
-		})
 	}
 
 	// We want prefetching to happen exactly once

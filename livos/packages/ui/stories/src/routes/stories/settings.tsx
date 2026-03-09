@@ -6,7 +6,7 @@ import {Card} from '@/components/ui/card'
 import {SegmentedControl} from '@/components/ui/segmented-control'
 import {DesktopPreviewFrame} from '@/modules/desktop/desktop-preview'
 import {DesktopPreview} from '@/modules/desktop/desktop-preview-basic'
-import {wallpaperIds} from '@/providers/wallpaper'
+import {wallpaperIds, type WallpaperId} from '@/providers/wallpaper'
 import {CpuTemperatureCardContent} from '@/routes/settings/_components/cpu-temperature-card-content'
 import {DeviceInfoContent, HostEnvironmentIcon} from '@/routes/settings/_components/device-info-content'
 import {ProgressStatCardContent} from '@/routes/settings/_components/progress-card-content'
@@ -16,7 +16,7 @@ import {Separator} from '@/shadcn-components/ui/separator'
 export default function SettingsStory() {
 	const [cpuWarning, setCpuWarning] = useState<string>('normal')
 
-	const wId = shuffle(wallpaperIds)[0]
+	const wId = shuffle(wallpaperIds)[0] as WallpaperId
 
 	return (
 		<div className='flex flex-col flex-wrap items-start gap-8 bg-white/10 p-8'>

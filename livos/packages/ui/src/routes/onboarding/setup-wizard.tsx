@@ -7,7 +7,8 @@ import {GlowEffect} from '@/components/motion-primitives/glow-effect'
 import LivinityLogo from '@/assets/livinity-logo'
 import {StepIndicator} from '@/components/ui/step-indicator'
 import {useLanguage} from '@/hooks/use-language'
-import {useWallpaper, wallpapers} from '@/providers/wallpaper'
+import {animatedWallpapers, animatedWallpaperIds} from '@/components/animated-wallpapers'
+import {useWallpaper} from '@/providers/wallpaper'
 import {trpcReact, wsClient} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 import {cn} from '@/shadcn-lib/utils'
@@ -318,18 +319,22 @@ function StepPersonalize({onNext}: {onNext: () => void}) {
 			</div>
 
 			<div className='grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto w-full pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border-default'>
-				{wallpapers.map((w) => (
+				{animatedWallpaperIds.map((id) => (
 					<motion.button
-						key={w.id}
-						onClick={() => setWallpaperId(w.id)}
+						key={id}
+						onClick={() => setWallpaperId(id)}
 						className={cn(
-							'aspect-video rounded-xl bg-cover bg-center transition-all duration-200 ring-2',
-							wallpaper.id === w.id ? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(139,92,246,0.4)]' : 'ring-transparent hover:ring-border-default',
+							'relative aspect-video rounded-xl transition-all duration-200 ring-2 overflow-hidden',
+							wallpaper.id === id ? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(139,92,246,0.4)]' : 'ring-transparent hover:ring-border-default',
 						)}
-						style={{backgroundImage: `url(/wallpapers/generated-thumbs/${w.id}.jpg)`}}
-						whileHover={{scale: wallpaper.id === w.id ? 1.02 : 1.04}}
+						style={{backgroundColor: `hsl(${animatedWallpapers[id].brandColorHsl})`}}
+						whileHover={{scale: wallpaper.id === id ? 1.02 : 1.04}}
 						whileTap={{scale: 0.98}}
-					/>
+					>
+						<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-1.5 pb-1 pt-3 text-[9px] font-medium text-white/80'>
+							{animatedWallpapers[id].name}
+						</span>
+					</motion.button>
 				))}
 			</div>
 

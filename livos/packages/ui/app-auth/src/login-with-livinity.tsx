@@ -6,6 +6,7 @@ import {FadeInImg} from '@/components/ui/fade-in-img'
 import {PinInput} from '@/components/ui/pin-input'
 import {toast} from '@/components/ui/toast'
 import {useQueryParams} from '@/hooks/use-query-params'
+import {animatedWallpaperIds} from '@/components/animated-wallpapers'
 import {useWallpaperCssVars, WallpaperId, wallpaperIds} from '@/providers/wallpaper'
 import {Button} from '@/shadcn-components/ui/button'
 import {PasswordInput} from '@/shadcn-components/ui/input'
@@ -174,11 +175,11 @@ function useWallpaperId() {
 			.then(async (res) => {
 				// `unknown` because `any` is too loose
 				const id = (await res.text()) as unknown
-				const knownId = arrayIncludes(wallpaperIds, id) ? id : '18'
-				setWallpaper(knownId)
+				const knownId = arrayIncludes(wallpaperIds, id) ? id : animatedWallpaperIds[0]
+				setWallpaper(knownId as WallpaperId)
 			})
 			.catch(() => {
-				setWallpaper('18')
+				setWallpaper(animatedWallpaperIds[0])
 			})
 	}, [])
 

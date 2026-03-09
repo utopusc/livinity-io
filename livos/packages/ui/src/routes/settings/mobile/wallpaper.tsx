@@ -1,8 +1,8 @@
 import {useRef} from 'react'
 import {useMount, useTimeout} from 'react-use'
 
-import {FadeInImg} from '@/components/ui/fade-in-img'
-import {useWallpaper, WallpaperId, wallpapers} from '@/providers/wallpaper'
+import {animatedWallpapers, animatedWallpaperIds} from '@/components/animated-wallpapers'
+import {useWallpaper, WallpaperId} from '@/providers/wallpaper'
 import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
 import {
 	Drawer,
@@ -40,12 +40,12 @@ export function WallpaperDrawer() {
 				<DrawerScroller>
 					{isReady() && (
 						<div className='grid grid-cols-2 gap-2.5'>
-							{wallpapers.map((w, i) => (
+							{animatedWallpaperIds.map((id, i) => (
 								<WallpaperItem
-									key={w.id}
-									bg={`/wallpapers/generated-small/${w.id}.jpg`}
-									active={w.id === wallpaper.id}
-									onSelect={() => selectWallpaper(w.id)}
+									key={id}
+									id={id}
+									active={id === wallpaper.id}
+									onSelect={() => selectWallpaper(id)}
 									className='animate-in fade-in fill-mode-both'
 									style={{
 										animationDelay: `${i * 20}ms`,
@@ -61,19 +61,20 @@ export function WallpaperDrawer() {
 }
 
 function WallpaperItem({
+	id,
 	active,
-	bg,
 	onSelect,
 	className,
 	style,
 }: {
+	id: string
 	active?: boolean
-	bg: string
 	onSelect: () => void
 	className?: string
 	style: React.CSSProperties
 }) {
 	const ref = useRef<HTMLButtonElement>(null)
+	const wallpaperData = animatedWallpapers[id as keyof typeof animatedWallpapers]
 
 	useMount(() => {
 		if (!active) return
@@ -83,14 +84,16 @@ function WallpaperItem({
 	return (
 		<button
 			ref={ref}
-			className={cn('relative aspect-1.9 overflow-hidden rounded-10 bg-surface-1', className)}
+			className={cn('relative aspect-1.9 overflow-hidden rounded-10', className)}
 			style={{
 				...style,
+				backgroundColor: `hsl(${wallpaperData.brandColorHsl})`,
 			}}
 			onClick={onSelect}
 		>
-			<FadeInImg src={bg} className='absolute inset-0 h-full w-full rounded-10 object-cover object-center' />
-			{/* Border */}
+			<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-3 pb-2 pt-6'>
+				<span className='text-[12px] font-medium text-white/90'>{wallpaperData.name}</span>
+			</div>
 			<div
 				className={cn(
 					'absolute inset-0 rounded-10 border-4 transition-colors',

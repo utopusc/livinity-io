@@ -4,7 +4,7 @@ import LivinityLogo from '@/assets/livinity-logo'
 import {FadeInImg} from '@/components/ui/fade-in-img'
 import {greetingMessage} from '@/modules/desktop/greeting-message'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
-import {useWallpaper, WallpaperId} from '@/providers/wallpaper'
+import {useWallpaper, wallpapersKeyed, WallpaperId} from '@/providers/wallpaper'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {tw} from '@/utils/tw'
@@ -24,7 +24,7 @@ export function DesktopPreviewConnected() {
 	return (
 		<DesktopPreview
 			key={wallpaper.wallpaper.id}
-			wallpaperId={wallpaper.wallpaper.id}
+			wallpaperId={wallpaper.wallpaper.id as WallpaperId | undefined}
 			userName={name}
 			apps={userApps}
 		/>
@@ -51,13 +51,9 @@ export function DesktopPreview({
 	return (
 		<div>
 			{wallpaperId && (
-				<FadeInImg
-					key={wallpaperId}
-					src={`/wallpapers/generated-small/${wallpaperId}.jpg`}
-					className='absolute h-full w-full object-cover object-center'
-					style={{
-						animation: 'animate-unblur 0.7s',
-					}}
+				<div
+					className='absolute h-full w-full'
+					style={{backgroundColor: `hsl(${wallpapersKeyed[wallpaperId]?.brandColorHsl ?? '0 0% 50%'})`}}
 				/>
 			)}
 			{/* <Wallpaper isPreview /> */}

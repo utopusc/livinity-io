@@ -4,7 +4,8 @@ import {RouterProvider} from 'react-router-dom'
 
 import {init} from '@/init'
 import {initTokenRenewal} from '@/modules/auth/shared'
-import {Wallpaper, WallpaperProvider, wallpapers} from '@/providers/wallpaper'
+import {animatedWallpaperIds} from '@/components/animated-wallpapers'
+import {WallpaperProvider, wallpapersKeyed} from '@/providers/wallpaper'
 import {TrpcProvider} from '@/trpc/trpc-provider'
 
 import {storiesRouter} from './router'
@@ -23,7 +24,7 @@ init(
 
 // In producation, we sync the wallpaper to the backend, but for stories, we don't wanna require being logged-in
 function SimpleWallpaperProvider({children}: {children: ReactNode}) {
-	const [w, setW] = useState<Wallpaper>(wallpapers[3])
+	const [w, setW] = useState(wallpapersKeyed[animatedWallpaperIds[0]])
 
 	return (
 		<WallpaperProvider wallpaper={w} onWallpaperChange={setW}>
