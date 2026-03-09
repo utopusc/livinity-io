@@ -47,6 +47,8 @@ export interface ProviderStreamChunk {
   toolUse?: ToolUseBlock;
   /** Stop reason from the provider */
   stopReason?: string;
+  /** Reasoning/thinking content (e.g. Kimi's reasoning_content) */
+  reasoning?: string;
 }
 
 /** Streaming chat response with async generator and usage getter. */
