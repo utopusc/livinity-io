@@ -880,6 +880,7 @@ interface NexusConfig {
 	logging?: {level?: 'silent' | 'error' | 'warn' | 'info' | 'debug' | 'trace'; redactSensitive?: boolean}
 	heartbeat?: {enabled?: boolean; intervalMinutes?: number; target?: 'telegram' | 'discord' | 'all' | 'none'}
 	response?: {style?: 'detailed' | 'concise' | 'direct'; showSteps?: boolean; showReasoning?: boolean; language?: string; maxLength?: number}
+	approval?: {policy?: 'always' | 'destructive' | 'never'; timeoutMs?: number}
 }
 
 function NexusConfigSection() {
@@ -1028,6 +1029,22 @@ function NexusConfigSection() {
 						checked={config.agent?.streamEnabled ?? true}
 						onCheckedChange={(v) => updateConfig('agent.streamEnabled', v)}
 					/>
+					<div className='flex flex-col gap-2 pt-2 border-t border-border-default'>
+						<label className='text-caption text-text-secondary'>Tool Approval Policy</label>
+						<Select value={config.approval?.policy || 'destructive'} onValueChange={(v) => updateConfig('approval.policy', v)}>
+							<SelectTrigger><SelectValue placeholder='Select policy' /></SelectTrigger>
+							<SelectContent>
+								<SelectItem value='never'>Never ask — auto-approve all tools</SelectItem>
+								<SelectItem value='destructive'>Ask for dangerous tools only (shell, etc.)</SelectItem>
+								<SelectItem value='always'>Ask for every tool call</SelectItem>
+							</SelectContent>
+						</Select>
+						<p className='text-caption-sm text-text-tertiary'>
+							{config.approval?.policy === 'never' ? 'AI can run all tools without asking permission.' :
+							 config.approval?.policy === 'always' ? 'Every tool call requires your approval via Chat UI or Telegram.' :
+							 'Only destructive tools (shell commands) require your approval.'}
+						</p>
+					</div>
 				</TabsContent>
 
 				{/* Retry Tab */}
