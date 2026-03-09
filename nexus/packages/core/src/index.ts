@@ -377,6 +377,8 @@ Conversation:`;
 
   // ApprovalManager for human-in-the-loop tool authorization
   const approvalManager = new ApprovalManager(redis);
+  // Wire approval manager into Telegram for inline button approve/reject
+  if (telegramProvider?.setApprovalManager) telegramProvider.setApprovalManager(approvalManager);
   logger.info('ApprovalManager initialized');
 
   // TaskManager for parallel agent task execution (BullMQ-based)
