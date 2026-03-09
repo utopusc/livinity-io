@@ -58,11 +58,11 @@ Plans:
   3. MCP tools (shell, docker, files, browser) are passed to Kimi CLI via `--mcp-config` and the agent can invoke them
   4. System prompt is written as temporary YAML + markdown files per session and cleaned up after completion
   5. Token usage from Kimi CLI responses is extracted and tracked correctly
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Server setup (Python 3.12, uv, Kimi CLI installation)
-- [ ] 03-02: KimiAgentRunner implementation with JSONL event parsing and MCP bridging
+- [ ] 03-01-PLAN.md -- Server setup: Python 3.12, uv, Kimi CLI installation on production (AUTH-03)
+- [ ] 03-02-PLAN.md -- KimiAgentRunner implementation with JSONL event parsing and MCP bridging (AGENT-01..05)
 
 ### Phase 4: Onboarding and Cleanup
 **Goal**: New users can set up Kimi through the onboarding wizard, and zero Claude/Anthropic/Gemini references remain in the codebase
@@ -89,5 +89,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|---------------|--------|-----------|
 | 1. KimiProvider | 0/2 | Planned | - |
 | 2. Configuration Layer | 0/2 | Planned | - |
-| 3. KimiAgentRunner | 0/2 | Not started | - |
+| 3. KimiAgentRunner | 0/2 | Planned | - |
 | 4. Onboarding and Cleanup | 0/2 | Not started | - |
