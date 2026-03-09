@@ -9,7 +9,7 @@ import { logger } from '../logger.js';
 
 /**
  * Normalize raw messages (from Brain ChatMessage or similar) to ProviderMessage format.
- * Maps 'model' → 'assistant', 'text' → 'content', strips empty messages.
+ * Maps 'model' -> 'assistant', 'text' -> 'content', strips empty messages.
  */
 export function normalizeMessages(
   messages: Array<{ role: string; text?: string; content?: string; images?: Array<{ base64: string; mimeType: string }> }>,
@@ -34,7 +34,7 @@ export function normalizeMessages(
 
 /**
  * Merge consecutive messages with the same role by concatenating content.
- * Critical for Claude compliance — Claude rejects consecutive same-role messages.
+ * Prevents consecutive same-role messages.
  */
 export function mergeConsecutiveRoles(messages: ProviderMessage[]): ProviderMessage[] {
   if (messages.length === 0) return [];
@@ -65,7 +65,7 @@ export function mergeConsecutiveRoles(messages: ProviderMessage[]): ProviderMess
 }
 
 /**
- * Validate strict user/assistant alternation (required by Claude).
+ * Validate strict user/assistant alternation.
  * First message must be 'user'.
  */
 export function validateAlternation(messages: ProviderMessage[]): { valid: boolean; error?: string } {
@@ -90,56 +90,26 @@ export function validateAlternation(messages: ProviderMessage[]): { valid: boole
 /**
  * Convert ProviderMessage[] to provider-specific format.
  * Applies mergeConsecutiveRoles before conversion.
- * For Claude, also validates alternation and throws if invalid.
  */
-export function prepareForProvider(messages: ProviderMessage[], provider: 'claude' | 'gemini' | 'kimi'): unknown[] {
+export function prepareForProvider(messages: ProviderMessage[], provider: 'kimi'): unknown[] {
   const merged = mergeConsecutiveRoles(messages);
 
-  if (provider === 'claude') {
-    const validation = validateAlternation(merged);
-    if (!validation.valid) {
-      throw new Error(`Claude message alternation error: ${validation.error}`);
+  // Kimi uses OpenAI-compatible message format
+  return merged.map((msg) => {
+    if (msg.images && msg.images.length > 0) {
+      return {
+        role: msg.role,
+        content: [
+          { type: 'text' as const, text: msg.content },
+          ...msg.images.map((img) => ({
+            type: 'image_url' as const,
+            image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+          })),
+        ],
+      };
     }
-
-    return merged.map((msg) => {
-      if (msg.images && msg.images.length > 0) {
-        return {
-          role: msg.role,
-          content: [
-            { type: 'text' as const, text: msg.content },
-            ...msg.images.map((img) => ({
-              type: 'image' as const,
-              source: {
-                type: 'base64' as const,
-                media_type: img.mimeType,
-                data: img.base64,
-              },
-            })),
-          ],
-        };
-      }
-      return { role: msg.role, content: msg.content };
-    });
-  }
-
-  if (provider === 'kimi') {
-    // OpenAI format: { role, content } — no alternation requirement, no images (supportsVision = false)
-    return merged.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
-  }
-
-  // Gemini format
-  return merged.map((msg) => ({
-    role: msg.role === 'assistant' ? 'model' : msg.role,
-    parts: [
-      { text: msg.content },
-      ...(msg.images || []).map((img) => ({
-        inlineData: { data: img.base64, mimeType: img.mimeType },
-      })),
-    ],
-  }));
+    return { role: msg.role, content: msg.content };
+  });
 }
 
 /**
@@ -147,7 +117,7 @@ export function prepareForProvider(messages: ProviderMessage[], provider: 'claud
  */
 export function normalizeAndPrepare(
   rawMessages: Array<{ role: string; text?: string; content?: string; images?: Array<{ base64: string; mimeType: string }> }>,
-  provider: 'claude' | 'gemini' | 'kimi',
+  provider: 'kimi',
 ): unknown[] {
   const normalized = normalizeMessages(rawMessages);
   return prepareForProvider(normalized, provider);

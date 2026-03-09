@@ -1,6 +1,6 @@
 /**
- * ProviderManager — Orchestrates AI providers with automatic fallback.
- * Kimi is primary, Claude is secondary fallback, Gemini is last resort.
+ * ProviderManager — Orchestrates AI providers.
+ * Kimi is the sole provider.
  */
 
 import type { Redis } from 'ioredis';
@@ -13,8 +13,6 @@ import type {
   ModelTier,
 } from './types.js';
 import { KimiProvider } from './kimi.js';
-import { ClaudeProvider } from './claude.js';
-import { GeminiProvider } from './gemini.js';
 import { logger } from '../logger.js';
 
 export class ProviderManager {
@@ -23,12 +21,8 @@ export class ProviderManager {
 
   constructor(redis?: Redis) {
     const kimi = new KimiProvider(redis);
-    const claude = new ClaudeProvider(redis);
-    const gemini = new GeminiProvider(redis);
     this.providers.set('kimi', kimi);
-    this.providers.set('claude', claude);
-    this.providers.set('gemini', gemini);
-    this.fallbackOrder = ['kimi', 'claude', 'gemini'];
+    this.fallbackOrder = ['kimi'];
   }
 
   async chat(options: ProviderChatOptions): Promise<ProviderChatResult> {
