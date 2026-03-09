@@ -6,24 +6,24 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works.
 **Current milestone:** v6.0 -- Claude Code to Kimi Code Migration
-**Current focus:** Phase 3 - Kimi Agent Runner (COMPLETE)
+**Current focus:** Phase 4 - Onboarding & Cleanup (Plan 1 complete)
 
 ## Current Position
 
 Milestone: v6.0 (Claude Code to Kimi Code Migration)
-Phase: 3 of 4 (Kimi Agent Runner)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-09 -- Completed 03-02-PLAN.md (KimiAgentRunner implementation)
+Phase: 4 of 4 (Onboarding & Cleanup)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-09 -- Completed 04-01-PLAN.md (Onboarding wizard Kimi auth step)
 
-Progress: [#######...] 75% (6/8 plans)
+Progress: [########..] 87% (7/8 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 3 min
-- Total execution time: 18 min
+- Total plans completed: 7
+- Average duration: 3.3 min
+- Total execution time: 23 min
 
 **By Phase:**
 
@@ -32,6 +32,7 @@ Progress: [#######...] 75% (6/8 plans)
 | 01-kimi-provider | 2/2 | 5 min | 2.5 min |
 | 02-configuration-layer | 2/2 | 7 min | 3.5 min |
 | 03-kimi-agent-runner | 2/2 | 6 min | 3 min |
+| 04-onboarding-cleanup | 1/2 | 5 min | 5 min |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@ Progress: [#######...] 75% (6/8 plans)
 - Temp agent YAML + .md files in /tmp/nexus-agents/ with cleanup in finally block (03-02)
 - KimiAgentRunner exported from lib.ts barrel, not index.ts (which is main entry) (03-02)
 - Model IDs: kimi-for-coding (sonnet), kimi-latest (flash/haiku), kimi-k2.5 (opus) -- may need adjustment (03-02)
+- Kimi API key input replaces Claude OAuth PKCE flow in setup wizard (04-01)
+- PasswordInput label prop used as placeholder (component has no separate placeholder prop) (04-01)
 
 ### Pending Todos
 
@@ -76,5 +79,5 @@ Progress: [#######...] 75% (6/8 plans)
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 03-02-PLAN.md (KimiAgentRunner implementation)
+Stopped at: Completed 04-01-PLAN.md (Onboarding wizard Kimi auth step)
 Resume file: None
