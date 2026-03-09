@@ -1,7 +1,7 @@
 /**
  * Heartbeat Runner
- * Periodic self-triggering system that checks HEARTBEAT.md and executes tasks.
- * Inspired by OpenClaw's heartbeat mechanism.
+ * Periodic system health monitoring with direct metrics collection.
+ * Sends health reports via configured channels (Telegram, Discord, etc.)
  */
 
 import fs from 'fs/promises';
@@ -27,10 +27,10 @@ export interface HeartbeatConfig {
   intervalMinutes: number;
   prompt: string;
   target: 'last' | 'none' | string;
-  to?: string; // Override recipient (WhatsApp JID)
+  to?: string;
   activeHours?: {
-    start: string; // "08:00"
-    end: string;   // "22:00"
+    start: string;
+    end: string;
     timezone?: string;
   };
   ackMaxChars: number;
@@ -48,6 +48,15 @@ interface HeartbeatState {
   lastRunMs: number;
   lastResult: string;
   runCount: number;
+}
+
+interface SystemMetrics {
+  pm2: { name: string; status: string; restarts: number; uptime: string }[];
+  disk: { used: string; total: string; percent: string };
+  memory: { used: string; total: string; percent: string };
+  load: string;
+  redis: boolean;
+  uptime: string;
 }
 
 const REDIS_HEARTBEAT_STATE = 'nexus:heartbeat_state';
@@ -71,7 +80,6 @@ export class HeartbeatRunner {
     this.workspaceDir = runnerConfig.workspaceDir;
     this.onDeliver = runnerConfig.onDeliver;
 
-    // Default config
     this.config = {
       enabled: false,
       intervalMinutes: DEFAULT_HEARTBEAT_INTERVAL_MINUTES,
@@ -81,9 +89,6 @@ export class HeartbeatRunner {
     };
   }
 
-  /**
-   * Update configuration from NexusConfig
-   */
   updateConfig(nexusConfig: NexusConfig): void {
     const hb = nexusConfig.heartbeat;
     if (hb) {
@@ -97,7 +102,6 @@ export class HeartbeatRunner {
       };
     }
 
-    // Restart if running to apply new interval
     if (this.running) {
       this.stop();
       if (this.config.enabled) {
@@ -106,9 +110,6 @@ export class HeartbeatRunner {
     }
   }
 
-  /**
-   * Start the heartbeat runner
-   */
   async start(): Promise<void> {
     if (!this.config.enabled) {
       logger.info('HeartbeatRunner: disabled, not starting');
@@ -128,24 +129,20 @@ export class HeartbeatRunner {
       target: this.config.target,
     });
 
-    // Schedule periodic execution
     this.timer = setInterval(async () => {
       if (this.running) {
         await this.runOnce();
       }
     }, intervalMs);
 
-    // Run first heartbeat after a short delay (gives daemon time to fully start)
+    // First run after 60s delay (gives daemon time to start)
     setTimeout(() => {
       if (this.running) {
         this.runOnce().catch(err => logger.error('HeartbeatRunner: initial run failed', err));
       }
-    }, 60_000); // 60s delay for first run
+    }, 60_000);
   }
 
-  /**
-   * Stop the heartbeat runner
-   */
   stop(): void {
     if (this.timer) {
       clearInterval(this.timer);
@@ -155,70 +152,40 @@ export class HeartbeatRunner {
     logger.info('HeartbeatRunner: stopped');
   }
 
-  /**
-   * Run a single heartbeat cycle
-   */
   async runOnce(): Promise<{ delivered: boolean; response: string }> {
     logger.info('HeartbeatRunner: starting heartbeat cycle');
 
     try {
-      // Check if within active hours
       if (!this.isWithinActiveHours()) {
         logger.info('HeartbeatRunner: outside active hours, skipping');
         return { delivered: false, response: '' };
       }
 
-      // Check if inbox has pending messages (don't interrupt user interaction)
-      const queueSize = await this.redis.llen('nexus:inbox');
-      if (queueSize > 0) {
-        logger.info('HeartbeatRunner: inbox has pending messages, skipping', { queueSize });
-        return { delivered: false, response: '' };
-      }
+      // Collect real system metrics (no LLM needed)
+      const metrics = await this.collectMetrics();
+      const alerts = this.checkAlerts(metrics);
+      const report = this.formatReport(metrics, alerts);
 
-      // Read HEARTBEAT.md
-      const heartbeatContent = await this.readHeartbeatFile();
+      logger.info('HeartbeatRunner: report generated', {
+        alerts: alerts.length,
+        reportLength: report.length,
+      });
 
-      // Collect live system health data before calling LLM
-      const systemHealth = await this.collectSystemHealth();
-
-      // Build context with heartbeat content + live data
-      let contextMessage = this.config.prompt;
-      if (heartbeatContent) {
-        contextMessage += `\n\n## HEARTBEAT.md Contents:\n${heartbeatContent}`;
-      } else {
-        contextMessage += `\n\nNote: No HEARTBEAT.md file found or file is empty.`;
-      }
-      contextMessage += `\n\n## Live System Health Data:\n${systemHealth}`;
-
-      // Run agent with heartbeat prompt
-      const response = await this.executeHeartbeat(contextMessage);
-
-      // Check if response is just HEARTBEAT_OK
-      logger.info('HeartbeatRunner: raw response', { length: response.length, preview: response.slice(0, 200) });
-      const { shouldSkip, cleanedResponse } = this.processHeartbeatResponse(response);
-
-      if (shouldSkip) {
-        logger.info('HeartbeatRunner: skipped delivery', { reason: !response.trim() ? 'empty' : 'heartbeat_ok_or_short' });
-        await this.saveState(response, false);
-        return { delivered: false, response };
-      }
-
-      // Deliver the response
-      if (this.onDeliver && cleanedResponse) {
+      // Deliver the report
+      if (this.onDeliver) {
         const target = await this.resolveDeliveryTarget();
         if (target && target !== 'none') {
-          await this.onDeliver(cleanedResponse, target);
-          logger.info('HeartbeatRunner: delivered response', {
-            target,
-            responseLength: cleanedResponse.length
-          });
-          await this.saveState(cleanedResponse, true);
-          return { delivered: true, response: cleanedResponse };
+          await this.onDeliver(report, target);
+          logger.info('HeartbeatRunner: delivered', { target, alerts: alerts.length });
+          await this.saveState(report, true);
+          return { delivered: true, response: report };
+        } else {
+          logger.warn('HeartbeatRunner: no delivery target');
         }
       }
 
-      await this.saveState(response, false);
-      return { delivered: false, response };
+      await this.saveState(report, false);
+      return { delivered: false, response: report };
 
     } catch (err: any) {
       logger.error('HeartbeatRunner: cycle failed', { error: err.message });
@@ -226,216 +193,234 @@ export class HeartbeatRunner {
     }
   }
 
-  /**
-   * Read HEARTBEAT.md file from workspace
-   */
+  // ── Metrics Collection ──────────────────────────────────────────────
+
+  private async collectMetrics(): Promise<SystemMetrics> {
+    const metrics: SystemMetrics = {
+      pm2: [],
+      disk: { used: '?', total: '?', percent: '?' },
+      memory: { used: '?', total: '?', percent: '?' },
+      load: '?',
+      redis: false,
+      uptime: '?',
+    };
+
+    const run = async (cmd: string): Promise<string> => {
+      try {
+        const { stdout } = await execAsync(cmd, { timeout: 10_000 });
+        return stdout.trim();
+      } catch {
+        return '';
+      }
+    };
+
+    // Run all commands in parallel
+    const [pm2Raw, diskRaw, memRaw, uptimeRaw, redisRaw] = await Promise.all([
+      run('pm2 jlist 2>/dev/null'),
+      run('df / --output=used,size,pcent | tail -1'),
+      run('free -m | grep Mem'),
+      run('uptime'),
+      run('redis-cli -a "LivRedis2024!" ping 2>/dev/null'),
+    ]);
+
+    // Parse PM2
+    if (pm2Raw) {
+      try {
+        const procs = JSON.parse(pm2Raw);
+        metrics.pm2 = procs.map((p: any) => ({
+          name: p.name,
+          status: p.pm2_env?.status || 'unknown',
+          restarts: p.pm2_env?.restart_time || 0,
+          uptime: this.formatUptime(Date.now() - (p.pm2_env?.pm_uptime || Date.now())),
+        }));
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Parse disk
+    if (diskRaw) {
+      const parts = diskRaw.trim().split(/\s+/);
+      if (parts.length >= 3) {
+        const usedKb = parseInt(parts[0]) || 0;
+        const totalKb = parseInt(parts[1]) || 0;
+        metrics.disk = {
+          used: this.formatBytes(usedKb * 1024),
+          total: this.formatBytes(totalKb * 1024),
+          percent: parts[2]?.trim() || '?',
+        };
+      }
+    }
+
+    // Parse memory
+    if (memRaw) {
+      const parts = memRaw.split(/\s+/);
+      if (parts.length >= 3) {
+        const totalMb = parseInt(parts[1]) || 0;
+        const usedMb = parseInt(parts[2]) || 0;
+        const pct = totalMb > 0 ? Math.round((usedMb / totalMb) * 100) : 0;
+        metrics.memory = {
+          used: `${usedMb}MB`,
+          total: `${totalMb}MB`,
+          percent: `${pct}%`,
+        };
+      }
+    }
+
+    // Parse uptime/load
+    if (uptimeRaw) {
+      const loadMatch = uptimeRaw.match(/load average:\s*(.+)/);
+      metrics.load = loadMatch ? loadMatch[1].trim() : '?';
+      const upMatch = uptimeRaw.match(/up\s+(.+?),\s+\d+\s+user/);
+      metrics.uptime = upMatch ? upMatch[1].trim() : '?';
+    }
+
+    // Redis
+    metrics.redis = redisRaw === 'PONG';
+
+    return metrics;
+  }
+
+  private checkAlerts(m: SystemMetrics): string[] {
+    const alerts: string[] = [];
+
+    // PM2 process alerts
+    for (const p of m.pm2) {
+      if (p.status !== 'online') {
+        alerts.push(`⚠️ PM2 "${p.name}" is ${p.status}`);
+      }
+      if (p.restarts > 100) {
+        alerts.push(`⚠️ PM2 "${p.name}" has ${p.restarts} restarts`);
+      }
+    }
+
+    // Disk alert
+    const diskPct = parseInt(m.disk.percent) || 0;
+    if (diskPct >= 90) {
+      alerts.push(`🔴 Disk at ${m.disk.percent} (CRITICAL)`);
+    } else if (diskPct >= 80) {
+      alerts.push(`⚠️ Disk at ${m.disk.percent}`);
+    }
+
+    // Memory alert
+    const memPct = parseInt(m.memory.percent) || 0;
+    if (memPct >= 95) {
+      alerts.push(`🔴 Memory at ${m.memory.percent} (CRITICAL)`);
+    } else if (memPct >= 90) {
+      alerts.push(`⚠️ Memory at ${m.memory.percent}`);
+    }
+
+    // Redis alert
+    if (!m.redis) {
+      alerts.push('🔴 Redis not responding');
+    }
+
+    return alerts;
+  }
+
+  private formatReport(m: SystemMetrics, alerts: string[]): string {
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const statusIcon = alerts.length > 0
+      ? (alerts.some(a => a.includes('🔴')) ? '🔴' : '⚠️')
+      : '✅';
+
+    const onlineCount = m.pm2.filter(p => p.status === 'online').length;
+    const errorCount = m.pm2.filter(p => p.status !== 'online').length;
+
+    let report = `${statusIcon} Server Health — ${now} UTC\n`;
+    report += `\n`;
+    report += `CPU: ${m.load} | Mem: ${m.memory.used}/${m.memory.total} (${m.memory.percent}) | Disk: ${m.disk.percent}\n`;
+    report += `PM2: ${onlineCount} online${errorCount > 0 ? `, ${errorCount} down` : ''} | Redis: ${m.redis ? 'OK' : 'DOWN'} | Up: ${m.uptime}\n`;
+
+    if (alerts.length > 0) {
+      report += `\nAlerts:\n${alerts.join('\n')}\n`;
+    }
+
+    // PM2 process details
+    if (m.pm2.length > 0) {
+      report += `\nProcesses:\n`;
+      for (const p of m.pm2) {
+        const icon = p.status === 'online' ? '●' : '○';
+        report += `${icon} ${p.name} (${p.uptime}, ${p.restarts}↻)\n`;
+      }
+    }
+
+    return report.trim();
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+
+  private formatUptime(ms: number): string {
+    const min = Math.floor(ms / 60000);
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h}h${min % 60}m`;
+    const d = Math.floor(h / 24);
+    return `${d}d${h % 24}h`;
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))}MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
+  }
+
   private async readHeartbeatFile(): Promise<string | null> {
     const heartbeatPath = path.join(this.workspaceDir, 'HEARTBEAT.md');
-
     try {
       const content = await fs.readFile(heartbeatPath, 'utf-8');
-
-      // Check if effectively empty
-      if (this.isContentEffectivelyEmpty(content)) {
-        return null;
-      }
-
+      if (this.isContentEffectivelyEmpty(content)) return null;
       return content.trim();
     } catch (err: any) {
-      if (err.code === 'ENOENT') {
-        return null;
-      }
+      if (err.code === 'ENOENT') return null;
       logger.error('HeartbeatRunner: failed to read HEARTBEAT.md', { error: err.message });
       return null;
     }
   }
 
-  /**
-   * Check if content is effectively empty (only comments/whitespace)
-   */
   private isContentEffectivelyEmpty(content: string): boolean {
     const lines = content.split('\n');
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      // Skip markdown headers
       if (/^#+(\s|$)/.test(trimmed)) continue;
-      // Skip empty list items
       if (/^[-*+]\s*(\[[\sXx]?\]\s*)?$/.test(trimmed)) continue;
-      // Found actionable content
       return false;
     }
     return true;
   }
 
-  /**
-   * Collect live system health data via shell commands
-   */
-  private async collectSystemHealth(): Promise<string> {
-    const results: string[] = [];
-
-    const runCmd = async (label: string, cmd: string): Promise<void> => {
-      try {
-        const { stdout } = await execAsync(cmd, { timeout: 10_000 });
-        results.push(`### ${label}\n\`\`\`\n${stdout.trim()}\n\`\`\``);
-      } catch (err: any) {
-        results.push(`### ${label}\nError: ${err.message}`);
-      }
-    };
-
-    await Promise.all([
-      runCmd('PM2 Processes', 'pm2 jlist 2>/dev/null | node -e "const d=JSON.parse(require(\'fs\').readFileSync(\'/dev/stdin\',\'utf8\'));d.forEach(p=>console.log(p.name+\': \'+p.pm2_env.status+\' (pid:\'+p.pid+\', restarts:\'+p.pm2_env.restart_time+\', uptime:\'+Math.round((Date.now()-p.pm2_env.pm_uptime)/60000)+\'m)\'))"'),
-      runCmd('Disk Usage', 'df -h / | tail -1'),
-      runCmd('Memory', 'free -h | head -2'),
-      runCmd('Load Average', 'uptime'),
-      runCmd('Redis Ping', 'redis-cli -a "LivRedis2024!" ping 2>/dev/null || echo "FAILED"'),
-    ]);
-
-    return results.join('\n\n');
-  }
-
-  /**
-   * Execute heartbeat via Brain
-   */
-  private async executeHeartbeat(prompt: string): Promise<string> {
-    const systemPrompt = `You are Nexus performing a periodic heartbeat check. Live system data is provided below.
-
-## Instructions
-
-Analyze the live system health data and HEARTBEAT.md tasks. Then produce a SHORT status report.
-
-CRITICAL: You MUST reply with a status report. Do NOT reply with just "HEARTBEAT_OK".
-Only reply "HEARTBEAT_OK" if HEARTBEAT.md is empty or missing.
-
-## Report Format
-
-🔵 Server Health — [time]
-CPU: [load] | Mem: [used/total] | Disk: [used%]
-PM2: [X running, Y errored, Z stopped]
-[Any alerts or issues found]
-[Status: ✅ All OK / ⚠️ Warning / 🔴 Critical]
-`;
-
-    // NOTE: tier 'flash' maps to kimi-for-coding which is a thinking model.
-    // The response may include reasoning_content tokens that count toward usage
-    // but are not surfaced in the text output. This is expected — Kimi's API
-    // does not offer a way to disable reasoning for kimi-for-coding. The token
-    // overhead is acceptable for infrequent heartbeat checks.
-    const response = await this.brain.chat({
-      systemPrompt,
-      messages: [{ role: 'user', text: prompt }],
-      maxTokens: 2000,
-      tier: 'flash',
-    });
-
-    return response.text || '';
-  }
-
-  /**
-   * Process heartbeat response, check for HEARTBEAT_OK token
-   */
-  private processHeartbeatResponse(response: string): {
-    shouldSkip: boolean;
-    cleanedResponse: string;
-  } {
-    const trimmed = response.trim();
-
-    if (!trimmed) {
-      return { shouldSkip: true, cleanedResponse: '' };
-    }
-
-    // Check for HEARTBEAT_OK token
-    if (!trimmed.includes(HEARTBEAT_TOKEN)) {
-      return { shouldSkip: false, cleanedResponse: trimmed };
-    }
-
-    // Strip HEARTBEAT_OK from edges
-    let cleaned = trimmed;
-    let didStrip = false;
-
-    // Remove from start
-    if (cleaned.startsWith(HEARTBEAT_TOKEN)) {
-      cleaned = cleaned.slice(HEARTBEAT_TOKEN.length).trim();
-      didStrip = true;
-    }
-
-    // Remove from end
-    if (cleaned.endsWith(HEARTBEAT_TOKEN)) {
-      cleaned = cleaned.slice(0, -HEARTBEAT_TOKEN.length).trim();
-      didStrip = true;
-    }
-
-    // If only HEARTBEAT_OK or very short remaining text, skip delivery
-    if (!cleaned || cleaned.length <= this.config.ackMaxChars) {
-      return { shouldSkip: true, cleanedResponse: '' };
-    }
-
-    return { shouldSkip: false, cleanedResponse: cleaned };
-  }
-
-  /**
-   * Resolve delivery target (WhatsApp JID)
-   */
   private async resolveDeliveryTarget(): Promise<string | null> {
     const target = this.config.target;
-
-    if (target === 'none') {
-      return null;
-    }
-
+    if (target === 'none') return null;
     if (target === 'last') {
-      // Get last WhatsApp sender
-      const lastRecipient = await this.redis.get(REDIS_HEARTBEAT_LAST_RECIPIENT);
-      return lastRecipient || null;
+      return await this.redis.get(REDIS_HEARTBEAT_LAST_RECIPIENT) || null;
     }
-
-    // Specific target (WhatsApp JID or channel ID)
     return target;
   }
 
-  /**
-   * Set the last recipient for 'last' target mode
-   */
   async setLastRecipient(jid: string): Promise<void> {
     await this.redis.set(REDIS_HEARTBEAT_LAST_RECIPIENT, jid);
   }
 
-  /**
-   * Check if current time is within active hours
-   */
   private isWithinActiveHours(): boolean {
-    if (!this.config.activeHours) {
-      return true; // No restriction
-    }
-
+    if (!this.config.activeHours) return true;
     const { start, end } = this.config.activeHours;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
     const [startH, startM] = start.split(':').map(Number);
     const [endH, endM] = end.split(':').map(Number);
-
     const startMinutes = startH * 60 + startM;
     const endMinutes = endH * 60 + endM;
-
     if (startMinutes <= endMinutes) {
       return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-    } else {
-      // Crosses midnight
-      return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
     }
+    return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
   }
 
-  /**
-   * Save heartbeat state to Redis
-   */
   private async saveState(result: string, delivered: boolean): Promise<void> {
     const state: HeartbeatState = {
       lastRunMs: Date.now(),
       lastResult: result.slice(0, 500),
       runCount: 0,
     };
-
     try {
       const existing = await this.redis.get(REDIS_HEARTBEAT_STATE);
       if (existing) {
@@ -448,9 +433,6 @@ PM2: [X running, Y errored, Z stopped]
     }
   }
 
-  /**
-   * Get current heartbeat state
-   */
   async getState(): Promise<HeartbeatState | null> {
     try {
       const data = await this.redis.get(REDIS_HEARTBEAT_STATE);
@@ -460,20 +442,12 @@ PM2: [X running, Y errored, Z stopped]
     }
   }
 
-  /**
-   * Get next scheduled run time
-   */
   getNextRunTime(): Date | null {
-    if (!this.running || !this.config.enabled) {
-      return null;
-    }
+    if (!this.running || !this.config.enabled) return null;
     const intervalMs = this.config.intervalMinutes * 60 * 1000;
     return new Date(Date.now() + intervalMs);
   }
 
-  /**
-   * Check if runner is active
-   */
   isRunning(): boolean {
     return this.running && this.config.enabled;
   }
