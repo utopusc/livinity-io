@@ -1,155 +1,93 @@
-# Requirements — v5.3 UI Polish & Consistency
+# Requirements: v6.0 — Claude Code → Kimi Code Migration
 
-**Defined:** 2026-03-07
-**Core Value:** One-command deployment of a personal AI-powered server that just works.
+**Milestone:** v6.0
+**Created:** 2026-03-09
+**Status:** Draft
 
-## Category: Files Polish (FP)
+---
 
-### REQ-FP-01: Path Bar Redesign
-Redesign the desktop path bar with motion-primitives transitions:
-- Rounded container with subtle bg and border
-- Animated breadcrumb segment transitions when navigating
-- Hover effects on path segments with Magnetic or subtle scale
-- Improved overflow handling with gradient fades
-- Consistent styling with v5.2 search input (rounded-xl, borderTrail-on-focus equivalent)
+## Milestone Requirements
 
-### REQ-FP-02: Empty States with Illustrations
-Replace plain text empty states with visually rich illustrations:
-- Empty folder: animated icon with gentle bounce, descriptive message, action buttons with hover effects
-- Empty network: network-specific illustration with connection status
-- Search with no results: search icon animation with helpful message
-- AnimatedGroup staggered entry for empty state elements
+### Core Runtime (CORE)
 
-### REQ-FP-03: Loading Skeletons
-Replace spinner-only loading with skeleton placeholders:
-- Grid view: skeleton cards matching file item dimensions with shimmer animation
-- List view: skeleton rows matching list item layout
-- Staggered reveal as real items load (AnimatedGroup)
-- Smooth transition from skeleton to loaded content
+- [ ] **CORE-01**: KimiProvider implements AIProvider interface with OpenAI-compatible API (`api.kimi.com/coding/v1`)
+- [ ] **CORE-02**: Tool format translation layer converts Anthropic `input_schema` to OpenAI `parameters` format
+- [ ] **CORE-03**: Tool argument parser applies `JSON.parse()` to Kimi's string-format tool call arguments
+- [ ] **CORE-04**: Model tier mapping (fast/balanced/powerful) configurable via Redis, with Kimi K2.5 model IDs
+- [ ] **CORE-05**: Streaming chat responses from Kimi API piped to existing SSE stream format
 
-### REQ-FP-04: File Operation Animations
-Polish floating island animations for file operations:
-- Smooth entry/exit animations for operations island
-- Progress indicator with gradient animation
-- Success/error state transitions
-- Upload island visual polish with consistent styling
+### Agent Runner (AGENT)
 
-## Category: Dashboard & Home (DH)
+- [ ] **AGENT-01**: KimiAgentRunner spawns `kimi` CLI as subprocess with `--print --output-format=stream-json`
+- [ ] **AGENT-02**: JSONL event parser maps Kimi output events to existing AgentEvent types (text, tool_call, tool_result, status, error)
+- [ ] **AGENT-03**: MCP tools passed to Kimi CLI via `--mcp-config` inline JSON flag
+- [ ] **AGENT-04**: System prompt written as temp YAML + markdown files per session, cleaned up after completion
+- [ ] **AGENT-05**: Token usage tracking extracted from Kimi response metadata
 
-### REQ-DH-01: Desktop Content Redesign
-Apply motion-primitives to the main desktop content area:
-- Header greeting with improved TextShimmerWave or TextEffect
-- Content area transitions with AnimatedGroup staggered entry
-- Improved spacing and layout for light theme
+### Auth & Config (AUTH)
 
-### REQ-DH-02: App Icon Cards
-Apply v5.2-style motion effects to desktop app icons:
-- Tilt 3D effect on hover (matching Files grid cards)
-- Spotlight cursor-following glow per icon
-- Consistent rounded corners and shadows
-- Improved app name typography
+- [ ] **AUTH-01**: Kimi API key stored in Redis (`nexus:config:kimi_api_key`)
+- [ ] **AUTH-02**: Config schema updated — model names, auth method, provider type for Kimi
+- [ ] **AUTH-03**: Python 3.12 + `uv` + Kimi CLI installed on production server
+- [ ] **AUTH-04**: Device auth flow (optional) — status polling, no code-paste step needed
 
-### REQ-DH-03: Stats & Metrics Widgets
-Polish stats display with motion-primitives:
-- AnimatedNumber for CPU, Memory, Storage values
-- Stat cards with subtle Tilt or Spotlight effects
-- Progress bars with gradient animation
-- Consistent card styling with v5.2 design language
+### API Routes (API)
 
-### REQ-DH-04: Dock Visual Polish
-Ensure dock consistency with v5.2 design language:
-- Frosted glass container matching light theme
-- Consistent icon sizing and hover magnification
-- Separator styling consistency
-- Active indicator consistency
+- [ ] **API-01**: Express routes `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` replace Claude CLI endpoints
+- [ ] **API-02**: tRPC routes `ai.getKimiStatus`, `ai.startKimiLogin`, `ai.submitKimiLoginCode`, `ai.kimiLogout` replace Claude routes
+- [ ] **API-03**: Existing agent stream endpoint (`/api/agent/stream`) works with KimiAgentRunner
 
-## Category: Visual Consistency (VC)
+### Settings UI (UI)
 
-### REQ-VC-01: Window Chrome Audit
-Audit and fix window chrome across all app windows:
-- Title bar styling consistency (background, text, controls)
-- Window border and shadow consistency
-- Close/minimize button positioning and styling
-- Resize handle visibility
+- [ ] **UI-01**: Settings AI Configuration shows Kimi API key input and auth status
+- [ ] **UI-02**: Claude Provider section and Gemini Fallback section removed from Settings
+- [ ] **UI-03**: Model selection dropdown shows Kimi model tiers (fast/balanced/powerful)
 
-### REQ-VC-02: Shared Component Alignment
-Audit buttons, inputs, dropdowns across all modules:
-- Button sizes, border radius, hover states
-- Input field styling (height, padding, focus states)
-- Dropdown menu styling (width, item height, hover)
-- Icon button sizes and spacing
+### Onboarding (ONBOARD)
 
-### REQ-VC-03: Color & Typography Consistency
-Ensure consistent use of design tokens across modules:
-- Neutral scale usage (text-neutral-400/500/600/700/800/900)
-- Accent color usage (only on CTAs and active states)
-- Font size scale consistency (text-[10px] to text-[15px])
-- Font weight consistency (medium for labels, semibold for active)
+- [ ] **ONBOARD-01**: Setup wizard AI step updated for Kimi Code (API key input or device auth)
+- [ ] **ONBOARD-02**: Setup wizard validation checks Kimi API key or CLI auth status
 
-### REQ-VC-04: Border Radius & Spacing
-Consistent rounded corners and spacing:
-- Cards: rounded-xl or rounded-[20px]
-- Buttons: rounded-xl
-- Inputs: rounded-xl
-- Dropdowns: rounded-xl
-- Consistent gap/padding scale
+### Cleanup (CLEAN)
 
-## Category: Performance (PERF)
+- [ ] **CLEAN-01**: `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk` packages removed from package.json
+- [ ] **CLEAN-02**: ClaudeProvider class and file deleted
+- [ ] **CLEAN-03**: SdkAgentRunner (Claude-specific) class and file deleted
+- [ ] **CLEAN-04**: Gemini fallback provider removed
+- [ ] **CLEAN-05**: All Redis keys with "claude" or "anthropic" prefix migrated or removed
+- [ ] **CLEAN-06**: All `.env` variables referencing Claude/Anthropic removed
+- [ ] **CLEAN-07**: Grep verification — zero matches for `claude|anthropic|Claude|Anthropic` in active TypeScript/TSX
 
-### REQ-PERF-01: Motion Component Performance Audit
-Profile motion-primitives components for performance:
-- Measure Tilt/Spotlight overhead per card in Files grid (100+ items)
-- Measure AnimatedBackground re-renders on view toggle
-- Identify any jank on lower-end devices
-- Document performance baselines
+---
 
-### REQ-PERF-02: Re-render Optimization
-Reduce unnecessary re-renders in animated components:
-- Memoize heavy motion wrappers (Tilt, Spotlight)
-- Debounce mouse move handlers where needed
-- Use CSS transforms over layout properties
-- Lazy-load motion components for off-screen items
+## Future Requirements (Deferred)
 
-### REQ-PERF-03: Build Verification
-Clean build with no TypeScript errors after all changes:
-- `pnpm --filter ui build` succeeds with zero errors
-- No console warnings from motion-primitives
-- Visual regression spot-check
+- SDK upgrade path: Replace Print mode with `@moonshot-ai/kimi-agent-sdk` session-based runner (when SDK reaches v1.0)
+- Thinking mode UI: Display Kimi's reasoning/thinking tokens in chat UI
+- Granular tool approval: Per-tool approval instead of blanket auto-approve
+- Multi-provider architecture: Re-add provider switching if needed later
 
 ## Out of Scope
 
-| Feature | Reason |
-|---------|--------|
-| New app features | UI polish only |
-| Backend changes | Frontend-only milestone |
-| Dark theme | Light theme only |
-| New motion-primitives components | Use already-installed 34 components |
-| Mobile-specific redesign | Desktop-first polish |
+- **Self-hosted LLM support** — Kimi Code only for now
+- **Dark theme** — light theme only
+- **New backend features** — migration only, no new capabilities
+- **Backward compatibility** — Claude Code support fully removed, no dual-provider
+- **Mobile app** — web-first
+
+---
 
 ## Traceability
 
 | Requirement | Phase | Status |
-|-------------|-------|--------|
-| REQ-FP-01 | Phase 1 | Pending |
-| REQ-FP-02 | Phase 1 | Pending |
-| REQ-FP-03 | Phase 1 | Pending |
-| REQ-FP-04 | Phase 1 | Pending |
-| REQ-DH-01 | Phase 2 | Pending |
-| REQ-DH-02 | Phase 2 | Pending |
-| REQ-DH-03 | Phase 2 | Pending |
-| REQ-DH-04 | Phase 2 | Pending |
-| REQ-VC-01 | Phase 3 | Pending |
-| REQ-VC-02 | Phase 3 | Pending |
-| REQ-VC-03 | Phase 3 | Pending |
-| REQ-VC-04 | Phase 3 | Pending |
-| REQ-PERF-01 | Phase 4 | Pending |
-| REQ-PERF-02 | Phase 4 | Pending |
-| REQ-PERF-03 | Phase 4 | Pending |
-
-**Coverage:**
-- v5.3 requirements: 15 total
-- Mapped to phases: 15/15
-- Unmapped: 0
+|------------|-------|--------|
+| CORE-01..05 | TBD | Pending |
+| AGENT-01..05 | TBD | Pending |
+| AUTH-01..04 | TBD | Pending |
+| API-01..03 | TBD | Pending |
+| UI-01..03 | TBD | Pending |
+| ONBOARD-01..02 | TBD | Pending |
+| CLEAN-01..07 | TBD | Pending |
 
 ---
-*Requirements defined: 2026-03-07*
+*29 requirements across 7 categories*
