@@ -58,8 +58,6 @@ import {usePassword} from '@/hooks/use-password'
 import {useUserName} from '@/hooks/use-user-name'
 import {useBackups} from '@/features/backups/hooks/use-backups'
 import {useApps} from '@/providers/apps'
-import {DesktopPreviewFrame} from '@/modules/desktop/desktop-preview'
-import {DesktopPreviewConnected} from '@/modules/desktop/desktop-preview-basic'
 import {animatedWallpapers, animatedWallpaperIds, type AnimatedWallpaperId} from '@/components/animated-wallpapers'
 import {useWallpaper} from '@/providers/wallpaper'
 import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/settings/_components/language-dropdown'
@@ -192,13 +190,6 @@ export function SettingsContent() {
 			<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
 				{/* Left Sidebar - Menu */}
 				<div className='flex flex-col gap-3'>
-					{/* Desktop Preview */}
-					<div className='flex items-center justify-center'>
-						<DesktopPreviewFrame>
-							<DesktopPreviewConnected />
-						</DesktopPreviewFrame>
-					</div>
-
 					{/* Menu Items */}
 					<Card className='!p-2'>
 						<div className='space-y-0.5'>
@@ -229,25 +220,37 @@ export function SettingsContent() {
 
 				{/* Right Side - Header Card */}
 				<div className='flex flex-col gap-5'>
-					<Card className='flex flex-wrap items-center justify-between gap-5'>
-						<div>
-							<h2 className='text-heading-lg font-bold leading-none -tracking-4'>
-								{userQ.data?.name && `${firstNameFromFullName(userQ.data?.name)}'s`}{' '}
-								<span className='text-text-tertiary'>{t('livinity')}</span>
-							</h2>
-							<div className='pt-5' />
-							<SettingsSummary />
+					<Card className='!p-0 overflow-hidden'>
+						{/* Top banner with name */}
+						<div className='bg-surface-2/50 px-6 py-5 border-b border-border-default/50'>
+							<div className='flex items-center justify-between'>
+								<div className='flex items-center gap-3'>
+									<div className='flex h-10 w-10 items-center justify-center rounded-full bg-surface-3'>
+										<RiUserLine className='h-5 w-5 text-text-secondary' />
+									</div>
+									<div>
+										<h2 className='text-heading-sm font-semibold leading-none -tracking-2'>
+											{userQ.data?.name && `${firstNameFromFullName(userQ.data?.name)}'s`}{' '}
+											<span className='text-text-tertiary'>{t('livinity')}</span>
+										</h2>
+									</div>
+								</div>
+								<div className='flex items-center gap-1.5'>
+									<IconButtonLink to={linkToDialog('logout')} icon={RiLogoutCircleRLine}>
+										{t('logout')}
+									</IconButtonLink>
+									<IconButtonLink to={linkToDialog('restart')} icon={RiRestartLine}>
+										{t('restart')}
+									</IconButtonLink>
+									<IconButtonLink to={linkToDialog('shutdown')} text='destructive' icon={RiShutDownLine}>
+										{t('shut-down')}
+									</IconButtonLink>
+								</div>
+							</div>
 						</div>
-						<div className='flex w-full flex-col items-stretch gap-2.5 md:w-auto md:flex-row'>
-							<IconButtonLink to={linkToDialog('logout')} icon={RiLogoutCircleRLine}>
-								{t('logout')}
-							</IconButtonLink>
-							<IconButtonLink to={linkToDialog('restart')} icon={RiRestartLine}>
-								{t('restart')}
-							</IconButtonLink>
-							<IconButtonLink to={linkToDialog('shutdown')} text='destructive' icon={RiShutDownLine}>
-								{t('shut-down')}
-							</IconButtonLink>
+						{/* Device info grid */}
+						<div className='px-6 py-4'>
+							<SettingsSummary />
 						</div>
 					</Card>
 
