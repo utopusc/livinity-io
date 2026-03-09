@@ -31,7 +31,8 @@ export default function AiConfigPage() {
 	const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
 	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery(undefined, {
-		refetchInterval: loginSession ? 3000 : false,
+		// Don't poll status during active login — the poll endpoint handles that
+		enabled: !loginSession,
 	})
 	const nexusConfigQ = trpcReact.ai.getNexusConfig.useQuery()
 	const utils = trpcReact.useUtils()
