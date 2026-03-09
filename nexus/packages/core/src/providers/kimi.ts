@@ -1,0 +1,603 @@
+/**
+ * KimiProvider — AI provider for LivOS using Kimi's OpenAI-compatible API.
+ * Implements the AIProvider interface with chat, streaming, tool calling, and model tiers.
+ * Uses raw fetch() against api.kimi.com/coding/v1 (no SDK dependency).
+ */
+
+import type { Redis } from 'ioredis';
+import type {
+  AIProvider,
+  ProviderChatOptions,
+  ProviderChatResult,
+  ProviderStreamResult,
+  ProviderStreamChunk,
+  ModelTier,
+  ToolUseBlock,
+  ClaudeToolDefinition,
+} from './types.js';
+import { prepareForProvider } from './normalize.js';
+import { logger } from '../logger.js';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const KIMI_MODELS: Record<string, string> = {
+  flash: 'kimi-k2.5-flash',
+  haiku: 'kimi-k2.5-flash',
+  sonnet: 'kimi-k2.5',
+  opus: 'kimi-k2.5-pro',
+};
+
+const BASE_URL = 'https://api.kimi.com/coding/v1';
+const API_KEY_REDIS_KEY = 'nexus:config:kimi_api_key';
+const MODELS_REDIS_KEY = 'nexus:config:kimi_models';
+const MODEL_CACHE_TTL_MS = 60_000; // 60 seconds
+
+// ---------------------------------------------------------------------------
+// OpenAI-compatible types (internal, not exported)
+// ---------------------------------------------------------------------------
+
+interface OpenAIFunctionTool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+  };
+}
+
+interface OpenAIChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
+  tool_call_id?: string;
+}
+
+interface OpenAIStreamChunk {
+  id: string;
+  choices: Array<{
+    delta: {
+      content?: string | null;
+      tool_calls?: Array<{
+        index: number;
+        id?: string;
+        type?: 'function';
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+    finish_reason: string | null;
+  }>;
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+interface OpenAIChatResponse {
+  id: string;
+  choices: Array<{
+    message: {
+      content: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      }>;
+    };
+    finish_reason: string;
+  }>;
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Translate Anthropic tool definitions to OpenAI function format
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a Claude tool definition (input_schema) to an OpenAI function tool (parameters).
+ * This is a straightforward field rename: input_schema -> parameters.
+ */
+function translateToolDefinition(tool: ClaudeToolDefinition): OpenAIFunctionTool {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: {
+        type: 'object',
+        properties: tool.input_schema.properties,
+        required: tool.input_schema.required,
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Parse tool call arguments (string or object)
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle Kimi's tool call arguments which may be a JSON string or already parsed object.
+ * Returns an empty object on parse failure rather than crashing the agent loop.
+ */
+function parseToolArguments(args: string | Record<string, unknown>): Record<string, unknown> {
+  if (typeof args === 'object' && args !== null) {
+    return args;
+  }
+
+  if (typeof args === 'string') {
+    try {
+      return JSON.parse(args);
+    } catch (err) {
+      logger.warn('KimiProvider: failed to parse tool call arguments', {
+        raw: typeof args === 'string' ? args.slice(0, 200) : String(args),
+      });
+      return {};
+    }
+  }
+
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Map OpenAI finish_reason to Anthropic stop_reason
+// ---------------------------------------------------------------------------
+
+function mapStopReason(finishReason: string | null): string {
+  switch (finishReason) {
+    case 'stop':
+      return 'end_turn';
+    case 'tool_calls':
+      return 'tool_use';
+    case 'length':
+      return 'max_tokens';
+    default:
+      return finishReason || 'end_turn';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// KimiProvider
+// ---------------------------------------------------------------------------
+
+export class KimiProvider implements AIProvider {
+  readonly id = 'kimi';
+  readonly supportsVision = false; // Kimi K2.5 vision TBD
+  readonly supportsToolCalling = true;
+
+  private redis: Redis | null = null;
+  private cachedApiKey: string = '';
+  private cachedModels: Record<string, string> | null = null;
+  private modelsCachedAt: number = 0;
+
+  constructor(redis?: Redis) {
+    this.redis = redis ?? null;
+  }
+
+  // -------------------------------------------------------------------------
+  // API key management
+  // -------------------------------------------------------------------------
+
+  private async getApiKey(): Promise<string> {
+    // Return cached key if available
+    if (this.cachedApiKey) {
+      return this.cachedApiKey;
+    }
+
+    // Try Redis first
+    if (this.redis) {
+      try {
+        const key = await this.redis.get(API_KEY_REDIS_KEY);
+        if (key) {
+          this.cachedApiKey = key;
+          return key;
+        }
+      } catch (err: any) {
+        logger.warn('KimiProvider: Redis read failed, falling back to env', { error: err.message });
+      }
+    }
+
+    // Fall back to environment variable
+    const envKey = process.env.KIMI_API_KEY;
+    if (envKey) {
+      this.cachedApiKey = envKey;
+      return envKey;
+    }
+
+    throw new Error('No Kimi API key configured');
+  }
+
+  // -------------------------------------------------------------------------
+  // Model tier resolution
+  // -------------------------------------------------------------------------
+
+  private async getModelForTier(tier: string): Promise<string> {
+    // Check if cached models are still fresh
+    if (this.cachedModels && Date.now() - this.modelsCachedAt < MODEL_CACHE_TTL_MS) {
+      return this.cachedModels[tier] || KIMI_MODELS[tier] || KIMI_MODELS.sonnet;
+    }
+
+    // Try Redis for model overrides
+    if (this.redis) {
+      try {
+        const raw = await this.redis.get(MODELS_REDIS_KEY);
+        if (raw) {
+          const overrides = JSON.parse(raw) as Record<string, string>;
+          this.cachedModels = overrides;
+          this.modelsCachedAt = Date.now();
+          return overrides[tier] || KIMI_MODELS[tier] || KIMI_MODELS.sonnet;
+        }
+      } catch (err: any) {
+        logger.warn('KimiProvider: failed to read model overrides from Redis', { error: err.message });
+      }
+    }
+
+    // Fall back to hardcoded defaults
+    this.cachedModels = { ...KIMI_MODELS };
+    this.modelsCachedAt = Date.now();
+    return KIMI_MODELS[tier] || KIMI_MODELS.sonnet;
+  }
+
+  // -------------------------------------------------------------------------
+  // chat() — Non-streaming completion
+  // -------------------------------------------------------------------------
+
+  async chat(options: ProviderChatOptions): Promise<ProviderChatResult> {
+    const tier = options.tier || 'sonnet';
+    const model = await this.getModelForTier(tier);
+    const apiKey = await this.getApiKey();
+
+    // Build messages
+    const kimiMessages: OpenAIChatMessage[] = [];
+
+    // System message
+    if (options.systemPrompt) {
+      kimiMessages.push({ role: 'system', content: options.systemPrompt });
+    }
+
+    // User/assistant messages
+    if (options.rawMessages) {
+      kimiMessages.push(...(options.rawMessages as OpenAIChatMessage[]));
+    } else {
+      const prepared = prepareForProvider(options.messages, 'kimi') as Array<{ role: string; content: string }>;
+      for (const msg of prepared) {
+        kimiMessages.push({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        });
+      }
+    }
+
+    // Build request body
+    const body: Record<string, unknown> = {
+      model,
+      messages: kimiMessages,
+      stream: false,
+    };
+
+    if (options.maxOutputTokens) {
+      body.max_tokens = options.maxOutputTokens;
+    }
+
+    // Translate tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(translateToolDefinition);
+    }
+
+    // Make request
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err: any) {
+      logger.error('KimiProvider: fetch failed', { error: err.message });
+      throw new Error(`KimiProvider: network error: ${err.message}`);
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error('KimiProvider: API error', { status: response.status, body: errorBody.slice(0, 500) });
+      throw new Error(`KimiProvider: API error ${response.status}: ${errorBody.slice(0, 500)}`);
+    }
+
+    const data = (await response.json()) as OpenAIChatResponse;
+    const choice = data.choices[0];
+
+    // Extract text
+    const text = choice.message.content || '';
+
+    // Extract tool calls
+    const toolCalls: ToolUseBlock[] = [];
+    if (choice.message.tool_calls) {
+      for (const tc of choice.message.tool_calls) {
+        toolCalls.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.function.name,
+          input: parseToolArguments(tc.function.arguments),
+        });
+      }
+    }
+
+    return {
+      text,
+      inputTokens: data.usage?.prompt_tokens || 0,
+      outputTokens: data.usage?.completion_tokens || 0,
+      provider: 'kimi',
+      model,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      stopReason: mapStopReason(choice.finish_reason),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // chatStream() — SSE streaming completion
+  // -------------------------------------------------------------------------
+
+  chatStream(options: ProviderChatOptions): ProviderStreamResult {
+    const tier = options.tier || 'sonnet';
+    let resolvedModel = KIMI_MODELS[tier] || KIMI_MODELS.sonnet;
+
+    let finalInputTokens = 0;
+    let finalOutputTokens = 0;
+    const self = this;
+
+    async function* generate(): AsyncGenerator<ProviderStreamChunk> {
+      const model = await self.getModelForTier(tier);
+      resolvedModel = model;
+      const apiKey = await self.getApiKey();
+
+      // Build messages
+      const kimiMessages: OpenAIChatMessage[] = [];
+
+      if (options.systemPrompt) {
+        kimiMessages.push({ role: 'system', content: options.systemPrompt });
+      }
+
+      if (options.rawMessages) {
+        kimiMessages.push(...(options.rawMessages as OpenAIChatMessage[]));
+      } else {
+        const prepared = prepareForProvider(options.messages, 'kimi') as Array<{ role: string; content: string }>;
+        for (const msg of prepared) {
+          kimiMessages.push({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          });
+        }
+      }
+
+      // Build request body
+      const body: Record<string, unknown> = {
+        model,
+        messages: kimiMessages,
+        stream: true,
+      };
+
+      if (options.maxOutputTokens) {
+        body.max_tokens = options.maxOutputTokens;
+      }
+
+      if (options.tools && options.tools.length > 0) {
+        body.tools = options.tools.map(translateToolDefinition);
+      }
+
+      // Make streaming request
+      let response: Response;
+      try {
+        response = await fetch(`${BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        });
+      } catch (err: any) {
+        logger.error('KimiProvider: stream fetch failed', { error: err.message });
+        yield { text: '', done: true };
+        throw new Error(`KimiProvider: network error: ${err.message}`);
+      }
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        logger.error('KimiProvider: stream API error', { status: response.status, body: errorBody.slice(0, 500) });
+        yield { text: '', done: true };
+        throw new Error(`KimiProvider: API error ${response.status}: ${errorBody.slice(0, 500)}`);
+      }
+
+      if (!response.body) {
+        logger.error('KimiProvider: no response body for stream');
+        yield { text: '', done: true };
+        return;
+      }
+
+      // Track pending tool calls during streaming
+      const pendingToolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
+      let lastStopReason = '';
+      let buffer = '';
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete lines from the buffer
+          const lines = buffer.split('\n');
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+
+            // Skip empty lines and comments
+            if (!trimmed || trimmed.startsWith(':')) continue;
+
+            // SSE data lines
+            if (!trimmed.startsWith('data: ')) continue;
+
+            const data = trimmed.slice(6); // Strip 'data: ' prefix
+
+            // Check for stream end
+            if (data === '[DONE]') {
+              // Emit any remaining pending tool calls
+              if (pendingToolCalls.size > 0) {
+                for (const [, tc] of pendingToolCalls) {
+                  yield {
+                    text: '',
+                    done: false,
+                    toolUse: {
+                      type: 'tool_use',
+                      id: tc.id,
+                      name: tc.name,
+                      input: parseToolArguments(tc.args),
+                    },
+                  };
+                }
+                pendingToolCalls.clear();
+              }
+              yield { text: '', done: true, stopReason: lastStopReason || 'end_turn' };
+              return;
+            }
+
+            // Parse chunk JSON
+            let chunk: OpenAIStreamChunk;
+            try {
+              chunk = JSON.parse(data) as OpenAIStreamChunk;
+            } catch {
+              logger.warn('KimiProvider: failed to parse SSE chunk', { data: data.slice(0, 200) });
+              continue;
+            }
+
+            // Extract usage if present (some providers include in final chunks)
+            if (chunk.usage) {
+              finalInputTokens = chunk.usage.prompt_tokens;
+              finalOutputTokens = chunk.usage.completion_tokens;
+            }
+
+            const choice = chunk.choices?.[0];
+            if (!choice) continue;
+
+            // Track finish reason
+            if (choice.finish_reason) {
+              lastStopReason = mapStopReason(choice.finish_reason);
+            }
+
+            // Handle text content delta
+            if (choice.delta.content) {
+              yield { text: choice.delta.content, done: false };
+            }
+
+            // Handle tool call deltas
+            if (choice.delta.tool_calls) {
+              for (const tcDelta of choice.delta.tool_calls) {
+                const idx = tcDelta.index;
+
+                if (!pendingToolCalls.has(idx)) {
+                  // New tool call — id and name come in the first chunk
+                  pendingToolCalls.set(idx, {
+                    id: tcDelta.id || '',
+                    name: tcDelta.function?.name || '',
+                    args: tcDelta.function?.arguments || '',
+                  });
+                } else {
+                  // Update existing tool call
+                  const existing = pendingToolCalls.get(idx)!;
+                  if (tcDelta.id) existing.id = tcDelta.id;
+                  if (tcDelta.function?.name) existing.name = tcDelta.function.name;
+                  if (tcDelta.function?.arguments) existing.args += tcDelta.function.arguments;
+                }
+              }
+            }
+
+            // If finish_reason indicates tool calls are complete, emit them
+            if (choice.finish_reason === 'tool_calls' && pendingToolCalls.size > 0) {
+              for (const [, tc] of pendingToolCalls) {
+                yield {
+                  text: '',
+                  done: false,
+                  toolUse: {
+                    type: 'tool_use',
+                    id: tc.id,
+                    name: tc.name,
+                    input: parseToolArguments(tc.args),
+                  },
+                };
+              }
+              pendingToolCalls.clear();
+            }
+          }
+        }
+
+        // If stream ended without [DONE], emit final chunk
+        yield { text: '', done: true, stopReason: lastStopReason || 'end_turn' };
+      } catch (err: any) {
+        logger.error('KimiProvider.chatStream error', { error: err.message });
+        yield { text: '', done: true };
+        throw err;
+      }
+    }
+
+    return {
+      stream: generate(),
+      getUsage: () => ({ inputTokens: finalInputTokens, outputTokens: finalOutputTokens }),
+      provider: 'kimi',
+      model: resolvedModel,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // think() — Simple text completion
+  // -------------------------------------------------------------------------
+
+  async think(options: { prompt: string; systemPrompt?: string; tier?: ModelTier; maxTokens?: number }): Promise<string> {
+    const result = await this.chat({
+      systemPrompt: options.systemPrompt || 'You are a helpful assistant.',
+      messages: [{ role: 'user', content: options.prompt }],
+      tier: options.tier,
+      maxOutputTokens: options.maxTokens,
+    });
+    return result.text;
+  }
+
+  // -------------------------------------------------------------------------
+  // isAvailable() — Check if API key is configured
+  // -------------------------------------------------------------------------
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      await this.getApiKey();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // getModels() — Return current model tier mapping
+  // -------------------------------------------------------------------------
+
+  getModels(): Record<string, string> {
+    // Return cached models if available and fresh, otherwise defaults
+    if (this.cachedModels && Date.now() - this.modelsCachedAt < MODEL_CACHE_TTL_MS) {
+      return { ...this.cachedModels };
+    }
+    return { ...KIMI_MODELS };
+  }
+}
