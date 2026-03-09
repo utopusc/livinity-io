@@ -42,11 +42,11 @@ Plans:
   3. Express routes `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` respond correctly
   4. tRPC routes for Kimi status/login/logout work through the livinityd proxy
   5. User can select between Kimi model tiers (fast/balanced/powerful) in the Settings UI
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Express and tRPC API routes for Kimi auth
-- [ ] 02-02: Settings UI redesign for Kimi configuration
+- [ ] 02-01-PLAN.md -- Express and tRPC API routes for Kimi auth (API-01, API-02, AUTH-01, AUTH-02)
+- [ ] 02-02-PLAN.md -- Settings UI redesign for Kimi configuration (UI-01, UI-02, UI-03)
 
 ### Phase 3: KimiAgentRunner
 **Goal**: AI agent tasks execute through Kimi CLI subprocess with full MCP tool access and streaming output
@@ -88,6 +88,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 1. KimiProvider | 0/2 | Planned | - |
-| 2. Configuration Layer | 0/2 | Not started | - |
+| 2. Configuration Layer | 0/2 | Planned | - |
 | 3. KimiAgentRunner | 0/2 | Not started | - |
 | 4. Onboarding and Cleanup | 0/2 | Not started | - |
