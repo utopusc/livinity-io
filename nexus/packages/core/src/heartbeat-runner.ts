@@ -276,11 +276,16 @@ export class HeartbeatRunner {
 - HEARTBEAT_OK means "all clear, nothing to report"
 `;
 
+    // NOTE: tier 'flash' maps to kimi-for-coding which is a thinking model.
+    // The response may include reasoning_content tokens that count toward usage
+    // but are not surfaced in the text output. This is expected — Kimi's API
+    // does not offer a way to disable reasoning for kimi-for-coding. The token
+    // overhead is acceptable for infrequent heartbeat checks.
     const response = await this.brain.chat({
       systemPrompt,
       messages: [{ role: 'user', text: prompt }],
       maxTokens: 2000,
-      tier: 'flash', // Use cheap model for heartbeats
+      tier: 'flash',
     });
 
     return response.text || '';
