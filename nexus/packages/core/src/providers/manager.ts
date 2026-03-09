@@ -1,6 +1,6 @@
 /**
  * ProviderManager — Orchestrates AI providers with automatic fallback.
- * Claude is primary, Gemini is fallback on 429/503/timeout errors.
+ * Kimi is primary, Claude is secondary fallback, Gemini is last resort.
  */
 
 import type { Redis } from 'ioredis';
@@ -12,6 +12,7 @@ import type {
   ProviderStreamChunk,
   ModelTier,
 } from './types.js';
+import { KimiProvider } from './kimi.js';
 import { ClaudeProvider } from './claude.js';
 import { GeminiProvider } from './gemini.js';
 import { logger } from '../logger.js';
@@ -21,11 +22,13 @@ export class ProviderManager {
   private fallbackOrder: string[] = [];
 
   constructor(redis?: Redis) {
+    const kimi = new KimiProvider(redis);
     const claude = new ClaudeProvider(redis);
     const gemini = new GeminiProvider(redis);
+    this.providers.set('kimi', kimi);
     this.providers.set('claude', claude);
     this.providers.set('gemini', gemini);
-    this.fallbackOrder = ['claude', 'gemini'];
+    this.fallbackOrder = ['kimi', 'claude', 'gemini'];
   }
 
   async chat(options: ProviderChatOptions): Promise<ProviderChatResult> {
@@ -191,7 +194,7 @@ export class ProviderManager {
       const available = await provider.isAvailable();
       if (available) return providerId;
     }
-    return 'gemini'; // fallback default
+    return 'kimi'; // fallback default
   }
 
   setFallbackOrder(order: string[]): void {

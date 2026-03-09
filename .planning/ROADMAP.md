@@ -74,11 +74,11 @@ Plans:
   3. `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk` are absent from package.json and node_modules
   4. No Redis keys with "claude" or "anthropic" prefix exist in production
   5. End-to-end test passes: fresh onboarding -> Kimi setup -> chat message -> tool execution -> streaming response
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Onboarding wizard update and device auth flow
-- [ ] 04-02: Full Claude/Anthropic/Gemini cleanup and verification
+- [ ] 04-01-PLAN.md -- Onboarding wizard StepKimiAuth replacing StepClaudeAuth (ONBOARD-01, ONBOARD-02)
+- [ ] 04-02-PLAN.md -- Full Claude/Anthropic/Gemini code deletion and grep verification (CLEAN-01..07)
 
 ## Progress
 
@@ -90,4 +90,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. KimiProvider | 0/2 | Planned | - |
 | 2. Configuration Layer | 0/2 | Planned | - |
 | 3. KimiAgentRunner | 0/2 | Planned | - |
-| 4. Onboarding and Cleanup | 0/2 | Not started | - |
+| 4. Onboarding and Cleanup | 0/2 | Planned | - |
