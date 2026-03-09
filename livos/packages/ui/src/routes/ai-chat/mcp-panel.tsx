@@ -30,6 +30,7 @@ import {
 	IconGitBranch,
 	IconNote,
 	IconBrandMongodb,
+	IconBolt,
 } from '@tabler/icons-react'
 import {cn} from '@/shadcn-lib/utils'
 
@@ -85,13 +86,25 @@ type FeaturedMcp = {
 	displayName: string
 	description: string
 	category: string
-	icon: 'search' | 'github' | 'database' | 'browser' | 'filesystem' | 'brain' | 'api' | 'cloud' | 'world' | 'git' | 'note' | 'mongodb'
+	icon: 'search' | 'github' | 'database' | 'browser' | 'filesystem' | 'brain' | 'api' | 'cloud' | 'world' | 'git' | 'note' | 'mongodb' | 'bolt'
 	gradient: string
 	npmPackage?: string
 	remoteUrl?: string
 	transport: 'stdio' | 'streamableHttp'
 	customCommand?: string
 	customArgs?: string[]
+	/** Credential fields to prompt during install (for remote servers) */
+	credentials?: Array<{
+		key: string
+		label: string
+		placeholder: string
+		isSecret?: boolean
+		type?: 'url' | 'token'
+		helpText?: string
+		helpUrl?: string
+	}>
+	/** Header template — use {{key}} for credential interpolation */
+	headerTemplate?: Record<string, string>
 }
 
 const FEATURED_MCPS: FeaturedMcp[] = [
@@ -276,6 +289,34 @@ const FEATURED_MCPS: FeaturedMcp[] = [
 		npmPackage: 'tavily-mcp',
 		transport: 'stdio',
 	},
+	{
+		name: 'zapier',
+		displayName: 'Zapier',
+		description: 'Connect to 8,000+ apps — Gmail, Slack, Sheets, Notion, and more via Zapier automations',
+		category: 'Automation',
+		icon: 'bolt',
+		gradient: 'from-orange-500/30 to-amber-400/30',
+		transport: 'streamableHttp',
+		credentials: [
+			{
+				key: 'serverUrl',
+				label: 'MCP Server URL',
+				placeholder: 'https://mcp.zapier.com/api/mcp/s/YOUR_SECRET/mcp',
+				type: 'url',
+				helpText: 'Get this from mcp.zapier.com → your server → Connect tab',
+				helpUrl: 'https://mcp.zapier.com',
+			},
+			{
+				key: 'bearerToken',
+				label: 'Bearer Token',
+				placeholder: 'Paste your token here...',
+				isSecret: true,
+				type: 'token',
+				helpText: 'Shown once when you create a new connection at mcp.zapier.com',
+			},
+		],
+		headerTemplate: {'Authorization': 'Bearer {{bearerToken}}'},
+	},
 ]
 
 const ICON_MAP: Record<FeaturedMcp['icon'], React.ElementType> = {
@@ -291,6 +332,7 @@ const ICON_MAP: Record<FeaturedMcp['icon'], React.ElementType> = {
 	git: IconGitBranch,
 	note: IconNote,
 	mongodb: IconBrandMongodb,
+	bolt: IconBolt,
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -303,6 +345,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 	Web: 'bg-teal-500/15 text-teal-700',
 	Productivity: 'bg-yellow-500/15 text-yellow-700',
 	Cloud: 'bg-amber-500/15 text-amber-700',
+	Automation: 'bg-orange-500/15 text-orange-700',
 }
 
 // ─── API helpers ────────────────────────────────────────────────
@@ -575,14 +618,23 @@ function InstallDialog({
 	const [url, setUrl] = useState('')
 	const [description, setDescription] = useState('')
 	const [envVars, setEnvVars] = useState<Array<{key: string; value: string}>>([])
+	const [credentialValues, setCredentialValues] = useState<Record<string, string>>({})
 	const [installing, setInstalling] = useState(false)
 	const [error, setError] = useState('')
+
+	const hasCredentials = !!featured?.credentials?.length
 
 	useEffect(() => {
 		if (featured) {
 			setName(featured.name)
 			setDescription(featured.description)
 			setTransport(featured.transport)
+			if (featured.credentials) {
+				// Init credential values
+				const init: Record<string, string> = {}
+				for (const c of featured.credentials) init[c.key] = ''
+				setCredentialValues(init)
+			}
 			if (featured.customCommand) {
 				setCommand(featured.customCommand)
 				setArgs(featured.customArgs?.join(' ') || '')
@@ -628,7 +680,22 @@ function InstallDialog({
 				description,
 				installedFrom: featured?.name || server?.name,
 			}
-			if (transport === 'stdio') {
+
+			if (hasCredentials && featured) {
+				// Credential-based install (e.g. Zapier)
+				// Resolve URL from credential with type=url, or from remoteUrl
+				const urlCred = featured.credentials!.find((c) => c.type === 'url')
+				body.url = urlCred ? credentialValues[urlCred.key] : featured.remoteUrl || url
+
+				// Build headers from template
+				if (featured.headerTemplate) {
+					const headers: Record<string, string> = {}
+					for (const [hKey, hVal] of Object.entries(featured.headerTemplate)) {
+						headers[hKey] = hVal.replace(/\{\{(\w+)\}\}/g, (_, k) => credentialValues[k] || '')
+					}
+					body.headers = headers
+				}
+			} else if (transport === 'stdio') {
 				body.command = command
 				body.args = args.split(/\s+/).filter(Boolean)
 				// Add env vars if any have values
@@ -673,6 +740,61 @@ function InstallDialog({
 				</div>
 
 				<div className='space-y-4'>
+					{/* Credential-based install flow (Zapier, etc.) */}
+					{hasCredentials && featured ? (
+					<>
+						{/* Setup instructions */}
+						<div className='rounded-radius-lg border border-amber-500/20 bg-amber-500/5 px-3.5 py-3'>
+							<p className='text-caption font-medium text-amber-300'>New connection credentials</p>
+							<p className='mt-1 text-caption-sm text-text-tertiary'>
+								Save these credentials now. This is the only time you will see them.
+							</p>
+						</div>
+
+						{/* Credential fields */}
+						{featured.credentials!.map((cred) => (
+							<div key={cred.key}>
+								<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>
+									{cred.label}
+								</label>
+								<input
+									type={cred.isSecret ? 'password' : 'text'}
+									value={credentialValues[cred.key] || ''}
+									onChange={(e) => setCredentialValues((prev) => ({...prev, [cred.key]: e.target.value}))}
+									placeholder={cred.placeholder}
+									className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 font-mono text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
+								/>
+								{cred.helpText && (
+									<p className='mt-1.5 text-caption-sm text-text-tertiary'>
+										{cred.helpText}
+										{cred.helpUrl && (
+											<>
+												{' '}
+												<a
+													href={cred.helpUrl}
+													target='_blank'
+													rel='noopener noreferrer'
+													className='inline-flex items-center gap-0.5 text-brand hover:underline'
+												>
+													Open <IconExternalLink size={11} className='inline' />
+												</a>
+											</>
+										)}
+									</p>
+								)}
+							</div>
+						))}
+
+						{/* Connection info */}
+						<div className='rounded-radius-lg bg-surface-1 px-3.5 py-3'>
+							<p className='text-caption-sm font-medium text-text-secondary'>How it connects</p>
+							<p className='mt-1 text-caption-sm text-text-tertiary'>
+								Liv connects via <span className='font-mono text-text-secondary'>Authorization: Bearer &lt;token&gt;</span> header to your MCP server URL.
+							</p>
+						</div>
+					</>
+					) : (
+					<>
 					{/* Name */}
 					<div>
 						<label className='mb-1.5 block text-caption-sm font-medium uppercase tracking-wide text-text-tertiary'>Name</label>
@@ -795,6 +917,8 @@ function InstallDialog({
 							className='w-full rounded-radius-lg border border-border-default bg-surface-base px-3 py-2 text-body-sm text-text-primary placeholder-text-tertiary outline-none transition-colors focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-brand/20'
 						/>
 					</div>
+					</>
+					)}
 
 					{/* Error */}
 					{error && (
@@ -814,11 +938,11 @@ function InstallDialog({
 						</button>
 						<button
 							onClick={handleInstall}
-							disabled={installing || !name}
+							disabled={installing || !name || (hasCredentials && featured?.credentials?.some((c) => !credentialValues[c.key]))}
 							className='flex items-center gap-2 rounded-radius-lg bg-brand px-5 py-2 text-body-sm font-semibold text-white transition-all hover:bg-brand-lighter disabled:opacity-40'
 						>
 							{installing ? <IconLoader2 size={14} className='animate-spin' /> : <IconDownload size={14} />}
-							Install
+							{hasCredentials ? 'Connect' : 'Install'}
 						</button>
 					</div>
 				</div>
