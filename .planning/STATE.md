@@ -12,24 +12,24 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 Milestone: v6.0 (Claude Code to Kimi Code Migration)
 Phase: 1 of 4 (KimiProvider)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-03-09 -- Roadmap created, 4 phases, 29 requirements mapped
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-09 -- Completed 01-01-PLAN.md (KimiProvider core implementation)
 
-Progress: [..........] 0%
+Progress: [##........] 25% (1/4 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 3 min
+- Total execution time: 3 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-kimi-provider | 1/2 | 3 min | 3 min |
 
 ## Accumulated Context
 
@@ -40,6 +40,9 @@ Progress: [..........] 0%
 - Build Kimi alongside Claude first, remove Claude code last (Phase 4)
 - OpenAI-compatible API at `api.kimi.com/coding/v1` for KimiProvider
 - Gemini fallback removed -- single provider architecture
+- Raw fetch over openai SDK for KimiProvider -- zero new dependencies (01-01)
+- 60s TTL cache for Redis model tier overrides (01-01)
+- supportsVision = false for Kimi until K2.5 vision verified (01-01)
 
 ### Pending Todos
 
@@ -54,5 +57,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Roadmap created, ready to plan Phase 1
+Stopped at: Completed 01-01-PLAN.md (KimiProvider core implementation)
 Resume file: None
