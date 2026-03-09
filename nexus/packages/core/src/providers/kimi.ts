@@ -597,11 +597,17 @@ export class KimiProvider implements AIProvider {
             // Track finish reason
             if (choice.finish_reason) {
               lastStopReason = mapStopReason(choice.finish_reason);
+              logger.info('KimiProvider: finish_reason', { raw: choice.finish_reason, mapped: lastStopReason });
             }
 
             // Handle text content delta
             if (choice.delta.content) {
+              logger.info('KimiProvider: content chunk', { content: choice.delta.content.slice(0, 50) });
               yield { text: choice.delta.content, done: false };
+            }
+            // Also capture reasoning_content for debug
+            if ((choice.delta as any).reasoning_content) {
+              logger.debug('KimiProvider: reasoning chunk', { len: (choice.delta as any).reasoning_content.length });
             }
 
             // Handle tool call deltas
