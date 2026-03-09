@@ -691,66 +691,22 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 	)
 }
 
-// ─── Step 4: Claude AI Auth (Skippable) ─────────────────────────
+// ─── Step 4: Kimi AI Auth (Skippable) ────────────────────────────
 
-function StepClaudeAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
-	const [loginCode, setLoginCode] = useState('')
-	const [loginUrl, setLoginUrl] = useState('')
+function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
+	const [apiKey, setApiKey] = useState('')
 
-	const cliStatusQ = trpcReact.ai.getClaudeCliStatus.useQuery()
+	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
 	const utils = trpcReact.useUtils()
 
-	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
+	const authenticated = kimiStatusQ.data?.authenticated ?? false
 
-	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
+	const kimiLoginMutation = trpcReact.ai.kimiLogin.useMutation({
 		onSuccess: () => {
-			utils.ai.getClaudeCliStatus.invalidate()
+			setApiKey('')
+			utils.ai.getKimiStatus.invalidate()
 		},
 	})
-
-	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
-		onSuccess: (data) => {
-			if (data.url) {
-				setLoginUrl(data.url)
-				window.open(data.url, '_blank', 'noopener,noreferrer')
-			}
-			if (data.alreadyAuthenticated) {
-				utils.ai.getClaudeCliStatus.invalidate()
-			}
-		},
-	})
-
-	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
-		onSuccess: (data) => {
-			if (data.success) {
-				setLoginCode('')
-				setLoginUrl('')
-				utils.ai.getClaudeCliStatus.invalidate()
-			}
-		},
-	})
-
-	// Set auth method to sdk-subscription on mount
-	useEffect(() => {
-		setAuthMethodMutation.mutate({method: 'sdk-subscription'})
-	}, [])
-
-	// Poll CLI status every 5s when not authenticated
-	useEffect(() => {
-		if (cliAuthenticated) return
-		const interval = setInterval(() => {
-			cliStatusQ.refetch()
-		}, 5000)
-		return () => clearInterval(interval)
-	}, [cliAuthenticated])
-
-	// Clear login UI when auth completes
-	useEffect(() => {
-		if (cliAuthenticated) {
-			setLoginUrl('')
-			setLoginCode('')
-		}
-	}, [cliAuthenticated])
 
 	return (
 		<div className='flex flex-col items-center gap-5 w-full'>
@@ -758,21 +714,21 @@ function StepClaudeAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => voi
 				<div className='flex items-center gap-2'>
 					<IconSparkles size={20} className='text-brand' />
 					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
-						{t('onboarding.claude.title', {defaultValue: 'Connect Claude AI'})}
+						{t('onboarding.kimi.title', {defaultValue: 'Connect Kimi AI'})}
 					</h2>
 				</div>
 				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg' style={{maxWidth: 420}}>
-					{t('onboarding.claude.subtitle', {defaultValue: 'Sign in with your Claude subscription to enable AI features'})}
+					{t('onboarding.kimi.subtitle', {defaultValue: 'Enter your Kimi API key to enable AI features'})}
 				</p>
 			</div>
 
 			<div className='w-full rounded-xl border border-border-default bg-surface-base p-5 space-y-4'>
-				{cliStatusQ.isLoading ? (
+				{kimiStatusQ.isLoading ? (
 					<div className='flex items-center justify-center gap-2 py-4 text-text-secondary'>
 						<IconLoader2 size={18} className='animate-spin' />
 						<span className='text-body'>Checking status...</span>
 					</div>
-				) : cliAuthenticated ? (
+				) : authenticated ? (
 					<motion.div
 						initial={{opacity: 0, scale: 0.95}}
 						animate={{opacity: 1, scale: 1}}
@@ -787,109 +743,61 @@ function StepClaudeAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => voi
 							<IconCheck size={24} className='text-green-400' />
 						</motion.div>
 						<div className='text-center'>
-							<p className='text-body font-medium text-green-400'>Authenticated</p>
-							{cliStatusQ.data?.user && (
-								<p className='mt-0.5 text-caption text-text-tertiary'>
-									Signed in as <span className='text-text-secondary'>{cliStatusQ.data.user}</span>
-								</p>
-							)}
+							<p className='text-body font-medium text-green-400'>
+								{t('onboarding.kimi.connected', {defaultValue: 'Connected'})}
+							</p>
+							<p className='mt-0.5 text-caption text-text-tertiary'>
+								{t('onboarding.kimi.connected-desc', {defaultValue: 'Kimi AI is ready to use'})}
+							</p>
 						</div>
 					</motion.div>
 				) : (
 					<div className='space-y-4'>
-						{/* Step 1: Sign in button */}
+						<div className='space-y-2'>
+							<PasswordInput
+								label={t('onboarding.kimi.api-key-placeholder', {defaultValue: 'Enter your Kimi API key'})}
+								value={apiKey}
+								onValueChange={setApiKey}
+							/>
+
+							{kimiLoginMutation.isError && (
+								<AnimatedInputError>{kimiLoginMutation.error.message}</AnimatedInputError>
+							)}
+						</div>
+
 						<button
-							onClick={() => startLoginMutation.mutate()}
-							disabled={startLoginMutation.isPending}
+							onClick={() => kimiLoginMutation.mutate({apiKey: apiKey.trim()})}
+							disabled={!apiKey.trim() || kimiLoginMutation.isPending}
 							className={cn(primaryButtonClass, 'w-full')}
 						>
-							{startLoginMutation.isPending ? (
+							{kimiLoginMutation.isPending ? (
 								<>
 									<IconLoader2 size={16} className='animate-spin' />
-									Opening...
+									{t('onboarding.kimi.validating', {defaultValue: 'Validating...'})}
 								</>
 							) : (
-								<>
-									<IconExternalLink size={16} />
-									{loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}
-								</>
+								t('onboarding.kimi.validate', {defaultValue: 'Validate & Save'})
 							)}
 						</button>
 
-						{startLoginMutation.isError && (
-							<p className='text-caption text-red-400 text-center'>{startLoginMutation.error.message}</p>
-						)}
-
-						{/* Step 2: Code input */}
-						<div className='space-y-3 rounded-lg bg-surface-1 border border-border-subtle p-4'>
-							<p className='text-caption text-text-tertiary'>
-								1. Click the button above to open the auth page.
-								<br />
-								2. Log in with your Claude account.
-								<br />
-								3. Copy the code you receive and paste it below:
-							</p>
-
-							{loginUrl && (
-								<a
-									href={loginUrl}
-									target='_blank'
-									rel='noopener noreferrer'
-									className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300 transition-colors'
-								>
-									<IconExternalLink size={14} />
-									Re-open auth page
-								</a>
-							)}
-
-							<div className='flex gap-2'>
-								<Input
-									placeholder='Paste auth code here...'
-									value={loginCode}
-									onValueChange={setLoginCode}
-									className='font-mono text-caption'
-								/>
-								<button
-									onClick={() => {
-										if (!loginUrl) {
-											startLoginMutation.mutate(undefined, {
-												onSuccess: () => {
-													submitCodeMutation.mutate({code: loginCode})
-												},
-											})
-										} else {
-											submitCodeMutation.mutate({code: loginCode})
-										}
-									}}
-									disabled={!loginCode.trim() || submitCodeMutation.isPending}
-									className={primaryButtonClass}
-								>
-									{submitCodeMutation.isPending ? (
-										<IconLoader2 size={16} className='animate-spin' />
-									) : (
-										'Submit'
-									)}
-								</button>
-							</div>
-
-							{submitCodeMutation.isError && (
-								<p className='text-caption text-red-400'>{submitCodeMutation.error.message}</p>
-							)}
-							{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
-								<p className='text-caption text-red-400'>
-									{submitCodeMutation.data?.error || 'Code exchange failed'}
-								</p>
-							)}
-						</div>
+						<a
+							href='https://kimi.com'
+							target='_blank'
+							rel='noopener noreferrer'
+							className='flex items-center justify-center gap-1.5 text-caption text-text-tertiary hover:text-text-secondary transition-colors'
+						>
+							<IconExternalLink size={14} />
+							{t('onboarding.kimi.get-key', {defaultValue: 'Get a Kimi API key'})}
+						</a>
 					</div>
 				)}
 			</div>
 
 			{/* Next / Skip */}
-			{cliAuthenticated && (
+			{authenticated && (
 				<motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
 					<button onClick={onNext} className={primaryButtonClass}>
-						Continue
+						{t('continue', {defaultValue: 'Continue'})}
 						<IconArrowRight size={16} />
 					</button>
 				</motion.div>
@@ -1086,9 +994,9 @@ export default function SetupWizard() {
 						<StepDomainSetup onNext={goNext} onSkip={goNext} />
 					</div>
 
-					{/* Step 4: Claude AI Auth */}
+					{/* Step 4: Kimi AI Auth */}
 					<div className='w-full'>
-						<StepClaudeAuth onNext={goNext} onSkip={goNext} />
+						<StepKimiAuth onNext={goNext} onSkip={goNext} />
 					</div>
 
 					{/* Step 5: All Done */}
