@@ -174,18 +174,22 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
           if (config.gmailClientSecret) clientSecret = config.gmailClientSecret;
         } catch { /* use env vars */ }
       }
-      const publicUrl = process.env.NEXUS_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
+      // Read stored public URL (saved during /oauth/start) with fallbacks
+      const storedPublicUrl = await redis.get('nexus:gmail:public_url');
+      const publicUrl = storedPublicUrl
+        || process.env.NEXUS_PUBLIC_URL
+        || `http://localhost:${process.env.API_PORT || '3200'}`;
       const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
 
       const { tokens, profile } = await gmailProvider.exchangeCode(clientId, clientSecret, redirectUri, code);
       await gmailProvider.finishOAuth(tokens, profile);
 
-      // Redirect back to LivOS Settings UI
-      const uiBase = process.env.LIVOS_UI_URL || 'http://localhost:2017';
-      res.redirect(`${uiBase}/settings?gmail=connected`);
+      // Redirect back to LivOS Settings UI (same origin the user came from)
+      res.redirect(`${publicUrl}/settings?gmail=connected`);
     } catch (err) {
       logger.error('Gmail OAuth callback error', { error: formatErrorMessage(err) });
-      const uiBase = process.env.LIVOS_UI_URL || 'http://localhost:2017';
+      const storedUrl = await redis.get('nexus:gmail:public_url');
+      const uiBase = storedUrl || process.env.LIVOS_UI_URL || 'http://localhost:2017';
       res.redirect(`${uiBase}/settings?gmail=error&message=${encodeURIComponent(formatErrorMessage(err))}`);
     }
   });
@@ -427,7 +431,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   });
 
   /** Start Gmail OAuth — returns URL for Google consent screen */
-  app.get('/api/gmail/oauth/start', async (_req, res) => {
+  app.get('/api/gmail/oauth/start', async (req, res) => {
     const gmailProvider = channelManager?.getProvider('gmail') as GmailProvider | undefined;
     if (!gmailProvider) {
       res.status(503).json({ error: 'Gmail provider not available' });
@@ -440,8 +444,14 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       return;
     }
 
-    const publicUrl = process.env.NEXUS_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
+    // Public URL passed from livinityd (derived from the browser's request)
+    const publicUrl = (req.query.publicUrl as string)
+      || process.env.NEXUS_PUBLIC_URL
+      || `http://localhost:${process.env.API_PORT || '3200'}`;
     const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
+
+    // Store the public URL in Redis so the callback can reconstruct the redirect URI
+    await redis.set('nexus:gmail:public_url', publicUrl);
 
     try {
       const url = gmailProvider.getAuthUrl(clientId, clientSecret, redirectUri);
