@@ -1210,14 +1210,11 @@ export default router({
 	}),
 
 	/** Start Gmail OAuth flow — returns consent screen URL */
-	startGmailOauth: privateProcedure.mutation(async ({ctx}) => {
+	startGmailOauth: privateProcedure.input(z.object({
+		publicUrl: z.string().min(1),
+	})).mutation(async ({input}) => {
 		const nexusUrl = getNexusApiUrl()
-		// Derive public URL from the browser request so Gmail OAuth works on any domain
-		const req = ctx.request
-		const proto = req?.headers['x-forwarded-proto'] || req?.protocol || 'https'
-		const host = req?.headers['x-forwarded-host'] || req?.headers.host || 'localhost'
-		const publicUrl = `${proto}://${host}`
-		const response = await fetch(`${nexusUrl}/api/gmail/oauth/start?publicUrl=${encodeURIComponent(publicUrl)}`, {
+		const response = await fetch(`${nexusUrl}/api/gmail/oauth/start?publicUrl=${encodeURIComponent(input.publicUrl)}`, {
 			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 		})
 		if (!response.ok) {
