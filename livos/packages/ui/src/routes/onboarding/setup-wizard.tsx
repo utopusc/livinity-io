@@ -694,7 +694,11 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 // ─── Step 4: Kimi AI Auth (Skippable) ────────────────────────────
 
 function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
-	const [apiKey, setApiKey] = useState('')
+	const [loginSession, setLoginSession] = useState<{
+		sessionId: string
+		verificationUrl: string
+		userCode: string
+	} | null>(null)
 
 	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
 	const utils = trpcReact.useUtils()
@@ -702,11 +706,24 @@ function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}
 	const authenticated = kimiStatusQ.data?.authenticated ?? false
 
 	const kimiLoginMutation = trpcReact.ai.kimiLogin.useMutation({
-		onSuccess: () => {
-			setApiKey('')
-			utils.ai.getKimiStatus.invalidate()
+		onSuccess: (data) => {
+			setLoginSession(data)
 		},
 	})
+
+	// Poll login session for auth completion
+	const pollQ = trpcReact.ai.kimiLoginPoll.useQuery(
+		{sessionId: loginSession?.sessionId ?? ''},
+		{enabled: !!loginSession, refetchInterval: 2000},
+	)
+
+	// When poll returns success or status becomes connected, clear login session
+	useEffect(() => {
+		if (pollQ.data?.status === 'success' || (authenticated && loginSession)) {
+			setLoginSession(null)
+			utils.ai.getKimiStatus.invalidate()
+		}
+	}, [pollQ.data?.status, authenticated, loginSession, utils.ai.getKimiStatus])
 
 	return (
 		<div className='flex flex-col items-center gap-5 w-full'>
@@ -718,7 +735,7 @@ function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}
 					</h2>
 				</div>
 				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg' style={{maxWidth: 420}}>
-					{t('onboarding.kimi.subtitle', {defaultValue: 'Enter your Kimi API key to enable AI features'})}
+					{t('onboarding.kimi.subtitle', {defaultValue: 'Sign in with your Kimi account to enable AI features'})}
 				</p>
 			</div>
 
@@ -751,44 +768,63 @@ function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}
 							</p>
 						</div>
 					</motion.div>
+				) : loginSession ? (
+					<div className='space-y-4'>
+						<div className='flex items-center justify-center gap-2 text-blue-400'>
+							<IconLoader2 size={18} className='animate-spin' />
+							<span className='text-body'>Waiting for authorization...</span>
+						</div>
+						<div className='rounded-lg border border-border-default bg-surface-raised p-4 text-center space-y-2'>
+							<p className='text-caption text-text-secondary'>Enter this code on the Kimi page:</p>
+							<p className='text-display-sm font-mono font-bold text-text-primary tracking-widest'>
+								{loginSession.userCode}
+							</p>
+						</div>
+						<a
+							href={loginSession.verificationUrl}
+							target='_blank'
+							rel='noopener noreferrer'
+							className='block'
+						>
+							<button className={cn(primaryButtonClass, 'w-full')}>
+								Open Kimi Authorization Page
+								<IconExternalLink size={16} />
+							</button>
+						</a>
+						<button
+							onClick={() => setLoginSession(null)}
+							className={cn(skipButtonClass, 'w-full')}
+						>
+							Cancel
+						</button>
+
+						{kimiLoginMutation.isError && (
+							<AnimatedInputError>{kimiLoginMutation.error.message}</AnimatedInputError>
+						)}
+					</div>
 				) : (
 					<div className='space-y-4'>
-						<div className='space-y-2'>
-							<PasswordInput
-								label={t('onboarding.kimi.api-key-placeholder', {defaultValue: 'Enter your Kimi API key'})}
-								value={apiKey}
-								onValueChange={setApiKey}
-							/>
-
-							{kimiLoginMutation.isError && (
-								<AnimatedInputError>{kimiLoginMutation.error.message}</AnimatedInputError>
-							)}
-						</div>
-
 						<button
-							onClick={() => kimiLoginMutation.mutate({apiKey: apiKey.trim()})}
-							disabled={!apiKey.trim() || kimiLoginMutation.isPending}
+							onClick={() => kimiLoginMutation.mutate()}
+							disabled={kimiLoginMutation.isPending}
 							className={cn(primaryButtonClass, 'w-full')}
 						>
 							{kimiLoginMutation.isPending ? (
 								<>
 									<IconLoader2 size={16} className='animate-spin' />
-									{t('onboarding.kimi.validating', {defaultValue: 'Validating...'})}
+									{t('onboarding.kimi.validating', {defaultValue: 'Starting login...'})}
 								</>
 							) : (
-								t('onboarding.kimi.validate', {defaultValue: 'Validate & Save'})
+								<>
+									<IconSparkles size={16} />
+									{t('onboarding.kimi.validate', {defaultValue: 'Sign in with Kimi'})}
+								</>
 							)}
 						</button>
 
-						<a
-							href='https://kimi.com'
-							target='_blank'
-							rel='noopener noreferrer'
-							className='flex items-center justify-center gap-1.5 text-caption text-text-tertiary hover:text-text-secondary transition-colors'
-						>
-							<IconExternalLink size={14} />
-							{t('onboarding.kimi.get-key', {defaultValue: 'Get a Kimi API key'})}
-						</a>
+						{kimiLoginMutation.isError && (
+							<AnimatedInputError>{kimiLoginMutation.error.message}</AnimatedInputError>
+						)}
 					</div>
 				)}
 			</div>

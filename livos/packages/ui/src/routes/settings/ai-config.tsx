@@ -1,8 +1,7 @@
-import {useState} from 'react'
-import {TbCheck, TbExternalLink, TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout} from 'react-icons/tb'
+import {useEffect, useRef, useState} from 'react'
+import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
-import {Input} from '@/shadcn-components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {trpcReact} from '@/trpc/trpc'
 
@@ -23,30 +22,32 @@ function nexusTierToUi(tier: string | undefined): string {
 }
 
 export default function AiConfigPage() {
-	const [apiKey, setApiKey] = useState('')
-	const [saved, setSaved] = useState(false)
+	const [loginSession, setLoginSession] = useState<{
+		sessionId: string
+		verificationUrl: string
+		userCode: string
+	} | null>(null)
+	const [copied, setCopied] = useState(false)
+	const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
-	const configQ = trpcReact.ai.getConfig.useQuery()
+	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery(undefined, {
+		refetchInterval: loginSession ? 3000 : false,
+	})
 	const nexusConfigQ = trpcReact.ai.getNexusConfig.useQuery()
 	const utils = trpcReact.useUtils()
 
 	const isConnected = kimiStatusQ.data?.authenticated ?? false
 
 	const loginMutation = trpcReact.ai.kimiLogin.useMutation({
-		onSuccess: () => {
-			setSaved(true)
-			setApiKey('')
-			utils.ai.getKimiStatus.invalidate()
-			utils.ai.getConfig.invalidate()
-			setTimeout(() => setSaved(false), 2000)
+		onSuccess: (data) => {
+			setLoginSession(data)
 		},
 	})
 
 	const logoutMutation = trpcReact.ai.kimiLogout.useMutation({
 		onSuccess: () => {
+			setLoginSession(null)
 			utils.ai.getKimiStatus.invalidate()
-			utils.ai.getConfig.invalidate()
 		},
 	})
 
@@ -56,13 +57,47 @@ export default function AiConfigPage() {
 		},
 	})
 
-	const handleSave = () => {
-		if (!apiKey.trim()) return
-		loginMutation.mutate({apiKey: apiKey.trim()})
+	// Poll login session for auth completion
+	const pollQ = trpcReact.ai.kimiLoginPoll.useQuery(
+		{sessionId: loginSession?.sessionId ?? ''},
+		{
+			enabled: !!loginSession,
+			refetchInterval: 2000,
+		},
+	)
+
+	// When poll returns success, clear login session and refresh status
+	useEffect(() => {
+		if (pollQ.data?.status === 'success') {
+			setLoginSession(null)
+			utils.ai.getKimiStatus.invalidate()
+		}
+	}, [pollQ.data?.status, utils.ai.getKimiStatus])
+
+	// When status changes to connected, clear login session
+	useEffect(() => {
+		if (isConnected && loginSession) {
+			setLoginSession(null)
+		}
+	}, [isConnected, loginSession])
+
+	// Cleanup poll interval on unmount
+	useEffect(() => {
+		return () => {
+			if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+		}
+	}, [])
+
+	const handleLogin = () => {
+		loginMutation.mutate()
 	}
 
-	const handleDisconnect = () => {
-		logoutMutation.mutate()
+	const handleCopyCode = () => {
+		if (loginSession?.userCode) {
+			navigator.clipboard.writeText(loginSession.userCode)
+			setCopied(true)
+			setTimeout(() => setCopied(false), 2000)
+		}
 	}
 
 	// Current tier from Nexus config
@@ -84,7 +119,7 @@ export default function AiConfigPage() {
 			<div className='max-w-lg space-y-8'>
 				{/* -- Kimi Provider ---------------------------------------- */}
 				<div className='space-y-4'>
-					<h2 className='text-body font-semibold'>Kimi Provider</h2>
+					<h2 className='text-body font-semibold'>Kimi Account</h2>
 
 					<div
 						className={`rounded-radius-md border p-4 space-y-3 ${
@@ -100,62 +135,74 @@ export default function AiConfigPage() {
 							<div className='space-y-3'>
 								<div className='flex items-center gap-2 text-body-sm text-green-400'>
 									<TbCircleCheck className='h-4 w-4' />
-									Connected
+									Connected to Kimi
 								</div>
-								{configQ.data?.kimiApiKey && (
-									<p className='text-caption text-text-secondary font-mono'>
-										Current: {configQ.data.kimiApiKey}
-									</p>
-								)}
-								<div className='space-y-3'>
-									<Input
-										placeholder='Enter a new Kimi API key...'
-										value={apiKey}
-										onValueChange={setApiKey}
-										className='font-mono'
-									/>
-									<div className='flex gap-2'>
-										<Button
-											variant='primary'
-											size='sm'
-											onClick={handleSave}
-											disabled={!apiKey.trim() || loginMutation.isPending}
-										>
-											{saved ? (
-												<>
-													<TbCheck className='h-4 w-4' />
-													Saved
-												</>
-											) : loginMutation.isPending ? (
-												'Saving...'
-											) : (
-												'Save API Key'
-											)}
-										</Button>
-										<Button
-											variant='secondary'
-											size='sm'
-											onClick={handleDisconnect}
-											disabled={logoutMutation.isPending}
-										>
-											{logoutMutation.isPending ? (
-												<>
-													<TbLoader2 className='h-4 w-4 animate-spin' /> Disconnecting...
-												</>
-											) : (
-												<>
-													<TbLogout className='h-4 w-4' /> Disconnect
-												</>
-											)}
-										</Button>
-									</div>
-								</div>
-								{loginMutation.isError && (
-									<p className='text-caption text-red-400'>{loginMutation.error.message}</p>
-								)}
+								<p className='text-caption text-text-secondary'>
+									Authenticated via Kimi CLI. AI features are active.
+								</p>
+								<Button
+									variant='secondary'
+									size='sm'
+									onClick={() => logoutMutation.mutate()}
+									disabled={logoutMutation.isPending}
+								>
+									{logoutMutation.isPending ? (
+										<>
+											<TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...
+										</>
+									) : (
+										<>
+											<TbLogout className='h-4 w-4' /> Sign Out
+										</>
+									)}
+								</Button>
 								{logoutMutation.isError && (
 									<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
 								)}
+							</div>
+						) : loginSession ? (
+							/* Login in progress — show verification URL + code */
+							<div className='space-y-3'>
+								<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+									<TbLoader2 className='h-4 w-4 animate-spin' />
+									Waiting for authorization...
+								</div>
+								<p className='text-caption text-text-secondary'>
+									Open the link below and enter the code to sign in:
+								</p>
+								<div className='rounded-radius-sm border border-border-default bg-surface-raised p-3 space-y-2'>
+									<div className='flex items-center justify-between'>
+										<span className='text-body-sm font-medium text-text-primary'>Code</span>
+										<button
+											onClick={handleCopyCode}
+											className='flex items-center gap-1 text-caption text-blue-400 hover:text-blue-300 transition-colors'
+										>
+											{copied ? <TbCheck className='h-3.5 w-3.5' /> : <TbCopy className='h-3.5 w-3.5' />}
+											{copied ? 'Copied' : 'Copy'}
+										</button>
+									</div>
+									<p className='text-heading-md font-mono font-bold text-text-primary tracking-widest text-center'>
+										{loginSession.userCode}
+									</p>
+								</div>
+								<a
+									href={loginSession.verificationUrl}
+									target='_blank'
+									rel='noopener noreferrer'
+									className='block w-full'
+								>
+									<Button variant='primary' size='sm' className='w-full'>
+										Open Kimi Authorization Page
+									</Button>
+								</a>
+								<Button
+									variant='secondary'
+									size='sm'
+									onClick={() => setLoginSession(null)}
+									className='w-full'
+								>
+									Cancel
+								</Button>
 							</div>
 						) : (
 							<div className='space-y-3'>
@@ -163,36 +210,23 @@ export default function AiConfigPage() {
 									<TbAlertCircle className='h-4 w-4' />
 									Not connected
 								</div>
-								<Input
-									placeholder='Enter your Kimi API key...'
-									value={apiKey}
-									onValueChange={setApiKey}
-									className='font-mono'
-								/>
-								<a
-									href='https://platform.kimi.com'
-									target='_blank'
-									rel='noopener noreferrer'
-									className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-								>
-									<TbExternalLink className='h-3.5 w-3.5' />
-									Get API key from Kimi Platform
-								</a>
+								<p className='text-caption text-text-secondary'>
+									Sign in with your Kimi account to enable AI features.
+								</p>
 								<Button
 									variant='primary'
 									size='sm'
-									onClick={handleSave}
-									disabled={!apiKey.trim() || loginMutation.isPending}
+									onClick={handleLogin}
+									disabled={loginMutation.isPending}
 								>
-									{saved ? (
+									{loginMutation.isPending ? (
 										<>
-											<TbCheck className='h-4 w-4' />
-											Saved
+											<TbLoader2 className='h-4 w-4 animate-spin' /> Starting...
 										</>
-									) : loginMutation.isPending ? (
-										'Saving...'
 									) : (
-										'Save API Key'
+										<>
+											<TbLogin className='h-4 w-4' /> Sign in with Kimi
+										</>
 									)}
 								</Button>
 								{loginMutation.isError && (

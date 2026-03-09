@@ -47,6 +47,7 @@ import {
 	TbMail,
 	TbWebhook,
 	TbMicrophone,
+	TbLogin,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -145,7 +146,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi API key'},
+	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi account & model'},
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
 	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
 	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
@@ -742,40 +743,47 @@ function TwoFaSection() {
 
 function AiConfigSection() {
 	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
-	const configQ = trpcReact.ai.getConfig.useQuery()
 	const utils = trpcReact.useUtils()
-	const [apiKey, setApiKey] = useState('')
-	const [saved, setSaved] = useState(false)
+	const [loginSession, setLoginSession] = useState<{
+		sessionId: string
+		verificationUrl: string
+		userCode: string
+	} | null>(null)
 
 	const isConnected = kimiStatusQ.data?.authenticated ?? false
 
 	const loginMutation = trpcReact.ai.kimiLogin.useMutation({
-		onSuccess: () => {
-			setSaved(true)
-			setApiKey('')
-			utils.ai.getKimiStatus.invalidate()
-			utils.ai.getConfig.invalidate()
-			setTimeout(() => setSaved(false), 2000)
+		onSuccess: (data) => {
+			setLoginSession(data)
 		},
 	})
 
 	const logoutMutation = trpcReact.ai.kimiLogout.useMutation({
 		onSuccess: () => {
+			setLoginSession(null)
 			utils.ai.getKimiStatus.invalidate()
-			utils.ai.getConfig.invalidate()
 		},
 	})
 
-	const handleSave = () => {
-		if (!apiKey.trim()) return
-		loginMutation.mutate({apiKey: apiKey.trim()})
-	}
+	// Poll login session for auth completion
+	const pollQ = trpcReact.ai.kimiLoginPoll.useQuery(
+		{sessionId: loginSession?.sessionId ?? ''},
+		{enabled: !!loginSession, refetchInterval: 2000},
+	)
+
+	// When poll returns success or status becomes connected, clear login session
+	useEffect(() => {
+		if (pollQ.data?.status === 'success' || (isConnected && loginSession)) {
+			setLoginSession(null)
+			utils.ai.getKimiStatus.invalidate()
+		}
+	}, [pollQ.data?.status, isConnected, loginSession, utils.ai.getKimiStatus])
 
 	return (
 		<div className='max-w-lg space-y-4'>
 			<h3 className='text-body font-medium text-text-primary'>Kimi AI</h3>
 			<p className='text-body-sm text-text-secondary'>
-				Enter your Kimi API key to connect LivOS to Kimi AI.
+				Sign in with your Kimi account to enable AI features.
 			</p>
 
 			<div className={cn(
@@ -791,13 +799,8 @@ function AiConfigSection() {
 					<div className='space-y-3'>
 						<div className='flex items-center gap-2 text-body-sm text-green-400'>
 							<TbCircleCheck className='h-4 w-4' />
-							Connected
+							Connected to Kimi
 						</div>
-						{configQ.data?.kimiApiKey && (
-							<p className='text-caption text-text-secondary font-mono'>
-								Current: {configQ.data.kimiApiKey}
-							</p>
-						)}
 						<Button
 							variant='secondary'
 							size='sm'
@@ -805,14 +808,37 @@ function AiConfigSection() {
 							disabled={logoutMutation.isPending}
 						>
 							{logoutMutation.isPending ? (
-								<><TbLoader2 className='h-4 w-4 animate-spin' /> Disconnecting...</>
+								<><TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...</>
 							) : (
-								<><TbLogout className='h-4 w-4' /> Disconnect</>
+								<><TbLogout className='h-4 w-4' /> Sign Out</>
 							)}
 						</Button>
 						{logoutMutation.isError && (
 							<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
 						)}
+					</div>
+				) : loginSession ? (
+					<div className='space-y-3'>
+						<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+							<TbLoader2 className='h-4 w-4 animate-spin' />
+							Waiting for authorization...
+						</div>
+						<p className='text-caption text-text-secondary'>
+							Open the link and enter code: <span className='font-mono font-bold'>{loginSession.userCode}</span>
+						</p>
+						<a
+							href={loginSession.verificationUrl}
+							target='_blank'
+							rel='noopener noreferrer'
+							className='block'
+						>
+							<Button variant='primary' size='sm' className='w-full'>
+								Open Kimi Authorization
+							</Button>
+						</a>
+						<Button variant='secondary' size='sm' onClick={() => setLoginSession(null)} className='w-full'>
+							Cancel
+						</Button>
 					</div>
 				) : (
 					<div className='space-y-3'>
@@ -820,33 +846,16 @@ function AiConfigSection() {
 							<TbAlertCircle className='h-4 w-4' />
 							Not connected
 						</div>
-						<Input
-							placeholder='Enter your Kimi API key...'
-							value={apiKey}
-							onValueChange={setApiKey}
-							className='font-mono'
-						/>
-						<a
-							href='https://platform.kimi.com'
-							target='_blank'
-							rel='noopener noreferrer'
-							className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-						>
-							<TbExternalLink className='h-3.5 w-3.5' />
-							Get API key from Kimi Platform
-						</a>
 						<Button
 							variant='primary'
 							size='sm'
-							onClick={handleSave}
-							disabled={!apiKey.trim() || loginMutation.isPending}
+							onClick={() => loginMutation.mutate()}
+							disabled={loginMutation.isPending}
 						>
-							{saved ? (
-								<><TbCheck className='h-4 w-4' /> Saved</>
-							) : loginMutation.isPending ? (
-								'Saving...'
+							{loginMutation.isPending ? (
+								<><TbLoader2 className='h-4 w-4 animate-spin' /> Starting...</>
 							) : (
-								'Save API Key'
+								<><TbLogin className='h-4 w-4' /> Sign in with Kimi</>
 							)}
 						</Button>
 						{loginMutation.isError && (
