@@ -66,16 +66,15 @@
 
 **Strategic research output:** `.planning/research/strategic/` (SYNTHESIS.md for overview)
 
-## Active
+## Completed (cont.)
 
 ### v6.0 — Claude Code → Kimi Code Migration
-**Started:** 2026-03-09
-**Phases:** 1-4 (29 requirements)
-**Goal:** Complete migration from Claude Code to Kimi Code as sole AI provider. Remove all Anthropic/Claude dependencies, replace with Kimi Code CLI + auth system, adapt MCP tools, update UI.
+**Completed:** 2026-03-09
+**Phases:** 1-4 (8 plans, 29 requirements)
+**Summary:** Complete migration from Claude Code to Kimi Code. KimiProvider (603 lines, OpenAI-compatible API), KimiAgentRunner (497 lines, CLI print mode + MCP bridging), Express/tRPC routes, Settings UI, onboarding wizard. Deleted ClaudeProvider, GeminiProvider, SdkAgentRunner. Removed @anthropic-ai/sdk, @anthropic-ai/claude-agent-sdk, @google/generative-ai. Zero Claude/Anthropic references in active source.
 
-| Phase | Name | Requirements |
-|-------|------|-------------|
-| 1 | KimiProvider | CORE-01..05 |
-| 2 | Configuration Layer | API-01..03, UI-01..03, AUTH-01..02 |
-| 3 | KimiAgentRunner | AGENT-01..05, AUTH-03 |
-| 4 | Onboarding + Cleanup | ONBOARD-01..02, AUTH-04, CLEAN-01..07 |
+**Last phase number:** 4 (v6.0)
+
+## Active
+
+*No active milestone*
