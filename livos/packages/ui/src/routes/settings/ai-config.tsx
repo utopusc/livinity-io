@@ -1,25 +1,10 @@
 import {useEffect, useRef, useState} from 'react'
-import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck} from 'react-icons/tb'
+import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck, TbBrain} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
-
-/** Map UI tier labels to Nexus config tier values */
-const TIER_TO_NEXUS: Record<string, string> = {
-	fast: 'flash',
-	balanced: 'sonnet',
-	powerful: 'opus',
-}
-
-/** Map Nexus config tier values back to UI tier labels */
-function nexusTierToUi(tier: string | undefined): string {
-	if (tier === 'flash' || tier === 'haiku') return 'fast'
-	if (tier === 'opus') return 'powerful'
-	return 'balanced' // default
-}
 
 export default function AiConfigPage() {
 	const [loginSession, setLoginSession] = useState<{
@@ -34,7 +19,6 @@ export default function AiConfigPage() {
 		// Don't poll status during active login — the poll endpoint handles that
 		enabled: !loginSession,
 	})
-	const nexusConfigQ = trpcReact.ai.getNexusConfig.useQuery()
 	const utils = trpcReact.useUtils()
 
 	const isConnected = kimiStatusQ.data?.authenticated ?? false
@@ -49,12 +33,6 @@ export default function AiConfigPage() {
 		onSuccess: () => {
 			setLoginSession(null)
 			utils.ai.getKimiStatus.invalidate()
-		},
-	})
-
-	const updateNexusConfigMutation = trpcReact.ai.updateNexusConfig.useMutation({
-		onSuccess: () => {
-			utils.ai.getNexusConfig.invalidate()
 		},
 	})
 
@@ -98,20 +76,6 @@ export default function AiConfigPage() {
 			navigator.clipboard.writeText(loginSession.userCode)
 			setCopied(true)
 			setTimeout(() => setCopied(false), 2000)
-		}
-	}
-
-	// Current tier from Nexus config
-	const currentTier = nexusTierToUi(
-		(nexusConfigQ.data?.config as Record<string, Record<string, string>> | undefined)?.agent?.tier,
-	)
-
-	const handleTierChange = (value: string) => {
-		const nexusTier = TIER_TO_NEXUS[value]
-		if (nexusTier) {
-			updateNexusConfigMutation.mutate({
-				agent: {tier: nexusTier as 'flash' | 'sonnet' | 'opus'},
-			})
 		}
 	}
 
@@ -238,29 +202,17 @@ export default function AiConfigPage() {
 					</div>
 				</div>
 
-				{/* -- Model Selection ---------------------------------------- */}
+				{/* -- Active Model ---------------------------------------- */}
 				<div className='space-y-4'>
-					<h2 className='text-body font-semibold'>Model Selection</h2>
-					<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
-						<p className='text-body-sm text-text-secondary'>
-							Select the default model tier for AI tasks.
+					<h2 className='text-body font-semibold'>Active Model</h2>
+					<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-2'>
+						<div className='flex items-center gap-2'>
+							<TbBrain className='h-4 w-4 text-brand' />
+							<span className='text-body-sm font-medium text-text-primary'>Kimi for Coding</span>
+						</div>
+						<p className='text-caption text-text-secondary'>
+							Thinking model with 128K context. Used for all AI tasks including chat, tool calling, and background agents.
 						</p>
-						<Select value={currentTier} onValueChange={handleTierChange}>
-							<SelectTrigger className='w-full'>
-								<SelectValue placeholder='Select model tier' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='fast'>Fast (K2.5 Flash)</SelectItem>
-								<SelectItem value='balanced'>Balanced (K2.5)</SelectItem>
-								<SelectItem value='powerful'>Powerful (K2.5 Pro)</SelectItem>
-							</SelectContent>
-						</Select>
-						{updateNexusConfigMutation.isPending && (
-							<p className='text-caption text-text-secondary'>Saving...</p>
-						)}
-						{updateNexusConfigMutation.isError && (
-							<p className='text-caption text-red-400'>{updateNexusConfigMutation.error.message}</p>
-						)}
 					</div>
 				</div>
 			</div>
