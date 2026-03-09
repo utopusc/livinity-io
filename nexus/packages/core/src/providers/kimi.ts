@@ -4,7 +4,7 @@
  * Uses raw fetch() against api.kimi.com/coding/v1 (no SDK dependency).
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, hostname, platform, release } from 'node:os';
 import type { Redis } from 'ioredis';
@@ -46,8 +46,7 @@ try {
 
 /** Headers required by Kimi API to identify as a coding agent */
 function getKimiHeaders(apiKey: string): Record<string, string> {
-  return {
-    'Authorization': `Bearer ${apiKey}`,
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': `KimiCLI/${KIMI_CLI_VERSION}`,
     'X-Msh-Platform': 'kimi_cli',
@@ -55,8 +54,10 @@ function getKimiHeaders(apiKey: string): Record<string, string> {
     'X-Msh-Device-Name': hostname(),
     'X-Msh-Device-Model': `${platform()} ${release()}`,
     'X-Msh-Os-Version': release(),
-    ...(DEVICE_ID ? { 'X-Msh-Device-Id': DEVICE_ID } : {}),
   };
+  if (DEVICE_ID) headers['X-Msh-Device-Id'] = DEVICE_ID;
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+  return headers;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,13 +192,28 @@ function mapStopReason(finishReason: string | null): string {
 // KimiProvider
 // ---------------------------------------------------------------------------
 
+const KIMI_OAUTH_HOST = 'https://auth.kimi.com';
+const KIMI_CLIENT_ID = '17e5f671-d194-4dfb-9706-5516cb48c098';
+const CRED_FILE = join(homedir(), '.kimi', 'credentials', 'kimi-code.json');
+const TOKEN_REFRESH_MARGIN_S = 60; // refresh 60s before expiry
+
+interface KimiOAuthCreds {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  scope?: string;
+  token_type?: string;
+}
+
 export class KimiProvider implements AIProvider {
   readonly id = 'kimi';
   readonly supportsVision = false; // Kimi K2.5 vision TBD
   readonly supportsToolCalling = true;
 
   private redis: Redis | null = null;
-  private cachedApiKey: string = '';
+  private cachedToken: string = '';
+  private tokenExpiresAt: number = 0;
+  private refreshing: Promise<string> | null = null;
   private cachedModels: Record<string, string> | null = null;
   private modelsCachedAt: number = 0;
 
@@ -206,36 +222,101 @@ export class KimiProvider implements AIProvider {
   }
 
   // -------------------------------------------------------------------------
-  // API key management
+  // OAuth token management (read from CLI credentials, auto-refresh)
   // -------------------------------------------------------------------------
 
   private async getApiKey(): Promise<string> {
-    // Return cached key if available
-    if (this.cachedApiKey) {
-      return this.cachedApiKey;
+    // Return cached token if still valid
+    const now = Date.now() / 1000;
+    if (this.cachedToken && now < this.tokenExpiresAt - TOKEN_REFRESH_MARGIN_S) {
+      return this.cachedToken;
     }
 
-    // Try Redis first
-    if (this.redis) {
-      try {
-        const key = await this.redis.get(API_KEY_REDIS_KEY);
-        if (key) {
-          this.cachedApiKey = key;
-          return key;
-        }
-      } catch (err: any) {
-        logger.warn('KimiProvider: Redis read failed, falling back to env', { error: err.message });
+    // Prevent concurrent refresh
+    if (this.refreshing) return this.refreshing;
+
+    this.refreshing = this._refreshToken().finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  }
+
+  private async _refreshToken(): Promise<string> {
+    // Read credentials file
+    let creds: KimiOAuthCreds;
+    try {
+      const raw = readFileSync(CRED_FILE, 'utf-8');
+      creds = JSON.parse(raw);
+    } catch {
+      throw new Error('Kimi not authenticated — no credentials file found. Please sign in via Settings.');
+    }
+
+    const now = Date.now() / 1000;
+
+    // If access token is still valid, use it
+    if (creds.access_token && now < creds.expires_at - TOKEN_REFRESH_MARGIN_S) {
+      this.cachedToken = creds.access_token;
+      this.tokenExpiresAt = creds.expires_at;
+      // Also sync to Redis for status checks
+      if (this.redis) {
+        this.redis.set(API_KEY_REDIS_KEY, creds.access_token).catch(() => {});
+        this.redis.set('nexus:kimi:authenticated', '1').catch(() => {});
       }
+      return creds.access_token;
     }
 
-    // Fall back to environment variable
-    const envKey = process.env.KIMI_API_KEY;
-    if (envKey) {
-      this.cachedApiKey = envKey;
-      return envKey;
+    // Need to refresh
+    if (!creds.refresh_token) {
+      throw new Error('Kimi token expired and no refresh token available. Please sign in again.');
     }
 
-    throw new Error('No Kimi API key configured');
+    logger.info('KimiProvider: refreshing OAuth token...');
+    const response = await fetch(`${KIMI_OAUTH_HOST}/api/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...getKimiHeaders(''),  // no auth needed for refresh, but include platform headers
+      },
+      body: new URLSearchParams({
+        client_id: KIMI_CLIENT_ID,
+        grant_type: 'refresh_token',
+        refresh_token: creds.refresh_token,
+      }),
+    });
+
+    const data = await response.json() as Record<string, any>;
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Kimi refresh token expired. Please sign in again via Settings.');
+    }
+    if (!response.ok) {
+      throw new Error(`Kimi token refresh failed: ${data.error_description || response.status}`);
+    }
+
+    // Save new credentials to file (same format as kimi CLI)
+    const newCreds: KimiOAuthCreds = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || creds.refresh_token,
+      expires_at: data.expires_at || (Date.now() / 1000 + (data.expires_in || 900)),
+      scope: data.scope || creds.scope,
+      token_type: data.token_type || 'Bearer',
+    };
+
+    try {
+      writeFileSync(CRED_FILE, JSON.stringify(newCreds));
+    } catch (err) {
+      logger.warn('KimiProvider: failed to write refreshed credentials', { error: String(err) });
+    }
+
+    this.cachedToken = newCreds.access_token;
+    this.tokenExpiresAt = newCreds.expires_at;
+
+    // Sync to Redis
+    if (this.redis) {
+      this.redis.set(API_KEY_REDIS_KEY, newCreds.access_token).catch(() => {});
+      this.redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+    }
+
+    logger.info('KimiProvider: OAuth token refreshed successfully');
+    return newCreds.access_token;
   }
 
   // -------------------------------------------------------------------------
