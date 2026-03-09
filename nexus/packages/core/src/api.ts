@@ -1746,7 +1746,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       maxTokens: agentDefaults?.maxTokens || parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
       timeoutMs: agentDefaults?.timeoutMs || parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
       tier: (agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
-      maxDepth: parseInt(process.env.AGENT_MAX_DEPTH || '3'),
+      maxDepth: agentDefaults?.maxDepth ?? parseInt(process.env.AGENT_MAX_DEPTH || '3'),
       stream: true,
       approvalManager,
       approvalPolicy: approvalPolicy as 'always' | 'destructive' | 'never',
