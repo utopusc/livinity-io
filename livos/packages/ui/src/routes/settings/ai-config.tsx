@@ -1,368 +1,232 @@
-import {useEffect, useState} from 'react'
+import {useState} from 'react'
 import {TbCheck, TbExternalLink, TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
-import {RadioGroup, RadioGroupItem} from '@/shadcn-components/ui/radio-group'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
 
+/** Map UI tier labels to Nexus config tier values */
+const TIER_TO_NEXUS: Record<string, string> = {
+	fast: 'flash',
+	balanced: 'sonnet',
+	powerful: 'opus',
+}
+
+/** Map Nexus config tier values back to UI tier labels */
+function nexusTierToUi(tier: string | undefined): string {
+	if (tier === 'flash' || tier === 'haiku') return 'fast'
+	if (tier === 'opus') return 'powerful'
+	return 'balanced' // default
+}
+
 export default function AiConfigPage() {
-	const [anthropicKey, setAnthropicKey] = useState('')
-	const [geminiKey, setGeminiKey] = useState('')
-	const [loginCode, setLoginCode] = useState('')
-	const [loginUrl, setLoginUrl] = useState('')
+	const [apiKey, setApiKey] = useState('')
 	const [saved, setSaved] = useState(false)
 
+	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
 	const configQ = trpcReact.ai.getConfig.useQuery()
-	const cliStatusQ = trpcReact.ai.getClaudeCliStatus.useQuery()
+	const nexusConfigQ = trpcReact.ai.getNexusConfig.useQuery()
 	const utils = trpcReact.useUtils()
 
-	// Derive auth method from server state
-	const serverAuthMethod = cliStatusQ.data?.authMethod ?? 'api-key'
-	const [authMethod, setAuthMethod] = useState<'api-key' | 'sdk-subscription'>('api-key')
+	const isConnected = kimiStatusQ.data?.authenticated ?? false
 
-	// Sync auth method from server on load
-	useEffect(() => {
-		if (serverAuthMethod) setAuthMethod(serverAuthMethod)
-	}, [serverAuthMethod])
-
-	// Poll CLI status every 5s when subscription mode selected but not authenticated
-	const cliAuthenticated = cliStatusQ.data?.authenticated ?? false
-	useEffect(() => {
-		if (authMethod !== 'sdk-subscription' || cliAuthenticated) return
-		const interval = setInterval(() => {
-			cliStatusQ.refetch()
-		}, 5000)
-		return () => clearInterval(interval)
-	}, [authMethod, cliAuthenticated])
-
-	// Clear login UI when auth completes
-	useEffect(() => {
-		if (cliAuthenticated) {
-			setLoginUrl('')
-			setLoginCode('')
-		}
-	}, [cliAuthenticated])
-
-	const setConfigMutation = trpcReact.ai.setConfig.useMutation({
+	const loginMutation = trpcReact.ai.kimiLogin.useMutation({
 		onSuccess: () => {
 			setSaved(true)
-			setAnthropicKey('')
-			setGeminiKey('')
+			setApiKey('')
+			utils.ai.getKimiStatus.invalidate()
 			utils.ai.getConfig.invalidate()
 			setTimeout(() => setSaved(false), 2000)
 		},
 	})
 
-	const setAuthMethodMutation = trpcReact.ai.setClaudeAuthMethod.useMutation({
+	const logoutMutation = trpcReact.ai.kimiLogout.useMutation({
 		onSuccess: () => {
-			utils.ai.getClaudeCliStatus.invalidate()
+			utils.ai.getKimiStatus.invalidate()
+			utils.ai.getConfig.invalidate()
 		},
 	})
 
-	const startLoginMutation = trpcReact.ai.startClaudeLogin.useMutation({
-		onSuccess: (data) => {
-			if (data.url) {
-				setLoginUrl(data.url)
-				window.open(data.url, '_blank', 'noopener,noreferrer')
-			}
-			if (data.alreadyAuthenticated) {
-				utils.ai.getClaudeCliStatus.invalidate()
-			}
-		},
-	})
-
-	const submitCodeMutation = trpcReact.ai.submitClaudeLoginCode.useMutation({
-		onSuccess: (data) => {
-			if (data.success) {
-				setLoginCode('')
-				setLoginUrl('')
-				utils.ai.getClaudeCliStatus.invalidate()
-			}
-		},
-	})
-
-	const logoutMutation = trpcReact.ai.claudeLogout.useMutation({
+	const updateNexusConfigMutation = trpcReact.ai.updateNexusConfig.useMutation({
 		onSuccess: () => {
-			utils.ai.getClaudeCliStatus.invalidate()
+			utils.ai.getNexusConfig.invalidate()
 		},
 	})
-
-	const handleAuthMethodChange = (value: string) => {
-		const method = value as 'api-key' | 'sdk-subscription'
-		setAuthMethod(method)
-		setAuthMethodMutation.mutate({method})
-	}
 
 	const handleSave = () => {
-		const updates: Record<string, string> = {}
-		if (anthropicKey.trim()) updates.anthropicApiKey = anthropicKey.trim()
-		if (geminiKey.trim()) updates.geminiApiKey = geminiKey.trim()
-		if (Object.keys(updates).length === 0) return
-		setConfigMutation.mutate(updates)
+		if (!apiKey.trim()) return
+		loginMutation.mutate({apiKey: apiKey.trim()})
+	}
+
+	const handleDisconnect = () => {
+		logoutMutation.mutate()
+	}
+
+	// Current tier from Nexus config
+	const currentTier = nexusTierToUi(
+		(nexusConfigQ.data?.config as Record<string, Record<string, string>> | undefined)?.agent?.tier,
+	)
+
+	const handleTierChange = (value: string) => {
+		const nexusTier = TIER_TO_NEXUS[value]
+		if (nexusTier) {
+			updateNexusConfigMutation.mutate({
+				agent: {tier: nexusTier as 'flash' | 'sonnet' | 'opus'},
+			})
+		}
 	}
 
 	return (
-		<SettingsPageLayout title='AI Configuration' description='Configure how LivOS connects to Claude and Gemini'>
+		<SettingsPageLayout title='AI Configuration' description='Configure how LivOS connects to Kimi AI'>
 			<div className='max-w-lg space-y-8'>
-				{/* ── Claude Provider ─────────────────── */}
+				{/* -- Kimi Provider ---------------------------------------- */}
 				<div className='space-y-4'>
-					<h2 className='text-body font-semibold'>Claude Provider</h2>
+					<h2 className='text-body font-semibold'>Kimi Provider</h2>
 
-					<RadioGroup value={authMethod} onValueChange={handleAuthMethodChange} className='gap-0'>
-						{/* SDK Subscription Option */}
-						<label
-							className={`flex cursor-pointer gap-3 rounded-t-radius-md border p-4 transition-colors ${
-								authMethod === 'sdk-subscription'
-									? 'border-brand/50 bg-brand/5'
-									: 'border-border-default bg-surface-base hover:bg-surface-1'
-							}`}
-						>
-							<RadioGroupItem value='sdk-subscription' className='mt-0.5 shrink-0' />
-							<div className='flex-1 space-y-2'>
-								<div className='flex items-center gap-2'>
-									<span className='text-body font-medium'>Claude Subscription</span>
-									<span className='rounded-full bg-brand/20 px-2 py-0.5 text-caption-sm text-brand'>Recommended</span>
-								</div>
-								<p className='text-body-sm text-text-secondary'>
-									Use your Claude Pro/Max subscription. No API key needed.
-								</p>
-
-								{authMethod === 'sdk-subscription' && (
-									<div className='mt-3 space-y-3'>
-										{cliStatusQ.isLoading ? (
-											<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
-												<TbLoader2 className='h-4 w-4 animate-spin' />
-												Checking status...
-											</div>
-										) : cliAuthenticated ? (
-											<div className='space-y-3'>
-												<div className='flex items-center gap-2 text-body-sm text-green-400'>
-													<TbCircleCheck className='h-4 w-4' />
-													Authenticated{cliStatusQ.data?.user ? ` as ${cliStatusQ.data.user}` : ''}
-												</div>
-												<Button
-													variant='secondary'
-													size='sm'
-													onClick={() => logoutMutation.mutate()}
-													disabled={logoutMutation.isPending}
-												>
-													{logoutMutation.isPending ? (
-														<>
-															<TbLoader2 className='h-4 w-4 animate-spin' />
-															Signing out...
-														</>
-													) : (
-														<>
-															<TbLogout className='h-4 w-4' />
-															Sign Out
-														</>
-													)}
-												</Button>
-												{logoutMutation.isError && (
-													<p className='text-caption text-red-400'>
-														{logoutMutation.error.message}
-													</p>
-												)}
-											</div>
-										) : (
-											<div className='space-y-3'>
-												<div className='flex items-center gap-2 text-body-sm text-amber-400'>
-													<TbAlertCircle className='h-4 w-4' />
-													Not authenticated
-												</div>
-
-												{/* Step 1: Open auth page */}
-												<Button
-													variant='primary'
-													size='sm'
-													onClick={() => startLoginMutation.mutate()}
-													disabled={startLoginMutation.isPending}
-												>
-													{startLoginMutation.isPending ? (
-														<>
-															<TbLoader2 className='h-4 w-4 animate-spin' />
-															Opening...
-														</>
-													) : (
-														<>
-															<TbExternalLink className='h-4 w-4' />
-															{loginUrl ? 'Re-open Auth Page' : 'Sign in with Claude'}
-														</>
-													)}
-												</Button>
-												{startLoginMutation.isError && (
-													<p className='text-caption text-red-400'>
-														{startLoginMutation.error.message}
-													</p>
-												)}
-
-												{/* Step 2: ALWAYS show code input when not authenticated */}
-												<div className='space-y-3 rounded-radius-sm bg-surface-2 p-3'>
-													<p className='text-caption text-text-secondary'>
-														1. Click "Sign in with Claude" above to open the auth page.
-														<br />
-														2. Log in with your Claude account.
-														<br />
-														3. Copy the code you receive and paste it below:
-													</p>
-													{loginUrl && (
-														<a
-															href={loginUrl}
-															target='_blank'
-															rel='noopener noreferrer'
-															className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-														>
-															<TbExternalLink className='h-3.5 w-3.5' />
-															Re-open auth page
-														</a>
-													)}
-													<div className='flex gap-2'>
-														<Input
-															placeholder='Paste auth code here...'
-															value={loginCode}
-															onValueChange={setLoginCode}
-															className='font-mono text-caption'
-														/>
-														<Button
-															variant='primary'
-															size='sm'
-															onClick={() => {
-																if (!loginUrl) {
-																	// If no OAuth flow started yet, start one first then submit
-																	startLoginMutation.mutate(undefined, {
-																		onSuccess: () => {
-																			submitCodeMutation.mutate({code: loginCode})
-																		},
-																	})
-																} else {
-																	submitCodeMutation.mutate({code: loginCode})
-																}
-															}}
-															disabled={!loginCode.trim() || submitCodeMutation.isPending}
-														>
-															{submitCodeMutation.isPending ? (
-																<TbLoader2 className='h-4 w-4 animate-spin' />
-															) : (
-																'Submit'
-															)}
-														</Button>
-													</div>
-													{submitCodeMutation.isError && (
-														<p className='text-caption text-red-400'>
-															{submitCodeMutation.error.message}
-														</p>
-													)}
-													{submitCodeMutation.isSuccess && !submitCodeMutation.data?.success && (
-														<p className='text-caption text-red-400'>
-															{submitCodeMutation.data?.error || 'Code exchange failed'}
-														</p>
-													)}
-												</div>
-											</div>
-										)}
-									</div>
-								)}
+					<div
+						className={`rounded-radius-md border p-4 space-y-3 ${
+							isConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
+						}`}
+					>
+						{kimiStatusQ.isLoading ? (
+							<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
+								<TbLoader2 className='h-4 w-4 animate-spin' />
+								Checking status...
 							</div>
-						</label>
-
-						{/* API Key Option */}
-						<label
-							className={`flex cursor-pointer gap-3 rounded-b-radius-md border border-t-0 p-4 transition-colors ${
-								authMethod === 'api-key'
-									? 'border-brand/50 bg-brand/5'
-									: 'border-border-default bg-surface-base hover:bg-surface-1'
-							}`}
-						>
-							<RadioGroupItem value='api-key' className='mt-0.5 shrink-0' />
-							<div className='flex-1 space-y-2'>
-								<div className='flex items-center gap-2'>
-									<span className='text-body font-medium'>API Key</span>
+						) : isConnected ? (
+							<div className='space-y-3'>
+								<div className='flex items-center gap-2 text-body-sm text-green-400'>
+									<TbCircleCheck className='h-4 w-4' />
+									Connected
 								</div>
-								<p className='text-body-sm text-text-secondary'>
-									Enter your Anthropic API key directly.
-								</p>
-
-								{authMethod === 'api-key' && (
-									<div className='mt-3 space-y-3'>
-										{/* Current key status */}
-										{configQ.data?.hasAnthropicKey && (
-											<div className='flex items-center gap-2 text-body-sm text-green-400'>
-												<TbCircleCheck className='h-4 w-4' />
-												Current: {configQ.data.anthropicApiKey}
-											</div>
-										)}
-										<Input
-											placeholder='sk-ant-...'
-											value={anthropicKey}
-											onValueChange={setAnthropicKey}
-											className='font-mono'
-										/>
-										<a
-											href='https://console.anthropic.com/settings/keys'
-											target='_blank'
-											rel='noopener noreferrer'
-											className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+								{configQ.data?.kimiApiKey && (
+									<p className='text-caption text-text-secondary font-mono'>
+										Current: {configQ.data.kimiApiKey}
+									</p>
+								)}
+								<div className='space-y-3'>
+									<Input
+										placeholder='Enter a new Kimi API key...'
+										value={apiKey}
+										onValueChange={setApiKey}
+										className='font-mono'
+									/>
+									<div className='flex gap-2'>
+										<Button
+											variant='primary'
+											size='sm'
+											onClick={handleSave}
+											disabled={!apiKey.trim() || loginMutation.isPending}
 										>
-											<TbExternalLink className='h-3.5 w-3.5' />
-											Get API key from Anthropic Console
-										</a>
+											{saved ? (
+												<>
+													<TbCheck className='h-4 w-4' />
+													Saved
+												</>
+											) : loginMutation.isPending ? (
+												'Saving...'
+											) : (
+												'Save API Key'
+											)}
+										</Button>
+										<Button
+											variant='secondary'
+											size='sm'
+											onClick={handleDisconnect}
+											disabled={logoutMutation.isPending}
+										>
+											{logoutMutation.isPending ? (
+												<>
+													<TbLoader2 className='h-4 w-4 animate-spin' /> Disconnecting...
+												</>
+											) : (
+												<>
+													<TbLogout className='h-4 w-4' /> Disconnect
+												</>
+											)}
+										</Button>
 									</div>
+								</div>
+								{loginMutation.isError && (
+									<p className='text-caption text-red-400'>{loginMutation.error.message}</p>
+								)}
+								{logoutMutation.isError && (
+									<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
 								)}
 							</div>
-						</label>
-					</RadioGroup>
-				</div>
-
-				{/* ── Gemini (Fallback) ─────────────────── */}
-				<div className='space-y-4'>
-					<h2 className='text-body font-semibold'>Gemini (Fallback)</h2>
-					<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
-						{configQ.data?.hasGeminiKey && (
-							<div className='flex items-center gap-2 text-body-sm text-green-400'>
-								<TbCircleCheck className='h-4 w-4' />
-								Current: {configQ.data.geminiApiKey}
+						) : (
+							<div className='space-y-3'>
+								<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+									<TbAlertCircle className='h-4 w-4' />
+									Not connected
+								</div>
+								<Input
+									placeholder='Enter your Kimi API key...'
+									value={apiKey}
+									onValueChange={setApiKey}
+									className='font-mono'
+								/>
+								<a
+									href='https://platform.kimi.com'
+									target='_blank'
+									rel='noopener noreferrer'
+									className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+								>
+									<TbExternalLink className='h-3.5 w-3.5' />
+									Get API key from Kimi Platform
+								</a>
+								<Button
+									variant='primary'
+									size='sm'
+									onClick={handleSave}
+									disabled={!apiKey.trim() || loginMutation.isPending}
+								>
+									{saved ? (
+										<>
+											<TbCheck className='h-4 w-4' />
+											Saved
+										</>
+									) : loginMutation.isPending ? (
+										'Saving...'
+									) : (
+										'Save API Key'
+									)}
+								</Button>
+								{loginMutation.isError && (
+									<p className='text-caption text-red-400'>{loginMutation.error.message}</p>
+								)}
 							</div>
 						)}
-						<Input
-							placeholder='AIzaSy...'
-							value={geminiKey}
-							onValueChange={setGeminiKey}
-							className='font-mono'
-						/>
-						<a
-							href='https://aistudio.google.com/app/apikey'
-							target='_blank'
-							rel='noopener noreferrer'
-							className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
-						>
-							<TbExternalLink className='h-3.5 w-3.5' />
-							Get API key from Google AI Studio
-						</a>
 					</div>
 				</div>
 
-				{/* ── Save Button ─────────────────── */}
-				<div className='pt-2'>
-					<Button
-						variant='primary'
-						onClick={handleSave}
-						disabled={(!anthropicKey.trim() && !geminiKey.trim()) || setConfigMutation.isPending}
-						className='w-full sm:w-auto'
-					>
-						{saved ? (
-							<>
-								<TbCheck className='h-4 w-4' />
-								Saved
-							</>
-						) : setConfigMutation.isPending ? (
-							'Saving...'
-						) : (
-							'Save API Keys'
+				{/* -- Model Selection ---------------------------------------- */}
+				<div className='space-y-4'>
+					<h2 className='text-body font-semibold'>Model Selection</h2>
+					<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
+						<p className='text-body-sm text-text-secondary'>
+							Select the default model tier for AI tasks.
+						</p>
+						<Select value={currentTier} onValueChange={handleTierChange}>
+							<SelectTrigger className='w-full'>
+								<SelectValue placeholder='Select model tier' />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value='fast'>Fast (K2.5 Flash)</SelectItem>
+								<SelectItem value='balanced'>Balanced (K2.5)</SelectItem>
+								<SelectItem value='powerful'>Powerful (K2.5 Pro)</SelectItem>
+							</SelectContent>
+						</Select>
+						{updateNexusConfigMutation.isPending && (
+							<p className='text-caption text-text-secondary'>Saving...</p>
 						)}
-					</Button>
+						{updateNexusConfigMutation.isError && (
+							<p className='text-caption text-red-400'>{updateNexusConfigMutation.error.message}</p>
+						)}
+					</div>
 				</div>
 			</div>
 		</SettingsPageLayout>
