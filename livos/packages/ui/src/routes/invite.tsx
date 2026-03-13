@@ -6,8 +6,7 @@ import {
 	TbArrowLeft,
 	TbUser,
 	TbPaint,
-	TbBrandTelegram,
-	TbMail,
+	TbSparkles,
 	TbCheck,
 	TbLoader2,
 } from 'react-icons/tb'
@@ -26,7 +25,7 @@ import {cn} from '@/shadcn-lib/utils'
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 5
 
 const glassCardStyle = {
 	background: 'rgba(255, 255, 255, 0.85)',
@@ -352,210 +351,143 @@ function StepPersonalize({onNext}: {onNext: () => void}) {
 	)
 }
 
-// ─── Step 3: Connect Telegram (Placeholder) ──────────────────────
+// ─── Step 3: Personalize AI ──────────────────────────────────────
 
-function StepTelegram({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
-	const [chatId, setChatId] = useState('')
+const AI_ROLES = [
+	{id: 'developer', label: 'Developer', icon: '💻'},
+	{id: 'student', label: 'Student', icon: '📚'},
+	{id: 'designer', label: 'Designer', icon: '🎨'},
+	{id: 'business', label: 'Business', icon: '📊'},
+	{id: 'creative', label: 'Creative', icon: '✨'},
+	{id: 'general', label: 'General', icon: '🌐'},
+] as const
+
+const AI_STYLES = [
+	{id: 'concise', label: 'Concise', desc: 'Short and to the point'},
+	{id: 'balanced', label: 'Balanced', desc: 'Clear with enough detail'},
+	{id: 'detailed', label: 'Detailed', desc: 'Thorough explanations'},
+] as const
+
+const AI_USE_CASES = [
+	'Coding', 'Research', 'Writing', 'Automation',
+	'Data Analysis', 'Email', 'Learning', 'Planning',
+	'Creative Projects', 'System Admin',
+] as const
+
+export const ONBOARDING_PERSONALIZATION_KEY = 'livinity-onboarding-personalization'
+
+function StepPersonalizeAI({
+	onNext,
+	onSkip,
+	personalization,
+	setPersonalization,
+}: {
+	onNext: () => void
+	onSkip: () => void
+	personalization: {role: string; style: string; useCases: string[]}
+	setPersonalization: (p: {role: string; style: string; useCases: string[]}) => void
+}) {
+	const {role, style, useCases} = personalization
+
+	const toggleUseCase = (uc: string) => {
+		const next = useCases.includes(uc) ? useCases.filter((u) => u !== uc) : [...useCases, uc]
+		setPersonalization({...personalization, useCases: next})
+	}
+
+	const handleContinue = () => {
+		// Save to localStorage for post-login sync
+		try {
+			localStorage.setItem(ONBOARDING_PERSONALIZATION_KEY, JSON.stringify(personalization))
+		} catch {}
+		onNext()
+	}
 
 	return (
 		<div className='flex flex-col items-center gap-5 w-full'>
 			<div className='flex flex-col items-center gap-2'>
 				<div className='flex items-center gap-2'>
-					<TbBrandTelegram size={22} className='text-[#2AABEE]' />
+					<TbSparkles size={20} className='text-amber-400' />
 					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
-						Connect Telegram
+						Personalize your AI
 					</h2>
 				</div>
-				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg' style={{maxWidth: 400}}>
-					Chat with your AI assistant from anywhere using Telegram
+				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg'>
+					Help your AI assistant understand you better
 				</p>
 			</div>
 
-			{/* Instructions card */}
-			<div className='w-full rounded-xl border border-border-default bg-surface-base p-5 space-y-4'>
-				<ol className='space-y-3'>
-					{[
-						{
-							num: 1,
-							text: (
-								<>
-									Open Telegram and search for{' '}
-									<span className='font-mono font-medium text-text-primary'>@LivinityBot</span>
-								</>
-							),
-						},
-						{
-							num: 2,
-							text: (
-								<>
-									Send the command{' '}
-									<span className='font-mono font-medium text-text-primary'>/start</span>{' '}
-									to begin pairing
-								</>
-							),
-						},
-						{
-							num: 3,
-							text: 'Copy the Chat ID shown and paste it below',
-						},
-					].map(({num, text}) => (
-						<li key={num} className='flex items-start gap-3'>
-							<span className='flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#2AABEE]/20 text-[11px] font-bold text-[#2AABEE]'>
-								{num}
-							</span>
-							<span className='text-body text-text-secondary'>{text}</span>
-						</li>
+			{/* Role selection */}
+			<div className='w-full space-y-2'>
+				<label className='text-caption font-medium text-text-tertiary'>What best describes you?</label>
+				<div className='grid grid-cols-3 gap-2'>
+					{AI_ROLES.map((r) => (
+						<motion.button
+							key={r.id}
+							onClick={() => setPersonalization({...personalization, role: r.id})}
+							className={cn(
+								'flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-all',
+								role === r.id
+									? 'border-brand bg-brand/5 ring-1 ring-brand/30'
+									: 'border-border-default hover:border-border-hover hover:bg-surface-1',
+							)}
+							whileTap={{scale: 0.97}}
+						>
+							<span className='text-xl'>{r.icon}</span>
+							<span className='text-caption font-medium text-text-primary'>{r.label}</span>
+						</motion.button>
 					))}
-				</ol>
-
-				<div>
-					<label className='mb-1.5 block text-caption font-medium text-text-tertiary'>
-						Telegram Chat ID
-					</label>
-					<Input
-						placeholder='e.g. 123456789'
-						value={chatId}
-						onValueChange={setChatId}
-					/>
 				</div>
+			</div>
 
-				<div className='rounded-lg bg-[#2AABEE]/10 border border-[#2AABEE]/20 px-3 py-2.5 text-caption text-[#2AABEE]/80'>
-					Telegram integration will be available after setup. Your Chat ID will be saved to connect automatically.
+			{/* Communication style */}
+			<div className='w-full space-y-2'>
+				<label className='text-caption font-medium text-text-tertiary'>How should AI respond?</label>
+				<div className='flex gap-2'>
+					{AI_STYLES.map((s) => (
+						<motion.button
+							key={s.id}
+							onClick={() => setPersonalization({...personalization, style: s.id})}
+							className={cn(
+								'flex-1 rounded-xl border p-3 text-left transition-all',
+								style === s.id
+									? 'border-brand bg-brand/5 ring-1 ring-brand/30'
+									: 'border-border-default hover:border-border-hover hover:bg-surface-1',
+							)}
+							whileTap={{scale: 0.97}}
+						>
+							<p className='text-caption font-semibold text-text-primary'>{s.label}</p>
+							<p className='text-[11px] text-text-tertiary'>{s.desc}</p>
+						</motion.button>
+					))}
+				</div>
+			</div>
+
+			{/* Use cases */}
+			<div className='w-full space-y-2'>
+				<label className='text-caption font-medium text-text-tertiary'>What will you use AI for?</label>
+				<div className='flex flex-wrap gap-2'>
+					{AI_USE_CASES.map((uc) => (
+						<motion.button
+							key={uc}
+							onClick={() => toggleUseCase(uc)}
+							className={cn(
+								'rounded-full border px-3 py-1.5 text-caption font-medium transition-all',
+								useCases.includes(uc)
+									? 'border-brand bg-brand/10 text-brand'
+									: 'border-border-default text-text-secondary hover:border-border-hover hover:bg-surface-1',
+							)}
+							whileTap={{scale: 0.95}}
+						>
+							{uc}
+						</motion.button>
+					))}
 				</div>
 			</div>
 
 			<div className='flex flex-col items-center gap-3'>
-				<button onClick={onNext} className={primaryButtonClass}>
-					{chatId.trim() ? (
-						<>
-							Save &amp; Continue
-							<TbArrowRight size={16} />
-						</>
-					) : (
-						<>
-							Continue
-							<TbArrowRight size={16} />
-						</>
-					)}
-				</button>
-				<button onClick={onSkip} className={skipButtonClass}>
-					Skip for now
-				</button>
-			</div>
-		</div>
-	)
-}
-
-// ─── Step 4: Connect Gmail (Placeholder) ─────────────────────────
-
-function StepGmail({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
-	const [connected, setConnected] = useState(false)
-
-	return (
-		<div className='flex flex-col items-center gap-5 w-full'>
-			<div className='flex flex-col items-center gap-2'>
-				<div className='flex items-center gap-2'>
-					<TbMail size={22} className='text-red-400' />
-					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
-						Connect Gmail
-					</h2>
-				</div>
-				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg' style={{maxWidth: 400}}>
-					Let your AI assistant help you manage and reply to emails
-				</p>
-			</div>
-
-			{/* Feature highlights */}
-			<div className='w-full rounded-xl border border-border-default bg-surface-base p-5 space-y-3'>
-				{[
-					{
-						icon: '📬',
-						title: 'Smart email summaries',
-						desc: 'Get daily briefings of your important emails',
-					},
-					{
-						icon: '✍️',
-						title: 'AI-powered replies',
-						desc: 'Draft replies in your writing style',
-					},
-					{
-						icon: '🔒',
-						title: 'Read-only by default',
-						desc: 'Your AI can only send emails when you approve',
-					},
-				].map(({icon, title, desc}) => (
-					<div key={title} className='flex items-start gap-3'>
-						<span className='text-lg leading-none mt-0.5'>{icon}</span>
-						<div>
-							<p className='text-body font-medium text-text-primary'>{title}</p>
-							<p className='text-caption text-text-tertiary'>{desc}</p>
-						</div>
-					</div>
-				))}
-			</div>
-
-			{/* OAuth connect button (placeholder) */}
-			{connected ? (
-				<motion.div
-					initial={{opacity: 0, scale: 0.95}}
-					animate={{opacity: 1, scale: 1}}
-					className='flex items-center gap-3 rounded-full bg-green-500/10 border border-green-500/20 px-5 py-3'
-				>
-					<motion.div
-						initial={{scale: 0}}
-						animate={{scale: 1}}
-						transition={{type: 'spring', stiffness: 400, damping: 15}}
-						className='flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20'
-					>
-						<TbCheck size={14} className='text-green-400' />
-					</motion.div>
-					<span className='text-body font-medium text-green-400'>Gmail connected</span>
-				</motion.div>
-			) : (
-				<button
-					onClick={() => setConnected(true)}
-					className={cn(secondaryButtonClass, 'gap-3')}
-				>
-					{/* Google "G" icon using SVG inline */}
-					<svg width='18' height='18' viewBox='0 0 18 18' fill='none' xmlns='http://www.w3.org/2000/svg'>
-						<path
-							d='M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z'
-							fill='#4285F4'
-						/>
-						<path
-							d='M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z'
-							fill='#34A853'
-						/>
-						<path
-							d='M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z'
-							fill='#FBBC05'
-						/>
-						<path
-							d='M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z'
-							fill='#EA4335'
-						/>
-					</svg>
-					Connect with Google
-				</button>
-			)}
-
-			<div className='rounded-lg bg-surface-1 border border-border-subtle px-3 py-2 text-caption text-text-tertiary text-center' style={{maxWidth: 360}}>
-				Gmail OAuth integration is coming soon. Your preference will be saved and configured once available.
-			</div>
-
-			<div className='flex flex-col items-center gap-3'>
-				<button onClick={onNext} className={primaryButtonClass}>
-					{connected ? (
-						<>
-							Continue
-							<TbArrowRight size={16} />
-						</>
-					) : (
-						<>
-							Continue
-							<TbArrowRight size={16} />
-						</>
-					)}
+				<button onClick={handleContinue} className={primaryButtonClass}>
+					Continue
+					<TbArrowRight size={16} />
 				</button>
 				<button onClick={onSkip} className={skipButtonClass}>
 					Skip for now
@@ -669,6 +601,11 @@ export default function InviteAcceptPage() {
 		username: '',
 		password: '',
 	})
+	const [personalization, setPersonalization] = useState({
+		role: '',
+		style: 'balanced',
+		useCases: [] as string[],
+	})
 
 	const goNext = useCallback(() => {
 		setDirection(1)
@@ -751,24 +688,24 @@ export default function InviteAcceptPage() {
 						<StepPersonalize onNext={goNext} />
 					</div>
 
-					{/* Step 3: Connect Telegram */}
+					{/* Step 3: Personalize AI */}
 					<div className='w-full'>
-						<StepTelegram onNext={goNext} onSkip={goNext} />
+						<StepPersonalizeAI
+							onNext={goNext}
+							onSkip={goNext}
+							personalization={personalization}
+							setPersonalization={setPersonalization}
+						/>
 					</div>
 
-					{/* Step 4: Connect Gmail */}
-					<div className='w-full'>
-						<StepGmail onNext={goNext} onSkip={goNext} />
-					</div>
-
-					{/* Step 5: All Done */}
+					{/* Step 4: All Done */}
 					<div className='w-full'>
 						<StepAllDone displayName={accountFields.displayName} />
 					</div>
 				</TransitionPanel>
 
-				{/* Back button for steps 2–4 */}
-				{activeStep >= 2 && activeStep <= 4 && (
+				{/* Back button for steps 2–3 */}
+				{activeStep >= 2 && activeStep <= 3 && (
 					<motion.div
 						initial={{opacity: 0}}
 						animate={{opacity: 1}}
