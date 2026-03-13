@@ -8,6 +8,7 @@ import {GlobalSystemStateProvider} from '@/providers/global-system-state/index'
 import {AuthBootstrap} from './providers/auth-bootstrap'
 import {GlobalFilesProvider} from './providers/global-files'
 import {RemoteLanguageInjector} from './providers/language'
+import {OnboardingPersonalizationSync} from './providers/onboarding-sync'
 import {Prefetcher} from './providers/prefetch'
 import {RemoteWallpaperInjector, WallpaperProviderConnected} from './providers/wallpaper'
 import {router} from './router'
@@ -30,6 +31,7 @@ init(
 				</GlobalSystemStateProvider>
 			</ConfirmationProvider>
 		</WallpaperProviderConnected>
+		<OnboardingPersonalizationSync />
 		<Prefetcher />
 	</TrpcProvider>,
 )

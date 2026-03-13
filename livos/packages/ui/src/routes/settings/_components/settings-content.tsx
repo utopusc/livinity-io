@@ -1,6 +1,6 @@
 import {Loader2} from 'lucide-react'
 import {AnimatePresence, motion} from 'motion/react'
-import React, {Suspense, useEffect, useState} from 'react'
+import React, {Suspense, useEffect, useRef, useState} from 'react'
 import {FaRegSave} from 'react-icons/fa'
 import {
 	RiExpandRightFill,
@@ -908,6 +908,136 @@ function AiConfigSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AI Personalization
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AI_ROLES = [
+	{id: 'developer', label: 'Developer'},
+	{id: 'student', label: 'Student'},
+	{id: 'designer', label: 'Designer'},
+	{id: 'business', label: 'Business'},
+	{id: 'creative', label: 'Creative'},
+	{id: 'general', label: 'General'},
+] as const
+
+const AI_RESPONSE_STYLES = [
+	{id: 'concise', label: 'Concise', desc: 'Short and to the point'},
+	{id: 'balanced', label: 'Balanced', desc: 'Clear with enough detail'},
+	{id: 'detailed', label: 'Detailed', desc: 'Thorough explanations'},
+] as const
+
+const AI_USE_CASES = [
+	'Coding', 'Research', 'Writing', 'Automation',
+	'Data Analysis', 'Email', 'Learning', 'Planning',
+	'Creative Projects', 'System Admin',
+] as const
+
+function PersonalizationCard() {
+	const prefsQ = trpcReact.preferences.get.useQuery({keys: ['ai_role', 'ai_response_style', 'ai_use_cases']}, {retry: false})
+	const setPref = trpcReact.preferences.set.useMutation()
+	const [role, setRole] = useState('')
+	const [style, setStyle] = useState('balanced')
+	const [useCases, setUseCases] = useState<string[]>([])
+	const loaded = useRef(false)
+
+	useEffect(() => {
+		if (prefsQ.data && !loaded.current) {
+			loaded.current = true
+			if (prefsQ.data['ai_role']) setRole(prefsQ.data['ai_role'] as string)
+			if (prefsQ.data['ai_response_style']) setStyle(prefsQ.data['ai_response_style'] as string)
+			if (prefsQ.data['ai_use_cases']) setUseCases(prefsQ.data['ai_use_cases'] as string[])
+		}
+	}, [prefsQ.data])
+
+	const saveRole = (v: string) => {
+		setRole(v)
+		setPref.mutate({key: 'ai_role', value: v})
+	}
+	const saveStyle = (v: string) => {
+		setStyle(v)
+		setPref.mutate({key: 'ai_response_style', value: v})
+	}
+	const toggleUseCase = (uc: string) => {
+		const next = useCases.includes(uc) ? useCases.filter((u) => u !== uc) : [...useCases, uc]
+		setUseCases(next)
+		setPref.mutate({key: 'ai_use_cases', value: next})
+	}
+
+	return (
+		<div className='space-y-4 mb-6 pb-6 border-b border-border-default'>
+			<div>
+				<h3 className='text-body font-medium text-text-primary'>AI Personalization</h3>
+				<p className='text-caption text-text-secondary mt-1'>Customize how the AI responds to you.</p>
+			</div>
+
+			{/* Role */}
+			<div className='flex flex-col gap-2'>
+				<label className='text-caption text-text-secondary'>Your Role</label>
+				<div className='grid grid-cols-3 gap-2'>
+					{AI_ROLES.map((r) => (
+						<button
+							key={r.id}
+							onClick={() => saveRole(r.id)}
+							className={cn(
+								'rounded-radius-md border p-2 text-center text-caption transition-all',
+								role === r.id
+									? 'border-brand bg-brand/10 text-text-primary'
+									: 'border-border-default text-text-secondary hover:border-brand/50',
+							)}
+						>
+							{r.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Response Style */}
+			<div className='flex flex-col gap-2'>
+				<label className='text-caption text-text-secondary'>AI Style</label>
+				<div className='grid grid-cols-3 gap-2'>
+					{AI_RESPONSE_STYLES.map((s) => (
+						<button
+							key={s.id}
+							onClick={() => saveStyle(s.id)}
+							className={cn(
+								'rounded-radius-md border p-2 text-center transition-all',
+								style === s.id
+									? 'border-brand bg-brand/10 text-text-primary'
+									: 'border-border-default text-text-secondary hover:border-brand/50',
+							)}
+						>
+							<div className='text-caption font-medium'>{s.label}</div>
+							<div className='text-caption-sm text-text-tertiary'>{s.desc}</div>
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Use Cases */}
+			<div className='flex flex-col gap-2'>
+				<label className='text-caption text-text-secondary'>Use Cases</label>
+				<div className='flex flex-wrap gap-1.5'>
+					{AI_USE_CASES.map((uc) => (
+						<button
+							key={uc}
+							onClick={() => toggleUseCase(uc)}
+							className={cn(
+								'rounded-full border px-3 py-1 text-caption transition-all',
+								useCases.includes(uc)
+									? 'border-brand bg-brand/10 text-text-primary'
+									: 'border-border-default text-text-secondary hover:border-brand/50',
+							)}
+						>
+							{uc}
+						</button>
+					))}
+				</div>
+			</div>
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Nexus Config Section (Full Implementation)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -976,6 +1106,7 @@ function NexusConfigSection() {
 
 	return (
 		<div className='max-w-full overflow-hidden'>
+			<PersonalizationCard />
 			<Tabs value={activeTab} onValueChange={setActiveTab} className='w-full'>
 				<TabsList className='mb-3 grid w-full grid-cols-6 gap-0.5 p-0.5 rounded-radius-sm'>
 					<TabsTrigger value='response' className='flex items-center justify-center p-1.5 rounded-6' title='Response'>
