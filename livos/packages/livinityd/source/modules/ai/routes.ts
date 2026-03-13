@@ -344,7 +344,8 @@ export default router({
 		)
 		.mutation(async ({ctx, input}) => {
 			const ai = ctx.livinityd.ai
-			const result = await ai.chat(input.conversationId, input.message)
+			const userId = ctx.currentUser?.id
+			const result = await ai.chat(input.conversationId, input.message, undefined, userId)
 			return result
 		}),
 
@@ -359,10 +360,11 @@ export default router({
 		.subscription(({ctx, input}) => {
 			return observable<{type: string; data: unknown}>((emit) => {
 				const ai = ctx.livinityd.ai
+				const userId = ctx.currentUser?.id
 
 				ai.chat(input.conversationId, input.message, (event) => {
 					emit.next({type: event.type, data: event.data})
-				})
+				}, userId)
 					.then((result) => {
 						emit.next({type: 'final_answer', data: result})
 						emit.next({type: 'done', data: null})
@@ -377,19 +379,22 @@ export default router({
 
 	/** Get a single conversation */
 	getConversation: privateProcedure.input(z.object({id: z.string()})).query(async ({ctx, input}) => {
-		const conversation = ctx.livinityd.ai.getConversation(input.id)
+		const userId = ctx.currentUser?.id
+		const conversation = ctx.livinityd.ai.getConversation(input.id, userId)
 		if (!conversation) throw new TRPCError({code: 'NOT_FOUND', message: 'Conversation not found'})
 		return conversation
 	}),
 
 	/** List all conversations */
 	listConversations: privateProcedure.query(async ({ctx}) => {
-		return ctx.livinityd.ai.listConversations()
+		const userId = ctx.currentUser?.id
+		return ctx.livinityd.ai.listConversations(userId)
 	}),
 
 	/** Delete a conversation */
 	deleteConversation: privateProcedure.input(z.object({id: z.string()})).mutation(async ({ctx, input}) => {
-		return ctx.livinityd.ai.deleteConversation(input.id)
+		const userId = ctx.currentUser?.id
+		return ctx.livinityd.ai.deleteConversation(input.id, userId)
 	}),
 
 	// ── Tools ──────────────────────────────────────────────

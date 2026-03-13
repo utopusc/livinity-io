@@ -1,6 +1,15 @@
 import z from 'zod'
 
 import {router, privateProcedure, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
+import {fileUserContext, type FileUserInfo} from './files.js'
+
+// Helper to run file operations within the user's file context
+function withFileUser<T>(ctx: {currentUser?: {username: string; role: string}}, fn: () => Promise<T>): Promise<T> {
+	const userInfo: FileUserInfo | undefined = ctx.currentUser
+		? {username: ctx.currentUser.username, role: ctx.currentUser.role as FileUserInfo['role']}
+		: undefined
+	return fileUserContext.run(userInfo, fn)
+}
 
 export default router({
 	// List a directory
@@ -15,7 +24,7 @@ export default router({
 			}),
 		)
 		.query(async ({ctx, input}) => {
-			const directoryListing = await ctx.livinityd.files.list(input.path)
+			const directoryListing = await withFileUser(ctx, () => ctx.livinityd.files.list(input.path))
 			const totalFiles = directoryListing.files.length
 
 			// Sort the files
@@ -63,7 +72,7 @@ export default router({
 	// Create a directory
 	createDirectory: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.createDirectory(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.createDirectory(input.path))),
 
 	// Copy a file or directory
 	copy: privateProcedure
@@ -75,7 +84,7 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) =>
-			ctx.livinityd.files.copy(input.path, input.toDirectory, {collision: input.collision}),
+			withFileUser(ctx, () => ctx.livinityd.files.copy(input.path, input.toDirectory, {collision: input.collision})),
 		),
 
 	// Move a file or directory
@@ -88,7 +97,7 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) =>
-			ctx.livinityd.files.move(input.path, input.toDirectory, {collision: input.collision}),
+			withFileUser(ctx, () => ctx.livinityd.files.move(input.path, input.toDirectory, {collision: input.collision})),
 		),
 
 	// Get progress of file operations
@@ -97,41 +106,43 @@ export default router({
 	// Rename a file or directory
 	rename: privateProcedure
 		.input(z.object({path: z.string(), newName: z.string().nonempty()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.rename(input.path, input.newName)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.rename(input.path, input.newName))),
 
 	// Trash a file or directory
 	trash: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.trash(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.trash(input.path))),
 
 	// Restore a file or directory from the trash
 	restore: privateProcedure
 		.input(z.object({path: z.string(), collision: z.enum(['error', 'keep-both', 'replace']).default('error')}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.restore(input.path, {collision: input.collision})),
+		.mutation(async ({ctx, input}) =>
+			withFileUser(ctx, () => ctx.livinityd.files.restore(input.path, {collision: input.collision})),
+		),
 
 	// Empty the trash
-	emptyTrash: privateProcedure.mutation(async ({ctx}) => ctx.livinityd.files.emptyTrash()),
+	emptyTrash: privateProcedure.mutation(async ({ctx}) => withFileUser(ctx, () => ctx.livinityd.files.emptyTrash())),
 
 	// Permanently delete a file or directory
 	delete: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.delete(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.delete(input.path))),
 
 	// Get favorites
-	favorites: privateProcedure.query(async ({ctx}) => ctx.livinityd.files.favorites.listFavorites()),
+	favorites: privateProcedure.query(async ({ctx}) => withFileUser(ctx, () => ctx.livinityd.files.favorites.listFavorites())),
 
 	// Add a favorite
 	addFavorite: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.favorites.addFavorite(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.favorites.addFavorite(input.path))),
 
 	// Remove a favorite
 	removeFavorite: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.favorites.removeFavorite(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.favorites.removeFavorite(input.path))),
 
 	// Get recent files
-	recents: privateProcedure.query(async ({ctx}) => ctx.livinityd.files.recents.get()),
+	recents: privateProcedure.query(async ({ctx}) => withFileUser(ctx, () => ctx.livinityd.files.recents.get())),
 
 	// Get view preferences
 	// Public only when no user exists for onboarding restore flow (returns defaults); private once a user exists
@@ -151,33 +162,35 @@ export default router({
 	// Create a zip archive
 	archive: privateProcedure
 		.input(z.object({paths: z.array(z.string()).min(1)}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.archive.archive(input.paths)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.archive.archive(input.paths))),
 
 	// Unarchive a file
 	unarchive: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.archive.unarchive(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.archive.unarchive(input.path))),
 
 	// Get/generate a thumbnail for a file on demand
 	getThumbnail: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.thumbnails.getThumbnailOnDemand(input.path)),
+		.mutation(async ({ctx, input}) =>
+			withFileUser(ctx, () => ctx.livinityd.files.thumbnails.getThumbnailOnDemand(input.path)),
+		),
 
 	// Get the share password
 	sharePassword: privateProcedure.query(async ({ctx}) => ctx.livinityd.files.samba.getSharePassword()),
 
 	// Get shares
-	shares: privateProcedure.query(async ({ctx}) => ctx.livinityd.files.samba.listShares()),
+	shares: privateProcedure.query(async ({ctx}) => withFileUser(ctx, () => ctx.livinityd.files.samba.listShares())),
 
 	// Share a directory
 	addShare: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.samba.addShare(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.samba.addShare(input.path))),
 
 	// Remove a share
 	removeShare: privateProcedure
 		.input(z.object({path: z.string()}))
-		.mutation(async ({ctx, input}) => ctx.livinityd.files.samba.removeShare(input.path)),
+		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.samba.removeShare(input.path))),
 
 	// Format an external device
 	formatExternalDevice: privateProcedure
@@ -215,7 +228,9 @@ export default router({
 				maxResults: z.number().positive().max(1000).default(250).optional(),
 			}),
 		)
-		.query(async ({ctx, input}) => ctx.livinityd.files.search.search(input.query, input.maxResults)),
+		.query(async ({ctx, input}) =>
+			withFileUser(ctx, () => ctx.livinityd.files.search.search(input.query, input.maxResults)),
+		),
 
 	// List network shares
 	listNetworkShares: publicProcedureWhenNoUserExists.query(async ({ctx}) =>

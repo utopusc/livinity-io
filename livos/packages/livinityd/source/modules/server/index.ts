@@ -419,6 +419,27 @@ class Server {
 				const isValid = await this.verifyProxyToken(token).catch(() => false)
 				if (!isValid) return response.status(401).json({error: 'unauthorized'})
 
+				// Extract user info from LIVINITY_SESSION JWT for per-user file isolation
+				try {
+					const sessionToken = request?.cookies?.LIVINITY_SESSION
+					if (sessionToken) {
+						const payload = await this.verifyToken(sessionToken)
+						if (payload && typeof payload === 'object' && 'userId' in payload) {
+							const {findUserById} = await import('../../database/index.js')
+							const user = await findUserById(payload.userId as string)
+							if (user) {
+								;(request as any).currentUser = {
+									id: user.id,
+									username: user.username,
+									role: user.role,
+								}
+							}
+						}
+					}
+				} catch {
+					// Non-fatal: legacy tokens without userId still work
+				}
+
 				next()
 			})
 

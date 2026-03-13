@@ -16,6 +16,7 @@
  */
 
 import nodePath from 'node:path'
+import {AsyncLocalStorage} from 'node:async_hooks'
 
 import mime from 'mime-types'
 import fse from 'fs-extra'
@@ -98,6 +99,16 @@ type OperationProgress = {
 
 export type OperationsInProgress = OperationProgress[]
 
+// Per-request user context for multi-user file isolation.
+// Admin users (or legacy single-user) get global base directories.
+// Non-admin users get per-user directories under {dataDir}/users/{username}/.
+export interface FileUserInfo {
+	username: string
+	role: 'admin' | 'member' | 'guest'
+}
+
+export const fileUserContext = new AsyncLocalStorage<FileUserInfo | undefined>()
+
 export default class Files {
 	#livinityd: Livinityd
 	logger: Livinityd['logger']
@@ -145,6 +156,47 @@ export default class Files {
 
 		// TODO: This should really be in a proper DB, refactor this once we've moved to SQLite
 		this.trashMetaDirectory = `${livinityd.dataDirectory}/trash-meta`
+	}
+
+	// Get base directories for a non-admin user (per-user isolation).
+	getUserBaseDirectories(username: string): Map<string, string> {
+		const userDir = `${this.#livinityd.dataDirectory}/users/${username}`
+		return new Map<BaseDirectory, string>([
+			['/Home', `${userDir}/home`],
+			['/Trash', `${userDir}/trash`],
+			['/Apps', `${userDir}/app-data`],
+			// External and Network are shared (hardware-level)
+			['/External', `${this.#livinityd.dataDirectory}/external`],
+			['/Backups', `${userDir}/backups`],
+			['/Network', `${this.#livinityd.dataDirectory}/network`],
+		])
+	}
+
+	// Returns the active base directories based on the current request's user context.
+	// Admin or legacy (no user context) → global directories.
+	// Non-admin → per-user directories.
+	getActiveBaseDirectories(): Map<string, string> {
+		const userInfo = fileUserContext.getStore()
+		if (!userInfo || userInfo.role === 'admin') {
+			return this.baseDirectories
+		}
+		return this.getUserBaseDirectories(userInfo.username)
+	}
+
+	// Ensure per-user directories exist. Called on first access.
+	async ensureUserDirectories(username: string) {
+		const userDir = `${this.#livinityd.dataDirectory}/users/${username}`
+		const dirs = ['home', 'trash', 'app-data', 'backups']
+		for (const dir of dirs) {
+			await fse.ensureDir(`${userDir}/${dir}`).catch((error) => {
+				this.logger.error(`Failed to create user directory ${userDir}/${dir}`, error)
+			})
+		}
+		// Create default folders in Home
+		const defaultFolders = ['Downloads', 'Documents', 'Photos', 'Videos']
+		for (const folder of defaultFolders) {
+			await fse.ensureDir(`${userDir}/home/${folder}`).catch(() => {})
+		}
 	}
 
 	async start() {
@@ -209,8 +261,10 @@ export default class Files {
 	}
 
 	// Typesafe wrapper to get the system path of a base directory
+	// Respects per-user context from AsyncLocalStorage.
 	getBaseDirectory(virtualPath: BaseDirectory) {
-		const path = this.baseDirectories.get(virtualPath)
+		const baseDirs = this.getActiveBaseDirectories()
+		const path = baseDirs.get(virtualPath)
 		if (!path) throw new Error(`[base-directory-not-found] ${virtualPath}`)
 		return path
 	}
@@ -843,8 +897,10 @@ export default class Files {
 		if (!nodePath.posix.isAbsolute(virtualPath)) throw new Error(`[path-not-absolute]`)
 
 		// Split the path into segments and lookup the system path for the base directory
+		// Uses per-user directories for non-admin users via AsyncLocalStorage context.
 		const segments = virtualPath.split('/').filter(Boolean)
-		const basePath = this.baseDirectories.get(`/${segments[0]}`)
+		const baseDirs = this.getActiveBaseDirectories()
+		const basePath = baseDirs.get(`/${segments[0]}`)
 
 		// Error if we don't find a matching base directory
 		if (!basePath) throw new Error(`[invalid-base] No valid base directory found for path: ${virtualPath}`)
@@ -862,8 +918,10 @@ export default class Files {
 	// If the full path doesn't exist it validates symlinks up to the deepest existing path.
 	async virtualToSystemPath(virtualPath: string) {
 		// Split the path into segments and lookup the system path for the base directory
+		// Uses per-user directories for non-admin users via AsyncLocalStorage context.
 		const segments = virtualPath.split('/').filter(Boolean)
-		const basePath = this.baseDirectories.get(`/${segments[0]}`)!
+		const baseDirs = this.getActiveBaseDirectories()
+		const basePath = baseDirs.get(`/${segments[0]}`)!
 
 		const systemPath = this.virtualToSystemPathUnsafe(virtualPath)
 
@@ -894,7 +952,9 @@ export default class Files {
 		systemPath = normalizePath(systemPath)
 
 		// Find the base directory this path belongs to by checking if it starts with any of the base paths
-		for (const [baseDirectory, basePath] of this.baseDirectories) {
+		// Uses per-user directories for non-admin users via AsyncLocalStorage context.
+		const baseDirs = this.getActiveBaseDirectories()
+		for (const [baseDirectory, basePath] of baseDirs) {
 			if (systemPath.startsWith(basePath)) {
 				// Replace the system base path with the virtual base directory name
 				const virtualPath = systemPath.replace(basePath, baseDirectory)

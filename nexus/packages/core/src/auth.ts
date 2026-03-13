@@ -148,6 +148,7 @@ export async function verifyAndDecodeJwt(token: string): Promise<JwtPayload | nu
 
 /**
  * Extract userId from a request's JWT token (if present).
+ * Checks Authorization header first, then LIVINITY_SESSION cookie.
  * Returns undefined for legacy tokens without userId.
  */
 export async function extractUserIdFromRequest(req: Request): Promise<string | undefined> {
@@ -156,8 +157,19 @@ export async function extractUserIdFromRequest(req: Request): Promise<string | u
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     const payload = await verifyAndDecodeJwt(token);
-    return payload?.userId;
+    if (payload?.userId) return payload.userId;
   }
+
+  // Try LIVINITY_SESSION cookie (forwarded from livinityd proxy)
+  const cookies = req.headers.cookie;
+  if (cookies) {
+    const match = cookies.match(/LIVINITY_SESSION=([^;]+)/);
+    if (match) {
+      const payload = await verifyAndDecodeJwt(match[1]);
+      if (payload?.userId) return payload.userId;
+    }
+  }
+
   return undefined;
 }
 
