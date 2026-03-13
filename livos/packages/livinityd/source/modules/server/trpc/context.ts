@@ -13,11 +13,39 @@ export const createContextExpress = ({req, res}: CreateExpressContextOptions) =>
 	}
 }
 
-export const createContextWss = ({livinityd, logger}: {livinityd: Livinityd; logger: Livinityd['logger']}) => {
-	return {
+export const createContextWss = async ({livinityd, logger, req}: {livinityd: Livinityd; logger: Livinityd['logger']; req?: any}) => {
+	const ctx = {
 		...createContext({livinityd, logger}),
 		transport: 'ws' as const,
 	}
+
+	// Extract user info from the JWT in the WebSocket URL query params.
+	// The upgrade handler already verified the token, but we need to decode
+	// the payload here to populate ctx.currentUser for per-user features.
+	if (req?.url) {
+		try {
+			const {searchParams} = new URL(`https://localhost${req.url}`)
+			const token = searchParams.get('token')
+			if (token) {
+				const payload = await livinityd.server.verifyToken(token)
+				if (payload && typeof payload === 'object' && 'userId' in payload && payload.userId) {
+					const {findUserById} = await import('../../database/index.js')
+					const dbUser = await findUserById(payload.userId as string)
+					if (dbUser && dbUser.isActive) {
+						ctx.currentUser = {
+							id: dbUser.id,
+							username: dbUser.username,
+							role: dbUser.role,
+						}
+					}
+				}
+			}
+		} catch {
+			// Non-fatal: legacy tokens without userId still work
+		}
+	}
+
+	return ctx
 }
 
 const createContext = ({livinityd, logger}: {livinityd: Livinityd; logger: Livinityd['logger']}) => {
