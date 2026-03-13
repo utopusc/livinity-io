@@ -9,6 +9,19 @@ const LIV_API_KEY = process.env.LIV_API_KEY;
 let cachedJwtSecret: string | null = null;
 
 /**
+ * Decoded JWT payload from a LivOS token.
+ * Legacy tokens only have { loggedIn: true }.
+ * New multi-user tokens also include userId and role.
+ */
+export type JwtPayload = {
+  loggedIn: boolean;
+  userId?: string;
+  role?: string;
+  exp?: number;
+  iat?: number;
+};
+
+/**
  * Read the JWT secret from disk and cache it.
  * Path: /data/secrets/jwt (plain text file)
  */
@@ -46,6 +59,8 @@ function base64urlDecode(str: string): Buffer {
  * 2. HMAC-SHA256 signature matches
  * 3. Payload contains { loggedIn: true }
  * 4. Token is not expired (if exp claim exists)
+ *
+ * Accepts both legacy {loggedIn: true} and new {loggedIn: true, userId, role} tokens.
  */
 export async function verifyJwt(token: string): Promise<boolean> {
   const secret = await getJwtSecret();
@@ -70,7 +85,7 @@ export async function verifyJwt(token: string): Promise<boolean> {
     // Decode and verify payload
     const payload = JSON.parse(base64urlDecode(parts[1]).toString('utf8'));
 
-    // Check loggedIn claim
+    // Check loggedIn claim (required for both legacy and new tokens)
     if (payload.loggedIn !== true) return false;
 
     // Check expiration if present
@@ -82,6 +97,68 @@ export async function verifyJwt(token: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Verify a JWT and return the decoded payload (including userId if present).
+ * Returns null if verification fails.
+ */
+export async function verifyAndDecodeJwt(token: string): Promise<JwtPayload | null> {
+  const secret = await getJwtSecret();
+  if (!secret) return null;
+
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  try {
+    // Verify header algorithm
+    const header = JSON.parse(base64urlDecode(parts[0]).toString('utf8'));
+    if (header.alg !== 'HS256') return null;
+
+    // Verify signature
+    const signingInput = `${parts[0]}.${parts[1]}`;
+    const expectedSig = createHmac('sha256', secret).update(signingInput).digest();
+    const actualSig = base64urlDecode(parts[2]);
+
+    if (expectedSig.length !== actualSig.length) return null;
+    if (!timingSafeEqual(expectedSig, actualSig)) return null;
+
+    // Decode payload
+    const payload = JSON.parse(base64urlDecode(parts[1]).toString('utf8'));
+
+    // Check loggedIn claim
+    if (payload.loggedIn !== true) return null;
+
+    // Check expiration
+    if (payload.exp && typeof payload.exp === 'number') {
+      if (Date.now() / 1000 > payload.exp) return null;
+    }
+
+    return {
+      loggedIn: true,
+      userId: payload.userId,
+      role: payload.role,
+      exp: payload.exp,
+      iat: payload.iat,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract userId from a request's JWT token (if present).
+ * Returns undefined for legacy tokens without userId.
+ */
+export async function extractUserIdFromRequest(req: Request): Promise<string | undefined> {
+  // Try Authorization header first
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const payload = await verifyAndDecodeJwt(token);
+    return payload?.userId;
+  }
+  return undefined;
 }
 
 /**

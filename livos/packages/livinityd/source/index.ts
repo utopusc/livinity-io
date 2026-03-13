@@ -18,6 +18,7 @@ import EventBus from './modules/event-bus/event-bus.js'
 import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
 import AiModule from './modules/ai/index.js'
+import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
@@ -181,6 +182,16 @@ export default class Livinityd {
 			await this.apps.cleanDockerState().catch((error) => this.logger.error(`Failed to clean Docker state`, error))
 		}
 
+		// Initialize PostgreSQL database (non-fatal -- falls back to YAML if unavailable)
+		const dbLogger = this.logger.createChildLogger('database')
+		const dbReady = await initDatabase(dbLogger)
+		if (dbReady) {
+			// Migrate YAML user data to PostgreSQL if this is the first run with DB
+			await migrateFromYaml(this.store, dbLogger)
+		} else {
+			dbLogger.log('PostgreSQL not available, continuing with YAML-only mode')
+		}
+
 		// Initialise modules
 		await Promise.all([
 			this.files.start(),
@@ -215,6 +226,10 @@ export default class Livinityd {
 
 			// Stop modules
 			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop()])
+
+			// Close database connection pool
+			await closeDatabase()
+
 			return true
 		} catch (error) {
 			// If we fail to stop gracefully there's not really much we can do, just log the error and return false

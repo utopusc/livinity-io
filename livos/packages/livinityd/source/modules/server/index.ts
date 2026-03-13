@@ -73,14 +73,27 @@ class Server {
 		return getOrCreateFile(jwtSecretPath, randomToken(256))
 	}
 
+	/**
+	 * Sign a legacy token (no userId). Used for backward compat.
+	 */
 	async signToken() {
 		return jwt.sign(await this.getJwtSecret())
+	}
+
+	/**
+	 * Sign a new multi-user token with userId and role.
+	 */
+	async signUserToken(userId: string, role: string) {
+		return jwt.signUserToken(await this.getJwtSecret(), userId, role)
 	}
 
 	async signProxyToken() {
 		return jwt.signProxyToken(await this.getJwtSecret())
 	}
 
+	/**
+	 * Verify a token and return the full payload (supports both legacy and new tokens).
+	 */
 	async verifyToken(token: string) {
 		return jwt.verify(token, await this.getJwtSecret())
 	}

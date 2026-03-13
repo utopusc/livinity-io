@@ -7,8 +7,23 @@ const ONE_WEEK = 7 * ONE_DAY
 
 const JWT_ALGORITHM = 'HS256'
 
-type jwtPayload = {
+// Legacy payload (single-user)
+type LegacyJwtPayload = {
 	loggedIn: boolean
+}
+
+// New multi-user payload
+type UserJwtPayload = {
+	loggedIn: boolean
+	userId: string
+	role: string
+}
+
+// Combined type for verification results
+export type VerifiedJwtPayload = {
+	loggedIn: boolean
+	userId?: string
+	role?: string
 }
 
 const validateSecret = (secret: string) => {
@@ -20,20 +35,51 @@ const validateSecret = (secret: string) => {
 	return true
 }
 
+/**
+ * Sign a legacy token (backward compatible, no userId).
+ */
 export async function sign(secret: string) {
 	validateSecret(secret)
-	const payload: jwtPayload = {loggedIn: true}
+	const payload: LegacyJwtPayload = {loggedIn: true}
 	const token = jwt.sign(payload, secret, {expiresIn: ONE_WEEK, algorithm: JWT_ALGORITHM})
 
 	return token
 }
 
-export async function verify(token: string, secret: string) {
+/**
+ * Sign a new multi-user token with userId and role.
+ */
+export async function signUserToken(secret: string, userId: string, role: string) {
 	validateSecret(secret)
-	const payload = jwt.verify(token, secret, {algorithms: [JWT_ALGORITHM]}) as jwtPayload
+	const payload: UserJwtPayload = {loggedIn: true, userId, role}
+	const token = jwt.sign(payload, secret, {expiresIn: ONE_WEEK, algorithm: JWT_ALGORITHM})
+
+	return token
+}
+
+/**
+ * Verify a token. Supports both legacy {loggedIn: true} and new {loggedIn: true, userId, role} payloads.
+ * Returns the full payload for the caller to inspect.
+ */
+export async function verify(token: string, secret: string): Promise<VerifiedJwtPayload> {
+	validateSecret(secret)
+	const payload = jwt.verify(token, secret, {algorithms: [JWT_ALGORITHM]}) as any
 
 	if (payload.loggedIn !== true) throw new Error('Invalid JWT')
 
+	return {
+		loggedIn: true,
+		userId: payload.userId,
+		role: payload.role,
+	}
+}
+
+/**
+ * Legacy verify that just returns true/false for backward compatibility.
+ * Used by code paths that only need to know if the token is valid.
+ */
+export async function verifyLegacy(token: string, secret: string): Promise<boolean> {
+	await verify(token, secret)
 	return true
 }
 
