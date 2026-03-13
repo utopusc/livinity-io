@@ -20,4 +20,16 @@ export const httpOnlyPaths = [
 	'user.acceptInvite',
 	// system.status doesn't use cookies/headers, but the UI polls it across restarts to detect when livinityd is back online; we force HTTP to avoid WS reconnect handshake
 	'system.status',
+	// Multi-user management routes — use HTTP to avoid WS connection dependency
+	'user.createInvite',
+	'user.listAllUsers',
+	'user.updateUserRole',
+	'user.toggleUserActive',
+	'apps.isMultiUserEnabled',
+	'apps.setMultiUserEnabled',
+	'apps.shareApp',
+	'apps.unshareApp',
+	'apps.sharedUsers',
+	'apps.allUsers',
+	'apps.myApps',
 ] as const
