@@ -1,93 +1,74 @@
-# Roadmap: LivOS v6.0 — Claude Code to Kimi Code Migration
+# Roadmap: LivOS v7.0 — Multi-User Support
 
 ## Overview
 
-This milestone replaces Claude Code with Kimi Code as the sole AI backbone across the Nexus backend and LivOS frontend. The migration follows a four-phase dependency chain: build the new provider first (lowest risk, gets chat working), wire up configuration UI and API routes second, tackle the complex CLI subprocess agent runner third, and clean up all Claude/Anthropic/Gemini dead code last. This ordering ensures the system is never deployed in a half-migrated state -- Claude stays intact until Kimi is fully verified.
+Transform LivOS from single-user to multi-user. Five phases: database foundation first, then login UI, then per-user data isolation, then Docker app routing, finally app sharing. Each phase builds on the previous. Existing single-user installations auto-migrate.
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3, 4): Planned milestone work
-- Decimal phases (e.g., 2.1): Urgent insertions if needed (marked with INSERTED)
-
-- [ ] **Phase 1: KimiProvider** - Implement Kimi AI provider with OpenAI-compatible API for chat and tool calling
-- [ ] **Phase 2: Configuration Layer** - API routes, tRPC proxies, and Settings UI for Kimi auth and model selection
-- [ ] **Phase 3: KimiAgentRunner** - CLI subprocess agent runner with MCP tool bridging and streaming events
-- [ ] **Phase 4: Onboarding and Cleanup** - Update setup wizard, remove all Claude/Anthropic/Gemini code
+- [ ] **Phase 1: Database & Auth Foundation** — PostgreSQL, users table, JWT overhaul, session management, tRPC context
+- [ ] **Phase 2: Login Screen & User Management** — Avatar-based login page, invite system, Settings > Users section
+- [ ] **Phase 3: File & AI Isolation** — Per-user directories, path security, Redis namespacing, AI data scoping
+- [ ] **Phase 4: App Gateway & Docker Isolation** — Wildcard Caddy, dynamic proxy, per-user containers, compose templating
+- [ ] **Phase 5: App Sharing** — Right-click share, user picker dialog, auto-access, shared app routing
 
 ## Phase Details
 
-### Phase 1: KimiProvider
-**Goal**: Users can chat with Kimi AI through the existing web UI with tool calling working end-to-end
-**Depends on**: Nothing (first phase)
-**Requirements**: CORE-01, CORE-02, CORE-03, CORE-04, CORE-05
-**Success Criteria** (what must be TRUE):
-  1. User sends a message in the chat UI and receives a streaming response from Kimi's API
-  2. AI can call existing MCP tools (shell, docker, files) through the Kimi provider with correct argument parsing
-  3. Model tier dropdown (fast/balanced/powerful) maps to actual Kimi K2.5 model IDs and the selection persists
-  4. Token usage (input/output counts) displays correctly in chat after each response
-**Plans**: 2 plans
+### Phase 1: Database & Auth Foundation
+**Goal**: PostgreSQL running, users table populated, JWT includes userId, auth works for existing single user
+**Requirements**: DB-01, DB-02, DB-03, DB-04, DB-05, DB-06, DB-07, DB-08, DB-09, DB-10
+**Success Criteria**:
+  1. PostgreSQL Docker container running and accessible from livinityd
+  2. Existing YAML user auto-migrated to admin in users table
+  3. JWT tokens contain {userId, role} and old {loggedIn: true} tokens still work during grace period
+  4. tRPC context has currentUser on all private procedures
+  5. Domain-wide cookie enables SSO across subdomains
 
-Plans:
-- [ ] 01-01-PLAN.md -- KimiProvider class with chat, streaming, tool format translation, and argument parsing
-- [ ] 01-02-PLAN.md -- Wire KimiProvider into ProviderManager and update config schema defaults
+### Phase 2: Login Screen & User Management
+**Goal**: Beautiful login screen with user avatars, admin can invite users, manage users from Settings
+**Requirements**: LOGIN-01, LOGIN-02, LOGIN-03, LOGIN-04, LOGIN-05, USER-01, USER-02, USER-03, USER-04, USER-05
+**Success Criteria**:
+  1. Visiting livinity.cloud when logged out shows login screen with user avatars
+  2. Clicking avatar + entering password logs in and redirects to desktop
+  3. Admin can create invite link from Settings > Users
+  4. Invited user can register via invite link
+  5. Admin can see all users, change roles, disable accounts
 
-### Phase 2: Configuration Layer
-**Goal**: Users can configure Kimi credentials, view auth status, and select models through the Settings UI and API
-**Depends on**: Phase 1
-**Requirements**: API-01, API-02, API-03, UI-01, UI-02, UI-03, AUTH-01, AUTH-02
-**Success Criteria** (what must be TRUE):
-  1. User can enter a Kimi API key in Settings and it persists in Redis across server restarts
-  2. Settings AI Configuration page shows Kimi auth status (connected/disconnected) and has no Claude or Gemini sections
-  3. Express routes `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` respond correctly
-  4. tRPC routes for Kimi status/login/logout work through the livinityd proxy
-  5. User can select between Kimi model tiers (fast/balanced/powerful) in the Settings UI
-**Plans**: 2 plans
+### Phase 3: File & AI Isolation
+**Goal**: Each user has isolated files and AI conversations, no cross-user data leakage
+**Requirements**: FILE-01, FILE-02, FILE-03, FILE-04, AI-01, AI-02, AI-03, AI-04
+**Success Criteria**:
+  1. Each user sees only their own files in the File Manager
+  2. Path traversal attempts blocked (../../../etc/passwd returns 403)
+  3. Each user sees only their own AI conversations
+  4. AI agent tools (file read/write) scoped to current user's directory
 
-Plans:
-- [ ] 02-01-PLAN.md -- Express and tRPC API routes for Kimi auth (API-01, API-02, AUTH-01, AUTH-02)
-- [ ] 02-02-PLAN.md -- Settings UI redesign for Kimi configuration (UI-01, UI-02, UI-03)
+### Phase 4: App Gateway & Docker Isolation
+**Goal**: Same subdomain serves different containers per user, Caddy uses wildcard cert
+**Requirements**: GW-01, GW-02, GW-03, GW-04, GW-05, DOCKER-01, DOCKER-02, DOCKER-03, DOCKER-04, DOCKER-05
+**Success Criteria**:
+  1. Caddy uses single wildcard block for all subdomains
+  2. n8n.livinity.cloud routes admin to admin's container, member to member's container
+  3. Unauthenticated subdomain access redirects to login
+  4. Each user's app has its own Docker container, volume, and port
+  5. Shared apps (Jellyfin) serve all authorized users from single container
 
-### Phase 3: KimiAgentRunner
-**Goal**: AI agent tasks execute through Kimi CLI subprocess with full MCP tool access and streaming output
-**Depends on**: Phase 2
-**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, AGENT-05, AUTH-03
-**Success Criteria** (what must be TRUE):
-  1. Kimi CLI is installed on the production server and `kimi --version` returns successfully
-  2. Agent stream endpoint (`/api/agent/stream`) spawns Kimi CLI subprocess and streams events to the UI in real time
-  3. MCP tools (shell, docker, files, browser) are passed to Kimi CLI via `--mcp-config` and the agent can invoke them
-  4. System prompt is written as temporary YAML + markdown files per session and cleaned up after completion
-  5. Token usage from Kimi CLI responses is extracted and tracked correctly
-**Plans**: 2 plans
-
-Plans:
-- [ ] 03-01-PLAN.md -- Server setup: Python 3.12, uv, Kimi CLI installation on production (AUTH-03)
-- [ ] 03-02-PLAN.md -- KimiAgentRunner implementation with JSONL event parsing and MCP bridging (AGENT-01..05)
-
-### Phase 4: Onboarding and Cleanup
-**Goal**: New users can set up Kimi through the onboarding wizard, and zero Claude/Anthropic/Gemini references remain in the codebase
-**Depends on**: Phase 3
-**Requirements**: ONBOARD-01, ONBOARD-02, AUTH-04, CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05, CLEAN-06, CLEAN-07
-**Success Criteria** (what must be TRUE):
-  1. Setup wizard AI step accepts Kimi API key or device auth and validates the connection before proceeding
-  2. `grep -r "claude\|anthropic\|Claude\|Anthropic" --include="*.ts" --include="*.tsx"` returns zero matches in active source files
-  3. `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk` are absent from package.json and node_modules
-  4. No Redis keys with "claude" or "anthropic" prefix exist in production
-  5. End-to-end test passes: fresh onboarding -> Kimi setup -> chat message -> tool execution -> streaming response
-**Plans**: 2 plans
-
-Plans:
-- [ ] 04-01-PLAN.md -- Onboarding wizard StepKimiAuth replacing StepClaudeAuth (ONBOARD-01, ONBOARD-02)
-- [ ] 04-02-PLAN.md -- Full Claude/Anthropic/Gemini code deletion and grep verification (CLEAN-01..07)
+### Phase 5: App Sharing
+**Goal**: Admin can share apps with other users via right-click context menu
+**Requirements**: SHARE-01, SHARE-02, SHARE-03, SHARE-04, SHARE-05
+**Success Criteria**:
+  1. Right-clicking app icon shows context menu with "Share" option
+  2. Share dialog shows user list with checkboxes
+  3. Shared app appears in target user's Apps section immediately
+  4. Admin can revoke shared access from Settings > Users
+  5. Accessing shared isolated app routes to sharer's container
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
-
-| Phase | Plans Complete | Status | Completed |
-|-------|---------------|--------|-----------|
-| 1. KimiProvider | 0/2 | Planned | - |
-| 2. Configuration Layer | 0/2 | Planned | - |
-| 3. KimiAgentRunner | 0/2 | Planned | - |
-| 4. Onboarding and Cleanup | 0/2 | Planned | - |
+| Phase | Status | Requirements |
+|-------|--------|-------------|
+| 1. Database & Auth | Planned | DB-01..DB-10 |
+| 2. Login & Users | Planned | LOGIN-01..05, USER-01..05 |
+| 3. Files & AI | Planned | FILE-01..04, AI-01..04 |
+| 4. Gateway & Docker | Planned | GW-01..05, DOCKER-01..05 |
+| 5. App Sharing | Planned | SHARE-01..05 |
