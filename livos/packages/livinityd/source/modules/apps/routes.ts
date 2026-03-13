@@ -1,7 +1,15 @@
 import z from 'zod'
 
-import {router, privateProcedure} from '../server/trpc/trpc.js'
+import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
+import {
+	grantAppAccess,
+	revokeAppAccess,
+	listAppAccessUsers,
+	hasAppAccess,
+	listUsers,
+	listUserAppInstances,
+} from '../database/index.js'
 
 export const appStore = router({
 	// Returns builtin apps (priority apps with official Docker images)
@@ -249,4 +257,100 @@ export const apps = router({
 			}),
 		)
 		.query(async ({ctx, input}) => ctx.apps.getApp(input.appId).getBackupIgnoredFilePaths()),
+
+	// ─── Multi-User & Sharing ──────────────────────────────────────
+
+	// Check if multi-user mode is enabled
+	isMultiUserEnabled: privateProcedure.query(async ({ctx}) => ctx.apps.isMultiUserEnabled()),
+
+	// Toggle multi-user mode (admin only)
+	setMultiUserEnabled: adminProcedure
+		.input(z.boolean())
+		.mutation(async ({ctx, input}) => {
+			await ctx.apps.setMultiUserEnabled(input)
+			return {success: true, enabled: input}
+		}),
+
+	// Share an app with a user (grant access)
+	shareApp: privateProcedure
+		.input(z.object({
+			appId: z.string(),
+			userId: z.string(),
+		}))
+		.mutation(async ({ctx, input}) => {
+			const grantedBy = ctx.currentUser?.id
+			if (!grantedBy) throw new Error('Authentication required')
+			await grantAppAccess(input.userId, input.appId, grantedBy)
+			return {success: true}
+		}),
+
+	// Revoke a user's access to an app
+	unshareApp: privateProcedure
+		.input(z.object({
+			appId: z.string(),
+			userId: z.string(),
+		}))
+		.mutation(async ({ctx, input}) => {
+			await revokeAppAccess(input.userId, input.appId)
+			return {success: true}
+		}),
+
+	// List users who have access to an app (for share dialog)
+	sharedUsers: privateProcedure
+		.input(z.object({appId: z.string()}))
+		.query(async ({ctx, input}) => listAppAccessUsers(input.appId)),
+
+	// List all users (for share dialog user picker)
+	allUsers: privateProcedure.query(async () => {
+		const users = await listUsers()
+		return users.map((u) => ({id: u.id, username: u.username, displayName: u.displayName, role: u.role, avatarColor: u.avatarColor}))
+	}),
+
+	// Install an app for a specific user (admin only)
+	installForUser: adminProcedure
+		.input(z.object({
+			appId: z.string(),
+			userId: z.string(),
+		}))
+		.mutation(async ({ctx, input}) => ctx.apps.installForUser(input.appId, input.userId)),
+
+	// Uninstall a per-user app instance (admin only)
+	uninstallForUser: adminProcedure
+		.input(z.object({
+			appId: z.string(),
+			userId: z.string(),
+		}))
+		.mutation(async ({ctx, input}) => ctx.apps.uninstallForUser(input.appId, input.userId)),
+
+	// List a user's per-user app instances
+	userInstances: privateProcedure
+		.input(z.object({userId: z.string()}))
+		.query(async ({ctx, input}) => listUserAppInstances(input.userId)),
+
+	// Get apps accessible to the current user (own + shared)
+	myApps: privateProcedure.query(async ({ctx}) => {
+		const userId = ctx.currentUser?.id
+		if (!userId) {
+			// Legacy single-user mode: return all installed apps
+			return {globalApps: true, sharedAppIds: [] as string[], userInstances: [] as any[]}
+		}
+
+		// Get user's per-user instances
+		const instances = await listUserAppInstances(userId)
+
+		// Get apps shared with this user
+		// We need to check user_app_access for shared apps
+		const allInstalledApps = ctx.apps.instances
+		const sharedAppIds: string[] = []
+		for (const app of allInstalledApps) {
+			const access = await hasAppAccess(userId, app.id)
+			if (access) sharedAppIds.push(app.id)
+		}
+
+		return {
+			globalApps: ctx.currentUser?.role === 'admin',
+			sharedAppIds,
+			userInstances: instances,
+		}
+	}),
 })

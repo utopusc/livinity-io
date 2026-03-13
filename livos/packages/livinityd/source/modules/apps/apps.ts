@@ -9,12 +9,18 @@ import semver from 'semver'
 import randomToken from '../../modules/utilities/random-token.js'
 import type Livinityd from '../../index.js'
 import appEnvironment from './legacy-compat/app-environment.js'
-import type {AppSettings} from './schema.js'
 import App, {readManifestInDirectory} from './app.js'
-import type {AppManifest} from './schema.js'
+import type {AppManifest, AppSettings} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import {getBuiltinApp} from './builtin-apps.js'
-import {applyCaddyConfig, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
+import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
+import {
+	allocatePort,
+	createUserAppInstance,
+	deleteUserAppInstance,
+	getUserAppInstance,
+	findUserById,
+} from '../database/index.js'
 
 // Redis keys for domain config
 const REDIS_DOMAIN_KEY = 'livos:domain:config'
@@ -517,7 +523,13 @@ export default class Apps {
 			subdomains: subdomains.filter((s) => s.enabled),
 		}
 
-		await applyCaddyConfig(caddyConfig)
+		// Check if multi-user mode is enabled
+		const multiUserEnabled = await this.#livinityd.ai.redis.get('livos:system:multi_user')
+		const isMultiUser = multiUserEnabled === 'true'
+
+		const content = generateFullCaddyfile(caddyConfig, isMultiUser)
+		await writeCaddyfile(content)
+		await reloadCaddy()
 	}
 
 	/**
@@ -570,5 +582,159 @@ export default class Apps {
 			await this.rebuildCaddy()
 			this.logger.log(`Removed subdomain registration for ${appId}`)
 		}
+	}
+
+	// ─── Multi-User App Management ──────────────────────────────────
+
+	/**
+	 * Check if multi-user mode is enabled.
+	 */
+	async isMultiUserEnabled(): Promise<boolean> {
+		const val = await this.#livinityd.ai.redis.get('livos:system:multi_user')
+		return val === 'true'
+	}
+
+	/**
+	 * Toggle multi-user mode. When enabled, Caddy uses wildcard subdomain routing
+	 * and the app gateway handles per-user container routing.
+	 */
+	async setMultiUserEnabled(enabled: boolean): Promise<void> {
+		await this.#livinityd.ai.redis.set('livos:system:multi_user', enabled ? 'true' : 'false')
+		await this.rebuildCaddy()
+		this.logger.log(`Multi-user mode ${enabled ? 'enabled' : 'disabled'}`)
+	}
+
+	/**
+	 * Install an app for a specific user (per-user Docker isolation).
+	 * Creates a per-user copy of the app with unique container name, port, and volume.
+	 */
+	async installForUser(appId: string, userId: string): Promise<boolean> {
+		const user = await findUserById(userId)
+		if (!user) throw new Error(`User ${userId} not found`)
+
+		// Check if user already has this app
+		const existing = await getUserAppInstance(userId, appId)
+		if (existing) throw new Error(`User ${user.username} already has ${appId} installed`)
+
+		// Get the app template
+		const appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
+		let manifest
+		try {
+			manifest = await readManifestInDirectory(appTemplatePath)
+		} catch {
+			throw new Error('App template not found')
+		}
+
+		// Allocate a unique port
+		const port = await allocatePort()
+
+		// Per-user data directory
+		const userDataDir = `${this.#livinityd.dataDirectory}/users/${user.username}/app-data/${appId}`
+		await fse.mkdirp(userDataDir)
+
+		// Copy app template to user directory
+		await $`rsync --archive --verbose --exclude ".gitkeep" ${appTemplatePath}/. ${userDataDir}`
+
+		// Read and patch compose file for this user
+		const compose = (await fse.readFile(`${userDataDir}/docker-compose.yml`, 'utf8'))
+		const composeData = (await import('js-yaml')).default.load(compose) as any
+
+		// Detect internal port (same logic as App.patchComposeFile)
+		let internalPort: number | null = null
+		const mainServiceName = Object.keys(composeData.services || {})[0]
+		if (mainServiceName && composeData.services[mainServiceName]) {
+			const service = composeData.services[mainServiceName]
+			if (service.ports && Array.isArray(service.ports)) {
+				for (const p of service.ports) {
+					const portStr = p.toString()
+					if (portStr.includes(':')) {
+						const parts = portStr.split(':')
+						internalPort = parseInt(parts[parts.length - 1], 10)
+						break
+					}
+				}
+			}
+			if (!internalPort && service.expose && Array.isArray(service.expose)) {
+				internalPort = parseInt(service.expose[0].toString(), 10)
+			}
+			if (!internalPort) internalPort = manifest.port || 8080
+		}
+
+		// Patch all services with per-user container names and volumes
+		for (const serviceName of Object.keys(composeData.services || {})) {
+			const service = composeData.services[serviceName]
+			service.container_name = `${appId}_${serviceName}_user_${user.username}_1`
+
+			// Remap volumes to per-user paths
+			if (service.volumes && Array.isArray(service.volumes)) {
+				service.volumes = service.volumes.map((v: string) =>
+					v.replace('/data/storage/downloads', `/users/${user.username}/home/Downloads`)
+						.replace('/data/storage', `/users/${user.username}/home`)
+						.replace('/home/Downloads', `/users/${user.username}/home/Downloads`)
+						.replace('/home', `/users/${user.username}/home`)
+				)
+			}
+		}
+
+		// Set the host port mapping on the main service
+		if (mainServiceName && composeData.services[mainServiceName]) {
+			const service = composeData.services[mainServiceName]
+			service.ports = [`127.0.0.1:${port}:${internalPort || manifest.port || 8080}`]
+		}
+
+		// Write patched compose
+		const yamlDump = (await import('js-yaml')).default.dump(composeData)
+		await fse.writeFile(`${userDataDir}/docker-compose.yml`, yamlDump)
+
+		// Start the container
+		try {
+			await $`docker compose --file ${userDataDir}/docker-compose.yml --project-name ${appId}-user-${user.username} up -d`
+		} catch (error) {
+			this.logger.error(`Failed to start per-user container for ${appId} (user: ${user.username})`, error)
+			throw new Error(`Failed to start container: ${(error as Error).message}`)
+		}
+
+		// Record in database
+		const subdomain = appId // default: use appId as subdomain
+		await createUserAppInstance({
+			userId,
+			appId,
+			subdomain,
+			containerName: `${appId}_${mainServiceName || 'app'}_user_${user.username}_1`,
+			port,
+			volumePath: userDataDir,
+		})
+
+		this.logger.log(`Installed ${appId} for user ${user.username} on port ${port}`)
+		return true
+	}
+
+	/**
+	 * Uninstall a per-user app instance.
+	 * Stops and removes the user's container and data.
+	 */
+	async uninstallForUser(appId: string, userId: string): Promise<boolean> {
+		const user = await findUserById(userId)
+		if (!user) throw new Error(`User ${userId} not found`)
+
+		const instance = await getUserAppInstance(userId, appId)
+		if (!instance) throw new Error(`User ${user.username} doesn't have ${appId} installed`)
+
+		// Stop and remove containers
+		const userDataDir = instance.volumePath
+		try {
+			await $`docker compose --file ${userDataDir}/docker-compose.yml --project-name ${appId}-user-${user.username} down --volumes`
+		} catch (error) {
+			this.logger.error(`Failed to stop per-user container for ${appId} (user: ${user.username})`, error)
+		}
+
+		// Remove data directory
+		await fse.remove(userDataDir)
+
+		// Remove from database
+		await deleteUserAppInstance(userId, appId)
+
+		this.logger.log(`Uninstalled ${appId} for user ${user.username}`)
+		return true
 	}
 }

@@ -44,8 +44,11 @@ export function validateSubdomain(subdomain: string): boolean {
 
 /**
  * Generate a complete Caddyfile with main domain and all subdomains.
+ * In multi-user mode, uses a single wildcard block that routes all subdomains
+ * to livinityd's app gateway (port 8080) for dynamic per-user routing.
+ * In single-user mode, uses individual per-subdomain blocks (legacy behavior).
  */
-export function generateFullCaddyfile(config: CaddyConfig): string {
+export function generateFullCaddyfile(config: CaddyConfig, multiUser = false): string {
 	const blocks: string[] = []
 
 	if (!config.mainDomain) {
@@ -56,20 +59,31 @@ export function generateFullCaddyfile(config: CaddyConfig): string {
 		return blocks.join('\n\n') + '\n'
 	}
 
-	// Main domain block
+	// Main domain block — always routes to livinityd
 	blocks.push(`${config.mainDomain} {
 	reverse_proxy 127.0.0.1:8080
 }`)
 
-	// Subdomain blocks
-	for (const sub of config.subdomains) {
-		if (!sub.enabled) continue
-		if (!validateSubdomain(sub.subdomain)) continue
+	if (multiUser) {
+		// Multi-user mode: Single wildcard block routes ALL subdomains to livinityd.
+		// Livinityd's app gateway middleware handles per-user container routing.
+		blocks.push(`*.${config.mainDomain} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	reverse_proxy 127.0.0.1:8080
+}`)
+	} else {
+		// Single-user mode: Individual subdomain blocks (legacy behavior)
+		for (const sub of config.subdomains) {
+			if (!sub.enabled) continue
+			if (!validateSubdomain(sub.subdomain)) continue
 
-		const fullDomain = `${sub.subdomain}.${config.mainDomain}`
-		blocks.push(`${fullDomain} {
+			const fullDomain = `${sub.subdomain}.${config.mainDomain}`
+			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:${sub.port}
 }`)
+		}
 	}
 
 	return blocks.join('\n\n') + '\n'
