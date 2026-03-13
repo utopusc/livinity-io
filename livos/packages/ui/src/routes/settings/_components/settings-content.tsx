@@ -141,25 +141,27 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
+	// Per-user settings
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
-	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
-	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi account & model'},
-	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
-	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
-	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
-	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
-	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
-	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets'},
-	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
-	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL'},
-	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore'},
-	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi'},
 	{id: 'language', icon: TbLanguage, label: 'Language', description: 'Interface language'},
-	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Debug & diagnostics'},
-	{id: 'advanced', icon: TbSettingsMinus, label: 'Advanced', description: 'Terminal, DNS, Beta'},
-	{id: 'software-update', icon: TbUpdate, label: 'Software Update', description: 'Check for updates'},
+	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
+	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
+	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
+	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
+	// Admin-only settings
+	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
+	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi account & model', adminOnly: true},
+	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord', adminOnly: true},
+	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth', adminOnly: true},
+	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist', adminOnly: true},
+	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets', adminOnly: true},
+	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL', adminOnly: true},
+	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
+	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi', adminOnly: true},
+	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Debug & diagnostics', adminOnly: true},
+	{id: 'advanced', icon: TbSettingsMinus, label: 'Advanced', description: 'Terminal, DNS, Beta', adminOnly: true},
+	{id: 'software-update', icon: TbUpdate, label: 'Software Update', description: 'Check for updates', adminOnly: true},
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
