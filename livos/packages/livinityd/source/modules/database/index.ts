@@ -207,6 +207,106 @@ export async function listUsers(): Promise<DatabaseUser[]> {
 }
 
 /**
+ * Update a user's role.
+ */
+export async function updateUserRole(userId: string, role: string): Promise<DatabaseUser | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2
+		 RETURNING id, username, display_name, hashed_password, role, avatar_color, is_active, created_at, updated_at`,
+		[role, userId],
+	)
+	if (rows.length === 0) return null
+	return rowToUser(rows[0])
+}
+
+/**
+ * Toggle a user's active status.
+ */
+export async function toggleUserActive(userId: string, isActive: boolean): Promise<DatabaseUser | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2
+		 RETURNING id, username, display_name, hashed_password, role, avatar_color, is_active, created_at, updated_at`,
+		[isActive, userId],
+	)
+	if (rows.length === 0) return null
+	return rowToUser(rows[0])
+}
+
+/**
+ * Update a user's display name.
+ */
+export async function updateUserDisplayName(userId: string, displayName: string): Promise<DatabaseUser | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2
+		 RETURNING id, username, display_name, hashed_password, role, avatar_color, is_active, created_at, updated_at`,
+		[displayName, userId],
+	)
+	if (rows.length === 0) return null
+	return rowToUser(rows[0])
+}
+
+/**
+ * Invite token types.
+ */
+export type DatabaseInvite = {
+	id: string
+	tokenHash: string
+	createdBy: string
+	role: string
+	expiresAt: Date
+	usedAt: Date | null
+	usedBy: string | null
+}
+
+/**
+ * Create an invite in the database.
+ */
+export async function createInvite(data: {
+	tokenHash: string
+	createdBy: string
+	role: string
+	expiresAt: Date
+}): Promise<DatabaseInvite> {
+	if (!pool) throw new Error('Database not initialized')
+	const {rows} = await pool.query(
+		`INSERT INTO invites (token_hash, created_by, role, expires_at)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, token_hash, created_by, role, expires_at, used_at, used_by`,
+		[data.tokenHash, data.createdBy, data.role, data.expiresAt],
+	)
+	return rowToInvite(rows[0])
+}
+
+/**
+ * Find an invite by token hash that is still valid (not used, not expired).
+ */
+export async function findValidInvite(tokenHash: string): Promise<DatabaseInvite | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`SELECT id, token_hash, created_by, role, expires_at, used_at, used_by
+		 FROM invites
+		 WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`,
+		[tokenHash],
+	)
+	if (rows.length === 0) return null
+	return rowToInvite(rows[0])
+}
+
+/**
+ * Mark an invite as used.
+ */
+export async function markInviteUsed(inviteId: string, usedBy: string): Promise<void> {
+	if (!pool) return
+	await pool.query(
+		`UPDATE invites SET used_at = NOW(), used_by = $1 WHERE id = $2`,
+		[usedBy, inviteId],
+	)
+}
+
+/**
  * Gracefully close the database pool.
  */
 export async function closeDatabase(): Promise<void> {
@@ -231,5 +331,20 @@ function rowToUser(row: any): DatabaseUser {
 		isActive: row.is_active,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+	}
+}
+
+/**
+ * Convert a database row to a DatabaseInvite object.
+ */
+function rowToInvite(row: any): DatabaseInvite {
+	return {
+		id: row.id,
+		tokenHash: row.token_hash,
+		createdBy: row.created_by,
+		role: row.role,
+		expiresAt: row.expires_at,
+		usedAt: row.used_at,
+		usedBy: row.used_by,
 	}
 }
