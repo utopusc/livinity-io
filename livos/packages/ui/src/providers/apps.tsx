@@ -113,10 +113,18 @@ const AppsContext = createContext<AppsContextT | null>(null)
 
 export function AppsProvider({children}: {children: React.ReactNode}) {
 	const appsQ = trpcReact.apps.list.useQuery()
+	const myAppsQ = trpcReact.apps.myApps.useQuery()
 
 	// Remove apps that have an error
 	// TODO: consider passing these down in some places (like the desktop)
-	const userApps = filter(appsQ.data ?? [], (app): app is UserApp => !('error' in app))
+	let userApps = filter(appsQ.data ?? [], (app): app is UserApp => !('error' in app))
+
+	// For non-admin users, filter to only show apps they have access to
+	if (myAppsQ.data && !myAppsQ.data.globalApps) {
+		const accessibleAppIds = new Set(myAppsQ.data.sharedAppIds)
+		userApps = userApps.filter((app) => accessibleAppIds.has(app.id))
+	}
+
 	const userAppsKeyed = keyBy(userApps, 'id')
 
 	const allApps = [...userApps, ...systemApps]

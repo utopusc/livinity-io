@@ -61,8 +61,42 @@ export function UsersSection() {
 	const currentUserQ = trpcReact.user.get.useQuery()
 	const currentUserId = currentUserQ.data?.id
 
+	const multiUserQ = trpcReact.apps.isMultiUserEnabled.useQuery()
+	const multiUserMut = trpcReact.apps.setMultiUserEnabled.useMutation({
+		onSuccess: (data) => {
+			toast.success(`Multi-user mode ${data.enabled ? 'enabled' : 'disabled'}`)
+			multiUserQ.refetch()
+		},
+		onError: (error) => {
+			toast.error(error.message)
+		},
+	})
+
 	return (
 		<div className='space-y-4'>
+			{/* Multi-user mode toggle */}
+			<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='flex-1'>
+					<div className='text-body-sm font-medium text-text-primary'>Multi-User Mode</div>
+					<div className='text-caption text-text-tertiary'>
+						Enable per-user app instances and subdomain routing. Caddy will use a wildcard certificate for all subdomains.
+					</div>
+				</div>
+				<button
+					onClick={() => multiUserMut.mutate(!multiUserQ.data)}
+					disabled={multiUserMut.isPending}
+					className={`relative flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+						multiUserQ.data ? 'bg-green-500' : 'bg-white/20'
+					}`}
+				>
+					<div
+						className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${
+							multiUserQ.data ? 'translate-x-5' : 'translate-x-0'
+						}`}
+					/>
+				</button>
+			</div>
+
 			<div className='flex items-center justify-between'>
 				<p className='text-body-sm text-text-secondary'>
 					Manage users who can access your Livinity device. Invite new users or change existing user roles.

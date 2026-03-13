@@ -179,6 +179,105 @@ class Server {
 			next()
 		})
 
+		// ── App Gateway ──────────────────────────────────────────────────────
+		// Dynamic per-user subdomain routing for multi-user mode.
+		// When Caddy wildcards all subdomains to livinityd, this middleware
+		// intercepts subdomain requests and proxies to the correct container
+		// based on the logged-in user's session.
+		const appGatewayProxyCache = new Map<number, ReturnType<typeof createProxyMiddleware>>()
+
+		this.app.use(async (request, response, next) => {
+			try {
+				const host = request.hostname
+				if (!host) return next()
+
+				// Get main domain config from Redis
+				const domainConfigRaw = await this.livinityd.ai.redis.get('livos:domain:config')
+				if (!domainConfigRaw) return next()
+				const domainConfig = JSON.parse(domainConfigRaw)
+				if (!domainConfig.active || !domainConfig.domain) return next()
+
+				const mainDomain: string = domainConfig.domain
+
+				// Check if this is a subdomain request
+				if (host === mainDomain || !host.endsWith(`.${mainDomain}`)) return next()
+
+				const subdomain = host.slice(0, -mainDomain.length - 1)
+				if (!subdomain || subdomain.includes('.')) return next()
+
+				// Look up subdomain → appId mapping from Redis
+				const subdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
+				const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+					subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+				const subConfig = subdomains.find((s) => s.subdomain === subdomain && s.enabled)
+
+				if (!subConfig) {
+					return response.status(404).send('App not found')
+				}
+
+				// Default target: the global app port (single-user mode or shared app)
+				let targetPort = subConfig.port
+
+				// Check if multi-user mode is active
+				const multiUserEnabled = await this.livinityd.ai.redis.get('livos:system:multi_user')
+
+				if (multiUserEnabled === 'true') {
+					// Check user session
+					const sessionToken = request.cookies?.LIVINITY_SESSION
+					if (!sessionToken) {
+						return response.redirect(`https://${mainDomain}/login`)
+					}
+
+					const payload = await this.verifyToken(sessionToken).catch(() => null)
+					if (!payload || typeof payload !== 'object' || !('loggedIn' in payload) || !payload.loggedIn) {
+						return response.redirect(`https://${mainDomain}/login`)
+					}
+
+					// Look up per-user container port if userId is available
+					if ('userId' in payload && payload.userId) {
+						const {findAppPortForUser, hasAppAccess} = await import('../database/index.js')
+
+						// Check if user has access to this app
+						const canAccess = await hasAppAccess(payload.userId as string, subConfig.appId)
+						if (!canAccess) {
+							return response.status(403).send('Access denied')
+						}
+
+						// Check for per-user instance
+						const userPort = await findAppPortForUser(payload.userId as string, subConfig.appId)
+						if (userPort) {
+							targetPort = userPort
+						}
+					}
+				}
+
+				// Get or create cached proxy for this port
+				let proxy = appGatewayProxyCache.get(targetPort)
+				if (!proxy) {
+					this.logger.log(`App gateway: creating proxy for port ${targetPort}`)
+					proxy = createProxyMiddleware({
+						target: `http://127.0.0.1:${targetPort}`,
+						changeOrigin: true,
+						ws: true,
+						logProvider: () => ({
+							log: this.logger.verbose,
+							debug: this.logger.verbose,
+							info: this.logger.verbose,
+							warn: this.logger.verbose,
+							error: this.logger.error,
+						}),
+					})
+					appGatewayProxyCache.set(targetPort, proxy)
+				}
+
+				this.logger.verbose(`App gateway: ${subdomain}.${mainDomain} -> 127.0.0.1:${targetPort}`)
+				return proxy(request, response, next)
+			} catch (error) {
+				this.logger.error('App gateway error:', error)
+				return next()
+			}
+		})
+
 		// App proxy - routes /app/<appId>/* to the app's port
 		// This allows accessing apps without port numbers: http://localhost/app/tailscale
 		const appProxyCache = new Map<string, ReturnType<typeof createProxyMiddleware>>()
@@ -240,6 +339,67 @@ class Server {
 			try {
 				// Grab the path and search params from the request
 				const {pathname, searchParams} = new URL(`https://localhost${request.url}`)
+
+				// ── Subdomain WebSocket Proxy ──────────────────────────────
+				// When using multi-user mode, subdomain WebSocket upgrades
+				// need to be proxied to the correct container port.
+				const upgradeHost = request.headers.host?.split(':')[0] || ''
+				const domainConfigRaw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
+				if (domainConfigRaw) {
+					const domainConfig = JSON.parse(domainConfigRaw)
+					if (domainConfig.active && domainConfig.domain && upgradeHost.endsWith(`.${domainConfig.domain}`)) {
+						const subdomain = upgradeHost.slice(0, -domainConfig.domain.length - 1)
+						if (subdomain && !subdomain.includes('.')) {
+							const subdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
+							const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+								subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+							const subConfig = subdomains.find((s) => s.subdomain === subdomain && s.enabled)
+
+							if (subConfig) {
+								let targetPort = subConfig.port
+
+								// Check multi-user mode for per-user port
+								const multiUserEnabled = await this.livinityd.ai.redis.get('livos:system:multi_user')
+								if (multiUserEnabled === 'true') {
+									const token = searchParams.get('token') || searchParams.get('LIVINITY_SESSION')
+									if (token) {
+										const payload = await this.verifyToken(token).catch(() => null)
+										if (payload && typeof payload === 'object' && 'userId' in payload && payload.userId) {
+											const {findAppPortForUser} = await import('../database/index.js')
+											const userPort = await findAppPortForUser(payload.userId as string, subConfig.appId)
+											if (userPort) targetPort = userPort
+										}
+									}
+								}
+
+								// Create proxy WebSocket connection to app container
+								const upstream = new WebSocket(`ws://127.0.0.1:${targetPort}${pathname}${request.url?.includes('?') ? '?' + request.url.split('?')[1] : ''}`)
+								const proxyWss = new WebSocketServer({noServer: true})
+
+								upstream.on('open', () => {
+									proxyWss.handleUpgrade(request, socket, head, (clientWs) => {
+										proxyWss.close()
+										clientWs.on('message', (data, isBinary) => {
+											if (upstream.readyState === WebSocket.OPEN) upstream.send(data, {binary: isBinary})
+										})
+										upstream.on('message', (data, isBinary) => {
+											if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data, {binary: isBinary})
+										})
+										clientWs.on('close', () => upstream.close())
+										upstream.on('close', () => clientWs.close())
+										clientWs.on('error', () => upstream.close())
+										upstream.on('error', () => clientWs.close())
+									})
+								})
+								upstream.on('error', () => {
+									proxyWss.close()
+									socket.destroy()
+								})
+								return
+							}
+						}
+					}
+				}
 
 				// ── Voice WebSocket Proxy ──────────────────────────────────
 				// /ws/voice lives on nexus-core (port 3200), not livinityd.
@@ -425,7 +585,7 @@ class Server {
 					if (sessionToken) {
 						const payload = await this.verifyToken(sessionToken)
 						if (payload && typeof payload === 'object' && 'userId' in payload) {
-							const {findUserById} = await import('../../database/index.js')
+							const {findUserById} = await import('../database/index.js')
 							const user = await findUserById(payload.userId as string)
 							if (user) {
 								;(request as any).currentUser = {

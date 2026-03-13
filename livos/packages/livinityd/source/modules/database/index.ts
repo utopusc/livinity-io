@@ -306,6 +306,177 @@ export async function markInviteUsed(inviteId: string, usedBy: string): Promise<
 	)
 }
 
+// ── User App Instances (per-user Docker isolation) ──────────────────────
+
+export type UserAppInstance = {
+	id: string
+	userId: string
+	appId: string
+	subdomain: string
+	containerName: string
+	port: number
+	volumePath: string
+	status: string
+	createdAt: Date
+}
+
+/**
+ * Register a per-user app instance in the database.
+ */
+export async function createUserAppInstance(data: {
+	userId: string
+	appId: string
+	subdomain: string
+	containerName: string
+	port: number
+	volumePath: string
+}): Promise<UserAppInstance | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`INSERT INTO user_app_instances (user_id, app_id, subdomain, container_name, port, volume_path)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (user_id, app_id) DO UPDATE SET
+			subdomain = EXCLUDED.subdomain,
+			container_name = EXCLUDED.container_name,
+			port = EXCLUDED.port,
+			volume_path = EXCLUDED.volume_path,
+			status = 'running'
+		 RETURNING id, user_id, app_id, subdomain, container_name, port, volume_path, status, created_at`,
+		[data.userId, data.appId, data.subdomain, data.containerName, data.port, data.volumePath],
+	)
+	return rowToAppInstance(rows[0])
+}
+
+/**
+ * Get a user's app instance for a specific app.
+ */
+export async function getUserAppInstance(userId: string, appId: string): Promise<UserAppInstance | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`SELECT id, user_id, app_id, subdomain, container_name, port, volume_path, status, created_at
+		 FROM user_app_instances WHERE user_id = $1 AND app_id = $2`,
+		[userId, appId],
+	)
+	if (rows.length === 0) return null
+	return rowToAppInstance(rows[0])
+}
+
+/**
+ * Find the container port for a specific app and user.
+ * Used by the app gateway to route subdomain requests.
+ */
+export async function findAppPortForUser(userId: string, appId: string): Promise<number | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`SELECT port FROM user_app_instances WHERE user_id = $1 AND app_id = $2 AND status = 'running'`,
+		[userId, appId],
+	)
+	if (rows.length === 0) return null
+	return rows[0].port
+}
+
+/**
+ * Find which app ID maps to a given subdomain.
+ * Returns appId from the global subdomain config.
+ */
+export async function findAppIdBySubdomain(subdomain: string): Promise<string | null> {
+	// This is looked up from Redis subdomain config, not the DB.
+	// See domain/routes.ts for subdomain registration.
+	return null // Placeholder - actual lookup happens in the gateway middleware
+}
+
+/**
+ * List all app instances for a user.
+ */
+export async function listUserAppInstances(userId: string): Promise<UserAppInstance[]> {
+	if (!pool) return []
+	const {rows} = await pool.query(
+		`SELECT id, user_id, app_id, subdomain, container_name, port, volume_path, status, created_at
+		 FROM user_app_instances WHERE user_id = $1 ORDER BY created_at DESC`,
+		[userId],
+	)
+	return rows.map(rowToAppInstance)
+}
+
+/**
+ * Delete a user's app instance (when uninstalling a per-user app).
+ */
+export async function deleteUserAppInstance(userId: string, appId: string): Promise<boolean> {
+	if (!pool) return false
+	const result = await pool.query(
+		`DELETE FROM user_app_instances WHERE user_id = $1 AND app_id = $2`,
+		[userId, appId],
+	)
+	return (result.rowCount ?? 0) > 0
+}
+
+/**
+ * Get the next available port for a per-user app container.
+ * Allocates ports starting from 10000 to avoid conflicts with standard services.
+ */
+export async function allocatePort(): Promise<number> {
+	if (!pool) throw new Error('Database not initialized')
+	const {rows} = await pool.query(
+		`SELECT COALESCE(MAX(port), 9999) + 1 AS next_port FROM user_app_instances`,
+	)
+	return Math.max(rows[0].next_port, 10000)
+}
+
+// ── User App Access (shared app permissions) ──────────────────────
+
+/**
+ * Grant a user access to a shared app.
+ */
+export async function grantAppAccess(userId: string, appId: string, grantedBy: string): Promise<void> {
+	if (!pool) return
+	await pool.query(
+		`INSERT INTO user_app_access (user_id, app_id, granted_by)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (user_id, app_id) DO NOTHING`,
+		[userId, appId, grantedBy],
+	)
+}
+
+/**
+ * Revoke a user's access to a shared app.
+ */
+export async function revokeAppAccess(userId: string, appId: string): Promise<void> {
+	if (!pool) return
+	await pool.query(
+		`DELETE FROM user_app_access WHERE user_id = $1 AND app_id = $2`,
+		[userId, appId],
+	)
+}
+
+/**
+ * Check if a user has access to an app (own instance or shared access).
+ */
+export async function hasAppAccess(userId: string, appId: string): Promise<boolean> {
+	if (!pool) return true // fallback: allow in single-user mode
+	const {rows} = await pool.query(
+		`SELECT 1 FROM user_app_instances WHERE user_id = $1 AND app_id = $2
+		 UNION ALL
+		 SELECT 1 FROM user_app_access WHERE user_id = $1 AND app_id = $2
+		 LIMIT 1`,
+		[userId, appId],
+	)
+	return rows.length > 0
+}
+
+/**
+ * List all users who have access to an app (for share UI).
+ */
+export async function listAppAccessUsers(appId: string): Promise<Array<{userId: string; username: string; grantedAt: Date}>> {
+	if (!pool) return []
+	const {rows} = await pool.query(
+		`SELECT ua.user_id, u.username, ua.granted_at
+		 FROM user_app_access ua JOIN users u ON ua.user_id = u.id
+		 WHERE ua.app_id = $1 ORDER BY ua.granted_at DESC`,
+		[appId],
+	)
+	return rows.map((r: any) => ({userId: r.user_id, username: r.username, grantedAt: r.granted_at}))
+}
+
 /**
  * Gracefully close the database pool.
  */
@@ -346,5 +517,22 @@ function rowToInvite(row: any): DatabaseInvite {
 		expiresAt: row.expires_at,
 		usedAt: row.used_at,
 		usedBy: row.used_by,
+	}
+}
+
+/**
+ * Convert a database row to a UserAppInstance object.
+ */
+function rowToAppInstance(row: any): UserAppInstance {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		appId: row.app_id,
+		subdomain: row.subdomain,
+		containerName: row.container_name,
+		port: row.port,
+		volumePath: row.volume_path,
+		status: row.status,
+		createdAt: row.created_at,
 	}
 }

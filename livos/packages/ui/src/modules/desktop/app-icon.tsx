@@ -19,6 +19,9 @@ import {useLinkToDialog} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
 import {assertUnreachable} from '@/utils/misc'
 
+import {useCurrentUser} from '@/hooks/use-current-user'
+
+import {ShareAppDialog} from './share-app-dialog'
 import {UninstallConfirmationDialog} from './uninstall-confirmation-dialog'
 import {UninstallTheseFirstDialog} from './uninstall-these-first-dialog'
 
@@ -154,8 +157,10 @@ export function AppIconConnected({appId}: {appId: string}) {
 	const [openDepsDialog, setOpenDepsDialog] = useState(false)
 	const [toUninstallFirstIds, setToUninstallFirstIds] = useState<string[]>([])
 	const [showUninstallDialog, setShowUninstallDialog] = useState(false)
+	const [showShareDialog, setShowShareDialog] = useState(false)
 	const launchApp = useLaunchApp()
 	const linkToDialog = useLinkToDialog()
+	const {isAdmin} = useCurrentUser()
 
 	const uninstall = async () => {
 		const res = await appInstall.uninstall()
@@ -235,6 +240,13 @@ export function AppIconConnected({appId}: {appId: string}) {
 							<Link to={linkToDialog('app-settings', {for: appId})}>{t('desktop.app.context.settings')}</Link>
 						</ContextMenuItem>
 
+					{/* Share (admin only) */}
+					{isAdmin && (
+						<ContextMenuItem onSelect={() => setShowShareDialog(true)}>
+							Share
+						</ContextMenuItem>
+					)}
+
 					{/* Start / Stop */}
 					{state !== 'stopped' ? (
 						<ContextMenuItem disabled={stopDisabled} onSelect={stopDisabled ? undefined : appInstall.stop}>
@@ -288,6 +300,13 @@ export function AppIconConnected({appId}: {appId: string}) {
 					open={showUninstallDialog}
 					onOpenChange={setShowUninstallDialog}
 					onConfirm={uninstall}
+				/>
+			)}
+			{showShareDialog && (
+				<ShareAppDialog
+					appId={appId}
+					open={showShareDialog}
+					onOpenChange={setShowShareDialog}
 				/>
 			)}
 		</>
