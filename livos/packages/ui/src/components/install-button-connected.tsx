@@ -165,6 +165,14 @@ export const InstallButtonConnected = forwardRef(
 			}
 		}
 
+		// If app is installed but user doesn't have access, show as "not-installed"
+		// so they can click Install to gain access (backend handles already-installed gracefully)
+		const hasAccess = !!userAppsKeyed?.[app.id]
+		const effectiveState =
+			!hasAccess && arrayIncludes(['running', 'stopped', 'ready', 'restarting', 'starting'] as const, appInstall.state)
+				? ('not-installed' as const)
+				: appInstall.state
+
 		return (
 			<>
 				<InstallButton
@@ -174,7 +182,7 @@ export const InstallButtonConnected = forwardRef(
 					// progress={userApp?.installProgress}
 					// state={userApp?.state || 'initial'}
 					progress={appInstall.progress}
-					state={appInstall.state}
+					state={effectiveState}
 					compatible={compatible}
 					onInstallClick={install}
 					onOpenClick={() => openApp(app.id)}
