@@ -236,11 +236,14 @@ class Server {
 					// Look up per-user container port if userId is available
 					if ('userId' in payload && payload.userId) {
 						const {findAppPortForUser, hasAppAccess} = await import('../database/index.js')
+						const isAdmin = 'role' in payload && payload.role === 'admin'
 
-						// Check if user has access to this app
-						const canAccess = await hasAppAccess(payload.userId as string, subConfig.appId)
-						if (!canAccess) {
-							return response.status(403).send('Access denied')
+						// Non-admin users need explicit access (via sharing or own instance)
+						if (!isAdmin) {
+							const canAccess = await hasAppAccess(payload.userId as string, subConfig.appId)
+							if (!canAccess) {
+								return response.status(403).send('Access denied')
+							}
 						}
 
 						// Check for per-user instance
