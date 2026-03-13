@@ -29,7 +29,7 @@ const AppStoreDiscover = React.lazy(() => import('./routes/app-store/discover'))
 const AppStoreCategoryPage = React.lazy(() => import('./routes/app-store/category-page'))
 const AppStoreAppPage = React.lazy(() => import('./routes/app-store/app-page'))
 const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'))
-const Login = React.lazy(() => import('./routes/login'))
+const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
@@ -134,7 +134,7 @@ export const router = createBrowserRouter([
 				element: (
 					<EnsureUserExists>
 						<EnsureLoggedOut>
-							<Login />
+							<MultiUserLogin />
 						</EnsureLoggedOut>
 					</EnsureUserExists>
 				),

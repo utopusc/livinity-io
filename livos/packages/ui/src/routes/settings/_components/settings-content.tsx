@@ -45,6 +45,7 @@ import {
 	TbWebhook,
 	TbMicrophone,
 	TbLogin,
+	TbUsers,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -100,6 +101,9 @@ const WebhooksContentLazy = React.lazy(() =>
 const VoiceContentLazy = React.lazy(() =>
 	import('@/routes/settings/voice').then((m) => ({default: m.VoiceContent})),
 )
+const UsersSectionLazy = React.lazy(() =>
+	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
+)
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +113,7 @@ import {SoftwareUpdateListRow} from './software-update-list-row'
 type SettingsSection =
 	| 'home'
 	| 'account'
+	| 'users'
 	| 'wallpaper'
 	| '2fa'
 	| 'ai-config'
@@ -132,10 +137,12 @@ interface MenuItem {
 	icon: IconType
 	label: string
 	description: string
+	adminOnly?: boolean
 }
 
 const MENU_ITEMS: MenuItem[] = [
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
+	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi account & model'},
@@ -159,8 +166,17 @@ const MENU_ITEMS: MenuItem[] = [
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
+function useVisibleMenuItems(): MenuItem[] {
+	const userQ = trpcReact.user.get.useQuery()
+	const role = userQ.data?.role
+	// In legacy single-user mode (no role set), treat as admin
+	const isAdmin = !role || role === 'admin'
+	return MENU_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+}
+
 export function SettingsContent() {
 	const [activeSection, setActiveSection] = useState<SettingsSection>('home')
+	const visibleItems = useVisibleMenuItems()
 
 	// If a section is selected, show master-detail view
 	if (activeSection !== 'home') {
@@ -170,6 +186,7 @@ export function SettingsContent() {
 					section={activeSection}
 					onBack={() => setActiveSection('home')}
 					onNavigate={(section) => setActiveSection(section)}
+					visibleItems={visibleItems}
 				/>
 			</div>
 		)
@@ -184,7 +201,7 @@ export function SettingsContent() {
 					{/* Menu Items */}
 					<Card className='!p-2'>
 						<div className='space-y-0.5'>
-							{MENU_ITEMS.map((item, i) => (
+							{visibleItems.map((item, i) => (
 								<motion.button
 									key={item.id}
 									onClick={() => setActiveSection(item.id)}
@@ -234,12 +251,14 @@ function SettingsDetailView({
 	section,
 	onBack,
 	onNavigate,
+	visibleItems,
 }: {
 	section: SettingsSection
 	onBack: () => void
 	onNavigate: (section: SettingsSection) => void
+	visibleItems: MenuItem[]
 }) {
-	const menuItem = MENU_ITEMS.find((m) => m.id === section)
+	const menuItem = visibleItems.find((m) => m.id === section)
 
 	return (
 		<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
@@ -247,7 +266,7 @@ function SettingsDetailView({
 			<div className='flex flex-col gap-3'>
 				<Card className='!p-2'>
 					<div className='space-y-0.5'>
-						{MENU_ITEMS.map((item) => (
+						{visibleItems.map((item) => (
 							<button
 								key={item.id}
 								onClick={() => onNavigate(item.id)}
@@ -320,6 +339,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 	switch (section) {
 		case 'account':
 			return <AccountSection />
+		case 'users':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><UsersSectionLazy /></Suspense>
 		case 'wallpaper':
 			return <WallpaperSection />
 		case '2fa':

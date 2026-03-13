@@ -14,6 +14,10 @@ export const httpOnlyPaths = [
 	'user.renewToken',
 	// clears cookie
 	'user.logout',
+	// public user list for login screen (no auth needed, use HTTP to avoid WS auth requirement)
+	'user.listUsers',
+	// public invite acceptance (no auth needed)
+	'user.acceptInvite',
 	// system.status doesn't use cookies/headers, but the UI polls it across restarts to detect when livinityd is back online; we force HTTP to avoid WS reconnect handshake
 	'system.status',
 ] as const

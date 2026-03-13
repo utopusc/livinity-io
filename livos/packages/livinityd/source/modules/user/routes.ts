@@ -1,10 +1,24 @@
+import crypto from 'node:crypto'
+
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 import bcrypt from 'bcryptjs'
 
-import {router, publicProcedure, privateProcedure} from '../server/trpc/trpc.js'
+import {router, publicProcedure, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import * as totp from '../utilities/totp.js'
-import {getPool, findUserByUsername, createUser, getAdminUser, listUsers} from '../database/index.js'
+import {
+	getPool,
+	findUserByUsername,
+	createUser,
+	getAdminUser,
+	listUsers,
+	updateUserRole,
+	toggleUserActive,
+	updateUserDisplayName,
+	createInvite,
+	findValidInvite,
+	markInviteUsed,
+} from '../database/index.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -136,12 +150,23 @@ export default router({
 				sameSite: 'lax',
 			})
 
-			// Return API token -- include userId if available
-			if (dbUserId && dbUserRole) {
-				return ctx.server.signUserToken(dbUserId, dbUserRole)
-			}
+			// Generate the API token
+			const apiToken = dbUserId && dbUserRole
+				? await ctx.server.signUserToken(dbUserId, dbUserRole)
+				: await ctx.server.signToken()
 
-			return ctx.server.signToken()
+			// Set domain-wide session cookie for cross-subdomain auth
+			const sessionExpires = new Date(Date.now() + 30 * ONE_DAY)
+			ctx.response!.cookie('LIVINITY_SESSION', apiToken, {
+				httpOnly: true,
+				secure: true,
+				sameSite: 'lax',
+				maxAge: 30 * ONE_DAY,
+				// Domain cookie will be set by the proxy/reverse-proxy layer
+				// since we can't know the exact domain at runtime
+			})
+
+			return apiToken
 		}),
 
 	// Checks if the request has a valid token
@@ -335,4 +360,178 @@ export default router({
 		const user = await ctx.user.get()
 		return user?.language ?? null
 	}),
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Multi-User Management Routes
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Public - list users for login screen (safe data only, no passwords)
+	listUsers: publicProcedure.query(async () => {
+		const users = await listUsers()
+		return users
+			.filter((u) => u.isActive)
+			.map((u) => ({
+				id: u.id,
+				username: u.username,
+				display_name: u.displayName,
+				avatar_color: u.avatarColor,
+				role: u.role,
+			}))
+	}),
+
+	// Admin only - list all users with full details
+	listAllUsers: adminProcedure.query(async () => {
+		const users = await listUsers()
+		return users.map((u) => ({
+			id: u.id,
+			username: u.username,
+			display_name: u.displayName,
+			avatar_color: u.avatarColor,
+			role: u.role,
+			is_active: u.isActive,
+			created_at: u.createdAt.toISOString(),
+			updated_at: u.updatedAt.toISOString(),
+		}))
+	}),
+
+	// Admin only - create invite link
+	createInvite: adminProcedure
+		.input(
+			z.object({
+				role: z.enum(['member', 'guest']).default('member'),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			if (!ctx.currentUser) {
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Must be logged in'})
+			}
+
+			// Generate a random token
+			const rawToken = crypto.randomBytes(32).toString('hex')
+			const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+
+			// Invite expires in 7 days
+			const expiresAt = new Date(Date.now() + 7 * ONE_DAY)
+
+			await createInvite({
+				tokenHash,
+				createdBy: ctx.currentUser.id,
+				role: input.role,
+				expiresAt,
+			})
+
+			return {token: rawToken}
+		}),
+
+	// Public - accept invite and register new user
+	acceptInvite: publicProcedure
+		.input(
+			z.object({
+				token: z.string(),
+				username: z.string().min(3).max(20).regex(/^[a-z0-9-]+$/, 'Username must be lowercase letters, numbers, or hyphens'),
+				display_name: z.string().min(1).max(50),
+				password: z.string().min(6, 'Password must be at least 6 characters'),
+			}),
+		)
+		.mutation(async ({input}) => {
+			// Hash the token to look up the invite
+			const tokenHash = crypto.createHash('sha256').update(input.token).digest('hex')
+			const invite = await findValidInvite(tokenHash)
+
+			if (!invite) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'Invalid or expired invite link'})
+			}
+
+			// Check username is not already taken
+			const existing = await findUserByUsername(input.username)
+			if (existing) {
+				throw new TRPCError({code: 'CONFLICT', message: 'Username already taken'})
+			}
+
+			// Hash password
+			const saltRounds = 12
+			const hashedPassword = (await bcrypt.hash(input.password, saltRounds)).replace(/^\$2a\$/, '$2b$')
+
+			// Pick a random avatar color
+			const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6']
+			const avatarColor = colors[Math.floor(Math.random() * colors.length)]
+
+			// Create user
+			const user = await createUser({
+				username: input.username,
+				displayName: input.display_name,
+				hashedPassword,
+				role: invite.role,
+				avatarColor,
+			})
+
+			// Mark invite as used
+			await markInviteUsed(invite.id, user.id)
+
+			return {success: true, username: user.username}
+		}),
+
+	// Admin only - update user role
+	updateUserRole: adminProcedure
+		.input(
+			z.object({
+				userId: z.string().uuid(),
+				role: z.enum(['admin', 'member', 'guest']),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			// Prevent admin from changing their own role
+			if (ctx.currentUser && input.userId === ctx.currentUser.id) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Cannot change your own role'})
+			}
+
+			const user = await updateUserRole(input.userId, input.role)
+			if (!user) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
+			}
+
+			return {success: true}
+		}),
+
+	// Admin only - disable/enable user
+	toggleUserActive: adminProcedure
+		.input(
+			z.object({
+				userId: z.string().uuid(),
+				isActive: z.boolean(),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			// Prevent admin from disabling themselves
+			if (ctx.currentUser && input.userId === ctx.currentUser.id) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Cannot disable your own account'})
+			}
+
+			const user = await toggleUserActive(input.userId, input.isActive)
+			if (!user) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
+			}
+
+			return {success: true}
+		}),
+
+	// Private - change own display name (multi-user)
+	changeDisplayName: privateProcedure
+		.input(
+			z.object({
+				displayName: z.string().min(1).max(50),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			if (!ctx.currentUser) {
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Must be logged in'})
+			}
+
+			const user = await updateUserDisplayName(ctx.currentUser.id, input.displayName)
+			if (!user) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
+			}
+
+			return {success: true}
+		}),
 })
