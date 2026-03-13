@@ -8,7 +8,7 @@ import type { Server } from 'http';
 import Redis from 'ioredis';
 import { logger } from './logger.js';
 import { formatErrorMessage } from './infra/errors.js';
-import { requireApiKey } from './auth.js';
+import { requireApiKey, extractUserIdFromRequest } from './auth.js';
 import { Daemon } from './daemon.js';
 import { Brain } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
@@ -1754,10 +1754,13 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       return;
     }
 
+    // Extract userId from JWT for per-user session isolation
+    const userId = await extractUserIdFromRequest(req);
+    const webJid = userId ? `web-ui:${userId}` : 'web-ui';
+
     // ── Handle slash commands (/usage, /new, /status, etc.) ──────────
     if (isCommand(task) && daemon.userSessionManager) {
       try {
-        const webJid = 'web-ui';
         const session = await daemon.userSessionManager.get(webJid);
         const cmdResult = await handleCommand(task, {
           jid: webJid,

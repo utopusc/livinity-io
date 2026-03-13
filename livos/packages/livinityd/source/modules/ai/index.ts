@@ -218,9 +218,17 @@ export default class AiModule {
 	redis!: Redis
 	subagentManager!: SubagentManager
 	scheduleManager!: ScheduleManager
+	toolRegistry: any
 
 	private redisUrl: string
 	private conversations = new Map<string, Conversation>()
+
+	// Returns user-scoped Redis key prefix for AI conversations.
+	// Admin/legacy users get the original 'liv:ui:' prefix for backward compat.
+	private userKeyPrefix(userId?: string): string {
+		if (!userId || userId === 'admin') return 'liv:ui:'
+		return `liv:ui:u:${userId}:`
+	}
 	chatStatus = new Map<string, {status: string; tool?: string; steps?: string[]; commands?: string[]; turn?: number; awaitingApproval?: {tool: string; params: Record<string, unknown>; thought?: string}}>()
 
 	constructor({livinityd, redisUrl}: AiModuleOptions) {
@@ -253,9 +261,14 @@ export default class AiModule {
 		conversationId: string,
 		userMessage: string,
 		onEvent?: (event: AgentEvent) => void,
+		userId?: string,
 	): Promise<ChatMessage> {
-		// Get or create conversation
-		let conversation = this.conversations.get(conversationId)
+		// Get or create conversation (scoped to user)
+		const cacheKey = userId ? `${userId}:${conversationId}` : conversationId
+		let conversation = this.conversations.get(cacheKey)
+		if (!conversation) {
+			conversation = await this.getConversation(conversationId, userId) ?? undefined
+		}
 		if (!conversation) {
 			conversation = {
 				id: conversationId,
@@ -264,7 +277,7 @@ export default class AiModule {
 				createdAt: Date.now(),
 				updatedAt: Date.now(),
 			}
-			this.conversations.set(conversationId, conversation)
+			this.conversations.set(cacheKey, conversation)
 		}
 
 		// Add user message
@@ -275,7 +288,7 @@ export default class AiModule {
 			timestamp: Date.now(),
 		}
 		conversation.messages.push(userMsg)
-		await this.saveConversation(conversation)
+		await this.saveConversation(conversation, userId)
 
 		// Build context from recent history
 		const recentHistory = conversation.messages
@@ -320,7 +333,7 @@ export default class AiModule {
 						timestamp: Date.now(),
 					}
 					conversation.messages.push(assistantMsg)
-					await this.saveConversation(conversation)
+					await this.saveConversation(conversation, userId)
 					return assistantMsg
 				}
 				// JSON response but not a command — treat as an error
@@ -432,41 +445,45 @@ export default class AiModule {
 		}
 		conversation.messages.push(assistantMsg)
 		conversation.updatedAt = Date.now()
-		await this.saveConversation(conversation)
+		await this.saveConversation(conversation, userId)
 		this.chatStatus.delete(conversationId)
 
 		return assistantMsg
 	}
 
-	private async saveConversation(conversation: Conversation): Promise<void> {
+	private async saveConversation(conversation: Conversation, userId?: string): Promise<void> {
+		const prefix = this.userKeyPrefix(userId)
 		try {
-			await this.redis.set(`liv:ui:conv:${conversation.id}`, JSON.stringify(conversation))
-			await this.redis.sadd('liv:ui:convs', conversation.id)
+			await this.redis.set(`${prefix}conv:${conversation.id}`, JSON.stringify(conversation))
+			await this.redis.sadd(`${prefix}convs`, conversation.id)
 		} catch (err) {
 			this.logger.error('Failed to save conversation', err)
 		}
 	}
 
-	async getConversation(id: string): Promise<Conversation | undefined> {
-		const cached = this.conversations.get(id)
+	async getConversation(id: string, userId?: string): Promise<Conversation | undefined> {
+		const cacheKey = userId ? `${userId}:${id}` : id
+		const cached = this.conversations.get(cacheKey)
 		if (cached) return cached
+		const prefix = this.userKeyPrefix(userId)
 		try {
-			const data = await this.redis.get(`liv:ui:conv:${id}`)
+			const data = await this.redis.get(`${prefix}conv:${id}`)
 			if (data) {
 				const conv = JSON.parse(data) as Conversation
-				this.conversations.set(id, conv)
+				this.conversations.set(cacheKey, conv)
 				return conv
 			}
 		} catch {}
 		return undefined
 	}
 
-	async listConversations(): Promise<Array<{id: string; title: string; updatedAt: number; messageCount: number}>> {
+	async listConversations(userId?: string): Promise<Array<{id: string; title: string; updatedAt: number; messageCount: number}>> {
+		const prefix = this.userKeyPrefix(userId)
 		try {
-			const ids = await this.redis.smembers('liv:ui:convs')
+			const ids = await this.redis.smembers(`${prefix}convs`)
 			if (ids.length === 0) return []
 			const pipeline = this.redis.pipeline()
-			for (const id of ids) pipeline.get(`liv:ui:conv:${id}`)
+			for (const id of ids) pipeline.get(`${prefix}conv:${id}`)
 			const results = await pipeline.exec()
 			const convs: Array<{id: string; title: string; updatedAt: number; messageCount: number}> = []
 			for (const [err, data] of (results || [])) {
@@ -484,11 +501,13 @@ export default class AiModule {
 		}
 	}
 
-	async deleteConversation(id: string): Promise<boolean> {
-		this.conversations.delete(id)
+	async deleteConversation(id: string, userId?: string): Promise<boolean> {
+		const cacheKey = userId ? `${userId}:${id}` : id
+		this.conversations.delete(cacheKey)
+		const prefix = this.userKeyPrefix(userId)
 		try {
-			await this.redis.del(`liv:ui:conv:${id}`)
-			await this.redis.srem('liv:ui:convs', id)
+			await this.redis.del(`${prefix}conv:${id}`)
+			await this.redis.srem(`${prefix}convs`, id)
 		} catch {}
 		return true
 	}
