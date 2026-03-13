@@ -121,11 +121,27 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 
 	// Filter to only show apps the user has access to (installed, shared, or per-user instances)
 	if (myAppsQ.data && !myAppsQ.data.globalApps) {
+		const perUserAppIds = new Set(myAppsQ.data.userInstances.map((i: any) => i.appId))
 		const accessibleAppIds = new Set([
 			...myAppsQ.data.sharedAppIds,
-			...myAppsQ.data.userInstances.map((i: any) => i.appId),
+			...perUserAppIds,
 		])
 		userApps = userApps.filter((app) => accessibleAppIds.has(app.id))
+
+		// For per-user instances, override port and subdomain with the user's own values
+		if (myAppsQ.data.userInstances.length > 0) {
+			userApps = userApps.map((app) => {
+				if (!perUserAppIds.has(app.id)) return app
+				const inst = myAppsQ.data!.userInstances.find((i: any) => i.appId === app.id)
+				if (!inst) return app
+				return {
+					...app,
+					port: inst.port,
+					subdomain: inst.subdomain || app.id,
+					state: inst.state || app.state,
+				} as typeof app
+			})
+		}
 	}
 
 	const userAppsKeyed = keyBy(userApps, 'id')
