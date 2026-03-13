@@ -399,6 +399,18 @@ export async function listUserAppInstances(userId: string): Promise<UserAppInsta
 }
 
 /**
+ * List ALL user app instances across all users (for startup restart).
+ */
+export async function listAllUserAppInstances(): Promise<UserAppInstance[]> {
+	if (!pool) return []
+	const {rows} = await pool.query(
+		`SELECT id, user_id, app_id, subdomain, container_name, port, volume_path, status, created_at
+		 FROM user_app_instances ORDER BY created_at ASC`,
+	)
+	return rows.map(rowToAppInstance)
+}
+
+/**
  * Delete a user's app instance (when uninstalling a per-user app).
  */
 export async function deleteUserAppInstance(userId: string, appId: string): Promise<boolean> {

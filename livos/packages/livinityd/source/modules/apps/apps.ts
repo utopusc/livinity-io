@@ -19,6 +19,7 @@ import {
 	createUserAppInstance,
 	deleteUserAppInstance,
 	getUserAppInstance,
+	listAllUserAppInstances,
 	findUserById,
 } from '../database/index.js'
 
@@ -214,6 +215,32 @@ export default class Apps {
 
 		// Wait for current installed apps to finish starting
 		await startAppsPromise
+
+		// Restart per-user Docker containers (they get destroyed by cleanDockerState)
+		try {
+			const perUserInstances = await listAllUserAppInstances()
+			if (perUserInstances.length > 0) {
+				this.logger.log(`Restarting ${perUserInstances.length} per-user container(s)...`)
+				await Promise.all(
+					perUserInstances.map(async (inst) => {
+						const composePath = `${inst.volumePath}/docker-compose.yml`
+						if (!(await fse.pathExists(composePath))) return
+						// Extract username from container name pattern: {appId}_{service}_user_{username}_1
+						const match = inst.containerName.match(/_user_(.+)_1$/)
+						const username = match?.[1] || 'unknown'
+						const projectName = `${inst.appId}-user-${username}`
+						try {
+							await $`docker compose --file ${composePath} --project-name ${projectName} up -d`
+							this.logger.log(`Started per-user container ${inst.containerName}`)
+						} catch (error) {
+							this.logger.error(`Failed to start per-user container ${inst.containerName}`, error)
+						}
+					}),
+				)
+			}
+		} catch (error) {
+			this.logger.error('Failed to restart per-user containers', error)
+		}
 	}
 
 	private async reinstallMissingAppsAfterRestore(appIds: string[]) {
