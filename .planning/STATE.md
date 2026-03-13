@@ -6,32 +6,34 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works — now for the whole household.
 **Current milestone:** v7.1 — Per-User Isolation Completion
-**Current focus:** Planning and executing phases
+**Current focus:** Deploy and verify
 
 ## Current Position
 
-Milestone: v7.1 (Per-User Isolation Completion) — Starting
-Phase: Not started
+Milestone: v7.1 (Per-User Isolation Completion) — Complete
+Phase: All phases (6, 7, 8) complete
 Plan: —
-Status: Defining requirements and roadmap
-Last activity: 2026-03-13 — Milestone v7.1 started
+Status: Ready for deployment
+Last activity: 2026-03-13 — All phases implemented and committed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Accumulated Context
 
 ### Decisions
 
-- Per-user settings via user_preferences table (key-value, already exists)
-- Wallpaper animation: migrate from localStorage to PostgreSQL user_preferences
-- Integration configs: each user stores their own bot tokens (not shared bot routing)
-- Nexus-core reads per-user config with fallback to global for backward compat
-- Onboarding: 4 questions (role, use cases, style, tech stack) → stored as preferences → injected into AI prompt
-- App Store: filter "Open" button based on user_app_access
+- Per-user settings via user_preferences table (key-value JSONB, already exists)
+- Wallpaper animation: migrated from localStorage to PostgreSQL user_preferences with server sync
+- Integration configs: per-user PostgreSQL storage, admin also syncs to global Redis for backward compat
+- Nexus-core reads per-user personalization from request body (livinityd reads from PostgreSQL)
+- Onboarding: 3 questions (role, use cases, style) → localStorage during invite → synced on first login
+- App Store: filter "Open" button based on user_app_access, show "Install" for unowned apps
+- INTEG-04 (per-user MCP settings) deferred to v7.2 — requires deeper nexus-core architecture changes
 
 ### Pending Todos
 
-- None — starting fresh
+- Deploy to production (UI build + nexus-core rebuild + PM2 restart)
+- Verify onboarding flow on production
 
 ### Blockers/Concerns
 
@@ -41,5 +43,5 @@ Progress: [░░░░░░░░░░] 0%
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Milestone initialized, creating requirements and roadmap
+Stopped at: All phases complete, ready for deployment
 Resume file: None

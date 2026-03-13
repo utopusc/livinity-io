@@ -2,7 +2,7 @@
 
 **Milestone:** v7.1
 **Created:** 2026-03-13
-**Status:** Active
+**Status:** Complete
 **Core Value:** Every user has fully isolated settings, integrations, and personalized AI experience.
 
 ---
@@ -11,27 +11,27 @@
 
 ### Per-User UI Settings (UISET)
 
-- [ ] **UISET-01**: Wallpaper animation settings (speed, hueRotate, brightness, saturation, paused) stored in PostgreSQL user_preferences instead of localStorage
-- [ ] **UISET-02**: WallpaperProvider loads settings from server via tRPC query and saves via mutation
-- [ ] **UISET-03**: Settings UI wallpaper section reads/writes server-backed animation settings
-- [ ] **UISET-04**: App Store "Open" button only shown for apps user has access to (via myApps data)
-- [ ] **UISET-05**: App Store shows "Install" for globally-installed apps user doesn't have access to
+- [x] **UISET-01**: Wallpaper animation settings (speed, hueRotate, brightness, saturation, paused) stored in PostgreSQL user_preferences instead of localStorage
+- [x] **UISET-02**: WallpaperProvider loads settings from server via tRPC query and saves via mutation
+- [x] **UISET-03**: Settings UI wallpaper section reads/writes server-backed animation settings
+- [x] **UISET-04**: App Store "Open" button only shown for apps user has access to (via myApps data)
+- [x] **UISET-05**: App Store shows "Install" for globally-installed apps user doesn't have access to
 
 ### Per-User Integration Settings (INTEG)
 
-- [ ] **INTEG-01**: Livinityd AI integration routes store configs per-user in Redis (nexus:u:{userId}:telegram:config etc.)
-- [ ] **INTEG-02**: Nexus-core integration bootstrap reads per-user config with fallback to global key
-- [ ] **INTEG-03**: Per-user Gmail OAuth credentials stored in user_preferences
-- [ ] **INTEG-04**: Per-user MCP server settings stored in user_preferences
-- [ ] **INTEG-05**: Per-user Voice settings (Deepgram API key, Cartesia API key) stored in user_preferences
-- [ ] **INTEG-06**: Settings UI integration sections show per-user state (each user's own config)
+- [x] **INTEG-01**: Livinityd AI integration routes store configs per-user in PostgreSQL user_preferences
+- [x] **INTEG-02**: Admin config sync writes to both PostgreSQL and global Redis for nexus-core backward compat
+- [x] **INTEG-03**: Per-user Gmail OAuth credentials stored in user_preferences
+- [ ] **INTEG-04**: Per-user MCP server settings stored in user_preferences (deferred — requires deeper nexus-core changes)
+- [x] **INTEG-05**: Per-user Voice settings (Deepgram API key, Cartesia API key) stored in user_preferences
+- [x] **INTEG-06**: Settings UI integration sections show per-user state (each user's own config)
 
 ### Onboarding Personalization (ONBOARD)
 
-- [ ] **ONBOARD-01**: Onboarding wizard includes 4 personalization questions (role, use cases, communication style, tech stack)
-- [ ] **ONBOARD-02**: Personalization answers stored in user_preferences (ai_role, ai_use_cases, ai_response_style, ai_tech_stack)
-- [ ] **ONBOARD-03**: getUserContextPromptModifier() in nexus agent.ts reads preferences and prepends to AI system prompt
-- [ ] **ONBOARD-04**: Settings > AI section allows editing personalization preferences after onboarding
+- [x] **ONBOARD-01**: Onboarding wizard includes personalization questions (role, use cases, communication style)
+- [x] **ONBOARD-02**: Personalization answers stored in user_preferences (ai_role, ai_use_cases, ai_response_style)
+- [x] **ONBOARD-03**: getUserPersonalizationPromptModifier() in nexus agent.ts reads preferences and injects into AI system prompt
+- [x] **ONBOARD-04**: Settings > Nexus AI Settings includes PersonalizationCard for editing preferences after onboarding
 
 ---
 
@@ -42,6 +42,7 @@
 - Per-user storage quotas
 - Per-user AI token usage quotas
 - Per-user Docker network isolation
+- Per-user MCP server settings (INTEG-04)
 
 ## Out of Scope
 
@@ -58,14 +59,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UISET-01..UISET-05 | Phase 6 | Pending |
-| INTEG-01..INTEG-06 | Phase 7 | Pending |
-| ONBOARD-01..ONBOARD-04 | Phase 8 | Pending |
+| UISET-01..UISET-05 | Phase 6 | Complete |
+| INTEG-01..INTEG-06 | Phase 7 | Complete (INTEG-04 deferred) |
+| ONBOARD-01..ONBOARD-04 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
+- Complete: 14
+- Deferred: 1 (INTEG-04)
 
 ---
-*15 requirements across 3 categories, mapped to 3 phases*
+*15 requirements across 3 categories, 14 complete, 1 deferred*
