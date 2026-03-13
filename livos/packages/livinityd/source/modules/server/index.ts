@@ -261,7 +261,7 @@ class Server {
 					proxy = createProxyMiddleware({
 						target: `http://127.0.0.1:${targetPort}`,
 						changeOrigin: true,
-						ws: true,
+						// ws disabled — WS upgrades handled manually in upgrade handler
 						logProvider: () => ({
 							log: this.logger.verbose,
 							debug: this.logger.verbose,
@@ -312,7 +312,7 @@ class Server {
 					proxy = createProxyMiddleware({
 						target: `http://localhost:${manifest.port}`,
 						changeOrigin: true,
-						ws: true,
+						// ws disabled — WS upgrades handled manually in upgrade handler
 						pathRewrite: (path) => path.replace(`/app/${appId}`, '') || '/',
 						logProvider: () => ({
 							log: this.logger.verbose,
