@@ -74,8 +74,18 @@ export default router({
 			return true
 		}),
 
-	// Public method to check if a user exists
-	exists: publicProcedure.query(async ({ctx}) => ctx.user.exists()),
+	// Public method to check if a user exists (YAML legacy OR PostgreSQL)
+	exists: publicProcedure.query(async ({ctx}) => {
+		// Check YAML store first (legacy)
+		if (await ctx.user.exists()) return true
+		// Fall back to PostgreSQL — users exist there after multi-user migration
+		const pool = getPool()
+		if (pool) {
+			const {rows} = await pool.query('SELECT 1 FROM users LIMIT 1')
+			if (rows.length > 0) return true
+		}
+		return false
+	}),
 
 	// Given valid credentials returns a token for a user
 	login: publicProcedure
