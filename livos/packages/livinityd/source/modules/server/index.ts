@@ -238,16 +238,19 @@ class Server {
 						const {findAppPortForUser, hasAppAccess} = await import('../database/index.js')
 						const isAdmin = 'role' in payload && payload.role === 'admin'
 
+						// Extract base appId (subdomains for per-user instances use "appId:user:userId" format)
+						const baseAppId = subConfig.appId.includes(':user:') ? subConfig.appId.split(':user:')[0] : subConfig.appId
+
 						// Non-admin users need explicit access (via sharing or own instance)
 						if (!isAdmin) {
-							const canAccess = await hasAppAccess(payload.userId as string, subConfig.appId)
+							const canAccess = await hasAppAccess(payload.userId as string, baseAppId)
 							if (!canAccess) {
 								return response.status(403).send('Access denied')
 							}
 						}
 
 						// Check for per-user instance
-						const userPort = await findAppPortForUser(payload.userId as string, subConfig.appId)
+						const userPort = await findAppPortForUser(payload.userId as string, baseAppId)
 						if (userPort) {
 							targetPort = userPort
 						}
@@ -369,7 +372,8 @@ class Server {
 										const payload = await this.verifyToken(token).catch(() => null)
 										if (payload && typeof payload === 'object' && 'userId' in payload && payload.userId) {
 											const {findAppPortForUser} = await import('../database/index.js')
-											const userPort = await findAppPortForUser(payload.userId as string, subConfig.appId)
+											const baseAppId = subConfig.appId.includes(':user:') ? subConfig.appId.split(':user:')[0] : subConfig.appId
+											const userPort = await findAppPortForUser(payload.userId as string, baseAppId)
 											if (userPort) targetPort = userPort
 										}
 									}
