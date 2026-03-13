@@ -1748,7 +1748,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {
-    const { task, max_turns, conversationId } = req.body;
+    const { task, max_turns, conversationId, userPersonalization } = req.body;
     if (!task) {
       res.status(400).json({ error: 'task is required' });
       return;
@@ -1843,6 +1843,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       approvalManager,
       approvalPolicy: approvalPolicy as 'always' | 'destructive' | 'never',
       sessionId: randomUUID(),
+      userPersonalization: userPersonalization || undefined,
     };
 
     const agent = new AgentLoop(agentConfig);

@@ -6,6 +6,7 @@ import {
 } from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
+import {getUserPreference} from '../database/index.js'
 
 export interface AiModuleOptions {
 	livinityd: Livinityd
@@ -299,6 +300,27 @@ export default class AiModule {
 		const contextPrefix = conversation.messages.length > 1 ? `Previous conversation:\n${recentHistory}\n\n` : ''
 		const task = contextPrefix ? `${contextPrefix}Current message: ${userMessage}` : userMessage
 
+		// Read user personalization preferences for AI prompt injection
+		let userPersonalization: {role?: string; responseStyle?: string; useCases?: string[]} | undefined
+		if (userId) {
+			try {
+				const [aiRole, aiStyle, aiUseCases] = await Promise.all([
+					getUserPreference(userId, 'ai_role'),
+					getUserPreference(userId, 'ai_response_style'),
+					getUserPreference(userId, 'ai_use_cases'),
+				])
+				if (aiRole || aiStyle || aiUseCases) {
+					userPersonalization = {
+						role: aiRole as string | undefined,
+						responseStyle: aiStyle as string | undefined,
+						useCases: aiUseCases as string[] | undefined,
+					}
+				}
+			} catch {
+				// Non-critical — proceed without personalization
+			}
+		}
+
 		// Forward to Liv AI daemon via HTTP SSE
 		const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
 		this.chatStatus.set(conversationId, {status: 'Connecting...', steps: [], commands: []})
@@ -310,7 +332,7 @@ export default class AiModule {
 			const response = await fetch(`${livApiUrl}/api/agent/stream`, {
 				method: 'POST',
 				headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
-				body: JSON.stringify({task, max_turns: 30, conversationId}),
+				body: JSON.stringify({task, max_turns: 30, conversationId, userPersonalization}),
 				signal: AbortSignal.timeout(600_000),
 			})
 

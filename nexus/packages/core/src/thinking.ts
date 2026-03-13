@@ -242,3 +242,47 @@ export function getResponseStylePromptModifier(config: ResponseConfig): string {
 
   return modifier;
 }
+
+/** User personalization preferences from onboarding/settings */
+export interface UserPersonalization {
+  role?: string;
+  responseStyle?: string;
+  useCases?: string[];
+}
+
+/**
+ * Get prompt modifier from user personalization preferences.
+ * Injected into system prompt so the AI adapts to the user's profile.
+ */
+export function getUserPersonalizationPromptModifier(prefs: UserPersonalization): string {
+  if (!prefs || (!prefs.role && !prefs.responseStyle && (!prefs.useCases || prefs.useCases.length === 0))) {
+    return '';
+  }
+
+  let modifier = '\n## User Profile';
+
+  if (prefs.role) {
+    modifier += `\n- The user is a ${prefs.role}. Tailor your responses to their expertise and perspective.`;
+  }
+
+  if (prefs.responseStyle) {
+    switch (prefs.responseStyle) {
+      case 'concise':
+        modifier += `\n- The user prefers concise responses. Be brief and to the point.`;
+        break;
+      case 'detailed':
+        modifier += `\n- The user prefers detailed responses. Provide thorough explanations.`;
+        break;
+      case 'balanced':
+      default:
+        // Balanced is default, no extra instruction
+        break;
+    }
+  }
+
+  if (prefs.useCases && prefs.useCases.length > 0) {
+    modifier += `\n- The user primarily uses AI for: ${prefs.useCases.join(', ')}. Prioritize these areas in your responses.`;
+  }
+
+  return modifier;
+}
