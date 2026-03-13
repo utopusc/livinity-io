@@ -26,8 +26,13 @@ async function writeYaml(path: string, data: any) {
 }
 
 export async function readManifestInDirectory(dataDirectory: string) {
-	// Read livinity-app.yml manifest
-	const parseYaml = await readYaml(`${dataDirectory}/livinity-app.yml`)
+	// Read livinity-app.yml manifest, fall back to legacy umbrel-app.yml
+	let parseYaml
+	try {
+		parseYaml = await readYaml(`${dataDirectory}/livinity-app.yml`)
+	} catch {
+		parseYaml = await readYaml(`${dataDirectory}/umbrel-app.yml`)
+	}
 	return validateManifest(parseYaml)
 }
 
