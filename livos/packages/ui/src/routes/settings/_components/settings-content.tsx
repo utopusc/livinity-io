@@ -141,21 +141,21 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-	// Per-user settings
+	// Per-user settings (visible to all users)
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: 'language', icon: TbLanguage, label: 'Language', description: 'Interface language'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
 	{id: 'nexus-config', icon: TbBrain, label: 'Nexus AI Settings', description: 'Agent behavior & response style'},
+	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
+	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
+	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
+	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets'},
 	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
-	// Admin-only settings
+	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi account & model', adminOnly: true},
-	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord', adminOnly: true},
-	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth', adminOnly: true},
-	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist', adminOnly: true},
-	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets', adminOnly: true},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi', adminOnly: true},
@@ -503,9 +503,30 @@ function InlineChangePasswordDialog({open, onOpenChange}: {open: boolean; onOpen
 	)
 }
 
+const ACCENT_COLORS = [
+	{label: 'Default', hsl: null},
+	{label: 'Blue', hsl: '217 91% 60%'},
+	{label: 'Purple', hsl: '262 83% 58%'},
+	{label: 'Pink', hsl: '330 81% 60%'},
+	{label: 'Red', hsl: '0 84% 60%'},
+	{label: 'Orange', hsl: '25 95% 53%'},
+	{label: 'Yellow', hsl: '45 93% 47%'},
+	{label: 'Green', hsl: '142 71% 45%'},
+	{label: 'Teal', hsl: '173 80% 40%'},
+	{label: 'Cyan', hsl: '189 94% 43%'},
+] as const
+
 function WallpaperSection() {
 	const {wallpaper, setWallpaperId, settings, updateSettings} = useWallpaper()
 	const [hoveredId, setHoveredId] = useState<AnimatedWallpaperId | null>(null)
+	const accentColorQ = trpcReact.user.accentColor.useQuery(undefined, {retry: false})
+	const utils = trpcReact.useUtils()
+	const accentMut = trpcReact.user.set.useMutation({
+		onSuccess: () => {
+			utils.user.accentColor.invalidate()
+			utils.user.get.invalidate()
+		},
+	})
 
 	const previewId = (hoveredId || wallpaper.id || animatedWallpaperIds[0]) as AnimatedWallpaperId
 	const PreviewComponent = animatedWallpapers[previewId]?.component
@@ -628,6 +649,41 @@ function WallpaperSection() {
 					>
 						Reset to defaults
 					</button>
+				)}
+			</div>
+
+			{/* Accent color picker */}
+			<div className='flex flex-col gap-3 rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<span className='text-sm font-medium text-text-primary'>Accent Color</span>
+				<div className='flex flex-wrap gap-2'>
+					{ACCENT_COLORS.map((color) => {
+						const isActive = color.hsl === null
+							? !accentColorQ.data
+							: accentColorQ.data === color.hsl
+						return (
+							<button
+								key={color.label}
+								title={color.label}
+								onClick={() => accentMut.mutate({accentColor: color.hsl})}
+								className={cn(
+									'relative h-8 w-8 rounded-full transition-all',
+									isActive ? 'ring-2 ring-white ring-offset-2 ring-offset-black/50 scale-110' : 'hover:scale-105',
+								)}
+								style={{
+									backgroundColor: color.hsl ? `hsl(${color.hsl})` : `hsl(${wallpaper.brandColorHsl || '0 0% 50%'})`,
+								}}
+							>
+								{isActive && (
+									<TbCheck className='absolute inset-0 m-auto h-4 w-4 text-white drop-shadow-md' />
+								)}
+							</button>
+						)
+					})}
+				</div>
+				{accentColorQ.data && (
+					<p className='text-xs text-text-tertiary'>
+						Custom accent color overrides the wallpaper theme color.
+					</p>
 				)}
 			</div>
 		</div>

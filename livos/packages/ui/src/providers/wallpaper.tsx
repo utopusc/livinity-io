@@ -119,7 +119,11 @@ export function WallpaperProvider({
 
 	const prevId = usePreviousDistinct(wallpaper.id)
 
-	useWallpaperCssVars(wallpaper.id)
+	// Query user's custom accent color
+	const userQ = trpcReact.user.accentColor.useQuery(undefined, {retry: false})
+	const accentColor = userQ.data ?? null
+
+	useWallpaperCssVars(wallpaper.id, accentColor)
 
 	useLayoutEffect(() => {
 		if (wallpaper.id === prevId) return
@@ -155,9 +159,11 @@ export function WallpaperProvider({
 	)
 }
 
-export function useWallpaperCssVars(wallpaperId?: string) {
+export function useWallpaperCssVars(wallpaperId?: string, accentColor?: string | null) {
 	const entry = wallpaperId ? wallpapersKeyed[wallpaperId] : undefined
-	const brandColorHsl = entry?.brandColorHsl ?? nullWallpaper.brandColorHsl
+	const wallpaperColor = entry?.brandColorHsl ?? nullWallpaper.brandColorHsl
+	// Custom accent color overrides wallpaper brand color
+	const brandColorHsl = accentColor || wallpaperColor
 
 	useLayoutEffect(() => {
 		const el = document.documentElement

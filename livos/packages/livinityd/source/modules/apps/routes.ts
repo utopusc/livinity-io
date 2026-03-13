@@ -128,7 +128,14 @@ export const apps = router({
 				environmentOverrides: z.record(z.string()).optional(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides)),
+		.mutation(async ({ctx, input}) => {
+			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides)
+			// Auto-grant access to the installing user
+			if (ctx.currentUser?.id) {
+				await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
+			}
+			return result
+		}),
 
 	// Get state
 	// Temporarily used for polling the state of app mutations until we implement subscriptions
@@ -338,17 +345,25 @@ export const apps = router({
 		// Get user's per-user instances
 		const instances = await listUserAppInstances(userId)
 
-		// Get apps shared with this user
-		// We need to check user_app_access for shared apps
+		// Get apps shared with / owned by this user
 		const allInstalledApps = ctx.apps.instances
 		const sharedAppIds: string[] = []
 		for (const app of allInstalledApps) {
 			const access = await hasAppAccess(userId, app.id)
-			if (access) sharedAppIds.push(app.id)
+			if (access) {
+				sharedAppIds.push(app.id)
+			} else if (ctx.currentUser?.role === 'admin') {
+				// Auto-grant legacy apps (no access entries at all) to admin
+				const accessUsers = await listAppAccessUsers(app.id)
+				if (accessUsers.length === 0) {
+					await grantAppAccess(userId, app.id, userId)
+					sharedAppIds.push(app.id)
+				}
+			}
 		}
 
 		return {
-			globalApps: ctx.currentUser?.role === 'admin',
+			globalApps: false,
 			sharedAppIds,
 			userInstances: instances,
 		}
