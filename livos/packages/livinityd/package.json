@@ -34,6 +34,7 @@
 		"@types/express": "^4.17.17",
 		"@types/fs-extra": "^11.0.1",
 		"@types/js-yaml": "^4.0.5",
+		"@types/jsonwebtoken": "^9.0.10",
 		"@types/mime-types": "^2.1.4",
 		"@types/ms": "^0.7.31",
 		"@types/notp": "^2.0.2",
@@ -54,13 +55,15 @@
 		"wait-port": "^1.0.4"
 	},
 	"dependencies": {
-		"@livos/config": "workspace:*",
 		"@homebridge/dbus-native": "github:getumbrel/dbus-native#types",
+		"@livos/config": "workspace:*",
+		"@nexus/core": "file:../../../nexus/packages/core",
 		"@parcel/watcher": "^2.5.1",
 		"@trpc/client": "^11.1.1",
 		"@trpc/server": "^11.1.1",
 		"@tsconfig/node22": "^22.0.0",
 		"@types/cookie-parser": "^1.4.7",
+		"@types/pg": "^8.18.0",
 		"archiver": "^7.0.1",
 		"arg": "^5.0.2",
 		"bcryptjs": "^2.4.3",
@@ -85,6 +88,7 @@
 		"globby": "^13.2.1",
 		"helmet": "^7.1.0",
 		"http-proxy-middleware": "^2.0.6",
+		"ioredis": "^5.4.0",
 		"isomorphic-git": "^1.24.5",
 		"js-yaml": "^4.1.0",
 		"jsonwebtoken": "^9.0.1",
@@ -99,6 +103,7 @@
 		"p-queue": "^7.3.0",
 		"p-retry": "^6.2.1",
 		"p-wait-for": "^5.0.2",
+		"pg": "^8.20.0",
 		"pify": "^6.1.0",
 		"pretty-bytes": "^6.1.1",
 		"read-pkg-up": "^9.1.0",
@@ -110,8 +115,6 @@
 		"tsx": "^4.7.1",
 		"valid-filename": "^4.0.0",
 		"ws": "^8.16.0",
-		"zod": "^3.21.4",
-		"@nexus/core": "file:../../../nexus/packages/core",
-		"ioredis": "^5.4.0"
+		"zod": "^3.21.4"
 	}
 }

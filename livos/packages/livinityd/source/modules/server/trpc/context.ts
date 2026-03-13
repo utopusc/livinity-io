@@ -1,5 +1,6 @@
 import {type CreateExpressContextOptions} from '@trpc/server/adapters/express'
 import type Livinityd from '../../../index.js'
+import type {CurrentUser} from '../../database/index.js'
 
 export const createContextExpress = ({req, res}: CreateExpressContextOptions) => {
 	const livinityd = req.app.get('livinityd') as Livinityd
@@ -32,6 +33,7 @@ const createContext = ({livinityd, logger}: {livinityd: Livinityd; logger: Livin
 		apps,
 		logger,
 		dangerouslyBypassAuthentication: false,
+		currentUser: undefined as CurrentUser | undefined,
 	}
 }
 

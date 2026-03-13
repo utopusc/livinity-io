@@ -2,7 +2,7 @@ import {ZodError} from 'zod'
 import {initTRPC} from '@trpc/server'
 
 import {type Context} from './context.js'
-import {isAuthenticated, isAuthenticatedIfUserExists} from './is-authenticated.js'
+import {isAuthenticated, isAuthenticatedIfUserExists, requireRole} from './is-authenticated.js'
 import {websocketLogger} from './websocket-logger.js'
 
 export const t = initTRPC.context<Context>().create({
@@ -27,3 +27,5 @@ export const privateProcedure = baseProcedure.use(isAuthenticated)
 // may need to be used before a user is registered when a token can't exist. We shouldn't use it for
 // everything because there could be edgecases where it gets applied like if the user file is corrupted.
 export const publicProcedureWhenNoUserExists = baseProcedure.use(isAuthenticatedIfUserExists)
+// Admin-only procedure: requires authentication + admin role
+export const adminProcedure = privateProcedure.use(requireRole('admin'))

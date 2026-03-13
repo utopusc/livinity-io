@@ -1,988 +1,1434 @@
-# Architecture Research: Kimi Code Migration
+# Architecture Patterns: Multi-User Integration
 
-**Dimension:** Architecture
-**Milestone:** Kimi Code Migration -- Replace Claude Code with Kimi Code in Nexus
-**Date:** 2026-03-09
-**Confidence:** HIGH (based on direct codebase analysis + official Kimi CLI docs + verified Kimi SDK info)
-
----
-
-## Executive Summary
-
-Migrating from Claude Code to Kimi Code requires changes across four layers: provider, agent runner, API routes, and UI. The existing architecture is well-suited for this -- the AIProvider interface, ProviderManager fallback system, and SdkAgentRunner pattern all have clean seams. The critical insight: **Kimi offers three integration depths** -- direct API calls (OpenAI-compatible), CLI subprocess via Agent SDK, and a raw Wire protocol (JSON-RPC 2.0 over stdio). The recommended approach uses the Agent SDK (`@moonshot-ai/kimi-agent-sdk`) for subscription mode (replacing SdkAgentRunner) and the OpenAI-compatible API for API key mode (replacing ClaudeProvider.chat).
-
-The migration is **not a rewrite** -- it's a systematic replacement of Claude-specific components with Kimi equivalents while preserving the surrounding architecture (ToolRegistry, Brain, ProviderManager, tRPC routes, SSE streaming).
-
-**Key finding from research:** Kimi CLI also supports a `--print --output-format=stream-json` mode that streams JSONL to stdout without any SDK dependency. This provides a fallback if the `@moonshot-ai/kimi-agent-sdk` proves too immature (0.x version). The fallback approach spawns `kimi --print --output-format=stream-json -p "task"` directly and parses JSONL output.
+**Domain:** Multi-user support for existing single-user home server OS
+**Researched:** 2026-03-12
+**Overall confidence:** HIGH (based on direct codebase analysis)
 
 ---
 
-## Current Architecture (Claude Code)
+## Table of Contents
 
-```
-+------------------+
-|   LivOS Web UI   |  React 18 + Vite
-|   ai-config.tsx  |  Claude auth method toggle (api-key / sdk-subscription)
-+--------+---------+
-         |
-    tRPC routes (livinityd/modules/ai/routes.ts)
-         |
-+--------+---------+
-|    livinityd     |  Proxies to Nexus API
-|   (port 80)     |  tRPC: ai.getClaudeCliStatus, ai.startClaudeLogin, etc.
-+--------+---------+
-         |
-    HTTP fetch to Nexus API
-         |
-+--------+---------+     +-------------------+
-|   Nexus Core     |---->|  SdkAgentRunner   |  Spawns Claude Code CLI subprocess
-|   api.ts         |     |  (sdk-agent-runner)|  via @anthropic-ai/claude-agent-sdk
-|   (port 3200)    |     +--------+----------+
-+--------+---------+              |
-         |                   query() function
-         |                   spawns 'claude' CLI
-+--------+---------+              |
-|  ClaudeProvider  |     +--------+----------+
-|  claude.ts       |     | Claude Code CLI   |
-|  - chat()        |     | - OAuth auth      |
-|  - chatStream()  |     | - MCP tools       |
-|  - startLogin()  |     | - permissionMode  |
-|  - submitCode()  |     +-------------------+
-+------------------+
-```
-
-### Key Components to Replace
-
-| Component | File | What It Does | Migration Impact |
-|-----------|------|-------------|------------------|
-| ClaudeProvider | `providers/claude.ts` | API key auth, OAuth PKCE, chat/stream, CLI status | **REPLACE** with KimiProvider |
-| SdkAgentRunner | `sdk-agent-runner.ts` | Spawns Claude CLI, bridges MCP tools | **REPLACE** with KimiAgentRunner |
-| API routes | `api.ts` lines 185-246 | `/api/claude-cli/*` endpoints | **REPLACE** with `/api/kimi/*` |
-| Config schema | `config/schema.ts` | Model names (claude-*) | **MODIFY** model names |
-| Provider types | `providers/types.ts` | ClaudeToolDefinition, cost table | **MODIFY** add Kimi costs |
-| ProviderManager | `providers/manager.ts` | Fallback order [claude, gemini] | **MODIFY** -> [kimi, gemini] |
-| AI tRPC routes | `livinityd/.../ai/routes.ts` | Claude CLI status/login/logout | **REPLACE** with Kimi equivalents |
-| AI Config UI | `ui/.../ai-config.tsx` | Claude auth UI | **REPLACE** with Kimi auth UI |
-
-### Components That Stay Unchanged
-
-| Component | Why Unchanged |
-|-----------|--------------|
-| ToolRegistry | Provider-agnostic tool definitions |
-| Brain | Delegates to ProviderManager -- provider-agnostic |
-| AgentLoop | Direct API mode -- works with any AIProvider |
-| AgentConfig/AgentResult types | Provider-agnostic interfaces |
-| AgentEvent types | Provider-agnostic event interface |
-| SSE streaming in api.ts | Uses AgentEvent -- provider-agnostic |
-| Daemon, Redis, all channels | No AI provider dependency |
+1. [Current Architecture Snapshot](#current-architecture-snapshot)
+2. [JWT to Multi-User Session Migration](#1-jwt-to-multi-user-session-migration)
+3. [tRPC Context Extension](#2-trpc-context-extension)
+4. [YAML to PostgreSQL Migration](#3-yaml-to-postgresql-migration)
+5. [Dynamic Proxy Middleware (App Gateway)](#4-dynamic-proxy-middleware-app-gateway)
+6. [Docker Compose Templating Per User](#5-docker-compose-templating-per-user)
+7. [Caddy Simplification](#6-caddy-simplification)
+8. [Redis Key Namespacing](#7-redis-key-namespacing)
+9. [File System Restructuring](#8-file-system-restructuring)
+10. [App Manifest Extension](#9-app-manifest-extension)
+11. [Login Page Routing](#10-login-page-routing)
+12. [Component Dependency Graph](#component-dependency-graph)
+13. [Suggested Build Order](#suggested-build-order)
 
 ---
 
-## Kimi Code Architecture
+## Current Architecture Snapshot
 
-### Three Integration Depths
+Before designing multi-user integration, here is the exact current state derived from reading every relevant source file.
 
-Kimi Code offers **three distinct integration depths**, more than Claude's two:
-
-#### Depth 1: Kimi API (Direct API Mode -- replaces ClaudeProvider.chat/chatStream)
-
-- **Endpoint:** `https://api.kimi.com/coding/v1` (Kimi Code specific) or `https://api.moonshot.ai/v1` (general Moonshot API)
-- **Format:** OpenAI-compatible chat completions API
-- **Authentication:** API key (Bearer token) from Moonshot Platform or Kimi Code membership
-- **Tool calling:** OpenAI-format function calling (NOT Anthropic tool_use)
-- **Streaming:** SSE with `data: {...}` chunks (OpenAI format)
-- **Context window:** 262,144 tokens
-- **Max output:** 32,768 tokens
-- **Pricing:** ~$0.60/M input, $2.50/M output (significantly cheaper than Claude)
-
-**Key difference from Claude API:** Kimi uses OpenAI function_call format, not Anthropic tool_use blocks. The KimiProvider must translate between Nexus's ClaudeToolDefinition format and OpenAI function format.
-
-**Confidence:** HIGH -- OpenAI-compatible format is well-documented and widely used.
-
-#### Depth 2: Kimi Agent SDK (Subprocess Mode -- replaces SdkAgentRunner)
-
-- **Package:** `@moonshot-ai/kimi-agent-sdk`
-- **Mechanism:** Spawns `kimi` CLI as subprocess, communicates via Wire protocol (JSON-RPC 2.0 over stdio)
-- **Authentication:** OAuth via `kimi login` or API key in `~/.kimi/config.toml`
-- **MCP support:** Reads from `~/.kimi/mcp.json` OR `--mcp-config-file` flag OR `--mcp-config` inline JSON
-- **Tool approval:** `yoloMode: true` auto-approves all tools (equivalent to Claude's `dontAsk`)
-- **Session API:** `createSession()` + `session.prompt()` (async iterator pattern)
-- **External tools:** `createExternalTool()` for registering custom tools with Zod schemas
-
-**Key difference from Claude SDK:** The Kimi SDK uses `createSession()` + `session.prompt()` instead of a single `query()` function. Sessions are stateful and persist across turns. Events use a different type system (TurnBegin, StepBegin, ContentPart, ToolCall, ToolResult, StatusUpdate, etc.).
-
-**Confidence:** MEDIUM -- SDK is 0.x version; API surface documented but exact TypeScript signatures need testing.
-
-#### Depth 3: CLI Print Mode (Fallback / Direct Subprocess)
-
-If the Agent SDK proves unreliable, we can spawn `kimi` CLI directly in print mode:
-
-```bash
-# Spawn as subprocess, get JSONL streaming output
-kimi --print --output-format=stream-json --yolo --max-steps-per-turn 25 \
-  --mcp-config '{"mcpServers":{"chrome-devtools":{"command":"chrome-devtools-mcp","args":["--browserUrl","http://127.0.0.1:9223"]}}}' \
-  -p "task description here"
-```
-
-**JSONL output format:**
-```json
-{"role": "assistant", "content": "I'll help with that..."}
-{"role": "assistant", "content": "...", "tool_calls": [{"id": "tc_1", "type": "function", "function": {"name": "shell", "arguments": "{\"cmd\":\"ls\"}"}}]}
-{"role": "tool", "tool_call_id": "tc_1", "content": "file1.txt\nfile2.txt"}
-{"role": "assistant", "content": "Here are the files..."}
-```
-
-**Key flags for programmatic use:**
-- `--print`: Non-interactive mode (implicitly enables `--yolo`)
-- `--output-format=stream-json`: JSONL output (one JSON object per line)
-- `--input-format=stream-json`: JSONL input via stdin (for multi-turn)
-- `--final-message-only`: Skip intermediate tool call messages, only output final answer
-- `--quiet`: Shortcut for `--print --output-format text --final-message-only`
-- `--yolo` / `-y` / `--auto-approve`: Auto-approve all operations
-- `--mcp-config JSON`: Pass MCP server config as inline JSON string (repeatable)
-- `--mcp-config-file PATH`: Load MCP config from file (repeatable)
-- `--model NAME`: Override model selection
-- `--max-steps-per-turn N`: Limit steps per turn
-- `--work-dir PATH`: Set working directory
-- `--no-thinking`: Disable thinking mode
-
-**Why this matters as a fallback:** This approach requires zero SDK dependency -- just spawn a child process and parse JSONL. The `--mcp-config` inline flag means we can pass MCP configuration programmatically without writing temp files. This is simpler than the SDK approach and equally capable, though it lacks the structured event types for finer-grained streaming.
-
-**Confidence:** HIGH -- CLI flags are documented in official Kimi CLI docs and GitHub README.
-
-#### Depth 4: Wire Mode (Advanced -- JSON-RPC 2.0 Protocol)
-
-Kimi CLI also supports `kimi --wire` which exposes a bidirectional JSON-RPC 2.0 protocol over stdin/stdout:
-
-- **Protocol version:** 1.4
-- **Methods:** `initialize`, `prompt`, `steer`, `cancel`, `replay`
-- **Events:** `TurnBegin`, `TurnEnd`, `StepBegin`, `StatusUpdate`, `ContentPart`, `ToolCall`, `ToolResult`, `ApprovalResponse`, `SubagentEvent`
-- **Tool registration:** Via `external_tools` parameter in the `initialize` request
-
-This is what the Agent SDK uses internally. Using it directly would give the most control but is more complex. **Not recommended unless the SDK proves inadequate.**
-
-**Confidence:** MEDIUM -- Wire mode is documented but marked "experimental" in the CLI reference.
-
-### Credential Storage
-
-| Item | Claude | Kimi |
-|------|--------|------|
-| Config directory | `~/.claude/` | `~/.kimi/` |
-| Credentials file | `~/.claude/.credentials.json` | `~/.kimi/config.toml` (provider section) |
-| MCP config | Inline via SDK | `~/.kimi/mcp.json` or `--mcp-config` inline JSON |
-| API key format | `sk-ant-...` | Bearer token from platform.moonshot.ai or api.kimi.com |
-| OAuth method | Custom PKCE flow to platform.claude.com | Device auth flow to auth.kimi.com + browser-based `/login` |
-| OAuth endpoints | `platform.claude.com/v1/oauth/token` | `auth.kimi.com/api/oauth/device_authorization` + `auth.kimi.com/api/oauth/token` |
-| Redis key (current) | `nexus:config:anthropic_api_key` | `nexus:config:kimi_api_key` (new) |
-| Auth method key | `nexus:config:claude_auth_method` | `nexus:config:kimi_auth_method` (new) |
-
-### OAuth Flow Comparison
-
-**Claude:** Custom PKCE flow handled entirely in `ClaudeProvider`:
-1. Generate code_verifier + code_challenge
-2. Return authorize URL to frontend
-3. User authenticates, gets a code
-4. User pastes code in UI
-5. Backend exchanges code for tokens via `platform.claude.com/v1/oauth/token`
-6. Save credentials to `~/.claude/.credentials.json`
-
-**Kimi:** Simpler -- CLI handles OAuth internally:
-1. Backend runs `kimi login` (or equivalent SDK call)
-2. CLI opens browser or returns device auth URL
-3. User authenticates in browser
-4. CLI stores credentials in `~/.kimi/config.toml` automatically
-5. No code-paste step needed (device auth flow auto-completes)
-
-**Key implication:** The Kimi login UI can be simpler. No code paste input field needed. Just "Sign in" button -> poll for auth completion.
-
----
-
-## New Component: KimiProvider
-
-**File:** `nexus/packages/core/src/providers/kimi.ts`
-
-### Interface Mapping
+### Authentication Flow (Current)
 
 ```
-ClaudeProvider method     ->  KimiProvider equivalent
-------------------------     -----------------------
-chat()                    ->  chat() -- OpenAI chat completions format
-chatStream()              ->  chatStream() -- OpenAI streaming format
-think()                   ->  think() -- same wrapper pattern
-isAvailable()             ->  isAvailable() -- check API key in Redis/env
-getModels()               ->  getModels() -- Kimi model tiers
-getCliStatus()            ->  getCliStatus() -- check 'kimi' binary + auth
-getAuthMethod()           ->  getAuthMethod() -- api-key vs kimi-subscription
-startLogin()              ->  startLogin() -- trigger OAuth flow via CLI
-submitLoginCode()         ->  NOT NEEDED (Kimi uses device auth, no code paste)
-logout()                  ->  logout() -- run 'kimi logout' or delete config
+Login Request
+  -> user.login (tRPC mutation, publicProcedure)
+  -> User.validatePassword() reads user.hashedPassword from livinity.yaml via FileStore
+  -> Optional 2FA via TOTP
+  -> Server.signToken() -> jwt.sign(secret, {loggedIn: true}, expiresIn: 1 week)
+  -> Also sets LIVINITY_PROXY_TOKEN cookie (separate JWT with {proxyToken: true})
+  -> Client stores main JWT in localStorage, proxy token in httpOnly cookie
 ```
 
-**Note on `submitLoginCode`:** Claude's PKCE flow requires the user to paste a code back. Kimi's device auth flow completes automatically when the user authenticates in the browser. The `startLogin()` method should initiate `kimi login` (or the device auth API) and return a URL. The frontend polls `getCliStatus()` until `authenticated: true`. No code submission step needed.
+**Key facts from `jwt.ts`:**
+- Payload is `{loggedIn: true}` -- no userId, no username, no role
+- Both JWTs use same secret from `{dataDirectory}/secrets/jwt`
+- Expiry is 1 week (both tokens)
+- Algorithm: HS256
 
-### Model Tier Mapping
+**Key facts from `is-authenticated.ts`:**
+- Middleware extracts token from `Authorization: Bearer <token>` header
+- Calls `ctx.server.verifyToken(token)` which just verifies signature and `loggedIn: true`
+- WebSocket connections bypass auth middleware (auth handled on upgrade by Server class)
+- `isAuthenticatedIfUserExists` allows unauthenticated access when no user registered
 
+### tRPC Context (Current)
+
+From `context.ts`:
 ```typescript
-const KIMI_MODELS: Record<string, string> = {
-  flash: 'kimi-latest',          // Fast, cheap model
-  haiku: 'kimi-latest',          // Map to same (Kimi doesn't have haiku equivalent)
-  sonnet: 'kimi-for-coding',     // Primary coding model (Kimi K2.5)
-  opus: 'kimi-for-coding',       // Map to same (Kimi K2.5 is top-tier)
-};
-```
-
-**Confidence:** MEDIUM -- Kimi's model tier naming may differ. The exact model IDs need verification from `kimi info` output or the `~/.kimi/config.toml` `[models]` section. At minimum, `kimi-for-coding` and `kimi-latest` are referenced in documentation.
-
-### Tool Definition Translation
-
-The existing Nexus system uses `ClaudeToolDefinition` format (Anthropic `input_schema`). Kimi's API uses OpenAI `function` format (`parameters`). Translation layer needed:
-
-```typescript
-// Nexus internal format (ClaudeToolDefinition)
 {
-  name: 'shell',
-  description: 'Execute a shell command',
-  input_schema: {
-    type: 'object',
-    properties: { command: { type: 'string' } },
-    required: ['command']
-  }
-}
-
-// Kimi API format (OpenAI function calling)
-{
-  type: 'function',
-  function: {
-    name: 'shell',
-    description: 'Execute a shell command',
-    parameters: {
-      type: 'object',
-      properties: { command: { type: 'string' } },
-      required: ['command']
-    }
-  }
+  livinityd,      // The main Livinityd instance
+  server,         // Server module (JWT signing/verification)
+  user,           // SINGLETON User class (reads from livinity.yaml)
+  appStore,       // App template repository
+  apps,           // App management (Docker compose, Caddy)
+  logger,
+  dangerouslyBypassAuthentication: false,
+  // Express context adds: transport, request, response
+  // WSS context adds: transport
 }
 ```
 
-The translation is mechanical: `input_schema` becomes `function.parameters`, wrapped in `{type: 'function', function: {...}}`. Response tool calls come back as `function.name` + `function.arguments` (JSON string) instead of `tool_use` blocks with `input` objects.
+**Critical observation:** `ctx.user` is a SINGLETON `User` class backed by the single YAML file. There is no concept of "which user is making this request." Every authenticated request accesses the same user data.
 
-**Response parsing difference:**
-```typescript
-// Claude: tool_use block
-{ type: 'tool_use', id: 'toolu_123', name: 'shell', input: { command: 'ls' } }
+### Data Storage (Current)
 
-// Kimi: function call (OpenAI format)
-{ id: 'call_123', type: 'function', function: { name: 'shell', arguments: '{"command":"ls"}' } }
-// Note: arguments is a JSON string, needs JSON.parse()
+**Primary store:** `FileStore<StoreSchema>` at `{dataDirectory}/livinity.yaml`
+- YAML format, read-parse-modify-write cycle
+- PQueue with concurrency 1 for writes (serialized)
+- All data in single file: user info, app list, widgets, files preferences, backup config, settings
+- Access via dot-prop paths: `store.get('user.name')`, `store.set('apps', [...])`, etc.
+
+**StoreSchema structure (from `index.ts`):**
+```
+version, apps[], appRepositories[], widgets[], torEnabled,
+user: { name, hashedPassword, totpUri, wallpaper, language, temperatureUnit },
+settings: { releaseChannel, wifi, externalDns },
+development: { hostname },
+recentlyOpenedApps[],
+files: { preferences: {...}, favorites[], recents[], shares[], networkStorage[] },
+notifications[], backups: { repositories[], ignore[] }
 ```
 
-### Authentication Flow
+**Per-app store:** `FileStore<AppSettings>` at `{dataDirectory}/app-data/{appId}/settings.yml`
+- Contains: hideCredentialsBeforeOpen, dependencies, backupIgnore, autoStart
 
-Two modes, same as Claude but different mechanics:
+**Redis (via AiModule):** Used for AI conversations, Nexus sessions, domain config, Caddy subdomains
+- Key patterns in livinityd: `livos:domain:config`, `livos:domain:subdomains`, `liv:ui:conv:*`, `liv:ui:convs`
+- Key patterns in nexus-core: `nexus:session:*`, `nexus:session_history:*`, `nexus:config:*`, `nexus:kimi:*`, `nexus:approval:*`, `nexus:canvas:*`, `nexus:gmail:*`, `nexus:wa_*`, `nexus:dm:*`, `nexus:activation:*`, `nexus:task_state:*`, `nexus:loop_state:*`, `nexus:stats`, `nexus:notifications`
 
-**API Key Mode:**
-1. User enters API key in Settings UI
-2. Stored in Redis: `nexus:config:kimi_api_key`
-3. KimiProvider reads from Redis, creates OpenAI-compatible client
-4. Uses `https://api.kimi.com/coding/v1` as base URL (or `https://api.moonshot.ai/v1`)
+### File System (Current)
 
-**Kimi Subscription Mode (CLI):**
-1. User clicks "Sign in with Kimi" in Settings UI
-2. Backend invokes `kimi login` subprocess (or calls device auth API directly)
-3. Returns auth URL to frontend for display
-4. User opens URL, authenticates in browser
-5. CLI/device auth auto-completes, credentials stored in `~/.kimi/config.toml`
-6. Frontend polls `getCliStatus()` until authenticated
-7. KimiAgentRunner can then spawn `kimi` subprocess for tasks
-
-**Implementation choice for login flow:**
-
-Option A (simpler): Shell out to `kimi login` which handles browser-based OAuth. Parse its output for the auth URL. Problem: `kimi login` is interactive by default.
-
-Option B (recommended): Use the device authorization API directly:
-```typescript
-// POST https://auth.kimi.com/api/oauth/device_authorization
-// Returns: { device_code, user_code, verification_uri, expires_in, interval }
-// Then poll: POST https://auth.kimi.com/api/oauth/token with grant_type=urn:ietf:params:oauth:grant-type:device_code
+From `files.ts`, base directories map virtual paths to system paths:
 ```
-This avoids spawning an interactive process and gives us full control.
+/Home     -> {dataDirectory}/home
+/Trash    -> {dataDirectory}/trash
+/Apps     -> {dataDirectory}/app-data
+/External -> {dataDirectory}/external
+/Backups  -> {dataDirectory}/backups
+/Network  -> {dataDirectory}/network
+```
+
+**All users share the same flat directory tree.** There is no per-user isolation at the filesystem level.
+
+### App Architecture (Current)
+
+- App templates cloned from `appStore.getAppTemplateFilePath(appId)` via rsync
+- Data directory: `{dataDirectory}/app-data/{appId}/`
+- Compose files at: `{dataDirectory}/app-data/{appId}/docker-compose.yml`
+- `patchComposeFile()` modifies ports (binds to `127.0.0.1:{manifest.port}:{internalPort}`), fixes container names, handles GPU passthrough
+- Container naming: `{appId}_{serviceName}_1`
+- Caddy receives subdomain registrations stored in Redis, rebuilds Caddyfile
+
+### Nexus-Core (AI Backend)
+
+- Runs on port 3200, authenticated via `X-API-Key` header (LIV_API_KEY)
+- Also verifies JWT from `/data/secrets/jwt` for some paths
+- SessionManager uses `per-sender` or `global` scope -- sender ID is a string, not tied to LivOS user
+- Conversations stored in Redis: `liv:ui:conv:{conversationId}`
 
 ---
 
-## New Component: KimiAgentRunner
+## 1. JWT to Multi-User Session Migration
 
-**File:** `nexus/packages/core/src/kimi-agent-runner.ts`
+### Current State
 
-### Recommended Implementation: Agent SDK with Print Mode Fallback
+The JWT payload is `{loggedIn: true}`. No user identity whatsoever. The proxy token payload is `{proxyToken: true}`. Both are signed with the same secret.
 
-**Primary approach:** Use `@moonshot-ai/kimi-agent-sdk` with `createSession()` + `session.prompt()`.
+### Recommended Approach: Phased JWT Extension
 
-**Fallback approach:** If the SDK proves unreliable, spawn `kimi --print --output-format=stream-json` directly and parse JSONL output. This is simpler but provides less structured events.
+**Phase 1: Add userId to JWT payload (backward-compatible)**
 
-### Primary: Agent SDK Pattern
-
-```typescript
-import { createSession, createExternalTool } from '@moonshot-ai/kimi-agent-sdk';
-import { z } from 'zod';
-
-// Instead of Claude SDK's:
-//   query({ prompt, options: { mcpServers, tools, allowedTools, ... } })
-//
-// Kimi SDK uses:
-//   const session = createSession({ workDir, model, yoloMode, ... })
-//   const turn = session.prompt(task)
-//   for await (const event of turn) { ... }
-```
-
-### Fallback: Print Mode Pattern
+Modify `jwt.ts`:
 
 ```typescript
-import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
+// New payload type
+type JwtPayload = {
+  loggedIn: boolean
+  userId?: string    // Optional for backward compat
+  role?: 'admin' | 'member'
+}
 
-async run(task: string): Promise<AgentResult> {
-  const mcpConfig = JSON.stringify({
-    mcpServers: this.buildMcpConfig()
-  });
+export async function sign(secret: string, userId?: string, role?: string) {
+  validateSecret(secret)
+  const payload: JwtPayload = { loggedIn: true }
+  if (userId) payload.userId = userId
+  if (role) payload.role = role as any
+  return jwt.sign(payload, secret, { expiresIn: ONE_WEEK, algorithm: JWT_ALGORITHM })
+}
 
-  const child = spawn('kimi', [
-    '--print',
-    '--output-format=stream-json',
-    '--yolo',
-    '--model', tierToModel(this.config.tier),
-    '--max-steps-per-turn', String(this.config.maxTurns ?? 25),
-    '--work-dir', '/opt/livos',
-    '--mcp-config', mcpConfig,
-    '-p', taskWithContext,
-  ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-  const rl = createInterface({ input: child.stdout });
-
-  for await (const line of rl) {
-    const msg = JSON.parse(line);
-    if (msg.role === 'assistant' && msg.content) {
-      this.emitEvent({ type: 'chunk', data: msg.content });
-    }
-    if (msg.role === 'assistant' && msg.tool_calls) {
-      for (const tc of msg.tool_calls) {
-        this.emitEvent({ type: 'tool_call', data: { tool: tc.function.name } });
-      }
-    }
-  }
-  // ...
+export async function verify(token: string, secret: string): Promise<JwtPayload> {
+  validateSecret(secret)
+  const payload = jwt.verify(token, secret, { algorithms: [JWT_ALGORITHM] }) as JwtPayload
+  if (payload.loggedIn !== true) throw new Error('Invalid JWT')
+  return payload  // Return full payload, not just true
 }
 ```
 
-### Key Differences from SdkAgentRunner
+**Why this works:**
+- Old JWTs without userId still pass validation (loggedIn: true is still checked)
+- New JWTs include userId and role
+- `verify()` returns the full payload instead of just `true`, so callers can extract userId
+- The proxy token stays separate (it only gates app proxy access)
 
-| Aspect | SdkAgentRunner (Claude) | KimiAgentRunner (SDK) | KimiAgentRunner (Print fallback) |
-|--------|------------------------|----------------------|-------------------------------|
-| SDK import | `@anthropic-ai/claude-agent-sdk` | `@moonshot-ai/kimi-agent-sdk` | None (child_process) |
-| Entry point | `query({ prompt, options })` | `createSession()` + `session.prompt()` | `spawn('kimi', ['--print', ...])` |
-| Tool registration | `tool()` + `createSdkMcpServer()` | `createExternalTool()` with Zod | `--mcp-config` inline JSON |
-| Auto-approve | `permissionMode: 'dontAsk'` | `yoloMode: true` | `--yolo` flag (implicit with --print) |
-| MCP config | Inline `mcpServers` object | `--mcp-config-file` or inline | `--mcp-config` JSON string |
-| Event types | `assistant`, `result` | `ContentPart`, `ToolCall`, `ToolResult`, etc. | JSONL messages with `role` field |
-| Session lifecycle | Stateless (one-shot query) | Stateful (session persists) | Stateless (one-shot subprocess) |
-| Result format | `SDKResultSuccess.result` | `RunResult.status` + accumulated text | Final JSONL message |
-| Usage tracking | `success.usage.input_tokens` | `StatusUpdate` events | Not available (use API separately) |
+**Phase 2: Thread userId through auth middleware**
 
-### MCP Tool Bridging Strategy
-
-**Current (Claude):** SdkAgentRunner builds `SdkMcpToolDefinition[]` using `tool()` helper, then creates an in-process MCP server via `createSdkMcpServer()`. This MCP server is passed to `query()` as a `mcpServers` config entry.
-
-**Kimi approach -- three options:**
-
-**Option A: External Tools via SDK (RECOMMENDED for SDK path)**
-Use `createExternalTool()` to register Nexus tools directly with the Kimi session. Each Nexus tool becomes a Kimi external tool with a Zod schema and handler function. No MCP server needed.
+Modify `is-authenticated.ts` to extract and attach userId:
 
 ```typescript
-const externalTools = toolNames.map(name => {
-  const t = toolRegistry.get(name)!;
-  const shape: Record<string, z.ZodTypeAny> = {};
-  for (const p of t.parameters) {
-    shape[p.name] = paramTypeToZod(p.type, p.description, p.enum);
-  }
-  return createExternalTool({
-    name: t.name,
-    description: t.description,
-    parameters: z.object(shape),
-    handler: async (params) => {
-      const result = await toolRegistry.execute(name, params);
-      return {
-        output: result.success ? result.output : `Error: ${result.error}`,
-        message: result.success ? 'Success' : 'Failed',
-      };
-    },
-  });
-});
-```
-
-**Why Option A:** The Kimi SDK's `createExternalTool()` is purpose-built for this. It takes Zod schemas (same as what SdkAgentRunner already builds) and handler functions. This avoids the indirection of creating an MCP server just to bridge tools.
-
-**Option B: Wire Mode external_tools (RECOMMENDED for Wire path)**
-If using Wire mode directly, pass tool definitions in the `initialize` JSON-RPC request via the `external_tools` parameter, which accepts tool name, description, and JSON Schema parameter definitions.
-
-**Option C: MCP Config via --mcp-config inline JSON (RECOMMENDED for Print fallback)**
-Pass Nexus tools as an MCP stdio server and Chrome DevTools as another, all via `--mcp-config` inline JSON flag. No temp files needed.
-
-```typescript
-const mcpConfig = {
-  mcpServers: {
-    'nexus-tools': {
-      command: 'node',
-      args: ['/opt/nexus/mcp-bridge.js'],  // small MCP server wrapping ToolRegistry
-    },
-    'chrome-devtools': {
-      command: 'chrome-devtools-mcp',
-      args: ['--browserUrl', 'http://127.0.0.1:9223', '--no-usage-statistics'],
-    }
-  }
-};
-// Pass as: --mcp-config JSON.stringify(mcpConfig)
-```
-
-**Verdict:** Use Option A (SDK external tools) as primary. Have Option C (--mcp-config with Print mode) as fallback. Option C requires building a small MCP bridge server for Nexus tools, but this is straightforward.
-
-### Chrome DevTools MCP
-
-For Chrome DevTools MCP (external process, not a Nexus tool), we still need MCP config. Strategies by integration depth:
-
-- **SDK path:** Write Chrome DevTools to `~/.kimi/mcp.json` on Nexus startup
-- **Print mode path:** Pass via `--mcp-config` inline JSON flag (no temp files needed)
-- **Wire path:** Include in the `initialize` request
-
-The `--mcp-config` inline JSON flag is the cleanest approach -- it requires no persistent config file and is passed per-invocation.
-
-### Event Mapping (SDK Path)
-
-```
-Kimi SDK Event          ->  Nexus AgentEvent
-------------------         -----------------
-TurnBegin               ->  { type: 'thinking', turn }
-StepBegin               ->  (internal, increment step counter)
-ContentPart(text)       ->  { type: 'chunk', turn, data: text }
-ContentPart(think)      ->  { type: 'thinking', turn, data: think }
-ToolCall                ->  { type: 'tool_call', turn, data: { tool, params } }
-ToolResult              ->  { type: 'observation', turn, data: { tool, success, output } }
-StatusUpdate            ->  (internal, track token usage and context)
-ApprovalRequest         ->  (auto-approve in yoloMode; else emit approval event)
-RunResult(finished)     ->  { type: 'final_answer', turn, data: answer }
-RunResult(cancelled)    ->  { type: 'error', turn, data: 'cancelled' }
-RunResult(max_steps)    ->  { type: 'done', data: { stoppedReason: 'max_turns' } }
-```
-
-### Event Mapping (Print Mode Fallback)
-
-```
-JSONL Message           ->  Nexus AgentEvent
-------------------         -----------------
-{role:"assistant", content:"text"}        ->  { type: 'chunk', data: text }
-{role:"assistant", tool_calls:[...]}      ->  { type: 'tool_call', data: { tool, params } }
-{role:"tool", tool_call_id, content}      ->  { type: 'observation', data: { output } }
-Last assistant message                    ->  { type: 'final_answer', data: content }
-Process exit code 0                       ->  { type: 'done', data: { success: true } }
-Process exit code != 0                    ->  { type: 'error', data: stderr }
-```
-
-### Session Lifecycle
-
-**Critical difference:** Claude SDK's `query()` is stateless -- each call is independent. Kimi SDK's `createSession()` creates a persistent session. For Nexus agent tasks:
-
-1. Create session per task (like `randomUUID()` sessionId)
-2. Send single prompt with the task
-3. Consume all events from the Turn
-4. Close session when done
-
-```typescript
-async run(task: string): Promise<AgentResult> {
-  const session = createSession({
-    workDir: '/opt/livos',  // or configured working directory
-    model: tierToModel(this.config.tier),
-    yoloMode: true,  // auto-approve all tools
-    executable: 'kimi',
-    env: { /* any needed env vars */ },
-  });
+export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
+  if (ctx.dangerouslyBypassAuthentication === true) return next()
+  if (ctx.transport === 'ws') return next()
 
   try {
-    const turn = session.prompt(taskWithContext);
-    let answer = '';
-    let turns = 0;
+    const token = ctx.request?.headers.authorization?.split(' ')[1]
+    if (token === undefined) throw new Error('Missing token')
+    const payload = await ctx.server.verifyToken(token)
+    // Attach userId to context for downstream use
+    // Falls back to 'owner' for legacy single-user JWTs
+    ctx.currentUserId = payload.userId || 'owner'
+    ctx.currentUserRole = payload.role || 'admin'
+  } catch (error) {
+    ctx.logger.error('Failed to verify token', error)
+    throw new TRPCError({code: 'UNAUTHORIZED', message: 'Invalid token'})
+  }
 
-    for await (const event of turn) {
-      // Map events to AgentEvent emissions
-      if (event.type === 'ContentPart' && event.payload.type === 'text') {
-        answer += event.payload.text;
-        this.emitEvent({ type: 'chunk', turn: turns, data: event.payload.text });
-      }
-      // ... handle other event types
-    }
+  return next()
+}
+```
 
-    const result = await turn.result;
-    return { success: true, answer, turns, ... };
-  } finally {
-    await session.close();
+**Dual-mode transition strategy:**
+1. Deploy JWT with optional userId first
+2. The owner (original user) gets `userId: 'owner'` or their new UUID
+3. Old tokens in localStorage still work (userId defaults to 'owner')
+4. Once multi-user UI is ready, require userId in JWT for new logins
+5. Old tokens expire naturally within 1 week
+
+**No breaking change needed.** The transition is fully backward-compatible because:
+- `verify()` still checks `loggedIn: true`
+- Missing `userId` defaults to `'owner'`
+- Proxy token is unchanged
+
+### Nexus-Core Alignment
+
+Nexus-core has its own `verifyJwt()` in `auth.ts` that also checks `{loggedIn: true}`. This needs the same update to extract userId. Since both services read from `/data/secrets/jwt`, the same JWT works for both. Add userId extraction to `verifyJwt()` and pass it through the Express request.
+
+### Confidence: HIGH
+Direct analysis of `jwt.ts`, `is-authenticated.ts`, `user/routes.ts`. The backward-compatible approach is verified against the actual payload structure.
+
+---
+
+## 2. tRPC Context Extension
+
+### Current State
+
+The context creates a single `user` object (the `User` class singleton) that reads from the shared YAML file. Every procedure that accesses `ctx.user` gets the same data.
+
+### Recommended Approach: Add currentUser Layer
+
+**Step 1: Extend context type**
+
+```typescript
+// New type for multi-user context
+type UserIdentity = {
+  id: string          // UUID or 'owner'
+  role: 'admin' | 'member'
+}
+
+const createContext = ({livinityd, logger}: ...) => {
+  return {
+    livinityd,
+    server: livinityd.server,
+    user: livinityd.user,       // KEEP: for backward compat and user-exists checks
+    appStore: livinityd.appStore,
+    apps: livinityd.apps,
+    logger,
+    dangerouslyBypassAuthentication: false,
+    // NEW: populated by isAuthenticated middleware
+    currentUserId: undefined as string | undefined,
+    currentUserRole: undefined as ('admin' | 'member') | undefined,
   }
 }
 ```
 
-**Recommend:** New session per task for isolation. Do not reuse sessions across different web UI requests.
+**Step 2: Create UserService (replaces direct User access for multi-user)**
 
----
-
-## API Route Changes
-
-### Routes to Remove (Claude-specific)
-
-```
-GET  /api/claude-cli/status     -> becomes GET  /api/kimi/status
-POST /api/claude-cli/login      -> becomes POST /api/kimi/login
-POST /api/claude-cli/login-code -> REMOVE (Kimi uses device auth, no code paste)
-POST /api/claude-cli/logout     -> becomes POST /api/kimi/logout
-```
-
-**Note:** The `login-code` endpoint is not needed for Kimi. The device auth flow auto-completes when the user authenticates in the browser. The login flow becomes:
-
-1. `POST /api/kimi/login` -> returns `{ url: "auth URL", deviceCode: "..." }`
-2. Frontend opens URL in new tab, starts polling `GET /api/kimi/status`
-3. Backend polls `auth.kimi.com/api/oauth/token` with the device_code
-4. When authenticated, status returns `{ authenticated: true }`
-
-### Route Implementation
+The existing `User` class is tightly coupled to the single YAML store. Rather than refactoring it, introduce a new `UserService` that wraps user operations:
 
 ```typescript
-app.get('/api/kimi/status', async (_req, res) => {
-  const kimiProvider = brain.getProviderManager().getProvider('kimi') as KimiProvider;
-  if (!kimiProvider) { res.json({ installed: false, authenticated: false }); return; }
-  const status = await kimiProvider.getCliStatus();
-  const authMethod = await kimiProvider.getAuthMethod();
-  res.json({ ...status, authMethod });
-});
+class UserService {
+  // For Phase 1 (before PostgreSQL migration):
+  // Owner user = legacy User class (YAML)
+  // Additional users = new storage (PostgreSQL when ready, or separate YAML files initially)
 
-app.post('/api/kimi/login', async (_req, res) => {
-  const kimiProvider = brain.getProviderManager().getProvider('kimi') as KimiProvider;
-  if (!kimiProvider) { res.status(503).json({ error: 'Kimi provider not available' }); return; }
-  const result = await kimiProvider.startLogin();
-  res.json(result);
-  // Note: no submitLoginCode needed -- frontend polls status instead
-});
-
-app.post('/api/kimi/logout', async (_req, res) => {
-  const kimiProvider = brain.getProviderManager().getProvider('kimi') as KimiProvider;
-  if (!kimiProvider) { res.status(503).json({ error: 'Kimi provider not available' }); return; }
-  const result = await kimiProvider.logout();
-  res.json(result);
-});
+  async getUser(userId: string): Promise<UserData> { ... }
+  async getUserPreferences(userId: string): Promise<Preferences> { ... }
+  async validatePassword(userId: string, password: string): Promise<boolean> { ... }
+}
 ```
 
-### Agent Stream Route
+**Step 3: Middleware chain design**
 
-The `/api/agent/stream` route (line 1534 in api.ts) already handles the switch between SDK and API modes:
+```
+baseProcedure
+  -> websocketLogger
+  -> [publicProcedure: no auth]
+  -> [privateProcedure: isAuthenticated -> resolveUser]
+  -> [adminProcedure: isAuthenticated -> resolveUser -> requireAdmin]
+```
+
+The `resolveUser` middleware loads user data based on `ctx.currentUserId` and attaches it:
 
 ```typescript
-// CURRENT:
-const useSdk = authMethod === 'sdk-subscription';
-const agent = useSdk ? new SdkAgentRunner(agentConfig) : new AgentLoop(agentConfig);
+const resolveUser = async ({ctx, next}: MiddlewareOptions) => {
+  if (!ctx.currentUserId) {
+    throw new TRPCError({code: 'UNAUTHORIZED'})
+  }
+  // Load user data from UserService
+  const userData = await ctx.livinityd.userService.getUser(ctx.currentUserId)
+  return next({
+    ctx: { ...ctx, currentUser: userData }
+  })
+}
 
-// BECOMES:
-const useSdk = authMethod === 'kimi-subscription';
-const agent = useSdk ? new KimiAgentRunner(agentConfig) : new AgentLoop(agentConfig);
+const requireAdmin = async ({ctx, next}: MiddlewareOptions) => {
+  if (ctx.currentUserRole !== 'admin') {
+    throw new TRPCError({code: 'FORBIDDEN', message: 'Admin access required'})
+  }
+  return next()
+}
 ```
 
-**AgentLoop stays.** When using API key mode, the existing AgentLoop + Brain + KimiProvider handles everything through the standard chat/chatStream interface. Only subscription mode uses KimiAgentRunner.
-
----
-
-## tRPC Route Changes (livinityd)
-
-### Current Claude-specific tRPC Procedures
-
-From `livos/packages/livinityd/source/modules/ai/routes.ts`:
-
-```
-ai.getClaudeCliStatus    -> ai.getKimiCliStatus
-ai.setClaudeAuthMethod   -> ai.setKimiAuthMethod
-ai.startClaudeLogin      -> ai.startKimiLogin
-ai.submitClaudeLoginCode -> REMOVE (not needed for Kimi)
-ai.claudeLogout          -> ai.kimiLogout
-```
-
-These tRPC procedures proxy to Nexus API endpoints. The proxy pattern stays identical -- only the endpoint URLs change.
-
-### Config tRPC Procedures
+**Step 4: Procedure types**
 
 ```typescript
-// CURRENT:
-const anthropicKey = await redis.get('nexus:config:anthropic_api_key')
-const primaryProvider = await redis.get('nexus:config:primary_provider') || 'claude'
-
-// BECOMES:
-const kimiKey = await redis.get('nexus:config:kimi_api_key')
-const primaryProvider = await redis.get('nexus:config:primary_provider') || 'kimi'
+export const publicProcedure = baseProcedure
+export const privateProcedure = baseProcedure.use(isAuthenticated).use(resolveUser)
+export const adminProcedure = baseProcedure.use(isAuthenticated).use(resolveUser).use(requireAdmin)
 ```
 
-### Redis Key Migration
+### Migration Path for Existing Procedures
 
-| Current Key | New Key |
-|-------------|---------|
-| `nexus:config:anthropic_api_key` | `nexus:config:kimi_api_key` |
-| `nexus:config:claude_auth_method` | `nexus:config:kimi_auth_method` |
-| `nexus:config:primary_provider` (value: `claude`) | `nexus:config:primary_provider` (value: `kimi`) |
+Every existing `privateProcedure` that accesses `ctx.user` needs auditing:
+
+| Route file | Current usage | Multi-user change |
+|-----------|--------------|-------------------|
+| `user/routes.ts` | `ctx.user.get()` | Use `ctx.currentUser` instead |
+| `user/routes.ts` | `ctx.user.setName()` | `ctx.livinityd.userService.setName(ctx.currentUserId, ...)` |
+| `user/routes.ts` | `ctx.user.register()` | Only admin can create new users via new `createUser` mutation |
+| `files/routes.ts` | Accesses shared files | Must scope to user's home directory |
+| `apps/routes.ts` | `ctx.apps.install()` | Depends on app sharing mode (shared vs isolated) |
+| `backups/routes.ts` | Global backup config | Admin-only, backs up all user data |
+| `ai/routes.ts` | Conversations via Redis | Scope conversation IDs by userId |
+
+### Confidence: HIGH
+Direct analysis of `trpc.ts`, `context.ts`, `is-authenticated.ts`, and all route files.
 
 ---
 
-## UI Changes (ai-config.tsx)
+## 3. YAML to SQLite Migration
 
-### Current UI Structure
+### Current State
 
-The Settings > AI Config page has:
-1. **Claude Provider** section with Radio Group:
-   - SDK Subscription (recommended) -- OAuth flow with code paste
-   - API Key -- input field for `sk-ant-...`
-2. **Gemini (Fallback)** section with API key input
-3. Save button
+`FileStore` in `file-store.ts`:
+- Reads entire YAML file on every `get()` call
+- Writes entire file on every `set()` call (atomic via temp file + rename)
+- PQueue(concurrency: 1) serializes writes
+- `getWriteLock()` for read-modify-write transactions
 
-### New UI Structure
+This is fine for single-user but becomes problematic with multiple concurrent users writing to the same file.
 
-1. **Kimi Provider** section with Radio Group:
-   - Kimi Subscription (recommended) -- OAuth via browser (no code paste)
-   - API Key -- input field for Kimi API key
-2. **Gemini (Fallback)** section (unchanged)
-3. Save button
+### Recommended Approach: Feature-Flagged Dual-Write with SQLite (not PostgreSQL)
 
-### UI Changes Required
+**Why SQLite instead of PostgreSQL:**
+- LivOS is a self-hosted home server OS -- adding a PostgreSQL dependency is heavy
+- SQLite handles concurrent reads excellently and serialized writes safely
+- The data volume is small (user preferences, app configs, not high-throughput)
+- SQLite is embedded, zero-config, zero-maintenance -- perfect for home server
+- The existing codebase already has TODO comments mentioning SQLite migration (`files.ts`: "TODO: This should really be in a proper DB, refactor this once we've moved to SQLite")
+- If PostgreSQL is already available via Docker for Nexus, it could be used, but SQLite is simpler and more aligned with the self-hosted philosophy
 
-- Replace all "Claude" text with "Kimi"
-- Change auth link from Anthropic Console to Kimi membership page
-- Update API key placeholder
-- Update tRPC hook names (getClaudeCliStatus -> getKimiCliStatus, etc.)
-- **Remove code paste UI** -- Kimi's device auth flow does not require it
-- Simplify subscription auth to: button + status indicator + poll
-
-**Simplified subscription UI flow:**
+**Migration strategy:**
 
 ```
-1. Click "Sign in with Kimi" button
-2. Browser opens auth URL in new tab
-3. Status indicator shows "Waiting for authentication..."
-4. Frontend polls getKimiCliStatus every 3-5 seconds
-5. When authenticated: show green checkmark + "Authenticated"
+Phase 1: Create new UserStore (SQLite)
+  - users table: id, name, hashedPassword, totpUri, role, createdAt
+  - user_preferences table: userId, key, value (JSON)
+  - Keep owner data in YAML during transition
+
+Phase 2: Dual-write mode
+  - FEATURE_FLAG: multiUser = false (default)
+  - When false: reads from YAML, writes to both YAML + SQLite
+  - When true: reads from SQLite, writes to SQLite only
+  - Migration script copies YAML owner data into SQLite
+
+Phase 3: YAML becomes read-only fallback
+  - SQLite is source of truth
+  - YAML still exists for backward compat (read-only)
+  - New user data only in SQLite
 ```
 
-This is fewer components than Claude's flow (no code input, no submit button for code).
+**Schema design:**
 
----
+```sql
+-- Core users table
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,           -- UUID or 'owner' for migration
+  name TEXT NOT NULL,
+  hashed_password TEXT NOT NULL,
+  totp_uri TEXT,
+  role TEXT NOT NULL DEFAULT 'member',  -- 'admin' or 'member'
+  wallpaper TEXT DEFAULT 'aurora',
+  language TEXT DEFAULT 'en',
+  temperature_unit TEXT DEFAULT 'celsius',
+  accent_color TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 
-## Config Schema Changes
+-- App installations per user (for isolated apps)
+CREATE TABLE user_apps (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  app_id TEXT NOT NULL,
+  auto_start BOOLEAN DEFAULT true,
+  PRIMARY KEY (user_id, app_id)
+);
 
-### Model Names
+-- Shared system settings (admin-only)
+CREATE TABLE system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL  -- JSON
+);
+
+-- User-specific preferences
+CREATE TABLE user_preferences (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,  -- JSON
+  PRIMARY KEY (user_id, key)
+);
+```
+
+**FileStore adapter pattern:**
+
+Create a `SqliteStore` that implements the same interface as `FileStore` so existing code can be migrated gradually:
 
 ```typescript
-// CURRENT (config/schema.ts):
-export const ModelsConfigSchema = z.object({
-  default: z.string().default('claude-haiku-4-5'),
-  flash: z.string().default('claude-haiku-4-5'),
-  haiku: z.string().default('claude-haiku-4-5'),
-  sonnet: z.string().default('claude-sonnet-4-5'),
-  opus: z.string().default('claude-opus-4-6'),
-  // ...
-});
-
-// BECOMES:
-export const ModelsConfigSchema = z.object({
-  default: z.string().default('kimi-latest'),
-  flash: z.string().default('kimi-latest'),
-  haiku: z.string().default('kimi-latest'),
-  sonnet: z.string().default('kimi-for-coding'),
-  opus: z.string().default('kimi-for-coding'),
-  // ...
-});
+class SqliteStore<T> {
+  async get(property?: string, defaultValue?: any) { ... }
+  async set(property: string, value: any) { ... }
+  async delete(property: string) { ... }
+  async getWriteLock(job: Function) { ... }
+}
 ```
 
-### Provider Cost Defaults
+### Data to Migrate vs Keep
+
+| Current YAML path | Destination | Scope |
+|------------------|-------------|-------|
+| `user.*` | `users` table | Per-user |
+| `apps[]` | `user_apps` or shared `system_settings` | Depends on app mode |
+| `widgets[]` | `user_preferences` | Per-user |
+| `recentlyOpenedApps[]` | `user_preferences` | Per-user |
+| `files.preferences` | `user_preferences` | Per-user |
+| `files.favorites[]` | `user_preferences` | Per-user |
+| `files.recents[]` | `user_preferences` | Per-user |
+| `files.shares[]` | `system_settings` | Admin-managed |
+| `files.networkStorage[]` | `system_settings` | Admin-managed |
+| `settings.*` | `system_settings` | Admin-only |
+| `backups.*` | `system_settings` | Admin-only |
+| `torEnabled` | `system_settings` | Admin-only |
+| `notifications[]` | `user_preferences` | Per-user |
+
+### Confidence: HIGH
+Direct analysis of `FileStore`, `StoreSchema`, and all store access patterns. The TODO comment in files.ts confirms SQLite was already planned.
+
+---
+
+## 4. Dynamic Proxy Middleware (App Gateway)
+
+### Current State
+
+The Express middleware chain in `server/index.ts` is:
+```
+1. cookieParser()
+2. helmet (CSP, referrerPolicy)
+3. Request logger
+4. /app/:appId proxy (http-proxy-middleware, cache per appId)
+5. WebSocket upgrade handler (checks token, routes to wss)
+6. /manager-api/v1/system/update-status (legacy)
+7. /api/mcp proxy -> nexus-core:3200 (proxy token auth)
+8. /api/gmail proxy -> nexus-core:3200 (public)
+9. /trpc (tRPC Express handler)
+10. /terminal (WebSocket)
+11. /api/files (public + private routers, proxy token auth)
+12. /logs/ (proxy token auth)
+13. Static UI (Vite proxy in dev, static files in prod)
+14. Error handler
+```
+
+### Where the App Gateway Fits
+
+The App Gateway should go **before tRPC but after the request logger**, replacing the current `/app/:appId` proxy:
+
+```
+1. cookieParser()
+2. helmet
+3. Request logger
+4. *** NEW: App Gateway middleware ***
+   - Check if request is for app subdomain (Host header)
+   - Check authentication (JWT or session)
+   - If unauthenticated -> redirect to login (see Section 10)
+   - If authenticated -> verify user has access to this app
+   - Proxy to correct port (shared app) or user-specific port (isolated app)
+5. /api/mcp proxy
+6. /api/gmail proxy
+7. /trpc
+8. /terminal
+9. /api/files
+10. /logs/
+11. Static UI
+```
+
+**Why before tRPC:** The App Gateway handles subdomain-based routing for app access. These requests should never reach tRPC. By placing it early, we avoid unnecessary middleware execution.
+
+**Why after helmet:** Security headers should still be applied to proxied responses.
+
+### Implementation Pattern
 
 ```typescript
-// ADD to types.ts PROVIDER_COST_DEFAULTS:
-kimi: {
-  flash: { input: 0.60, output: 2.50 },
-  haiku: { input: 0.60, output: 2.50 },
-  sonnet: { input: 0.60, output: 2.50 },
-  opus: { input: 0.60, output: 2.50 },
-},
+// In server/index.ts
+this.app.use(createAppGateway({
+  livinityd: this.livinityd,
+  logger: this.logger,
+  // Function to check if a request is for an app subdomain
+  isAppSubdomain: (hostname: string) => {
+    // Parse hostname against known subdomains from Redis
+    // e.g., "nextcloud.livinity.cloud" -> appId: "nextcloud"
+  },
+  // Function to resolve target port
+  resolveTarget: async (appId: string, userId: string) => {
+    // For shared apps: return manifest.port (same as current)
+    // For isolated apps: return user-specific port from allocation table
+  },
+  // Authentication
+  authenticate: async (req: Request) => {
+    // Check JWT from cookie or Authorization header
+    // Return userId or null
+  },
+  // Authorization
+  authorize: async (userId: string, appId: string) => {
+    // Check if user has access to this app
+  },
+  // Unauthenticated redirect
+  loginRedirect: (req: Request, res: Response) => {
+    // Redirect to main domain login page
+  },
+}))
 ```
+
+### Current App Proxy Analysis
+
+The existing `/app/:appId` proxy creates `http-proxy-middleware` instances and caches them per appId:
+
+```typescript
+// Current (from server/index.ts line 171-219)
+const appProxyCache = new Map<string, ReturnType<typeof createProxyMiddleware>>()
+this.app.use('/app/:appId', async (request, response, next) => {
+  // Find app, read manifest.port, create/cache proxy
+})
+```
+
+This needs to evolve to support:
+1. **Subdomain-based routing** (Host header matching instead of /app/ path prefix)
+2. **Per-user port allocation** (for isolated apps)
+3. **Authentication before proxy** (currently no auth on /app/ proxy)
+4. **User access control** (not all users have access to all apps)
+
+### Confidence: HIGH
+Direct analysis of `server/index.ts` middleware chain and WebSocket upgrade handler.
 
 ---
 
-## Data Flow: Complete Path
+## 5. Docker Compose Templating Per User
 
-### API Key Mode (AgentLoop)
+### Current State
 
+From `app.ts`, app installation flow:
+1. `Apps.install(appId)` copies template from app store via rsync
+2. Creates data directory at `{dataDirectory}/app-data/{appId}/`
+3. `App.patchComposeFile()` modifies the compose YAML:
+   - Removes legacy `app_proxy` service
+   - Exposes `127.0.0.1:{manifest.port}:{internalPort}` port mapping
+   - Forces container names to `{appId}_{serviceName}_1`
+   - Migrates volume paths (old `data/storage` -> new `home`)
+   - Handles GPU passthrough
+
+### Multi-User App Isolation Strategy
+
+Apps fall into two categories:
+
+**Shared apps** (e.g., Nextcloud, Gitea): One instance, multiple users authenticate directly in the app.
+- No Docker changes needed
+- One compose file, one set of containers
+- App handles its own user management
+- LivOS just proxies authenticated traffic
+
+**Isolated apps** (e.g., code-server, VS Code): Each user gets their own instance.
+- Need per-user compose file and containers
+- Need per-user port allocation
+- Need per-user data volumes
+
+### Implementation for Isolated Apps
+
+**Directory structure:**
 ```
-UI (ai-chat) -> tRPC ai.send -> livinityd -> HTTP POST /api/agent/stream (Nexus)
-    -> AgentLoop.run(task)
-    -> Brain.chat() / Brain.chatStream()
-    -> ProviderManager.chat()
-    -> KimiProvider.chat()  [OpenAI-compatible API call]
-    -> https://api.kimi.com/coding/v1/chat/completions
-    -> Response with function_call -> ToolRegistry.execute() -> loop
-    -> Final answer -> SSE event -> UI
-```
+{dataDirectory}/app-data/{appId}/                    # Shared app template/data
+{dataDirectory}/app-data/{appId}/docker-compose.yml  # Shared app compose
 
-### Subscription Mode (KimiAgentRunner -- SDK)
-
-```
-UI (ai-chat) -> tRPC ai.send -> livinityd -> HTTP POST /api/agent/stream (Nexus)
-    -> KimiAgentRunner.run(task)
-    -> createSession({ workDir, model, yoloMode: true })
-    -> [spawns 'kimi' CLI subprocess via Wire protocol]
-    -> session.prompt(task)
-    -> Turn async iterator
-    -> ContentPart events -> SSE 'chunk' events -> UI
-    -> ToolCall events [Kimi calls its built-in tools + external tools]
-    -> External tool handler -> ToolRegistry.execute() -> ToolResult -> Kimi
-    -> RunResult -> SSE 'done' event -> UI
-    -> session.close()
-```
-
-### Subscription Mode (KimiAgentRunner -- Print Fallback)
-
-```
-UI (ai-chat) -> tRPC ai.send -> livinityd -> HTTP POST /api/agent/stream (Nexus)
-    -> KimiAgentRunner.run(task)
-    -> spawn('kimi', ['--print', '--output-format=stream-json', '--yolo', ...])
-    -> Parse JSONL from stdout line by line
-    -> {role:"assistant", content} -> SSE 'chunk' events -> UI
-    -> {role:"assistant", tool_calls} -> SSE 'tool_call' events -> UI
-    -> {role:"tool", content} -> SSE 'observation' events -> UI
-    -> Process exit -> SSE 'done' event -> UI
+{dataDirectory}/users/{userId}/app-data/{appId}/                    # Isolated app per-user data
+{dataDirectory}/users/{userId}/app-data/{appId}/docker-compose.yml  # Per-user compose
 ```
 
-### Streaming Event Flow to UI
+**Compose cloning and modification:**
+
+```typescript
+async cloneComposeForUser(appId: string, userId: string): Promise<void> {
+  const templateCompose = await this.readCompose()  // Read shared template
+  const userCompose = structuredClone(templateCompose)
+
+  // 1. Rename containers to include userId
+  for (const serviceName of Object.keys(userCompose.services!)) {
+    userCompose.services![serviceName].container_name =
+      `${appId}_${userId}_${serviceName}_1`
+  }
+
+  // 2. Allocate unique port
+  const userPort = await this.allocatePort(appId, userId)
+  // Remap port bindings from manifest.port to userPort
+  // 127.0.0.1:{userPort}:{internalPort}
+
+  // 3. Remap volumes to user-specific data directory
+  for (const serviceName of Object.keys(userCompose.services!)) {
+    userCompose.services![serviceName].volumes =
+      userCompose.services![serviceName].volumes?.map(vol => {
+        // Replace shared data path with user-specific path
+        return (vol as string).replace(
+          `${this.dataDirectory}`,
+          `${this.livinityd.dataDirectory}/users/${userId}/app-data/${appId}`
+        )
+      })
+  }
+
+  // 4. Isolate Docker network
+  userCompose.networks = {
+    default: { name: `${appId}_${userId}_net` }
+  }
+
+  // Write per-user compose
+  const userComposeDir = `${this.livinityd.dataDirectory}/users/${userId}/app-data/${appId}`
+  await fse.ensureDir(userComposeDir)
+  await writeYaml(`${userComposeDir}/docker-compose.yml`, userCompose)
+}
+```
+
+**Port allocation strategy:**
+
+```typescript
+// Allocate ports in a range for user-isolated apps
+// Base: manifest.port (e.g., 8080 for code-server)
+// User ports: 10000 + (userIndex * 100) + appOffset
+// This gives each user up to 100 apps, supports 550 users
+
+class PortAllocator {
+  private readonly BASE_PORT = 10000
+  private readonly PORTS_PER_USER = 100
+
+  async allocate(appId: string, userId: string): Promise<number> {
+    // Store allocations in SQLite or Redis
+    // Check for conflicts, return allocated port
+  }
+}
+```
+
+### Compose Project Name Isolation
+
+Docker compose uses the directory name as the project name by default. Since we create per-user directories, the project names will naturally be unique:
 
 ```
-Kimi Agent SDK         KimiAgentRunner          SSE/WebSocket          UI
-     |                      |                       |                   |
-     |--ContentPart(text)-->|                       |                   |
-     |                      |--AgentEvent(chunk)-->|                   |
-     |                      |                       |--SSE data:{}---->|
-     |                      |                       |                   |--update chatStatus
-     |--ToolCall----------->|                       |                   |
-     |                      |--AgentEvent(tool)---->|                   |
-     |                      |                       |--SSE data:{}---->|
-     |                      |                       |                   |--show step
-     |                      |                       |                   |
-     |                      |--ToolRegistry.exec()  |                   |
-     |                      |                       |                   |
-     |<--ToolResult---------|                       |                   |
-     |                      |--AgentEvent(obs)----->|                   |
-     |                      |                       |--SSE data:{}---->|
-     |                      |                       |                   |--update step
+Project: {appId}       (shared apps in {dataDirectory}/app-data/{appId}/)
+Project: {appId}       (isolated: {dataDirectory}/users/{userId}/app-data/{appId}/)
 ```
+
+To avoid collision, explicitly set `COMPOSE_PROJECT_NAME`:
+```typescript
+// In appScript (legacy-compat/app-script.ts), pass environment:
+const env = {
+  COMPOSE_PROJECT_NAME: isIsolated ? `${appId}-${userId}` : appId
+}
+```
+
+### Confidence: HIGH
+Direct analysis of `app.ts` patchComposeFile(), compose structure, container naming, and port mapping.
 
 ---
 
-## Dependencies
+## 6. Caddy Simplification
 
-### New npm Packages
+### Current State
 
-```bash
-# In nexus/
-npm install @moonshot-ai/kimi-agent-sdk
-# zod already installed (peer dep)
-# 'openai' package may be useful for KimiProvider (OpenAI-compatible client)
-npm install openai  # for KimiProvider API key mode
+From `caddy.ts`:
+- `generateFullCaddyfile()` creates one block per subdomain: `{subdomain}.{mainDomain} { reverse_proxy 127.0.0.1:{port} }`
+- Caddyfile is regenerated and reloaded on every app install/uninstall
+- Subdomain config stored in Redis at `livos:domain:subdomains`
+- Main domain config stored in Redis at `livos:domain:config`
+
+Current Caddyfile output:
+```
+livinity.cloud {
+    reverse_proxy 127.0.0.1:8080
+}
+
+nextcloud.livinity.cloud {
+    reverse_proxy 127.0.0.1:8081
+}
+
+code-server.livinity.cloud {
+    reverse_proxy 127.0.0.1:8082
+}
 ```
 
-### System Dependencies (Server)
+### Recommended Approach: Wildcard + Internal Gateway
 
-```bash
-# Kimi CLI (Python-based, installed via uv)
-curl -LsSf https://code.kimi.com/install.sh | bash
-# OR: uv tool install --python 3.13 kimi-cli
+**Phase 1: Replace per-app blocks with wildcard**
 
-# Verify:
-kimi --version
-kimi info  # shows available models and protocol version
+```
+*.livinity.cloud {
+    reverse_proxy 127.0.0.1:8080
+}
+
+livinity.cloud {
+    reverse_proxy 127.0.0.1:8080
+}
 ```
 
-**Important:** The Kimi CLI requires Python 3.12-3.14 (3.13 recommended) and `uv` package manager. The production server needs these installed. This is a new system dependency that doesn't exist for Claude Code (which is a standalone binary).
+This sends ALL subdomain traffic to livinityd (port 8080), which then routes it internally.
 
-### Packages to Remove
+**Why wildcard:**
+1. No Caddyfile rebuild needed when apps are installed/uninstalled
+2. No Caddy reload needed (avoids brief TLS gaps)
+3. Caddy handles wildcard TLS via DNS challenge (needed) or on-demand TLS
+4. All routing logic moves to the App Gateway middleware (Section 4)
+5. Per-user app instances don't need separate subdomains in Caddy
 
-```bash
-npm uninstall @anthropic-ai/sdk             # Anthropic SDK (used by ClaudeProvider)
-npm uninstall @anthropic-ai/claude-agent-sdk # Claude Agent SDK (used by SdkAgentRunner)
+**Phase 2: TLS consideration**
+
+Wildcard certs require DNS-01 challenge. Caddy supports this with DNS plugins:
 ```
+*.livinity.cloud {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+If DNS-01 is not feasible, use Caddy's `on_demand_tls`:
+```
+{
+    on_demand_tls {
+        ask http://localhost:8080/api/caddy/check  # livinityd validates subdomain
+    }
+}
+
+*.livinity.cloud {
+    tls {
+        on_demand
+    }
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+**Transition strategy:**
+
+1. Add the wildcard block alongside existing per-app blocks (both work simultaneously)
+2. Test that wildcard routing works via the App Gateway
+3. Remove per-app blocks once App Gateway handles all routing
+4. Simplify `caddy.ts` to only manage the wildcard block
+
+**Migration code change in `caddy.ts`:**
+
+```typescript
+export function generateFullCaddyfile(config: CaddyConfig): string {
+  if (!config.mainDomain) {
+    return `:80 {\n\treverse_proxy 127.0.0.1:8080\n}\n`
+  }
+
+  // Wildcard block for all subdomains
+  return `${config.mainDomain} {\n\treverse_proxy 127.0.0.1:8080\n}\n\n` +
+         `*.${config.mainDomain} {\n\treverse_proxy 127.0.0.1:8080\n}\n`
+}
+```
+
+### What Changes for App Installation
+
+Currently `Apps.registerAppSubdomain()` creates a Caddy block and reloads. With wildcard:
+- Still register the subdomain in Redis (for the App Gateway to look up port mappings)
+- No Caddyfile regeneration or reload needed
+- The `rebuildCaddy()` call becomes a no-op after initial wildcard setup
+
+### Confidence: HIGH
+Direct analysis of `caddy.ts`, `apps.ts` subdomain management, and Caddyfile generation. Caddy wildcard TLS is well-documented.
 
 ---
 
-## Complete File Manifest
+## 7. Redis Key Namespacing
 
-### Files to CREATE
+### Current State: Complete Key Inventory
 
-| File | Purpose |
-|------|---------|
-| `nexus/packages/core/src/providers/kimi.ts` | KimiProvider implementing AIProvider interface |
-| `nexus/packages/core/src/kimi-agent-runner.ts` | KimiAgentRunner (subprocess mode) |
+**livinityd keys:**
+```
+livos:domain:config          - Domain configuration JSON
+livos:domain:subdomains      - Subdomain registrations JSON array
+liv:ui:conv:{conversationId} - AI conversation data
+liv:ui:convs                 - Set of conversation IDs
+```
 
-### Files to MODIFY
+**nexus-core keys:**
+```
+nexus:session:{id}           - Session state JSON
+nexus:session_history:{id}   - Conversation history (list)
+nexus:config                 - Nexus configuration JSON
+nexus:config:kimi_api_key    - Kimi API key
+nexus:kimi:authenticated     - Kimi auth status
+nexus:approval:{requestId}   - Tool approval requests
+nexus:approval:response:{id} - Tool approval responses
+nexus:approval:audit         - Audit log
+nexus:canvas:{id}            - Canvas data
+nexus:gmail:*                - Gmail integration
+nexus:wa_*                   - WhatsApp integration
+nexus:dm:*                   - DM pairing
+nexus:activation:{channelId} - Channel activation mode
+nexus:task_state:{key}       - Task state
+nexus:loop_state:{id}        - Loop runner state
+nexus:stats                  - Usage statistics
+nexus:notifications          - Notification queue
+nexus:active_session         - Active terminal session
+nexus:inbox                  - Pending messages
+nexus:wa_outbox              - WhatsApp outbox (list)
+nexus:wa_contacts            - WhatsApp contacts (hash)
+nexus:wa_history:{jid}       - WhatsApp history per contact
+nexus:wa_pending:{from}      - Pending WhatsApp messages
+nexus:skills:registries      - Skill registries
+nexus:{channel}_history:{id} - Channel-specific history
+nexus:{channel}:last_chat_id - Last chat ID per channel
+nexus:last_reflection        - Last reflection data
+nexus:webhook:rate:{id}      - Webhook rate limiting
+```
 
-| File | What Changes |
-|------|-------------|
-| `nexus/packages/core/src/providers/manager.ts` | Replace `ClaudeProvider` with `KimiProvider`, update fallback order |
-| `nexus/packages/core/src/providers/index.ts` | Export `KimiProvider` instead of `ClaudeProvider` |
-| `nexus/packages/core/src/providers/types.ts` | Add Kimi cost defaults; optionally rename `ClaudeToolDefinition` to `ToolDefinition` |
-| `nexus/packages/core/src/api.ts` | Replace `/api/claude-cli/*` routes with `/api/kimi/*`; update agent stream to use KimiAgentRunner |
-| `nexus/packages/core/src/daemon.ts` | Replace `ClaudeProvider` import/usage with `KimiProvider`; update `SdkAgentRunner` to `KimiAgentRunner` |
-| `nexus/packages/core/src/config/schema.ts` | Update model defaults from `claude-*` to `kimi-*` |
-| `nexus/packages/core/package.json` | Add `@moonshot-ai/kimi-agent-sdk`, `openai`; remove `@anthropic-ai/sdk`, `@anthropic-ai/claude-agent-sdk` |
-| `livos/packages/livinityd/source/modules/ai/routes.ts` | Replace Claude tRPC procedures with Kimi equivalents |
-| `livos/packages/ui/src/routes/settings/ai-config.tsx` | Replace Claude auth UI with Kimi auth UI |
+### Migration Strategy: Prefix Injection, Not Key Rename
 
-### Files to DELETE
+**Do NOT rename existing keys.** Instead, introduce a key resolver function:
 
-| File | Why |
-|------|-----|
-| `nexus/packages/core/src/providers/claude.ts` | Replaced by `kimi.ts` |
-| `nexus/packages/core/src/sdk-agent-runner.ts` | Replaced by `kimi-agent-runner.ts` |
+```typescript
+// Key resolver that adds user scope when needed
+class RedisKeyResolver {
+  // System-scoped keys (no user prefix)
+  private static SYSTEM_KEYS = new Set([
+    'livos:domain:config',
+    'livos:domain:subdomains',
+    'nexus:config',
+    'nexus:config:kimi_api_key',
+    'nexus:kimi:authenticated',
+    'nexus:stats',
+    'nexus:gmail:*',
+    'nexus:skills:registries',
+  ])
+
+  // Resolve key with optional user scope
+  static resolve(key: string, userId?: string): string {
+    // System keys are never user-scoped
+    if (this.isSystemKey(key)) return key
+
+    // If no userId, return key as-is (backward compat)
+    if (!userId) return key
+
+    // User-scoped keys get prefixed
+    // nexus:session:{id} -> nexus:user:{userId}:session:{id}
+    // liv:ui:conv:{id}   -> liv:ui:user:{userId}:conv:{id}
+    return this.addUserPrefix(key, userId)
+  }
+
+  private static addUserPrefix(key: string, userId: string): string {
+    if (key.startsWith('nexus:session')) {
+      return key.replace('nexus:session', `nexus:user:${userId}:session`)
+    }
+    if (key.startsWith('nexus:session_history')) {
+      return key.replace('nexus:session_history', `nexus:user:${userId}:session_history`)
+    }
+    if (key.startsWith('liv:ui:conv')) {
+      return key.replace('liv:ui:conv', `liv:ui:user:${userId}:conv`)
+    }
+    if (key.startsWith('nexus:approval')) {
+      return key.replace('nexus:approval', `nexus:user:${userId}:approval`)
+    }
+    // Default: inject user:{userId}: after first namespace
+    const colonIndex = key.indexOf(':')
+    return `${key.slice(0, colonIndex)}:user:${userId}:${key.slice(colonIndex + 1)}`
+  }
+}
+```
+
+**Migration for existing data:**
+
+For the owner user, run a one-time migration:
+```typescript
+async function migrateRedisKeysForOwner(redis: Redis, ownerId: string) {
+  // Scan for user-scopeable keys
+  const patterns = ['nexus:session:*', 'nexus:session_history:*', 'liv:ui:conv:*']
+  for (const pattern of patterns) {
+    const keys = await redis.keys(pattern)
+    for (const key of keys) {
+      const newKey = RedisKeyResolver.resolve(key, ownerId)
+      if (newKey !== key) {
+        await redis.rename(key, newKey)
+      }
+    }
+  }
+  // Migrate the conversation set
+  const convIds = await redis.smembers('liv:ui:convs')
+  if (convIds.length > 0) {
+    await redis.sadd(`liv:ui:user:${ownerId}:convs`, ...convIds)
+    await redis.del('liv:ui:convs')
+  }
+}
+```
+
+### Keys That Should NOT Be User-Scoped
+
+| Key pattern | Reason |
+|-------------|--------|
+| `livos:domain:*` | System-wide domain config |
+| `nexus:config` | Global Nexus configuration |
+| `nexus:config:kimi_api_key` | Shared API key |
+| `nexus:kimi:authenticated` | Global auth status |
+| `nexus:gmail:*` | Shared email integration |
+| `nexus:wa_*` | Shared WhatsApp integration |
+| `nexus:skills:registries` | System-wide skill registries |
+| `nexus:stats` | Aggregate statistics |
+
+### Keys That SHOULD Be User-Scoped
+
+| Key pattern | Reason |
+|-------------|--------|
+| `nexus:session:*` | Per-user AI sessions |
+| `nexus:session_history:*` | Per-user conversation history |
+| `liv:ui:conv:*` | Per-user UI conversations |
+| `liv:ui:convs` | Per-user conversation list |
+| `nexus:approval:*` | Per-user tool approvals |
+| `nexus:canvas:*` | Per-user canvas data |
+| `nexus:active_session` | Per-user terminal session |
+| `nexus:notifications` | Per-user notification queue |
+
+### Confidence: HIGH
+Complete key inventory derived from grep across both codebases.
 
 ---
 
-## Build Order (Suggested Phase Sequence)
+## 8. File System Restructuring
 
-### Phase 1: KimiProvider (API Key Mode)
+### Current State
 
-**Rationale:** Get basic chat working first. No CLI dependency needed.
+From `files.ts`, the base directory mapping:
+```
+/Home     -> {dataDirectory}/home
+/Trash    -> {dataDirectory}/trash
+/Apps     -> {dataDirectory}/app-data
+/External -> {dataDirectory}/external
+/Backups  -> {dataDirectory}/backups
+/Network  -> {dataDirectory}/network
+```
 
-1. Create `providers/kimi.ts` implementing AIProvider interface
-2. Use `openai` npm package with custom `baseURL: 'https://api.kimi.com/coding/v1'`
-3. Implement `chat()`, `chatStream()`, `think()`, `isAvailable()`, `getModels()`
-4. Translate ClaudeToolDefinition to OpenAI function format (and parse responses back)
-5. Register in ProviderManager with `kimi` key
-6. Update fallback order to `['kimi', 'gemini']`
-7. Add Redis keys: `nexus:config:kimi_api_key`
-8. Test: API key mode chat through existing AgentLoop
+All files operations go through `virtualToSystemPath()` which:
+1. Normalizes the path (prevents traversal attacks)
+2. Splits on first segment to find base directory
+3. Resolves symlinks via `realpath()` to prevent escape
+4. Returns system path
 
-**Files modified:** `providers/kimi.ts` (new), `providers/manager.ts`, `providers/index.ts`, `providers/types.ts`
-**Dependencies:** `npm install openai` (for OpenAI-compatible client)
+### Recommended Approach: Per-User Home with Shared System Directories
 
-### Phase 2: API Routes + tRPC + UI
+**New directory structure:**
+```
+{dataDirectory}/
+  users/
+    {userId}/
+      home/          # User's home directory (/Home)
+      trash/         # User's trash (/Trash)
+      trash-meta/    # Trash metadata
+  app-data/          # SHARED: app installations (no change)
+  external/          # SHARED: external storage
+  backups/           # SHARED: backup repositories (admin)
+  network/           # SHARED: network storage
+```
 
-**Rationale:** Users need to configure Kimi credentials through the UI.
+**Modified base directory mapping:**
 
-1. Add `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` routes in `api.ts`
-2. Remove `/api/claude-cli/*` routes
-3. Update tRPC procedures in livinityd `ai/routes.ts`
-4. Update `ai-config.tsx` to show Kimi configuration (simpler auth flow, no code paste)
-5. Update Redis config keys
-6. Test: Full settings flow (enter API key, see status, chat works)
+```typescript
+constructor(livinityd: Livinityd, userId?: string) {
+  const userDir = userId
+    ? `${livinityd.dataDirectory}/users/${userId}`
+    : livinityd.dataDirectory  // Fallback for single-user mode
 
-**Files modified:** `api.ts`, `livinityd/modules/ai/routes.ts`, `ui/routes/settings/ai-config.tsx`
+  this.baseDirectories = new Map<BaseDirectory, string>([
+    ['/Home', `${userDir}/home`],
+    ['/Trash', `${userDir}/trash`],
+    ['/Apps', `${livinityd.dataDirectory}/app-data`],     // Always shared
+    ['/External', `${livinityd.dataDirectory}/external`],  // Always shared
+    ['/Backups', `${livinityd.dataDirectory}/backups`],    // Admin only
+    ['/Network', `${livinityd.dataDirectory}/network`],    // Always shared
+  ])
 
-### Phase 3: KimiAgentRunner (Subscription Mode)
+  this.trashMetaDirectory = `${userDir}/trash-meta`
+}
+```
 
-**Rationale:** More complex, depends on Kimi CLI being installed on server.
+### Migration Strategy for Owner's Existing Files
 
-1. Install Kimi CLI on production server (`curl -LsSf https://code.kimi.com/install.sh | bash`)
-2. Authenticate Kimi CLI on server (`kimi login`)
-3. Create `kimi-agent-runner.ts` -- start with Print mode fallback (simpler, no SDK dep)
-4. Implement JSONL parsing from `kimi --print --output-format=stream-json`
-5. Map JSONL messages to AgentEvent interface
-6. Handle MCP tools via `--mcp-config` inline JSON flag
-7. Upgrade to SDK path (`createSession` + `createExternalTool`) if SDK is stable
-8. Test: Subscription mode agent tasks
+**Use symlinks for zero-downtime migration:**
 
-**Files modified:** `kimi-agent-runner.ts` (new), `api.ts` (agent stream switch), `daemon.ts` (import swap)
+```typescript
+async migrateOwnerFiles(ownerId: string) {
+  const ownerDir = `${this.dataDirectory}/users/${ownerId}`
 
-### Phase 4: Config Schema + Cleanup
+  // 1. Create user directory
+  await fse.ensureDir(ownerDir)
 
-**Rationale:** Final cleanup after core functionality works.
+  // 2. Move existing home to user directory
+  await fse.move(
+    `${this.dataDirectory}/home`,
+    `${ownerDir}/home`
+  )
 
-1. Update model names in config schema defaults
-2. Update DEFAULT_NEXUS_CONFIG
-3. Remove Claude-specific code (claude.ts, sdk-agent-runner.ts)
-4. Remove `@anthropic-ai/*` packages
-5. Update any remaining references in codebase
-6. Migration script for Redis keys (anthropic -> kimi)
-7. Update server deployment scripts (install Kimi CLI, authenticate)
-8. Test: Full end-to-end on production
+  // 3. Create symlink for backward compatibility
+  // Any code still using the old path will follow the symlink
+  await fse.symlink(`${ownerDir}/home`, `${this.dataDirectory}/home`)
 
-**Files modified:** `config/schema.ts`, `package.json`, cleanup of old files
+  // 4. Same for trash
+  await fse.move(`${this.dataDirectory}/trash`, `${ownerDir}/trash`)
+  await fse.symlink(`${ownerDir}/trash`, `${this.dataDirectory}/trash`)
+
+  // 5. Same for trash-meta
+  await fse.move(`${this.dataDirectory}/trash-meta`, `${ownerDir}/trash-meta`)
+  await fse.symlink(`${ownerDir}/trash-meta`, `${this.dataDirectory}/trash-meta`)
+}
+```
+
+**Why symlinks work here:**
+- `virtualToSystemPath()` resolves symlinks via `fse.realpath()` as a security check
+- The security check verifies the resolved path starts with the base directory
+- Since the symlink resolves to `{dataDirectory}/users/{ownerId}/home` which is still under `{dataDirectory}`, it passes validation
+- However, we need to update the base directory check to accept the `users/` subdirectory
+
+**Symlink removal timeline:**
+1. Deploy with symlinks (backward compat)
+2. After confirming all code paths use the new user-scoped Files instance
+3. Remove symlinks, update any remaining hardcoded paths
+
+### Permission Model
+
+```typescript
+async getAllowedOperations(virtualPath: string, userId: string): Promise<FileOperation[]> {
+  const operations = new Set(ALL_OPERATIONS)
+
+  // ... existing operation filtering ...
+
+  // NEW: Multi-user access control
+  if (virtualPath.startsWith('/Backups')) {
+    // Only admin can access backups
+    if (!this.isAdmin(userId)) {
+      return []  // No operations allowed
+    }
+  }
+
+  // Users can only access their own /Home and /Trash
+  // /Apps, /External, /Network are shared with appropriate permissions
+
+  return Array.from(operations)
+}
+```
+
+### Confidence: HIGH
+Direct analysis of `files.ts` virtualToSystemPath(), base directories, symlink handling, and permission model.
 
 ---
 
-## Risk Assessment
+## 9. App Manifest Extension
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Kimi Agent SDK is 0.x (immature API surface) | HIGH | MEDIUM | Start with Print mode fallback, upgrade to SDK once stable |
-| Python dependency on server | LOW | LOW | uv installer is reliable, Python 3.13 widely available |
-| Kimi API tool calling format differences cause bugs | MEDIUM | MEDIUM | Thorough test of function_call -> tool_use translation |
-| MCP config injection fails in SDK mode | MEDIUM | LOW | Use `--mcp-config` inline JSON via Print mode as fallback |
-| OAuth device auth flow doesn't work on headless server | MEDIUM | MEDIUM | Test early; may need API key mode as primary auth initially |
-| Model tier mapping imprecise | MEDIUM | LOW | Verify against `kimi info` output at runtime |
-| Kimi CLI not available as standalone binary | LOW | MEDIUM | Requires Python + uv, more deps than Claude's standalone binary |
-| OpenAI function_call arguments are JSON strings (not objects) | LOW | LOW | Always `JSON.parse(arguments)` in response handler |
+### Current State
+
+From `schema.ts`, the AppManifest type:
+```typescript
+{
+  manifestVersion, id, disabled, name, tagline, icon, category, version,
+  port, description, website, developer, submitter, submission, repo,
+  support, gallery, releaseNotes, dependencies, permissions, path,
+  defaultUsername, defaultPassword, deterministicPassword,
+  optimizedForLivinityHome, torOnly, installSize, widgets,
+  defaultShell, implements, backupIgnore
+}
+```
+
+**Note:** `validateManifest()` currently does NOT use Zod validation in production (line 96: `return parsed as AppManifest`). It just validates manifestVersion.
+
+### Recommended Extension
+
+Add a `multiUser` field to the manifest:
+
+```typescript
+const AppManifestSchema = z.object({
+  // ... existing fields ...
+
+  // NEW: Multi-user behavior
+  multiUser: z.object({
+    mode: z.enum(['shared', 'isolated']).default('shared'),
+    // For shared mode: does the app handle its own users?
+    internalAuth: z.boolean().default(false),
+    // For isolated mode: max instances (0 = unlimited)
+    maxInstances: z.number().int().default(0),
+    // Resources per isolated instance
+    resources: z.object({
+      memoryLimit: z.string().optional(),  // e.g., "512m"
+      cpuLimit: z.string().optional(),     // e.g., "0.5"
+    }).optional(),
+  }).optional(),
+})
+```
+
+### Backward Compatibility
+
+Since `validateManifest()` already skips Zod validation and returns `parsed as AppManifest`, adding the optional field is fully backward-compatible:
+
+```typescript
+export function validateManifest(parsed: unknown): AppManifest {
+  if (!isRecord(parsed)) throw new Error('invalid manifest')
+  parsed.manifestVersion = tryNormalizeVersion(parsed.manifestVersion)
+
+  // Default multiUser behavior for existing manifests
+  if (!parsed.multiUser) {
+    parsed.multiUser = { mode: 'shared', internalAuth: false }
+  }
+
+  return parsed as AppManifest
+}
+```
+
+**Existing apps without `multiUser` in their YAML manifest** will default to `shared` mode, which matches current behavior exactly (one instance, all users access via proxy).
+
+### App Mode Decision Guide
+
+| App | Mode | Rationale |
+|-----|------|-----------|
+| Nextcloud | shared + internalAuth | Has its own user system |
+| Gitea | shared + internalAuth | Has its own user system |
+| Jellyfin | shared + internalAuth | Has its own user system |
+| code-server | isolated | Per-user workspace |
+| Portainer | shared | Admin-only tool |
+| Home Assistant | shared | Single home automation instance |
+| n8n | shared or isolated | Depends on use case |
+| Uptime Kuma | shared | Monitoring is system-wide |
+
+### Confidence: HIGH
+Direct analysis of `schema.ts`, `validateManifest()`, and the existing manifest structure.
+
+---
+
+## 10. Login Page Routing
+
+### Current State
+
+From `server/index.ts`:
+- The UI is served as static files at the root path `/`
+- In production: `express.static(uiPath)` with `app.use('*', express.static('index.html'))` as SPA fallback
+- In dev: proxied to Vite dev server
+- The React frontend handles login/not-logged-in state client-side
+
+Currently, when you hit `nextcloud.livinity.cloud`, Caddy proxies to the app port directly. There is no authentication layer -- you go straight to Nextcloud's own login.
+
+### Problem Statement
+
+With multi-user and wildcard Caddy, ALL subdomain requests come to livinityd on port 8080. When an unauthenticated user hits `code-server.livinity.cloud`, we need to:
+1. Detect they are not authenticated
+2. Show a login page
+3. After login, redirect to the app
+
+### Recommended Approach: Auth-Gated App Gateway
+
+```typescript
+// In the App Gateway middleware (from Section 4)
+async function appGatewayMiddleware(req: Request, res: Response, next: NextFunction) {
+  const hostname = req.hostname
+
+  // 1. Check if this is a subdomain request
+  const appId = resolveAppFromHostname(hostname)
+  if (!appId) {
+    // Not an app subdomain, pass through to normal routes
+    return next()
+  }
+
+  // 2. Check authentication
+  const userId = await authenticateRequest(req)
+
+  if (!userId) {
+    // 3. Unauthenticated: serve login page or redirect
+    if (req.accepts('html')) {
+      // Browser request: redirect to main domain login with return URL
+      const returnUrl = `https://${hostname}${req.originalUrl}`
+      return res.redirect(`https://${mainDomain}/login?redirect=${encodeURIComponent(returnUrl)}`)
+    } else {
+      // API request: return 401
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+  }
+
+  // 4. Authenticated: check authorization
+  const hasAccess = await checkAppAccess(userId, appId)
+  if (!hasAccess) {
+    return res.status(403).send('Access denied')
+  }
+
+  // 5. Proxy to app
+  const target = await resolveAppTarget(appId, userId)
+  return proxyToApp(req, res, target)
+}
+```
+
+### Login Flow for Subdomain Requests
+
+```
+User visits code-server.livinity.cloud
+  -> Caddy wildcard catches *.livinity.cloud
+  -> Forwards to livinityd:8080
+  -> App Gateway detects subdomain "code-server"
+  -> No valid JWT/session cookie
+  -> Redirect to livinity.cloud/login?redirect=https://code-server.livinity.cloud
+  -> User logs in on main domain
+  -> Frontend receives JWT, stores in localStorage
+  -> Frontend also receives a session cookie (LIVINITY_SESSION) that works across subdomains
+  -> Redirect back to code-server.livinity.cloud
+  -> App Gateway finds valid session cookie
+  -> Proxies to code-server
+```
+
+### Cookie Strategy for Subdomains
+
+The current proxy token uses `sameSite: 'lax'` which does NOT send cookies to subdomains by default. For subdomain-aware auth:
+
+```typescript
+// During login, set a domain-wide session cookie
+const sessionCookie = await signSessionToken(userId)
+res.cookie('LIVINITY_SESSION', sessionCookie, {
+  httpOnly: true,
+  expires: new Date(Date.now() + ONE_WEEK),
+  sameSite: 'lax',
+  domain: `.${mainDomain}`,  // Leading dot = all subdomains
+  secure: true,               // HTTPS only
+})
+```
+
+**Key:** The `domain: '.livinity.cloud'` ensures the cookie is sent on requests to `code-server.livinity.cloud`, `nextcloud.livinity.cloud`, etc.
+
+### Server-Side Session vs JWT for Subdomains
+
+For subdomain auth, a server-side session is safer than a JWT:
+- JWT in localStorage cannot be sent to subdomains (different origin, different localStorage)
+- A httpOnly cookie with `domain=.livinity.cloud` can
+- The session cookie contains a signed session ID, not the full JWT
+- Server looks up session data (userId, role) from Redis
+
+```typescript
+// Session token: lightweight signed reference
+function signSessionToken(userId: string, secret: string): string {
+  return jwt.sign({ sid: randomToken(32), userId }, secret, {
+    expiresIn: '7d',
+    algorithm: 'HS256'
+  })
+}
+```
+
+### Confidence: HIGH
+Direct analysis of cookie handling in `user/routes.ts`, Express middleware chain, and Caddy configuration. The domain-scoped cookie strategy is standard web practice.
+
+---
+
+## Component Dependency Graph
+
+### New Components
+
+| Component | Description | Depends On |
+|-----------|------------|------------|
+| **UserService** | Multi-user CRUD, replaces singleton User for multi-user ops | SQLite (or YAML initially) |
+| **UserStore (SQLite)** | Database for user accounts and preferences | SQLite library (better-sqlite3) |
+| **AppGateway** | Subdomain routing + auth + user access control | UserService, PortAllocator |
+| **PortAllocator** | Manages per-user port assignments for isolated apps | Redis or SQLite |
+| **RedisKeyResolver** | Adds user scope to Redis keys | None |
+| **SessionMiddleware** | Domain-wide cookie-based sessions | Redis |
+
+### Modified Components
+
+| Component | Modification | Impact |
+|-----------|-------------|--------|
+| `jwt.ts` | Add userId/role to payload | LOW (additive) |
+| `is-authenticated.ts` | Extract userId from JWT, add resolveUser middleware | MEDIUM |
+| `context.ts` | Add currentUserId, currentUserRole, currentUser fields | MEDIUM |
+| `trpc.ts` | Add adminProcedure, update privateProcedure chain | MEDIUM |
+| `User` class | Keep for owner backward compat, delegate to UserService | LOW |
+| `Files` class | Accept userId, scope base directories per user | HIGH |
+| `Apps` class | Add isolated app management, per-user install | HIGH |
+| `App` class | Add cloneComposeForUser, user-scoped containers | HIGH |
+| `caddy.ts` | Simplify to wildcard block | LOW |
+| `server/index.ts` | Add AppGateway middleware, session cookie handling | HIGH |
+| `user/routes.ts` | Multi-user login, user management (admin) | HIGH |
+| `AiModule` | Scope conversations by userId | MEDIUM |
+| `SessionManager` (nexus) | Use RedisKeyResolver for user-scoped keys | MEDIUM |
+
+### Unchanged Components
+
+| Component | Why Unchanged |
+|-----------|---------------|
+| `AppStore` | App templates are system-wide, no user scoping needed |
+| `Backups` | System-wide backup (all user data), admin-only |
+| `Dbus` | System-level, not user-scoped |
+| `EventBus` | Can add user filtering later, not needed for initial multi-user |
+| `Notifications` | System-level notifications (can scope later) |
+| `Migration` | Startup migrations don't need user context |
+
+---
+
+## Suggested Build Order
+
+Based on dependency analysis, here is the recommended build order. Each step builds on the previous.
+
+### Phase 1: Foundation (No visible change, backward-compatible)
+
+**1A. JWT Extension**
+- Add optional `userId` and `role` to JWT payload
+- Update `verify()` to return full payload
+- `is-authenticated.ts` extracts userId (defaults to 'owner')
+- Zero breaking changes -- old tokens still work
+
+**1B. tRPC Context Extension**
+- Add `currentUserId`, `currentUserRole` to context type
+- Create `resolveUser` middleware
+- Create `adminProcedure`
+- All existing `privateProcedure` routes continue to work (userId defaults to 'owner')
+
+**1C. SQLite Schema + UserService**
+- Install better-sqlite3
+- Create schema (users, user_preferences, user_apps, system_settings)
+- Create UserService class
+- Migration: copy owner data from YAML to SQLite
+- Feature flag: still reads from YAML, dual-writes to SQLite
+
+### Phase 2: Core Multi-User (New functionality)
+
+**2A. Multi-User Login**
+- Create additional users (admin-only mutation)
+- Login returns JWT with userId and role
+- Domain-wide session cookie for subdomain auth
+- UI: user selection on login screen (or single password field with user dropdown)
+
+**2B. Per-User File System**
+- Create `{dataDirectory}/users/{userId}/home/` structure
+- Migrate owner files with symlinks
+- Files class accepts userId, scopes base directories
+- Each user gets own /Home and /Trash
+
+**2C. Redis Key Migration**
+- Deploy RedisKeyResolver
+- Run owner key migration
+- All new user data uses scoped keys
+- AI conversations scoped per user
+
+### Phase 3: App Isolation
+
+**3A. Wildcard Caddy**
+- Switch to wildcard Caddyfile
+- All subdomain traffic routes to livinityd
+
+**3B. App Gateway Middleware**
+- Insert in Express middleware chain
+- Subdomain detection from Host header
+- Auth check via session cookie
+- Login redirect for unauthenticated requests
+
+**3C. App Manifest Extension**
+- Add `multiUser` field to schema
+- Default existing apps to `shared` mode
+- Implement isolated app compose cloning
+- Port allocation for isolated instances
+
+### Phase Ordering Rationale
+
+1. **Phase 1 before Phase 2** because: Phase 2 needs userId in JWT and tRPC context. Phase 1 is purely additive with no breaking changes, making it safe to deploy independently.
+
+2. **2A (login) before 2B (files)** because: Files need to know which user is requesting. Login provides the userId that scopes file access.
+
+3. **2B (files) before 2C (Redis)** because: File system restructuring is the most impactful change for user experience. Redis key scoping is invisible to users but needed for data isolation.
+
+4. **Phase 3 after Phase 2** because: App isolation is the most complex feature and depends on having multi-user auth, file scoping, and Redis scoping already working. The wildcard Caddy change is technically independent but makes more sense alongside the App Gateway.
+
+5. **3A (Caddy) before 3B (gateway)** because: The App Gateway assumes all subdomain traffic reaches livinityd, which requires the wildcard Caddy setup.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### 1. Don't Write to ~/.kimi/mcp.json Per-Request
-Writing MCP config to disk on every agent request creates race conditions when multiple requests run simultaneously. Use `--mcp-config` inline JSON flag instead (no disk writes).
+### Anti-Pattern 1: Global User Object
+**What:** Continuing to access `ctx.user` (the singleton) for multi-user operations.
+**Why bad:** All users see the same data, no isolation.
+**Instead:** Always use `ctx.currentUser` or `ctx.livinityd.userService.getUser(ctx.currentUserId)`.
 
-### 2. Don't Reuse Sessions Across Web UI Requests
-Each web UI agent stream request should create its own session and close it when done. Reusing sessions creates state leakage between unrelated tasks.
+### Anti-Pattern 2: User ID in URL Paths
+**What:** `/api/users/{userId}/files` style routes where userId is a path parameter.
+**Why bad:** Requires manual authorization check on every route. Easy to forget, leads to IDOR vulnerabilities.
+**Instead:** Always derive userId from the authenticated JWT/session. Never trust userId from request parameters.
 
-### 3. Don't Remove ClaudeProvider Before KimiProvider Is Fully Tested
-Keep ClaudeProvider code in place during development. Delete only in the final cleanup phase after Kimi is confirmed working end-to-end.
+### Anti-Pattern 3: Shared Docker Networks for Isolated Apps
+**What:** Running all user instances of an isolated app on the same Docker network.
+**Why bad:** Containers can communicate with each other, breaking isolation.
+**Instead:** Each isolated app instance gets its own Docker network: `{appId}_{userId}_net`.
 
-### 4. Don't Hard-Code Model Names
-Use the tier mapping (flash/haiku/sonnet/opus -> kimi model IDs) consistently. Model names may change; the tier abstraction protects against this.
+### Anti-Pattern 4: Premature PostgreSQL
+**What:** Adding PostgreSQL as a dependency for the multi-user database.
+**Why bad:** Adds operational complexity to a home server. Another service to manage, update, backup.
+**Instead:** Use SQLite (better-sqlite3) -- zero config, embedded, handles the data volume easily.
 
-### 5. Don't Assume Kimi's function_call Arguments Are Objects
-Claude returns `tool_use.input` as a parsed JSON object. Kimi (OpenAI format) returns `function.arguments` as a JSON string. Always parse it.
-
----
-
-## Open Questions
-
-1. **External tool registration in SDK:** Does `createExternalTool()` integrate with `createSession()` directly? The SDK docs reference both but the exact wiring needs testing. **Fallback:** Use Print mode with `--mcp-config` instead.
-
-2. **Token usage reporting:** Kimi SDK reports usage via `StatusUpdate` events mid-stream. Does it also report total usage in `RunResult`? The current `AgentResult` expects final token counts. **Fallback:** Sum from StatusUpdate events.
-
-3. **Kimi CLI on Windows:** The production server is Linux, but development is Windows. Does the Kimi CLI work on Windows for local testing? The CLI is Python-based and should work, but needs verification.
-
-4. **Kimi API base URL:** Is it `https://api.kimi.com/coding/v1` or `https://api.moonshot.ai/v1`? Documentation references both. The "Kimi for Coding" specific endpoint may have different model availability. **Test both.**
-
-5. **Device auth on headless server:** The `kimi login` command may try to open a browser. On a headless server, we need the device auth API (`auth.kimi.com/api/oauth/device_authorization`) to get a URL without requiring a local browser.
+### Anti-Pattern 5: Big Bang Migration
+**What:** Converting YAML to SQLite in one step, requiring all code to update simultaneously.
+**Why bad:** High risk of bugs, hard to rollback.
+**Instead:** Feature flag + dual-write. YAML remains authoritative until SQLite is verified.
 
 ---
 
 ## Sources
 
-- [Kimi CLI GitHub](https://github.com/MoonshotAI/kimi-cli) -- CLI source, README, architecture
-- [Kimi Agent SDK GitHub](https://github.com/MoonshotAI/kimi-agent-sdk) -- Official SDK repo (Python, Node.js, Go)
-- [Kimi CLI MCP Docs](https://moonshotai.github.io/kimi-cli/en/customization/mcp.html) -- MCP server configuration [HIGH confidence]
-- [Kimi CLI Print Mode Docs](https://moonshotai.github.io/kimi-cli/en/customization/print-mode.html) -- Non-interactive mode, JSONL format [HIGH confidence]
-- [Kimi CLI Wire Mode Docs](https://moonshotai.github.io/kimi-cli/en/customization/wire-mode.html) -- JSON-RPC 2.0 bidirectional protocol [MEDIUM confidence]
-- [Kimi CLI Command Reference](https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html) -- All CLI flags [HIGH confidence]
-- [Kimi CLI Technical Deep Dive](https://llmmultiagents.com/en/blogs/kimi-cli-technical-deep-dive) -- Architecture analysis [MEDIUM confidence]
-- [Kimi CLI Auth Issue #757](https://github.com/MoonshotAI/kimi-cli/issues/757) -- OAuth/subscription auth implementation [HIGH confidence]
-- [Moonshot AI Platform](https://platform.moonshot.ai/) -- API documentation
-- [One Agent SDK](https://github.com/odysa/one-agent-sdk) -- Provider-agnostic wrapper showing Kimi SDK patterns [MEDIUM confidence]
-- [Kimi K2.5 Developer Guide](https://www.nxcode.io/resources/news/kimi-k2-5-developer-guide-kimi-code-cli-2026) -- Model capabilities and pricing [MEDIUM confidence]
-
-### Confidence Levels
-
-| Area | Level | Reason |
-|------|-------|--------|
-| KimiProvider (API key mode) | HIGH | OpenAI-compatible format is well-documented, standard pattern |
-| CLI flags (--print, --mcp-config, --yolo) | HIGH | Documented in official CLI reference, verified on multiple sources |
-| KimiAgentRunner (Print mode fallback) | HIGH | Spawn child process + parse JSONL is straightforward, well-documented |
-| KimiAgentRunner (SDK path) | MEDIUM | SDK is 0.x; createSession/createExternalTool API shape needs testing |
-| OAuth device auth flow | MEDIUM | Endpoints found in issue tracker, but not in official SDK docs |
-| External tool bridging via SDK | MEDIUM | createExternalTool documented but session integration unclear |
-| MCP inline config | HIGH | `--mcp-config JSON` flag documented in CLI reference |
-| Model tier mapping | LOW | Exact model IDs need runtime verification via `kimi info` |
-| Wire mode protocol | MEDIUM | Documented but marked "experimental" |
+- All findings derived from direct codebase analysis of the following files:
+  - `livos/packages/livinityd/source/index.ts` (Livinityd main class, StoreSchema)
+  - `livos/packages/livinityd/source/modules/server/index.ts` (Express middleware chain)
+  - `livos/packages/livinityd/source/modules/server/trpc/context.ts` (tRPC context)
+  - `livos/packages/livinityd/source/modules/server/trpc/trpc.ts` (procedure types)
+  - `livos/packages/livinityd/source/modules/server/trpc/index.ts` (router, routes)
+  - `livos/packages/livinityd/source/modules/server/trpc/is-authenticated.ts` (auth middleware)
+  - `livos/packages/livinityd/source/modules/jwt.ts` (JWT signing/verification)
+  - `livos/packages/livinityd/source/modules/user/user.ts` (User class)
+  - `livos/packages/livinityd/source/modules/user/routes.ts` (login, register, etc.)
+  - `livos/packages/livinityd/source/modules/apps/apps.ts` (app management, Caddy)
+  - `livos/packages/livinityd/source/modules/apps/app.ts` (compose patching, Docker)
+  - `livos/packages/livinityd/source/modules/apps/schema.ts` (AppManifest)
+  - `livos/packages/livinityd/source/modules/domain/caddy.ts` (Caddyfile generation)
+  - `livos/packages/livinityd/source/modules/files/files.ts` (file system, virtual paths)
+  - `livos/packages/livinityd/source/modules/utilities/file-store.ts` (YAML FileStore)
+  - `livos/packages/livinityd/source/modules/ai/index.ts` (AI module, Redis conversations)
+  - `nexus/packages/core/src/auth.ts` (Nexus JWT verification)
+  - `nexus/packages/core/src/session-manager.ts` (Redis session management)
+  - Redis key patterns from grep across `nexus/packages/core/src/*.ts`

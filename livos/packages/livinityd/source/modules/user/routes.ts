@@ -1,8 +1,10 @@
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
+import bcrypt from 'bcryptjs'
 
 import {router, publicProcedure, privateProcedure} from '../server/trpc/trpc.js'
 import * as totp from '../utilities/totp.js'
+import {getPool, findUserByUsername, createUser, getAdminUser, listUsers} from '../database/index.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -23,13 +25,39 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			// Check the user hasn't already signed up
+			// Check the user hasn't already signed up (YAML legacy check)
 			if (await ctx.user.exists()) {
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Attempted to register when user is already registered'})
 			}
 
-			// Register new user
-			return ctx.user.register(input.name, input.password, input.language)
+			// Register new user in YAML (legacy)
+			await ctx.user.register(input.name, input.password, input.language)
+
+			// Also create in PostgreSQL if available
+			const pool = getPool()
+			if (pool) {
+				try {
+					const username = input.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'admin'
+					const hashedPassword = await ctx.livinityd.store.get('user.hashedPassword' as any)
+
+					// First user is always admin
+					const existingUsers = await listUsers()
+					const role = existingUsers.length === 0 ? 'admin' : 'member'
+
+					await createUser({
+						username,
+						displayName: input.name,
+						hashedPassword: hashedPassword || '',
+						role,
+					})
+					ctx.logger.log(`Created user "${input.name}" in database as ${role}`)
+				} catch (error) {
+					// Log but don't fail -- YAML registration already succeeded
+					ctx.logger.error('Failed to create user in database during registration', error)
+				}
+			}
+
+			return true
 		}),
 
 	// Public method to check if a user exists
@@ -41,15 +69,51 @@ export default router({
 			z.object({
 				password: z.string(),
 				totpToken: z.string().optional(),
+				// Optional username for multi-user login
+				username: z.string().optional(),
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			if (!(await ctx.user.validatePassword(input.password))) {
-				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
+			let dbUserId: string | undefined
+			let dbUserRole: string | undefined
+
+			const pool = getPool()
+
+			// If a username is provided and DB is available, try DB-based auth
+			if (input.username && pool) {
+				const dbUser = await findUserByUsername(input.username)
+				if (!dbUser) {
+					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
+				}
+				if (!dbUser.isActive) {
+					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Account is disabled'})
+				}
+
+				const validPassword = await bcrypt.compare(input.password, dbUser.hashedPassword)
+				if (!validPassword) {
+					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
+				}
+
+				dbUserId = dbUser.id
+				dbUserRole = dbUser.role
+			} else {
+				// Legacy single-user login via YAML
+				if (!(await ctx.user.validatePassword(input.password))) {
+					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
+				}
+
+				// If DB is available, look up the admin user to include userId in token
+				if (pool) {
+					const adminUser = await getAdminUser()
+					if (adminUser) {
+						dbUserId = adminUser.id
+						dbUserRole = adminUser.role
+					}
+				}
 			}
 
-			// 2FA
-			if (await ctx.user.is2faEnabled()) {
+			// 2FA (only for YAML-based users for now)
+			if (!input.username && (await ctx.user.is2faEnabled())) {
 				// Check we have a token
 				if (!input.totpToken) {
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Missing 2FA code'})
@@ -72,7 +136,11 @@ export default router({
 				sameSite: 'lax',
 			})
 
-			// Return API token
+			// Return API token -- include userId if available
+			if (dbUserId && dbUserRole) {
+				return ctx.server.signUserToken(dbUserId, dbUserRole)
+			}
+
 			return ctx.server.signToken()
 		}),
 
@@ -98,7 +166,12 @@ export default router({
 			sameSite: 'lax',
 		})
 
-		// Return API token
+		// If we have a current user from middleware, sign a user-scoped token
+		if (ctx.currentUser) {
+			return ctx.server.signUserToken(ctx.currentUser.id, ctx.currentUser.role)
+		}
+
+		// Otherwise return legacy API token
 		return ctx.server.signToken()
 	}),
 
@@ -124,7 +197,26 @@ export default router({
 			if (!(await ctx.user.validatePassword(input.oldPassword))) {
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
 			}
-			return ctx.user.setPassword(input.newPassword)
+
+			// Update in YAML
+			await ctx.user.setPassword(input.newPassword)
+
+			// Also update in PostgreSQL if current user is known
+			const pool = getPool()
+			if (pool && ctx.currentUser) {
+				try {
+					const saltRounds = 12
+					const hashedPassword = (await bcrypt.hash(input.newPassword, saltRounds)).replace(/^\$2a\$/, '$2b$')
+					await pool.query('UPDATE users SET hashed_password = $1, updated_at = NOW() WHERE id = $2', [
+						hashedPassword,
+						ctx.currentUser.id,
+					])
+				} catch (error) {
+					ctx.logger.error('Failed to update password in database', error)
+				}
+			}
+
+			return true
 		}),
 
 	// Generates a new random 2FA TOTP URI
@@ -191,6 +283,14 @@ export default router({
 			wallpaper: user.wallpaper,
 			language: user.language,
 			temperatureUnit: user.temperatureUnit,
+			// Include multi-user info if available
+			...(ctx.currentUser
+				? {
+						id: ctx.currentUser.id,
+						username: ctx.currentUser.username,
+						role: ctx.currentUser.role,
+					}
+				: {}),
 		}
 	}),
 
