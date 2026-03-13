@@ -6,7 +6,7 @@ import type { ToolResult } from './types.js';
 import type { ToolDefinition, ToolUseBlock, ToolResultBlock } from './providers/types.js';
 import { logger } from './logger.js';
 import type { NexusConfig } from './config/schema.js';
-import { getThinkingPromptModifier, getVerbosePromptModifier, getResponseStylePromptModifier, type ThinkLevel, type VerboseLevel, type ResponseConfig } from './thinking.js';
+import { getThinkingPromptModifier, getVerbosePromptModifier, getResponseStylePromptModifier, getUserPersonalizationPromptModifier, type ThinkLevel, type VerboseLevel, type ResponseConfig, type UserPersonalization } from './thinking.js';
 import type { ApprovalManager } from './approval-manager.js';
 
 /** Events emitted during agent execution for real-time streaming */
@@ -63,6 +63,8 @@ export interface AgentConfig {
   sessionId?: string;
   /** Approval policy: 'always' = all tools, 'destructive' = only requiresApproval tools, 'never' = skip */
   approvalPolicy?: 'always' | 'destructive' | 'never';
+  /** User personalization preferences (role, style, use cases) from onboarding/settings */
+  userPersonalization?: UserPersonalization;
 }
 
 /** Resolve agent config with defaults from NexusConfig */
@@ -409,6 +411,11 @@ export class AgentLoop extends EventEmitter {
     const responseConfig = this.config.responseConfig ?? this.config.nexusConfig?.response;
     if (responseConfig) {
       systemPrompt += getResponseStylePromptModifier(responseConfig);
+    }
+
+    // Inject user personalization modifier (role, style, use cases from onboarding/settings)
+    if (this.config.userPersonalization) {
+      systemPrompt += getUserPersonalizationPromptModifier(this.config.userPersonalization);
     }
 
     const messages: ChatMessage[] = [];
