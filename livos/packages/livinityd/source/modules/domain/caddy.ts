@@ -64,22 +64,21 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false): s
 	reverse_proxy 127.0.0.1:8080
 }`)
 
-	if (multiUser) {
-		// Multi-user mode: Single wildcard block routes ALL subdomains to livinityd.
-		// Livinityd's app gateway middleware handles per-user container routing.
-		blocks.push(`*.${config.mainDomain} {
-	tls {
-		dns cloudflare {env.CF_API_TOKEN}
-	}
+	// Generate subdomain blocks
+	for (const sub of config.subdomains) {
+		if (!sub.enabled) continue
+		if (!validateSubdomain(sub.subdomain)) continue
+
+		const fullDomain = `${sub.subdomain}.${config.mainDomain}`
+		if (multiUser) {
+			// Multi-user mode: route ALL subdomains through livinityd's app gateway.
+			// The gateway middleware checks the user's session and routes to the
+			// correct per-user container. No wildcard cert needed.
+			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:8080
 }`)
-	} else {
-		// Single-user mode: Individual subdomain blocks (legacy behavior)
-		for (const sub of config.subdomains) {
-			if (!sub.enabled) continue
-			if (!validateSubdomain(sub.subdomain)) continue
-
-			const fullDomain = `${sub.subdomain}.${config.mainDomain}`
+		} else {
+			// Single-user mode: route directly to app port (legacy behavior)
 			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:${sub.port}
 }`)
