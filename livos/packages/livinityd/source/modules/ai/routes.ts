@@ -3,6 +3,7 @@ import {observable} from '@trpc/server/observable'
 import {TRPCError} from '@trpc/server'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
+import {getUserPreference, setUserPreference} from '../database/index.js'
 
 /** Mask an API key: show first 4 and last 4 chars */
 function maskKey(key: string): string {
@@ -676,17 +677,23 @@ export default router({
 	/** Get all channel statuses (for Integrations dialog) */
 	getChannels: privateProcedure.query(async ({ctx}) => {
 		try {
-			const redis = ctx.livinityd.ai.redis
+			const redis = ctx.livinityd!.ai.redis
 
 			// Get channels from Redis (only Telegram and Discord)
 			const channelTypes = ['telegram', 'discord'] as const
 			const channels = await Promise.all(
 				channelTypes.map(async (type) => {
-					const [configStr, statusStr] = await Promise.all([
-						redis.get(`nexus:${type}:config`),
-						redis.get(`nexus:${type}:status`),
-					])
-					const config = configStr ? JSON.parse(configStr) : null
+					// Per-user: read from PostgreSQL
+					let config: any = null
+					if (ctx.currentUser) {
+						config = await getUserPreference(ctx.currentUser.id, `integration:${type}`)
+					}
+					if (!config) {
+						const configStr = await redis.get(`nexus:${type}:config`)
+						config = configStr ? JSON.parse(configStr) : null
+					}
+
+					const statusStr = await redis.get(`nexus:${type}:status`)
 					const status = statusStr ? JSON.parse(statusStr) : null
 					return {
 						id: type,
@@ -701,12 +708,12 @@ export default router({
 
 			return {channels}
 		} catch (error) {
-			ctx.livinityd.logger.error('Failed to get channels', error)
+			ctx.livinityd!.logger.error('Failed to get channels', error)
 			return {channels: []}
 		}
 	}),
 
-	/** Update channel config (for Integrations dialog) */
+	/** Update channel config (for Integrations dialog) — per-user */
 	updateChannel: privateProcedure
 		.input(
 			z.object({
@@ -716,20 +723,32 @@ export default router({
 		)
 		.mutation(async ({ctx, input}) => {
 			try {
-				const redis = ctx.livinityd.ai.redis
-				const existingStr = await redis.get(`nexus:${input.type}:config`)
-				const existing = existingStr ? JSON.parse(existingStr) : {}
+				const redis = ctx.livinityd!.ai.redis
 
-				const newConfig = {...existing, ...input.config, enabled: true}
-				await redis.set(`nexus:${input.type}:config`, JSON.stringify(newConfig))
+				// Per-user: store in PostgreSQL
+				if (ctx.currentUser) {
+					const existing = (await getUserPreference(ctx.currentUser.id, `integration:${input.type}`)) || {}
+					const newConfig = {...existing, ...input.config, enabled: true}
+					await setUserPreference(ctx.currentUser.id, `integration:${input.type}`, newConfig)
 
-				// Notify Nexus about the config change
-				await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.type}))
+					// Admin also syncs to Redis for nexus-core
+					if (ctx.currentUser.role === 'admin') {
+						await redis.set(`nexus:${input.type}:config`, JSON.stringify(newConfig))
+						await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.type}))
+					}
+				} else {
+					// Legacy: write to Redis directly
+					const existingStr = await redis.get(`nexus:${input.type}:config`)
+					const existing = existingStr ? JSON.parse(existingStr) : {}
+					const newConfig = {...existing, ...input.config, enabled: true}
+					await redis.set(`nexus:${input.type}:config`, JSON.stringify(newConfig))
+					await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.type}))
+				}
 
-				ctx.livinityd.logger.log(`Channel config updated for ${input.type}`)
+				ctx.livinityd!.logger.log(`Channel config updated for ${input.type}`)
 				return {success: true}
 			} catch (error) {
-				ctx.livinityd.logger.error(`Failed to update ${input.type} config`, error)
+				ctx.livinityd!.logger.error(`Failed to update ${input.type} config`, error)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: getErrorMessage(error) || 'Failed to update channel config',
@@ -742,7 +761,23 @@ export default router({
 		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.query(async ({ctx, input}) => {
 			try {
-				const redis = ctx.livinityd.ai.redis
+				// Per-user: read from PostgreSQL user_preferences
+				if (ctx.currentUser) {
+					const pref = await getUserPreference(ctx.currentUser.id, `integration:${input.channel}`)
+					if (pref) return pref as {
+						enabled: boolean
+						token?: string
+						appToken?: string
+						webhookUrl?: string
+						webhookSecret?: string
+						homeserverUrl?: string
+						roomId?: string
+					}
+					// No per-user config saved yet — return null (unconfigured for this user)
+					return null
+				}
+				// Legacy single-user: read from Redis
+				const redis = ctx.livinityd!.ai.redis
 				const key = `nexus:${input.channel}:config`
 				const config = await redis.get(key)
 				if (!config) return null
@@ -756,7 +791,7 @@ export default router({
 					roomId?: string
 				}
 			} catch (error) {
-				ctx.livinityd.logger.error(`Failed to get ${input.channel} config`, error)
+				ctx.livinityd!.logger.error(`Failed to get ${input.channel} config`, error)
 				return null
 			}
 		}),
@@ -766,13 +801,20 @@ export default router({
 		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.query(async ({ctx, input}) => {
 			try {
-				const redis = ctx.livinityd.ai.redis
-				const [configStr, statusStr] = await Promise.all([
-					redis.get(`nexus:${input.channel}:config`),
-					redis.get(`nexus:${input.channel}:status`),
-				])
+				const redis = ctx.livinityd!.ai.redis
 
-				const config = configStr ? JSON.parse(configStr) : null
+				// Per-user: read config from PostgreSQL, status from Redis (global)
+				let config: any = null
+				if (ctx.currentUser) {
+					config = await getUserPreference(ctx.currentUser.id, `integration:${input.channel}`)
+				}
+				if (!config) {
+					const configStr = await redis.get(`nexus:${input.channel}:config`)
+					config = configStr ? JSON.parse(configStr) : null
+				}
+
+				// Status is global (nexus-core manages the active bot)
+				const statusStr = await redis.get(`nexus:${input.channel}:status`)
 				const status = statusStr ? JSON.parse(statusStr) : null
 
 				return {
@@ -785,7 +827,7 @@ export default router({
 					botId: status?.botId,
 				}
 			} catch (error) {
-				ctx.livinityd.logger.error(`Failed to get ${input.channel} status`, error)
+				ctx.livinityd!.logger.error(`Failed to get ${input.channel} status`, error)
 				return {enabled: false, connected: false, error: getErrorMessage(error)}
 			}
 		}),
@@ -808,23 +850,33 @@ export default router({
 		)
 		.mutation(async ({ctx, input}) => {
 			try {
-				const redis = ctx.livinityd.ai.redis
-				const key = `nexus:${input.channel}:config`
-				const existingStr = await redis.get(key)
-				const existing = existingStr ? JSON.parse(existingStr) : {}
+				const redis = ctx.livinityd!.ai.redis
 
-				const newConfig = {...existing, ...input.config}
-				await redis.set(key, JSON.stringify(newConfig))
+				// Per-user: store in PostgreSQL user_preferences
+				if (ctx.currentUser) {
+					const existing = (await getUserPreference(ctx.currentUser.id, `integration:${input.channel}`)) || {}
+					const newConfig = {...existing, ...input.config}
+					await setUserPreference(ctx.currentUser.id, `integration:${input.channel}`, newConfig)
 
-				// Notify Nexus about the config change
-				await redis.publish('nexus:channel:updated', JSON.stringify({
-					channel: input.channel,
-				}))
+					// Admin's config also syncs to global Redis for nexus-core
+					if (ctx.currentUser.role === 'admin') {
+						await redis.set(`nexus:${input.channel}:config`, JSON.stringify(newConfig))
+						await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.channel}))
+					}
+				} else {
+					// Legacy single-user: write to Redis directly
+					const key = `nexus:${input.channel}:config`
+					const existingStr = await redis.get(key)
+					const existing = existingStr ? JSON.parse(existingStr) : {}
+					const newConfig = {...existing, ...input.config}
+					await redis.set(key, JSON.stringify(newConfig))
+					await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.channel}))
+				}
 
-				ctx.livinityd.logger.log(`Integration config saved for ${input.channel}`)
+				ctx.livinityd!.logger.log(`Integration config saved for ${input.channel}`)
 				return {success: true}
 			} catch (error) {
-				ctx.livinityd.logger.error(`Failed to save ${input.channel} config`, error)
+				ctx.livinityd!.logger.error(`Failed to save ${input.channel} config`, error)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: getErrorMessage(error) || 'Failed to save config',
@@ -1148,15 +1200,32 @@ export default router({
 
 	// ── Voice Config ─────────────────────────────────────────────
 
-	/** Get voice pipeline configuration (keys masked) */
-	getVoiceConfig: privateProcedure.query(async () => {
+	/** Get voice pipeline configuration (keys masked) — per-user */
+	getVoiceConfig: privateProcedure.query(async ({ctx}) => {
+		const defaultVoice = {enabled: false, hasDeepgramKey: false, hasCartesiaKey: false, cartesiaVoiceId: '', sttLanguage: 'en', sttModel: 'nova-3'}
+
+		// Per-user: read from PostgreSQL user_preferences
+		if (ctx.currentUser) {
+			const pref = await getUserPreference(ctx.currentUser.id, 'voice:config')
+			if (pref && typeof pref === 'object') {
+				return {
+					enabled: pref.enabled ?? false,
+					hasDeepgramKey: !!pref.deepgramApiKey,
+					hasCartesiaKey: !!pref.cartesiaApiKey,
+					cartesiaVoiceId: pref.cartesiaVoiceId ?? '',
+					sttLanguage: pref.sttLanguage ?? 'en',
+					sttModel: pref.sttModel ?? 'nova-3',
+				}
+			}
+			return defaultVoice
+		}
+
+		// Legacy: proxy to nexus-core
 		const nexusUrl = getNexusApiUrl()
 		const response = await fetch(`${nexusUrl}/api/voice/config`, {
 			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 		})
-		if (!response.ok) {
-			return {enabled: false, hasDeepgramKey: false, hasCartesiaKey: false, cartesiaVoiceId: '', sttLanguage: 'en', sttModel: 'nova-3'}
-		}
+		if (!response.ok) return defaultVoice
 		return await response.json() as {
 			enabled: boolean
 			hasDeepgramKey: boolean
@@ -1167,7 +1236,7 @@ export default router({
 		}
 	}),
 
-	/** Update voice pipeline configuration */
+	/** Update voice pipeline configuration — per-user */
 	updateVoiceConfig: privateProcedure
 		.input(z.object({
 			deepgramApiKey: z.string().optional(),
@@ -1177,7 +1246,37 @@ export default router({
 			sttModel: z.string().optional(),
 			enabled: z.boolean().optional(),
 		}))
-		.mutation(async ({input}) => {
+		.mutation(async ({ctx, input}) => {
+			// Per-user: store in PostgreSQL user_preferences
+			if (ctx.currentUser) {
+				const existing = (await getUserPreference(ctx.currentUser.id, 'voice:config')) || {}
+				const newConfig = {...existing, ...input}
+				await setUserPreference(ctx.currentUser.id, 'voice:config', newConfig)
+
+				// Admin's config also syncs to nexus-core for backward compat
+				if (ctx.currentUser.role === 'admin') {
+					const nexusUrl = getNexusApiUrl()
+					await fetch(`${nexusUrl}/api/voice/config`, {
+						method: 'PUT',
+						headers: {
+							'Content-Type': 'application/json',
+							...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+						},
+						body: JSON.stringify(input),
+					}).catch(() => {}) // Don't fail if nexus-core is unavailable
+				}
+
+				return {
+					enabled: newConfig.enabled ?? false,
+					hasDeepgramKey: !!newConfig.deepgramApiKey,
+					hasCartesiaKey: !!newConfig.cartesiaApiKey,
+					cartesiaVoiceId: newConfig.cartesiaVoiceId ?? '',
+					sttLanguage: newConfig.sttLanguage ?? 'en',
+					sttModel: newConfig.sttModel ?? 'nova-3',
+				}
+			}
+
+			// Legacy: proxy to nexus-core
 			const nexusUrl = getNexusApiUrl()
 			const response = await fetch(`${nexusUrl}/api/voice/config`, {
 				method: 'PUT',
@@ -1206,62 +1305,80 @@ export default router({
 
 	// ── Gmail OAuth ─────────────────────────────────────────────
 
-	/** Get Gmail connection status */
-	getGmailStatus: privateProcedure.query(async () => {
+	/** Get Gmail connection status — per-user */
+	getGmailStatus: privateProcedure.query(async ({ctx}) => {
+		const defaultStatus = {connected: false, enabled: false, configured: false, email: null as string | null, error: null as string | null, lastMessage: null as string | null}
+
+		// Per-user: read from PostgreSQL user_preferences
+		if (ctx.currentUser) {
+			const pref = await getUserPreference(ctx.currentUser.id, 'gmail:status')
+			if (pref && typeof pref === 'object') return {...defaultStatus, ...pref}
+			return defaultStatus
+		}
+
+		// Legacy: proxy to nexus-core
 		const nexusUrl = getNexusApiUrl()
 		const response = await fetch(`${nexusUrl}/api/gmail/oauth/status`, {
 			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 		})
-		if (!response.ok) {
-			return {connected: false, enabled: false, configured: false, email: null, error: null, lastMessage: null}
-		}
-		return await response.json() as {
-			connected: boolean
-			enabled: boolean
-			configured: boolean
-			email: string | null
-			error: string | null
-			lastMessage: string | null
-		}
+		if (!response.ok) return defaultStatus
+		return await response.json() as typeof defaultStatus
 	}),
 
-	/** Save Gmail OAuth credentials (Client ID + Secret) from UI */
+	/** Save Gmail OAuth credentials (Client ID + Secret) — per-user */
 	saveGmailCredentials: privateProcedure.input(z.object({
 		clientId: z.string().min(1),
 		clientSecret: z.string().min(1),
-	})).mutation(async ({input}) => {
+	})).mutation(async ({ctx, input}) => {
+		// Per-user: store in PostgreSQL user_preferences
+		if (ctx.currentUser) {
+			const existing = (await getUserPreference(ctx.currentUser.id, 'gmail:config')) || {}
+			await setUserPreference(ctx.currentUser.id, 'gmail:config', {...existing, clientId: input.clientId, clientSecret: input.clientSecret})
+
+			// Admin also syncs to nexus-core
+			if (ctx.currentUser.role === 'admin') {
+				const nexusUrl = getNexusApiUrl()
+				await fetch(`${nexusUrl}/api/gmail/credentials`, {
+					method: 'POST',
+					headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
+					body: JSON.stringify({clientId: input.clientId, clientSecret: input.clientSecret}),
+				}).catch(() => {})
+			}
+			return {ok: true}
+		}
+
+		// Legacy: proxy to nexus-core
 		const nexusUrl = getNexusApiUrl()
 		const response = await fetch(`${nexusUrl}/api/gmail/credentials`, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
-			},
+			headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
 			body: JSON.stringify({clientId: input.clientId, clientSecret: input.clientSecret}),
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: err.error || `Nexus API error: ${response.status}`,
-			})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
 		}
 		return await response.json() as {ok: boolean}
 	}),
 
-	/** Get Gmail settings (processing mode, filters, notifications) */
-	getGmailSettings: privateProcedure.query(async () => {
+	/** Get Gmail settings (processing mode, filters, notifications) — per-user */
+	getGmailSettings: privateProcedure.query(async ({ctx}) => {
+		// Per-user: read from PostgreSQL user_preferences
+		if (ctx.currentUser) {
+			const pref = await getUserPreference(ctx.currentUser.id, 'gmail:settings')
+			return pref || null
+		}
+
+		// Legacy: proxy to nexus-core
 		const nexusUrl = getNexusApiUrl()
 		const response = await fetch(`${nexusUrl}/api/gmail/settings`, {
 			headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 		})
-		if (!response.ok) {
-			return null
-		}
+		if (!response.ok) return null
 		return await response.json()
 	}),
 
-	/** Update Gmail settings */
+	/** Update Gmail settings — per-user */
 	updateGmailSettings: privateProcedure.input(z.object({
 		processingMode: z.enum(['disabled', 'notify_only', 'full']).optional(),
 		sendProtection: z.boolean().optional(),
@@ -1273,27 +1390,39 @@ export default router({
 		notifyChatId: z.string().optional(),
 		gmailPollIntervalSec: z.number().min(30).max(3600).optional(),
 		maxEmailsPerPoll: z.number().min(1).max(50).optional(),
-	})).mutation(async ({input}) => {
+	})).mutation(async ({ctx, input}) => {
+		// Per-user: store in PostgreSQL
+		if (ctx.currentUser) {
+			const existing = (await getUserPreference(ctx.currentUser.id, 'gmail:settings')) || {}
+			await setUserPreference(ctx.currentUser.id, 'gmail:settings', {...existing, ...input})
+
+			// Admin also syncs to nexus-core
+			if (ctx.currentUser.role === 'admin') {
+				const nexusUrl = getNexusApiUrl()
+				await fetch(`${nexusUrl}/api/gmail/settings`, {
+					method: 'PUT',
+					headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
+					body: JSON.stringify(input),
+				}).catch(() => {})
+			}
+			return {ok: true}
+		}
+
+		// Legacy: proxy to nexus-core
 		const nexusUrl = getNexusApiUrl()
 		const response = await fetch(`${nexusUrl}/api/gmail/settings`, {
 			method: 'PUT',
-			headers: {
-				'Content-Type': 'application/json',
-				...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
-			},
+			headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
 			body: JSON.stringify(input),
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: err.error || `Nexus API error: ${response.status}`,
-			})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
 		}
 		return await response.json() as {ok: boolean}
 	}),
 
-	/** Start Gmail OAuth flow — returns consent screen URL */
+	/** Start Gmail OAuth flow — returns consent screen URL (admin only, proxies to nexus-core) */
 	startGmailOauth: privateProcedure.input(z.object({
 		publicUrl: z.string().min(1),
 	})).mutation(async ({input}) => {
@@ -1303,30 +1432,38 @@ export default router({
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: err.error || `Nexus API error: ${response.status}`,
-			})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
 		}
 		return await response.json() as {url: string}
 	}),
 
 	/** Disconnect Gmail — clears tokens and stops polling */
 	disconnectGmail: privateProcedure.mutation(async ({ctx}) => {
+		// Per-user: clear Gmail preferences
+		if (ctx.currentUser) {
+			await setUserPreference(ctx.currentUser.id, 'gmail:status', {connected: false, enabled: false, configured: false, email: null})
+			await setUserPreference(ctx.currentUser.id, 'gmail:config', {})
+
+			// Admin also disconnects in nexus-core
+			if (ctx.currentUser.role === 'admin') {
+				const nexusUrl = getNexusApiUrl()
+				await fetch(`${nexusUrl}/api/gmail/oauth/disconnect`, {
+					method: 'POST',
+					headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
+				}).catch(() => {})
+			}
+			return {ok: true, message: 'Gmail disconnected'}
+		}
+
+		// Legacy: proxy to nexus-core
 		const nexusUrl = getNexusApiUrl()
 		const response = await fetch(`${nexusUrl}/api/gmail/oauth/disconnect`, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
-			},
+			headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: err.error || `Nexus API error: ${response.status}`,
-			})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
 		}
 		return await response.json() as {ok: boolean; message: string}
 	}),
