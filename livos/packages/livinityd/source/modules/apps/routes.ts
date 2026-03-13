@@ -9,6 +9,7 @@ import {
 	hasAppAccess,
 	listUsers,
 	listUserAppInstances,
+	getUserAppInstance,
 } from '../database/index.js'
 
 export const appStore = router({
@@ -119,7 +120,7 @@ export const apps = router({
 		return appDataSortedByNames
 	}),
 
-	// Install an app (or grant access if already installed)
+	// Install an app (or create per-user instance if already installed)
 	install: privateProcedure
 		.input(
 			z.object({
@@ -129,12 +130,27 @@ export const apps = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			// If app is already installed, just grant access to the current user
 			const alreadyInstalled = await ctx.apps.isInstalled(input.appId)
-			if (alreadyInstalled) {
-				if (ctx.currentUser?.id) {
-					await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
+			if (alreadyInstalled && ctx.currentUser?.id) {
+				// Non-admin: create per-user Docker instance
+				if (ctx.currentUser.role && ctx.currentUser.role !== 'admin') {
+					const existing = await getUserAppInstance(ctx.currentUser.id, input.appId)
+					if (existing) {
+						// Already has per-user instance, just return
+						return {alreadyInstalled: true, perUserInstance: true}
+					}
+					await ctx.apps.installForUser(input.appId, ctx.currentUser.id)
+					// Register per-user subdomain in Caddy
+					const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
+					if (inst) {
+						const user = ctx.currentUser
+						const perUserSubdomain = `${input.appId}-${user.username || user.id.slice(0, 8)}`
+						await ctx.apps.registerAppSubdomain(`${input.appId}:user:${ctx.currentUser.id}`, inst.port, perUserSubdomain)
+					}
+					return {alreadyInstalled: true, perUserInstance: true}
 				}
+				// Admin: grant shared access to global instance
+				await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
 				return {alreadyInstalled: true}
 			}
 
@@ -146,8 +162,7 @@ export const apps = router({
 			return result
 		}),
 
-	// Get state
-	// Temporarily used for polling the state of app mutations until we implement subscriptions
+	// Get state (checks per-user instance first, then global app)
 	state: privateProcedure
 		.input(
 			z.object({
@@ -155,6 +170,23 @@ export const apps = router({
 			}),
 		)
 		.query(async ({ctx, input}) => {
+			// Check per-user instance first
+			if (ctx.currentUser?.id) {
+				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
+				if (inst) {
+					// Check Docker container state for per-user instance
+					try {
+						const {$} = await import('execa')
+						const result = await $`docker inspect --format={{.State.Status}} ${inst.containerName}`
+						const status = result.stdout.trim()
+						const stateMap: Record<string, string> = {running: 'running', exited: 'stopped', created: 'ready', paused: 'stopped'}
+						return {state: (stateMap[status] || 'ready') as any, progress: 0}
+					} catch {
+						return {state: 'ready' as const, progress: 0}
+					}
+				}
+			}
+
 			if (!(await ctx.apps.isInstalled(input.appId))) {
 				return {
 					state: 'not-installed' as const,
@@ -170,41 +202,83 @@ export const apps = router({
 			} as const
 		}),
 
-	// Uninstall an app
+	// Uninstall an app (handles per-user instances for non-admin)
 	uninstall: privateProcedure
 		.input(
 			z.object({
 				appId: z.string(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.uninstall(input.appId)),
+		.mutation(async ({ctx, input}) => {
+			// Non-admin: uninstall per-user instance
+			if (ctx.currentUser?.id && ctx.currentUser.role && ctx.currentUser.role !== 'admin') {
+				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
+				if (inst) {
+					await ctx.apps.uninstallForUser(input.appId, ctx.currentUser.id)
+					// Remove per-user subdomain
+					await ctx.apps.removeAppSubdomain(`${input.appId}:user:${ctx.currentUser.id}`)
+					return
+				}
+			}
+			return ctx.apps.uninstall(input.appId)
+		}),
 
-	// Restart an app
+	// Restart an app (handles per-user instances)
 	restart: privateProcedure
 		.input(
 			z.object({
 				appId: z.string(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.restart(input.appId)),
+		.mutation(async ({ctx, input}) => {
+			if (ctx.currentUser?.id) {
+				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
+				if (inst) {
+					const {$} = await import('execa')
+					await $`docker restart ${inst.containerName}`
+					return
+				}
+			}
+			return ctx.apps.restart(input.appId)
+		}),
 
-	// Start an app
+	// Start an app (handles per-user instances)
 	start: privateProcedure
 		.input(
 			z.object({
 				appId: z.string(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.getApp(input.appId).start()),
+		.mutation(async ({ctx, input}) => {
+			if (ctx.currentUser?.id) {
+				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
+				if (inst) {
+					const {$} = await import('execa')
+					await $`docker start ${inst.containerName}`
+					return
+				}
+			}
+			return ctx.apps.getApp(input.appId).start()
+		}),
 
-	// Stop an app
+	// Stop an app (handles per-user instances)
 	stop: privateProcedure
 		.input(
 			z.object({
 				appId: z.string(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.getApp(input.appId).stop({persistState: true})),
+		.mutation(async ({ctx, input}) => {
+			if (ctx.currentUser?.id) {
+				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
+				if (inst) {
+					const {$} = await import('execa')
+					await $`docker stop ${inst.containerName}`
+					return
+				}
+			}
+			return ctx.apps.getApp(input.appId).stop({persistState: true})
+		}),
 
 	// Update an app
 	update: privateProcedure
@@ -354,6 +428,45 @@ export const apps = router({
 		// Get user's per-user instances
 		const instances = await listUserAppInstances(userId)
 
+		// Enrich per-user instances with app metadata (name, icon, path)
+		const enrichedInstances = await Promise.all(
+			instances.map(async (inst) => {
+				const globalApp = ctx.apps.instances.find((a) => a.id === inst.appId)
+				let name = inst.appId
+				let icon = ''
+				let path = ''
+				if (globalApp) {
+					try {
+						const manifest = await globalApp.readManifest()
+						name = manifest.name || inst.appId
+						icon = manifest.icon || ''
+						path = manifest.path || ''
+						// Use builtin icon if available
+						const builtinApp = getBuiltinApp(inst.appId)
+						if (!icon && builtinApp?.icon) icon = builtinApp.icon
+						if (!icon) icon = `https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/${inst.appId}/icon.svg`
+					} catch { /* use defaults */ }
+				}
+				// Check Docker container state
+				let state = 'ready'
+				try {
+					const {$} = await import('execa')
+					const result = await $`docker inspect --format={{.State.Status}} ${inst.containerName}`
+					const status = result.stdout.trim()
+					const stateMap: Record<string, string> = {running: 'running', exited: 'stopped', created: 'ready', paused: 'stopped'}
+					state = stateMap[status] || 'ready'
+				} catch { /* default to ready */ }
+
+				return {
+					...inst,
+					name,
+					icon,
+					path,
+					state,
+				}
+			}),
+		)
+
 		// Get apps shared with / owned by this user
 		const allInstalledApps = ctx.apps.instances
 		const sharedAppIds: string[] = []
@@ -374,7 +487,7 @@ export const apps = router({
 		return {
 			globalApps: false,
 			sharedAppIds,
-			userInstances: instances,
+			userInstances: enrichedInstances,
 		}
 	}),
 })
