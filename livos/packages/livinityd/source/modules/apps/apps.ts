@@ -636,7 +636,12 @@ export default class Apps {
 		await $`rsync --archive --verbose --exclude ".gitkeep" ${appTemplatePath}/. ${userDataDir}`
 
 		// Read and patch compose file for this user
+		// Resolve legacy env vars that the app-script would normally set
+		const {hostname} = await import('os')
 		const compose = (await fse.readFile(`${userDataDir}/docker-compose.yml`, 'utf8'))
+			.replace(/\$\{APP_DATA_DIR\}/g, userDataDir)
+			.replace(/\$\{UMBREL_ROOT\}/g, this.#livinityd.dataDirectory)
+			.replace(/\$\{DEVICE_HOSTNAME\}/g, hostname())
 		const composeData = (await import('js-yaml')).default.load(compose) as any
 
 		// Detect internal port — prefer manifest.port (the web-accessible port)
