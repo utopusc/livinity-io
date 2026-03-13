@@ -75,6 +75,16 @@
 
 **Last phase number:** 4 (v6.0)
 
+### v7.0 — Multi-User Foundation
+**Completed:** 2026-03-13
+**Phases:** 1-5 (planned), implemented across sessions
+**Summary:** PostgreSQL migration, users/sessions/preferences tables, JWT with userId/role, login screen with avatars, invite system, user management, per-user file isolation, AI conversation isolation, app visibility/sharing, accent color picker, wallpaper selection per-user. Foundation for multi-user platform.
+
+**Last phase number:** 5 (v7.0)
+
 ## Active
 
-*No active milestone*
+### v7.1 — Per-User Isolation Completion
+**Started:** 2026-03-13
+**Phases:** 6-8 (3 phases, 15 requirements)
+**Goal:** Complete per-user isolation: wallpaper animation settings, integration configs (Telegram/Discord/Gmail/MCP/Voice), onboarding personalization, App Store per-user visibility.

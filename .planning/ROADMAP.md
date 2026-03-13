@@ -1,74 +1,52 @@
-# Roadmap: LivOS v7.0 — Multi-User Support
+# Roadmap: LivOS v7.1 — Per-User Isolation Completion
 
 ## Overview
 
-Transform LivOS from single-user to multi-user. Five phases: database foundation first, then login UI, then per-user data isolation, then Docker app routing, finally app sharing. Each phase builds on the previous. Existing single-user installations auto-migrate.
+Complete per-user isolation across UI settings, integrations, onboarding, and app store. Three phases: wallpaper animation + app store first (UI-only, quick wins), then integration/voice/MCP settings isolation (backend + frontend), finally onboarding personalization (new UI + AI prompt injection). Continues phase numbering from v7.0.
 
 ## Phases
 
-- [ ] **Phase 1: Database & Auth Foundation** — PostgreSQL, users table, JWT overhaul, session management, tRPC context
-- [ ] **Phase 2: Login Screen & User Management** — Avatar-based login page, invite system, Settings > Users section
-- [ ] **Phase 3: File & AI Isolation** — Per-user directories, path security, Redis namespacing, AI data scoping
-- [ ] **Phase 4: App Gateway & Docker Isolation** — Wildcard Caddy, dynamic proxy, per-user containers, compose templating
-- [ ] **Phase 5: App Sharing** — Right-click share, user picker dialog, auto-access, shared app routing
+- [ ] **Phase 6: Per-User UI Settings** — Wallpaper animation settings to PostgreSQL, App Store per-user visibility
+- [ ] **Phase 7: Per-User Integration & Voice Settings** — Telegram, Discord, Gmail, MCP, Voice configs per-user with nexus-core fallback
+- [ ] **Phase 8: Onboarding Personalization** — 4 AI personalization questions in onboarding wizard + system prompt injection
 
 ## Phase Details
 
-### Phase 1: Database & Auth Foundation
-**Goal**: PostgreSQL running, users table populated, JWT includes userId, auth works for existing single user
-**Requirements**: DB-01, DB-02, DB-03, DB-04, DB-05, DB-06, DB-07, DB-08, DB-09, DB-10
+### Phase 6: Per-User UI Settings
+**Goal**: Wallpaper animation settings stored per-user in PostgreSQL (not localStorage), App Store shows correct state per user
+**Requirements**: UISET-01, UISET-02, UISET-03, UISET-04, UISET-05
 **Success Criteria**:
-  1. PostgreSQL Docker container running and accessible from livinityd
-  2. Existing YAML user auto-migrated to admin in users table
-  3. JWT tokens contain {userId, role} and old {loggedIn: true} tokens still work during grace period
-  4. tRPC context has currentUser on all private procedures
-  5. Domain-wide cookie enables SSO across subdomains
+  1. User A changes wallpaper speed to 0.5x, User B still sees 1x — settings isolated
+  2. Wallpaper hue/brightness/saturation persist across browser sessions via server
+  3. App Store shows "Open" only for apps user has access to
+  4. App Store shows "Install" or "Request Access" for apps user doesn't have
+  5. Logging in as different user loads that user's wallpaper animation settings
 
-### Phase 2: Login Screen & User Management
-**Goal**: Beautiful login screen with user avatars, admin can invite users, manage users from Settings
-**Requirements**: LOGIN-01, LOGIN-02, LOGIN-03, LOGIN-04, LOGIN-05, USER-01, USER-02, USER-03, USER-04, USER-05
+### Phase 7: Per-User Integration & Voice Settings
+**Goal**: Each user stores their own Telegram, Discord, Gmail, MCP, and Voice configurations
+**Requirements**: INTEG-01, INTEG-02, INTEG-03, INTEG-04, INTEG-05, INTEG-06
 **Success Criteria**:
-  1. Visiting livinity.cloud when logged out shows login screen with user avatars
-  2. Clicking avatar + entering password logs in and redirects to desktop
-  3. Admin can create invite link from Settings > Users
-  4. Invited user can register via invite link
-  5. Admin can see all users, change roles, disable accounts
+  1. User A configures Telegram bot, User B's Telegram section shows unconfigured
+  2. Nexus-core reads per-user integration config when processing messages
+  3. Gmail OAuth per-user (each user links own Google account)
+  4. MCP servers configurable per-user in Settings
+  5. Voice API keys (Deepgram, Cartesia) stored per-user
+  6. Admin's existing global configs auto-migrate as their per-user configs
 
-### Phase 3: File & AI Isolation
-**Goal**: Each user has isolated files and AI conversations, no cross-user data leakage
-**Requirements**: FILE-01, FILE-02, FILE-03, FILE-04, AI-01, AI-02, AI-03, AI-04
+### Phase 8: Onboarding Personalization
+**Goal**: New users answer 4 personalization questions during onboarding, AI adapts its responses accordingly
+**Requirements**: ONBOARD-01, ONBOARD-02, ONBOARD-03, ONBOARD-04
 **Success Criteria**:
-  1. Each user sees only their own files in the File Manager
-  2. Path traversal attempts blocked (../../../etc/passwd returns 403)
-  3. Each user sees only their own AI conversations
-  4. AI agent tools (file read/write) scoped to current user's directory
-
-### Phase 4: App Gateway & Docker Isolation
-**Goal**: Same subdomain serves different containers per user, Caddy uses wildcard cert
-**Requirements**: GW-01, GW-02, GW-03, GW-04, GW-05, DOCKER-01, DOCKER-02, DOCKER-03, DOCKER-04, DOCKER-05
-**Success Criteria**:
-  1. Caddy uses single wildcard block for all subdomains
-  2. n8n.livinity.cloud routes admin to admin's container, member to member's container
-  3. Unauthenticated subdomain access redirects to login
-  4. Each user's app has its own Docker container, volume, and port
-  5. Shared apps (Jellyfin) serve all authorized users from single container
-
-### Phase 5: App Sharing
-**Goal**: Admin can share apps with other users via right-click context menu
-**Requirements**: SHARE-01, SHARE-02, SHARE-03, SHARE-04, SHARE-05
-**Success Criteria**:
-  1. Right-clicking app icon shows context menu with "Share" option
-  2. Share dialog shows user list with checkboxes
-  3. Shared app appears in target user's Apps section immediately
-  4. Admin can revoke shared access from Settings > Users
-  5. Accessing shared isolated app routes to sharer's container
+  1. Onboarding wizard shows role, use cases, style, tech stack questions after account setup
+  2. Answers saved to user_preferences table
+  3. AI responses reflect user's stated preferences (e.g., concise style for "brief" preference)
+  4. User can edit personalization from Settings > AI section
+  5. Users who skip personalization get default AI behavior
 
 ## Progress
 
 | Phase | Status | Requirements |
 |-------|--------|-------------|
-| 1. Database & Auth | Planned | DB-01..DB-10 |
-| 2. Login & Users | Planned | LOGIN-01..05, USER-01..05 |
-| 3. Files & AI | Planned | FILE-01..04, AI-01..04 |
-| 4. Gateway & Docker | Planned | GW-01..05, DOCKER-01..05 |
-| 5. App Sharing | Planned | SHARE-01..05 |
+| 6. UI Settings | Planned | UISET-01..05 |
+| 7. Integrations & Voice | Planned | INTEG-01..06 |
+| 8. Onboarding | Planned | ONBOARD-01..04 |

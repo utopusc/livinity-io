@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-12)
+See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works — now for the whole household.
-**Current milestone:** v7.0 — Multi-User Support
-**Current focus:** Defining requirements
+**Current milestone:** v7.1 — Per-User Isolation Completion
+**Current focus:** Planning and executing phases
 
 ## Current Position
 
-Milestone: v7.0 (Multi-User Support) — Starting
-Phase: Not started (defining requirements)
+Milestone: v7.1 (Per-User Isolation Completion) — Starting
+Phase: Not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-12 — Milestone v7.0 started
+Status: Defining requirements and roadmap
+Last activity: 2026-03-13 — Milestone v7.1 started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -22,14 +22,12 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
-- LivOS acts as dynamic proxy (Caddy wildcard → LivOS → per-user container routing)
-- PostgreSQL replaces YAML FileStore for multi-user data
-- Domain-wide SSO cookie on .livinity.cloud for seamless subdomain auth
-- Same subdomain serves different containers based on authenticated user
-- Docker compose files templated per-user (container name, port, volume, network)
-- Invite-only user registration (admin generates invite links)
-- Shared Kimi API auth, per-user AI data isolation via Redis key namespacing
-- Apps declare multiUserMode in manifest: 'shared' (single container) or 'isolated' (per-user)
+- Per-user settings via user_preferences table (key-value, already exists)
+- Wallpaper animation: migrate from localStorage to PostgreSQL user_preferences
+- Integration configs: each user stores their own bot tokens (not shared bot routing)
+- Nexus-core reads per-user config with fallback to global for backward compat
+- Onboarding: 4 questions (role, use cases, style, tech stack) → stored as preferences → injected into AI prompt
+- App Store: filter "Open" button based on user_app_access
 
 ### Pending Todos
 
@@ -37,12 +35,11 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Blockers/Concerns
 
-- Docker compose files come from GitHub — templating must handle arbitrary compose structures
-- 8GB RAM budget limits per-user container count (need resource tracking)
-- Existing single-user data must auto-migrate to admin account on first boot
+- Nexus-core runs compiled JS — must rebuild after every source change
+- Global Redis keys must keep working as fallback for admin
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Milestone initialized, ready for research/requirements
+Last session: 2026-03-13
+Stopped at: Milestone initialized, creating requirements and roadmap
 Resume file: None
