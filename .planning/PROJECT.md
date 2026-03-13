@@ -2,26 +2,28 @@
 
 ## What This Is
 
-LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users interact via Telegram, Discord, and a web UI. The AI agent runs through Kimi Code (replacing Claude Code), with MCP tools for shell, Docker, files, browser control, and more. The goal is an OpenClaw-class personal AI platform that anyone can install with a single command.
+LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users interact via Telegram, Discord, and a web UI. The AI agent runs through Kimi Code, with MCP tools for shell, Docker, files, browser control, and more. The goal is an OpenClaw-class personal AI platform that anyone can install with a single command — now expanding to support multiple users sharing the same server.
 
 ## Core Value
 
-**One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use.
+**One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use — now for the whole household.
 
-## Current Milestone: v6.0 — Claude Code → Kimi Code Migration
+## Current Milestone: v7.0 — Multi-User Support
 
-**Goal:** Complete migration from Claude Code to Kimi Code as the AI backbone. Remove all Anthropic/Claude dependencies, replace with Kimi Code CLI + auth system, adapt MCP tools, update UI, remove Gemini fallback.
+**Goal:** Transform LivOS from a single-user system into a multi-user platform where multiple people share one server, each with isolated apps, files, AI conversations, and personalized experience — while the admin retains full control.
 
 **Target features:**
-- Replace Claude Code CLI with Kimi Code CLI installation and auth flow
-- Implement KimiProvider (replaces ClaudeProvider) with Kimi's OAuth-style auth
-- Replace SdkAgentRunner with Kimi Code equivalent agent runner
-- Write MCP adapter layer for Kimi Code's tool calling format
-- Remove Gemini fallback — Kimi as sole AI provider
-- Update Settings UI: Kimi auth flow (URL → code → paste), remove Claude/Gemini sections
-- Update onboarding wizard for Kimi Code setup
-- Remove @anthropic-ai/sdk and @anthropic-ai/claude-agent-sdk dependencies
-- Clean all Redis keys, env vars, config schema for Kimi
+- PostgreSQL database migration from single-user YAML FileStore
+- User account system with RBAC (admin/member/guest)
+- Beautiful login screen with user avatar selection
+- Per-user Docker app instances (same subdomain, different container per user)
+- Dynamic App Gateway proxy (LivOS routes based on authenticated user)
+- App sharing system (right-click → Share → select user → auto-access)
+- Per-user file system isolation (/opt/livos/data/users/{username}/files/)
+- Redis key namespacing for AI data isolation (nexus:u:{userId}:*)
+- Domain-wide SSO cookie (.livinity.cloud) for seamless subdomain auth
+- Docker compose templating system for per-user app instances
+- Wildcard Caddy config (all subdomains → LivOS dynamic proxy)
 
 ## Requirements
 
@@ -98,71 +100,86 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Apple Spotlight search, terminal dark theme, desktop search button — v5.3
 - ✓ Strategic research (8 reports) — v5.3
 
-### Active (v6.0 — Claude Code → Kimi Code Migration)
+### Validated (v6.0 — Kimi Code Migration)
 
-- [ ] Install Kimi Code CLI on server, verify it works
-- [ ] Implement KimiProvider with Kimi's OAuth auth flow (URL → code → paste)
-- [ ] Replace SdkAgentRunner with Kimi Code agent runner
-- [ ] Write MCP adapter for Kimi Code's tool calling format
-- [ ] Remove ClaudeProvider, Gemini fallback, all Anthropic SDK imports
-- [ ] Update config schema (models, auth methods, Redis keys)
-- [ ] Update Settings UI for Kimi auth and config
-- [ ] Update onboarding wizard for Kimi Code setup
-- [ ] Remove @anthropic-ai/sdk and @anthropic-ai/claude-agent-sdk packages
-- [ ] End-to-end test: UI chat → Kimi Code → tool execution → response
+- ✓ KimiProvider with OpenAI-compatible API, tool calling, streaming — v6.0
+- ✓ KimiAgentRunner with CLI print mode + MCP bridging — v6.0
+- ✓ Settings UI for Kimi auth and config — v6.0
+- ✓ Onboarding wizard updated for Kimi Code — v6.0
+- ✓ All Claude/Anthropic/Gemini code removed — v6.0
+- ✓ Tool approval system with Telegram inline buttons — v6.0
+- ✓ Chat UI approval prompt — v6.0
+
+### Active (v7.0 — Multi-User Support)
+
+- [ ] PostgreSQL migration from YAML FileStore
+- [ ] Users table with RBAC (admin/member/guest)
+- [ ] Session-based auth with domain-wide SSO cookie
+- [ ] Login screen with user avatar selection
+- [ ] Per-user Docker app instances with compose templating
+- [ ] Dynamic App Gateway proxy (same subdomain → different container per user)
+- [ ] App sharing system (right-click → Share → auto-access for target user)
+- [ ] Per-user file system isolation
+- [ ] Redis key namespacing for AI data isolation
+- [ ] Wildcard Caddy config for dynamic routing
+- [ ] User management UI in Settings (invite, roles, app access)
 
 ### Out of Scope
 
 - WhatsApp — disabled for v2.0, only Telegram + Discord
 - Slack/Matrix — already built in v1.5, maintenance only
 - Mobile app — web-first approach, mobile later
-- Multi-tenancy — single-user home server focus
 - Cloud hosting option — self-hosted only
 - Native desktop/mobile apps — web-based only for now
 - Payment/billing system — free open source project
 - Self-hosted LLM support — Kimi Code only for now
-- New backend features — UI only for v5.0
 - Dark theme — fully light theme only
+- Open self-registration — invite-only for security
+- Per-user billing/quotas — simple shared server model first
 
 ## Context
 
-**Current State (post v4.0 revert):**
-- Running production on Contabo VPS (45.137.194.103)
-- UI: Vite + React 18 + Tailwind 3.4 + shadcn/ui
-- v4.0 ui-next (Next.js 16) was built but reverted back to Vite/React
-- Current UI has dark theme with semantic tokens in tailwind.config.ts
-- Glassmorphic onboarding wizard exists but has hardcoded English and dark-only colors
-- motion-primitives already partially installed (5 components in src/components/motion-primitives/)
-- Tailwind config has semantic tokens (text-primary, text-secondary, surface-base, etc.) but all hardcoded to dark values
+**Current State (post v6.0):**
+- Running production on Contabo VPS (45.137.194.103), 8GB RAM
+- Single-user: one YAML FileStore, JWT {loggedIn: true}, no userId in tokens
+- Nexus already has JID-based sessions (Telegram/Discord) but web UI is hardcoded 'web-ui'
+- Caddy reverse proxy with per-app subdomain configs (rebuilt on each app install)
+- Docker apps pulled from GitHub repos, patchComposeFile() modifies compose during install
+- Domain: livinity.cloud with wildcard DNS available
 
 **Technical Environment:**
 - Node.js 22+, TypeScript 5.7+
 - React 18 + Vite for frontend
 - Tailwind CSS 3.4 with semantic design tokens
-- shadcn/ui components
-- Framer Motion for animations
-- motion-primitives (partially installed)
+- shadcn/ui components + Framer Motion
 - Express + tRPC for backend
+- Redis (ioredis) for sessions, configs, AI data
+- Docker for app management
+- Caddy for reverse proxy + auto HTTPS
+- Kimi Code as sole AI provider
 
 ## Constraints
 
-- **UI Framework**: Vite + React 18 (NOT Next.js)
-- **Theme**: Light theme ONLY (no dark mode toggle)
-- **Component Library**: motion-primitives.com/docs as primary source
-- **Design System**: Update existing tailwind semantic tokens for light values
-- **i18n**: All user-facing strings must use t() function
-- **Compatibility**: Must work with existing tRPC backend (no backend changes)
-- **Piece-by-piece**: Each screen is a separate phase, approved individually
+- **Zero-downtime migration**: Existing single-user installation must auto-migrate
+- **Resource budget**: 8GB RAM server, 3-5 users max
+- **Security**: Per-user file isolation at OS level, path traversal prevention
+- **Docker compose**: Apps come from GitHub repos — must template per-user without forking
+- **Backward compatible**: Multi-user off by default, admin enables when ready
+- **Cookie domain**: SSO requires `.livinity.cloud` domain-wide cookie
+- **Single Kimi auth**: All users share same Kimi API credentials, data isolated per user
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Keep Vite/React over Next.js | v4.0 Next.js rewrite was reverted; Vite/React is proven stable | ✓ Good |
-| Light theme only | User preference, cleaner professional look | — Pending |
-| motion-primitives | Professional animations, referenced by user | — Pending |
-| Piece-by-piece phases | User wants to approve each screen individually | — Pending |
-| Full i18n | Current wizard has hardcoded strings, must fix | — Pending |
+| Kimi Code as sole AI provider | v6.0 migration complete, working in production | ✓ Good |
+| LivOS as dynamic proxy (not Caddy per-user) | Caddy can't do dynamic upstream routing based on auth; LivOS handles it | — Pending |
+| PostgreSQL over extending YAML | YAML FileStore can't handle concurrent multi-user safely | — Pending |
+| Shared-database, app-level isolation | Simpler than per-user DB schemas; matches Nextcloud pattern | — Pending |
+| Invite-only registration | Home servers should never have open self-registration | — Pending |
+| Per-user Docker networks | iptables isolation between user containers | — Pending |
+| Compose templating over forking | Docker compose files from GitHub get modified per-user at install time | — Pending |
 
 ---
-*Last updated: 2026-03-09 — v6.0 milestone (Claude Code → Kimi Code Migration)*
+*Last updated: 2026-03-12 — v7.0 milestone (Multi-User Support)*
