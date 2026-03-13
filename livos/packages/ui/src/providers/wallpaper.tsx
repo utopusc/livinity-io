@@ -1,4 +1,4 @@
-import {createContext, ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useState} from 'react'
+import {createContext, ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState} from 'react'
 import {usePreviousDistinct} from 'react-use'
 import {arrayIncludes} from 'ts-extras'
 
@@ -55,7 +55,7 @@ const defaultSettings: WallpaperSettings = {
 	saturation: 1,
 }
 
-function loadSettings(): WallpaperSettings {
+function loadSettingsFromLocalStorage(): WallpaperSettings {
 	try {
 		const stored = localStorage.getItem(SETTINGS_KEY)
 		if (!stored) return defaultSettings
@@ -63,12 +63,6 @@ function loadSettings(): WallpaperSettings {
 	} catch {
 		return defaultSettings
 	}
-}
-
-function saveSettings(settings: WallpaperSettings) {
-	try {
-		localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-	} catch {}
 }
 
 // ---
@@ -115,13 +109,30 @@ export function WallpaperProvider({
 }) {
 	const [isLoading, setIsLoading] = useState(false)
 	const [wallpaperFullyVisible, setWallpaperFullyVisible] = useState(true)
-	const [settings, setSettings] = useState<WallpaperSettings>(loadSettings)
+	// Initialize from localStorage for instant first paint, then sync from server
+	const [settings, setSettings] = useState<WallpaperSettings>(loadSettingsFromLocalStorage)
 
 	const prevId = usePreviousDistinct(wallpaper.id)
 
 	// Query user's custom accent color
 	const userQ = trpcReact.user.accentColor.useQuery(undefined, {retry: false})
 	const accentColor = userQ.data ?? null
+
+	// Query per-user wallpaper animation settings from server
+	const settingsQ = trpcReact.preferences.get.useQuery({keys: ['wallpaperSettings']}, {retry: false})
+	const settingsMut = trpcReact.preferences.set.useMutation()
+	const serverSynced = useRef(false)
+
+	// Sync server settings to local state when query loads
+	useEffect(() => {
+		if (settingsQ.data && !serverSynced.current) {
+			serverSynced.current = true
+			const remote = settingsQ.data['wallpaperSettings']
+			if (remote && typeof remote === 'object') {
+				setSettings((prev) => ({...prev, ...remote}))
+			}
+		}
+	}, [settingsQ.data])
 
 	useWallpaperCssVars(wallpaper.id, accentColor)
 
@@ -134,10 +145,11 @@ export function WallpaperProvider({
 	const updateSettings = useCallback((partial: Partial<WallpaperSettings>) => {
 		setSettings((prev) => {
 			const next = {...prev, ...partial}
-			saveSettings(next)
+			// Save to server (per-user)
+			settingsMut.mutate({key: 'wallpaperSettings', value: next})
 			return next
 		})
-	}, [])
+	}, [settingsMut])
 
 	return (
 		<WallPaperContext.Provider

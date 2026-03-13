@@ -48,6 +48,8 @@ export function useAppInstall(id: string) {
 		utils.apps.state.invalidate({appId: id})
 		// Invalidate list of apps on desktop
 		utils.apps.list.invalidate()
+		// Invalidate user's accessible apps (for multi-user access control)
+		utils.apps.myApps.invalidate()
 		// Invalidate latest app opens
 		utils.user.get.invalidate()
 	}

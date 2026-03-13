@@ -119,7 +119,7 @@ export const apps = router({
 		return appDataSortedByNames
 	}),
 
-	// Install an app
+	// Install an app (or grant access if already installed)
 	install: privateProcedure
 		.input(
 			z.object({
@@ -129,6 +129,15 @@ export const apps = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
+			// If app is already installed, just grant access to the current user
+			const alreadyInstalled = await ctx.apps.isInstalled(input.appId)
+			if (alreadyInstalled) {
+				if (ctx.currentUser?.id) {
+					await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
+				}
+				return {alreadyInstalled: true}
+			}
+
 			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides)
 			// Auto-grant access to the installing user
 			if (ctx.currentUser?.id) {
