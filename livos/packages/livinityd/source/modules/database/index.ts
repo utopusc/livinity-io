@@ -477,6 +477,76 @@ export async function listAppAccessUsers(appId: string): Promise<Array<{userId: 
 	return rows.map((r: any) => ({userId: r.user_id, username: r.username, grantedAt: r.granted_at}))
 }
 
+// ── User Preferences ────────────────────────────────────────────────────
+
+/**
+ * Get a single preference for a user.
+ * Returns the JSONB value or null if not found.
+ */
+export async function getUserPreference(userId: string, key: string): Promise<any | null> {
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`SELECT value FROM user_preferences WHERE user_id = $1 AND key = $2`,
+		[userId, key],
+	)
+	if (rows.length === 0) return null
+	return rows[0].value
+}
+
+/**
+ * Set a single preference for a user (upsert).
+ */
+export async function setUserPreference(userId: string, key: string, value: any): Promise<void> {
+	if (!pool) throw new Error('Database not initialized')
+	await pool.query(
+		`INSERT INTO user_preferences (user_id, key, value, updated_at)
+		 VALUES ($1, $2, $3, NOW())
+		 ON CONFLICT (user_id, key) DO UPDATE SET
+			value = EXCLUDED.value,
+			updated_at = NOW()`,
+		[userId, key, JSON.stringify(value)],
+	)
+}
+
+/**
+ * Get multiple preferences for a user.
+ * If `keys` is provided, only those keys are returned. Otherwise, all preferences are returned.
+ * Returns a Record<string, any> mapping key to value.
+ */
+export async function getUserPreferences(userId: string, keys?: string[]): Promise<Record<string, any>> {
+	if (!pool) return {}
+	let rows: any[]
+	if (keys && keys.length > 0) {
+		const result = await pool.query(
+			`SELECT key, value FROM user_preferences WHERE user_id = $1 AND key = ANY($2)`,
+			[userId, keys],
+		)
+		rows = result.rows
+	} else {
+		const result = await pool.query(
+			`SELECT key, value FROM user_preferences WHERE user_id = $1`,
+			[userId],
+		)
+		rows = result.rows
+	}
+	const prefs: Record<string, any> = {}
+	for (const row of rows) {
+		prefs[row.key] = row.value
+	}
+	return prefs
+}
+
+/**
+ * Delete a preference for a user.
+ */
+export async function deleteUserPreference(userId: string, key: string): Promise<void> {
+	if (!pool) return
+	await pool.query(
+		`DELETE FROM user_preferences WHERE user_id = $1 AND key = $2`,
+		[userId, key],
+	)
+}
+
 /**
  * Gracefully close the database pool.
  */

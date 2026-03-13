@@ -8,6 +8,7 @@ import {router, publicProcedure, privateProcedure, adminProcedure} from '../serv
 import * as totp from '../utilities/totp.js'
 import {
 	getPool,
+	findUserById,
 	findUserByUsername,
 	createUser,
 	getAdminUser,
@@ -18,6 +19,10 @@ import {
 	createInvite,
 	findValidInvite,
 	markInviteUsed,
+	getUserPreference,
+	setUserPreference,
+	getUserPreferences,
+	deleteUserPreference,
 } from '../database/index.js'
 
 const ONE_SECOND = 1000
@@ -326,26 +331,43 @@ export default router({
 
 	// Returns the current user
 	get: privateProcedure.query(async ({ctx}) => {
-		const user = await ctx.user.get()
+		// Get YAML data as fallback defaults
+		const yamlUser = await ctx.user.get()
 
-		if (user.wallpaper === undefined) {
-			user.wallpaper = DEFAULT_WALLPAPER
+		// If we have a multi-user session, read from PostgreSQL
+		if (ctx.currentUser) {
+			const dbUser = await findUserById(ctx.currentUser.id)
+			const prefs = await getUserPreferences(ctx.currentUser.id, [
+				'wallpaper',
+				'language',
+				'temperatureUnit',
+				'accentColor',
+			])
+
+			return {
+				// Display name from the database users table (correct per-user name)
+				name: dbUser?.displayName ?? yamlUser?.name ?? '',
+				// Preferences from user_preferences, falling back to YAML defaults
+				wallpaper: prefs.wallpaper ?? yamlUser?.wallpaper ?? DEFAULT_WALLPAPER,
+				language: prefs.language ?? yamlUser?.language,
+				temperatureUnit: prefs.temperatureUnit ?? yamlUser?.temperatureUnit,
+				// Multi-user info
+				id: ctx.currentUser.id,
+				username: ctx.currentUser.username,
+				role: ctx.currentUser.role,
+			}
 		}
 
-		// Only return non sensitive data
+		// Legacy single-user mode: read everything from YAML
+		if (yamlUser?.wallpaper === undefined && yamlUser) {
+			yamlUser.wallpaper = DEFAULT_WALLPAPER
+		}
+
 		return {
-			name: user.name,
-			wallpaper: user.wallpaper,
-			language: user.language,
-			temperatureUnit: user.temperatureUnit,
-			// Include multi-user info if available
-			...(ctx.currentUser
-				? {
-						id: ctx.currentUser.id,
-						username: ctx.currentUser.username,
-						role: ctx.currentUser.role,
-					}
-				: {}),
+			name: yamlUser?.name,
+			wallpaper: yamlUser?.wallpaper ?? DEFAULT_WALLPAPER,
+			language: yamlUser?.language,
+			temperatureUnit: yamlUser?.temperatureUnit,
 		}
 	}),
 
@@ -363,17 +385,47 @@ export default router({
 				.strict(),
 		)
 		.mutation(async ({ctx, input}) => {
-			if (input.name) await ctx.user.setName(input.name)
-			if (input.wallpaper) await ctx.user.setWallpaper(input.wallpaper)
-			if (input.language) await ctx.user.setLanguage(input.language)
-			if (input.temperatureUnit) await ctx.user.setTemperatureUnit(input.temperatureUnit)
-			if (input.accentColor !== undefined) await ctx.user.setAccentColor(input.accentColor)
+			// If multi-user mode, write preferences to PostgreSQL
+			if (ctx.currentUser) {
+				if (input.name) {
+					await updateUserDisplayName(ctx.currentUser.id, input.name)
+				}
+				if (input.wallpaper) {
+					await setUserPreference(ctx.currentUser.id, 'wallpaper', input.wallpaper)
+				}
+				if (input.language) {
+					await setUserPreference(ctx.currentUser.id, 'language', input.language)
+				}
+				if (input.temperatureUnit) {
+					await setUserPreference(ctx.currentUser.id, 'temperatureUnit', input.temperatureUnit)
+				}
+				if (input.accentColor !== undefined) {
+					if (input.accentColor === null) {
+						await deleteUserPreference(ctx.currentUser.id, 'accentColor')
+					} else {
+						await setUserPreference(ctx.currentUser.id, 'accentColor', input.accentColor)
+					}
+				}
+			} else {
+				// Legacy single-user mode: write to YAML
+				if (input.name) await ctx.user.setName(input.name)
+				if (input.wallpaper) await ctx.user.setWallpaper(input.wallpaper)
+				if (input.language) await ctx.user.setLanguage(input.language)
+				if (input.temperatureUnit) await ctx.user.setTemperatureUnit(input.temperatureUnit)
+				if (input.accentColor !== undefined) await ctx.user.setAccentColor(input.accentColor)
+			}
 
 			return true
 		}),
 
 	// Get custom accent color
 	accentColor: privateProcedure.query(async ({ctx}) => {
+		// If multi-user mode, read from PostgreSQL
+		if (ctx.currentUser) {
+			const value = await getUserPreference(ctx.currentUser.id, 'accentColor')
+			return value ?? null
+		}
+		// Legacy single-user mode: read from YAML
 		return ctx.user.getAccentColor()
 	}),
 

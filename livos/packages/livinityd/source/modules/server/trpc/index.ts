@@ -7,6 +7,7 @@ import migration from '../../migration/routes.js'
 import system from '../../system/routes.js'
 import wifi from '../../system/wifi-routes.js'
 import user from '../../user/routes.js'
+import preferences from '../../user/preferences-routes.js'
 import {appStore, apps} from '../../apps/routes.js'
 import widget from '../../widgets/routes.js'
 import files from '../../files/routes.js'
@@ -24,6 +25,7 @@ const appRouter = router({
 	system,
 	wifi,
 	user,
+	preferences,
 	appStore,
 	apps,
 	widget,
