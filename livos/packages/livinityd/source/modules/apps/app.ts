@@ -118,7 +118,7 @@ export default class App {
 		}
 
 		// Expose the app port to host for Caddy reverse proxy
-		// Find the main service and detect its internal port
+		// manifest.port is the authoritative web port (both host and container internal)
 		if (manifest.port) {
 			const mainServiceName = Object.keys(compose.services!).find(name =>
 				name === 'server' || name === 'app' || name === 'web'
@@ -127,60 +127,26 @@ export default class App {
 			if (mainServiceName && compose.services![mainServiceName]) {
 				const service = compose.services![mainServiceName]
 
-				// Detect the internal port the container listens on
-				let internalPort: number | null = null
-
-				// 1. Check existing port mappings (format: "hostPort:containerPort" or just "port")
-				if (service.ports && Array.isArray(service.ports)) {
-					for (const p of service.ports) {
-						const portStr = p.toString()
-						if (portStr.includes(':')) {
-							// Extract container port from "host:container" format
-							const parts = portStr.split(':')
-							internalPort = parseInt(parts[parts.length - 1], 10)
-							break
-						}
-					}
-				}
-
-				// 2. Check expose directive
-				if (!internalPort && service.expose && Array.isArray(service.expose)) {
-					internalPort = parseInt(service.expose[0].toString(), 10)
-				}
-
-				// 3. Fallback to common internal ports based on app patterns
-				if (!internalPort) {
-					// Common patterns: code-server=8080, vikunja=3456, most apps=8080 or 3000
-					const commonPorts: Record<string, number> = {
-						'chromium': 3000,
-						'code-server': 8080,
-						'vikunja': 3456,
-						'nextcloud': 80,
-						'jellyfin': 8096,
-						'gitea': 3000,
-						'grafana': 3000,
-						'uptime-kuma': 3001,
-						'n8n': 5678,
-						'portainer': 9000,
-						'home-assistant': 8123,
-					}
-					internalPort = commonPorts[this.id] || 8080
-				}
-
-				// Create proper port mapping: manifest.port (host) -> internalPort (container)
-				const portMapping = `127.0.0.1:${manifest.port}:${internalPort}`
+				// manifest.port is the port the container's web UI listens on internally
+				// AND the host port we bind to for Caddy reverse proxy
+				const portMapping = `127.0.0.1:${manifest.port}:${manifest.port}`
 				if (!service.ports) {
 					service.ports = []
 				}
 
-				// Remove any existing mappings to manifest.port to avoid conflicts
+				// Remove any existing mappings that reference manifest.port as host port
+				// Handles formats: "8096:X", "127.0.0.1:8096:X", "0.0.0.0:8096:X"
 				service.ports = (service.ports as string[]).filter(p => {
 					const portStr = p.toString()
-					return !portStr.startsWith(`${manifest.port}:`)
+					return !portStr.includes(`:${manifest.port}:`) && !portStr.startsWith(`${manifest.port}:`)
 				})
 
-				service.ports.push(portMapping)
-				this.logger.log(`Exposed port ${manifest.port}:${internalPort} for ${this.id}`)
+				// Only add if not already present
+				if (!service.ports.some(p => p.toString() === portMapping)) {
+					service.ports.push(portMapping)
+				}
+
+				this.logger.log(`Exposed port ${manifest.port}:${manifest.port} for ${this.id}`)
 			}
 		}
 
