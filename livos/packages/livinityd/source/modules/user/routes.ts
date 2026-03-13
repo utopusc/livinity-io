@@ -433,6 +433,12 @@ export default router({
 	// Returns the users wallpaper
 	// This endpoint is public so it can be shown on the login screen
 	wallpaper: publicProcedure.query(async ({ctx}) => {
+		// Multi-user: read from PostgreSQL preferences
+		if (ctx.currentUser) {
+			const value = await getUserPreference(ctx.currentUser.id, 'wallpaper')
+			if (value) return value
+		}
+		// Legacy single-user mode or fallback: read from YAML
 		const user = await ctx.user.get()
 		return user?.wallpaper ?? DEFAULT_WALLPAPER
 	}),
@@ -440,6 +446,12 @@ export default router({
 	// Returns the preferred language, if any
 	// This endpoint is public so it can be used on the login screen
 	language: publicProcedure.query(async ({ctx}) => {
+		// Multi-user: read from PostgreSQL preferences
+		if (ctx.currentUser) {
+			const value = await getUserPreference(ctx.currentUser.id, 'language')
+			if (value) return value
+		}
+		// Legacy or fallback
 		const user = await ctx.user.get()
 		return user?.language ?? null
 	}),
