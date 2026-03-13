@@ -59,7 +59,7 @@ export const trpcWssHandler = ({
 	return applyWSSHandler({
 		wss,
 		router: appRouter,
-		createContext: () => createContextWss({livinityd, logger}),
+		createContext: ({req}) => createContextWss({livinityd, logger, req}),
 		onError({error, ctx, path}) {
 			logger.error(`WS ${path}`, error)
 		},
