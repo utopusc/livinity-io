@@ -144,6 +144,15 @@ export const router = createBrowserRouter([
 				path: 'factory-reset/*',
 				element: <FactoryReset />,
 			},
+		],
+	},
+
+	// onboarding + invite (gradient glassmorphism background)
+	{
+		path: '/',
+		Component: GradientLayout,
+		ErrorBoundary: ErrorBoundaryPageFallback,
+		children: [
 			{
 				path: 'invite/:token',
 				element: <InviteAcceptPage />,
