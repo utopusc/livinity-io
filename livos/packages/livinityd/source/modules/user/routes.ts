@@ -156,14 +156,22 @@ export default router({
 				: await ctx.server.signToken()
 
 			// Set domain-wide session cookie for cross-subdomain auth
-			const sessionExpires = new Date(Date.now() + 30 * ONE_DAY)
+			// Read the configured domain so the cookie covers *.domain too
+			let cookieDomain: string | undefined
+			try {
+				const domainConfigRaw = await ctx.livinityd.ai.redis.get('livos:domain:config')
+				if (domainConfigRaw) {
+					const dc = JSON.parse(domainConfigRaw)
+					if (dc.active && dc.domain) cookieDomain = `.${dc.domain}`
+				}
+			} catch { /* ignore – fall back to no explicit domain */ }
+
 			ctx.response!.cookie('LIVINITY_SESSION', apiToken, {
 				httpOnly: true,
 				secure: true,
 				sameSite: 'lax',
 				maxAge: 30 * ONE_DAY,
-				// Domain cookie will be set by the proxy/reverse-proxy layer
-				// since we can't know the exact domain at runtime
+				...(cookieDomain ? {domain: cookieDomain} : {}),
 			})
 
 			return apiToken
@@ -203,9 +211,21 @@ export default router({
 	// Deletes the proxy token cookie
 	// The JWT needs to be deleted from the client side
 	logout: privateProcedure.mutation(async ({ctx}) => {
-		ctx.response!.clearCookie('LIVINITY_PROXY_TOKEN')
+		// Read domain for cookie clearing
+		let cookieDomain: string | undefined
+		try {
+			const domainConfigRaw = await ctx.livinityd.ai.redis.get('livos:domain:config')
+			if (domainConfigRaw) {
+				const dc = JSON.parse(domainConfigRaw)
+				if (dc.active && dc.domain) cookieDomain = `.${dc.domain}`
+			}
+		} catch { /* ignore */ }
 
-		// Return API token
+		ctx.response!.clearCookie('LIVINITY_PROXY_TOKEN')
+		ctx.response!.clearCookie('LIVINITY_SESSION', {
+			...(cookieDomain ? {domain: cookieDomain} : {}),
+		})
+
 		return true
 	}),
 
