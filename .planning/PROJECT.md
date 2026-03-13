@@ -8,17 +8,10 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 
 **One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use — now for the whole household.
 
-## Current Milestone: v7.1 — Per-User Isolation Completion
+## Current Milestone: Pending
 
-**Goal:** Complete per-user isolation across all settings, integrations, onboarding, and app store — building on the v7.0 database, auth, login, and basic isolation foundation already implemented.
-
-**Target features:**
-- Per-user wallpaper animation settings (localStorage → PostgreSQL user_preferences)
-- Per-user integration configs (Telegram, Discord, Gmail) with nexus-core multi-user support
-- Per-user MCP server settings
-- Per-user Voice settings (Deepgram/Cartesia API keys)
-- Onboarding personalization questions (role, use cases, style, tech stack → AI prompt)
-- App Store per-user visibility (only show "Open" for apps user has access to)
+**Previous:** v7.2 (Per-User Docker Isolation & Bugfixes) — Complete 2026-03-13
+**Next:** TBD
 
 ## Requirements
 
@@ -62,17 +55,25 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - ✓ Auto-grant app access on install
 - ✓ Legacy app auto-migration for admin users
 
-### Active (v7.1 — Per-User Isolation Completion)
+### Validated (v7.1 — Per-User Isolation Completion)
 
-- [ ] Per-user wallpaper animation settings (speed, hue, brightness, saturation)
-- [ ] Per-user Telegram bot configuration
-- [ ] Per-user Discord bot configuration
-- [ ] Per-user Gmail OAuth credentials
-- [ ] Per-user MCP server settings
-- [ ] Per-user Voice settings (Deepgram/Cartesia keys)
-- [ ] Onboarding personalization questions (role, use cases, style, tech stack)
-- [ ] AI system prompt personalization from user preferences
-- [ ] App Store per-user state (installed vs available vs accessible)
+- ✓ Per-user wallpaper animation settings (speed, hue, brightness, saturation) via PostgreSQL
+- ✓ Per-user Telegram bot configuration via user_preferences
+- ✓ Per-user Discord bot configuration via user_preferences
+- ✓ Per-user Gmail OAuth credentials via user_preferences
+- ✓ Per-user Voice settings (Deepgram/Cartesia keys) via user_preferences
+- ✓ Onboarding personalization questions (role, use cases, style → AI prompt)
+- ✓ AI system prompt personalization from user preferences
+- ✓ App Store per-user state (installed vs available vs accessible)
+
+### Validated (v7.2 — Per-User Docker Isolation)
+
+- ✓ Per-user Docker container isolation (installForUser with dedicated ports/volumes)
+- ✓ Per-user subdomain routing (appId-username pattern)
+- ✓ Caddy multi-user gateway (all subdomains → livinityd → per-user port)
+- ✓ Per-user container restart on startup
+- ✓ Manifest fallback (umbrel-app.yml → livinity-app.yml)
+- ✓ Legacy env var resolution in per-user compose files
 
 ### Out of Scope
 
@@ -85,7 +86,7 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 - Dark theme — fully light theme only
 - Open self-registration — invite-only for security
 - Per-user billing/quotas — simple shared server model first
-- Per-user Docker container isolation (compose templating) — deferred to v7.2
+- Per-user MCP server settings — deferred, requires deeper nexus-core architecture changes
 
 ## Context
 
@@ -130,4 +131,4 @@ LivOS is a self-hosted home server operating system with an integrated autonomou
 | Global keys remain for admin backward compat | Admin user falls back to global Redis keys if no per-user key exists | Pending |
 
 ---
-*Last updated: 2026-03-13 — v7.1 milestone (Per-User Isolation Completion)*
+*Last updated: 2026-03-13 — v7.2 complete (Per-User Docker Isolation), next milestone pending*

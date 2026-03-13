@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** One-command deployment of a personal AI-powered server that just works — now for the whole household.
-**Current milestone:** v7.1 — Per-User Isolation Completion
-**Current focus:** Deploy and verify
+**Current milestone:** Pending — v7.1 and v7.2 complete
+**Current focus:** Define next milestone
 
 ## Current Position
 
-Milestone: v7.1 (Per-User Isolation Completion) — Complete
-Phase: All phases (6, 7, 8) complete
+Milestone: v7.2 (Per-User Docker Isolation & Bugfixes) — Complete
+Phase: All complete
 Plan: —
-Status: Ready for deployment
-Last activity: 2026-03-13 — All phases implemented and committed
+Status: Ready for next milestone
+Last activity: 2026-03-13 — All per-user isolation + Docker bugs fixed, 24/24 tests pass
 
 Progress: [██████████] 100%
 
@@ -22,26 +22,24 @@ Progress: [██████████] 100%
 
 ### Decisions
 
-- Per-user settings via user_preferences table (key-value JSONB, already exists)
-- Wallpaper animation: migrated from localStorage to PostgreSQL user_preferences with server sync
-- Integration configs: per-user PostgreSQL storage, admin also syncs to global Redis for backward compat
-- Nexus-core reads per-user personalization from request body (livinityd reads from PostgreSQL)
-- Onboarding: 3 questions (role, use cases, style) → localStorage during invite → synced on first login
-- App Store: filter "Open" button based on user_app_access, show "Install" for unowned apps
-- INTEG-04 (per-user MCP settings) deferred to v7.2 — requires deeper nexus-core architecture changes
+- Per-user settings via user_preferences table (key-value JSONB)
+- Per-user Docker containers with dedicated ports (10000+), subdomains (appId-username), and volumes
+- INTEG-04 (per-user MCP settings) deferred — requires deeper nexus-core architecture changes
+- Global Jellyfin compose fixed (8096:8096 instead of 8096:7359)
+- JWT with {loggedIn, userId, role} — shared between livinityd and nexus-core via /data/secrets/jwt
 
 ### Pending Todos
 
-- Deploy to production (UI build + nexus-core rebuild + PM2 restart)
-- Verify onboarding flow on production
+- None — all v7.1 + v7.2 work deployed and verified
 
 ### Blockers/Concerns
 
 - Nexus-core runs compiled JS — must rebuild after every source change
 - Global Redis keys must keep working as fallback for admin
+- 8GB RAM server limit with 3-5 users + Docker containers
 
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: All phases complete, ready for deployment
+Stopped at: All milestones complete, defining next milestone
 Resume file: None

@@ -82,9 +82,16 @@
 
 **Last phase number:** 5 (v7.0)
 
-## Active
-
 ### v7.1 — Per-User Isolation Completion
-**Started:** 2026-03-13
+**Completed:** 2026-03-13
 **Phases:** 6-8 (3 phases, 15 requirements)
-**Goal:** Complete per-user isolation: wallpaper animation settings, integration configs (Telegram/Discord/Gmail/MCP/Voice), onboarding personalization, App Store per-user visibility.
+**Summary:** Per-user wallpaper animation settings (localStorage → PostgreSQL), per-user integration configs (Telegram/Discord/Gmail/Voice), onboarding personalization (role, use cases, style → AI prompt), App Store per-user visibility. MCP settings deferred to v7.2.
+
+**Last phase number:** 8 (v7.1)
+
+### v7.2 — Per-User Docker Isolation & Bugfixes
+**Completed:** 2026-03-13
+**Phases:** Ad-hoc (4 commits)
+**Summary:** Per-user Docker container isolation (installForUser, user_app_instances table, per-user subdomains, per-user Caddy routing). Fixed: port mapping (manifest.port priority), volume triple-nesting, umbrel-app.yml manifest fallback, legacy env var resolution in compose, per-user container restart on startup, gateway appId extraction from qualified IDs, global Jellyfin port misconfiguration. 24/24 tests pass.
+
+**Last phase number:** 8 (v7.2, continues from v7.1)
