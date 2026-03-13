@@ -368,7 +368,8 @@ export default class Files {
 	// Lists the contents of the root directory.
 	// This is a special case since the root directory doesn't map to a system path.
 	async #listRoot() {
-		const files = await Promise.all([...this.baseDirectories.values()].map((systemPath) => this.status(systemPath)))
+		const baseDirs = this.getActiveBaseDirectories()
+		const files = await Promise.all([...baseDirs.values()].map((systemPath) => this.status(systemPath)))
 		return {
 			name: '',
 			path: '/',
