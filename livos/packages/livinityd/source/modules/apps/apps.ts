@@ -639,14 +639,15 @@ export default class Apps {
 		const compose = (await fse.readFile(`${userDataDir}/docker-compose.yml`, 'utf8'))
 		const composeData = (await import('js-yaml')).default.load(compose) as any
 
-		// Detect internal port (same logic as App.patchComposeFile)
-		let internalPort: number | null = null
+		// Detect internal port — prefer manifest.port (the web-accessible port)
+		// Compose may only list peripheral ports (e.g., discovery), so manifest is authoritative
 		const mainServiceName = Object.keys(composeData.services || {})[0]
-		if (mainServiceName && composeData.services[mainServiceName]) {
+		let internalPort: number = manifest.port || 8080
+		if (!manifest.port && mainServiceName && composeData.services[mainServiceName]) {
 			const service = composeData.services[mainServiceName]
 			if (service.ports && Array.isArray(service.ports)) {
 				for (const p of service.ports) {
-					const portStr = p.toString()
+					const portStr = p.toString().replace('/udp', '').replace('/tcp', '')
 					if (portStr.includes(':')) {
 						const parts = portStr.split(':')
 						internalPort = parseInt(parts[parts.length - 1], 10)
@@ -654,10 +655,9 @@ export default class Apps {
 					}
 				}
 			}
-			if (!internalPort && service.expose && Array.isArray(service.expose)) {
+			if (internalPort === 8080 && service.expose && Array.isArray(service.expose)) {
 				internalPort = parseInt(service.expose[0].toString(), 10)
 			}
-			if (!internalPort) internalPort = manifest.port || 8080
 		}
 
 		// Patch all services with per-user container names and volumes
@@ -665,21 +665,32 @@ export default class Apps {
 			const service = composeData.services[serviceName]
 			service.container_name = `${appId}_${serviceName}_user_${user.username}_1`
 
-			// Remap volumes to per-user paths
+			// Remap volumes to per-user paths (apply only the first matching replacement per volume
+			// to prevent chaining, e.g., /data/storage/downloads → /users/X/home/Downloads
+			// then /home/Downloads matching again in the result)
 			if (service.volumes && Array.isArray(service.volumes)) {
-				service.volumes = service.volumes.map((v: string) =>
-					v.replace('/data/storage/downloads', `/users/${user.username}/home/Downloads`)
-						.replace('/data/storage', `/users/${user.username}/home`)
-						.replace('/home/Downloads', `/users/${user.username}/home/Downloads`)
-						.replace('/home', `/users/${user.username}/home`)
-				)
+				service.volumes = service.volumes.map((v: string) => {
+					if (v.includes('/data/storage/downloads')) {
+						return v.replace('/data/storage/downloads', `/users/${user.username}/home/Downloads`)
+					}
+					if (v.includes('/data/storage')) {
+						return v.replace('/data/storage', `/users/${user.username}/home`)
+					}
+					if (v.includes('/home/Downloads')) {
+						return v.replace('/home/Downloads', `/users/${user.username}/home/Downloads`)
+					}
+					if (v.includes('/home') && !v.includes('/users/')) {
+						return v.replace('/home', `/users/${user.username}/home`)
+					}
+					return v
+				})
 			}
 		}
 
 		// Set the host port mapping on the main service
 		if (mainServiceName && composeData.services[mainServiceName]) {
 			const service = composeData.services[mainServiceName]
-			service.ports = [`127.0.0.1:${port}:${internalPort || manifest.port || 8080}`]
+			service.ports = [`127.0.0.1:${port}:${internalPort}`]
 		}
 
 		// Write patched compose
@@ -694,8 +705,8 @@ export default class Apps {
 			throw new Error(`Failed to start container: ${(error as Error).message}`)
 		}
 
-		// Record in database
-		const subdomain = appId // default: use appId as subdomain
+		// Record in database — use per-user subdomain so frontend routes to this user's instance
+		const subdomain = `${appId}-${user.username}`
 		await createUserAppInstance({
 			userId,
 			appId,
