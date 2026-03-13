@@ -119,9 +119,12 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 	// TODO: consider passing these down in some places (like the desktop)
 	let userApps = filter(appsQ.data ?? [], (app): app is UserApp => !('error' in app))
 
-	// For non-admin users, filter to only show apps they have access to
+	// Filter to only show apps the user has access to (installed, shared, or per-user instances)
 	if (myAppsQ.data && !myAppsQ.data.globalApps) {
-		const accessibleAppIds = new Set(myAppsQ.data.sharedAppIds)
+		const accessibleAppIds = new Set([
+			...myAppsQ.data.sharedAppIds,
+			...myAppsQ.data.userInstances.map((i: any) => i.appId),
+		])
 		userApps = userApps.filter((app) => accessibleAppIds.has(app.id))
 	}
 

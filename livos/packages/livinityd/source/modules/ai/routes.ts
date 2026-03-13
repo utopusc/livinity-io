@@ -737,13 +737,17 @@ export default router({
 			}
 		}),
 
-	/** Get integration config for a channel */
+	/** Get integration config for a channel (per-user scoped) */
 	getIntegrationConfig: privateProcedure
 		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.query(async ({ctx, input}) => {
 			try {
 				const redis = ctx.livinityd.ai.redis
-				const config = await redis.get(`nexus:${input.channel}:config`)
+				// Per-user key when multi-user, falls back to global key
+				const key = ctx.currentUser
+					? `nexus:u:${ctx.currentUser.id}:${input.channel}:config`
+					: `nexus:${input.channel}:config`
+				const config = await redis.get(key)
 				if (!config) return null
 				return JSON.parse(config) as {
 					enabled: boolean
@@ -760,15 +764,16 @@ export default router({
 			}
 		}),
 
-	/** Get integration status for a channel */
+	/** Get integration status for a channel (per-user scoped) */
 	getIntegrationStatus: privateProcedure
 		.input(z.object({channel: z.enum(['discord', 'telegram', 'slack', 'matrix'])}))
 		.query(async ({ctx, input}) => {
 			try {
 				const redis = ctx.livinityd.ai.redis
+				const prefix = ctx.currentUser ? `nexus:u:${ctx.currentUser.id}:` : 'nexus:'
 				const [configStr, statusStr] = await Promise.all([
-					redis.get(`nexus:${input.channel}:config`),
-					redis.get(`nexus:${input.channel}:status`),
+					redis.get(`${prefix}${input.channel}:config`),
+					redis.get(`${prefix}${input.channel}:status`),
 				])
 
 				const config = configStr ? JSON.parse(configStr) : null
@@ -789,7 +794,7 @@ export default router({
 			}
 		}),
 
-	/** Save integration config for a channel */
+	/** Save integration config for a channel (per-user scoped) */
 	saveIntegrationConfig: privateProcedure
 		.input(
 			z.object({
@@ -808,16 +813,22 @@ export default router({
 		.mutation(async ({ctx, input}) => {
 			try {
 				const redis = ctx.livinityd.ai.redis
-				const existingStr = await redis.get(`nexus:${input.channel}:config`)
+				const key = ctx.currentUser
+					? `nexus:u:${ctx.currentUser.id}:${input.channel}:config`
+					: `nexus:${input.channel}:config`
+				const existingStr = await redis.get(key)
 				const existing = existingStr ? JSON.parse(existingStr) : {}
 
 				const newConfig = {...existing, ...input.config}
-				await redis.set(`nexus:${input.channel}:config`, JSON.stringify(newConfig))
+				await redis.set(key, JSON.stringify(newConfig))
 
-				// Notify Nexus about the config change
-				await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.channel}))
+				// Notify Nexus about the config change (include userId for per-user routing)
+				await redis.publish('nexus:channel:updated', JSON.stringify({
+					channel: input.channel,
+					userId: ctx.currentUser?.id,
+				}))
 
-				ctx.livinityd.logger.log(`Integration config saved for ${input.channel}`)
+				ctx.livinityd.logger.log(`Integration config saved for ${input.channel}${ctx.currentUser ? ` (user: ${ctx.currentUser.username})` : ''}`)
 				return {success: true}
 			} catch (error) {
 				ctx.livinityd.logger.error(`Failed to save ${input.channel} config`, error)
@@ -834,7 +845,11 @@ export default router({
 		.mutation(async ({ctx, input}) => {
 			try {
 				const nexusUrl = getNexusApiUrl()
-				const response = await fetch(`${nexusUrl}/api/channels/${input.channel}/test`, {
+				const userId = ctx.currentUser?.id
+				const url = userId
+					? `${nexusUrl}/api/channels/${input.channel}/test?userId=${userId}`
+					: `${nexusUrl}/api/channels/${input.channel}/test`
+				const response = await fetch(url, {
 					method: 'POST',
 					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 				})

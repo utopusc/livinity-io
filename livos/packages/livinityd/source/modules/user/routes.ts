@@ -351,6 +351,7 @@ export default router({
 				wallpaper: prefs.wallpaper ?? yamlUser?.wallpaper ?? DEFAULT_WALLPAPER,
 				language: prefs.language ?? yamlUser?.language,
 				temperatureUnit: prefs.temperatureUnit ?? yamlUser?.temperatureUnit,
+				accentColor: prefs.accentColor ?? null,
 				// Multi-user info
 				id: ctx.currentUser.id,
 				username: ctx.currentUser.username,
