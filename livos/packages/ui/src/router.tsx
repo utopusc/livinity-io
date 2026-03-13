@@ -33,6 +33,7 @@ const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
+const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()
@@ -142,6 +143,10 @@ export const router = createBrowserRouter([
 			{
 				path: 'factory-reset/*',
 				element: <FactoryReset />,
+			},
+			{
+				path: 'invite/:token',
+				element: <InviteAcceptPage />,
 			},
 		],
 	},
