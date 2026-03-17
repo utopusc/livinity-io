@@ -9,6 +9,7 @@ import {
 	type CaddyConfig,
 	type SubdomainConfig,
 } from './caddy.js'
+import platform from '../platform/routes.js'
 
 // ─── Domain & HTTPS tRPC Routes ─────────────────────────────────
 // Manages custom domain configuration, DNS verification, and
@@ -359,6 +360,8 @@ const domain = router({
 			return {success: true}
 		}),
 	}),
+
+	platform,
 })
 
 export default domain

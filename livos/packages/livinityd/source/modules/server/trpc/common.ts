@@ -36,4 +36,7 @@ export const httpOnlyPaths = [
 	'domain.tunnel.getStatus',
 	'domain.tunnel.configure',
 	'domain.tunnel.remove',
+	// Platform relay tunnel routes — use HTTP to avoid WS connection dependency
+	'domain.platform.setApiKey',
+	'domain.platform.disconnect',
 ] as const

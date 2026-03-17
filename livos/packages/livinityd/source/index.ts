@@ -18,6 +18,7 @@ import EventBus from './modules/event-bus/event-bus.js'
 import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
 import AiModule from './modules/ai/index.js'
+import TunnelClient from './modules/platform/tunnel-client.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
@@ -108,6 +109,7 @@ export default class Livinityd {
 	dbus: Dbus
 	backups: Backups
 	ai: AiModule
+	tunnelClient: TunnelClient
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -133,6 +135,7 @@ export default class Livinityd {
 		this.dbus = new Dbus(this)
 		this.backups = new Backups(this)
 		this.ai = new AiModule({livinityd: this})
+		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
 	}
 
 	async start() {
@@ -200,6 +203,7 @@ export default class Livinityd {
 			this.dbus.start(),
 			this.server.start(),
 			this.ai.start(),
+			this.tunnelClient.start(),
 		])
 
 		// Start backups last because it depends on files
@@ -225,7 +229,7 @@ export default class Livinityd {
 			await this.backups.stop()
 
 			// Stop modules
-			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop()])
+			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop()])
 
 			// Close database connection pool
 			await closeDatabase()
