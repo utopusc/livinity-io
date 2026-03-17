@@ -665,7 +665,9 @@ class Server {
 		} else {
 			const currentFilename = fileURLToPath(import.meta.url)
 			const currentDirname = dirname(currentFilename)
-			const uiPath = join(currentDirname, '../../../ui')
+			// Resolve UI dist path: source/modules/server → 4 levels up → packages/ui/dist
+			// Works with both tsx (source) and compiled JS (dist) since depth is the same
+			const uiPath = join(currentDirname, '../../../../ui/dist')
 
 			// Built assets include a hash of the contents in the filename and
 			// wallpapers do not ever change, so we can cache these aggressively
