@@ -154,7 +154,7 @@ class Server {
 					// Also allow data: URLs for base64 images (e.g., WhatsApp QR code)
 					imgSrc: ['*', 'blob:', 'data:'],
 					// Allow fetching data from our apps API (e.g., for Discover page in App Store)
-					connectSrc: ["'self'"],
+					connectSrc: ["'self'", 'wss:', 'ws:', 'https://*.livinity.io'],
 					// Allow iframes from marketplace and self
 					frameSrc: ["'self'", `https://${domains.marketplace}`, `https://*.${domains.primary}`],
 					// Allow CDN stylesheets for canvas iframe
