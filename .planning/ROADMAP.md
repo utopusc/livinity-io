@@ -54,12 +54,15 @@ Transform LivOS from a local-only self-hosted server into a globally accessible 
   3. A WebSocket connection (tRPC subscription or terminal) upgrades successfully through the tunnel and streams data bidirectionally
   4. When the tunnel disconnects, the relay serves a branded "Connecting..." page and the client reconnects with exponential backoff within 60 seconds
   5. Per-user bandwidth is tracked in Redis and flushed to PostgreSQL, and requests are rejected with 429 when the 50GB monthly quota is exceeded
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
-- [ ] 09-03: TBD
+- [ ] 09-01-PLAN.md -- Relay project scaffold, protocol types, config, PostgreSQL schema
+- [ ] 09-02-PLAN.md -- Relay core: tunnel auth, registry, heartbeat, subdomain routing, HTTP proxy
+- [ ] 09-03-PLAN.md -- Tunnel client module in livinityd with tRPC routes
+- [ ] 09-04-PLAN.md -- WebSocket proxying (relay + client), offline page, session reconnection
+- [ ] 09-05-PLAN.md -- Bandwidth tracking and quota enforcement
+- [ ] 09-06-PLAN.md -- Server5 infrastructure setup, deployment, and E2E verification
 
 ### Phase 10: DNS, TLS & Subdomain Routing
 **Goal**: Browser requests to `{username}.livinity.io` and `{app}.{username}.livinity.io` resolve, terminate TLS, and route through the relay to the correct tunnel
@@ -146,7 +149,7 @@ Plans:
 | 6. UI Settings | v7.1 | Complete | Complete | 2026-03-13 |
 | 7. Integrations | v7.1 | Complete | Complete | 2026-03-13 |
 | 8. Onboarding | v7.2 | Complete | Complete | 2026-03-13 |
-| 9. Relay + Client | v8.0 | 0/TBD | Not started | - |
+| 9. Relay + Client | v8.0 | 0/6 | Planned | - |
 | 10. DNS & TLS | v8.0 | 0/TBD | Not started | - |
 | 11. Auth | v8.0 | 0/TBD | Not started | - |
 | 12. Dashboard | v8.0 | 0/TBD | Not started | - |
