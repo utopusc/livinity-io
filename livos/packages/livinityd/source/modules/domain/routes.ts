@@ -60,7 +60,10 @@ async function buildCaddyConfig(redis: Redis): Promise<CaddyConfig> {
 
 async function rebuildCaddy(redis: Redis): Promise<{firewallResult: {success: boolean; method: string; message: string}}> {
 	const caddyConfig = await buildCaddyConfig(redis)
-	return await applyCaddyConfig(caddyConfig)
+	// Check if tunnel mode is active — if so, Caddy stays on :80 only
+	const config = await getConfig(redis)
+	const isTunnel = !!(config as any)?.tunnel
+	return await applyCaddyConfig(caddyConfig, isTunnel)
 }
 
 const domain = router({
