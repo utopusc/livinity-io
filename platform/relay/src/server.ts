@@ -12,6 +12,7 @@ import type { Redis } from 'ioredis';
 import { parseSubdomain } from './subdomain-parser.js';
 import { handleHealthRequest } from './health.js';
 import { proxyHttpRequest } from './request-proxy.js';
+import { serveOfflinePage } from './offline-page.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
 
 /**
@@ -43,8 +44,14 @@ export function createRequestHandler(
     const tunnel = registry.get(username);
 
     if (!tunnel || tunnel.ws.readyState !== 1 /* WebSocket.OPEN */) {
-      res.writeHead(503, { 'Content-Type': 'text/plain' });
-      res.end('Server offline');
+      // Check if the tunnel is in reconnect mode -- buffer the request
+      if (tunnel && tunnel.isReconnecting()) {
+        const buffered = tunnel.bufferRequest(req, res);
+        if (buffered) return;
+        // Buffer full -- fall through to offline page
+      }
+
+      serveOfflinePage(res, username);
       return;
     }
 

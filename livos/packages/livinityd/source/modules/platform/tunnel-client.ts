@@ -282,7 +282,7 @@ export default class TunnelClient {
 				this.handleHttpRequest(msg)
 				break
 			case 'ws_upgrade':
-				this.logger.log(`[tunnel] WebSocket upgrade request received (stub - implemented in Plan 04)`)
+				this.handleWsUpgrade(msg)
 				break
 			case 'ping':
 				this.sendMessage({type: 'pong', ts: msg.ts})
@@ -295,10 +295,10 @@ export default class TunnelClient {
 				this.redis.set(`${REDIS_PREFIX}status`, 'quota_exceeded')
 				break
 			case 'ws_frame':
-				// Stub for Plan 04
+				this.handleWsFrame(msg)
 				break
 			case 'ws_close':
-				// Stub for Plan 04
+				this.handleWsClose(msg)
 				break
 		}
 	}
@@ -396,6 +396,89 @@ export default class TunnelClient {
 			}
 			this.sendMessage(errorResponse)
 		}
+	}
+
+	// ─── WebSocket forwarding ─────────────────────────────────────
+
+	private handleWsUpgrade(msg: TunnelWsUpgrade): void {
+		const targetUrl = `ws://127.0.0.1:8080${msg.path}`
+
+		// Build headers for the local WS connection
+		const forwardHeaders: Record<string, string> = {}
+		for (const [key, value] of Object.entries(msg.headers)) {
+			forwardHeaders[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : value
+		}
+		forwardHeaders['host'] = '127.0.0.1:8080'
+		forwardHeaders['x-forwarded-proto'] = 'https'
+
+		let localWs: WebSocket
+		try {
+			localWs = new WebSocket(targetUrl, {headers: forwardHeaders})
+		} catch (err) {
+			const errorMsg = err instanceof Error ? err.message : String(err)
+			this.logger.error(`[tunnel] Local WS creation failed for ${msg.path}: ${errorMsg}`)
+			this.sendMessage({type: 'ws_error', id: msg.id, error: errorMsg})
+			return
+		}
+
+		localWs.on('open', () => {
+			this.localWsSockets.set(msg.id, localWs)
+			this.sendMessage({type: 'ws_ready', id: msg.id})
+		})
+
+		localWs.on('message', (data: Buffer | ArrayBuffer | Buffer[], isBinary: boolean) => {
+			const frame: TunnelWsFrame = {
+				type: 'ws_frame',
+				id: msg.id,
+				data: Buffer.from(data as Buffer).toString('base64'),
+				binary: isBinary,
+			}
+			this.sendMessage(frame)
+		})
+
+		localWs.on('close', (code: number, reason: Buffer) => {
+			const closeMsg: TunnelWsClose = {
+				type: 'ws_close',
+				id: msg.id,
+				code,
+				reason: reason.toString(),
+			}
+			this.sendMessage(closeMsg)
+			this.localWsSockets.delete(msg.id)
+		})
+
+		localWs.on('error', (err: Error) => {
+			this.logger.error(`[tunnel] Local WS error for ${msg.id}: ${err.message}`)
+			this.sendMessage({type: 'ws_error', id: msg.id, error: err.message})
+			this.localWsSockets.delete(msg.id)
+		})
+	}
+
+	private handleWsFrame(msg: TunnelWsFrame): void {
+		const localWs = this.localWsSockets.get(msg.id)
+		if (!localWs || localWs.readyState !== WebSocket.OPEN) return
+
+		const decoded = Buffer.from(msg.data, 'base64')
+		localWs.send(decoded, {binary: msg.binary})
+	}
+
+	private handleWsClose(msg: TunnelWsClose): void {
+		const localWs = this.localWsSockets.get(msg.id)
+		if (localWs) {
+			localWs.close(msg.code ?? 1000, msg.reason ?? '')
+		}
+		this.localWsSockets.delete(msg.id)
+	}
+
+	private closeAllLocalWsSockets(): void {
+		for (const [id, localWs] of this.localWsSockets) {
+			try {
+				localWs.close(1001, 'tunnel disconnected')
+			} catch {
+				// Already closed -- ignore
+			}
+		}
+		this.localWsSockets.clear()
 	}
 
 	// ─── Reconnection ─────────────────────────────────────────────
