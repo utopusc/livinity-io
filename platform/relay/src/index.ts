@@ -20,7 +20,8 @@ import { config } from './config.js';
 import { createRequestHandler } from './server.js';
 import { TunnelConnection, TunnelRegistry } from './tunnel-registry.js';
 import { verifyApiKey } from './auth.js';
-import { handleTunnelResponse, proxyHttpRequest } from './request-proxy.js';
+import { handleTunnelResponse, proxyHttpRequest, setRedis } from './request-proxy.js';
+import { startBandwidthFlush, stopBandwidthFlush } from './bandwidth.js';
 import { parseSubdomain } from './subdomain-parser.js';
 import {
   handleWsUpgrade,
@@ -56,6 +57,12 @@ const schema = fs.readFileSync(schemaPath, 'utf-8');
 
 await pool.query(schema);
 console.log('[relay] Schema applied');
+
+// Provide Redis to request-proxy for bandwidth tracking
+setRedis(redis);
+
+// Start bandwidth flush to PostgreSQL
+const bandwidthInterval = startBandwidthFlush(redis, pool);
 
 // ---------------------------------------------------------------------------
 // Registry & HTTP server
@@ -274,6 +281,8 @@ function shutdown(signal: string): void {
     }
     console.log(`[relay] Notified ${username} of shutdown`);
   }
+
+  stopBandwidthFlush(bandwidthInterval);
 
   server.close(() => {
     pool.end().then(() => {

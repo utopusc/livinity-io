@@ -13,7 +13,9 @@ import { parseSubdomain } from './subdomain-parser.js';
 import { handleHealthRequest } from './health.js';
 import { proxyHttpRequest } from './request-proxy.js';
 import { serveOfflinePage } from './offline-page.js';
+import { checkQuota } from './bandwidth.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
+import type { TunnelQuotaExceeded } from './protocol.js';
 
 /**
  * Create the HTTP request handler.
@@ -22,9 +24,9 @@ import type { TunnelRegistry } from './tunnel-registry.js';
  */
 export function createRequestHandler(
   registry: TunnelRegistry,
-  _redis: Redis,
+  redis: Redis,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
-  return (req, res) => {
+  return async (req, res) => {
     const { username, appName } = parseSubdomain(req.headers.host);
 
     // Health endpoint (on bare domain or direct IP)
@@ -52,6 +54,35 @@ export function createRequestHandler(
       }
 
       serveOfflinePage(res, username);
+      return;
+    }
+
+    // Check bandwidth quota before proxying
+    const quota = await checkQuota(redis, tunnel.userId);
+    if (!quota.allowed) {
+      // Calculate first day of next month for Retry-After hint
+      const now = new Date();
+      const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+      const resetsAt = nextMonth.toISOString();
+
+      res.writeHead(429, {
+        'Content-Type': 'text/plain',
+        'Retry-After': '86400',
+      });
+      res.end(`Bandwidth quota exceeded. Your monthly limit resets on ${resetsAt.split('T')[0]}.`);
+
+      // Notify the tunnel client
+      const quotaMsg: TunnelQuotaExceeded = {
+        type: 'quota_exceeded',
+        usedBytes: quota.usedBytes,
+        limitBytes: quota.limitBytes,
+        resetsAt,
+      };
+      try {
+        tunnel.ws.send(JSON.stringify(quotaMsg));
+      } catch {
+        // Ignore send failures
+      }
       return;
     }
 
