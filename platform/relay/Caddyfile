@@ -4,7 +4,14 @@
 	}
 }
 
-*.livinity.io, livinity.io {
+livinity.io {
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:3000
+}
+
+*.livinity.io {
 	tls {
 		on_demand
 	}
