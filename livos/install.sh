@@ -686,8 +686,6 @@ ENVFILE
         npm run build 2>&1 | tail -5
         cd "$LIVOS_DIR"
 
-        # Symlink UI dist to expected location
-        ln -sf "$LIVOS_DIR/packages/ui/dist" "$LIVOS_DIR/packages/livinityd/ui"
         ok "UI built"
 
         # Install Nexus dependencies
@@ -715,12 +713,20 @@ ENVFILE
             cd "$LIVOS_DIR"
             ok "Nexus packages built"
 
-            # Copy nexus dist to pnpm symlink location
-            local pnpm_nexus_dir
-            pnpm_nexus_dir=$(find "$LIVOS_DIR/node_modules/.pnpm" -maxdepth 1 -name '@nexus+core*' -type d 2>/dev/null | head -1)
-            if [[ -n "$pnpm_nexus_dir" ]] && [[ -d "$nexus_dir/packages/core/dist" ]]; then
-                cp -r "$nexus_dir/packages/core/dist" "$pnpm_nexus_dir/node_modules/@nexus/core/"
-                ok "Nexus dist linked to pnpm store"
+            # Copy nexus core dist to all locations where livinityd expects it
+            if [[ -d "$nexus_dir/packages/core/dist" ]]; then
+                # Direct node_modules in livinityd
+                local livinityd_nexus="$LIVOS_DIR/packages/livinityd/node_modules/@nexus/core/dist"
+                mkdir -p "$livinityd_nexus"
+                cp -r "$nexus_dir/packages/core/dist/"* "$livinityd_nexus/"
+                ok "Nexus dist copied to livinityd node_modules"
+
+                # Also copy to pnpm store if it exists
+                local pnpm_nexus_dir
+                pnpm_nexus_dir=$(find "$LIVOS_DIR/node_modules/.pnpm" -maxdepth 1 -name '@nexus+core*' -type d 2>/dev/null | head -1)
+                if [[ -n "$pnpm_nexus_dir" ]]; then
+                    cp -r "$nexus_dir/packages/core/dist" "$pnpm_nexus_dir/node_modules/@nexus/core/"
+                fi
             fi
         fi
 
