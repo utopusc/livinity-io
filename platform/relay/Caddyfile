@@ -1,0 +1,18 @@
+{
+	on_demand_tls {
+		ask http://localhost:4000/internal/ask
+	}
+	servers {
+		stream_close_delay 5m
+	}
+}
+
+*.livinity.io, livinity.io {
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:4000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+}
