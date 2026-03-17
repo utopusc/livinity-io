@@ -109,9 +109,9 @@
 
 | Feature | Reason |
 |---------|--------|
-| Payment processing | Deferred to v8.1 — focus on core platform first |
-| Custom domains | Deferred to v8.1 — requires additional TLS/DNS complexity |
-| Multi-region relay | Deferred to v8.2 — single Server5 sufficient for launch |
+| Payment processing | Deferred to v8.1 -- focus on core platform first |
+| Custom domains | Deferred to v8.1 -- requires additional TLS/DNS complexity |
+| Multi-region relay | Deferred to v8.2 -- single Server5 sufficient for launch |
 | Mobile app | Web-first approach covers core use case |
 | SSO between platform and LivOS | Two separate auth systems by design (P4 pitfall) |
 | White-label / reseller | Not planned |
@@ -124,20 +124,63 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RELAY-01..09 | Phase 9 | Pending |
-| CLIENT-01..06 | Phase 9 | Pending |
-| DNS-01..06 | Phase 10 | Pending |
-| AUTH-01..06 | Phase 11 | Pending |
-| DASH-01..07 | Phase 12 | Pending |
-| LAND-01..07 | Phase 13 | Pending |
-| INST-01..05 | Phase 13 | Pending |
-| INFRA-01..05 | Phase 9 | Pending |
+| RELAY-01 | Phase 9 | Pending |
+| RELAY-02 | Phase 9 | Pending |
+| RELAY-03 | Phase 9 | Pending |
+| RELAY-04 | Phase 9 | Pending |
+| RELAY-05 | Phase 9 | Pending |
+| RELAY-06 | Phase 9 | Pending |
+| RELAY-07 | Phase 9 | Pending |
+| RELAY-08 | Phase 9 | Pending |
+| RELAY-09 | Phase 9 | Pending |
+| CLIENT-01 | Phase 9 | Pending |
+| CLIENT-02 | Phase 9 | Pending |
+| CLIENT-03 | Phase 9 | Pending |
+| CLIENT-04 | Phase 9 | Pending |
+| CLIENT-05 | Phase 12 | Pending |
+| CLIENT-06 | Phase 12 | Pending |
+| DNS-01 | Phase 10 | Pending |
+| DNS-02 | Phase 10 | Pending |
+| DNS-03 | Phase 10 | Pending |
+| DNS-04 | Phase 10 | Pending |
+| DNS-05 | Phase 10 | Pending |
+| DNS-06 | Phase 10 | Pending |
+| AUTH-01 | Phase 11 | Pending |
+| AUTH-02 | Phase 11 | Pending |
+| AUTH-03 | Phase 11 | Pending |
+| AUTH-04 | Phase 11 | Pending |
+| AUTH-05 | Phase 11 | Pending |
+| AUTH-06 | Phase 11 | Pending |
+| DASH-01 | Phase 12 | Pending |
+| DASH-02 | Phase 12 | Pending |
+| DASH-03 | Phase 12 | Pending |
+| DASH-04 | Phase 12 | Pending |
+| DASH-05 | Phase 12 | Pending |
+| DASH-06 | Phase 12 | Pending |
+| DASH-07 | Phase 12 | Pending |
+| LAND-01 | Phase 13 | Pending |
+| LAND-02 | Phase 13 | Pending |
+| LAND-03 | Phase 13 | Pending |
+| LAND-04 | Phase 13 | Pending |
+| LAND-05 | Phase 13 | Pending |
+| LAND-06 | Phase 13 | Pending |
+| LAND-07 | Phase 13 | Pending |
+| INST-01 | Phase 13 | Pending |
+| INST-02 | Phase 13 | Pending |
+| INST-03 | Phase 13 | Pending |
+| INST-04 | Phase 13 | Pending |
+| INST-05 | Phase 13 | Pending |
+| INFRA-01 | Phase 9 | Pending |
+| INFRA-02 | Phase 9 | Pending |
+| INFRA-03 | Phase 14 | Pending |
+| INFRA-04 | Phase 14 | Pending |
+| INFRA-05 | Phase 9 | Pending |
 
 **Coverage:**
-- v1 requirements: 48 total
-- Mapped to phases: 48
-- Unmapped: 0 ✓
+- v1 requirements: 51 total
+- Mapped to phases: 51
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after research synthesis*
+*Last updated: 2026-03-17 -- roadmap phase mapping complete*
