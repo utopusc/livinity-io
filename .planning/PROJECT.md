@@ -1,134 +1,95 @@
-# LivOS - Self-Hosted AI-Powered Home Server OS
+# Livinity — Self-Hosted AI Server Platform
 
 ## What This Is
 
-LivOS is a self-hosted home server operating system with an integrated autonomous AI agent (Nexus). Users interact via Telegram, Discord, and a web UI. The AI agent runs through Kimi Code, with MCP tools for shell, Docker, files, browser control, and more. The goal is an OpenClaw-class personal AI platform that anyone can install with a single command — now expanding to support multiple users sharing the same server.
+Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platform (livinity.io) that provides tunnel routing, user registration, and API key management. Users install LivOS on their own hardware, enter an API key from livinity.io, and their server becomes accessible globally via `{username}.livinity.io`. Apps are accessible via `{app}.{username}.livinity.app`. The platform handles DNS, tunnel relay, and user management — the user just runs one command.
 
 ## Core Value
 
-**One-command deployment of a personal AI-powered server that just works.** Users should be able to run a single install script and have a fully functional home server with AI assistant ready to use — now for the whole household.
+**One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: Pending
+## Current Milestone: v8.0 — Livinity Platform
 
-**Previous:** v7.2 (Per-User Docker Isolation & Bugfixes) — Complete 2026-03-13
-**Next:** TBD
+**Goal:** Build the livinity.io central platform with landing page, user auth, dashboard, tunnel relay, API key system, and DNS routing — transforming LivOS from a self-managed install into a globally accessible platform.
+
+**Target features:**
+- Apple-style premium landing page at livinity.io
+- User registration/login with email + password
+- Dashboard with API key management and server status
+- Custom tunnel relay (Server5) — user's LivOS connects via API key
+- Subdomain routing: {username}.livinity.io → user's server
+- App routing: {app}.{username}.livinity.app → user's apps
+- LivOS install.sh integration — API key input during onboarding
+- Free tier: 1 subdomain + 50GB/mo bandwidth
+- Custom domain support via dashboard (premium feature)
 
 ## Requirements
 
 ### Validated
 
-*Existing capabilities from codebase analysis:*
+*All features from v1.0 through v7.2 — see MILESTONES.md*
 
-- ✓ Web UI with desktop-like windowed interface — existing
-- ✓ Docker application management (install, start, stop, remove) — existing
-- ✓ File manager with upload, download, rename, delete — existing
-- ✓ User authentication with JWT — existing
-- ✓ AI chat via web UI with SSE streaming — existing
-- ✓ Telegram bot integration — existing
-- ✓ Discord bot integration — existing
-- ✓ MCP server for Claude/Cursor integration — existing
-- ✓ Background job processing with BullMQ — existing
-- ✓ Memory service with embeddings — existing
-- ✓ Tool system (shell, docker, files, scrape, etc.) — existing
-- ✓ Skill system with hot-reload — existing
-- ✓ Reverse proxy with Caddy (auto HTTPS) — existing
+Key validated capabilities:
+- ✓ Web UI with desktop-like windowed interface
+- ✓ Docker application management
+- ✓ File manager, AI chat, tool system, skill system
+- ✓ Multi-user: PostgreSQL, JWT, login screen, invite system
+- ✓ Per-user isolation: files, AI, apps, settings, Docker containers
+- ✓ Per-user subdomain routing, app gateway middleware
+- ✓ Caddy reverse proxy, Cloudflare Tunnel support
+- ✓ Onboarding wizard with personalization
 
-### Validated (v1.0 through v6.0)
+### Active (v8.0 — Livinity Platform)
 
-- ✓ All features from v1.0 through v6.0 — see MILESTONES.md
-
-### Validated (v7.0 — Multi-User Foundation)
-
-- ✓ PostgreSQL database with users, sessions, user_preferences, user_app_access tables
-- ✓ JWT extended with {userId, role, sessionId}, backward-compatible verification
-- ✓ Login screen with circular user avatars and password entry
-- ✓ Invite system with admin-generated links (48h expiry)
-- ✓ User management in Settings (roles, disable, sessions)
-- ✓ Per-user file isolation (/opt/livos/data/users/{username}/files/)
-- ✓ Per-user AI conversations via Redis key namespacing
-- ✓ Per-user app visibility (myApps endpoint with access control)
-- ✓ App sharing system (grant/revoke access, share dialog)
-- ✓ Per-user accent color picker with CSS variable override
-- ✓ Per-user wallpaper selection stored in PostgreSQL
-- ✓ Domain-wide SSO cookie (.livinity.cloud)
-- ✓ tRPC context with currentUser {id, username, role}
-- ✓ Auto-grant app access on install
-- ✓ Legacy app auto-migration for admin users
-
-### Validated (v7.1 — Per-User Isolation Completion)
-
-- ✓ Per-user wallpaper animation settings (speed, hue, brightness, saturation) via PostgreSQL
-- ✓ Per-user Telegram bot configuration via user_preferences
-- ✓ Per-user Discord bot configuration via user_preferences
-- ✓ Per-user Gmail OAuth credentials via user_preferences
-- ✓ Per-user Voice settings (Deepgram/Cartesia keys) via user_preferences
-- ✓ Onboarding personalization questions (role, use cases, style → AI prompt)
-- ✓ AI system prompt personalization from user preferences
-- ✓ App Store per-user state (installed vs available vs accessible)
-
-### Validated (v7.2 — Per-User Docker Isolation)
-
-- ✓ Per-user Docker container isolation (installForUser with dedicated ports/volumes)
-- ✓ Per-user subdomain routing (appId-username pattern)
-- ✓ Caddy multi-user gateway (all subdomains → livinityd → per-user port)
-- ✓ Per-user container restart on startup
-- ✓ Manifest fallback (umbrel-app.yml → livinity-app.yml)
-- ✓ Legacy env var resolution in per-user compose files
+*Defined in REQUIREMENTS.md*
 
 ### Out of Scope
 
-- WhatsApp — disabled for v2.0, only Telegram + Discord
-- Slack/Matrix — already built in v1.5, maintenance only
 - Mobile app — web-first approach, mobile later
-- Cloud hosting option — self-hosted only
-- Payment/billing system — free open source project
 - Self-hosted LLM support — Kimi Code only for now
-- Dark theme — fully light theme only
-- Open self-registration — invite-only for security
-- Per-user billing/quotas — simple shared server model first
-- Per-user MCP server settings — deferred, requires deeper nexus-core architecture changes
+- Payment/billing system — deferred to v8.1 (Stripe/Lemonsqueezy TBD)
+- Dark theme for livinity.io — light/premium theme only
+- Multi-region tunnel relay — single relay (Server5) for now
+- White-label/reseller — direct platform only
+- Per-user MCP server settings — deferred
 
 ## Context
 
-**Current State (post v7.0 foundation):**
-- Running production on Contabo VPS (45.137.194.103), 8GB RAM
-- Multi-user: PostgreSQL, JWT with userId/role, login screen with avatars
-- Per-user files, AI conversations, app visibility already working
-- Accent color and wallpaper selection per-user via user_preferences table
-- Nexus-core reads global Redis keys for integrations (not per-user yet)
-- Wallpaper animation settings stored in localStorage (not per-user)
-- Integration configs (Telegram, Discord, Gmail) stored globally in Redis
-- MCP and Voice settings stored globally
-- Onboarding wizard has no personalization questions
+**Current State (post v7.2):**
+- LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
+- Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
+- Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
+- install.sh one-command installer with PostgreSQL, Caddy, cloudflared
+- 350 test cases written, 40/40 automated API tests passing
+
+**Infrastructure:**
+- Server4 (45.137.194.103) = LivOS production (livinity.cloud)
+- Server5 (45.137.194.102) = Tunnel relay + livinity.io platform
+- Mini PC (10.69.31.68) = Test server (livinity.live)
 
 **Technical Environment:**
-- Node.js 22+, TypeScript 5.7+
-- React 18 + Vite for frontend
-- Tailwind CSS 3.4 with semantic design tokens
-- shadcn/ui components + Framer Motion
-- Express + tRPC for backend
-- Redis (ioredis) for sessions, configs, AI data
-- PostgreSQL for users, preferences, app access
-- Docker for app management
-- Caddy for reverse proxy + auto HTTPS
-- Kimi Code as sole AI provider
+- LivOS: Node.js 22+, TypeScript, React 18 + Vite, Express + tRPC, Redis, PostgreSQL, Docker, Caddy
+- Platform (new): Next.js 15, TypeScript, Tailwind CSS, PostgreSQL, Prisma/Drizzle
 
 ## Constraints
 
-- **Global integrations**: Telegram/Discord bots are global (one bot token per server) — per-user means each user configures their OWN bot, not shared bot
-- **Resource budget**: 8GB RAM server, 3-5 users max
-- **Nexus-core compiled JS**: Must rebuild after changes (`npm run build --workspace=packages/core`)
-- **Redis key migration**: Existing global keys must continue working for admin user
-- **localStorage migration**: Wallpaper animation settings must migrate from localStorage to PostgreSQL
+- **Server5 resources**: 8GB RAM — must handle tunnel relay + platform API efficiently
+- **DNS**: Wildcard DNS for *.livinity.io and *.livinity.app required (Cloudflare DNS)
+- **Tunnel protocol**: Must support WebSocket upgrades for tRPC subscriptions and voice
+- **Latency**: Tunnel relay adds hop — must keep latency under 100ms for acceptable UX
+- **Scale**: Initial target 50-100 concurrent tunnel connections
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Per-user bot tokens (not shared bot) | Each user's Telegram/Discord bot is their own — no message routing complexity | Pending |
-| user_preferences for all per-user settings | Single table, key-value, already exists and works for wallpaper/accent | Pending |
-| Onboarding research complete | 4 questions: role, use cases, style, tech stack — stored as preferences | Pending |
-| Global keys remain for admin backward compat | Admin user falls back to global Redis keys if no per-user key exists | Pending |
+| Custom tunnel relay (not CF Tunnel) | Full control over routing, subdomain management, bandwidth tracking | Pending |
+| Next.js for livinity.io | SSR for landing SEO, API routes for dashboard, React ecosystem | Pending |
+| Server5 for relay | Available VPS, isolated from production LivOS | Pending |
+| Free: 1 subdomain + 50GB/mo | Low barrier to entry, premium for power users | Pending |
+| Payment deferred to v8.1 | Focus on core platform first, monetize after user base | Pending |
+| Apple-style premium design | Differentiates from typical dev-tool aesthetic | Pending |
+| Users can add custom domains | Via livinity.io dashboard, requires DNS verification | Pending |
 
 ---
-*Last updated: 2026-03-13 — v7.2 complete (Per-User Docker Isolation), next milestone pending*
+*Last updated: 2026-03-17 — v8.0 milestone started (Livinity Platform)*
