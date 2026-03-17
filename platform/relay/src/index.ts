@@ -69,7 +69,7 @@ const bandwidthInterval = startBandwidthFlush(redis, pool);
 // ---------------------------------------------------------------------------
 
 const registry = new TunnelRegistry();
-const handleRequest = createRequestHandler(registry, redis);
+const handleRequest = createRequestHandler(registry, redis, pool);
 const server = http.createServer(handleRequest);
 
 // ---------------------------------------------------------------------------
