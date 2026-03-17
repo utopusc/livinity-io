@@ -8,9 +8,19 @@
 
 import type http from 'node:http';
 import { nanoid } from 'nanoid';
+import { Redis } from 'ioredis';
 import { config } from './config.js';
+import { trackBandwidth } from './bandwidth.js';
 import type { TunnelConnection } from './tunnel-registry.js';
 import type { TunnelRequest, TunnelResponse } from './protocol.js';
+
+/** Module-level Redis reference, set once at startup */
+let _redis: Redis | null = null;
+
+/** Called from index.ts to provide the Redis connection for bandwidth tracking */
+export function setRedis(redis: Redis): void {
+  _redis = redis;
+}
 
 /**
  * Proxy an HTTP request through a tunnel connection.
@@ -71,9 +81,15 @@ export function proxyHttpRequest(
     // Register pending request
     tunnel.addPendingRequest(requestId, res, timeout);
 
+    // Track outbound bandwidth (fire-and-forget)
+    const payload = JSON.stringify(message);
+    if (_redis) {
+      trackBandwidth(_redis, tunnel.userId, 'out', Buffer.byteLength(payload)).catch(() => {});
+    }
+
     // Send through tunnel
     try {
-      tunnel.ws.send(JSON.stringify(message));
+      tunnel.ws.send(payload);
     } catch {
       // WebSocket send failed — clean up immediately
       clearTimeout(timeout);
@@ -110,6 +126,12 @@ export function handleTunnelResponse(
   const { res } = pending;
 
   if (res.headersSent) return;
+
+  // Track inbound bandwidth (fire-and-forget)
+  if (_redis) {
+    const rawSize = Buffer.byteLength(JSON.stringify(msg));
+    trackBandwidth(_redis, tunnel.userId, 'in', rawSize).catch(() => {});
+  }
 
   // Decode body from base64
   const bodyBuffer = msg.body ? Buffer.from(msg.body, 'base64') : Buffer.alloc(0);
