@@ -2,9 +2,6 @@
 	on_demand_tls {
 		ask http://localhost:4000/internal/ask
 	}
-	servers {
-		stream_close_delay 5m
-	}
 }
 
 *.livinity.io, livinity.io {
