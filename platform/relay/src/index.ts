@@ -22,6 +22,7 @@ import { TunnelConnection, TunnelRegistry } from './tunnel-registry.js';
 import { verifyApiKey } from './auth.js';
 import { handleTunnelResponse, proxyHttpRequest, setRedis } from './request-proxy.js';
 import { startBandwidthFlush, stopBandwidthFlush } from './bandwidth.js';
+import { shouldRejectNewConnections } from './health.js';
 import { parseSubdomain } from './subdomain-parser.js';
 import {
   handleWsUpgrade,
@@ -88,6 +89,13 @@ const tunnelWss = new WebSocketServer({
  * After successful auth, messages are routed by type.
  */
 function onTunnelConnect(ws: WebSocket): void {
+  // Memory pressure check — reject new connections at 80% system memory
+  if (shouldRejectNewConnections()) {
+    console.warn('[relay] Rejecting new tunnel connection: memory pressure too high');
+    ws.close(4004, 'Server under memory pressure');
+    return;
+  }
+
   let authenticated = false;
   let tunnel: TunnelConnection | null = null;
   let tunnelUsername: string | null = null;
