@@ -32,4 +32,8 @@ export const httpOnlyPaths = [
 	'apps.sharedUsers',
 	'apps.allUsers',
 	'apps.myApps',
+	// Tunnel management routes — use HTTP to avoid WS connection dependency
+	'domain.tunnel.getStatus',
+	'domain.tunnel.configure',
+	'domain.tunnel.remove',
 ] as const

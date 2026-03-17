@@ -307,6 +307,55 @@ const domain = router({
 
 			return {success: true}
 		}),
+
+	// ─── Tunnel Management ───────────────────────────────────────
+
+	tunnel: router({
+		getStatus: privateProcedure.query(async () => {
+			const {getTunnelStatus} = await import('./tunnel.js')
+			return getTunnelStatus()
+		}),
+
+		configure: privateProcedure
+			.input(
+				z.object({
+					token: z.string().min(10),
+					domain: z.string().min(3),
+				}),
+			)
+			.mutation(async ({input, ctx}) => {
+				const {configureTunnel} = await import('./tunnel.js')
+
+				// Save domain to Redis
+				const domainConfig = {domain: input.domain, active: true, activatedAt: Date.now(), tunnel: true}
+				await ctx.livinityd.ai.redis.set('livos:domain:config', JSON.stringify(domainConfig))
+
+				// Configure and start tunnel
+				const result = await configureTunnel(input.token)
+
+				if (result.success) {
+					// Write simple Caddy config (tunnel handles HTTPS at edge)
+					const {applyCaddyConfigForTunnel} = await import('./caddy.js')
+					await applyCaddyConfigForTunnel()
+				}
+
+				return result
+			}),
+
+		remove: privateProcedure.mutation(async ({ctx}) => {
+			const {removeTunnel} = await import('./tunnel.js')
+			await removeTunnel()
+
+			// Clear domain config
+			await ctx.livinityd.ai.redis.del('livos:domain:config')
+
+			// Revert Caddy to IP-only
+			const {revertCaddyToDefault} = await import('./caddy.js')
+			await revertCaddyToDefault()
+
+			return {success: true}
+		}),
+	}),
 })
 
 export default domain

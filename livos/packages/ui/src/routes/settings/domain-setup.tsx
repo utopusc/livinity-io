@@ -13,16 +13,23 @@ import {
 	IconRefresh,
 	IconTrash,
 } from '@tabler/icons-react'
+import {TbCloud, TbWorldWww} from 'react-icons/tb'
 
 import {trpcReact} from '@/trpc/trpc'
+import {cn} from '@/shadcn-lib/utils'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
 
 // ─── Types ──────────────────────────────────────────────────────
 
-type WizardStep = 'domain' | 'dns-records' | 'verify' | 'activate' | 'done'
+type ConnectionMethod = 'tunnel' | 'direct'
+type WizardStep = 'domain' | 'method' | 'tunnel' | 'dns-records' | 'verify' | 'activate' | 'done'
 
-const STEPS: WizardStep[] = ['domain', 'dns-records', 'verify', 'activate', 'done']
+// Steps for direct path: domain → method → dns-records → verify → activate → done
+// Steps for tunnel path: domain → method → tunnel → done
+// The indicator labels adapt based on selected method
+const DIRECT_STEPS: WizardStep[] = ['domain', 'method', 'dns-records', 'verify', 'activate', 'done']
+const TUNNEL_STEPS: WizardStep[] = ['domain', 'method', 'tunnel', 'done']
 
 // ─── Copy Helper ────────────────────────────────────────────────
 
@@ -43,6 +50,186 @@ function CopyButton({text}: {text: string}) {
 		>
 			{copied ? <IconCheck size={14} className='text-green-400' /> : <IconCopy size={14} />}
 		</button>
+	)
+}
+
+// ─── Step: Choose Connection Method ─────────────────────────────
+
+function StepMethod({
+	onSelectMethod,
+	onBack,
+}: {
+	onSelectMethod: (method: ConnectionMethod) => void
+	onBack: () => void
+}) {
+	return (
+		<div className='space-y-5'>
+			<div>
+				<h3 className='text-body-lg font-semibold text-text-primary'>Choose connection method</h3>
+				<p className='mt-1 text-caption text-text-tertiary'>
+					How would you like to expose your server to the internet?
+				</p>
+			</div>
+
+			<div className='space-y-3'>
+				{/* Cloudflare Tunnel option */}
+				<button
+					onClick={() => onSelectMethod('tunnel')}
+					className='w-full rounded-radius-md border border-border-default bg-surface-base px-4 py-4 text-left transition-all hover:border-violet-500/50 hover:bg-surface-2 group'
+				>
+					<div className='flex items-start gap-3'>
+						<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-md bg-orange-500/15 group-hover:bg-orange-500/20 transition-colors'>
+							<TbCloud size={18} className='text-orange-400' />
+						</div>
+						<div className='flex-1 min-w-0'>
+							<div className='flex items-center gap-2'>
+								<span className='text-body font-medium text-text-primary'>Cloudflare Tunnel</span>
+								<span className='rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-medium text-violet-400'>
+									Recommended
+								</span>
+							</div>
+							<p className='mt-0.5 text-caption text-text-tertiary'>
+								No port forwarding needed. Secure tunnel via Cloudflare Zero Trust.
+							</p>
+						</div>
+						<IconArrowRight size={14} className='mt-1 flex-shrink-0 text-text-tertiary group-hover:text-text-secondary transition-colors' />
+					</div>
+				</button>
+
+				{/* Direct DNS option */}
+				<button
+					onClick={() => onSelectMethod('direct')}
+					className='w-full rounded-radius-md border border-border-default bg-surface-base px-4 py-4 text-left transition-all hover:border-violet-500/50 hover:bg-surface-2 group'
+				>
+					<div className='flex items-start gap-3'>
+						<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-md bg-blue-500/15 group-hover:bg-blue-500/20 transition-colors'>
+							<TbWorldWww size={18} className='text-blue-400' />
+						</div>
+						<div className='flex-1 min-w-0'>
+							<span className='text-body font-medium text-text-primary'>Direct (DNS + Let's Encrypt)</span>
+							<p className='mt-0.5 text-caption text-text-tertiary'>
+								Point your domain's A record to this server. Requires open ports 80/443.
+							</p>
+						</div>
+						<IconArrowRight size={14} className='mt-1 flex-shrink-0 text-text-tertiary group-hover:text-text-secondary transition-colors' />
+					</div>
+				</button>
+			</div>
+
+			<div className='flex justify-start pt-1'>
+				<button
+					onClick={onBack}
+					className='flex items-center gap-2 rounded-radius-md bg-surface-base px-4 py-2.5 text-body text-text-secondary transition-all hover:bg-surface-2 hover:text-text-secondary'
+				>
+					<IconArrowLeft size={14} />
+					Back
+				</button>
+			</div>
+		</div>
+	)
+}
+
+// ─── Step: Cloudflare Tunnel ─────────────────────────────────────
+
+function StepTunnel({
+	domain,
+	onNext,
+	onBack,
+}: {
+	domain: string
+	onNext: () => void
+	onBack: () => void
+}) {
+	const [token, setToken] = useState('')
+	const [error, setError] = useState('')
+
+	const configureTunnelM = trpcReact.domain.tunnel.configure.useMutation()
+
+	const handleConnect = async () => {
+		setError('')
+		try {
+			await configureTunnelM.mutateAsync({token, domain})
+			onNext()
+		} catch (err: any) {
+			setError(err.message || 'Failed to configure tunnel')
+		}
+	}
+
+	const isConnecting = configureTunnelM.isPending
+	const tokenValid = token.trim().length > 0
+
+	return (
+		<div className='space-y-5'>
+			<div>
+				<h3 className='text-body-lg font-semibold text-text-primary'>Configure Cloudflare Tunnel</h3>
+				<p className='mt-1 text-caption text-text-tertiary'>
+					Paste your Cloudflare Tunnel token to connect{' '}
+					<span className='font-mono text-text-secondary'>{domain}</span> securely.
+				</p>
+			</div>
+
+			<div className='space-y-3 rounded-radius-md border border-border-default bg-surface-base p-4 text-caption text-text-secondary'>
+				<p className='font-medium text-text-primary'>How to get your tunnel token:</p>
+				<ol className='space-y-1.5 pl-4'>
+					<li className='list-decimal'>
+						Go to{' '}
+						<a
+							href='https://one.dash.cloudflare.com/'
+							target='_blank'
+							rel='noopener noreferrer'
+							className='inline-flex items-center gap-0.5 text-blue-400 transition-colors hover:text-blue-300'
+						>
+							Cloudflare Zero Trust Dashboard
+							<IconExternalLink size={11} className='ml-0.5' />
+						</a>
+					</li>
+					<li className='list-decimal'>Navigate to <span className='text-text-primary'>Networks → Tunnels</span></li>
+					<li className='list-decimal'>Click <span className='text-text-primary'>Create a tunnel</span> → Choose <span className='text-text-primary'>Cloudflared</span></li>
+					<li className='list-decimal'>Copy the token shown in the install command</li>
+				</ol>
+			</div>
+
+			<div>
+				<label className='mb-1.5 block text-caption font-medium text-text-secondary'>Tunnel Token</label>
+				<textarea
+					value={token}
+					onChange={(e) => setToken(e.target.value)}
+					placeholder='eyJhIjoiMTIz...'
+					rows={3}
+					className='w-full rounded-radius-md border border-border-default bg-surface-base px-4 py-2.5 font-mono text-caption text-text-primary placeholder-text-tertiary outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25 resize-none'
+				/>
+			</div>
+
+			{error && (
+				<div className='flex items-start gap-2 rounded-radius-md bg-red-500/10 px-4 py-3 text-caption text-red-400'>
+					<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
+					<span>{error}</span>
+				</div>
+			)}
+
+			<div className='flex justify-between pt-1'>
+				<button
+					onClick={onBack}
+					disabled={isConnecting}
+					className='flex items-center gap-2 rounded-radius-md bg-surface-base px-4 py-2.5 text-body text-text-secondary transition-all hover:bg-surface-2 hover:text-text-secondary disabled:opacity-40'
+				>
+					<IconArrowLeft size={14} />
+					Back
+				</button>
+				<button
+					onClick={handleConnect}
+					disabled={!tokenValid || isConnecting}
+					className='flex items-center gap-2 rounded-radius-md bg-orange-600 px-5 py-2.5 text-body font-medium text-white transition-all hover:bg-orange-500 disabled:opacity-40'
+				>
+					{isConnecting ? (
+						<IconLoader2 size={14} className='animate-spin' />
+					) : (
+						<TbCloud size={14} />
+					)}
+					Connect
+				</button>
+			</div>
+		</div>
 	)
 }
 
@@ -419,7 +606,7 @@ function StepActivate({
 
 // ─── Step 5: Done ───────────────────────────────────────────────
 
-function StepDone({domain, onClose}: {domain: string}) {
+function StepDone({domain, onClose}: {domain: string; onClose: () => void}) {
 	const url = `https://${domain}`
 
 	return (
@@ -549,9 +736,15 @@ export function DomainSetupDialogContent({onClose}: {onClose: () => void}) {
 
 // ─── Step Progress Indicator ────────────────────────────────────
 
-function StepIndicator({current}: {current: WizardStep}) {
-	const labels = ['Domain', 'DNS', 'Verify', 'HTTPS', 'Done']
-	const currentIdx = STEPS.indexOf(current)
+function StepIndicator({current, method}: {current: WizardStep; method: ConnectionMethod | null}) {
+	// Labels and step list depend on the selected method (or pre-method: show generic)
+	const steps = method === 'tunnel' ? TUNNEL_STEPS : DIRECT_STEPS
+	const labels =
+		method === 'tunnel'
+			? ['Domain', 'Method', 'Tunnel', 'Done']
+			: ['Domain', 'Method', 'DNS', 'Verify', 'HTTPS', 'Done']
+
+	const currentIdx = steps.indexOf(current)
 
 	return (
 		<div className='flex items-center gap-1.5'>
@@ -561,15 +754,16 @@ function StepIndicator({current}: {current: WizardStep}) {
 
 				return (
 					<div key={label} className='flex items-center gap-1.5'>
-						{idx > 0 && <div className={`h-px w-4 ${isDone ? 'bg-violet-500' : 'bg-border-default'}`} />}
+						{idx > 0 && <div className={cn('h-px w-4', isDone ? 'bg-violet-500' : 'bg-border-default')} />}
 						<div
-							className={`flex h-6 items-center rounded-full px-2.5 text-[10px] font-medium transition-all ${
+							className={cn(
+								'flex h-6 items-center rounded-full px-2.5 text-[10px] font-medium transition-all',
 								isActive
 									? 'bg-violet-600 text-white'
 									: isDone
 										? 'bg-violet-500/20 text-violet-400'
-										: 'bg-surface-base text-text-tertiary'
-							}`}
+										: 'bg-surface-base text-text-tertiary',
+							)}
 						>
 							{isDone ? <IconCheck size={10} className='mr-1' /> : null}
 							{label}
@@ -585,6 +779,7 @@ function StepIndicator({current}: {current: WizardStep}) {
 
 function DomainSetupInner({onClose}: {onClose: () => void}) {
 	const [step, setStep] = useState<WizardStep>('domain')
+	const [method, setMethod] = useState<ConnectionMethod | null>(null)
 	const [domain, setDomain] = useState('')
 	const [serverIp, setServerIp] = useState<string | null>(null)
 	const [saving, setSaving] = useState(false)
@@ -609,12 +804,12 @@ function DomainSetupInner({onClose}: {onClose: () => void}) {
 		}
 	}, [statusQuery.data])
 
-	// Handle step 1 "Next" -> save domain to Redis
+	// Handle step 1 "Next" -> save domain to Redis, then go to method selection
 	const handleSaveDomain = useCallback(async () => {
 		setSaving(true)
 		try {
 			await setDomainMutation.mutateAsync({domain})
-			setStep('dns-records')
+			setStep('method')
 		} catch {
 			// error handled by tRPC
 		} finally {
@@ -622,9 +817,19 @@ function DomainSetupInner({onClose}: {onClose: () => void}) {
 		}
 	}, [domain, setDomainMutation])
 
+	const handleSelectMethod = useCallback((selected: ConnectionMethod) => {
+		setMethod(selected)
+		if (selected === 'tunnel') {
+			setStep('tunnel')
+		} else {
+			setStep('dns-records')
+		}
+	}, [])
+
 	const handleRemoved = () => {
 		setShowWizard(false)
 		setStep('domain')
+		setMethod(null)
 		setDomain('')
 		statusQuery.refetch()
 	}
@@ -648,6 +853,7 @@ function DomainSetupInner({onClose}: {onClose: () => void}) {
 				onReconfigure={() => {
 					setShowWizard(true)
 					setStep('domain')
+					setMethod(null)
 				}}
 			/>
 		)
@@ -658,7 +864,7 @@ function DomainSetupInner({onClose}: {onClose: () => void}) {
 		<div>
 			{/* Progress */}
 			<div className='mb-6'>
-				<StepIndicator current={step} />
+				<StepIndicator current={step} method={method} />
 			</div>
 
 			{/* Steps */}
@@ -671,12 +877,25 @@ function DomainSetupInner({onClose}: {onClose: () => void}) {
 					saving={saving}
 				/>
 			)}
+			{step === 'method' && (
+				<StepMethod
+					onSelectMethod={handleSelectMethod}
+					onBack={() => setStep('domain')}
+				/>
+			)}
+			{step === 'tunnel' && (
+				<StepTunnel
+					domain={domain}
+					onNext={() => setStep('done')}
+					onBack={() => setStep('method')}
+				/>
+			)}
 			{step === 'dns-records' && serverIp && (
 				<StepDnsRecords
 					domain={domain}
 					serverIp={serverIp}
 					onNext={() => setStep('verify')}
-					onBack={() => setStep('domain')}
+					onBack={() => setStep('method')}
 				/>
 			)}
 			{step === 'verify' && (

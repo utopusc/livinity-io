@@ -1,5 +1,6 @@
 import {useState, useEffect, useRef, useCallback} from 'react'
 import {motion} from 'framer-motion'
+import {TbCloud, TbWorldWww} from 'react-icons/tb'
 
 import {TextEffect} from '@/components/motion-primitives/text-effect'
 import {TransitionPanel} from '@/components/motion-primitives/transition-panel'
@@ -29,6 +30,11 @@ import {
 	IconRefresh,
 	IconSparkles,
 } from '@tabler/icons-react'
+
+// ─── Domain Sub-Step Types ───────────────────────────────────────
+
+type DomainSubStep = 'enter-domain' | 'choose-method' | 'tunnel' | 'dns-records' | 'verify' | 'activate'
+type DomainMethod = 'tunnel' | 'direct'
 
 // ─── Constants ──────────────────────────────────────────────────
 
@@ -349,20 +355,24 @@ function StepPersonalize({onNext}: {onNext: () => void}) {
 // ─── Step 3: Domain Setup (Skippable) ───────────────────────────
 
 function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
-	const [domainSubStep, setDomainSubStep] = useState<0 | 1 | 2 | 3>(0)
+	const [subStep, setSubStep] = useState<DomainSubStep>('enter-domain')
+	const [domainMethod, setDomainMethod] = useState<DomainMethod | null>(null)
 	const [domain, setDomain] = useState('')
 	const [serverIp, setServerIp] = useState<string | null>(null)
 	const [saving, setSaving] = useState(false)
 	const [activating, setActivating] = useState(false)
 	const [activateError, setActivateError] = useState('')
+	const [tunnelToken, setTunnelToken] = useState('')
+	const [tunnelError, setTunnelError] = useState('')
 
 	const ipQuery = trpcReact.domain.getPublicIp.useQuery()
 	const setDomainMutation = trpcReact.domain.setDomain.useMutation()
 	const activateMutation = trpcReact.domain.activate.useMutation()
+	const configureTunnelM = trpcReact.domain.tunnel.configure.useMutation()
 
 	const verifyQuery = trpcReact.domain.verifyDns.useQuery(undefined, {
-		enabled: domainSubStep === 2,
-		refetchInterval: domainSubStep === 2 ? 10_000 : false,
+		enabled: subStep === 'verify',
+		refetchInterval: subStep === 'verify' ? 10_000 : false,
 	})
 
 	const isMatch = verifyQuery.data?.match === true
@@ -377,13 +387,22 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 		setSaving(true)
 		try {
 			await setDomainMutation.mutateAsync({domain})
-			setDomainSubStep(1)
+			setSubStep('choose-method')
 		} catch {
 			// error handled by tRPC
 		} finally {
 			setSaving(false)
 		}
 	}, [domain, setDomainMutation])
+
+	const handleSelectMethod = useCallback((selected: DomainMethod) => {
+		setDomainMethod(selected)
+		if (selected === 'tunnel') {
+			setSubStep('tunnel')
+		} else {
+			setSubStep('dns-records')
+		}
+	}, [])
 
 	const handleActivate = async () => {
 		setActivateError('')
@@ -395,6 +414,16 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 			setActivateError(err.message || 'Failed to activate HTTPS')
 		} finally {
 			setActivating(false)
+		}
+	}
+
+	const handleConnectTunnel = async () => {
+		setTunnelError('')
+		try {
+			await configureTunnelM.mutateAsync({token: tunnelToken, domain})
+			onNext()
+		} catch (err: any) {
+			setTunnelError(err.message || 'Failed to configure tunnel')
 		}
 	}
 
@@ -419,8 +448,8 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 				</p>
 			</div>
 
-			{/* Sub-step 0: Domain input */}
-			{domainSubStep === 0 && (
+			{/* Sub-step: Enter domain */}
+			{subStep === 'enter-domain' && (
 				<motion.div
 					initial={{opacity: 0, y: 10}}
 					animate={{opacity: 1, y: 0}}
@@ -460,8 +489,157 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 				</motion.div>
 			)}
 
-			{/* Sub-step 1: DNS records */}
-			{domainSubStep === 1 && serverIp && (
+			{/* Sub-step: Choose connection method */}
+			{subStep === 'choose-method' && (
+				<motion.div
+					initial={{opacity: 0, x: 40}}
+					animate={{opacity: 1, x: 0}}
+					transition={{type: 'spring', stiffness: 300, damping: 30}}
+					className='w-full space-y-4'
+				>
+					<div>
+						<h3 className='text-body font-semibold text-text-primary'>Choose connection method</h3>
+						<p className='mt-1 text-caption text-text-tertiary'>
+							How would you like to expose your server to the internet?
+						</p>
+					</div>
+
+					<div className='space-y-3'>
+						{/* Cloudflare Tunnel */}
+						<button
+							onClick={() => handleSelectMethod('tunnel')}
+							className='w-full rounded-xl border border-border-default bg-surface-base px-4 py-4 text-left transition-all hover:border-violet-400/50 hover:bg-surface-1 group'
+						>
+							<div className='flex items-start gap-3'>
+								<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500/15 group-hover:bg-orange-500/20 transition-colors'>
+									<TbCloud size={18} className='text-orange-400' />
+								</div>
+								<div className='flex-1 min-w-0'>
+									<div className='flex items-center gap-2'>
+										<span className='text-body font-medium text-text-primary'>Cloudflare Tunnel</span>
+										<span className='rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-400'>
+											Recommended
+										</span>
+									</div>
+									<p className='mt-0.5 text-caption text-text-tertiary'>
+										No port forwarding. Secure tunnel via Cloudflare Zero Trust.
+									</p>
+								</div>
+								<IconArrowRight size={14} className='mt-1 flex-shrink-0 text-text-tertiary group-hover:text-text-secondary transition-colors' />
+							</div>
+						</button>
+
+						{/* Direct DNS */}
+						<button
+							onClick={() => handleSelectMethod('direct')}
+							className='w-full rounded-xl border border-border-default bg-surface-base px-4 py-4 text-left transition-all hover:border-violet-400/50 hover:bg-surface-1 group'
+						>
+							<div className='flex items-start gap-3'>
+								<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/15 group-hover:bg-blue-500/20 transition-colors'>
+									<TbWorldWww size={18} className='text-blue-400' />
+								</div>
+								<div className='flex-1 min-w-0'>
+									<span className='text-body font-medium text-text-primary'>Direct (DNS + Let's Encrypt)</span>
+									<p className='mt-0.5 text-caption text-text-tertiary'>
+										Point your domain's A record to this server. Requires open ports 80/443.
+									</p>
+								</div>
+								<IconArrowRight size={14} className='mt-1 flex-shrink-0 text-text-tertiary group-hover:text-text-secondary transition-colors' />
+							</div>
+						</button>
+					</div>
+
+					<div className='flex justify-start'>
+						<button onClick={() => setSubStep('enter-domain')} className={secondaryButtonClass}>
+							<IconArrowLeft size={14} />
+							Back
+						</button>
+					</div>
+				</motion.div>
+			)}
+
+			{/* Sub-step: Configure Cloudflare Tunnel */}
+			{subStep === 'tunnel' && (
+				<motion.div
+					initial={{opacity: 0, x: 40}}
+					animate={{opacity: 1, x: 0}}
+					transition={{type: 'spring', stiffness: 300, damping: 30}}
+					className='w-full space-y-4'
+				>
+					<div>
+						<h3 className='text-body font-semibold text-text-primary'>Configure Cloudflare Tunnel</h3>
+						<p className='mt-1 text-caption text-text-tertiary'>
+							Paste your tunnel token to connect{' '}
+							<span className='font-mono text-text-secondary'>{domain}</span> securely.
+						</p>
+					</div>
+
+					<div className='space-y-2 rounded-xl border border-border-default bg-surface-base p-4 text-caption text-text-secondary'>
+						<p className='font-medium text-text-primary'>How to get your tunnel token:</p>
+						<ol className='space-y-1 pl-4'>
+							<li className='list-decimal'>
+								Go to{' '}
+								<a
+									href='https://one.dash.cloudflare.com/'
+									target='_blank'
+									rel='noopener noreferrer'
+									className='inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300 transition-colors'
+								>
+									Cloudflare Zero Trust Dashboard
+									<IconExternalLink size={11} className='ml-0.5' />
+								</a>
+							</li>
+							<li className='list-decimal'>Navigate to <span className='text-text-primary'>Networks → Tunnels</span></li>
+							<li className='list-decimal'>Create a tunnel → Choose <span className='text-text-primary'>Cloudflared</span></li>
+							<li className='list-decimal'>Copy the token from the install command</li>
+						</ol>
+					</div>
+
+					<div>
+						<label className='mb-1.5 block text-caption font-medium text-text-tertiary'>Tunnel Token</label>
+						<textarea
+							value={tunnelToken}
+							onChange={(e) => setTunnelToken(e.target.value)}
+							placeholder='eyJhIjoiMTIz...'
+							rows={3}
+							className='w-full rounded-xl border border-border-default bg-surface-base px-4 py-2.5 font-mono text-caption text-text-primary placeholder-text-tertiary outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25 resize-none'
+						/>
+					</div>
+
+					{tunnelError && (
+						<div className='flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-caption text-red-400'>
+							<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
+							<span>{tunnelError}</span>
+						</div>
+					)}
+
+					<div className='flex items-center justify-between'>
+						<button
+							onClick={() => setSubStep('choose-method')}
+							disabled={configureTunnelM.isPending}
+							className={secondaryButtonClass}
+						>
+							<IconArrowLeft size={14} />
+							Back
+						</button>
+						<button
+							onClick={handleConnectTunnel}
+							disabled={!tunnelToken.trim() || configureTunnelM.isPending}
+							className={cn(primaryButtonClass, 'bg-orange-600 shadow-[0_0_20px_rgba(234,88,12,0.25)] hover:bg-orange-500')}
+						>
+							{configureTunnelM.isPending ? (
+								<IconLoader2 size={16} className='animate-spin' />
+							) : (
+								<TbCloud size={16} />
+							)}
+							Connect
+						</button>
+					</div>
+				</motion.div>
+			)}
+
+			{/* Sub-step: DNS records */}
+			{subStep === 'dns-records' && serverIp && (
 				<motion.div
 					initial={{opacity: 0, x: 40}}
 					animate={{opacity: 1, x: 0}}
@@ -515,11 +693,11 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					</div>
 
 					<div className='flex items-center justify-between'>
-						<button onClick={() => setDomainSubStep(0)} className={secondaryButtonClass}>
+						<button onClick={() => setSubStep('choose-method')} className={secondaryButtonClass}>
 							<IconArrowLeft size={14} />
 							Back
 						</button>
-						<button onClick={() => setDomainSubStep(2)} className={primaryButtonClass}>
+						<button onClick={() => setSubStep('verify')} className={primaryButtonClass}>
 							I've added the record
 							<IconArrowRight size={14} />
 						</button>
@@ -527,8 +705,8 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 				</motion.div>
 			)}
 
-			{/* Sub-step 2: Verify DNS */}
-			{domainSubStep === 2 && (
+			{/* Sub-step: Verify DNS */}
+			{subStep === 'verify' && (
 				<motion.div
 					initial={{opacity: 0, x: 40}}
 					animate={{opacity: 1, x: 0}}
@@ -607,12 +785,12 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					)}
 
 					<div className='flex items-center justify-between'>
-						<button onClick={() => setDomainSubStep(1)} className={secondaryButtonClass}>
+						<button onClick={() => setSubStep('dns-records')} className={secondaryButtonClass}>
 							<IconArrowLeft size={14} />
 							Back
 						</button>
 						<button
-							onClick={() => setDomainSubStep(3)}
+							onClick={() => setSubStep('activate')}
 							disabled={!isMatch}
 							className={primaryButtonClass}
 						>
@@ -623,8 +801,8 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 				</motion.div>
 			)}
 
-			{/* Sub-step 3: Activate HTTPS */}
-			{domainSubStep === 3 && (
+			{/* Sub-step: Activate HTTPS */}
+			{subStep === 'activate' && (
 				<motion.div
 					initial={{opacity: 0, x: 40}}
 					animate={{opacity: 1, x: 0}}
@@ -667,7 +845,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					)}
 
 					<div className='flex items-center justify-between'>
-						<button onClick={() => setDomainSubStep(2)} className={secondaryButtonClass}>
+						<button onClick={() => setSubStep('verify')} className={secondaryButtonClass}>
 							<IconArrowLeft size={14} />
 							Back
 						</button>
