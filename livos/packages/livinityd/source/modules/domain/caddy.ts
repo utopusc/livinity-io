@@ -50,11 +50,13 @@ export function validateSubdomain(subdomain: string): boolean {
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
  * In single-user mode, uses individual per-subdomain blocks (legacy behavior).
  */
-export function generateFullCaddyfile(config: CaddyConfig, multiUser = false): string {
+export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tunnel = false): string {
 	const blocks: string[] = []
 
-	if (!config.mainDomain) {
-		// No domain configured - IP-only mode
+	if (!config.mainDomain || tunnel) {
+		// No domain configured OR tunnel mode — Caddy just reverse proxies on :80
+		// When using Cloudflare Tunnel, HTTPS is terminated at the Cloudflare edge.
+		// Caddy must NOT use domain blocks (they trigger automatic HTTPS + redirects).
 		blocks.push(`:80 {
 	reverse_proxy 127.0.0.1:8080
 }`)
@@ -73,14 +75,10 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false): s
 
 		const fullDomain = `${sub.subdomain}.${config.mainDomain}`
 		if (multiUser) {
-			// Multi-user mode: route ALL subdomains through livinityd's app gateway.
-			// The gateway middleware checks the user's session and routes to the
-			// correct per-user container. No wildcard cert needed.
 			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:8080
 }`)
 		} else {
-			// Single-user mode: route directly to app port (legacy behavior)
 			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:${sub.port}
 }`)
@@ -132,9 +130,9 @@ export async function reloadCaddy(): Promise<void> {
  * Apply a full Caddy configuration with main domain and subdomains.
  * Ensures firewall ports are open before applying.
  */
-export async function applyCaddyConfig(config: CaddyConfig): Promise<{firewallResult: {success: boolean; method: string; message: string}}> {
+export async function applyCaddyConfig(config: CaddyConfig, tunnel = false): Promise<{firewallResult: {success: boolean; method: string; message: string}}> {
 	const firewallResult = await ensureFirewallPorts()
-	const content = generateFullCaddyfile(config)
+	const content = generateFullCaddyfile(config, false, tunnel)
 	await writeCaddyfile(content)
 	await reloadCaddy()
 	return {firewallResult}
