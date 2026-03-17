@@ -84,10 +84,50 @@ export function createRequestHandler(
   pool: pg.Pool,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
   return async (req, res) => {
-    // Caddy on-demand TLS ask endpoint
-    if (req.url?.startsWith('/internal/ask')) {
-      await handleAskRequest(req, res, pool);
-      return;
+    // Internal endpoints (localhost only)
+    if (req.url?.startsWith('/internal/')) {
+      const remote = req.socket.remoteAddress;
+      const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+
+      if (req.url.startsWith('/internal/ask')) {
+        await handleAskRequest(req, res, pool);
+        return;
+      }
+
+      if (req.url.startsWith('/internal/user-status') && isLocal) {
+        const url = new URL(req.url, 'http://localhost');
+        const qUsername = url.searchParams.get('username');
+        if (!qUsername) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'missing username' }));
+          return;
+        }
+        const tunnel = registry.get(qUsername);
+        const online = !!tunnel && tunnel.ws.readyState === 1;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ username: qUsername, online, sessionId: tunnel?.sessionId ?? null }));
+        return;
+      }
+
+      if (req.url.startsWith('/internal/user-bandwidth') && isLocal) {
+        const url = new URL(req.url, 'http://localhost');
+        const userId = url.searchParams.get('userId');
+        if (!userId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'missing userId' }));
+          return;
+        }
+        const quota = await checkQuota(redis, userId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(quota));
+        return;
+      }
+
+      if (!isLocal) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'forbidden' }));
+        return;
+      }
     }
 
     const { username, appName } = parseSubdomain(req.headers.host);
