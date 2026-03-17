@@ -61,6 +61,14 @@ async function handleAskRequest(
     return;
   }
 
+  // Allow infrastructure subdomains that aren't user accounts
+  const INFRA_SUBDOMAINS = new Set(['relay', 'api', 'www', 'status']);
+  if (INFRA_SUBDOMAINS.has(username)) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ allowed: true }));
+    return;
+  }
+
   try {
     const result = await pool.query('SELECT 1 FROM users WHERE username = $1 LIMIT 1', [username]);
     if (result.rows.length > 0) {
