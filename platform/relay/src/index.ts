@@ -20,12 +20,24 @@ import { config } from './config.js';
 import { createRequestHandler } from './server.js';
 import { TunnelConnection, TunnelRegistry } from './tunnel-registry.js';
 import { verifyApiKey } from './auth.js';
-import { handleTunnelResponse } from './request-proxy.js';
+import { handleTunnelResponse, proxyHttpRequest } from './request-proxy.js';
+import { parseSubdomain } from './subdomain-parser.js';
+import {
+  handleWsUpgrade,
+  handleWsReady,
+  handleWsFrame,
+  handleWsClose,
+  handleWsError,
+} from './ws-proxy.js';
 import type {
   TunnelAuth,
   TunnelConnected,
   TunnelAuthError,
   TunnelRelayShutdown,
+  TunnelWsReady,
+  TunnelWsFrame,
+  TunnelWsClose,
+  TunnelWsError as TunnelWsErrorMsg,
   ClientToRelayMessage,
   BidirectionalMessage,
 } from './protocol.js';
@@ -114,6 +126,28 @@ function onTunnelConnect(ws: WebSocket): void {
       // Auth succeeded
       authenticated = true;
       tunnelUsername = result.username;
+
+      // Check for session reconnection
+      if (authMsg.sessionId) {
+        const existing = registry.getBySessionId(authMsg.sessionId);
+        if (existing && existing.isReconnecting() && existing.username === result.username) {
+          // Resume existing session
+          tunnel = existing;
+          existing.resumeSession(ws, (req, res) => proxyHttpRequest(existing, req, res, null));
+
+          const connectedMsg: TunnelConnected = {
+            type: 'connected',
+            sessionId: authMsg.sessionId,
+            assignedUrl: `https://${result.username}.${config.RELAY_HOST}`,
+          };
+          ws.send(JSON.stringify(connectedMsg));
+
+          console.log(`[relay] Tunnel reconnected: ${result.username} (session=${authMsg.sessionId})`);
+          return;
+        }
+      }
+
+      // New session
       const sessionId = nanoid();
 
       tunnel = new TunnelConnection({
@@ -144,12 +178,18 @@ function onTunnelConnect(ws: WebSocket): void {
         handleTunnelResponse(tunnel, msg);
         break;
 
-      // WebSocket proxy messages — handled in Plan 04
+      // WebSocket proxy messages
       case 'ws_ready':
-      case 'ws_error':
+        handleWsReady(msg as TunnelWsReady, tunnel);
+        break;
       case 'ws_frame':
+        handleWsFrame(msg as TunnelWsFrame, tunnel);
+        break;
       case 'ws_close':
-        // No-op for now
+        handleWsClose(msg as TunnelWsClose, tunnel);
+        break;
+      case 'ws_error':
+        handleWsError(msg as TunnelWsErrorMsg, tunnel);
         break;
 
       case 'pong':
@@ -165,8 +205,8 @@ function onTunnelConnect(ws: WebSocket): void {
   ws.on('close', () => {
     clearTimeout(authTimer);
     if (tunnelUsername) {
-      console.log(`[relay] Tunnel disconnected: ${tunnelUsername}`);
-      registry.unregister(tunnelUsername);
+      console.log(`[relay] Tunnel disconnected: ${tunnelUsername} (entering reconnect mode)`);
+      registry.markDisconnected(tunnelUsername);
     }
   });
 
@@ -174,7 +214,7 @@ function onTunnelConnect(ws: WebSocket): void {
     clearTimeout(authTimer);
     if (tunnelUsername) {
       console.error(`[relay] Tunnel error (${tunnelUsername}):`, err.message);
-      registry.unregister(tunnelUsername);
+      registry.markDisconnected(tunnelUsername);
     }
   });
 }
@@ -193,8 +233,17 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
 
-  // User subdomain WebSocket proxying — implemented in Plan 04
-  // For now, reject all other upgrades
+  // User subdomain WebSocket proxying
+  const { username } = parseSubdomain(req.headers.host);
+  if (username) {
+    const tunnel = registry.get(username);
+    if (tunnel && tunnel.ws.readyState === 1 /* WebSocket.OPEN */) {
+      handleWsUpgrade(req, socket, head, tunnel);
+      return;
+    }
+  }
+
+  // No tunnel or not connected -- reject upgrade
   socket.destroy();
 });
 
