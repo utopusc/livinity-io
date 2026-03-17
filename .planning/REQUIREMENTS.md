@@ -1,57 +1,122 @@
-# Requirements: v7.1 — Per-User Isolation Completion
+# Requirements: v8.0 — Livinity Platform
 
-**Milestone:** v7.1
-**Created:** 2026-03-13
-**Status:** Complete
-**Core Value:** Every user has fully isolated settings, integrations, and personalized AI experience.
+**Milestone:** v8.0
+**Created:** 2026-03-17
+**Status:** Active
+**Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
 ---
 
 ## v1 Requirements
 
-### Per-User UI Settings (UISET)
+### Tunnel Relay (RELAY)
 
-- [x] **UISET-01**: Wallpaper animation settings (speed, hueRotate, brightness, saturation, paused) stored in PostgreSQL user_preferences instead of localStorage
-- [x] **UISET-02**: WallpaperProvider loads settings from server via tRPC query and saves via mutation
-- [x] **UISET-03**: Settings UI wallpaper section reads/writes server-backed animation settings
-- [x] **UISET-04**: App Store "Open" button only shown for apps user has access to (via myApps data)
-- [x] **UISET-05**: App Store shows "Install" for globally-installed apps user doesn't have access to
+- [ ] **RELAY-01**: Relay server accepts WebSocket tunnel connections from LivOS instances authenticated via API key
+- [ ] **RELAY-02**: Relay proxies HTTP requests from browser through tunnel to user's LivOS (request → JSON+base64 envelope → WebSocket → LivOS → response)
+- [ ] **RELAY-03**: Relay handles WebSocket upgrade requests (tRPC subscriptions, terminal, voice) through the tunnel
+- [ ] **RELAY-04**: Relay extracts username from subdomain and routes to correct tunnel connection
+- [ ] **RELAY-05**: Relay tracks per-user bandwidth via Redis INCRBY, flushes to PostgreSQL every 60s
+- [ ] **RELAY-06**: Relay implements 30s ping/pong heartbeat to detect dead connections
+- [ ] **RELAY-07**: Relay assigns persistent session IDs and buffers requests for 30s during reconnection
+- [ ] **RELAY-08**: Relay serves branded "Connecting..." page when tunnel is disconnected
+- [ ] **RELAY-09**: Relay enforces bandwidth quota (50GB/mo free tier) — returns 429 when exceeded
 
-### Per-User Integration Settings (INTEG)
+### Tunnel Client (CLIENT)
 
-- [x] **INTEG-01**: Livinityd AI integration routes store configs per-user in PostgreSQL user_preferences
-- [x] **INTEG-02**: Admin config sync writes to both PostgreSQL and global Redis for nexus-core backward compat
-- [x] **INTEG-03**: Per-user Gmail OAuth credentials stored in user_preferences
-- [ ] **INTEG-04**: Per-user MCP server settings stored in user_preferences (deferred — requires deeper nexus-core changes)
-- [x] **INTEG-05**: Per-user Voice settings (Deepgram API key, Cartesia API key) stored in user_preferences
-- [x] **INTEG-06**: Settings UI integration sections show per-user state (each user's own config)
+- [ ] **CLIENT-01**: Tunnel client module in livinityd connects to relay via WebSocket using API key from Redis config
+- [ ] **CLIENT-02**: Client forwards received HTTP requests to localhost:8080 and returns responses through tunnel
+- [ ] **CLIENT-03**: Client forwards WebSocket upgrade requests through tunnel
+- [ ] **CLIENT-04**: Client implements exponential backoff reconnection (1s to 60s max) with jitter
+- [ ] **CLIENT-05**: Client stores API key in Redis (`livos:platform:api_key`) and connection status
+- [ ] **CLIENT-06**: LivOS Settings UI has "Livinity Platform" section for entering/viewing API key
 
-### Onboarding Personalization (ONBOARD)
+### DNS & TLS (DNS)
 
-- [x] **ONBOARD-01**: Onboarding wizard includes personalization questions (role, use cases, communication style)
-- [x] **ONBOARD-02**: Personalization answers stored in user_preferences (ai_role, ai_use_cases, ai_response_style)
-- [x] **ONBOARD-03**: getUserPersonalizationPromptModifier() in nexus agent.ts reads preferences and injects into AI system prompt
-- [x] **ONBOARD-04**: Settings > Nexus AI Settings includes PersonalizationCard for editing preferences after onboarding
+- [ ] **DNS-01**: Wildcard DNS `*.livinity.io` A record points to Server5 IP via Cloudflare
+- [ ] **DNS-02**: Caddy On-Demand TLS issues certificates for `{username}.livinity.io` via DNS-01 challenge
+- [ ] **DNS-03**: Caddy On-Demand TLS issues certificates for `{app}.{username}.livinity.io` via DNS-01 challenge
+- [ ] **DNS-04**: Caddy `ask` endpoint validates subdomain against registered users before issuing cert
+- [ ] **DNS-05**: Caddy config includes `stream_close_delay 5m` to prevent WebSocket drops on reload
+- [ ] **DNS-06**: Relay parses two-level subdomains: `{app}.{username}.livinity.io` → routes to tunnel with app context
+
+### Platform Auth (AUTH)
+
+- [ ] **AUTH-01**: User can register with email and password on livinity.io
+- [ ] **AUTH-02**: User receives email verification via Resend after registration
+- [ ] **AUTH-03**: Unverified users cannot generate API keys
+- [ ] **AUTH-04**: User can log in with email/password, session persists 30 days (httpOnly secure cookie)
+- [ ] **AUTH-05**: User can reset password via email link
+- [ ] **AUTH-06**: Username validated: 3-30 chars, alphanumeric + hyphens, no reserved words (admin, www, api, app, relay, status)
+
+### Dashboard (DASH)
+
+- [ ] **DASH-01**: Dashboard shows API key (display once on generation, store bcrypt hash)
+- [ ] **DASH-02**: Dashboard shows server connection status (green=online, grey=offline) via Redis TTL key
+- [ ] **DASH-03**: Dashboard shows bandwidth usage progress bar (current month, color at 80%/95%/100%)
+- [ ] **DASH-04**: Dashboard shows personalized install command with API key
+- [ ] **DASH-05**: Dashboard shows subdomain URL (`{username}.livinity.io`) with copy button
+- [ ] **DASH-06**: Dashboard shows installed apps list with subdomain URLs when server is connected
+- [ ] **DASH-07**: User can regenerate API key (invalidates old key, disconnects active tunnel)
+
+### Landing Page (LAND)
+
+- [ ] **LAND-01**: Apple-style premium landing page at livinity.io with hero section
+- [ ] **LAND-02**: "How it works" section: 3 steps (Install → Enter API key → Access anywhere)
+- [ ] **LAND-03**: Feature cards section highlighting AI assistant, app store, multi-user
+- [ ] **LAND-04**: Pricing section (Free tier details + "Premium coming soon" placeholder)
+- [ ] **LAND-05**: Footer with links, social, legal
+- [ ] **LAND-06**: Responsive design (mobile-first)
+- [ ] **LAND-07**: SEO optimized (meta tags, OG images, structured data)
+
+### Install Script Integration (INST)
+
+- [ ] **INST-01**: install.sh includes tunnel client setup (connects to livinity.io relay)
+- [ ] **INST-02**: Onboarding wizard has "Connect to Livinity" step with API key input
+- [ ] **INST-03**: After entering API key, LivOS automatically connects to relay and becomes accessible
+- [ ] **INST-04**: `curl -sSL https://livinity.io/install.sh | sudo bash` works as one-command installer
+- [ ] **INST-05**: Install script hosted on livinity.io (not GitHub raw)
+
+### Infrastructure (INFRA)
+
+- [ ] **INFRA-01**: Server5 runs relay process (port 4000) + Next.js app (port 3000) + Caddy + PostgreSQL + Redis
+- [ ] **INFRA-02**: PM2 or systemd manages relay and Next.js processes with auto-restart
+- [ ] **INFRA-03**: Health endpoint on relay (`/health`) reports connection count, memory usage, uptime
+- [ ] **INFRA-04**: Memory monitoring with alert at 70% (5.6GB), reject new connections at 80%
+- [ ] **INFRA-05**: Platform PostgreSQL schema: users, api_keys, bandwidth_usage, tunnel_connections tables
 
 ---
 
-## Future Requirements (Deferred to v7.2+)
+## Future Requirements (v8.1+)
 
-- Per-user Docker container isolation (compose templating per user)
-- Dynamic App Gateway proxy (same subdomain → different container per user)
-- Per-user storage quotas
-- Per-user AI token usage quotas
-- Per-user Docker network isolation
-- Per-user MCP server settings (INTEG-04)
+### Payments
+- **PAY-01**: Stripe integration for premium tier subscriptions
+- **PAY-02**: Premium tier: custom domain, unlimited bandwidth, priority support
+- **PAY-03**: Usage-based billing or fixed monthly pricing
+
+### Custom Domains
+- **CDOM-01**: User adds custom domain in dashboard (e.g., myserver.example.com)
+- **CDOM-02**: DNS verification (CNAME to livinity.io)
+- **CDOM-03**: Automatic TLS for custom domains
+
+### Scale
+- **SCALE-01**: Multi-region relay (US, EU, Asia)
+- **SCALE-02**: Relay clustering for horizontal scaling
+- **SCALE-03**: CDN for static assets
+
+---
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Shared bot routing | Each user has own bot token, no multi-tenant message routing |
-| Per-user Docker containers | Deferred to v7.2, requires compose templating |
-| Dark theme | Light theme only |
-| Mobile app | Web-first approach |
+| Payment processing | Deferred to v8.1 — focus on core platform first |
+| Custom domains | Deferred to v8.1 — requires additional TLS/DNS complexity |
+| Multi-region relay | Deferred to v8.2 — single Server5 sufficient for launch |
+| Mobile app | Web-first approach covers core use case |
+| SSO between platform and LivOS | Two separate auth systems by design (P4 pitfall) |
+| White-label / reseller | Not planned |
+| Self-hosted LLM support | Kimi Code only for now |
+| Binary tunnel protocol | JSON+base64 sufficient for launch, optimize later |
 
 ---
 
@@ -59,14 +124,20 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UISET-01..UISET-05 | Phase 6 | Complete |
-| INTEG-01..INTEG-06 | Phase 7 | Complete (INTEG-04 deferred) |
-| ONBOARD-01..ONBOARD-04 | Phase 8 | Complete |
+| RELAY-01..09 | Phase 9 | Pending |
+| CLIENT-01..06 | Phase 9 | Pending |
+| DNS-01..06 | Phase 10 | Pending |
+| AUTH-01..06 | Phase 11 | Pending |
+| DASH-01..07 | Phase 12 | Pending |
+| LAND-01..07 | Phase 13 | Pending |
+| INST-01..05 | Phase 13 | Pending |
+| INFRA-01..05 | Phase 9 | Pending |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Complete: 14
-- Deferred: 1 (INTEG-04)
+- v1 requirements: 48 total
+- Mapped to phases: 48
+- Unmapped: 0 ✓
 
 ---
-*15 requirements across 3 categories, 14 complete, 1 deferred*
+*Requirements defined: 2026-03-17*
+*Last updated: 2026-03-17 after research synthesis*
