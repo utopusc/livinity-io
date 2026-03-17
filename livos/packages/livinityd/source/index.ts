@@ -135,7 +135,8 @@ export default class Livinityd {
 		this.dbus = new Dbus(this)
 		this.backups = new Backups(this)
 		this.ai = new AiModule({livinityd: this})
-		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
+		// TunnelClient is initialized in start() after ai.start() creates the Redis connection
+		this.tunnelClient = null as unknown as TunnelClient
 	}
 
 	async start() {
@@ -195,7 +196,7 @@ export default class Livinityd {
 			dbLogger.log('PostgreSQL not available, continuing with YAML-only mode')
 		}
 
-		// Initialise modules
+		// Initialise modules (ai must start first — TunnelClient needs ai.redis)
 		await Promise.all([
 			this.files.start(),
 			this.apps.start(),
@@ -203,8 +204,11 @@ export default class Livinityd {
 			this.dbus.start(),
 			this.server.start(),
 			this.ai.start(),
-			this.tunnelClient.start(),
 		])
+
+		// Initialize TunnelClient after ai.start() creates the Redis connection
+		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
+		await this.tunnelClient.start()
 
 		// Start backups last because it depends on files
 		this.backups.start()
