@@ -51,7 +51,7 @@ async function handleAskRequest(
   const { username } = parseSubdomain(domain);
   if (!username) {
     // Bare domain or unparseable — allow cert for livinity.io itself
-    if (domain === 'livinity.io' || domain === 'www.livinity.io') {
+    if (domain === 'livinity.io' || domain === 'www.livinity.io' || domain === 'relay.livinity.io') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ allowed: true }));
       return;
