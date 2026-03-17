@@ -59,6 +59,27 @@ CREATE TABLE IF NOT EXISTS tunnel_connections (
 );
 
 -- =========================================================================
+-- Auth tokens (Phase 11)
+-- =========================================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ;
+
+-- =========================================================================
+-- Sessions (cookie-based auth, Phase 11)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS sessions (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token       VARCHAR(255) UNIQUE NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  ip_address  VARCHAR(45),
+  user_agent  TEXT
+);
+
+-- =========================================================================
 -- Indexes
 -- =========================================================================
 CREATE INDEX IF NOT EXISTS idx_api_keys_prefix
@@ -66,6 +87,12 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_prefix
 
 CREATE INDEX IF NOT EXISTS idx_bandwidth_user_month
   ON bandwidth_usage(user_id, period_month);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_token
+  ON sessions(token);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id
+  ON sessions(user_id);
 
 -- =========================================================================
 -- Phase 9 test data (run manually):
