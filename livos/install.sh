@@ -378,6 +378,19 @@ main() {
         ok "Caddy installed"
     }
 
+    install_cloudflared() {
+        if command -v cloudflared &>/dev/null; then
+            ok "cloudflared already installed"
+            return 0
+        fi
+
+        info "Installing cloudflared..."
+        curl -sSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+        dpkg -i /tmp/cloudflared.deb
+        rm -f /tmp/cloudflared.deb
+        ok "cloudflared $(cloudflared --version 2>&1 | head -1) installed"
+    }
+
     # ── Fail2ban ────────────────────────────────────────────────
 
     install_fail2ban() {
@@ -1080,6 +1093,7 @@ FWSVC
     install_python
     install_postgresql
     install_caddy
+    install_cloudflared
     install_fail2ban
     ok "All system dependencies ready"
 

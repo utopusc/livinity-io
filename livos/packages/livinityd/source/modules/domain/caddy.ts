@@ -1,6 +1,8 @@
 import {writeFile} from 'node:fs/promises'
 import {exec} from 'node:child_process'
 import {promisify} from 'node:util'
+import fse from 'fs-extra'
+import {$} from 'execa'
 import {ensureFirewallPorts} from './firewall.js'
 
 const execAsync = promisify(exec)
@@ -158,4 +160,24 @@ export async function removeDomain(): Promise<void> {
 	const content = generateDefaultCaddyfile()
 	await writeCaddyfile(content)
 	await reloadCaddy()
+}
+
+/** Simple Caddy config for tunnel mode — tunnel handles HTTPS, Caddy just reverse proxies */
+export async function applyCaddyConfigForTunnel(): Promise<void> {
+	const caddyfile = `:80 {
+\treverse_proxy localhost:8080
+}
+`
+	await fse.writeFile('/etc/caddy/Caddyfile', caddyfile)
+	await $({reject: false})`caddy reload --config /etc/caddy/Caddyfile`
+}
+
+/** Revert Caddy to default IP-only config */
+export async function revertCaddyToDefault(): Promise<void> {
+	const caddyfile = `:80 {
+\treverse_proxy localhost:8080
+}
+`
+	await fse.writeFile('/etc/caddy/Caddyfile', caddyfile)
+	await $({reject: false})`caddy reload --config /etc/caddy/Caddyfile`
 }
