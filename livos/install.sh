@@ -350,6 +350,34 @@ main() {
         ok "Python3 installed"
     }
 
+    install_postgresql() {
+        if command -v psql &>/dev/null; then
+            ok "PostgreSQL already installed"
+            return 0
+        fi
+
+        info "Installing PostgreSQL..."
+        apt-get install -y -qq postgresql postgresql-contrib
+        systemctl enable postgresql
+        systemctl start postgresql
+        ok "PostgreSQL $(psql --version | head -1) installed"
+    }
+
+    install_caddy() {
+        if command -v caddy &>/dev/null; then
+            ok "Caddy already installed"
+            return 0
+        fi
+
+        info "Installing Caddy..."
+        apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+        apt-get update -qq
+        apt-get install -y -qq caddy
+        ok "Caddy installed"
+    }
+
     # ── Fail2ban ────────────────────────────────────────────────
 
     install_fail2ban() {
@@ -442,8 +470,6 @@ SSHCONF
         # Initialize defaults
         CONFIG_DOMAIN="localhost"
         CONFIG_USE_HTTPS="false"
-        CONFIG_GEMINI_KEY=""
-        CONFIG_ANTHROPIC_KEY=""
         CONFIG_WHATSAPP="false"
 
         if ! $HAS_TTY; then
@@ -468,21 +494,9 @@ SSHCONF
             fi
         fi
 
-        # AI API Key
-        if wizard_yesno "AI Configuration" \
-            "Configure a Gemini API key now?\n\n(You can also add this later in Settings > AI Configuration)\n\nGet a key at: https://aistudio.google.com/app/apikey"; then
-            CONFIG_GEMINI_KEY=$(wizard_input "Gemini API Key" \
-                "Enter your Gemini API key:" \
-                "")
-        fi
-
-        # Anthropic API Key
-        if wizard_yesno "AI Configuration" \
-            "Configure an Anthropic API key now?\n\nThis enables Claude as your primary AI provider.\n(You can also add this later in Settings > AI Configuration)\n\nGet a key at: https://console.anthropic.com/settings/keys"; then
-            CONFIG_ANTHROPIC_KEY=$(wizard_input "Anthropic API Key" \
-                "Enter your Anthropic API key:" \
-                "")
-        fi
+        # AI info
+        info "AI Provider: Kimi (kimi-for-coding)"
+        info "Run 'kimi login' after install to authenticate with Kimi API"
 
         # Optional features
         if wizard_yesno "WhatsApp Integration" \
@@ -495,8 +509,7 @@ SSHCONF
         local summary="Configuration Summary:\n\n"
         summary+="Domain: $CONFIG_DOMAIN\n"
         summary+="HTTPS: $CONFIG_USE_HTTPS\n"
-        summary+="Gemini API Key: $([ -n "$CONFIG_GEMINI_KEY" ] && echo "Configured" || echo "Not set")\n"
-        summary+="Anthropic API Key: $([ -n "$CONFIG_ANTHROPIC_KEY" ] && echo "Configured" || echo "Not set")\n"
+        summary+="AI Provider: Kimi (run 'kimi login' after install)\n"
         summary+="WhatsApp: $CONFIG_WHATSAPP"
 
         wizard_msgbox "Configuration Complete" "$summary"
@@ -513,6 +526,7 @@ SSHCONF
         SECRET_JWT=$(openssl rand -hex 32)
         SECRET_API_KEY=$(openssl rand -hex 32)
         SECRET_REDIS=$(openssl rand -hex 24)
+        SECRET_PG_PASS=$(openssl rand -hex 16)
 
         # Verify generation
         if [[ ${#SECRET_JWT} -ne 64 ]] || [[ ${#SECRET_API_KEY} -ne 64 ]]; then
@@ -553,8 +567,7 @@ SSHCONF
 # ==============================================================================
 
 # === AI API Keys ===
-GEMINI_API_KEY=${CONFIG_GEMINI_KEY:-}
-ANTHROPIC_API_KEY=${CONFIG_ANTHROPIC_KEY:-}
+KIMI_API_KEY=
 
 # === Security ===
 JWT_SECRET=${SECRET_JWT}
@@ -562,7 +575,7 @@ LIV_API_KEY=${SECRET_API_KEY}
 
 # === Database ===
 REDIS_URL=redis://:${SECRET_REDIS}@localhost:6379
-DATABASE_URL=
+DATABASE_URL=postgresql://livos:${SECRET_PG_PASS}@localhost:5432/livos
 
 # === Domain ===
 LIVOS_DOMAIN=${CONFIG_DOMAIN:-localhost}
@@ -580,7 +593,7 @@ MEMORY_HOST=127.0.0.1
 
 # === Daemon Configuration ===
 DAEMON_INTERVAL_MS=30000
-DEFAULT_MODEL=gemini-2.0-flash
+DEFAULT_MODEL=kimi-for-coding
 
 # === Service URLs ===
 NEXUS_API_URL=http://localhost:3200
@@ -602,8 +615,6 @@ ENVFILE
     setup_repository() {
         step "Setting up repository"
 
-        local temp_dir="/tmp/livinity-io-$$"
-
         if [[ -d "$LIVOS_DIR/packages" ]]; then
             info "Repository exists, pulling latest..."
             cd "$LIVOS_DIR"
@@ -611,20 +622,25 @@ ENVFILE
             ok "Repository updated"
         else
             info "Cloning repository..."
+            local temp_dir="/tmp/livinity-io-$$"
             rm -rf "$temp_dir"
             git clone --depth 1 "$REPO_URL" "$temp_dir" || fail "Failed to clone repository"
 
             # Move livos contents to /opt/livos
             rm -rf "$LIVOS_DIR"
-            mv "$temp_dir/livos" "$LIVOS_DIR"
+            mkdir -p "$LIVOS_DIR"
+            cp -a "$temp_dir/livos/." "$LIVOS_DIR/"
 
-            # Move nexus to /opt/nexus (required dependency)
+            # Move nexus to /opt/nexus
             rm -rf /opt/nexus
-            mv "$temp_dir/nexus" /opt/nexus
+            mkdir -p /opt/nexus
+            cp -a "$temp_dir/nexus/." /opt/nexus/
+
+            # Keep update script
+            cp "$temp_dir/update.sh" "$LIVOS_DIR/update.sh" 2>/dev/null || true
 
             # Cleanup
             rm -rf "$temp_dir"
-
             ok "Repository ready"
         fi
 
@@ -754,6 +770,37 @@ ENVFILE
         redis-cli -a "$SECRET_REDIS" FLUSHALL 2>/dev/null || true
 
         ok "Redis configured with password + AOF"
+    }
+
+    configure_postgresql() {
+        step "Configuring PostgreSQL"
+
+        # SECRET_PG_PASS is already generated in generate_secrets()
+
+        # Create user and database
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='livos'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE USER livos WITH PASSWORD '$SECRET_PG_PASS';"
+
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='livos'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE DATABASE livos OWNER livos;"
+
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE livos TO livos;"
+
+        ok "PostgreSQL: database 'livos' ready"
+    }
+
+    configure_caddy() {
+        step "Configuring Caddy"
+
+        cat > /etc/caddy/Caddyfile << 'CADDYFILE'
+:80 {
+    reverse_proxy localhost:8080
+}
+CADDYFILE
+
+        systemctl enable caddy
+        systemctl restart caddy
+        ok "Caddy configured: :80 → localhost:8080 (full reverse proxy)"
     }
 
     # ── Systemd Services ──────────────────────────────────────
@@ -998,11 +1045,9 @@ FWSVC
         echo -e "    systemctl restart livos       - restart"
         echo -e "    journalctl -u livos -f        - view logs"
         echo ""
-        if [[ -z "${CONFIG_GEMINI_KEY:-}" ]] || [[ -z "${CONFIG_ANTHROPIC_KEY:-}" ]]; then
-            echo -e "  ${YELLOW}Next step:${NC} Open Settings > AI Configuration"
-            echo -e "  and add your API keys for AI providers."
-            echo ""
-        fi
+        echo -e "  ${YELLOW}Next step:${NC} Run 'kimi login' to authenticate"
+        echo -e "  with the Kimi AI provider."
+        echo ""
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     }
 
@@ -1033,6 +1078,8 @@ FWSVC
     install_docker
     setup_docker_images
     install_python
+    install_postgresql
+    install_caddy
     install_fail2ban
     ok "All system dependencies ready"
 
@@ -1049,6 +1096,9 @@ FWSVC
     # === Redis ===
     configure_redis
 
+    # === PostgreSQL ===
+    configure_postgresql
+
     # === Build ===
     build_project
 
@@ -1062,6 +1112,9 @@ FWSVC
     # === Services ===
     create_systemd_service
     start_services
+
+    # === Caddy ===
+    configure_caddy
 
     # === Firewall ===
     configure_firewall
