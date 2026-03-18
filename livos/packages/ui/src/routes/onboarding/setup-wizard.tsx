@@ -365,6 +365,16 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 	const [tunnelToken, setTunnelToken] = useState('')
 	const [tunnelError, setTunnelError] = useState('')
 
+	// Auto-skip if domain is already configured (e.g., via Livinity tunnel)
+	const domainStatusQuery = trpcReact.domain.getStatus.useQuery()
+	const [autoSkipped, setAutoSkipped] = useState(false)
+	useEffect(() => {
+		if (!autoSkipped && domainStatusQuery.data?.active) {
+			setAutoSkipped(true)
+			onNext()
+		}
+	}, [domainStatusQuery.data, autoSkipped, onNext])
+
 	const ipQuery = trpcReact.domain.getPublicIp.useQuery()
 	const setDomainMutation = trpcReact.domain.setDomain.useMutation()
 	const activateMutation = trpcReact.domain.activate.useMutation()
