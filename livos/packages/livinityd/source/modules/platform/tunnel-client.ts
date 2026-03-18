@@ -313,6 +313,27 @@ export default class TunnelClient {
 		await this.redis.set(`${REDIS_PREFIX}url`, msg.assignedUrl)
 		await this.updateRedisStatus()
 
+		// Auto-configure domain for LivOS when connected via Livinity tunnel
+		// This makes App Store, subdomain routing, and domain-dependent features work
+		try {
+			const domain = msg.assignedUrl.replace('https://', '').replace('http://', '')
+			const existingConfig = await this.redis.get('livos:domain:config')
+			const existing = existingConfig ? JSON.parse(existingConfig) : null
+			// Only set if no domain configured or domain changed
+			if (!existing || !existing.active || existing.domain !== domain) {
+				const domainConfig = {
+					domain,
+					active: true,
+					activatedAt: new Date().toISOString(),
+					source: 'livinity-tunnel',
+				}
+				await this.redis.set('livos:domain:config', JSON.stringify(domainConfig))
+				this.logger.log(`[tunnel] Domain auto-configured: ${domain}`)
+			}
+		} catch (err) {
+			this.logger.error(`[tunnel] Failed to auto-configure domain: ${err}`)
+		}
+
 		this.logger.log(`[tunnel] Connected! Session: ${msg.sessionId}, URL: ${msg.assignedUrl}`)
 	}
 
