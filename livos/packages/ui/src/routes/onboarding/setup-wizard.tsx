@@ -38,7 +38,7 @@ type DomainMethod = 'tunnel' | 'direct'
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 7
 
 const glassCardStyle = {
 	background: 'rgba(255, 255, 255, 0.85)',
@@ -324,20 +324,29 @@ function StepPersonalize({onNext}: {onNext: () => void}) {
 				</p>
 			</div>
 
-			<div className='grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto w-full pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border-default'>
+			<div className='grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto w-full pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border-default'>
 				{animatedWallpaperIds.map((id) => (
 					<motion.button
 						key={id}
 						onClick={() => setWallpaperId(id)}
 						className={cn(
-							'relative aspect-video rounded-xl transition-all duration-200 ring-2 overflow-hidden',
-							wallpaper.id === id ? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(139,92,246,0.4)]' : 'ring-transparent hover:ring-border-default',
+							'relative aspect-[16/9] min-h-[80px] rounded-xl transition-all duration-200 ring-2 overflow-hidden',
+							wallpaper.id === id
+								? 'ring-brand ring-offset-2 ring-offset-transparent scale-[1.02] shadow-[0_0_20px_rgba(139,92,246,0.5)]'
+								: 'ring-transparent hover:ring-border-default',
 						)}
 						style={{backgroundColor: `hsl(${animatedWallpapers[id].brandColorHsl})`}}
 						whileHover={{scale: wallpaper.id === id ? 1.02 : 1.04}}
 						whileTap={{scale: 0.98}}
 					>
-						<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-1.5 pb-1 pt-3 text-[9px] font-medium text-white/80'>
+						{wallpaper.id === id && (
+							<div className='absolute inset-0 flex items-center justify-center bg-black/20'>
+								<div className='flex h-7 w-7 items-center justify-center rounded-full bg-brand shadow-[0_0_12px_rgba(139,92,246,0.6)]'>
+									<IconCheck size={14} className='text-white' />
+								</div>
+							</div>
+						)}
+						<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-2 pb-1.5 pt-4 text-[11px] font-medium text-white/90'>
 							{animatedWallpapers[id].name}
 						</span>
 					</motion.button>
@@ -879,7 +888,145 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 	)
 }
 
-// ─── Step 4: Kimi AI Auth (Skippable) ────────────────────────────
+// ─── Step 4: AI Personalization ───────────────────────────────
+
+const AI_ROLES = ['Developer', 'Student', 'Designer', 'Business', 'Creative', 'General'] as const
+const AI_STYLES = [
+	{id: 'concise' as const, label: 'Concise', description: 'Short and to the point'},
+	{id: 'direct' as const, label: 'Direct', description: 'Clear with enough detail'},
+	{id: 'detailed' as const, label: 'Detailed', description: 'Thorough explanations'},
+] as const
+const AI_USE_CASES = ['Coding', 'Research', 'Writing', 'Automation', 'Data Analysis', 'Email', 'Learning', 'Planning', 'Creative Projects', 'System Admin'] as const
+
+type AIRole = (typeof AI_ROLES)[number]
+type AIStyle = 'concise' | 'direct' | 'detailed'
+type AIUseCase = (typeof AI_USE_CASES)[number]
+
+function StepAIPersonalization({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
+	const [role, setRole] = useState<AIRole | null>(null)
+	const [style, setStyle] = useState<AIStyle>('direct')
+	const [useCases, setUseCases] = useState<AIUseCase[]>([])
+	const [saving, setSaving] = useState(false)
+
+	const updateConfigMut = trpcReact.ai.updateNexusConfig.useMutation()
+
+	const toggleUseCase = (uc: AIUseCase) => {
+		setUseCases((prev) => (prev.includes(uc) ? prev.filter((x) => x !== uc) : [...prev, uc]))
+	}
+
+	const handleSave = async () => {
+		setSaving(true)
+		try {
+			await updateConfigMut.mutateAsync({
+				response: {style},
+			})
+		} catch {
+			// non-fatal — proceed regardless
+		} finally {
+			setSaving(false)
+		}
+		onNext()
+	}
+
+	return (
+		<div className='flex flex-col items-center gap-6 w-full'>
+			<div className='flex flex-col items-center gap-2'>
+				<div className='flex items-center gap-2'>
+					<IconSparkles size={20} className='text-brand' />
+					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
+						Personalize your AI
+					</h2>
+				</div>
+				<p className='text-center text-body font-medium text-text-secondary md:text-body-lg'>
+					Help the AI understand how to best assist you
+				</p>
+			</div>
+
+			{/* Role */}
+			<div className='w-full space-y-2'>
+				<p className='text-caption font-semibold text-text-tertiary uppercase tracking-wide'>Your Role</p>
+				<div className='flex flex-wrap gap-2'>
+					{AI_ROLES.map((r) => (
+						<button
+							key={r}
+							onClick={() => setRole(r)}
+							className={cn(
+								'rounded-full border px-4 py-1.5 text-body-sm font-medium transition-all',
+								role === r
+									? 'border-brand bg-brand/15 text-brand shadow-[0_0_10px_rgba(139,92,246,0.2)]'
+									: 'border-border-default bg-surface-base text-text-secondary hover:border-brand/40 hover:text-text-primary',
+							)}
+						>
+							{r}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* AI Style */}
+			<div className='w-full space-y-2'>
+				<p className='text-caption font-semibold text-text-tertiary uppercase tracking-wide'>AI Style</p>
+				<div className='grid grid-cols-3 gap-2'>
+					{AI_STYLES.map((s) => (
+						<button
+							key={s.id}
+							onClick={() => setStyle(s.id)}
+							className={cn(
+								'flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-center transition-all',
+								style === s.id
+									? 'border-brand bg-brand/10 shadow-[0_0_12px_rgba(139,92,246,0.15)]'
+									: 'border-border-default bg-surface-base hover:border-brand/40',
+							)}
+						>
+							<span
+								className={cn(
+									'text-body-sm font-semibold',
+									style === s.id ? 'text-brand' : 'text-text-primary',
+								)}
+							>
+								{s.label}
+							</span>
+							<span className='text-[10px] text-text-tertiary leading-tight'>{s.description}</span>
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Use Cases */}
+			<div className='w-full space-y-2'>
+				<p className='text-caption font-semibold text-text-tertiary uppercase tracking-wide'>Use Cases <span className='normal-case font-normal'>(pick any)</span></p>
+				<div className='flex flex-wrap gap-2'>
+					{AI_USE_CASES.map((uc) => (
+						<button
+							key={uc}
+							onClick={() => toggleUseCase(uc)}
+							className={cn(
+								'rounded-full border px-3 py-1 text-body-sm font-medium transition-all',
+								useCases.includes(uc)
+									? 'border-brand bg-brand/15 text-brand shadow-[0_0_8px_rgba(139,92,246,0.15)]'
+									: 'border-border-default bg-surface-base text-text-secondary hover:border-brand/40 hover:text-text-primary',
+							)}
+						>
+							{uc}
+						</button>
+					))}
+				</div>
+			</div>
+
+			<div className='flex flex-col items-center gap-3'>
+				<button onClick={handleSave} disabled={saving} className={primaryButtonClass}>
+					{saving ? <IconLoader2 size={16} className='animate-spin' /> : <IconArrowRight size={16} />}
+					{saving ? 'Saving...' : 'Continue'}
+				</button>
+				<button onClick={onSkip} className={skipButtonClass}>
+					{t('onboarding.skip', {defaultValue: 'Skip for now'})}
+				</button>
+			</div>
+		</div>
+	)
+}
+
+// ─── Step 5: Kimi AI Auth (Skippable) ────────────────────────────
 
 function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}) {
 	const [loginSession, setLoginSession] = useState<{
@@ -1171,12 +1318,12 @@ export default function SetupWizard() {
 			<div
 				className={cn(
 					'flex w-full flex-col items-center gap-6 rounded-3xl border border-border-default px-6 py-8 md:px-10 md:py-12',
-					activeStep === 3 ? 'max-w-[600px]' : 'max-w-[520px]',
+					(activeStep === 3 || activeStep === 4) ? 'max-w-[600px]' : 'max-w-[520px]',
 				)}
 				style={glassCardStyle}
 			>
-				{/* Step indicator -- show for steps 1-4 */}
-				{activeStep > 0 && activeStep < 5 && (
+				{/* Step indicator -- show for steps 1-5 */}
+				{activeStep > 0 && activeStep < 6 && (
 					<motion.div
 						initial={{opacity: 0, y: -10}}
 						animate={{opacity: 1, y: 0}}
@@ -1218,19 +1365,24 @@ export default function SetupWizard() {
 						<StepDomainSetup onNext={goNext} onSkip={goNext} />
 					</div>
 
-					{/* Step 4: Kimi AI Auth */}
+					{/* Step 4: AI Personalization */}
+					<div className='w-full'>
+						<StepAIPersonalization onNext={goNext} onSkip={goNext} />
+					</div>
+
+					{/* Step 5: Kimi AI Auth */}
 					<div className='w-full'>
 						<StepKimiAuth onNext={goNext} onSkip={goNext} />
 					</div>
 
-					{/* Step 5: All Done */}
+					{/* Step 6: All Done */}
 					<div className='w-full'>
 						<StepAllDone name={userName || 'friend'} />
 					</div>
 				</TransitionPanel>
 
-				{/* Back button for steps 2-4 */}
-				{activeStep >= 2 && activeStep <= 4 && (
+				{/* Back button for steps 2-5 */}
+				{activeStep >= 2 && activeStep <= 5 && (
 					<motion.div
 						initial={{opacity: 0}}
 						animate={{opacity: 1}}
