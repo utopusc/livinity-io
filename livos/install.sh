@@ -1138,6 +1138,22 @@ FWSVC
         ok "Liv .env symlinked"
     fi
 
+    # === Kimi CLI (AI provider) ===
+    if [[ -f "$NEXUS_DIR/scripts/install-kimi.sh" ]]; then
+        if ! command -v kimi &>/dev/null; then
+            step "Installing Kimi CLI"
+            bash "$NEXUS_DIR/scripts/install-kimi.sh" 2>&1 | tail -5
+            # Ensure kimi is globally accessible
+            if [[ -f /root/.local/bin/kimi ]]; then
+                ln -sf /root/.local/bin/kimi /usr/local/bin/kimi
+                ln -sf /root/.local/bin/kimi-code /usr/local/bin/kimi-code 2>/dev/null
+                ok "Kimi CLI installed: $(kimi --version 2>/dev/null || echo 'installed')"
+            fi
+        else
+            ok "Kimi CLI already installed: $(kimi --version 2>/dev/null)"
+        fi
+    fi
+
     # === Services ===
     create_systemd_service
     start_services
