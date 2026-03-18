@@ -349,8 +349,26 @@ export default class TunnelClient {
 		for (const [key, value] of Object.entries(msg.headers)) {
 			requestHeaders[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : value
 		}
+
+		// Determine target port: app subdomain → app port, otherwise → LivOS (8080)
+		let targetPort = 8080
+		if (msg.targetApp) {
+			try {
+				const subdomainsRaw = await this.redis.get('livos:domain:subdomains')
+				if (subdomainsRaw) {
+					const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> = JSON.parse(subdomainsRaw)
+					const appConfig = subdomains.find(s => s.subdomain === msg.targetApp || s.appId === msg.targetApp)
+					if (appConfig && appConfig.enabled) {
+						targetPort = appConfig.port
+					}
+				}
+			} catch {
+				// Fall back to main LivOS port
+			}
+		}
+
 		// Replace host with local target
-		requestHeaders['host'] = '127.0.0.1:8080'
+		requestHeaders['host'] = `127.0.0.1:${targetPort}`
 		// Add forwarding headers
 		requestHeaders['x-forwarded-proto'] = 'https'
 		if (!requestHeaders['x-forwarded-for']) {
@@ -359,7 +377,7 @@ export default class TunnelClient {
 
 		const options: http.RequestOptions = {
 			hostname: '127.0.0.1',
-			port: 8080,
+			port: targetPort,
 			path: msg.path,
 			method: msg.method,
 			headers: requestHeaders,
