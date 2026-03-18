@@ -7,6 +7,15 @@
 main() {
     set -euo pipefail
 
+    # ── Parse arguments ──────────────────────────────────────
+    PLATFORM_API_KEY=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --api-key) PLATFORM_API_KEY="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
     # ── Constants ─────────────────────────────────────────────
     LIVOS_DIR="/opt/livos"
     NEXUS_DIR="/opt/nexus"
@@ -1141,6 +1150,31 @@ FWSVC
 
     # === SSH Hardening ===
     harden_ssh
+
+    # === Platform API Key (Livinity tunnel) ===
+    if [[ -n "$PLATFORM_API_KEY" ]]; then
+        step "Connecting to Livinity Platform"
+        # Source .env for REDIS password
+        source "$LIVOS_DIR/.env" 2>/dev/null || true
+        local redis_pass
+        redis_pass=$(echo "$REDIS_URL" | sed -n 's|redis://:\(.*\)@.*|\1|p')
+        if [[ -n "$redis_pass" ]]; then
+            redis-cli -a "$redis_pass" SET livos:platform:api_key "$PLATFORM_API_KEY" 2>/dev/null
+            redis-cli -a "$redis_pass" SET livos:platform:enabled "1" 2>/dev/null
+            ok "API key configured"
+            # Restart livos to pick up the API key and connect tunnel
+            systemctl restart livos
+            sleep 5
+            # Check if tunnel connected
+            if journalctl -u livos --no-pager -n 20 2>/dev/null | grep -q "Connected!"; then
+                ok "Tunnel connected to Livinity relay"
+            else
+                warn "Tunnel connecting... (may take a few seconds)"
+            fi
+        else
+            warn "Could not parse Redis password - set API key manually"
+        fi
+    fi
 
     # === Done ===
     show_banner
