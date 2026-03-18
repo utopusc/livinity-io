@@ -56,11 +56,11 @@ export function appToUrl(app: UserApp) {
 	}
 
 	// Use subdomain-based URL for production/cloud deployment
-	// If app has a configured subdomain, use that; otherwise use app.id
-	const hostParts = location.hostname.split('.')
-	const domain = hostParts.slice(-2).join('.') // Get base domain (e.g., livinity.cloud)
+	// Prepend app subdomain to the current hostname
+	// lucy.livinity.io → n8n.lucy.livinity.io
+	// myserver.com → n8n.myserver.com
 	const subdomain = (app as any).subdomain || app.id
-	return `${location.protocol}//${subdomain}.${domain}`
+	return `${location.protocol}//${subdomain}.${location.hostname}`
 }
 
 export function appToUrlWithAppPath(app: UserApp) {
