@@ -439,15 +439,32 @@ export default class TunnelClient {
 
 	// ─── WebSocket forwarding ─────────────────────────────────────
 
-	private handleWsUpgrade(msg: TunnelWsUpgrade): void {
-		const targetUrl = `ws://127.0.0.1:8080${msg.path}`
+	private async handleWsUpgrade(msg: TunnelWsUpgrade): Promise<void> {
+		// Determine target port based on targetApp
+		let targetPort = 8080
+		if (msg.targetApp) {
+			try {
+				const subdomainsRaw = await this.redis.get('livos:domain:subdomains')
+				if (subdomainsRaw) {
+					const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> = JSON.parse(subdomainsRaw)
+					const appConfig = subdomains.find(s => s.subdomain === msg.targetApp || s.appId === msg.targetApp)
+					if (appConfig && appConfig.enabled) {
+						targetPort = appConfig.port
+					}
+				}
+			} catch {
+				// Fall back to LivOS port
+			}
+		}
+
+		const targetUrl = `ws://127.0.0.1:${targetPort}${msg.path}`
 
 		// Build headers for the local WS connection
 		const forwardHeaders: Record<string, string> = {}
 		for (const [key, value] of Object.entries(msg.headers)) {
 			forwardHeaders[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : value
 		}
-		forwardHeaders['host'] = '127.0.0.1:8080'
+		forwardHeaders['host'] = `127.0.0.1:${targetPort}`
 		forwardHeaders['x-forwarded-proto'] = 'https'
 
 		let localWs: WebSocket
