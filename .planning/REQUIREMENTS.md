@@ -49,9 +49,9 @@
 
 ### API — Backend API Extensions
 
-- [ ] **API-01**: POST /api/install-event records install/uninstall event (authenticated)
-- [ ] **API-02**: GET /api/user/apps returns user's installed apps grouped by instance
-- [ ] **API-03**: GET /api/user/profile returns user profile info (username, instance count, app count)
+- [x] **API-01**: POST /api/install-event records install/uninstall event (authenticated)
+- [x] **API-02**: GET /api/user/apps returns user's installed apps grouped by instance
+- [x] **API-03**: GET /api/user/profile returns user profile info (username, instance count, app count)
 
 ## Future Requirements
 
@@ -82,9 +82,9 @@
 | INST-03 | Phase 16 | Complete |
 | INST-04 | Phase 16 | Complete |
 | INST-05 | Phase 16 | Complete |
-| API-01 | Phase 17 | Pending |
-| API-02 | Phase 17 | Pending |
-| API-03 | Phase 17 | Pending |
+| API-01 | Phase 17 | Complete |
+| API-02 | Phase 17 | Complete |
+| API-03 | Phase 17 | Complete |
 | STORE-01 | Phase 18 | Pending |
 | STORE-02 | Phase 18 | Pending |
 | STORE-03 | Phase 18 | Pending |

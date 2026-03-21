@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-03-21T03:25:04.054Z"
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-03-21T03:35:05.318Z"
 progress:
-  total_phases: 20
+  total_phases: 21
   completed_phases: 9
-  total_plans: 25
-  completed_plans: 28
+  total_plans: 27
+  completed_plans: 29
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 16 — Install Script Docker Fix
+**Current focus:** Phase 17 — Backend API Extensions
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
+Phase: 17 (Backend API Extensions) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: Not started
 ## Accumulated Context
 
 | Phase 16-install-script-docker-fix P01 | 2min | 2 tasks | 1 files |
+| Phase 17 P01 | 3min | 2 tasks | 13 files |
 
 ### Decisions
 
@@ -55,6 +56,8 @@ Plan: Not started
 - Phase numbering continues from 16 (v8.0 ended at Phase 15)
 - [Phase 16-install-script-docker-fix]: Use fail() not warn() for Docker pull failures - compose up will fail anyway, fail fast with clear message
 - [Phase 16-install-script-docker-fix]: Subshell + || warn pattern for optional install steps (Kimi CLI) to prevent abort under set -e
+- [Phase 17]: Restored all 11 v9.0 API files verbatim from backup/post-v9.0 branch -- no modifications needed
+- [Phase 17]: Installed motion, react-use-measure, clsx, tailwind-merge as pre-existing component deps to unblock build
 
 ### Pending Todos
 
@@ -66,6 +69,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T03:20:48.388Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-03-21T03:35:05.313Z
+Stopped at: Completed 17-01-PLAN.md
 Resume file: None

@@ -95,7 +95,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — Restore v9.0 API files from backup/post-v9.0 branch, install Drizzle ORM
+- [x] 17-01-PLAN.md — Restore v9.0 API files from backup/post-v9.0 branch, install Drizzle ORM
 - [ ] 17-02-PLAN.md — Add install_history table and 3 new endpoints (install-event, user/apps, user/profile)
 
 ### Phase 18: Store UI
@@ -168,7 +168,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 17. Backend API Extensions | v10.0 | 0/2 | Not started | - |
+| 17. Backend API Extensions | v10.0 | 1/2 | In Progress|  |
 | 18. Store UI | v10.0 | 0/TBD | Not started | - |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
