@@ -15,6 +15,7 @@ import App, {readManifestInDirectory} from './app.js'
 import type {AppManifest, AppSettings} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import {getBuiltinApp} from './builtin-apps.js'
+import {NativeApp, NATIVE_APP_CONFIGS} from './native-app.js'
 import {generateAppTemplate} from './compose-generator.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {
@@ -36,6 +37,7 @@ export default class Apps {
 	#livinityd: Livinityd
 	logger: Livinityd['logger']
 	instances: App[] = []
+	nativeInstances: NativeApp[] = []
 	isTorBeingToggled = false
 
 	constructor(livinityd: Livinityd) {
@@ -246,6 +248,14 @@ export default class Apps {
 		} catch (error) {
 			this.logger.error('Failed to restart per-user containers', error)
 		}
+
+		// Initialize native app instances
+		for (const config of NATIVE_APP_CONFIGS) {
+			const nativeApp = new NativeApp(this.#livinityd, config)
+			await nativeApp.getStatus()
+			this.nativeInstances.push(nativeApp)
+			this.logger.log(`Registered native app ${config.id} (${nativeApp.state})`)
+		}
 	}
 
 	private async reinstallMissingAppsAfterRestore(appIds: string[]) {
@@ -319,7 +329,60 @@ export default class Apps {
 		return app
 	}
 
+	getNativeApp(appId: string): NativeApp | undefined {
+		return this.nativeInstances.find((app) => app.id === appId)
+	}
+
+	isNativeApp(appId: string): boolean {
+		return NATIVE_APP_CONFIGS.some((c) => c.id === appId)
+	}
+
 	async install(appId: string, alternatives?: AppSettings['dependencies'], environmentOverrides?: Record<string, string>) {
+		// Native apps don't need Docker install — they're installed via setup script
+		if (this.isNativeApp(appId)) {
+			// Just register as installed
+			await this.#livinityd.store.getWriteLock(async ({get, set}) => {
+				const apps = (await get('apps')) || []
+				if (!apps.includes(appId)) {
+					apps.push(appId)
+					await set('apps', apps)
+				}
+			})
+			// Create minimal data directory for manifest
+			const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
+			await fse.mkdirp(appDataDirectory)
+			// Write a minimal livinity-app.yml manifest
+			const builtinApp = getBuiltinApp(appId)
+			if (builtinApp) {
+				const yaml = (await import('js-yaml')).default
+				const manifest = {
+					manifestVersion: '1.1',
+					id: appId,
+					name: builtinApp.name,
+					version: builtinApp.version,
+					category: builtinApp.category,
+					tagline: builtinApp.tagline,
+					description: builtinApp.description,
+					developer: builtinApp.developer,
+					website: builtinApp.website,
+					port: builtinApp.port,
+					icon: builtinApp.icon,
+				}
+				await fse.writeFile(`${appDataDirectory}/livinity-app.yml`, yaml.dump(manifest))
+			}
+			this.logger.log(`Native app ${appId} registered as installed`)
+
+			// Register subdomain in Caddy for reverse proxy
+			try {
+				const subdomain = builtinApp?.installOptions?.subdomain
+				await this.registerAppSubdomain(appId, builtinApp?.port ?? 6080, subdomain)
+			} catch (error) {
+				this.logger.error(`Failed to register subdomain for native app ${appId}`, error)
+			}
+
+			return true
+		}
+
 		if (await this.isInstalled(appId)) throw new Error(`App ${appId} is already installed`)
 
 		this.logger.log(`Installing app ${appId}`)
