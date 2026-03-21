@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { StoreToLivOSMessage, LivOSToStoreMessage, AppStatus, AppCredentials } from '../types';
+import type { StoreToLivOSMessage, LivOSToStoreMessage, AppStatus, AppCredentials, InstanceInfo } from '../types';
 
 const ALLOWED_ORIGINS = [
   'https://livinity.io',
@@ -24,6 +24,7 @@ export function usePostMessage() {
   const [appSubdomains, setAppSubdomains] = useState<Map<string, string>>(new Map());
   const [installProgress, setInstallProgress] = useState<Map<string, number>>(new Map());
   const [appCredentials, setAppCredentials] = useState<AppCredentials | null>(null);
+  const [instanceInfo, setInstanceInfo] = useState<InstanceInfo | null>(null);
   const parentOriginRef = useRef<string | null>(null);
 
   // Detect iframe on mount
@@ -68,6 +69,7 @@ export function usePostMessage() {
           }
           setInstalledApps(map);
           setAppSubdomains(subMap);
+          if (data.instance) setInstanceInfo(data.instance);
           break;
         }
         case 'installed': {
@@ -193,5 +195,6 @@ export function usePostMessage() {
     getAppStatus,
     getAppSubdomain,
     sendUpdateSubdomain,
+    instanceInfo,
   };
 }

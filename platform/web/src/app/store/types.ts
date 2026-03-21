@@ -39,8 +39,17 @@ export type AppStatus = {
   subdomain?: string;
 };
 
+export type InstanceInfo = {
+  hostname: string;
+  version: string;
+  versionName: string;
+  cpu: string;
+  memory: { total: number; used: number };
+  disk: { total: number; used: number };
+};
+
 export type LivOSToStoreMessage =
-  | { type: 'status'; apps: AppStatus[] }
+  | { type: 'status'; apps: AppStatus[]; instance?: InstanceInfo }
   | { type: 'installed'; appId: string; success: boolean; error?: string }
   | { type: 'uninstalled'; appId: string; success: boolean }
   | { type: 'progress'; appId: string; progress: number }
@@ -78,6 +87,8 @@ export interface StoreContextValue {
   // Subdomain management
   getAppSubdomain: (appId: string) => string | undefined;
   sendUpdateSubdomain: (appId: string, subdomain: string) => void;
+  // Instance info
+  instanceInfo: InstanceInfo | null;
 }
 
 export const CATEGORIES: Record<string, { label: string; icon: string }> = {

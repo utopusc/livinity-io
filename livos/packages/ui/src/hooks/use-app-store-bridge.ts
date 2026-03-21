@@ -14,8 +14,17 @@ type StoreToLivOSMessage =
 
 type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing'; progress?: number; subdomain?: string}
 
+type InstanceInfo = {
+	hostname: string
+	version: string
+	versionName: string
+	cpu: string
+	memory: {total: number; used: number}
+	disk: {total: number; used: number}
+}
+
 type LivOSToStoreMessage =
-	| {type: 'status'; apps: AppStatusEntry[]}
+	| {type: 'status'; apps: AppStatusEntry[]; instance?: InstanceInfo}
 	| {type: 'installed'; appId: string; success: boolean; error?: string}
 	| {type: 'uninstalled'; appId: string; success: boolean}
 	| {type: 'progress'; appId: string; progress: number}
@@ -85,9 +94,13 @@ export function useAppStoreBridge(
 
 	const sendStatusToIframe = useCallback(async () => {
 		try {
-			const [apps, domainStatus] = await Promise.all([
+			const [apps, domainStatus, version, device, memory, disk] = await Promise.all([
 				trpcClient.apps.list.query(),
 				trpcClient.domain.getStatus.query(),
+				trpcClient.system.version.query(),
+				trpcClient.system.device.query().catch(() => null),
+				trpcClient.system.systemMemoryUsage.query().catch(() => null),
+				trpcClient.system.systemDiskUsage.query().catch(() => null),
 			])
 			const subdomains = domainStatus.subdomains || []
 			const statusList: AppStatusEntry[] = apps.map((app) => {
@@ -107,7 +120,15 @@ export function useAppStoreBridge(
 				}
 				return {id: app.id, status: 'not_installed' as const}
 			})
-			sendToIframe({type: 'status', apps: statusList})
+			const instance: InstanceInfo = {
+				hostname: (device as any)?.hostname || 'LivOS Server',
+				version: version.version,
+				versionName: version.name,
+				cpu: (device as any)?.id || 'Unknown',
+				memory: {total: (memory as any)?.totalMemory || 0, used: (memory as any)?.usedMemory || 0},
+				disk: {total: (disk as any)?.totalDisk || 0, used: (disk as any)?.usedDisk || 0},
+			}
+			sendToIframe({type: 'status', apps: statusList, instance})
 		} catch {
 			// If we can't fetch apps, send empty status
 			sendToIframe({type: 'status', apps: []})
