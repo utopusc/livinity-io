@@ -32,12 +32,45 @@ export function setRedis(redis: Redis): void {
  * 5. Register as pending request on the tunnel
  * 6. Send through WebSocket
  */
+// Paths commonly probed by automated scanners — drop silently with 404
+const SCANNER_PATHS = new Set([
+  '/.env', '/.git/config', '/.DS_Store', '/.vscode/sftp.json',
+  '/wp-login.php', '/wp-admin', '/xmlrpc.php',
+  '/swagger-ui.html', '/swagger.json', '/swagger/v1/swagger.json',
+  '/v2/api-docs', '/v2/_catalog', '/actuator/env', '/actuator/health',
+  '/server-status', '/server-info', '/telescope/requests',
+  '/info.php', '/phpinfo.php', '/config.json',
+  '/debug/default/view', '/console/', '/login.action',
+  '/trace.axd', '/.well-known/security.txt',
+]);
+
+const SCANNER_PATTERNS = [
+  /^\/ecp\//,
+  /^\/s\/[0-9a-f]+\/_\//,
+  /rest_route=\/wp\//,
+  /^\/webjars\/swagger/,
+  /META-INF\/maven/,
+];
+
+function isScannerProbe(path: string): boolean {
+  const cleanPath = path.split('?')[0];
+  if (SCANNER_PATHS.has(cleanPath)) return true;
+  return SCANNER_PATTERNS.some(p => p.test(path));
+}
+
 export function proxyHttpRequest(
   tunnel: TunnelConnection,
   req: http.IncomingMessage,
   res: http.ServerResponse,
   targetApp: string | null,
 ): void {
+  // Drop known scanner probes silently
+  if (!targetApp && isScannerProbe(req.url ?? '/')) {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+    return;
+  }
+
   const requestId = nanoid();
   const bodyChunks: Buffer[] = [];
 
