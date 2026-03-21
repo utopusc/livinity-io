@@ -798,46 +798,6 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       },
     },
   },
-  {
-    id: 'openclaw',
-    name: 'OpenClaw',
-    tagline: 'Autonomous AI agent that runs on your machine',
-    version: '1.0.0',
-    category: 'ai',
-    port: 18789,
-    description: 'Free and open-source autonomous AI agent. Connects to WhatsApp, Telegram, Slack, Discord, Signal, and more. Manages files, controls browsers, sends messages, automates workflows. Supports any LLM including local models via Ollama. MIT licensed.',
-    website: 'https://openclaws.io',
-    developer: 'OpenClaw',
-    icon: 'https://openclaws.io/favicon.ico',
-    docker: {
-      image: 'alpine/openclaw:latest',
-      volumes: ['/data'],
-    },
-    installOptions: {subdomain: 'agent'},
-    compose: {
-      mainService: 'server',
-      services: {
-        server: {
-          image: 'alpine/openclaw:latest',
-          restart: 'unless-stopped',
-          user: '0:0',
-          environment: {
-            OPENCLAW_MODE: 'gateway',
-            OPENCLAW_HOST: '0.0.0.0',
-          },
-          volumes: ['${APP_DATA_DIR}/data:/home/node/.openclaw', '${APP_DATA_DIR}/workspace:/workspace'],
-          ports: ['127.0.0.1:18789:18789'],
-          healthcheck: {
-            test: ['CMD-SHELL', 'wget -q --spider http://localhost:18789/healthz || exit 1'],
-            interval: '30s',
-            timeout: '10s',
-            retries: 3,
-            start_period: '30s',
-          },
-        },
-      },
-    },
-  },
 ]
 
 export function getBuiltinApp(appId: string): BuiltinAppManifest | undefined {
