@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '../store-provider';
 import { CATEGORIES } from '../types';
 import { cn } from '@/lib/utils';
@@ -14,13 +14,30 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { selectedCategory, setSelectedCategory, token, instanceName } = useStore();
   const pathname = usePathname();
+  const router = useRouter();
   const isProfileActive = pathname === '/store/profile';
+  const isStorePage = pathname === '/store';
+
+  const storeParams = new URLSearchParams();
+  if (token) storeParams.set('token', token);
+  if (instanceName) storeParams.set('instance', instanceName);
+  const storeQs = storeParams.toString();
+  const storeHref = `/store${storeQs ? `?${storeQs}` : ''}`;
 
   const profileParams = new URLSearchParams();
   if (token) profileParams.set('token', token);
   if (instanceName) profileParams.set('instance', instanceName);
   const profileQs = profileParams.toString();
   const profileHref = `/store/profile${profileQs ? `?${profileQs}` : ''}`;
+
+  // Navigate to store page when clicking category/discover from a detail page
+  const handleCategoryClick = (category: string | null) => {
+    setSelectedCategory(category);
+    if (!isStorePage) {
+      router.push(storeHref);
+    }
+    onClose();
+  };
 
   return (
     <>
@@ -46,13 +63,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
           {/* Discover */}
           <button
-            onClick={() => {
-              setSelectedCategory(null);
-              onClose();
-            }}
+            onClick={() => handleCategoryClick(null)}
             className={cn(
               'mb-1 w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
-              selectedCategory === null
+              selectedCategory === null && isStorePage
                 ? 'bg-teal-50 text-teal-600'
                 : 'text-[#1d1d1f] hover:bg-[#f5f5f7]'
             )}
@@ -70,13 +84,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             {Object.entries(CATEGORIES).map(([key, { label, icon }]) => (
               <button
                 key={key}
-                onClick={() => {
-                  setSelectedCategory(key);
-                  onClose();
-                }}
+                onClick={() => handleCategoryClick(key)}
                 className={cn(
                   'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                  selectedCategory === key
+                  selectedCategory === key && isStorePage
                     ? 'bg-teal-50 font-medium text-teal-600'
                     : 'text-[#1d1d1f] hover:bg-[#f5f5f7]'
                 )}

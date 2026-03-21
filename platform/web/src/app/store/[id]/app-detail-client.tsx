@@ -289,9 +289,9 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                       setSubdomainValue(currentSubdomain || app.id);
                       setEditingSubdomain(true);
                     }}
-                    className="text-xs font-medium text-teal-500 hover:text-teal-600"
+                    className="rounded-md bg-teal-500/10 px-2.5 py-1 text-xs font-semibold text-teal-600 transition-colors hover:bg-teal-500/20"
                   >
-                    Edit
+                    Change
                   </button>
                 )}
               </div>
