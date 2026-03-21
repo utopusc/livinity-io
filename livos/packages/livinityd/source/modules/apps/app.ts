@@ -120,9 +120,13 @@ export default class App {
 		// Expose the app port to host for Caddy reverse proxy
 		// manifest.port is the authoritative web port (both host and container internal)
 		if (manifest.port) {
-			const mainServiceName = Object.keys(compose.services!).find(name =>
-				name === 'server' || name === 'app' || name === 'web'
-			) || Object.keys(compose.services!)[0]
+			const serviceNames = Object.keys(compose.services!)
+			const mainServiceName = serviceNames.find(name =>
+				name === this.id || name === 'server' || name === 'app' || name === 'web'
+			) || serviceNames.find(name =>
+				// Skip known infrastructure services (DinD, sidecar proxies, etc.)
+				!['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(name)
+			) || serviceNames[0]
 
 			if (mainServiceName && compose.services![mainServiceName]) {
 				const service = compose.services![mainServiceName]
@@ -182,7 +186,12 @@ export default class App {
 
 		// Apply environment overrides from install dialog
 		if (environmentOverrides && Object.keys(environmentOverrides).length > 0) {
-			const mainServiceName = Object.keys(compose.services!)[0]
+			const envServiceNames = Object.keys(compose.services!)
+			const mainServiceName = envServiceNames.find(name =>
+				name === this.id || name === 'server' || name === 'app' || name === 'web'
+			) || envServiceNames.find(name =>
+				!['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(name)
+			) || envServiceNames[0]
 			const service = compose.services![mainServiceName]
 			if (!service.environment) service.environment = {}
 
