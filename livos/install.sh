@@ -359,10 +359,7 @@ main() {
         # Tor container runs as 1000:1000, needs ownership on mounted volumes
         chown -R 1000:1000 "$data_dir/tor"
 
-        # Pre-pull Chrome browser image (auto-installed on first boot by livinityd)
-        docker pull lscr.io/linuxserver/chrome:latest 2>/dev/null || warn "Chrome image pull failed (will retry on first start)"
-
-        ok "Docker prerequisites ready (tor/data, app-data, chrome image)"
+        ok "Docker prerequisites ready (tor/data, app-data)"
     }
 
     install_python() {
