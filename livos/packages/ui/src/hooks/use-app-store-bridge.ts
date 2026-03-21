@@ -35,7 +35,6 @@ type LivOSToStoreMessage =
 
 function isAllowedOrigin(origin: string): boolean {
 	if (origin === 'https://livinity.io') return true
-	if (origin === 'https://apps.livinity.io') return true
 	if (/^https:\/\/[a-z0-9-]+\.livinity\.io$/.test(origin)) return true
 	// Allow localhost in development
 	if (import.meta.env.DEV && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true

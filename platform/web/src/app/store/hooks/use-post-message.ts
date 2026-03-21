@@ -5,7 +5,6 @@ import type { StoreToLivOSMessage, LivOSToStoreMessage, AppStatus, AppCredential
 
 const ALLOWED_ORIGINS = [
   'https://livinity.io',
-  'https://apps.livinity.io',
 ];
 
 // In development, also allow localhost origins

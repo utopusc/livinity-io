@@ -15,7 +15,7 @@ export default defineConfig({
 	],
 	define: {
 		__MARKETPLACE_URL__: JSON.stringify(
-			process.env.VITE_MARKETPLACE_URL || 'https://apps.livinity.io'
+			process.env.VITE_MARKETPLACE_URL || 'https://livinity.io'
 		),
 	},
 	server: {
