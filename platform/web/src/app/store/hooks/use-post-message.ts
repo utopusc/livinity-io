@@ -123,6 +123,22 @@ export function usePostMessage() {
           });
           break;
         }
+        case 'reportEvent': {
+          // Same-origin call to /api/install-event (no CORS needed)
+          fetch('/api/install-event', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Api-Key': data.apiKey,
+            },
+            body: JSON.stringify({
+              app_id: data.appId,
+              action: data.action,
+              instance_name: data.instanceName,
+            }),
+          }).catch(() => {}); // fire-and-forget
+          break;
+        }
       }
     }
 

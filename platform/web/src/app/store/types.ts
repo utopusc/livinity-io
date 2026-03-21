@@ -55,7 +55,8 @@ export type LivOSToStoreMessage =
   | { type: 'installed'; appId: string; success: boolean; error?: string }
   | { type: 'uninstalled'; appId: string; success: boolean }
   | { type: 'progress'; appId: string; progress: number }
-  | { type: 'credentials'; appId: string; username: string; password: string };
+  | { type: 'credentials'; appId: string; username: string; password: string }
+  | { type: 'reportEvent'; appId: string; action: 'install' | 'uninstall'; apiKey: string; instanceName: string };
 
 export type AppCredentials = {
   appId: string;
