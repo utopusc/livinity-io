@@ -111,12 +111,5 @@ export class NativeApp {
 	}
 }
 
-// Registry of native app configurations
-export const NATIVE_APP_CONFIGS: NativeAppConfig[] = [
-	{
-		id: 'chromium', // matches builtin-apps.ts id
-		serviceName: 'livos-chrome',
-		port: 6080,
-		idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
-	},
-]
+// Registry of native app configurations (empty — Chrome moved to Docker)
+export const NATIVE_APP_CONFIGS: NativeAppConfig[] = []
