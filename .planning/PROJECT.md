@@ -8,20 +8,17 @@ Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platf
 
 **One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: v8.0 — Livinity Platform
+## Current Milestone: v10.0 — App Store Platform
 
-**Goal:** Build the livinity.io central platform with landing page, user auth, dashboard, tunnel relay, API key system, and DNS routing — transforming LivOS from a self-managed install into a globally accessible platform.
+**Goal:** Build apps.livinity.io as an embedded app store that LivOS instances display via iframe, with install history, user profiles, and postMessage-based install/uninstall communication. Fix install.sh to auto-setup auth + tor proxy.
 
 **Target features:**
-- Apple-style premium landing page at livinity.io
-- User registration/login with email + password
-- Dashboard with API key management and server status
-- Custom tunnel relay (Server5) — user's LivOS connects via API key
-- Subdomain routing: {username}.livinity.io → user's server
-- App routing: {app}.{username}.livinity.app → user's apps
-- LivOS install.sh integration — API key input during onboarding
-- Free tier: 1 subdomain + 50GB/mo bandwidth
-- Custom domain support via dashboard (premium feature)
+- install.sh auto-pulls auth-server + tor Docker images, creates torrc, starts all containers
+- apps.livinity.io/store — standalone Next.js store UI (Apple App Store aesthetic)
+- LivOS App Store window embeds apps.livinity.io via iframe with postMessage bridge
+- Install/uninstall triggered via postMessage, executed by LivOS Docker + Caddy
+- User profile page with installed apps, install history
+- Server5 API: install events, user apps, profile endpoints
 
 ## Requirements
 
@@ -39,9 +36,14 @@ Key validated capabilities:
 - ✓ Caddy reverse proxy, Cloudflare Tunnel support
 - ✓ Onboarding wizard with personalization
 
-### Active (v8.0 — Livinity Platform)
+### Active (v10.0 — App Store Platform)
 
-*Defined in REQUIREMENTS.md*
+- [ ] install.sh auto-setup auth + tor Docker containers
+- [ ] apps.livinity.io/store UI (featured, categories, detail, profile)
+- [ ] postMessage bridge (apps.livinity.io ↔ LivOS)
+- [ ] LivOS iframe App Store window
+- [ ] Install history + profile database
+- [ ] Backend API (install events, user apps, profile)
 
 ### Out of Scope
 
@@ -91,5 +93,22 @@ Key validated capabilities:
 | Apple-style premium design | Differentiates from typical dev-tool aesthetic | Pending |
 | Users can add custom domains | Via livinity.io dashboard, requires DNS verification | Pending |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-03-17 — v8.0 milestone started (Livinity Platform)*
+*Last updated: 2026-03-20 — v10.0 milestone started (App Store Platform)*
