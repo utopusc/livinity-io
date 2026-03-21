@@ -15,3 +15,12 @@ export const apps = pgTable('apps', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const installHistory = pgTable('install_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  user_id: uuid('user_id').notNull(),
+  app_id: uuid('app_id').notNull().references(() => apps.id),
+  action: text('action').notNull(),  // 'install' or 'uninstall'
+  instance_name: text('instance_name').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
