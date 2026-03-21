@@ -29,8 +29,7 @@ export function WindowChrome({title, icon, onClose}: WindowChromeProps) {
 			</div>
 
 			{/* Title pill - this is what gets centered */}
-			<div className='flex items-center gap-2.5 px-4 py-2 bg-white/90 backdrop-blur-xl rounded-full border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)]'>
-				{icon && <img src={icon} alt='' className='h-5 w-5 rounded-lg' />}
+			<div className='flex items-center px-4 py-2 bg-white/90 backdrop-blur-xl rounded-full border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)]'>
 				<span className='text-[13px] font-semibold text-neutral-700 tracking-tight whitespace-nowrap select-none'>
 					{title}
 				</span>

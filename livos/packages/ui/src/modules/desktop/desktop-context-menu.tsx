@@ -1,54 +1,130 @@
 import {useRef, useState} from 'react'
 import {RiCloseCircleFill} from 'react-icons/ri'
-import {Link} from 'react-router-dom'
 
-import {useQueryParams} from '@/hooks/use-query-params'
 import {WallpaperPicker} from '@/routes/settings/_components/wallpaper-picker'
-import {ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger} from '@/shadcn-components/ui/context-menu'
+import {ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger} from '@/shadcn-components/ui/context-menu'
 import {Popover, PopoverAnchor, PopoverClose, PopoverContent} from '@/shadcn-components/ui/popover'
-import {contextMenuClasses} from '@/shadcn-components/ui/shared/menu'
+import {Dialog, DialogPortal, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/shadcn-components/ui/dialog'
+import {Input} from '@/shadcn-components/ui/input'
+import {Button} from '@/shadcn-components/ui/button'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
+import {addDesktopFolder} from '@/modules/desktop/desktop-content'
+import {trpcReact} from '@/trpc/trpc'
+import {WidgetPickerDialog} from './widgets/widget-picker-dialog'
 
 export function DesktopContextMenu({children}: {children: React.ReactNode}) {
-	const [show, setShow] = useState(false)
+	const [showWallpaper, setShowWallpaper] = useState(false)
+	const [showNewFolder, setShowNewFolder] = useState(false)
+	const [showWidgetPicker, setShowWidgetPicker] = useState(false)
 	const contentRef = useRef<HTMLDivElement>(null)
 	const anchorRef = useRef<HTMLDivElement>(null)
-	const {params, addLinkSearchParams} = useQueryParams()
-	const isShowingDialog = params.get('dialog') !== null
 
 	return (
 		<>
 			<ContextMenu modal={false}>
-				<ContextMenuTrigger disabled={isShowingDialog}>{children}</ContextMenuTrigger>
+				<ContextMenuTrigger>{children}</ContextMenuTrigger>
 				<ContextMenuContent ref={contentRef}>
 					<ContextMenuItem
 						onSelect={() => {
-							// get bounding box
+							setShowWidgetPicker(true)
+						}}
+					>
+						Add Widget
+					</ContextMenuItem>
+					<ContextMenuItem
+						onSelect={() => {
+							setShowNewFolder(true)
+						}}
+					>
+						New Folder
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem
+						onSelect={() => {
 							const {top, left} = contentRef.current!.getBoundingClientRect()
 							anchorRef.current!.style.top = `${top}px`
 							anchorRef.current!.style.left = `${left}px`
-							// Delay because otherwise just blinks into existence then disappears
-							setTimeout(() => setShow(true), 200)
+							setTimeout(() => setShowWallpaper(true), 200)
 						}}
 					>
 						{t('desktop.context-menu.change-wallpaper')}
 					</ContextMenuItem>
-					<ContextMenuItem asChild className={contextMenuClasses.item.rootDestructive}>
-						<Link to={{search: addLinkSearchParams({dialog: 'logout'})}}>{t('desktop.context-menu.logout')}</Link>
-					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenu>
 
-			<Popover open={show} onOpenChange={(open) => setShow(open)}>
+			{/* Wallpaper picker popover */}
+			<Popover open={showWallpaper} onOpenChange={setShowWallpaper}>
 				<PopoverAnchor className='fixed' ref={anchorRef} />
-				{/* `relative` fixes Safari paint bug caused by the `mask-image` property in the `WallpaperPicker` not playing well with the popover `transform: translate()`. On hovering the close button, Safari would jump the wallpaper picker in the wrong spot. */}
 				<PopoverContent align='start' className='relative py-2.5 pl-1.5 pr-5'>
 					<CloseButton className='absolute right-2 top-2' />
 					<WallpaperPicker maxW={300} />
 				</PopoverContent>
 			</Popover>
+
+			{/* New folder dialog */}
+			<NewFolderDialog open={showNewFolder} onOpenChange={setShowNewFolder} />
+
+			{/* Widget picker dialog */}
+			<WidgetPickerDialog open={showWidgetPicker} onOpenChange={setShowWidgetPicker} />
 		</>
+	)
+}
+
+function NewFolderDialog({open, onOpenChange}: {open: boolean; onOpenChange: (v: boolean) => void}) {
+	const [name, setName] = useState('Untitled Folder')
+	const [error, setError] = useState('')
+
+	const createFolderMut = trpcReact.files.createDirectory.useMutation()
+
+	const handleCreate = async (e: React.FormEvent) => {
+		e.preventDefault()
+		const trimmed = name.trim()
+		if (!trimmed) {
+			setError('Folder name cannot be empty')
+			return
+		}
+		setError('')
+		try {
+			await createFolderMut.mutateAsync({path: `/Home/${trimmed}`})
+		} catch {
+			// Ignore API errors — folder may still be created
+		}
+		// Add to desktop grid regardless
+		addDesktopFolder(trimmed)
+		onOpenChange(false)
+		setName('Untitled Folder')
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { setName('Untitled Folder'); setError('') } }}>
+			<DialogPortal>
+				<DialogContent asChild>
+					<form onSubmit={handleCreate}>
+						<fieldset disabled={createFolderMut.isPending} className='flex flex-col gap-4'>
+							<DialogHeader>
+								<DialogTitle>New Folder</DialogTitle>
+							</DialogHeader>
+							<Input
+								placeholder='Folder name'
+								value={name}
+								onValueChange={setName}
+								autoFocus
+							/>
+							{error && <p className='text-sm text-red-500'>{error}</p>}
+							<DialogFooter>
+								<Button type='submit' size='dialog' variant='primary'>
+									Create
+								</Button>
+								<Button type='button' size='dialog' onClick={() => onOpenChange(false)}>
+									Cancel
+								</Button>
+							</DialogFooter>
+						</fieldset>
+					</form>
+				</DialogContent>
+			</DialogPortal>
+		</Dialog>
 	)
 }
 

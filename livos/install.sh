@@ -311,9 +311,7 @@ main() {
     setup_docker_images() {
         info "Setting up LivOS Docker images..."
 
-        # Pull Umbrel images and retag as livos/
-        # This allows us to use branded images without needing a Docker Hub org
-
+        # Pull upstream images and retag as livos/ for consistent local naming
         local images=(
             "getumbrel/auth-server:1.0.5|livos/auth-server:1.0.5"
             "getumbrel/tor:0.4.7.8|livos/tor:0.4.7.8"

@@ -41,9 +41,11 @@ type FilesWindowContentProps = {
 
 export default function FilesWindowContent({initialRoute}: FilesWindowContentProps) {
 	// Convert route to files path (remove /files prefix if present)
-	const filesPath = initialRoute.startsWith('/files')
+	// Decode URI components so encoded names (e.g. "Untitled%20Folder") become filesystem paths
+	const raw = initialRoute.startsWith('/files')
 		? initialRoute.replace('/files', '') || HOME_PATH
 		: initialRoute || HOME_PATH
+	const filesPath = decodeURIComponent(raw)
 
 	return (
 		<WindowRouterProvider initialRoute={filesPath}>

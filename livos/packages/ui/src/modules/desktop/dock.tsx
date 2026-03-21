@@ -6,34 +6,37 @@ import {useLocation} from 'react-router-dom'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {useSettingsNotificationCount} from '@/hooks/use-settings-notification-count'
-import {systemAppsKeyed} from '@/providers/apps'
+import {systemAppsKeyed, useApps} from '@/providers/apps'
+import {trpcReact} from '@/trpc/trpc'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {cn} from '@/shadcn-lib/utils'
 import {tw} from '@/utils/tw'
 
+import {useLaunchApp} from '@/hooks/use-launch-app'
 import {DockItem} from './dock-item'
+import {DockProfile} from './dock-profile'
 import {LogoutDialog} from './logout-dialog'
 
 const LiveUsageDialog = React.lazy(() => import('@/routes/live-usage'))
 const WhatsNewModal = React.lazy(() => import('@/routes/whats-new-modal').then((m) => ({default: m.WhatsNewModal})))
 
-const DOCK_BOTTOM_PADDING_PX = 10
+const DOCK_BOTTOM_PADDING_PX = 8
 
 const DOCK_DIMENSIONS_PX = {
 	preview: {
-		iconSize: 50,
-		iconSizeZoomed: 80,
-		padding: 12,
-	},
-	desktop: {
-		iconSize: 50,
-		iconSizeZoomed: 80,
+		iconSize: 48,
+		iconSizeZoomed: 72,
 		padding: 10,
 	},
-	mobile: {
-		iconSize: 48,
-		iconSizeZoomed: 60,
+	desktop: {
+		iconSize: 46,
+		iconSizeZoomed: 74,
 		padding: 8,
+	},
+	mobile: {
+		iconSize: 44,
+		iconSizeZoomed: 58,
+		padding: 6,
 	},
 } as const
 
@@ -80,9 +83,9 @@ export function Dock() {
 	return (
 		<>
 			<motion.div
-				initial={{translateY: 80, opacity: 0}}
-				animate={{translateY: 0, opacity: 1}}
-				transition={{type: 'spring', stiffness: 200, damping: 20, delay: 0.2, duration: 0.2}}
+				initial={{translateY: 60, opacity: 0, scale: 0.95}}
+				animate={{translateY: 0, opacity: 1, scale: 1}}
+				transition={{type: 'spring', stiffness: 280, damping: 24, delay: 0.15}}
 				onPointerMove={(e) => e.pointerType === 'mouse' && mouseX.set(e.pageX)}
 				onPointerLeave={() => mouseX.set(Infinity)}
 				className={cn(dockClass, isMobile && 'gap-2')}
@@ -91,14 +94,10 @@ export function Dock() {
 					paddingBottom: padding,
 				}}
 			>
-				<DockItem
-					appId='LIVINITY_home'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					to={systemAppsKeyed['LIVINITY_home'].systemAppTo}
-					open={pathname === '/'}
-					mouseX={mouseX}
-				/>
+				{/* Profile avatar */}
+				<DockProfile mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
+				{/* Separator */}
+				<div className='mx-0.5 h-[60%] w-px bg-white/20 self-center' />
 				<DockItem
 					appId='LIVINITY_files'
 					iconSize={iconSize}
@@ -239,6 +238,8 @@ export function Dock() {
 						)
 					}
 				/>
+				{/* Recent apps */}
+				<RecentAppsDock mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
 			</motion.div>
 			<LogoutDialog />
 
@@ -268,12 +269,6 @@ export function DockPreview() {
 				paddingBottom: padding,
 			}}
 		>
-			<DockItem
-				appId='LIVINITY_home'
-				mouseX={mouseX}
-				iconSize={iconSize}
-				iconSizeZoomed={iconSizeZoomed}
-			/>
 			<DockItem
 				appId='LIVINITY_files'
 				mouseX={mouseX}
@@ -313,8 +308,43 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-white/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
 const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-white/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
+function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<typeof useMotionValue<number>>; iconSize: number; iconSizeZoomed: number}) {
+	const recentQ = trpcReact.apps.recentlyOpened.useQuery(undefined, {staleTime: 30_000})
+	const {userAppsKeyed} = useApps()
+	const launchApp = useLaunchApp()
+
+	const recentApps = (recentQ.data ?? [])
+		.filter((appId: string) => userAppsKeyed?.[appId])
+		.slice(0, 3)
+
+	if (recentApps.length === 0) return null
+
+	return (
+		<>
+			<div className='mx-0.5 h-[60%] w-px bg-white/20 self-center' />
+			{recentApps.map((appId: string) => {
+				const app = userAppsKeyed![appId]
+				return (
+					<DockItem
+						key={appId}
+						appId={appId}
+						bg={app.icon}
+						label={app.name}
+						iconSize={iconSize}
+						iconSizeZoomed={iconSizeZoomed}
+						open={false}
+						mouseX={mouseX}
+						onClick={() => launchApp(appId)}
+					/>
+				)
+			})}
+		</>
+	)
+}
+
 const DockDivider = ({iconSize}: {iconSize: number}) => (
 	<div className='br grid w-1 place-items-center' style={{height: iconSize}}>
 		<div className='h-6 border-r border-border-subtle' />
 	</div>
 )
+

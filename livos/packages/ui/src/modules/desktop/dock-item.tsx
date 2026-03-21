@@ -1,5 +1,6 @@
-import {HTMLMotionProps, motion, MotionValue, SpringOptions, useSpring, useTransform, Variants} from 'framer-motion'
+import {AnimatePresence, HTMLMotionProps, motion, MotionValue, SpringOptions, useSpring, useTransform, Variants} from 'framer-motion'
 import {useEffect, useRef, useState} from 'react'
+import {createPortal} from 'react-dom'
 import {IconType} from 'react-icons'
 import {Link, LinkProps} from 'react-router-dom'
 import {
@@ -17,6 +18,20 @@ import {
 
 import {NotificationBadge} from '@/components/ui/notification-badge'
 import {cn} from '@/shadcn-lib/utils'
+
+// Map app IDs to their display names
+const DOCK_LABELS: Record<string, string> = {
+	'LIVINITY_home': 'Home',
+	'LIVINITY_files': 'Files',
+	'LIVINITY_app-store': 'App Store',
+	'LIVINITY_settings': 'Settings',
+	'LIVINITY_live-usage': 'Live Usage',
+	'LIVINITY_ai-chat': 'AI Chat',
+	'LIVINITY_server-control': 'Server',
+	'LIVINITY_subagents': 'Agents',
+	'LIVINITY_schedules': 'Schedules',
+	'LIVINITY_terminal': 'Terminal',
+}
 
 // Map app IDs to their React Icons
 const DOCK_ICONS: Record<string, IconType> = {
@@ -44,12 +59,13 @@ type DockItemProps = {
 	iconSizeZoomed: number
 	className?: string
 	style?: React.CSSProperties
+	label?: string
 	onClick?: (e: React.MouseEvent) => void
 	/** Called when item is clicked. If provided, navigation is always prevented and window opens instead. Returns the dock icon's bounding rect for morph animation. */
 	onOpenWindow?: (originRect: {x: number; y: number; width: number; height: number}) => boolean
 } & HTMLDivProps
 
-const BOUNCE_DURATION = 0.4
+const BOUNCE_DURATION = 0.35
 
 export function DockItem({
 	appId,
@@ -59,6 +75,7 @@ export function DockItem({
 	open,
 	className,
 	style,
+	label: labelProp,
 	to,
 	onClick,
 	onOpenWindow,
@@ -67,10 +84,13 @@ export function DockItem({
 	...props
 }: DockItemProps) {
 	const [clickedOpen, setClickedOpen] = useState(false)
+	const [isHovered, setIsHovered] = useState(false)
 	const ref = useRef<HTMLDivElement>(null)
+	const iconRef = useRef<HTMLDivElement>(null)
 
-	// Get the icon component for this app
+	// Get the icon component and label for this app
 	const Icon = appId ? DOCK_ICONS[appId] : null
+	const label = labelProp || (appId ? DOCK_LABELS[appId] : undefined)
 
 	useEffect(() => {
 		if (!open) setClickedOpen(false)
@@ -83,19 +103,17 @@ export function DockItem({
 	})
 
 	const springOptions: SpringOptions = {
-		mass: 0.1,
-		stiffness: 150,
-		damping: 14,
+		mass: 0.08,
+		stiffness: 170,
+		damping: 16,
 	}
 
-	const widthSync = useTransform(distance, [-150, 0, 150], [iconSize, iconSizeZoomed, iconSize])
+	const widthSync = useTransform(distance, [-140, 0, 140], [iconSize, iconSizeZoomed, iconSize])
 	const width = useSpring(widthSync, springOptions)
 
-	const scaleSync = useTransform(distance, [-150, 0, 150], [1, iconSizeZoomed / iconSize, 1])
+	const scaleSync = useTransform(distance, [-140, 0, 140], [1, iconSizeZoomed / iconSize, 1])
 	const transform = useSpring(scaleSync, springOptions)
 
-	// Config from:
-	// https://github.com/ysj151215/big-sur-dock/blob/04a7244beb0d35d22d1bb18ad91b4c0021bf5ec4/components/dock/DockItem.tsx
 	const variants: Variants = {
 		open: {
 			transition: {
@@ -108,14 +126,22 @@ export function DockItem({
 					times: [0, 0.5, 1],
 				},
 			},
-			translateY: [0, -20, 0],
+			translateY: [0, -16, 0],
 		},
 		closed: {},
 	}
 	const variant = open && clickedOpen ? 'open' : 'closed'
 
 	return (
-		<motion.div ref={ref} className='relative aspect-square' style={{width}}>
+		<motion.div
+			ref={ref}
+			className='relative aspect-square'
+			style={{width}}
+			onPointerEnter={() => setIsHovered(true)}
+			onPointerLeave={() => setIsHovered(false)}
+		>
+			{/* Tooltip — tracks the inner icon element for accurate centering */}
+			<DockTooltip label={label} isVisible={isHovered} anchorRef={iconRef} />
 			{/* icon glow */}
 			<div
 				className='absolute hidden h-full w-full rounded-radius-lg bg-surface-3 opacity-50 md:block'
@@ -126,6 +152,7 @@ export function DockItem({
 			/>
 			{/* icon */}
 			<motion.div
+				ref={iconRef}
 				className={cn(
 					'relative origin-top-left rounded-radius-lg bg-surface-2 transform-gpu backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
 					className,
@@ -178,6 +205,46 @@ export function DockItem({
 			</motion.div>
 			{open && <OpenPill />}
 		</motion.div>
+	)
+}
+
+function DockTooltip({label, isVisible, anchorRef}: {label?: string; isVisible: boolean; anchorRef: React.RefObject<HTMLDivElement | null>}) {
+	if (!label) return null
+
+	const [pos, setPos] = useState<{x: number; y: number} | null>(null)
+
+	useEffect(() => {
+		if (!isVisible || !anchorRef.current) {
+			setPos(null)
+			return
+		}
+		let raf: number
+		const update = () => {
+			if (!anchorRef.current) return
+			const rect = anchorRef.current.getBoundingClientRect()
+			setPos({x: rect.left + rect.width / 2, y: rect.top})
+			raf = requestAnimationFrame(update)
+		}
+		raf = requestAnimationFrame(update)
+		return () => cancelAnimationFrame(raf)
+	}, [isVisible, anchorRef])
+
+	return createPortal(
+		<AnimatePresence>
+			{isVisible && pos && (
+				<motion.div
+					className='fixed z-[9999] whitespace-nowrap rounded-lg bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-neutral-800 shadow-[0_2px_12px_rgba(0,0,0,0.12)] backdrop-blur-xl border border-neutral-200/60 pointer-events-none'
+					style={{left: pos.x, top: pos.y - 10, transform: 'translate(-50%, -100%)'}}
+					initial={{opacity: 0}}
+					animate={{opacity: 1}}
+					exit={{opacity: 0}}
+					transition={{duration: 0.1}}
+				>
+					{label}
+				</motion.div>
+			)}
+		</AnimatePresence>,
+		document.body,
 	)
 }
 

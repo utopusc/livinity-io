@@ -42,12 +42,12 @@ export function usePager({apps}: {apps: ReactNode[]}): {
 		return sizes[1]
 	}
 
-	const paddingX = responsive([10, 32])
-	const appsPerRowMax = responsive([4, 6])
-	const appW = responsive([70, 120])
-	const appH = responsive([90, 110])
-	const appXGap = responsive([20, 30])
-	const appYGap = responsive([0, 12])
+	const paddingX = responsive([12, 28])
+	const appsPerRowMax = responsive([4, 5])
+	const appW = responsive([66, 112])
+	const appH = responsive([86, 106])
+	const appXGap = responsive([18, 28])
+	const appYGap = responsive([4, 14])
 
 	const appsInnerW = (appW + appXGap) * appsPerRowMax - appXGap
 	const appsMaxW = appsInnerW + paddingX * 2

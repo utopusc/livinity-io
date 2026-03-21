@@ -41,7 +41,7 @@ export function SubTitle({
 export const footerClass = tw`flex items-center justify-center gap-4`
 export const footerLinkClass = tw`text-body-sm transition-colors font-normal text-text-tertiary -tracking-3 hover:text-text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20`
 
-export const buttonClass = tw`flex h-12 items-center rounded-full bg-brand px-6 text-body font-medium -tracking-1 text-white transition-all duration-300 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50 shadow-[0_0_20px_rgba(139,92,246,0.3)]`
+export const buttonClass = tw`flex h-12 items-center rounded-full bg-brand px-6 text-body font-medium -tracking-1 text-white transition-all duration-300 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50 shadow-[0_0_20px_rgba(6,182,212,0.3)]`
 export const secondaryButtonClasss = tw`flex h-12 items-center rounded-full bg-surface-1 border border-border-default px-6 text-body font-medium -tracking-1 text-text-primary transition-all duration-300 hover:bg-surface-2 hover:border-border-emphasis focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
 
 export const formGroupClass = tw`flex w-full max-w-sm flex-col gap-2.5`

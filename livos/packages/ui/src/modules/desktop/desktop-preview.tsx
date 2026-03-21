@@ -1,10 +1,10 @@
-import {useEffect, useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 
 import {useApps} from '@/providers/apps'
 import {Wallpaper} from '@/providers/wallpaper'
 import {trpcReact} from '@/trpc/trpc'
 
-import {AppGrid} from './app-grid/app-grid'
+import {AppGrid, AppGridItem, DesktopLayout} from './app-grid/app-grid'
 import {AppIcon} from './app-icon'
 import {DockPreview} from './dock'
 import {Header} from './header'
@@ -80,18 +80,20 @@ function DesktopContent() {
 	if (!userApps) return null
 	if (!name) return null
 
+	const items: AppGridItem[] = useMemo(() =>
+		userApps.map((app) => ({
+			id: app.id,
+			node: <AppIcon src={app.icon} label={app.name} onClick={() => {}} />,
+		})),
+	[userApps])
+
 	return (
 		<>
 			<div className='pt-12' />
 			<Header userName={name} />
 			<div className='pt-12' />
 			<div className='flex w-full flex-grow overflow-hidden'>
-				<AppGrid
-					onlyFirstPage
-					apps={userApps.map((app) => (
-						<AppIcon key={app.id} src={app.icon} label={app.name} onClick={() => alert(app.name)} />
-					))}
-				/>
+				<AppGrid items={items} layout={{}} onLayoutChange={() => {}} />
 			</div>
 		</>
 	)
