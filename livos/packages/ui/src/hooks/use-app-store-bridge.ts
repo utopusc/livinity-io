@@ -72,18 +72,18 @@ export function useAppStoreBridge(
 	const optionsRef = useRef(options)
 	optionsRef.current = options
 
+	const sendToIframe = useCallback((message: LivOSToStoreMessage) => {
+		const iframe = iframeRefStable.current?.current
+		if (!iframe?.contentWindow) return
+		iframe.contentWindow.postMessage(message, '*')
+	}, [])
+
 	const reportEvent = useCallback((appId: string, action: 'install' | 'uninstall') => {
 		const {apiKey, instanceName} = optionsRef.current
 		if (!apiKey) return
 		// Send via iframe (same-origin to livinity.io) to avoid CORS issues
 		sendToIframe({type: 'reportEvent', appId, action, apiKey, instanceName})
 	}, [sendToIframe])
-
-	const sendToIframe = useCallback((message: LivOSToStoreMessage) => {
-		const iframe = iframeRefStable.current?.current
-		if (!iframe?.contentWindow) return
-		iframe.contentWindow.postMessage(message, '*')
-	}, [])
 
 	const sendStatusToIframe = useCallback(async () => {
 		try {
