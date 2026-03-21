@@ -11,10 +11,18 @@ interface AppDetailClientProps {
 }
 
 export function AppDetailClient({ appId }: AppDetailClientProps) {
-  const { token, instanceName, isEmbedded, getAppStatus, sendInstall, sendUninstall, sendOpen } = useStore();
+  const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen } = useStore();
   const [app, setApp] = useState<App | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCredentials, setShowCredentials] = useState(false);
+
+  // Auto-show credentials dialog when credentials arrive for this app
+  useEffect(() => {
+    if (appCredentials && appCredentials.appId === appId) {
+      setShowCredentials(true);
+    }
+  }, [appCredentials, appId]);
 
   const params = new URLSearchParams();
   if (token) params.set('token', token);
@@ -161,6 +169,28 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
           );
         }
 
+        if (status === 'installing') {
+          const progress = getInstallProgress(app.id);
+          return (
+            <div className="mb-10">
+              <button
+                disabled
+                className="rounded-xl bg-[#f5f5f7] px-8 py-3 text-sm font-semibold text-[#86868b] cursor-not-allowed"
+              >
+                Installing{progress > 0 ? ` ${progress}%` : '...'}
+              </button>
+              {progress > 0 && (
+                <div className="mt-3 h-1.5 w-48 rounded-full bg-[#f5f5f7] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-teal-500 transition-all duration-500"
+                    style={{ width: `${Math.min(progress, 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        }
+
         if (status === 'running') {
           return (
             <div className="mb-10 flex gap-3">
@@ -244,6 +274,41 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
           </div>
         </div>
       </section>
+
+      {/* Credentials dialog */}
+      {showCredentials && appCredentials && appCredentials.appId === app.id && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-[#1d1d1f]">App Credentials</h3>
+            <p className="mt-1 text-sm text-[#86868b]">
+              Save these credentials to log into {app.name}
+            </p>
+            <div className="mt-4 space-y-3">
+              {appCredentials.username && (
+                <div className="rounded-xl bg-[#f5f5f7] p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Username</p>
+                  <p className="mt-1 select-all font-mono text-sm text-[#1d1d1f]">{appCredentials.username}</p>
+                </div>
+              )}
+              {appCredentials.password && (
+                <div className="rounded-xl bg-[#f5f5f7] p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Password</p>
+                  <p className="mt-1 select-all font-mono text-sm text-[#1d1d1f]">{appCredentials.password}</p>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setShowCredentials(false);
+                clearCredentials();
+              }}
+              className="mt-5 w-full rounded-xl bg-teal-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-600"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
