@@ -200,14 +200,14 @@ export default function ProfilePage() {
       {profile && (
         <div className="mb-10 rounded-2xl bg-gradient-to-r from-teal-50 to-cyan-50 p-8">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <path d="M8 21h8M12 17v4" />
-              </svg>
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-sm text-xl font-bold text-white"
+              style={{ backgroundColor: instanceInfo?.avatarColor || '#6366f1' }}
+            >
+              {(instanceInfo?.userName || 'U').charAt(0).toUpperCase()}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[#1d1d1f]">{instanceInfo?.hostname || instanceName || 'My Server'}</h1>
+              <h1 className="text-2xl font-bold text-[#1d1d1f]">{instanceInfo?.userName || instanceName || 'My Server'}</h1>
               <p className="mt-0.5 text-sm text-[#86868b]">
                 {instanceName}
                 {instanceInfo && <span className="ml-2 text-xs">v{instanceInfo.version}</span>}

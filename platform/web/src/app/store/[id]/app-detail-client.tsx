@@ -196,6 +196,19 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
           );
         }
 
+        if (status === 'uninstalling') {
+          return (
+            <div className="mb-10">
+              <button
+                disabled
+                className="rounded-xl bg-red-50 px-8 py-3 text-sm font-semibold text-red-400 cursor-not-allowed"
+              >
+                Uninstalling...
+              </button>
+            </div>
+          );
+        }
+
         if (status === 'running') {
           return (
             <div className="mb-10 flex gap-3">

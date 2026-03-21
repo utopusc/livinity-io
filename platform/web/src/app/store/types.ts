@@ -34,13 +34,15 @@ export type StoreToLivOSMessage =
 // Messages sent from LivOS parent to Store iframe
 export type AppStatus = {
   id: string;
-  status: 'running' | 'stopped' | 'not_installed' | 'installing';
+  status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling';
   progress?: number;
   subdomain?: string;
 };
 
 export type InstanceInfo = {
   hostname: string;
+  userName: string;
+  avatarColor: string;
   version: string;
   versionName: string;
   cpu: string;
