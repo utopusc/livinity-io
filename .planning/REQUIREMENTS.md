@@ -25,12 +25,12 @@
 
 ### BRIDGE — postMessage Communication
 
-- [ ] **BRIDGE-01**: apps.livinity.io sends `{type:'install', appId, composeUrl}` to parent LivOS window
-- [ ] **BRIDGE-02**: apps.livinity.io sends `{type:'uninstall', appId}` to parent LivOS window
-- [ ] **BRIDGE-03**: apps.livinity.io sends `{type:'open', appId}` to parent LivOS window
-- [ ] **BRIDGE-04**: LivOS sends `{type:'status', apps:[...]}` with running app statuses to iframe
-- [ ] **BRIDGE-05**: LivOS sends `{type:'installed', appId, success}` confirmation to iframe
-- [ ] **BRIDGE-06**: postMessage origin validated (only apps.livinity.io accepted)
+- [x] **BRIDGE-01**: apps.livinity.io sends `{type:'install', appId, composeUrl}` to parent LivOS window
+- [x] **BRIDGE-02**: apps.livinity.io sends `{type:'uninstall', appId}` to parent LivOS window
+- [x] **BRIDGE-03**: apps.livinity.io sends `{type:'open', appId}` to parent LivOS window
+- [x] **BRIDGE-04**: LivOS sends `{type:'status', apps:[...]}` with running app statuses to iframe
+- [x] **BRIDGE-05**: LivOS sends `{type:'installed', appId, success}` confirmation to iframe
+- [x] **BRIDGE-06**: postMessage origin validated (only apps.livinity.io accepted)
 
 ### EMBED — LivOS iframe Integration
 
@@ -92,12 +92,12 @@
 | STORE-05 | Phase 18 | Complete |
 | STORE-06 | Phase 18 | Complete |
 | STORE-07 | Phase 18 | Complete |
-| BRIDGE-01 | Phase 19 | Pending |
-| BRIDGE-02 | Phase 19 | Pending |
-| BRIDGE-03 | Phase 19 | Pending |
-| BRIDGE-04 | Phase 19 | Pending |
-| BRIDGE-05 | Phase 19 | Pending |
-| BRIDGE-06 | Phase 19 | Pending |
+| BRIDGE-01 | Phase 19 | Complete |
+| BRIDGE-02 | Phase 19 | Complete |
+| BRIDGE-03 | Phase 19 | Complete |
+| BRIDGE-04 | Phase 19 | Complete |
+| BRIDGE-05 | Phase 19 | Complete |
+| BRIDGE-06 | Phase 19 | Complete |
 | EMBED-01 | Phase 20 | Pending |
 | EMBED-02 | Phase 20 | Pending |
 | EMBED-03 | Phase 20 | Pending |
