@@ -737,7 +737,16 @@ export default class Apps {
 		const multiUserEnabled = await this.#livinityd.ai.redis.get('livos:system:multi_user')
 		const isMultiUser = multiUserEnabled === 'true'
 
-		const content = generateFullCaddyfile(caddyConfig, isMultiUser)
+		// Gather native app subdomain info for JWT-gated Caddy blocks
+		const nativeAppSubdomains = this.nativeInstances.map((app) => {
+			const builtinApp = getBuiltinApp(app.id)
+			return {
+				subdomain: builtinApp?.installOptions?.subdomain || app.id,
+				port: app.port,
+			}
+		})
+
+		const content = generateFullCaddyfile(caddyConfig, isMultiUser, false, nativeAppSubdomains)
 		await writeCaddyfile(content)
 		await reloadCaddy()
 	}
