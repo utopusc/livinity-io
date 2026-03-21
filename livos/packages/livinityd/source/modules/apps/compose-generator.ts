@@ -71,6 +71,12 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		if ((serviceDef as any).user) {
 			service.user = (serviceDef as any).user
 		}
+		if (serviceDef.shm_size) {
+			service.shm_size = serviceDef.shm_size
+		}
+		if (serviceDef.security_opt && serviceDef.security_opt.length > 0) {
+			service.security_opt = [...serviceDef.security_opt]
+		}
 
 		composeDoc.services[serviceName] = service
 	}
