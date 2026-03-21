@@ -79,11 +79,10 @@ Build apps.livinity.io as an embedded app store that LivOS instances display via
   2. install.sh creates a valid torrc config file with SocksPort and HiddenService directives before starting containers
   3. After install.sh completes, `docker ps` shows auth-server and tor containers running alongside livinityd
   4. The single `curl | bash --api-key KEY` command results in a fully operational LivOS instance with auth, tor, and tunnel connected -- zero manual steps
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 16-01: TBD
-- [ ] 16-02: TBD
+- [ ] 16-01-PLAN.md — Harden Docker image pulls, add setup_docker_prerequisites, wrap Kimi CLI
 
 ### Phase 17: Backend API Extensions
 **Goal**: Server5 exposes authenticated API endpoints for recording install events, querying user apps by instance, and retrieving user profile data -- so the store UI and LivOS can read/write install state
@@ -167,7 +166,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 16. Install Script Docker Fix | v10.0 | 0/TBD | Not started | - |
+| 16. Install Script Docker Fix | v10.0 | 0/1 | Planned | - |
 | 17. Backend API Extensions | v10.0 | 0/TBD | Not started | - |
 | 18. Store UI | v10.0 | 0/TBD | Not started | - |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
