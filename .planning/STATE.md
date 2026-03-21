@@ -91,6 +91,7 @@ Plan: Not started
 ### Roadmap Evolution
 
 - Phase 22 added: App Store Integration Fix
+- Phase 23 added: LivOS-Native App Compose System
 
 ### Pending Todos
 
