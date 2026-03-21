@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 25-02-PLAN.md
-last_updated: "2026-03-21T12:46:58.873Z"
+stopped_at: Completed 25-03-PLAN.md
+last_updated: "2026-03-21T13:10:15.674Z"
 progress:
   total_phases: 30
   completed_phases: 18
-  total_plans: 43
-  completed_plans: 46
+  total_plans: 44
+  completed_plans: 47
 ---
 
 # Project State
@@ -62,6 +62,7 @@ Plan: 2 of 2
 | Phase 24-app-store-expansion P04 | 10min | 2 tasks | 1 files |
 | Phase 25 P01 | 3min | 2 tasks | 4 files |
 | Phase 25 P02 | 10min | 2 tasks | 4 files |
+| Phase 25 P03 | 4min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -110,6 +111,9 @@ Plan: 2 of 2
 - [Phase 25]: Cookie-based auth (livinity_token) for native app Caddy blocks instead of forward_auth
 - [Phase 25]: Native apps in apps.list response with matching schema for transparent UI display
 - [Phase 25]: Dedicated nativeStart/nativeStop/nativeStatus routes plus integration into existing start/stop/state handlers
+- [Phase 25]: Fire-and-forget nativeStart with catch: continue to open URL even if start fails (stream may already be running)
+- [Phase 25]: No nativeStop on window close: cross-origin tab unreliable, 30-min idle timer handles shutdown
+- [Phase 25]: CDP bound to 127.0.0.1 only for security; MCP runs on same server
 
 ### Roadmap Evolution
 
@@ -128,6 +132,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:46:58.869Z
-Stopped at: Completed 25-02-PLAN.md
+Last session: 2026-03-21T13:10:15.669Z
+Stopped at: Completed 25-03-PLAN.md
 Resume file: None
