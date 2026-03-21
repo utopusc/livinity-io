@@ -15,9 +15,9 @@
 
 ### STORE — apps.livinity.io Store UI
 
-- [ ] **STORE-01**: /store page displays featured apps in hero section with large cards
-- [ ] **STORE-02**: /store page shows app categories with filterable grid
-- [ ] **STORE-03**: /store page has search functionality across all apps
+- [x] **STORE-01**: /store page displays featured apps in hero section with large cards
+- [x] **STORE-02**: /store page shows app categories with filterable grid
+- [x] **STORE-03**: /store page has search functionality across all apps
 - [ ] **STORE-04**: /store/[id] page shows app detail with icon, description, version, Install button
 - [x] **STORE-05**: /store page has left sidebar navigation (Discover, Categories, My Apps)
 - [x] **STORE-06**: Store UI follows Apple App Store aesthetic — white, clean, premium feel
@@ -85,9 +85,9 @@
 | API-01 | Phase 17 | Complete |
 | API-02 | Phase 17 | Complete |
 | API-03 | Phase 17 | Complete |
-| STORE-01 | Phase 18 | Pending |
-| STORE-02 | Phase 18 | Pending |
-| STORE-03 | Phase 18 | Pending |
+| STORE-01 | Phase 18 | Complete |
+| STORE-02 | Phase 18 | Complete |
+| STORE-03 | Phase 18 | Complete |
 | STORE-04 | Phase 18 | Pending |
 | STORE-05 | Phase 18 | Complete |
 | STORE-06 | Phase 18 | Complete |
