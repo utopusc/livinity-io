@@ -569,7 +569,7 @@ export default class Apps {
 			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
 			if (!apiKey) return null
 
-			const response = await fetch(`https://apps.livinity.io/api/apps/${appId}`, {
+			const response = await fetch(`https://livinity.io/api/apps/${appId}`, {
 				headers: {'X-Api-Key': apiKey},
 			})
 			if (!response.ok) return null

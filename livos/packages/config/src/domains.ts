@@ -11,7 +11,7 @@ export const DomainsConfigSchema = z.object({
   /** Whether to use HTTPS */
   useHttps: z.boolean().default(false),
   /** Marketplace/app store domain */
-  marketplace: z.string().default('apps.livinity.io'),
+  marketplace: z.string().default('livinity.io'),
   /** API subdomain prefix (combined with primary to form api.{primary}) */
   api: z.string().default('api'),
 });
