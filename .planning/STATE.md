@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-03-21T04:46:33.015Z"
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-03-21T05:58:01.294Z"
 progress:
-  total_phases: 25
+  total_phases: 27
   completed_phases: 14
-  total_plans: 33
-  completed_plans: 36
+  total_plans: 35
+  completed_plans: 37
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 21 — Install History & Profile
+**Current focus:** Phase 22 — app-store-integration-fix
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
+Phase: 22 (app-store-integration-fix) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: Not started
 | Phase 19-postmessage-bridge-protocol P01 | 2min | 2 tasks | 5 files |
 | Phase 20 P01 | 4min | 2 tasks | 4 files |
 | Phase 21-install-history-profile P01 | 10min | 2 tasks | 5 files |
+| Phase 22 P01 | 2min | 2 tasks | 1 files |
 
 ### Decisions
 
@@ -80,6 +81,9 @@ Plan: Not started
 - [Phase 20]: Origin validation accepts *.livinity.io + localhost in dev; app state mapping: running/ready->running, stopped/stopping->stopped, else->not_installed
 - [Phase 21-install-history-profile]: Fire-and-forget event reporting: fetch().catch(() => {}) to avoid blocking UI
 - [Phase 21-install-history-profile]: Promise.all parallel fetch for profile page (profile + apps + history endpoints)
+- [Phase 22]: Combined Task 1+2 into single commit due to tab-indented file requiring full Write operation
+- [Phase 22]: 3 clearInterval calls for robustness: success path, error path, and state-change detection in poll interval
+- [Phase 22]: Partial status update sent immediately for installing app rather than querying apps.list first
 
 ### Roadmap Evolution
 
@@ -95,6 +99,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T04:45:30.166Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-03-21T05:58:01.290Z
+Stopped at: Completed 22-01-PLAN.md
 Resume file: None

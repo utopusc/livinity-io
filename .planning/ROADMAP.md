@@ -162,10 +162,10 @@ Plans:
 **Goal:** Fix App Store iframe integration gaps: desktop auto-refresh after install, correct reportEvent URL, install progress reporting, credentials dialog, and bidirectional status updates between LivOS and store iframe.
 **Requirements**: R-STORE-REFRESH, R-STORE-PROGRESS, R-STORE-CREDENTIALS, R-STORE-STATUS
 **Depends on:** Phase 21
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 22-01-PLAN.md — LivOS bridge: fix reportEvent URL, add progress polling, credentials forwarding, installing status
+- [x] 22-01-PLAN.md — LivOS bridge: fix reportEvent URL, add progress polling, credentials forwarding, installing status
 - [ ] 22-02-PLAN.md — Store UI: progress display, credentials dialog, installing badges on detail page and app cards
 
 ## Progress
@@ -180,4 +180,4 @@ Plans:
 | 19. postMessage Bridge | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 20. iframe Embedding | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 21. History & Profile | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 22. Integration Fix | v10.0 | 0/2 | In Progress |           |
+| 22. Integration Fix | v10.0 | 1/2 | In Progress|  |
