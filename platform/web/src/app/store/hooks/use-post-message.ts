@@ -21,6 +21,7 @@ function isAllowedOrigin(origin: string): boolean {
 export function usePostMessage() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [installedApps, setInstalledApps] = useState<Map<string, AppStatus['status']>>(new Map());
+  const [appSubdomains, setAppSubdomains] = useState<Map<string, string>>(new Map());
   const [installProgress, setInstallProgress] = useState<Map<string, number>>(new Map());
   const [appCredentials, setAppCredentials] = useState<AppCredentials | null>(null);
   const parentOriginRef = useRef<string | null>(null);
@@ -60,10 +61,13 @@ export function usePostMessage() {
         case 'status': {
           // Full status update -- replace the map (per BRIDGE-04)
           const map = new Map<string, AppStatus['status']>();
+          const subMap = new Map<string, string>();
           for (const app of data.apps) {
             map.set(app.id, app.status);
+            if (app.subdomain) subMap.set(app.id, app.subdomain);
           }
           setInstalledApps(map);
+          setAppSubdomains(subMap);
           break;
         }
         case 'installed': {
@@ -168,6 +172,14 @@ export function usePostMessage() {
     setAppCredentials(null);
   }, []);
 
+  const getAppSubdomain = useCallback((appId: string): string | undefined => {
+    return appSubdomains.get(appId);
+  }, [appSubdomains]);
+
+  const sendUpdateSubdomain = useCallback((appId: string, subdomain: string) => {
+    sendMessage({ type: 'updateSubdomain', appId, subdomain });
+  }, [sendMessage]);
+
   return {
     isEmbedded,
     installedApps,
@@ -179,5 +191,7 @@ export function usePostMessage() {
     sendUninstall,
     sendOpen,
     getAppStatus,
+    getAppSubdomain,
+    sendUpdateSubdomain,
   };
 }

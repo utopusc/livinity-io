@@ -28,13 +28,15 @@ export type StoreToLivOSMessage =
   | { type: 'ready' }
   | { type: 'install'; appId: string; composeUrl: string }
   | { type: 'uninstall'; appId: string }
-  | { type: 'open'; appId: string };
+  | { type: 'open'; appId: string }
+  | { type: 'updateSubdomain'; appId: string; subdomain: string };
 
 // Messages sent from LivOS parent to Store iframe
 export type AppStatus = {
   id: string;
   status: 'running' | 'stopped' | 'not_installed' | 'installing';
   progress?: number;
+  subdomain?: string;
 };
 
 export type LivOSToStoreMessage =
@@ -73,6 +75,9 @@ export interface StoreContextValue {
   getInstallProgress: (appId: string) => number;
   appCredentials: AppCredentials | null;
   clearCredentials: () => void;
+  // Subdomain management
+  getAppSubdomain: (appId: string) => string | undefined;
+  sendUpdateSubdomain: (appId: string, subdomain: string) => void;
 }
 
 export const CATEGORIES: Record<string, { label: string; icon: string }> = {

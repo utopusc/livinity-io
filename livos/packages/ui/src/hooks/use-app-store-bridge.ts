@@ -10,8 +10,9 @@ type StoreToLivOSMessage =
 	| {type: 'install'; appId: string; composeUrl: string}
 	| {type: 'uninstall'; appId: string}
 	| {type: 'open'; appId: string}
+	| {type: 'updateSubdomain'; appId: string; subdomain: string}
 
-type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing'; progress?: number}
+type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing'; progress?: number; subdomain?: string}
 
 type LivOSToStoreMessage =
 	| {type: 'status'; apps: AppStatusEntry[]}
@@ -84,20 +85,25 @@ export function useAppStoreBridge(
 
 	const sendStatusToIframe = useCallback(async () => {
 		try {
-			const apps = await trpcClient.apps.list.query()
+			const [apps, domainStatus] = await Promise.all([
+				trpcClient.apps.list.query(),
+				trpcClient.domain.getStatus.query(),
+			])
+			const subdomains = domainStatus.subdomains || []
 			const statusList: AppStatusEntry[] = apps.map((app) => {
 				if ('error' in app) {
 					return {id: app.id, status: 'not_installed' as const}
 				}
+				const sub = subdomains.find((s: {appId: string}) => s.appId === app.id)
 				const state = app.state
 				if (state === 'installing') {
-					return {id: app.id, status: 'installing' as const}
+					return {id: app.id, status: 'installing' as const, subdomain: sub?.subdomain}
 				}
 				if (state === 'running' || state === 'ready') {
-					return {id: app.id, status: 'running' as const}
+					return {id: app.id, status: 'running' as const, subdomain: sub?.subdomain}
 				}
 				if (state === 'stopped' || state === 'stopping') {
-					return {id: app.id, status: 'stopped' as const}
+					return {id: app.id, status: 'stopped' as const, subdomain: sub?.subdomain}
 				}
 				return {id: app.id, status: 'not_installed' as const}
 			})
@@ -186,15 +192,42 @@ export function useAppStoreBridge(
 		[sendToIframe, sendStatusToIframe, reportEvent],
 	)
 
-	const handleOpen = useCallback((appId: string) => {
+	const handleOpen = useCallback(async (appId: string) => {
 		const domain = domainRef.current?.domain
 		if (domain) {
-			window.open(`https://${appId}.${domain}`, '_blank')
+			// Use actual subdomain from config (e.g. jellyfin uses "media" not "jellyfin")
+			try {
+				const domainStatus = await trpcClient.domain.getStatus.query()
+				const sub = (domainStatus.subdomains || []).find((s: {appId: string}) => s.appId === appId)
+				const subdomain = sub?.subdomain ?? appId
+				window.open(`https://${subdomain}.${domain}`, '_blank')
+			} catch {
+				window.open(`https://${appId}.${domain}`, '_blank')
+			}
 		} else {
-			// Fallback: open on current origin with app subdomain-style path
 			window.open(`${window.location.origin}/${appId}`, '_blank')
 		}
 	}, [])
+
+	const handleUpdateSubdomain = useCallback(
+		async (appId: string, subdomain: string) => {
+			try {
+				const domainStatus = await trpcClient.domain.getStatus.query()
+				const existing = (domainStatus.subdomains || []).find((s: {appId: string}) => s.appId === appId)
+				await trpcClient.domain.setAppSubdomain.mutate({
+					appId,
+					subdomain,
+					port: existing?.port ?? 8080,
+					enabled: true,
+				})
+				await sendStatusToIframe()
+			} catch (err) {
+				const message = err instanceof Error ? err.message : 'Failed to update subdomain'
+				sendToIframe({type: 'installed', appId, success: false, error: message})
+			}
+		},
+		[sendToIframe, sendStatusToIframe],
+	)
 
 	useEffect(() => {
 		function handleMessage(event: MessageEvent) {
@@ -215,10 +248,13 @@ export function useAppStoreBridge(
 				case 'open':
 					handleOpen(data.appId)
 					break
+				case 'updateSubdomain':
+					handleUpdateSubdomain(data.appId, data.subdomain)
+					break
 			}
 		}
 
 		window.addEventListener('message', handleMessage)
 		return () => window.removeEventListener('message', handleMessage)
-	}, [sendStatusToIframe, handleInstall, handleUninstall, handleOpen])
+	}, [sendStatusToIframe, handleInstall, handleUninstall, handleOpen, handleUpdateSubdomain])
 }
