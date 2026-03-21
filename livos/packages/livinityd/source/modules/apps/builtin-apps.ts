@@ -478,55 +478,6 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     },
   },
   {
-    id: 'chrome',
-    name: 'Chrome',
-    tagline: 'Stream Google Chrome from your server',
-    version: '1.0.0',
-    category: 'networking',
-    port: 3000,
-    description: 'Google Chrome running in Docker with KasmVNC streaming. Anti-detection flags, persistent sessions — stay logged into all your sites. Managed from LivOS desktop.',
-    website: 'https://www.google.com/chrome/',
-    developer: 'Livinity',
-    icon: 'https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome.svg',
-    docker: {
-      image: 'lscr.io/linuxserver/chrome:latest',
-      environment: {
-        PUID: '1000',
-        PGID: '1000',
-        CHROME_CLI: '--disable-blink-features=AutomationControlled --disable-features=ChromeWhatsNewUI',
-      },
-      volumes: ['/config'],
-    },
-    installOptions: {
-      subdomain: 'chrome',
-    },
-    compose: {
-      mainService: 'server',
-      services: {
-        server: {
-          image: 'lscr.io/linuxserver/chrome:latest',
-          restart: 'unless-stopped',
-          shm_size: '1gb',
-          security_opt: ['seccomp=unconfined'],
-          environment: {
-            PUID: '1000',
-            PGID: '1000',
-            CHROME_CLI: '--disable-blink-features=AutomationControlled --disable-features=ChromeWhatsNewUI',
-          },
-          volumes: ['${APP_DATA_DIR}/config:/config'],
-          ports: ['127.0.0.1:3000:3000', '127.0.0.1:3001:3001'],
-          healthcheck: {
-            test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
-            interval: '30s',
-            timeout: '10s',
-            retries: 3,
-            start_period: '15s',
-          },
-        },
-      },
-    },
-  },
-  {
     id: 'ollama',
     name: 'Ollama',
     tagline: 'Run any LLM locally with one command',
