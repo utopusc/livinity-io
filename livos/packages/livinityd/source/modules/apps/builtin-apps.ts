@@ -1,6 +1,6 @@
 /**
  * LivOS Built-in Apps
- * 23 Built-in apps with official Docker images and native compose definitions
+ * 28 Built-in apps with official Docker images and native compose definitions
  */
 
 export interface ComposeServiceDef {
@@ -1005,6 +1005,217 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
           ports: ['127.0.0.1:7575:7575'],
           healthcheck: {
             test: ['CMD-SHELL', 'wget -q --spider http://localhost:7575/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+
+  // --- Wave 2: Plan 03 apps (Wiki.js, Linkwarden, Element Web, Hoppscotch, Stirling PDF) ---
+
+  {
+    id: 'wikijs',
+    name: 'Wiki.js',
+    tagline: 'Powerful and extensible open source wiki',
+    version: '2',
+    category: 'productivity',
+    port: 3006,
+    description: 'Wiki.js is a powerful open-source wiki app built on Node.js. Beautiful and intuitive interface with Markdown and WYSIWYG editors. Supports SQLite for zero-config storage, full-text search, diagrams, and media assets management.',
+    website: 'https://js.wiki',
+    developer: 'Requarks',
+    icon: 'https://raw.githubusercontent.com/requarks/wiki/main/assets/svg/logo.svg',
+    docker: {
+      image: 'ghcr.io/requarks/wiki:2',
+      environment: {
+        DB_TYPE: 'sqlite',
+        DB_FILEPATH: '/wiki/data/db.sqlite',
+      },
+      volumes: ['/wiki/data'],
+    },
+    installOptions: {subdomain: 'wiki'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'ghcr.io/requarks/wiki:2',
+          restart: 'unless-stopped',
+          environment: {
+            DB_TYPE: 'sqlite',
+            DB_FILEPATH: '/wiki/data/db.sqlite',
+          },
+          volumes: ['${APP_DATA_DIR}/data:/wiki/data'],
+          ports: ['127.0.0.1:3006:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+
+  {
+    id: 'linkwarden',
+    name: 'Linkwarden',
+    tagline: 'Collaborative bookmark manager and archive',
+    version: '2.8.0',
+    category: 'productivity',
+    port: 3004,
+    description: 'Linkwarden is a self-hosted, open-source collaborative bookmark manager to collect, organize, and preserve webpages. Auto-captures screenshots and archives pages. Tag-based organization with collections and sharing.',
+    website: 'https://linkwarden.app',
+    developer: 'Linkwarden',
+    icon: 'https://raw.githubusercontent.com/linkwarden/linkwarden/main/assets/logo.png',
+    docker: {
+      image: 'ghcr.io/linkwarden/linkwarden:latest',
+      environment: {
+        NEXTAUTH_SECRET: '',
+        NEXTAUTH_URL: 'http://localhost:3004',
+      },
+      volumes: ['/data/data'],
+    },
+    installOptions: {
+      subdomain: 'links',
+      environmentOverrides: [
+        {name: 'NEXTAUTH_SECRET', label: 'Auth Secret (random string)', type: 'password', required: true},
+      ],
+    },
+    deterministicPassword: true,
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'ghcr.io/linkwarden/linkwarden:latest',
+          restart: 'unless-stopped',
+          environment: {
+            NEXTAUTH_SECRET: '',
+            NEXTAUTH_URL: 'http://localhost:3004',
+          },
+          volumes: ['${APP_DATA_DIR}/data:/data/data'],
+          ports: ['127.0.0.1:3004:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+
+  {
+    id: 'element-web',
+    name: 'Element Web',
+    tagline: 'Matrix chat client for decentralized communication',
+    version: '1.11.0',
+    category: 'communication',
+    port: 8087,
+    description: 'Element is a Matrix-based end-to-end encrypted messenger and secure collaboration app. Connect to any Matrix homeserver (default: matrix.org). Supports rooms, spaces, voice/video calls, file sharing, and bridges to other platforms.',
+    website: 'https://element.io',
+    developer: 'Element',
+    icon: 'https://raw.githubusercontent.com/nicehash/element-web/develop/res/themes/element/img/logos/element-logo.svg',
+    docker: {
+      image: 'vectorim/element-web:latest',
+      volumes: [],
+    },
+    installOptions: {subdomain: 'element'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'vectorim/element-web:latest',
+          restart: 'unless-stopped',
+          ports: ['127.0.0.1:8087:80'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:80/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '15s',
+          },
+        },
+      },
+    },
+  },
+
+  {
+    id: 'hoppscotch',
+    name: 'Hoppscotch',
+    tagline: 'Open-source API development ecosystem',
+    version: '2024.12.0',
+    category: 'developer-tools',
+    port: 3005,
+    description: 'Hoppscotch is an open source API development ecosystem. Test REST, GraphQL, WebSocket, SSE, and Socket.IO APIs with a beautiful interface. Collections, environments, pre-request scripts, and team collaboration.',
+    website: 'https://hoppscotch.io',
+    developer: 'Hoppscotch',
+    icon: 'https://raw.githubusercontent.com/hoppscotch/hoppscotch/main/packages/hoppscotch-common/public/icon.png',
+    docker: {
+      image: 'hoppscotch/hoppscotch:latest',
+      volumes: [],
+    },
+    installOptions: {subdomain: 'api'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'hoppscotch/hoppscotch:latest',
+          restart: 'unless-stopped',
+          ports: ['127.0.0.1:3005:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+
+  {
+    id: 'stirling-pdf',
+    name: 'Stirling PDF',
+    tagline: 'All-in-one PDF manipulation toolkit',
+    version: '0.36.0',
+    category: 'developer-tools',
+    port: 8085,
+    description: 'Stirling PDF is a self-hosted web-based PDF manipulation tool. Split, merge, convert, compress, rotate, watermark, and OCR your PDFs. Supports dark mode, custom download options, parallel file processing, and API access.',
+    website: 'https://stirlingpdf.io',
+    developer: 'Stirling-Tools',
+    icon: 'https://raw.githubusercontent.com/Stirling-Tools/Stirling-PDF/main/docs/stirling.png',
+    docker: {
+      image: 'frooodle/s-pdf:latest',
+      environment: {
+        DOCKER_ENABLE_SECURITY: 'false',
+      },
+      volumes: ['/usr/share/tessdata', '/configs'],
+    },
+    installOptions: {subdomain: 'pdf'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'frooodle/s-pdf:latest',
+          restart: 'unless-stopped',
+          environment: {
+            DOCKER_ENABLE_SECURITY: 'false',
+          },
+          volumes: [
+            '${APP_DATA_DIR}/data:/usr/share/tessdata',
+            '${APP_DATA_DIR}/config:/configs',
+          ],
+          ports: ['127.0.0.1:8085:8080'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:8080/ || exit 1'],
             interval: '30s',
             timeout: '10s',
             retries: 3,
