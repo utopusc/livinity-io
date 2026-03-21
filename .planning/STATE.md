@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-03-21T05:58:01.294Z"
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-03-21T06:02:42.931Z"
 progress:
   total_phases: 27
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 35
-  completed_plans: 37
+  completed_plans: 38
 ---
 
 # Project State
@@ -53,6 +53,7 @@ Plan: 2 of 2
 | Phase 20 P01 | 4min | 2 tasks | 4 files |
 | Phase 21-install-history-profile P01 | 10min | 2 tasks | 5 files |
 | Phase 22 P01 | 2min | 2 tasks | 1 files |
+| Phase 22 P02 | 3min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -84,6 +85,8 @@ Plan: 2 of 2
 - [Phase 22]: Combined Task 1+2 into single commit due to tab-indented file requiring full Write operation
 - [Phase 22]: 3 clearInterval calls for robustness: success path, error path, and state-change detection in poll interval
 - [Phase 22]: Partial status update sent immediately for installing app rather than querying apps.list first
+- [Phase 22]: Progress bar uses teal-500 matching brand palette; installing badge uses blue to differentiate from running/stopped
+- [Phase 22]: Credentials dialog auto-shows via useEffect on appCredentials context, dismissed via Got it + clearCredentials
 
 ### Roadmap Evolution
 
@@ -99,6 +102,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T05:58:01.290Z
-Stopped at: Completed 22-01-PLAN.md
+Last session: 2026-03-21T06:02:42.926Z
+Stopped at: Completed 22-02-PLAN.md
 Resume file: None
