@@ -10,7 +10,7 @@ interface AppCardProps {
 }
 
 export function AppCard({ app }: AppCardProps) {
-  const { token, instanceName } = useStore();
+  const { token, instanceName, getAppStatus, isEmbedded } = useStore();
   const params = new URLSearchParams();
   if (token) params.set('token', token);
   if (instanceName) params.set('instance', instanceName);
@@ -37,9 +37,29 @@ export function AppCard({ app }: AppCardProps) {
             {app.tagline}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-600">
-          Get
-        </span>
+        {(() => {
+          if (!isEmbedded) return (
+            <span className="shrink-0 rounded-full bg-[#f5f5f7] px-3 py-1 text-xs font-semibold text-[#86868b]">
+              Get
+            </span>
+          );
+          const status = getAppStatus(app.id);
+          if (status === 'running') return (
+            <span className="shrink-0 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600">
+              Open
+            </span>
+          );
+          if (status === 'stopped') return (
+            <span className="shrink-0 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600">
+              Stopped
+            </span>
+          );
+          return (
+            <span className="shrink-0 rounded-full bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-600">
+              Get
+            </span>
+          );
+        })()}
       </div>
       {cat && (
         <span className="mt-3 self-start text-[10px] font-medium uppercase tracking-wider text-[#86868b]">
