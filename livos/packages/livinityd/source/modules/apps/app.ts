@@ -214,6 +214,34 @@ export default class App {
 			this.logger.log(`Applied ${Object.keys(environmentOverrides).length} environment overrides for ${this.id}`)
 		}
 
+		// For apps that need CSRF origin whitelisting (e.g. Portainer behind reverse proxy)
+		// dynamically inject the subdomain URL based on current domain config
+		if (this.id === 'portainer') {
+			try {
+				const domainRaw = await this.#livinityd.ai.redis.get('livos:domain:config')
+				if (domainRaw) {
+					const domainConfig = JSON.parse(domainRaw)
+					if (domainConfig?.active && domainConfig?.domain) {
+						const subdomainsRaw = await this.#livinityd.ai.redis.get('livos:domain:subdomains')
+						const subdomains = subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+						const sub = subdomains.find((s: {appId: string}) => s.appId === this.id)
+						const subdomain = sub?.subdomain || this.id
+						const origin = `${subdomain}.${domainConfig.domain}`
+
+						const mainServiceName = Object.keys(compose.services!).find(n => n === 'portainer') || Object.keys(compose.services!)[0]
+						const service = compose.services![mainServiceName]
+						if (!service.environment) service.environment = {}
+						if (typeof service.environment === 'object' && !Array.isArray(service.environment)) {
+							;(service.environment as Record<string, string>).TRUSTED_ORIGINS = origin
+						}
+						this.logger.log(`Set TRUSTED_ORIGINS=${origin} for ${this.id}`)
+					}
+				}
+			} catch (error) {
+				this.logger.error(`Failed to set TRUSTED_ORIGINS for ${this.id}`, error)
+			}
+		}
+
 		await this.writeCompose(compose)
 	}
 
