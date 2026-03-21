@@ -78,6 +78,14 @@ export default class Apps {
 			await this.#livinityd.store.set('apps', [])
 		}
 
+		// Auto-register Chrome as a pre-installed default app
+		const apps = (await this.#livinityd.store.get('apps')) || []
+		if (!apps.includes('chrome')) {
+			apps.push('chrome')
+			await this.#livinityd.store.set('apps', apps)
+			this.logger.log('Chrome registered as default app')
+		}
+
 		// Set torEnabled to false on first start
 		if ((await this.#livinityd.store.get('torEnabled')) === undefined) {
 			await this.#livinityd.store.set('torEnabled', false)
