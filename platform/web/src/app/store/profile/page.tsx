@@ -188,18 +188,25 @@ export default function ProfilePage() {
         Store
       </Link>
 
-      {/* Section A: Profile Header */}
+      {/* Section A: Instance Header */}
       {profile && (
         <div className="mb-10 rounded-2xl bg-gradient-to-r from-teal-50 to-cyan-50 p-8">
-          <h1 className="text-2xl font-bold text-[#1d1d1f]">{profile.email}</h1>
-          <div className="mt-3 flex flex-wrap gap-3">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-[#1d1d1f]">{instanceName || 'My Server'}</h1>
+              <p className="mt-0.5 text-sm text-[#86868b]">{profile.email}</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-sm font-medium text-[#1d1d1f] shadow-sm">
-              <span className="text-teal-500">{profile.instance_count}</span>
-              {profile.instance_count === 1 ? 'instance' : 'instances'}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-sm font-medium text-[#1d1d1f] shadow-sm">
-              <span className="text-teal-500">{profile.app_count}</span>
-              {profile.app_count === 1 ? 'app' : 'apps'} installed
+              <span className="text-teal-500">{totalApps}</span>
+              {totalApps === 1 ? 'app' : 'apps'} installed
             </span>
           </div>
         </div>
