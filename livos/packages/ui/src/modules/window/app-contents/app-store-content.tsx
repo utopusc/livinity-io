@@ -1,64 +1,51 @@
-import React, {Suspense} from 'react'
-import {ErrorBoundary} from 'react-error-boundary'
+import {useRef} from 'react'
 
-import {ErrorBoundaryCardFallback} from '@/components/ui/error-boundary-card-fallback'
 import {Loading} from '@/components/ui/loading'
-import {AvailableAppsProvider} from '@/providers/available-apps'
-import {useWindowRouter, WindowRouterProvider} from '@/providers/window-router'
+import {useAppStoreBridge} from '@/hooks/use-app-store-bridge'
+import {trpcReact} from '@/trpc/trpc'
 
-// Lazy load route components
-const AppStoreLayout = React.lazy(() => import('./app-store-routes/app-store-layout-window'))
-const AppPageWindow = React.lazy(() => import('./app-store-routes/app-page-window'))
-const CategoryPageWindow = React.lazy(() => import('./app-store-routes/category-page-window'))
-const DiscoverWindow = React.lazy(() => import('./app-store-routes/discover-window'))
+export default function AppStoreWindowContent() {
+	const iframeRef = useRef<HTMLIFrameElement>(null)
+	const apiKeyQ = trpcReact.domain.platform.getApiKey.useQuery()
+	const domainQ = trpcReact.domain.getStatus.useQuery()
+	useAppStoreBridge(iframeRef)
 
-type AppStoreWindowContentProps = {
-	initialRoute: string
-}
+	if (apiKeyQ.isLoading || domainQ.isLoading) {
+		return (
+			<div className='flex h-full items-center justify-center'>
+				<Loading />
+			</div>
+		)
+	}
 
-export default function AppStoreWindowContent({initialRoute}: AppStoreWindowContentProps) {
-	// Convert route to window-local route (remove /app-store prefix if present)
-	const localRoute = initialRoute.startsWith('/app-store')
-		? initialRoute.replace('/app-store', '') || '/'
-		: initialRoute
+	const apiKey = apiKeyQ.data?.apiKey
+	if (!apiKey) {
+		return <NoApiKeyMessage />
+	}
+
+	const hostname = domainQ.data?.domain || window.location.hostname
+	const storeUrl = `https://livinity.io/store?token=${encodeURIComponent(apiKey)}&instance=${encodeURIComponent(hostname)}`
 
 	return (
-		<AvailableAppsProvider>
-			<WindowRouterProvider initialRoute={localRoute}>
-				<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
-					<Suspense fallback={<Loading />}>
-						<AppStoreWindowRouter />
-					</Suspense>
-				</ErrorBoundary>
-			</WindowRouterProvider>
-		</AvailableAppsProvider>
+		<iframe
+			ref={iframeRef}
+			src={storeUrl}
+			style={{width: '100%', height: '100%', border: 'none'}}
+			allow='clipboard-write'
+			title='App Store'
+		/>
 	)
 }
 
-function AppStoreWindowRouter() {
-	const {currentRoute} = useWindowRouter()
-
-	// Route matching for app store
-	// /app-store/:appId -> /:appId
-	// /app-store/category/:categoryId -> /category/:categoryId
-	// /app-store -> /
-
-	// Match /:appId (but not /category/...)
-	const appIdMatch = currentRoute.match(/^\/([^/]+)$/)
-	const isAppPage = appIdMatch && appIdMatch[1] !== 'category'
-
-	// Match /category/:categoryId
-	const categoryMatch = currentRoute.match(/^\/category\/([^/]+)/)
-
+function NoApiKeyMessage() {
 	return (
-		<AppStoreLayout>
-			{isAppPage ? (
-				<AppPageWindow appId={appIdMatch[1]} />
-			) : categoryMatch ? (
-				<CategoryPageWindow categoryId={categoryMatch[1]} />
-			) : (
-				<DiscoverWindow />
-			)}
-		</AppStoreLayout>
+		<div className='flex h-full flex-col items-center justify-center gap-3 p-8 text-center'>
+			<div className='text-4xl'>🔗</div>
+			<h2 className='text-lg font-semibold text-white'>Connect to Livinity Platform</h2>
+			<p className='max-w-md text-sm text-white/60'>
+				To access the App Store, connect your LivOS instance to the Livinity platform. Go to Settings and enter
+				your API key to get started.
+			</p>
+		</div>
 	)
 }

@@ -19,7 +19,7 @@ type WindowContentProps = {
 }
 
 // Apps that manage their own scroll and layout (no wrapper padding/scroll)
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files'])
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
 	if (fullHeightApps.has(appId)) {
@@ -46,7 +46,7 @@ export function WindowContent({route, appId}: WindowContentProps) {
 function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: string}) {
 	switch (appId) {
 		case 'LIVINITY_app-store':
-			return <AppStoreWindowContent initialRoute={initialRoute} />
+			return <AppStoreWindowContent />
 
 		case 'LIVINITY_files':
 			return <FilesWindowContent initialRoute={initialRoute} />
