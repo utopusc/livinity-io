@@ -193,3 +193,13 @@ Plans:
 Plans:
 - [x] 23-01-PLAN.md — Compose definitions for all 11 builtin apps + generateAppTemplate() engine
 - [x] 23-02-PLAN.md — Install flow integration with builtin-first, platform DB fallback chain
+
+### Phase 24: App Store Expansion
+
+**Goal:** Research, add, and test 10 new single-container web UI apps to the store. Categories: Privacy (AdGuard Home, WireGuard Easy), Media (Navidrome, Calibre-web), Productivity (Homarr dashboard, BookStack wiki, Linkwarden bookmarks), Communication (Element/Matrix), Dev Tools (Hoppscotch API, Stirling PDF). Each app tested end-to-end on Server4.
+**Requirements**: R-APPS-RESEARCH, R-APPS-BUILTIN, R-APPS-DB, R-APPS-TEST
+**Depends on:** Phase 23
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 24 to break down)
