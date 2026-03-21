@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await pool.query(
-      `SELECT ih.id, ih.app_id, ih.action, ih.instance_name, ih.created_at,
+      `SELECT ih.id, a.slug as app_id, ih.action, ih.instance_name, ih.created_at,
               a.name as app_name, a.icon_url
        FROM install_history ih
        JOIN apps a ON a.id = ih.app_id
