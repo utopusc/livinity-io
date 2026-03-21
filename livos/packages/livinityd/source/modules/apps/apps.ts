@@ -1,5 +1,7 @@
 import {fileURLToPath} from 'node:url'
 import {dirname, join} from 'node:path'
+import os from 'node:os'
+import path from 'node:path'
 
 import fse from 'fs-extra'
 import {$} from 'execa'
@@ -13,6 +15,7 @@ import App, {readManifestInDirectory} from './app.js'
 import type {AppManifest, AppSettings} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import {getBuiltinApp} from './builtin-apps.js'
+import {generateAppTemplate} from './compose-generator.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {
 	allocatePort,
@@ -253,9 +256,9 @@ export default class Apps {
 		if (appIds.length === 0) return
 
 		this.logger.log(`Detected ${appIds.length} app(s) missing a data directory after restore, reinstalling...`)
+
+		// Try to update app repos for community apps (builtin apps don't need repos)
 		try {
-			// Best effort retry to ensure app repositories are pulled before reinstalling
-			// app stores are excluded from backups so first boot after recovery won't have them.
 			await pRetry(
 				async () => {
 					await this.#livinityd.appStore.update()
@@ -271,11 +274,8 @@ export default class Apps {
 				},
 			)
 		} catch (error) {
-			this.logger.error('Exhausted retries updating app store before reinstalls', error)
-
-			// If we fail, we return early because no appstore repos exist and installs will fail
-			// We won't retry on a later boot (marker file already deleted).
-			return
+			this.logger.error('Exhausted retries updating app store before reinstalls — builtin apps will still install from generated templates', error)
+			// Don't return early — builtin apps can still install without repos
 		}
 
 		for (const appId of appIds) {
@@ -323,7 +323,37 @@ export default class Apps {
 		if (await this.isInstalled(appId)) throw new Error(`App ${appId} is already installed`)
 
 		this.logger.log(`Installing app ${appId}`)
-		const appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
+
+		// Template resolution chain:
+		// 1. Try builtin compose generation (no network needed)
+		// 2. Try platform DB via API (for apps added via web admin)
+		// 3. Fall back to community git repos (legacy)
+		let appTemplatePath: string
+		let isGeneratedTemplate = false
+
+		// Step 1: Try builtin compose generation
+		const generatedPath = await generateAppTemplate(appId)
+		if (generatedPath) {
+			this.logger.log(`Using builtin compose template for ${appId}`)
+			appTemplatePath = generatedPath
+			isGeneratedTemplate = true
+		} else {
+			// Step 2: Try fetching compose from platform API
+			const platformTemplate = await this.fetchPlatformTemplate(appId)
+			if (platformTemplate) {
+				this.logger.log(`Using platform DB compose template for ${appId}`)
+				appTemplatePath = platformTemplate
+				isGeneratedTemplate = true
+			} else {
+				// Step 3: Fall back to community git repos
+				try {
+					appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
+					this.logger.log(`Using community repo template for ${appId}`)
+				} catch {
+					throw new Error(`App ${appId} not found: no builtin definition, no platform compose, and not in any app repository`)
+				}
+			}
+		}
 
 		let manifest: AppManifest
 		try {
@@ -347,6 +377,11 @@ export default class Apps {
 
 		// We use rsync to copy to preserve permissions
 		await $`rsync --archive --verbose --exclude ".gitkeep" ${appTemplatePath}/. ${appDataDirectory}`
+
+		// Clean up generated template directory (not needed after rsync)
+		if (isGeneratedTemplate) {
+			await fse.remove(appTemplatePath).catch(() => {})
+		}
 
 		// Save reference to app instance
 		const app = new App(this.#livinityd, appId)
@@ -523,6 +558,58 @@ export default class Apps {
 		return app.store.set('hideCredentialsBeforeOpen', value)
 	}
 
+	// ─── Platform Template Fetching ──────────────────────────────────
+
+	/**
+	 * Fetch docker compose definition from platform API for non-builtin apps.
+	 * Returns a temp directory path with docker-compose.yml + livinity-app.yml, or null.
+	 */
+	private async fetchPlatformTemplate(appId: string): Promise<string | null> {
+		try {
+			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
+			if (!apiKey) return null
+
+			const response = await fetch(`https://apps.livinity.io/api/apps/${appId}`, {
+				headers: {'X-Api-Key': apiKey},
+			})
+			if (!response.ok) return null
+
+			const data = (await response.json()) as any
+			if (!data.docker_compose) return null
+
+			// Write compose and manifest to temp directory
+			const tmpDir = path.join(os.tmpdir(), `livos-platform-${appId}-${Date.now()}`)
+			await fse.mkdirp(tmpDir)
+
+			// Write the docker-compose.yml from platform DB
+			await fse.writeFile(path.join(tmpDir, 'docker-compose.yml'), data.docker_compose)
+
+			// Build manifest from API response data
+			const manifest = {
+				manifestVersion: '1.0.0',
+				id: data.app_id || appId,
+				name: data.name || appId,
+				tagline: data.tagline || '',
+				category: data.category || 'other',
+				version: data.version || '1.0.0',
+				port: data.port || 8080,
+				description: data.description || '',
+				website: data.website || '',
+				developer: data.developer || '',
+				support: data.website || '',
+				gallery: [],
+			}
+
+			const yaml = (await import('js-yaml')).default
+			await fse.writeFile(path.join(tmpDir, 'livinity-app.yml'), yaml.dump(manifest, {lineWidth: -1, noRefs: true}))
+
+			return tmpDir
+		} catch (error) {
+			this.logger.error(`Failed to fetch platform template for ${appId}`, error)
+			return null
+		}
+	}
+
 	// ─── Platform Event Reporting ────────────────────────────────────
 	// Reports install/uninstall events to livinity.io platform API (server-to-server)
 
@@ -676,8 +763,27 @@ export default class Apps {
 		const existing = await getUserAppInstance(userId, appId)
 		if (existing) throw new Error(`User ${user.username} already has ${appId} installed`)
 
-		// Get the app template
-		const appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
+		// Template resolution chain (same as install())
+		let appTemplatePath: string
+		let isGeneratedTemplate = false
+		const generatedPath = await generateAppTemplate(appId)
+		if (generatedPath) {
+			appTemplatePath = generatedPath
+			isGeneratedTemplate = true
+		} else {
+			const platformTemplate = await this.fetchPlatformTemplate(appId)
+			if (platformTemplate) {
+				appTemplatePath = platformTemplate
+				isGeneratedTemplate = true
+			} else {
+				try {
+					appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
+				} catch {
+					throw new Error(`App ${appId} not found: no builtin definition, no platform compose, and not in any app repository`)
+				}
+			}
+		}
+
 		let manifest
 		try {
 			manifest = await readManifestInDirectory(appTemplatePath)
@@ -694,6 +800,11 @@ export default class Apps {
 
 		// Copy app template to user directory
 		await $`rsync --archive --verbose --exclude ".gitkeep" ${appTemplatePath}/. ${userDataDir}`
+
+		// Clean up generated template directory (not needed after rsync)
+		if (isGeneratedTemplate) {
+			await fse.remove(appTemplatePath).catch(() => {})
+		}
 
 		// Read and patch compose file for this user
 		// Resolve legacy env vars that the app-script would normally set
