@@ -108,4 +108,9 @@ export const CATEGORIES: Record<string, { label: string; icon: string }> = {
   photography: { label: 'Photography', icon: '\uD83D\uDCF7' },
   security: { label: 'Security', icon: '\uD83D\uDD12' },
   dashboards: { label: 'Dashboards', icon: '\uD83D\uDCC8' },
+  privacy: { label: 'Privacy', icon: '\uD83D\uDEE1' },
+  communication: { label: 'Communication', icon: '\uD83D\uDCAC' },
+  productivity: { label: 'Productivity', icon: '\uD83D\uDCDD' },
+  'developer-tools': { label: 'Dev Tools', icon: '\uD83D\uDD27' },
+  networking: { label: 'Networking', icon: '\uD83C\uDF10' },
 };

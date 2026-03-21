@@ -80,7 +80,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </p>
 
           {/* Category list */}
-          <nav className="flex flex-col gap-0.5">
+          <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
             {Object.entries(CATEGORIES).map(([key, { label, icon }]) => (
               <button
                 key={key}
@@ -97,9 +97,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               </button>
             ))}
           </nav>
-
-          {/* Spacer */}
-          <div className="flex-1" />
 
           {/* My Apps */}
           <div className="border-t border-[#e5e5e7] pt-4">
