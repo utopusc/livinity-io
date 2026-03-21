@@ -21,6 +21,7 @@ export function usePostMessage() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [installedApps, setInstalledApps] = useState<Map<string, AppStatus['status']>>(new Map());
   const [appSubdomains, setAppSubdomains] = useState<Map<string, string>>(new Map());
+  const [appDefaultCreds, setAppDefaultCreds] = useState<Map<string, {username: string; password: string}>>(new Map());
   const [installProgress, setInstallProgress] = useState<Map<string, number>>(new Map());
   const [appCredentials, setAppCredentials] = useState<AppCredentials | null>(null);
   const [instanceInfo, setInstanceInfo] = useState<InstanceInfo | null>(null);
@@ -66,8 +67,15 @@ export function usePostMessage() {
             map.set(app.id, app.status);
             if (app.subdomain) subMap.set(app.id, app.subdomain);
           }
+          const credMap = new Map<string, {username: string; password: string}>();
+          for (const app of data.apps) {
+            if (app.defaultUsername || app.defaultPassword) {
+              credMap.set(app.id, {username: app.defaultUsername || '', password: app.defaultPassword || ''});
+            }
+          }
           setInstalledApps(map);
           setAppSubdomains(subMap);
+          setAppDefaultCreds(credMap);
           if (data.instance) setInstanceInfo(data.instance);
           break;
         }
@@ -199,6 +207,10 @@ export function usePostMessage() {
     return appSubdomains.get(appId);
   }, [appSubdomains]);
 
+  const getAppDefaultCreds = useCallback((appId: string): {username: string; password: string} | undefined => {
+    return appDefaultCreds.get(appId);
+  }, [appDefaultCreds]);
+
   const sendUpdateSubdomain = useCallback((appId: string, subdomain: string) => {
     sendMessage({ type: 'updateSubdomain', appId, subdomain });
   }, [sendMessage]);
@@ -215,6 +227,7 @@ export function usePostMessage() {
     sendOpen,
     getAppStatus,
     getAppSubdomain,
+    getAppDefaultCreds,
     sendUpdateSubdomain,
     instanceInfo,
   };

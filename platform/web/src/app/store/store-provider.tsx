@@ -71,6 +71,7 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         clearCredentials: bridge.clearCredentials,
         // Subdomain management
         getAppSubdomain: bridge.getAppSubdomain,
+        getAppDefaultCreds: bridge.getAppDefaultCreds,
         sendUpdateSubdomain: bridge.sendUpdateSubdomain,
         // Instance info
         instanceInfo: bridge.instanceInfo,
