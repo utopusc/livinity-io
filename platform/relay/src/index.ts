@@ -249,7 +249,7 @@ server.on('upgrade', (req, socket, head) => {
   }
 
   // User subdomain WebSocket proxying
-  const { username } = parseSubdomain(req.headers.host);
+  const { username, appName } = parseSubdomain(req.headers.host);
   if (username) {
     const tunnel = registry.get(username);
     if (tunnel && tunnel.ws.readyState === 1 /* WebSocket.OPEN */) {

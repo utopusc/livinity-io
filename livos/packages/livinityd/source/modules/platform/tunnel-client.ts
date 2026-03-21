@@ -458,21 +458,39 @@ export default class TunnelClient {
 		}
 
 		const targetUrl = `ws://127.0.0.1:${targetPort}${msg.path}`
+		const targetLabel = `${msg.targetApp ?? 'livos'}:${targetPort}${msg.path}`
 
-		// Build headers for the local WS connection
+		// Build clean headers — remove WebSocket handshake headers that the ws
+		// library generates itself to avoid duplicate/conflicting header values.
+		// Extract subprotocols separately for proper negotiation via ws constructor.
 		const forwardHeaders: Record<string, string> = {}
+		let subprotocols: string[] | undefined
+		const skipHeaders = new Set([
+			'upgrade', 'connection',
+			'sec-websocket-key', 'sec-websocket-version',
+			'sec-websocket-extensions', 'sec-websocket-protocol',
+			'host',
+		])
 		for (const [key, value] of Object.entries(msg.headers)) {
-			forwardHeaders[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : value
+			const lk = key.toLowerCase()
+			if (skipHeaders.has(lk)) {
+				if (lk === 'sec-websocket-protocol') {
+					const val = Array.isArray(value) ? value.join(', ') : value
+					subprotocols = val.split(',').map(s => s.trim()).filter(Boolean)
+				}
+				continue
+			}
+			forwardHeaders[lk] = Array.isArray(value) ? value.join(', ') : value
 		}
 		forwardHeaders['host'] = `127.0.0.1:${targetPort}`
 		forwardHeaders['x-forwarded-proto'] = 'https'
 
 		let localWs: WebSocket
 		try {
-			localWs = new WebSocket(targetUrl, {headers: forwardHeaders})
+			localWs = new WebSocket(targetUrl, subprotocols, {headers: forwardHeaders})
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err)
-			this.logger.error(`[tunnel] Local WS creation failed for ${msg.path}: ${errorMsg}`)
+			this.logger.error(`[tunnel] Local WS creation failed for ${targetLabel}: ${errorMsg}`)
 			this.sendMessage({type: 'ws_error', id: msg.id, error: errorMsg})
 			return
 		}
@@ -504,7 +522,7 @@ export default class TunnelClient {
 		})
 
 		localWs.on('error', (err: Error) => {
-			this.logger.error(`[tunnel] Local WS error for ${msg.id}: ${err.message}`)
+			this.logger.error(`[tunnel] Local WS error for ${targetLabel} [${msg.id}]: ${err.message}`)
 			this.sendMessage({type: 'ws_error', id: msg.id, error: err.message})
 			this.localWsSockets.delete(msg.id)
 		})
