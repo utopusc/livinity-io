@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 24-04-PLAN.md
-last_updated: "2026-03-21T12:18:42.534Z"
+stopped_at: Completed 25-01-PLAN.md
+last_updated: "2026-03-21T12:33:40.212Z"
 progress:
-  total_phases: 29
+  total_phases: 30
   completed_phases: 17
-  total_plans: 41
-  completed_plans: 44
+  total_plans: 43
+  completed_plans: 45
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 24 — app-store-expansion
+**Current focus:** Phase 25 — native-chrome-browser
 
 ## Current Position
 
-Phase: 24
-Plan: Not started
+Phase: 25 (native-chrome-browser) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Plan: Not started
 | Phase 24 P02 | 1min | 1 tasks | 1 files |
 | Phase 24 P03 | 1min | 1 tasks | 1 files |
 | Phase 24-app-store-expansion P04 | 10min | 2 tasks | 1 files |
+| Phase 25 P01 | 3min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -102,6 +103,9 @@ Plan: Not started
 - [Phase 24-app-store-expansion]: 5 new builtin apps added following existing BuiltinAppManifest pattern: AdGuard Home, WireGuard Easy, Navidrome, Calibre-web, Homarr
 - [Phase 24]: Migration numbered 0003 (not 0002 as planned) because 0002_create_install_history.sql already exists
 - [Phase 24-app-store-expansion]: Added slug column to SQL migration -- production DB has NOT NULL slug column that was missing from original migration
+- [Phase 25]: Type=forking + RemainAfterExit=yes for systemd Chrome service (websockify daemonizes)
+- [Phase 25]: NativeApp pattern: systemd lifecycle via execa for non-Docker apps, NATIVE_APP_CONFIGS registry
+- [Phase 25]: 30-minute idle auto-stop timer for native Chrome to conserve resources
 
 ### Roadmap Evolution
 
@@ -120,6 +124,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:13:23.124Z
-Stopped at: Completed 24-04-PLAN.md
+Last session: 2026-03-21T12:33:40.208Z
+Stopped at: Completed 25-01-PLAN.md
 Resume file: None
