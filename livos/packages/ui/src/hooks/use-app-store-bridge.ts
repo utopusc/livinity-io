@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef} from 'react'
+import {useCallback, useEffect, useRef, useState} from 'react'
 
 import {trpcClient, trpcReact} from '@/trpc/trpc'
 
@@ -58,6 +58,8 @@ export function useAppStoreBridge(
 ): void {
 	const utils = trpcReact.useUtils()
 	const domainQ = trpcReact.domain.getStatus.useQuery()
+	// Watch apps list for changes (desktop installs/uninstalls trigger invalidation)
+	const appsListQ = trpcReact.apps.list.useQuery(undefined, {refetchInterval: 10_000})
 
 	// Use refs to avoid stale closures in the message event listener
 	const iframeRefStable = useRef(iframeRef)
@@ -276,4 +278,26 @@ export function useAppStoreBridge(
 		window.addEventListener('message', handleMessage)
 		return () => window.removeEventListener('message', handleMessage)
 	}, [sendStatusToIframe, handleInstall, handleUninstall, handleOpen, handleUpdateSubdomain])
+
+	// Auto-sync status to iframe when apps list changes (covers desktop install/uninstall)
+	const [iframeReady, setIframeReady] = useState(false)
+	const prevAppsDataRef = useRef<string>('')
+	useEffect(() => {
+		if (!iframeReady || !appsListQ.data) return
+		const key = appsListQ.data.map((a) => `${a.id}:${'state' in a ? a.state : 'err'}`).join(',')
+		if (key !== prevAppsDataRef.current) {
+			prevAppsDataRef.current = key
+			sendStatusToIframe()
+		}
+	}, [appsListQ.data, iframeReady, sendStatusToIframe])
+
+	// Track iframe ready state
+	useEffect(() => {
+		function onMessage(event: MessageEvent) {
+			if (!isAllowedOrigin(event.origin)) return
+			if (event.data?.type === 'ready') setIframeReady(true)
+		}
+		window.addEventListener('message', onMessage)
+		return () => window.removeEventListener('message', onMessage)
+	}, [])
 }
