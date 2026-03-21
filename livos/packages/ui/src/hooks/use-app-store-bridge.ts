@@ -31,6 +31,7 @@ type LivOSToStoreMessage =
 	| {type: 'uninstalled'; appId: string; success: boolean}
 	| {type: 'progress'; appId: string; progress: number}
 	| {type: 'credentials'; appId: string; username: string; password: string}
+	| {type: 'reportEvent'; appId: string; action: 'install' | 'uninstall'; apiKey: string; instanceName: string}
 
 function isAllowedOrigin(origin: string): boolean {
 	if (origin === 'https://livinity.io') return true
@@ -74,19 +75,9 @@ export function useAppStoreBridge(
 	const reportEvent = useCallback((appId: string, action: 'install' | 'uninstall') => {
 		const {apiKey, instanceName} = optionsRef.current
 		if (!apiKey) return
-		fetch('https://livinity.io/api/install-event', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'X-Api-Key': apiKey,
-			},
-			body: JSON.stringify({
-				app_id: appId,
-				action,
-				instance_name: instanceName,
-			}),
-		}).catch(() => {}) // Fire-and-forget: silently ignore errors
-	}, [])
+		// Send via iframe (same-origin to livinity.io) to avoid CORS issues
+		sendToIframe({type: 'reportEvent', appId, action, apiKey, instanceName})
+	}, [sendToIframe])
 
 	const sendToIframe = useCallback((message: LivOSToStoreMessage) => {
 		const iframe = iframeRefStable.current?.current
