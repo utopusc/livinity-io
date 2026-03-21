@@ -34,11 +34,11 @@
 
 ### EMBED — LivOS iframe Integration
 
-- [ ] **EMBED-01**: LivOS App Store window displays apps.livinity.io/store in iframe
-- [ ] **EMBED-02**: iframe URL includes API key token and instance hostname as query params
-- [ ] **EMBED-03**: LivOS listens for postMessage install commands from iframe
-- [ ] **EMBED-04**: Install command triggers compose download → Docker pull/up → Caddy config update
-- [ ] **EMBED-05**: LivOS sends app status updates to iframe on load and after state changes
+- [x] **EMBED-01**: LivOS App Store window displays apps.livinity.io/store in iframe
+- [x] **EMBED-02**: iframe URL includes API key token and instance hostname as query params
+- [x] **EMBED-03**: LivOS listens for postMessage install commands from iframe
+- [x] **EMBED-04**: Install command triggers compose download → Docker pull/up → Caddy config update
+- [x] **EMBED-05**: LivOS sends app status updates to iframe on load and after state changes
 
 ### HIST — Install History + Profile
 
@@ -98,11 +98,11 @@
 | BRIDGE-04 | Phase 19 | Complete |
 | BRIDGE-05 | Phase 19 | Complete |
 | BRIDGE-06 | Phase 19 | Complete |
-| EMBED-01 | Phase 20 | Pending |
-| EMBED-02 | Phase 20 | Pending |
-| EMBED-03 | Phase 20 | Pending |
-| EMBED-04 | Phase 20 | Pending |
-| EMBED-05 | Phase 20 | Pending |
+| EMBED-01 | Phase 20 | Complete |
+| EMBED-02 | Phase 20 | Complete |
+| EMBED-03 | Phase 20 | Complete |
+| EMBED-04 | Phase 20 | Complete |
+| EMBED-05 | Phase 20 | Complete |
 | HIST-01 | Phase 21 | Pending |
 | HIST-02 | Phase 21 | Pending |
 | HIST-03 | Phase 21 | Pending |
