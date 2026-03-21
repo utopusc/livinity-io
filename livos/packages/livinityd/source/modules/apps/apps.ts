@@ -26,6 +26,8 @@ import {
 // Redis keys for domain config
 const REDIS_DOMAIN_KEY = 'livos:domain:config'
 const REDIS_SUBDOMAINS_KEY = 'livos:domain:subdomains'
+const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
+const REDIS_PLATFORM_URL = 'livos:platform:url'
 
 export default class Apps {
 	#livinityd: Livinityd
@@ -400,6 +402,9 @@ export default class Apps {
 			// Don't fail install if subdomain registration fails
 		}
 
+		// Report install event to platform (fire-and-forget)
+		this.reportInstallEvent(appId, 'install').catch(() => {})
+
 		return true
 	}
 
@@ -422,6 +427,9 @@ export default class Apps {
 			} catch (error) {
 				this.logger.error(`Failed to remove subdomain for ${appId}`, error)
 			}
+
+			// Report uninstall event to platform (fire-and-forget)
+			this.reportInstallEvent(appId, 'uninstall').catch(() => {})
 		}
 		return uninstalled
 	}
@@ -513,6 +521,31 @@ export default class Apps {
 	async setHideCredentialsBeforeOpen(appId: string, value: boolean) {
 		const app = this.getApp(appId)
 		return app.store.set('hideCredentialsBeforeOpen', value)
+	}
+
+	// ─── Platform Event Reporting ────────────────────────────────────
+	// Reports install/uninstall events to livinity.io platform API (server-to-server)
+
+	private async reportInstallEvent(appId: string, action: 'install' | 'uninstall'): Promise<void> {
+		try {
+			const [apiKey, instanceUrl] = await Promise.all([
+				this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY),
+				this.#livinityd.ai.redis.get(REDIS_PLATFORM_URL),
+			])
+			if (!apiKey || !instanceUrl) return
+
+			const instanceName = instanceUrl.replace('https://', '').replace('http://', '')
+			const response = await fetch('https://livinity.io/api/install-event', {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json', 'X-Api-Key': apiKey},
+				body: JSON.stringify({app_id: appId, action, instance_name: instanceName}),
+			})
+			if (response.ok) {
+				this.logger.log(`Reported ${action} event for ${appId} to platform`)
+			}
+		} catch (error) {
+			this.logger.error(`Failed to report ${action} event for ${appId}`, error)
+		}
 	}
 
 	// ─── Caddy Subdomain Management ─────────────────────────────────
