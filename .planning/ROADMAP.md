@@ -197,7 +197,7 @@ Plans:
 
 ### Phase 24: App Store Expansion
 
-**Goal:** Research, add, and test 10 new single-container web UI apps to the store. Categories: Privacy (AdGuard Home, WireGuard Easy), Media (Navidrome, Calibre-web), Productivity (Homarr dashboard, BookStack wiki, Linkwarden bookmarks), Communication (Element/Matrix), Dev Tools (Hoppscotch API, Stirling PDF). Each app tested end-to-end on Server4.
+**Goal:** Research, add, and test 10 new single-container web UI apps to the store. Categories: Privacy (AdGuard Home, WireGuard Easy), Media (Navidrome, Calibre-web), Productivity (Homarr dashboard, Wiki.js, Linkwarden bookmarks), Communication (Element/Matrix), Dev Tools (Hoppscotch API, Stirling PDF). Each app tested end-to-end on Server4.
 **Requirements**: R-APPS-RESEARCH, R-APPS-BUILTIN, R-APPS-DB, R-APPS-TEST
 **Depends on:** Phase 23
 **Plans:** 4 plans
@@ -205,5 +205,5 @@ Plans:
 Plans:
 - [ ] 24-01-PLAN.md — Add 5 builtin apps batch 1: AdGuard Home, WireGuard Easy, Navidrome, Calibre-web, Homarr
 - [ ] 24-02-PLAN.md — SQL seed migration for all 10 new expansion apps in platform DB
-- [ ] 24-03-PLAN.md — Add 5 builtin apps batch 2: BookStack, Linkwarden, Element Web, Hoppscotch, Stirling PDF
+- [ ] 24-03-PLAN.md — Add 5 builtin apps batch 2: Wiki.js, Linkwarden, Element Web, Hoppscotch, Stirling PDF
 - [ ] 24-04-PLAN.md — Deploy to Server4/Server5 and verify installs end-to-end

@@ -61,7 +61,7 @@ Target apps (from ROADMAP):
 3. Navidrome — Music streaming server (Media)
 4. Calibre-web — Ebook library (Media)
 5. Homarr — Dashboard/homepage (Productivity)
-6. BookStack — Wiki/documentation (Productivity)
+6. Wiki.js — Wiki/documentation (Productivity)
 7. Linkwarden — Bookmark manager (Productivity)
 8. Element Web — Matrix chat client (Communication)
 9. Hoppscotch — API development platform (Dev Tools)
