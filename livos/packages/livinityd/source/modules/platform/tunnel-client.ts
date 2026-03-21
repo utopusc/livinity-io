@@ -350,26 +350,15 @@ export default class TunnelClient {
 			requestHeaders[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : value
 		}
 
-		// Determine target port: app subdomain → app port, otherwise → LivOS (8080)
-		let targetPort = 8080
-		if (msg.targetApp) {
-			try {
-				const subdomainsRaw = await this.redis.get('livos:domain:subdomains')
-				if (subdomainsRaw) {
-					const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> = JSON.parse(subdomainsRaw)
-					const appConfig = subdomains.find(s => s.subdomain === msg.targetApp || s.appId === msg.targetApp)
-					if (appConfig && appConfig.enabled) {
-						targetPort = appConfig.port
-					}
-				}
-			} catch {
-				// Fall back to main LivOS port
-			}
+		// Always proxy through LivOS (port 8080) so the app gateway middleware
+		// can enforce auth (session cookies, multi-user access checks).
+		// For app subdomain requests, preserve the original Host header so LivOS
+		// can detect the subdomain and route to the correct container.
+		const targetPort = 8080
+		if (!msg.targetApp) {
+			requestHeaders['host'] = `127.0.0.1:${targetPort}`
 		}
-
-		// Replace host with local target
-		requestHeaders['host'] = `127.0.0.1:${targetPort}`
-		// Add forwarding headers
+		// else: keep original Host (e.g., chrome.bruce.livinity.io)
 		requestHeaders['x-forwarded-proto'] = 'https'
 		if (!requestHeaders['x-forwarded-for']) {
 			requestHeaders['x-forwarded-for'] = '127.0.0.1'
@@ -440,23 +429,10 @@ export default class TunnelClient {
 	// ─── WebSocket forwarding ─────────────────────────────────────
 
 	private async handleWsUpgrade(msg: TunnelWsUpgrade): Promise<void> {
-		// Determine target port based on targetApp
-		let targetPort = 8080
-		if (msg.targetApp) {
-			try {
-				const subdomainsRaw = await this.redis.get('livos:domain:subdomains')
-				if (subdomainsRaw) {
-					const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> = JSON.parse(subdomainsRaw)
-					const appConfig = subdomains.find(s => s.subdomain === msg.targetApp || s.appId === msg.targetApp)
-					if (appConfig && appConfig.enabled) {
-						targetPort = appConfig.port
-					}
-				}
-			} catch {
-				// Fall back to LivOS port
-			}
-		}
-
+		// Always proxy through LivOS (port 8080) so the WebSocket upgrade handler
+		// can enforce auth. For app subdomain requests, preserve the original Host
+		// header so LivOS can detect the subdomain and route to the correct container.
+		const targetPort = 8080
 		const targetUrl = `ws://127.0.0.1:${targetPort}${msg.path}`
 		const targetLabel = `${msg.targetApp ?? 'livos'}:${targetPort}${msg.path}`
 
@@ -482,7 +458,10 @@ export default class TunnelClient {
 			}
 			forwardHeaders[lk] = Array.isArray(value) ? value.join(', ') : value
 		}
-		forwardHeaders['host'] = `127.0.0.1:${targetPort}`
+		if (!msg.targetApp) {
+			forwardHeaders['host'] = `127.0.0.1:${targetPort}`
+		}
+		// else: keep original Host from browser (e.g., chrome.bruce.livinity.io)
 		forwardHeaders['x-forwarded-proto'] = 'https'
 
 		let localWs: WebSocket
