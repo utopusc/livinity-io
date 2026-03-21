@@ -62,7 +62,7 @@ Build apps.livinity.io as an embedded app store that LivOS instances display via
 **Milestone Goal:** Build apps.livinity.io as an embedded app store inside LivOS, with postMessage bridge for install/uninstall, install history tracking, and user profiles. Fix install.sh to auto-setup auth + tor Docker containers.
 
 - [x] **Phase 16: Install Script Docker Fix** - install.sh auto-pulls auth-server + tor images, creates torrc, starts all containers (completed 2026-03-21)
-- [ ] **Phase 17: Backend API Extensions** - Install event recording, user apps endpoint, profile endpoint on Server5
+- [x] **Phase 17: Backend API Extensions** - Install event recording, user apps endpoint, profile endpoint on Server5 (completed 2026-03-21)
 - [ ] **Phase 18: Store UI** - apps.livinity.io/store with featured apps, categories, search, detail pages, Apple aesthetic
 - [ ] **Phase 19: postMessage Bridge Protocol** - Bidirectional postMessage communication between apps.livinity.io and LivOS
 - [ ] **Phase 20: LivOS iframe Embedding** - App Store window in LivOS that embeds apps.livinity.io and executes install commands
@@ -96,7 +96,7 @@ Plans:
 
 Plans:
 - [x] 17-01-PLAN.md — Restore v9.0 API files from backup/post-v9.0 branch, install Drizzle ORM
-- [ ] 17-02-PLAN.md — Add install_history table and 3 new endpoints (install-event, user/apps, user/profile)
+- [x] 17-02-PLAN.md — Add install_history table and 3 new endpoints (install-event, user/apps, user/profile)
 
 ### Phase 18: Store UI
 **Goal**: apps.livinity.io/store is a standalone, responsive Next.js page with Apple App Store aesthetic that users can browse for featured apps, filter by category, search, and view app details -- works both in a browser and inside an iframe
@@ -168,7 +168,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 17. Backend API Extensions | v10.0 | 1/2 | In Progress|  |
+| 17. Backend API Extensions | v10.0 | 2/2 | Complete   | 2026-03-21 |
 | 18. Store UI | v10.0 | 0/TBD | Not started | - |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
