@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { AppSummary, StoreContextValue } from './types';
+import { usePostMessage } from './hooks/use-post-message';
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
@@ -22,6 +23,7 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const bridge = usePostMessage();
 
   useEffect(() => {
     if (!token) {
@@ -55,6 +57,13 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         setSelectedCategory,
         token,
         instanceName,
+        // postMessage bridge
+        isEmbedded: bridge.isEmbedded,
+        installedApps: bridge.installedApps,
+        sendInstall: bridge.sendInstall,
+        sendUninstall: bridge.sendUninstall,
+        sendOpen: bridge.sendOpen,
+        getAppStatus: bridge.getAppStatus,
       }}
     >
       {children}

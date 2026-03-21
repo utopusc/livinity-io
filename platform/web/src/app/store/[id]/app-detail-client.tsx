@@ -11,7 +11,7 @@ interface AppDetailClientProps {
 }
 
 export function AppDetailClient({ appId }: AppDetailClientProps) {
-  const { token, instanceName } = useStore();
+  const { token, instanceName, isEmbedded, getAppStatus, sendInstall, sendUninstall, sendOpen } = useStore();
   const [app, setApp] = useState<App | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,13 +149,66 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
         </div>
       </div>
 
-      {/* Install button */}
-      <button
-        onClick={() => alert('Install functionality coming in a future update')}
-        className="mb-10 rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
-      >
-        Install
-      </button>
+      {/* Action buttons */}
+      {(() => {
+        const status = getAppStatus(app.id);
+
+        if (!isEmbedded) {
+          return (
+            <p className="mb-10 text-sm text-[#86868b]">
+              Open this store from your LivOS instance to install apps
+            </p>
+          );
+        }
+
+        if (status === 'running') {
+          return (
+            <div className="mb-10 flex gap-3">
+              <button
+                onClick={() => sendOpen(app.id)}
+                className="rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
+              >
+                Open
+              </button>
+              <button
+                onClick={() => sendUninstall(app.id)}
+                className="rounded-xl bg-[#f5f5f7] px-6 py-3 text-sm font-semibold text-red-500 transition-all hover:bg-red-50 active:scale-[0.98]"
+              >
+                Uninstall
+              </button>
+            </div>
+          );
+        }
+
+        if (status === 'stopped') {
+          return (
+            <div className="mb-10 flex gap-3">
+              <button
+                onClick={() => sendOpen(app.id)}
+                className="rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
+              >
+                Start
+              </button>
+              <button
+                onClick={() => sendUninstall(app.id)}
+                className="rounded-xl bg-[#f5f5f7] px-6 py-3 text-sm font-semibold text-red-500 transition-all hover:bg-red-50 active:scale-[0.98]"
+              >
+                Uninstall
+              </button>
+            </div>
+          );
+        }
+
+        // not_installed
+        return (
+          <button
+            onClick={() => sendInstall(app.id)}
+            className="mb-10 rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
+          >
+            Install
+          </button>
+        );
+      })()}
 
       {/* Description */}
       <section className="mb-10">
