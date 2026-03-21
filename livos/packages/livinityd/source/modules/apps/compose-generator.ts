@@ -102,5 +102,13 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		yaml.dump(manifest, {lineWidth: -1, noRefs: true}),
 	)
 
+	// Create app-specific config files
+	if (app.id === 'filebrowser') {
+		await fse.writeFile(
+			path.join(tmpDir, 'filebrowser.json'),
+			JSON.stringify({port: 80, baseURL: '', address: '0.0.0.0', log: 'stdout', database: '/database.db', root: '/srv'}, null, 2),
+		)
+	}
+
 	return tmpDir
 }

@@ -333,7 +333,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
           volumes: ['${APP_DATA_DIR}/data:/app/data'],
           ports: ['127.0.0.1:3001:3001'],
           healthcheck: {
-            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3001/ || exit 1'],
+            test: ['CMD-SHELL', 'node -e "const h=require(\'http\');h.get(\'http://localhost:3001\',r=>{process.exit(r.statusCode===200||r.statusCode===302?0:1)}).on(\'error\',()=>process.exit(1))"'],
             interval: '30s',
             timeout: '10s',
             retries: 3,
@@ -738,15 +738,12 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         server: {
           image: 'filebrowser/filebrowser:latest',
           restart: 'unless-stopped',
-          volumes: ['${APP_DATA_DIR}/srv:/srv', '${APP_DATA_DIR}/database:/database', '${APP_DATA_DIR}/config:/config'],
-          ports: ['127.0.0.1:8070:80'],
-          healthcheck: {
-            test: ['CMD-SHELL', 'wget -q --spider http://localhost:80/health || exit 1'],
-            interval: '30s',
-            timeout: '10s',
-            retries: 3,
-            start_period: '10s',
+          environment: {
+            PUID: '0',
+            PGID: '0',
           },
+          volumes: ['${APP_DATA_DIR}/srv:/srv', '${APP_DATA_DIR}/database.db:/database.db', '${APP_DATA_DIR}/filebrowser.json:/.filebrowser.json'],
+          ports: ['127.0.0.1:8070:80'],
         },
       },
     },
