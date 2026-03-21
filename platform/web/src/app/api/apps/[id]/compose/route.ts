@@ -15,11 +15,19 @@ export async function GET(
 
   const { id } = await params;
 
-  const rows = await db
+  // Look up by slug first, fallback to UUID
+  let rows = await db
     .select({ docker_compose: apps.docker_compose })
     .from(apps)
-    .where(eq(apps.id, id))
+    .where(eq(apps.slug, id))
     .limit(1);
+  if (rows.length === 0) {
+    rows = await db
+      .select({ docker_compose: apps.docker_compose })
+      .from(apps)
+      .where(eq(apps.id, id))
+      .limit(1);
+  }
 
   if (rows.length === 0) {
     return NextResponse.json({ error: 'App not found' }, { status: 404 });

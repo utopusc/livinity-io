@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const rows = await db
     .select({
-      id: apps.id,
+      id: apps.slug,
       name: apps.name,
       tagline: apps.tagline,
       category: apps.category,

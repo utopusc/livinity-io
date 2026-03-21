@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
         ORDER BY app_id, instance_name, created_at DESC
       )
       SELECT le.instance_name, le.created_at as installed_at,
-             a.id as app_id, a.name, a.tagline, a.icon_url, a.version, a.category
+             a.slug as app_id, a.name, a.tagline, a.icon_url, a.version, a.category
       FROM latest_events le
       JOIN apps a ON a.id = le.app_id
       WHERE le.action = 'install'
