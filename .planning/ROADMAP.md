@@ -125,11 +125,10 @@ Plans:
   3. LivOS sends a "status" message to the iframe containing the list of running apps, and the store UI reflects which apps are installed vs available
   4. After an install or uninstall completes, LivOS sends an "installed" confirmation message back to the iframe with the success/failure result
   5. postMessage origin is validated on both sides -- LivOS only accepts messages from apps.livinity.io, and the store only accepts messages from the expected parent origin
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 19-01: TBD
-- [ ] 19-02: TBD
+- [ ] 19-01-PLAN.md — postMessage types, usePostMessage hook, bridge wiring into StoreProvider + Install button + app cards
 
 ### Phase 20: LivOS iframe Embedding
 **Goal**: LivOS has an App Store window that loads apps.livinity.io/store in an iframe, listens for postMessage install commands, executes Docker compose pull/up + Caddy config, and reports status back -- completing the install flow from browsing to running app
@@ -170,6 +169,6 @@ Plans:
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. Backend API Extensions | v10.0 | 2/2 | Complete    | 2026-03-21 |
 | 18. Store UI | v10.0 | 3/3 | Complete    | 2026-03-21 |
-| 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
+| 19. postMessage Bridge | v10.0 | 0/1 | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
 | 21. History & Profile | v10.0 | 0/TBD | Not started | - |
