@@ -169,4 +169,4 @@ Plans:
 | 18. Store UI | v10.0 | 3/3 | Complete    | 2026-03-21 |
 | 19. postMessage Bridge | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 20. iframe Embedding | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 21. History & Profile | v10.0 | 1/1 | Complete   | 2026-03-21 |
+| 21. History & Profile | v10.0 | 1/1 | Complete    | 2026-03-21 |
