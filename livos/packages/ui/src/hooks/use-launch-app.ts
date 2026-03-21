@@ -16,7 +16,7 @@ interface LaunchOptions {
 /**
  * Hook that returns a function to launch installed apps.
  * Handles credential dialogs, Tor-only restrictions, usage tracking,
- * and opens the app in a new browser tab.
+ * native app auto-start, and opens the app in a new browser tab.
  */
 export function useLaunchApp() {
 	const {userAppsKeyed} = useApps()
@@ -28,7 +28,9 @@ export function useLaunchApp() {
 		onSuccess: () => utils.apps.recentlyOpened.invalidate(),
 	})
 
-	return (appId: string, opts?: LaunchOptions) => {
+	const nativeStartMut = trpcReact.apps.nativeStart.useMutation()
+
+	return async (appId: string, opts?: LaunchOptions) => {
 		const app = userAppsKeyed?.[appId]
 		if (!app) throw new Error(t('app-not-found', {app: appId}))
 
@@ -48,6 +50,16 @@ export function useLaunchApp() {
 		if (app.torOnly && !isOnionPage()) {
 			alert(t('app-only-over-tor', {app: app.name}))
 			return
+		}
+
+		// Auto-start native app stream before opening URL
+		if (app.native) {
+			try {
+				await nativeStartMut.mutateAsync({appId})
+			} catch (error) {
+				console.error('Failed to start native app stream:', error)
+				// Continue to open anyway — stream might already be running
+			}
 		}
 
 		openInTab(opts?.path)

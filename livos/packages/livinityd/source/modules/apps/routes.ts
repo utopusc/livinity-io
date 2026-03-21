@@ -96,6 +96,7 @@ export const apps = router({
 						path,
 						state: app.state,
 						subdomain,
+						native: false as const,
 						credentials: {
 							defaultUsername,
 							defaultPassword,
@@ -128,6 +129,7 @@ export const apps = router({
 					path: '',
 					state: nativeApp.state === 'ready' ? 'ready' : nativeApp.state === 'stopped' ? 'stopped' : nativeApp.state,
 					subdomain: builtinApp.installOptions?.subdomain || nativeApp.id,
+					native: true as const,
 					credentials: {defaultUsername: undefined, defaultPassword: undefined, showBeforeOpen: false},
 					hiddenService: '',
 					widgets: undefined,
