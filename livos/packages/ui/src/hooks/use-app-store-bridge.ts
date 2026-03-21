@@ -11,12 +11,14 @@ type StoreToLivOSMessage =
 	| {type: 'uninstall'; appId: string}
 	| {type: 'open'; appId: string}
 
-type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed'}
+type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing'; progress?: number}
 
 type LivOSToStoreMessage =
 	| {type: 'status'; apps: AppStatusEntry[]}
 	| {type: 'installed'; appId: string; success: boolean; error?: string}
 	| {type: 'uninstalled'; appId: string; success: boolean}
+	| {type: 'progress'; appId: string; progress: number}
+	| {type: 'credentials'; appId: string; username: string; password: string}
 
 function isAllowedOrigin(origin: string): boolean {
 	if (origin === 'https://livinity.io') return true
@@ -60,7 +62,7 @@ export function useAppStoreBridge(
 	const reportEvent = useCallback((appId: string, action: 'install' | 'uninstall') => {
 		const {apiKey, instanceName} = optionsRef.current
 		if (!apiKey) return
-		fetch('https://apps.livinity.io/api/install-event', {
+		fetch('https://livinity.io/api/install-event', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -88,6 +90,9 @@ export function useAppStoreBridge(
 					return {id: app.id, status: 'not_installed' as const}
 				}
 				const state = app.state
+				if (state === 'installing') {
+					return {id: app.id, status: 'installing' as const}
+				}
 				if (state === 'running' || state === 'ready') {
 					return {id: app.id, status: 'running' as const}
 				}
@@ -105,11 +110,54 @@ export function useAppStoreBridge(
 
 	const handleInstall = useCallback(
 		async (appId: string) => {
+			// Send installing status immediately
+			sendToIframe({type: 'progress', appId, progress: 0})
+			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
+
+			// Start polling for progress during install
+			const pollInterval = setInterval(async () => {
+				try {
+					const stateResult = await trpcClient.apps.state.query({appId})
+					if (stateResult.progress > 0) {
+						sendToIframe({type: 'progress', appId, progress: stateResult.progress})
+					}
+					// Stop polling if no longer installing
+					if (stateResult.state !== 'installing') {
+						clearInterval(pollInterval)
+					}
+				} catch {
+					// Ignore polling errors
+				}
+			}, 2000)
+
 			try {
 				await trpcClient.apps.install.mutate({appId})
+				clearInterval(pollInterval)
+				sendToIframe({type: 'progress', appId, progress: 100})
 				reportEvent(appId, 'install')
+
+				// Fetch credentials for the newly installed app
+				try {
+					const appsList = await trpcClient.apps.list.query()
+					const installedApp = appsList.find((a) => a.id === appId && !('error' in a))
+					if (installedApp && 'credentials' in installedApp && installedApp.credentials) {
+						const {defaultUsername, defaultPassword} = installedApp.credentials
+						if (defaultUsername || defaultPassword) {
+							sendToIframe({
+								type: 'credentials',
+								appId,
+								username: defaultUsername || '',
+								password: defaultPassword || '',
+							})
+						}
+					}
+				} catch {
+					// Ignore credentials fetch errors
+				}
+
 				sendToIframe({type: 'installed', appId, success: true})
 			} catch (err) {
+				clearInterval(pollInterval)
 				const message = err instanceof Error ? err.message : 'Install failed'
 				sendToIframe({type: 'installed', appId, success: false, error: message})
 			}
