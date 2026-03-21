@@ -359,34 +359,10 @@ main() {
         # Tor container runs as 1000:1000, needs ownership on mounted volumes
         chown -R 1000:1000 "$data_dir/tor"
 
-        # Setup Chrome browser container (pre-installed default app)
-        mkdir -p "$data_dir/app-data/chrome/config"
-        cat > "$data_dir/app-data/chrome/docker-compose.yml" << 'CHROMECOMPOSE'
-services:
-  server:
-    image: lscr.io/linuxserver/chrome:latest
-    container_name: livinity-chrome
-    restart: unless-stopped
-    security_opt:
-      - seccomp=unconfined
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - CHROME_CLI=--disable-blink-features=AutomationControlled --disable-features=ChromeWhatsNewUI
-    volumes:
-      - /opt/livos/app-data/chrome/config:/config
-    ports:
-      - '127.0.0.1:3000:3000'
-      - '127.0.0.1:3001:3001'
-    shm_size: 1gb
-CHROMECOMPOSE
-        cat > "$data_dir/app-data/chrome/livinity-app.yml" << 'CHROMEMANIFEST'
-port: 3000
-subdomain: chrome
-CHROMEMANIFEST
+        # Pre-pull Chrome browser image (auto-installed on first boot by livinityd)
         docker pull lscr.io/linuxserver/chrome:latest 2>/dev/null || warn "Chrome image pull failed (will retry on first start)"
 
-        ok "Docker prerequisites ready (tor/data, app-data, chrome)"
+        ok "Docker prerequisites ready (tor/data, app-data, chrome image)"
     }
 
     install_python() {
@@ -678,34 +654,49 @@ ENVFILE
     setup_repository() {
         step "Setting up repository"
 
-        if [[ -d "$LIVOS_DIR/packages" ]]; then
-            info "Repository exists, pulling latest..."
-            cd "$LIVOS_DIR"
-            git pull --ff-only 2>/dev/null || warn "Git pull failed, continuing with existing code"
-            ok "Repository updated"
-        else
-            info "Cloning repository..."
-            local temp_dir="/tmp/livinity-io-$$"
-            rm -rf "$temp_dir"
-            git clone --depth 1 "$REPO_URL" "$temp_dir" || fail "Failed to clone repository"
+        info "Cloning latest repository..."
+        local temp_dir="/tmp/livinity-io-$$"
+        rm -rf "$temp_dir"
+        git clone --depth 1 "$REPO_URL" "$temp_dir" || fail "Failed to clone repository"
 
-            # Move livos contents to /opt/livos
-            rm -rf "$LIVOS_DIR"
-            mkdir -p "$LIVOS_DIR"
-            cp -a "$temp_dir/livos/." "$LIVOS_DIR/"
-
-            # Move nexus to /opt/nexus
-            rm -rf /opt/nexus
-            mkdir -p /opt/nexus
-            cp -a "$temp_dir/nexus/." /opt/nexus/
-
-            # Keep update script
-            cp "$temp_dir/update.sh" "$LIVOS_DIR/update.sh" 2>/dev/null || true
-
-            # Cleanup
-            rm -rf "$temp_dir"
-            ok "Repository ready"
+        # Preserve data directory and app-data across updates
+        local saved_data=""
+        if [[ -d "$LIVOS_DIR/data" ]]; then
+            saved_data="/tmp/livos-data-$$"
+            mv "$LIVOS_DIR/data" "$saved_data"
         fi
+        local saved_appdata=""
+        if [[ -d "$LIVOS_DIR/app-data" ]]; then
+            saved_appdata="/tmp/livos-appdata-$$"
+            mv "$LIVOS_DIR/app-data" "$saved_appdata"
+        fi
+
+        # Move livos contents to /opt/livos
+        rm -rf "$LIVOS_DIR"
+        mkdir -p "$LIVOS_DIR"
+        cp -a "$temp_dir/livos/." "$LIVOS_DIR/"
+
+        # Restore preserved data
+        if [[ -n "$saved_data" ]]; then
+            rm -rf "$LIVOS_DIR/data"
+            mv "$saved_data" "$LIVOS_DIR/data"
+        fi
+        if [[ -n "$saved_appdata" ]]; then
+            rm -rf "$LIVOS_DIR/app-data"
+            mv "$saved_appdata" "$LIVOS_DIR/app-data"
+        fi
+
+        # Move nexus to /opt/nexus
+        rm -rf /opt/nexus
+        mkdir -p /opt/nexus
+        cp -a "$temp_dir/nexus/." /opt/nexus/
+
+        # Keep update script
+        cp "$temp_dir/update.sh" "$LIVOS_DIR/update.sh" 2>/dev/null || true
+
+        # Cleanup
+        rm -rf "$temp_dir"
+        ok "Repository ready"
 
         cd "$LIVOS_DIR"
     }
