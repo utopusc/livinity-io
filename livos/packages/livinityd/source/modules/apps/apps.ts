@@ -493,7 +493,7 @@ export default class Apps {
 		// Register subdomain in Caddy for reverse proxy
 		try {
 			const builtinApp = getBuiltinApp(appId)
-			const subdomain = builtinApp?.installOptions?.subdomain
+			const subdomain = builtinApp?.installOptions?.subdomain || (manifest as any).subdomain
 			await this.registerAppSubdomain(appId, manifest.port, subdomain)
 		} catch (error) {
 			this.logger.error(`Failed to register subdomain for ${appId}`, error)
@@ -655,7 +655,7 @@ export default class Apps {
 				tagline: data.tagline || '',
 				category: data.category || 'other',
 				version: data.version || '1.0.0',
-				port: data.port || 8080,
+				port: data.port || data.manifest?.port || 8080,
 				description: data.description || '',
 				website: data.website || '',
 				developer: data.developer || '',
