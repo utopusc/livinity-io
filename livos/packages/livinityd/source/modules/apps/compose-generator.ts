@@ -1,0 +1,106 @@
+import fse from 'fs-extra'
+import yaml from 'js-yaml'
+import os from 'node:os'
+import path from 'node:path'
+
+import {getBuiltinApp} from './builtin-apps.js'
+
+/**
+ * Generate docker-compose.yml and livinity-app.yml for a builtin app.
+ * Writes files to a temporary directory and returns the path.
+ * Returns null if appId is not a builtin app or has no compose definition.
+ */
+export async function generateAppTemplate(appId: string): Promise<string | null> {
+	const app = getBuiltinApp(appId)
+	if (!app || !app.compose) return null
+
+	// Create temp directory with unique name
+	const tmpDir = path.join(os.tmpdir(), `livos-template-${appId}-${Date.now()}`)
+	await fse.mkdirp(tmpDir)
+
+	// Build docker-compose.yml from compose definition
+	const composeDoc: Record<string, any> = {
+		version: '3.7',
+		services: {},
+	}
+
+	for (const [serviceName, serviceDef] of Object.entries(app.compose.services)) {
+		const service: Record<string, any> = {
+			image: serviceDef.image,
+			restart: serviceDef.restart,
+		}
+
+		if (serviceDef.container_name) {
+			service.container_name = serviceDef.container_name
+		}
+		if (serviceDef.environment && Object.keys(serviceDef.environment).length > 0) {
+			service.environment = {...serviceDef.environment}
+		}
+		if (serviceDef.volumes && serviceDef.volumes.length > 0) {
+			service.volumes = [...serviceDef.volumes]
+		}
+		if (serviceDef.ports && serviceDef.ports.length > 0) {
+			service.ports = [...serviceDef.ports]
+		}
+		if (serviceDef.healthcheck) {
+			service.healthcheck = {
+				test: serviceDef.healthcheck.test,
+				interval: serviceDef.healthcheck.interval,
+				timeout: serviceDef.healthcheck.timeout,
+				retries: serviceDef.healthcheck.retries,
+			}
+			if (serviceDef.healthcheck.start_period) {
+				service.healthcheck.start_period = serviceDef.healthcheck.start_period
+			}
+		}
+		if (serviceDef.network_mode) {
+			service.network_mode = serviceDef.network_mode
+		}
+		if (serviceDef.privileged) {
+			service.privileged = serviceDef.privileged
+		}
+		if (serviceDef.devices && serviceDef.devices.length > 0) {
+			service.devices = [...serviceDef.devices]
+		}
+		if (serviceDef.depends_on && serviceDef.depends_on.length > 0) {
+			service.depends_on = [...serviceDef.depends_on]
+		}
+		if (serviceDef.command && serviceDef.command.length > 0) {
+			service.command = serviceDef.command
+		}
+
+		composeDoc.services[serviceName] = service
+	}
+
+	// Write docker-compose.yml
+	await fse.writeFile(
+		path.join(tmpDir, 'docker-compose.yml'),
+		yaml.dump(composeDoc, {lineWidth: -1, noRefs: true}),
+	)
+
+	// Build livinity-app.yml manifest
+	// Must satisfy AppManifest required fields: manifestVersion, id, name, tagline,
+	// category, version, port, description, website, support, gallery
+	const manifest = {
+		manifestVersion: '1.0.0',
+		id: app.id,
+		name: app.name,
+		tagline: app.tagline,
+		category: app.category,
+		version: app.version,
+		port: app.port,
+		description: app.description,
+		website: app.website,
+		developer: app.developer,
+		support: app.website,
+		gallery: [] as string[],
+	}
+
+	// Write livinity-app.yml
+	await fse.writeFile(
+		path.join(tmpDir, 'livinity-app.yml'),
+		yaml.dump(manifest, {lineWidth: -1, noRefs: true}),
+	)
+
+	return tmpDir
+}
