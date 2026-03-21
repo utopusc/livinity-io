@@ -12,7 +12,7 @@ type StoreToLivOSMessage =
 	| {type: 'open'; appId: string}
 	| {type: 'updateSubdomain'; appId: string; subdomain: string}
 
-type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string}
+type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string; defaultUsername?: string; defaultPassword?: string}
 
 type InstanceInfo = {
 	hostname: string
@@ -103,15 +103,19 @@ export function useAppStoreBridge(
 					return {id: app.id, status: 'not_installed' as const}
 				}
 				const sub = subdomains.find((s: {appId: string}) => s.appId === app.id)
+				const creds = 'credentials' in app && app.credentials ? app.credentials : null
+				const credFields = creds?.defaultUsername || creds?.defaultPassword
+					? {defaultUsername: creds.defaultUsername || '', defaultPassword: creds.defaultPassword || ''}
+					: {}
 				const state = app.state
 				if (state === 'installing') {
-					return {id: app.id, status: 'installing' as const, subdomain: sub?.subdomain}
+					return {id: app.id, status: 'installing' as const, subdomain: sub?.subdomain, ...credFields}
 				}
 				if (state === 'running' || state === 'ready') {
-					return {id: app.id, status: 'running' as const, subdomain: sub?.subdomain}
+					return {id: app.id, status: 'running' as const, subdomain: sub?.subdomain, ...credFields}
 				}
 				if (state === 'stopped' || state === 'stopping') {
-					return {id: app.id, status: 'stopped' as const, subdomain: sub?.subdomain}
+					return {id: app.id, status: 'stopped' as const, subdomain: sub?.subdomain, ...credFields}
 				}
 				return {id: app.id, status: 'not_installed' as const}
 			})

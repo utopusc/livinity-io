@@ -1,0 +1,41 @@
+---
+title: "Livinity Platform"
+description: "Tunnel relay, user registration, dashboard, landing page — global access via livinity.io."
+date: "2026-03-17"
+tags: ["Platform", "Infrastructure", "Tunnel"]
+version: "8.0"
+---
+
+The biggest release yet — LivOS servers are now accessible from anywhere via livinity.io.
+
+- **Custom tunnel relay** on Server5 with WebSocket-based proxying
+- **User registration** with email verification via Resend
+- **Dashboard** with API key management, server status, and bandwidth tracking
+- **Landing page** at livinity.io with premium design
+- **Subdomain routing** — `username.livinity.io` reaches your server
+- **App subdomain routing** — `app.username.livinity.io` reaches individual apps
+- **On-Demand TLS** via Caddy for automatic HTTPS certificates
+- **One-command installer** with `--api-key` flag for instant tunnel connection
+- **Memory monitoring** with 80% threshold for connection rejection
+
+```bash
+# Install LivOS and connect to the platform
+curl -sSL https://livinity.io/install.sh | sudo bash --api-key YOUR_KEY
+# Your server is now live at username.livinity.io
+```
+
+<Accordion type="multiple" collapsible className="w-full not-prose">
+  <AccordionItem value="item-1">
+    <AccordionTrigger>Infrastructure Details</AccordionTrigger>
+    <AccordionContent className="flex flex-col gap-4 text-balance">
+      <ul className="list-disc space-y-2 pl-4">
+        <li>14 tunnel protocol message types with TypeScript interfaces</li>
+        <li>JSON+base64 envelope protocol for HTTP proxying through WebSocket</li>
+        <li>Per-user bandwidth tracking via Redis INCRBY with PostgreSQL flush</li>
+        <li>Exponential backoff reconnection (1s to 60s max) with jitter</li>
+        <li>Free tier: 50GB/month bandwidth per user</li>
+        <li>Server5: Node.js 22, PostgreSQL 16, Redis 7, Caddy, PM2</li>
+      </ul>
+    </AccordionContent>
+  </AccordionItem>
+</Accordion>

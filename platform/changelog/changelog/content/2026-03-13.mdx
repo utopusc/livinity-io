@@ -1,0 +1,35 @@
+---
+title: "Multi-User Platform"
+description: "PostgreSQL, JWT auth, login screen, invite system, and per-user Docker isolation."
+date: "2026-03-13"
+tags: ["Multi-User", "Security", "Docker"]
+version: "7.2"
+---
+
+LivOS becomes a true multi-user platform with complete isolation between users.
+
+- **PostgreSQL database** with users, sessions, preferences tables
+- **JWT authentication** with userId, role, and sessionId
+- **Login screen** with avatar selection and password entry
+- **Invite system** — create invite links with 7-day expiry
+- **Per-user file isolation** — each user gets their own workspace
+- **Per-user AI conversations** — isolated chat history
+- **Per-user Docker containers** — separate app instances per user
+- **Per-user subdomain routing** and app gateway middleware
+- **Accent color picker** and wallpaper selection per user
+- **Onboarding personalization** — role, use cases, style preferences
+
+<Accordion type="multiple" collapsible className="w-full not-prose">
+  <AccordionItem value="item-1">
+    <AccordionTrigger>Per-User Isolation Details</AccordionTrigger>
+    <AccordionContent className="flex flex-col gap-4 text-balance">
+      <ul className="list-disc space-y-2 pl-4">
+        <li>Per-user wallpaper animation settings (localStorage → PostgreSQL)</li>
+        <li>Per-user integration configs (Telegram/Discord/Gmail/Voice)</li>
+        <li>installForUser() generates per-user compose files with unique ports</li>
+        <li>App sharing via user_app_access table and ShareAppDialog</li>
+        <li>24/24 automated tests passing</li>
+      </ul>
+    </AccordionContent>
+  </AccordionItem>
+</Accordion>

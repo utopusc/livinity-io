@@ -1,0 +1,22 @@
+---
+title: "Kimi Code Migration"
+description: "Complete migration from Claude to Kimi Code — single AI provider with OAuth auth."
+date: "2026-03-09"
+tags: ["AI", "Migration", "Backend"]
+version: "6.0"
+---
+
+Full AI provider migration to Kimi Code for improved performance and cost efficiency.
+
+- **KimiProvider** — 603-line OpenAI-compatible provider
+- **KimiAgentRunner** — CLI print mode with MCP bridging
+- **OAuth device flow** authentication via `kimi login`
+- **Settings UI** and onboarding wizard updated
+- **Removed** Claude, Gemini, and Anthropic SDK dependencies
+- Zero Claude/Anthropic references in active source code
+
+```bash
+# All AI now powered by Kimi Code
+kimi login
+# Credentials stored at ~/.kimi/credentials/kimi-code.json
+```

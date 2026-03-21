@@ -29,9 +29,10 @@ interface AppDetailClientProps {
 }
 
 export function AppDetailClient({ appId }: AppDetailClientProps) {
-  const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen, getAppSubdomain, sendUpdateSubdomain } = useStore();
+  const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen, getAppSubdomain, getAppDefaultCreds, sendUpdateSubdomain } = useStore();
   const status = isEmbedded ? getAppStatus(appId) : 'not_installed';
   const isInstalled = status === 'running' || status === 'stopped';
+  const defaultCreds = isEmbedded ? getAppDefaultCreds(appId) : undefined;
   const currentSubdomain = getAppSubdomain(appId);
   const [editingSubdomain, setEditingSubdomain] = useState(false);
   const [subdomainValue, setSubdomainValue] = useState('');
@@ -363,6 +364,33 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                   https://{currentSubdomain || app.id}.{instanceName}
                 </p>
               )}
+            </div>
+          )}
+          {isInstalled && defaultCreds && (defaultCreds.username || defaultCreds.password) && (
+            <div className="col-span-2 rounded-xl bg-amber-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-amber-700">
+                Default Credentials
+              </p>
+              <div className="mt-2 flex items-center gap-4">
+                {defaultCreds.username && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-amber-600">User:</span>
+                    <span className="font-mono text-sm text-[#1d1d1f]">{defaultCreds.username}</span>
+                    <button onClick={() => copyToClipboard(defaultCreds.username)} className="text-amber-500 hover:text-amber-700" title="Copy">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
+                    </button>
+                  </div>
+                )}
+                {defaultCreds.password && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-amber-600">Pass:</span>
+                    <span className="font-mono text-sm text-[#1d1d1f]">{defaultCreds.password.length > 20 ? defaultCreds.password.slice(0, 16) + '...' : defaultCreds.password}</span>
+                    <button onClick={() => copyToClipboard(defaultCreds.password)} className="text-amber-500 hover:text-amber-700" title="Copy">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

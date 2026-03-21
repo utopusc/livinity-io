@@ -1,0 +1,31 @@
+---
+title: "Open Source Foundation"
+description: "Config system, security foundation, AI exports, TypeScript quality, and production installer."
+date: "2026-02-05"
+tags: ["Foundation", "Security", "Installer"]
+version: "1.0"
+---
+
+The very first release of LivOS — a self-hosted AI-powered home server OS.
+
+- **Config system** with environment-based configuration and typed defaults
+- **Security foundation** with JWT authentication and role-based access
+- **AI exports** and provider migration infrastructure
+- **TypeScript quality** pass across the entire codebase
+- **Security hardening** with OWASP top-10 mitigations
+- **Documentation** for all modules and APIs
+- **Production installer** — `install.sh` with `curl | bash` safety, OS/arch detection, and 7 idempotent dependency installers
+
+<Accordion type="multiple" collapsible className="w-full not-prose">
+  <AccordionItem value="item-1">
+    <AccordionTrigger>Technical Details</AccordionTrigger>
+    <AccordionContent className="flex flex-col gap-4 text-balance">
+      <ul className="list-disc space-y-2 pl-4">
+        <li>21 plans executed across 10 phases</li>
+        <li>Main wrapper for curl pipe safety with ERR trap</li>
+        <li>OS detection (Ubuntu/Debian) and architecture mapping (amd64/arm64)</li>
+        <li>Idempotent install functions with command -v checks</li>
+      </ul>
+    </AccordionContent>
+  </AccordionItem>
+</Accordion>

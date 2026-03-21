@@ -1,0 +1,35 @@
+---
+title: "App Store Platform"
+description: "Embedded app store with iframe integration, install history, and user profiles."
+date: "2026-03-21"
+tags: ["App Store", "UI", "Integration"]
+version: "10.0"
+---
+
+A fully integrated App Store experience — browse, install, and manage apps without leaving LivOS.
+
+- **apps.livinity.io/store** — standalone Next.js store with Apple App Store aesthetic
+- **iframe embedding** — App Store window inside LivOS with seamless integration
+- **postMessage bridge** — bidirectional communication between store and LivOS
+- **One-click install** — browse, click Install, and the app is running with its own subdomain
+- **Install progress** — real-time progress tracking with animated progress bar
+- **Credentials dialog** — auto-display of default credentials after install
+- **User profiles** — installed apps across all instances with history timeline
+- **Install history** — chronological record of all install/uninstall events
+- **Install script hardening** — auto-setup auth-server + tor Docker containers
+
+<Accordion type="multiple" collapsible className="w-full not-prose">
+  <AccordionItem value="item-1">
+    <AccordionTrigger>Technical Details</AccordionTrigger>
+    <AccordionContent className="flex flex-col gap-4 text-balance">
+      <ul className="list-disc space-y-2 pl-4">
+        <li>7 phases, 11 plans, 22 tasks executed</li>
+        <li>postMessage protocol with origin validation (*.livinity.io)</li>
+        <li>Drizzle ORM for install_history schema and migrations</li>
+        <li>Featured hero with category-gradient cards</li>
+        <li>Real-time search and category filtering</li>
+        <li>Fire-and-forget event reporting to platform API</li>
+      </ul>
+    </AccordionContent>
+  </AccordionItem>
+</Accordion>

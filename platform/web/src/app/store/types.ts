@@ -37,6 +37,8 @@ export type AppStatus = {
   status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling';
   progress?: number;
   subdomain?: string;
+  defaultUsername?: string;
+  defaultPassword?: string;
 };
 
 export type InstanceInfo = {
@@ -89,6 +91,7 @@ export interface StoreContextValue {
   clearCredentials: () => void;
   // Subdomain management
   getAppSubdomain: (appId: string) => string | undefined;
+  getAppDefaultCreds: (appId: string) => {username: string; password: string} | undefined;
   sendUpdateSubdomain: (appId: string, subdomain: string) => void;
   // Instance info
   instanceInfo: InstanceInfo | null;
