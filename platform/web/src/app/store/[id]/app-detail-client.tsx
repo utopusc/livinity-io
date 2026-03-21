@@ -12,6 +12,8 @@ interface AppDetailClientProps {
 
 export function AppDetailClient({ appId }: AppDetailClientProps) {
   const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen } = useStore();
+  const status = isEmbedded ? getAppStatus(appId) : 'not_installed';
+  const isInstalled = status === 'running' || status === 'stopped';
   const [app, setApp] = useState<App | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -272,6 +274,16 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
               {cat?.label || app.category}
             </p>
           </div>
+          {isInstalled && instanceName && (
+            <div className="col-span-2 rounded-xl bg-[#f5f5f7] p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
+                Access URL
+              </p>
+              <p className="mt-1 text-sm font-semibold text-teal-600 break-all">
+                https://{app.id}.{instanceName}
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

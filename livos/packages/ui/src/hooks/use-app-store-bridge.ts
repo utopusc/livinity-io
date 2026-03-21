@@ -119,7 +119,7 @@ export function useAppStoreBridge(
 				try {
 					const stateResult = await trpcClient.apps.state.query({appId})
 					if (stateResult.progress > 0) {
-						sendToIframe({type: 'progress', appId, progress: stateResult.progress})
+						sendToIframe({type: 'progress', appId, progress: Math.round(stateResult.progress)})
 					}
 					// Stop polling if no longer installing
 					if (stateResult.state !== 'installing') {
