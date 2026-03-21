@@ -92,10 +92,11 @@ Plans:
   1. POST /api/install-event with valid auth records an install or uninstall event and returns success
   2. GET /api/user/apps returns the authenticated user's installed apps grouped by instance name
   3. GET /api/user/profile returns the user's username, instance count, and total app count
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 17-01: TBD
+- [ ] 17-01-PLAN.md — Restore v9.0 API files from backup/post-v9.0 branch, install Drizzle ORM
+- [ ] 17-02-PLAN.md — Add install_history table and 3 new endpoints (install-event, user/apps, user/profile)
 
 ### Phase 18: Store UI
 **Goal**: apps.livinity.io/store is a standalone, responsive Next.js page with Apple App Store aesthetic that users can browse for featured apps, filter by category, search, and view app details -- works both in a browser and inside an iframe
@@ -167,7 +168,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 17. Backend API Extensions | v10.0 | 0/TBD | Not started | - |
+| 17. Backend API Extensions | v10.0 | 0/2 | Not started | - |
 | 18. Store UI | v10.0 | 0/TBD | Not started | - |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
