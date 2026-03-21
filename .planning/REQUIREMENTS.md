@@ -1,210 +1,88 @@
-# Requirements: v8.0 — Livinity Platform
+# Requirements: Livinity v10.0 — App Store Platform
 
-**Milestone:** v8.0
-**Created:** 2026-03-17
-**Status:** Active
+**Defined:** 2026-03-20
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
----
+## v10.0 Requirements
 
-## v1 Requirements
+### INST — install.sh Docker Fix
 
-### Tunnel Relay (RELAY)
+- [ ] **INST-01**: install.sh pulls getumbrel/auth-server:1.0.5 and tags as livos/auth-server:1.0.5
+- [ ] **INST-02**: install.sh pulls getumbrel/tor:0.4.7.8 and tags as livos/tor:0.4.7.8
+- [ ] **INST-03**: install.sh creates torrc config file with SocksPort and HiddenService directives
+- [ ] **INST-04**: install.sh starts auth + tor containers via docker compose automatically
+- [ ] **INST-05**: Single `curl | bash --api-key KEY` command results in fully working LivOS with auth + tor + tunnel connected
 
-- [ ] **RELAY-01**: Relay server accepts WebSocket tunnel connections from LivOS instances authenticated via API key
-- [ ] **RELAY-02**: Relay proxies HTTP requests from browser through tunnel to user's LivOS (request → JSON+base64 envelope → WebSocket → LivOS → response)
-- [ ] **RELAY-03**: Relay handles WebSocket upgrade requests (tRPC subscriptions, terminal, voice) through the tunnel
-- [ ] **RELAY-04**: Relay extracts username from subdomain and routes to correct tunnel connection
-- [ ] **RELAY-05**: Relay tracks per-user bandwidth via Redis INCRBY, flushes to PostgreSQL every 60s
-- [ ] **RELAY-06**: Relay implements 30s ping/pong heartbeat to detect dead connections
-- [ ] **RELAY-07**: Relay assigns persistent session IDs and buffers requests for 30s during reconnection
-- [ ] **RELAY-08**: Relay serves branded "Connecting..." page when tunnel is disconnected
-- [ ] **RELAY-09**: Relay enforces bandwidth quota (50GB/mo free tier) — returns 429 when exceeded
+### STORE — apps.livinity.io Store UI
 
-### Tunnel Client (CLIENT)
+- [ ] **STORE-01**: /store page displays featured apps in hero section with large cards
+- [ ] **STORE-02**: /store page shows app categories with filterable grid
+- [ ] **STORE-03**: /store page has search functionality across all apps
+- [ ] **STORE-04**: /store/[id] page shows app detail with icon, description, version, Install button
+- [ ] **STORE-05**: /store page has left sidebar navigation (Discover, Categories, My Apps)
+- [ ] **STORE-06**: Store UI follows Apple App Store aesthetic — white, clean, premium feel
+- [ ] **STORE-07**: Store UI is responsive — works standalone in browser and inside iframe
 
-- [ ] **CLIENT-01**: Tunnel client module in livinityd connects to relay via WebSocket using API key from Redis config
-- [ ] **CLIENT-02**: Client forwards received HTTP requests to localhost:8080 and returns responses through tunnel
-- [ ] **CLIENT-03**: Client forwards WebSocket upgrade requests through tunnel
-- [ ] **CLIENT-04**: Client implements exponential backoff reconnection (1s to 60s max) with jitter
-- [ ] **CLIENT-05**: Client stores API key in Redis (`livos:platform:api_key`) and connection status
-- [ ] **CLIENT-06**: LivOS Settings UI has "Livinity Platform" section for entering/viewing API key
+### BRIDGE — postMessage Communication
 
-### DNS & TLS (DNS)
+- [ ] **BRIDGE-01**: apps.livinity.io sends `{type:'install', appId, composeUrl}` to parent LivOS window
+- [ ] **BRIDGE-02**: apps.livinity.io sends `{type:'uninstall', appId}` to parent LivOS window
+- [ ] **BRIDGE-03**: apps.livinity.io sends `{type:'open', appId}` to parent LivOS window
+- [ ] **BRIDGE-04**: LivOS sends `{type:'status', apps:[...]}` with running app statuses to iframe
+- [ ] **BRIDGE-05**: LivOS sends `{type:'installed', appId, success}` confirmation to iframe
+- [ ] **BRIDGE-06**: postMessage origin validated (only apps.livinity.io accepted)
 
-- [ ] **DNS-01**: Wildcard DNS `*.livinity.io` A record points to Server5 IP via Cloudflare
-- [ ] **DNS-02**: Caddy On-Demand TLS issues certificates for `{username}.livinity.io` via DNS-01 challenge
-- [ ] **DNS-03**: Caddy On-Demand TLS issues certificates for `{app}.{username}.livinity.io` via DNS-01 challenge
-- [ ] **DNS-04**: Caddy `ask` endpoint validates subdomain against registered users before issuing cert
-- [ ] **DNS-05**: Caddy config includes `stream_close_delay 5m` to prevent WebSocket drops on reload
-- [ ] **DNS-06**: Relay parses two-level subdomains: `{app}.{username}.livinity.io` → routes to tunnel with app context
+### EMBED — LivOS iframe Integration
 
-### Platform Auth (AUTH)
+- [ ] **EMBED-01**: LivOS App Store window displays apps.livinity.io/store in iframe
+- [ ] **EMBED-02**: iframe URL includes API key token and instance hostname as query params
+- [ ] **EMBED-03**: LivOS listens for postMessage install commands from iframe
+- [ ] **EMBED-04**: Install command triggers compose download → Docker pull/up → Caddy config update
+- [ ] **EMBED-05**: LivOS sends app status updates to iframe on load and after state changes
 
-- [ ] **AUTH-01**: User can register with email and password on livinity.io
-- [ ] **AUTH-02**: User receives email verification via Resend after registration
-- [ ] **AUTH-03**: Unverified users cannot generate API keys
-- [ ] **AUTH-04**: User can log in with email/password, session persists 30 days (httpOnly secure cookie)
-- [ ] **AUTH-05**: User can reset password via email link
-- [ ] **AUTH-06**: Username validated: 3-30 chars, alphanumeric + hyphens, no reserved words (admin, www, api, app, relay, status)
+### HIST — Install History + Profile
 
-### Dashboard (DASH)
+- [ ] **HIST-01**: install_history table records install/uninstall/update events with user_id, app_id, instance_name
+- [ ] **HIST-02**: /store/profile page shows user's installed apps across all instances
+- [ ] **HIST-03**: /store/profile page shows install history timeline
+- [ ] **HIST-04**: LivOS reports install/uninstall events to apps.livinity.io API
 
-- [ ] **DASH-01**: Dashboard shows API key (display once on generation, store bcrypt hash)
-- [ ] **DASH-02**: Dashboard shows server connection status (green=online, grey=offline) via Redis TTL key
-- [ ] **DASH-03**: Dashboard shows bandwidth usage progress bar (current month, color at 80%/95%/100%)
-- [ ] **DASH-04**: Dashboard shows personalized install command with API key
-- [ ] **DASH-05**: Dashboard shows subdomain URL (`{username}.livinity.io`) with copy button
-- [ ] **DASH-06**: Dashboard shows installed apps list with subdomain URLs when server is connected
-- [ ] **DASH-07**: User can regenerate API key (invalidates old key, disconnects active tunnel)
+### API — Backend API Extensions
 
-### Landing Page (LAND)
+- [ ] **API-01**: POST /api/install-event records install/uninstall event (authenticated)
+- [ ] **API-02**: GET /api/user/apps returns user's installed apps grouped by instance
+- [ ] **API-03**: GET /api/user/profile returns user profile info (username, instance count, app count)
 
-- [ ] **LAND-01**: Apple-style premium landing page at livinity.io with hero section
-- [ ] **LAND-02**: "How it works" section: 3 steps (Install → Enter API key → Access anywhere)
-- [ ] **LAND-03**: Feature cards section highlighting AI assistant, app store, multi-user
-- [ ] **LAND-04**: Pricing section (Free tier details + "Premium coming soon" placeholder)
-- [ ] **LAND-05**: Footer with links, social, legal
-- [ ] **LAND-06**: Responsive design (mobile-first)
-- [ ] **LAND-07**: SEO optimized (meta tags, OG images, structured data)
+## Future Requirements
 
-### Install Script Integration (INST)
-
-- [ ] **INST-01**: install.sh includes tunnel client setup (connects to livinity.io relay)
-- [ ] **INST-02**: Onboarding wizard has "Connect to Livinity" step with API key input
-- [ ] **INST-03**: After entering API key, LivOS automatically connects to relay and becomes accessible
-- [ ] **INST-04**: `curl -sSL https://livinity.io/install.sh | sudo bash` works as one-command installer
-- [ ] **INST-05**: Install script hosted on livinity.io (not GitHub raw)
-
-### Infrastructure (INFRA)
-
-- [ ] **INFRA-01**: Server5 runs relay process (port 4000) + Next.js app (port 3000) + Caddy + PostgreSQL + Redis
-- [ ] **INFRA-02**: PM2 or systemd manages relay and Next.js processes with auto-restart
-- [ ] **INFRA-03**: Health endpoint on relay (`/health`) reports connection count, memory usage, uptime
-- [ ] **INFRA-04**: Memory monitoring with alert at 70% (5.6GB), reject new connections at 80%
-- [ ] **INFRA-05**: Platform PostgreSQL schema: users, api_keys, bandwidth_usage, tunnel_connections tables
-
-### Desktop Widgets (WIDGET)
-
-- [x] **WIDGET-01**: Widget type system with size catalog (Small 2x2, Medium 4x2, Large 4x4) and WidgetMeta interface
-- [x] **WIDGET-02**: Desktop grid supports multi-cell items (colSpan/rowSpan) with correct DnD and collision detection
-- [x] **WIDGET-03**: Widget picker dialog accessible via right-click "Widget Ekle" on desktop
-- [x] **WIDGET-04**: Clock & Date widget (2x2) with digital and analog modes
-- [x] **WIDGET-05**: System Info Compact widget (2x2) with CPU/RAM/Disk progress bars
-- [x] **WIDGET-06**: System Info Detailed widget (4x2) with circular gauges and temperature
-- [x] **WIDGET-07**: Quick Notes widget (4x4) with auto-save to preferences
-- [x] **WIDGET-08**: Widget storage via preferences (localStorage + trpcReact server sync)
-- [x] **WIDGET-09**: Widget removal via right-click context menu on individual widgets
-
----
-
-## Future Requirements (v8.1+)
-
-### Payments
-- **PAY-01**: Stripe integration for premium tier subscriptions
-- **PAY-02**: Premium tier: custom domain, unlimited bandwidth, priority support
-- **PAY-03**: Usage-based billing or fixed monthly pricing
-
-### Custom Domains
-- **CDOM-01**: User adds custom domain in dashboard (e.g., myserver.example.com)
-- **CDOM-02**: DNS verification (CNAME to livinity.io)
-- **CDOM-03**: Automatic TLS for custom domains
-
-### Scale
-- **SCALE-01**: Multi-region relay (US, EU, Asia)
-- **SCALE-02**: Relay clustering for horizontal scaling
-- **SCALE-03**: CDN for static assets
-
----
+- **STORE-F01**: App ratings and reviews
+- **STORE-F02**: App screenshots/preview images
+- **STORE-F03**: App update notifications
+- **HIST-F01**: Usage analytics per app
+- **API-F01**: Admin panel for app catalog management
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Payment processing | Deferred to v8.1 -- focus on core platform first |
-| Custom domains | Deferred to v8.1 -- requires additional TLS/DNS complexity |
-| Multi-region relay | Deferred to v8.2 -- single Server5 sufficient for launch |
-| Mobile app | Web-first approach covers core use case |
-| SSO between platform and LivOS | Two separate auth systems by design (P4 pitfall) |
-| White-label / reseller | Not planned |
-| Self-hosted LLM support | Kimi Code only for now |
-| Binary tunnel protocol | JSON+base64 sufficient for launch, optimize later |
-| Weather widget | Deferred -- requires external API key setup |
-| Calendar widget | Deferred -- needs calendar data source integration |
-| Widget resize handles | Deferred -- fixed sizes per type for V1 |
-
----
+| Community app submissions | v10.0 is curated-only |
+| Payment for premium apps | All free for now |
+| App auto-updates | Manual install for v10.0 |
+| Mobile store layout | Desktop/iframe focus for v10.0 |
+| Custom auth-proxy | Reverted — using Umbrel auth-server |
+| Rate limiting | Caused tunnel issues — deferred |
+| JWT refresh tokens | Caused redirect loops — deferred |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RELAY-01 | Phase 9 | Pending |
-| RELAY-02 | Phase 9 | Pending |
-| RELAY-03 | Phase 9 | Pending |
-| RELAY-04 | Phase 9 | Pending |
-| RELAY-05 | Phase 9 | Pending |
-| RELAY-06 | Phase 9 | Pending |
-| RELAY-07 | Phase 9 | Pending |
-| RELAY-08 | Phase 9 | Pending |
-| RELAY-09 | Phase 9 | Pending |
-| CLIENT-01 | Phase 9 | Pending |
-| CLIENT-02 | Phase 9 | Pending |
-| CLIENT-03 | Phase 9 | Pending |
-| CLIENT-04 | Phase 9 | Pending |
-| CLIENT-05 | Phase 12 | Pending |
-| CLIENT-06 | Phase 12 | Pending |
-| DNS-01 | Phase 10 | Pending |
-| DNS-02 | Phase 10 | Pending |
-| DNS-03 | Phase 10 | Pending |
-| DNS-04 | Phase 10 | Pending |
-| DNS-05 | Phase 10 | Pending |
-| DNS-06 | Phase 10 | Pending |
-| AUTH-01 | Phase 11 | Pending |
-| AUTH-02 | Phase 11 | Pending |
-| AUTH-03 | Phase 11 | Pending |
-| AUTH-04 | Phase 11 | Pending |
-| AUTH-05 | Phase 11 | Pending |
-| AUTH-06 | Phase 11 | Pending |
-| DASH-01 | Phase 12 | Pending |
-| DASH-02 | Phase 12 | Pending |
-| DASH-03 | Phase 12 | Pending |
-| DASH-04 | Phase 12 | Pending |
-| DASH-05 | Phase 12 | Pending |
-| DASH-06 | Phase 12 | Pending |
-| DASH-07 | Phase 12 | Pending |
-| LAND-01 | Phase 13 | Pending |
-| LAND-02 | Phase 13 | Pending |
-| LAND-03 | Phase 13 | Pending |
-| LAND-04 | Phase 13 | Pending |
-| LAND-05 | Phase 13 | Pending |
-| LAND-06 | Phase 13 | Pending |
-| LAND-07 | Phase 13 | Pending |
-| INST-01 | Phase 13 | Pending |
-| INST-02 | Phase 13 | Pending |
-| INST-03 | Phase 13 | Pending |
-| INST-04 | Phase 13 | Pending |
-| INST-05 | Phase 13 | Pending |
-| INFRA-01 | Phase 9 | Pending |
-| INFRA-02 | Phase 9 | Pending |
-| INFRA-03 | Phase 14 | Pending |
-| INFRA-04 | Phase 14 | Pending |
-| INFRA-05 | Phase 9 | Pending |
-| WIDGET-01 | Phase 15 | Complete |
-| WIDGET-02 | Phase 15 | Complete |
-| WIDGET-03 | Phase 15 | Complete |
-| WIDGET-04 | Phase 15 | Complete |
-| WIDGET-05 | Phase 15 | Complete |
-| WIDGET-06 | Phase 15 | Complete |
-| WIDGET-07 | Phase 15 | Complete |
-| WIDGET-08 | Phase 15 | Complete |
-| WIDGET-09 | Phase 15 | Complete |
+| (populated by roadmapper) | | |
 
 **Coverage:**
-- v1 requirements: 60 total
-- Mapped to phases: 60
-- Unmapped: 0
+- v10.0 requirements: 28 total
+- Mapped to phases: 0
+- Unmapped: 28
 
 ---
-*Requirements defined: 2026-03-17*
-*Last updated: 2026-03-18 -- added WIDGET requirements for Phase 15*
+*Requirements defined: 2026-03-20*
