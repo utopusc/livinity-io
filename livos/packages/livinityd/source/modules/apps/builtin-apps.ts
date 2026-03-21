@@ -1,6 +1,6 @@
 /**
  * LivOS Built-in Apps
- * 11 Priority apps with official Docker images and native compose definitions
+ * 23 Built-in apps with official Docker images and native compose definitions
  */
 
 export interface ComposeServiceDef {
@@ -793,6 +793,222 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             timeout: '10s',
             retries: 3,
             start_period: '60s',
+          },
+        },
+      },
+    },
+  },
+  {
+    id: 'adguard-home',
+    name: 'AdGuard Home',
+    tagline: 'Network-wide ad and tracker blocking DNS server',
+    version: '0.107.0',
+    category: 'privacy',
+    port: 3003,
+    description: 'AdGuard Home is a network-wide software for blocking ads and tracking. After you set it up, it covers ALL your home devices without needing any client-side software. DNS-over-HTTPS, DNS-over-TLS, DHCP server, query log, and parental controls.',
+    website: 'https://adguard.com/adguard-home.html',
+    developer: 'AdGuard',
+    icon: 'https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/client/public/assets/favicon.png',
+    docker: {
+      image: 'adguard/adguardhome:latest',
+      volumes: ['/opt/adguardhome/work', '/opt/adguardhome/conf'],
+    },
+    installOptions: {subdomain: 'adguard'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'adguard/adguardhome:latest',
+          restart: 'unless-stopped',
+          volumes: [
+            '${APP_DATA_DIR}/work:/opt/adguardhome/work',
+            '${APP_DATA_DIR}/conf:/opt/adguardhome/conf',
+          ],
+          ports: ['127.0.0.1:3003:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+  {
+    id: 'wireguard-easy',
+    name: 'WireGuard Easy',
+    tagline: 'Simple WireGuard VPN server with web UI',
+    version: '14',
+    category: 'privacy',
+    port: 51821,
+    description: 'WireGuard Easy provides a simple web interface to manage your WireGuard VPN server. Create and manage clients with QR codes, view transfer statistics, and enable/disable clients — all from a beautiful web UI.',
+    website: 'https://github.com/wg-easy/wg-easy',
+    developer: 'wg-easy',
+    icon: 'https://raw.githubusercontent.com/wg-easy/wg-easy/master/src/www/img/logo.png',
+    docker: {
+      image: 'ghcr.io/wg-easy/wg-easy:latest',
+      environment: {
+        LANG: 'en',
+      },
+      volumes: ['/etc/wireguard'],
+    },
+    installOptions: {
+      subdomain: 'vpn',
+      environmentOverrides: [
+        {name: 'WG_HOST', label: 'Server Public IP or Domain', type: 'string', required: true},
+        {name: 'PASSWORD_HASH', label: 'Admin Password (bcrypt hash)', type: 'password', required: true},
+      ],
+    },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'ghcr.io/wg-easy/wg-easy:latest',
+          restart: 'unless-stopped',
+          environment: {
+            LANG: 'en',
+          },
+          volumes: ['${APP_DATA_DIR}/config:/etc/wireguard'],
+          ports: ['127.0.0.1:51821:51821', '51820:51820/udp'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:51821/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+  {
+    id: 'navidrome',
+    name: 'Navidrome',
+    tagline: 'Modern music server and streamer',
+    version: '0.53.0',
+    category: 'media',
+    port: 4533,
+    description: 'Navidrome is an open source web-based music collection server and streamer. It gives you freedom to listen to your music collection from any browser or mobile device. Compatible with Subsonic/Airsonic clients.',
+    website: 'https://www.navidrome.org',
+    developer: 'Navidrome',
+    icon: 'https://raw.githubusercontent.com/navidrome/navidrome/master/resources/logo-192x192.png',
+    docker: {
+      image: 'deluan/navidrome:latest',
+      environment: {
+        ND_SCANSCHEDULE: '1h',
+        ND_LOGLEVEL: 'info',
+      },
+      volumes: ['/data', '/music'],
+    },
+    installOptions: {subdomain: 'music'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'deluan/navidrome:latest',
+          restart: 'unless-stopped',
+          environment: {
+            ND_SCANSCHEDULE: '1h',
+            ND_LOGLEVEL: 'info',
+          },
+          volumes: [
+            '${APP_DATA_DIR}/data:/data',
+            '${APP_DATA_DIR}/music:/music',
+          ],
+          ports: ['127.0.0.1:4533:4533'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:4533/ping || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '15s',
+          },
+        },
+      },
+    },
+  },
+  {
+    id: 'calibre-web',
+    name: 'Calibre-web',
+    tagline: 'Web-based ebook library manager and reader',
+    version: '0.6.0',
+    category: 'media',
+    port: 8083,
+    description: 'Calibre-web is a web app providing a clean interface for browsing, reading, and downloading eBooks. Based on Calibre, it supports OPDS feed, user management, Kobo/Kindle sync, and in-browser reading of EPUB, PDF, and more.',
+    website: 'https://github.com/janeczku/calibre-web',
+    developer: 'janeczku',
+    icon: 'https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/calibre-web-icon.png',
+    docker: {
+      image: 'lscr.io/linuxserver/calibre-web:latest',
+      environment: {
+        PUID: '1000',
+        PGID: '1000',
+        TZ: 'UTC',
+      },
+      volumes: ['/config', '/books'],
+    },
+    defaultUsername: 'admin',
+    defaultPassword: 'admin123',
+    installOptions: {subdomain: 'books'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'lscr.io/linuxserver/calibre-web:latest',
+          restart: 'unless-stopped',
+          environment: {
+            PUID: '1000',
+            PGID: '1000',
+            TZ: 'UTC',
+          },
+          volumes: [
+            '${APP_DATA_DIR}/config:/config',
+            '${APP_DATA_DIR}/books:/books',
+          ],
+          ports: ['127.0.0.1:8083:8083'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:8083/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
+  },
+  {
+    id: 'homarr',
+    name: 'Homarr',
+    tagline: 'Customizable dashboard for your server',
+    version: '1.0.0',
+    category: 'productivity',
+    port: 7575,
+    description: 'Homarr is a modern, sleek dashboard for your home server. Organize your links, monitor services, and manage your Docker containers with a drag-and-drop interface. Integrates with popular self-hosted apps.',
+    website: 'https://homarr.dev',
+    developer: 'Homarr',
+    icon: 'https://raw.githubusercontent.com/homarr-labs/homarr/dev/public/imgs/logo/logo-color.png',
+    docker: {
+      image: 'ghcr.io/homarr-labs/homarr:latest',
+      volumes: ['/appdata'],
+    },
+    installOptions: {subdomain: 'dash'},
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'ghcr.io/homarr-labs/homarr:latest',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/data:/appdata'],
+          ports: ['127.0.0.1:7575:7575'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:7575/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
           },
         },
       },
