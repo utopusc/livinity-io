@@ -476,27 +476,50 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     },
   },
   {
-    id: 'chromium',
+    id: 'chrome',
     name: 'Chrome',
     tagline: 'Stream Google Chrome from your server',
     version: '1.0.0',
     category: 'networking',
-    port: 6080,
-    native: true,
-    nativePort: 6080,
-    description: 'Google Chrome running natively on your server, streamed via noVNC. Sessions persist across restarts — stay logged into all your sites. Starts on demand, stops automatically after 30 minutes idle.',
+    port: 3000,
+    description: 'Google Chrome running in Docker with KasmVNC streaming. Anti-detection flags, persistent sessions — stay logged into all your sites. Managed from LivOS desktop.',
     website: 'https://www.google.com/chrome/',
     developer: 'Livinity',
     icon: 'https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome.svg',
     docker: {
-      image: 'native', // placeholder, not used for native apps
+      image: 'lscr.io/linuxserver/chrome:latest',
+      environment: {
+        PUID: '1000',
+        PGID: '1000',
+        CHROME_CLI: '--disable-blink-features=AutomationControlled --disable-features=ChromeWhatsNewUI',
+      },
+      volumes: ['/config'],
     },
     installOptions: {
       subdomain: 'chrome',
     },
     compose: {
-      mainService: 'native',
-      services: {},
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'lscr.io/linuxserver/chrome:latest',
+          restart: 'unless-stopped',
+          environment: {
+            PUID: '1000',
+            PGID: '1000',
+            CHROME_CLI: '--disable-blink-features=AutomationControlled --disable-features=ChromeWhatsNewUI',
+          },
+          volumes: ['${APP_DATA_DIR}/config:/config'],
+          ports: ['127.0.0.1:3000:3000', '127.0.0.1:3001:3001'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '15s',
+          },
+        },
+      },
     },
   },
   {

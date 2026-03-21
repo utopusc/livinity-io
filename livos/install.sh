@@ -359,7 +359,34 @@ main() {
         # Tor container runs as 1000:1000, needs ownership on mounted volumes
         chown -R 1000:1000 "$data_dir/tor"
 
-        ok "Docker prerequisites ready (tor/data, app-data directories)"
+        # Setup Chrome browser container (pre-installed default app)
+        mkdir -p "$data_dir/app-data/chrome/config"
+        cat > "$data_dir/app-data/chrome/docker-compose.yml" << 'CHROMECOMPOSE'
+services:
+  server:
+    image: lscr.io/linuxserver/chrome:latest
+    container_name: livinity-chrome
+    restart: unless-stopped
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - CHROME_CLI=--disable-blink-features=AutomationControlled --disable-features=ChromeWhatsNewUI
+    volumes:
+      - /opt/livos/app-data/chrome/config:/config
+    ports:
+      - '127.0.0.1:3000:3000'
+      - '127.0.0.1:3001:3001'
+    shm_size: 1gb
+CHROMECOMPOSE
+        cat > "$data_dir/app-data/chrome/livinity-app.yml" << 'CHROMEMANIFEST'
+port: 3000
+subdomain: chrome
+CHROMEMANIFEST
+        docker pull lscr.io/linuxserver/chrome:latest 2>/dev/null || warn "Chrome image pull failed (will retry on first start)"
+
+        ok "Docker prerequisites ready (tor/data, app-data, chrome)"
     }
 
     install_python() {
