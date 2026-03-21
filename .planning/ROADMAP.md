@@ -108,12 +108,12 @@ Plans:
   3. Clicking an app card navigates to /store/[id] showing the app's icon, description, version info, and an Install button
   4. The store page renders correctly both as a standalone browser page and when embedded inside an iframe (no layout breakage, no scroll conflicts)
   5. The visual design follows an Apple App Store aesthetic -- white background, clean typography, premium feel with generous spacing
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 18-01: TBD
-- [ ] 18-02: TBD
-- [ ] 18-03: TBD
+- [ ] 18-01-PLAN.md — Types, auth context provider, sidebar navigation, topbar with search, store layout shell
+- [ ] 18-02-PLAN.md — Featured hero section, app cards, category sections, discover page with search filtering
+- [ ] 18-03-PLAN.md — App detail page (/store/[id]) with full info, Install button placeholder, build verification
 
 ### Phase 19: postMessage Bridge Protocol
 **Goal**: apps.livinity.io and LivOS communicate bidirectionally via postMessage -- the store can request installs/uninstalls/opens, and LivOS can report app status back -- with origin validation for security
@@ -169,7 +169,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. Backend API Extensions | v10.0 | 2/2 | Complete    | 2026-03-21 |
-| 18. Store UI | v10.0 | 0/TBD | Not started | - |
+| 18. Store UI | v10.0 | 0/3 | Not started | - |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
 | 21. History & Profile | v10.0 | 0/TBD | Not started | - |
