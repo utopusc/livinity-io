@@ -445,7 +445,6 @@ export default class TunnelClient {
 			'upgrade', 'connection',
 			'sec-websocket-key', 'sec-websocket-version',
 			'sec-websocket-extensions', 'sec-websocket-protocol',
-			'host',
 		])
 		for (const [key, value] of Object.entries(msg.headers)) {
 			const lk = key.toLowerCase()
@@ -458,10 +457,12 @@ export default class TunnelClient {
 			}
 			forwardHeaders[lk] = Array.isArray(value) ? value.join(', ') : value
 		}
+		// For non-app requests, override Host to local LivOS.
+		// For app requests, keep original Host (e.g., chrome.bruce.livinity.io)
+		// so LivOS can detect the subdomain and apply auth.
 		if (!msg.targetApp) {
 			forwardHeaders['host'] = `127.0.0.1:${targetPort}`
 		}
-		// else: keep original Host from browser (e.g., chrome.bruce.livinity.io)
 		forwardHeaders['x-forwarded-proto'] = 'https'
 
 		let localWs: WebSocket
