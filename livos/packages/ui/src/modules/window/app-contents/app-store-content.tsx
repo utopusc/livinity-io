@@ -8,7 +8,10 @@ export default function AppStoreWindowContent() {
 	const iframeRef = useRef<HTMLIFrameElement>(null)
 	const apiKeyQ = trpcReact.domain.platform.getApiKey.useQuery()
 	const domainQ = trpcReact.domain.getStatus.useQuery()
-	useAppStoreBridge(iframeRef)
+
+	const apiKey = apiKeyQ.data?.apiKey ?? null
+	const hostname = domainQ.data?.domain || window.location.hostname
+	useAppStoreBridge(iframeRef, {apiKey, instanceName: hostname})
 
 	if (apiKeyQ.isLoading || domainQ.isLoading) {
 		return (
@@ -18,12 +21,10 @@ export default function AppStoreWindowContent() {
 		)
 	}
 
-	const apiKey = apiKeyQ.data?.apiKey
 	if (!apiKey) {
 		return <NoApiKeyMessage />
 	}
 
-	const hostname = domainQ.data?.domain || window.location.hostname
 	const storeUrl = `https://livinity.io/store?token=${encodeURIComponent(apiKey)}&instance=${encodeURIComponent(hostname)}`
 
 	return (

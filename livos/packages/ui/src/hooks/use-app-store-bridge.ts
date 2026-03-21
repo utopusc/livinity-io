@@ -27,12 +27,20 @@ function isAllowedOrigin(origin: string): boolean {
 	return false
 }
 
+interface AppStoreBridgeOptions {
+	apiKey: string | null
+	instanceName: string
+}
+
 /**
  * Listens for postMessage commands from the App Store iframe and executes
  * install/uninstall/open operations via tRPC. Sends status updates and
  * operation results back to the iframe.
  */
-export function useAppStoreBridge(iframeRef: React.RefObject<HTMLIFrameElement | null>): void {
+export function useAppStoreBridge(
+	iframeRef: React.RefObject<HTMLIFrameElement | null>,
+	options: AppStoreBridgeOptions,
+): void {
 	const utils = trpcReact.useUtils()
 	const domainQ = trpcReact.domain.getStatus.useQuery()
 
@@ -45,6 +53,26 @@ export function useAppStoreBridge(iframeRef: React.RefObject<HTMLIFrameElement |
 
 	const domainRef = useRef(domainQ.data)
 	domainRef.current = domainQ.data
+
+	const optionsRef = useRef(options)
+	optionsRef.current = options
+
+	const reportEvent = useCallback((appId: string, action: 'install' | 'uninstall') => {
+		const {apiKey, instanceName} = optionsRef.current
+		if (!apiKey) return
+		fetch('https://apps.livinity.io/api/install-event', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Api-Key': apiKey,
+			},
+			body: JSON.stringify({
+				app_id: appId,
+				action,
+				instance_name: instanceName,
+			}),
+		}).catch(() => {}) // Fire-and-forget: silently ignore errors
+	}, [])
 
 	const sendToIframe = useCallback((message: LivOSToStoreMessage) => {
 		const iframe = iframeRefStable.current?.current
@@ -79,6 +107,7 @@ export function useAppStoreBridge(iframeRef: React.RefObject<HTMLIFrameElement |
 		async (appId: string) => {
 			try {
 				await trpcClient.apps.install.mutate({appId})
+				reportEvent(appId, 'install')
 				sendToIframe({type: 'installed', appId, success: true})
 			} catch (err) {
 				const message = err instanceof Error ? err.message : 'Install failed'
@@ -89,13 +118,14 @@ export function useAppStoreBridge(iframeRef: React.RefObject<HTMLIFrameElement |
 			utilsRef.current.apps.list.invalidate()
 			utilsRef.current.apps.state.invalidate()
 		},
-		[sendToIframe, sendStatusToIframe],
+		[sendToIframe, sendStatusToIframe, reportEvent],
 	)
 
 	const handleUninstall = useCallback(
 		async (appId: string) => {
 			try {
 				await trpcClient.apps.uninstall.mutate({appId})
+				reportEvent(appId, 'uninstall')
 				sendToIframe({type: 'uninstalled', appId, success: true})
 			} catch {
 				sendToIframe({type: 'uninstalled', appId, success: false})
@@ -105,7 +135,7 @@ export function useAppStoreBridge(iframeRef: React.RefObject<HTMLIFrameElement |
 			utilsRef.current.apps.list.invalidate()
 			utilsRef.current.apps.state.invalidate()
 		},
-		[sendToIframe, sendStatusToIframe],
+		[sendToIframe, sendStatusToIframe, reportEvent],
 	)
 
 	const handleOpen = useCallback((appId: string) => {
