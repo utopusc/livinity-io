@@ -4,13 +4,15 @@
 
 BEGIN;
 
--- Idempotency: remove existing seed data before re-inserting
-DELETE FROM apps WHERE name IN ('AdGuard Home', 'WireGuard Easy', 'Navidrome', 'Calibre-web', 'Homarr', 'Wiki.js', 'Linkwarden', 'Element Web', 'Hoppscotch', 'Stirling PDF');
+-- Idempotency: remove existing seed data before re-inserting (by name or slug)
+DELETE FROM apps WHERE name IN ('AdGuard Home', 'WireGuard Easy', 'Navidrome', 'Calibre-web', 'Homarr', 'Wiki.js', 'Linkwarden', 'Element Web', 'Hoppscotch', 'Stirling PDF')
+  OR slug IN ('adguard-home', 'wireguard-easy', 'navidrome', 'calibre-web', 'homarr', 'wikijs', 'linkwarden', 'element-web', 'hoppscotch', 'stirling-pdf');
 
 -- App 1: AdGuard Home — Network-wide ad blocking
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'AdGuard Home',
+  'adguard-home',
   'Network-wide ad and tracker blocking DNS server',
   'AdGuard Home is a network-wide software for blocking ads and tracking. After you set it up, it covers ALL your home devices without needing any client-side software. DNS-over-HTTPS, DNS-over-TLS, DHCP server, query log, and parental controls.',
   'privacy',
@@ -37,9 +39,10 @@ $$,
 );
 
 -- App 2: WireGuard Easy — Simple VPN server
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'WireGuard Easy',
+  'wireguard-easy',
   'Simple WireGuard VPN server with web UI',
   'WireGuard Easy provides a simple web interface to manage your WireGuard VPN server. Create and manage clients with QR codes, view transfer statistics, and enable/disable clients from a beautiful web UI.',
   'privacy',
@@ -71,9 +74,10 @@ $$,
 );
 
 -- App 3: Navidrome — Music server and streamer
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Navidrome',
+  'navidrome',
   'Modern music server and streamer',
   'Navidrome is an open source web-based music collection server and streamer. It gives you freedom to listen to your music collection from any browser or mobile device. Compatible with Subsonic/Airsonic clients.',
   'media',
@@ -103,9 +107,10 @@ $$,
 );
 
 -- App 4: Calibre-web — Ebook library manager
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Calibre-web',
+  'calibre-web',
   'Web-based ebook library manager and reader',
   'Calibre-web is a web app providing a clean interface for browsing, reading, and downloading eBooks. Based on Calibre, it supports OPDS feed, user management, Kobo/Kindle sync, and in-browser reading of EPUB, PDF, and more.',
   'media',
@@ -136,9 +141,10 @@ $$,
 );
 
 -- App 5: Homarr — Server dashboard
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Homarr',
+  'homarr',
   'Customizable dashboard for your server',
   'Homarr is a modern, sleek dashboard for your home server. Organize your links, monitor services, and manage your Docker containers with a drag-and-drop interface. Integrates with popular self-hosted apps.',
   'productivity',
@@ -163,9 +169,10 @@ $$,
 );
 
 -- App 6: Wiki.js — Open source wiki
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Wiki.js',
+  'wikijs',
   'Powerful and extensible open source wiki',
   'Wiki.js is a powerful open-source wiki app built on Node.js. Beautiful and intuitive interface with Markdown and WYSIWYG editors. Supports SQLite for zero-config storage, full-text search, diagrams, and media assets management.',
   'productivity',
@@ -193,9 +200,10 @@ $$,
 );
 
 -- App 7: Linkwarden — Bookmark manager
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Linkwarden',
+  'linkwarden',
   'Collaborative bookmark manager and archive',
   'Linkwarden is a self-hosted, open-source collaborative bookmark manager to collect, organize, and preserve webpages. Auto-captures screenshots and archives pages. Tag-based organization with collections and sharing.',
   'productivity',
@@ -223,9 +231,10 @@ $$,
 );
 
 -- App 8: Element Web — Matrix chat client
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Element Web',
+  'element-web',
   'Matrix chat client for decentralized communication',
   'Element is a Matrix-based end-to-end encrypted messenger and secure collaboration app. Connect to any Matrix homeserver (default: matrix.org). Supports rooms, spaces, voice/video calls, file sharing, and bridges to other platforms.',
   'communication',
@@ -247,9 +256,10 @@ $$,
 );
 
 -- App 9: Hoppscotch — API development ecosystem
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Hoppscotch',
+  'hoppscotch',
   'Open-source API development ecosystem',
   'Hoppscotch is an open source API development ecosystem. Test REST, GraphQL, WebSocket, SSE, and Socket.IO APIs with a beautiful interface. Collections, environments, pre-request scripts, and team collaboration.',
   'developer-tools',
@@ -271,9 +281,10 @@ $$,
 );
 
 -- App 10: Stirling PDF — PDF manipulation toolkit
-INSERT INTO apps (name, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
+INSERT INTO apps (name, slug, tagline, description, category, version, docker_compose, manifest, icon_url, featured, verified)
 VALUES (
   'Stirling PDF',
+  'stirling-pdf',
   'All-in-one PDF manipulation toolkit',
   'Stirling PDF is a self-hosted web-based PDF manipulation tool. Split, merge, convert, compress, rotate, watermark, and OCR your PDFs. Supports dark mode, custom download options, parallel file processing, and API access.',
   'developer-tools',
