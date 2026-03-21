@@ -118,7 +118,7 @@ export default class App {
 		}
 
 		// Expose the app port to host for Caddy reverse proxy
-		// manifest.port is the authoritative web port (both host and container internal)
+		// manifest.port is the HOST port. Container internal port may differ.
 		if (manifest.port) {
 			const serviceNames = Object.keys(compose.services!)
 			const mainServiceName = serviceNames.find(name =>
@@ -130,27 +130,25 @@ export default class App {
 
 			if (mainServiceName && compose.services![mainServiceName]) {
 				const service = compose.services![mainServiceName]
-
-				// manifest.port is the port the container's web UI listens on internally
-				// AND the host port we bind to for Caddy reverse proxy
-				const portMapping = `127.0.0.1:${manifest.port}:${manifest.port}`
 				if (!service.ports) {
 					service.ports = []
 				}
 
-				// Remove any existing mappings that reference manifest.port as host port
-				// Handles formats: "8096:X", "127.0.0.1:8096:X", "0.0.0.0:8096:X"
-				service.ports = (service.ports as string[]).filter(p => {
+				// Check if compose already has a mapping for manifest.port as host port
+				// (builtin compose definitions set the correct host:container mapping)
+				const hasHostPort = (service.ports as string[]).some(p => {
 					const portStr = p.toString()
-					return !portStr.includes(`:${manifest.port}:`) && !portStr.startsWith(`${manifest.port}:`)
+					return portStr.includes(`${manifest.port}:`)
 				})
 
-				// Only add if not already present
-				if (!service.ports.some(p => p.toString() === portMapping)) {
+				if (!hasHostPort) {
+					// No existing mapping — add manifest.port:manifest.port (legacy behavior)
+					const portMapping = `127.0.0.1:${manifest.port}:${manifest.port}`
 					service.ports.push(portMapping)
+					this.logger.log(`Exposed port ${manifest.port}:${manifest.port} for ${this.id}`)
+				} else {
+					this.logger.log(`Port ${manifest.port} already mapped for ${this.id}`)
 				}
-
-				this.logger.log(`Exposed port ${manifest.port}:${manifest.port} for ${this.id}`)
 			}
 		}
 
@@ -261,6 +259,23 @@ export default class App {
 		this.stateProgress = 1
 
 		await this.patchComposeFile(environmentOverrides)
+
+		// Ensure volume mount directories exist with proper permissions
+		try {
+			const compose = await this.readCompose()
+			for (const service of Object.values(compose.services || {})) {
+				for (const vol of (service.volumes || []) as string[]) {
+					const hostPath = vol.split(':')[0]
+					if (hostPath && hostPath.startsWith(this.dataDirectory)) {
+						await fse.mkdirp(hostPath)
+						await $`chmod -R 777 ${hostPath}`.catch(() => {})
+					}
+				}
+			}
+		} catch {
+			// Non-fatal — some apps work without this
+		}
+
 		await this.pull()
 
 		await pRetry(() => appScript(this.#livinityd, 'install', this.id), {
