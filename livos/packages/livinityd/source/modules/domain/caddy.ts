@@ -50,7 +50,7 @@ export function validateSubdomain(subdomain: string): boolean {
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
  * In single-user mode, uses individual per-subdomain blocks (legacy behavior).
  */
-export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tunnel = false): string {
+export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tunnel = false, nativeApps: Array<{subdomain: string; port: number}> = []): string {
 	const blocks: string[] = []
 
 	if (!config.mainDomain || tunnel) {
@@ -83,6 +83,24 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 	reverse_proxy 127.0.0.1:${sub.port}
 }`)
 		}
+	}
+
+	// Native app subdomains — JWT-gated via cookie check
+	// Redirects to login page if no livinity_token cookie is present
+	for (const nApp of nativeApps) {
+		if (!config.mainDomain) continue
+		const fullDomain = `${nApp.subdomain}.${config.mainDomain}`
+		blocks.push(`${fullDomain} {
+	@notauth {
+		not {
+			header Cookie *livinity_token=*
+		}
+	}
+	handle @notauth {
+		redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
+	}
+	reverse_proxy 127.0.0.1:${nApp.port}
+}`)
 	}
 
 	return blocks.join('\n\n') + '\n'

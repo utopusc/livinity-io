@@ -115,6 +115,30 @@ export const apps = router({
 			}),
 		)
 
+		// Add native apps to the list
+		for (const nativeApp of ctx.apps.nativeInstances) {
+			const builtinApp = getBuiltinApp(nativeApp.id)
+			if (builtinApp) {
+				appData.push({
+					id: nativeApp.id,
+					name: builtinApp.name,
+					version: builtinApp.version,
+					icon: builtinApp.icon,
+					port: builtinApp.port,
+					path: '',
+					state: nativeApp.state === 'ready' ? 'ready' : nativeApp.state === 'stopped' ? 'stopped' : nativeApp.state,
+					subdomain: builtinApp.installOptions?.subdomain || nativeApp.id,
+					credentials: {defaultUsername: undefined, defaultPassword: undefined, showBeforeOpen: false},
+					hiddenService: '',
+					widgets: undefined,
+					dependencies: undefined,
+					selectedDependencies: undefined,
+					implements: undefined,
+					torOnly: undefined,
+				})
+			}
+		}
+
 		const appDataSortedByNames = appData.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
 
 		return appDataSortedByNames
@@ -162,7 +186,7 @@ export const apps = router({
 			return result
 		}),
 
-	// Get state (checks per-user instance first, then global app)
+	// Get state (checks native app first, then per-user instance, then global app)
 	state: privateProcedure
 		.input(
 			z.object({
@@ -170,6 +194,13 @@ export const apps = router({
 			}),
 		)
 		.query(async ({ctx, input}) => {
+			// Check native app first
+			const nativeApp = ctx.apps.getNativeApp(input.appId)
+			if (nativeApp) {
+				const state = await nativeApp.getStatus()
+				return {state, progress: 0}
+			}
+
 			// Check per-user instance first
 			if (ctx.currentUser?.id) {
 				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
@@ -242,7 +273,7 @@ export const apps = router({
 			return ctx.apps.restart(input.appId)
 		}),
 
-	// Start an app (handles per-user instances)
+	// Start an app (handles native apps and per-user instances)
 	start: privateProcedure
 		.input(
 			z.object({
@@ -250,6 +281,13 @@ export const apps = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
+			// Handle native apps
+			const nativeApp = ctx.apps.getNativeApp(input.appId)
+			if (nativeApp) {
+				await nativeApp.start()
+				return true
+			}
+
 			if (ctx.currentUser?.id) {
 				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
 				if (inst) {
@@ -261,7 +299,7 @@ export const apps = router({
 			return ctx.apps.getApp(input.appId).start()
 		}),
 
-	// Stop an app (handles per-user instances)
+	// Stop an app (handles native apps and per-user instances)
 	stop: privateProcedure
 		.input(
 			z.object({
@@ -269,6 +307,13 @@ export const apps = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
+			// Handle native apps
+			const nativeApp = ctx.apps.getNativeApp(input.appId)
+			if (nativeApp) {
+				await nativeApp.stop()
+				return true
+			}
+
 			if (ctx.currentUser?.id) {
 				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
 				if (inst) {
@@ -490,4 +535,38 @@ export const apps = router({
 			userInstances: enrichedInstances,
 		}
 	}),
+
+	// ─── Native App Management ──────────────────────────────────────
+
+	// Start a native app (e.g., Chrome browser stream)
+	nativeStart: privateProcedure
+		.input(z.object({ appId: z.string() }))
+		.mutation(async ({ctx, input}) => {
+			const nativeApp = ctx.apps.getNativeApp(input.appId)
+			if (!nativeApp) throw new Error(`Native app ${input.appId} not found`)
+			await nativeApp.start()
+			return {state: nativeApp.state}
+		}),
+
+	// Stop a native app
+	nativeStop: privateProcedure
+		.input(z.object({ appId: z.string() }))
+		.mutation(async ({ctx, input}) => {
+			const nativeApp = ctx.apps.getNativeApp(input.appId)
+			if (!nativeApp) throw new Error(`Native app ${input.appId} not found`)
+			await nativeApp.stop()
+			return {state: nativeApp.state}
+		}),
+
+	// Get native app status (also resets idle timer — acts as heartbeat)
+	nativeStatus: privateProcedure
+		.input(z.object({ appId: z.string() }))
+		.query(async ({ctx, input}) => {
+			const nativeApp = ctx.apps.getNativeApp(input.appId)
+			if (!nativeApp) throw new Error(`Native app ${input.appId} not found`)
+			const state = await nativeApp.getStatus()
+			// Reset idle timer on status check (acts as keepalive from UI)
+			if (state === 'ready') nativeApp.resetIdleTimer()
+			return {state, port: nativeApp.port}
+		}),
 })

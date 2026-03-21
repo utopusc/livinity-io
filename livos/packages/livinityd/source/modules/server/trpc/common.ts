@@ -46,4 +46,8 @@ export const httpOnlyPaths = [
 	'files.rename',
 	'files.delete',
 	'files.emptyTrash',
+	// Native app management routes — use HTTP to avoid WS connection dependency
+	'apps.nativeStart',
+	'apps.nativeStop',
+	'apps.nativeStatus',
 ] as const
