@@ -49,6 +49,12 @@ const platform = router({
 		])
 		return {status: status ?? 'idle', url: url ?? null, sessionId: sessionId ?? null}
 	}),
+
+	getApiKey: privateProcedure.query(async ({ctx}) => {
+		const redis = ctx.livinityd.ai.redis
+		const apiKey = await redis.get(`${REDIS_PREFIX}api_key`)
+		return {apiKey: apiKey ?? null}
+	}),
 })
 
 export default platform
