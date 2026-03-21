@@ -22,6 +22,7 @@ export interface ComposeServiceDef {
   devices?: string[]
   depends_on?: string[]
   command?: string[]
+  user?: string
 }
 
 export interface ComposeDefinition {
@@ -56,6 +57,9 @@ export interface BuiltinAppManifest {
     }>
   }
   compose: ComposeDefinition
+  defaultUsername?: string
+  defaultPassword?: string
+  deterministicPassword?: boolean
 }
 
 export const BUILTIN_APPS: BuiltinAppManifest[] = [
@@ -115,6 +119,8 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     version: '2.19.0',
     category: 'developer-tools',
     port: 9000,
+    defaultUsername: 'admin',
+    deterministicPassword: true,
     description: 'Portainer is a lightweight management UI which allows you to easily manage your Docker environments.',
     website: 'https://www.portainer.io',
     developer: 'Portainer.io',
@@ -390,6 +396,8 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     version: '10.2.0',
     category: 'monitoring',
     port: 3002,
+    defaultUsername: 'admin',
+    defaultPassword: 'admin',
     description: 'Grafana allows you to query, visualize, alert on and understand your metrics.',
     website: 'https://grafana.com',
     developer: 'Grafana Labs',
@@ -723,6 +731,8 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     version: '2.31.0',
     category: 'files',
     port: 8070,
+    defaultUsername: 'admin',
+    defaultPassword: 'admin',
     description: 'Web-based file manager for your server. Upload, download, rename, delete, and archive files. Multi-user with per-user scoped directories. In-browser text and image preview, share links with expiry.',
     website: 'https://filebrowser.org',
     developer: 'FileBrowser',
@@ -810,6 +820,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         server: {
           image: 'alpine/openclaw:latest',
           restart: 'unless-stopped',
+          user: '0:0',
           environment: {
             OPENCLAW_MODE: 'gateway',
             OPENCLAW_HOST: '0.0.0.0',

@@ -68,6 +68,9 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		if (serviceDef.command && serviceDef.command.length > 0) {
 			service.command = serviceDef.command
 		}
+		if ((serviceDef as any).user) {
+			service.user = (serviceDef as any).user
+		}
 
 		composeDoc.services[serviceName] = service
 	}
@@ -81,7 +84,7 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 	// Build livinity-app.yml manifest
 	// Must satisfy AppManifest required fields: manifestVersion, id, name, tagline,
 	// category, version, port, description, website, support, gallery
-	const manifest = {
+	const manifest: Record<string, any> = {
 		manifestVersion: '1.0.0',
 		id: app.id,
 		name: app.name,
@@ -95,6 +98,10 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		support: app.website,
 		gallery: [] as string[],
 	}
+	// Add credentials if defined
+	if ((app as any).defaultUsername) manifest.defaultUsername = (app as any).defaultUsername
+	if ((app as any).defaultPassword) manifest.defaultPassword = (app as any).defaultPassword
+	if ((app as any).deterministicPassword) manifest.deterministicPassword = true
 
 	// Write livinity-app.yml
 	await fse.writeFile(
