@@ -12,10 +12,12 @@ type StoreToLivOSMessage =
 	| {type: 'open'; appId: string}
 	| {type: 'updateSubdomain'; appId: string; subdomain: string}
 
-type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing'; progress?: number; subdomain?: string}
+type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string}
 
 type InstanceInfo = {
 	hostname: string
+	userName: string
+	avatarColor: string
 	version: string
 	versionName: string
 	cpu: string
@@ -94,13 +96,14 @@ export function useAppStoreBridge(
 
 	const sendStatusToIframe = useCallback(async () => {
 		try {
-			const [apps, domainStatus, version, device, memory, disk] = await Promise.all([
+			const [apps, domainStatus, version, device, memory, disk, userData] = await Promise.all([
 				trpcClient.apps.list.query(),
 				trpcClient.domain.getStatus.query(),
 				trpcClient.system.version.query(),
 				trpcClient.system.device.query().catch(() => null),
 				trpcClient.system.systemMemoryUsage.query().catch(() => null),
 				trpcClient.system.systemDiskUsage.query().catch(() => null),
+				trpcClient.user.get.query().catch(() => null),
 			])
 			const subdomains = domainStatus.subdomains || []
 			const statusList: AppStatusEntry[] = apps.map((app) => {
@@ -122,6 +125,8 @@ export function useAppStoreBridge(
 			})
 			const instance: InstanceInfo = {
 				hostname: (device as any)?.hostname || 'LivOS Server',
+				userName: (userData as any)?.name || (userData as any)?.displayName || '',
+				avatarColor: (userData as any)?.avatarColor || '#6366f1',
 				version: version.version,
 				versionName: version.name,
 				cpu: (device as any)?.id || 'Unknown',
@@ -198,6 +203,8 @@ export function useAppStoreBridge(
 
 	const handleUninstall = useCallback(
 		async (appId: string) => {
+			// Send uninstalling status immediately so UI shows feedback
+			sendToIframe({type: 'status', apps: [{id: appId, status: 'uninstalling'}]})
 			try {
 				await trpcClient.apps.uninstall.mutate({appId})
 				reportEvent(appId, 'uninstall')

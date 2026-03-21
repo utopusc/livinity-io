@@ -156,6 +156,12 @@ export function usePostMessage() {
 
   const sendUninstall = useCallback((appId: string) => {
     sendMessage({ type: 'uninstall', appId });
+    // Optimistic: mark as uninstalling
+    setInstalledApps(prev => {
+      const next = new Map(prev);
+      next.set(appId, 'uninstalling');
+      return next;
+    });
   }, [sendMessage]);
 
   const sendOpen = useCallback((appId: string) => {

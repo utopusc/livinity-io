@@ -57,6 +57,11 @@ export function AppCard({ app }: AppCardProps) {
               </span>
             );
           }
+          if (status === 'uninstalling') return (
+            <span className="shrink-0 rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-500">
+              Removing
+            </span>
+          );
           if (status === 'stopped') return (
             <span className="shrink-0 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600">
               Stopped
