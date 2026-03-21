@@ -21,6 +21,27 @@ export interface AppSummary {
   version: string;
 }
 
+// --- postMessage Bridge Protocol (Phase 19) ---
+
+// Messages sent from Store iframe to LivOS parent
+export type StoreToLivOSMessage =
+  | { type: 'ready' }
+  | { type: 'install'; appId: string; composeUrl: string }
+  | { type: 'uninstall'; appId: string }
+  | { type: 'open'; appId: string };
+
+// Messages sent from LivOS parent to Store iframe
+export type AppStatus = {
+  id: string;
+  status: 'running' | 'stopped' | 'not_installed';
+};
+
+export type LivOSToStoreMessage =
+  | { type: 'status'; apps: AppStatus[] }
+  | { type: 'installed'; appId: string; success: boolean; error?: string }
+  | { type: 'uninstalled'; appId: string; success: boolean };
+
+// Extended context value with bridge state
 export interface StoreContextValue {
   apps: AppSummary[];
   loading: boolean;
@@ -31,6 +52,13 @@ export interface StoreContextValue {
   setSelectedCategory: (c: string | null) => void;
   token: string | null;
   instanceName: string | null;
+  // postMessage bridge (Phase 19)
+  isEmbedded: boolean;
+  installedApps: Map<string, AppStatus['status']>;
+  sendInstall: (appId: string) => void;
+  sendUninstall: (appId: string) => void;
+  sendOpen: (appId: string) => void;
+  getAppStatus: (appId: string) => AppStatus['status'];
 }
 
 export const CATEGORIES: Record<string, { label: string; icon: string }> = {
