@@ -564,7 +564,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Beautiful ChatGPT-like interface for Ollama and any OpenAI-compatible API. Multi-user support, RAG pipeline with document ingestion, conversation history, and model management. Connect to your local Ollama instance or external APIs.',
     website: 'https://openwebui.com',
     developer: 'Open WebUI',
-    icon: 'https://docs.openwebui.com/img/logo.png',
+    icon: 'https://raw.githubusercontent.com/open-webui/open-webui/main/static/favicon.png',
     docker: {
       image: 'ghcr.io/open-webui/open-webui:main',
       environment: {
@@ -801,7 +801,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Free and open-source autonomous AI agent. Connects to WhatsApp, Telegram, Slack, Discord, Signal, and more. Manages files, controls browsers, sends messages, automates workflows. Supports any LLM including local models via Ollama. MIT licensed.',
     website: 'https://openclaws.io',
     developer: 'OpenClaw',
-    icon: 'https://raw.githubusercontent.com/openclaw/openclaw/main/docs/static/img/logo.png',
+    icon: 'https://openclaws.io/favicon.ico',
     docker: {
       image: 'alpine/openclaw:latest',
       volumes: ['/data'],
