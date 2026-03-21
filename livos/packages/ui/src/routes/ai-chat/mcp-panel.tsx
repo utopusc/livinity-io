@@ -237,7 +237,7 @@ const FEATURED_MCPS: FeaturedMcp[] = [
 		gradient: 'from-blue-500/30 to-green-500/30',
 		transport: 'stdio',
 		customCommand: 'npx',
-		customArgs: ['-y', '@playwright/mcp@latest', '--cdp-endpoint', 'http://127.0.0.1:9222'],
+		customArgs: ['-y', 'chrome-devtools-mcp', '--browserUrl', 'http://127.0.0.1:9222'],
 	},
 	{
 		name: 'git',
