@@ -57,8 +57,8 @@
 
 - [x] **R-CHROME-NATIVE**: Google Chrome installed natively on server (not Docker), with setup script for Xvfb + x11vnc + websockify + noVNC
 - [x] **R-CHROME-STREAM**: Chrome streams on-demand via noVNC — starts on user click, stops on window close or 30-min idle timeout
-- [ ] **R-CHROME-AUTH**: Chrome streaming endpoint (chrome.{domain}) requires valid LivOS JWT cookie to access
-- [ ] **R-CHROME-MANAGE**: tRPC routes exist for starting, stopping, and querying Chrome native app status (apps.nativeStart, apps.nativeStop, apps.nativeStatus)
+- [x] **R-CHROME-AUTH**: Chrome streaming endpoint (chrome.{domain}) requires valid LivOS JWT cookie to access
+- [x] **R-CHROME-MANAGE**: tRPC routes exist for starting, stopping, and querying Chrome native app status (apps.nativeStart, apps.nativeStop, apps.nativeStatus)
 
 ## Future Requirements
 

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 25-01-PLAN.md
-last_updated: "2026-03-21T12:33:40.212Z"
+stopped_at: Completed 25-02-PLAN.md
+last_updated: "2026-03-21T12:46:58.873Z"
 progress:
   total_phases: 30
-  completed_phases: 17
+  completed_phases: 18
   total_plans: 43
-  completed_plans: 45
+  completed_plans: 46
 ---
 
 # Project State
@@ -61,6 +61,7 @@ Plan: 2 of 2
 | Phase 24 P03 | 1min | 1 tasks | 1 files |
 | Phase 24-app-store-expansion P04 | 10min | 2 tasks | 1 files |
 | Phase 25 P01 | 3min | 2 tasks | 4 files |
+| Phase 25 P02 | 10min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -106,6 +107,9 @@ Plan: 2 of 2
 - [Phase 25]: Type=forking + RemainAfterExit=yes for systemd Chrome service (websockify daemonizes)
 - [Phase 25]: NativeApp pattern: systemd lifecycle via execa for non-Docker apps, NATIVE_APP_CONFIGS registry
 - [Phase 25]: 30-minute idle auto-stop timer for native Chrome to conserve resources
+- [Phase 25]: Cookie-based auth (livinity_token) for native app Caddy blocks instead of forward_auth
+- [Phase 25]: Native apps in apps.list response with matching schema for transparent UI display
+- [Phase 25]: Dedicated nativeStart/nativeStop/nativeStatus routes plus integration into existing start/stop/state handlers
 
 ### Roadmap Evolution
 
@@ -124,6 +128,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:33:40.208Z
-Stopped at: Completed 25-01-PLAN.md
+Last session: 2026-03-21T12:46:58.869Z
+Stopped at: Completed 25-02-PLAN.md
 Resume file: None
