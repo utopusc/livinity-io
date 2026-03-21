@@ -95,12 +95,14 @@ export interface StoreContextValue {
 }
 
 export const CATEGORIES: Record<string, { label: string; icon: string }> = {
+  ai: { label: 'AI & ML', icon: '\uD83E\uDD16' },
   automation: { label: 'Automation', icon: '\u26A1' },
-  'cloud-storage': { label: 'Cloud Storage', icon: '\u2601' },
+  'cloud-storage': { label: 'Files & Storage', icon: '\u2601' },
   media: { label: 'Media', icon: '\uD83C\uDFAC' },
   management: { label: 'Management', icon: '\u2699' },
   monitoring: { label: 'Monitoring', icon: '\uD83D\uDCCA' },
   development: { label: 'Development', icon: '\uD83D\uDCBB' },
   photography: { label: 'Photography', icon: '\uD83D\uDCF7' },
+  security: { label: 'Security', icon: '\uD83D\uDD12' },
   dashboards: { label: 'Dashboards', icon: '\uD83D\uDCC8' },
 };
