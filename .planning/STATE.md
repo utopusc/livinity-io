@@ -81,6 +81,10 @@ Plan: Not started
 - [Phase 21-install-history-profile]: Fire-and-forget event reporting: fetch().catch(() => {}) to avoid blocking UI
 - [Phase 21-install-history-profile]: Promise.all parallel fetch for profile page (profile + apps + history endpoints)
 
+### Roadmap Evolution
+
+- Phase 22 added: App Store Integration Fix
+
 ### Pending Todos
 
 None
