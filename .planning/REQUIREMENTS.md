@@ -77,12 +77,42 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmapper) | | |
+| INST-01 | Phase 16 | Pending |
+| INST-02 | Phase 16 | Pending |
+| INST-03 | Phase 16 | Pending |
+| INST-04 | Phase 16 | Pending |
+| INST-05 | Phase 16 | Pending |
+| API-01 | Phase 17 | Pending |
+| API-02 | Phase 17 | Pending |
+| API-03 | Phase 17 | Pending |
+| STORE-01 | Phase 18 | Pending |
+| STORE-02 | Phase 18 | Pending |
+| STORE-03 | Phase 18 | Pending |
+| STORE-04 | Phase 18 | Pending |
+| STORE-05 | Phase 18 | Pending |
+| STORE-06 | Phase 18 | Pending |
+| STORE-07 | Phase 18 | Pending |
+| BRIDGE-01 | Phase 19 | Pending |
+| BRIDGE-02 | Phase 19 | Pending |
+| BRIDGE-03 | Phase 19 | Pending |
+| BRIDGE-04 | Phase 19 | Pending |
+| BRIDGE-05 | Phase 19 | Pending |
+| BRIDGE-06 | Phase 19 | Pending |
+| EMBED-01 | Phase 20 | Pending |
+| EMBED-02 | Phase 20 | Pending |
+| EMBED-03 | Phase 20 | Pending |
+| EMBED-04 | Phase 20 | Pending |
+| EMBED-05 | Phase 20 | Pending |
+| HIST-01 | Phase 21 | Pending |
+| HIST-02 | Phase 21 | Pending |
+| HIST-03 | Phase 21 | Pending |
+| HIST-04 | Phase 21 | Pending |
 
 **Coverage:**
-- v10.0 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28
+- v10.0 requirements: 30 total
+- Mapped to phases: 30
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-20*
+*Traceability updated: 2026-03-20*
