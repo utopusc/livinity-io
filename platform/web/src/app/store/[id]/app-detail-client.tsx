@@ -1,0 +1,196 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useStore } from '../store-provider';
+import { CATEGORIES } from '../types';
+import type { App } from '../types';
+
+interface AppDetailClientProps {
+  appId: string;
+}
+
+export function AppDetailClient({ appId }: AppDetailClientProps) {
+  const { token, instanceName } = useStore();
+  const [app, setApp] = useState<App | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  if (instanceName) params.set('instance', instanceName);
+  const qs = params.toString();
+
+  useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      setError('Connect your LivOS instance to view app details');
+      return;
+    }
+    fetch(`/api/apps/${appId}`, { headers: { 'X-Api-Key': token } })
+      .then((res) => {
+        if (res.status === 404) throw new Error('App not found');
+        if (!res.ok) throw new Error('Failed to load app');
+        return res.json();
+      })
+      .then((data: App) => {
+        setApp(data);
+        setError(null);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [appId, token]);
+
+  // Loading skeleton
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-8 animate-pulse">
+        <div className="mb-8 h-4 w-16 rounded bg-[#f5f5f7]" />
+        <div className="mb-8 flex items-start gap-6">
+          <div className="h-32 w-32 shrink-0 rounded-3xl bg-[#f5f5f7]" />
+          <div className="flex-1 space-y-3 pt-2">
+            <div className="h-8 w-48 rounded bg-[#f5f5f7]" />
+            <div className="h-5 w-64 rounded bg-[#f5f5f7]" />
+            <div className="h-4 w-32 rounded bg-[#f5f5f7]" />
+          </div>
+        </div>
+        <div className="h-12 w-32 rounded-xl bg-[#f5f5f7]" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !app) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <Link
+          href={`/store${qs ? `?${qs}` : ''}`}
+          className="mb-8 inline-flex items-center gap-1 text-sm text-teal-500 transition-colors hover:text-teal-600"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10 12L6 8l4-4" />
+          </svg>
+          Store
+        </Link>
+        <div className="rounded-xl bg-[#f5f5f7] px-8 py-6 text-center">
+          <p className="text-sm text-[#86868b]">{error || 'App not found'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const cat = CATEGORIES[app.category];
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-8">
+      {/* Back link */}
+      <Link
+        href={`/store${qs ? `?${qs}` : ''}`}
+        className="mb-8 inline-flex items-center gap-1 text-sm text-teal-500 transition-colors hover:text-teal-600"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M10 12L6 8l4-4" />
+        </svg>
+        Store
+      </Link>
+
+      {/* App header */}
+      <div className="mb-8 flex flex-col items-start gap-6 sm:flex-row">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={app.icon_url}
+          alt={`${app.name} icon`}
+          className="h-32 w-32 shrink-0 rounded-3xl bg-white object-contain p-3 shadow-lg"
+        />
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold text-[#1d1d1f]">{app.name}</h1>
+          <p className="mt-1 text-lg text-[#86868b]">{app.tagline}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {cat && (
+              <span className="rounded-full bg-[#f5f5f7] px-3 py-1 text-xs font-medium text-[#1d1d1f]">
+                {cat.icon} {cat.label}
+              </span>
+            )}
+            <span className="rounded-full bg-[#f5f5f7] px-3 py-1 text-xs font-medium text-[#86868b]">
+              v{app.version}
+            </span>
+            {app.verified && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                >
+                  <path d="M6 0a6 6 0 1 1 0 12A6 6 0 0 1 6 0Zm2.65 4.15a.5.5 0 0 0-.8-.6L5.4 7.2 4.15 5.95a.5.5 0 1 0-.7.7l1.6 1.6a.5.5 0 0 0 .75-.05l2.85-4.05Z" />
+                </svg>
+                Verified
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Install button */}
+      <button
+        onClick={() => alert('Install functionality coming in a future update')}
+        className="mb-10 rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
+      >
+        Install
+      </button>
+
+      {/* Description */}
+      <section className="mb-10">
+        <h2 className="mb-3 text-xl font-semibold text-[#1d1d1f]">
+          About this app
+        </h2>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-[#424245]">
+          {app.description}
+        </p>
+      </section>
+
+      {/* Info grid */}
+      <section>
+        <h2 className="mb-3 text-xl font-semibold text-[#1d1d1f]">
+          Information
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-[#f5f5f7] p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
+              Version
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">
+              {app.version}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#f5f5f7] p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
+              Category
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">
+              {cat?.label || app.category}
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
