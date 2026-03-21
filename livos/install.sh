@@ -1097,6 +1097,15 @@ FWSVC
     # MAIN EXECUTION FLOW
     # ══════════════════════════════════════════════════════════
 
+    # === Install Flow ===
+    # Dependency chain for docker compose:
+    # 1. install_docker          -> Docker engine available
+    # 2. setup_docker_images     -> livos/auth-server + livos/tor images tagged
+    # 3. build_project           -> /opt/livos/data directory created
+    # 4. setup_docker_prerequisites -> tor/data (1000:1000) + app-data dirs ready
+    # 5. start_services          -> livos.service starts livinityd -> docker compose up
+    # Note: docker compose env vars come from app-environment.ts at runtime, NOT .env
+
     # === Pre-flight ===
     step "Pre-flight checks"
     check_root
