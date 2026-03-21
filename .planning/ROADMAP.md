@@ -142,7 +142,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 20-01-PLAN.md — iframe App Store window with postMessage bridge listener and install executor
+- [x] 20-01-PLAN.md — iframe App Store window with postMessage bridge listener and install executor
 
 ### Phase 21: Install History & Profile
 **Goal**: Install and uninstall events are tracked across all instances, and users can view their installed apps and history timeline on a profile page -- tying the entire app store experience together
@@ -153,11 +153,10 @@ Plans:
   2. Visiting /store/profile shows the user's installed apps grouped by instance, with each app showing its current status
   3. The profile page includes an install history timeline showing chronological install/uninstall/update events across all instances
   4. LivOS automatically reports install and uninstall events to the apps.livinity.io API after each action completes
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 21-01: TBD
-- [ ] 21-02: TBD
+- [ ] 21-01-PLAN.md — Event reporting in LivOS bridge + profile page with installed apps and history timeline
 
 ## Progress
 
@@ -169,5 +168,5 @@ Plans:
 | 17. Backend API Extensions | v10.0 | 2/2 | Complete    | 2026-03-21 |
 | 18. Store UI | v10.0 | 3/3 | Complete    | 2026-03-21 |
 | 19. postMessage Bridge | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 20. iframe Embedding | v10.0 | 0/1 | Complete    | 2026-03-21 |
-| 21. History & Profile | v10.0 | 0/TBD | Not started | - |
+| 20. iframe Embedding | v10.0 | 1/1 | Complete    | 2026-03-21 |
+| 21. History & Profile | v10.0 | 0/1 | Not started | - |
