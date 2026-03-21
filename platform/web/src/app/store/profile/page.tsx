@@ -55,8 +55,16 @@ function timeAgo(dateStr: string): string {
 
 // --- Component ---
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
 export default function ProfilePage() {
-  const { token, instanceName } = useStore();
+  const { token, instanceName, instanceInfo } = useStore();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [instances, setInstances] = useState<Record<string, InstalledApp[]> | null>(null);
@@ -199,8 +207,11 @@ export default function ProfilePage() {
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[#1d1d1f]">{instanceName || 'My Server'}</h1>
-              <p className="mt-0.5 text-sm text-[#86868b]">{profile.email}</p>
+              <h1 className="text-2xl font-bold text-[#1d1d1f]">{instanceInfo?.hostname || instanceName || 'My Server'}</h1>
+              <p className="mt-0.5 text-sm text-[#86868b]">
+                {instanceName}
+                {instanceInfo && <span className="ml-2 text-xs">v{instanceInfo.version}</span>}
+              </p>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -208,6 +219,21 @@ export default function ProfilePage() {
               <span className="text-teal-500">{totalApps}</span>
               {totalApps === 1 ? 'app' : 'apps'} installed
             </span>
+            {instanceInfo && instanceInfo.memory.total > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-sm font-medium text-[#1d1d1f] shadow-sm">
+                RAM {formatBytes(instanceInfo.memory.used)} / {formatBytes(instanceInfo.memory.total)}
+              </span>
+            )}
+            {instanceInfo && instanceInfo.disk.total > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-sm font-medium text-[#1d1d1f] shadow-sm">
+                Disk {formatBytes(instanceInfo.disk.used)} / {formatBytes(instanceInfo.disk.total)}
+              </span>
+            )}
+            {instanceInfo && instanceInfo.cpu && instanceInfo.cpu !== 'Unknown' && (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-sm font-medium text-[#86868b] shadow-sm">
+                {instanceInfo.cpu}
+              </span>
+            )}
           </div>
         </div>
       )}

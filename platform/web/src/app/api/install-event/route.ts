@@ -4,6 +4,10 @@ import { db } from '@/lib/drizzle';
 import { apps, installHistory } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204 });
+}
+
 export async function POST(req: NextRequest) {
   const auth = await validateApiKey(req);
   if (!auth.valid) {

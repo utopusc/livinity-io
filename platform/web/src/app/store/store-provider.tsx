@@ -72,6 +72,8 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         // Subdomain management
         getAppSubdomain: bridge.getAppSubdomain,
         sendUpdateSubdomain: bridge.sendUpdateSubdomain,
+        // Instance info
+        instanceInfo: bridge.instanceInfo,
       }}
     >
       {children}
