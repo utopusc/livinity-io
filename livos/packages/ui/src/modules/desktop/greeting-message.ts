@@ -1,27 +1,25 @@
 import {t} from '@/utils/i18n'
 import {firstNameFromFullName} from '@/utils/misc'
 
-export function greetingMessage(name: string) {
-	const firstName = firstNameFromFullName(name)
+type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night'
 
-	const greetingMap = {
-		morning: t('desktop.greeting.morning', {name: firstName}),
-		afternoon: t('desktop.greeting.afternoon', {name: firstName}),
-		evening: t('desktop.greeting.evening', {name: firstName}),
-	}
-
-	return greetingMap[getPartofDay()] + '.'
+function resolveTimeOfDay(): TimeOfDay {
+	const hour = new Date().getHours()
+	if (hour >= 5 && hour < 12) return 'morning'
+	if (hour >= 12 && hour < 17) return 'afternoon'
+	if (hour >= 17 && hour < 21) return 'evening'
+	return 'night'
 }
 
-function getPartofDay() {
-	const today = new Date()
-	const curHr = today.getHours()
+const greetingKeys: Record<TimeOfDay, string> = {
+	morning: 'desktop.greeting.morning',
+	afternoon: 'desktop.greeting.afternoon',
+	evening: 'desktop.greeting.evening',
+	night: 'desktop.greeting.evening',
+}
 
-	if (curHr < 12) {
-		return 'morning'
-	} else if (curHr < 18) {
-		return 'afternoon'
-	} else {
-		return 'evening'
-	}
+export function greetingMessage(fullName: string): string {
+	const displayName = firstNameFromFullName(fullName)
+	const period = resolveTimeOfDay()
+	return `${t(greetingKeys[period], {name: displayName})}.`
 }

@@ -12,6 +12,7 @@ import {SidebarHome} from '@/features/files/components/sidebar/sidebar-home'
 import {SidebarNetworkStorage} from '@/features/files/components/sidebar/sidebar-network-storage'
 import {SidebarRecents} from '@/features/files/components/sidebar/sidebar-recents'
 import {SidebarShares} from '@/features/files/components/sidebar/sidebar-shares'
+import {SidebarStorage} from '@/features/files/components/sidebar/sidebar-storage'
 import {SidebarTrash} from '@/features/files/components/sidebar/sidebar-trash'
 import {HOME_PATH} from '@/features/files/constants'
 import {useExternalStorage} from '@/features/files/hooks/use-external-storage'
@@ -83,15 +84,6 @@ export function Sidebar({className}: {className?: string}) {
 					)}
 				</AnimatePresence>
 
-				{/* Network storage */}
-				{/* We don't wrap in AnimatePresence because this section is always rendered */}
-				<SidebarDivider />
-				{showNetwork ? (
-					<SidebarSection label={t('files-sidebar.network')}>
-						<SidebarNetworkStorage />
-					</SidebarSection>
-				) : null}
-
 				{/* External Storage */}
 				<AnimatePresence initial={!isLoadingExternalStorage}>
 					{showExternal && (
@@ -109,12 +101,25 @@ export function Sidebar({className}: {className?: string}) {
 					)}
 				</AnimatePresence>
 
+				{/* Storage */}
+				<SidebarDivider />
+				<SidebarSection label='Storage'>
+					<SidebarStorage />
+				</SidebarSection>
+
+				{/* Trash */}
+				{showTrash ? (
+					<>
+						<SidebarDivider />
+						<SidebarSection>
+							<SidebarTrash />
+						</SidebarSection>
+					</>
+				) : null}
+
 				{/* Spacer */}
-				<div className='h-6' />
+				<div className='h-4' />
 			</ScrollArea>
-			{/* Trash */}
-			{showTrash ? <SidebarTrash /> : null}
-			{showRewind ? <SidebarRewind /> : null}
 		</nav>
 	)
 }

@@ -155,3 +155,16 @@ Plans:
 | 12. Dashboard | v8.0 | 0/TBD | Not started | - |
 | 13. Landing + Install | v8.0 | 0/TBD | Not started | - |
 | 14. Monitoring | v8.0 | 0/TBD | Not started | - |
+| 15. Desktop Widgets | 3/3 | Complete   | 2026-03-18 | - |
+
+### Phase 15: Desktop Widgets
+
+**Goal:** Add an iOS/iPadOS-style desktop widget system to LivOS with multi-cell grid support, glassmorphism styling, and 4 widget types (Clock, System Info Compact, System Info Detailed, Quick Notes)
+**Requirements**: WIDGET-01, WIDGET-02, WIDGET-03, WIDGET-04, WIDGET-05, WIDGET-06, WIDGET-07, WIDGET-08, WIDGET-09
+**Depends on:** None (independent LivOS UI feature, can run in parallel with v8.0 phases)
+**Plans:** 3/3 plans complete
+
+Plans:
+- [ ] 15-01-PLAN.md -- Widget types, multi-cell grid extension, widget storage hooks
+- [ ] 15-02-PLAN.md -- Widget components (Clock, System Info Compact, System Info Detailed, Quick Notes)
+- [ ] 15-03-PLAN.md -- Widget picker dialog, context menus, and full integration

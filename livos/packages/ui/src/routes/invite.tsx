@@ -35,7 +35,7 @@ const glassCardStyle = {
 } as const
 
 const primaryButtonClass =
-	'flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-body font-medium text-white shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
+	'flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-body font-medium text-white shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
 
 const secondaryButtonClass =
 	'flex items-center justify-center gap-2 rounded-full bg-surface-1 border border-border-default px-6 py-3 text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
@@ -81,7 +81,7 @@ function StepWelcome({onNext}: {onNext: () => void}) {
 			{/* Logo with glow */}
 			<div className='relative'>
 				<GlowEffect
-					colors={['#8B5CF6', '#6D28D9', '#A78BFA', '#7C3AED']}
+					colors={['#06B6D4', '#0891B2', '#22D3EE', '#0E7490']}
 					mode='breathe'
 					blur='strong'
 					scale={1.4}
@@ -329,7 +329,7 @@ function StepPersonalize({onNext}: {onNext: () => void}) {
 						className={cn(
 							'relative aspect-video rounded-xl transition-all duration-200 ring-2 overflow-hidden',
 							wallpaper.id === id
-								? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(139,92,246,0.4)]'
+								? 'ring-brand scale-[1.02] shadow-[0_0_16px_rgba(6,182,212,0.4)]'
 								: 'ring-transparent hover:ring-border-default',
 						)}
 						style={{backgroundColor: `hsl(${animatedWallpapers[id].brandColorHsl})`}}
@@ -530,7 +530,7 @@ function StepAllDone({displayName}: {displayName: string}) {
 						key={i}
 						className='absolute w-1.5 h-1.5 rounded-full'
 						style={{
-							background: ['#8B5CF6', '#22C55E', '#3B82F6', '#F59E0B', '#EC4899', '#06B6D4'][i % 6],
+							background: ['#06B6D4', '#22C55E', '#3B82F6', '#F59E0B', '#EC4899', '#0EA5E9'][i % 6],
 							left: `${15 + Math.random() * 70}%`,
 							top: '50%',
 						}}

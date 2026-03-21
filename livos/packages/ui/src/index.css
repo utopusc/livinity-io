@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -18,7 +18,7 @@ body {
 
 html {
 	--font-inter: 'Inter';
-	--font-jakarta: 'Plus Jakarta Sans';
+	--font-jakarta: 'Space Grotesk';
 	/* Space above the sheet. Putting here because it's used in multiple places for calculations */
 	--sheet-top: 2vh;
 	--wallpaper-blur: 12px;
@@ -178,36 +178,35 @@ a {
 }
 
 @keyframes animate-arc {
-	from {
+	0% {
 		stroke-dashoffset: var(--full-length);
 		stroke-opacity: 0;
 	}
-	to {
+	100% {
 		stroke-dashoffset: var(--final-offset);
 		stroke-opacity: 1;
 	}
 }
 
 @keyframes animate-unblur {
-	from {
+	0% {
 		filter: blur(var(--wallpaper-blur));
-		scale: 1.25;
+		transform: scale(1.15);
+		opacity: 0.8;
 	}
-	to {
+	100% {
 		filter: blur(0);
-		scale: 1;
+		transform: scale(1);
+		opacity: 1;
 	}
 }
 
 @keyframes pulse {
-	0% {
+	0%, 100% {
 		opacity: 1;
 	}
 	50% {
-		opacity: 0.5;
-	}
-	100% {
-		opacity: 1;
+		opacity: 0.4;
 	}
 }
 
@@ -238,6 +237,25 @@ a {
 	100% {
 		opacity: 1;
 	}
+}
+
+/* Orb avatar animations */
+@keyframes orb-breathe {
+	0%, 100% { transform: scale(1); }
+	50% { transform: scale(1.05); }
+}
+@keyframes orb-pulse {
+	0%, 100% { transform: scale(1); opacity: 1; }
+	50% { transform: scale(1.1); opacity: 0.85; }
+}
+@keyframes orb-float {
+	0%, 100% { transform: translate(0, 0) scale(1); }
+	33% { transform: translate(10%, -8%) scale(1.1); }
+	66% { transform: translate(-5%, 6%) scale(0.95); }
+}
+@keyframes orb-glow {
+	0%, 100% { opacity: 0.5; transform: scale(1); }
+	50% { opacity: 0.8; transform: scale(1.08); }
 }
 
 .livinity-pulse-a-few-times {

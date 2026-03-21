@@ -21,7 +21,7 @@ services:
     restart: on-failure
     environment:
       PORT: $AUTH_PORT
-      UMBREL_AUTH_SECRET: $LIVINITY_AUTH_SECRET
+      UMBREL_AUTH_SECRET: $LIVINITY_AUTH_SECRET  # env var name required by auth-server image API
       MANAGER_IP: $MANAGER_IP
       MANAGER_PORT: 3006
       DASHBOARD_IP: $DASHBOARD_IP

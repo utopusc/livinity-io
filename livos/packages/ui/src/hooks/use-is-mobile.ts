@@ -1,16 +1,13 @@
 import {useBreakpoint} from '@/utils/tw'
 
-// Made for the '/settings' page, but probably useful elsewhere.
-export function useIsMobile() {
-	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
+const MOBILE_BREAKPOINTS = new Set(['sm', 'md'])
 
-	return isMobile
+/** Returns true when viewport is below the `lg` breakpoint (< 1024px) */
+export function useIsMobile(): boolean {
+	return MOBILE_BREAKPOINTS.has(useBreakpoint())
 }
 
-export function useIsSmallMobile() {
-	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm'
-
-	return isMobile
+/** Returns true when viewport is below the `md` breakpoint (< 768px) */
+export function useIsSmallMobile(): boolean {
+	return useBreakpoint() === 'sm'
 }

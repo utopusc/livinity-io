@@ -160,7 +160,7 @@ function useApp(appId: string) {
 	useEffect(() => {
 		fetch(`/v1/apps?app=${appId}`).then(async (res) => {
 			const data = await res.json()
-			setApp({...data, icon: appId ? `https://getumbrel.github.io/umbrel-apps-gallery/${appId}/icon.svg` : undefined})
+			setApp({...data, icon: appId ? `/v1/apps/${appId}/icon` : undefined})
 		})
 	}, [appId])
 

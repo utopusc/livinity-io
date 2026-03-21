@@ -667,7 +667,7 @@ export default class Apps {
 		const {hostname} = await import('os')
 		const compose = (await fse.readFile(`${userDataDir}/docker-compose.yml`, 'utf8'))
 			.replace(/\$\{APP_DATA_DIR\}/g, userDataDir)
-			.replace(/\$\{UMBREL_ROOT\}/g, this.#livinityd.dataDirectory)
+			.replace(/\$\{UMBREL_ROOT\}/g, this.#livinityd.dataDirectory) // legacy env var in third-party app compose files
 			.replace(/\$\{DEVICE_HOSTNAME\}/g, hostname())
 		const composeData = (await import('js-yaml')).default.load(compose) as any
 

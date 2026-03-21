@@ -1,35 +1,31 @@
 import Fuse from 'fuse.js'
 
-const fuseOptions = {
-	// https://www.fusejs.io/api/options.html
-	isCaseSensitive: false,
-	includeScore: false,
-	includeMatches: false,
-	minMatchCharLength: 2,
-	shouldSort: true,
-	findAllMatches: false,
-	location: 0,
-	threshold: 0.3,
-	distance: 100,
-	ignoreLocation: false,
-	useExtendedSearch: false,
-	ignoreFieldNorm: false,
-	fieldNormWeight: 1,
-}
-
-export type SearchKey = {
+/** Configuration for fuzzy search fields */
+export interface SearchKey {
 	name: string
 	weight: number
 }
 
-export function createSearch<T>(items: T[], keys: SearchKey[]) {
-	const fuse = new Fuse<T>(items, {
-		...fuseOptions,
-		keys,
-	})
-	return (pattern: string, limit = 60) => {
-		const normalizedPattern = pattern.trim().replace(/\s+/g, ' ')
-		const results = fuse.search(normalizedPattern, {limit})
-		return results.map((result) => result.item)
+const DEFAULT_FUSE_OPTIONS: Fuse.IFuseOptions<unknown> = {
+	isCaseSensitive: false,
+	shouldSort: true,
+	threshold: 0.35,
+	distance: 120,
+	minMatchCharLength: 2,
+	ignoreLocation: false,
+	fieldNormWeight: 1,
+}
+
+/**
+ * Create a reusable fuzzy search function over a collection.
+ * Returns a function that accepts a query string and optional result limit.
+ */
+export function createSearch<T>(collection: T[], keys: SearchKey[]) {
+	const index = new Fuse<T>(collection, {...DEFAULT_FUSE_OPTIONS, keys})
+
+	return function search(query: string, maxResults = 60): T[] {
+		const normalized = query.trim().replace(/\s+/g, ' ')
+		if (!normalized) return collection.slice(0, maxResults)
+		return index.search(normalized, {limit: maxResults}).map((r) => r.item)
 	}
 }

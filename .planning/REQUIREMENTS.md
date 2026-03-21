@@ -84,6 +84,18 @@
 - [ ] **INFRA-04**: Memory monitoring with alert at 70% (5.6GB), reject new connections at 80%
 - [ ] **INFRA-05**: Platform PostgreSQL schema: users, api_keys, bandwidth_usage, tunnel_connections tables
 
+### Desktop Widgets (WIDGET)
+
+- [x] **WIDGET-01**: Widget type system with size catalog (Small 2x2, Medium 4x2, Large 4x4) and WidgetMeta interface
+- [x] **WIDGET-02**: Desktop grid supports multi-cell items (colSpan/rowSpan) with correct DnD and collision detection
+- [x] **WIDGET-03**: Widget picker dialog accessible via right-click "Widget Ekle" on desktop
+- [x] **WIDGET-04**: Clock & Date widget (2x2) with digital and analog modes
+- [x] **WIDGET-05**: System Info Compact widget (2x2) with CPU/RAM/Disk progress bars
+- [x] **WIDGET-06**: System Info Detailed widget (4x2) with circular gauges and temperature
+- [x] **WIDGET-07**: Quick Notes widget (4x4) with auto-save to preferences
+- [x] **WIDGET-08**: Widget storage via preferences (localStorage + trpcReact server sync)
+- [x] **WIDGET-09**: Widget removal via right-click context menu on individual widgets
+
 ---
 
 ## Future Requirements (v8.1+)
@@ -117,6 +129,9 @@
 | White-label / reseller | Not planned |
 | Self-hosted LLM support | Kimi Code only for now |
 | Binary tunnel protocol | JSON+base64 sufficient for launch, optimize later |
+| Weather widget | Deferred -- requires external API key setup |
+| Calendar widget | Deferred -- needs calendar data source integration |
+| Widget resize handles | Deferred -- fixed sizes per type for V1 |
 
 ---
 
@@ -175,12 +190,21 @@
 | INFRA-03 | Phase 14 | Pending |
 | INFRA-04 | Phase 14 | Pending |
 | INFRA-05 | Phase 9 | Pending |
+| WIDGET-01 | Phase 15 | Complete |
+| WIDGET-02 | Phase 15 | Complete |
+| WIDGET-03 | Phase 15 | Complete |
+| WIDGET-04 | Phase 15 | Complete |
+| WIDGET-05 | Phase 15 | Complete |
+| WIDGET-06 | Phase 15 | Complete |
+| WIDGET-07 | Phase 15 | Complete |
+| WIDGET-08 | Phase 15 | Complete |
+| WIDGET-09 | Phase 15 | Complete |
 
 **Coverage:**
-- v1 requirements: 51 total
-- Mapped to phases: 51
+- v1 requirements: 60 total
+- Mapped to phases: 60
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 -- roadmap phase mapping complete*
+*Last updated: 2026-03-18 -- added WIDGET requirements for Phase 15*

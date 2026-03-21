@@ -651,7 +651,7 @@
   "login.password-label": "Password",
   "login.password.submit": "Log in",
   "login.subtitle": "Enter your Livinity password to log in",
-  "login.title": "Welcome back",
+  "login.title": "Welcome",
   "logout": "Log out",
   "logout-error-generic": "Error: Logout failed",
   "logout.confirm.submit": "Log out",

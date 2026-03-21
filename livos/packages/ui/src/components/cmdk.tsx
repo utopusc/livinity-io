@@ -147,10 +147,7 @@ function CmdkContent() {
 				icon={systemAppsKeyed['LIVINITY_files'].icon}
 				value={systemAppsKeyed['LIVINITY_files'].name}
 				onSelect={() => {
-					// TODO: THIS IS A HACK
-					// We need a better approach to track the last visited path (possibly scroll position too?)
-					// inside every page. We do this right now for the File app because it's has the most
-					// UX-advantage (eg. user accidentally clicking close while they're in a deeply nested path)
+					// Restore last visited path in Files app for better UX
 					const lastFilesPath = sessionStorage.getItem('lastFilesPath')
 
 					navigate(lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo)

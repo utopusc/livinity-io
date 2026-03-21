@@ -21,7 +21,7 @@ export function GradientPage({children}: {children: React.ReactNode}) {
 			<div
 				className='pointer-events-none fixed left-[-10%] top-[-10%] h-[500px] w-[500px] rounded-full opacity-30'
 				style={{
-					background: 'radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%)',
+					background: 'radial-gradient(circle, rgba(6,182,212,0.3) 0%, transparent 70%)',
 					filter: 'blur(80px)',
 					animation: 'blob-drift-1 20s ease-in-out infinite',
 				}}

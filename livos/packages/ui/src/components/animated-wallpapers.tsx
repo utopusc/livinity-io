@@ -658,16 +658,16 @@ export const animatedWallpapers: Record<AnimatedWallpaperId, {
 	name: string
 	brandColorHsl: string
 }> = {
-	aurora: {component: AuroraWallpaper, name: 'Aurora', brandColorHsl: '265 100% 40%'},
-	nebula: {component: NebulaWallpaper, name: 'Nebula', brandColorHsl: '270 100% 30%'},
+	aurora: {component: AuroraWallpaper, name: 'Aurora', brandColorHsl: '187 85% 43%'},
+	nebula: {component: NebulaWallpaper, name: 'Nebula', brandColorHsl: '200 90% 35%'},
 	ocean: {component: OceanWallpaper, name: 'Ocean', brandColorHsl: '210 100% 25%'},
 	ember: {component: EmberWallpaper, name: 'Ember', brandColorHsl: '15 80% 30%'},
-	matrix: {component: MatrixWallpaper, name: 'Matrix', brandColorHsl: '180 100% 25%'},
+	matrix: {component: MatrixWallpaper, name: 'Matrix', brandColorHsl: '160 80% 30%'},
 	chromatic: {component: ChromaticWallpaper, name: 'Chromatic', brandColorHsl: '0 0% 10%'},
-	prism: {component: PrismWallpaper, name: 'Prism', brandColorHsl: '280 90% 55%'},
-	terrain: {component: TerrainWallpaper, name: 'Terrain', brandColorHsl: '300 80% 25%'},
+	prism: {component: PrismWallpaper, name: 'Prism', brandColorHsl: '190 85% 45%'},
+	terrain: {component: TerrainWallpaper, name: 'Terrain', brandColorHsl: '340 70% 35%'},
 	pixel: {component: PixelWallpaper, name: 'Pixel', brandColorHsl: '330 100% 40%'},
-	mesh: {component: MeshWallpaper, name: 'Mesh', brandColorHsl: '270 60% 35%'},
+	mesh: {component: MeshWallpaper, name: 'Mesh', brandColorHsl: '195 70% 40%'},
 	vortex: {component: VortexWallpaper, name: 'Vortex', brandColorHsl: '180 100% 35%'},
 }
 

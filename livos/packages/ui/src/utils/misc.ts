@@ -8,127 +8,106 @@ export function fixmeAlert() {
 
 export const fixmeHandler = () => fixmeAlert()
 
-export function firstNameFromFullName(name: string) {
-	return name.split(' ')[0]
+/** Extract first name from a full name string */
+export function firstNameFromFullName(fullName: string): string {
+	return fullName.split(' ')[0]
 }
 
-export function sleep(milliseconds: number) {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds))
+/** Promise-based delay */
+export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/** Type guard for finite, non-NaN numbers */
+export function isNormalNumber(val: number | null | undefined): val is number {
+	return val != null && Number.isFinite(val)
 }
 
-export function isNormalNumber(value: number | null | undefined): value is number {
-	if (value === undefined || value === null) return false
-	return value !== Infinity && value !== -Infinity && !isNaN(value)
+/** Exhaustiveness check for switch/if-else chains */
+export function assertUnreachable(value: never): never {
+	throw new Error(`Unexpected value: ${value}`)
 }
 
-// https://stackoverflow.com/a/39419171
-export function assertUnreachable(x: never): never {
-	throw new Error("Didn't expect to get here, got " + x)
+/** Index an array by a key field, returning a typed Record */
+export function keyBy<T, K extends keyof T>(items: ReadonlyArray<T>, key: K): Record<T[K] & string, T> {
+	return indexBy(items, (item) => item[key])
 }
 
-/**
- * Does what lodash's keyBy does, but returns with better types
- */
-export function keyBy<T, U extends keyof T>(array: ReadonlyArray<T>, key: U): Record<T[U] & string, T> {
-	return indexBy(array, (el) => el[key])
+/** Join a base URL with a path segment, preserving trailing slashes */
+export function urlJoin(base: string, segment: string): string {
+	return new URL(segment, base).href
 }
 
-// Not using `url-join` or others because they remove desired slashes after joining. `new URL('?bla=1', 'http://localhost:3001/a/').href` preserves trailing slash to return 'http://localhost:3001/a/?bla=1'
-// The `transmission` app depends on this behavior because the app's full path is `http://localhost:9091/transmission/web/` but when joining a query string, we want it to be `http://localhost:9091/transmission/web/?bla=1`
-export function urlJoin(base: string, path: string) {
-	return new URL(path, base).href
+/** Simple path concatenation with slash normalization */
+export function pathJoin(base: string, segment: string): string {
+	return base.replace(/\/$/, '') + '/' + segment.replace(/^\//, '')
 }
 
-/** `urlJoin` doesn't work when used like so: `urlJoin('foo', 'bar')`, and sometimes we just want basic behavior */
-export function pathJoin(base: string, path: string) {
-	// Remove trailing slash from base and leading slash from path
-	return base.replace(/\/$/, '') + '/' + path.replace(/^\//, '')
-}
-
-export function appToUrl(app: UserApp) {
+/** Resolve the external URL for an installed app based on current hostname */
+export function appToUrl(app: UserApp): string {
 	if (isOnionPage()) {
 		return `${location.protocol}//${app.hiddenService}`
 	}
 
-	// Use port-based URL for local development (localhost)
+	// Local development — use port-based URL
 	if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
 		return `${location.protocol}//${location.hostname}:${app.port}`
 	}
 
-	// Use subdomain-based URL for production/cloud deployment
-	// Need to find the user's base domain, stripping any existing app subdomain
-	// If on n8n.lucy.livinity.io → base = lucy.livinity.io
-	// If on lucy.livinity.io → base = lucy.livinity.io
-	// If on myserver.com → base = myserver.com
-	const subdomain = (app as any).subdomain || app.id
-	const parts = location.hostname.split('.')
-	// For livinity.io domains (3+ parts ending in livinity.io), user domain is X.livinity.io
-	// For custom domains (2 parts like myserver.com), the whole hostname is the domain
-	let baseDomain = location.hostname
-	if (parts.length > 3 && parts.slice(-2).join('.') === 'livinity.io') {
-		// Strip app subdomain: n8n.lucy.livinity.io → lucy.livinity.io
-		baseDomain = parts.slice(-3).join('.')
-	} else if (parts.length > 2 && parts.slice(-2).join('.') !== 'livinity.io') {
-		// Custom domain with app prefix: n8n.myserver.com → myserver.com
-		baseDomain = parts.slice(-2).join('.')
+	// Production — prepend app subdomain to user's base domain
+	const appSubdomain = (app as any).subdomain || app.id
+	const hostParts = location.hostname.split('.')
+
+	let userDomain = location.hostname
+	if (hostParts.length > 3 && hostParts.slice(-2).join('.') === 'livinity.io') {
+		userDomain = hostParts.slice(-3).join('.')
+	} else if (hostParts.length > 2 && hostParts.slice(-2).join('.') !== 'livinity.io') {
+		userDomain = hostParts.slice(-2).join('.')
 	}
-	return `${location.protocol}//${subdomain}.${baseDomain}`
+
+	return `${location.protocol}//${appSubdomain}.${userDomain}`
 }
 
-export function appToUrlWithAppPath(app: UserApp) {
+/** Resolve app URL including the app's configured path */
+export function appToUrlWithAppPath(app: UserApp): string {
 	return urlJoin(appToUrl(app), app.path ?? '')
 }
 
-export function isOnionPage() {
-	return window.location.origin.indexOf('.onion') !== -1
+/** Check if the current page is accessed via a Tor .onion address */
+export function isOnionPage(): boolean {
+	return location.origin.includes('.onion')
 }
 
-export function preloadImage(url: string): Promise<void> {
+/** Preload an image by creating a hidden Image element */
+export function preloadImage(src: string): Promise<void> {
 	return new Promise((resolve) => {
 		const img = new Image()
-		const handleLoad = () => {
-			img.removeEventListener('load', handleLoad)
-			resolve()
-		}
-		img.addEventListener('load', handleLoad)
-		img.src = url
+		img.onload = () => resolve()
+		img.onerror = () => resolve()
+		img.src = src
 	})
 }
 
-export function transitionViewIfSupported(cb: () => void) {
-	if (document.startViewTransition) {
-		document.startViewTransition(cb)
-	} else {
-		cb()
-	}
+/** Wrap a callback in View Transition API if supported */
+export function transitionViewIfSupported(fn: () => void): void {
+	document.startViewTransition ? document.startViewTransition(fn) : fn()
 }
 
-// ---
+// ── Platform detection ──────────────────────────────────
 
-export function isWindows() {
-	return /Win/i.test(navigator.userAgent)
-}
+const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
 
-export function isLinux() {
-	return /Linux/i.test(navigator.userAgent)
-}
+export const isWindows = () => /Win/i.test(ua)
+export const isLinux = () => /Linux/i.test(ua)
+export const isMac = () => /Mac/i.test(ua)
 
-export function isMac() {
-	return /Mac/i.test(navigator.userAgent)
-}
-
-export function platform() {
+export function platform(): 'windows' | 'linux' | 'mac' | 'other' {
 	if (isWindows()) return 'windows'
-	if (isLinux()) return 'linux'
 	if (isMac()) return 'mac'
+	if (isLinux()) return 'linux'
 	return 'other'
 }
 
-// NOTE: in Chrome, this can be `true` when emulating a touch device
-export const IS_ANDROID = /Android/i.test(navigator.userAgent)
-
+export const IS_ANDROID = /Android/i.test(ua)
 export const IS_DEV = localStorage.getItem('debug') === 'true'
 
-export function cmdOrCtrl() {
-	return isMac() ? '⌘' : 'Ctrl+'
-}
+/** Returns the platform-appropriate modifier key symbol */
+export const cmdOrCtrl = () => (isMac() ? '⌘' : 'Ctrl+')

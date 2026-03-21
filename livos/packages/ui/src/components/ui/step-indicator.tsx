@@ -15,7 +15,7 @@ export function StepIndicator({steps, currentStep, className}: StepIndicatorProp
 					className={cn(
 						'h-1.5 rounded-full transition-all duration-500',
 						i === currentStep
-							? 'w-8 bg-brand shadow-[0_0_10px_rgba(139,92,246,0.5)]'
+							? 'w-8 bg-brand shadow-[0_0_10px_rgba(6,182,212,0.5)]'
 							: i < currentStep
 								? 'w-2 bg-brand/40'
 								: 'w-2 bg-surface-2',
