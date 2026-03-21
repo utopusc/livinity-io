@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-03-21T06:05:43.399Z"
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-03-21T08:03:39.409Z"
 progress:
-  total_phases: 27
+  total_phases: 28
   completed_phases: 15
-  total_plans: 35
-  completed_plans: 38
+  total_plans: 37
+  completed_plans: 39
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 22 — app-store-integration-fix
+**Current focus:** Phase 23 — livos-native-app-compose-system
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Phase: 23 (livos-native-app-compose-system) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Plan: Not started
 | Phase 21-install-history-profile P01 | 10min | 2 tasks | 5 files |
 | Phase 22 P01 | 2min | 2 tasks | 1 files |
 | Phase 22 P02 | 3min | 2 tasks | 5 files |
+| Phase 23 P01 | 4min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -87,6 +88,9 @@ Plan: Not started
 - [Phase 22]: Partial status update sent immediately for installing app rather than querying apps.list first
 - [Phase 22]: Progress bar uses teal-500 matching brand palette; installing badge uses blue to differentiate from running/stopped
 - [Phase 22]: Credentials dialog auto-shows via useEffect on appCredentials context, dismissed via Got it + clearCredentials
+- [Phase 23]: ComposeDefinition as separate interface (ComposeServiceDef + ComposeDefinition) for type safety
+- [Phase 23]: Volume paths use ${APP_DATA_DIR} placeholder resolved at install time by patchComposeFile
+- [Phase 23]: generateAppTemplate returns null for non-builtin apps enabling fallback to git repo in Plan 02
 
 ### Roadmap Evolution
 
@@ -103,6 +107,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T06:02:42.926Z
-Stopped at: Completed 22-02-PLAN.md
+Last session: 2026-03-21T08:03:39.404Z
+Stopped at: Completed 23-01-PLAN.md
 Resume file: None

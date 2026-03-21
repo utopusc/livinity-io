@@ -181,15 +181,15 @@ Plans:
 | 20. iframe Embedding | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 21. History & Profile | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 22. Integration Fix | v10.0 | 2/2 | Complete    | 2026-03-21 |
-| 23. Native App Compose | v10.0 | 0/2 | In Progress |           |
+| 23. Native App Compose | v10.0 | 1/2 | In Progress|  |
 
 ### Phase 23: LivOS-Native App Compose System
 
 **Goal:** Replace community app store repo dependency with a self-contained compose generation system. Each builtin app gets a complete, LivOS-optimized docker-compose.yml generated at install time from builtin-apps.ts definitions. Handles multi-service apps (Portainer+DinD), health checks, restart policies, correct main service detection for port binding, proper volume paths, and environment defaults. Falls back to platform DB docker_compose field for non-builtin apps. Eliminates the requirement for cloned git repos on the server.
 **Requirements**: R-COMPOSE-GEN, R-COMPOSE-MULTISERVICE, R-COMPOSE-HEALTHCHECK, R-COMPOSE-FALLBACK
 **Depends on:** Phase 22
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 23-01-PLAN.md — Compose definitions for all 11 builtin apps + generateAppTemplate() engine
+- [x] 23-01-PLAN.md — Compose definitions for all 11 builtin apps + generateAppTemplate() engine
 - [ ] 23-02-PLAN.md — Install flow integration with builtin-first, platform DB fallback chain
