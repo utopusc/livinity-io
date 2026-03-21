@@ -364,18 +364,42 @@ class Server {
 							if (subConfig) {
 								let targetPort = subConfig.port
 
-								// Check multi-user mode for per-user port
+								// Auth + per-user port resolution
 								const multiUserEnabled = await this.livinityd.ai.redis.get('livos:system:multi_user')
 								if (multiUserEnabled === 'true') {
-									const token = searchParams.get('token') || searchParams.get('LIVINITY_SESSION')
-									if (token) {
-										const payload = await this.verifyToken(token).catch(() => null)
-										if (payload && typeof payload === 'object' && 'userId' in payload && payload.userId) {
-											const {findAppPortForUser} = await import('../database/index.js')
-											const baseAppId = subConfig.appId.includes(':user:') ? subConfig.appId.split(':user:')[0] : subConfig.appId
-											const userPort = await findAppPortForUser(payload.userId as string, baseAppId)
-											if (userPort) targetPort = userPort
+									// Try token from query params first, then session cookie
+									let token = searchParams.get('token') || searchParams.get('LIVINITY_SESSION')
+									if (!token) {
+										// Parse session cookie from raw header
+										const cookieHeader = request.headers.cookie || ''
+										const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
+										if (sessionMatch) token = sessionMatch[1]
+									}
+									if (!token) {
+										socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+										socket.destroy()
+										return
+									}
+									const payload = await this.verifyToken(token).catch(() => null)
+									if (!payload || typeof payload !== 'object' || !('loggedIn' in payload) || !payload.loggedIn) {
+										socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+										socket.destroy()
+										return
+									}
+									if ('userId' in payload && payload.userId) {
+										const {findAppPortForUser, hasAppAccess} = await import('../database/index.js')
+										const baseAppId = subConfig.appId.includes(':user:') ? subConfig.appId.split(':user:')[0] : subConfig.appId
+										const isAdmin = 'role' in payload && payload.role === 'admin'
+										if (!isAdmin) {
+											const canAccess = await hasAppAccess(payload.userId as string, baseAppId)
+											if (!canAccess) {
+												socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+												socket.destroy()
+												return
+											}
 										}
+										const userPort = await findAppPortForUser(payload.userId as string, baseAppId)
+										if (userPort) targetPort = userPort
 									}
 								}
 
