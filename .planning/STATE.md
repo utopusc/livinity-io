@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-03-21T04:28:48.796Z"
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-03-21T04:45:30.170Z"
 progress:
-  total_phases: 24
-  completed_phases: 13
-  total_plans: 32
-  completed_plans: 35
+  total_phases: 25
+  completed_phases: 14
+  total_plans: 33
+  completed_plans: 36
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 20 — LivOS iframe Embedding
+**Current focus:** Phase 21 — Install History & Profile
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
+Phase: 21 (Install History & Profile) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: Not started
 | Phase 18 P03 | 5min | 2 tasks | 2 files |
 | Phase 19-postmessage-bridge-protocol P01 | 2min | 2 tasks | 5 files |
 | Phase 20 P01 | 4min | 2 tasks | 4 files |
+| Phase 21-install-history-profile P01 | 10min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -77,6 +78,8 @@ Plan: Not started
 - [Phase 20]: tRPC path domain.platform.getApiKey (platform nested under domain router)
 - [Phase 20]: Imperative trpcClient for mutations in postMessage event handlers, useRef to prevent stale closures
 - [Phase 20]: Origin validation accepts *.livinity.io + localhost in dev; app state mapping: running/ready->running, stopped/stopping->stopped, else->not_installed
+- [Phase 21-install-history-profile]: Fire-and-forget event reporting: fetch().catch(() => {}) to avoid blocking UI
+- [Phase 21-install-history-profile]: Promise.all parallel fetch for profile page (profile + apps + history endpoints)
 
 ### Pending Todos
 
@@ -88,6 +91,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T04:28:11.160Z
-Stopped at: Completed 20-01-PLAN.md
+Last session: 2026-03-21T04:45:30.166Z
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None

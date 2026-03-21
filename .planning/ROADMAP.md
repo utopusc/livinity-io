@@ -66,7 +66,7 @@ Build apps.livinity.io as an embedded app store that LivOS instances display via
 - [x] **Phase 18: Store UI** - apps.livinity.io/store with featured apps, categories, search, detail pages, Apple aesthetic (completed 2026-03-21)
 - [x] **Phase 19: postMessage Bridge Protocol** - Bidirectional postMessage communication between apps.livinity.io and LivOS (completed 2026-03-21)
 - [x] **Phase 20: LivOS iframe Embedding** - App Store window in LivOS that embeds apps.livinity.io and executes install commands (completed 2026-03-21)
-- [ ] **Phase 21: Install History & Profile** - Install event reporting, profile page with installed apps and history timeline
+- [x] **Phase 21: Install History & Profile** - Install event reporting, profile page with installed apps and history timeline (completed 2026-03-21)
 
 ## Phase Details
 
@@ -156,7 +156,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 21-01-PLAN.md — Event reporting in LivOS bridge + profile page with installed apps and history timeline
+- [x] 21-01-PLAN.md — Event reporting in LivOS bridge + profile page with installed apps and history timeline
 
 ## Progress
 
@@ -169,4 +169,4 @@ Plans:
 | 18. Store UI | v10.0 | 3/3 | Complete    | 2026-03-21 |
 | 19. postMessage Bridge | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 20. iframe Embedding | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 21. History & Profile | v10.0 | 0/1 | Not started | - |
+| 21. History & Profile | v10.0 | 1/1 | Complete   | 2026-03-21 |

@@ -42,10 +42,10 @@
 
 ### HIST — Install History + Profile
 
-- [ ] **HIST-01**: install_history table records install/uninstall/update events with user_id, app_id, instance_name
-- [ ] **HIST-02**: /store/profile page shows user's installed apps across all instances
-- [ ] **HIST-03**: /store/profile page shows install history timeline
-- [ ] **HIST-04**: LivOS reports install/uninstall events to apps.livinity.io API
+- [x] **HIST-01**: install_history table records install/uninstall/update events with user_id, app_id, instance_name
+- [x] **HIST-02**: /store/profile page shows user's installed apps across all instances
+- [x] **HIST-03**: /store/profile page shows install history timeline
+- [x] **HIST-04**: LivOS reports install/uninstall events to apps.livinity.io API
 
 ### API — Backend API Extensions
 
@@ -103,10 +103,10 @@
 | EMBED-03 | Phase 20 | Complete |
 | EMBED-04 | Phase 20 | Complete |
 | EMBED-05 | Phase 20 | Complete |
-| HIST-01 | Phase 21 | Pending |
-| HIST-02 | Phase 21 | Pending |
-| HIST-03 | Phase 21 | Pending |
-| HIST-04 | Phase 21 | Pending |
+| HIST-01 | Phase 21 | Complete |
+| HIST-02 | Phase 21 | Complete |
+| HIST-03 | Phase 21 | Complete |
+| HIST-04 | Phase 21 | Complete |
 
 **Coverage:**
 - v10.0 requirements: 30 total
