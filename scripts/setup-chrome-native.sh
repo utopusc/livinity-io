@@ -58,6 +58,8 @@ ExecStart=/bin/bash -c '\
     --disable-dev-shm-usage \
     --no-first-run \
     --start-maximized \
+    --remote-debugging-port=9222 \
+    --remote-debugging-address=127.0.0.1 \
     --user-data-dir=${CHROME_DATA_DIR} \
     --display=:99 & \
   sleep 2 && \
