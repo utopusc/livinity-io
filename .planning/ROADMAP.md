@@ -63,7 +63,7 @@ Build apps.livinity.io as an embedded app store that LivOS instances display via
 
 - [x] **Phase 16: Install Script Docker Fix** - install.sh auto-pulls auth-server + tor images, creates torrc, starts all containers (completed 2026-03-21)
 - [x] **Phase 17: Backend API Extensions** - Install event recording, user apps endpoint, profile endpoint on Server5 (completed 2026-03-21)
-- [ ] **Phase 18: Store UI** - apps.livinity.io/store with featured apps, categories, search, detail pages, Apple aesthetic
+- [x] **Phase 18: Store UI** - apps.livinity.io/store with featured apps, categories, search, detail pages, Apple aesthetic (completed 2026-03-21)
 - [ ] **Phase 19: postMessage Bridge Protocol** - Bidirectional postMessage communication between apps.livinity.io and LivOS
 - [ ] **Phase 20: LivOS iframe Embedding** - App Store window in LivOS that embeds apps.livinity.io and executes install commands
 - [ ] **Phase 21: Install History & Profile** - Install event reporting, profile page with installed apps and history timeline
@@ -113,7 +113,7 @@ Plans:
 Plans:
 - [x] 18-01-PLAN.md — Types, auth context provider, sidebar navigation, topbar with search, store layout shell
 - [x] 18-02-PLAN.md — Featured hero section, app cards, category sections, discover page with search filtering
-- [ ] 18-03-PLAN.md — App detail page (/store/[id]) with full info, Install button placeholder, build verification
+- [x] 18-03-PLAN.md — App detail page (/store/[id]) with full info, Install button placeholder, build verification
 
 ### Phase 19: postMessage Bridge Protocol
 **Goal**: apps.livinity.io and LivOS communicate bidirectionally via postMessage -- the store can request installs/uninstalls/opens, and LivOS can report app status back -- with origin validation for security
@@ -169,7 +169,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. Backend API Extensions | v10.0 | 2/2 | Complete    | 2026-03-21 |
-| 18. Store UI | v10.0 | 2/3 | In Progress|  |
+| 18. Store UI | v10.0 | 3/3 | Complete   | 2026-03-21 |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
 | 21. History & Profile | v10.0 | 0/TBD | Not started | - |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-03-21T03:55:35.109Z"
+stopped_at: Completed 18-03-PLAN.md
+last_updated: "2026-03-21T04:02:27.111Z"
 progress:
   total_phases: 22
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 30
-  completed_plans: 32
+  completed_plans: 33
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 3 of 3
 | Phase 17 P02 | 2min | 2 tasks | 5 files |
 | Phase 18 P01 | 2min | 2 tasks | 7 files |
 | Phase 18 P02 | 2min | 2 tasks | 4 files |
+| Phase 18 P03 | 5min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -67,6 +68,8 @@ Plan: 3 of 3
 - [Phase 18]: Suspense boundary inside StoreProvider for Next.js 16 useSearchParams requirement
 - [Phase 18]: Category gradient map for visual variety across featured cards
 - [Phase 18]: Multi-mode page rendering: discover/search/category views in single page component
+- [Phase 18]: Client-side fetch for detail page using token from StoreProvider context (avoids server-component auth complexity)
+- [Phase 18]: Raw img tags with eslint-disable for app icons -- simpler than next/image remotePatterns for arbitrary external URLs
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T03:55:35.104Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-03-21T04:02:27.107Z
+Stopped at: Completed 18-03-PLAN.md
 Resume file: None
