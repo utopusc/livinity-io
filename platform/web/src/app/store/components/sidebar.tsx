@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useStore } from '../store-provider';
 import { CATEGORIES } from '../types';
 import { cn } from '@/lib/utils';
@@ -10,7 +12,15 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
-  const { selectedCategory, setSelectedCategory } = useStore();
+  const { selectedCategory, setSelectedCategory, token, instanceName } = useStore();
+  const pathname = usePathname();
+  const isProfileActive = pathname === '/store/profile';
+
+  const profileParams = new URLSearchParams();
+  if (token) profileParams.set('token', token);
+  if (instanceName) profileParams.set('instance', instanceName);
+  const profileQs = profileParams.toString();
+  const profileHref = `/store/profile${profileQs ? `?${profileQs}` : ''}`;
 
   return (
     <>
@@ -80,17 +90,20 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* My Apps -- placeholder */}
+          {/* My Apps */}
           <div className="border-t border-[#e5e5e7] pt-4">
-            <div
-              className="flex cursor-not-allowed items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#86868b]"
-              title="Coming in a future update"
+            <Link
+              href={profileHref}
+              onClick={onClose}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                isProfileActive
+                  ? 'bg-teal-50 font-medium text-teal-600'
+                  : 'text-[#1d1d1f] hover:bg-[#f5f5f7]'
+              )}
             >
               My Apps
-              <span className="ml-auto rounded bg-[#f5f5f7] px-1.5 py-0.5 text-[10px]">
-                Soon
-              </span>
-            </div>
+            </Link>
           </div>
         </div>
       </aside>
