@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Store UI — Apple App Store aesthetic (light-only) */
+.store-layout {
+  --background: #ffffff;
+  --foreground: #1d1d1f;
+  --muted: #86868b;
+  --border: #e5e5e7;
+  --card: #f5f5f7;
+  --primary: #14b8a6;
+  color-scheme: light;
+}
