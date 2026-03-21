@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 24-03-PLAN.md
-last_updated: "2026-03-21T10:57:53.828Z"
+stopped_at: Completed 24-04-PLAN.md
+last_updated: "2026-03-21T12:13:23.128Z"
 progress:
   total_phases: 29
-  completed_phases: 16
+  completed_phases: 17
   total_plans: 41
-  completed_plans: 43
+  completed_plans: 44
 ---
 
 # Project State
@@ -59,6 +59,7 @@ Plan: 4 of 4
 | Phase 24-app-store-expansion P01 | 1min | 1 tasks | 1 files |
 | Phase 24 P02 | 1min | 1 tasks | 1 files |
 | Phase 24 P03 | 1min | 1 tasks | 1 files |
+| Phase 24-app-store-expansion P04 | 10min | 2 tasks | 1 files |
 
 ### Decisions
 
@@ -100,6 +101,7 @@ Plan: 4 of 4
 - [Phase 23]: reinstallMissingAppsAfterRestore no longer returns early on repo failure -- builtin apps install without repos
 - [Phase 24-app-store-expansion]: 5 new builtin apps added following existing BuiltinAppManifest pattern: AdGuard Home, WireGuard Easy, Navidrome, Calibre-web, Homarr
 - [Phase 24]: Migration numbered 0003 (not 0002 as planned) because 0002_create_install_history.sql already exists
+- [Phase 24-app-store-expansion]: Added slug column to SQL migration -- production DB has NOT NULL slug column that was missing from original migration
 
 ### Roadmap Evolution
 
@@ -117,6 +119,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T10:57:53.824Z
-Stopped at: Completed 24-03-PLAN.md
+Last session: 2026-03-21T12:13:23.124Z
+Stopped at: Completed 24-04-PLAN.md
 Resume file: None
