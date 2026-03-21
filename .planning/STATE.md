@@ -108,6 +108,7 @@ Plan: Not started
 - Phase 22 added: App Store Integration Fix
 - Phase 23 added: LivOS-Native App Compose System
 - Phase 24 added: App Store Expansion (10 new apps)
+- Phase 25 added: Native Chrome Browser (native install, on-demand streaming, JWT auth)
 
 ### Pending Todos
 

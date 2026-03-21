@@ -207,3 +207,13 @@ Plans:
 - [x] 24-02-PLAN.md — SQL seed migration for all 10 new expansion apps in platform DB
 - [x] 24-03-PLAN.md — Add 5 builtin apps batch 2: Wiki.js, Linkwarden, Element Web, Hoppscotch, Stirling PDF
 - [x] 24-04-PLAN.md — Deploy to Server4/Server5 and verify installs end-to-end
+
+### Phase 25: Native Chrome Browser
+
+**Goal:** Install Google Chrome natively on server (no Docker), stream on-demand via noVNC/KasmVNC when user opens the app, auth-gated behind LivOS JWT, manageable from UI and AI MCP. Stream starts on click, stops on window close/idle. Chrome session persists across restarts.
+**Requirements**: R-CHROME-NATIVE, R-CHROME-STREAM, R-CHROME-AUTH, R-CHROME-MANAGE
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 25 to break down)
