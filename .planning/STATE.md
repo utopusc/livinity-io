@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-03-21T03:39:36.728Z"
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-03-21T03:52:10.587Z"
 progress:
-  total_phases: 21
+  total_phases: 22
   completed_phases: 10
-  total_plans: 27
-  completed_plans: 30
+  total_plans: 30
+  completed_plans: 31
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 17 — Backend API Extensions
+**Current focus:** Phase 18 — Store UI
 
 ## Current Position
 
-Phase: 18
-Plan: Not started
+Phase: 18 (Store UI) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: Not started
 | Phase 16-install-script-docker-fix P01 | 2min | 2 tasks | 1 files |
 | Phase 17 P01 | 3min | 2 tasks | 13 files |
 | Phase 17 P02 | 2min | 2 tasks | 5 files |
+| Phase 18 P01 | 2min | 2 tasks | 7 files |
 
 ### Decisions
 
@@ -61,6 +62,8 @@ Plan: Not started
 - [Phase 17]: Installed motion, react-use-measure, clsx, tailwind-merge as pre-existing component deps to unblock build
 - [Phase 17]: Raw SQL via pool for complex aggregation queries (DISTINCT ON, CTE) instead of Drizzle ORM
 - [Phase 17]: No FK on user_id in install_history since users table managed by raw SQL not Drizzle
+- [Phase 18]: Server layout + client shell pattern for Next.js metadata with client-side sidebar state
+- [Phase 18]: Suspense boundary inside StoreProvider for Next.js 16 useSearchParams requirement
 
 ### Pending Todos
 
@@ -72,6 +75,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T03:38:55.935Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-03-21T03:52:10.583Z
+Stopped at: Completed 18-01-PLAN.md
 Resume file: None

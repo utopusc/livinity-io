@@ -111,7 +111,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 18-01-PLAN.md — Types, auth context provider, sidebar navigation, topbar with search, store layout shell
+- [x] 18-01-PLAN.md — Types, auth context provider, sidebar navigation, topbar with search, store layout shell
 - [ ] 18-02-PLAN.md — Featured hero section, app cards, category sections, discover page with search filtering
 - [ ] 18-03-PLAN.md — App detail page (/store/[id]) with full info, Install button placeholder, build verification
 
@@ -169,7 +169,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 16. Install Script Docker Fix | v10.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. Backend API Extensions | v10.0 | 2/2 | Complete    | 2026-03-21 |
-| 18. Store UI | v10.0 | 0/3 | Not started | - |
+| 18. Store UI | v10.0 | 1/3 | In Progress|  |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |
 | 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
 | 21. History & Profile | v10.0 | 0/TBD | Not started | - |

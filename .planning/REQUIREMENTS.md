@@ -19,9 +19,9 @@
 - [ ] **STORE-02**: /store page shows app categories with filterable grid
 - [ ] **STORE-03**: /store page has search functionality across all apps
 - [ ] **STORE-04**: /store/[id] page shows app detail with icon, description, version, Install button
-- [ ] **STORE-05**: /store page has left sidebar navigation (Discover, Categories, My Apps)
-- [ ] **STORE-06**: Store UI follows Apple App Store aesthetic — white, clean, premium feel
-- [ ] **STORE-07**: Store UI is responsive — works standalone in browser and inside iframe
+- [x] **STORE-05**: /store page has left sidebar navigation (Discover, Categories, My Apps)
+- [x] **STORE-06**: Store UI follows Apple App Store aesthetic — white, clean, premium feel
+- [x] **STORE-07**: Store UI is responsive — works standalone in browser and inside iframe
 
 ### BRIDGE — postMessage Communication
 
@@ -89,9 +89,9 @@
 | STORE-02 | Phase 18 | Pending |
 | STORE-03 | Phase 18 | Pending |
 | STORE-04 | Phase 18 | Pending |
-| STORE-05 | Phase 18 | Pending |
-| STORE-06 | Phase 18 | Pending |
-| STORE-07 | Phase 18 | Pending |
+| STORE-05 | Phase 18 | Complete |
+| STORE-06 | Phase 18 | Complete |
+| STORE-07 | Phase 18 | Complete |
 | BRIDGE-01 | Phase 19 | Pending |
 | BRIDGE-02 | Phase 19 | Pending |
 | BRIDGE-03 | Phase 19 | Pending |
