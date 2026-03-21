@@ -1,8 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useStore } from '../store-provider';
+
+function copyToClipboard(text: string): boolean {
+  // Try modern API first
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    return true;
+  }
+  // Fallback: textarea + execCommand
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch {}
+  document.body.removeChild(ta);
+  return true;
+}
 import { CATEGORIES } from '../types';
 import type { App } from '../types';
 
@@ -366,7 +384,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                     <p className="mt-1 truncate font-mono text-sm text-[#1d1d1f]">{appCredentials.username}</p>
                   </div>
                   <button
-                    onClick={() => navigator.clipboard.writeText(appCredentials.username)}
+                    onClick={() => copyToClipboard(appCredentials.username)}
                     className="shrink-0 rounded-lg bg-white p-2 text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
                     title="Copy"
                   >
@@ -381,7 +399,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                     <p className="mt-1 truncate font-mono text-sm text-[#1d1d1f]">{appCredentials.password}</p>
                   </div>
                   <button
-                    onClick={() => navigator.clipboard.writeText(appCredentials.password)}
+                    onClick={() => copyToClipboard(appCredentials.password)}
                     className="shrink-0 rounded-lg bg-white p-2 text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
                     title="Copy"
                   >
