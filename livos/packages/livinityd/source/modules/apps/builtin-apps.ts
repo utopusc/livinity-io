@@ -23,6 +23,8 @@ export interface ComposeServiceDef {
   depends_on?: string[]
   command?: string[]
   user?: string
+  shm_size?: string
+  security_opt?: string[]
 }
 
 export interface ComposeDefinition {
@@ -504,6 +506,8 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         server: {
           image: 'lscr.io/linuxserver/chrome:latest',
           restart: 'unless-stopped',
+          shm_size: '1gb',
+          security_opt: ['seccomp=unconfined'],
           environment: {
             PUID: '1000',
             PGID: '1000',

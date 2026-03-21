@@ -95,6 +95,56 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/terminal',
 	},
+	{
+		id: 'LIVINITY_chrome',
+		name: 'Chrome',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: '/chrome',
+	},
+	// Web app shortcuts — open Chrome with specific URL
+	{
+		id: 'LIVINITY_facebook',
+		name: 'Facebook',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: 'https://www.facebook.com',
+	},
+	{
+		id: 'LIVINITY_gmail',
+		name: 'Gmail',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: 'https://mail.google.com',
+	},
+	{
+		id: 'LIVINITY_youtube',
+		name: 'YouTube',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: 'https://www.youtube.com',
+	},
+	{
+		id: 'LIVINITY_tradingview',
+		name: 'TradingView',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: 'https://www.tradingview.com',
+	},
+	{
+		id: 'LIVINITY_google',
+		name: 'Google',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: 'https://www.google.com',
+	},
+	{
+		id: 'LIVINITY_yahoo',
+		name: 'Yahoo',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: 'https://www.yahoo.com',
+	},
 ] as const satisfies readonly AppT[]
 
 export const systemAppsKeyed = keyBy(systemApps, 'id')

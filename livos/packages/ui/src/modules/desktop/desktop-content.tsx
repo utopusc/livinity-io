@@ -2,11 +2,12 @@ import {motion, Variant} from 'framer-motion'
 import {useLocation} from 'react-router-dom'
 import {useState, useEffect, useCallback, useMemo, useRef} from 'react'
 
-import {useApps} from '@/providers/apps'
+import {useApps, systemAppsKeyed} from '@/providers/apps'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {trpcReact} from '@/trpc/trpc'
 
 import {AppGrid, AppGridItem, DesktopLayout} from './app-grid/app-grid'
-import {AppIconConnected} from './app-icon'
+import {AppIcon, AppIconConnected} from './app-icon'
 import {DesktopFolder} from './desktop-folder'
 import {DockSpacer} from './dock'
 import {WidgetMeta, getWidgetSize} from './widgets/widget-types'
@@ -268,7 +269,33 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 			}
 		})
 
-		return [...appItems, ...folderItems, ...widgetItems]
+		// Web app shortcuts on desktop
+		const webAppIds = ['LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'] as const
+		const webAppIcons: Record<string, string> = {
+			'LIVINITY_facebook': 'https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg',
+			'LIVINITY_gmail': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg',
+			'LIVINITY_youtube': 'https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg',
+			'LIVINITY_tradingview': 'https://www.tradingview.com/static/images/favicon.ico',
+			'LIVINITY_google': 'https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg',
+			'LIVINITY_yahoo': 'https://upload.wikimedia.org/wikipedia/commons/5/58/Yahoo%21_logo.svg',
+		}
+		const webAppItems: AppGridItem[] = webAppIds.map((id) => {
+			const app = systemAppsKeyed[id]
+			return {
+				id,
+				node: (
+					<motion.div
+						initial={{opacity: 0, scale: 0}}
+						animate={{opacity: 1, scale: 1}}
+						transition={{type: 'spring', stiffness: 400, damping: 25}}
+					>
+						<WebAppShortcut appId={id} name={app.name} icon={webAppIcons[id]} url={app.systemAppTo} />
+					</motion.div>
+				),
+			}
+		})
+
+		return [...webAppItems, ...appItems, ...folderItems, ...widgetItems]
 	}, [userApps, folders, widgets])
 
 	return (
@@ -287,4 +314,17 @@ export function addDesktopFolder(folderName: string) {
 		folders.push({name: folderName})
 		saveFoldersLocal(folders)
 	}
+}
+
+// Web app shortcut that opens Chrome KasmVNC in a new browser tab
+function WebAppShortcut({name, icon}: {appId: string; name: string; icon: string; url: string}) {
+	const handleClick = useCallback(() => {
+		// Open Chrome's KasmVNC stream in a new browser tab
+		const host = window.location.hostname
+		const proto = window.location.protocol
+		const chromeUrl = `${proto}//chrome.${host}/`
+		window.open(chromeUrl, '_blank')
+	}, [])
+
+	return <AppIcon label={name} src={icon} onClick={handleClick} />
 }

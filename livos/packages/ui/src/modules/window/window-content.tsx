@@ -12,6 +12,7 @@ const ServerControlWindowContent = React.lazy(() => import('./app-contents/serve
 const SubagentsWindowContent = React.lazy(() => import('./app-contents/subagents-content'))
 const SchedulesWindowContent = React.lazy(() => import('./app-contents/schedules-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
+const ChromeWindowContent = React.lazy(() => import('./app-contents/chrome-content'))
 
 type WindowContentProps = {
 	route: string
@@ -19,7 +20,8 @@ type WindowContentProps = {
 }
 
 // Apps that manage their own scroll and layout (no wrapper padding/scroll)
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store'])
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_chrome',
+	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
 	if (fullHeightApps.has(appId)) {
@@ -68,6 +70,15 @@ function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: s
 
 		case 'LIVINITY_terminal':
 			return <TerminalWindowContent />
+
+		case 'LIVINITY_chrome':
+		case 'LIVINITY_facebook':
+		case 'LIVINITY_gmail':
+		case 'LIVINITY_youtube':
+		case 'LIVINITY_tradingview':
+		case 'LIVINITY_google':
+		case 'LIVINITY_yahoo':
+			return <ChromeWindowContent url={initialRoute.startsWith('http') ? initialRoute : undefined} />
 
 		default:
 			return (
