@@ -7,11 +7,11 @@
 
 ### INST — install.sh Docker Fix
 
-- [ ] **INST-01**: install.sh pulls getumbrel/auth-server:1.0.5 and tags as livos/auth-server:1.0.5
-- [ ] **INST-02**: install.sh pulls getumbrel/tor:0.4.7.8 and tags as livos/tor:0.4.7.8
-- [ ] **INST-03**: install.sh creates torrc config file with SocksPort and HiddenService directives
-- [ ] **INST-04**: install.sh starts auth + tor containers via docker compose automatically
-- [ ] **INST-05**: Single `curl | bash --api-key KEY` command results in fully working LivOS with auth + tor + tunnel connected
+- [x] **INST-01**: install.sh pulls getumbrel/auth-server:1.0.5 and tags as livos/auth-server:1.0.5
+- [x] **INST-02**: install.sh pulls getumbrel/tor:0.4.7.8 and tags as livos/tor:0.4.7.8
+- [x] **INST-03**: install.sh creates torrc config file with SocksPort and HiddenService directives
+- [x] **INST-04**: install.sh starts auth + tor containers via docker compose automatically
+- [x] **INST-05**: Single `curl | bash --api-key KEY` command results in fully working LivOS with auth + tor + tunnel connected
 
 ### STORE — apps.livinity.io Store UI
 
@@ -77,11 +77,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 16 | Pending |
-| INST-02 | Phase 16 | Pending |
-| INST-03 | Phase 16 | Pending |
-| INST-04 | Phase 16 | Pending |
-| INST-05 | Phase 16 | Pending |
+| INST-01 | Phase 16 | Complete |
+| INST-02 | Phase 16 | Complete |
+| INST-03 | Phase 16 | Complete |
+| INST-04 | Phase 16 | Complete |
+| INST-05 | Phase 16 | Complete |
 | API-01 | Phase 17 | Pending |
 | API-02 | Phase 17 | Pending |
 | API-03 | Phase 17 | Pending |

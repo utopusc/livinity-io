@@ -61,7 +61,7 @@ Build apps.livinity.io as an embedded app store that LivOS instances display via
 
 **Milestone Goal:** Build apps.livinity.io as an embedded app store inside LivOS, with postMessage bridge for install/uninstall, install history tracking, and user profiles. Fix install.sh to auto-setup auth + tor Docker containers.
 
-- [ ] **Phase 16: Install Script Docker Fix** - install.sh auto-pulls auth-server + tor images, creates torrc, starts all containers
+- [x] **Phase 16: Install Script Docker Fix** - install.sh auto-pulls auth-server + tor images, creates torrc, starts all containers (completed 2026-03-21)
 - [ ] **Phase 17: Backend API Extensions** - Install event recording, user apps endpoint, profile endpoint on Server5
 - [ ] **Phase 18: Store UI** - apps.livinity.io/store with featured apps, categories, search, detail pages, Apple aesthetic
 - [ ] **Phase 19: postMessage Bridge Protocol** - Bidirectional postMessage communication between apps.livinity.io and LivOS
@@ -82,7 +82,7 @@ Build apps.livinity.io as an embedded app store that LivOS instances display via
 **Plans**: 1 plan
 
 Plans:
-- [ ] 16-01-PLAN.md — Harden Docker image pulls, add setup_docker_prerequisites, wrap Kimi CLI
+- [x] 16-01-PLAN.md — Harden Docker image pulls, add setup_docker_prerequisites, wrap Kimi CLI
 
 ### Phase 17: Backend API Extensions
 **Goal**: Server5 exposes authenticated API endpoints for recording install events, querying user apps by instance, and retrieving user profile data -- so the store UI and LivOS can read/write install state
@@ -166,7 +166,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 16. Install Script Docker Fix | v10.0 | 0/1 | Planned | - |
+| 16. Install Script Docker Fix | v10.0 | 1/1 | Complete   | 2026-03-21 |
 | 17. Backend API Extensions | v10.0 | 0/TBD | Not started | - |
 | 18. Store UI | v10.0 | 0/TBD | Not started | - |
 | 19. postMessage Bridge | v10.0 | 0/TBD | Not started | - |

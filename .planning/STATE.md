@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
-status: ready_to_plan
-stopped_at: "Roadmap created, ready to plan Phase 16"
-last_updated: "2026-03-20T21:00:00.000Z"
+status: unknown
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-03-21T03:20:48.391Z"
 progress:
-  total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 20
+  completed_phases: 9
+  total_plans: 25
+  completed_plans: 28
 ---
 
 # Project State
@@ -20,20 +20,17 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 16 -- Install Script Docker Fix
+**Current focus:** Phase 16 — Install Script Docker Fix
 
 ## Current Position
 
-Phase: 16 of 21 (Install Script Docker Fix) -- first of 6 phases in v10.0
-Plan: -- (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-20 -- Roadmap created for v10.0
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 16 (Install Script Docker Fix) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: --
 - Total execution time: 0 hours
@@ -46,6 +43,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
+| Phase 16-install-script-docker-fix P01 | 2min | 2 tasks | 1 files |
+
 ### Decisions
 
 - Custom tunnel relay on Server5, NOT Cloudflare Tunnel
@@ -54,6 +53,8 @@ Progress: [░░░░░░░░░░] 0%
 - apps.livinity.io serves REST API for app catalog (deployed on Server5)
 - iframe + postMessage for App Store embedding in LivOS
 - Phase numbering continues from 16 (v8.0 ended at Phase 15)
+- [Phase 16-install-script-docker-fix]: Use fail() not warn() for Docker pull failures - compose up will fail anyway, fail fast with clear message
+- [Phase 16-install-script-docker-fix]: Subshell + || warn pattern for optional install steps (Kimi CLI) to prevent abort under set -e
 
 ### Pending Todos
 
@@ -65,6 +66,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-20
-Stopped at: Roadmap v10.0 created, ready to plan Phase 16
+Last session: 2026-03-21T03:20:48.388Z
+Stopped at: Completed 16-01-PLAN.md
 Resume file: None
