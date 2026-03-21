@@ -139,11 +139,10 @@ Plans:
   2. When the store iframe sends an install command via postMessage, LivOS downloads the compose file, pulls Docker images, starts the container, and updates Caddy config -- the app becomes accessible at its subdomain
   3. LivOS sends the current app status list to the iframe on initial load and after every state change (install, uninstall, start, stop)
   4. The install/uninstall result (success or failure with reason) is communicated back to the iframe so the store UI can update accordingly
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 20-01: TBD
-- [ ] 20-02: TBD
+- [ ] 20-01-PLAN.md — iframe App Store window with postMessage bridge listener and install executor
 
 ### Phase 21: Install History & Profile
 **Goal**: Install and uninstall events are tracked across all instances, and users can view their installed apps and history timeline on a profile page -- tying the entire app store experience together
@@ -170,5 +169,5 @@ Plans:
 | 17. Backend API Extensions | v10.0 | 2/2 | Complete    | 2026-03-21 |
 | 18. Store UI | v10.0 | 3/3 | Complete    | 2026-03-21 |
 | 19. postMessage Bridge | v10.0 | 1/1 | Complete    | 2026-03-21 |
-| 20. iframe Embedding | v10.0 | 0/TBD | Not started | - |
+| 20. iframe Embedding | v10.0 | 0/1 | Not started | - |
 | 21. History & Profile | v10.0 | 0/TBD | Not started | - |
