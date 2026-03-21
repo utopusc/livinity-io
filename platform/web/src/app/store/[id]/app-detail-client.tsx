@@ -290,22 +290,40 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
       {/* Credentials dialog */}
       {showCredentials && appCredentials && appCredentials.appId === app.id && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-[#1d1d1f]">App Credentials</h3>
             <p className="mt-1 text-sm text-[#86868b]">
               Save these credentials to log into {app.name}
             </p>
             <div className="mt-4 space-y-3">
               {appCredentials.username && (
-                <div className="rounded-xl bg-[#f5f5f7] p-3">
-                  <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Username</p>
-                  <p className="mt-1 select-all font-mono text-sm text-[#1d1d1f]">{appCredentials.username}</p>
+                <div className="flex items-center gap-2 rounded-xl bg-[#f5f5f7] p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Username</p>
+                    <p className="mt-1 truncate font-mono text-sm text-[#1d1d1f]">{appCredentials.username}</p>
+                  </div>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(appCredentials.username)}
+                    className="shrink-0 rounded-lg bg-white p-2 text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
+                    title="Copy"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
+                  </button>
                 </div>
               )}
               {appCredentials.password && (
-                <div className="rounded-xl bg-[#f5f5f7] p-3">
-                  <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Password</p>
-                  <p className="mt-1 select-all font-mono text-sm text-[#1d1d1f]">{appCredentials.password}</p>
+                <div className="flex items-center gap-2 rounded-xl bg-[#f5f5f7] p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Password</p>
+                    <p className="mt-1 truncate font-mono text-sm text-[#1d1d1f]">{appCredentials.password}</p>
+                  </div>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(appCredentials.password)}
+                    className="shrink-0 rounded-lg bg-white p-2 text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
+                    title="Copy"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
+                  </button>
                 </div>
               )}
             </div>
