@@ -33,13 +33,22 @@ export type StoreToLivOSMessage =
 // Messages sent from LivOS parent to Store iframe
 export type AppStatus = {
   id: string;
-  status: 'running' | 'stopped' | 'not_installed';
+  status: 'running' | 'stopped' | 'not_installed' | 'installing';
+  progress?: number;
 };
 
 export type LivOSToStoreMessage =
   | { type: 'status'; apps: AppStatus[] }
   | { type: 'installed'; appId: string; success: boolean; error?: string }
-  | { type: 'uninstalled'; appId: string; success: boolean };
+  | { type: 'uninstalled'; appId: string; success: boolean }
+  | { type: 'progress'; appId: string; progress: number }
+  | { type: 'credentials'; appId: string; username: string; password: string };
+
+export type AppCredentials = {
+  appId: string;
+  username: string;
+  password: string;
+};
 
 // Extended context value with bridge state
 export interface StoreContextValue {
@@ -59,6 +68,11 @@ export interface StoreContextValue {
   sendUninstall: (appId: string) => void;
   sendOpen: (appId: string) => void;
   getAppStatus: (appId: string) => AppStatus['status'];
+  // Progress & credentials (Phase 22)
+  installProgress: Map<string, number>;
+  getInstallProgress: (appId: string) => number;
+  appCredentials: AppCredentials | null;
+  clearCredentials: () => void;
 }
 
 export const CATEGORIES: Record<string, { label: string; icon: string }> = {

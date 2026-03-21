@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { StoreToLivOSMessage, LivOSToStoreMessage, AppStatus } from '../types';
+import type { StoreToLivOSMessage, LivOSToStoreMessage, AppStatus, AppCredentials } from '../types';
 
 const ALLOWED_ORIGINS = [
   'https://livinity.io',
@@ -21,6 +21,8 @@ function isAllowedOrigin(origin: string): boolean {
 export function usePostMessage() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [installedApps, setInstalledApps] = useState<Map<string, AppStatus['status']>>(new Map());
+  const [installProgress, setInstallProgress] = useState<Map<string, number>>(new Map());
+  const [appCredentials, setAppCredentials] = useState<AppCredentials | null>(null);
   const parentOriginRef = useRef<string | null>(null);
 
   // Detect iframe on mount
@@ -71,6 +73,12 @@ export function usePostMessage() {
             next.set(data.appId, data.success ? 'running' : 'not_installed');
             return next;
           });
+          // Clear progress for this app
+          setInstallProgress(prev => {
+            const next = new Map(prev);
+            next.delete(data.appId);
+            return next;
+          });
           break;
         }
         case 'uninstalled': {
@@ -81,6 +89,31 @@ export function usePostMessage() {
               next.set(data.appId, 'not_installed');
             }
             return next;
+          });
+          break;
+        }
+        case 'progress': {
+          // Update progress for the specific app
+          setInstallProgress(prev => {
+            const next = new Map(prev);
+            next.set(data.appId, data.progress);
+            return next;
+          });
+          // Also ensure status shows as installing
+          setInstalledApps(prev => {
+            const next = new Map(prev);
+            if (next.get(data.appId) !== 'installing') {
+              next.set(data.appId, 'installing');
+            }
+            return next;
+          });
+          break;
+        }
+        case 'credentials': {
+          setAppCredentials({
+            appId: data.appId,
+            username: data.username,
+            password: data.password,
           });
           break;
         }
@@ -102,10 +135,15 @@ export function usePostMessage() {
   const sendInstall = useCallback((appId: string) => {
     const composeUrl = `${window.location.origin}/api/apps/${appId}/compose`;
     sendMessage({ type: 'install', appId, composeUrl });
-    // Optimistic: mark as installing (show "stopped" while pending)
+    // Optimistic: mark as installing
     setInstalledApps(prev => {
       const next = new Map(prev);
-      next.set(appId, 'stopped');
+      next.set(appId, 'installing');
+      return next;
+    });
+    setInstallProgress(prev => {
+      const next = new Map(prev);
+      next.set(appId, 0);
       return next;
     });
   }, [sendMessage]);
@@ -122,9 +160,21 @@ export function usePostMessage() {
     return installedApps.get(appId) || 'not_installed';
   }, [installedApps]);
 
+  const getInstallProgress = useCallback((appId: string): number => {
+    return installProgress.get(appId) ?? 0;
+  }, [installProgress]);
+
+  const clearCredentials = useCallback(() => {
+    setAppCredentials(null);
+  }, []);
+
   return {
     isEmbedded,
     installedApps,
+    installProgress,
+    getInstallProgress,
+    appCredentials,
+    clearCredentials,
     sendInstall,
     sendUninstall,
     sendOpen,
