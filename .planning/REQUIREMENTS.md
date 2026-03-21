@@ -53,6 +53,13 @@
 - [x] **API-02**: GET /api/user/apps returns user's installed apps grouped by instance
 - [x] **API-03**: GET /api/user/profile returns user profile info (username, instance count, app count)
 
+### R-CHROME — Native Chrome Browser
+
+- [ ] **R-CHROME-NATIVE**: Google Chrome installed natively on server (not Docker), with setup script for Xvfb + x11vnc + websockify + noVNC
+- [ ] **R-CHROME-STREAM**: Chrome streams on-demand via noVNC — starts on user click, stops on window close or 30-min idle timeout
+- [ ] **R-CHROME-AUTH**: Chrome streaming endpoint (chrome.{domain}) requires valid LivOS JWT cookie to access
+- [ ] **R-CHROME-MANAGE**: tRPC routes exist for starting, stopping, and querying Chrome native app status (apps.nativeStart, apps.nativeStop, apps.nativeStatus)
+
 ## Future Requirements
 
 - **STORE-F01**: App ratings and reviews
@@ -72,6 +79,9 @@
 | Custom auth-proxy | Reverted — using Umbrel auth-server |
 | Rate limiting | Caused tunnel issues — deferred |
 | JWT refresh tokens | Caused redirect loops — deferred |
+| Multi-user Chrome sessions | Deferred — separate displays per user |
+| GPU acceleration for Chrome | Deferred — software rendering for now |
+| Chrome extension management UI | Deferred — manage via Chrome itself |
 
 ## Traceability
 
@@ -107,12 +117,16 @@
 | HIST-02 | Phase 21 | Complete |
 | HIST-03 | Phase 21 | Complete |
 | HIST-04 | Phase 21 | Complete |
+| R-CHROME-NATIVE | Phase 25 | In Progress |
+| R-CHROME-STREAM | Phase 25 | In Progress |
+| R-CHROME-AUTH | Phase 25 | In Progress |
+| R-CHROME-MANAGE | Phase 25 | In Progress |
 
 **Coverage:**
-- v10.0 requirements: 30 total
-- Mapped to phases: 30
+- v10.0 requirements: 34 total
+- Mapped to phases: 34
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-20*
-*Traceability updated: 2026-03-20*
+*Traceability updated: 2026-03-21*

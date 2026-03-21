@@ -170,7 +170,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23 -> 24
+**Execution Order:** 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23 -> 24 -> 25
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -183,6 +183,7 @@ Plans:
 | 22. Integration Fix | v10.0 | 2/2 | Complete    | 2026-03-21 |
 | 23. Native App Compose | v10.0 | 2/2 | Complete    | 2026-03-21 |
 | 24. App Store Expansion | v10.0 | 4/4 | Complete    | 2026-03-21 |
+| 25. Native Chrome Browser | v10.0 | 0/2 | In Progress | - |
 
 ### Phase 23: LivOS-Native App Compose System
 
@@ -210,10 +211,11 @@ Plans:
 
 ### Phase 25: Native Chrome Browser
 
-**Goal:** Install Google Chrome natively on server (no Docker), stream on-demand via noVNC/KasmVNC when user opens the app, auth-gated behind LivOS JWT, manageable from UI and AI MCP. Stream starts on click, stops on window close/idle. Chrome session persists across restarts.
+**Goal:** Install Google Chrome natively on server (no Docker), stream on-demand via noVNC when user opens the app, auth-gated behind LivOS JWT, manageable from UI and AI MCP. Stream starts on click, stops on window close/idle. Chrome session persists across restarts.
 **Requirements**: R-CHROME-NATIVE, R-CHROME-STREAM, R-CHROME-AUTH, R-CHROME-MANAGE
 **Depends on:** Phase 24
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 25 to break down)
+- [ ] 25-01-PLAN.md — Setup script + systemd service + NativeApp class + builtin-apps.ts native flag
+- [ ] 25-02-PLAN.md — tRPC routes + Caddy JWT auth + Server4 deployment + Docker chromium removal
