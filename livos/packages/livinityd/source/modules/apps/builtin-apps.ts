@@ -60,6 +60,8 @@ export interface BuiltinAppManifest {
   defaultUsername?: string
   defaultPassword?: string
   deterministicPassword?: boolean
+  native?: boolean          // true = managed via systemd, not Docker
+  nativePort?: number       // the noVNC/streaming port (for Caddy proxy)
 }
 
 export const BUILTIN_APPS: BuiltinAppManifest[] = [
@@ -476,55 +478,25 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
   {
     id: 'chromium',
     name: 'Chrome',
-    tagline: 'Persistent web browser with AI control',
+    tagline: 'Stream Google Chrome from your server',
     version: '1.0.0',
     category: 'networking',
-    port: 3000,
-    description: 'A persistent Chromium browser running in Docker with Selkies web viewer. Sessions survive restarts — stay logged into Google, Facebook, and other sites. Includes Playwright MCP for AI-powered browser automation via LivOS. Anti-detection flags prevent automation fingerprinting.',
-    website: 'https://www.chromium.org/Home/',
+    port: 6080,
+    native: true,
+    nativePort: 6080,
+    description: 'Google Chrome running natively on your server, streamed via noVNC. Sessions persist across restarts — stay logged into all your sites. Starts on demand, stops automatically after 30 minutes idle.',
+    website: 'https://www.google.com/chrome/',
     developer: 'Livinity',
     icon: 'https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome.svg',
     docker: {
-      image: 'lscr.io/linuxserver/chromium:latest',
-      environment: {
-        CUSTOM_USER: '',
-        PASSWORD: '',
-        PROXY_URL: '',
-        TZ: 'Europe/Istanbul',
-      },
-      volumes: ['/config'],
+      image: 'native', // placeholder, not used for native apps
     },
     installOptions: {
       subdomain: 'chrome',
-      environmentOverrides: [
-        { name: 'CUSTOM_USER', label: 'Username', type: 'string', required: true },
-        { name: 'PASSWORD', label: 'Password', type: 'password', required: true },
-        { name: 'PROXY_URL', label: 'Proxy URL (e.g. socks5://host:port)', type: 'string', default: '', required: false },
-      ],
     },
     compose: {
-      mainService: 'server',
-      services: {
-        server: {
-          image: 'lscr.io/linuxserver/chromium:latest',
-          restart: 'unless-stopped',
-          environment: {
-            CUSTOM_USER: '',
-            PASSWORD: '',
-            PROXY_URL: '',
-            TZ: 'Europe/Istanbul',
-          },
-          volumes: ['${APP_DATA_DIR}/config:/config'],
-          ports: ['127.0.0.1:3000:3000'],
-          healthcheck: {
-            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/ || exit 1'],
-            interval: '30s',
-            timeout: '10s',
-            retries: 3,
-            start_period: '30s',
-          },
-        },
-      },
+      mainService: 'native',
+      services: {},
     },
   },
   {
