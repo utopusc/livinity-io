@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-03-21T08:03:39.409Z"
+stopped_at: Completed 23-02-PLAN.md
+last_updated: "2026-03-21T08:08:05.918Z"
 progress:
   total_phases: 28
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 37
-  completed_plans: 39
+  completed_plans: 40
 ---
 
 # Project State
@@ -55,6 +55,7 @@ Plan: 2 of 2
 | Phase 22 P01 | 2min | 2 tasks | 1 files |
 | Phase 22 P02 | 3min | 2 tasks | 5 files |
 | Phase 23 P01 | 4min | 2 tasks | 2 files |
+| Phase 23 P02 | 2min | 1 tasks | 1 files |
 
 ### Decisions
 
@@ -91,6 +92,9 @@ Plan: 2 of 2
 - [Phase 23]: ComposeDefinition as separate interface (ComposeServiceDef + ComposeDefinition) for type safety
 - [Phase 23]: Volume paths use ${APP_DATA_DIR} placeholder resolved at install time by patchComposeFile
 - [Phase 23]: generateAppTemplate returns null for non-builtin apps enabling fallback to git repo in Plan 02
+- [Phase 23]: 3-step resolution chain: builtin compose -> platform API -> community repos -> error
+- [Phase 23]: fetchPlatformTemplate writes docker-compose.yml + livinity-app.yml to temp dir from apps.livinity.io API response
+- [Phase 23]: reinstallMissingAppsAfterRestore no longer returns early on repo failure -- builtin apps install without repos
 
 ### Roadmap Evolution
 
@@ -107,6 +111,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:03:39.404Z
-Stopped at: Completed 23-01-PLAN.md
+Last session: 2026-03-21T08:08:05.914Z
+Stopped at: Completed 23-02-PLAN.md
 Resume file: None
