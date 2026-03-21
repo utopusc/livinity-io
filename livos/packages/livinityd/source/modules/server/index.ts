@@ -218,11 +218,13 @@ class Server {
 				// Default target: the global app port (single-user mode or shared app)
 				let targetPort = subConfig.port
 
-				// Check if multi-user mode is active
+				// Auth: require valid session for app subdomain access.
+				// In multi-user mode: LIVINITY_SESSION cookie with RBAC checks.
+				// In single-user mode: LIVINITY_PROXY_TOKEN or LIVINITY_SESSION cookie.
 				const multiUserEnabled = await this.livinityd.ai.redis.get('livos:system:multi_user')
 
 				if (multiUserEnabled === 'true') {
-					// Check user session
+					// Multi-user: check session cookie
 					const sessionToken = request.cookies?.LIVINITY_SESSION
 					if (!sessionToken) {
 						return response.redirect(`https://${mainDomain}/login`)
@@ -238,10 +240,8 @@ class Server {
 						const {findAppPortForUser, hasAppAccess} = await import('../database/index.js')
 						const isAdmin = 'role' in payload && payload.role === 'admin'
 
-						// Extract base appId (subdomains for per-user instances use "appId:user:userId" format)
 						const baseAppId = subConfig.appId.includes(':user:') ? subConfig.appId.split(':user:')[0] : subConfig.appId
 
-						// Non-admin users need explicit access (via sharing or own instance)
 						if (!isAdmin) {
 							const canAccess = await hasAppAccess(payload.userId as string, baseAppId)
 							if (!canAccess) {
@@ -249,11 +249,25 @@ class Server {
 							}
 						}
 
-						// Check for per-user instance
 						const userPort = await findAppPortForUser(payload.userId as string, baseAppId)
 						if (userPort) {
 							targetPort = userPort
 						}
+					}
+				} else {
+					// Single-user: require proxy token or session cookie
+					const proxyToken = request.cookies?.LIVINITY_PROXY_TOKEN
+					const sessionToken = request.cookies?.LIVINITY_SESSION
+					const token = proxyToken || sessionToken
+					if (!token) {
+						return response.redirect(`https://${mainDomain}/login`)
+					}
+					// Verify whichever token is available
+					const isValid = proxyToken
+						? await this.verifyProxyToken(proxyToken).catch(() => false)
+						: await this.verifyToken(sessionToken!).catch(() => false)
+					if (!isValid) {
+						return response.redirect(`https://${mainDomain}/login`)
 					}
 				}
 
@@ -364,17 +378,19 @@ class Server {
 							if (subConfig) {
 								let targetPort = subConfig.port
 
-								// Auth + per-user port resolution
+								// Auth: require valid session for WebSocket subdomain access
 								const multiUserEnabled = await this.livinityd.ai.redis.get('livos:system:multi_user')
+
+								// Extract token from query params or cookies
+								const cookieHeader = request.headers.cookie || ''
+								let token = searchParams.get('token') || searchParams.get('LIVINITY_SESSION')
+								if (!token) {
+									const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
+									if (sessionMatch) token = sessionMatch[1]
+								}
+
 								if (multiUserEnabled === 'true') {
-									// Try token from query params first, then session cookie
-									let token = searchParams.get('token') || searchParams.get('LIVINITY_SESSION')
-									if (!token) {
-										// Parse session cookie from raw header
-										const cookieHeader = request.headers.cookie || ''
-										const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
-										if (sessionMatch) token = sessionMatch[1]
-									}
+									// Multi-user: require session token
 									if (!token) {
 										socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
 										socket.destroy()
@@ -400,6 +416,26 @@ class Server {
 										}
 										const userPort = await findAppPortForUser(payload.userId as string, baseAppId)
 										if (userPort) targetPort = userPort
+									}
+								} else {
+									// Single-user: require proxy token or session cookie
+									let proxyToken: string | null = null
+									const proxyMatch = cookieHeader.match(/LIVINITY_PROXY_TOKEN=([^;]+)/)
+									if (proxyMatch) proxyToken = proxyMatch[1]
+
+									const authToken = token || proxyToken
+									if (!authToken) {
+										socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+										socket.destroy()
+										return
+									}
+									const isValid = proxyToken
+										? await this.verifyProxyToken(proxyToken).catch(() => false)
+										: await this.verifyToken(authToken).catch(() => false)
+									if (!isValid) {
+										socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+										socket.destroy()
+										return
 									}
 								}
 
