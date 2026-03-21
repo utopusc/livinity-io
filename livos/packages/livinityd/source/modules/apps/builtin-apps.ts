@@ -1,7 +1,34 @@
 /**
  * LivOS Built-in Apps
- * 10 Priority apps with official Docker images
+ * 11 Priority apps with official Docker images and native compose definitions
  */
+
+export interface ComposeServiceDef {
+  image: string
+  restart: string
+  container_name?: string
+  environment?: Record<string, string>
+  volumes?: string[]
+  ports?: string[]
+  healthcheck?: {
+    test: string[]
+    interval: string
+    timeout: string
+    retries: number
+    start_period?: string
+  }
+  network_mode?: string
+  privileged?: boolean
+  devices?: string[]
+  depends_on?: string[]
+  command?: string[]
+}
+
+export interface ComposeDefinition {
+  mainService: string
+  services: Record<string, ComposeServiceDef>
+}
+
 export interface BuiltinAppManifest {
   id: string
   name: string
@@ -28,6 +55,7 @@ export interface BuiltinAppManifest {
       required?: boolean
     }>
   }
+  compose: ComposeDefinition
 }
 
 export const BUILTIN_APPS: BuiltinAppManifest[] = [
@@ -57,6 +85,28 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         { name: 'N8N_BASIC_AUTH_PASSWORD', label: 'Admin Password', type: 'password', required: true },
       ],
     },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'n8nio/n8n:latest',
+          restart: 'unless-stopped',
+          environment: {
+            N8N_BASIC_AUTH_ACTIVE: 'true',
+            GENERIC_TIMEZONE: 'Europe/Istanbul',
+          },
+          volumes: ['${APP_DATA_DIR}/data:/home/node/.n8n'],
+          ports: ['127.0.0.1:5678:5678'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:5678/healthz || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'portainer',
@@ -74,6 +124,41 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       volumes: ['/data', '/var/run/docker.sock:/var/run/docker.sock'],
     },
     installOptions: { subdomain: 'portainer' },
+    compose: {
+      mainService: 'portainer',
+      services: {
+        docker: {
+          image: 'docker:dind',
+          restart: 'unless-stopped',
+          environment: {
+            DOCKER_TLS_CERTDIR: '',
+          },
+          volumes: ['${APP_DATA_DIR}/docker-data:/var/lib/docker'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'docker info || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 5,
+            start_period: '60s',
+          },
+          network_mode: 'host',
+          privileged: true,
+        },
+        portainer: {
+          image: 'portainer/portainer-ce:latest',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/data:/data', '/var/run/docker.sock:/var/run/docker.sock'],
+          ports: ['127.0.0.1:9000:9000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:9000/api/status || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'home-assistant',
@@ -92,6 +177,27 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       volumes: ['/config'],
     },
     installOptions: { subdomain: 'home' },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'homeassistant/home-assistant:stable',
+          restart: 'unless-stopped',
+          environment: {
+            TZ: 'Europe/Istanbul',
+          },
+          volumes: ['${APP_DATA_DIR}/config:/config'],
+          ports: ['127.0.0.1:8123:8123'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:8123/api/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '60s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'jellyfin',
@@ -109,6 +215,28 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       volumes: ['/config', '/cache', '/media'],
     },
     installOptions: { subdomain: 'media' },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'jellyfin/jellyfin:latest',
+          restart: 'unless-stopped',
+          volumes: [
+            '${APP_DATA_DIR}/config:/config',
+            '${APP_DATA_DIR}/cache:/cache',
+            '${APP_DATA_DIR}/media:/media',
+          ],
+          ports: ['127.0.0.1:8096:8096'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:8096/health || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'nextcloud',
@@ -132,6 +260,24 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         { name: 'NEXTCLOUD_ADMIN_PASSWORD', label: 'Admin Password', type: 'password', required: true },
       ],
     },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'nextcloud:latest',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/html:/var/www/html'],
+          ports: ['127.0.0.1:8080:80'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:80/status.php || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '60s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'code-server',
@@ -154,6 +300,27 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         { name: 'PASSWORD', label: 'Access Password', type: 'password', required: true },
       ],
     },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'codercom/code-server:latest',
+          restart: 'unless-stopped',
+          volumes: [
+            '${APP_DATA_DIR}/config:/home/coder/.config',
+            '${APP_DATA_DIR}/project:/home/coder/project',
+          ],
+          ports: ['127.0.0.1:8081:8080'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:8080/healthz || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'uptime-kuma',
@@ -171,6 +338,24 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       volumes: ['/app/data'],
     },
     installOptions: { subdomain: 'status' },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'louislam/uptime-kuma:latest',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/data:/app/data'],
+          ports: ['127.0.0.1:3001:3001'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3001/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'gitea',
@@ -189,6 +374,28 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       volumes: ['/data'],
     },
     installOptions: { subdomain: 'git' },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'gitea/gitea:latest',
+          restart: 'unless-stopped',
+          environment: {
+            USER_UID: '1000',
+            USER_GID: '1000',
+          },
+          volumes: ['${APP_DATA_DIR}/data:/data'],
+          ports: ['127.0.0.1:3000:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/api/v1/version || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'grafana',
@@ -212,6 +419,24 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         { name: 'GF_SECURITY_ADMIN_PASSWORD', label: 'Admin Password', type: 'password', required: true },
       ],
     },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'grafana/grafana:latest',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/data:/var/lib/grafana'],
+          ports: ['127.0.0.1:3002:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/api/health || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
+    },
   },
   {
     id: 'postgresql',
@@ -234,6 +459,24 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         { name: 'POSTGRES_PASSWORD', label: 'Password', type: 'password', required: true },
         { name: 'POSTGRES_DB', label: 'Database Name', type: 'string', default: 'postgres', required: true },
       ],
+    },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'postgres:16',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/data:/var/lib/postgresql/data'],
+          ports: ['127.0.0.1:5432:5432'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'pg_isready -U postgres || exit 1'],
+            interval: '10s',
+            timeout: '5s',
+            retries: 5,
+            start_period: '30s',
+          },
+        },
+      },
     },
   },
   {
@@ -264,6 +507,30 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         { name: 'PASSWORD', label: 'Password', type: 'password', required: true },
         { name: 'PROXY_URL', label: 'Proxy URL (e.g. socks5://host:port)', type: 'string', default: '', required: false },
       ],
+    },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'lscr.io/linuxserver/chromium:latest',
+          restart: 'unless-stopped',
+          environment: {
+            CUSTOM_USER: '',
+            PASSWORD: '',
+            PROXY_URL: '',
+            TZ: 'Europe/Istanbul',
+          },
+          volumes: ['${APP_DATA_DIR}/config:/config'],
+          ports: ['127.0.0.1:3000:3000'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '30s',
+          },
+        },
+      },
     },
   },
 ]
