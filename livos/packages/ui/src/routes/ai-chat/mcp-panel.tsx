@@ -236,8 +236,8 @@ const FEATURED_MCPS: FeaturedMcp[] = [
 		icon: 'browser',
 		gradient: 'from-blue-500/30 to-green-500/30',
 		transport: 'stdio',
-		customCommand: 'docker',
-		customArgs: ['exec', '-i', 'chromium_server_1', 'npx', '-y', '@playwright/mcp@latest', '--cdp-endpoint', 'http://localhost:9222'],
+		customCommand: 'npx',
+		customArgs: ['-y', '@playwright/mcp@latest', '--cdp-endpoint', 'http://127.0.0.1:9222'],
 	},
 	{
 		name: 'git',
