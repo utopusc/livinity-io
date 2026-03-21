@@ -11,9 +11,12 @@ interface AppDetailClientProps {
 }
 
 export function AppDetailClient({ appId }: AppDetailClientProps) {
-  const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen } = useStore();
+  const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen, getAppSubdomain, sendUpdateSubdomain } = useStore();
   const status = isEmbedded ? getAppStatus(appId) : 'not_installed';
   const isInstalled = status === 'running' || status === 'stopped';
+  const currentSubdomain = getAppSubdomain(appId);
+  const [editingSubdomain, setEditingSubdomain] = useState(false);
+  const [subdomainValue, setSubdomainValue] = useState('');
   const [app, setApp] = useState<App | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -276,12 +279,59 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
           </div>
           {isInstalled && instanceName && (
             <div className="col-span-2 rounded-xl bg-[#f5f5f7] p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
-                Access URL
-              </p>
-              <p className="mt-1 text-sm font-semibold text-teal-600 break-all">
-                https://{app.id}.{instanceName}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
+                  Access URL
+                </p>
+                {isEmbedded && (
+                  <button
+                    onClick={() => {
+                      setSubdomainValue(currentSubdomain || app.id);
+                      setEditingSubdomain(true);
+                    }}
+                    className="text-xs font-medium text-teal-500 hover:text-teal-600"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              {editingSubdomain ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="flex items-center rounded-lg border border-[#d2d2d7] bg-white">
+                    <input
+                      type="text"
+                      value={subdomainValue}
+                      onChange={(e) => setSubdomainValue(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                      className="w-24 rounded-l-lg px-2 py-1.5 text-sm text-[#1d1d1f] outline-none"
+                      autoFocus
+                    />
+                    <span className="border-l border-[#d2d2d7] px-2 py-1.5 text-xs text-[#86868b]">
+                      .{instanceName}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (subdomainValue && subdomainValue !== currentSubdomain) {
+                        sendUpdateSubdomain(app.id, subdomainValue);
+                      }
+                      setEditingSubdomain(false);
+                    }}
+                    className="rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-600"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingSubdomain(false)}
+                    className="rounded-lg px-2 py-1.5 text-xs text-[#86868b] hover:text-[#1d1d1f]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-1 text-sm font-semibold text-teal-600 break-all">
+                  https://{currentSubdomain || app.id}.{instanceName}
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -69,6 +69,9 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         getInstallProgress: bridge.getInstallProgress,
         appCredentials: bridge.appCredentials,
         clearCredentials: bridge.clearCredentials,
+        // Subdomain management
+        getAppSubdomain: bridge.getAppSubdomain,
+        sendUpdateSubdomain: bridge.sendUpdateSubdomain,
       }}
     >
       {children}
