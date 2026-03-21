@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: App Store Platform
 status: unknown
-stopped_at: Completed 23-02-PLAN.md
-last_updated: "2026-03-21T08:10:56.543Z"
+stopped_at: Completed 24-01-PLAN.md
+last_updated: "2026-03-21T10:51:35.478Z"
 progress:
-  total_phases: 28
+  total_phases: 29
   completed_phases: 16
-  total_plans: 37
-  completed_plans: 40
+  total_plans: 41
+  completed_plans: 41
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v10.0 -- App Store Platform
-**Current focus:** Phase 23 — livos-native-app-compose-system
+**Current focus:** Phase 24 — app-store-expansion
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
+Phase: 24 (app-store-expansion) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Plan: Not started
 | Phase 22 P02 | 3min | 2 tasks | 5 files |
 | Phase 23 P01 | 4min | 2 tasks | 2 files |
 | Phase 23 P02 | 2min | 1 tasks | 1 files |
+| Phase 24-app-store-expansion P01 | 1min | 1 tasks | 1 files |
 
 ### Decisions
 
@@ -95,6 +96,7 @@ Plan: Not started
 - [Phase 23]: 3-step resolution chain: builtin compose -> platform API -> community repos -> error
 - [Phase 23]: fetchPlatformTemplate writes docker-compose.yml + livinity-app.yml to temp dir from apps.livinity.io API response
 - [Phase 23]: reinstallMissingAppsAfterRestore no longer returns early on repo failure -- builtin apps install without repos
+- [Phase 24-app-store-expansion]: 5 new builtin apps added following existing BuiltinAppManifest pattern: AdGuard Home, WireGuard Easy, Navidrome, Calibre-web, Homarr
 
 ### Roadmap Evolution
 
@@ -112,6 +114,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:08:05.914Z
-Stopped at: Completed 23-02-PLAN.md
+Last session: 2026-03-21T10:51:35.474Z
+Stopped at: Completed 24-01-PLAN.md
 Resume file: None
