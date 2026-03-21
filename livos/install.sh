@@ -329,8 +329,7 @@ main() {
 
             info "Pulling $src..."
             if ! docker pull "$src"; then
-                warn "Failed to pull $src - will retry on first use"
-                continue
+                fail "Failed to pull $src — Docker images are required for LivOS. Check your internet connection and retry."
             fi
 
             info "Tagging as $dst..."
@@ -344,6 +343,23 @@ main() {
         done
 
         ok "LivOS Docker images configured"
+    }
+
+    setup_docker_prerequisites() {
+        info "Preparing Docker container prerequisites..."
+
+        local data_dir="$LIVOS_DIR/data"
+
+        # Create tor data directory (mounted by tor_proxy as /data)
+        mkdir -p "$data_dir/tor/data"
+
+        # Create app-data directory (mounted by auth as /app-data)
+        mkdir -p "$data_dir/app-data"
+
+        # Tor container runs as 1000:1000, needs ownership on mounted volumes
+        chown -R 1000:1000 "$data_dir/tor"
+
+        ok "Docker prerequisites ready (tor/data, app-data directories)"
     }
 
     install_python() {
@@ -1136,21 +1152,26 @@ FWSVC
         ok "Liv .env symlinked"
     fi
 
-    # === Kimi CLI (AI provider) ===
-    if [[ -f "$NEXUS_DIR/scripts/install-kimi.sh" ]]; then
-        if ! command -v kimi &>/dev/null; then
-            step "Installing Kimi CLI"
-            bash "$NEXUS_DIR/scripts/install-kimi.sh" 2>&1 | tail -5
-            # Ensure kimi is globally accessible
-            if [[ -f /root/.local/bin/kimi ]]; then
-                ln -sf /root/.local/bin/kimi /usr/local/bin/kimi
-                ln -sf /root/.local/bin/kimi-code /usr/local/bin/kimi-code 2>/dev/null
-                ok "Kimi CLI installed: $(kimi --version 2>/dev/null || echo 'installed')"
+    # === Docker Prerequisites ===
+    setup_docker_prerequisites
+
+    # === Kimi CLI (AI provider — optional, non-blocking) ===
+    (
+        if [[ -f "$NEXUS_DIR/scripts/install-kimi.sh" ]]; then
+            if ! command -v kimi &>/dev/null; then
+                step "Installing Kimi CLI"
+                bash "$NEXUS_DIR/scripts/install-kimi.sh" 2>&1 | tail -5 || true
+                # Ensure kimi is globally accessible
+                if [[ -f /root/.local/bin/kimi ]]; then
+                    ln -sf /root/.local/bin/kimi /usr/local/bin/kimi
+                    ln -sf /root/.local/bin/kimi-code /usr/local/bin/kimi-code 2>/dev/null || true
+                    ok "Kimi CLI installed: $(kimi --version 2>/dev/null || echo 'installed')"
+                fi
+            else
+                ok "Kimi CLI already installed: $(kimi --version 2>/dev/null)"
             fi
-        else
-            ok "Kimi CLI already installed: $(kimi --version 2>/dev/null)"
         fi
-    fi
+    ) || warn "Kimi CLI setup skipped (non-critical)"
 
     # === Services ===
     create_systemd_service
