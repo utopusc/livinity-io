@@ -64,6 +64,11 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         sendUninstall: bridge.sendUninstall,
         sendOpen: bridge.sendOpen,
         getAppStatus: bridge.getAppStatus,
+        // Progress & credentials (Phase 22)
+        installProgress: bridge.installProgress,
+        getInstallProgress: bridge.getInstallProgress,
+        appCredentials: bridge.appCredentials,
+        clearCredentials: bridge.clearCredentials,
       }}
     >
       {children}
