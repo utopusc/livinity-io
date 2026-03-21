@@ -10,7 +10,7 @@ interface AppCardProps {
 }
 
 export function AppCard({ app }: AppCardProps) {
-  const { token, instanceName, getAppStatus, isEmbedded } = useStore();
+  const { token, instanceName, getAppStatus, getInstallProgress, isEmbedded } = useStore();
   const params = new URLSearchParams();
   if (token) params.set('token', token);
   if (instanceName) params.set('instance', instanceName);
@@ -49,6 +49,14 @@ export function AppCard({ app }: AppCardProps) {
               Open
             </span>
           );
+          if (status === 'installing') {
+            const progress = getInstallProgress(app.id);
+            return (
+              <span className="shrink-0 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-600">
+                {progress > 0 ? `${progress}%` : 'Installing'}
+              </span>
+            );
+          }
           if (status === 'stopped') return (
             <span className="shrink-0 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600">
               Stopped
