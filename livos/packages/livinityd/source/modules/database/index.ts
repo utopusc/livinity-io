@@ -249,6 +249,30 @@ export async function updateUserDisplayName(userId: string, displayName: string)
 }
 
 /**
+ * Delete a user and all related data (sessions, preferences, app access, app instances, invites).
+ */
+export async function deleteUser(userId: string): Promise<boolean> {
+	if (!pool) return false
+	const client = await pool.connect()
+	try {
+		await client.query('BEGIN')
+		await client.query('DELETE FROM user_app_instances WHERE user_id = $1', [userId])
+		await client.query('DELETE FROM user_app_access WHERE user_id = $1', [userId])
+		await client.query('DELETE FROM user_preferences WHERE user_id = $1', [userId])
+		await client.query('DELETE FROM sessions WHERE user_id = $1', [userId])
+		await client.query('DELETE FROM invites WHERE used_by = $1', [userId])
+		const {rowCount} = await client.query('DELETE FROM users WHERE id = $1', [userId])
+		await client.query('COMMIT')
+		return (rowCount ?? 0) > 0
+	} catch (err) {
+		await client.query('ROLLBACK')
+		throw err
+	} finally {
+		client.release()
+	}
+}
+
+/**
  * Invite token types.
  */
 export type DatabaseInvite = {

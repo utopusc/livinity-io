@@ -25,6 +25,7 @@ export const httpOnlyPaths = [
 	'user.listAllUsers',
 	'user.updateUserRole',
 	'user.toggleUserActive',
+	'user.deleteUser',
 	'apps.isMultiUserEnabled',
 	'apps.setMultiUserEnabled',
 	'apps.shareApp',
