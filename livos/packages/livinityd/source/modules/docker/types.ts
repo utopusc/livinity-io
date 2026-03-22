@@ -73,3 +73,39 @@ export interface ContainerStats {
 	networkTx: number // bytes transmitted
 	pids: number // number of processes
 }
+
+export interface ImageInfo {
+	id: string // first 12 chars of image ID (strip sha256: prefix)
+	repoTags: string[] // e.g. ["nginx:latest", "nginx:1.25"]
+	size: number // bytes
+	created: number // unix timestamp
+}
+
+export interface VolumeInfo {
+	name: string
+	driver: string // e.g. "local"
+	mountpoint: string // host path
+	createdAt: string // ISO date string
+}
+
+export interface NetworkInfo {
+	id: string // first 12 chars
+	name: string
+	driver: string // e.g. "bridge", "host", "overlay"
+	scope: string // "local" | "swarm" | "global"
+	containerCount: number
+}
+
+export interface NetworkContainer {
+	name: string
+	ipv4: string
+	macAddress: string
+}
+
+export interface NetworkDetail {
+	id: string
+	name: string
+	driver: string
+	scope: string
+	containers: NetworkContainer[]
+}
