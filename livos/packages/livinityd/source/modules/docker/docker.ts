@@ -11,6 +11,10 @@ import {
 	type ContainerStats,
 	type VolumeMount,
 	type MountInfo,
+	type ImageInfo,
+	type VolumeInfo,
+	type NetworkInfo,
+	type NetworkDetail,
 } from './types.js'
 
 // Singleton Dockerode instance -- reused across all calls (not per-call like ai/routes.ts)
@@ -250,6 +254,124 @@ export async function getContainerStats(name: string): Promise<ContainerStats> {
 	} catch (err: any) {
 		if (err.statusCode === 404 || err.reason === 'no such container') {
 			throw new Error(`[not-found] Container not found: ${name}`)
+		}
+		throw err
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Image management
+// ---------------------------------------------------------------------------
+
+export async function listImages(): Promise<ImageInfo[]> {
+	const images = await docker.listImages()
+	return images
+		.map((img): ImageInfo => ({
+			id: img.Id.replace(/^sha256:/, '').slice(0, 12),
+			repoTags: img.RepoTags && img.RepoTags.length > 0 ? img.RepoTags : ['<none>:<none>'],
+			size: img.Size,
+			created: img.Created,
+		}))
+		.sort((a, b) => b.created - a.created)
+}
+
+export async function removeImage(
+	id: string,
+	force: boolean,
+): Promise<{success: boolean; message: string}> {
+	try {
+		await docker.getImage(id).remove({force})
+		return {success: true, message: 'Image removed successfully'}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Image not found: ${id}`)
+		}
+		if (err.statusCode === 409) {
+			throw new Error('[in-use] Image is in use by a container')
+		}
+		throw err
+	}
+}
+
+export async function pruneImages(): Promise<{spaceReclaimed: number; deletedCount: number}> {
+	const result = await docker.pruneImages()
+	return {
+		spaceReclaimed: result.SpaceReclaimed || 0,
+		deletedCount: (result.ImagesDeleted || []).length,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Volume management
+// ---------------------------------------------------------------------------
+
+export async function listVolumes(): Promise<VolumeInfo[]> {
+	const result = await docker.listVolumes()
+	const volumes = result.Volumes || []
+	return volumes
+		.map((vol): VolumeInfo => ({
+			name: vol.Name,
+			driver: vol.Driver,
+			mountpoint: vol.Mountpoint,
+			createdAt: (vol as any).CreatedAt || '',
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function removeVolume(
+	name: string,
+): Promise<{success: boolean; message: string}> {
+	try {
+		await docker.getVolume(name).remove()
+		return {success: true, message: `Volume '${name}' removed successfully`}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Volume not found: ${name}`)
+		}
+		if (err.statusCode === 409) {
+			throw new Error('[in-use] Volume is in use')
+		}
+		throw err
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Network management
+// ---------------------------------------------------------------------------
+
+export async function listNetworks(): Promise<NetworkInfo[]> {
+	const networks = await docker.listNetworks()
+	return networks
+		.map((net): NetworkInfo => ({
+			id: net.Id.slice(0, 12),
+			name: net.Name,
+			driver: net.Driver || '',
+			scope: net.Scope || 'local',
+			containerCount: Object.keys(net.Containers || {}).length,
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function inspectNetwork(id: string): Promise<NetworkDetail> {
+	try {
+		const info = await docker.getNetwork(id).inspect()
+		const containers = Object.entries(info.Containers || {}).map(
+			([, value]: [string, any]) => ({
+				name: (value.Name || '').replace(/^\//, ''),
+				ipv4: value.IPv4Address || '',
+				macAddress: value.MacAddress || '',
+			}),
+		)
+		return {
+			id: info.Id.slice(0, 12),
+			name: info.Name,
+			driver: info.Driver || '',
+			scope: info.Scope || 'local',
+			containers,
+		}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Network not found: ${id}`)
 		}
 		throw err
 	}
