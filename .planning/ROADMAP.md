@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v12.0 Server Management Dashboard -- full Docker container lifecycle, PM2 process management, and enhanced system monitoring from the browser.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v13.0 Portainer-Level Server Management — match every Portainer feature: container creation, config editing, exec terminal, compose stacks, enhanced images/networks/volumes, bulk ops, events.
 
 ## Milestones
 
@@ -11,7 +11,8 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v12
 - [x] **v9.0 App Store API** - Phase 15 area + app store backend (shipped)
 - [x] **v10.0 App Store Platform** - Phases 16-25 (shipped 2026-03-21)
 - [x] **v11.0 Nexus Agent Fixes** - Phases 26-34 (shipped 2026-03-22)
-- [ ] **v12.0 Server Management Dashboard** - Phases 35-40 (in progress)
+- [x] **v12.0 Server Management Dashboard** - Phases 35-40 (shipped 2026-03-22)
+- [ ] **v13.0 Portainer-Level Server Management** - Phases 41-46 (in progress)
 
 ## Phases
 
@@ -256,9 +257,95 @@ Plans:
   4. Dashboard is deployed to production (Server4) and functional with real containers/processes
 **Plans**: TBD
 
+### v13.0 Portainer-Level Server Management
+
+**Milestone Goal:** Match every Portainer feature — container creation with full config, container edit + recreate, exec terminal, compose stack management, enhanced image/network/volume CRUD, bulk operations, Docker events, and engine info.
+
+- [ ] **Phase 41: Container Creation** — Full container creation form (name, image, ports, volumes, env, restart, resources, health, network) + window resize
+- [ ] **Phase 42: Container Edit & Recreate** — Edit existing container config + recreate, duplicate, rename
+- [ ] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap
+- [ ] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage
+- [ ] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars
+- [ ] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish
+
+## Phase Details (v13.0)
+
+### Phase 41: Container Creation
+**Goal**: User can create a new Docker container from any image with full configuration — ports, volumes, env vars, restart policy, resource limits, health check, and network settings — via a tabbed creation form
+**Depends on**: Phase 35 (docker backend module)
+**Requirements**: CREATE-01, CREATE-02, CREATE-03, CREATE-04, CREATE-05, CREATE-06, CREATE-07, CREATE-08, UI-01, UI-02
+**Success Criteria**:
+  1. User can open a "Create Container" form from the Containers tab
+  2. Form has tabbed sections: General, Network, Volumes, Environment, Resources, Health Check
+  3. User fills in image name, port mappings, volume mounts, env vars, restart policy, memory/CPU limits, and health check
+  4. Container is created and appears in the container list
+  5. Server Management window is at least 1400x900
+**Plans**: TBD
+
+### Phase 42: Container Edit & Recreate
+**Goal**: User can edit any existing container's configuration (ports, env, volumes, restart, resources) and recreate it, or duplicate/rename it
+**Depends on**: Phase 41 (creation form reused for edit)
+**Requirements**: EDIT-01, EDIT-02, EDIT-03, EDIT-04, EDIT-05, EDIT-06, EDIT-07, UI-03
+**Success Criteria**:
+  1. User clicks "Edit" on a container → creation form opens pre-filled with current config
+  2. User changes ports/env/volumes/restart/resources → clicks "Recreate" → old container stopped, new created with same name
+  3. User can "Duplicate" a container → creation form with cloned config but empty name
+  4. User can rename a container
+**Plans**: TBD
+
+### Phase 43: Exec Terminal + Enhanced Logs
+**Goal**: User can open a terminal shell into any running container and logs have search, download, timestamps toggle, and wrap toggle
+**Depends on**: Phase 35 (docker backend)
+**Requirements**: EXEC-01, EXEC-02, EXEC-03, LOGS-01, LOGS-02, LOGS-03, LOGS-04
+**Success Criteria**:
+  1. User clicks "Console" on a running container → xterm.js terminal opens with bash/sh shell selection
+  2. Terminal handles resize, supports copy/paste
+  3. Log viewer has search input that highlights matches
+  4. User can download logs as .log file
+  5. Timestamps and line wrap are toggleable
+**Plans**: TBD
+
+### Phase 44: Bulk Ops + Enhanced Images + Networks + Volumes
+**Goal**: User can perform bulk container actions, pull/tag images, create networks, create volumes, and see container-volume associations
+**Depends on**: Phase 35-37 (existing tabs)
+**Requirements**: ACT-01, ACT-02, ACT-03, IMG-01, IMG-02, IMG-03, NET-01, NET-02, NET-03, VOL-01, VOL-02
+**Success Criteria**:
+  1. Container table has checkboxes for multi-select → bulk start/stop/restart/remove
+  2. User can kill (SIGKILL) and pause/resume containers
+  3. User can pull image by name:tag with progress bar
+  4. User can tag an image and see layer history
+  5. User can create a network with driver/subnet/gateway
+  6. User can create a volume with driver options
+  7. Volume detail shows which containers use it
+**Plans**: TBD
+
+### Phase 45: Docker Compose Stacks
+**Goal**: User can manage Docker Compose stacks — list, deploy from YAML editor, edit and redeploy, start/stop, remove, and set stack env vars
+**Depends on**: Phase 35 (docker backend)
+**Requirements**: STACK-01, STACK-02, STACK-03, STACK-04, STACK-05, STACK-06, UI-04
+**Success Criteria**:
+  1. Stacks tab shows list of compose stacks with name, status, container count
+  2. User can deploy a new stack by pasting/editing YAML in a code editor
+  3. User can edit existing stack's YAML and redeploy
+  4. User can start/stop entire stack
+  5. User can remove stack with optional volume cleanup
+  6. Stack-level environment variables can be set
+**Plans**: TBD
+
+### Phase 46: Events + Engine Info + Polish
+**Goal**: Docker event log, engine info display, and final polish for the complete Portainer-level experience
+**Depends on**: Phases 41-45
+**Requirements**: EVENT-01, EVENT-02, ENGINE-01, UI-05, UI-06
+**Success Criteria**:
+  1. Events tab shows real-time Docker event log (container/image/volume/network actions)
+  2. Events can be filtered by type and time range
+  3. Engine info section shows Docker version, OS, kernel, storage driver, CPUs, memory
+  4. All features deployed and functional
+**Plans**: TBD
+
 ## Progress
 
-**Execution Order:** 35 -> 36 -> 37 -> 38 -> 39 -> 40
+**Execution Order:** 35 -> 36 -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -277,3 +364,9 @@ Plans:
 | 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 39. System Monitoring + Overview | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
+| 41. Container Creation | v13.0 | 0/? | Not started | - |
+| 42. Container Edit & Recreate | v13.0 | 0/? | Not started | - |
+| 43. Exec Terminal + Enhanced Logs | v13.0 | 0/? | Not started | - |
+| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
+| 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
+| 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
