@@ -1,100 +1,123 @@
-# Requirements: Livinity v11.0 — Nexus Agent Fixes
+# Requirements: Livinity v12.0 — Server Management Dashboard
 
 **Defined:** 2026-03-22
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v11.0 Requirements
+## v12.0 Requirements
 
-### SCHED — Sub-agent Scheduler Coupling
+### DOCK — Docker Container Management
 
-- [ ] **SCHED-01**: subagent_create with schedule but no scheduled_task returns error (not silent success)
-- [ ] **SCHED-02**: schedule and scheduled_task parameter descriptions indicate coupling requirement
-- [ ] **SCHED-03**: subagent_create output confirms schedule registration status
+- [ ] **DOCK-01**: User can see all containers (running + stopped) with name, image, state, status, ports, and resource usage
+- [ ] **DOCK-02**: User can start, stop, restart, and remove containers from the UI
+- [ ] **DOCK-03**: User can view container details (full inspect: ports, volumes, env vars, networks, mounts, restart policy, health)
+- [ ] **DOCK-04**: User can view container logs with tail limit, auto-scroll, and search
+- [ ] **DOCK-05**: User can see per-container CPU and memory usage stats in real-time
+- [ ] **DOCK-06**: Protected containers (Redis, PostgreSQL, Caddy, LivOS core) cannot be stopped or removed from UI
+- [ ] **DOCK-07**: Remove operation requires confirmation dialog with container name
 
-### CRON — Cron Tool Persistence
+### IMG — Docker Image Management
 
-- [ ] **CRON-01**: cron tool uses BullMQ cronQueue instead of setTimeout
-- [ ] **CRON-02**: Scheduled cron tasks survive nexus-core process restart
+- [ ] **IMG-01**: User can see all Docker images with name, tag, size, and creation date
+- [ ] **IMG-02**: User can remove unused images to reclaim disk space
+- [ ] **IMG-03**: User can prune all dangling/unused images with confirmation and space reclaimed feedback
 
-### PROF — Tool Profile Accuracy
+### VOL — Docker Volume & Network Management
 
-- [ ] **PROF-01**: TOOL_PROFILES names match actual registered tool names in daemon.ts
+- [ ] **VOL-01**: User can see all Docker volumes with name, driver, and mount point
+- [ ] **VOL-02**: User can see all Docker networks with name, driver, and connected container count
+- [ ] **VOL-03**: User can remove unused volumes with confirmation
+- [ ] **VOL-04**: User can inspect a network to see connected containers
 
-### SESS — Session Cleanup
+### PM2 — Process Management
 
-- [ ] **SESS-01**: MultiAgentManager.cleanup() called periodically to remove stale sessions
-- [ ] **SESS-02**: cleanup() uses Redis pipeline instead of sequential exists calls
+- [ ] **PM2-01**: User can see all PM2 processes with name, status, CPU%, memory, uptime, and restart count
+- [ ] **PM2-02**: User can start, stop, and restart individual PM2 processes
+- [ ] **PM2-03**: User can view PM2 process logs (stdout + stderr) with tail and auto-scroll
+- [ ] **PM2-04**: User can see process details (pid, script path, cwd, node version)
 
-### ROUTE — Multi-Channel Notification Routing
+### MON — Enhanced System Monitoring
 
-- [ ] **ROUTE-01**: SubagentConfig includes createdVia field tracking source channel
-- [ ] **ROUTE-02**: subagent_create saves channel source from currentChannelContext
-- [ ] **ROUTE-03**: Schedule/loop results route to originating channel (WhatsApp/Telegram/Discord/Web)
+- [ ] **MON-01**: User can see network interface traffic (bytes in/out, speed) in real-time
+- [ ] **MON-02**: User can see disk I/O metrics (read/write speed) in real-time
+- [ ] **MON-03**: User can see a process list sorted by CPU or memory usage
 
-### NAME — Skills→Tools Naming
+### UI — Dashboard UI
 
-- [ ] **NAME-01**: SubagentConfig.skills field renamed to tools
-- [ ] **NAME-02**: All references updated (subagent_create params, executeSubagentTask, Redis migration)
+- [ ] **UI-01**: Server Management is a tabbed interface (Overview, Containers, Images, Volumes, Networks, PM2, Monitoring)
+- [ ] **UI-02**: Overview tab shows system health dashboard (CPU, RAM, Disk, Network sparklines + container/PM2 summary)
+- [ ] **UI-03**: Container detail opens a slide-over or modal with tabbed view (Info, Logs, Stats)
+- [ ] **UI-04**: All destructive operations (remove, prune) show confirmation dialogs
+- [ ] **UI-05**: Real-time data updates without full page refresh (polling or subscription)
 
-### PROMPT — System Prompt Improvements
+### SEC — Security
 
-- [ ] **PROMPT-01**: NATIVE_SYSTEM_PROMPT includes tool category overview
-- [ ] **PROMPT-02**: Sub-agent mechanism guidance added (spawn_subagent vs subagent_create vs sessions_create)
-- [ ] **PROMPT-03**: WhatsApp rules consolidated into native prompt, AGENT_SYSTEM_PROMPT dead code removed
+- [ ] **SEC-01**: All Docker/PM2 management operations require admin role
+- [ ] **SEC-02**: Protected container/process registry prevents accidental deletion of infrastructure
+- [ ] **SEC-03**: Container remove requires explicit confirmation with container name typed
 
-### PROG — Progress Report Multi-Channel
+## v13.0+ Requirements (Deferred)
 
-- [ ] **PROG-01**: progress_report tool routes to correct channel based on context
+### Future Docker
+- **DOCK-F01**: Container exec terminal (shell into container from browser)
+- **DOCK-F02**: Container creation from UI (image + config)
+- **DOCK-F03**: Compose file editor
+- **DOCK-F04**: Bulk container operations (stop all, remove selected)
 
-### MISC — Miscellaneous Fixes
-
-- [ ] **MISC-01**: SELF_REFLECTION_PROMPT JSON.parse has try/catch + regex fallback
-- [ ] **MISC-02**: SUBAGENT_ROUTING_PROMPT dead code removed
-- [ ] **MISC-03**: loopIterationPrompt dead code removed
-- [ ] **MISC-04**: SubagentManager.recordRun uses atomic Redis Lua script
-- [ ] **MISC-05**: sessions_create parentSessionId uses session UUID not chatId
-- [ ] **MISC-06**: COMPLEXITY_PROMPT uses 1000 char limit instead of 500
+### Future Monitoring
+- **MON-F01**: Historical metrics with 24h/7d graphs
+- **MON-F02**: systemd service management
+- **MON-F03**: UFW/firewall rule viewer
+- **MON-F04**: Alert thresholds (notify when CPU > 90%)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| New tool development | Bug fixes only, no new tools |
-| UI changes | Backend/agent system only |
-| New AI provider support | Kimi-only policy unchanged |
-| Channel manager refactor | Minimal routing changes, not full rewrite |
+| Swarm/Kubernetes | Single-server LivOS, not cluster management |
+| Container registry | Not needed for self-hosted |
+| Docker Compose editor | Dockge does this well, different tool |
+| Container creation from scratch | Users install via App Store |
+| Image build from Dockerfile | Developer tool, not server admin |
+| Historical metrics DB (Prometheus/InfluxDB) | Too heavy for v12.0, defer |
+| Mobile-specific layout | Desktop-first windowed UI |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHED-01 | Phase 26 | Pending |
-| SCHED-02 | Phase 26 | Pending |
-| SCHED-03 | Phase 26 | Pending |
-| CRON-01 | Phase 27 | Pending |
-| CRON-02 | Phase 27 | Pending |
-| PROF-01 | Phase 28 | Pending |
-| SESS-01 | Phase 29 | Pending |
-| SESS-02 | Phase 29 | Pending |
-| ROUTE-01 | Phase 30 | Pending |
-| ROUTE-02 | Phase 30 | Pending |
-| ROUTE-03 | Phase 30 | Pending |
-| NAME-01 | Phase 31 | Pending |
-| NAME-02 | Phase 31 | Pending |
-| PROMPT-01 | Phase 32 | Pending |
-| PROMPT-02 | Phase 32 | Pending |
-| PROMPT-03 | Phase 32 | Pending |
-| PROG-01 | Phase 33 | Pending |
-| MISC-01 | Phase 34 | Pending |
-| MISC-02 | Phase 34 | Pending |
-| MISC-03 | Phase 34 | Pending |
-| MISC-04 | Phase 34 | Pending |
-| MISC-05 | Phase 34 | Pending |
-| MISC-06 | Phase 34 | Pending |
+| DOCK-01 | Phase 35 | Pending |
+| DOCK-02 | Phase 35 | Pending |
+| DOCK-03 | Phase 36 | Pending |
+| DOCK-04 | Phase 36 | Pending |
+| DOCK-05 | Phase 36 | Pending |
+| DOCK-06 | Phase 35 | Pending |
+| DOCK-07 | Phase 35 | Pending |
+| IMG-01 | Phase 37 | Pending |
+| IMG-02 | Phase 37 | Pending |
+| IMG-03 | Phase 37 | Pending |
+| VOL-01 | Phase 37 | Pending |
+| VOL-02 | Phase 37 | Pending |
+| VOL-03 | Phase 37 | Pending |
+| VOL-04 | Phase 37 | Pending |
+| PM2-01 | Phase 38 | Pending |
+| PM2-02 | Phase 38 | Pending |
+| PM2-03 | Phase 38 | Pending |
+| PM2-04 | Phase 38 | Pending |
+| MON-01 | Phase 39 | Pending |
+| MON-02 | Phase 39 | Pending |
+| MON-03 | Phase 39 | Pending |
+| UI-01 | Phase 35 | Pending |
+| UI-02 | Phase 39 | Pending |
+| UI-03 | Phase 36 | Pending |
+| UI-04 | Phase 35 | Pending |
+| UI-05 | Phase 35 | Pending |
+| SEC-01 | Phase 35 | Pending |
+| SEC-02 | Phase 35 | Pending |
+| SEC-03 | Phase 35 | Pending |
 
 **Coverage:**
-- v11.0 requirements: 23 total
-- Mapped to phases: 23
+- v12.0 requirements: 29 total
+- Mapped to phases: 29
 - Unmapped: 0 ✓
 
 ---
