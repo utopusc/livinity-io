@@ -1,132 +1,102 @@
-# Requirements: Livinity v10.0 — App Store Platform
+# Requirements: Livinity v11.0 — Nexus Agent Fixes
 
-**Defined:** 2026-03-20
+**Defined:** 2026-03-22
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v10.0 Requirements
+## v11.0 Requirements
 
-### INST — install.sh Docker Fix
+### SCHED — Sub-agent Scheduler Coupling
 
-- [x] **INST-01**: install.sh pulls getumbrel/auth-server:1.0.5 and tags as livos/auth-server:1.0.5
-- [x] **INST-02**: install.sh pulls getumbrel/tor:0.4.7.8 and tags as livos/tor:0.4.7.8
-- [x] **INST-03**: torrc config files with SocksPort directives exist in repo and are mounted by docker compose
-- [x] **INST-04**: install.sh starts auth + tor containers via docker compose automatically
-- [x] **INST-05**: Single `curl | bash --api-key KEY` command results in fully working LivOS with auth + tor + tunnel connected
+- [ ] **SCHED-01**: subagent_create with schedule but no scheduled_task returns error (not silent success)
+- [ ] **SCHED-02**: schedule and scheduled_task parameter descriptions indicate coupling requirement
+- [ ] **SCHED-03**: subagent_create output confirms schedule registration status
 
-### STORE — apps.livinity.io Store UI
+### CRON — Cron Tool Persistence
 
-- [x] **STORE-01**: /store page displays featured apps in hero section with large cards
-- [x] **STORE-02**: /store page shows app categories with filterable grid
-- [x] **STORE-03**: /store page has search functionality across all apps
-- [x] **STORE-04**: /store/[id] page shows app detail with icon, description, version, Install button
-- [x] **STORE-05**: /store page has left sidebar navigation (Discover, Categories, My Apps)
-- [x] **STORE-06**: Store UI follows Apple App Store aesthetic — white, clean, premium feel
-- [x] **STORE-07**: Store UI is responsive — works standalone in browser and inside iframe
+- [ ] **CRON-01**: cron tool uses BullMQ cronQueue instead of setTimeout
+- [ ] **CRON-02**: Scheduled cron tasks survive nexus-core process restart
 
-### BRIDGE — postMessage Communication
+### PROF — Tool Profile Accuracy
 
-- [x] **BRIDGE-01**: apps.livinity.io sends `{type:'install', appId, composeUrl}` to parent LivOS window
-- [x] **BRIDGE-02**: apps.livinity.io sends `{type:'uninstall', appId}` to parent LivOS window
-- [x] **BRIDGE-03**: apps.livinity.io sends `{type:'open', appId}` to parent LivOS window
-- [x] **BRIDGE-04**: LivOS sends `{type:'status', apps:[...]}` with running app statuses to iframe
-- [x] **BRIDGE-05**: LivOS sends `{type:'installed', appId, success}` confirmation to iframe
-- [x] **BRIDGE-06**: postMessage origin validated (only apps.livinity.io accepted)
+- [ ] **PROF-01**: TOOL_PROFILES names match actual registered tool names in daemon.ts
 
-### EMBED — LivOS iframe Integration
+### SESS — Session Cleanup
 
-- [x] **EMBED-01**: LivOS App Store window displays apps.livinity.io/store in iframe
-- [x] **EMBED-02**: iframe URL includes API key token and instance hostname as query params
-- [x] **EMBED-03**: LivOS listens for postMessage install commands from iframe
-- [x] **EMBED-04**: Install command triggers compose download → Docker pull/up → Caddy config update
-- [x] **EMBED-05**: LivOS sends app status updates to iframe on load and after state changes
+- [ ] **SESS-01**: MultiAgentManager.cleanup() called periodically to remove stale sessions
+- [ ] **SESS-02**: cleanup() uses Redis pipeline instead of sequential exists calls
 
-### HIST — Install History + Profile
+### ROUTE — Multi-Channel Notification Routing
 
-- [x] **HIST-01**: install_history table records install/uninstall/update events with user_id, app_id, instance_name
-- [x] **HIST-02**: /store/profile page shows user's installed apps across all instances
-- [x] **HIST-03**: /store/profile page shows install history timeline
-- [x] **HIST-04**: LivOS reports install/uninstall events to apps.livinity.io API
+- [ ] **ROUTE-01**: SubagentConfig includes createdVia field tracking source channel
+- [ ] **ROUTE-02**: subagent_create saves channel source from currentChannelContext
+- [ ] **ROUTE-03**: Schedule/loop results route to originating channel (WhatsApp/Telegram/Discord/Web)
 
-### API — Backend API Extensions
+### NAME — Skills→Tools Naming
 
-- [x] **API-01**: POST /api/install-event records install/uninstall event (authenticated)
-- [x] **API-02**: GET /api/user/apps returns user's installed apps grouped by instance
-- [x] **API-03**: GET /api/user/profile returns user profile info (username, instance count, app count)
+- [ ] **NAME-01**: SubagentConfig.skills field renamed to tools
+- [ ] **NAME-02**: All references updated (subagent_create params, executeSubagentTask, Redis migration)
 
-### R-CHROME — Native Chrome Browser
+### PROMPT — System Prompt Improvements
 
-- [x] **R-CHROME-NATIVE**: Google Chrome installed natively on server (not Docker), with setup script for Xvfb + x11vnc + websockify + noVNC
-- [x] **R-CHROME-STREAM**: Chrome streams on-demand via noVNC — starts on user click, stops on window close or 30-min idle timeout
-- [x] **R-CHROME-AUTH**: Chrome streaming endpoint (chrome.{domain}) requires valid LivOS JWT cookie to access
-- [x] **R-CHROME-MANAGE**: tRPC routes exist for starting, stopping, and querying Chrome native app status (apps.nativeStart, apps.nativeStop, apps.nativeStatus)
+- [ ] **PROMPT-01**: NATIVE_SYSTEM_PROMPT includes tool category overview
+- [ ] **PROMPT-02**: Sub-agent mechanism guidance added (spawn_subagent vs subagent_create vs sessions_create)
+- [ ] **PROMPT-03**: WhatsApp rules consolidated into native prompt, AGENT_SYSTEM_PROMPT dead code removed
 
-## Future Requirements
+### PROG — Progress Report Multi-Channel
 
-- **STORE-F01**: App ratings and reviews
-- **STORE-F02**: App screenshots/preview images
-- **STORE-F03**: App update notifications
-- **HIST-F01**: Usage analytics per app
-- **API-F01**: Admin panel for app catalog management
+- [ ] **PROG-01**: progress_report tool routes to correct channel based on context
+
+### MISC — Miscellaneous Fixes
+
+- [ ] **MISC-01**: SELF_REFLECTION_PROMPT JSON.parse has try/catch + regex fallback
+- [ ] **MISC-02**: SUBAGENT_ROUTING_PROMPT dead code removed
+- [ ] **MISC-03**: loopIterationPrompt dead code removed
+- [ ] **MISC-04**: SubagentManager.recordRun uses atomic Redis Lua script
+- [ ] **MISC-05**: sessions_create parentSessionId uses session UUID not chatId
+- [ ] **MISC-06**: COMPLEXITY_PROMPT uses 1000 char limit instead of 500
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Community app submissions | v10.0 is curated-only |
-| Payment for premium apps | All free for now |
-| App auto-updates | Manual install for v10.0 |
-| Mobile store layout | Desktop/iframe focus for v10.0 |
-| Custom auth-proxy | Reverted — using Umbrel auth-server |
-| Rate limiting | Caused tunnel issues — deferred |
-| JWT refresh tokens | Caused redirect loops — deferred |
-| Multi-user Chrome sessions | Deferred — separate displays per user |
-| GPU acceleration for Chrome | Deferred — software rendering for now |
-| Chrome extension management UI | Deferred — manage via Chrome itself |
+| New tool development | Bug fixes only, no new tools |
+| UI changes | Backend/agent system only |
+| New AI provider support | Kimi-only policy unchanged |
+| Channel manager refactor | Minimal routing changes, not full rewrite |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 16 | Complete |
-| INST-02 | Phase 16 | Complete |
-| INST-03 | Phase 16 | Complete |
-| INST-04 | Phase 16 | Complete |
-| INST-05 | Phase 16 | Complete |
-| API-01 | Phase 17 | Complete |
-| API-02 | Phase 17 | Complete |
-| API-03 | Phase 17 | Complete |
-| STORE-01 | Phase 18 | Complete |
-| STORE-02 | Phase 18 | Complete |
-| STORE-03 | Phase 18 | Complete |
-| STORE-04 | Phase 18 | Complete |
-| STORE-05 | Phase 18 | Complete |
-| STORE-06 | Phase 18 | Complete |
-| STORE-07 | Phase 18 | Complete |
-| BRIDGE-01 | Phase 19 | Complete |
-| BRIDGE-02 | Phase 19 | Complete |
-| BRIDGE-03 | Phase 19 | Complete |
-| BRIDGE-04 | Phase 19 | Complete |
-| BRIDGE-05 | Phase 19 | Complete |
-| BRIDGE-06 | Phase 19 | Complete |
-| EMBED-01 | Phase 20 | Complete |
-| EMBED-02 | Phase 20 | Complete |
-| EMBED-03 | Phase 20 | Complete |
-| EMBED-04 | Phase 20 | Complete |
-| EMBED-05 | Phase 20 | Complete |
-| HIST-01 | Phase 21 | Complete |
-| HIST-02 | Phase 21 | Complete |
-| HIST-03 | Phase 21 | Complete |
-| HIST-04 | Phase 21 | Complete |
-| R-CHROME-NATIVE | Phase 25 | In Progress |
-| R-CHROME-STREAM | Phase 25 | In Progress |
-| R-CHROME-AUTH | Phase 25 | In Progress |
-| R-CHROME-MANAGE | Phase 25 | In Progress |
+| SCHED-01 | Phase 26 | Pending |
+| SCHED-02 | Phase 26 | Pending |
+| SCHED-03 | Phase 26 | Pending |
+| CRON-01 | Phase 27 | Pending |
+| CRON-02 | Phase 27 | Pending |
+| PROF-01 | Phase 28 | Pending |
+| SESS-01 | Phase 29 | Pending |
+| SESS-02 | Phase 29 | Pending |
+| ROUTE-01 | Phase 30 | Pending |
+| ROUTE-02 | Phase 30 | Pending |
+| ROUTE-03 | Phase 30 | Pending |
+| NAME-01 | Phase 31 | Pending |
+| NAME-02 | Phase 31 | Pending |
+| PROMPT-01 | Phase 32 | Pending |
+| PROMPT-02 | Phase 32 | Pending |
+| PROMPT-03 | Phase 32 | Pending |
+| PROG-01 | Phase 33 | Pending |
+| MISC-01 | Phase 34 | Pending |
+| MISC-02 | Phase 34 | Pending |
+| MISC-03 | Phase 34 | Pending |
+| MISC-04 | Phase 34 | Pending |
+| MISC-05 | Phase 34 | Pending |
+| MISC-06 | Phase 34 | Pending |
 
 **Coverage:**
-- v10.0 requirements: 34 total
-- Mapped to phases: 34
-- Unmapped: 0
+- v11.0 requirements: 23 total
+- Mapped to phases: 23
+- Unmapped: 0 ✓
 
 ---
-*Requirements defined: 2026-03-20*
-*Traceability updated: 2026-03-21*
+*Requirements defined: 2026-03-22*
+*Last updated: 2026-03-22 after initial definition*

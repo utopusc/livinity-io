@@ -8,17 +8,20 @@ Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platf
 
 **One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: v10.0 — App Store Platform
+## Current Milestone: v11.0 — Nexus Agent Fixes
 
-**Goal:** Build apps.livinity.io as an embedded app store that LivOS instances display via iframe, with install history, user profiles, and postMessage-based install/uninstall communication. Fix install.sh to auto-setup auth + tor proxy.
+**Goal:** Fix 27 issues in the Nexus AI agent system — sub-agent scheduling reliability, cron persistence, tool profile accuracy, session cleanup, multi-channel routing, naming consistency, system prompt completeness, and dead code removal.
 
 **Target features:**
-- install.sh auto-pulls auth-server + tor Docker images, creates torrc, starts all containers
-- apps.livinity.io/store — standalone Next.js store UI (Apple App Store aesthetic)
-- LivOS App Store window embeds apps.livinity.io via iframe with postMessage bridge
-- Install/uninstall triggered via postMessage, executed by LivOS Docker + Caddy
-- User profile page with installed apps, install history
-- Server5 API: install events, user apps, profile endpoints
+- Sub-agent scheduler coupling: schedule+scheduled_task validation, error on missing task
+- Cron tool BullMQ migration: restart-persistent scheduled tasks
+- Tool profile names aligned with actual registered tools
+- MultiAgentManager periodic cleanup for stale sessions
+- Multi-channel notification routing (WhatsApp/Telegram/Discord/Web)
+- skills→tools naming clarification in SubagentConfig
+- Native system prompt with tool awareness and sub-agent guidance
+- progress_report multi-channel support
+- Miscellaneous: JSON parse safety, dead code removal, atomic ops
 
 ## Requirements
 
@@ -36,14 +39,17 @@ Key validated capabilities:
 - ✓ Caddy reverse proxy, Cloudflare Tunnel support
 - ✓ Onboarding wizard with personalization
 
-### Active (v10.0 — App Store Platform)
+### Active (v11.0 — Nexus Agent Fixes)
 
-- [ ] install.sh auto-setup auth + tor Docker containers
-- [ ] apps.livinity.io/store UI (featured, categories, detail, profile)
-- [ ] postMessage bridge (apps.livinity.io ↔ LivOS)
-- [ ] LivOS iframe App Store window
-- [ ] Install history + profile database
-- [ ] Backend API (install events, user apps, profile)
+- [ ] Sub-agent scheduler coupling fix (schedule+scheduled_task validation)
+- [ ] Cron tool BullMQ migration (restart-persistent)
+- [ ] Tool profile name alignment with registered tools
+- [ ] MultiAgentManager periodic stale session cleanup
+- [ ] Multi-channel notification routing for scheduled/loop results
+- [ ] skills→tools naming fix in SubagentConfig
+- [ ] Native system prompt tool awareness + sub-agent guidance
+- [ ] progress_report multi-channel support
+- [ ] Misc: JSON parse safety, dead code removal, atomic Redis ops
 
 ### Out of Scope
 
@@ -111,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-20 — v10.0 milestone started (App Store Platform)*
+*Last updated: 2026-03-22 — v11.0 milestone started (Nexus Agent Fixes)*
