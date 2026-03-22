@@ -299,9 +299,9 @@ function InviteDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open:
 							<p className='text-body-sm text-text-secondary'>
 								Share this invite link with the new user. It expires in 7 days and can only be used once.
 							</p>
-							<div className='flex items-center gap-2 rounded-radius-md border border-border-default bg-surface-base p-3'>
-								<code className='flex-1 truncate text-caption font-mono text-text-primary'>{inviteUrl}</code>
-								<Button variant='default' size='sm' onClick={handleCopy}>
+							<div className='flex items-center gap-2 overflow-hidden rounded-radius-md border border-border-default bg-surface-base p-3'>
+								<code className='min-w-0 flex-1 truncate text-caption font-mono text-text-primary'>{inviteUrl}</code>
+								<Button variant='default' size='sm' className='shrink-0' onClick={handleCopy}>
 									{copied ? <TbCheck className='h-4 w-4 text-green-500' /> : <TbCopy className='h-4 w-4' />}
 								</Button>
 							</div>
