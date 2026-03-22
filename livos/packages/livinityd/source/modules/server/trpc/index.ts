@@ -17,6 +17,7 @@ import backups from '../../backups/routes.js'
 import ai from '../../ai/routes.js'
 import domain from '../../domain/routes.js'
 import docker from '../../docker/routes.js'
+import pm2 from '../../pm2/routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -37,6 +38,7 @@ const appRouter = router({
 	ai,
 	domain,
 	docker,
+	pm2,
 })
 
 export type AppRouter = typeof appRouter
