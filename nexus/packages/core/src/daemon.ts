@@ -1831,7 +1831,7 @@ ${task}`;
 
           // Route to the correct channel based on context
           if (ctx && ['telegram', 'discord', 'slack', 'matrix'].includes(ctx.source) && this.config.channelManager) {
-            await this.config.channelManager.sendMessage(ctx.source, ctx.chatId, message);
+            await this.config.channelManager.sendMessage(ctx.source as any, ctx.chatId, message);
             return { success: true, output: `Progress sent via ${ctx.source}: ${message.slice(0, 100)}` };
           }
 
@@ -3066,7 +3066,7 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
         }));
       }
     } else if (['telegram', 'discord', 'slack', 'matrix'].includes(via) && this.config.channelManager && chatId) {
-      await this.config.channelManager.sendMessage(via, chatId, text).catch((err) => {
+      await this.config.channelManager.sendMessage(via as any, chatId, text).catch((err) => {
         logger.error('routeSubagentResult: channel send failed', { via, chatId, error: formatErrorMessage(err) });
       });
     } else if (via === 'web' || via === 'mcp') {
