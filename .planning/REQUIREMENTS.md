@@ -17,16 +17,16 @@
 
 ### IMG — Docker Image Management
 
-- [ ] **IMG-01**: User can see all Docker images with name, tag, size, and creation date
-- [ ] **IMG-02**: User can remove unused images to reclaim disk space
-- [ ] **IMG-03**: User can prune all dangling/unused images with confirmation and space reclaimed feedback
+- [x] **IMG-01**: User can see all Docker images with name, tag, size, and creation date
+- [x] **IMG-02**: User can remove unused images to reclaim disk space
+- [x] **IMG-03**: User can prune all dangling/unused images with confirmation and space reclaimed feedback
 
 ### VOL — Docker Volume & Network Management
 
-- [ ] **VOL-01**: User can see all Docker volumes with name, driver, and mount point
-- [ ] **VOL-02**: User can see all Docker networks with name, driver, and connected container count
-- [ ] **VOL-03**: User can remove unused volumes with confirmation
-- [ ] **VOL-04**: User can inspect a network to see connected containers
+- [x] **VOL-01**: User can see all Docker volumes with name, driver, and mount point
+- [x] **VOL-02**: User can see all Docker networks with name, driver, and connected container count
+- [x] **VOL-03**: User can remove unused volumes with confirmation
+- [x] **VOL-04**: User can inspect a network to see connected containers
 
 ### PM2 — Process Management
 
@@ -92,13 +92,13 @@
 | DOCK-05 | Phase 36 | Complete |
 | DOCK-06 | Phase 35 | Complete |
 | DOCK-07 | Phase 35 | Complete |
-| IMG-01 | Phase 37 | Pending |
-| IMG-02 | Phase 37 | Pending |
-| IMG-03 | Phase 37 | Pending |
-| VOL-01 | Phase 37 | Pending |
-| VOL-02 | Phase 37 | Pending |
-| VOL-03 | Phase 37 | Pending |
-| VOL-04 | Phase 37 | Pending |
+| IMG-01 | Phase 37 | Complete |
+| IMG-02 | Phase 37 | Complete |
+| IMG-03 | Phase 37 | Complete |
+| VOL-01 | Phase 37 | Complete |
+| VOL-02 | Phase 37 | Complete |
+| VOL-03 | Phase 37 | Complete |
+| VOL-04 | Phase 37 | Complete |
 | PM2-01 | Phase 38 | Pending |
 | PM2-02 | Phase 38 | Pending |
 | PM2-03 | Phase 38 | Pending |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 36-02-PLAN.md
-last_updated: "2026-03-22T21:31:18.856Z"
+stopped_at: Completed 37-01-PLAN.md
+last_updated: "2026-03-22T21:42:50.058Z"
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v12.0 -- Server Management Dashboard
-**Current focus:** Phase 36 — container-detail-view-logs-stats
+**Current focus:** Phase 37 — images-volumes-networks
 
 ## Current Position
 
-Phase: 37
-Plan: Not started
+Phase: 37 (images-volumes-networks) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: Not started
 | Phase 35 P02 | 4min | 2 tasks | 4 files |
 | Phase 36 P01 | 3min | 2 tasks | 3 files |
 | Phase 36 P02 | 3min | 2 tasks | 3 files |
+| Phase 37-01 P01 | 3min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -67,6 +68,8 @@ Plan: Not started
 - [Phase 36]: [not-found] error tag pattern: domain throws tagged error, route maps to TRPCError NOT_FOUND
 - [Phase 36]: Each tab renders its own useContainerDetail call for independent lifecycle and query parameters
 - [Phase 36]: Native HTML range input for tail slider (no shadcn Slider); stopPropagation via span wrappers on ActionButton
+- [Phase 37]: Used (vol as any).CreatedAt cast for Dockerode type gap on VolumeInspectInfo.CreatedAt
+- [Phase 37]: [in-use] error tag with CONFLICT tRPC code for image/volume in-use errors (extends [not-found] pattern)
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T21:30:47.409Z
-Stopped at: Completed 36-02-PLAN.md
+Last session: 2026-03-22T21:42:50.055Z
+Stopped at: Completed 37-01-PLAN.md
 Resume file: None
