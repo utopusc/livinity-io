@@ -24,6 +24,7 @@ import {useCpuForUi} from '@/hooks/use-cpu'
 import {useSystemMemoryForUi} from '@/hooks/use-memory'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {useContainers} from '@/hooks/use-containers'
+import {ContainerDetailSheet} from './container-detail-sheet'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {Table, TableHeader, TableBody, TableHead, TableRow, TableCell} from '@/shadcn-components/ui/table'
@@ -270,6 +271,7 @@ function RemoveDialog({
 
 export default function ServerControl() {
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+	const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
 
 	// System resource hooks
 	const cpuUsage = useCpuForUi({poll: true})
@@ -431,7 +433,7 @@ export default function ServerControl() {
 									{containers.map((container) => {
 										const isRunning = container.state === 'running'
 										return (
-											<TableRow key={container.id}>
+											<TableRow key={container.id} onClick={() => setSelectedContainer(container.name)} className='cursor-pointer transition-colors hover:bg-surface-1/50'>
 												<TableCell className='pl-4 font-medium'>
 													<div className='flex items-center gap-2'>
 														{container.isProtected && (
@@ -458,36 +460,44 @@ export default function ServerControl() {
 												<TableCell className='text-right pr-4'>
 													<div className='flex items-center justify-end gap-1'>
 														{!isRunning ? (
-															<ActionButton
-																icon={IconPlayerPlay}
-																onClick={() => manage(container.name, 'start')}
-																disabled={isManaging}
-																color='emerald'
-																title='Start'
-															/>
+															<span onClick={(e) => e.stopPropagation()}>
+																<ActionButton
+																	icon={IconPlayerPlay}
+																	onClick={() => manage(container.name, 'start')}
+																	disabled={isManaging}
+																	color='emerald'
+																	title='Start'
+																/>
+															</span>
 														) : (
-															<ActionButton
-																icon={IconPlayerStop}
-																onClick={() => manage(container.name, 'stop')}
-																disabled={isManaging || container.isProtected}
-																color='amber'
-																title={container.isProtected ? 'Protected — cannot stop' : 'Stop'}
-															/>
+															<span onClick={(e) => e.stopPropagation()}>
+																<ActionButton
+																	icon={IconPlayerStop}
+																	onClick={() => manage(container.name, 'stop')}
+																	disabled={isManaging || container.isProtected}
+																	color='amber'
+																	title={container.isProtected ? 'Protected — cannot stop' : 'Stop'}
+																/>
+															</span>
 														)}
-														<ActionButton
-															icon={IconRotateClockwise}
-															onClick={() => manage(container.name, 'restart')}
-															disabled={isManaging}
-															color='blue'
-															title='Restart'
-														/>
-														<ActionButton
-															icon={IconTrash}
-															onClick={() => setRemoveTarget(container.name)}
-															disabled={isManaging || container.isProtected}
-															color='red'
-															title={container.isProtected ? 'Protected — cannot remove' : 'Remove'}
-														/>
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconRotateClockwise}
+																onClick={() => manage(container.name, 'restart')}
+																disabled={isManaging}
+																color='blue'
+																title='Restart'
+															/>
+														</span>
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconTrash}
+																onClick={() => setRemoveTarget(container.name)}
+																disabled={isManaging || container.isProtected}
+																color='red'
+																title={container.isProtected ? 'Protected — cannot remove' : 'Remove'}
+															/>
+														</span>
 													</div>
 												</TableCell>
 											</TableRow>
@@ -529,6 +539,15 @@ export default function ServerControl() {
 					isManaging={isManaging}
 				/>
 			)}
+
+			{/* Container Detail Sheet */}
+			<ContainerDetailSheet
+				containerName={selectedContainer}
+				open={selectedContainer !== null}
+				onOpenChange={(open) => {
+					if (!open) setSelectedContainer(null)
+				}}
+			/>
 		</div>
 	)
 }
