@@ -1,5 +1,25 @@
 # Milestones
 
+## v11.0 Nexus Agent Fixes (Shipped: 2026-03-22)
+
+**Phases completed:** 9 phases (26-34), 9 commits
+
+**Key accomplishments:**
+
+- Sub-agent scheduler coupling: schedule+scheduled_task validation with error on missing task
+- Cron tool migrated from setTimeout to BullMQ (restart-persistent)
+- Tool profile names aligned with actual registered tools (removed 14 phantom names)
+- MultiAgentManager.cleanup() wired into daemon cycle (every 5 min), Redis pipeline optimization
+- Multi-channel notification routing: createdVia/createdChatId fields, routeSubagentResult helper
+- SubagentConfig.skills renamed to tools with backward compat
+- NATIVE_SYSTEM_PROMPT: tool overview (14 categories), sub-agent guidance, WhatsApp rules consolidated
+- progress_report multi-channel: Telegram/Discord/Slack/Matrix/Web/WhatsApp routing
+- Misc: Lua atomic recordRun, JSON parse safety, dead code removed, complexity limit 500→1000
+
+**Last phase number:** 34 (v11.0)
+
+---
+
 ## v10.0 App Store Platform (Shipped: 2026-03-21)
 
 **Phases completed:** 25 phases, 33 plans, 54 tasks

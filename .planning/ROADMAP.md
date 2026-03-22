@@ -10,7 +10,7 @@ Fix 27 issues in the Nexus AI agent system. Critical: sub-agent scheduler coupli
 - [x] **v8.0 Livinity Platform** - Phases 9-14 (shipped)
 - [x] **v9.0 App Store API** - Phase 15 area + app store backend (shipped)
 - [x] **v10.0 App Store Platform** - Phases 16-25 (shipped 2026-03-21)
-- [ ] **v11.0 Nexus Agent Fixes** - Phases 26-34 (in progress)
+- [x] **v11.0 Nexus Agent Fixes** - Phases 26-34 (shipped 2026-03-22)
 
 ## Phases
 
@@ -53,19 +53,19 @@ Fix 27 issues in the Nexus AI agent system. Critical: sub-agent scheduler coupli
 
 </details>
 
-### v11.0 Nexus Agent Fixes (In Progress)
+### v11.0 Nexus Agent Fixes (Complete)
 
 **Milestone Goal:** Fix 27 issues across the Nexus AI agent system — sub-agent scheduling, cron persistence, tool profiles, session cleanup, multi-channel routing, naming consistency, system prompts, and dead code removal.
 
-- [ ] **Phase 26: Sub-agent Scheduler Coupling Fix** — Validate schedule+scheduled_task coupling, fallback to description, error on missing scheduled_task
-- [ ] **Phase 27: Cron Tool BullMQ Migration** — Replace setTimeout with BullMQ cronQueue for restart-persistent scheduled tasks
-- [ ] **Phase 28: Tool Profile Name Mismatch Fix** — Align TOOL_PROFILES names with actual registered tool names in daemon.ts
-- [ ] **Phase 29: MultiAgentManager Cleanup** — Wire cleanup() into periodic call, convert sequential Redis exists to pipeline
-- [ ] **Phase 30: Multi-Channel Notification Routing** — Add createdVia field, route scheduled/loop results to correct channel
-- [ ] **Phase 31: Skills→Tools Naming Fix** — Rename SubagentConfig.skills to tools, update all references
-- [ ] **Phase 32: Native System Prompt Improvements** — Add tool awareness, sub-agent guidance, consolidate WhatsApp rules
-- [ ] **Phase 33: progress_report Multi-Channel** — Route progress reports to correct channel based on context
-- [ ] **Phase 34: Miscellaneous Fixes** — JSON parse safety, dead code removal, atomic recordRun, parentSessionId fix, complexity limit
+- [x] **Phase 26: Sub-agent Scheduler Coupling Fix** — Validate schedule+scheduled_task coupling, error on missing scheduled_task (completed 2026-03-22)
+- [x] **Phase 27: Cron Tool BullMQ Migration** — Replace setTimeout with BullMQ cronQueue for restart-persistent scheduled tasks (completed 2026-03-22)
+- [x] **Phase 28: Tool Profile Name Mismatch Fix** — Align TOOL_PROFILES names with actual registered tool names in daemon.ts (completed 2026-03-22)
+- [x] **Phase 29: MultiAgentManager Cleanup** — Wire cleanup() into periodic call, convert sequential Redis exists to pipeline (completed 2026-03-22)
+- [x] **Phase 30: Multi-Channel Notification Routing** — Add createdVia field, route scheduled/loop results to correct channel (completed 2026-03-22)
+- [x] **Phase 31: Skills→Tools Naming Fix** — Rename SubagentConfig.skills to tools, update all references (completed 2026-03-22)
+- [x] **Phase 32: Native System Prompt Improvements** — Add tool awareness, sub-agent guidance, consolidate WhatsApp rules (completed 2026-03-22)
+- [x] **Phase 33: progress_report Multi-Channel** — Route progress reports to correct channel based on context (completed 2026-03-22)
+- [x] **Phase 34: Miscellaneous Fixes** — JSON parse safety, dead code removal, atomic recordRun, parentSessionId fix, complexity limit (completed 2026-03-22)
 
 ## Phase Details
 
@@ -165,12 +165,12 @@ Fix 27 issues in the Nexus AI agent system. Critical: sub-agent scheduler coupli
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 26. Scheduler Coupling | v11.0 | 0/0 | Not Started | — |
-| 27. Cron BullMQ | v11.0 | 0/0 | Not Started | — |
-| 28. Tool Profiles | v11.0 | 0/0 | Not Started | — |
-| 29. Session Cleanup | v11.0 | 0/0 | Not Started | — |
-| 30. Multi-Channel | v11.0 | 0/0 | Not Started | — |
-| 31. Skills→Tools | v11.0 | 0/0 | Not Started | — |
-| 32. System Prompts | v11.0 | 0/0 | Not Started | — |
-| 33. Progress Report | v11.0 | 0/0 | Not Started | — |
-| 34. Misc Fixes | v11.0 | 0/0 | Not Started | — |
+| 26. Scheduler Coupling | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 27. Cron BullMQ | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 28. Tool Profiles | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 29. Session Cleanup | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 30. Multi-Channel | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 31. Skills→Tools | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 32. System Prompts | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 33. Progress Report | v11.0 | 1/1 | Complete | 2026-03-22 |
+| 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
