@@ -126,16 +126,24 @@ export class SubagentManager {
     return updated;
   }
 
-  /** Record a run completion */
+  /** Record a run completion (atomic via Lua script) */
   async recordRun(id: string, result: string): Promise<void> {
-    const config = await this.get(id);
-    if (!config) return;
+    const key = `${PREFIX}${id}`;
+    const now = Date.now();
+    const truncatedResult = result.slice(0, 2000);
 
-    config.lastRunAt = Date.now();
-    config.lastResult = result.slice(0, 2000);
-    config.runCount++;
-
-    await this.redis.set(`${PREFIX}${id}`, JSON.stringify(config));
+    // Atomic read-modify-write via Lua to prevent race conditions
+    const luaScript = `
+      local raw = redis.call('GET', KEYS[1])
+      if not raw then return 0 end
+      local config = cjson.decode(raw)
+      config.lastRunAt = tonumber(ARGV[1])
+      config.lastResult = ARGV[2]
+      config.runCount = (config.runCount or 0) + 1
+      redis.call('SET', KEYS[1], cjson.encode(config))
+      return 1
+    `;
+    await this.redis.eval(luaScript, 1, key, now.toString(), truncatedResult);
   }
 
   /** Delete a subagent */
