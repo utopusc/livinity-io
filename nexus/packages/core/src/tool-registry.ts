@@ -20,26 +20,24 @@ export interface ToolPolicy {
  * Tool profiles define which tools are available at each level
  */
 const TOOL_PROFILES: Record<string, string[]> = {
-  // Minimal: only basic info tools
-  minimal: ['help', 'status', 'info', 'list_tools'],
+  // Minimal: only status and system info
+  minimal: ['status', 'logs', 'sysinfo'],
 
-  // Basic: minimal + file reading, web search
-  basic: ['help', 'status', 'info', 'list_tools', 'read_file', 'list_files', 'web_search', 'web_fetch'],
+  // Basic: minimal + file operations, web search, scraping
+  basic: ['status', 'logs', 'sysinfo', 'files', 'web_search', 'scrape'],
 
-  // Coding: basic + code editing, shell
+  // Coding: basic + shell, Docker, PM2
   coding: [
-    'help', 'status', 'info', 'list_tools',
-    'read_file', 'list_files', 'write_file', 'edit_file',
-    'shell', 'docker', 'git',
-    'web_search', 'web_fetch',
+    'status', 'logs', 'sysinfo',
+    'shell', 'files',
+    'docker_list', 'docker_manage', 'docker_exec', 'pm2',
+    'web_search', 'scrape',
   ],
 
-  // Messaging: basic + WhatsApp, notifications
+  // Messaging: WhatsApp, channels, memory
   messaging: [
-    'help', 'status', 'info', 'list_tools',
-    'read_file', 'list_files',
-    'send_whatsapp', 'send_notification',
-    'web_search', 'web_fetch',
+    'whatsapp_send', 'channel_send',
+    'memory_search', 'memory_add',
   ],
 
   // Full: all tools (no filtering except deny list)
