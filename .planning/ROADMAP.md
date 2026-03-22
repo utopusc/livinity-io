@@ -271,6 +271,6 @@ Plans:
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 38. PM2 Process Management | v12.0 | 2/2 | Complete   | 2026-03-22 |
+| 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
 | 40. Polish & Deployment | v12.0 | 0/? | Not started | - |
