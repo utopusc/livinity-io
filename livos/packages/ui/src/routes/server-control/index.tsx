@@ -22,7 +22,7 @@ import {
 	IconChevronDown,
 	IconChevronRight,
 } from '@tabler/icons-react'
-import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis} from 'recharts'
+import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
 import {useCpuForUi} from '@/hooks/use-cpu'
 import {useSystemMemoryForUi} from '@/hooks/use-memory'
@@ -30,6 +30,7 @@ import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {trpcReact} from '@/trpc/trpc'
 import {useContainers} from '@/hooks/use-containers'
 import {useImages, formatBytes} from '@/hooks/use-images'
+import {useNetworkStats, useDiskIO, useProcesses} from '@/hooks/use-monitoring'
 import {usePM2} from '@/hooks/use-pm2'
 import {useVolumes} from '@/hooks/use-volumes'
 import {useNetworks} from '@/hooks/use-networks'
@@ -212,6 +213,244 @@ function PlaceholderTab({title, icon: Icon}: {title: string; icon: React.Compone
 			<Icon size={40} className='mb-3 text-text-tertiary' />
 			<p className='text-sm font-medium text-text-secondary'>{title}</p>
 			<p className='mt-1 text-xs text-text-tertiary'>Coming soon</p>
+		</div>
+	)
+}
+
+// Format bytes/sec to human-readable speed string
+function formatSpeed(bytesPerSec: number): string {
+	if (bytesPerSec < 1024) return `${bytesPerSec.toFixed(0)} B/s`
+	if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+	if (bytesPerSec < 1024 * 1024 * 1024) return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+	return `${(bytesPerSec / (1024 * 1024 * 1024)).toFixed(2)} GB/s`
+}
+
+// Custom tooltip for monitoring charts
+function MonitoringChartTooltip({active, payload, labels}: {active?: boolean; payload?: any[]; labels: [string, string]}) {
+	if (!active || !payload?.length) return null
+	return (
+		<div className='rounded-lg border border-border-default bg-surface-base px-3 py-2 shadow-sm'>
+			{payload.map((entry: any, i: number) => (
+				<div key={entry.dataKey} className='flex items-center gap-2 text-xs'>
+					<span className='h-2 w-2 rounded-full' style={{backgroundColor: entry.color}} />
+					<span className='text-text-secondary'>{labels[i]}:</span>
+					<span className='font-medium text-text-primary'>{formatSpeed(entry.value)}</span>
+				</div>
+			))}
+		</div>
+	)
+}
+
+// Process state badge for monitoring tab
+function ProcessStateBadge({state}: {state: string}) {
+	const colorClasses: Record<string, string> = {
+		running: 'bg-emerald-500/20 text-emerald-600',
+		sleeping: 'bg-neutral-500/20 text-neutral-500',
+		stopped: 'bg-red-500/20 text-red-600',
+		zombie: 'bg-amber-500/20 text-amber-600',
+	}
+	const classes = colorClasses[state] ?? 'bg-neutral-500/20 text-neutral-500'
+	return (
+		<span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', classes)}>
+			{state}
+		</span>
+	)
+}
+
+// Monitoring tab - network I/O, disk I/O, and process list
+function MonitoringTab() {
+	const {history: networkHistory, data: networkData, isLoading: networkLoading} = useNetworkStats()
+	const {history: diskHistory, isLoading: diskLoading} = useDiskIO()
+	const [sortBy, setSortBy] = useState<'cpu' | 'memory'>('cpu')
+	const {processes, isLoading: processesLoading} = useProcesses(sortBy)
+
+	// Current aggregate network speed
+	const currentRx = networkData.reduce((sum, iface) => sum + (iface.rxSec ?? 0), 0)
+	const currentTx = networkData.reduce((sum, iface) => sum + (iface.txSec ?? 0), 0)
+
+	// Current disk I/O speed
+	const latestDisk = diskHistory.length > 0 ? diskHistory[diskHistory.length - 1] : null
+
+	return (
+		<div className='space-y-6 p-4'>
+			{/* Section 1: Network I/O */}
+			<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+				<div className='mb-3 flex items-center justify-between'>
+					<div>
+						<h3 className='text-sm font-semibold text-text-primary'>Network Traffic</h3>
+						{networkHistory.length > 1 ? (
+							<p className='mt-0.5 text-xs text-text-tertiary'>
+								<span className='text-blue-500'>RX {formatSpeed(currentRx)}</span>
+								{' / '}
+								<span className='text-emerald-500'>TX {formatSpeed(currentTx)}</span>
+							</p>
+						) : (
+							<p className='mt-0.5 text-xs text-text-tertiary'>Calculating...</p>
+						)}
+					</div>
+				</div>
+				{networkLoading || networkHistory.length < 2 ? (
+					<div className='flex h-[200px] items-center justify-center'>
+						<p className='text-xs text-text-tertiary'>
+							{networkLoading ? 'Loading...' : 'Calculating...'}
+						</p>
+					</div>
+				) : (
+					<ResponsiveContainer width='100%' height={200}>
+						<AreaChart data={networkHistory} margin={{top: 5, right: 5, bottom: 5, left: 5}}>
+							<defs>
+								<linearGradient id='networkRxGradient' x1='0' y1='0' x2='0' y2='1'>
+									<stop offset='5%' stopColor='hsl(210, 80%, 60%)' stopOpacity={0.3} />
+									<stop offset='95%' stopColor='hsl(210, 80%, 60%)' stopOpacity={0} />
+								</linearGradient>
+								<linearGradient id='networkTxGradient' x1='0' y1='0' x2='0' y2='1'>
+									<stop offset='5%' stopColor='hsl(160, 80%, 45%)' stopOpacity={0.3} />
+									<stop offset='95%' stopColor='hsl(160, 80%, 45%)' stopOpacity={0} />
+								</linearGradient>
+							</defs>
+							<XAxis dataKey='time' hide />
+							<YAxis hide />
+							<RechartsTooltip content={<MonitoringChartTooltip labels={['Download', 'Upload']} />} />
+							<Area
+								type='monotone'
+								dataKey='rxSec'
+								stroke='hsl(210, 80%, 60%)'
+								fill='url(#networkRxGradient)'
+								fillOpacity={1}
+								dot={false}
+								isAnimationActive={false}
+							/>
+							<Area
+								type='monotone'
+								dataKey='txSec'
+								stroke='hsl(160, 80%, 45%)'
+								fill='url(#networkTxGradient)'
+								fillOpacity={1}
+								dot={false}
+								isAnimationActive={false}
+							/>
+						</AreaChart>
+					</ResponsiveContainer>
+				)}
+			</div>
+
+			{/* Section 2: Disk I/O */}
+			<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+				<div className='mb-3 flex items-center justify-between'>
+					<div>
+						<h3 className='text-sm font-semibold text-text-primary'>Disk I/O</h3>
+						{latestDisk ? (
+							<p className='mt-0.5 text-xs text-text-tertiary'>
+								<span className='text-amber-500'>Read {formatSpeed(latestDisk.rIOSec)}</span>
+								{' / '}
+								<span className='text-violet-500'>Write {formatSpeed(latestDisk.wIOSec)}</span>
+							</p>
+						) : (
+							<p className='mt-0.5 text-xs text-text-tertiary'>Calculating...</p>
+						)}
+					</div>
+				</div>
+				{diskLoading || diskHistory.length < 2 ? (
+					<div className='flex h-[200px] items-center justify-center'>
+						<p className='text-xs text-text-tertiary'>
+							{diskLoading ? 'Loading...' : 'Calculating...'}
+						</p>
+					</div>
+				) : (
+					<ResponsiveContainer width='100%' height={200}>
+						<AreaChart data={diskHistory} margin={{top: 5, right: 5, bottom: 5, left: 5}}>
+							<defs>
+								<linearGradient id='diskReadGradient' x1='0' y1='0' x2='0' y2='1'>
+									<stop offset='5%' stopColor='hsl(40, 90%, 50%)' stopOpacity={0.3} />
+									<stop offset='95%' stopColor='hsl(40, 90%, 50%)' stopOpacity={0} />
+								</linearGradient>
+								<linearGradient id='diskWriteGradient' x1='0' y1='0' x2='0' y2='1'>
+									<stop offset='5%' stopColor='hsl(270, 70%, 55%)' stopOpacity={0.3} />
+									<stop offset='95%' stopColor='hsl(270, 70%, 55%)' stopOpacity={0} />
+								</linearGradient>
+							</defs>
+							<XAxis dataKey='time' hide />
+							<YAxis hide />
+							<RechartsTooltip content={<MonitoringChartTooltip labels={['Read', 'Write']} />} />
+							<Area
+								type='monotone'
+								dataKey='rIOSec'
+								stroke='hsl(40, 90%, 50%)'
+								fill='url(#diskReadGradient)'
+								fillOpacity={1}
+								dot={false}
+								isAnimationActive={false}
+							/>
+							<Area
+								type='monotone'
+								dataKey='wIOSec'
+								stroke='hsl(270, 70%, 55%)'
+								fill='url(#diskWriteGradient)'
+								fillOpacity={1}
+								dot={false}
+								isAnimationActive={false}
+							/>
+						</AreaChart>
+					</ResponsiveContainer>
+				)}
+			</div>
+
+			{/* Section 3: Process List */}
+			<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+				<div className='mb-3 flex items-center justify-between'>
+					<h3 className='text-sm font-semibold text-text-primary'>Top Processes</h3>
+					<div className='flex items-center gap-1'>
+						<Button
+							variant={sortBy === 'cpu' ? 'default' : 'ghost'}
+							size='sm'
+							className='h-7 px-2.5 text-xs'
+							onClick={() => setSortBy('cpu')}
+						>
+							CPU
+						</Button>
+						<Button
+							variant={sortBy === 'memory' ? 'default' : 'ghost'}
+							size='sm'
+							className='h-7 px-2.5 text-xs'
+							onClick={() => setSortBy('memory')}
+						>
+							Memory
+						</Button>
+					</div>
+				</div>
+				{processesLoading ? (
+					<div className='flex h-40 items-center justify-center'>
+						<p className='text-xs text-text-tertiary'>Loading...</p>
+					</div>
+				) : processes.length === 0 ? (
+					<div className='flex h-40 items-center justify-center'>
+						<p className='text-xs text-text-tertiary'>No processes found</p>
+					</div>
+				) : (
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='w-16 text-xs'>PID</TableHead>
+								<TableHead className='text-xs'>Name</TableHead>
+								<TableHead className='w-20 text-right text-xs'>CPU%</TableHead>
+								<TableHead className='w-20 text-right text-xs'>Mem%</TableHead>
+								<TableHead className='w-24 text-xs'>State</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{processes.map((proc) => (
+								<TableRow key={proc.pid}>
+									<TableCell className='font-mono text-xs text-text-secondary'>{proc.pid}</TableCell>
+									<TableCell className='max-w-[200px] truncate text-xs font-medium'>{proc.name}</TableCell>
+									<TableCell className='text-right font-mono text-xs'>{proc.cpu.toFixed(1)}%</TableCell>
+									<TableCell className='text-right font-mono text-xs'>{proc.memory.toFixed(1)}%</TableCell>
+									<TableCell><ProcessStateBadge state={proc.state} /></TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				)}
+			</div>
 		</div>
 	)
 }
@@ -1442,7 +1681,7 @@ export default function ServerControl() {
 					<PM2Tab />
 				</TabsContent>
 				<TabsContent value='monitoring' className='flex-1 overflow-auto'>
-					<PlaceholderTab title='System Monitoring' icon={IconActivity} />
+					<MonitoringTab />
 				</TabsContent>
 			</Tabs>
 
