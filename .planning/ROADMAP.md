@@ -186,7 +186,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v12
   5. Remove requires a confirmation dialog where user must type the container name before proceeding
 **Plans**: 2 plans
 Plans:
-- [ ] 35-01-PLAN.md -- Docker backend module (types, singleton, tRPC router, protected registry, httpOnlyPaths)
+- [x] 35-01-PLAN.md -- Docker backend module (types, singleton, tRPC router, protected registry, httpOnlyPaths)
 - [ ] 35-02-PLAN.md -- Frontend tabbed UI shell with container table, actions, remove dialog
 
 ### Phase 36: Container Detail View + Logs + Stats
@@ -259,7 +259,7 @@ Plans:
 | 32. System Prompts | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 33. Progress Report | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 35. Docker Backend + Container List | v12.0 | 0/2 | In progress | - |
+| 35. Docker Backend + Container List | v12.0 | 1/2 | In Progress|  |
 | 36. Container Detail + Logs + Stats | v12.0 | 0/? | Not started | - |
 | 37. Images, Volumes, Networks | v12.0 | 0/? | Not started | - |
 | 38. PM2 Process Management | v12.0 | 0/? | Not started | - |

@@ -7,12 +7,12 @@
 
 ### DOCK — Docker Container Management
 
-- [ ] **DOCK-01**: User can see all containers (running + stopped) with name, image, state, status, ports, and resource usage
-- [ ] **DOCK-02**: User can start, stop, restart, and remove containers from the UI
+- [x] **DOCK-01**: User can see all containers (running + stopped) with name, image, state, status, ports, and resource usage
+- [x] **DOCK-02**: User can start, stop, restart, and remove containers from the UI
 - [ ] **DOCK-03**: User can view container details (full inspect: ports, volumes, env vars, networks, mounts, restart policy, health)
 - [ ] **DOCK-04**: User can view container logs with tail limit, auto-scroll, and search
 - [ ] **DOCK-05**: User can see per-container CPU and memory usage stats in real-time
-- [ ] **DOCK-06**: Protected containers (Redis, PostgreSQL, Caddy, LivOS core) cannot be stopped or removed from UI
+- [x] **DOCK-06**: Protected containers (Redis, PostgreSQL, Caddy, LivOS core) cannot be stopped or removed from UI
 - [ ] **DOCK-07**: Remove operation requires confirmation dialog with container name
 
 ### IMG — Docker Image Management
@@ -51,8 +51,8 @@
 
 ### SEC — Security
 
-- [ ] **SEC-01**: All Docker/PM2 management operations require admin role
-- [ ] **SEC-02**: Protected container/process registry prevents accidental deletion of infrastructure
+- [x] **SEC-01**: All Docker/PM2 management operations require admin role
+- [x] **SEC-02**: Protected container/process registry prevents accidental deletion of infrastructure
 - [ ] **SEC-03**: Container remove requires explicit confirmation with container name typed
 
 ## v13.0+ Requirements (Deferred)
@@ -85,12 +85,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOCK-01 | Phase 35 | Pending |
-| DOCK-02 | Phase 35 | Pending |
+| DOCK-01 | Phase 35 | Complete |
+| DOCK-02 | Phase 35 | Complete |
 | DOCK-03 | Phase 36 | Pending |
 | DOCK-04 | Phase 36 | Pending |
 | DOCK-05 | Phase 36 | Pending |
-| DOCK-06 | Phase 35 | Pending |
+| DOCK-06 | Phase 35 | Complete |
 | DOCK-07 | Phase 35 | Pending |
 | IMG-01 | Phase 37 | Pending |
 | IMG-02 | Phase 37 | Pending |
@@ -111,8 +111,8 @@
 | UI-03 | Phase 36 | Pending |
 | UI-04 | Phase 35 | Pending |
 | UI-05 | Phase 35 | Pending |
-| SEC-01 | Phase 35 | Pending |
-| SEC-02 | Phase 35 | Pending |
+| SEC-01 | Phase 35 | Complete |
+| SEC-02 | Phase 35 | Complete |
 | SEC-03 | Phase 35 | Pending |
 
 **Coverage:**
