@@ -37,9 +37,9 @@
 
 ### MON — Enhanced System Monitoring
 
-- [ ] **MON-01**: User can see network interface traffic (bytes in/out, speed) in real-time
-- [ ] **MON-02**: User can see disk I/O metrics (read/write speed) in real-time
-- [ ] **MON-03**: User can see a process list sorted by CPU or memory usage
+- [x] **MON-01**: User can see network interface traffic (bytes in/out, speed) in real-time
+- [x] **MON-02**: User can see disk I/O metrics (read/write speed) in real-time
+- [x] **MON-03**: User can see a process list sorted by CPU or memory usage
 
 ### UI — Dashboard UI
 
@@ -103,9 +103,9 @@
 | PM2-02 | Phase 38 | Complete |
 | PM2-03 | Phase 38 | Complete |
 | PM2-04 | Phase 38 | Complete |
-| MON-01 | Phase 39 | Pending |
-| MON-02 | Phase 39 | Pending |
-| MON-03 | Phase 39 | Pending |
+| MON-01 | Phase 39 | Complete |
+| MON-02 | Phase 39 | Complete |
+| MON-03 | Phase 39 | Complete |
 | UI-01 | Phase 35 | Complete |
 | UI-02 | Phase 39 | Pending |
 | UI-03 | Phase 36 | Complete |
