@@ -458,6 +458,13 @@ export class Daemon {
       await this.config.dockerManager.cleanup();
     }
 
+    // 2b. MultiAgent stale session cleanup (every 10 cycles = ~5 min)
+    if (this.cycleCount % 10 === 0 && this.config.multiAgentManager) {
+      await this.config.multiAgentManager.cleanup().catch((err) => {
+        logger.error('MultiAgent cleanup error', { error: formatErrorMessage(err) });
+      });
+    }
+
     // 3. Log cycle stats (every 120 cycles = ~1 hour)
     if (this.cycleCount % 120 === 0) {
       const stats = await this.getStats();

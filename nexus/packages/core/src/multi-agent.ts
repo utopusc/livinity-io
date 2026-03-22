@@ -276,19 +276,26 @@ export class MultiAgentManager {
     const ids = await this.redis.smembers(this.activeKey);
     if (ids.length === 0) return 0;
 
-    let cleaned = 0;
-    const pipeline = this.redis.pipeline();
-
+    // Check existence of all session keys in a single pipeline
+    const checkPipeline = this.redis.pipeline();
     for (const id of ids) {
-      const exists = await this.redis.exists(this.sessionKey(id));
+      checkPipeline.exists(this.sessionKey(id));
+    }
+    const results = await checkPipeline.exec();
+
+    // Remove stale entries (where session key no longer exists)
+    const removePipeline = this.redis.pipeline();
+    let cleaned = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const exists = results?.[i]?.[1] as number;
       if (!exists) {
-        pipeline.srem(this.activeKey, id);
+        removePipeline.srem(this.activeKey, ids[i]);
         cleaned++;
       }
     }
 
     if (cleaned > 0) {
-      await pipeline.exec();
+      await removePipeline.exec();
       logger.info('MultiAgent: cleaned up stale sessions', { cleaned });
     }
 
