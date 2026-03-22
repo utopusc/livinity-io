@@ -212,7 +212,10 @@ Plans:
   2. User can remove individual images and prune all dangling/unused images with confirmation and space-reclaimed feedback
   3. Volumes tab lists all volumes with name, driver, and mount point; user can remove unused volumes with confirmation
   4. Networks tab lists all networks with name, driver, and connected container count; user can inspect a network to see its connected containers
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 37-01-PLAN.md -- Backend tRPC routes for images, volumes, networks (types, domain functions, routes, httpOnlyPaths)
+- [ ] 37-02-PLAN.md -- Frontend ImagesTab, VolumesTab, NetworksTab replacing placeholders
 
 ### Phase 38: PM2 Process Management
 **Goal**: User can monitor and control all PM2-managed processes from the dashboard -- a unique LivOS capability no other self-hosted UI provides
@@ -264,7 +267,7 @@ Plans:
 | 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 37. Images, Volumes, Networks | v12.0 | 0/? | Not started | - |
+| 37. Images, Volumes, Networks | v12.0 | 0/2 | Not started | - |
 | 38. PM2 Process Management | v12.0 | 0/? | Not started | - |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
 | 40. Polish & Deployment | v12.0 | 0/? | Not started | - |
