@@ -170,7 +170,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v12
 - [x] **Phase 37: Images, Volumes, Networks** -- Docker image list/remove/prune, volume list/remove, network list/inspect tabs (completed 2026-03-22)
 - [x] **Phase 38: PM2 Process Management** -- PM2 process list, start/stop/restart actions, process logs and details (completed 2026-03-22)
 - [x] **Phase 39: Enhanced System Monitoring + Overview Tab** -- Network I/O, disk I/O, process list, overview dashboard with system health (completed 2026-03-22)
-- [ ] **Phase 40: Polish, Edge Cases & Deployment** -- Error handling for Docker daemon unavailability, confirmation UX audit, deprecated route cleanup, production deployment
+- [x] **Phase 40: Polish, Edge Cases & Deployment** -- Error handling for Docker daemon unavailability, confirmation UX audit, deprecated route cleanup, production deployment (completed 2026-03-22)
 
 ## Phase Details
 
@@ -276,4 +276,4 @@ Plans:
 | 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 39. System Monitoring + Overview | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 40. Polish & Deployment | v12.0 | 0/? | Not started | - |
+| 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
