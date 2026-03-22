@@ -31,6 +31,10 @@ export interface SubagentConfig {
   status: 'active' | 'paused' | 'stopped';
   /** Creator (WhatsApp JID or 'system') */
   createdBy: string;
+  /** Source channel that created this subagent */
+  createdVia?: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'matrix' | 'web' | 'mcp';
+  /** Chat ID for the source channel (for routing results back) */
+  createdChatId?: string;
   createdAt: number;
   lastRunAt?: number;
   lastResult?: string;

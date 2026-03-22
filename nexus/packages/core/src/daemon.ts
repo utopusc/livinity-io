@@ -208,29 +208,16 @@ export class Daemon {
       logger.info('ScheduleManager: executing scheduled job', { subagentId: data.subagentId, task: data.task.slice(0, 80) });
       try {
         const result = await this.executeSubagentTask(data.subagentId, data.task);
-        // Send the final result to the creator's WhatsApp
         const agentConfig = await this.config.subagentManager.get(data.subagentId);
-        if (agentConfig?.createdBy && agentConfig.createdBy !== 'system') {
+        if (agentConfig && agentConfig.createdBy !== 'system') {
           const header = `*${agentConfig.name}* (scheduled):`;
-          const chunks = chunkForWhatsApp(`${header}\n\n${result}`);
-          for (const chunk of chunks) {
-            await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-              jid: agentConfig.createdBy,
-              text: chunk,
-              timestamp: Date.now(),
-            }));
-          }
+          await this.routeSubagentResult(agentConfig, `${header}\n\n${result}`);
         }
       } catch (err) {
         logger.error('Scheduled job execution error', { subagentId: data.subagentId, error: formatErrorMessage(err) });
-        // Send error notification to creator
         const agentConfig = await this.config.subagentManager.get(data.subagentId);
-        if (agentConfig?.createdBy && agentConfig.createdBy !== 'system') {
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid: agentConfig.createdBy,
-            text: `${agentConfig.name} (scheduled) hata: ${formatErrorMessage(err)}`,
-            timestamp: Date.now(),
-          }));
+        if (agentConfig && agentConfig.createdBy !== 'system') {
+          await this.routeSubagentResult(agentConfig, `${agentConfig.name} (scheduled) hata: ${formatErrorMessage(err)}`);
         }
       }
     });
@@ -243,27 +230,15 @@ export class Daemon {
     this.config.loopRunner.onExecute(async (ctx) => {
       try {
         const result = await this.executeSubagentTask(ctx.config.id, ctx.config.loop!.task, ctx.previousState);
-        // Send loop result to creator's WhatsApp
         if (ctx.config.createdBy && ctx.config.createdBy !== 'system') {
           const header = `*${ctx.config.name}* (loop #${ctx.iteration || 1}):`;
-          const chunks = chunkForWhatsApp(`${header}\n\n${result}`);
-          for (const chunk of chunks) {
-            await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-              jid: ctx.config.createdBy,
-              text: chunk,
-              timestamp: Date.now(),
-            }));
-          }
+          await this.routeSubagentResult(ctx.config, `${header}\n\n${result}`);
         }
         return { result, state: result.slice(0, 4000) };
       } catch (err) {
         logger.error('Loop execution error', { subagentId: ctx.config.id, error: formatErrorMessage(err) });
         if (ctx.config.createdBy && ctx.config.createdBy !== 'system') {
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid: ctx.config.createdBy,
-            text: `${ctx.config.name} (loop) hata: ${formatErrorMessage(err)}`,
-            timestamp: Date.now(),
-          }));
+          await this.routeSubagentResult(ctx.config, `${ctx.config.name} (loop) hata: ${formatErrorMessage(err)}`);
         }
         return { result: `Error: ${formatErrorMessage(err)}`, state: `error: ${formatErrorMessage(err)}` };
       }
@@ -1921,6 +1896,8 @@ ${task}`;
             maxTurns: max_turns || 15,
             status: 'active',
             createdBy: this.currentWhatsAppJid || 'system',
+            createdVia: (this.currentChannelContext?.source as any) || (this.currentWhatsAppJid ? 'whatsapp' : 'web'),
+            createdChatId: this.currentChannelContext?.chatId || this.currentWhatsAppJid || undefined,
           });
 
           // Register schedule if provided
@@ -3053,6 +3030,37 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
         })).catch(() => {});
       }
     };
+  }
+
+  /** Route subagent result to the correct channel based on createdVia */
+  private async routeSubagentResult(config: import('./subagent-manager.js').SubagentConfig, text: string): Promise<void> {
+    const via = config.createdVia || 'whatsapp';
+    const chatId = config.createdChatId || config.createdBy;
+
+    if (via === 'whatsapp' && chatId) {
+      const chunks = chunkForWhatsApp(text);
+      for (const chunk of chunks) {
+        await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
+          jid: chatId,
+          text: chunk,
+          timestamp: Date.now(),
+        }));
+      }
+    } else if (['telegram', 'discord', 'slack', 'matrix'].includes(via) && this.config.channelManager && chatId) {
+      await this.config.channelManager.sendMessage(via, chatId, text).catch((err) => {
+        logger.error('routeSubagentResult: channel send failed', { via, chatId, error: formatErrorMessage(err) });
+      });
+    } else if (via === 'web' || via === 'mcp') {
+      // Web/MCP: publish to Redis pubsub for WebSocket gateway pickup
+      await this.config.redis.publish('nexus:agent_results', JSON.stringify({
+        subagentId: config.id,
+        subagentName: config.name,
+        text,
+        timestamp: Date.now(),
+      }));
+    } else {
+      logger.warn('routeSubagentResult: no route for result', { via, chatId, subagentId: config.id });
+    }
   }
 
   /** Execute a task as a specific subagent with its own context and system prompt */
