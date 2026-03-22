@@ -1522,10 +1522,22 @@ ${task}`;
         const scheduledSource = ctx?.source || 'cron';
         const scheduledFrom = ctx?.chatId;
         const scheduledParams = ctx?.params;
-        setTimeout(() => {
-          this.addToInbox(msg, scheduledSource as any, undefined, scheduledParams, scheduledFrom);
-          logger.info('Cron (tool) fired', { task: msg, source: scheduledSource, from: scheduledFrom });
-        }, ms);
+
+        // Use BullMQ delayed job — survives process restarts
+        if (this.config.cronQueue) {
+          await this.config.cronQueue.add('cron-task', {
+            task: msg,
+            source: scheduledSource,
+            from: scheduledFrom,
+            params: scheduledParams,
+          }, { delay: ms, removeOnComplete: true, removeOnFail: true });
+        } else {
+          // Fallback: setTimeout only if cronQueue not available
+          setTimeout(() => {
+            this.addToInbox(msg, scheduledSource as any, undefined, scheduledParams, scheduledFrom);
+            logger.info('Cron (tool) fired via setTimeout fallback', { task: msg, source: scheduledSource, from: scheduledFrom });
+          }, ms);
+        }
         return { success: true, output: `Scheduled: "${msg}" in ${delay} ${unit}. Response will be sent to ${scheduledSource}.` };
       },
     });
