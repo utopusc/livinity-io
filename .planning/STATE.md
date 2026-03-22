@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 38-01-PLAN.md
-last_updated: "2026-03-22T22:04:10.657Z"
+stopped_at: Completed 38-02-PLAN.md
+last_updated: "2026-03-22T22:11:05.426Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -50,6 +50,7 @@ Plan: 2 of 2
 | Phase 37-01 P01 | 3min | 2 tasks | 4 files |
 | Phase 37 P02 | 6min | 2 tasks | 4 files |
 | Phase 38 P01 | 2min | 2 tasks | 5 files |
+| Phase 38 P02 | 5min | 1 tasks | 2 files |
 
 ### Decisions
 
@@ -75,6 +76,7 @@ Plan: 2 of 2
 - [Phase 37]: formatBytes exported from use-images for reuse; network inspect as inline card not dialog; simple confirm for image remove, typed-name confirm for volume remove
 - [Phase 38]: Exact match for protected PM2 process names (not substring like Docker containers)
 - [Phase 38]: pm2 jlist with reject:false for graceful empty-state handling when no PM2 processes running
+- [Phase 38]: Inline expandable detail panel (not dialog/sheet) for PM2 process details
 
 ### Pending Todos
 
@@ -86,6 +88,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T22:04:10.655Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-03-22T22:11:05.424Z
+Stopped at: Completed 38-02-PLAN.md
 Resume file: None
