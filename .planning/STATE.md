@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 36-01-PLAN.md
-last_updated: "2026-03-22T21:25:04.160Z"
+stopped_at: Completed 36-02-PLAN.md
+last_updated: "2026-03-22T21:30:47.413Z"
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -46,6 +46,7 @@ Plan: 2 of 2
 | Phase 35 P01 | 2min | 2 tasks | 5 files |
 | Phase 35 P02 | 4min | 2 tasks | 4 files |
 | Phase 36 P01 | 3min | 2 tasks | 3 files |
+| Phase 36 P02 | 3min | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -64,6 +65,8 @@ Plan: 2 of 2
 - [Phase 36]: Docker stream header stripping via manual 8-byte frame parsing for clean log output
 - [Phase 36]: Memory usage subtracts cache for accurate reporting; network stats summed across all interfaces
 - [Phase 36]: [not-found] error tag pattern: domain throws tagged error, route maps to TRPCError NOT_FOUND
+- [Phase 36]: Each tab renders its own useContainerDetail call for independent lifecycle and query parameters
+- [Phase 36]: Native HTML range input for tail slider (no shadcn Slider); stopPropagation via span wrappers on ActionButton
 
 ### Pending Todos
 
@@ -75,6 +78,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T21:25:04.158Z
-Stopped at: Completed 36-01-PLAN.md
+Last session: 2026-03-22T21:30:47.409Z
+Stopped at: Completed 36-02-PLAN.md
 Resume file: None
