@@ -9,18 +9,34 @@ import {
 	IconPlayerStop,
 	IconRotateClockwise,
 	IconTrash,
-	IconChevronDown,
-	IconChevronUp,
 	IconBox,
 	IconCircuitResistor,
+	IconLock,
+	IconPhoto,
+	IconFolder,
+	IconNetwork,
+	IconBrandDocker,
+	IconActivity,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis} from 'recharts'
 
 import {useCpuForUi} from '@/hooks/use-cpu'
 import {useSystemMemoryForUi} from '@/hooks/use-memory'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
+import {useContainers} from '@/hooks/use-containers'
 import {Progress} from '@/shadcn-components/ui/progress'
-import {trpcReact} from '@/trpc/trpc'
+import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
+import {Table, TableHeader, TableBody, TableHead, TableRow, TableCell} from '@/shadcn-components/ui/table'
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogDescription,
+	DialogFooter,
+} from '@/shadcn-components/ui/dialog'
+import {Button} from '@/shadcn-components/ui/button'
+import {Input} from '@/shadcn-components/ui/input'
 import {cn} from '@/shadcn-lib/utils'
 
 // Resource Card Component - matches Live Usage style
@@ -120,127 +136,6 @@ function ResourceCard({
 	)
 }
 
-// Docker Container Component - Enhanced with more features
-function DockerContainer({
-	container,
-	onAction,
-	isActioning,
-	expanded,
-	onToggle,
-}: {
-	container: {id: string; name: string; image: string; state: string; status: string}
-	onAction: (op: 'start' | 'stop' | 'restart' | 'remove', name: string) => void
-	isActioning: boolean
-	expanded: boolean
-	onToggle: () => void
-}) {
-	const isRunning = container.state === 'running'
-	const shortId = container.id.slice(0, 12)
-
-	return (
-		<motion.div
-			layout
-			initial={{opacity: 0, y: 10}}
-			animate={{opacity: 1, y: 0}}
-			exit={{opacity: 0, y: -10}}
-			className='overflow-hidden rounded-xl border border-border-default bg-surface-base backdrop-blur-sm'
-		>
-			{/* Main Row */}
-			<div className='flex items-center gap-4 px-4 py-3'>
-				<div className='relative'>
-					<div className={cn(
-						'h-3 w-3 rounded-full transition-colors',
-						isRunning ? 'bg-emerald-400' : 'bg-red-400'
-					)} />
-					{isRunning && (
-						<div className='absolute inset-0 h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-50' />
-					)}
-				</div>
-				<div className='flex-1 min-w-0'>
-					<div className='flex items-center gap-2'>
-						<span className='font-medium text-text-primary truncate'>{container.name}</span>
-						<span className={cn(
-							'px-2 py-0.5 text-[10px] font-medium rounded-full uppercase tracking-wide',
-							isRunning ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-						)}>
-							{container.state}
-						</span>
-					</div>
-					<div className='text-xs text-text-tertiary truncate mt-0.5'>{container.status}</div>
-				</div>
-
-				{/* Action Buttons */}
-				<div className='flex items-center gap-1'>
-					{!isRunning ? (
-						<ActionButton
-							icon={IconPlayerPlay}
-							onClick={() => onAction('start', container.name)}
-							disabled={isActioning}
-							color='emerald'
-							title='Start'
-						/>
-					) : (
-						<ActionButton
-							icon={IconPlayerStop}
-							onClick={() => onAction('stop', container.name)}
-							disabled={isActioning}
-							color='amber'
-							title='Stop'
-						/>
-					)}
-					<ActionButton
-						icon={IconRotateClockwise}
-						onClick={() => onAction('restart', container.name)}
-						disabled={isActioning}
-						color='blue'
-						title='Restart'
-					/>
-					<ActionButton
-						icon={IconTrash}
-						onClick={() => onAction('remove', container.name)}
-						disabled={isActioning}
-						color='red'
-						title='Remove'
-					/>
-					<button
-						onClick={onToggle}
-						className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-text-secondary transition-colors'
-					>
-						{expanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
-					</button>
-				</div>
-			</div>
-
-			{/* Expanded Details */}
-			<AnimatePresence>
-				{expanded && (
-					<motion.div
-						initial={{height: 0, opacity: 0}}
-						animate={{height: 'auto', opacity: 1}}
-						exit={{height: 0, opacity: 0}}
-						className='overflow-hidden'
-					>
-						<div className='border-t border-border-subtle px-4 py-3 bg-surface-base'>
-							<div className='grid grid-cols-2 gap-4 text-xs'>
-								<div>
-									<span className='text-text-tertiary'>Container ID</span>
-									<div className='font-mono text-text-secondary mt-1'>{shortId}</div>
-								</div>
-								<div>
-									<span className='text-text-tertiary'>Image</span>
-									<div className='text-text-secondary mt-1 truncate' title={container.image}>
-										{container.image.split('@')[0]}
-									</div>
-								</div>
-							</div>
-						</div>
-					</motion.div>
-				)}
-			</AnimatePresence>
-		</motion.div>
-	)
-}
-
 // Action Button Component
 function ActionButton({
 	icon: Icon,
@@ -269,7 +164,7 @@ function ActionButton({
 			title={title}
 			className={cn(
 				'rounded-lg p-1.5 text-text-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
-				colorClasses[color]
+				colorClasses[color],
 			)}
 		>
 			<Icon size={16} />
@@ -277,24 +172,106 @@ function ActionButton({
 	)
 }
 
-// Section Header Component
-function SectionHeader({icon: Icon, title, action}: {icon: React.ComponentType<{size?: number; className?: string}>; title: string; action?: React.ReactNode}) {
+// Format port mappings for display
+function formatPorts(ports: Array<{hostPort: number | null; containerPort: number; protocol: string}>) {
+	if (!ports.length) return '-'
+	return ports
+		.map((p) => (p.hostPort != null ? `${p.hostPort}:${p.containerPort}/${p.protocol}` : `${p.containerPort}/${p.protocol}`))
+		.join(', ')
+}
+
+// State badge with color coding
+function StateBadge({state}: {state: string}) {
+	const colorClasses: Record<string, string> = {
+		running: 'bg-emerald-500/20 text-emerald-600',
+		exited: 'bg-red-500/20 text-red-600',
+		paused: 'bg-amber-500/20 text-amber-600',
+	}
+	const classes = colorClasses[state] ?? 'bg-neutral-500/20 text-neutral-600'
 	return (
-		<div className='flex items-center justify-between mb-4'>
-			<div className='flex items-center gap-2'>
-				<Icon size={20} className='text-text-secondary' />
-				<h2 className='text-lg font-semibold text-text-primary'>{title}</h2>
-			</div>
-			{action}
+		<span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', classes)}>
+			{state}
+		</span>
+	)
+}
+
+// Placeholder tab content for future phases
+function PlaceholderTab({title, icon: Icon}: {title: string; icon: React.ComponentType<{size?: number; className?: string}>}) {
+	return (
+		<div className='flex flex-col items-center justify-center py-20'>
+			<Icon size={40} className='mb-3 text-text-tertiary' />
+			<p className='text-sm font-medium text-text-secondary'>{title}</p>
+			<p className='mt-1 text-xs text-text-tertiary'>Coming soon</p>
 		</div>
 	)
 }
 
-export default function ServerControl() {
-	const [expandedContainer, setExpandedContainer] = useState<string | null>(null)
-	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
+// Remove confirmation dialog
+function RemoveDialog({
+	containerName,
+	open,
+	onOpenChange,
+	onConfirm,
+	isManaging,
+}: {
+	containerName: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: (confirmName: string) => void
+	isManaging: boolean
+}) {
+	const [typedName, setTypedName] = useState('')
 
-	// Use the same hooks as Live Usage for consistent data
+	// Reset typed name when dialog opens/closes
+	useEffect(() => {
+		if (!open) setTypedName('')
+	}, [open])
+
+	const canConfirm = typedName === containerName && !isManaging
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Remove Container</DialogTitle>
+					<DialogDescription>
+						This action cannot be undone. Type the container name to confirm:
+					</DialogDescription>
+				</DialogHeader>
+				<div className='py-2'>
+					<p className='mb-3 text-sm text-text-secondary'>
+						Container: <span className='font-bold font-mono text-text-primary'>{containerName}</span>
+					</p>
+					<Input
+						sizeVariant='short-square'
+						placeholder='Type container name...'
+						value={typedName}
+						onValueChange={setTypedName}
+						autoFocus
+					/>
+				</div>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='destructive'
+						size='dialog'
+						disabled={!canConfirm}
+						onClick={() => onConfirm(typedName)}
+					>
+						Remove
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+export default function ServerControl() {
+	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+
+	// System resource hooks
 	const cpuUsage = useCpuForUi({poll: true})
 	const memoryUsage = useSystemMemoryForUi({poll: true})
 	const diskUsage = useSystemDiskForUi({poll: true})
@@ -312,44 +289,37 @@ export default function ServerControl() {
 		setMemoryChartData((prev) => [...prev.slice(1), {value: memoryUsage.progress * 100 || 0}])
 	}, [memoryUsage.progress])
 
-	// Docker containers query
-	const containersQuery = trpcReact.ai.listDockerContainers.useQuery(undefined, {
-		refetchInterval: 10_000,
-	})
+	// Docker containers via new hook
+	const {
+		containers,
+		isLoading,
+		isError,
+		error,
+		isFetching,
+		refetch,
+		manage,
+		isManaging,
+		actionResult,
+		runningCount,
+		totalCount,
+	} = useContainers()
 
-	// Docker manage mutation
-	const manageMutation = trpcReact.ai.manageDockerContainer.useMutation({
-		onSuccess: (data) => {
-			setActionResult({type: 'success', message: data.message})
-			containersQuery.refetch()
-			setTimeout(() => setActionResult(null), 3000)
-		},
-		onError: (error) => {
-			setActionResult({type: 'error', message: error.message})
-			setTimeout(() => setActionResult(null), 5000)
-		},
-	})
-
-	const handleDockerAction = (op: 'start' | 'stop' | 'restart' | 'remove', name: string) => {
-		setActionResult(null)
-		manageMutation.mutate({name, operation: op})
+	const handleRemoveConfirm = (confirmName: string) => {
+		if (!removeTarget) return
+		manage(removeTarget, 'remove', {force: true, confirmName})
+		setRemoveTarget(null)
 	}
 
-	const runningCount = containersQuery.data?.filter(c => c.state === 'running').length ?? 0
-	const totalCount = containersQuery.data?.length ?? 0
-
 	return (
-		<div className='space-y-8 pb-8'>
+		<div className='flex h-full flex-col'>
 			{/* Header */}
-			<div className='flex items-center justify-between'>
-				<div>
-					<h1 className='text-2xl font-bold text-text-primary'>Server Control</h1>
-					<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
-				</div>
+			<div className='shrink-0 px-6 pt-5 pb-4'>
+				<h1 className='text-2xl font-bold text-text-primary'>Server Management</h1>
+				<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
 			</div>
 
-			{/* Resource Cards - Live Usage Style */}
-			<div className='grid grid-cols-1 gap-4 sm:grid-cols-3'>
+			{/* Resource Cards */}
+			<div className='shrink-0 grid grid-cols-1 gap-4 px-6 pb-4 sm:grid-cols-3'>
 				<ResourceCard
 					title='CPU'
 					icon={IconCpu}
@@ -377,87 +347,188 @@ export default function ServerControl() {
 				/>
 			</div>
 
-			{/* Docker Containers Section */}
-			<div>
-				<SectionHeader
-					icon={IconBox}
-					title='Docker Containers'
-					action={
-						<div className='flex items-center gap-3'>
-							<div className='text-sm text-text-secondary'>
-								<span className='text-emerald-400 font-medium'>{runningCount}</span>
-								<span className='mx-1'>/</span>
-								<span>{totalCount}</span>
-								<span className='ml-1'>running</span>
-							</div>
-							<button
-								onClick={() => containersQuery.refetch()}
-								disabled={containersQuery.isFetching}
-								className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
-							>
-								<IconRefresh size={14} className={containersQuery.isFetching ? 'animate-spin' : ''} />
-								Refresh
-							</button>
+			{/* Tabbed Interface */}
+			<Tabs defaultValue='containers' className='flex min-h-0 flex-1 flex-col px-6 pb-4'>
+				<TabsList className='shrink-0 w-full justify-start gap-1 bg-transparent p-0'>
+					<TabsTrigger value='containers'>Containers</TabsTrigger>
+					<TabsTrigger value='images'>Images</TabsTrigger>
+					<TabsTrigger value='volumes'>Volumes</TabsTrigger>
+					<TabsTrigger value='networks'>Networks</TabsTrigger>
+					<TabsTrigger value='pm2'>PM2</TabsTrigger>
+					<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
+				</TabsList>
+
+				{/* Containers Tab */}
+				<TabsContent value='containers' className='flex-1 overflow-auto'>
+					{/* Summary Row */}
+					<div className='mb-4 flex items-center justify-between'>
+						<div className='text-sm text-text-secondary'>
+							<span className='font-medium text-emerald-500'>{runningCount}</span>
+							<span className='mx-1'>/</span>
+							<span>{totalCount}</span>
+							<span className='ml-1'>running</span>
 						</div>
-					}
-				/>
-
-				{/* Action Result Toast */}
-				<AnimatePresence>
-					{actionResult && (
-						<motion.div
-							initial={{opacity: 0, y: -10}}
-							animate={{opacity: 1, y: 0}}
-							exit={{opacity: 0, y: -10}}
-							className={cn(
-								'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
-								actionResult.type === 'success'
-									? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-									: 'bg-red-500/20 text-red-400 border border-red-500/30'
-							)}
+						<button
+							onClick={() => refetch()}
+							disabled={isFetching}
+							className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
 						>
-							{actionResult.message}
-						</motion.div>
-					)}
-				</AnimatePresence>
+							<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+							Refresh
+						</button>
+					</div>
 
-				{/* Container List */}
-				{containersQuery.isLoading ? (
-					<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
-						<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
-						<p className='text-sm text-text-tertiary'>Loading containers...</p>
-					</div>
-				) : containersQuery.isError ? (
-					<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
-						<IconServer size={24} className='mx-auto mb-3 text-red-400' />
-						<p className='text-sm text-red-400'>Failed to load containers</p>
-						<p className='mt-1 text-xs text-red-400/60'>{containersQuery.error.message}</p>
-					</div>
-				) : !containersQuery.data?.length ? (
-					<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
-						<IconBox size={32} className='mx-auto mb-3 text-text-tertiary' />
-						<p className='text-sm text-text-tertiary'>No Docker containers found</p>
-						<p className='mt-1 text-xs text-text-tertiary'>Install an app from the App Store to get started</p>
-					</div>
-				) : (
-					<div className='space-y-2'>
-						<AnimatePresence>
-							{containersQuery.data.map((container) => (
-								<DockerContainer
-									key={container.id}
-									container={container}
-									onAction={handleDockerAction}
-									isActioning={manageMutation.isPending}
-									expanded={expandedContainer === container.id}
-									onToggle={() => setExpandedContainer(
-										expandedContainer === container.id ? null : container.id
-									)}
-								/>
-							))}
-						</AnimatePresence>
-					</div>
-				)}
-			</div>
+					{/* Action Result Toast */}
+					<AnimatePresence>
+						{actionResult && (
+							<motion.div
+								initial={{opacity: 0, y: -10}}
+								animate={{opacity: 1, y: 0}}
+								exit={{opacity: 0, y: -10}}
+								className={cn(
+									'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
+									actionResult.type === 'success'
+										? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+										: 'bg-red-500/20 text-red-600 border border-red-500/30',
+								)}
+							>
+								{actionResult.message}
+							</motion.div>
+						)}
+					</AnimatePresence>
+
+					{/* Container Table */}
+					{isLoading ? (
+						<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+							<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+							<p className='text-sm text-text-tertiary'>Loading containers...</p>
+						</div>
+					) : isError ? (
+						<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
+							<IconServer size={24} className='mx-auto mb-3 text-red-400' />
+							<p className='text-sm text-red-400'>Failed to load containers</p>
+							<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+						</div>
+					) : !containers.length ? (
+						<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+							<IconBox size={32} className='mx-auto mb-3 text-text-tertiary' />
+							<p className='text-sm text-text-tertiary'>No Docker containers found</p>
+							<p className='mt-1 text-xs text-text-tertiary'>Install an app from the App Store to get started</p>
+						</div>
+					) : (
+						<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead className='pl-4'>Name</TableHead>
+										<TableHead>Image</TableHead>
+										<TableHead>State</TableHead>
+										<TableHead>Ports</TableHead>
+										<TableHead className='text-right pr-4'>Actions</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{containers.map((container) => {
+										const isRunning = container.state === 'running'
+										return (
+											<TableRow key={container.id}>
+												<TableCell className='pl-4 font-medium'>
+													<div className='flex items-center gap-2'>
+														{container.isProtected && (
+															<IconLock size={14} className='shrink-0 text-amber-500' title='Protected container' />
+														)}
+														<span className='truncate' title={container.name}>
+															{container.name}
+														</span>
+													</div>
+												</TableCell>
+												<TableCell>
+													<span className='truncate text-text-secondary text-xs' title={container.image}>
+														{container.image.split('@')[0]}
+													</span>
+												</TableCell>
+												<TableCell>
+													<StateBadge state={container.state} />
+												</TableCell>
+												<TableCell>
+													<span className='text-xs text-text-secondary font-mono'>
+														{formatPorts(container.ports)}
+													</span>
+												</TableCell>
+												<TableCell className='text-right pr-4'>
+													<div className='flex items-center justify-end gap-1'>
+														{!isRunning ? (
+															<ActionButton
+																icon={IconPlayerPlay}
+																onClick={() => manage(container.name, 'start')}
+																disabled={isManaging}
+																color='emerald'
+																title='Start'
+															/>
+														) : (
+															<ActionButton
+																icon={IconPlayerStop}
+																onClick={() => manage(container.name, 'stop')}
+																disabled={isManaging || container.isProtected}
+																color='amber'
+																title={container.isProtected ? 'Protected — cannot stop' : 'Stop'}
+															/>
+														)}
+														<ActionButton
+															icon={IconRotateClockwise}
+															onClick={() => manage(container.name, 'restart')}
+															disabled={isManaging}
+															color='blue'
+															title='Restart'
+														/>
+														<ActionButton
+															icon={IconTrash}
+															onClick={() => setRemoveTarget(container.name)}
+															disabled={isManaging || container.isProtected}
+															color='red'
+															title={container.isProtected ? 'Protected — cannot remove' : 'Remove'}
+														/>
+													</div>
+												</TableCell>
+											</TableRow>
+										)
+									})}
+								</TableBody>
+							</Table>
+						</div>
+					)}
+				</TabsContent>
+
+				{/* Placeholder Tabs */}
+				<TabsContent value='images' className='flex-1 overflow-auto'>
+					<PlaceholderTab title='Docker Images' icon={IconPhoto} />
+				</TabsContent>
+				<TabsContent value='volumes' className='flex-1 overflow-auto'>
+					<PlaceholderTab title='Docker Volumes' icon={IconFolder} />
+				</TabsContent>
+				<TabsContent value='networks' className='flex-1 overflow-auto'>
+					<PlaceholderTab title='Docker Networks' icon={IconNetwork} />
+				</TabsContent>
+				<TabsContent value='pm2' className='flex-1 overflow-auto'>
+					<PlaceholderTab title='PM2 Processes' icon={IconBrandDocker} />
+				</TabsContent>
+				<TabsContent value='monitoring' className='flex-1 overflow-auto'>
+					<PlaceholderTab title='System Monitoring' icon={IconActivity} />
+				</TabsContent>
+			</Tabs>
+
+			{/* Remove Confirmation Dialog */}
+			{removeTarget && (
+				<RemoveDialog
+					containerName={removeTarget}
+					open={!!removeTarget}
+					onOpenChange={(open) => {
+						if (!open) setRemoveTarget(null)
+					}}
+					onConfirm={handleRemoveConfirm}
+					isManaging={isManaging}
+				/>
+			)}
 		</div>
 	)
 }
