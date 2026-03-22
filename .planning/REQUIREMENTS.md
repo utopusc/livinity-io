@@ -44,7 +44,7 @@
 ### UI — Dashboard UI
 
 - [x] **UI-01**: Server Management is a tabbed interface (Overview, Containers, Images, Volumes, Networks, PM2, Monitoring)
-- [ ] **UI-02**: Overview tab shows system health dashboard (CPU, RAM, Disk, Network sparklines + container/PM2 summary)
+- [x] **UI-02**: Overview tab shows system health dashboard (CPU, RAM, Disk, Network sparklines + container/PM2 summary)
 - [x] **UI-03**: Container detail opens a slide-over or modal with tabbed view (Info, Logs, Stats)
 - [x] **UI-04**: All destructive operations (remove, prune) show confirmation dialogs
 - [x] **UI-05**: Real-time data updates without full page refresh (polling or subscription)
@@ -107,7 +107,7 @@
 | MON-02 | Phase 39 | Complete |
 | MON-03 | Phase 39 | Complete |
 | UI-01 | Phase 35 | Complete |
-| UI-02 | Phase 39 | Pending |
+| UI-02 | Phase 39 | Complete |
 | UI-03 | Phase 36 | Complete |
 | UI-04 | Phase 35 | Complete |
 | UI-05 | Phase 35 | Complete |
