@@ -23,6 +23,7 @@ import {
 	setUserPreference,
 	getUserPreferences,
 	deleteUserPreference,
+	deleteUser,
 } from '../database/index.js'
 
 const ONE_SECOND = 1000
@@ -604,6 +605,26 @@ export default router({
 
 			const user = await toggleUserActive(input.userId, input.isActive)
 			if (!user) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
+			}
+
+			return {success: true}
+		}),
+
+	// Admin only - delete a user
+	deleteUser: adminProcedure
+		.input(
+			z.object({
+				userId: z.string().uuid(),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			if (ctx.currentUser && input.userId === ctx.currentUser.id) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Cannot delete your own account'})
+			}
+
+			const deleted = await deleteUser(input.userId)
+			if (!deleted) {
 				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
 			}
 

@@ -6,6 +6,7 @@ import {
 	TbLoader2,
 	TbPlus,
 	TbShieldCheck,
+	TbTrash,
 	TbUser,
 	TbUserOff,
 	TbUserPlus,
@@ -157,12 +158,28 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 		},
 	})
 
+	const deleteMut = trpcReact.user.deleteUser.useMutation({
+		onSuccess: () => {
+			utils.user.listAllUsers.invalidate()
+			toast.success(`${user.display_name} has been deleted`)
+		},
+		onError: (error) => {
+			toast.error(error.message)
+		},
+	})
+
 	const handleRoleChange = (role: string) => {
 		roleMut.mutate({userId: user.id, role: role as 'admin' | 'member' | 'guest'})
 	}
 
 	const handleToggleActive = () => {
 		toggleActiveMut.mutate({userId: user.id, isActive: !user.is_active})
+	}
+
+	const handleDelete = () => {
+		if (window.confirm(`Are you sure you want to delete ${user.display_name}? This cannot be undone.`)) {
+			deleteMut.mutate({userId: user.id})
+		}
 	}
 
 	return (
@@ -224,22 +241,33 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 				</SelectContent>
 			</Select>
 
-			{/* Enable/Disable toggle */}
+			{/* Actions */}
 			{!isCurrentUser && (
-				<Button
-					variant={user.is_active ? 'default' : 'primary'}
-					size='sm'
-					onClick={handleToggleActive}
-					disabled={toggleActiveMut.isPending}
-				>
-					{toggleActiveMut.isPending ? (
-						<TbLoader2 className='h-4 w-4 animate-spin' />
-					) : user.is_active ? (
-						'Disable'
-					) : (
-						'Enable'
-					)}
-				</Button>
+				<div className='flex items-center gap-1.5'>
+					<Button
+						variant={user.is_active ? 'default' : 'primary'}
+						size='sm'
+						onClick={handleToggleActive}
+						disabled={toggleActiveMut.isPending}
+					>
+						{toggleActiveMut.isPending ? (
+							<TbLoader2 className='h-4 w-4 animate-spin' />
+						) : user.is_active ? (
+							'Disable'
+						) : (
+							'Enable'
+						)}
+					</Button>
+					<Button
+						variant='ghost'
+						size='icon-only'
+						text='destructive'
+						onClick={handleDelete}
+						disabled={deleteMut.isPending}
+					>
+						{deleteMut.isPending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : <TbTrash className='h-4 w-4' />}
+					</Button>
+				</div>
 			)}
 		</div>
 	)
