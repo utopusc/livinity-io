@@ -51,4 +51,6 @@ export const httpOnlyPaths = [
 	'apps.nativeStart',
 	'apps.nativeStop',
 	'apps.nativeStatus',
+	// Docker management — use HTTP for reliability through relay tunnel
+	'docker.manageContainer',
 ] as const
