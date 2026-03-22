@@ -1,198 +1,181 @@
 # Project Research Summary
 
-**Project:** LivOS v6.0 -- Claude Code to Kimi Code Migration
-**Domain:** AI provider migration in self-hosted home server OS
-**Researched:** 2026-03-09
-**Confidence:** MEDIUM-HIGH
+**Project:** LivOS v12.0 -- Server Management Dashboard
+**Domain:** Docker lifecycle management, PM2 process control, enhanced system monitoring for self-hosted home server OS
+**Researched:** 2026-03-22
+**Confidence:** HIGH
 
 ## Executive Summary
 
-This migration replaces Claude Code (Anthropic's CLI-based AI agent) with Kimi Code (Moonshot AI's equivalent) across the Nexus backend and LivOS frontend. The research confirms this is a **systematic component replacement, not a rewrite**. The existing architecture has clean seams: the AIProvider interface, ProviderManager, SdkAgentRunner pattern, ToolRegistry, and SSE streaming pipeline are all provider-agnostic. The Claude-specific surface is confined to roughly 10 files across four layers (provider, agent runner, API routes, UI). Kimi Code offers three integration depths -- direct OpenAI-compatible API, Agent SDK subprocess, and CLI print mode -- giving us flexibility and a reliable fallback chain.
+LivOS v12.0 adds a full server management dashboard to the existing Server Control window. The research unanimously confirms that the existing stack covers nearly every requirement: dockerode (already installed) handles all Docker API operations, systeminformation (already installed) covers the missing network/disk I/O metrics, execa (already installed) is the correct tool for PM2 management, and recharts plus xterm (both already installed) handle the frontend. Zero new backend dependencies are needed. The only optional additions are two xterm addons for search and clickable links in log output. This is a feature-build project, not a technology-selection project.
 
-The recommended approach is to build in four phases: (1) KimiProvider for API key mode first (fastest path to a working chat), (2) API routes and UI updates for configuration, (3) KimiAgentRunner for subscription/CLI mode (the more complex subprocess integration), and (4) cleanup of all Claude-specific code. The single most important architectural decision: **start with Kimi CLI's print mode (`--print --output-format=stream-json`) for the agent runner, not the SDK**. The `@moonshot-ai/kimi-agent-sdk` is version 0.1.5 (pre-stable), making it a risk for the primary integration path. Print mode is a stable, zero-dependency approach that spawns `kimi` as a child process and parses JSONL output. Upgrade to the SDK once it matures.
+The recommended approach is a tabbed dashboard inside the existing Server Control window, built on three new tRPC routers (docker, pm2, monitoring) following the established thin-routes-plus-fat-domain pattern. Docker streaming (logs, stats) should use tRPC async generator subscriptions over the existing WebSocket infrastructure, matching the proven eventBus pattern already in the codebase. PM2 management should use execa to shell out to the PM2 CLI (not the pm2 programmatic API) to avoid connection lifecycle bugs and version coupling. Container exec reuses the existing terminal-socket.ts WebSocket handler with a new `containerId` query parameter.
 
-The key risks are: (1) the inline MCP server gap -- Claude's `createSdkMcpServer()` has no Kimi equivalent, requiring either `createExternalTool()` via the SDK or `--mcp-config` inline JSON via print mode; (2) the system prompt format change from inline strings to file-based agent YAML definitions; and (3) the new Python 3.12+ system dependency on the production server. All three have verified workarounds. On the upside, Kimi is 8-10x cheaper ($0.60/$3.00 vs $5/$25 per million tokens for top-tier models), offers cache-aware token tracking, and simplifies the OAuth flow (device auth instead of manual PKCE code paste).
+The primary risks are security-related, not technical. Docker exec grants host-level shell access and must be admin-only with container authorization. Deleting infrastructure containers (Redis, PostgreSQL, Caddy) will brick the system, so a server-side protected container registry is mandatory before any remove endpoint ships. Multi-user container visibility must filter by ownership to prevent cross-user data leakage. On the performance side, Docker stats streaming without lifecycle management causes memory exhaustion, and log streaming without tail limits can send gigabytes of data. All of these have well-documented prevention strategies detailed in the research.
 
 ## Key Findings
 
 ### Recommended Stack
 
-**Remove:** `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk` from nexus/packages/core.
+No new backend packages required. The entire v12.0 feature set builds on libraries already in the monorepo. This eliminates dependency risk and version compatibility concerns entirely.
 
-**Add:** `@moonshot-ai/kimi-agent-sdk` (^0.1.5, pin exact version). Optionally add `openai` npm package for the KimiProvider API key mode, since Kimi exposes an OpenAI-compatible endpoint at `api.kimi.com/coding/v1`.
+**Core technologies (all existing):**
+- **dockerode ^4.0.2**: All Docker API operations (containers, images, volumes, networks) -- programmatic API with streaming support, already proven in docker-pull.ts
+- **systeminformation (forked)**: Enhanced monitoring (networkStats, disksIO, processes) -- functions exist in the library but are not yet called in the codebase
+- **execa ^7.1.1**: PM2 management via `pm2 jlist` JSON output -- avoids the pm2 npm package's 40MB dependency tree, connection management bugs, and version coupling
+- **node-pty ^1.0.0 + @xterm/xterm ^5.4.0**: Container exec terminal -- existing terminal-socket.ts handles all PTY lifecycle
+- **recharts ^2.12.7**: All monitoring charts (CPU, memory, network I/O, disk I/O, per-container stats) -- existing patterns in live-usage.tsx
+- **tRPC v11 async generator subscriptions**: Log and stats streaming over existing WebSocket infrastructure -- proven in eventBus
 
-**System dependency:** Kimi CLI requires Python 3.12+ and `uv` package manager on the production server. Install via `curl -LsSf https://code.kimi.com/install.sh | bash` or `uv tool install kimi-code`.
-
-**Core technologies:**
-- **Kimi Agent SDK** (`@moonshot-ai/kimi-agent-sdk`): Subprocess SDK mirroring Claude Agent SDK pattern -- `createSession()` + `session.prompt()` instead of `query()`
-- **Kimi CLI print mode**: Fallback integration via `kimi --print --output-format=stream-json` -- zero SDK dependency, parse JSONL stdout
-- **OpenAI-compatible API**: `api.kimi.com/coding/v1` for direct API key mode chat -- standard format, high confidence
-- **Existing stack unchanged**: Express + tRPC, Redis, React 18, Vite, BullMQ, MCP tools, SSE streaming, JWT auth
-
-**What NOT to add:** Do not add the `openai` package if unnecessary complexity. Do not maintain dual Claude + Kimi support. Do not keep the dead GeminiProvider. Do not adopt LangChain.
+**Optional frontend additions:** `@xterm/addon-search ^0.16.0` and `@xterm/addon-web-links ^0.12.0` for quality-of-life in the log viewer.
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Agent runner spawning Kimi CLI subprocess with MCP tool access (FM-01, FM-02)
-- Streaming events from Kimi to web UI via SSE (FM-03)
-- Model tier selection mapping to Kimi model IDs (FM-04)
-- API key authentication with Moonshot platform (FM-05)
-- Auto-approval for Nexus tools via `yoloMode: true` (FM-07)
-- Chrome DevTools MCP integration via mcp.json stdio config (FM-10)
-- Settings UI with Kimi branding and auth flow (FM-11)
+**Must have (table stakes -- every server UI has these):**
+- Full container lifecycle: list (running + stopped), start, stop, restart, remove
+- Container detail: inspect, port mappings, volume mounts, environment variables
+- Container logs: tail with follow, search, ANSI color rendering
+- Container stats: CPU, memory, network I/O per container
+- Docker image management: list, remove, prune unused
+- Docker volume and network listing with inspect
+- PM2 process management: list, restart, stop, start, logs (unique differentiator -- no other self-hosted UI has this)
+- Enhanced system monitoring: network interface traffic, disk I/O rates, active process list
 
-**Should have (differentiators -- Kimi advantages):**
-- 8-10x cheaper inference costs (zero code change, immediate benefit)
-- Cache-aware token tracking with `input_cache_read` metrics (low effort)
-- Thinking mode toggle (`SessionOptions.thinking: true`) for chain-of-thought reasoning (low effort)
-- Granular approval system with per-request approve/reject (medium effort, better than Claude's all-or-nothing)
-- Vision capabilities via multimodal K2.5 model (low effort)
+**Should have (differentiators):**
+- Container exec terminal (from dashboard, not just app context)
+- Per-container resource graphs with 60-second history
+- Image pull from UI with progress tracking
+- Bulk container operations (stop all, remove selected)
+- Health check status display
 
-**Defer (v2+):**
-- Wire mode integration for advanced programmatic steering
-- Agent YAML files for different personas per use case
-- Self-hosted model weights from HuggingFace
-- Thinking mode UI (reasoning chain display)
+**Defer (v13.0+):**
+- Container creation from scratch (users install via App Store)
+- Compose file editor (Dockge's domain)
+- Historical metrics storage (24h+ time-series)
+- Firewall rule management, systemd service management
 
 ### Architecture Approach
 
-The migration touches four layers with clean boundaries. **KimiProvider** (new file) implements the AIProvider interface for API key mode using OpenAI-compatible chat completions format. **KimiAgentRunner** (new file) replaces SdkAgentRunner for subscription mode, initially using print mode fallback (spawn child process, parse JSONL) with SDK upgrade path. API routes change from `/api/claude-cli/*` to `/api/kimi/*` with a simpler auth flow (device auth, no code paste). The UI simplifies: the "paste authorization code" step is eliminated entirely.
+The dashboard extends the existing Server Control window with a tab-based layout (Overview, Containers, Images, Volumes, Networks, PM2, Monitoring). Three new backend modules (`modules/docker/`, `modules/pm2/`, `modules/monitoring/`) each follow the thin-routes-plus-fat-domain pattern established by existing modules. A singleton Dockerode instance replaces the current per-call instantiation in ai/routes.ts. All Docker/PM2 mutations must be added to `httpOnlyPaths` in common.ts for reliability through the tunnel relay.
 
 **Major components:**
-1. **KimiProvider** (`providers/kimi.ts`) -- Implements `chat()`, `chatStream()`, `isAvailable()`, `getModels()`, `getCliStatus()`, `startLogin()`, `logout()` using OpenAI-compatible API and device auth
-2. **KimiAgentRunner** (`kimi-agent-runner.ts`) -- Spawns `kimi` CLI subprocess, handles MCP tools via `createExternalTool()` (SDK) or `--mcp-config` inline JSON (print mode), maps events to AgentEvent interface
-3. **API routes** (`api.ts`) -- `/api/kimi/status`, `/api/kimi/login`, `/api/kimi/logout` replacing Claude endpoints; agent stream switches to KimiAgentRunner for subscription mode
-4. **tRPC proxy routes** (`livinityd/ai/routes.ts`) -- `ai.getKimiCliStatus`, `ai.startKimiLogin`, `ai.kimiLogout` replacing Claude equivalents
-5. **Settings UI** (`ai-config.tsx`) -- Kimi branding, simplified subscription auth (button + poll, no code paste), API key input
-
-**Files to create:** 2 (kimi.ts, kimi-agent-runner.ts)
-**Files to modify:** 7 (manager.ts, index.ts, types.ts, api.ts, daemon.ts, routes.ts, ai-config.tsx, config/schema.ts)
-**Files to delete:** 2 (claude.ts, sdk-agent-runner.ts)
+1. **modules/docker/** (docker.ts + routes.ts + types.ts) -- Dockerode singleton, all container/image/volume/network operations, log and stats streaming as async generator subscriptions
+2. **modules/pm2/** (pm2.ts + routes.ts) -- Execa-based PM2 CLI wrapper, process listing/management, log file streaming
+3. **modules/monitoring/** (routes.ts) -- Real-time system metrics subscription (CPU, memory, network I/O, disk I/O) via polling loop as async generator
+4. **ui/routes/server-control/tabs/** -- Tabbed frontend with dedicated hooks per data domain, recharts for visualization, xterm for log rendering
 
 ### Critical Pitfalls
 
-1. **SDK maturity risk (P1, CRITICAL)** -- `@moonshot-ai/kimi-agent-sdk` is v0.1.5 (0.x = pre-stable). API may change without warning. **Prevention:** Build print mode fallback first (`kimi --print --output-format=stream-json`). Use SDK as an upgrade path, not the foundation. Pin exact version.
-
-2. **Inline MCP server gap (P2, CRITICAL)** -- Claude's `createSdkMcpServer()` has no Kimi equivalent. Nexus tools must be exposed differently. **Prevention:** Use `createExternalTool()` for SDK path (register tools directly with Zod schemas and handlers) or `--mcp-config` inline JSON for print mode path. Both are verified workarounds.
-
-3. **Tool format translation errors (P3, CRITICAL)** -- Kimi uses OpenAI function calling format: `parameters` instead of `input_schema`, tool arguments as JSON strings instead of parsed objects. Missing `JSON.parse()` causes silent failures. **Prevention:** Create explicit `translateToolDefinition()` and `parseToolArguments()` functions. Unit test with every MCP tool. Log raw payloads during development.
-
-4. **System prompt format change (P4, HIGH)** -- Kimi requires file-based agent YAML + markdown prompt instead of inline strings. **Prevention:** Write temporary agent YAML + system prompt files per session, clean up on close. Alternatively, API mode supports inline system prompts through the OpenAI-compatible format.
-
-5. **Breaking changes during migration (P10, MEDIUM)** -- System is unusable between removing Claude and having Kimi fully working. **Prevention:** Build Kimi alongside Claude first. Switch provider in config when verified. Remove Claude code last (Phase 4). Never deploy a half-migrated state.
+1. **Unrestricted Docker exec grants host-level shell** -- Gate behind adminProcedure, validate container ownership against user_app_instances table, add idle timeout and audit logging
+2. **Deleting infrastructure containers bricks the system** -- Maintain a server-side PROTECTED_CONTAINERS set (Redis, PostgreSQL, Caddy, etc.), enforce before calling Docker API, never rely on frontend-only guards
+3. **Multi-user container visibility leaks cross-user data** -- Filter container listings by user role and ownership using existing user_app_instances/user_app_access tables; admin sees all, members see only theirs
+4. **Docker stats streaming causes memory exhaustion** -- Use one-shot stats for overview (5s polling), stream only for single-container detail view, track all streams for cleanup on disconnect, cap concurrent streams per user
+5. **Docker log streaming without tail limits sends gigabytes** -- Always default to `--tail 500`, use `--tail 0 --follow` for live tailing, implement circular buffer server-side, use virtual scrolling client-side
 
 ## Implications for Roadmap
 
-Based on combined research, the migration should follow a four-phase structure driven by dependency order and risk management.
+Based on research, suggested phase structure:
 
-### Phase 1: KimiProvider (API Key Mode)
+### Phase 1: Docker Foundation and Container Management
+**Rationale:** Everything depends on the Docker module. The Dockerode singleton, container listing with multi-user filtering, and the protected container registry are prerequisites for all other Docker features. Security controls must be baked in from the start, not bolted on later.
+**Delivers:** New docker module (singleton + types + routes), container list with role-based visibility, container lifecycle (start/stop/restart/remove with protection), container inspect/detail view, frontend Containers tab with detail drawer
+**Addresses:** Container lifecycle (table stakes), port/volume/env visibility, protected container safety, multi-user filtering
+**Avoids:** Pitfalls 1 (exec access), 2 (protected containers), 3 (visibility leak), command injection
+**Stack:** dockerode (existing), tRPC adminProcedure, httpOnlyPaths for mutations
 
-**Rationale:** Establishes the foundation with the lowest-risk integration path. API key mode uses standard OpenAI-compatible chat completions -- no CLI dependency, no subprocess management, no MCP config complexity. Gets basic chat working immediately.
+### Phase 2: Container Logs and Stats Streaming
+**Rationale:** Logs and stats are the highest-value container detail features and both use the same tRPC async generator subscription pattern. Building them together validates the streaming architecture once.
+**Delivers:** Container log streaming (tail + follow), log viewer with xterm, container stats streaming (CPU/mem/net), per-container resource charts with recharts
+**Addresses:** Container logs (table stakes), container stats (table stakes), per-container graphs (differentiator)
+**Avoids:** Pitfalls 4 (stats memory exhaustion) and 5 (log gigabyte streaming)
+**Stack:** dockerode streaming APIs, tRPC subscriptions, xterm + recharts (all existing)
 
-**Delivers:** Working AI chat via Kimi API with tool calling through existing AgentLoop. Cost tracking with Kimi pricing. Model tier mapping.
+### Phase 3: PM2 Process Management
+**Rationale:** PM2 management is independent of Docker and can be built in parallel with later Docker phases. It is a unique LivOS differentiator (no other self-hosted UI has PM2 management). Uses execa, so no new dependencies.
+**Delivers:** PM2 process list, restart/stop/start actions, process detail view, PM2 log viewing, protected process list (livos, nexus-core cannot be stopped)
+**Addresses:** PM2 management (table stakes for LivOS, differentiator in market)
+**Avoids:** Pitfall 6 (PM2 connection leaks -- avoided entirely by using execa instead of programmatic API), self-management guard
+**Stack:** execa + `pm2 jlist` (existing)
 
-**Addresses:** FM-04 (model selection), FM-09 (token usage), P3 (tool format translation), P8 (model tier mapping), P11 (rate limiting)
+### Phase 4: Docker Images, Volumes, and Networks
+**Rationale:** These are secondary Docker resources that extend the container management foundation. Lower priority than containers/logs/stats/PM2 but needed for completeness. All use the same Dockerode singleton from Phase 1.
+**Delivers:** Image list/remove/prune, volume list/inspect/remove, network list/inspect/remove, frontend tabs for each
+**Addresses:** Image management (table stakes), volume/network visibility (table stakes), image prune (differentiator)
+**Avoids:** Image "in use" indicator before deletion, volume data loss from accidental removal
+**Stack:** dockerode (existing), same tRPC patterns as Phase 1
 
-**Avoids:** P1 (SDK maturity) by not depending on the SDK yet. P10 (breaking changes) by keeping Claude code intact.
+### Phase 5: Enhanced System Monitoring
+**Rationale:** Builds on the existing system module by adding network I/O, disk I/O, and process list. The monitoring subscription provides a unified real-time metrics stream for the dashboard. Depends on phases 1-4 being done so the Overview tab can synthesize all data sources.
+**Delivers:** Network interface traffic graphs, disk I/O graphs, active process list, unified real-time metrics subscription, Monitoring tab, enhanced Overview tab combining all data
+**Addresses:** Enhanced monitoring (table stakes gaps), real-time dashboard (differentiator)
+**Avoids:** systeminformation first-call null values (prime on startup or handle in UI)
+**Stack:** systeminformation (existing), recharts (existing), tRPC subscription
 
-**Files:** `providers/kimi.ts` (new), `providers/manager.ts`, `providers/index.ts`, `providers/types.ts`, `config/schema.ts`
-
-### Phase 2: API Routes + tRPC + UI
-
-**Rationale:** Users need to configure Kimi credentials through the UI before the migration is usable. The auth flow is simpler than Claude's (device auth, no code paste), making the UI work lighter.
-
-**Delivers:** Full settings UI for Kimi configuration. API key input, CLI status display, subscription login flow. Redis key migration from `anthropic_api_key` to `kimi_api_key`.
-
-**Addresses:** FM-05 (authentication), FM-06 (CLI status), FM-11 (settings UI), FM-12 (onboarding wizard), P6 (auth flow simplification)
-
-**Avoids:** P7 (incomplete cleanup) by not removing Claude code yet -- both coexist during development.
-
-**Files:** `api.ts`, `livinityd/modules/ai/routes.ts`, `ui/routes/settings/ai-config.tsx`
-
-### Phase 3: KimiAgentRunner (Subscription Mode)
-
-**Rationale:** The most complex phase. Depends on Kimi CLI being installed on the production server (Python 3.12+, uv). Start with print mode fallback for reliability, upgrade to SDK if stable.
-
-**Delivers:** Full agent runner spawning Kimi CLI subprocess with MCP tool access. Streaming events to UI. External tool registration. Chrome DevTools MCP integration.
-
-**Addresses:** FM-01 (agent runner), FM-02 (MCP tools), FM-03 (streaming events), FM-07 (auto-approval), FM-08 (system prompt), FM-10 (Chrome DevTools)
-
-**Avoids:** P1 (SDK maturity) by starting with print mode. P2 (MCP gap) by using `--mcp-config` inline JSON or `createExternalTool()`. P4 (system prompt) by writing temp agent YAML files. P5 (Python dependency) by installing requirements first.
-
-**Files:** `kimi-agent-runner.ts` (new), `api.ts` (agent stream switch), `daemon.ts` (import swap)
-
-**Server prerequisite:** Install Python 3.12+ and Kimi CLI on production server before this phase.
-
-### Phase 4: Cleanup and Enhancement
-
-**Rationale:** Only after all functionality is verified working end-to-end. Remove all Claude-specific code, packages, and references. Add differentiator features.
-
-**Delivers:** Clean codebase with no Claude dependencies. Redis key migration. Optionally: thinking mode UI, granular approval handler.
-
-**Addresses:** P7 (incomplete cleanup), AF-01 (no dual support), AF-04 (remove dead Gemini code)
-
-**Verification:** Run `grep -r "claude\|anthropic\|Claude\|Anthropic" --include="*.ts" --include="*.tsx"` to confirm complete removal. Check Redis keys. End-to-end test on production.
-
-**Files:** Delete `claude.ts`, `sdk-agent-runner.ts`. Remove `@anthropic-ai/*` packages. Update `package.json`.
+### Phase 6: Polish and Migration Cleanup
+**Rationale:** Once all features are built and validated, remove the deprecated Docker routes from ai/routes.ts, add container exec from dashboard (extends terminal-socket.ts), implement bulk operations, and handle edge cases from the "Looks Done But Isn't" checklist.
+**Delivers:** Container exec from dashboard, bulk container operations, deprecated route removal, terminal resize handling, health check display, comprehensive error handling for Docker daemon unavailability
+**Addresses:** Container exec (differentiator), bulk operations (differentiator), code cleanup
+**Avoids:** Breaking existing AI Docker tool calls during migration (keep deprecated aliases until fully migrated)
 
 ### Phase Ordering Rationale
 
-- **Phase 1 before Phase 2** because the provider must exist before routes and UI can reference it
-- **Phase 2 before Phase 3** because API key mode (Phase 1 + 2) provides a working system while the more complex CLI subprocess integration is built
-- **Phase 3 is the critical path** -- the MCP tool bridging and event mapping are where most bugs will surface
-- **Phase 4 last** because deleting Claude code before Kimi is fully verified risks downtime
-- Phases 2 and 3 could partially overlap (UI work is independent of agent runner work)
+- **Phase 1 must come first** because the Dockerode singleton, multi-user filtering, and protected container registry are prerequisites for every other feature. Security controls cannot be retrofitted.
+- **Phase 2 follows Phase 1** because log/stats streaming is the most complex pattern and validates the subscription architecture early. If the streaming approach has issues, discovering them early prevents rework in later phases.
+- **Phase 3 is independent** of Docker phases and could theoretically be built in parallel with Phase 2, but is sequenced after to keep the critical path focused.
+- **Phase 4 groups secondary Docker resources** together because they share the same Dockerode singleton and identical route patterns (list, inspect, remove). Minimal new architecture decisions.
+- **Phase 5 comes late** because the Overview tab needs data from all other phases to synthesize a meaningful dashboard.
+- **Phase 6 is last** because cleanup and polish should only happen after all features are stable.
 
 ### Research Flags
 
-**Phases likely needing deeper research during planning:**
-- **Phase 3 (KimiAgentRunner):** The SDK's `createExternalTool()` integration with `createSession()` is documented but not verified. The exact TypeScript signatures need testing. Print mode fallback is well-understood, but the SDK path needs runtime validation. Consider running `/gsd:research-phase` before executing.
-- **Phase 2 (Auth flow):** The device auth API endpoints (`auth.kimi.com/api/oauth/device_authorization`) were found in the GitHub issue tracker, not official docs. The exact request/response format needs verification.
+Phases likely needing deeper research during planning:
+- **Phase 2 (Logs/Stats Streaming):** The tRPC async generator subscription pattern for Docker streams needs careful design around stream lifecycle, backpressure, and cleanup. The eventBus subscription is a good reference but Docker streams have different characteristics (continuous high-throughput data vs sparse events). Worth a `/gsd:research-phase` to nail down the exact implementation pattern.
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (KimiProvider):** OpenAI-compatible API is a well-documented, established pattern. Tool definition translation is mechanical (`input_schema` -> `parameters`). High confidence.
-- **Phase 4 (Cleanup):** Straightforward deletion and grep verification. No research needed.
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (Docker Foundation):** Well-documented dockerode API, straightforward tRPC CRUD routes, established patterns in codebase.
+- **Phase 3 (PM2 Management):** Simple execa + JSON parsing, no complex patterns.
+- **Phase 4 (Images/Volumes/Networks):** Identical patterns to Phase 1 container management, just different Docker resource types.
+- **Phase 5 (System Monitoring):** systeminformation functions are well-documented, existing polling patterns in system/routes.ts to follow.
+- **Phase 6 (Polish):** No research needed, just implementation and QA.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | MEDIUM-HIGH | SDK is 0.x but has fallback (print mode). OpenAI-compatible API is standard. |
-| Features | HIGH | 12 features mapped 1:1 with clear complexity ratings. Gaps identified with workarounds. |
-| Architecture | HIGH | Direct codebase analysis + official Kimi docs. Complete file manifest with exact changes. |
-| Pitfalls | HIGH | 12 pitfalls identified with prevention strategies. Informed by architecture + features research. |
+| Stack | HIGH | Zero new backend deps needed. All libraries already installed and proven in the codebase. Sources are official npm docs and direct codebase analysis. |
+| Features | HIGH | Feature matrix derived from Portainer, Cockpit, CasaOS, Yacht, Dockge comparisons. Table stakes are well-established across the industry. |
+| Architecture | HIGH | Architecture decisions based on direct codebase analysis of 13 existing tRPC routers, 3 streaming mechanisms, and established patterns. No speculation. |
+| Pitfalls | HIGH | Pitfalls sourced from Portainer CVE history, Docker security documentation, PM2 API docs, and analysis of the actual existing code (e.g., terminal-socket.ts lacking role checks). |
 
-**Overall confidence:** MEDIUM-HIGH
-
-The primary uncertainty is the Kimi Agent SDK's stability (0.x version) and the exact model IDs available at runtime. Both have clear fallback paths. The architecture is well-understood because the migration preserves the existing provider abstraction layer.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Model IDs at runtime:** The exact Kimi model IDs (`kimi-for-coding`, `kimi-latest`, etc.) need verification via `kimi info` on the server. The tier mapping is approximate until validated.
-- **Device auth API format:** The OAuth device authorization endpoint was found in GitHub issues, not official documentation. Request/response format needs testing during Phase 2.
-- **`createExternalTool()` wiring:** The SDK docs show `createExternalTool()` usage but not how it integrates with `createSession()`. Needs runtime testing in Phase 3. Fallback: use print mode with `--mcp-config`.
-- **Kimi API base URL:** Documentation references both `api.kimi.com/coding/v1` and `api.moonshot.ai/v1`. Need to determine which endpoint has the correct model availability for coding tasks.
-- **Windows development:** Kimi CLI is Python-based and should work on Windows, but local development/testing has not been verified.
+- **STACK.md vs ARCHITECTURE.md disagreement on PM2 approach:** STACK.md recommends execa (shell out to PM2 CLI) while ARCHITECTURE.md recommends the pm2 programmatic API. PITFALLS.md sides with execa due to connection leak risks. **Resolution: Use execa.** The programmatic API's connection management burden is not worth the marginal benefit of avoiding JSON parsing. The codebase already uses execa extensively, and `pm2 jlist` output is stable structured JSON.
+- **STACK.md vs ARCHITECTURE.md disagreement on streaming transport:** STACK.md recommends SSE for container stats/log streaming while ARCHITECTURE.md recommends tRPC async generator subscriptions over WebSocket. **Resolution: Use tRPC subscriptions.** The infrastructure already exists (eventBus uses this pattern), the types auto-propagate, and it avoids adding a new transport mechanism. SSE would require `httpSubscriptionLink` changes to the client.
+- **systeminformation first-call null values:** networkStats(), disksIO(), and fsStats() return null for rate values on the first call. Need to decide during Phase 5 planning whether to prime on server startup or handle gracefully in the UI (show "Calculating..." for the first 1-2 seconds).
+- **Terminal resize events:** The existing terminal-socket.ts passes initial cols/rows but the PITFALLS research flags that ongoing resize events may not be handled. Needs verification during Phase 6 planning.
+- **Docker daemon unavailability handling:** No research covered what happens when the Docker daemon is temporarily unreachable (e.g., during system updates). All Docker routes need graceful error handling, but the specific UX pattern needs design during implementation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Kimi Agent SDK GitHub](https://github.com/MoonshotAI/kimi-agent-sdk) -- Session API, Turn interface, event types, createExternalTool
-- [Kimi CLI GitHub](https://github.com/MoonshotAI/kimi-cli) -- CLI features, installation, MCP support
-- [Kimi CLI Official Docs](https://moonshotai.github.io/kimi-cli/en/) -- MCP config, print mode, wire mode, command reference, agent files
-- [Kimi CLI Auth Issue #757](https://github.com/MoonshotAI/kimi-cli/issues/757) -- OAuth device auth implementation details
-- [Kimi API Pricing](https://costgoat.com/pricing/kimi-api) -- Full model list with per-million-token pricing
+- [dockerode npm/GitHub](https://github.com/apocas/dockerode) -- Container, Image, Volume, Network API surface, streaming patterns
+- [Docker Engine API docs](https://docs.docker.com/engine/api/) -- Stats, logs, exec endpoint behavior
+- [systeminformation npm](https://www.npmjs.com/package/systeminformation) -- networkStats, disksIO, processes function signatures and behavior
+- [tRPC v11 subscriptions docs](https://trpc.io/docs/server/subscriptions) -- Async generator pattern
+- [PM2 programmatic API docs](https://pm2.io/docs/runtime/reference/pm2-programmatic/) -- Evaluated and rejected
+- Direct codebase analysis of all 13 existing tRPC routers, terminal-socket.ts, docker-pull.ts, system.ts, ai/routes.ts
 
 ### Secondary (MEDIUM confidence)
-- [Kimi CLI Technical Deep Dive](https://llmmultiagents.com/en/blogs/kimi-cli-technical-deep-dive) -- Internal architecture analysis
-- [Kimi K2.5 Developer Guide](https://www.nxcode.io/resources/news/kimi-k2-5-developer-guide-kimi-code-cli-2026) -- Model capabilities
-- [Kimi Code vs Claude Code](https://medium.com/ai-software-engineer/i-finally-tested-new-kimi-code-cli-like-claude-code-dont-miss-my-hard-lesson-bc5d60a51578) -- Practical comparison
-- [One Agent SDK](https://github.com/odysa/one-agent-sdk) -- Provider-agnostic wrapper showing Kimi SDK patterns
+- [Portainer CVE history (Fortinet)](https://www.fortinet.com/blog/threat-research/seven-critical-vulnerabilities-portainer) -- Security pitfalls
+- [Docker Container Escape Techniques (Unit42)](https://unit42.paloaltonetworks.com/container-escape-techniques/) -- exec security considerations
+- [Dokploy DeepWiki](https://deepwiki.com/dokploy/dokploy/9.1-real-time-log-streaming) -- Circular buffer pattern for log streaming
+- [Docker Stats API Performance (moby #23188)](https://github.com/moby/moby/issues/23188) -- Stats API performance characteristics
 
 ### Tertiary (LOW confidence)
-- [SourceForge Claude vs Kimi](https://sourceforge.net/software/compare/Claude-Code-vs-Kimi-Code-CLI/) -- Feature comparison (marketing-oriented)
+- [XDA Portainer frustrations](https://www.xda-developers.com/why-i-stopped-using-portainer-and-went-back-to-dockge/) -- UX lessons (anecdotal but useful for feature prioritization)
 
 ---
-*Research completed: 2026-03-09*
+*Research completed: 2026-03-22*
 *Ready for roadmap: yes*
