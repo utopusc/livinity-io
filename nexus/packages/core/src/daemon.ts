@@ -1006,7 +1006,7 @@ export class Daemon {
       let complexity = 3; // default to moderate
       try {
         const scoreText = await this.config.brain.think({
-          prompt: COMPLEXITY_PROMPT + task.slice(0, 500),
+          prompt: COMPLEXITY_PROMPT + task.slice(0, 1000),
           tier: 'flash',
           maxTokens: 5,
         });
@@ -2547,7 +2547,7 @@ ${task}`;
         execute: async (params) => {
           try {
             const session = await mam.create({
-              parentSessionId: this.currentChannelContext?.chatId || 'web',
+              parentSessionId: this.currentChannelContext?.chatId || this.currentWhatsAppJid || 'web',
               task: params.task as string,
               maxTurns: params.max_turns as number | undefined,
             });
@@ -3247,9 +3247,22 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
         maxTokens: 1024,
       });
 
-      // Parse reflection response
+      // Parse reflection response (with fallback for malformed JSON)
       const cleaned = response.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
-      const reflection = JSON.parse(cleaned);
+      let reflection: any;
+      try {
+        reflection = JSON.parse(cleaned);
+      } catch {
+        // Regex fallback: extract JSON object from response
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try { reflection = JSON.parse(jsonMatch[0]); } catch { reflection = null; }
+        }
+        if (!reflection) {
+          logger.warn('Self-reflection: could not parse response as JSON', { response: cleaned.slice(0, 200) });
+          return;
+        }
+      }
 
       // Save insights to memory
       if (reflection.memory_updates && Array.isArray(reflection.memory_updates)) {

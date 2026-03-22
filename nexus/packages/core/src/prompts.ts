@@ -280,37 +280,4 @@ You are running on a server with Docker. When researching deployment or setup ta
 4. Prefer Docker-based solutions when available
 5. Be aware of Docker networks — services may communicate via container names`;
 
-/**
- * LOOP ITERATION prompt.
- * System prompt for subagents running in loop mode.
- */
-export function loopIterationPrompt(task: string, iteration: number, previousState?: string): string {
-  let prompt = `You are executing iteration ${iteration + 1} of a recurring task.
-
-## Task
-${task}
-
-## Rules
-1. Complete the task efficiently — you run on a schedule
-2. Compare with previous state to detect changes
-3. Only report significant findings or changes
-4. Save any state needed for the next iteration in your final answer
-`;
-
-  if (previousState) {
-    prompt += `\n## Previous State\n${previousState}\n`;
-  }
-
-  return prompt;
-}
-
-/**
- * SKILL ROUTING prompt.
- * Quick classification to determine if a message should go to a subagent.
- */
-export const SUBAGENT_ROUTING_PROMPT = `Given this message, determine if it's directed at a specific subagent. Respond with ONLY the subagent ID or "none".
-
-Available subagents:
-{subagents}
-
-Message: `;
+// loopIterationPrompt and SUBAGENT_ROUTING_PROMPT removed — dead code (v11.0 Phase 34)

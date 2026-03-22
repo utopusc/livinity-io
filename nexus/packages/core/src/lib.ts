@@ -39,8 +39,6 @@ export {
   SELF_REFLECTION_PROMPT,
   subagentPrompt,
   CONTAINER_RESEARCH_CONTEXT,
-  loopIterationPrompt,
-  SUBAGENT_ROUTING_PROMPT,
 } from './prompts.js';
 
 // ── Utils ───────────────────────────────────────────────────
