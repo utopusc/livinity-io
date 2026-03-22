@@ -226,7 +226,10 @@ Plans:
   2. User can start, stop, and restart individual PM2 processes from the list
   3. User can view PM2 process logs (stdout and stderr) with tail and auto-scroll
   4. User can see process details including pid, script path, working directory, and Node version
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 38-01-PLAN.md -- PM2 backend module (types, domain functions, tRPC routes, httpOnlyPaths)
+- [ ] 38-02-PLAN.md -- Frontend PM2Tab with process table, actions, inline detail panel, log viewer
 
 ### Phase 39: Enhanced System Monitoring + Overview Tab
 **Goal**: User has a comprehensive view of server health -- system-wide metrics, network traffic, disk I/O, and a process list, all unified in an overview dashboard
@@ -268,6 +271,6 @@ Plans:
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 38. PM2 Process Management | v12.0 | 0/? | Not started | - |
+| 38. PM2 Process Management | v12.0 | 0/2 | Not started | - |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
 | 40. Polish & Deployment | v12.0 | 0/? | Not started | - |
