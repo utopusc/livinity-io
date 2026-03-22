@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { asc, sql } from 'drizzle-orm';
 import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
 import { db } from '@/lib/drizzle';
 import { apps } from '@/db/schema';
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
       featured: apps.featured,
       version: apps.version,
     })
-    .from(apps);
+    .from(apps)
+    .orderBy(asc(sql`COALESCE(sort_order, 100)`), asc(apps.name));
 
   return NextResponse.json(rows);
 }
