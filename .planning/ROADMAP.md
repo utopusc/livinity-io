@@ -167,7 +167,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v12
 
 - [x] **Phase 35: Docker Backend + Container List/Actions UI** -- Dockerode singleton, protected container registry, tRPC docker router, container list with actions, tabbed dashboard shell (completed 2026-03-22)
 - [x] **Phase 36: Container Detail View + Logs + Stats** -- Container inspect detail drawer, log streaming with xterm, per-container CPU/memory stats (completed 2026-03-22)
-- [ ] **Phase 37: Images, Volumes, Networks** -- Docker image list/remove/prune, volume list/remove, network list/inspect tabs
+- [x] **Phase 37: Images, Volumes, Networks** -- Docker image list/remove/prune, volume list/remove, network list/inspect tabs (completed 2026-03-22)
 - [ ] **Phase 38: PM2 Process Management** -- PM2 process list, start/stop/restart actions, process logs and details
 - [ ] **Phase 39: Enhanced System Monitoring + Overview Tab** -- Network I/O, disk I/O, process list, overview dashboard with system health
 - [ ] **Phase 40: Polish, Edge Cases & Deployment** -- Error handling for Docker daemon unavailability, confirmation UX audit, deprecated route cleanup, production deployment
@@ -215,7 +215,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 37-01-PLAN.md -- Backend tRPC routes for images, volumes, networks (types, domain functions, routes, httpOnlyPaths)
-- [ ] 37-02-PLAN.md -- Frontend ImagesTab, VolumesTab, NetworksTab replacing placeholders
+- [x] 37-02-PLAN.md -- Frontend ImagesTab, VolumesTab, NetworksTab replacing placeholders
 
 ### Phase 38: PM2 Process Management
 **Goal**: User can monitor and control all PM2-managed processes from the dashboard -- a unique LivOS capability no other self-hosted UI provides
@@ -267,7 +267,7 @@ Plans:
 | 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 37. Images, Volumes, Networks | v12.0 | 1/2 | In Progress|  |
+| 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete   | 2026-03-22 |
 | 38. PM2 Process Management | v12.0 | 0/? | Not started | - |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
 | 40. Polish & Deployment | v12.0 | 0/? | Not started | - |

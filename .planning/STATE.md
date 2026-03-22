@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 37-01-PLAN.md
-last_updated: "2026-03-22T21:42:50.058Z"
+stopped_at: Completed 37-02-PLAN.md
+last_updated: "2026-03-22T21:51:36.603Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 2 of 2
 | Phase 36 P01 | 3min | 2 tasks | 3 files |
 | Phase 36 P02 | 3min | 2 tasks | 3 files |
 | Phase 37-01 P01 | 3min | 2 tasks | 4 files |
+| Phase 37 P02 | 6min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -70,6 +71,7 @@ Plan: 2 of 2
 - [Phase 36]: Native HTML range input for tail slider (no shadcn Slider); stopPropagation via span wrappers on ActionButton
 - [Phase 37]: Used (vol as any).CreatedAt cast for Dockerode type gap on VolumeInspectInfo.CreatedAt
 - [Phase 37]: [in-use] error tag with CONFLICT tRPC code for image/volume in-use errors (extends [not-found] pattern)
+- [Phase 37]: formatBytes exported from use-images for reuse; network inspect as inline card not dialog; simple confirm for image remove, typed-name confirm for volume remove
 
 ### Pending Todos
 
@@ -81,6 +83,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T21:42:50.055Z
-Stopped at: Completed 37-01-PLAN.md
+Last session: 2026-03-22T21:51:36.601Z
+Stopped at: Completed 37-02-PLAN.md
 Resume file: None
