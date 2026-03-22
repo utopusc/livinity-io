@@ -21,10 +21,14 @@ import {
 	IconX,
 	IconChevronDown,
 	IconChevronRight,
+	IconArrowUp,
+	IconArrowDown,
+	IconTemperature,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
 import {useCpuForUi} from '@/hooks/use-cpu'
+import {useCpuTemperature} from '@/hooks/use-cpu-temperature'
 import {useSystemMemoryForUi} from '@/hooks/use-memory'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {trpcReact} from '@/trpc/trpc'
@@ -254,6 +258,246 @@ function ProcessStateBadge({state}: {state: string}) {
 		<span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', classes)}>
 			{state}
 		</span>
+	)
+}
+
+// Overview tab - system health dashboard landing page
+function OverviewTab() {
+	// System resource hooks (tRPC query caching shares the same cache as parent -- no duplicate calls)
+	const cpuUsage = useCpuForUi({poll: true})
+	const memoryUsage = useSystemMemoryForUi({poll: true})
+	const diskUsage = useSystemDiskForUi({poll: true})
+	const {temperature, warning: tempWarning, isLoading: tempLoading} = useCpuTemperature()
+
+	// Container and PM2 summaries
+	const {runningCount: containerRunning, totalCount: containerTotal, isLoading: containersLoading} = useContainers()
+	const {onlineCount: pm2Online, totalCount: pm2Total, isLoading: pm2Loading} = usePM2()
+
+	// Network throughput
+	const {data: networkData, isLoading: networkLoading} = useNetworkStats()
+
+	// Chart data ring buffers for sparklines
+	const [cpuChartData, setCpuChartData] = useState<Array<{value: number}>>(new Array(30).fill({value: 0}))
+	const [memoryChartData, setMemoryChartData] = useState<Array<{value: number}>>(new Array(30).fill({value: 0}))
+
+	useEffect(() => {
+		setCpuChartData((prev) => [...prev.slice(1), {value: cpuUsage.progress * 100 || 0}])
+	}, [cpuUsage.progress])
+
+	useEffect(() => {
+		setMemoryChartData((prev) => [...prev.slice(1), {value: memoryUsage.progress * 100 || 0}])
+	}, [memoryUsage.progress])
+
+	// Aggregate network speed
+	const currentRx = networkData.reduce((sum, iface) => sum + (iface.rxSec ?? 0), 0)
+	const currentTx = networkData.reduce((sum, iface) => sum + (iface.txSec ?? 0), 0)
+
+	// Status dot color helpers
+	const containerStatusColor = containerTotal === 0
+		? 'bg-neutral-400'
+		: containerRunning === containerTotal
+			? 'bg-emerald-500'
+			: containerRunning === 0
+				? 'bg-red-500'
+				: 'bg-amber-500'
+
+	const pm2StatusColor = pm2Total === 0
+		? 'bg-neutral-400'
+		: pm2Online === pm2Total
+			? 'bg-emerald-500'
+			: pm2Online === 0
+				? 'bg-red-500'
+				: 'bg-amber-500'
+
+	// Temperature color
+	const tempColor = tempWarning ? 'text-red-500' : (temperature ?? 0) > 70 ? 'text-amber-500' : 'text-text-primary'
+
+	return (
+		<div className='space-y-4 p-4'>
+			{/* Row 1: System Health Cards */}
+			<div className='grid grid-cols-2 gap-4 lg:grid-cols-4'>
+				{/* CPU Card */}
+				<div className='relative overflow-hidden rounded-xl border border-border-default bg-surface-base p-4'>
+					{/* Background sparkline */}
+					<div className='absolute inset-0 z-0'>
+						<ResponsiveContainer width='100%' height='100%'>
+							<AreaChart data={cpuChartData} margin={{bottom: 0}}>
+								<defs>
+									<linearGradient id='overviewCpuGradient' x1='0' y1='0' x2='0' y2='1'>
+										<stop offset='5%' style={{stopColor: 'rgba(0, 0, 0, 0.04)'}} />
+										<stop offset='95%' style={{stopColor: 'rgba(0, 0, 0, 0)'}} />
+									</linearGradient>
+								</defs>
+								<YAxis domain={[0, 100]} hide />
+								<XAxis hide />
+								<Area
+									isAnimationActive={false}
+									type='monotone'
+									dataKey='value'
+									style={{stroke: 'rgba(0, 0, 0, 0.06)'}}
+									fillOpacity={1}
+									fill='url(#overviewCpuGradient)'
+									dot={false}
+								/>
+							</AreaChart>
+						</ResponsiveContainer>
+					</div>
+					<div className='relative z-10'>
+						<div className='mb-2 flex items-center gap-2'>
+							<IconCpu size={14} className='text-text-secondary' />
+							<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>CPU</span>
+						</div>
+						<div className='text-2xl font-semibold text-text-primary'>{cpuUsage.value}</div>
+						<div className='mt-2'>
+							<Progress value={cpuUsage.progress * 100} variant='primary' />
+						</div>
+						<div className='mt-1 text-xs text-text-tertiary'>{cpuUsage.secondaryValue}</div>
+					</div>
+				</div>
+
+				{/* RAM Card */}
+				<div className='relative overflow-hidden rounded-xl border border-border-default bg-surface-base p-4'>
+					<div className='absolute inset-0 z-0'>
+						<ResponsiveContainer width='100%' height='100%'>
+							<AreaChart data={memoryChartData} margin={{bottom: 0}}>
+								<defs>
+									<linearGradient id='overviewMemGradient' x1='0' y1='0' x2='0' y2='1'>
+										<stop offset='5%' style={{stopColor: 'rgba(0, 0, 0, 0.04)'}} />
+										<stop offset='95%' style={{stopColor: 'rgba(0, 0, 0, 0)'}} />
+									</linearGradient>
+								</defs>
+								<YAxis domain={[0, 100]} hide />
+								<XAxis hide />
+								<Area
+									isAnimationActive={false}
+									type='monotone'
+									dataKey='value'
+									style={{stroke: 'rgba(0, 0, 0, 0.06)'}}
+									fillOpacity={1}
+									fill='url(#overviewMemGradient)'
+									dot={false}
+								/>
+							</AreaChart>
+						</ResponsiveContainer>
+					</div>
+					<div className='relative z-10'>
+						<div className='mb-2 flex items-center gap-2'>
+							<IconCircuitResistor size={14} className='text-text-secondary' />
+							<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>RAM</span>
+						</div>
+						<div className='flex items-end gap-1.5'>
+							<span className='text-2xl font-semibold text-text-primary'>{memoryUsage.value}</span>
+							{memoryUsage.valueSub && <span className='text-sm text-text-tertiary'>{memoryUsage.valueSub}</span>}
+						</div>
+						<div className='mt-2'>
+							<Progress value={memoryUsage.progress * 100} variant='primary' />
+						</div>
+						<div className='mt-1 text-xs text-text-tertiary'>{memoryUsage.secondaryValue}</div>
+					</div>
+				</div>
+
+				{/* Disk Card */}
+				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+					<div className='mb-2 flex items-center gap-2'>
+						<IconDatabase size={14} className='text-text-secondary' />
+						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Disk</span>
+					</div>
+					<div className='flex items-end gap-1.5'>
+						<span className='text-2xl font-semibold text-text-primary'>{diskUsage.value}</span>
+						{diskUsage.valueSub && <span className='text-sm text-text-tertiary'>{diskUsage.valueSub}</span>}
+					</div>
+					<div className='mt-2'>
+						<Progress value={diskUsage.progress * 100} variant='primary' />
+					</div>
+					<div className='mt-1 text-xs text-text-tertiary'>{diskUsage.secondaryValue}</div>
+				</div>
+
+				{/* Temperature Card */}
+				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+					<div className='mb-2 flex items-center gap-2'>
+						<IconTemperature size={14} className='text-text-secondary' />
+						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Temp</span>
+					</div>
+					<div className={cn('text-2xl font-semibold', tempColor)}>
+						{tempLoading ? '--' : temperature != null ? `${Math.round(temperature)}°C` : 'N/A'}
+					</div>
+					<div className='mt-2 text-xs text-text-tertiary'>
+						{tempWarning ? 'High temperature!' : temperature != null ? (temperature > 70 ? 'Warm' : 'Normal') : 'Unavailable'}
+					</div>
+				</div>
+			</div>
+
+			{/* Row 2: Summary Cards */}
+			<div className='grid grid-cols-1 gap-4 sm:grid-cols-3'>
+				{/* Docker Containers */}
+				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+					<div className='mb-3 flex items-center gap-2'>
+						<IconBrandDocker size={16} className='text-text-secondary' />
+						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Docker Containers</span>
+					</div>
+					{containersLoading ? (
+						<div className='text-sm text-text-tertiary'>Loading...</div>
+					) : (
+						<div className='flex items-center gap-3'>
+							<div className={cn('h-2 w-2 rounded-full', containerStatusColor)} />
+							<div>
+								<div className='text-2xl font-semibold text-text-primary'>
+									{containerRunning} <span className='text-base font-normal text-text-tertiary'>/ {containerTotal}</span>
+								</div>
+								<div className='text-xs uppercase tracking-wider text-text-secondary'>containers running</div>
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* PM2 Processes */}
+				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+					<div className='mb-3 flex items-center gap-2'>
+						<IconActivity size={16} className='text-text-secondary' />
+						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>PM2 Processes</span>
+					</div>
+					{pm2Loading ? (
+						<div className='text-sm text-text-tertiary'>Loading...</div>
+					) : (
+						<div className='flex items-center gap-3'>
+							<div className={cn('h-2 w-2 rounded-full', pm2StatusColor)} />
+							<div>
+								<div className='text-2xl font-semibold text-text-primary'>
+									{pm2Online} <span className='text-base font-normal text-text-tertiary'>/ {pm2Total}</span>
+								</div>
+								<div className='text-xs uppercase tracking-wider text-text-secondary'>processes online</div>
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* Network Throughput */}
+				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+					<div className='mb-3 flex items-center gap-2'>
+						<IconNetwork size={16} className='text-text-secondary' />
+						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Network</span>
+					</div>
+					{networkLoading ? (
+						<div className='text-sm text-text-tertiary'>Loading...</div>
+					) : networkData.length === 0 ? (
+						<div className='text-sm text-text-tertiary'>Calculating...</div>
+					) : (
+						<div className='space-y-1.5'>
+							<div className='flex items-center gap-2'>
+								<IconArrowDown size={14} className='text-blue-500' />
+								<span className='text-sm font-medium text-text-primary'>{formatSpeed(currentRx)}</span>
+								<span className='text-xs text-text-tertiary'>in</span>
+							</div>
+							<div className='flex items-center gap-2'>
+								<IconArrowUp size={14} className='text-emerald-500' />
+								<span className='text-sm font-medium text-text-primary'>{formatSpeed(currentTx)}</span>
+								<span className='text-xs text-text-tertiary'>out</span>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
 	)
 }
 
@@ -1508,8 +1752,9 @@ export default function ServerControl() {
 			</div>
 
 			{/* Tabbed Interface */}
-			<Tabs defaultValue='containers' className='flex min-h-0 flex-1 flex-col px-6 pb-4'>
+			<Tabs defaultValue='overview' className='flex min-h-0 flex-1 flex-col px-6 pb-4'>
 				<TabsList className='shrink-0 w-full justify-start gap-1 bg-transparent p-0'>
+					<TabsTrigger value='overview'>Overview</TabsTrigger>
 					<TabsTrigger value='containers'>Containers</TabsTrigger>
 					<TabsTrigger value='images'>Images</TabsTrigger>
 					<TabsTrigger value='volumes'>Volumes</TabsTrigger>
@@ -1517,6 +1762,11 @@ export default function ServerControl() {
 					<TabsTrigger value='pm2'>PM2</TabsTrigger>
 					<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
 				</TabsList>
+
+				{/* Overview Tab */}
+				<TabsContent value='overview' className='flex-1 overflow-auto'>
+					<OverviewTab />
+				</TabsContent>
 
 				{/* Containers Tab */}
 				<TabsContent value='containers' className='flex-1 overflow-auto'>
