@@ -6,8 +6,10 @@ export interface SubagentConfig {
   id: string;
   name: string;
   description: string;
-  /** Skill names or '*' for all */
-  skills: string[];
+  /** Tool names to give this agent access to, or ['*'] for all tools */
+  tools: string[];
+  /** @deprecated Use 'tools' instead. Kept for backward compat with existing Redis data. */
+  skills?: string[];
   /** Custom system prompt override */
   systemPrompt?: string;
   /** Cron expression (e.g. '0 9 * * MON-FRI') */

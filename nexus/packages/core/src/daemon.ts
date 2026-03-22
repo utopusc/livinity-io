@@ -1853,7 +1853,7 @@ ${task}`;
         { name: 'id', type: 'string', description: 'Unique ID (kebab-case, e.g. "lead-finder")', required: true },
         { name: 'name', type: 'string', description: 'Display name', required: true },
         { name: 'description', type: 'string', description: 'What this subagent does', required: true },
-        { name: 'skills', type: 'string', description: 'Comma-separated skill names or "*" for all', required: false },
+        { name: 'tools', type: 'string', description: 'Comma-separated tool names to give this agent access to, or "*" for all tools', required: false },
         { name: 'system_prompt', type: 'string', description: 'Custom system prompt for the subagent', required: false },
         { name: 'schedule', type: 'string', description: 'Cron expression (e.g. "0 9 * * MON-FRI" for weekdays at 9am). Must be used together with scheduled_task.', required: false },
         { name: 'timezone', type: 'string', description: 'IANA timezone for schedule (e.g. "Europe/Istanbul")', required: false },
@@ -1865,7 +1865,7 @@ ${task}`;
         { name: 'max_turns', type: 'number', description: 'Max agent turns per execution', required: false },
       ],
       execute: async (params) => {
-        const { id, name, description, skills, system_prompt, schedule, timezone, scheduled_task,
+        const { id, name, description, tools: toolsParam, system_prompt, schedule, timezone, scheduled_task,
                 loop_interval_ms, loop_task, loop_max_iterations, tier, max_turns } = params as Record<string, any>;
 
         if (!id || !name || !description) {
@@ -1882,7 +1882,7 @@ ${task}`;
             id,
             name,
             description,
-            skills: skills ? skills.split(',').map((s: string) => s.trim()) : ['*'],
+            tools: toolsParam ? toolsParam.split(',').map((s: string) => s.trim()) : ['*'],
             systemPrompt: system_prompt,
             schedule,
             timezone,
@@ -3074,7 +3074,8 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
 
     // Build scoped tool registry
     const scopedRegistry = new ToolRegistry();
-    for (const toolName of config.skills.includes('*') ? this.config.toolRegistry.list() : config.skills) {
+    const agentTools = config.tools || config.skills || ['*'];
+    for (const toolName of agentTools.includes('*') ? this.config.toolRegistry.list() : agentTools) {
       const tool = this.config.toolRegistry.get(toolName);
       if (tool) scopedRegistry.register(tool);
     }
