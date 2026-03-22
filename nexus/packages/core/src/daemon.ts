@@ -1813,11 +1813,11 @@ ${task}`;
       },
     });
 
-    // ── Progress Report tool (WhatsApp interim updates) ───────────────
+    // ── Progress Report tool (multi-channel interim updates) ───────────
 
     toolRegistry.register({
       name: 'progress_report',
-      description: 'Send a WhatsApp progress update during long-running tasks without ending the agent loop. Use this to keep the user informed about multi-step operations.',
+      description: 'Send a progress update during long-running tasks without ending the agent loop. Use this to keep the user informed about multi-step operations. Works across all channels (WhatsApp, Telegram, Discord, Web).',
       parameters: [
         { name: 'message', type: 'string', description: 'Progress message to send', required: true },
         { name: 'jid', type: 'string', description: 'WhatsApp JID to send to (auto-detected if from WhatsApp context)', required: false },
@@ -1826,18 +1826,37 @@ ${task}`;
         const { message, jid } = params as { message: string; jid?: string };
         if (!message) return { success: false, output: '', error: 'Message is required.' };
 
-        const targetJid = jid || this.currentWhatsAppJid;
-        if (!targetJid) {
-          return { success: true, output: `Progress (no WhatsApp target): ${message}` };
-        }
-
         try {
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid: targetJid,
-            text: message,
-            timestamp: Date.now(),
-          }));
-          return { success: true, output: `Progress sent: ${message.slice(0, 100)}` };
+          const ctx = this.currentChannelContext;
+
+          // Route to the correct channel based on context
+          if (ctx && ['telegram', 'discord', 'slack', 'matrix'].includes(ctx.source) && this.config.channelManager) {
+            await this.config.channelManager.sendMessage(ctx.source, ctx.chatId, message);
+            return { success: true, output: `Progress sent via ${ctx.source}: ${message.slice(0, 100)}` };
+          }
+
+          // WhatsApp: use JID param or auto-detected JID
+          const targetJid = jid || this.currentWhatsAppJid;
+          if (targetJid) {
+            await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
+              jid: targetJid,
+              text: message,
+              timestamp: Date.now(),
+            }));
+            return { success: true, output: `Progress sent via WhatsApp: ${message.slice(0, 100)}` };
+          }
+
+          // Web/MCP: publish to Redis for WebSocket gateway
+          if (ctx?.source === 'web' || ctx?.source === 'mcp') {
+            await this.config.redis.publish('nexus:agent_results', JSON.stringify({
+              type: 'progress',
+              text: message,
+              timestamp: Date.now(),
+            }));
+            return { success: true, output: `Progress published: ${message.slice(0, 100)}` };
+          }
+
+          return { success: false, output: '', error: 'No channel context available — cannot route progress report.' };
         } catch (err) {
           return { success: false, output: '', error: `Progress report error: ${formatErrorMessage(err)}` };
         }
