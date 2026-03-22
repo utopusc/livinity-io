@@ -15,11 +15,11 @@ const buttonVariants = cva(
 				default:
 					'bg-surface-1 hover:bg-surface-2 active:bg-surface-base border border-border-default ring-brand/20 data-[state=open]:bg-surface-2 hover:border-border-emphasis focus-visible:border-border-emphasis data-[state=open]:border-border-emphasis shadow-button-highlight-soft',
 				primary:
-					'bg-brand hover:bg-brand-lighter focus-visible:bg-brand-lighter active:bg-brand ring-brand/40 data-[state=open]:bg-brand-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98]',
+					'bg-brand hover:bg-brand-lighter focus-visible:bg-brand-lighter active:bg-brand ring-brand/40 data-[state=open]:bg-brand-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98] text-white',
 				secondary:
 					'bg-slate-900 hover:bg-slate-800 focus-visible:bg-slate-800 active:bg-slate-900 ring-slate-900/40 data-[state=open]:bg-slate-800 text-white hover:scale-[1.02] active:scale-[0.98]',
 				destructive:
-					'bg-destructive2 hover:bg-destructive2-lighter focus-visible:bg-destructive2-lighter active:bg-destructive2 ring-destructive/40 data-[state=open]:bg-destructive2-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98]',
+					'bg-destructive2 hover:bg-destructive2-lighter focus-visible:bg-destructive2-lighter active:bg-destructive2 ring-destructive/40 data-[state=open]:bg-destructive2-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98] text-white',
 				ghost: 'hover:bg-surface-1 active:bg-surface-base border border-transparent hover:border-border-subtle ring-brand/20',
 			},
 			size: {
