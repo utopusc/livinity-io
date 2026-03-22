@@ -240,7 +240,10 @@ Plans:
   2. Monitoring tab shows real-time disk I/O metrics (read/write speed) as charts
   3. Monitoring tab shows a process list sorted by CPU or memory usage
   4. Overview tab displays a system health dashboard with CPU, RAM, Disk, and Network sparklines alongside container count and PM2 process summary
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 39-01-PLAN.md -- Backend monitoring module + frontend Monitoring tab (network/disk charts, process table)
+- [ ] 39-02-PLAN.md -- Frontend Overview tab with system health cards, container/PM2 summaries, network throughput
 
 ### Phase 40: Polish, Edge Cases & Deployment
 **Goal**: The server management dashboard handles all edge cases gracefully, deprecated Docker routes are cleaned up, and the feature is deployed to production
@@ -272,5 +275,5 @@ Plans:
 | 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
+| 39. System Monitoring + Overview | v12.0 | 0/2 | Not started | - |
 | 40. Polish & Deployment | v12.0 | 0/? | Not started | - |
