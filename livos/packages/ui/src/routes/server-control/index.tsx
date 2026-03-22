@@ -1,4 +1,4 @@
-import {useState, useEffect} from 'react'
+import {useState, useEffect, useRef, Fragment} from 'react'
 import {motion, AnimatePresence} from 'framer-motion'
 import {
 	IconServer,
@@ -19,14 +19,18 @@ import {
 	IconActivity,
 	IconSearch,
 	IconX,
+	IconChevronDown,
+	IconChevronRight,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis} from 'recharts'
 
 import {useCpuForUi} from '@/hooks/use-cpu'
 import {useSystemMemoryForUi} from '@/hooks/use-memory'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
+import {trpcReact} from '@/trpc/trpc'
 import {useContainers} from '@/hooks/use-containers'
 import {useImages, formatBytes} from '@/hooks/use-images'
+import {usePM2} from '@/hooks/use-pm2'
 import {useVolumes} from '@/hooks/use-volumes'
 import {useNetworks} from '@/hooks/use-networks'
 import {ContainerDetailSheet} from './container-detail-sheet'
@@ -889,6 +893,301 @@ function NetworksTab() {
 	)
 }
 
+// Format uptime in milliseconds to human-readable string
+function formatUptime(ms: number): string {
+	if (!ms) return 'N/A'
+	const seconds = Math.floor(ms / 1000)
+	if (seconds < 60) return `${seconds}s`
+	const minutes = Math.floor(seconds / 60)
+	if (minutes < 60) return `${minutes}m`
+	const hours = Math.floor(minutes / 60)
+	const remainingMinutes = minutes % 60
+	if (hours < 24) return `${hours}h ${remainingMinutes}m`
+	const days = Math.floor(hours / 24)
+	const remainingHours = hours % 24
+	return `${days}d ${remainingHours}h`
+}
+
+// PM2 status badge with color coding
+function PM2StatusBadge({status}: {status: string}) {
+	const colorClasses: Record<string, string> = {
+		online: 'bg-emerald-500/20 text-emerald-600',
+		stopped: 'bg-red-500/20 text-red-600',
+		errored: 'bg-amber-500/20 text-amber-600',
+		launching: 'bg-blue-500/20 text-blue-600',
+	}
+	const classes = colorClasses[status] ?? 'bg-neutral-500/20 text-neutral-600'
+	return (
+		<span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', classes)}>
+			{status}
+		</span>
+	)
+}
+
+// PM2 Detail Panel - shown when a process row is expanded
+function PM2DetailPanel({name}: {name: string}) {
+	const describeQuery = trpcReact.pm2.describe.useQuery({name})
+	const [logLines, setLogLines] = useState(200)
+	const [autoScroll, setAutoScroll] = useState(true)
+	const preRef = useRef<HTMLPreElement>(null)
+
+	const logsQuery = trpcReact.pm2.logs.useQuery({name, lines: logLines}, {enabled: true})
+
+	useEffect(() => {
+		if (autoScroll && preRef.current && logsQuery.data) {
+			preRef.current.scrollTop = preRef.current.scrollHeight
+		}
+	}, [logsQuery.data, autoScroll])
+
+	const detail = describeQuery.data
+
+	return (
+		<div className='flex gap-4 p-4'>
+			{/* Info Section */}
+			<div className='w-[280px] shrink-0 space-y-2'>
+				<h4 className='text-xs font-semibold uppercase tracking-wider text-text-secondary mb-3'>Process Info</h4>
+				{describeQuery.isLoading ? (
+					<div className='space-y-2'>
+						{Array.from({length: 7}).map((_, i) => (
+							<div key={i} className='h-4 rounded bg-surface-2 animate-pulse' />
+						))}
+					</div>
+				) : detail ? (
+					<div className='space-y-1.5 text-xs'>
+						{([
+							['PID', detail.pid ? String(detail.pid) : 'N/A'],
+							['Script', detail.script],
+							['Working Dir', detail.cwd],
+							['Node', detail.nodeVersion],
+							['Mode', detail.execMode],
+							['Restarts', String(detail.restarts)],
+							['Uptime', formatUptime(detail.uptime)],
+						] as const).map(([label, value]) => (
+							<div key={label} className='flex items-start gap-2'>
+								<span className='w-20 shrink-0 font-medium text-text-secondary'>{label}</span>
+								<span className='truncate text-text-primary font-mono' title={value}>{value}</span>
+							</div>
+						))}
+					</div>
+				) : (
+					<p className='text-xs text-text-tertiary'>Failed to load details</p>
+				)}
+			</div>
+
+			{/* Log Section */}
+			<div className='flex flex-1 flex-col min-w-0'>
+				<div className='mb-2 flex items-center gap-3'>
+					<h4 className='text-xs font-semibold uppercase tracking-wider text-text-secondary'>Logs</h4>
+					<div className='flex items-center gap-1'>
+						<input
+							type='range'
+							min={50}
+							max={500}
+							step={50}
+							value={logLines}
+							onChange={(e) => setLogLines(Number(e.target.value))}
+							className='w-24 accent-brand'
+						/>
+						<span className='text-xs text-text-tertiary ml-1'>{logLines} lines</span>
+					</div>
+					<button
+						onClick={() => logsQuery.refetch()}
+						disabled={logsQuery.isFetching}
+						className='ml-auto flex items-center gap-1 rounded-lg bg-surface-1 px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+					>
+						<IconRefresh size={12} className={logsQuery.isFetching ? 'animate-spin' : ''} />
+						Refresh
+					</button>
+				</div>
+				<pre
+					ref={preRef}
+					className='flex-1 max-h-[300px] overflow-y-auto rounded-lg bg-neutral-900/50 p-3 font-mono text-xs text-neutral-200 leading-relaxed'
+				>
+					{logsQuery.isLoading ? 'Loading logs...' : logsQuery.data ?? 'No logs available'}
+				</pre>
+			</div>
+		</div>
+	)
+}
+
+// PM2 Tab Component
+function PM2Tab() {
+	const {
+		processes,
+		isLoading,
+		isError,
+		error,
+		isFetching,
+		refetch,
+		manage,
+		isManaging,
+		actionResult,
+		onlineCount,
+		totalCount,
+	} = usePM2()
+
+	const [expandedProcess, setExpandedProcess] = useState<string | null>(null)
+
+	return (
+		<>
+			{/* Summary Row */}
+			<div className='mb-4 flex items-center justify-between'>
+				<div className='text-sm text-text-secondary'>
+					<span className='font-medium text-emerald-500'>{onlineCount}</span>
+					<span className='mx-1'>/</span>
+					<span>{totalCount}</span>
+					<span className='ml-1'>online</span>
+				</div>
+				<button
+					onClick={() => refetch()}
+					disabled={isFetching}
+					className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+				>
+					<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+					Refresh
+				</button>
+			</div>
+
+			{/* Action Result Toast */}
+			<AnimatePresence>
+				{actionResult && (
+					<motion.div
+						initial={{opacity: 0, y: -10}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: -10}}
+						className={cn(
+							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
+							actionResult.type === 'success'
+								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+						)}
+					>
+						{actionResult.message}
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* Process Table */}
+			{isLoading ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>Loading PM2 processes...</p>
+				</div>
+			) : isError ? (
+				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
+					<IconActivity size={24} className='mx-auto mb-3 text-red-400' />
+					<p className='text-sm text-red-400'>Failed to load PM2 processes</p>
+					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				</div>
+			) : !processes.length ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconActivity size={32} className='mx-auto mb-3 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No PM2 processes found</p>
+				</div>
+			) : (
+				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='pl-4'>Name</TableHead>
+								<TableHead>Status</TableHead>
+								<TableHead>CPU</TableHead>
+								<TableHead>Memory</TableHead>
+								<TableHead>Uptime</TableHead>
+								<TableHead>Restarts</TableHead>
+								<TableHead className='text-right pr-4'>Actions</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{processes.map((process) => {
+								const isOnline = process.status === 'online'
+								const isExpanded = expandedProcess === process.name
+								return (
+									<Fragment key={process.name}>
+										<TableRow
+											onClick={() => setExpandedProcess(isExpanded ? null : process.name)}
+											className={cn('cursor-pointer transition-colors hover:bg-surface-1/50', isExpanded && 'bg-surface-1')}
+										>
+											<TableCell className='pl-4 font-medium'>
+												<div className='flex items-center gap-2'>
+													{isExpanded ? (
+														<IconChevronDown size={14} className='shrink-0 text-text-tertiary' />
+													) : (
+														<IconChevronRight size={14} className='shrink-0 text-text-tertiary' />
+													)}
+													{process.isProtected && (
+														<IconLock size={14} className='shrink-0 text-amber-500' title='Protected process' />
+													)}
+													<span className='truncate' title={process.name}>
+														{process.name}
+													</span>
+												</div>
+											</TableCell>
+											<TableCell>
+												<PM2StatusBadge status={process.status} />
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{process.cpu.toFixed(1)}%</span>
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{formatBytes(process.memory)}</span>
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{formatUptime(process.uptime)}</span>
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{process.restarts}</span>
+											</TableCell>
+											<TableCell className='text-right pr-4'>
+												<div className='flex items-center justify-end gap-1'>
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconPlayerPlay}
+															onClick={() => manage(process.name, 'start')}
+															disabled={isManaging || isOnline}
+															color='emerald'
+															title='Start'
+														/>
+													</span>
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconPlayerStop}
+															onClick={() => manage(process.name, 'stop')}
+															disabled={isManaging || !isOnline || process.isProtected}
+															color='red'
+															title={process.isProtected ? 'Protected -- cannot stop' : 'Stop'}
+														/>
+													</span>
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconRotateClockwise}
+															onClick={() => manage(process.name, 'restart')}
+															disabled={isManaging}
+															color='blue'
+															title='Restart'
+														/>
+													</span>
+												</div>
+											</TableCell>
+										</TableRow>
+										{isExpanded && (
+											<TableRow key={`${process.name}-detail`}>
+												<TableCell colSpan={7} className='p-0 border-t border-border-default bg-surface-1/30'>
+													<PM2DetailPanel name={process.name} />
+												</TableCell>
+											</TableRow>
+										)}
+									</Fragment>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+		</>
+	)
+}
+
 export default function ServerControl() {
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
 	const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
@@ -1140,7 +1439,7 @@ export default function ServerControl() {
 					<NetworksTab />
 				</TabsContent>
 				<TabsContent value='pm2' className='flex-1 overflow-auto'>
-					<PlaceholderTab title='PM2 Processes' icon={IconBrandDocker} />
+					<PM2Tab />
 				</TabsContent>
 				<TabsContent value='monitoring' className='flex-1 overflow-auto'>
 					<PlaceholderTab title='System Monitoring' icon={IconActivity} />
