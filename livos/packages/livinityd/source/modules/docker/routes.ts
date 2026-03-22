@@ -2,7 +2,7 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {adminProcedure, router} from '../server/trpc/trpc.js'
-import {listContainers, manageContainer} from './docker.js'
+import {listContainers, manageContainer, inspectContainer, getContainerLogs, getContainerStats} from './docker.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -43,6 +43,69 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to ${input.operation} container ${input.name}`,
+				})
+			}
+		}),
+
+	inspectContainer: adminProcedure
+		.input(z.object({name: z.string().min(1).max(255)}))
+		.query(async ({input}) => {
+			try {
+				return await inspectContainer(input.name)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to inspect container ${input.name}`,
+				})
+			}
+		}),
+
+	containerLogs: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				tail: z.number().min(10).max(5000).optional().default(500),
+				timestamps: z.boolean().optional().default(true),
+			}),
+		)
+		.query(async ({input}) => {
+			try {
+				return await getContainerLogs(input.name, input.tail, input.timestamps)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to get logs for container ${input.name}`,
+				})
+			}
+		}),
+
+	containerStats: adminProcedure
+		.input(z.object({name: z.string().min(1).max(255)}))
+		.query(async ({input}) => {
+			try {
+				return await getContainerStats(input.name)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to get stats for container ${input.name}`,
 				})
 			}
 		}),
