@@ -228,7 +228,7 @@ Plans:
   4. User can see process details including pid, script path, working directory, and Node version
 **Plans**: 2 plans
 Plans:
-- [ ] 38-01-PLAN.md -- PM2 backend module (types, domain functions, tRPC routes, httpOnlyPaths)
+- [x] 38-01-PLAN.md -- PM2 backend module (types, domain functions, tRPC routes, httpOnlyPaths)
 - [ ] 38-02-PLAN.md -- Frontend PM2Tab with process table, actions, inline detail panel, log viewer
 
 ### Phase 39: Enhanced System Monitoring + Overview Tab
@@ -271,6 +271,6 @@ Plans:
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 38. PM2 Process Management | v12.0 | 0/2 | Not started | - |
+| 38. PM2 Process Management | v12.0 | 1/2 | In Progress|  |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
 | 40. Polish & Deployment | v12.0 | 0/? | Not started | - |

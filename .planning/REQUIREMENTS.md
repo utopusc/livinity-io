@@ -30,10 +30,10 @@
 
 ### PM2 — Process Management
 
-- [ ] **PM2-01**: User can see all PM2 processes with name, status, CPU%, memory, uptime, and restart count
-- [ ] **PM2-02**: User can start, stop, and restart individual PM2 processes
-- [ ] **PM2-03**: User can view PM2 process logs (stdout + stderr) with tail and auto-scroll
-- [ ] **PM2-04**: User can see process details (pid, script path, cwd, node version)
+- [x] **PM2-01**: User can see all PM2 processes with name, status, CPU%, memory, uptime, and restart count
+- [x] **PM2-02**: User can start, stop, and restart individual PM2 processes
+- [x] **PM2-03**: User can view PM2 process logs (stdout + stderr) with tail and auto-scroll
+- [x] **PM2-04**: User can see process details (pid, script path, cwd, node version)
 
 ### MON — Enhanced System Monitoring
 
@@ -99,10 +99,10 @@
 | VOL-02 | Phase 37 | Complete |
 | VOL-03 | Phase 37 | Complete |
 | VOL-04 | Phase 37 | Complete |
-| PM2-01 | Phase 38 | Pending |
-| PM2-02 | Phase 38 | Pending |
-| PM2-03 | Phase 38 | Pending |
-| PM2-04 | Phase 38 | Pending |
+| PM2-01 | Phase 38 | Complete |
+| PM2-02 | Phase 38 | Complete |
+| PM2-03 | Phase 38 | Complete |
+| PM2-04 | Phase 38 | Complete |
 | MON-01 | Phase 39 | Pending |
 | MON-02 | Phase 39 | Pending |
 | MON-03 | Phase 39 | Pending |

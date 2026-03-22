@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 37-02-PLAN.md
-last_updated: "2026-03-22T21:52:26.397Z"
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-03-22T22:04:10.657Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v12.0 -- Server Management Dashboard
-**Current focus:** Phase 37 — images-volumes-networks
+**Current focus:** Phase 38 — pm2-process-management
 
 ## Current Position
 
-Phase: 38
-Plan: Not started
+Phase: 38 (pm2-process-management) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Plan: Not started
 | Phase 36 P02 | 3min | 2 tasks | 3 files |
 | Phase 37-01 P01 | 3min | 2 tasks | 4 files |
 | Phase 37 P02 | 6min | 2 tasks | 4 files |
+| Phase 38 P01 | 2min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -72,6 +73,8 @@ Plan: Not started
 - [Phase 37]: Used (vol as any).CreatedAt cast for Dockerode type gap on VolumeInspectInfo.CreatedAt
 - [Phase 37]: [in-use] error tag with CONFLICT tRPC code for image/volume in-use errors (extends [not-found] pattern)
 - [Phase 37]: formatBytes exported from use-images for reuse; network inspect as inline card not dialog; simple confirm for image remove, typed-name confirm for volume remove
+- [Phase 38]: Exact match for protected PM2 process names (not substring like Docker containers)
+- [Phase 38]: pm2 jlist with reject:false for graceful empty-state handling when no PM2 processes running
 
 ### Pending Todos
 
@@ -83,6 +86,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T21:51:36.601Z
-Stopped at: Completed 37-02-PLAN.md
+Last session: 2026-03-22T22:04:10.655Z
+Stopped at: Completed 38-01-PLAN.md
 Resume file: None
