@@ -268,8 +268,6 @@ Plans:
 - [ ] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars
 - [ ] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish
 
-## Phase Details (v13.0)
-
 ### Phase 41: Container Creation
 **Goal**: User can create a new Docker container from any image with full configuration — ports, volumes, env vars, restart policy, resource limits, health check, and network settings — via a tabbed creation form
 **Depends on**: Phase 35 (docker backend module)
