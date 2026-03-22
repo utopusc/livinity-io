@@ -8,19 +8,24 @@ Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platf
 
 **One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: v12.0 — Server Management Dashboard
+## Current Milestone: v13.0 — Portainer-Level Server Management
 
-**Goal:** Build a comprehensive server management UI in LivOS — full Docker container lifecycle (inspect, logs, exec, remove, images, volumes, networks, ports), PM2 process management, and enhanced system monitoring. Production-grade server administration from the browser.
+**Goal:** Match every Portainer feature in LivOS Server Management. Full container lifecycle with configuration editing (ports, env vars, volumes, restart policy, resource limits), container creation from images, Docker Compose stack management, container exec terminal, image pull/build, volume/network CRUD, bulk operations, and larger window size. Users can do everything Portainer offers without leaving LivOS.
 
 **Target features:**
-- Full Docker container management (all operations: remove, logs, inspect, exec, stats, create)
-- Docker image management (list, pull, remove, tag)
-- Docker volume & network management
-- PM2 process management (list, restart, stop, start, logs, describe)
-- Enhanced system monitoring (network I/O, process list, disk I/O)
-- Comprehensive Server Management UI with detailed container inspection
-- Port mapping visibility and management
-- Container resource usage (CPU, memory per container)
+- Container configuration editor (ports, env vars, volumes, restart policy, resource limits) with redeploy
+- Container creation from image (full form: name, image, ports, volumes, env, network, restart)
+- Container exec terminal (shell into running container via xterm.js)
+- Docker Compose stack management (view, deploy, edit, remove stacks)
+- Image pull by name:tag with progress, image build from Dockerfile
+- Volume CRUD (create, inspect, remove) + Network CRUD (create, inspect, remove)
+- Bulk operations (select multiple containers → stop/start/remove)
+- Container duplicate (clone config to new container)
+- Container export/import
+- Real-time container resource graphs (CPU, memory, network per container over time)
+- Larger Server Management window (1400x900+)
+- Container restart policy editor
+- Container health check configuration
 
 ## Requirements
 
@@ -38,15 +43,18 @@ Key validated capabilities:
 - ✓ Caddy reverse proxy, Cloudflare Tunnel support
 - ✓ Onboarding wizard with personalization
 
-### Active (v12.0 — Server Management Dashboard)
+### Active (v13.0 — Portainer-Level Server Management)
 
-- [ ] Full Docker container lifecycle (inspect, logs, exec, remove, stats)
-- [ ] Docker image management (list, pull, remove)
-- [ ] Docker volume & network management
-- [ ] PM2 process management endpoints + UI
-- [ ] Enhanced system monitoring (network, disk I/O, processes)
-- [ ] Server Management Dashboard UI (comprehensive, detailed)
-- [ ] Port/volume/network visibility in container details
+- [ ] Container config editor (ports, env, volumes, restart, resources) + redeploy
+- [ ] Container creation from image (full form with all Docker options)
+- [ ] Container exec terminal (xterm.js shell into container)
+- [ ] Docker Compose stack management (deploy, edit, remove)
+- [ ] Image pull with progress + image build from Dockerfile
+- [ ] Volume/Network full CRUD (create, inspect, remove)
+- [ ] Bulk container operations (multi-select → action)
+- [ ] Container duplicate/clone
+- [ ] Real-time per-container resource graphs
+- [ ] Larger window size (1400x900+)
 
 ### Out of Scope
 
@@ -114,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 — v12.0 milestone started (Server Management Dashboard)*
+*Last updated: 2026-03-22 — v13.0 milestone started (Portainer-Level Server Management)*
