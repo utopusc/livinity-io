@@ -2,7 +2,20 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {adminProcedure, router} from '../server/trpc/trpc.js'
-import {listContainers, manageContainer, inspectContainer, getContainerLogs, getContainerStats} from './docker.js'
+import {
+	listContainers,
+	manageContainer,
+	inspectContainer,
+	getContainerLogs,
+	getContainerStats,
+	listImages,
+	removeImage,
+	pruneImages,
+	listVolumes,
+	removeVolume,
+	listNetworks,
+	inspectNetwork,
+} from './docker.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -106,6 +119,127 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to get stats for container ${input.name}`,
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Image management
+	// -----------------------------------------------------------------------
+
+	listImages: adminProcedure.query(async () => {
+		return listImages()
+	}),
+
+	removeImage: adminProcedure
+		.input(
+			z.object({
+				id: z.string().min(1),
+				force: z.boolean().optional().default(false),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await removeImage(input.id, input.force)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[in-use]')) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: err.message.replace('[in-use] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to remove image ${input.id}`,
+				})
+			}
+		}),
+
+	pruneImages: adminProcedure.mutation(async () => {
+		try {
+			return await pruneImages()
+		} catch (err: any) {
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err.message || 'Failed to prune images',
+			})
+		}
+	}),
+
+	// -----------------------------------------------------------------------
+	// Volume management
+	// -----------------------------------------------------------------------
+
+	listVolumes: adminProcedure.query(async () => {
+		return listVolumes()
+	}),
+
+	removeVolume: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1),
+				confirmName: z.string(),
+			}),
+		)
+		.mutation(async ({input}) => {
+			if (input.confirmName !== input.name) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Volume name confirmation required for removal. confirmName must match name.',
+				})
+			}
+
+			try {
+				return await removeVolume(input.name)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[in-use]')) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: err.message.replace('[in-use] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to remove volume ${input.name}`,
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Network management
+	// -----------------------------------------------------------------------
+
+	listNetworks: adminProcedure.query(async () => {
+		return listNetworks()
+	}),
+
+	inspectNetwork: adminProcedure
+		.input(z.object({id: z.string().min(1)}))
+		.query(async ({input}) => {
+			try {
+				return await inspectNetwork(input.id)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to inspect network ${input.id}`,
 				})
 			}
 		}),
