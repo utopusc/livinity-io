@@ -8,20 +8,19 @@ Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platf
 
 **One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: v11.0 — Nexus Agent Fixes
+## Current Milestone: v12.0 — Server Management Dashboard
 
-**Goal:** Fix 27 issues in the Nexus AI agent system — sub-agent scheduling reliability, cron persistence, tool profile accuracy, session cleanup, multi-channel routing, naming consistency, system prompt completeness, and dead code removal.
+**Goal:** Build a comprehensive server management UI in LivOS — full Docker container lifecycle (inspect, logs, exec, remove, images, volumes, networks, ports), PM2 process management, and enhanced system monitoring. Production-grade server administration from the browser.
 
 **Target features:**
-- Sub-agent scheduler coupling: schedule+scheduled_task validation, error on missing task
-- Cron tool BullMQ migration: restart-persistent scheduled tasks
-- Tool profile names aligned with actual registered tools
-- MultiAgentManager periodic cleanup for stale sessions
-- Multi-channel notification routing (WhatsApp/Telegram/Discord/Web)
-- skills→tools naming clarification in SubagentConfig
-- Native system prompt with tool awareness and sub-agent guidance
-- progress_report multi-channel support
-- Miscellaneous: JSON parse safety, dead code removal, atomic ops
+- Full Docker container management (all operations: remove, logs, inspect, exec, stats, create)
+- Docker image management (list, pull, remove, tag)
+- Docker volume & network management
+- PM2 process management (list, restart, stop, start, logs, describe)
+- Enhanced system monitoring (network I/O, process list, disk I/O)
+- Comprehensive Server Management UI with detailed container inspection
+- Port mapping visibility and management
+- Container resource usage (CPU, memory per container)
 
 ## Requirements
 
@@ -39,17 +38,15 @@ Key validated capabilities:
 - ✓ Caddy reverse proxy, Cloudflare Tunnel support
 - ✓ Onboarding wizard with personalization
 
-### Active (v11.0 — Nexus Agent Fixes)
+### Active (v12.0 — Server Management Dashboard)
 
-- [ ] Sub-agent scheduler coupling fix (schedule+scheduled_task validation)
-- [ ] Cron tool BullMQ migration (restart-persistent)
-- [ ] Tool profile name alignment with registered tools
-- [ ] MultiAgentManager periodic stale session cleanup
-- [ ] Multi-channel notification routing for scheduled/loop results
-- [ ] skills→tools naming fix in SubagentConfig
-- [ ] Native system prompt tool awareness + sub-agent guidance
-- [ ] progress_report multi-channel support
-- [ ] Misc: JSON parse safety, dead code removal, atomic Redis ops
+- [ ] Full Docker container lifecycle (inspect, logs, exec, remove, stats)
+- [ ] Docker image management (list, pull, remove)
+- [ ] Docker volume & network management
+- [ ] PM2 process management endpoints + UI
+- [ ] Enhanced system monitoring (network, disk I/O, processes)
+- [ ] Server Management Dashboard UI (comprehensive, detailed)
+- [ ] Port/volume/network visibility in container details
 
 ### Out of Scope
 
@@ -117,4 +114,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 — v11.0 milestone started (Nexus Agent Fixes)*
+*Last updated: 2026-03-22 — v12.0 milestone started (Server Management Dashboard)*
