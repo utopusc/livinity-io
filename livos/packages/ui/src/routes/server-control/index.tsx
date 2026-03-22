@@ -17,6 +17,8 @@ import {
 	IconNetwork,
 	IconBrandDocker,
 	IconActivity,
+	IconSearch,
+	IconX,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis} from 'recharts'
 
@@ -24,6 +26,9 @@ import {useCpuForUi} from '@/hooks/use-cpu'
 import {useSystemMemoryForUi} from '@/hooks/use-memory'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {useContainers} from '@/hooks/use-containers'
+import {useImages, formatBytes} from '@/hooks/use-images'
+import {useVolumes} from '@/hooks/use-volumes'
+import {useNetworks} from '@/hooks/use-networks'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
@@ -269,6 +274,621 @@ function RemoveDialog({
 	)
 }
 
+// Format unix timestamp to relative date string
+function formatRelativeDate(timestamp: number): string {
+	const now = Math.floor(Date.now() / 1000)
+	const diff = now - timestamp
+	if (diff < 60) return 'just now'
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+	if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`
+	return `${Math.floor(diff / 2592000)}mo ago`
+}
+
+// Remove Image confirmation dialog (simple)
+function RemoveImageDialog({
+	imageTag,
+	open,
+	onOpenChange,
+	onConfirm,
+	isRemoving,
+}: {
+	imageTag: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: () => void
+	isRemoving: boolean
+}) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Remove Image</DialogTitle>
+					<DialogDescription>
+						Are you sure you want to remove this image? This action cannot be undone.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='py-2'>
+					<p className='text-sm text-text-secondary'>
+						Image: <span className='font-bold font-mono text-text-primary'>{imageTag}</span>
+					</p>
+				</div>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='destructive'
+						size='dialog'
+						disabled={isRemoving}
+						onClick={onConfirm}
+					>
+						Remove
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Prune Images confirmation dialog
+function PruneImagesDialog({
+	open,
+	onOpenChange,
+	onConfirm,
+	isPruning,
+}: {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: () => void
+	isPruning: boolean
+}) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Prune Unused Images</DialogTitle>
+					<DialogDescription>
+						This will remove all dangling images. Are you sure?
+					</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='destructive'
+						size='dialog'
+						disabled={isPruning}
+						onClick={onConfirm}
+					>
+						Prune
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Remove Volume confirmation dialog (typed name required)
+function RemoveVolumeDialog({
+	volumeName,
+	open,
+	onOpenChange,
+	onConfirm,
+	isRemoving,
+}: {
+	volumeName: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: (confirmName: string) => void
+	isRemoving: boolean
+}) {
+	const [typedName, setTypedName] = useState('')
+
+	useEffect(() => {
+		if (!open) setTypedName('')
+	}, [open])
+
+	const canConfirm = typedName === volumeName && !isRemoving
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Remove Volume</DialogTitle>
+					<DialogDescription>
+						This will permanently delete the volume and its data. Type the volume name to confirm.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='py-2'>
+					<p className='mb-3 text-sm text-text-secondary'>
+						Volume: <span className='font-bold font-mono text-text-primary'>{volumeName}</span>
+					</p>
+					<Input
+						sizeVariant='short-square'
+						placeholder='Type volume name...'
+						value={typedName}
+						onValueChange={setTypedName}
+						autoFocus
+					/>
+				</div>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='destructive'
+						size='dialog'
+						disabled={!canConfirm}
+						onClick={() => onConfirm(typedName)}
+					>
+						Remove
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Images Tab Component
+function ImagesTab() {
+	const {
+		images,
+		isLoading,
+		isError,
+		error,
+		isFetching,
+		refetch,
+		removeImage,
+		isRemoving,
+		pruneImages,
+		isPruning,
+		actionResult,
+		totalSize,
+		totalCount,
+	} = useImages()
+
+	const [removeTarget, setRemoveTarget] = useState<{id: string; tag: string} | null>(null)
+	const [showPruneDialog, setShowPruneDialog] = useState(false)
+
+	return (
+		<>
+			{/* Summary Row */}
+			<div className='mb-4 flex items-center justify-between'>
+				<div className='text-sm text-text-secondary'>
+					<span className='font-medium text-text-primary'>{totalCount}</span>
+					<span className='ml-1'>images,</span>
+					<span className='ml-1 font-medium text-text-primary'>{formatBytes(totalSize)}</span>
+					<span className='ml-1'>total</span>
+				</div>
+				<div className='flex items-center gap-2'>
+					<Button
+						variant='default'
+						size='sm'
+						onClick={() => setShowPruneDialog(true)}
+						disabled={isPruning}
+					>
+						Prune Unused Images
+					</Button>
+					<button
+						onClick={() => refetch()}
+						disabled={isFetching}
+						className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+					>
+						<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+						Refresh
+					</button>
+				</div>
+			</div>
+
+			{/* Action Result Toast */}
+			<AnimatePresence>
+				{actionResult && (
+					<motion.div
+						initial={{opacity: 0, y: -10}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: -10}}
+						className={cn(
+							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
+							actionResult.type === 'success'
+								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+						)}
+					>
+						{actionResult.message}
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* Images Table */}
+			{isLoading ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>Loading images...</p>
+				</div>
+			) : isError ? (
+				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
+					<IconPhoto size={24} className='mx-auto mb-3 text-red-400' />
+					<p className='text-sm text-red-400'>Failed to load images</p>
+					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				</div>
+			) : !images.length ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconPhoto size={32} className='mx-auto mb-3 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No Docker images found</p>
+				</div>
+			) : (
+				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='pl-4'>Repository:Tag</TableHead>
+								<TableHead>Size</TableHead>
+								<TableHead>Created</TableHead>
+								<TableHead className='text-right pr-4'>Actions</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{images.map((image) => {
+								const isNone = image.repoTags.length === 1 && image.repoTags[0] === '<none>:<none>'
+								const primaryTag = isNone ? '<none>:<none>' : image.repoTags[0]
+								const extraCount = image.repoTags.length - 1
+								return (
+									<TableRow key={image.id}>
+										<TableCell className='pl-4'>
+											<div className='flex items-center gap-2'>
+												<span className={cn('truncate font-mono text-sm', isNone && 'italic text-text-tertiary')} title={image.repoTags.join(', ')}>
+													{primaryTag}
+												</span>
+												{extraCount > 0 && (
+													<span className='inline-flex items-center rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600'>
+														+{extraCount} more
+													</span>
+												)}
+											</div>
+										</TableCell>
+										<TableCell>
+											<span className='text-sm text-text-secondary'>{formatBytes(image.size)}</span>
+										</TableCell>
+										<TableCell>
+											<span className='text-sm text-text-secondary'>{formatRelativeDate(image.created)}</span>
+										</TableCell>
+										<TableCell className='text-right pr-4'>
+											<ActionButton
+												icon={IconTrash}
+												onClick={() => setRemoveTarget({id: image.id, tag: primaryTag})}
+												disabled={isRemoving}
+												color='red'
+												title='Remove image'
+											/>
+										</TableCell>
+									</TableRow>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+
+			{/* Remove Image Dialog */}
+			{removeTarget && (
+				<RemoveImageDialog
+					imageTag={removeTarget.tag}
+					open={!!removeTarget}
+					onOpenChange={(open) => {
+						if (!open) setRemoveTarget(null)
+					}}
+					onConfirm={() => {
+						removeImage(removeTarget.id, true)
+						setRemoveTarget(null)
+					}}
+					isRemoving={isRemoving}
+				/>
+			)}
+
+			{/* Prune Images Dialog */}
+			<PruneImagesDialog
+				open={showPruneDialog}
+				onOpenChange={setShowPruneDialog}
+				onConfirm={() => {
+					pruneImages()
+					setShowPruneDialog(false)
+				}}
+				isPruning={isPruning}
+			/>
+		</>
+	)
+}
+
+// Volumes Tab Component
+function VolumesTab() {
+	const {
+		volumes,
+		isLoading,
+		isError,
+		error,
+		isFetching,
+		refetch,
+		removeVolume,
+		isRemoving,
+		actionResult,
+		totalCount,
+	} = useVolumes()
+
+	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+
+	return (
+		<>
+			{/* Summary Row */}
+			<div className='mb-4 flex items-center justify-between'>
+				<div className='text-sm text-text-secondary'>
+					<span className='font-medium text-text-primary'>{totalCount}</span>
+					<span className='ml-1'>volumes</span>
+				</div>
+				<button
+					onClick={() => refetch()}
+					disabled={isFetching}
+					className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+				>
+					<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+					Refresh
+				</button>
+			</div>
+
+			{/* Action Result Toast */}
+			<AnimatePresence>
+				{actionResult && (
+					<motion.div
+						initial={{opacity: 0, y: -10}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: -10}}
+						className={cn(
+							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
+							actionResult.type === 'success'
+								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+						)}
+					>
+						{actionResult.message}
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* Volumes Table */}
+			{isLoading ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>Loading volumes...</p>
+				</div>
+			) : isError ? (
+				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
+					<IconFolder size={24} className='mx-auto mb-3 text-red-400' />
+					<p className='text-sm text-red-400'>Failed to load volumes</p>
+					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				</div>
+			) : !volumes.length ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconFolder size={32} className='mx-auto mb-3 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No Docker volumes found</p>
+				</div>
+			) : (
+				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='pl-4'>Name</TableHead>
+								<TableHead>Driver</TableHead>
+								<TableHead>Mount Point</TableHead>
+								<TableHead className='text-right pr-4'>Actions</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{volumes.map((volume) => (
+								<TableRow key={volume.name}>
+									<TableCell className='pl-4'>
+										<span className='font-mono text-sm font-medium'>{volume.name}</span>
+									</TableCell>
+									<TableCell>
+										<span className='text-sm text-text-secondary'>{volume.driver}</span>
+									</TableCell>
+									<TableCell>
+										<span className='truncate font-mono text-xs text-text-secondary' title={volume.mountpoint}>
+											{volume.mountpoint}
+										</span>
+									</TableCell>
+									<TableCell className='text-right pr-4'>
+										<ActionButton
+											icon={IconTrash}
+											onClick={() => setRemoveTarget(volume.name)}
+											disabled={isRemoving}
+											color='red'
+											title='Remove volume'
+										/>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+
+			{/* Remove Volume Dialog */}
+			{removeTarget && (
+				<RemoveVolumeDialog
+					volumeName={removeTarget}
+					open={!!removeTarget}
+					onOpenChange={(open) => {
+						if (!open) setRemoveTarget(null)
+					}}
+					onConfirm={(confirmName) => {
+						removeVolume(removeTarget, confirmName)
+						setRemoveTarget(null)
+					}}
+					isRemoving={isRemoving}
+				/>
+			)}
+		</>
+	)
+}
+
+// Networks Tab Component
+function NetworksTab() {
+	const {
+		networks,
+		isLoading,
+		isError,
+		error,
+		isFetching,
+		refetch,
+		inspectNetwork,
+		clearInspect,
+		inspectedNetworkData,
+		isInspecting,
+		totalCount,
+	} = useNetworks()
+
+	return (
+		<>
+			{/* Summary Row */}
+			<div className='mb-4 flex items-center justify-between'>
+				<div className='text-sm text-text-secondary'>
+					<span className='font-medium text-text-primary'>{totalCount}</span>
+					<span className='ml-1'>networks</span>
+				</div>
+				<button
+					onClick={() => refetch()}
+					disabled={isFetching}
+					className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+				>
+					<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+					Refresh
+				</button>
+			</div>
+
+			{/* Networks Table */}
+			{isLoading ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>Loading networks...</p>
+				</div>
+			) : isError ? (
+				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
+					<IconNetwork size={24} className='mx-auto mb-3 text-red-400' />
+					<p className='text-sm text-red-400'>Failed to load networks</p>
+					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				</div>
+			) : !networks.length ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconNetwork size={32} className='mx-auto mb-3 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No Docker networks found</p>
+				</div>
+			) : (
+				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='pl-4'>Name</TableHead>
+								<TableHead>Driver</TableHead>
+								<TableHead>Scope</TableHead>
+								<TableHead>Containers</TableHead>
+								<TableHead className='text-right pr-4'>Actions</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{networks.map((network) => (
+								<TableRow key={network.id}>
+									<TableCell className='pl-4'>
+										<span className='text-sm font-medium'>{network.name}</span>
+									</TableCell>
+									<TableCell>
+										<span className='text-sm text-text-secondary'>{network.driver}</span>
+									</TableCell>
+									<TableCell>
+										<span className='inline-flex items-center rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-medium text-text-secondary'>
+											{network.scope}
+										</span>
+									</TableCell>
+									<TableCell>
+										<span className='text-sm text-text-secondary'>{network.containerCount}</span>
+									</TableCell>
+									<TableCell className='text-right pr-4'>
+										<ActionButton
+											icon={IconSearch}
+											onClick={() => inspectNetwork(network.id)}
+											disabled={isInspecting}
+											color='blue'
+											title='Inspect network'
+										/>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+
+			{/* Network Inspect Card */}
+			<AnimatePresence>
+				{inspectedNetworkData && (
+					<motion.div
+						initial={{opacity: 0, y: 10}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: 10}}
+						className='mt-4 rounded-xl border border-border-default bg-surface-base p-4'
+					>
+						<div className='mb-3 flex items-center justify-between'>
+							<div>
+								<h3 className='text-sm font-semibold text-text-primary'>{inspectedNetworkData.name}</h3>
+								<p className='text-xs text-text-secondary'>
+									{inspectedNetworkData.driver} / {inspectedNetworkData.scope}
+								</p>
+							</div>
+							<button
+								onClick={clearInspect}
+								className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary'
+								title='Close'
+							>
+								<IconX size={16} />
+							</button>
+						</div>
+						{inspectedNetworkData.containers.length === 0 ? (
+							<p className='text-xs text-text-tertiary'>No containers connected to this network</p>
+						) : (
+							<div className='rounded-lg border border-border-default overflow-hidden'>
+								<Table>
+									<TableHeader>
+										<TableRow>
+											<TableHead className='pl-3 text-xs'>Container</TableHead>
+											<TableHead className='text-xs'>IPv4 Address</TableHead>
+											<TableHead className='text-xs'>MAC Address</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{inspectedNetworkData.containers.map((container) => (
+											<TableRow key={container.name}>
+												<TableCell className='pl-3'>
+													<span className='text-xs font-medium'>{container.name}</span>
+												</TableCell>
+												<TableCell>
+													<span className='font-mono text-xs text-text-secondary'>{container.ipv4 || '-'}</span>
+												</TableCell>
+												<TableCell>
+													<span className='font-mono text-xs text-text-secondary'>{container.macAddress || '-'}</span>
+												</TableCell>
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
+							</div>
+						)}
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</>
+	)
+}
+
 export default function ServerControl() {
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
 	const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
@@ -509,15 +1129,15 @@ export default function ServerControl() {
 					)}
 				</TabsContent>
 
-				{/* Placeholder Tabs */}
+				{/* Images Tab */}
 				<TabsContent value='images' className='flex-1 overflow-auto'>
-					<PlaceholderTab title='Docker Images' icon={IconPhoto} />
+					<ImagesTab />
 				</TabsContent>
 				<TabsContent value='volumes' className='flex-1 overflow-auto'>
-					<PlaceholderTab title='Docker Volumes' icon={IconFolder} />
+					<VolumesTab />
 				</TabsContent>
 				<TabsContent value='networks' className='flex-1 overflow-auto'>
-					<PlaceholderTab title='Docker Networks' icon={IconNetwork} />
+					<NetworksTab />
 				</TabsContent>
 				<TabsContent value='pm2' className='flex-1 overflow-auto'>
 					<PlaceholderTab title='PM2 Processes' icon={IconBrandDocker} />
