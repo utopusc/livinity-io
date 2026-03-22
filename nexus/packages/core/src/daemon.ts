@@ -1861,9 +1861,9 @@ ${task}`;
         { name: 'description', type: 'string', description: 'What this subagent does', required: true },
         { name: 'skills', type: 'string', description: 'Comma-separated skill names or "*" for all', required: false },
         { name: 'system_prompt', type: 'string', description: 'Custom system prompt for the subagent', required: false },
-        { name: 'schedule', type: 'string', description: 'Cron expression (e.g. "0 9 * * MON-FRI" for weekdays at 9am)', required: false },
+        { name: 'schedule', type: 'string', description: 'Cron expression (e.g. "0 9 * * MON-FRI" for weekdays at 9am). Must be used together with scheduled_task.', required: false },
         { name: 'timezone', type: 'string', description: 'IANA timezone for schedule (e.g. "Europe/Istanbul")', required: false },
-        { name: 'scheduled_task', type: 'string', description: 'Task to execute on schedule trigger', required: false },
+        { name: 'scheduled_task', type: 'string', description: 'Task to execute on schedule trigger (REQUIRED when schedule is set)', required: false },
         { name: 'loop_interval_ms', type: 'number', description: 'Loop interval in ms (for continuous execution)', required: false },
         { name: 'loop_task', type: 'string', description: 'Task to execute each loop iteration', required: false },
         { name: 'loop_max_iterations', type: 'number', description: 'Max loop iterations (0 = unlimited)', required: false },
@@ -1876,6 +1876,11 @@ ${task}`;
 
         if (!id || !name || !description) {
           return { success: false, output: '', error: 'id, name, and description are required.' };
+        }
+
+        // Validate schedule+scheduled_task coupling
+        if (schedule && !scheduled_task) {
+          return { success: false, output: '', error: 'scheduled_task is required when schedule is set. Provide the task to execute on each schedule trigger.' };
         }
 
         try {
@@ -1915,7 +1920,7 @@ ${task}`;
           }
 
           let output = `Subagent "${name}" (${id}) created.`;
-          if (config.schedule) output += ` Schedule: ${config.schedule}`;
+          if (config.schedule && config.scheduledTask) output += ` Schedule registered: ${config.schedule} (task: "${config.scheduledTask}")`;
           if (config.loop) output += ` Loop: every ${config.loop.intervalMs}ms`;
           return { success: true, output };
         } catch (err) {
