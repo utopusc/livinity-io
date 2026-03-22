@@ -269,33 +269,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 			}
 		})
 
-		// Web app shortcuts on desktop
-		const webAppIds = ['LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'] as const
-		const webAppIcons: Record<string, string> = {
-			'LIVINITY_facebook': 'https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg',
-			'LIVINITY_gmail': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg',
-			'LIVINITY_youtube': 'https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg',
-			'LIVINITY_tradingview': 'https://www.tradingview.com/static/images/favicon.ico',
-			'LIVINITY_google': 'https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg',
-			'LIVINITY_yahoo': 'https://upload.wikimedia.org/wikipedia/commons/5/58/Yahoo%21_logo.svg',
-		}
-		const webAppItems: AppGridItem[] = webAppIds.map((id) => {
-			const app = systemAppsKeyed[id]
-			return {
-				id,
-				node: (
-					<motion.div
-						initial={{opacity: 0, scale: 0}}
-						animate={{opacity: 1, scale: 1}}
-						transition={{type: 'spring', stiffness: 400, damping: 25}}
-					>
-						<WebAppShortcut appId={id} name={app.name} icon={webAppIcons[id]} url={app.systemAppTo} />
-					</motion.div>
-				),
-			}
-		})
-
-		return [...webAppItems, ...appItems, ...folderItems, ...widgetItems]
+		return [...appItems, ...folderItems, ...widgetItems]
 	}, [userApps, folders, widgets])
 
 	return (

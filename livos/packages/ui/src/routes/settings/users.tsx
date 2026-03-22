@@ -259,9 +259,8 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 						)}
 					</Button>
 					<Button
-						variant='ghost'
-						size='icon-only'
-						text='destructive'
+						variant='destructive'
+						size='sm'
 						onClick={handleDelete}
 						disabled={deleteMut.isPending}
 					>
