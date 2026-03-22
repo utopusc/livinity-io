@@ -263,7 +263,7 @@ Plans:
 | 33. Progress Report | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete   | 2026-03-22 |
+| 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 37. Images, Volumes, Networks | v12.0 | 0/? | Not started | - |
 | 38. PM2 Process Management | v12.0 | 0/? | Not started | - |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |
