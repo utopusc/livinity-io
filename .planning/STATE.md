@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-03-22T21:03:17.278Z"
+stopped_at: Completed 35-02-PLAN.md
+last_updated: "2026-03-22T21:09:43.396Z"
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -44,6 +44,7 @@ Plan: 2 of 2
 ## Accumulated Context
 
 | Phase 35 P01 | 2min | 2 tasks | 5 files |
+| Phase 35 P02 | 4min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -56,6 +57,9 @@ Plan: 2 of 2
 - [Phase 35]: Dockerode singleton pattern instead of per-call instantiation
 - [Phase 35]: adminProcedure for both docker list and manage (not privateProcedure)
 - [Phase 35]: confirmName backend validation for container remove (SEC-03)
+- [Phase 35]: shadcn Table for container list instead of card-per-container for better information density
+- [Phase 35]: useContainers hook pattern: centralized container state with 5s polling + manage mutation + action result state
+- [Phase 35]: Tabbed dashboard with flex-1 min-h-0 + overflow-auto per TabsContent for scroll management
 
 ### Pending Todos
 
@@ -67,6 +71,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T21:03:17.276Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-03-22T21:09:43.394Z
+Stopped at: Completed 35-02-PLAN.md
 Resume file: None

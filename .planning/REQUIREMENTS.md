@@ -13,7 +13,7 @@
 - [ ] **DOCK-04**: User can view container logs with tail limit, auto-scroll, and search
 - [ ] **DOCK-05**: User can see per-container CPU and memory usage stats in real-time
 - [x] **DOCK-06**: Protected containers (Redis, PostgreSQL, Caddy, LivOS core) cannot be stopped or removed from UI
-- [ ] **DOCK-07**: Remove operation requires confirmation dialog with container name
+- [x] **DOCK-07**: Remove operation requires confirmation dialog with container name
 
 ### IMG — Docker Image Management
 
@@ -43,17 +43,17 @@
 
 ### UI — Dashboard UI
 
-- [ ] **UI-01**: Server Management is a tabbed interface (Overview, Containers, Images, Volumes, Networks, PM2, Monitoring)
+- [x] **UI-01**: Server Management is a tabbed interface (Overview, Containers, Images, Volumes, Networks, PM2, Monitoring)
 - [ ] **UI-02**: Overview tab shows system health dashboard (CPU, RAM, Disk, Network sparklines + container/PM2 summary)
 - [ ] **UI-03**: Container detail opens a slide-over or modal with tabbed view (Info, Logs, Stats)
-- [ ] **UI-04**: All destructive operations (remove, prune) show confirmation dialogs
-- [ ] **UI-05**: Real-time data updates without full page refresh (polling or subscription)
+- [x] **UI-04**: All destructive operations (remove, prune) show confirmation dialogs
+- [x] **UI-05**: Real-time data updates without full page refresh (polling or subscription)
 
 ### SEC — Security
 
 - [x] **SEC-01**: All Docker/PM2 management operations require admin role
 - [x] **SEC-02**: Protected container/process registry prevents accidental deletion of infrastructure
-- [ ] **SEC-03**: Container remove requires explicit confirmation with container name typed
+- [x] **SEC-03**: Container remove requires explicit confirmation with container name typed
 
 ## v13.0+ Requirements (Deferred)
 
@@ -91,7 +91,7 @@
 | DOCK-04 | Phase 36 | Pending |
 | DOCK-05 | Phase 36 | Pending |
 | DOCK-06 | Phase 35 | Complete |
-| DOCK-07 | Phase 35 | Pending |
+| DOCK-07 | Phase 35 | Complete |
 | IMG-01 | Phase 37 | Pending |
 | IMG-02 | Phase 37 | Pending |
 | IMG-03 | Phase 37 | Pending |
@@ -106,14 +106,14 @@
 | MON-01 | Phase 39 | Pending |
 | MON-02 | Phase 39 | Pending |
 | MON-03 | Phase 39 | Pending |
-| UI-01 | Phase 35 | Pending |
+| UI-01 | Phase 35 | Complete |
 | UI-02 | Phase 39 | Pending |
 | UI-03 | Phase 36 | Pending |
-| UI-04 | Phase 35 | Pending |
-| UI-05 | Phase 35 | Pending |
+| UI-04 | Phase 35 | Complete |
+| UI-05 | Phase 35 | Complete |
 | SEC-01 | Phase 35 | Complete |
 | SEC-02 | Phase 35 | Complete |
-| SEC-03 | Phase 35 | Pending |
+| SEC-03 | Phase 35 | Complete |
 
 **Coverage:**
 - v12.0 requirements: 29 total
