@@ -16,7 +16,11 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 	if (ctx.transport === 'ws') return next()
 
 	try {
-		const token = ctx.request?.headers.authorization?.split(' ')[1]
+		// Try Bearer token first, then fall back to LIVINITY_SESSION cookie
+		let token = ctx.request?.headers.authorization?.split(' ')[1]
+		if (!token) {
+			token = ctx.request?.cookies?.LIVINITY_SESSION
+		}
 		if (token === undefined) throw new Error('Missing token')
 		const payload = await ctx.server.verifyToken(token)
 
