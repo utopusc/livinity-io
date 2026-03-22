@@ -188,7 +188,13 @@ export function handleWsClose(
 ): void {
   const browserWs = tunnel.getBrowserSocket(msg.id);
   if (browserWs) {
-    browserWs.close(msg.code ?? 1000, msg.reason ?? '');
+    // Sanitize close code: ws library rejects reserved codes (1004-1006, 1015)
+    // and codes outside the valid range (must be 1000 or 3000-4999).
+    let code = msg.code ?? 1000;
+    if (code !== 1000 && code !== 1001 && (code < 3000 || code > 4999)) {
+      code = 1000;
+    }
+    browserWs.close(code, msg.reason ?? '');
   }
   tunnel.removeBrowserSocket(msg.id);
 }
