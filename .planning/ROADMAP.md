@@ -200,7 +200,7 @@ Plans:
   4. Stats tab shows live CPU percentage and memory usage for the selected container, updating without page refresh
 **Plans**: 2 plans
 Plans:
-- [ ] 36-01-PLAN.md -- Backend tRPC queries (inspectContainer, containerLogs, containerStats)
+- [x] 36-01-PLAN.md -- Backend tRPC queries (inspectContainer, containerLogs, containerStats)
 - [ ] 36-02-PLAN.md -- Frontend ContainerDetailSheet with Info/Logs/Stats tabs
 
 ### Phase 37: Images, Volumes, Networks
@@ -263,7 +263,7 @@ Plans:
 | 33. Progress Report | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 36. Container Detail + Logs + Stats | v12.0 | 0/2 | Not started | - |
+| 36. Container Detail + Logs + Stats | v12.0 | 1/2 | In Progress|  |
 | 37. Images, Volumes, Networks | v12.0 | 0/? | Not started | - |
 | 38. PM2 Process Management | v12.0 | 0/? | Not started | - |
 | 39. System Monitoring + Overview | v12.0 | 0/? | Not started | - |

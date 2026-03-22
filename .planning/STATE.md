@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-stopped_at: Completed 35-02-PLAN.md
-last_updated: "2026-03-22T21:13:21.712Z"
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-22T21:25:04.160Z"
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v12.0 -- Server Management Dashboard
-**Current focus:** Phase 35 — docker-backend-container-list-actions-ui
+**Current focus:** Phase 36 — container-detail-view-logs-stats
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: 36 (container-detail-view-logs-stats) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 
 | Phase 35 P01 | 2min | 2 tasks | 5 files |
 | Phase 35 P02 | 4min | 2 tasks | 4 files |
+| Phase 36 P01 | 3min | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -60,6 +61,9 @@ Plan: Not started
 - [Phase 35]: shadcn Table for container list instead of card-per-container for better information density
 - [Phase 35]: useContainers hook pattern: centralized container state with 5s polling + manage mutation + action result state
 - [Phase 35]: Tabbed dashboard with flex-1 min-h-0 + overflow-auto per TabsContent for scroll management
+- [Phase 36]: Docker stream header stripping via manual 8-byte frame parsing for clean log output
+- [Phase 36]: Memory usage subtracts cache for accurate reporting; network stats summed across all interfaces
+- [Phase 36]: [not-found] error tag pattern: domain throws tagged error, route maps to TRPCError NOT_FOUND
 
 ### Pending Todos
 
@@ -71,6 +75,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-22T21:09:43.394Z
-Stopped at: Completed 35-02-PLAN.md
+Last session: 2026-03-22T21:25:04.158Z
+Stopped at: Completed 36-01-PLAN.md
 Resume file: None
