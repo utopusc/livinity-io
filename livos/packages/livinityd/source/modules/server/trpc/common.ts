@@ -65,6 +65,11 @@ export const httpOnlyPaths = [
 	'docker.pullImage',
 	'docker.tagImage',
 	'docker.removeVolume',
+	'docker.createVolume',
+	// Network management -- use HTTP for reliability
+	'docker.createNetwork',
+	'docker.removeNetwork',
+	'docker.disconnectNetwork',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
 ] as const
