@@ -261,7 +261,7 @@ Plans:
 
 **Milestone Goal:** Match every Portainer feature — container creation with full config, container edit + recreate, exec terminal, compose stack management, enhanced image/network/volume CRUD, bulk operations, Docker events, and engine info.
 
-- [ ] **Phase 41: Container Creation** — Full container creation form (name, image, ports, volumes, env, restart, resources, health, network) + window resize
+- [x] **Phase 41: Container Creation** — Full container creation form (name, image, ports, volumes, env, restart, resources, health, network) + window resize (completed 2026-03-23)
 - [ ] **Phase 42: Container Edit & Recreate** — Edit existing container config + recreate, duplicate, rename
 - [ ] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap
 - [ ] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage
@@ -281,7 +281,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 41-01-PLAN.md -- Backend createContainer mutation (types, domain function, tRPC route, httpOnlyPaths)
-- [ ] 41-02-PLAN.md -- Frontend tabbed creation form (6 tabs) + Add Container button + window resize
+- [x] 41-02-PLAN.md -- Frontend tabbed creation form (6 tabs) + Add Container button + window resize
 
 ### Phase 42: Container Edit & Recreate
 **Goal**: User can edit any existing container's configuration (ports, env, volumes, restart, resources) and recreate it, or duplicate/rename it
@@ -365,7 +365,7 @@ Plans:
 | 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 39. System Monitoring + Overview | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
-| 41. Container Creation | v13.0 | 1/2 | In Progress|  |
+| 41. Container Creation | v13.0 | 2/2 | Complete   | 2026-03-23 |
 | 42. Container Edit & Recreate | v13.0 | 0/? | Not started | - |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 0/? | Not started | - |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |

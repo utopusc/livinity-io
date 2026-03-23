@@ -82,8 +82,8 @@
 
 ### UI — Interface Enhancements
 
-- [ ] **UI-01**: Server Management window size increased to 1400x900 minimum
-- [ ] **UI-02**: Container creation form is a full-page or large modal with tabbed sections
+- [x] **UI-01**: Server Management window size increased to 1400x900 minimum
+- [x] **UI-02**: Container creation form is a full-page or large modal with tabbed sections
 - [ ] **UI-03**: Container edit/recreate uses the same form pre-filled with current config
 - [ ] **UI-04**: Stacks gets its own tab in Server Management
 - [ ] **UI-05**: Events gets its own tab in Server Management
@@ -147,8 +147,8 @@
 | EVENT-01 | Phase 46 | Pending |
 | EVENT-02 | Phase 46 | Pending |
 | ENGINE-01 | Phase 46 | Pending |
-| UI-01 | Phase 41 | Pending |
-| UI-02 | Phase 41 | Pending |
+| UI-01 | Phase 41 | Complete |
+| UI-02 | Phase 41 | Complete |
 | UI-03 | Phase 42 | Pending |
 | UI-04 | Phase 45 | Pending |
 | UI-05 | Phase 46 | Pending |
