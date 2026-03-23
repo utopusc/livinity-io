@@ -15,6 +15,9 @@ import {
 	listImages,
 	removeImage,
 	pruneImages,
+	pullImage,
+	tagImage,
+	imageHistory,
 	listVolumes,
 	removeVolume,
 	listNetworks,
@@ -435,6 +438,60 @@ export default router({
 			})
 		}
 	}),
+
+	pullImage: adminProcedure
+		.input(z.object({
+			image: z.string().min(1).max(500),
+		}))
+		.mutation(async ({input}) => {
+			try {
+				return await pullImage(input.image)
+			} catch (err: any) {
+				if (err.message?.includes('[image-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[image-not-found] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to pull image ${input.image}`,
+				})
+			}
+		}),
+
+	tagImage: adminProcedure
+		.input(z.object({
+			id: z.string().min(1),
+			repo: z.string().min(1).max(500),
+			tag: z.string().min(1).max(200),
+		}))
+		.mutation(async ({input}) => {
+			try {
+				return await tagImage(input.id, input.repo, input.tag)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to tag image ${input.id}`,
+				})
+			}
+		}),
+
+	imageHistory: adminProcedure
+		.input(z.object({id: z.string().min(1)}))
+		.query(async ({input}) => {
+			try {
+				return await imageHistory(input.id)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to get history for image ${input.id}`,
+				})
+			}
+		}),
 
 	// -----------------------------------------------------------------------
 	// Volume management
