@@ -292,7 +292,10 @@ Plans:
   2. User changes ports/env/volumes/restart/resources → clicks "Recreate" → old container stopped, new created with same name
   3. User can "Duplicate" a container → creation form with cloned config but empty name
   4. User can rename a container
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 42-01-PLAN.md — Backend recreateContainer and renameContainer mutations (domain functions, tRPC routes, httpOnlyPaths)
+- [ ] 42-02-PLAN.md — Frontend edit/duplicate modes in ContainerCreateForm + Edit/Duplicate/Rename actions + Rename dialog
 
 ### Phase 43: Exec Terminal + Enhanced Logs
 **Goal**: User can open a terminal shell into any running container and logs have search, download, timestamps toggle, and wrap toggle
@@ -366,7 +369,7 @@ Plans:
 | 39. System Monitoring + Overview | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
 | 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 42. Container Edit & Recreate | v13.0 | 0/? | Not started | - |
+| 42. Container Edit & Recreate | v13.0 | 0/2 | Not started | - |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 0/? | Not started | - |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
 | 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
