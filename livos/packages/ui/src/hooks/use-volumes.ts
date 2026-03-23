@@ -22,9 +22,26 @@ export function useVolumes() {
 		},
 	})
 
+	const createVolumeMutation = trpcReact.docker.createVolume.useMutation({
+		onSuccess: (data) => {
+			setActionResult({type: 'success', message: data.message})
+			volumesQuery.refetch()
+			setTimeout(() => setActionResult(null), 3000)
+		},
+		onError: (error) => {
+			setActionResult({type: 'error', message: error.message})
+			setTimeout(() => setActionResult(null), 5000)
+		},
+	})
+
 	const removeVolume = (name: string, confirmName: string) => {
 		setActionResult(null)
 		removeMutation.mutate({name, confirmName})
+	}
+
+	const createVolume = (input: {name: string; driver?: string; driverOpts?: Record<string, string>}) => {
+		setActionResult(null)
+		createVolumeMutation.mutate(input)
 	}
 
 	const volumes = volumesQuery.data ?? []
@@ -39,6 +56,8 @@ export function useVolumes() {
 		refetch: volumesQuery.refetch,
 		removeVolume,
 		isRemoving: removeMutation.isPending,
+		createVolume,
+		isCreatingVolume: createVolumeMutation.isPending,
 		actionResult,
 		totalCount,
 	}
