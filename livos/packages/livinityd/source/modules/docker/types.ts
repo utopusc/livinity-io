@@ -109,3 +109,68 @@ export interface NetworkDetail {
 	scope: string
 	containers: NetworkContainer[]
 }
+
+export interface ContainerCreateInput {
+	// General (CREATE-01)
+	name: string
+	image: string
+	command?: string[]
+	entrypoint?: string[]
+	workingDir?: string
+	user?: string
+	hostname?: string
+	domainname?: string
+	tty?: boolean
+	openStdin?: boolean
+
+	// Ports (CREATE-02)
+	ports?: Array<{
+		hostPort: number
+		containerPort: number
+		protocol: 'tcp' | 'udp'
+	}>
+
+	// Volumes (CREATE-03)
+	volumes?: Array<{
+		hostPath?: string
+		containerPath: string
+		readOnly?: boolean
+		type: 'bind' | 'volume' | 'tmpfs'
+		volumeName?: string
+	}>
+
+	// Environment (CREATE-04)
+	env?: Array<{key: string; value: string}>
+	labels?: Array<{key: string; value: string}>
+
+	// Restart Policy (CREATE-05)
+	restartPolicy?: {
+		name: 'no' | 'always' | 'on-failure' | 'unless-stopped'
+		maximumRetryCount?: number
+	}
+
+	// Resources (CREATE-06)
+	resources?: {
+		memoryLimit?: number // bytes
+		cpuLimit?: number // nanoCPUs (1e9 = 1 CPU)
+		cpuShares?: number
+	}
+
+	// Health Check (CREATE-07)
+	healthCheck?: {
+		test?: string[] // e.g. ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+		interval?: number // nanoseconds
+		timeout?: number // nanoseconds
+		retries?: number
+		startPeriod?: number // nanoseconds
+	}
+
+	// Network (CREATE-08)
+	networkMode?: string // bridge | host | none | <network-name>
+	dns?: string[]
+	extraHosts?: string[] // ["host:ip", ...]
+
+	// Pull behavior
+	pullImage?: boolean // default true -- pull image before creating
+	autoStart?: boolean // default true -- start container after creating
+}
