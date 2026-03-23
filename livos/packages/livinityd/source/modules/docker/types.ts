@@ -123,6 +123,27 @@ export interface NetworkDetail {
 	containers: NetworkContainer[]
 }
 
+// -----------------------------------------------------------------------
+// Stack management (Phase 45)
+// -----------------------------------------------------------------------
+
+export interface StackInfo {
+	name: string // compose project name
+	status: 'running' | 'stopped' | 'partial' // all running / all stopped / mixed
+	containerCount: number
+	containers: StackContainer[]
+}
+
+export interface StackContainer {
+	id: string
+	name: string
+	image: string
+	state: string
+	status: string
+}
+
+export type StackControlOperation = 'up' | 'down' | 'stop' | 'start' | 'restart'
+
 export interface ContainerCreateInput {
 	// General (CREATE-01)
 	name: string
