@@ -19,6 +19,7 @@ import {
 	IconActivity,
 	IconSearch,
 	IconX,
+	IconPlus,
 	IconChevronDown,
 	IconChevronRight,
 	IconArrowUp,
@@ -38,6 +39,7 @@ import {useNetworkStats, useDiskIO, useProcesses} from '@/hooks/use-monitoring'
 import {usePM2} from '@/hooks/use-pm2'
 import {useVolumes} from '@/hooks/use-volumes'
 import {useNetworks} from '@/hooks/use-networks'
+import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
@@ -1674,6 +1676,7 @@ function PM2Tab() {
 export default function ServerControl() {
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
 	const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
+	const [showCreateForm, setShowCreateForm] = useState(false)
 
 	// System resource hooks
 	const cpuUsage = useCpuForUi({poll: true})
@@ -1778,14 +1781,23 @@ export default function ServerControl() {
 							<span>{totalCount}</span>
 							<span className='ml-1'>running</span>
 						</div>
-						<button
-							onClick={() => refetch()}
-							disabled={isFetching}
-							className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
-						>
-							<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
-							Refresh
-						</button>
+						<div className='flex items-center gap-2'>
+							<button
+								onClick={() => setShowCreateForm(true)}
+								className='flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/90'
+							>
+								<IconPlus size={14} />
+								Add Container
+							</button>
+							<button
+								onClick={() => refetch()}
+								disabled={isFetching}
+								className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+							>
+								<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+								Refresh
+							</button>
+						</div>
 					</div>
 
 					{/* Action Result Toast */}
@@ -1916,6 +1928,13 @@ export default function ServerControl() {
 						</div>
 					)}
 				</TabsContent>
+
+				{/* Container Create Form */}
+				<ContainerCreateForm
+					open={showCreateForm}
+					onClose={() => setShowCreateForm(false)}
+					onSuccess={() => refetch()}
+				/>
 
 				{/* Images Tab */}
 				<TabsContent value='images' className='flex-1 overflow-auto'>
