@@ -28,9 +28,9 @@
 
 ### EXEC — Container Terminal
 
-- [ ] **EXEC-01**: User can open a terminal shell (bash/sh) into a running container via xterm.js
-- [ ] **EXEC-02**: Terminal supports shell selection (bash, sh, ash) and custom user
-- [ ] **EXEC-03**: Terminal handles resize events and supports copy/paste
+- [x] **EXEC-01**: User can open a terminal shell (bash/sh) into a running container via xterm.js
+- [x] **EXEC-02**: Terminal supports shell selection (bash, sh, ash) and custom user
+- [x] **EXEC-03**: Terminal handles resize events and supports copy/paste
 
 ### LOGS — Enhanced Container Logs
 
@@ -120,9 +120,9 @@
 | EDIT-05 | Phase 42 | Complete |
 | EDIT-06 | Phase 42 | Complete |
 | EDIT-07 | Phase 42 | Complete |
-| EXEC-01 | Phase 43 | Pending |
-| EXEC-02 | Phase 43 | Pending |
-| EXEC-03 | Phase 43 | Pending |
+| EXEC-01 | Phase 43 | Complete |
+| EXEC-02 | Phase 43 | Complete |
+| EXEC-03 | Phase 43 | Complete |
 | LOGS-01 | Phase 43 | Pending |
 | LOGS-02 | Phase 43 | Pending |
 | LOGS-03 | Phase 43 | Pending |

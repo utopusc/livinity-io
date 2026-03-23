@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T00:35:34.445Z"
+last_updated: "2026-03-23T00:48:34.185Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -19,12 +19,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v13.0 -- Portainer-Level Server Management
-**Current focus:** Phase 42 — container-edit-recreate
+**Current focus:** Phase 43 — exec-terminal-enhanced-logs
 
 ## Current Position
 
-Phase: 42
-Plan: Not started
+Phase: 43 (exec-terminal-enhanced-logs) — EXECUTING
+Plan: 2 of 2
 
 ## Accumulated Context
 
@@ -41,6 +41,8 @@ Plan: Not started
 - [Phase 42]: Docker naming regex validated at both domain and Zod layers for defense in depth
 - [Phase 42]: Form mode determined by optional string props (editContainerName/duplicateContainerName) rather than explicit mode enum
 - [Phase 42]: detailToFormState leaves fields not in ContainerDetail empty rather than guessing
+- [Phase 43]: Used Dockerode exec API with hijack mode instead of pty.spawn docker for direct stream control
+- [Phase 43]: ConsoleTab queries inspectContainer internally (cached by React Query) rather than receiving state as prop
 
 ### Pending Todos
 
