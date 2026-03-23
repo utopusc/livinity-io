@@ -30,6 +30,30 @@ export function useImages() {
 		},
 	})
 
+	const pullMutation = trpcReact.docker.pullImage.useMutation({
+		onSuccess: (data) => {
+			setActionResult({type: 'success', message: data.message})
+			imagesQuery.refetch()
+			setTimeout(() => setActionResult(null), 3000)
+		},
+		onError: (error) => {
+			setActionResult({type: 'error', message: error.message})
+			setTimeout(() => setActionResult(null), 5000)
+		},
+	})
+
+	const tagMutation = trpcReact.docker.tagImage.useMutation({
+		onSuccess: (data) => {
+			setActionResult({type: 'success', message: data.message})
+			imagesQuery.refetch()
+			setTimeout(() => setActionResult(null), 3000)
+		},
+		onError: (error) => {
+			setActionResult({type: 'error', message: error.message})
+			setTimeout(() => setActionResult(null), 5000)
+		},
+	})
+
 	const pruneMutation = trpcReact.docker.pruneImages.useMutation({
 		onSuccess: (data) => {
 			const spaceText = formatBytes(data.spaceReclaimed)
@@ -47,6 +71,16 @@ export function useImages() {
 	const removeImage = (id: string, force?: boolean) => {
 		setActionResult(null)
 		removeMutation.mutate({id, force: force ?? false})
+	}
+
+	const pullImage = (image: string) => {
+		setActionResult(null)
+		pullMutation.mutate({image})
+	}
+
+	const tagImage = (id: string, repo: string, tag: string) => {
+		setActionResult(null)
+		tagMutation.mutate({id, repo, tag})
 	}
 
 	const pruneImages = () => {
@@ -67,6 +101,10 @@ export function useImages() {
 		refetch: imagesQuery.refetch,
 		removeImage,
 		isRemoving: removeMutation.isPending,
+		pullImage,
+		isPulling: pullMutation.isPending,
+		tagImage,
+		isTagging: tagMutation.isPending,
 		pruneImages,
 		isPruning: pruneMutation.isPending,
 		actionResult,
