@@ -1,4 +1,4 @@
-import {useState, useEffect, useRef, useCallback} from 'react'
+import {useState, useEffect, useRef, useCallback, useMemo} from 'react'
 import {
 	IconInfoCircle,
 	IconFileText,
@@ -11,6 +11,12 @@ import {
 	IconAlertTriangle,
 	IconPencil,
 	IconCopy,
+	IconSearch,
+	IconDownload,
+	IconChevronUp,
+	IconChevronDown,
+	IconClock,
+	IconTextWrap,
 } from '@tabler/icons-react'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
@@ -247,9 +253,16 @@ function InfoTab({containerName}: {containerName: string}) {
 function LogsTab({containerName}: {containerName: string}) {
 	const [tailLines, setTailLines] = useState(500)
 	const [autoScroll, setAutoScroll] = useState(true)
+	const [searchTerm, setSearchTerm] = useState('')
+	const [matchIndex, setMatchIndex] = useState(0)
+	const [showTimestamps, setShowTimestamps] = useState(true)
+	const [lineWrap, setLineWrap] = useState(true)
 	const preRef = useRef<HTMLPreElement>(null)
 
-	const {logs, logsLoading, logsError, refetchLogs} = useContainerDetail(containerName, {tail: tailLines})
+	const {logs, logsLoading, logsError, refetchLogs} = useContainerDetail(containerName, {
+		tail: tailLines,
+		timestamps: showTimestamps,
+	})
 
 	// Auto-scroll to bottom when logs change
 	useEffect(() => {
@@ -272,9 +285,142 @@ function LogsTab({containerName}: {containerName: string}) {
 		}
 	}, [])
 
+	// Search: compute match positions
+	const matches = useMemo(() => {
+		if (!searchTerm || !logs) return []
+		const indices: number[] = []
+		const lower = logs.toLowerCase()
+		const term = searchTerm.toLowerCase()
+		let pos = 0
+		while ((pos = lower.indexOf(term, pos)) !== -1) {
+			indices.push(pos)
+			pos += term.length
+		}
+		return indices
+	}, [logs, searchTerm])
+
+	// Reset match index when search term changes
+	useEffect(() => {
+		setMatchIndex(0)
+	}, [searchTerm])
+
+	// Highlighted log content with <mark> elements
+	const highlightedContent = useMemo(() => {
+		if (!logs) return null
+		if (!searchTerm || matches.length === 0) return logs
+
+		const parts: React.ReactNode[] = []
+		let lastEnd = 0
+		matches.forEach((start, i) => {
+			if (start > lastEnd) {
+				parts.push(logs.slice(lastEnd, start))
+			}
+			parts.push(
+				<mark
+					key={i}
+					className={cn(
+						'bg-amber-500/30 text-amber-200',
+						i === matchIndex && 'bg-amber-500/60 ring-1 ring-amber-400',
+					)}
+					data-match-index={i}
+				>
+					{logs.slice(start, start + searchTerm.length)}
+				</mark>,
+			)
+			lastEnd = start + searchTerm.length
+		})
+		if (lastEnd < logs.length) {
+			parts.push(logs.slice(lastEnd))
+		}
+		return parts
+	}, [logs, searchTerm, matches, matchIndex])
+
+	// Scroll active match into view
+	useEffect(() => {
+		if (matches.length > 0 && preRef.current) {
+			const el = preRef.current.querySelector(`[data-match-index="${matchIndex}"]`)
+			el?.scrollIntoView({block: 'center'})
+		}
+	}, [matchIndex, matches.length])
+
+	const goToPrevMatch = useCallback(() => {
+		if (matches.length === 0) return
+		setMatchIndex((prev) => (prev - 1 + matches.length) % matches.length)
+	}, [matches.length])
+
+	const goToNextMatch = useCallback(() => {
+		if (matches.length === 0) return
+		setMatchIndex((prev) => (prev + 1) % matches.length)
+	}, [matches.length])
+
+	const handleDownload = useCallback(() => {
+		if (!logs) return
+		const blob = new Blob([logs], {type: 'text/plain'})
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = `${containerName}-logs-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.log`
+		a.click()
+		URL.revokeObjectURL(url)
+	}, [logs, containerName])
+
 	return (
 		<div className='flex h-full flex-col gap-3'>
-			{/* Controls */}
+			{/* Row 1: Search + toggles */}
+			<div className='flex shrink-0 items-center gap-3'>
+				<div className='relative flex items-center'>
+					<IconSearch size={12} className='absolute left-2 text-text-tertiary' />
+					<input
+						type='text'
+						value={searchTerm}
+						onChange={(e) => setSearchTerm(e.target.value)}
+						placeholder='Search logs...'
+						className='w-48 rounded-lg border border-border-default bg-surface-1 py-1 pl-7 pr-2 text-xs text-text-primary placeholder:text-text-tertiary'
+					/>
+				</div>
+				{matches.length > 0 && (
+					<span className='text-xs tabular-nums text-text-tertiary'>
+						{matchIndex + 1}/{matches.length}
+					</span>
+				)}
+				<button
+					onClick={goToPrevMatch}
+					disabled={matches.length === 0}
+					className='rounded-lg bg-surface-1 p-1 text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-30'
+				>
+					<IconChevronUp size={14} />
+				</button>
+				<button
+					onClick={goToNextMatch}
+					disabled={matches.length === 0}
+					className='rounded-lg bg-surface-1 p-1 text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-30'
+				>
+					<IconChevronDown size={14} />
+				</button>
+				<div className='flex-1' />
+				<label className='flex cursor-pointer items-center gap-1.5 text-xs text-text-secondary'>
+					<input
+						type='checkbox'
+						checked={showTimestamps}
+						onChange={(e) => setShowTimestamps(e.target.checked)}
+						className='accent-brand'
+					/>
+					<IconClock size={12} />
+					Timestamps
+				</label>
+				<label className='flex cursor-pointer items-center gap-1.5 text-xs text-text-secondary'>
+					<input
+						type='checkbox'
+						checked={lineWrap}
+						onChange={(e) => setLineWrap(e.target.checked)}
+						className='accent-brand'
+					/>
+					<IconTextWrap size={12} />
+					Wrap
+				</label>
+			</div>
+
+			{/* Row 2: Tail slider, refresh, download */}
 			<div className='flex shrink-0 items-center gap-4'>
 				<div className='flex items-center gap-2'>
 					<span className='text-xs font-medium text-text-secondary'>Tail:</span>
@@ -296,6 +442,14 @@ function LogsTab({containerName}: {containerName: string}) {
 					<IconRefresh size={12} />
 					Refresh
 				</button>
+				<button
+					onClick={handleDownload}
+					disabled={!logs}
+					className='flex items-center gap-1.5 rounded-lg bg-surface-1 px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-30'
+				>
+					<IconDownload size={12} />
+					Download
+				</button>
 			</div>
 
 			{/* Log output */}
@@ -315,9 +469,12 @@ function LogsTab({containerName}: {containerName: string}) {
 						<pre
 							ref={preRef}
 							onScroll={handleScroll}
-							className='h-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-neutral-950 p-4 font-mono text-xs leading-relaxed text-neutral-200'
+							className={cn(
+								'h-full overflow-auto rounded-lg bg-neutral-950 p-4 font-mono text-xs leading-relaxed text-neutral-200',
+								lineWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
+							)}
 						>
-							{logs || 'No logs available'}
+							{highlightedContent || 'No logs available'}
 						</pre>
 						{!autoScroll && (
 							<button
