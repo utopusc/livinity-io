@@ -324,7 +324,11 @@ Plans:
   5. User can create a network with driver/subnet/gateway
   6. User can create a volume with driver options
   7. Volume detail shows which containers use it
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 44-01-PLAN.md -- Bulk container actions (kill/pause/resume) + multi-select bulk operations
+- [ ] 44-02-PLAN.md -- Enhanced image management (pull, tag, layer history)
+- [ ] 44-03-PLAN.md -- Network create/remove/disconnect + Volume create/usage
 
 ### Phase 45: Docker Compose Stacks
 **Goal**: User can manage Docker Compose stacks — list, deploy from YAML editor, edit and redeploy, start/stop, remove, and set stack env vars
@@ -374,6 +378,6 @@ Plans:
 | 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
+| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/3 | Planning complete | - |
 | 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
