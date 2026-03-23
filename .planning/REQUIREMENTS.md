@@ -47,9 +47,9 @@
 
 ### IMG — Enhanced Image Management
 
-- [ ] **IMG-01**: User can pull an image by name:tag with real-time progress display
-- [ ] **IMG-02**: User can tag an existing image with a new name:tag
-- [ ] **IMG-03**: User can view image layer history (command, size per layer)
+- [x] **IMG-01**: User can pull an image by name:tag with real-time progress display
+- [x] **IMG-02**: User can tag an existing image with a new name:tag
+- [x] **IMG-03**: User can view image layer history (command, size per layer)
 
 ### NET — Network CRUD
 
@@ -130,9 +130,9 @@
 | ACT-01 | Phase 44 | Complete |
 | ACT-02 | Phase 44 | Complete |
 | ACT-03 | Phase 44 | Complete |
-| IMG-01 | Phase 44 | Pending |
-| IMG-02 | Phase 44 | Pending |
-| IMG-03 | Phase 44 | Pending |
+| IMG-01 | Phase 44 | Complete |
+| IMG-02 | Phase 44 | Complete |
+| IMG-03 | Phase 44 | Complete |
 | NET-01 | Phase 44 | Pending |
 | NET-02 | Phase 44 | Pending |
 | NET-03 | Phase 44 | Pending |

@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T01:09:19.519Z"
+last_updated: "2026-03-23T01:14:58.639Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 44 (bulk-ops-images-networks-volumes) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Accumulated Context
 
@@ -47,6 +47,8 @@ Plan: 2 of 3
 - [Phase 43]: Timestamps toggle re-fetches from backend (Docker API) rather than client-side stripping for data accuracy
 - [Phase 44]: Protected containers block pause alongside stop/remove; kill allowed on protected (emergency stop)
 - [Phase 44]: Bulk remove uses force:true with single Confirm button; Promise.allSettled for parallel bulk ops
+- [Phase 44]: Blocking pull approach (no streaming progress) per CONTEXT.md -- pulls typically < 60s
+- [Phase 44]: Layer history rendered inline as expanded table rows (Fragment + conditional render) rather than separate modal
 
 ### Pending Todos
 
