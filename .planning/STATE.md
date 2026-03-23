@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T01:14:58.639Z"
+last_updated: "2026-03-23T01:22:52.678Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -49,6 +49,8 @@ Plan: 3 of 3
 - [Phase 44]: Bulk remove uses force:true with single Confirm button; Promise.allSettled for parallel bulk ops
 - [Phase 44]: Blocking pull approach (no streaming progress) per CONTEXT.md -- pulls typically < 60s
 - [Phase 44]: Layer history rendered inline as expanded table rows (Fragment + conditional render) rather than separate modal
+- [Phase 44]: VolumeUsagePanel uses lazy-loaded tRPC query per volume on expand
+- [Phase 44]: Network disconnect uses container name from inspect data as containerId parameter
 
 ### Pending Todos
 

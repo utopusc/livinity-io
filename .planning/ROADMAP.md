@@ -264,7 +264,7 @@ Plans:
 - [x] **Phase 41: Container Creation** — Full container creation form (name, image, ports, volumes, env, restart, resources, health, network) + window resize (completed 2026-03-23)
 - [x] **Phase 42: Container Edit & Recreate** — Edit existing container config + recreate, duplicate, rename (completed 2026-03-23)
 - [x] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap (completed 2026-03-23)
-- [ ] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage
+- [x] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage (completed 2026-03-23)
 - [ ] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars
 - [ ] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish
 
@@ -328,7 +328,7 @@ Plans:
 Plans:
 - [x] 44-01-PLAN.md -- Bulk container actions (kill/pause/resume) + multi-select bulk operations
 - [x] 44-02-PLAN.md -- Enhanced image management (pull, tag, layer history)
-- [ ] 44-03-PLAN.md -- Network create/remove/disconnect + Volume create/usage
+- [x] 44-03-PLAN.md -- Network create/remove/disconnect + Volume create/usage
 
 ### Phase 45: Docker Compose Stacks
 **Goal**: User can manage Docker Compose stacks — list, deploy from YAML editor, edit and redeploy, start/stop, remove, and set stack env vars
@@ -378,6 +378,6 @@ Plans:
 | 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 2/3 | In Progress|  |
+| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete   | 2026-03-23 |
 | 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |

@@ -53,14 +53,14 @@
 
 ### NET — Network CRUD
 
-- [ ] **NET-01**: User can create a Docker network with name, driver, subnet, gateway
-- [ ] **NET-02**: User can remove a network (with in-use check)
-- [ ] **NET-03**: User can disconnect a container from a network
+- [x] **NET-01**: User can create a Docker network with name, driver, subnet, gateway
+- [x] **NET-02**: User can remove a network (with in-use check)
+- [x] **NET-03**: User can disconnect a container from a network
 
 ### VOL — Volume CRUD
 
-- [ ] **VOL-01**: User can create a Docker volume with name, driver, and driver options
-- [ ] **VOL-02**: User can see which containers are using a volume
+- [x] **VOL-01**: User can create a Docker volume with name, driver, and driver options
+- [x] **VOL-02**: User can see which containers are using a volume
 
 ### STACK — Docker Compose Stacks
 
@@ -133,11 +133,11 @@
 | IMG-01 | Phase 44 | Complete |
 | IMG-02 | Phase 44 | Complete |
 | IMG-03 | Phase 44 | Complete |
-| NET-01 | Phase 44 | Pending |
-| NET-02 | Phase 44 | Pending |
-| NET-03 | Phase 44 | Pending |
-| VOL-01 | Phase 44 | Pending |
-| VOL-02 | Phase 44 | Pending |
+| NET-01 | Phase 44 | Complete |
+| NET-02 | Phase 44 | Complete |
+| NET-03 | Phase 44 | Complete |
+| VOL-01 | Phase 44 | Complete |
+| VOL-02 | Phase 44 | Complete |
 | STACK-01 | Phase 45 | Pending |
 | STACK-02 | Phase 45 | Pending |
 | STACK-03 | Phase 45 | Pending |
