@@ -18,13 +18,13 @@
 
 ### EDIT — Container Edit & Recreate
 
-- [ ] **EDIT-01**: User can edit an existing container's port mappings and recreate it
-- [ ] **EDIT-02**: User can edit an existing container's environment variables and recreate
-- [ ] **EDIT-03**: User can edit an existing container's volume mounts and recreate
-- [ ] **EDIT-04**: User can edit an existing container's restart policy and recreate
-- [ ] **EDIT-05**: User can edit an existing container's resource limits and recreate
+- [x] **EDIT-01**: User can edit an existing container's port mappings and recreate it
+- [x] **EDIT-02**: User can edit an existing container's environment variables and recreate
+- [x] **EDIT-03**: User can edit an existing container's volume mounts and recreate
+- [x] **EDIT-04**: User can edit an existing container's restart policy and recreate
+- [x] **EDIT-05**: User can edit an existing container's resource limits and recreate
 - [ ] **EDIT-06**: User can duplicate a container (clone config into pre-filled creation form)
-- [ ] **EDIT-07**: User can rename a container
+- [x] **EDIT-07**: User can rename a container
 
 ### EXEC — Container Terminal
 
@@ -113,13 +113,13 @@
 | CREATE-06 | Phase 41 | Complete |
 | CREATE-07 | Phase 41 | Complete |
 | CREATE-08 | Phase 41 | Complete |
-| EDIT-01 | Phase 42 | Pending |
-| EDIT-02 | Phase 42 | Pending |
-| EDIT-03 | Phase 42 | Pending |
-| EDIT-04 | Phase 42 | Pending |
-| EDIT-05 | Phase 42 | Pending |
+| EDIT-01 | Phase 42 | Complete |
+| EDIT-02 | Phase 42 | Complete |
+| EDIT-03 | Phase 42 | Complete |
+| EDIT-04 | Phase 42 | Complete |
+| EDIT-05 | Phase 42 | Complete |
 | EDIT-06 | Phase 42 | Pending |
-| EDIT-07 | Phase 42 | Pending |
+| EDIT-07 | Phase 42 | Complete |
 | EXEC-01 | Phase 43 | Pending |
 | EXEC-02 | Phase 43 | Pending |
 | EXEC-03 | Phase 43 | Pending |
