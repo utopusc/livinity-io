@@ -52,11 +52,22 @@ export async function manageContainer(
 	force?: boolean,
 ): Promise<{success: boolean; message: string}> {
 	// Server-side protected container enforcement (SEC-02)
-	if (isProtectedContainer(name) && (operation === 'stop' || operation === 'remove')) {
+	// Protected containers cannot be stopped, removed, or paused (must stay running)
+	if (isProtectedContainer(name) && (operation === 'stop' || operation === 'remove' || operation === 'pause')) {
 		throw new Error(`[protected-container] Cannot ${operation} protected container: ${name}`)
 	}
 
 	const container = docker.getContainer(name)
+
+	const pastTense: Record<ContainerOperation, string> = {
+		start: 'started',
+		stop: 'stopped',
+		restart: 'restarted',
+		remove: 'removed',
+		kill: 'killed',
+		pause: 'paused',
+		unpause: 'resumed',
+	}
 
 	switch (operation) {
 		case 'start':
@@ -71,9 +82,39 @@ export async function manageContainer(
 		case 'remove':
 			await container.remove({force: force ?? false})
 			break
+		case 'kill':
+			await container.kill()
+			break
+		case 'pause':
+			await container.pause()
+			break
+		case 'unpause':
+			await container.unpause()
+			break
 	}
 
-	return {success: true, message: `Container ${name} ${operation === 'remove' ? 'removed' : operation + 'ed'} successfully`}
+	return {success: true, message: `Container ${name} ${pastTense[operation]} successfully`}
+}
+
+export async function bulkManageContainers(
+	names: string[],
+	operation: ContainerOperation,
+	force?: boolean,
+): Promise<Array<{name: string; success: boolean; message: string}>> {
+	const results = await Promise.allSettled(
+		names.map((name) => manageContainer(name, operation, force)),
+	)
+
+	return results.map((result, index) => {
+		if (result.status === 'fulfilled') {
+			return {name: names[index], ...result.value}
+		}
+		return {
+			name: names[index],
+			success: false,
+			message: result.reason?.message || `Failed to ${operation} container ${names[index]}`,
+		}
+	})
 }
 
 export async function createContainer(

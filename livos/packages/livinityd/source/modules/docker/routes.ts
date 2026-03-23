@@ -5,6 +5,7 @@ import {adminProcedure, router} from '../server/trpc/trpc.js'
 import {
 	listContainers,
 	manageContainer,
+	bulkManageContainers,
 	createContainer,
 	recreateContainer,
 	renameContainer,
@@ -31,7 +32,7 @@ export default router({
 		.input(
 			z.object({
 				name: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
-				operation: z.enum(['start', 'stop', 'restart', 'remove']),
+				operation: z.enum(['start', 'stop', 'restart', 'remove', 'kill', 'pause', 'unpause']),
 				force: z.boolean().optional().default(false),
 				confirmName: z.string().optional(),
 			}),
@@ -59,6 +60,25 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to ${input.operation} container ${input.name}`,
+				})
+			}
+		}),
+
+	bulkManageContainers: adminProcedure
+		.input(
+			z.object({
+				names: z.array(z.string().min(1).max(255)).min(1).max(50),
+				operation: z.enum(['start', 'stop', 'restart', 'remove', 'kill', 'pause', 'unpause']),
+				force: z.boolean().optional().default(false),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await bulkManageContainers(input.names, input.operation, input.force)
+			} catch (err: any) {
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to bulk ${input.operation} containers`,
 				})
 			}
 		}),
