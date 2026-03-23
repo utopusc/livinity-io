@@ -7,14 +7,14 @@
 
 ### CREATE — Container Creation
 
-- [ ] **CREATE-01**: User can create a new container from any image with name, image:tag, command, entrypoint, working dir, and user fields
-- [ ] **CREATE-02**: User can configure port mappings (host:container/protocol) with add/remove rows in creation form
-- [ ] **CREATE-03**: User can configure volume mounts (bind + named) with host path, container path, and read-only toggle
-- [ ] **CREATE-04**: User can set environment variables as key-value pairs with add/remove rows
-- [ ] **CREATE-05**: User can set restart policy (no, always, on-failure with retries, unless-stopped)
-- [ ] **CREATE-06**: User can set resource limits (memory limit MB, CPU limit) in creation form
-- [ ] **CREATE-07**: User can set health check (command, interval, timeout, retries, start period)
-- [ ] **CREATE-08**: User can select network mode (bridge/host/none/custom) and set hostname
+- [x] **CREATE-01**: User can create a new container from any image with name, image:tag, command, entrypoint, working dir, and user fields
+- [x] **CREATE-02**: User can configure port mappings (host:container/protocol) with add/remove rows in creation form
+- [x] **CREATE-03**: User can configure volume mounts (bind + named) with host path, container path, and read-only toggle
+- [x] **CREATE-04**: User can set environment variables as key-value pairs with add/remove rows
+- [x] **CREATE-05**: User can set restart policy (no, always, on-failure with retries, unless-stopped)
+- [x] **CREATE-06**: User can set resource limits (memory limit MB, CPU limit) in creation form
+- [x] **CREATE-07**: User can set health check (command, interval, timeout, retries, start period)
+- [x] **CREATE-08**: User can select network mode (bridge/host/none/custom) and set hostname
 
 ### EDIT — Container Edit & Recreate
 
@@ -105,14 +105,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CREATE-01 | Phase 41 | Pending |
-| CREATE-02 | Phase 41 | Pending |
-| CREATE-03 | Phase 41 | Pending |
-| CREATE-04 | Phase 41 | Pending |
-| CREATE-05 | Phase 41 | Pending |
-| CREATE-06 | Phase 41 | Pending |
-| CREATE-07 | Phase 41 | Pending |
-| CREATE-08 | Phase 41 | Pending |
+| CREATE-01 | Phase 41 | Complete |
+| CREATE-02 | Phase 41 | Complete |
+| CREATE-03 | Phase 41 | Complete |
+| CREATE-04 | Phase 41 | Complete |
+| CREATE-05 | Phase 41 | Complete |
+| CREATE-06 | Phase 41 | Complete |
+| CREATE-07 | Phase 41 | Complete |
+| CREATE-08 | Phase 41 | Complete |
 | EDIT-01 | Phase 42 | Pending |
 | EDIT-02 | Phase 42 | Pending |
 | EDIT-03 | Phase 42 | Pending |
