@@ -373,7 +373,7 @@ Plans:
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
 | 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete   | 2026-03-23 |
+| 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
 | 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
