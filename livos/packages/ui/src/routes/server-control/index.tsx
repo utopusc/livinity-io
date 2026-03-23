@@ -32,6 +32,7 @@ import {
 	IconHandStop,
 	IconPlayerPause,
 	IconUnlink,
+	IconStack2,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -46,6 +47,7 @@ import {useNetworkStats, useDiskIO, useProcesses} from '@/hooks/use-monitoring'
 import {usePM2} from '@/hooks/use-pm2'
 import {useVolumes} from '@/hooks/use-volumes'
 import {useNetworks} from '@/hooks/use-networks'
+import {useStacks} from '@/hooks/use-stacks'
 import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {Progress} from '@/shadcn-components/ui/progress'
@@ -2137,6 +2139,564 @@ function NetworksTab() {
 	)
 }
 
+// Deploy/Edit Stack Form (full-page overlay like ContainerCreateForm)
+function DeployStackForm({
+	open,
+	onClose,
+	editStackName,
+	onDeploySuccess,
+}: {
+	open: boolean
+	onClose: () => void
+	editStackName: string | null
+	onDeploySuccess: () => void
+}) {
+	const [stackName, setStackName] = useState('')
+	const [composeYaml, setComposeYaml] = useState('')
+	const [envVars, setEnvVars] = useState<Array<{key: string; value: string}>>([])
+	const [nameError, setNameError] = useState('')
+
+	const isEditMode = !!editStackName
+
+	// Fetch existing compose YAML and env vars when editing
+	const {data: composeData, isLoading: isLoadingCompose} = trpcReact.docker.getStackCompose.useQuery(
+		{name: editStackName!},
+		{enabled: isEditMode && open},
+	)
+	const {data: envData, isLoading: isLoadingEnv} = trpcReact.docker.getStackEnv.useQuery(
+		{name: editStackName!},
+		{enabled: isEditMode && open},
+	)
+
+	const {deployStack, isDeploying, editStack, isEditing} = useStacks()
+	const isBusy = isDeploying || isEditing
+
+	// Populate form when edit data loads
+	useEffect(() => {
+		if (isEditMode && composeData) {
+			setComposeYaml(composeData.yaml)
+			setStackName(editStackName)
+		}
+	}, [composeData, isEditMode, editStackName])
+
+	useEffect(() => {
+		if (isEditMode && envData) {
+			setEnvVars(envData.envVars.length > 0 ? envData.envVars : [])
+		}
+	}, [envData, isEditMode])
+
+	// Reset form when closing
+	useEffect(() => {
+		if (!open) {
+			setStackName('')
+			setComposeYaml('')
+			setEnvVars([])
+			setNameError('')
+		}
+	}, [open])
+
+	if (!open) return null
+
+	// Show loading state when fetching edit data
+	if (isEditMode && (isLoadingCompose || isLoadingEnv)) {
+		return (
+			<div className='absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface-base'>
+				<IconRefresh size={32} className='animate-spin text-text-tertiary' />
+				<p className='mt-3 text-sm text-text-tertiary'>Loading stack configuration...</p>
+			</div>
+		)
+	}
+
+	const addEnvVar = () => setEnvVars([...envVars, {key: '', value: ''}])
+	const removeEnvVar = (i: number) => setEnvVars(envVars.filter((_, idx) => idx !== i))
+	const updateEnvVar = (i: number, field: 'key' | 'value', value: string) => {
+		const next = [...envVars]
+		next[i] = {...next[i], [field]: value}
+		setEnvVars(next)
+	}
+
+	const handleSubmit = () => {
+		// Validate name
+		if (!isEditMode) {
+			if (!stackName.trim()) {
+				setNameError('Stack name is required')
+				return
+			}
+			if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(stackName.trim())) {
+				setNameError('Must start with alphanumeric and contain only [a-zA-Z0-9_.-]')
+				return
+			}
+		}
+		if (!composeYaml.trim()) return
+		setNameError('')
+
+		const filteredEnv = envVars.filter((e) => e.key.trim())
+		const input = {
+			name: isEditMode ? editStackName : stackName.trim(),
+			composeYaml: composeYaml,
+			envVars: filteredEnv.length > 0 ? filteredEnv : undefined,
+		}
+
+		if (isEditMode) {
+			editStack(input)
+		} else {
+			deployStack(input)
+		}
+		onDeploySuccess()
+		onClose()
+	}
+
+	return (
+		<div className='absolute inset-0 z-50 flex flex-col bg-surface-base'>
+			{/* Header */}
+			<div className='flex shrink-0 items-center justify-between border-b border-border-default px-6 py-4'>
+				<div>
+					<h2 className='text-lg font-semibold text-text-primary'>
+						{isEditMode ? `Edit Stack: ${editStackName}` : 'Deploy Stack'}
+					</h2>
+					{isEditMode && (
+						<p className='mt-0.5 text-xs text-text-tertiary'>Update compose configuration and redeploy</p>
+					)}
+				</div>
+				<button
+					onClick={onClose}
+					className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-primary'
+				>
+					<IconX size={18} />
+				</button>
+			</div>
+
+			{/* Body */}
+			<div className='flex-1 overflow-y-auto px-6 py-5 space-y-5'>
+				{/* Stack Name */}
+				<div className='space-y-1.5'>
+					<Label htmlFor='stack-name'>Stack Name</Label>
+					<Input
+						id='stack-name'
+						value={stackName}
+						onChange={(e) => {
+							setStackName(e.target.value)
+							setNameError('')
+						}}
+						placeholder='my-stack'
+						disabled={isEditMode}
+						className={cn(isEditMode && 'opacity-60 cursor-not-allowed')}
+					/>
+					{nameError && <p className='text-xs text-red-500'>{nameError}</p>}
+				</div>
+
+				{/* Compose YAML */}
+				<div className='space-y-1.5'>
+					<Label htmlFor='compose-yaml'>Docker Compose YAML</Label>
+					<textarea
+						id='compose-yaml'
+						value={composeYaml}
+						onChange={(e) => setComposeYaml(e.target.value)}
+						placeholder={`version: '3.8'\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n    restart: unless-stopped`}
+						className='w-full rounded-lg border border-border-default bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/50'
+						style={{
+							fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+							fontSize: '13px',
+							minHeight: '400px',
+							lineHeight: '1.6',
+							resize: 'vertical',
+							tabSize: 2,
+						}}
+						spellCheck={false}
+					/>
+				</div>
+
+				{/* Environment Variables */}
+				<div className='space-y-3'>
+					<div className='flex items-center justify-between'>
+						<Label>Environment Variables</Label>
+						<button
+							type='button'
+							onClick={addEnvVar}
+							className='flex items-center gap-1 rounded-lg bg-surface-1 px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2'
+						>
+							<IconPlus size={12} />
+							Add Variable
+						</button>
+					</div>
+					{envVars.length === 0 ? (
+						<p className='text-xs text-text-tertiary'>No environment variables. Click "Add Variable" to add one.</p>
+					) : (
+						<div className='space-y-2'>
+							{envVars.map((env, i) => (
+								<div key={i} className='flex items-center gap-2'>
+									<Input
+										value={env.key}
+										onChange={(e) => updateEnvVar(i, 'key', e.target.value)}
+										placeholder='KEY'
+										className='flex-1 font-mono text-sm'
+									/>
+									<span className='text-text-tertiary'>=</span>
+									<Input
+										value={env.value}
+										onChange={(e) => updateEnvVar(i, 'value', e.target.value)}
+										placeholder='value'
+										className='flex-1 font-mono text-sm'
+									/>
+									<button
+										type='button'
+										onClick={() => removeEnvVar(i)}
+										className='shrink-0 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-red-500/20 hover:text-red-500'
+									>
+										<IconX size={14} />
+									</button>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+
+			{/* Footer */}
+			<div className='shrink-0 flex items-center justify-end gap-3 border-t border-border-default px-6 py-4'>
+				<Button variant='outline' onClick={onClose} disabled={isBusy}>
+					Cancel
+				</Button>
+				<Button onClick={handleSubmit} disabled={isBusy || !composeYaml.trim()}>
+					{isBusy ? (isEditMode ? 'Redeploying...' : 'Deploying...') : isEditMode ? 'Redeploy' : 'Deploy'}
+				</Button>
+			</div>
+		</div>
+	)
+}
+
+// Remove Stack Dialog
+function RemoveStackDialog({
+	stackName,
+	open,
+	onOpenChange,
+	onConfirm,
+	isRemoving,
+}: {
+	stackName: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: (removeVolumes: boolean) => void
+	isRemoving: boolean
+}) {
+	const [removeVolumes, setRemoveVolumes] = useState(false)
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Remove Stack: {stackName}</DialogTitle>
+					<DialogDescription>
+						This will stop and remove all containers in this stack.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='py-3'>
+					<label className='flex items-center gap-2 cursor-pointer'>
+						<Checkbox
+							checked={removeVolumes}
+							onCheckedChange={(checked) => setRemoveVolumes(checked === true)}
+						/>
+						<span className='text-sm text-text-secondary'>Also remove associated volumes</span>
+					</label>
+				</div>
+				<DialogFooter>
+					<Button variant='outline' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='destructive'
+						onClick={() => {
+							onConfirm(removeVolumes)
+							setRemoveVolumes(false)
+						}}
+						disabled={isRemoving}
+					>
+						{isRemoving ? 'Removing...' : 'Remove'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Stacks Tab Component
+function StacksTab() {
+	const {
+		stacks,
+		isLoading,
+		isError,
+		error,
+		isFetching,
+		refetch,
+		controlStack,
+		isControlling,
+		removeStack,
+		isRemoving,
+		actionResult,
+	} = useStacks()
+
+	const [expandedStack, setExpandedStack] = useState<string | null>(null)
+	const [deployFormOpen, setDeployFormOpen] = useState(false)
+	const [editTarget, setEditTarget] = useState<string | null>(null)
+	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+
+	const statusBadge = (status: 'running' | 'stopped' | 'partial') => {
+		const classes: Record<string, string> = {
+			running: 'bg-emerald-500/20 text-emerald-600',
+			stopped: 'bg-red-500/20 text-red-600',
+			partial: 'bg-amber-500/20 text-amber-600',
+		}
+		return (
+			<span className={cn('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', classes[status] || 'bg-neutral-500/20 text-neutral-500')}>
+				{status}
+			</span>
+		)
+	}
+
+	return (
+		<>
+			{/* Summary Row */}
+			<div className='mb-4 flex items-center justify-between'>
+				<div className='text-sm text-text-secondary'>
+					<span className='font-medium text-text-primary'>{stacks.length}</span>
+					<span className='ml-1'>stack(s)</span>
+				</div>
+				<div className='flex items-center gap-2'>
+					<Button variant='default' size='sm' onClick={() => setDeployFormOpen(true)}>
+						<IconPlus size={14} className='mr-1.5' />
+						Deploy Stack
+					</Button>
+					<button
+						onClick={() => refetch()}
+						disabled={isFetching}
+						className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+					>
+						<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
+						Refresh
+					</button>
+				</div>
+			</div>
+
+			{/* Action Result Toast */}
+			<AnimatePresence>
+				{actionResult && (
+					<motion.div
+						initial={{opacity: 0, y: -10}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: -10}}
+						className={cn(
+							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
+							actionResult.type === 'success'
+								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+						)}
+					>
+						{actionResult.message}
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* Stack Table */}
+			{isLoading ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>Loading stacks...</p>
+				</div>
+			) : isError ? (
+				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
+					<IconStack2 size={24} className='mx-auto mb-3 text-red-400' />
+					<p className='text-sm text-red-400'>Failed to load stacks</p>
+					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				</div>
+			) : !stacks.length ? (
+				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
+					<IconStack2 size={32} className='mx-auto mb-3 text-text-tertiary' />
+					<p className='text-sm text-text-tertiary'>No stacks found. Deploy your first stack.</p>
+				</div>
+			) : (
+				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='pl-4'>Name</TableHead>
+								<TableHead>Status</TableHead>
+								<TableHead>Containers</TableHead>
+								<TableHead className='text-right pr-4'>Actions</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{stacks.map((stack) => {
+								const isExpanded = expandedStack === stack.name
+								const isRunning = stack.status === 'running'
+								const isStopped = stack.status === 'stopped'
+								return (
+									<Fragment key={stack.name}>
+										<TableRow
+											onClick={() => setExpandedStack(isExpanded ? null : stack.name)}
+											className={cn('cursor-pointer transition-colors hover:bg-surface-1/50', isExpanded && 'bg-surface-1')}
+										>
+											<TableCell className='pl-4 font-medium'>
+												<div className='flex items-center gap-2'>
+													{isExpanded ? (
+														<IconChevronDown size={14} className='shrink-0 text-text-tertiary' />
+													) : (
+														<IconChevronRight size={14} className='shrink-0 text-text-tertiary' />
+													)}
+													<span className='truncate' title={stack.name}>
+														{stack.name}
+													</span>
+												</div>
+											</TableCell>
+											<TableCell>
+												{statusBadge(stack.status)}
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{stack.containerCount}</span>
+											</TableCell>
+											<TableCell className='text-right pr-4'>
+												<div className='flex items-center justify-end gap-1'>
+													{/* Start (when stopped or partial) */}
+													{(isStopped || stack.status === 'partial') && (
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconPlayerPlay}
+																onClick={() => controlStack(stack.name, 'up')}
+																disabled={isControlling}
+																color='emerald'
+																title='Start'
+															/>
+														</span>
+													)}
+													{/* Stop (when running or partial) */}
+													{(isRunning || stack.status === 'partial') && (
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconPlayerStop}
+																onClick={() => controlStack(stack.name, 'stop')}
+																disabled={isControlling}
+																color='amber'
+																title='Stop'
+															/>
+														</span>
+													)}
+													{/* Restart */}
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconRotateClockwise}
+															onClick={() => controlStack(stack.name, 'restart')}
+															disabled={isControlling}
+															color='blue'
+															title='Restart'
+														/>
+													</span>
+													{/* Edit */}
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconPencil}
+															onClick={() => setEditTarget(stack.name)}
+															disabled={isControlling}
+															color='blue'
+															title='Edit'
+														/>
+													</span>
+													{/* Remove */}
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconTrash}
+															onClick={() => setRemoveTarget(stack.name)}
+															disabled={isRemoving}
+															color='red'
+															title='Remove'
+														/>
+													</span>
+												</div>
+											</TableCell>
+										</TableRow>
+										{/* Expanded row: constituent containers */}
+										{isExpanded && (
+											<TableRow>
+												<TableCell colSpan={4} className='p-0 border-t border-border-default bg-surface-1/30'>
+													<div className='px-4 py-3'>
+														<h4 className='mb-2 text-xs font-semibold uppercase tracking-wider text-text-secondary'>
+															Containers ({stack.containers.length})
+														</h4>
+														{stack.containers.length === 0 ? (
+															<p className='text-xs text-text-tertiary'>No containers running for this stack.</p>
+														) : (
+															<Table>
+																<TableHeader>
+																	<TableRow>
+																		<TableHead className='text-xs'>Name</TableHead>
+																		<TableHead className='text-xs'>Image</TableHead>
+																		<TableHead className='text-xs'>State</TableHead>
+																	</TableRow>
+																</TableHeader>
+																<TableBody>
+																	{stack.containers.map((container) => (
+																		<TableRow key={container.id}>
+																			<TableCell className='py-1.5'>
+																				<span className='font-mono text-xs font-medium'>{container.name}</span>
+																			</TableCell>
+																			<TableCell className='py-1.5'>
+																				<span className='text-xs text-text-secondary'>{container.image}</span>
+																			</TableCell>
+																			<TableCell className='py-1.5'>
+																				<span className={cn(
+																					'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+																					container.state === 'running' ? 'bg-emerald-500/20 text-emerald-600' :
+																					container.state === 'exited' ? 'bg-red-500/20 text-red-600' :
+																					'bg-neutral-500/20 text-neutral-500',
+																				)}>
+																					{container.state}
+																				</span>
+																			</TableCell>
+																		</TableRow>
+																	))}
+																</TableBody>
+															</Table>
+														)}
+													</div>
+												</TableCell>
+											</TableRow>
+										)}
+									</Fragment>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+
+			{/* Deploy/Edit Stack Form */}
+			<DeployStackForm
+				open={deployFormOpen || !!editTarget}
+				onClose={() => {
+					setDeployFormOpen(false)
+					setEditTarget(null)
+				}}
+				editStackName={editTarget}
+				onDeploySuccess={() => refetch()}
+			/>
+
+			{/* Remove Stack Dialog */}
+			{removeTarget && (
+				<RemoveStackDialog
+					stackName={removeTarget}
+					open={!!removeTarget}
+					onOpenChange={(open) => {
+						if (!open) setRemoveTarget(null)
+					}}
+					onConfirm={(removeVols) => {
+						removeStack(removeTarget, removeVols)
+						setRemoveTarget(null)
+					}}
+					isRemoving={isRemoving}
+				/>
+			)}
+		</>
+	)
+}
+
 // Format uptime in milliseconds to human-readable string
 function formatUptime(ms: number): string {
 	if (!ms) return 'N/A'
@@ -2590,6 +3150,7 @@ export default function ServerControl() {
 					<TabsTrigger value='images'>Images</TabsTrigger>
 					<TabsTrigger value='volumes'>Volumes</TabsTrigger>
 					<TabsTrigger value='networks'>Networks</TabsTrigger>
+					<TabsTrigger value='stacks'>Stacks</TabsTrigger>
 					<TabsTrigger value='pm2'>PM2</TabsTrigger>
 					<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
 				</TabsList>
@@ -2951,6 +3512,9 @@ export default function ServerControl() {
 				</TabsContent>
 				<TabsContent value='networks' className='flex-1 overflow-auto'>
 					<NetworksTab />
+				</TabsContent>
+				<TabsContent value='stacks' className='flex-1 overflow-auto'>
+					<StacksTab />
 				</TabsContent>
 				<TabsContent value='pm2' className='flex-1 overflow-auto'>
 					<PM2Tab />
