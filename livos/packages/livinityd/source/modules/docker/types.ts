@@ -81,6 +81,14 @@ export interface ImageInfo {
 	created: number // unix timestamp
 }
 
+export interface ImageHistoryEntry {
+	id: string // layer ID (first 12 chars, or '<missing>')
+	created: number // unix timestamp
+	createdBy: string // the Dockerfile command that created this layer
+	size: number // bytes added by this layer
+	comment: string // optional comment
+}
+
 export interface VolumeInfo {
 	name: string
 	driver: string // e.g. "local"

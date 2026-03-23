@@ -12,6 +12,7 @@ import {
 	type VolumeMount,
 	type MountInfo,
 	type ImageInfo,
+	type ImageHistoryEntry,
 	type VolumeInfo,
 	type NetworkInfo,
 	type NetworkDetail,
@@ -518,6 +519,77 @@ export async function pruneImages(): Promise<{spaceReclaimed: number; deletedCou
 	return {
 		spaceReclaimed: result.SpaceReclaimed || 0,
 		deletedCount: (result.ImagesDeleted || []).length,
+	}
+}
+
+export async function pullImage(
+	imageName: string,
+): Promise<{success: boolean; message: string}> {
+	try {
+		await new Promise<void>((resolve, reject) => {
+			docker.pull(imageName, (err: any, stream: any) => {
+				if (err) {
+					if (err.statusCode === 404) {
+						return reject(new Error(`[image-not-found] Image not found: ${imageName}`))
+					}
+					return reject(err)
+				}
+				docker.modem.followProgress(stream, (err: any) => {
+					if (err) {
+						if (err.statusCode === 404 || err.message?.includes('not found')) {
+							return reject(new Error(`[image-not-found] Image not found: ${imageName}`))
+						}
+						return reject(err)
+					}
+					resolve()
+				})
+			})
+		})
+		return {success: true, message: `Image '${imageName}' pulled successfully`}
+	} catch (err: any) {
+		if (err.message?.includes('[image-not-found]')) {
+			throw err
+		}
+		if (err.statusCode === 404 || err.message?.includes('not found')) {
+			throw new Error(`[image-not-found] Image not found: ${imageName}`)
+		}
+		throw err
+	}
+}
+
+export async function tagImage(
+	id: string,
+	repo: string,
+	tag: string,
+): Promise<{success: boolean; message: string}> {
+	try {
+		await docker.getImage(id).tag({repo, tag})
+		return {success: true, message: `Image tagged as ${repo}:${tag}`}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Image not found: ${id}`)
+		}
+		throw err
+	}
+}
+
+export async function imageHistory(
+	id: string,
+): Promise<ImageHistoryEntry[]> {
+	try {
+		const history = await docker.getImage(id).history()
+		return history.map((entry: any): ImageHistoryEntry => ({
+			id: entry.Id?.replace('sha256:', '').slice(0, 12) || '<missing>',
+			created: entry.Created,
+			createdBy: entry.CreatedBy || '',
+			size: entry.Size,
+			comment: entry.Comment || '',
+		}))
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Image not found: ${id}`)
+		}
+		throw err
 	}
 }
 

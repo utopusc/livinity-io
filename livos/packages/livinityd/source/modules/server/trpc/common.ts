@@ -62,6 +62,8 @@ export const httpOnlyPaths = [
 	// Docker image/volume management -- use HTTP for reliability
 	'docker.removeImage',
 	'docker.pruneImages',
+	'docker.pullImage',
+	'docker.tagImage',
 	'docker.removeVolume',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
