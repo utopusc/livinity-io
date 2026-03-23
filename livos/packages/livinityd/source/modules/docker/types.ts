@@ -30,7 +30,7 @@ export interface PortMapping {
 	protocol: string // tcp | udp
 }
 
-export type ContainerOperation = 'start' | 'stop' | 'restart' | 'remove'
+export type ContainerOperation = 'start' | 'stop' | 'restart' | 'remove' | 'kill' | 'pause' | 'unpause'
 
 export interface ContainerDetail {
 	id: string

@@ -53,6 +53,7 @@ export const httpOnlyPaths = [
 	'apps.nativeStatus',
 	// Docker management — use HTTP for reliability through relay tunnel
 	'docker.manageContainer',
+	'docker.bulkManageContainers',
 	// Container creation -- use HTTP for reliability
 	'docker.createContainer',
 	// Container edit/recreate -- use HTTP for reliability
