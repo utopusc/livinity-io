@@ -25,6 +25,9 @@ import {
 	IconArrowUp,
 	IconArrowDown,
 	IconTemperature,
+	IconPencil,
+	IconCopy,
+	IconTag,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -54,6 +57,7 @@ import {
 } from '@/shadcn-components/ui/dialog'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
+import {Label} from '@/shadcn-components/ui/label'
 import {cn} from '@/shadcn-lib/utils'
 
 // Resource Card Component - matches Live Usage style
@@ -756,6 +760,69 @@ function RemoveDialog({
 						onClick={() => onConfirm(typedName)}
 					>
 						Remove
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Rename Container Dialog
+function RenameDialog({
+	containerName,
+	open,
+	onOpenChange,
+	onConfirm,
+	isPending,
+	error,
+}: {
+	containerName: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: (newName: string) => void
+	isPending: boolean
+	error: any
+}) {
+	const [newName, setNewName] = useState('')
+
+	// Reset when dialog opens/closes
+	useEffect(() => {
+		if (!open) setNewName('')
+	}, [open])
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Rename Container</DialogTitle>
+					<DialogDescription>
+						Rename <span className='font-mono font-medium'>{containerName}</span> to a new name.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='py-2'>
+					<Label className='mb-1.5 block text-text-secondary'>New Name</Label>
+					<Input
+						sizeVariant='short-square'
+						placeholder='new-container-name'
+						value={newName}
+						onValueChange={setNewName}
+						autoFocus
+					/>
+					{error && (
+						<p className='mt-2 text-sm text-red-400'>{error.message}</p>
+					)}
+				</div>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='default'
+						size='dialog'
+						onClick={() => onConfirm(newName)}
+						disabled={!newName.trim() || isPending}
+					>
+						{isPending ? 'Renaming...' : 'Rename'}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
@@ -1677,6 +1744,9 @@ export default function ServerControl() {
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
 	const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
 	const [showCreateForm, setShowCreateForm] = useState(false)
+	const [editTarget, setEditTarget] = useState<string | null>(null)
+	const [duplicateTarget, setDuplicateTarget] = useState<string | null>(null)
+	const [renameTarget, setRenameTarget] = useState<string | null>(null)
 
 	// System resource hooks
 	const cpuUsage = useCpuForUi({poll: true})
@@ -1710,6 +1780,13 @@ export default function ServerControl() {
 		runningCount,
 		totalCount,
 	} = useContainers()
+
+	const renameMutation = trpcReact.docker.renameContainer.useMutation({
+		onSuccess: () => {
+			refetch()
+			setRenameTarget(null)
+		},
+	})
 
 	const handleRemoveConfirm = (confirmName: string) => {
 		if (!removeTarget) return
@@ -1879,6 +1956,36 @@ export default function ServerControl() {
 												</TableCell>
 												<TableCell className='text-right pr-4'>
 													<div className='flex items-center justify-end gap-1'>
+														{/* Edit */}
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconPencil}
+																onClick={() => { setSelectedContainer(null); setEditTarget(container.name) }}
+																disabled={isManaging || container.isProtected}
+																color='blue'
+																title={container.isProtected ? 'Protected — cannot edit' : 'Edit'}
+															/>
+														</span>
+														{/* Duplicate */}
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconCopy}
+																onClick={() => { setSelectedContainer(null); setDuplicateTarget(container.name) }}
+																disabled={isManaging}
+																color='blue'
+																title='Duplicate'
+															/>
+														</span>
+														{/* Rename */}
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconTag}
+																onClick={() => { setSelectedContainer(null); setRenameTarget(container.name) }}
+																disabled={isManaging || container.isProtected}
+																color='blue'
+																title={container.isProtected ? 'Protected — cannot rename' : 'Rename'}
+															/>
+														</span>
 														{!isRunning ? (
 															<span onClick={(e) => e.stopPropagation()}>
 																<ActionButton
@@ -1931,9 +2038,11 @@ export default function ServerControl() {
 
 				{/* Container Create Form */}
 				<ContainerCreateForm
-					open={showCreateForm}
-					onClose={() => setShowCreateForm(false)}
+					open={showCreateForm || !!editTarget || !!duplicateTarget}
+					onClose={() => { setShowCreateForm(false); setEditTarget(null); setDuplicateTarget(null) }}
 					onSuccess={() => refetch()}
+					editContainerName={editTarget}
+					duplicateContainerName={duplicateTarget}
 				/>
 
 				{/* Images Tab */}
@@ -1967,6 +2076,18 @@ export default function ServerControl() {
 				/>
 			)}
 
+			{/* Rename Dialog */}
+			{renameTarget && (
+				<RenameDialog
+					containerName={renameTarget}
+					open={!!renameTarget}
+					onOpenChange={(open) => { if (!open) setRenameTarget(null) }}
+					onConfirm={(newName) => renameMutation.mutate({name: renameTarget, newName})}
+					isPending={renameMutation.isPending}
+					error={renameMutation.error}
+				/>
+			)}
+
 			{/* Container Detail Sheet */}
 			<ContainerDetailSheet
 				containerName={selectedContainer}
@@ -1974,6 +2095,8 @@ export default function ServerControl() {
 				onOpenChange={(open) => {
 					if (!open) setSelectedContainer(null)
 				}}
+				onEdit={(name) => { setSelectedContainer(null); setEditTarget(name) }}
+				onDuplicate={(name) => { setSelectedContainer(null); setDuplicateTarget(name) }}
 			/>
 		</div>
 	)

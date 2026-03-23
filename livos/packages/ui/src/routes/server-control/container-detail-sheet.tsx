@@ -8,6 +8,8 @@ import {
 	IconArrowDown,
 	IconLoader2,
 	IconAlertTriangle,
+	IconPencil,
+	IconCopy,
 } from '@tabler/icons-react'
 
 import {useContainerDetail} from '@/hooks/use-container-detail'
@@ -426,10 +428,14 @@ export function ContainerDetailSheet({
 	containerName,
 	open,
 	onOpenChange,
+	onEdit,
+	onDuplicate,
 }: {
 	containerName: string | null
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	onEdit?: (name: string) => void
+	onDuplicate?: (name: string) => void
 }) {
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -444,12 +450,32 @@ export function ContainerDetailSheet({
 						<div className='min-w-0 flex-1'>
 							<h2 className='truncate text-lg font-bold text-text-primary'>{containerName}</h2>
 						</div>
-						<button
-							onClick={() => onOpenChange(false)}
-							className='ml-3 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary'
-						>
-							<IconX size={18} />
-						</button>
+						<div className='flex items-center gap-1.5'>
+							{onEdit && containerName && (
+								<button
+									onClick={() => { onEdit(containerName); onOpenChange(false) }}
+									className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									title='Edit'
+								>
+									<IconPencil size={16} />
+								</button>
+							)}
+							{onDuplicate && containerName && (
+								<button
+									onClick={() => { onDuplicate(containerName); onOpenChange(false) }}
+									className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									title='Duplicate'
+								>
+									<IconCopy size={16} />
+								</button>
+							)}
+							<button
+								onClick={() => onOpenChange(false)}
+								className='ml-3 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary'
+							>
+								<IconX size={18} />
+							</button>
+						</div>
 					</div>
 
 					{/* Tabs */}
