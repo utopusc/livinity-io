@@ -6,6 +6,8 @@ import {
 	listContainers,
 	manageContainer,
 	createContainer,
+	recreateContainer,
+	renameContainer,
 	inspectContainer,
 	getContainerLogs,
 	getContainerStats,
@@ -152,6 +154,152 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to create container ${input.name}`,
+				})
+			}
+		}),
+
+	recreateContainer: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				config: z.object({
+					name: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+					image: z.string().min(1).max(500),
+					command: z.array(z.string()).optional(),
+					entrypoint: z.array(z.string()).optional(),
+					workingDir: z.string().max(500).optional(),
+					user: z.string().max(100).optional(),
+					hostname: z.string().max(255).optional(),
+					domainname: z.string().max(255).optional(),
+					tty: z.boolean().optional(),
+					openStdin: z.boolean().optional(),
+					ports: z
+						.array(
+							z.object({
+								hostPort: z.number().int().min(1).max(65535),
+								containerPort: z.number().int().min(1).max(65535),
+								protocol: z.enum(['tcp', 'udp']),
+							}),
+						)
+						.optional(),
+					volumes: z
+						.array(
+							z.object({
+								hostPath: z.string().optional(),
+								containerPath: z.string().min(1),
+								readOnly: z.boolean().optional(),
+								type: z.enum(['bind', 'volume', 'tmpfs']),
+								volumeName: z.string().optional(),
+							}),
+						)
+						.optional(),
+					env: z
+						.array(
+							z.object({
+								key: z.string().min(1),
+								value: z.string(),
+							}),
+						)
+						.optional(),
+					labels: z
+						.array(
+							z.object({
+								key: z.string().min(1),
+								value: z.string(),
+							}),
+						)
+						.optional(),
+					restartPolicy: z
+						.object({
+							name: z.enum(['no', 'always', 'on-failure', 'unless-stopped']),
+							maximumRetryCount: z.number().int().min(0).optional(),
+						})
+						.optional(),
+					resources: z
+						.object({
+							memoryLimit: z.number().int().min(0).optional(),
+							cpuLimit: z.number().int().min(0).optional(),
+							cpuShares: z.number().int().min(0).optional(),
+						})
+						.optional(),
+					healthCheck: z
+						.object({
+							test: z.array(z.string()).optional(),
+							interval: z.number().int().min(0).optional(),
+							timeout: z.number().int().min(0).optional(),
+							retries: z.number().int().min(0).optional(),
+							startPeriod: z.number().int().min(0).optional(),
+						})
+						.optional(),
+					networkMode: z.string().max(255).optional(),
+					dns: z.array(z.string()).optional(),
+					extraHosts: z.array(z.string()).optional(),
+					pullImage: z.boolean().optional(),
+					autoStart: z.boolean().optional(),
+				}),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await recreateContainer(input.name, input.config)
+			} catch (err: any) {
+				if (err.message?.includes('[protected-container]')) {
+					throw new TRPCError({
+						code: 'FORBIDDEN',
+						message: err.message.replace('[protected-container] ', ''),
+					})
+				}
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[image-not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[image-not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to recreate container ${input.name}`,
+				})
+			}
+		}),
+
+	renameContainer: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				newName: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await renameContainer(input.name, input.newName)
+			} catch (err: any) {
+				if (err.message?.includes('[protected-container]')) {
+					throw new TRPCError({
+						code: 'FORBIDDEN',
+						message: err.message.replace('[protected-container] ', ''),
+					})
+				}
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[conflict]')) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: err.message.replace('[conflict] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to rename container ${input.name}`,
 				})
 			}
 		}),
