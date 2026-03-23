@@ -86,8 +86,8 @@
 - [x] **UI-02**: Container creation form is a full-page or large modal with tabbed sections
 - [x] **UI-03**: Container edit/recreate uses the same form pre-filled with current config
 - [x] **UI-04**: Stacks gets its own tab in Server Management
-- [ ] **UI-05**: Events gets its own tab in Server Management
-- [ ] **UI-06**: Engine info shown in Overview tab or dedicated section
+- [x] **UI-05**: Events gets its own tab in Server Management
+- [x] **UI-06**: Engine info shown in Overview tab or dedicated section
 
 ## Out of Scope
 
@@ -151,8 +151,8 @@
 | UI-02 | Phase 41 | Complete |
 | UI-03 | Phase 42 | Complete |
 | UI-04 | Phase 45 | Complete |
-| UI-05 | Phase 46 | Pending |
-| UI-06 | Phase 46 | Pending |
+| UI-05 | Phase 46 | Complete |
+| UI-06 | Phase 46 | Complete |
 
 **Coverage:**
 - v13.0 requirements: 46 total

@@ -266,7 +266,7 @@ Plans:
 - [x] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap (completed 2026-03-23)
 - [x] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage (completed 2026-03-23)
 - [x] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars (completed 2026-03-23)
-- [ ] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish
+- [x] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish (completed 2026-03-23)
 
 ### Phase 41: Container Creation
 **Goal**: User can create a new Docker container from any image with full configuration — ports, volumes, env vars, restart policy, resource limits, health check, and network settings — via a tabbed creation form
@@ -358,7 +358,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 46-01-PLAN.md -- Backend Docker events query + engine info query (types, domain functions, tRPC routes)
-- [ ] 46-02-PLAN.md -- Frontend Events tab + engine info section in Overview tab
+- [x] 46-02-PLAN.md -- Frontend Events tab + engine info section in Overview tab
 
 ## Progress
 
@@ -386,4 +386,4 @@ Plans:
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete    | 2026-03-23 |
 | 45. Docker Compose Stacks | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 46. Events + Engine Info + Polish | v13.0 | 1/2 | In Progress|  |
+| 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete   | 2026-03-23 |

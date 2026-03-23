@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T01:56:26.772Z"
+last_updated: "2026-03-23T02:03:08.359Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -56,6 +56,7 @@ Plan: 2 of 2
 - [Phase 45]: DeployStackForm uses absolute inset-0 overlay pattern; YAML editor is simple monospace textarea per CONTEXT.md
 - [Phase 46]: Stream type cast for dockerode getEvents() to fix TypeScript strict mode destroy() issue
 - [Phase 46]: 200-event cap with 10s stream timeout for bounded Docker event responses
+- [Phase 46]: EngineInfoSection placed before OverviewTab as separate component; Events tab after Stacks before PM2
 
 ### Pending Todos
 
