@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T00:54:56.682Z"
+last_updated: "2026-03-23T01:09:19.519Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -19,12 +19,12 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v13.0 -- Portainer-Level Server Management
-**Current focus:** Phase 43 — exec-terminal-enhanced-logs
+**Current focus:** Phase 44 — bulk-ops-images-networks-volumes
 
 ## Current Position
 
-Phase: 43
-Plan: Not started
+Phase: 44 (bulk-ops-images-networks-volumes) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -45,6 +45,8 @@ Plan: Not started
 - [Phase 43]: ConsoleTab queries inspectContainer internally (cached by React Query) rather than receiving state as prop
 - [Phase 43]: Search highlighting uses useMemo with mark elements and data-match-index for scrollIntoView navigation
 - [Phase 43]: Timestamps toggle re-fetches from backend (Docker API) rather than client-side stripping for data accuracy
+- [Phase 44]: Protected containers block pause alongside stop/remove; kill allowed on protected (emergency stop)
+- [Phase 44]: Bulk remove uses force:true with single Confirm button; Promise.allSettled for parallel bulk ops
 
 ### Pending Todos
 

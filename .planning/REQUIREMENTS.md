@@ -41,9 +41,9 @@
 
 ### ACT — Container Actions
 
-- [ ] **ACT-01**: User can kill a container (SIGKILL)
-- [ ] **ACT-02**: User can pause and resume (unpause) a container
-- [ ] **ACT-03**: User can select multiple containers and perform bulk start/stop/restart/remove
+- [x] **ACT-01**: User can kill a container (SIGKILL)
+- [x] **ACT-02**: User can pause and resume (unpause) a container
+- [x] **ACT-03**: User can select multiple containers and perform bulk start/stop/restart/remove
 
 ### IMG — Enhanced Image Management
 
@@ -127,9 +127,9 @@
 | LOGS-02 | Phase 43 | Complete |
 | LOGS-03 | Phase 43 | Complete |
 | LOGS-04 | Phase 43 | Complete |
-| ACT-01 | Phase 44 | Pending |
-| ACT-02 | Phase 44 | Pending |
-| ACT-03 | Phase 44 | Pending |
+| ACT-01 | Phase 44 | Complete |
+| ACT-02 | Phase 44 | Complete |
+| ACT-03 | Phase 44 | Complete |
 | IMG-01 | Phase 44 | Pending |
 | IMG-02 | Phase 44 | Pending |
 | IMG-03 | Phase 44 | Pending |
