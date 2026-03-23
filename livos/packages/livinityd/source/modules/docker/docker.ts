@@ -14,6 +14,7 @@ import {
 	type ImageInfo,
 	type ImageHistoryEntry,
 	type VolumeInfo,
+	type VolumeUsageInfo,
 	type NetworkInfo,
 	type NetworkDetail,
 	type ContainerCreateInput,
@@ -667,4 +668,118 @@ export async function inspectNetwork(id: string): Promise<NetworkDetail> {
 		}
 		throw err
 	}
+}
+
+export async function createNetwork(input: {
+	name: string
+	driver: string
+	subnet?: string
+	gateway?: string
+	internal?: boolean
+	labels?: Record<string, string>
+}): Promise<{success: boolean; message: string; id: string}> {
+	try {
+		const ipamConfig = input.subnet
+			? [
+					{
+						Subnet: input.subnet,
+						...(input.gateway ? {Gateway: input.gateway} : {}),
+					},
+				]
+			: undefined
+
+		const result = await docker.createNetwork({
+			Name: input.name,
+			Driver: input.driver || 'bridge',
+			Internal: input.internal || false,
+			Labels: input.labels || {},
+			IPAM: ipamConfig ? {Config: ipamConfig} : undefined,
+		})
+
+		return {success: true, message: `Network '${input.name}' created`, id: result.id.slice(0, 12)}
+	} catch (err: any) {
+		if (err.statusCode === 409) {
+			throw new Error(`[conflict] Network name '${input.name}' already exists`)
+		}
+		throw err
+	}
+}
+
+export async function removeNetwork(
+	id: string,
+): Promise<{success: boolean; message: string}> {
+	try {
+		await docker.getNetwork(id).remove()
+		return {success: true, message: 'Network removed successfully'}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Network not found: ${id}`)
+		}
+		if (err.statusCode === 403) {
+			throw new Error(`[forbidden] Cannot remove predefined network`)
+		}
+		if (err.statusCode === 409) {
+			throw new Error(`[in-use] Network has active containers — disconnect them first`)
+		}
+		throw err
+	}
+}
+
+export async function disconnectNetwork(
+	networkId: string,
+	containerId: string,
+): Promise<{success: boolean; message: string}> {
+	try {
+		await docker.getNetwork(networkId).disconnect({Container: containerId})
+		return {success: true, message: `Container disconnected from network`}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[not-found] Network or container not found`)
+		}
+		if (err.statusCode === 403) {
+			throw new Error(`[forbidden] Cannot disconnect from this network`)
+		}
+		throw err
+	}
+}
+
+export async function createVolume(input: {
+	name: string
+	driver?: string
+	driverOpts?: Record<string, string>
+}): Promise<{success: boolean; message: string}> {
+	try {
+		await docker.createVolume({
+			Name: input.name,
+			Driver: input.driver || 'local',
+			DriverOpts: input.driverOpts || {},
+		})
+		return {success: true, message: `Volume '${input.name}' created`}
+	} catch (err: any) {
+		if (err.statusCode === 409) {
+			throw new Error(`[conflict] Volume name '${input.name}' already exists`)
+		}
+		throw err
+	}
+}
+
+export async function volumeUsage(
+	volumeName: string,
+): Promise<VolumeUsageInfo[]> {
+	const containers = await docker.listContainers({all: true})
+	const usage: VolumeUsageInfo[] = []
+
+	for (const c of containers) {
+		const mounts = c.Mounts || []
+		for (const mount of mounts) {
+			if (mount.Name === volumeName || mount.Source === volumeName) {
+				usage.push({
+					containerName: c.Names[0]?.replace('/', '') || '',
+					mountPath: mount.Destination || '',
+				})
+			}
+		}
+	}
+
+	return usage
 }

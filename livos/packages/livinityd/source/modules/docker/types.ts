@@ -96,6 +96,11 @@ export interface VolumeInfo {
 	createdAt: string // ISO date string
 }
 
+export interface VolumeUsageInfo {
+	containerName: string
+	mountPath: string // container path where volume is mounted
+}
+
 export interface NetworkInfo {
 	id: string // first 12 chars
 	name: string

@@ -20,8 +20,13 @@ import {
 	imageHistory,
 	listVolumes,
 	removeVolume,
+	createVolume,
+	volumeUsage,
 	listNetworks,
 	inspectNetwork,
+	createNetwork,
+	removeNetwork,
+	disconnectNetwork,
 } from './docker.js'
 
 export default router({
@@ -538,6 +543,34 @@ export default router({
 			}
 		}),
 
+	createVolume: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				driver: z.string().default('local'),
+				driverOpts: z.record(z.string()).optional(),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await createVolume(input)
+			} catch (err: any) {
+				if (err.message?.includes('[conflict]')) {
+					throw new TRPCError({code: 'CONFLICT', message: err.message.replace('[conflict] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to create volume',
+				})
+			}
+		}),
+
+	volumeUsage: adminProcedure
+		.input(z.object({name: z.string().min(1)}))
+		.query(async ({input}) => {
+			return await volumeUsage(input.name)
+		}),
+
 	// -----------------------------------------------------------------------
 	// Network management
 	// -----------------------------------------------------------------------
@@ -561,6 +594,73 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to inspect network ${input.id}`,
+				})
+			}
+		}),
+
+	createNetwork: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				driver: z.string().default('bridge'),
+				subnet: z.string().max(50).optional(),
+				gateway: z.string().max(50).optional(),
+				internal: z.boolean().optional(),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await createNetwork(input)
+			} catch (err: any) {
+				if (err.message?.includes('[conflict]')) {
+					throw new TRPCError({code: 'CONFLICT', message: err.message.replace('[conflict] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to create network',
+				})
+			}
+		}),
+
+	removeNetwork: adminProcedure
+		.input(z.object({id: z.string().min(1)}))
+		.mutation(async ({input}) => {
+			try {
+				return await removeNetwork(input.id)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[forbidden]')) {
+					throw new TRPCError({code: 'FORBIDDEN', message: err.message.replace('[forbidden] ', '')})
+				}
+				if (err.message?.includes('[in-use]')) {
+					throw new TRPCError({code: 'CONFLICT', message: err.message.replace('[in-use] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to remove network',
+				})
+			}
+		}),
+
+	disconnectNetwork: adminProcedure
+		.input(
+			z.object({
+				networkId: z.string().min(1),
+				containerId: z.string().min(1),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await disconnectNetwork(input.networkId, input.containerId)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to disconnect container',
 				})
 			}
 		}),
