@@ -48,6 +48,8 @@ import {usePM2} from '@/hooks/use-pm2'
 import {useVolumes} from '@/hooks/use-volumes'
 import {useNetworks} from '@/hooks/use-networks'
 import {useStacks} from '@/hooks/use-stacks'
+import {useDockerEvents, type EventTypeFilter, type TimeRangeKey} from '@/hooks/use-docker-events'
+import {useEngineInfo} from '@/hooks/use-engine-info'
 import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {Progress} from '@/shadcn-components/ui/progress'
@@ -272,6 +274,188 @@ function ProcessStateBadge({state}: {state: string}) {
 		<span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', classes)}>
 			{state}
 		</span>
+	)
+}
+
+// Docker Engine Info -- collapsible key-value grid (ENGINE-01, UI-06)
+function EngineInfoSection() {
+	const {engineInfo, isLoading, isError} = useEngineInfo()
+	const [expanded, setExpanded] = useState(true)
+
+	if (isLoading) return (
+		<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+			<div className='text-sm text-text-tertiary'>Loading engine info...</div>
+		</div>
+	)
+
+	if (isError || !engineInfo) return null
+
+	const formatMemory = (bytes: number) => {
+		const gb = bytes / (1024 * 1024 * 1024)
+		return `${gb.toFixed(1)} GB`
+	}
+
+	const fields = [
+		{label: 'Version', value: engineInfo.version},
+		{label: 'API Version', value: engineInfo.apiVersion},
+		{label: 'OS', value: engineInfo.os},
+		{label: 'Architecture', value: engineInfo.architecture},
+		{label: 'Kernel', value: engineInfo.kernelVersion},
+		{label: 'Storage Driver', value: engineInfo.storageDriver},
+		{label: 'Logging Driver', value: engineInfo.loggingDriver},
+		{label: 'CPUs', value: String(engineInfo.cpus)},
+		{label: 'Memory', value: formatMemory(engineInfo.totalMemory)},
+		{label: 'Docker Root', value: engineInfo.dockerRootDir},
+		{label: 'Containers', value: String(engineInfo.containers)},
+		{label: 'Images', value: String(engineInfo.images)},
+	]
+
+	return (
+		<div className='rounded-xl border border-border-default bg-surface-base/50'>
+			<button
+				onClick={() => setExpanded(!expanded)}
+				className='flex w-full items-center justify-between p-4 text-left'
+			>
+				<div className='flex items-center gap-2'>
+					<IconBrandDocker size={16} className='text-text-secondary' />
+					<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Docker Engine</span>
+				</div>
+				{expanded ? <IconChevronDown size={14} className='text-text-tertiary' /> : <IconChevronRight size={14} className='text-text-tertiary' />}
+			</button>
+			{expanded && (
+				<div className='grid grid-cols-2 gap-x-6 gap-y-2 border-t border-border-default px-4 pb-4 pt-3 sm:grid-cols-3 lg:grid-cols-4'>
+					{fields.map((field) => (
+						<div key={field.label}>
+							<div className='text-[10px] font-bold uppercase tracking-wider text-text-tertiary'>{field.label}</div>
+							<div className='text-sm font-medium text-text-primary truncate' title={field.value}>{field.value}</div>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	)
+}
+
+// Events tab -- filterable Docker event log (EVENT-01, EVENT-02, UI-05)
+function EventsTab() {
+	const {events, isLoading, isError, error, isFetching, refetch, typeFilter, setTypeFilter, timeRange, setTimeRange} = useDockerEvents()
+
+	// Color map for event action badges
+	const actionColor = (action: string): string => {
+		if (action === 'create' || action === 'start') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+		if (action === 'destroy' || action === 'die' || action === 'remove' || action === 'delete') return 'bg-red-100 text-red-700 border-red-200'
+		if (action === 'stop' || action === 'kill' || action === 'pause') return 'bg-amber-100 text-amber-700 border-amber-200'
+		if (action === 'pull' || action === 'push' || action === 'tag') return 'bg-blue-100 text-blue-700 border-blue-200'
+		if (action === 'connect' || action === 'disconnect') return 'bg-purple-100 text-purple-700 border-purple-200'
+		if (action === 'unpause' || action === 'restart') return 'bg-cyan-100 text-cyan-700 border-cyan-200'
+		return 'bg-neutral-100 text-neutral-700 border-neutral-200'
+	}
+
+	// Color map for event type badges
+	const typeColor = (type: string): string => {
+		if (type === 'container') return 'bg-blue-50 text-blue-600 border-blue-200'
+		if (type === 'image') return 'bg-purple-50 text-purple-600 border-purple-200'
+		if (type === 'network') return 'bg-teal-50 text-teal-600 border-teal-200'
+		if (type === 'volume') return 'bg-orange-50 text-orange-600 border-orange-200'
+		return 'bg-neutral-50 text-neutral-600 border-neutral-200'
+	}
+
+	const formatEventTime = (unixSeconds: number): string => {
+		const d = new Date(unixSeconds * 1000)
+		return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'})
+	}
+
+	return (
+		<div className='space-y-4 p-4'>
+			{/* Filter Row */}
+			<div className='flex items-center gap-3'>
+				<div className='flex items-center gap-2'>
+					<Label className='text-xs text-text-secondary'>Type</Label>
+					<Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as EventTypeFilter)}>
+						<SelectTrigger className='h-8 w-[140px] text-xs'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value='all'>All Types</SelectItem>
+							<SelectItem value='container'>Container</SelectItem>
+							<SelectItem value='image'>Image</SelectItem>
+							<SelectItem value='network'>Network</SelectItem>
+							<SelectItem value='volume'>Volume</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+				<div className='flex items-center gap-2'>
+					<Label className='text-xs text-text-secondary'>Range</Label>
+					<Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRangeKey)}>
+						<SelectTrigger className='h-8 w-[120px] text-xs'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value='1h'>Last 1 hour</SelectItem>
+							<SelectItem value='6h'>Last 6 hours</SelectItem>
+							<SelectItem value='24h'>Last 24 hours</SelectItem>
+							<SelectItem value='7d'>Last 7 days</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+				<button
+					onClick={() => refetch()}
+					disabled={isFetching}
+					className='flex items-center gap-1.5 rounded-lg bg-surface-1 px-3 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
+				>
+					<IconRefresh size={12} className={isFetching ? 'animate-spin' : ''} />
+					Refresh
+				</button>
+				<div className='ml-auto text-xs text-text-tertiary'>
+					{events.length} event{events.length !== 1 ? 's' : ''}
+					{isFetching && !isLoading && ' (updating...)'}
+				</div>
+			</div>
+
+			{/* Events Table */}
+			{isLoading ? (
+				<div className='flex items-center justify-center py-12 text-sm text-text-tertiary'>Loading events...</div>
+			) : isError ? (
+				<div className='rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600'>
+					Failed to load events: {error?.message || 'Unknown error'}
+				</div>
+			) : events.length === 0 ? (
+				<div className='flex items-center justify-center py-12 text-sm text-text-tertiary'>No events in selected time range</div>
+			) : (
+				<div className='rounded-xl border border-border-default bg-surface-base/50'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='w-[170px] text-xs'>Time</TableHead>
+								<TableHead className='w-[100px] text-xs'>Type</TableHead>
+								<TableHead className='w-[110px] text-xs'>Action</TableHead>
+								<TableHead className='text-xs'>Actor</TableHead>
+								<TableHead className='text-xs'>Details</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{events.map((event, idx) => (
+								<TableRow key={`${event.time}-${event.actorId}-${idx}`}>
+									<TableCell className='text-xs text-text-secondary font-mono'>{formatEventTime(event.time)}</TableCell>
+									<TableCell>
+										<span className={cn('inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase', typeColor(event.type))}>
+											{event.type}
+										</span>
+									</TableCell>
+									<TableCell>
+										<span className={cn('inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold', actionColor(event.action))}>
+											{event.action}
+										</span>
+									</TableCell>
+									<TableCell className='text-xs font-medium text-text-primary max-w-[200px] truncate' title={event.actor}>{event.actor}</TableCell>
+									<TableCell className='text-xs text-text-tertiary max-w-[200px] truncate' title={event.actorId}>{event.actorId.slice(0, 12)}</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+		</div>
 	)
 }
 
@@ -511,6 +695,9 @@ function OverviewTab() {
 					)}
 				</div>
 			</div>
+
+			{/* Row 3: Docker Engine Info (ENGINE-01, UI-06) */}
+			<EngineInfoSection />
 		</div>
 	)
 }
@@ -3151,6 +3338,7 @@ export default function ServerControl() {
 					<TabsTrigger value='volumes'>Volumes</TabsTrigger>
 					<TabsTrigger value='networks'>Networks</TabsTrigger>
 					<TabsTrigger value='stacks'>Stacks</TabsTrigger>
+					<TabsTrigger value='events'>Events</TabsTrigger>
 					<TabsTrigger value='pm2'>PM2</TabsTrigger>
 					<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
 				</TabsList>
@@ -3515,6 +3703,9 @@ export default function ServerControl() {
 				</TabsContent>
 				<TabsContent value='stacks' className='flex-1 overflow-auto'>
 					<StacksTab />
+				</TabsContent>
+				<TabsContent value='events' className='flex-1 overflow-auto'>
+					<EventsTab />
 				</TabsContent>
 				<TabsContent value='pm2' className='flex-1 overflow-auto'>
 					<PM2Tab />
