@@ -55,6 +55,9 @@ export const httpOnlyPaths = [
 	'docker.manageContainer',
 	// Container creation -- use HTTP for reliability
 	'docker.createContainer',
+	// Container edit/recreate -- use HTTP for reliability
+	'docker.recreateContainer',
+	'docker.renameContainer',
 	// Docker image/volume management -- use HTTP for reliability
 	'docker.removeImage',
 	'docker.pruneImages',
