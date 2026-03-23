@@ -27,6 +27,8 @@ import {
 	createNetwork,
 	removeNetwork,
 	disconnectNetwork,
+	getDockerEvents,
+	getEngineInfo,
 } from './docker.js'
 import {
 	listStacks,
@@ -857,4 +859,52 @@ export default router({
 				})
 			}
 		}),
+
+	// -----------------------------------------------------------------------
+	// Docker Events (Phase 46)
+	// -----------------------------------------------------------------------
+
+	dockerEvents: adminProcedure
+		.input(
+			z
+				.object({
+					since: z.number().optional(),
+					until: z.number().optional(),
+					filters: z
+						.object({
+							type: z.array(z.string()).optional(),
+						})
+						.optional(),
+				})
+				.optional(),
+		)
+		.query(async ({input}) => {
+			try {
+				return await getDockerEvents({
+					since: input?.since,
+					until: input?.until,
+					filters: input?.filters,
+				})
+			} catch (err: any) {
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to get Docker events',
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Docker Engine Info (Phase 46)
+	// -----------------------------------------------------------------------
+
+	engineInfo: adminProcedure.query(async () => {
+		try {
+			return await getEngineInfo()
+		} catch (err: any) {
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err.message || 'Failed to get Docker engine info',
+			})
+		}
+	}),
 })
