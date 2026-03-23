@@ -355,7 +355,10 @@ Plans:
   2. Events can be filtered by type and time range
   3. Engine info section shows Docker version, OS, kernel, storage driver, CPUs, memory
   4. All features deployed and functional
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 46-01-PLAN.md -- Backend Docker events query + engine info query (types, domain functions, tRPC routes)
+- [ ] 46-02-PLAN.md -- Frontend Events tab + engine info section in Overview tab
 
 ## Progress
 
@@ -383,4 +386,4 @@ Plans:
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete    | 2026-03-23 |
 | 45. Docker Compose Stacks | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
+| 46. Events + Engine Info + Polish | v13.0 | 0/2 | Not started | - |
