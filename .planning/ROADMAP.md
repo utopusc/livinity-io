@@ -307,7 +307,10 @@ Plans:
   3. Log viewer has search input that highlights matches
   4. User can download logs as .log file
   5. Timestamps and line wrap are toggleable
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 43-01-PLAN.md -- Backend docker exec WebSocket handler + frontend Console tab with xterm.js
+- [ ] 43-02-PLAN.md -- Enhanced LogsTab with search/highlight, download, timestamps toggle, line wrap toggle
 
 ### Phase 44: Bulk Ops + Enhanced Images + Networks + Volumes
 **Goal**: User can perform bulk container actions, pull/tag images, create networks, create volumes, and see container-volume associations
@@ -370,7 +373,7 @@ Plans:
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
 | 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 43. Exec Terminal + Enhanced Logs | v13.0 | 0/? | Not started | - |
+| 43. Exec Terminal + Enhanced Logs | v13.0 | 0/2 | Not started | - |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
 | 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
