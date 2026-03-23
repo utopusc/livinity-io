@@ -265,7 +265,7 @@ Plans:
 - [x] **Phase 42: Container Edit & Recreate** — Edit existing container config + recreate, duplicate, rename (completed 2026-03-23)
 - [x] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap (completed 2026-03-23)
 - [x] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage (completed 2026-03-23)
-- [ ] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars
+- [x] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars (completed 2026-03-23)
 - [ ] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish
 
 ### Phase 41: Container Creation
@@ -344,7 +344,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 45-01-PLAN.md -- Backend stack module (types, domain functions with execa, tRPC routes, httpOnlyPaths)
-- [ ] 45-02-PLAN.md -- Frontend StacksTab with stack list, deploy/edit form, remove dialog, env vars
+- [x] 45-02-PLAN.md -- Frontend StacksTab with stack list, deploy/edit form, remove dialog, env vars
 
 ### Phase 46: Events + Engine Info + Polish
 **Goal**: Docker event log, engine info display, and final polish for the complete Portainer-level experience
@@ -382,5 +382,5 @@ Plans:
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete    | 2026-03-23 |
-| 45. Docker Compose Stacks | v13.0 | 1/2 | In Progress|  |
+| 45. Docker Compose Stacks | v13.0 | 2/2 | Complete   | 2026-03-23 |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
