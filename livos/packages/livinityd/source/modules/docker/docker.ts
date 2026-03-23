@@ -807,12 +807,12 @@ export async function getDockerEvents(options: {
 		query.filters = JSON.stringify({type: options.filters.type})
 	}
 
-	const stream = await docker.getEvents(query)
+	const stream = await docker.getEvents(query) as unknown as NodeJS.ReadableStream & {destroy?: () => void}
 
 	const events = await new Promise<DockerEvent[]>((resolve, reject) => {
 		const chunks: Buffer[] = []
 		const timeout = setTimeout(() => {
-			stream.destroy()
+			if (stream.destroy) stream.destroy()
 			resolve(parseEventChunks(chunks))
 		}, 10_000)
 
