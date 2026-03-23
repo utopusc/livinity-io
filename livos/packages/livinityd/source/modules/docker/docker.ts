@@ -15,6 +15,7 @@ import {
 	type VolumeInfo,
 	type NetworkInfo,
 	type NetworkDetail,
+	type ContainerCreateInput,
 } from './types.js'
 
 // Singleton Dockerode instance -- reused across all calls (not per-call like ai/routes.ts)
@@ -73,6 +74,126 @@ export async function manageContainer(
 	}
 
 	return {success: true, message: `Container ${name} ${operation === 'remove' ? 'removed' : operation + 'ed'} successfully`}
+}
+
+export async function createContainer(
+	input: ContainerCreateInput,
+): Promise<{success: boolean; message: string; containerId: string}> {
+	// Optionally pull image first (default: true)
+	if (input.pullImage !== false) {
+		await new Promise<void>((resolve, reject) => {
+			docker.pull(input.image, (err: any, stream: any) => {
+				if (err) return reject(err)
+				docker.modem.followProgress(stream, (err: any) => {
+					if (err) return reject(err)
+					resolve()
+				})
+			})
+		})
+	}
+
+	// Build ExposedPorts and PortBindings from input.ports
+	const exposedPorts: Record<string, object> = {}
+	const portBindings: Record<string, Array<{HostPort: string}>> = {}
+	if (input.ports) {
+		for (const p of input.ports) {
+			const key = `${p.containerPort}/${p.protocol}`
+			exposedPorts[key] = {}
+			if (!portBindings[key]) portBindings[key] = []
+			portBindings[key].push({HostPort: String(p.hostPort)})
+		}
+	}
+
+	// Build Binds (for bind mounts) and Mounts (for named volumes and tmpfs)
+	const binds: string[] = []
+	const mounts: Array<{Type: string; Source: string; Target: string; ReadOnly: boolean}> = []
+	if (input.volumes) {
+		for (const v of input.volumes) {
+			if (v.type === 'bind') {
+				const mode = v.readOnly ? 'ro' : 'rw'
+				binds.push(`${v.hostPath || ''}:${v.containerPath}:${mode}`)
+			} else {
+				// Named volumes and tmpfs use Mounts
+				mounts.push({
+					Type: v.type,
+					Source: v.type === 'volume' ? (v.volumeName || '') : '',
+					Target: v.containerPath,
+					ReadOnly: v.readOnly ?? false,
+				})
+			}
+		}
+	}
+
+	// Build Env array
+	const env = input.env?.map((e) => `${e.key}=${e.value}`)
+
+	// Build Labels object
+	const labels: Record<string, string> | undefined = input.labels
+		? Object.fromEntries(input.labels.map((l) => [l.key, l.value]))
+		: undefined
+
+	// Build dockerode ContainerCreateOptions
+	const opts: Dockerode.ContainerCreateOptions = {
+		name: input.name,
+		Image: input.image,
+		Cmd: input.command || undefined,
+		Entrypoint: input.entrypoint || undefined,
+		WorkingDir: input.workingDir || undefined,
+		User: input.user || undefined,
+		Hostname: input.hostname || undefined,
+		Domainname: input.domainname || undefined,
+		Tty: input.tty || false,
+		OpenStdin: input.openStdin || false,
+		Env: env,
+		Labels: labels,
+		ExposedPorts: Object.keys(exposedPorts).length > 0 ? exposedPorts : undefined,
+		Healthcheck: input.healthCheck
+			? {
+					Test: input.healthCheck.test,
+					Interval: input.healthCheck.interval,
+					Timeout: input.healthCheck.timeout,
+					Retries: input.healthCheck.retries,
+					StartPeriod: input.healthCheck.startPeriod,
+				}
+			: undefined,
+		HostConfig: {
+			PortBindings: Object.keys(portBindings).length > 0 ? portBindings : undefined,
+			Binds: binds.length > 0 ? binds : undefined,
+			Mounts: mounts.length > 0 ? (mounts as any) : undefined,
+			RestartPolicy: input.restartPolicy
+				? {
+						Name: input.restartPolicy.name,
+						MaximumRetryCount: input.restartPolicy.maximumRetryCount || 0,
+					}
+				: undefined,
+			Memory: input.resources?.memoryLimit || undefined,
+			NanoCpus: input.resources?.cpuLimit || undefined,
+			CpuShares: input.resources?.cpuShares || undefined,
+			NetworkMode: input.networkMode || undefined,
+			Dns: input.dns || undefined,
+			ExtraHosts: input.extraHosts || undefined,
+		},
+	}
+
+	try {
+		const container = await docker.createContainer(opts)
+
+		// Optionally start container (default: true)
+		if (input.autoStart !== false) {
+			await container.start()
+		}
+
+		return {
+			success: true,
+			message: `Container '${input.name}' created successfully`,
+			containerId: container.id.slice(0, 12),
+		}
+	} catch (err: any) {
+		if (err.statusCode === 404) {
+			throw new Error(`[image-not-found] Image not found: ${input.image}`)
+		}
+		throw err
+	}
 }
 
 export async function inspectContainer(name: string): Promise<ContainerDetail> {
