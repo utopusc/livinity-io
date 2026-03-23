@@ -278,7 +278,10 @@ Plans:
   3. User fills in image name, port mappings, volume mounts, env vars, restart policy, memory/CPU limits, and health check
   4. Container is created and appears in the container list
   5. Server Management window is at least 1400x900
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 41-01-PLAN.md -- Backend createContainer mutation (types, domain function, tRPC route, httpOnlyPaths)
+- [ ] 41-02-PLAN.md -- Frontend tabbed creation form (6 tabs) + Add Container button + window resize
 
 ### Phase 42: Container Edit & Recreate
 **Goal**: User can edit any existing container's configuration (ports, env, volumes, restart, resources) and recreate it, or duplicate/rename it
@@ -362,7 +365,7 @@ Plans:
 | 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 39. System Monitoring + Overview | v12.0 | 2/2 | Complete    | 2026-03-22 |
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
-| 41. Container Creation | v13.0 | 0/? | Not started | - |
+| 41. Container Creation | v13.0 | 0/2 | Planning | - |
 | 42. Container Edit & Recreate | v13.0 | 0/? | Not started | - |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 0/? | Not started | - |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
