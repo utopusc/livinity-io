@@ -64,12 +64,12 @@
 
 ### STACK — Docker Compose Stacks
 
-- [ ] **STACK-01**: User can see a list of Docker Compose stacks with name, status, and container count
-- [ ] **STACK-02**: User can deploy a new stack from a compose YAML editor
-- [ ] **STACK-03**: User can edit a stack's compose YAML and redeploy
-- [ ] **STACK-04**: User can start/stop an entire stack
-- [ ] **STACK-05**: User can remove a stack (optionally with volumes)
-- [ ] **STACK-06**: User can set stack-level environment variables
+- [x] **STACK-01**: User can see a list of Docker Compose stacks with name, status, and container count
+- [x] **STACK-02**: User can deploy a new stack from a compose YAML editor
+- [x] **STACK-03**: User can edit a stack's compose YAML and redeploy
+- [x] **STACK-04**: User can start/stop an entire stack
+- [x] **STACK-05**: User can remove a stack (optionally with volumes)
+- [x] **STACK-06**: User can set stack-level environment variables
 
 ### EVENT — Docker Events
 
@@ -138,12 +138,12 @@
 | NET-03 | Phase 44 | Complete |
 | VOL-01 | Phase 44 | Complete |
 | VOL-02 | Phase 44 | Complete |
-| STACK-01 | Phase 45 | Pending |
-| STACK-02 | Phase 45 | Pending |
-| STACK-03 | Phase 45 | Pending |
-| STACK-04 | Phase 45 | Pending |
-| STACK-05 | Phase 45 | Pending |
-| STACK-06 | Phase 45 | Pending |
+| STACK-01 | Phase 45 | Complete |
+| STACK-02 | Phase 45 | Complete |
+| STACK-03 | Phase 45 | Complete |
+| STACK-04 | Phase 45 | Complete |
+| STACK-05 | Phase 45 | Complete |
+| STACK-06 | Phase 45 | Complete |
 | EVENT-01 | Phase 46 | Pending |
 | EVENT-02 | Phase 46 | Pending |
 | ENGINE-01 | Phase 46 | Pending |

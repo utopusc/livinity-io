@@ -343,7 +343,7 @@ Plans:
   6. Stack-level environment variables can be set
 **Plans**: 2 plans
 Plans:
-- [ ] 45-01-PLAN.md -- Backend stack module (types, domain functions with execa, tRPC routes, httpOnlyPaths)
+- [x] 45-01-PLAN.md -- Backend stack module (types, domain functions with execa, tRPC routes, httpOnlyPaths)
 - [ ] 45-02-PLAN.md -- Frontend StacksTab with stack list, deploy/edit form, remove dialog, env vars
 
 ### Phase 46: Events + Engine Info + Polish
@@ -382,5 +382,5 @@ Plans:
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete    | 2026-03-23 |
-| 45. Docker Compose Stacks | v13.0 | 0/2 | Not started | - |
+| 45. Docker Compose Stacks | v13.0 | 1/2 | In Progress|  |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |
