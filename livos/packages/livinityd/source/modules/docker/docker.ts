@@ -196,6 +196,64 @@ export async function createContainer(
 	}
 }
 
+export async function recreateContainer(
+	name: string,
+	input: ContainerCreateInput,
+): Promise<{success: boolean; message: string; containerId: string}> {
+	if (isProtectedContainer(name)) {
+		throw new Error(`[protected-container] Cannot recreate protected container: ${name}`)
+	}
+
+	try {
+		const container = docker.getContainer(name)
+		await container.inspect() // verify it exists
+
+		// Stop the container if running (ignore errors if already stopped)
+		await container.stop().catch(() => {})
+
+		// Remove the old container
+		await container.remove({force: true})
+
+		// Ensure the recreated container keeps the same name
+		input.name = name
+
+		// Create and start the new container with updated config
+		return await createContainer(input)
+	} catch (err: any) {
+		if (err.statusCode === 404 || err.reason === 'no such container') {
+			throw new Error(`[not-found] Container not found: ${name}`)
+		}
+		throw err
+	}
+}
+
+export async function renameContainer(
+	name: string,
+	newName: string,
+): Promise<{success: boolean; message: string}> {
+	if (isProtectedContainer(name)) {
+		throw new Error(`[protected-container] Cannot rename protected container: ${name}`)
+	}
+
+	if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(newName)) {
+		throw new Error(`Invalid container name '${newName}'. Must start with alphanumeric and contain only [a-zA-Z0-9_.-]`)
+	}
+
+	try {
+		const container = docker.getContainer(name)
+		await container.rename({name: newName})
+		return {success: true, message: `Container '${name}' renamed to '${newName}'`}
+	} catch (err: any) {
+		if (err.statusCode === 404 || err.reason === 'no such container') {
+			throw new Error(`[not-found] Container not found: ${name}`)
+		}
+		if (err.statusCode === 409) {
+			throw new Error(`[conflict] Container name '${newName}' is already in use`)
+		}
+		throw err
+	}
+}
+
 export async function inspectContainer(name: string): Promise<ContainerDetail> {
 	try {
 		const container = docker.getContainer(name)
