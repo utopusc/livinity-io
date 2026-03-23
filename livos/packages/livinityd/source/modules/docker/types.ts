@@ -208,3 +208,36 @@ export interface ContainerCreateInput {
 	pullImage?: boolean // default true -- pull image before creating
 	autoStart?: boolean // default true -- start container after creating
 }
+
+// -----------------------------------------------------------------------
+// Docker Events (Phase 46)
+// -----------------------------------------------------------------------
+
+export interface DockerEvent {
+	type: string // container | image | network | volume | daemon
+	action: string // create | destroy | start | stop | die | pull | remove | connect | disconnect | etc.
+	actor: string // container name, image name, network name, etc.
+	actorId: string // full ID of the actor
+	time: number // unix timestamp (seconds)
+	attributes: Record<string, string> // extra attributes from Docker
+}
+
+// -----------------------------------------------------------------------
+// Docker Engine Info (Phase 46)
+// -----------------------------------------------------------------------
+
+export interface EngineInfo {
+	version: string
+	apiVersion: string
+	os: string
+	architecture: string
+	kernelVersion: string
+	storageDriver: string
+	loggingDriver: string
+	cpus: number
+	totalMemory: number // bytes
+	dockerRootDir: string
+	containers: number // total container count
+	images: number // total image count
+	serverTime: string // ISO date string
+}
