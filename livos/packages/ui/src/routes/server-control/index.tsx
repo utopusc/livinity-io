@@ -1,4 +1,4 @@
-import {useState, useEffect, useRef, Fragment} from 'react'
+import {useState, useEffect, useRef, useCallback, Fragment} from 'react'
 import {motion, AnimatePresence} from 'framer-motion'
 import {
 	IconServer,
@@ -28,6 +28,8 @@ import {
 	IconPencil,
 	IconCopy,
 	IconTag,
+	IconHandStop,
+	IconPlayerPause,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -58,6 +60,7 @@ import {
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Label} from '@/shadcn-components/ui/label'
+import {Checkbox} from '@/shadcn-components/ui/checkbox'
 import {cn} from '@/shadcn-lib/utils'
 
 // Resource Card Component - matches Live Usage style
@@ -1747,6 +1750,8 @@ export default function ServerControl() {
 	const [editTarget, setEditTarget] = useState<string | null>(null)
 	const [duplicateTarget, setDuplicateTarget] = useState<string | null>(null)
 	const [renameTarget, setRenameTarget] = useState<string | null>(null)
+	const [selectedContainers, setSelectedContainers] = useState<Set<string>>(new Set())
+	const [bulkRemoveOpen, setBulkRemoveOpen] = useState(false)
 
 	// System resource hooks
 	const cpuUsage = useCpuForUi({poll: true})
@@ -1776,6 +1781,8 @@ export default function ServerControl() {
 		refetch,
 		manage,
 		isManaging,
+		bulkManage,
+		isBulkManaging,
 		actionResult,
 		runningCount,
 		totalCount,
@@ -1793,6 +1800,61 @@ export default function ServerControl() {
 		manage(removeTarget, 'remove', {force: true, confirmName})
 		setRemoveTarget(null)
 	}
+
+	// Selection helpers for bulk operations
+	const toggleSelect = useCallback((name: string) => {
+		setSelectedContainers((prev) => {
+			const next = new Set(prev)
+			if (next.has(name)) {
+				next.delete(name)
+			} else {
+				next.add(name)
+			}
+			return next
+		})
+	}, [])
+
+	const toggleSelectAll = useCallback(() => {
+		setSelectedContainers((prev) => {
+			if (prev.size === containers.length) {
+				return new Set()
+			}
+			return new Set(containers.map((c) => c.name))
+		})
+	}, [containers])
+
+	const clearSelection = useCallback(() => {
+		setSelectedContainers(new Set())
+	}, [])
+
+	// Clear selection when containers list changes (remove stale references)
+	useEffect(() => {
+		setSelectedContainers((prev) => {
+			const containerNames = new Set(containers.map((c) => c.name))
+			const filtered = new Set([...prev].filter((name) => containerNames.has(name)))
+			if (filtered.size !== prev.size) return filtered
+			return prev
+		})
+	}, [containers])
+
+	const handleBulkAction = useCallback(
+		(operation: 'start' | 'stop' | 'restart' | 'kill' | 'remove') => {
+			if (selectedContainers.size === 0) return
+			if (operation === 'remove') {
+				setBulkRemoveOpen(true)
+				return
+			}
+			bulkManage(Array.from(selectedContainers), operation)
+			clearSelection()
+		},
+		[selectedContainers, bulkManage, clearSelection],
+	)
+
+	const handleBulkRemoveConfirm = useCallback(() => {
+		bulkManage(Array.from(selectedContainers), 'remove', {force: true})
+		clearSelection()
+		setBulkRemoveOpen(false)
+	}, [selectedContainers, bulkManage, clearSelection])
 
 	return (
 		<div className='flex h-full flex-col'>
@@ -1919,7 +1981,15 @@ export default function ServerControl() {
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead className='pl-4'>Name</TableHead>
+										<TableHead className='w-10 pl-4'>
+											<span onClick={(e) => e.stopPropagation()}>
+												<Checkbox
+													checked={containers.length > 0 && selectedContainers.size === containers.length ? true : selectedContainers.size > 0 ? 'indeterminate' : false}
+													onCheckedChange={() => toggleSelectAll()}
+												/>
+											</span>
+										</TableHead>
+										<TableHead>Name</TableHead>
 										<TableHead>Image</TableHead>
 										<TableHead>State</TableHead>
 										<TableHead>Ports</TableHead>
@@ -1929,9 +1999,18 @@ export default function ServerControl() {
 								<TableBody>
 									{containers.map((container) => {
 										const isRunning = container.state === 'running'
+										const isPaused = container.state === 'paused'
 										return (
-											<TableRow key={container.id} onClick={() => setSelectedContainer(container.name)} className='cursor-pointer transition-colors hover:bg-surface-1/50'>
-												<TableCell className='pl-4 font-medium'>
+											<TableRow key={container.id} onClick={() => setSelectedContainer(container.name)} className={cn('cursor-pointer transition-colors hover:bg-surface-1/50', selectedContainers.has(container.name) && 'bg-brand/5')}>
+												<TableCell className='w-10 pl-4'>
+													<span onClick={(e) => e.stopPropagation()}>
+														<Checkbox
+															checked={selectedContainers.has(container.name)}
+															onCheckedChange={() => toggleSelect(container.name)}
+														/>
+													</span>
+												</TableCell>
+												<TableCell className='font-medium'>
 													<div className='flex items-center gap-2'>
 														{container.isProtected && (
 															<IconLock size={14} className='shrink-0 text-amber-500' title='Protected container' />
@@ -1986,7 +2065,8 @@ export default function ServerControl() {
 																title={container.isProtected ? 'Protected — cannot rename' : 'Rename'}
 															/>
 														</span>
-														{!isRunning ? (
+														{/* Start -- show for non-running, non-paused states */}
+														{!isRunning && !isPaused && (
 															<span onClick={(e) => e.stopPropagation()}>
 																<ActionButton
 																	icon={IconPlayerPlay}
@@ -1996,7 +2076,9 @@ export default function ServerControl() {
 																	title='Start'
 																/>
 															</span>
-														) : (
+														)}
+														{/* Stop -- show when running */}
+														{isRunning && (
 															<span onClick={(e) => e.stopPropagation()}>
 																<ActionButton
 																	icon={IconPlayerStop}
@@ -2004,6 +2086,42 @@ export default function ServerControl() {
 																	disabled={isManaging || container.isProtected}
 																	color='amber'
 																	title={container.isProtected ? 'Protected — cannot stop' : 'Stop'}
+																/>
+															</span>
+														)}
+														{/* Pause -- show when running */}
+														{isRunning && (
+															<span onClick={(e) => e.stopPropagation()}>
+																<ActionButton
+																	icon={IconPlayerPause}
+																	onClick={() => manage(container.name, 'pause')}
+																	disabled={isManaging || container.isProtected}
+																	color='amber'
+																	title={container.isProtected ? 'Protected — cannot pause' : 'Pause'}
+																/>
+															</span>
+														)}
+														{/* Resume (unpause) -- show when paused */}
+														{isPaused && (
+															<span onClick={(e) => e.stopPropagation()}>
+																<ActionButton
+																	icon={IconPlayerPlay}
+																	onClick={() => manage(container.name, 'unpause')}
+																	disabled={isManaging}
+																	color='emerald'
+																	title='Resume'
+																/>
+															</span>
+														)}
+														{/* Kill -- show when running or paused (emergency stop) */}
+														{(isRunning || isPaused) && (
+															<span onClick={(e) => e.stopPropagation()}>
+																<ActionButton
+																	icon={IconHandStop}
+																	onClick={() => manage(container.name, 'kill')}
+																	disabled={isManaging}
+																	color='red'
+																	title='Kill (SIGKILL)'
 																/>
 															</span>
 														)}
@@ -2034,6 +2152,96 @@ export default function ServerControl() {
 							</Table>
 						</div>
 					)}
+
+					{/* Floating Bulk Action Bar */}
+					<AnimatePresence>
+						{selectedContainers.size > 0 && (
+							<motion.div
+								initial={{opacity: 0, y: 20}}
+								animate={{opacity: 1, y: 0}}
+								exit={{opacity: 0, y: 20}}
+								transition={{duration: 0.2}}
+								className='fixed bottom-6 left-1/2 z-50 -translate-x-1/2'
+							>
+								<div className='flex items-center gap-3 rounded-xl border border-border-default bg-surface-base px-4 py-2.5 shadow-lg'>
+									<span className='text-sm font-medium text-text-primary'>
+										{selectedContainers.size} selected
+									</span>
+									<div className='h-4 w-px bg-border-default' />
+									<div className='flex items-center gap-2'>
+										<button
+											onClick={() => handleBulkAction('start')}
+											disabled={isBulkManaging}
+											className='flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/30 disabled:opacity-50'
+										>
+											<IconPlayerPlay size={14} />
+											Start
+										</button>
+										<button
+											onClick={() => handleBulkAction('stop')}
+											disabled={isBulkManaging}
+											className='flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-500/30 disabled:opacity-50'
+										>
+											<IconPlayerStop size={14} />
+											Stop
+										</button>
+										<button
+											onClick={() => handleBulkAction('restart')}
+											disabled={isBulkManaging}
+											className='flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-500/30 disabled:opacity-50'
+										>
+											<IconRotateClockwise size={14} />
+											Restart
+										</button>
+										<button
+											onClick={() => handleBulkAction('kill')}
+											disabled={isBulkManaging}
+											className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
+										>
+											<IconHandStop size={14} />
+											Kill
+										</button>
+										<button
+											onClick={() => handleBulkAction('remove')}
+											disabled={isBulkManaging}
+											className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
+										>
+											<IconTrash size={14} />
+											Remove
+										</button>
+									</div>
+									<div className='h-4 w-px bg-border-default' />
+									<button
+										onClick={clearSelection}
+										className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary'
+										title='Clear selection'
+									>
+										<IconX size={14} />
+									</button>
+								</div>
+							</motion.div>
+						)}
+					</AnimatePresence>
+
+					{/* Bulk Remove Confirmation Dialog */}
+					<Dialog open={bulkRemoveOpen} onOpenChange={setBulkRemoveOpen}>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>Remove {selectedContainers.size} containers?</DialogTitle>
+								<DialogDescription>
+									This will force-remove the selected containers. This action cannot be undone.
+								</DialogDescription>
+							</DialogHeader>
+							<DialogFooter>
+								<Button variant='outline' onClick={() => setBulkRemoveOpen(false)}>
+									Cancel
+								</Button>
+								<Button variant='destructive' onClick={handleBulkRemoveConfirm} disabled={isBulkManaging}>
+									{isBulkManaging ? 'Removing...' : 'Confirm Remove'}
+								</Button>
+							</DialogFooter>
+						</DialogContent>
+					</Dialog>
 				</TabsContent>
 
 				{/* Container Create Form */}
