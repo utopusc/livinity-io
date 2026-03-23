@@ -22,6 +22,7 @@ import type Livinityd from '../../index.js'
 import * as jwt from '../jwt.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
+import createDockerExecHandler from '../docker/docker-exec-socket.js'
 
 import fileApi from '../files/api.js'
 
@@ -634,6 +635,12 @@ class Server {
 		this.mountWebSocketServer('/terminal', (wss) => {
 			const logger = this.logger.createChildLogger('terminal')
 			wss.on('connection', createTerminalWebSocketHandler({livinityd: this.livinityd, logger}))
+		})
+
+		// Handle Docker exec WebSocket routes (container console)
+		this.mountWebSocketServer('/ws/docker-exec', (wss) => {
+			const logger = this.logger.createChildLogger('docker-exec')
+			wss.on('connection', createDockerExecHandler({logger}))
 		})
 
 		// Handle API routes
