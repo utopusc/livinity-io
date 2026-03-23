@@ -73,12 +73,12 @@
 
 ### EVENT — Docker Events
 
-- [ ] **EVENT-01**: User can see a real-time Docker event log
-- [ ] **EVENT-02**: User can filter events by type and time range
+- [x] **EVENT-01**: User can see a real-time Docker event log
+- [x] **EVENT-02**: User can filter events by type and time range
 
 ### ENGINE — Docker Engine Info
 
-- [ ] **ENGINE-01**: User can see Docker engine info (version, OS, kernel, storage driver, CPUs, memory)
+- [x] **ENGINE-01**: User can see Docker engine info (version, OS, kernel, storage driver, CPUs, memory)
 
 ### UI — Interface Enhancements
 
@@ -144,9 +144,9 @@
 | STACK-04 | Phase 45 | Complete |
 | STACK-05 | Phase 45 | Complete |
 | STACK-06 | Phase 45 | Complete |
-| EVENT-01 | Phase 46 | Pending |
-| EVENT-02 | Phase 46 | Pending |
-| ENGINE-01 | Phase 46 | Pending |
+| EVENT-01 | Phase 46 | Complete |
+| EVENT-02 | Phase 46 | Complete |
+| ENGINE-01 | Phase 46 | Complete |
 | UI-01 | Phase 41 | Complete |
 | UI-02 | Phase 41 | Complete |
 | UI-03 | Phase 42 | Complete |
