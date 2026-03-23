@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useState, useEffect} from 'react'
 import {IconPlus, IconX, IconLoader2} from '@tabler/icons-react'
 
 import {trpcReact} from '@/trpc/trpc'
@@ -13,11 +13,17 @@ interface ContainerCreateFormProps {
 	open: boolean
 	onClose: () => void
 	onSuccess: () => void
+	/** Edit mode: pre-fill from existing container, submit calls recreateContainer */
+	editContainerName?: string | null
+	/** Duplicate mode: pre-fill from existing container, submit calls createContainer (name is empty) */
+	duplicateContainerName?: string | null
 }
 
 type PortRow = {hostPort: string; containerPort: string; protocol: 'tcp' | 'udp'}
 type VolumeRow = {type: 'bind' | 'volume' | 'tmpfs'; hostPath: string; volumeName: string; containerPath: string; readOnly: boolean}
 type KVRow = {key: string; value: string}
+
+type FormState = ReturnType<typeof initialForm>
 
 const initialForm = () => ({
 	name: '',
@@ -50,9 +56,77 @@ const initialForm = () => ({
 	extraHosts: '',
 })
 
-export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateFormProps) {
+// Maps ContainerDetail (inspect data) to form state for edit/duplicate pre-filling
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function detailToFormState(detail: any): FormState {
+	return {
+		name: detail.name,
+		image: detail.image,
+		command: '', // Not available in ContainerDetail
+		entrypoint: '', // Not available in ContainerDetail
+		workingDir: '', // Not available in ContainerDetail
+		user: '', // Not available in ContainerDetail
+		hostname: '', // Not available in ContainerDetail
+		tty: false,
+		openStdin: false,
+		pullImage: false, // Don't re-pull on edit (image already present)
+		autoStart: true,
+		ports: (detail.ports || [])
+			.filter((p: any) => p.hostPort !== null)
+			.map((p: any) => ({
+				hostPort: String(p.hostPort ?? ''),
+				containerPort: String(p.containerPort),
+				protocol: (p.protocol === 'udp' ? 'udp' : 'tcp') as 'tcp' | 'udp',
+			})),
+		volumes: (detail.mounts || []).map((m: any) => ({
+			type: (m.type === 'bind' || m.type === 'volume' || m.type === 'tmpfs' ? m.type : 'bind') as 'bind' | 'volume' | 'tmpfs',
+			hostPath: m.type === 'bind' ? m.source : '',
+			volumeName: m.type === 'volume' ? m.source : '',
+			containerPath: m.destination,
+			readOnly: m.mode === 'ro',
+		})),
+		env: (detail.envVars || []).map((e: string) => {
+			const eqIdx = e.indexOf('=')
+			return eqIdx === -1 ? {key: e, value: ''} : {key: e.slice(0, eqIdx), value: e.slice(eqIdx + 1)}
+		}),
+		labels: [], // Not available in ContainerDetail
+		restartPolicy: (['no', 'always', 'on-failure', 'unless-stopped'].includes(detail.restartPolicy)
+			? detail.restartPolicy
+			: 'no') as 'no' | 'always' | 'on-failure' | 'unless-stopped',
+		maxRetries: 0,
+		memoryLimitMB: '',
+		cpuLimit: '',
+		cpuShares: '',
+		healthCheckTest: '',
+		healthCheckInterval: '',
+		healthCheckTimeout: '',
+		healthCheckRetries: '',
+		healthCheckStartPeriod: '',
+		networkMode: (detail.networks && detail.networks[0]) || 'bridge',
+		dns: '',
+		extraHosts: '',
+	}
+}
+
+export function ContainerCreateForm({
+	open,
+	onClose,
+	onSuccess,
+	editContainerName,
+	duplicateContainerName,
+}: ContainerCreateFormProps) {
 	const [form, setForm] = useState(initialForm)
 	const [errors, setErrors] = useState<{name?: string; image?: string}>({})
+
+	// Determine the mode
+	const mode = editContainerName ? 'edit' : duplicateContainerName ? 'duplicate' : 'create'
+	const sourceContainerName = editContainerName || duplicateContainerName || null
+
+	// Fetch container details for pre-filling when in edit or duplicate mode
+	const {data: inspectData, isLoading: inspectLoading} = trpcReact.docker.inspectContainer.useQuery(
+		{name: sourceContainerName!},
+		{enabled: open && !!sourceContainerName},
+	)
 
 	const createMutation = trpcReact.docker.createContainer.useMutation({
 		onSuccess: () => {
@@ -63,9 +137,49 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 		},
 	})
 
+	const recreateMutation = trpcReact.docker.recreateContainer.useMutation({
+		onSuccess: () => {
+			onSuccess()
+			onClose()
+			setForm(initialForm())
+			setErrors({})
+		},
+	})
+
+	const activeMutation = mode === 'edit' ? recreateMutation : createMutation
+
+	// Populate form when inspect data loads
+	useEffect(() => {
+		if (inspectData && sourceContainerName) {
+			const formState = detailToFormState(inspectData)
+			if (mode === 'duplicate') {
+				formState.name = '' // Clear name for duplicate
+			}
+			setForm(formState)
+		}
+	}, [inspectData, sourceContainerName, mode])
+
+	// Reset form when dialog closes
+	useEffect(() => {
+		if (!open) {
+			setForm(initialForm())
+			setErrors({})
+		}
+	}, [open])
+
 	if (!open) return null
 
-	const set = <K extends keyof ReturnType<typeof initialForm>>(key: K, value: ReturnType<typeof initialForm>[K]) => {
+	// Show loading spinner while fetching inspect data
+	if (sourceContainerName && inspectLoading) {
+		return (
+			<div className='absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface-base'>
+				<IconLoader2 size={32} className='animate-spin text-text-tertiary' />
+				<p className='mt-3 text-sm text-text-tertiary'>Loading container configuration...</p>
+			</div>
+		)
+	}
+
+	const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
 		setForm((prev) => ({...prev, [key]: value}))
 	}
 
@@ -102,6 +216,17 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 		next[i] = {...next[i], [field]: value}
 		set('labels', next)
 	}
+
+	// --- Header text ---
+	const headerText =
+		mode === 'edit'
+			? 'Edit Container'
+			: mode === 'duplicate'
+				? 'Duplicate Container'
+				: 'Create Container'
+
+	const submitText =
+		mode === 'edit' ? 'Recreate Container' : 'Create'
 
 	// --- Submit ---
 	const handleSubmit = () => {
@@ -221,15 +346,27 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 		const extraHosts = splitComma(form.extraHosts)
 		if (extraHosts.length > 0) input.extraHosts = extraHosts
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		createMutation.mutate(input as any)
+		// Dispatch to correct mutation based on mode
+		if (mode === 'edit') {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			recreateMutation.mutate({name: editContainerName!, config: input as any})
+		} else {
+			// create or duplicate -- both use createContainer
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			createMutation.mutate(input as any)
+		}
 	}
 
 	return (
 		<div className='absolute inset-0 z-50 flex flex-col bg-surface-base'>
 			{/* Header */}
 			<div className='flex shrink-0 items-center justify-between border-b border-border-default px-6 py-4'>
-				<h2 className='text-lg font-semibold text-text-primary'>Create Container</h2>
+				<div>
+					<h2 className='text-lg font-semibold text-text-primary'>{headerText}</h2>
+					{mode === 'edit' && editContainerName && (
+						<p className='mt-0.5 text-xs text-text-tertiary font-mono'>{editContainerName}</p>
+					)}
+				</div>
 				<button
 					onClick={onClose}
 					className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-primary'
@@ -237,6 +374,13 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 					<IconX size={18} />
 				</button>
 			</div>
+
+			{/* Warning banner in edit mode */}
+			{mode === 'edit' && (
+				<div className='mx-6 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600'>
+					<strong>Warning:</strong> This will stop and remove the existing container, then create a new one with the updated configuration.
+				</div>
+			)}
 
 			{/* Tabbed form */}
 			<Tabs defaultValue='general' className='flex min-h-0 flex-1 flex-col'>
@@ -267,6 +411,7 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 										value={form.name}
 										onValueChange={(v) => set('name', v)}
 										variant={errors.name ? 'destructive' : undefined}
+										disabled={mode === 'edit'}
 									/>
 									{errors.name && <p className='mt-1 text-xs text-red-400'>{errors.name}</p>}
 								</div>
@@ -777,9 +922,9 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 
 			{/* Footer */}
 			<div className='shrink-0 border-t border-border-default px-6 py-4'>
-				{createMutation.error && (
+				{activeMutation.error && (
 					<div className='mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400'>
-						{createMutation.error.message}
+						{activeMutation.error.message}
 					</div>
 				)}
 				<div className='flex items-center justify-end gap-3'>
@@ -791,11 +936,11 @@ export function ContainerCreateForm({open, onClose, onSuccess}: ContainerCreateF
 					</button>
 					<button
 						onClick={handleSubmit}
-						disabled={createMutation.isPending}
+						disabled={activeMutation.isPending}
 						className='flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50'
 					>
-						{createMutation.isPending && <IconLoader2 size={14} className='animate-spin' />}
-						Create
+						{activeMutation.isPending && <IconLoader2 size={14} className='animate-spin' />}
+						{submitText}
 					</button>
 				</div>
 			</div>
