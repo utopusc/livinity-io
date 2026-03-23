@@ -28,6 +28,7 @@ import {
 	IconPencil,
 	IconCopy,
 	IconTag,
+	IconDownload,
 	IconHandStop,
 	IconPlayerPause,
 } from '@tabler/icons-react'
@@ -929,6 +930,197 @@ function PruneImagesDialog({
 	)
 }
 
+// Pull Image dialog
+function PullImageDialog({
+	open,
+	onOpenChange,
+	onConfirm,
+	isPulling,
+}: {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: (image: string) => void
+	isPulling: boolean
+}) {
+	const [imageName, setImageName] = useState('')
+
+	useEffect(() => {
+		if (!open) setImageName('')
+	}, [open])
+
+	return (
+		<Dialog open={open} onOpenChange={isPulling ? undefined : onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Pull Image</DialogTitle>
+					<DialogDescription>
+						Pull a Docker image from a registry.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='py-2'>
+					<Label htmlFor='pull-image-name' className='mb-2 block text-sm'>Image Name</Label>
+					<Input
+						id='pull-image-name'
+						sizeVariant='short-square'
+						placeholder='e.g. nginx:latest, ubuntu:22.04'
+						value={imageName}
+						onValueChange={setImageName}
+						autoFocus
+						disabled={isPulling}
+					/>
+				</div>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)} disabled={isPulling}>
+						Cancel
+					</Button>
+					<Button
+						variant='default'
+						size='dialog'
+						disabled={!imageName.trim() || isPulling}
+						onClick={() => onConfirm(imageName.trim())}
+					>
+						{isPulling ? 'Pulling...' : 'Pull'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Tag Image dialog
+function TagImageDialog({
+	open,
+	onOpenChange,
+	imageId,
+	currentTag,
+	onConfirm,
+	isTagging,
+}: {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	imageId: string
+	currentTag: string
+	onConfirm: (id: string, repo: string, tag: string) => void
+	isTagging: boolean
+}) {
+	const [repo, setRepo] = useState('')
+	const [tag, setTag] = useState('latest')
+
+	useEffect(() => {
+		if (!open) {
+			setRepo('')
+			setTag('latest')
+		}
+	}, [open])
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Tag Image</DialogTitle>
+					<DialogDescription>
+						Add a new tag to this image.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='space-y-3 py-2'>
+					<p className='text-sm text-text-secondary'>
+						Current: <span className='font-bold font-mono text-text-primary'>{currentTag}</span>
+					</p>
+					<div>
+						<Label htmlFor='tag-repo' className='mb-2 block text-sm'>Repository</Label>
+						<Input
+							id='tag-repo'
+							sizeVariant='short-square'
+							placeholder='e.g. myapp'
+							value={repo}
+							onValueChange={setRepo}
+							autoFocus
+						/>
+					</div>
+					<div>
+						<Label htmlFor='tag-tag' className='mb-2 block text-sm'>Tag</Label>
+						<Input
+							id='tag-tag'
+							sizeVariant='short-square'
+							placeholder='e.g. v1.0'
+							value={tag}
+							onValueChange={setTag}
+						/>
+					</div>
+				</div>
+				<DialogFooter>
+					<Button variant='default' size='dialog' onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button
+						variant='default'
+						size='dialog'
+						disabled={!repo.trim() || !tag.trim() || isTagging}
+						onClick={() => onConfirm(imageId, repo.trim(), tag.trim())}
+					>
+						Tag
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// Expandable image layer history
+function ImageHistoryRow({imageId}: {imageId: string}) {
+	const historyQuery = trpcReact.docker.imageHistory.useQuery({id: imageId})
+
+	if (historyQuery.isLoading) {
+		return (
+			<TableRow>
+				<TableCell colSpan={4} className='px-4 py-3'>
+					<div className='flex items-center gap-2 text-sm text-text-tertiary'>
+						<IconRefresh size={14} className='animate-spin' />
+						Loading layer history...
+					</div>
+				</TableCell>
+			</TableRow>
+		)
+	}
+
+	if (historyQuery.isError || !historyQuery.data) {
+		return (
+			<TableRow>
+				<TableCell colSpan={4} className='px-4 py-3'>
+					<p className='text-sm text-red-400'>Failed to load layer history</p>
+				</TableCell>
+			</TableRow>
+		)
+	}
+
+	return (
+		<>
+			{historyQuery.data.map((layer, idx) => (
+				<TableRow key={`${imageId}-layer-${idx}`} className='bg-surface-1/50'>
+					<TableCell className='pl-8 pr-4' colSpan={2}>
+						<span
+							className='block truncate max-w-[500px] font-mono text-xs text-text-secondary'
+							title={layer.createdBy}
+						>
+							{layer.createdBy || '(empty)'}
+						</span>
+					</TableCell>
+					<TableCell>
+						<span className='text-xs text-text-tertiary'>
+							{layer.size > 0 ? formatBytes(layer.size) : '0 B'}
+						</span>
+					</TableCell>
+					<TableCell className='text-right pr-4'>
+						<span className='text-xs text-text-tertiary'>
+							{formatRelativeDate(layer.created)}
+						</span>
+					</TableCell>
+				</TableRow>
+			))}
+		</>
+	)
+}
+
 // Remove Volume confirmation dialog (typed name required)
 function RemoveVolumeDialog({
 	volumeName,
@@ -1001,6 +1193,10 @@ function ImagesTab() {
 		refetch,
 		removeImage,
 		isRemoving,
+		pullImage,
+		isPulling,
+		tagImage,
+		isTagging,
 		pruneImages,
 		isPruning,
 		actionResult,
@@ -1010,6 +1206,9 @@ function ImagesTab() {
 
 	const [removeTarget, setRemoveTarget] = useState<{id: string; tag: string} | null>(null)
 	const [showPruneDialog, setShowPruneDialog] = useState(false)
+	const [showPullDialog, setShowPullDialog] = useState(false)
+	const [tagTarget, setTagTarget] = useState<{id: string; tag: string} | null>(null)
+	const [expandedImage, setExpandedImage] = useState<string | null>(null)
 
 	return (
 		<>
@@ -1022,6 +1221,15 @@ function ImagesTab() {
 					<span className='ml-1'>total</span>
 				</div>
 				<div className='flex items-center gap-2'>
+					<Button
+						variant='default'
+						size='sm'
+						onClick={() => setShowPullDialog(true)}
+						disabled={isPulling}
+					>
+						<IconDownload size={14} className='mr-1.5' />
+						{isPulling ? 'Pulling...' : 'Pull Image'}
+					</Button>
 					<Button
 						variant='default'
 						size='sm'
@@ -1093,36 +1301,53 @@ function ImagesTab() {
 								const isNone = image.repoTags.length === 1 && image.repoTags[0] === '<none>:<none>'
 								const primaryTag = isNone ? '<none>:<none>' : image.repoTags[0]
 								const extraCount = image.repoTags.length - 1
+								const isExpanded = expandedImage === image.id
 								return (
-									<TableRow key={image.id}>
-										<TableCell className='pl-4'>
-											<div className='flex items-center gap-2'>
-												<span className={cn('truncate font-mono text-sm', isNone && 'italic text-text-tertiary')} title={image.repoTags.join(', ')}>
-													{primaryTag}
-												</span>
-												{extraCount > 0 && (
-													<span className='inline-flex items-center rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600'>
-														+{extraCount} more
+									<Fragment key={image.id}>
+										<TableRow className='cursor-pointer' onClick={() => setExpandedImage(isExpanded ? null : image.id)}>
+											<TableCell className='pl-4'>
+												<div className='flex items-center gap-2'>
+													{isExpanded
+														? <IconChevronDown size={14} className='shrink-0 text-text-tertiary' />
+														: <IconChevronRight size={14} className='shrink-0 text-text-tertiary' />
+													}
+													<span className={cn('truncate font-mono text-sm', isNone && 'italic text-text-tertiary')} title={image.repoTags.join(', ')}>
+														{primaryTag}
 													</span>
-												)}
-											</div>
-										</TableCell>
-										<TableCell>
-											<span className='text-sm text-text-secondary'>{formatBytes(image.size)}</span>
-										</TableCell>
-										<TableCell>
-											<span className='text-sm text-text-secondary'>{formatRelativeDate(image.created)}</span>
-										</TableCell>
-										<TableCell className='text-right pr-4'>
-											<ActionButton
-												icon={IconTrash}
-												onClick={() => setRemoveTarget({id: image.id, tag: primaryTag})}
-												disabled={isRemoving}
-												color='red'
-												title='Remove image'
-											/>
-										</TableCell>
-									</TableRow>
+													{extraCount > 0 && (
+														<span className='inline-flex items-center rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600'>
+															+{extraCount} more
+														</span>
+													)}
+												</div>
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{formatBytes(image.size)}</span>
+											</TableCell>
+											<TableCell>
+												<span className='text-sm text-text-secondary'>{formatRelativeDate(image.created)}</span>
+											</TableCell>
+											<TableCell className='text-right pr-4'>
+												<div className='flex items-center justify-end gap-0.5' onClick={(e) => e.stopPropagation()}>
+													<ActionButton
+														icon={IconTag}
+														onClick={() => setTagTarget({id: image.id, tag: primaryTag})}
+														disabled={isTagging}
+														color='blue'
+														title='Tag image'
+													/>
+													<ActionButton
+														icon={IconTrash}
+														onClick={() => setRemoveTarget({id: image.id, tag: primaryTag})}
+														disabled={isRemoving}
+														color='red'
+														title='Remove image'
+													/>
+												</div>
+											</TableCell>
+										</TableRow>
+										{isExpanded && <ImageHistoryRow imageId={image.id} />}
+									</Fragment>
 								)
 							})}
 						</TableBody>
@@ -1156,6 +1381,32 @@ function ImagesTab() {
 				}}
 				isPruning={isPruning}
 			/>
+
+			{/* Pull Image Dialog */}
+			<PullImageDialog
+				open={showPullDialog}
+				onOpenChange={setShowPullDialog}
+				onConfirm={(image) => {
+					pullImage(image)
+					setShowPullDialog(false)
+				}}
+				isPulling={isPulling}
+			/>
+
+			{/* Tag Image Dialog */}
+			{tagTarget && (
+				<TagImageDialog
+					open={!!tagTarget}
+					onOpenChange={(open) => { if (!open) setTagTarget(null) }}
+					imageId={tagTarget.id}
+					currentTag={tagTarget.tag}
+					onConfirm={(id, repo, tag) => {
+						tagImage(id, repo, tag)
+						setTagTarget(null)
+					}}
+					isTagging={isTagging}
+				/>
+			)}
 		</>
 	)
 }
