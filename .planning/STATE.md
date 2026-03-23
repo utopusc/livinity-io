@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T00:27:46.411Z"
+last_updated: "2026-03-23T00:34:54.815Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -39,6 +39,8 @@ Plan: 2 of 2
 - [Phase 41]: Form state uses string types for numeric inputs with submit-time conversion (MB to bytes, seconds to nanoseconds)
 - [Phase 42]: Recreate flow: stop+force-remove+createContainer for clean container config updates
 - [Phase 42]: Docker naming regex validated at both domain and Zod layers for defense in depth
+- [Phase 42]: Form mode determined by optional string props (editContainerName/duplicateContainerName) rather than explicit mode enum
+- [Phase 42]: detailToFormState leaves fields not in ContainerDetail empty rather than guessing
 
 ### Pending Todos
 

@@ -23,7 +23,7 @@
 - [x] **EDIT-03**: User can edit an existing container's volume mounts and recreate
 - [x] **EDIT-04**: User can edit an existing container's restart policy and recreate
 - [x] **EDIT-05**: User can edit an existing container's resource limits and recreate
-- [ ] **EDIT-06**: User can duplicate a container (clone config into pre-filled creation form)
+- [x] **EDIT-06**: User can duplicate a container (clone config into pre-filled creation form)
 - [x] **EDIT-07**: User can rename a container
 
 ### EXEC — Container Terminal
@@ -84,7 +84,7 @@
 
 - [x] **UI-01**: Server Management window size increased to 1400x900 minimum
 - [x] **UI-02**: Container creation form is a full-page or large modal with tabbed sections
-- [ ] **UI-03**: Container edit/recreate uses the same form pre-filled with current config
+- [x] **UI-03**: Container edit/recreate uses the same form pre-filled with current config
 - [ ] **UI-04**: Stacks gets its own tab in Server Management
 - [ ] **UI-05**: Events gets its own tab in Server Management
 - [ ] **UI-06**: Engine info shown in Overview tab or dedicated section
@@ -118,7 +118,7 @@
 | EDIT-03 | Phase 42 | Complete |
 | EDIT-04 | Phase 42 | Complete |
 | EDIT-05 | Phase 42 | Complete |
-| EDIT-06 | Phase 42 | Pending |
+| EDIT-06 | Phase 42 | Complete |
 | EDIT-07 | Phase 42 | Complete |
 | EXEC-01 | Phase 43 | Pending |
 | EXEC-02 | Phase 43 | Pending |
@@ -149,7 +149,7 @@
 | ENGINE-01 | Phase 46 | Pending |
 | UI-01 | Phase 41 | Complete |
 | UI-02 | Phase 41 | Complete |
-| UI-03 | Phase 42 | Pending |
+| UI-03 | Phase 42 | Complete |
 | UI-04 | Phase 45 | Pending |
 | UI-05 | Phase 46 | Pending |
 | UI-06 | Phase 46 | Pending |
