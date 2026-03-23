@@ -28,6 +28,15 @@ import {
 	removeNetwork,
 	disconnectNetwork,
 } from './docker.js'
+import {
+	listStacks,
+	deployStack,
+	editStack,
+	controlStack,
+	removeStack,
+	getStackCompose,
+	getStackEnv,
+} from './stacks.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -661,6 +670,190 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || 'Failed to disconnect container',
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Stack management
+	// -----------------------------------------------------------------------
+
+	listStacks: adminProcedure.query(async () => {
+		return listStacks()
+	}),
+
+	deployStack: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+				composeYaml: z.string().min(1).max(1_000_000),
+				envVars: z
+					.array(
+						z.object({
+							key: z.string().min(1),
+							value: z.string(),
+						}),
+					)
+					.optional(),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await deployStack(input)
+			} catch (err: any) {
+				if (err.message?.includes('[validation-error]')) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: err.message.replace('[validation-error] ', ''),
+					})
+				}
+				if (err.message?.includes('[compose-error]')) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message.replace('[compose-error] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to deploy stack ${input.name}`,
+				})
+			}
+		}),
+
+	editStack: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+				composeYaml: z.string().min(1).max(1_000_000),
+				envVars: z
+					.array(
+						z.object({
+							key: z.string().min(1),
+							value: z.string(),
+						}),
+					)
+					.optional(),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await editStack(input)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[compose-error]')) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message.replace('[compose-error] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to edit stack ${input.name}`,
+				})
+			}
+		}),
+
+	controlStack: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				operation: z.enum(['up', 'down', 'stop', 'start', 'restart']),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await controlStack(input.name, input.operation)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[compose-error]')) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message.replace('[compose-error] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to ${input.operation} stack ${input.name}`,
+				})
+			}
+		}),
+
+	removeStack: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				removeVolumes: z.boolean().optional().default(false),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await removeStack(input.name, input.removeVolumes)
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[compose-error]')) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message.replace('[compose-error] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to remove stack ${input.name}`,
+				})
+			}
+		}),
+
+	getStackCompose: adminProcedure
+		.input(z.object({name: z.string().min(1).max(255)}))
+		.query(async ({input}) => {
+			try {
+				const yaml = await getStackCompose(input.name)
+				return {yaml}
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to get compose for stack ${input.name}`,
+				})
+			}
+		}),
+
+	getStackEnv: adminProcedure
+		.input(z.object({name: z.string().min(1).max(255)}))
+		.query(async ({input}) => {
+			try {
+				const envVars = await getStackEnv(input.name)
+				return {envVars}
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to get env for stack ${input.name}`,
 				})
 			}
 		}),
