@@ -22,13 +22,39 @@ export function useContainers() {
 		},
 	})
 
+	const bulkManageMutation = trpcReact.docker.bulkManageContainers.useMutation({
+		onSuccess: (data) => {
+			const successCount = data.filter((r) => r.success).length
+			const totalCount = data.length
+			setActionResult({
+				type: successCount === totalCount ? 'success' : 'error',
+				message: `Bulk ${data.length > 0 ? 'operation' : 'action'}: ${successCount}/${totalCount} succeeded`,
+			})
+			containersQuery.refetch()
+			setTimeout(() => setActionResult(null), 3000)
+		},
+		onError: (error) => {
+			setActionResult({type: 'error', message: error.message})
+			setTimeout(() => setActionResult(null), 5000)
+		},
+	})
+
 	const manage = (
 		name: string,
-		operation: 'start' | 'stop' | 'restart' | 'remove',
+		operation: 'start' | 'stop' | 'restart' | 'remove' | 'kill' | 'pause' | 'unpause',
 		opts?: {force?: boolean; confirmName?: string},
 	) => {
 		setActionResult(null)
 		manageMutation.mutate({name, operation, force: opts?.force, confirmName: opts?.confirmName})
+	}
+
+	const bulkManage = (
+		names: string[],
+		operation: 'start' | 'stop' | 'restart' | 'remove' | 'kill' | 'pause' | 'unpause',
+		opts?: {force?: boolean},
+	) => {
+		setActionResult(null)
+		bulkManageMutation.mutate({names, operation, force: opts?.force})
 	}
 
 	const containers = containersQuery.data ?? []
@@ -44,6 +70,8 @@ export function useContainers() {
 		refetch: containersQuery.refetch,
 		manage,
 		isManaging: manageMutation.isPending,
+		bulkManage,
+		isBulkManaging: bulkManageMutation.isPending,
 		actionResult,
 		runningCount,
 		totalCount,
