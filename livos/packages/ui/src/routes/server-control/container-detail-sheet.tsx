@@ -3,6 +3,7 @@ import {
 	IconInfoCircle,
 	IconFileText,
 	IconChartBar,
+	IconTerminal2,
 	IconX,
 	IconRefresh,
 	IconArrowDown,
@@ -11,8 +12,12 @@ import {
 	IconPencil,
 	IconCopy,
 } from '@tabler/icons-react'
+import {Terminal} from '@xterm/xterm'
+import {FitAddon} from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
 
 import {useContainerDetail} from '@/hooks/use-container-detail'
+import {trpcReact} from '@/trpc/trpc'
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {Progress} from '@/shadcn-components/ui/progress'
@@ -421,6 +426,227 @@ function StatsTab({containerName}: {containerName: string}) {
 }
 
 // ---------------------------------------------------------------------------
+// Console Tab
+// ---------------------------------------------------------------------------
+
+const XTERM_THEME = {
+	background: '#171717',
+	foreground: '#e5e5e5',
+	cursor: '#a3a3a3',
+	selectionBackground: '#404040',
+	black: '#171717',
+	red: '#f87171',
+	green: '#4ade80',
+	yellow: '#facc15',
+	blue: '#60a5fa',
+	magenta: '#c084fc',
+	cyan: '#22d3ee',
+	white: '#e5e5e5',
+	brightBlack: '#525252',
+	brightRed: '#fca5a5',
+	brightGreen: '#86efac',
+	brightYellow: '#fde68a',
+	brightBlue: '#93c5fd',
+	brightMagenta: '#d8b4fe',
+	brightCyan: '#67e8f9',
+	brightWhite: '#fafafa',
+}
+
+function ConsoleTab({containerName}: {containerName: string}) {
+	const [shell, setShell] = useState<'bash' | 'sh' | 'ash'>('bash')
+	const [user, setUser] = useState('')
+	const [connected, setConnected] = useState(false)
+
+	const terminalRef = useRef<Terminal | null>(null)
+	const wsRef = useRef<WebSocket | null>(null)
+	const containerRef = useRef<HTMLDivElement>(null)
+	const fitAddonRef = useRef<FitAddon | null>(null)
+	const resizeObserverRef = useRef<ResizeObserver | null>(null)
+
+	// Query container state to determine if running (cached from Info tab)
+	const inspectQuery = trpcReact.docker.inspectContainer.useQuery(
+		{name: containerName},
+		{enabled: !!containerName, retry: false},
+	)
+	const containerState = inspectQuery.data?.state ?? 'unknown'
+	const isRunning = containerState === 'running'
+
+	const disconnect = useCallback(() => {
+		if (wsRef.current) {
+			wsRef.current.close()
+			wsRef.current = null
+		}
+		if (terminalRef.current) {
+			terminalRef.current.dispose()
+			terminalRef.current = null
+		}
+		if (fitAddonRef.current) {
+			fitAddonRef.current = null
+		}
+		setConnected(false)
+	}, [])
+
+	const connect = useCallback(() => {
+		// Clean up previous instances
+		disconnect()
+
+		if (!containerRef.current) return
+
+		// Create new terminal
+		const terminal = new Terminal({
+			fontSize: 13,
+			fontFamily: 'SF Mono, SFMono-Regular, ui-monospace, DejaVu Sans Mono, Menlo, Consolas, monospace',
+			cursorBlink: true,
+			theme: XTERM_THEME,
+		})
+		terminalRef.current = terminal
+
+		// Create and load FitAddon
+		const fitAddon = new FitAddon()
+		fitAddonRef.current = fitAddon
+		terminal.loadAddon(fitAddon)
+
+		// Open terminal in container
+		terminal.open(containerRef.current)
+
+		// Build WebSocket URL
+		const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+		const port = window.location.port ? `:${window.location.port}` : ''
+		const token = localStorage.getItem('jwt')
+		const params = new URLSearchParams({container: containerName, shell, token: token || ''})
+		if (user) params.set('user', user)
+		const wsUrl = `${wsProtocol}//${window.location.hostname}${port}/ws/docker-exec?${params}`
+
+		// Create WebSocket
+		const ws = new WebSocket(wsUrl)
+		ws.binaryType = 'arraybuffer'
+		wsRef.current = ws
+
+		ws.onopen = () => {
+			fitAddon.fit()
+			terminal.focus()
+			setConnected(true)
+		}
+
+		ws.onmessage = (event) => {
+			terminal.write(new Uint8Array(event.data))
+		}
+
+		ws.onclose = () => {
+			setConnected(false)
+			if (terminalRef.current) {
+				terminalRef.current.write('\r\n\x1b[31m[Disconnected]\x1b[0m\r\n')
+			}
+		}
+
+		ws.onerror = () => {
+			setConnected(false)
+		}
+
+		// Terminal -> WebSocket
+		terminal.onData((data) => {
+			if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+				wsRef.current.send(data)
+			}
+		})
+
+		// Terminal resize -> WebSocket
+		terminal.onResize(({cols, rows}) => {
+			if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+				wsRef.current.send(JSON.stringify({type: 'resize', cols, rows}))
+			}
+		})
+	}, [containerName, shell, user, disconnect])
+
+	// ResizeObserver to refit terminal when container dimensions change
+	useEffect(() => {
+		const el = containerRef.current
+		if (!el) return
+
+		const observer = new ResizeObserver(() => {
+			if (fitAddonRef.current && terminalRef.current) {
+				try {
+					fitAddonRef.current.fit()
+				} catch {
+					// Ignore fit errors during cleanup
+				}
+			}
+		})
+		observer.observe(el)
+		resizeObserverRef.current = observer
+
+		return () => {
+			observer.disconnect()
+			resizeObserverRef.current = null
+		}
+	}, [])
+
+	// Cleanup on unmount
+	useEffect(() => {
+		return () => {
+			if (wsRef.current) {
+				wsRef.current.close()
+				wsRef.current = null
+			}
+			if (terminalRef.current) {
+				terminalRef.current.dispose()
+				terminalRef.current = null
+			}
+		}
+	}, [])
+
+	return (
+		<div className='flex h-full flex-col gap-3'>
+			{/* Controls */}
+			<div className='flex shrink-0 items-center gap-3'>
+				{isRunning ? (
+					<>
+						<select
+							value={shell}
+							onChange={(e) => setShell(e.target.value as 'bash' | 'sh' | 'ash')}
+							disabled={connected}
+							className='rounded-lg border border-border-default bg-surface-1 px-2.5 py-1 text-xs text-text-primary disabled:opacity-50'
+						>
+							<option value='bash'>bash</option>
+							<option value='sh'>sh</option>
+							<option value='ash'>ash</option>
+						</select>
+						<input
+							type='text'
+							value={user}
+							onChange={(e) => setUser(e.target.value)}
+							disabled={connected}
+							placeholder='user (optional)'
+							className='w-[120px] rounded-lg border border-border-default bg-surface-1 px-2.5 py-1 text-xs text-text-primary placeholder:text-text-tertiary disabled:opacity-50'
+						/>
+						{connected ? (
+							<button
+								onClick={disconnect}
+								className='rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700'
+							>
+								Disconnect
+							</button>
+						) : (
+							<button
+								onClick={connect}
+								className='rounded-lg bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700'
+							>
+								Connect
+							</button>
+						)}
+					</>
+				) : (
+					<p className='text-xs text-text-tertiary'>Container must be running to open a console</p>
+				)}
+			</div>
+
+			{/* Terminal area */}
+			<div ref={containerRef} className='h-full min-h-0 w-full flex-1 rounded-lg bg-neutral-950 p-1' />
+		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -494,6 +720,10 @@ export function ContainerDetailSheet({
 									<IconChartBar size={14} />
 									Stats
 								</TabsTrigger>
+								<TabsTrigger value='console' className='flex items-center gap-1.5'>
+									<IconTerminal2 size={14} />
+									Console
+								</TabsTrigger>
 							</TabsList>
 
 							<TabsContent value='info' className='flex-1 overflow-auto p-4'>
@@ -504,6 +734,9 @@ export function ContainerDetailSheet({
 							</TabsContent>
 							<TabsContent value='stats' className='flex-1 overflow-auto p-4'>
 								<StatsTab containerName={containerName} />
+							</TabsContent>
+							<TabsContent value='console' className='flex min-h-0 flex-1 flex-col p-4'>
+								<ConsoleTab containerName={containerName} />
 							</TabsContent>
 						</Tabs>
 					)}
