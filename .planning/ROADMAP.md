@@ -263,7 +263,7 @@ Plans:
 
 - [x] **Phase 41: Container Creation** — Full container creation form (name, image, ports, volumes, env, restart, resources, health, network) + window resize (completed 2026-03-23)
 - [x] **Phase 42: Container Edit & Recreate** — Edit existing container config + recreate, duplicate, rename (completed 2026-03-23)
-- [ ] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap
+- [x] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap (completed 2026-03-23)
 - [ ] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage
 - [ ] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars
 - [ ] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish
@@ -310,7 +310,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 43-01-PLAN.md -- Backend docker exec WebSocket handler + frontend Console tab with xterm.js
-- [ ] 43-02-PLAN.md -- Enhanced LogsTab with search/highlight, download, timestamps toggle, line wrap toggle
+- [x] 43-02-PLAN.md -- Enhanced LogsTab with search/highlight, download, timestamps toggle, line wrap toggle
 
 ### Phase 44: Bulk Ops + Enhanced Images + Networks + Volumes
 **Goal**: User can perform bulk container actions, pull/tag images, create networks, create volumes, and see container-volume associations
@@ -373,7 +373,7 @@ Plans:
 | 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
 | 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
 | 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 43. Exec Terminal + Enhanced Logs | v13.0 | 1/2 | In Progress|  |
+| 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete   | 2026-03-23 |
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 0/? | Not started | - |
 | 45. Docker Compose Stacks | v13.0 | 0/? | Not started | - |
 | 46. Events + Engine Info + Polish | v13.0 | 0/? | Not started | - |

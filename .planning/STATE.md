@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v12.0
 milestone_name: Server Management Dashboard
 status: unknown
-last_updated: "2026-03-23T00:48:34.185Z"
+last_updated: "2026-03-23T00:54:14.860Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -43,6 +43,8 @@ Plan: 2 of 2
 - [Phase 42]: detailToFormState leaves fields not in ContainerDetail empty rather than guessing
 - [Phase 43]: Used Dockerode exec API with hijack mode instead of pty.spawn docker for direct stream control
 - [Phase 43]: ConsoleTab queries inspectContainer internally (cached by React Query) rather than receiving state as prop
+- [Phase 43]: Search highlighting uses useMemo with mark elements and data-match-index for scrollIntoView navigation
+- [Phase 43]: Timestamps toggle re-fetches from backend (Docker API) rather than client-side stripping for data accuracy
 
 ### Pending Todos
 

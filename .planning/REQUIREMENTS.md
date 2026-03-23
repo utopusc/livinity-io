@@ -34,10 +34,10 @@
 
 ### LOGS — Enhanced Container Logs
 
-- [ ] **LOGS-01**: User can search within container logs
-- [ ] **LOGS-02**: User can download container logs as a file
-- [ ] **LOGS-03**: User can toggle timestamps on/off in log view
-- [ ] **LOGS-04**: User can toggle line wrap on/off in log view
+- [x] **LOGS-01**: User can search within container logs
+- [x] **LOGS-02**: User can download container logs as a file
+- [x] **LOGS-03**: User can toggle timestamps on/off in log view
+- [x] **LOGS-04**: User can toggle line wrap on/off in log view
 
 ### ACT — Container Actions
 
@@ -123,10 +123,10 @@
 | EXEC-01 | Phase 43 | Complete |
 | EXEC-02 | Phase 43 | Complete |
 | EXEC-03 | Phase 43 | Complete |
-| LOGS-01 | Phase 43 | Pending |
-| LOGS-02 | Phase 43 | Pending |
-| LOGS-03 | Phase 43 | Pending |
-| LOGS-04 | Phase 43 | Pending |
+| LOGS-01 | Phase 43 | Complete |
+| LOGS-02 | Phase 43 | Complete |
+| LOGS-03 | Phase 43 | Complete |
+| LOGS-04 | Phase 43 | Complete |
 | ACT-01 | Phase 44 | Pending |
 | ACT-02 | Phase 44 | Pending |
 | ACT-03 | Phase 44 | Pending |
