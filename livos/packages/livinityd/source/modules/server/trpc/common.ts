@@ -70,6 +70,11 @@ export const httpOnlyPaths = [
 	'docker.createNetwork',
 	'docker.removeNetwork',
 	'docker.disconnectNetwork',
+	// Stack management -- use HTTP for reliability
+	'docker.deployStack',
+	'docker.editStack',
+	'docker.controlStack',
+	'docker.removeStack',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
 ] as const
