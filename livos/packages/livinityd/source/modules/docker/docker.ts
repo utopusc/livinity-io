@@ -18,6 +18,8 @@ import {
 	type NetworkInfo,
 	type NetworkDetail,
 	type ContainerCreateInput,
+	type DockerEvent,
+	type EngineInfo,
 } from './types.js'
 
 // Singleton Dockerode instance -- reused across all calls (not per-call like ai/routes.ts)
@@ -782,4 +784,105 @@ export async function volumeUsage(
 	}
 
 	return usage
+}
+
+// ---------------------------------------------------------------------------
+// Docker Events (Phase 46)
+// ---------------------------------------------------------------------------
+
+export async function getDockerEvents(options: {
+	since?: number
+	until?: number
+	filters?: {type?: string[]}
+}): Promise<DockerEvent[]> {
+	const now = Math.floor(Date.now() / 1000)
+	const sinceTs = options.since ?? now - 3600
+	const untilTs = options.until ?? now
+
+	const query: Record<string, any> = {
+		since: sinceTs,
+		until: untilTs,
+	}
+	if (options.filters?.type && options.filters.type.length > 0) {
+		query.filters = JSON.stringify({type: options.filters.type})
+	}
+
+	const stream = await docker.getEvents(query)
+
+	const events = await new Promise<DockerEvent[]>((resolve, reject) => {
+		const chunks: Buffer[] = []
+		const timeout = setTimeout(() => {
+			stream.destroy()
+			resolve(parseEventChunks(chunks))
+		}, 10_000)
+
+		stream.on('data', (chunk: Buffer) => {
+			chunks.push(chunk)
+		})
+
+		stream.on('end', () => {
+			clearTimeout(timeout)
+			resolve(parseEventChunks(chunks))
+		})
+
+		stream.on('error', (err: Error) => {
+			clearTimeout(timeout)
+			reject(err)
+		})
+	})
+
+	// Sort by time descending (most recent first) and cap at 200
+	return events.sort((a, b) => b.time - a.time).slice(0, 200)
+}
+
+function parseEventChunks(chunks: Buffer[]): DockerEvent[] {
+	const raw = Buffer.concat(chunks).toString('utf-8')
+	const lines = raw.split('\n').filter((line) => line.trim().length > 0)
+	const events: DockerEvent[] = []
+
+	for (const line of lines) {
+		try {
+			const parsed = JSON.parse(line)
+			events.push({
+				type: parsed.Type || '',
+				action: parsed.Action || '',
+				actor:
+					parsed.Actor?.Attributes?.name ||
+					parsed.Actor?.Attributes?.image ||
+					parsed.Actor?.ID?.slice(0, 12) ||
+					'unknown',
+				actorId: parsed.Actor?.ID || '',
+				time: parsed.time || (parsed.timeNano ? Math.floor(parsed.timeNano / 1e9) : 0),
+				attributes: parsed.Actor?.Attributes || {},
+			})
+		} catch {
+			// Skip malformed JSON lines
+		}
+	}
+
+	return events
+}
+
+// ---------------------------------------------------------------------------
+// Docker Engine Info (Phase 46)
+// ---------------------------------------------------------------------------
+
+export async function getEngineInfo(): Promise<EngineInfo> {
+	const [info, version] = await Promise.all([docker.info(), docker.version()])
+
+	return {
+		version: version.Version,
+		apiVersion: version.ApiVersion,
+		os: info.OperatingSystem,
+		architecture: info.Architecture,
+		kernelVersion: info.KernelVersion,
+		storageDriver: info.Driver,
+		loggingDriver: info.LoggingDriver,
+		cpus: info.NCPU,
+		totalMemory: info.MemTotal,
+		dockerRootDir: info.DockerRootDir,
+		containers: info.Containers,
+		images: info.Images,
+		serverTime: info.SystemTime,
+	}
 }
