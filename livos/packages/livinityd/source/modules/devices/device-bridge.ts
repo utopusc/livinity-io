@@ -275,4 +275,90 @@ export class DeviceBridge {
 	isDeviceConnected(deviceId: string): boolean {
 		return this.connectedDevices.has(deviceId)
 	}
+
+	// -- Redis Device Queries & Mutations (for tRPC routes) --
+
+	async getDeviceFromRedis(
+		deviceId: string,
+	): Promise<{deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number} | null> {
+		const raw = await this.redis.get(`${DEVICE_REDIS_PREFIX}${deviceId}`)
+		if (!raw) return null
+		try {
+			return JSON.parse(raw)
+		} catch {
+			return null
+		}
+	}
+
+	async getAllDevicesFromRedis(): Promise<
+		Array<{deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number; online: boolean}>
+	> {
+		const keys = await this.redis.keys(`${DEVICE_REDIS_PREFIX}*`)
+		if (keys.length === 0) return []
+
+		const pipeline = this.redis.pipeline()
+		for (const key of keys) pipeline.get(key)
+		const results = await pipeline.exec()
+		if (!results) return []
+
+		const devices: Array<{
+			deviceId: string
+			deviceName: string
+			platform: string
+			tools: string[]
+			connectedAt: number
+			online: boolean
+		}> = []
+
+		for (const [err, val] of results) {
+			if (err || !val) continue
+			try {
+				const parsed = JSON.parse(val as string)
+				devices.push({
+					...parsed,
+					online: this.connectedDevices.has(parsed.deviceId),
+				})
+			} catch {
+				// skip malformed entries
+			}
+		}
+
+		return devices
+	}
+
+	async renameDevice(deviceId: string, newName: string): Promise<boolean> {
+		const redisKey = `${DEVICE_REDIS_PREFIX}${deviceId}`
+		const raw = await this.redis.get(redisKey)
+		if (!raw) return false
+
+		try {
+			const data = JSON.parse(raw)
+			data.deviceName = newName
+			const ttl = await this.redis.ttl(redisKey)
+			await this.redis.set(redisKey, JSON.stringify(data), 'EX', ttl > 0 ? ttl : 90000)
+		} catch {
+			return false
+		}
+
+		// Update in-memory state if device is online
+		const inMemory = this.connectedDevices.get(deviceId)
+		if (inMemory) {
+			inMemory.deviceName = newName
+		}
+
+		return true
+	}
+
+	async removeDevice(deviceId: string): Promise<boolean> {
+		// Delete Redis key
+		await this.redis.del(`${DEVICE_REDIS_PREFIX}${deviceId}`)
+
+		// Remove from in-memory state
+		this.connectedDevices.delete(deviceId)
+
+		// Tell relay to disconnect the device
+		this.sendTunnelMessage({type: 'device_disconnect', deviceId})
+
+		return true
+	}
 }
