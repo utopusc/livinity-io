@@ -1,5 +1,24 @@
 # Milestones
 
+## v15.0 AI Computer Use (Shipped: 2026-03-24)
+
+**Phases completed:** 5 phases, 10 plans, 20 tasks
+
+**Key accomplishments:**
+
+- 8 desktop automation tools (6 mouse + 2 keyboard) using @jitsi/robotjs with lazy loading, combo key parsing, and drag safety
+- robotjs native addon wired into SEA build (external + prebuilds copy) and all 17 tool schemas registered in DeviceBridge for Nexus proxy routing
+- screen_info tool for display geometry/scaling/active window, plus coordinate metadata on screenshot return data for AI vision-to-screen mapping
+- Kimi vision enabled and native tool calling path wires screenshot images through to LLM via multimodal content blocks
+- AI system prompt with screenshot-analyze-act-verify loop, configurable 50-action step limit, and graceful session termination
+- SSE screenshot passthrough, chatStatus computer use enrichment (screenshot/actions/paused), and pause/resume/stop tRPC mutations for live monitoring
+- ComputerUsePanel with live screenshot feed, red dot click overlays, blue type badges, action timeline, and pause/resume/stop controls wired into AI chat split-pane layout
+- AbortController-based SSE stream abort so stopComputerUse actually kills the Nexus agent loop
+- Emergency stop hotkey (3x Escape in 1s) with device_emergency_stop protocol message, plus enriched audit events carrying full coordinates and text for all mouse/keyboard tools
+- Emergency stop protocol chain through relay, user consent gate with modal dialog, and 60s inactivity auto-timeout for computer use sessions
+
+---
+
 ## v14.1 Agent Installer & Setup UX (Shipped: 2026-03-24)
 
 **Phases completed:** 12 phases, 19 plans, 35 tasks

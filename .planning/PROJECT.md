@@ -39,28 +39,25 @@ Key validated capabilities:
   - ✓ Native installers: Windows .exe (Inno Setup), macOS .dmg, Linux .deb
   - ✓ Auto-start on boot (registry, LaunchAgent, systemd)
   - ✓ livinity.io/download with platform detection
+- ✓ AI Computer Use — v15.0
+  - ✓ 8 desktop automation tools (6 mouse + 2 keyboard) via @jitsi/robotjs
+  - ✓ Screen info tool (resolution, displays, active window) + screenshot coordinate metadata
+  - ✓ Multimodal vision: Kimi receives screenshot images, analyzes UI, determines coordinates
+  - ✓ Autonomous screenshot→analyze→act→verify loop with 50-action step limit
+  - ✓ Live monitoring: real-time screenshot feed, click/type overlays, action timeline
+  - ✓ Session controls: pause/resume/stop with AbortController SSE abort
+  - ✓ User consent dialog before AI takes device control
+  - ✓ Emergency stop: 3x Escape hotkey → full protocol chain → session abort
+  - ✓ Enriched audit logging with coordinates/text for all computer use actions
+  - ✓ 60-second inactivity auto-timeout
 
-## Current Milestone: v15.0 — AI Computer Use
+## Current Milestone: None (v15.0 complete)
 
-**Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices — Claude Computer Use style. The AI takes screenshots, analyzes them with multimodal vision, determines coordinates, and executes mouse/keyboard actions in a screenshot→analyze→action loop.
+**Goal:** Planning next milestone.
 
-**Target features:**
-- Mouse & keyboard automation tools in the agent (click, type, press, drag, move, scroll)
-- Screenshot→analyze→action loop in Nexus AI (computer use mode)
-- Live screen monitoring UI in LivOS (real-time screenshot stream)
-- Security: user consent, emergency stop, per-action audit logging
-- Screen size and coordinate system handling
+### Active
 
-### Active (v15.0 — AI Computer Use)
-
-- [ ] Mouse automation tools (click, double-click, right-click, move, drag)
-- [ ] Keyboard automation tools (type text, press keys, key combinations)
-- [ ] Screen info tool (get resolution, active window info)
-- [ ] Computer use agent loop in Nexus (screenshot→vision→action cycle)
-- [ ] Live screen monitoring in LivOS UI (streaming screenshots, action overlay)
-- [ ] User consent flow for computer control sessions
-- [ ] Emergency stop mechanism (hotkey kills AI control)
-- [ ] Per-action audit logging for all mouse/keyboard events
+(None — defining next milestone)
 
 ### Out of Scope
 
@@ -142,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 — v15.0 milestone started (AI Computer Use)*
+*Last updated: 2026-03-24 after v15.0 milestone (AI Computer Use)*
