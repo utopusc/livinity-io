@@ -2,10 +2,13 @@
 import { setupCommand, startCommand, stopCommand, statusCommand } from './cli.js';
 
 const command = process.argv[2];
+const cliMode = process.argv.includes('--cli');
+// --web is the default; accept it as a no-op for explicitness
+const _webMode = process.argv.includes('--web');
 
 switch (command) {
   case 'setup':
-    await setupCommand();
+    await setupCommand({ cli: cliMode });
     break;
   case 'start':
     await startCommand();
@@ -26,5 +29,9 @@ switch (command) {
     console.log('  start    Connect to relay and start accepting tool calls');
     console.log('  stop     Stop the running agent');
     console.log('  status   Show connection status');
+    console.log('');
+    console.log('Flags:');
+    console.log('  --cli    Use terminal-only setup (no browser)');
+    console.log('  --web    Use browser-based setup (default)');
     break;
 }

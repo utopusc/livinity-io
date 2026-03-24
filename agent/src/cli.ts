@@ -6,8 +6,23 @@ import { deviceFlowSetup, isTokenExpired } from './auth.js';
 
 // ---- setup ----
 
-export async function setupCommand(): Promise<void> {
-  // Prompt for device name with hostname as default
+export async function setupCommand(options: { cli?: boolean } = {}): Promise<void> {
+  // Web mode (default): open browser-based setup wizard
+  if (!options.cli) {
+    const { startSetupServer } = await import('./setup-server.js');
+    const server = await startSetupServer();
+
+    console.log(`Setup wizard opened in your browser at http://localhost:${server.port}`);
+    console.log('Complete the setup in your browser, or use --cli for terminal setup.');
+
+    const creds = await server.waitForSetup();
+    server.close();
+
+    console.log(`Setup complete! Device: ${creds.deviceName}`);
+    return;
+  }
+
+  // CLI mode: terminal-based setup (existing behavior)
   const defaultName = hostname();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise<string>((resolve) =>
@@ -46,10 +61,29 @@ export async function setupCommand(): Promise<void> {
 // ---- start ----
 
 export async function startCommand(): Promise<void> {
-  const credentials = readCredentials();
+  let credentials = readCredentials();
+
+  // If no credentials, auto-open web setup wizard
   if (!credentials) {
-    console.log('No credentials found. Run `livinity-agent setup` first.');
-    process.exit(1);
+    console.log('No credentials found. Opening setup wizard...');
+
+    const { startSetupServer } = await import('./setup-server.js');
+    const server = await startSetupServer();
+
+    console.log(`Setup wizard opened in your browser at http://localhost:${server.port}`);
+    console.log('Complete the setup in your browser to continue.');
+
+    await server.waitForSetup();
+    server.close();
+
+    // Re-read credentials after setup completes
+    credentials = readCredentials();
+    if (!credentials) {
+      console.log('Setup did not complete. Exiting.');
+      process.exit(1);
+    }
+    console.log(`Setup complete! Device: ${credentials.deviceName}`);
+    console.log('Connecting to relay...');
   }
 
   // Check token expiry before connecting
@@ -66,7 +100,7 @@ export async function startCommand(): Promise<void> {
       console.log(`Agent already running (PID ${existingPid})`);
       process.exit(0);
     } catch {
-      // Process not running, stale PID file — continue
+      // Process not running, stale PID file -- continue
     }
   }
 
