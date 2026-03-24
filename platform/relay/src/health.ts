@@ -8,6 +8,7 @@
 import os from 'node:os';
 import type http from 'node:http';
 import type { TunnelRegistry } from './tunnel-registry.js';
+import type { DeviceRegistry } from './device-registry.js';
 
 const TOTAL_MEMORY = os.totalmem();
 const ALERT_THRESHOLD = 0.70;   // 70% — log warning
@@ -33,11 +34,14 @@ function getMemoryStatus() {
 export function handleHealthRequest(
   res: http.ServerResponse,
   registry: TunnelRegistry,
+  deviceRegistry?: DeviceRegistry,
 ): void {
   const mem = getMemoryStatus();
   const body = JSON.stringify({
     status: mem.pressure === 'critical' ? 'degraded' : 'ok',
     connections: registry.size,
+    devices: deviceRegistry?.totalDevices ?? 0,
+    deviceUsers: deviceRegistry?.totalUsers ?? 0,
     memory: {
       process: process.memoryUsage(),
       system: mem,

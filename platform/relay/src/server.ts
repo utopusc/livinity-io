@@ -16,6 +16,7 @@ import { proxyHttpRequest } from './request-proxy.js';
 import { serveOfflinePage } from './offline-page.js';
 import { checkQuota } from './bandwidth.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
+import type { DeviceRegistry } from './device-registry.js';
 import type { TunnelQuotaExceeded } from './protocol.js';
 
 /**
@@ -90,6 +91,7 @@ export function createRequestHandler(
   registry: TunnelRegistry,
   redis: Redis,
   pool: pg.Pool,
+  deviceRegistry?: DeviceRegistry,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
   return async (req, res) => {
     // Internal endpoints (localhost only)
@@ -142,7 +144,7 @@ export function createRequestHandler(
 
     // Health endpoint (on bare domain or direct IP)
     if (!username && req.url === '/health') {
-      handleHealthRequest(res, registry);
+      handleHealthRequest(res, registry, deviceRegistry);
       return;
     }
 
