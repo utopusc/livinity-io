@@ -680,9 +680,17 @@ export class AgentLoop extends EventEmitter {
               is_error: !toolResult.success,
             });
 
+            const isScreenshot = /^device_.*_screenshot$/.test(toolCall.name);
+            const screenshotData = isScreenshot && toolResult.images && toolResult.images.length > 0
+              ? toolResult.images[0].base64 : undefined;
             this.emitEvent({
               type: 'observation', turn: turn + 1,
-              data: { tool: toolCall.name, success: toolResult.success, output: (toolResult.output || '').slice(0, 500) },
+              data: {
+                tool: toolCall.name,
+                success: toolResult.success,
+                output: (toolResult.output || '').slice(0, 500),
+                ...(screenshotData ? { screenshot: screenshotData } : {}),
+              },
             });
 
             if (this.config.onAction) {
@@ -927,7 +935,10 @@ export class AgentLoop extends EventEmitter {
         : `Tool "${step.tool}" failed:\n${toolResult.error || toolResult.output}`;
 
       messages.push({ role: 'user', text: `Observation:\n${observation}`, images: toolResult.images });
-      this.emitEvent({ type: 'observation', turn: turn + 1, data: { tool: step.tool, success: toolResult.success, output: toolResult.output.slice(0, 500) } });
+      const isScreenshot = /^device_.*_screenshot$/.test(step.tool);
+      const screenshotData = isScreenshot && toolResult.images && toolResult.images.length > 0
+        ? toolResult.images[0].base64 : undefined;
+      this.emitEvent({ type: 'observation', turn: turn + 1, data: { tool: step.tool, success: toolResult.success, output: toolResult.output.slice(0, 500), ...(screenshotData ? { screenshot: screenshotData } : {}) } });
 
       // Fire onAction callback for live reporting
       if (this.config.onAction) {

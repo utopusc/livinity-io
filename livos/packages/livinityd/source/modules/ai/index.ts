@@ -39,6 +39,7 @@ interface LivStreamEventData {
 	answer?: string
 	awaitingApproval?: boolean
 	thought?: string
+	screenshot?: string  // base64 screenshot data from device screenshot tools
 }
 
 /** SSE event from Liv AI daemon */
@@ -230,7 +231,19 @@ export default class AiModule {
 		if (!userId || userId === 'admin') return 'liv:ui:'
 		return `liv:ui:u:${userId}:`
 	}
-	chatStatus = new Map<string, {status: string; tool?: string; steps?: string[]; commands?: string[]; turn?: number; awaitingApproval?: {tool: string; params: Record<string, unknown>; thought?: string}}>()
+	chatStatus = new Map<string, {
+		status: string;
+		tool?: string;
+		steps?: string[];
+		commands?: string[];
+		turn?: number;
+		awaitingApproval?: {tool: string; params: Record<string, unknown>; thought?: string};
+		// Computer use live monitoring fields
+		computerUse?: boolean;
+		screenshot?: string; // latest screenshot base64 (JPEG)
+		actions?: Array<{type: 'click' | 'double_click' | 'right_click' | 'type' | 'press' | 'drag' | 'scroll' | 'move' | 'screenshot'; x?: number; y?: number; text?: string; key?: string; timestamp: number}>;
+		paused?: boolean;
+	}>()
 
 	constructor({livinityd, redisUrl}: AiModuleOptions) {
 		this.livinityd = livinityd
@@ -418,6 +431,42 @@ export default class AiModule {
 							tool: rawName,
 							params: event.data.params || {},
 						})
+
+						// Track computer use actions in chatStatus
+						if (/^device_.*_(mouse_|keyboard_|screenshot)/.test(rawName)) {
+							const prev2 = this.chatStatus.get(conversationId)
+							const actions = prev2?.actions ?? []
+							const params = event.data.params || {}
+							let actionEntry: {type: 'click' | 'double_click' | 'right_click' | 'type' | 'press' | 'drag' | 'scroll' | 'move' | 'screenshot'; x?: number; y?: number; text?: string; key?: string; timestamp: number} | undefined
+							if (rawName.includes('_screenshot')) {
+								actionEntry = {type: 'screenshot', timestamp: Date.now()}
+							} else if (rawName.includes('mouse_double_click')) {
+								actionEntry = {type: 'double_click', x: Number(params.x) || 0, y: Number(params.y) || 0, timestamp: Date.now()}
+							} else if (rawName.includes('mouse_right_click')) {
+								actionEntry = {type: 'right_click', x: Number(params.x) || 0, y: Number(params.y) || 0, timestamp: Date.now()}
+							} else if (rawName.includes('mouse_click')) {
+								actionEntry = {type: 'click', x: Number(params.x) || 0, y: Number(params.y) || 0, timestamp: Date.now()}
+							} else if (rawName.includes('mouse_move')) {
+								actionEntry = {type: 'move', x: Number(params.x) || 0, y: Number(params.y) || 0, timestamp: Date.now()}
+							} else if (rawName.includes('mouse_drag')) {
+								actionEntry = {type: 'drag', x: Number(params.fromX ?? params.x) || 0, y: Number(params.fromY ?? params.y) || 0, timestamp: Date.now()}
+							} else if (rawName.includes('mouse_scroll')) {
+								actionEntry = {type: 'scroll', x: Number(params.x) || 0, y: Number(params.y) || 0, timestamp: Date.now()}
+							} else if (rawName.includes('keyboard_type')) {
+								actionEntry = {type: 'type', text: String(params.text || '').slice(0, 100), timestamp: Date.now()}
+							} else if (rawName.includes('keyboard_press')) {
+								actionEntry = {type: 'press', key: String(params.key || ''), timestamp: Date.now()}
+							} else {
+								actionEntry = undefined
+							}
+							if (actionEntry) {
+								this.chatStatus.set(conversationId, {
+									...prev2!,
+									computerUse: true,
+									actions: [...actions, actionEntry],
+								})
+							}
+						}
 					}
 
 					if (event.type === 'observation' && isEventData(event.data)) {
@@ -443,6 +492,17 @@ export default class AiModule {
 							},
 						})
 						pendingToolCalls.delete(key)
+
+						// Capture screenshot base64 from observation event into chatStatus
+						if (event.data.screenshot) {
+							const prev3 = this.chatStatus.get(conversationId)
+							if (prev3) {
+								this.chatStatus.set(conversationId, {
+									...prev3,
+									screenshot: event.data.screenshot as string,
+								})
+							}
+						}
 					}
 
 					if (event.type === 'done' && isEventData(event.data)) {
