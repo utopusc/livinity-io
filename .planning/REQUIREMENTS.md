@@ -55,9 +55,9 @@
 
 ### Tools -- AI Tool Integration
 
-- [ ] **TOOLS-01**: Connected device tools dynamically register in Nexus ToolRegistry as proxy tools
-- [ ] **TOOLS-02**: Tools unregister when device disconnects
-- [ ] **TOOLS-03**: Tool names prefixed with `device_{deviceId}_` to avoid collisions
+- [x] **TOOLS-01**: Connected device tools dynamically register in Nexus ToolRegistry as proxy tools
+- [x] **TOOLS-02**: Tools unregister when device disconnects
+- [x] **TOOLS-03**: Tool names prefixed with `device_{deviceId}_` to avoid collisions
 
 ### UI -- My Devices Panel
 
@@ -127,9 +127,9 @@
 | SEC-02 | Phase 48 | Complete |
 | RELAY-03 | Phase 49 | Complete |
 | RELAY-04 | Phase 49 | Complete |
-| TOOLS-01 | Phase 49 | Pending |
-| TOOLS-02 | Phase 49 | Pending |
-| TOOLS-03 | Phase 49 | Pending |
+| TOOLS-01 | Phase 49 | Complete |
+| TOOLS-02 | Phase 49 | Complete |
+| TOOLS-03 | Phase 49 | Complete |
 | SHELL-01 | Phase 50 | Pending |
 | SHELL-02 | Phase 50 | Pending |
 | SHELL-03 | Phase 50 | Pending |

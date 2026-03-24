@@ -107,7 +107,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 - [x] **Phase 47: Platform OAuth + Relay Device Infrastructure** - livinity.io device endpoints, relay DeviceRegistry, /device/connect WebSocket (completed 2026-03-24)
 - [x] **Phase 48: Agent Binary + Authentication** - Node.js SEA agent scaffold, OAuth device flow, connection manager, heartbeat (completed 2026-03-24)
-- [ ] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry
+- [x] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry (completed 2026-03-24)
 - [ ] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations
 - [ ] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection
 - [ ] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove
@@ -161,7 +161,7 @@ Plans:
 
 Plans:
 - [x] 49-01-PLAN.md -- Relay message routing: tunnel protocol types for device events, forward tool_call/tool_result between LivOS tunnel and device WS
-- [ ] 49-02-PLAN.md -- DeviceBridge module in livinityd, Nexus proxy tool registration API, tunnel-client event handlers, execution callback
+- [x] 49-02-PLAN.md -- DeviceBridge module in livinityd, Nexus proxy tool registration API, tunnel-client event handlers, execution callback
 
 ### Phase 50: Agent Core Tools -- Shell + Files
 **Goal**: The AI can execute shell commands and perform file operations on the user's remote PC via natural language
@@ -252,7 +252,7 @@ Plans:
 | 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 49. Relay Message Routing + DeviceBridge | v14.0 | 1/2 | In Progress|  |
+| 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete   | 2026-03-24 |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |
 | 52. My Devices UI | v14.0 | 0/2 | Not started | - |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.0
 milestone_name: Remote PC Control Agent
 status: unknown
-stopped_at: Completed 49-01-PLAN.md
-last_updated: "2026-03-24T06:06:28.960Z"
+stopped_at: Completed 49-02-PLAN.md
+last_updated: "2026-03-24T06:12:13.428Z"
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -43,6 +43,7 @@ Plan: 2 of 2
 | 48 | 1 | 3min | 3min |
 | Phase 48 P02 | 3min | 2 tasks | 3 files |
 | Phase 49 P01 | 3min | 2 tasks | 4 files |
+| Phase 49 P02 | 3min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Plan: 2 of 2
 - [Phase 48]: Token expiry check in ConnectionManager.connect() with 5min buffer prevents reconnect storms
 - [Phase 49]: getByUserId iterates TunnelRegistry Map (acceptable at v14.0 scale of 50-100 tunnels)
 - [Phase 49]: Relay returns error TunnelDeviceToolResult immediately if target device not connected (no queueing in v14.0)
+- [Phase 49]: Used crypto.randomUUID() instead of nanoid in DeviceBridge (not a direct dependency)
+- [Phase 49]: Proxy tool registration uses HTTP callback pattern: Nexus POSTs to livinityd /internal/device-tool-execute
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T06:06:28.957Z
-Stopped at: Completed 49-01-PLAN.md
+Last session: 2026-03-24T06:12:13.424Z
+Stopped at: Completed 49-02-PLAN.md
 Resume file: None
