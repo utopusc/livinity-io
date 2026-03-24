@@ -72,35 +72,35 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOUSE-01 | -- | Pending |
-| MOUSE-02 | -- | Pending |
-| MOUSE-03 | -- | Pending |
-| MOUSE-04 | -- | Pending |
-| MOUSE-05 | -- | Pending |
-| MOUSE-06 | -- | Pending |
-| KEY-01 | -- | Pending |
-| KEY-02 | -- | Pending |
-| SCREEN-01 | -- | Pending |
-| SCREEN-02 | -- | Pending |
-| LOOP-01 | -- | Pending |
-| LOOP-02 | -- | Pending |
-| LOOP-03 | -- | Pending |
-| LOOP-04 | -- | Pending |
-| LOOP-05 | -- | Pending |
-| UI-01 | -- | Pending |
-| UI-02 | -- | Pending |
-| UI-03 | -- | Pending |
-| UI-04 | -- | Pending |
-| SEC-01 | -- | Pending |
-| SEC-02 | -- | Pending |
-| SEC-03 | -- | Pending |
-| SEC-04 | -- | Pending |
+| MOUSE-01 | Phase 5 | Pending |
+| MOUSE-02 | Phase 5 | Pending |
+| MOUSE-03 | Phase 5 | Pending |
+| MOUSE-04 | Phase 5 | Pending |
+| MOUSE-05 | Phase 5 | Pending |
+| MOUSE-06 | Phase 5 | Pending |
+| KEY-01 | Phase 5 | Pending |
+| KEY-02 | Phase 5 | Pending |
+| SCREEN-01 | Phase 6 | Pending |
+| SCREEN-02 | Phase 6 | Pending |
+| LOOP-01 | Phase 7 | Pending |
+| LOOP-02 | Phase 7 | Pending |
+| LOOP-03 | Phase 7 | Pending |
+| LOOP-04 | Phase 7 | Pending |
+| LOOP-05 | Phase 7 | Pending |
+| UI-01 | Phase 8 | Pending |
+| UI-02 | Phase 8 | Pending |
+| UI-03 | Phase 8 | Pending |
+| UI-04 | Phase 8 | Pending |
+| SEC-01 | Phase 9 | Pending |
+| SEC-02 | Phase 9 | Pending |
+| SEC-03 | Phase 9 | Pending |
+| SEC-04 | Phase 9 | Pending |
 
 **Coverage:**
 - v15.0 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after initial definition*
+*Last updated: 2026-03-24 after roadmap creation -- all 23 requirements mapped to Phases 5-9*

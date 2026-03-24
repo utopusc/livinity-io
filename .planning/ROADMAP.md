@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14.1 Agent Installer & Setup UX -- replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb), a web-based setup wizard that opens in the browser for OAuth, a system tray icon for background status, and a livinity.io download page with platform detection.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15.0 AI Computer Use -- enable the AI to see the screen, click, type, and navigate applications on connected devices via a screenshot-analyze-action loop, with live monitoring UI and security controls.
 
 ## Milestones
 
@@ -14,12 +14,13 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **v12.0 Server Management Dashboard** - Phases 35-40 (shipped 2026-03-22)
 - [x] **v13.0 Portainer-Level Server Management** - Phases 41-46 (shipped 2026-03-23)
 - [x] **v14.0 Remote PC Control Agent** - Phases 47-53 (shipped 2026-03-24)
-- [ ] **v14.1 Agent Installer & Setup UX** - Phases 1-4 (in progress)
+- [x] **v14.1 Agent Installer & Setup UX** - Phases 1-4 (shipped 2026-03-24)
+- [ ] **v15.0 AI Computer Use** - Phases 5-9 (in progress)
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (1, 2, 3, 4): Planned milestone work (reset for v14.1)
+- Integer phases (1, 2, 3, 4): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 <details>
@@ -117,83 +118,94 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 </details>
 
-### v14.1 Agent Installer & Setup UX
+<details>
+<summary>v14.1 Agent Installer & Setup UX (Phases 1-4) - SHIPPED 2026-03-24</summary>
 
 **Milestone Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser. Users double-click to install, the agent opens a beautiful setup page for OAuth, then runs silently in the background with auto-start on boot.
 
-- [x] **Phase 1: Web Setup Wizard** - Local HTTP server serves a React UI for OAuth device flow, replacing CLI setup (completed 2026-03-24)
-- [x] **Phase 2: System Tray Icon** - Cross-platform tray icon with connection status and context menu (completed 2026-03-24)
-- [x] **Phase 3: Platform Installers** - Native installers for Windows (.exe), macOS (.dmg), and Linux (.deb) with auto-start (completed 2026-03-24)
-- [x] **Phase 4: Download Page** - livinity.io/download with platform detection and setup instructions (completed 2026-03-24)
+- [x] **Phase 1: Web Setup Wizard** (completed 2026-03-24)
+- [x] **Phase 2: System Tray Icon** (completed 2026-03-24)
+- [x] **Phase 3: Platform Installers** (completed 2026-03-24)
+- [x] **Phase 4: Download Page** (completed 2026-03-24)
+
+</details>
+
+### v15.0 AI Computer Use
+
+**Milestone Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices -- Claude Computer Use style. The AI takes screenshots, analyzes them with multimodal vision, determines coordinates, and executes mouse/keyboard actions in a screenshot-analyze-action loop with live monitoring and security controls.
+
+- [ ] **Phase 5: Agent Mouse & Keyboard Tools** - nut.js-powered mouse and keyboard automation tools in the agent
+- [ ] **Phase 6: Screen Info & Screenshot Extensions** - Screen metadata and coordinate-aware screenshot output
+- [ ] **Phase 7: Computer Use Loop** - Autonomous screenshot-analyze-action cycle in Nexus AI
+- [ ] **Phase 8: Live Monitoring UI** - Real-time session viewer with action overlay and controls
+- [ ] **Phase 9: Security & Permissions** - Consent flow, emergency stop, audit logging, auto-timeout
 
 ## Phase Details
 
-### Phase 1: Web Setup Wizard
-**Goal**: Users connect their account through a beautiful browser-based wizard instead of the terminal
-**Depends on**: Nothing (first phase; builds on existing agent at agent/ with CLI OAuth flow)
-**Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05
+### Phase 5: Agent Mouse & Keyboard Tools
+**Goal**: AI can physically interact with a device's desktop -- clicking, typing, dragging, and scrolling -- through the existing agent tool system
+**Depends on**: Nothing (builds on existing agent at agent/ with 9 tools and nut.js dependency)
+**Requirements**: MOUSE-01, MOUSE-02, MOUSE-03, MOUSE-04, MOUSE-05, MOUSE-06, KEY-01, KEY-02
 **Success Criteria** (what must be TRUE):
-  1. Running the agent for the first time opens a browser tab to a local setup page
-  2. The setup page shows a polished UI with a clear "Connect Your Account" call-to-action
-  3. Clicking connect displays a device code and a link to livinity.io for approval
-  4. After approving on livinity.io, the setup page shows "Connected!" with the device name
-  5. The setup page closes itself and the agent continues running silently in the background
-**Plans**: 2 plans
+  1. AI can instruct the agent to click at screen coordinates (x, y) with left, double, or right click, and the click visibly occurs on the device
+  2. AI can instruct the agent to type a text string and the characters appear in the focused application on the device
+  3. AI can instruct the agent to press key combinations (Ctrl+C, Alt+Tab, Enter, etc.) and the device responds to those keys
+  4. AI can instruct the agent to drag from one coordinate to another (drag and drop) and scroll at a position
+  5. All mouse/keyboard tools follow the existing tool dispatcher pattern (TOOL_NAMES + switch case) and route through DeviceBridge as proxy tools
+**Plans**: TBD
 
-Plans:
-- [x] 01-01: Local HTTP server and React setup UI
-- [x] 01-02: OAuth device flow integration and success state
-
-### Phase 2: System Tray Icon
-**Goal**: Users can see their agent's connection status at a glance and access controls from the system tray
-**Depends on**: Phase 1
-**Requirements**: TRAY-01, TRAY-02, TRAY-03
+### Phase 6: Screen Info & Screenshot Extensions
+**Goal**: AI has full awareness of the device's display geometry and screenshots carry coordinate metadata for accurate targeting
+**Depends on**: Phase 5 (mouse/keyboard tools need screen context to be useful)
+**Requirements**: SCREEN-01, SCREEN-02
 **Success Criteria** (what must be TRUE):
-  1. A Livinity icon appears in the system tray when the agent is running on Windows, macOS, and Linux
-  2. The tray icon color reflects connection status -- green for connected, yellow for connecting, red for disconnected
-  3. Right-clicking the tray icon shows a menu with Status, Open Setup, Disconnect, and Quit options
-**Plans**: 1 plan
+  1. AI can query a device's screen resolution, display count, and active window title/position
+  2. Screenshot tool returns image dimensions and scaling factor alongside the JPEG data so the AI can map pixel coordinates to actual screen positions
+**Plans**: TBD
 
-Plans:
-- [x] 02-01: System tray integration with status icons and context menu
-
-### Phase 3: Platform Installers
-**Goal**: Users install the agent with a native installer and it auto-starts on boot without configuration
-**Depends on**: Phase 1, Phase 2
-**Requirements**: WIN-01, WIN-02, WIN-03, WIN-04, MAC-01, MAC-02, MAC-03, LIN-01, LIN-02, LIN-03
+### Phase 7: Computer Use Loop
+**Goal**: Users can give the AI a natural language task and it autonomously operates the device's desktop through a screenshot-vision-action cycle until the task is done
+**Depends on**: Phase 5 (needs mouse/keyboard tools), Phase 6 (needs screen info/screenshot metadata)
+**Requirements**: LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05
 **Success Criteria** (what must be TRUE):
-  1. On Windows, double-clicking the .exe runs an Inno Setup installer that places the agent in Program Files with Start Menu and optional Desktop shortcuts
-  2. On Windows, after installation the agent auto-starts on boot and can be cleanly uninstalled removing files, shortcuts, and registry entries
-  3. On macOS, opening the .dmg shows a drag-to-Applications window with a proper .app bundle containing icon and Info.plist, and the agent registers as a LaunchAgent for auto-start on login
-  4. On Linux, installing the .deb places the binary and creates a systemd service that runs as the installing user and auto-starts on boot
-**Plans**: 3 plans
+  1. User can say "Open Chrome and go to YouTube" and the AI enters computer use mode -- taking a screenshot, analyzing it with vision, clicking/typing, then repeating until the task is complete
+  2. AI correctly identifies UI elements (buttons, text fields, icons) from screenshots and clicks at accurate coordinates
+  3. Computer use sessions respect a configurable step limit (e.g., max 50 actions) and stop gracefully when reached
+  4. AI reports back to the user when the task is complete or explains why it could not be completed
+  5. The computer use loop is a distinct mode in Nexus that the AI enters when a task requires visual desktop interaction
+**Plans**: TBD
 
-Plans:
-- [x] 03-01: SEA build pipeline + Windows installer (Inno Setup .iss, shortcuts, auto-start, uninstaller)
-- [x] 03-02: macOS installer (create-dmg, .app bundle with Info.plist and icon, LaunchAgent plist)
-- [ ] 03-03: Linux installer (fpm .deb package, systemd service unit file)
-
-### Phase 4: Download Page
-**Goal**: Users find and download the correct installer from livinity.io without confusion
-**Depends on**: Phase 3
-**Requirements**: DL-01, DL-02, DL-03
+### Phase 8: Live Monitoring UI
+**Goal**: Users can watch the AI operate their device in real time with a visual stream, action indicators, and session controls
+**Depends on**: Phase 7 (needs the computer use loop to produce sessions and actions)
+**Requirements**: UI-01, UI-02, UI-03, UI-04
 **Success Criteria** (what must be TRUE):
-  1. Visiting livinity.io/download auto-detects the user's OS and highlights the matching download button
-  2. Download links for all three platforms (Windows, macOS, Linux) are visible with platform icons
-  3. The page includes brief setup instructions covering download, install, and connect steps
-**Plans**: 1 plan
+  1. When a computer use session is active, the LivOS AI chat shows a live screenshot feed of the device updating after each action
+  2. Visual indicators overlay each screenshot showing where the AI clicked or what it typed (crosshair on click point, text badge for typed text)
+  3. A session timeline panel lists every action chronologically with type, coordinates/text, and timestamp
+  4. User can pause, resume, or stop the session from the LivOS UI, and the AI responds immediately to those controls
+**Plans**: TBD
 
-Plans:
-- [x] 04-01: Download page with platform detection, download links, and setup instructions
+### Phase 9: Security & Permissions
+**Goal**: Users maintain full control over AI computer use with explicit consent, an emergency stop, per-action audit logging, and automatic session timeouts
+**Depends on**: Phase 7 (needs the loop to gate with consent), Phase 8 (needs the UI to surface controls)
+**Requirements**: SEC-01, SEC-02, SEC-03, SEC-04
+**Success Criteria** (what must be TRUE):
+  1. Before the AI takes mouse/keyboard control, the user sees a consent dialog in LivOS and must explicitly approve the session
+  2. Pressing Escape three times rapidly on the device immediately terminates AI control regardless of session state
+  3. Every mouse/keyboard action (click x,y / type "text" / press Ctrl+C) is recorded to the audit trail with coordinates, timestamp, and screenshot reference
+  4. Computer use sessions that have no AI activity for a configurable period (default 60s) auto-terminate and notify the user
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Web Setup Wizard | v14.1 | 2/2 | Complete    | 2026-03-24 |
-| 2. System Tray Icon | v14.1 | 0/1 | Complete    | 2026-03-24 |
-| 3. Platform Installers | v14.1 | 2/3 | Complete    | 2026-03-24 |
-| 4. Download Page | v14.1 | 1/1 | Complete    | 2026-03-24 |
+| 5. Agent Mouse & Keyboard Tools | v15.0 | 0/? | Not started | - |
+| 6. Screen Info & Screenshot Extensions | v15.0 | 0/? | Not started | - |
+| 7. Computer Use Loop | v15.0 | 0/? | Not started | - |
+| 8. Live Monitoring UI | v15.0 | 0/? | Not started | - |
+| 9. Security & Permissions | v15.0 | 0/? | Not started | - |
