@@ -344,6 +344,24 @@ export default router({
 		return {ok: true}
 	}),
 
+	/** Grant consent for computer use on an active session (SEC-01) */
+	grantConsent: privateProcedure.input(z.object({conversationId: z.string()})).mutation(({ctx, input}) => {
+		const status = ctx.livinityd.ai.chatStatus.get(input.conversationId)
+		if (!status) {
+			throw new TRPCError({code: 'NOT_FOUND', message: 'No active session'})
+		}
+		ctx.livinityd.ai.chatStatus.set(input.conversationId, {...status, computerUseConsent: true})
+		return {ok: true}
+	}),
+
+	/** Deny consent for computer use (aborts the session) (SEC-01) */
+	denyConsent: privateProcedure.input(z.object({conversationId: z.string()})).mutation(({ctx, input}) => {
+		const controller = ctx.livinityd.ai.activeStreams.get(input.conversationId)
+		if (controller) controller.abort()
+		ctx.livinityd.ai.chatStatus.delete(input.conversationId)
+		return {ok: true}
+	}),
+
 	/** Get pending tool approvals */
 	getPendingApprovals: privateProcedure.query(async () => {
 		const apiUrl = getNexusApiUrl()

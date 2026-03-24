@@ -119,6 +119,14 @@ export interface TunnelDeviceAuditEvent {
   error?: string;
 }
 
+/** Device emergency stop forwarded from relay to LivOS */
+export interface TunnelDeviceEmergencyStop {
+  type: 'device_emergency_stop';
+  deviceId: string;
+  timestamp: string;
+  reason: string;
+}
+
 // ---------------------------------------------------------------------------
 // Client → Relay messages (5 types)
 // ---------------------------------------------------------------------------
@@ -220,7 +228,8 @@ export type RelayToClientMessage =
   | TunnelDeviceConnected
   | TunnelDeviceDisconnected
   | TunnelDeviceToolResult
-  | TunnelDeviceAuditEvent;
+  | TunnelDeviceAuditEvent
+  | TunnelDeviceEmergencyStop;
 
 /** All messages sent from the tunnel client to the relay */
 export type ClientToRelayMessage =
@@ -270,4 +279,5 @@ export type MessageTypeMap = {
   'device_tool_call': TunnelDeviceToolCall;
   'device_tool_result': TunnelDeviceToolResult;
   'device_audit_event': TunnelDeviceAuditEvent;
+  'device_emergency_stop': TunnelDeviceEmergencyStop;
 };

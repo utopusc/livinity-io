@@ -45,6 +45,7 @@ import type {
   TunnelDeviceToolCall,
   TunnelDeviceToolResult,
   TunnelDeviceAuditEvent,
+  TunnelDeviceEmergencyStop,
   ClientToRelayMessage,
   BidirectionalMessage,
 } from './protocol.js';
@@ -53,6 +54,7 @@ import { verifyDeviceToken } from './device-auth.js';
 import type {
   DeviceAuth,
   DeviceAuditEvent,
+  DeviceEmergencyStop,
   DeviceConnected,
   DeviceAuthError,
   DeviceToolCall,
@@ -433,6 +435,22 @@ function onDeviceConnect(ws: WebSocket): void {
             error: auditMsg.error,
           };
           userTunnel.ws.send(JSON.stringify(tunnelAudit));
+        }
+        break;
+      }
+
+      case 'device_emergency_stop': {
+        // Forward emergency stop to the user's LivOS tunnel
+        const userTunnel = registry.getByUserId(device.userId);
+        if (userTunnel && userTunnel.ws.readyState === 1) {
+          const emergencyMsg: TunnelDeviceEmergencyStop = {
+            type: 'device_emergency_stop',
+            deviceId: device.deviceId,
+            timestamp: (msg as DeviceEmergencyStop).timestamp,
+            reason: (msg as DeviceEmergencyStop).reason,
+          };
+          userTunnel.ws.send(JSON.stringify(emergencyMsg));
+          console.log(`[relay] Forwarded emergency_stop from device=${device.deviceId}`);
         }
         break;
       }

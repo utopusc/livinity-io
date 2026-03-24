@@ -484,6 +484,10 @@ export class AgentLoop extends EventEmitter {
     let computerUseSteps = 0;
     const computerUseStepLimit = this.config.computerUseStepLimit ?? 50;
 
+    // Computer use inactivity timeout (SEC-04)
+    let lastComputerUseTime = 0; // Timestamp of last mouse/keyboard tool call
+    const computerUseTimeoutMs = 60_000; // 60 seconds inactivity timeout
+
     const taskWithContext = this.config.contextPrefix
       ? `${this.config.contextPrefix}\n\n## Current Task\n${task}`
       : `Task: ${task}`;
@@ -730,6 +734,7 @@ export class AgentLoop extends EventEmitter {
           for (const toolCall of nativeToolUseBlocks) {
             if (/^device_.*_(mouse_|keyboard_)/.test(toolCall.name)) {
               computerUseSteps++;
+              lastComputerUseTime = Date.now();
             }
           }
           if (computerUseSteps >= computerUseStepLimit) {
@@ -744,6 +749,20 @@ export class AgentLoop extends EventEmitter {
             }
             messages[messages.length - 1].text += limitMsg;
             logger.warn(`${prefix}: computer use step limit reached`, { computerUseSteps, computerUseStepLimit });
+          }
+
+          // Auto-timeout: if in computer use mode and no activity for 60s (SEC-04)
+          if (lastComputerUseTime > 0 && (Date.now() - lastComputerUseTime) > computerUseTimeoutMs) {
+            const timeoutMsg = `\n\n[SYSTEM] Computer use session timed out -- no mouse/keyboard activity for ${computerUseTimeoutMs / 1000} seconds. Provide your final answer explaining what was accomplished.`;
+            const lastProviderMsg2 = providerMessages[providerMessages.length - 1] as any;
+            if (Array.isArray(lastProviderMsg2?.content)) {
+              const lastBlock2 = lastProviderMsg2.content[lastProviderMsg2.content.length - 1];
+              if (lastBlock2 && typeof lastBlock2.content === 'string') {
+                lastBlock2.content += timeoutMsg;
+              }
+            }
+            messages[messages.length - 1].text += timeoutMsg;
+            logger.warn(`${prefix}: computer use inactivity timeout`, { lastComputerUseTime, elapsed: Date.now() - lastComputerUseTime });
           }
 
           if (turn === maxTurns - 1) {

@@ -124,6 +124,13 @@ interface TunnelDeviceAuditEvent {
 	error?: string
 }
 
+interface TunnelDeviceEmergencyStop {
+	type: 'device_emergency_stop'
+	deviceId: string
+	timestamp: string
+	reason: string
+}
+
 type RelayToClientMessage =
 	| TunnelRequest
 	| TunnelWsUpgrade
@@ -136,6 +143,7 @@ type RelayToClientMessage =
 	| TunnelDeviceDisconnected
 	| TunnelDeviceToolResult
 	| TunnelDeviceAuditEvent
+	| TunnelDeviceEmergencyStop
 
 type BidirectionalMessage = TunnelWsFrame | TunnelWsClose
 
@@ -365,6 +373,11 @@ export default class TunnelClient {
 			case 'device_audit_event':
 				if (this._deviceBridge) {
 					this._deviceBridge.onAuditEvent(msg)
+				}
+				break
+			case 'device_emergency_stop':
+				if (this._deviceBridge) {
+					this._deviceBridge.onEmergencyStop(msg)
 				}
 				break
 		}

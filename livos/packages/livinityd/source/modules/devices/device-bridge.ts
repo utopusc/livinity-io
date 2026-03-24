@@ -150,6 +150,7 @@ interface DeviceBridgeOptions {
 	nexusApiKey?: string
 	callbackBaseUrl?: string
 	logger?: {log: (...args: any[]) => void; error: (...args: any[]) => void}
+	onEmergencyStop?: (deviceId: string) => void
 }
 
 const DEVICE_REDIS_PREFIX = 'livos:devices:'
@@ -167,6 +168,7 @@ export class DeviceBridge {
 
 	private connectedDevices = new Map<string, ConnectedDevice>()
 	private pendingRequests = new Map<string, PendingRequest>()
+	private onEmergencyStopCallback?: (deviceId: string) => void
 
 	constructor(opts: DeviceBridgeOptions) {
 		this.redis = opts.redis
@@ -175,6 +177,7 @@ export class DeviceBridge {
 		this.nexusApiKey = opts.nexusApiKey || process.env.LIV_API_KEY || ''
 		this.callbackBaseUrl = opts.callbackBaseUrl || 'http://localhost:8080'
 		this.logger = opts.logger || {log: console.log, error: console.error}
+		this.onEmergencyStopCallback = opts.onEmergencyStop
 	}
 
 	// -- Device Event Handlers (called by TunnelClient) --
@@ -362,6 +365,13 @@ export class DeviceBridge {
 			.catch((err) => this.logger.error(`[device-bridge] Failed to store audit event:`, err))
 
 		this.logger.log(`[device-bridge] Audit: ${event.toolName} on ${event.deviceId} success=${event.success}`)
+	}
+
+	// -- Emergency Stop Handler (called by TunnelClient on device_emergency_stop) --
+
+	onEmergencyStop(event: {deviceId: string; timestamp: string; reason: string}): void {
+		this.logger.log(`[device-bridge] EMERGENCY STOP from device ${event.deviceId} (${event.reason})`)
+		this.onEmergencyStopCallback?.(event.deviceId)
 	}
 
 	async getAuditLog(
