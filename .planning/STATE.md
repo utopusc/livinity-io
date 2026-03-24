@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.1
 milestone_name: Agent Installer & Setup UX
 status: unknown
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-24T09:28:47.085Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-03-24T09:33:31.934Z"
 progress:
   total_phases: 11
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 3 of 3
 | Phase 02 P01 | 4min | 2 tasks | 5 files |
 | Phase 03 P01 | 12min | 2 tasks | 9 files |
 | Phase 03 P02 | 3min | 2 tasks | 5 files |
+| Phase 03 P03 | 2min | 2 tasks | 6 files |
 
 ### Decisions
 
@@ -75,6 +76,8 @@ Plan: 3 of 3
 - [Phase 03]: Launcher script as CFBundleExecutable to pass 'start --background' flag
 - [Phase 03]: In-memory plist generation in cli.ts instead of bundling template in SEA
 - [Phase 03]: installLaunchAgent() called after connect for idempotent auto-install on every macOS start
+- [Phase 03]: Dual systemd strategy: .deb installs system service, direct binary installs user service; system service takes precedence
+- [Phase 03]: User detection via SUDO_USER -> logname -> whoami fallback chain in postinst.sh
 
 ### Pending Todos
 
@@ -86,6 +89,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T09:28:47.082Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-24T09:33:31.930Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

@@ -28,9 +28,9 @@
 
 ### Installer -- Linux
 
-- [ ] **LIN-01**: Linux .deb package built with fpm containing the SEA binary
-- [ ] **LIN-02**: .deb includes systemd service file for auto-start on boot
-- [ ] **LIN-03**: systemd service runs agent as the installing user (not root)
+- [x] **LIN-01**: Linux .deb package built with fpm containing the SEA binary
+- [x] **LIN-02**: .deb includes systemd service file for auto-start on boot
+- [x] **LIN-03**: systemd service runs agent as the installing user (not root)
 
 ### Tray -- System Tray Icon
 
@@ -76,9 +76,9 @@
 | MAC-01 | Phase 3 | Complete |
 | MAC-02 | Phase 3 | Complete |
 | MAC-03 | Phase 3 | Complete |
-| LIN-01 | Phase 3 | Pending |
-| LIN-02 | Phase 3 | Pending |
-| LIN-03 | Phase 3 | Pending |
+| LIN-01 | Phase 3 | Complete |
+| LIN-02 | Phase 3 | Complete |
+| LIN-03 | Phase 3 | Complete |
 | TRAY-01 | Phase 2 | Complete |
 | TRAY-02 | Phase 2 | Complete |
 | TRAY-03 | Phase 2 | Complete |
