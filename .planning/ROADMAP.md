@@ -124,7 +124,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **Phase 1: Web Setup Wizard** - Local HTTP server serves a React UI for OAuth device flow, replacing CLI setup (completed 2026-03-24)
 - [x] **Phase 2: System Tray Icon** - Cross-platform tray icon with connection status and context menu (completed 2026-03-24)
 - [x] **Phase 3: Platform Installers** - Native installers for Windows (.exe), macOS (.dmg), and Linux (.deb) with auto-start (completed 2026-03-24)
-- [ ] **Phase 4: Download Page** - livinity.io/download with platform detection and setup instructions
+- [x] **Phase 4: Download Page** - livinity.io/download with platform detection and setup instructions (completed 2026-03-24)
 
 ## Phase Details
 
@@ -184,7 +184,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: Download page with platform detection, download links, and setup instructions
+- [x] 04-01: Download page with platform detection, download links, and setup instructions
 
 ## Progress
 
@@ -196,4 +196,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Web Setup Wizard | v14.1 | 2/2 | Complete    | 2026-03-24 |
 | 2. System Tray Icon | v14.1 | 0/1 | Complete    | 2026-03-24 |
 | 3. Platform Installers | v14.1 | 2/3 | Complete    | 2026-03-24 |
-| 4. Download Page | v14.1 | 0/1 | Not started | - |
+| 4. Download Page | v14.1 | 1/1 | Complete   | 2026-03-24 |

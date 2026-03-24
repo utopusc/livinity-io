@@ -40,9 +40,9 @@
 
 ### Download -- livinity.io Download Page
 
-- [ ] **DL-01**: livinity.io/download page detects user's platform and shows appropriate download button
-- [ ] **DL-02**: Page shows download links for all 3 platforms with icons
-- [ ] **DL-03**: Page includes brief setup instructions (download, install, connect)
+- [x] **DL-01**: livinity.io/download page detects user's platform and shows appropriate download button
+- [x] **DL-02**: Page shows download links for all 3 platforms with icons
+- [x] **DL-03**: Page includes brief setup instructions (download, install, connect)
 
 ## Future Requirements (v15.0+)
 
@@ -82,9 +82,9 @@
 | TRAY-01 | Phase 2 | Complete |
 | TRAY-02 | Phase 2 | Complete |
 | TRAY-03 | Phase 2 | Complete |
-| DL-01 | Phase 4 | Pending |
-| DL-02 | Phase 4 | Pending |
-| DL-03 | Phase 4 | Pending |
+| DL-01 | Phase 4 | Complete |
+| DL-02 | Phase 4 | Complete |
+| DL-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v14.1 requirements: 21 total
