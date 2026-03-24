@@ -3,6 +3,8 @@ import { executeFilesList, executeFilesRead, executeFilesWrite, executeFilesDele
 import { executeProcesses } from './tools/processes.js';
 import { executeSystemInfo } from './tools/system-info.js';
 import { executeScreenshot } from './tools/screenshot.js';
+import { executeMouseClick, executeMouseDoubleClick, executeMouseRightClick, executeMouseMove, executeMouseDrag, executeMouseScroll } from './tools/mouse.js';
+import { executeKeyboardType, executeKeyboardPress } from './tools/keyboard.js';
 
 export const TOOL_NAMES = [
   'shell',
@@ -14,6 +16,15 @@ export const TOOL_NAMES = [
   'processes',
   'system_info',
   'screenshot',
+  // Phase 5: Mouse & Keyboard tools
+  'mouse_click',
+  'mouse_double_click',
+  'mouse_right_click',
+  'mouse_move',
+  'mouse_drag',
+  'mouse_scroll',
+  'keyboard_type',
+  'keyboard_press',
 ] as const;
 
 export type ToolName = typeof TOOL_NAMES[number];
@@ -41,6 +52,22 @@ export async function executeTool(
       return executeSystemInfo(params);
     case 'screenshot':
       return executeScreenshot(params);
+    case 'mouse_click':
+      return executeMouseClick(params);
+    case 'mouse_double_click':
+      return executeMouseDoubleClick(params);
+    case 'mouse_right_click':
+      return executeMouseRightClick(params);
+    case 'mouse_move':
+      return executeMouseMove(params);
+    case 'mouse_drag':
+      return executeMouseDrag(params);
+    case 'mouse_scroll':
+      return executeMouseScroll(params);
+    case 'keyboard_type':
+      return executeKeyboardType(params);
+    case 'keyboard_press':
+      return executeKeyboardPress(params);
     default:
       return { success: false, output: '', error: `Unknown tool: ${tool}` };
   }
