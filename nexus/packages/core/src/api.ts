@@ -1786,7 +1786,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   // ── SSE Streaming Endpoint ────────────────────────────────────
 
   app.post('/api/agent/stream', async (req, res) => {
-    const { task, max_turns, conversationId, userPersonalization } = req.body;
+    const { task, max_turns, conversationId, userPersonalization, computer_use_step_limit } = req.body;
     if (!task) {
       res.status(400).json({ error: 'task is required' });
       return;
@@ -1872,7 +1872,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       brain,
       toolRegistry,
       nexusConfig,
-      maxTurns: Math.min(max_turns || agentDefaults?.maxTurns || parseInt(process.env.AGENT_MAX_TURNS || '30'), 100),
+      maxTurns: Math.min(max_turns || agentDefaults?.maxTurns || parseInt(process.env.AGENT_MAX_TURNS || '30'), 200),
       maxTokens: agentDefaults?.maxTokens || parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
       timeoutMs: agentDefaults?.timeoutMs || parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
       tier: (agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
@@ -1882,6 +1882,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       approvalPolicy: approvalPolicy as 'always' | 'destructive' | 'never',
       sessionId: randomUUID(),
       userPersonalization: userPersonalization || undefined,
+      computerUseStepLimit: computer_use_step_limit || 50,
     };
 
     const agent = new AgentLoop(agentConfig);
