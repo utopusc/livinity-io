@@ -21,6 +21,7 @@ import {
 	IconCode,
 	IconShieldCheck,
 	IconShieldX,
+	IconScreenshot,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -41,6 +42,7 @@ const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
 const VoiceButton = lazy(() => import('./voice-button').then((m) => ({default: m.VoiceButton})))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
+const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
 
 type ToolCall = {
 	tool: string
@@ -456,6 +458,9 @@ export default function AiChat() {
 	} | null>(null)
 	const [canvasMinimized, setCanvasMinimized] = useState(false)
 
+	// Computer use monitoring state
+	const [computerUseMinimized, setComputerUseMinimized] = useState(false)
+
 	// Poll for canvas artifacts while AI is loading
 	const canvasQuery = trpcReact.ai.listCanvasArtifacts.useQuery(
 		{conversationId: activeConversationId},
@@ -474,6 +479,24 @@ export default function AiChat() {
 			staleTime: 30000,
 		},
 	)
+
+	// Poll chatStatus for computer use session detection
+	const computerUseQuery = trpcReact.ai.getChatStatus.useQuery(
+		{conversationId: activeConversationId},
+		{
+			enabled: isLoading,
+			refetchInterval: isLoading ? 500 : false,
+		},
+	)
+
+	const computerUseData = computerUseQuery.data as {
+		computerUse?: boolean
+		screenshot?: string
+		actions?: Array<{type: string; x?: number; y?: number; text?: string; key?: string; timestamp: number}>
+		paused?: boolean
+	} | null
+
+	const isComputerUseActive = !!computerUseData?.computerUse
 
 	useEffect(() => {
 		if (conversationQuery.data) {
@@ -599,6 +622,7 @@ export default function AiChat() {
 		setMessages([])
 		setCanvasArtifact(null)
 		setCanvasMinimized(false)
+		setComputerUseMinimized(false)
 		setSearchParams({conv: `conv_${Date.now()}`})
 		setActiveView('chat')
 	}
@@ -645,7 +669,8 @@ export default function AiChat() {
 					{/* Chat area */}
 					<div className={cn(
 						'flex min-h-0 flex-col',
-						canvasArtifact && !canvasMinimized && !isMobile ? 'w-1/2 min-w-[360px]' : 'flex-1',
+						(isComputerUseActive && !computerUseMinimized && !isMobile) || (canvasArtifact && !canvasMinimized && !isMobile)
+							? 'w-1/2 min-w-[360px]' : 'flex-1',
 					)}>
 						{isMobile && (
 							<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
@@ -793,8 +818,8 @@ export default function AiChat() {
 						</div>
 					</div>
 
-					{/* Canvas panel — desktop split-pane */}
-					{canvasArtifact && !canvasMinimized && !isMobile && (
+					{/* Canvas panel — desktop split-pane (hidden when computer use is active) */}
+					{canvasArtifact && !canvasMinimized && !isMobile && !isComputerUseActive && (
 						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 							<div className='w-1/2 min-w-[360px]'>
 								<CanvasPanel
@@ -805,8 +830,8 @@ export default function AiChat() {
 						</Suspense>
 					)}
 
-					{/* Canvas panel — mobile full overlay */}
-					{canvasArtifact && !canvasMinimized && isMobile && (
+					{/* Canvas panel — mobile full overlay (hidden when computer use is active) */}
+					{canvasArtifact && !canvasMinimized && isMobile && !isComputerUseActive && (
 						<Suspense fallback={null}>
 							<div className='fixed inset-0 z-50 bg-surface-base'>
 								<CanvasPanel
@@ -817,14 +842,56 @@ export default function AiChat() {
 						</Suspense>
 					)}
 
-					{/* Minimized canvas indicator */}
-					{canvasArtifact && canvasMinimized && (
+					{/* Minimized canvas indicator (hidden when computer use is active) */}
+					{canvasArtifact && canvasMinimized && !isComputerUseActive && (
 						<button
 							onClick={() => setCanvasMinimized(false)}
 							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
 						>
 							<IconCode size={16} className='text-cyan-400' />
 							{canvasArtifact.title}
+						</button>
+					)}
+
+					{/* Computer Use Panel — desktop split-pane (takes priority over canvas) */}
+					{isComputerUseActive && !computerUseMinimized && !isMobile && (
+						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+							<div className='w-1/2 min-w-[360px]'>
+								<ComputerUsePanel
+									conversationId={activeConversationId}
+									screenshot={computerUseData?.screenshot || null}
+									actions={(computerUseData?.actions || []) as any}
+									paused={!!computerUseData?.paused}
+									onClose={() => setComputerUseMinimized(true)}
+								/>
+							</div>
+						</Suspense>
+					)}
+
+					{/* Computer Use Panel — mobile full overlay */}
+					{isComputerUseActive && !computerUseMinimized && isMobile && (
+						<Suspense fallback={null}>
+							<div className='fixed inset-0 z-50 bg-surface-base'>
+								<ComputerUsePanel
+									conversationId={activeConversationId}
+									screenshot={computerUseData?.screenshot || null}
+									actions={(computerUseData?.actions || []) as any}
+									paused={!!computerUseData?.paused}
+									onClose={() => setComputerUseMinimized(true)}
+								/>
+							</div>
+						</Suspense>
+					)}
+
+					{/* Minimized computer use indicator */}
+					{isComputerUseActive && computerUseMinimized && (
+						<button
+							onClick={() => setComputerUseMinimized(false)}
+							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
+						>
+							<IconScreenshot size={16} className='text-green-400' />
+							Computer Use
+							<span className='ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-green-500' />
 						</button>
 					)}
 				</div>
