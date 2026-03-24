@@ -1,0 +1,21 @@
+{
+  "name": "livinity-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "node esbuild.config.mjs",
+    "build:sea": "node esbuild.config.mjs && node --experimental-sea-config sea-config.json && echo 'SEA blob created at dist/sea-prep.blob'"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "esbuild": "^0.24.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
