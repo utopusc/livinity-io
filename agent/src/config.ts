@@ -6,6 +6,7 @@ export const CREDENTIALS_DIR = '.livinity';
 export const CREDENTIALS_FILE = 'credentials.json';
 export const PID_FILE = 'agent.pid';
 export const STATE_FILE = 'state.json';
+export const CONFIG_FILE = 'config.json';
 
 // Reconnection constants (matching TunnelClient pattern)
 export const RECONNECT_BASE_DELAY = 1000;

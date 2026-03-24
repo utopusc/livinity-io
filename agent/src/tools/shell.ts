@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { isCommandBlocked } from '../blocklist.js';
 
 export interface ShellResult {
   success: boolean;
@@ -50,6 +51,16 @@ export async function executeShell(params: Record<string, unknown>): Promise<She
 
   if (!command || typeof command !== 'string' || command.trim() === '') {
     return { success: false, output: '', error: 'Missing required parameter: command' };
+  }
+
+  // Check command against security blocklist before execution
+  const blockCheck = isCommandBlocked(command);
+  if (blockCheck.blocked) {
+    return {
+      success: false,
+      output: '',
+      error: `Command blocked by security policy: ${blockCheck.description} (pattern: ${blockCheck.pattern})`,
+    };
   }
 
   const { shell, buildArgs } = detectShell();
