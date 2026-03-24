@@ -8,24 +8,20 @@ Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platf
 
 **One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: v13.0 — Portainer-Level Server Management
+## Current Milestone: v14.0 — Remote PC Control Agent
 
-**Goal:** Match every Portainer feature in LivOS Server Management. Full container lifecycle with configuration editing (ports, env vars, volumes, restart policy, resource limits), container creation from images, Docker Compose stack management, container exec terminal, image pull/build, volume/network CRUD, bulk operations, and larger window size. Users can do everything Portainer offers without leaving LivOS.
+**Goal:** Build a cross-platform agent (Windows/Mac/Linux) that users install on their PCs, authenticates via livinity.io OAuth, and enables AI-driven remote control from LivOS UI. The AI gets tools for shell access, file operations, process management, clipboard, screenshots — controlled by the AI agent to accomplish user requests. Maximum security: E2EE vs TLS+Token to be determined by research.
 
 **Target features:**
-- Container configuration editor (ports, env vars, volumes, restart policy, resource limits) with redeploy
-- Container creation from image (full form: name, image, ports, volumes, env, network, restart)
-- Container exec terminal (shell into running container via xterm.js)
-- Docker Compose stack management (view, deploy, edit, remove stacks)
-- Image pull by name:tag with progress, image build from Dockerfile
-- Volume CRUD (create, inspect, remove) + Network CRUD (create, inspect, remove)
-- Bulk operations (select multiple containers → stop/start/remove)
-- Container duplicate (clone config to new container)
-- Container export/import
-- Real-time container resource graphs (CPU, memory, network per container over time)
-- Larger Server Management window (1400x900+)
-- Container restart policy editor
-- Container health check configuration
+- Cross-platform agent binary (Windows/Mac/Linux) installable via single command or download
+- livinity.io OAuth authentication (user logs in, agent registers with their account)
+- Secure tunnel between LivOS and remote PC (encrypted, relay if needed)
+- AI tool integration: shell, files, process list, clipboard, screenshots as AI tools
+- LivOS UI: "My Devices" panel showing connected PCs with status
+- AI can control remote PC via natural language ("show me files on my desktop PC")
+- Per-device permissions (user can restrict what AI can do on each device)
+- Connection status, heartbeat, reconnection handling
+- Audit log of all remote operations
 
 ## Requirements
 
@@ -43,18 +39,16 @@ Key validated capabilities:
 - ✓ Caddy reverse proxy, Cloudflare Tunnel support
 - ✓ Onboarding wizard with personalization
 
-### Active (v13.0 — Portainer-Level Server Management)
+### Active (v14.0 — Remote PC Control Agent)
 
-- [ ] Container config editor (ports, env, volumes, restart, resources) + redeploy
-- [ ] Container creation from image (full form with all Docker options)
-- [ ] Container exec terminal (xterm.js shell into container)
-- [ ] Docker Compose stack management (deploy, edit, remove)
-- [ ] Image pull with progress + image build from Dockerfile
-- [ ] Volume/Network full CRUD (create, inspect, remove)
-- [ ] Bulk container operations (multi-select → action)
-- [ ] Container duplicate/clone
-- [ ] Real-time per-container resource graphs
-- [ ] Larger window size (1400x900+)
+- [ ] Cross-platform agent (Windows/Mac/Linux) with installer
+- [ ] livinity.io OAuth authentication for agent registration
+- [ ] Secure encrypted tunnel between LivOS and remote PC
+- [ ] AI tools: shell, files, process, clipboard, screenshot on remote PC
+- [ ] "My Devices" UI in LivOS showing connected PCs
+- [ ] Per-device permission controls
+- [ ] Connection status, heartbeat, auto-reconnect
+- [ ] Audit log of remote operations
 
 ### Out of Scope
 
@@ -122,4 +116,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 — v13.0 milestone started (Portainer-Level Server Management)*
+*Last updated: 2026-03-23 — v14.0 milestone started (Remote PC Control Agent)*
