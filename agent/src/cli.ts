@@ -1,10 +1,46 @@
+import { createInterface } from 'node:readline';
+import { hostname } from 'node:os';
 import { readCredentials, readState, readPid, writePid, removePid } from './state.js';
 import { ConnectionManager } from './connection-manager.js';
+import { deviceFlowSetup, isTokenExpired } from './auth.js';
 
 // ---- setup ----
 
 export async function setupCommand(): Promise<void> {
-  console.log('Run `livinity-agent setup` to authenticate. (Implemented in Plan 02)');
+  // Prompt for device name with hostname as default
+  const defaultName = hostname();
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>((resolve) =>
+    rl.question(`Device name [${defaultName}]: `, resolve),
+  );
+  rl.close();
+  const deviceName = answer.trim() || defaultName;
+
+  // Check for existing credentials
+  const existing = readCredentials();
+  if (existing) {
+    console.log(
+      `This device is already authenticated as '${existing.deviceName}'. Re-running setup will replace the existing credentials.`,
+    );
+    const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+    const confirm = await new Promise<string>((resolve) =>
+      rl2.question('Continue? [y/N]: ', resolve),
+    );
+    rl2.close();
+    if (confirm.trim().toLowerCase() !== 'y') {
+      console.log('Setup cancelled.');
+      return;
+    }
+  }
+
+  // Run OAuth device flow
+  try {
+    await deviceFlowSetup(deviceName);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Setup failed: ${message}`);
+    process.exit(1);
+  }
 }
 
 // ---- start ----
@@ -13,6 +49,12 @@ export async function startCommand(): Promise<void> {
   const credentials = readCredentials();
   if (!credentials) {
     console.log('No credentials found. Run `livinity-agent setup` first.');
+    process.exit(1);
+  }
+
+  // Check token expiry before connecting
+  if (isTokenExpired(credentials.deviceToken)) {
+    console.log('Device token has expired. Run `livinity-agent setup` to re-authenticate.');
     process.exit(1);
   }
 
@@ -92,10 +134,16 @@ export async function statusCommand(): Promise<void> {
 
   const credentials = readCredentials();
 
+  // Format status display
+  let statusDisplay = state.status;
+  if (state.status === 'token_expired') {
+    statusDisplay = 'Token expired -- run `livinity-agent setup` to re-authenticate';
+  }
+
   console.log('');
   console.log('Livinity Agent Status');
   console.log('---------------------');
-  console.log(`Status:      ${state.status}${pid !== null ? ` (PID ${pid} ${processAlive ? 'running' : 'not running'})` : ''}`);
+  console.log(`Status:      ${statusDisplay}${pid !== null ? ` (PID ${pid} ${processAlive ? 'running' : 'not running'})` : ''}`);
   console.log(`Device:      ${credentials?.deviceName ?? 'unknown'}`);
   console.log(`Relay:       ${credentials?.relayUrl ?? 'unknown'}`);
   console.log(`Connected:   ${state.connectedAt ?? 'never'}`);
