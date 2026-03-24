@@ -1,163 +1,158 @@
-# Requirements: Livinity v13.0 — Portainer-Level Server Management
+# Requirements: Livinity v14.0 — Remote PC Control Agent
 
-**Defined:** 2026-03-22
+**Defined:** 2026-03-23
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v13.0 Requirements
+## v14.0 Requirements
 
-### CREATE — Container Creation
+### Agent — Remote Agent Binary
 
-- [x] **CREATE-01**: User can create a new container from any image with name, image:tag, command, entrypoint, working dir, and user fields
-- [x] **CREATE-02**: User can configure port mappings (host:container/protocol) with add/remove rows in creation form
-- [x] **CREATE-03**: User can configure volume mounts (bind + named) with host path, container path, and read-only toggle
-- [x] **CREATE-04**: User can set environment variables as key-value pairs with add/remove rows
-- [x] **CREATE-05**: User can set restart policy (no, always, on-failure with retries, unless-stopped)
-- [x] **CREATE-06**: User can set resource limits (memory limit MB, CPU limit) in creation form
-- [x] **CREATE-07**: User can set health check (command, interval, timeout, retries, start period)
-- [x] **CREATE-08**: User can select network mode (bridge/host/none/custom) and set hostname
+- [ ] **AGENT-01**: User can download a single binary for their platform (Windows/Mac/Linux)
+- [ ] **AGENT-02**: Agent runs as background daemon with start/stop/status CLI commands
+- [ ] **AGENT-03**: Agent auto-reconnects with exponential backoff on connection loss
+- [ ] **AGENT-04**: Agent reports its available tools to the relay on connect
 
-### EDIT — Container Edit & Recreate
+### Auth — Device Authentication
 
-- [x] **EDIT-01**: User can edit an existing container's port mappings and recreate it
-- [x] **EDIT-02**: User can edit an existing container's environment variables and recreate
-- [x] **EDIT-03**: User can edit an existing container's volume mounts and recreate
-- [x] **EDIT-04**: User can edit an existing container's restart policy and recreate
-- [x] **EDIT-05**: User can edit an existing container's resource limits and recreate
-- [x] **EDIT-06**: User can duplicate a container (clone config into pre-filled creation form)
-- [x] **EDIT-07**: User can rename a container
+- [ ] **AUTH-01**: Agent performs OAuth Device Authorization Grant via `setup` command
+- [ ] **AUTH-02**: User approves device at livinity.io/device by entering the displayed code
+- [ ] **AUTH-03**: Agent stores device token securely and auto-refreshes on expiry
 
-### EXEC — Container Terminal
+### Platform — livinity.io Device Endpoints
 
-- [x] **EXEC-01**: User can open a terminal shell (bash/sh) into a running container via xterm.js
-- [x] **EXEC-02**: Terminal supports shell selection (bash, sh, ash) and custom user
-- [x] **EXEC-03**: Terminal handles resize events and supports copy/paste
+- [ ] **PLAT-01**: livinity.io exposes POST /api/device/register (generates device_code + user_code)
+- [ ] **PLAT-02**: livinity.io exposes POST /api/device/token (agent polls for approval)
+- [ ] **PLAT-03**: livinity.io has /device approval page where user enters code
 
-### LOGS — Enhanced Container Logs
+### Relay — Relay Server Extension
 
-- [x] **LOGS-01**: User can search within container logs
-- [x] **LOGS-02**: User can download container logs as a file
-- [x] **LOGS-03**: User can toggle timestamps on/off in log view
-- [x] **LOGS-04**: User can toggle line wrap on/off in log view
+- [ ] **RELAY-01**: Relay accepts device connections at /device/connect WebSocket endpoint
+- [ ] **RELAY-02**: Relay maintains DeviceRegistry (user -> devices mapping)
+- [ ] **RELAY-03**: Relay routes tool_call/tool_result messages between LivOS tunnel and device
+- [ ] **RELAY-04**: Relay notifies LivOS when devices connect/disconnect
 
-### ACT — Container Actions
+### Shell — Remote Shell Execution
 
-- [x] **ACT-01**: User can kill a container (SIGKILL)
-- [x] **ACT-02**: User can pause and resume (unpause) a container
-- [x] **ACT-03**: User can select multiple containers and perform bulk start/stop/restart/remove
+- [ ] **SHELL-01**: AI can execute shell commands on the remote PC
+- [ ] **SHELL-02**: Agent uses the correct shell per OS (PowerShell/bash/zsh)
+- [ ] **SHELL-03**: Command output returns as structured JSON result
 
-### IMG — Enhanced Image Management
+### Files — Remote File Operations
 
-- [x] **IMG-01**: User can pull an image by name:tag with real-time progress display
-- [x] **IMG-02**: User can tag an existing image with a new name:tag
-- [x] **IMG-03**: User can view image layer history (command, size per layer)
+- [ ] **FILES-01**: AI can list directory contents with metadata (name, size, type, modified date)
+- [ ] **FILES-02**: AI can read file contents from the remote PC
+- [ ] **FILES-03**: AI can write/create files on the remote PC
+- [ ] **FILES-04**: AI can delete and rename files on the remote PC
 
-### NET — Network CRUD
+### Proc — Process & System Info
 
-- [x] **NET-01**: User can create a Docker network with name, driver, subnet, gateway
-- [x] **NET-02**: User can remove a network (with in-use check)
-- [x] **NET-03**: User can disconnect a container from a network
+- [ ] **PROC-01**: AI can list running processes with PID, name, CPU%, memory
+- [ ] **PROC-02**: AI can collect system info (OS, CPU, RAM, disk, hostname, IPs, uptime)
 
-### VOL — Volume CRUD
+### Screen — Screenshot Capture
 
-- [x] **VOL-01**: User can create a Docker volume with name, driver, and driver options
-- [x] **VOL-02**: User can see which containers are using a volume
+- [ ] **SCREEN-01**: AI can capture on-demand screenshot of the remote PC display
 
-### STACK — Docker Compose Stacks
+### Tools — AI Tool Integration
 
-- [x] **STACK-01**: User can see a list of Docker Compose stacks with name, status, and container count
-- [x] **STACK-02**: User can deploy a new stack from a compose YAML editor
-- [x] **STACK-03**: User can edit a stack's compose YAML and redeploy
-- [x] **STACK-04**: User can start/stop an entire stack
-- [x] **STACK-05**: User can remove a stack (optionally with volumes)
-- [x] **STACK-06**: User can set stack-level environment variables
+- [ ] **TOOLS-01**: Connected device tools dynamically register in Nexus ToolRegistry as proxy tools
+- [ ] **TOOLS-02**: Tools unregister when device disconnects
+- [ ] **TOOLS-03**: Tool names prefixed with `device_{deviceId}_` to avoid collisions
 
-### EVENT — Docker Events
+### UI — My Devices Panel
 
-- [x] **EVENT-01**: User can see a real-time Docker event log
-- [x] **EVENT-02**: User can filter events by type and time range
+- [ ] **UI-01**: LivOS shows "My Devices" panel listing connected devices
+- [ ] **UI-02**: Each device shows name, OS, platform icon, connection status, last seen
+- [ ] **UI-03**: User can rename or remove a device
 
-### ENGINE — Docker Engine Info
+### Audit — Audit Logging
 
-- [x] **ENGINE-01**: User can see Docker engine info (version, OS, kernel, storage driver, CPUs, memory)
+- [ ] **AUDIT-01**: Every remote tool execution logged with timestamp, user, tool, parameters, result
+- [ ] **AUDIT-02**: Audit log viewable per device from LivOS UI
 
-### UI — Interface Enhancements
+### Security
 
-- [x] **UI-01**: Server Management window size increased to 1400x900 minimum
-- [x] **UI-02**: Container creation form is a full-page or large modal with tabbed sections
-- [x] **UI-03**: Container edit/recreate uses the same form pre-filled with current config
-- [x] **UI-04**: Stacks gets its own tab in Server Management
-- [x] **UI-05**: Events gets its own tab in Server Management
-- [x] **UI-06**: Engine info shown in Overview tab or dedicated section
+- [ ] **SEC-01**: All agent-relay transport uses WSS (TLS 1.3)
+- [ ] **SEC-02**: Device tokens are JWTs with 24h expiry and auto-refresh
+- [ ] **SEC-03**: Agent runs as logged-in user (not root/SYSTEM) by default
+- [ ] **SEC-04**: Dangerous command blocklist enforced on agent side
+
+## Future Requirements (v14.1)
+
+### Permissions
+
+- **PERM-01**: Per-device permission matrix (shell scope, file path restrictions)
+- **PERM-02**: User can configure what AI can do per device from UI
+
+### Enhanced Capabilities
+
+- **ENH-01**: Clipboard sync as AI-readable tool
+- **ENH-02**: Process kill/terminate capability
+- **ENH-03**: Service management (systemd/launchctl/sc)
+- **ENH-04**: File search (find by name/content on remote PC)
+- **ENH-05**: Multi-monitor screenshot selection
+- **ENH-06**: Agent auto-update mechanism
+- **ENH-07**: Agent tray icon / config UI
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Docker Swarm/Kubernetes | Single-server only |
-| Registry management | Not needed for self-hosted LivOS |
-| Image build from Dockerfile | Complex, low priority |
-| Image import/export | Niche use case |
-| Volume browse contents | Requires file server |
-| Stack from Git repo | Defer to v14.0 |
-| Container GPU access | Niche hardware |
+| Full desktop streaming (RDP/VNC) | Different product — 90% of RustDesk is video streaming. AI doesn't need live video |
+| Keyboard/mouse takeover | AI executes structured commands, not GUI interaction |
+| Multi-device orchestration | v15+ after single-device is proven |
+| Wake-on-LAN | Requires LAN peer, niche use case |
+| Browser automation on remote PC | Enormous attack surface, credential theft risk |
+| Real-time screen recording | Privacy invasion, massive storage, legal issues |
+| Mobile agent (Android/iOS) | Fundamentally different capabilities, separate product |
+| Application install abstraction | Shell IS the abstraction — AI knows which package manager per OS |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CREATE-01 | Phase 41 | Complete |
-| CREATE-02 | Phase 41 | Complete |
-| CREATE-03 | Phase 41 | Complete |
-| CREATE-04 | Phase 41 | Complete |
-| CREATE-05 | Phase 41 | Complete |
-| CREATE-06 | Phase 41 | Complete |
-| CREATE-07 | Phase 41 | Complete |
-| CREATE-08 | Phase 41 | Complete |
-| EDIT-01 | Phase 42 | Complete |
-| EDIT-02 | Phase 42 | Complete |
-| EDIT-03 | Phase 42 | Complete |
-| EDIT-04 | Phase 42 | Complete |
-| EDIT-05 | Phase 42 | Complete |
-| EDIT-06 | Phase 42 | Complete |
-| EDIT-07 | Phase 42 | Complete |
-| EXEC-01 | Phase 43 | Complete |
-| EXEC-02 | Phase 43 | Complete |
-| EXEC-03 | Phase 43 | Complete |
-| LOGS-01 | Phase 43 | Complete |
-| LOGS-02 | Phase 43 | Complete |
-| LOGS-03 | Phase 43 | Complete |
-| LOGS-04 | Phase 43 | Complete |
-| ACT-01 | Phase 44 | Complete |
-| ACT-02 | Phase 44 | Complete |
-| ACT-03 | Phase 44 | Complete |
-| IMG-01 | Phase 44 | Complete |
-| IMG-02 | Phase 44 | Complete |
-| IMG-03 | Phase 44 | Complete |
-| NET-01 | Phase 44 | Complete |
-| NET-02 | Phase 44 | Complete |
-| NET-03 | Phase 44 | Complete |
-| VOL-01 | Phase 44 | Complete |
-| VOL-02 | Phase 44 | Complete |
-| STACK-01 | Phase 45 | Complete |
-| STACK-02 | Phase 45 | Complete |
-| STACK-03 | Phase 45 | Complete |
-| STACK-04 | Phase 45 | Complete |
-| STACK-05 | Phase 45 | Complete |
-| STACK-06 | Phase 45 | Complete |
-| EVENT-01 | Phase 46 | Complete |
-| EVENT-02 | Phase 46 | Complete |
-| ENGINE-01 | Phase 46 | Complete |
-| UI-01 | Phase 41 | Complete |
-| UI-02 | Phase 41 | Complete |
-| UI-03 | Phase 42 | Complete |
-| UI-04 | Phase 45 | Complete |
-| UI-05 | Phase 46 | Complete |
-| UI-06 | Phase 46 | Complete |
+| AGENT-01 | TBD | Pending |
+| AGENT-02 | TBD | Pending |
+| AGENT-03 | TBD | Pending |
+| AGENT-04 | TBD | Pending |
+| AUTH-01 | TBD | Pending |
+| AUTH-02 | TBD | Pending |
+| AUTH-03 | TBD | Pending |
+| PLAT-01 | TBD | Pending |
+| PLAT-02 | TBD | Pending |
+| PLAT-03 | TBD | Pending |
+| RELAY-01 | TBD | Pending |
+| RELAY-02 | TBD | Pending |
+| RELAY-03 | TBD | Pending |
+| RELAY-04 | TBD | Pending |
+| SHELL-01 | TBD | Pending |
+| SHELL-02 | TBD | Pending |
+| SHELL-03 | TBD | Pending |
+| FILES-01 | TBD | Pending |
+| FILES-02 | TBD | Pending |
+| FILES-03 | TBD | Pending |
+| FILES-04 | TBD | Pending |
+| PROC-01 | TBD | Pending |
+| PROC-02 | TBD | Pending |
+| SCREEN-01 | TBD | Pending |
+| TOOLS-01 | TBD | Pending |
+| TOOLS-02 | TBD | Pending |
+| TOOLS-03 | TBD | Pending |
+| UI-01 | TBD | Pending |
+| UI-02 | TBD | Pending |
+| UI-03 | TBD | Pending |
+| AUDIT-01 | TBD | Pending |
+| AUDIT-02 | TBD | Pending |
+| SEC-01 | TBD | Pending |
+| SEC-02 | TBD | Pending |
+| SEC-03 | TBD | Pending |
+| SEC-04 | TBD | Pending |
 
 **Coverage:**
-- v13.0 requirements: 46 total
-- Mapped to phases: 46
-- Unmapped: 0 ✓
+- v14.0 requirements: 36 total
+- Mapped to phases: 0
+- Unmapped: 36
 
 ---
-*Requirements defined: 2026-03-22*
+*Requirements defined: 2026-03-23*
+*Last updated: 2026-03-23 after initial definition*
