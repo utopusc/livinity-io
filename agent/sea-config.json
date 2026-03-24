@@ -1,4 +1,5 @@
 {
   "main": "dist/agent.js",
-  "output": "dist/sea-prep.blob"
+  "output": "dist/sea-prep.blob",
+  "disableExperimentalSEAWarning": true
 }

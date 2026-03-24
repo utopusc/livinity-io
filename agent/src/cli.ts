@@ -1,5 +1,7 @@
 import { createInterface } from 'node:readline';
-import { hostname, userInfo } from 'node:os';
+import { hostname, userInfo, homedir } from 'node:os';
+import { createWriteStream, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { readCredentials, readState, readPid, writePid, removePid } from './state.js';
 import { ConnectionManager } from './connection-manager.js';
 import { deviceFlowSetup, isTokenExpired } from './auth.js';
@@ -62,10 +64,32 @@ export async function setupCommand(options: { cli?: boolean } = {}): Promise<voi
 // ---- start ----
 
 export async function startCommand(): Promise<void> {
+  // Background mode: redirect all console output to log file
+  const isBackground = process.env.LIVINITY_BACKGROUND === '1';
+  if (isBackground) {
+    const logDir = join(homedir(), '.livinity');
+    mkdirSync(logDir, { recursive: true });
+    const logPath = join(logDir, 'agent.log');
+    const logStream = createWriteStream(logPath, { flags: 'a' });
+    const timestamp = () => new Date().toISOString();
+
+    // Redirect console methods to log file
+    console.log = (...args: unknown[]) => logStream.write(`${timestamp()} [INFO] ${args.join(' ')}\n`);
+    console.warn = (...args: unknown[]) => logStream.write(`${timestamp()} [WARN] ${args.join(' ')}\n`);
+    console.error = (...args: unknown[]) => logStream.write(`${timestamp()} [ERROR] ${args.join(' ')}\n`);
+
+    console.log('Agent starting in background mode');
+  }
+
   let credentials = readCredentials();
 
-  // If no credentials, auto-open web setup wizard
+  // If no credentials, auto-open web setup wizard (skip in background mode)
   if (!credentials) {
+    if (isBackground) {
+      console.log('No credentials found. Cannot run setup in background mode. Exiting.');
+      process.exit(1);
+    }
+
     console.log('No credentials found. Opening setup wizard...');
 
     const { startSetupServer } = await import('./setup-server.js');
@@ -157,7 +181,11 @@ export async function startCommand(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  console.log(`Agent started (PID ${process.pid}). Press Ctrl+C to stop.`);
+  if (isBackground) {
+    console.log(`Agent started in background mode (PID ${process.pid})`);
+  } else {
+    console.log(`Agent started (PID ${process.pid}). Press Ctrl+C to stop.`);
+  }
   try {
     const user = userInfo();
     console.log(`[agent] Running as OS user: ${user.username}`);

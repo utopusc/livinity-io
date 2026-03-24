@@ -5,6 +5,11 @@ const command = process.argv[2];
 const cliMode = process.argv.includes('--cli');
 // --web is the default; accept it as a no-op for explicitness
 const _webMode = process.argv.includes('--web');
+// --background: suppress console output, log to file, for auto-start on boot
+const backgroundMode = process.argv.includes('--background');
+if (backgroundMode) {
+  process.env.LIVINITY_BACKGROUND = '1';
+}
 
 switch (command) {
   case 'setup':
@@ -31,7 +36,8 @@ switch (command) {
     console.log('  status   Show connection status');
     console.log('');
     console.log('Flags:');
-    console.log('  --cli    Use terminal-only setup (no browser)');
-    console.log('  --web    Use browser-based setup (default)');
+    console.log('  --cli         Use terminal-only setup (no browser)');
+    console.log('  --web         Use browser-based setup (default)');
+    console.log('  --background  Suppress console output, log to file (for auto-start)');
     break;
 }
