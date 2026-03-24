@@ -12,7 +12,7 @@ import type {
   DeviceToRelayMessage,
   RelayToDeviceMessage,
 } from './types.js';
-import { TOOL_NAMES, executeToolStub } from './tools.js';
+import { TOOL_NAMES, executeTool } from './tools.js';
 import { writeState, removePid, type CredentialsData } from './state.js';
 import { isTokenExpired } from './auth.js';
 
@@ -55,7 +55,6 @@ class ReconnectionManager {
 
 export interface ConnectionManagerOptions {
   credentials: CredentialsData;
-  onToolCall?: (call: DeviceToolCall) => DeviceToolResult;
 }
 
 export class ConnectionManager {
@@ -67,11 +66,9 @@ export class ConnectionManager {
   private destroyed = false;
 
   private credentials: CredentialsData;
-  private onToolCall?: (call: DeviceToolCall) => DeviceToolResult;
 
   constructor(options: ConnectionManagerOptions) {
     this.credentials = options.credentials;
-    this.onToolCall = options.onToolCall;
   }
 
   // ---- Lifecycle ----
@@ -215,14 +212,13 @@ export class ConnectionManager {
     }
   }
 
-  private handleToolCall(msg: DeviceToolCall): void {
+  private async handleToolCall(msg: DeviceToolCall): Promise<void> {
     let result: DeviceToolResult['result'];
 
-    if (this.onToolCall) {
-      const response = this.onToolCall(msg);
-      result = response.result;
-    } else {
-      result = executeToolStub(msg.tool, msg.params);
+    try {
+      result = await executeTool(msg.tool, msg.params);
+    } catch (err: unknown) {
+      result = { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
     }
 
     const response: DeviceToolResult = {
