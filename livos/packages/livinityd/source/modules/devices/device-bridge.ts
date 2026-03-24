@@ -61,7 +61,9 @@ const DEVICE_TOOL_SCHEMAS: Record<
 	},
 	screenshot: {
 		description: 'Capture a screenshot of the display',
-		parameters: [],
+		parameters: [
+			{name: 'display', type: 'number', description: 'Display index (default: primary)', required: false},
+		],
 	},
 }
 
