@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { AGENT_VERSION } from './config.js';
 import { PLATFORM_URL } from './auth.js';
@@ -365,14 +366,20 @@ export async function startSetupServer(): Promise<{
 
   console.log(`Setup server running at http://localhost:${boundPort}`);
 
-  // Auto-open browser (dynamic import to handle ESM-only package)
+  // Auto-open browser using platform-native commands (no ESM dependency)
+  const url = `http://localhost:${boundPort}`;
   try {
-    const openModule = await import('open');
-    const openFn = openModule.default;
-    await openFn(`http://localhost:${boundPort}`);
+    const platform = process.platform;
+    if (platform === 'win32') {
+      execSync(`start "" "${url}"`, { stdio: 'ignore', shell: true });
+    } else if (platform === 'darwin') {
+      execSync(`open "${url}"`, { stdio: 'ignore' });
+    } else {
+      execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+    }
   } catch {
     // Silently ignore if browser cannot be opened (headless environments)
-    console.log(`Open http://localhost:${boundPort} in your browser to complete setup.`);
+    console.log(`Open ${url} in your browser to complete setup.`);
   }
 
   // Create the waitForSetup promise
