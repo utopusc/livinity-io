@@ -368,14 +368,13 @@ export async function startSetupServer(): Promise<{
 
   console.log(`Setup server running at http://localhost:${boundPort}`);
 
-  // Auto-open browser — explorer.exe is the most reliable method on Windows (even in SEA binaries)
+  // Auto-open browser — spawn URL with shell:true lets the OS handle it via cmd.exe association
   const url = `http://localhost:${boundPort}`;
   try {
-    const plat = process.platform;
     let child;
-    if (plat === 'win32') {
-      child = spawn('explorer.exe', [url], { detached: true, stdio: 'ignore' });
-    } else if (plat === 'darwin') {
+    if (process.platform === 'win32') {
+      child = spawn(url, [], { shell: true, detached: true, stdio: 'ignore' });
+    } else if (process.platform === 'darwin') {
       child = spawn('open', [url], { detached: true, stdio: 'ignore' });
     } else {
       child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
