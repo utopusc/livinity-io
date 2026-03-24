@@ -1,5 +1,28 @@
 # Milestones
 
+## v14.0 Remote PC Control Agent (Shipped: 2026-03-24)
+
+**Phases completed:** 7 phases, 14 plans, 26 tasks
+
+**Key accomplishments:**
+
+- RFC 8628 device auth flow with 3 API routes, device-auth helper library, Drizzle schema, and approval UI page
+- DeviceRegistry with nested userId->deviceId mapping, /device/connect WebSocket endpoint with HS256 JWT auth, 30s heartbeat, and reconnection buffering
+- Agent CLI with start/stop/status commands, WebSocket ConnectionManager with DeviceAuth, heartbeat pong, exponential backoff reconnection, and 9-tool capability advertisement
+- RFC 8628 OAuth device flow in agent setup command with JWT base64url decode, credential storage, and token expiry gates in start and reconnect paths
+- 4 new tunnel protocol types and bidirectional message routing between LivOS tunnel WS and device agent WS
+- DeviceBridge module with dynamic proxy tool lifecycle: registers device tools in Nexus on connect, unregisters on disconnect, routes tool execution through tunnel WS
+- Cross-platform shell execution via child_process.spawn with PowerShell/bash detection, 100KB truncation, and structured JSON output (stdout, stderr, exitCode, duration)
+- Five file operation tools (list/read/write/delete/rename) with home-directory path traversal protection, 1MB read limit, and structured JSON output
+- Process listing and system info collection tools using systeminformation, wired into agent dispatcher with DeviceBridge parameter schemas
+- Screenshot capture tool using node-screenshots native addon with JPEG encoding, graceful fallback, and all 9 agent tools fully wired
+- tRPC devices router with list/rename/remove endpoints backed by DeviceBridge Redis queries and tunnel disconnect messaging
+- My Devices panel with device card grid, online/offline pulse indicators, rename/remove dialogs, integrated into dock and spotlight
+- End-to-end audit trail for device tool executions: agent local JSON-lines log, relay pass-through, Redis storage (capped 1000/device), tRPC query, and UI Activity dialog
+- Dangerous command blocklist with 21 regex patterns enforced in shell tool, plus OS user display in agent status
+
+---
+
 ## v11.0 Nexus Agent Fixes (Shipped: 2026-03-22)
 
 **Phases completed:** 9 phases (26-34), 9 commits

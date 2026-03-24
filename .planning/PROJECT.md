@@ -8,66 +8,59 @@ Livinity is a self-hosted AI-powered home server OS (LivOS) with a central platf
 
 **One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.** No port forwarding, no DNS setup, no tunnel configuration — enter your API key and you're live.
 
-## Current Milestone: v14.0 — Remote PC Control Agent
-
-**Goal:** Build a cross-platform agent (Windows/Mac/Linux) that users install on their PCs, authenticates via livinity.io OAuth, and enables AI-driven remote control from LivOS UI. The AI gets tools for shell access, file operations, process management, clipboard, screenshots — controlled by the AI agent to accomplish user requests. Maximum security: E2EE vs TLS+Token to be determined by research.
-
-**Target features:**
-- Cross-platform agent binary (Windows/Mac/Linux) installable via single command or download
-- livinity.io OAuth authentication (user logs in, agent registers with their account)
-- Secure tunnel between LivOS and remote PC (encrypted, relay if needed)
-- AI tool integration: shell, files, process list, clipboard, screenshots as AI tools
-- LivOS UI: "My Devices" panel showing connected PCs with status
-- AI can control remote PC via natural language ("show me files on my desktop PC")
-- Per-device permissions (user can restrict what AI can do on each device)
-- Connection status, heartbeat, reconnection handling
-- Audit log of all remote operations
-
 ## Requirements
 
 ### Validated
 
-*All features from v1.0 through v7.2 — see MILESTONES.md*
+*All features from v1.0 through v13.0 — see MILESTONES.md*
 
 Key validated capabilities:
 - ✓ Web UI with desktop-like windowed interface
-- ✓ Docker application management
+- ✓ Docker application management (Portainer-level: create, edit, exec, stacks, events)
 - ✓ File manager, AI chat, tool system, skill system
 - ✓ Multi-user: PostgreSQL, JWT, login screen, invite system
 - ✓ Per-user isolation: files, AI, apps, settings, Docker containers
 - ✓ Per-user subdomain routing, app gateway middleware
 - ✓ Caddy reverse proxy, Cloudflare Tunnel support
 - ✓ Onboarding wizard with personalization
+- ✓ Remote PC Control Agent — v14.0
+  - ✓ Cross-platform agent binary (Windows/Mac/Linux) with Node.js SEA
+  - ✓ livinity.io OAuth Device Authorization Grant (RFC 8628)
+  - ✓ Secure WSS tunnel through relay with JWT auth
+  - ✓ AI tools: shell, files (list/read/write/delete/rename), processes, system info, screenshot
+  - ✓ "My Devices" UI panel with device cards, rename, remove
+  - ✓ Dynamic proxy tool registration in Nexus ToolRegistry
+  - ✓ Connection status, heartbeat, exponential backoff auto-reconnect
+  - ✓ End-to-end audit logging (agent → relay → LivOS → UI)
+  - ✓ Dangerous command blocklist (21 patterns, configurable)
 
-### Active (v14.0 — Remote PC Control Agent)
+### Active
 
-- [ ] Cross-platform agent (Windows/Mac/Linux) with installer
-- [ ] livinity.io OAuth authentication for agent registration
-- [ ] Secure encrypted tunnel between LivOS and remote PC
-- [ ] AI tools: shell, files, process, clipboard, screenshot on remote PC
-- [ ] "My Devices" UI in LivOS showing connected PCs
-- [ ] Per-device permission controls
-- [ ] Connection status, heartbeat, auto-reconnect
-- [ ] Audit log of remote operations
+(None — planning next milestone)
 
 ### Out of Scope
 
 - Mobile app — web-first approach, mobile later
 - Self-hosted LLM support — Kimi Code only for now
-- Payment/billing system — deferred to v8.1 (Stripe/Lemonsqueezy TBD)
+- Payment/billing system — deferred (Stripe/Lemonsqueezy TBD)
 - Dark theme for livinity.io — light/premium theme only
 - Multi-region tunnel relay — single relay (Server5) for now
 - White-label/reseller — direct platform only
 - Per-user MCP server settings — deferred
+- Full desktop streaming (RDP/VNC) — AI uses structured commands, not video
+- Per-device permission matrix — v14.1 (all-or-nothing for now)
+- Clipboard sync as AI tool — v14.1
+- Multi-device orchestration — v15+
 
 ## Context
 
-**Current State (post v7.2):**
+**Current State (post v14.0):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
-- install.sh one-command installer with PostgreSQL, Caddy, cloudflared
-- 350 test cases written, 40/40 automated API tests passing
+- Portainer-level Docker management: container CRUD, exec, stacks, events, engine info
+- Remote PC Control Agent: cross-platform agent binary, OAuth device flow, 9 AI tools, My Devices UI
+- Agent architecture: agent → relay /device/connect → DeviceBridge → Nexus proxy tools
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -90,13 +83,17 @@ Key validated capabilities:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Custom tunnel relay (not CF Tunnel) | Full control over routing, subdomain management, bandwidth tracking | Pending |
-| Next.js for livinity.io | SSR for landing SEO, API routes for dashboard, React ecosystem | Pending |
-| Server5 for relay | Available VPS, isolated from production LivOS | Pending |
-| Free: 1 subdomain + 50GB/mo | Low barrier to entry, premium for power users | Pending |
-| Payment deferred to v8.1 | Focus on core platform first, monetize after user base | Pending |
-| Apple-style premium design | Differentiates from typical dev-tool aesthetic | Pending |
-| Users can add custom domains | Via livinity.io dashboard, requires DNS verification | Pending |
+| Custom tunnel relay (not CF Tunnel) | Full control over routing, subdomain management, bandwidth tracking | ✓ Good |
+| Next.js for livinity.io | SSR for landing SEO, API routes for dashboard, React ecosystem | ✓ Good |
+| Server5 for relay | Available VPS, isolated from production LivOS | ✓ Good |
+| Free: 1 subdomain + 50GB/mo | Low barrier to entry, premium for power users | — Pending |
+| Payment deferred | Focus on core platform first, monetize after user base | — Pending |
+| Apple-style premium design | Differentiates from typical dev-tool aesthetic | ✓ Good |
+| TLS+Token for agent (not E2EE) | Simpler, relay is self-hosted/trusted, E2EE can layer on later | ✓ Good |
+| Node.js SEA for agent binary | Same language as LivOS/Nexus, shared protocol types, fast iteration | ✓ Good |
+| OAuth Device Grant (RFC 8628) | Standard for headless device auth, good UX for non-technical users | ✓ Good |
+| Proxy tools in ToolRegistry (not MCP) | Simpler than MCP per device, uses existing ToolRegistry | ✓ Good |
+| Redis for ephemeral device state | Fits transient connection data, PostgreSQL only for persistent metadata | ✓ Good |
 
 ## Evolution
 
@@ -116,4 +113,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 — v14.0 milestone started (Remote PC Control Agent)*
+*Last updated: 2026-03-24 after v14.0 milestone (Remote PC Control Agent)*
