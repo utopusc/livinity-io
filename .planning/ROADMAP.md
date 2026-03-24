@@ -165,7 +165,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. AI can query a device's screen resolution, display count, and active window title/position
   2. Screenshot tool returns image dimensions and scaling factor alongside the JPEG data so the AI can map pixel coordinates to actual screen positions
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 06-01-PLAN.md -- screen_info tool + screenshot coordinate metadata + dispatcher/DeviceBridge registration
 
 ### Phase 7: Computer Use Loop
 **Goal**: Users can give the AI a natural language task and it autonomously operates the device's desktop through a screenshot-vision-action cycle until the task is done
@@ -209,7 +212,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 5. Agent Mouse & Keyboard Tools | v15.0 | 0/2 | In progress | - |
-| 6. Screen Info & Screenshot Extensions | v15.0 | 0/? | Not started | - |
+| 6. Screen Info & Screenshot Extensions | v15.0 | 0/1 | Not started | - |
 | 7. Computer Use Loop | v15.0 | 0/? | Not started | - |
 | 8. Live Monitoring UI | v15.0 | 0/? | Not started | - |
 | 9. Security & Permissions | v15.0 | 0/? | Not started | - |
