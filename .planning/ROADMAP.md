@@ -251,7 +251,7 @@ Plans:
 | 45. Docker Compose Stacks | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete   | 2026-03-24 |
+| 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 0/2 | Not started | - |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |
