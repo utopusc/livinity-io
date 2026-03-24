@@ -9,11 +9,14 @@
     "build:sea": "node esbuild.config.mjs && node --experimental-sea-config sea-config.json && echo 'SEA blob created at dist/sea-prep.blob'"
   },
   "dependencies": {
+    "express": "^4.21.0",
     "node-screenshots": "^0.2.8",
+    "open": "^10.1.0",
     "systeminformation": "^5.31.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
     "esbuild": "^0.24.0",
