@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import ConnectingScreen from './components/ConnectingScreen';
 import SuccessScreen from './components/SuccessScreen';
@@ -20,13 +20,23 @@ function App() {
   const [userCode, setUserCode] = useState('');
   const [verificationUri, setVerificationUri] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch device name on mount
+  // Fetch device name and initial status on mount
   useEffect(() => {
     fetch('/api/status')
       .then((res) => res.json())
-      .then((data: { deviceName: string }) => {
+      .then((data: { deviceName: string; status: string }) => {
         setDeviceName(data.deviceName);
+        // If status is already past awaiting_setup (e.g., page refresh during flow),
+        // resume from the correct screen
+        if (data.status === 'connecting' || data.status === 'polling') {
+          setScreen('connecting');
+        } else if (data.status === 'success') {
+          setScreen('success');
+        } else if (data.status === 'error') {
+          setScreen('error');
+        }
       })
       .catch(() => {
         setDeviceName('Unknown Device');
@@ -35,14 +45,21 @@ function App() {
 
   // Poll for status while connecting
   useEffect(() => {
-    if (screen !== 'connecting') return;
+    if (screen !== 'connecting') {
+      // Clear any existing poll interval when not in connecting screen
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
 
-    const interval = setInterval(async () => {
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const res = await fetch('/api/poll-status');
         const data = (await res.json()) as PollResponse;
 
-        if (data.userCode && data.verificationUri) {
+        if (data.status === 'polling' && data.userCode && data.verificationUri) {
           setUserCode(data.userCode);
           setVerificationUri(data.verificationUri);
         }
@@ -57,15 +74,38 @@ function App() {
       } catch {
         // Ignore poll errors silently
       }
-    }, 3000);
+    }, 2000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [screen]);
+
+  // Auto-close window after success
+  useEffect(() => {
+    if (screen !== 'success') return;
+
+    const timeout = setTimeout(() => {
+      window.close();
+      // If window.close() is blocked by the browser, the SuccessScreen
+      // already shows "This window will close automatically" text.
+      // We don't need additional handling -- the user can close manually.
+    }, 5000);
+
+    return () => clearTimeout(timeout);
   }, [screen]);
 
   const handleConnect = useCallback(async () => {
     setScreen('connecting');
     try {
-      const res = await fetch('/api/start-setup', { method: 'POST' });
+      const res = await fetch('/api/start-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceName }),
+      });
       const data = (await res.json()) as { started: boolean };
       if (!data.started) {
         setErrorMessage('Failed to start setup process.');
@@ -75,9 +115,16 @@ function App() {
       setErrorMessage('Could not connect to the setup server.');
       setScreen('error');
     }
-  }, []);
+  }, [deviceName]);
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = useCallback(async () => {
+    // Reset server-side state
+    try {
+      await fetch('/api/retry', { method: 'POST' });
+    } catch {
+      // If retry endpoint fails, still reset UI
+    }
+    // Reset UI state
     setErrorMessage('');
     setUserCode('');
     setVerificationUri('');
