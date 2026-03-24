@@ -152,7 +152,7 @@ Plans:
   1. A Livinity icon appears in the system tray when the agent is running on Windows, macOS, and Linux
   2. The tray icon color reflects connection status -- green for connected, yellow for connecting, red for disconnected
   3. Right-clicking the tray icon shows a menu with Status, Open Setup, Disconnect, and Quit options
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 02-01: System tray integration with status icons and context menu
