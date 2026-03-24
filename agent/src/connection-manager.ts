@@ -7,11 +7,13 @@ import {
 } from './config.js';
 import type {
   DeviceAuth,
+  DeviceAuditEvent,
   DeviceToolCall,
   DeviceToolResult,
   DeviceToRelayMessage,
   RelayToDeviceMessage,
 } from './types.js';
+import { appendAuditLog, truncateParams } from './audit.js';
 import { TOOL_NAMES, executeTool } from './tools.js';
 import { writeState, removePid, type CredentialsData } from './state.js';
 import { isTokenExpired } from './auth.js';
@@ -215,11 +217,13 @@ export class ConnectionManager {
   private async handleToolCall(msg: DeviceToolCall): Promise<void> {
     let result: DeviceToolResult['result'];
 
+    const startTime = Date.now();
     try {
       result = await executeTool(msg.tool, msg.params);
     } catch (err: unknown) {
       result = { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
     }
+    const duration = Date.now() - startTime;
 
     const response: DeviceToolResult = {
       type: 'device_tool_result',
@@ -227,6 +231,29 @@ export class ConnectionManager {
       result,
     };
     this.sendMessage(response);
+
+    // Audit: local file log (fire-and-forget)
+    const truncatedParams = truncateParams(msg.params);
+    appendAuditLog({
+      timestamp: new Date().toISOString(),
+      toolName: msg.tool,
+      params: truncatedParams,
+      success: result.success !== false,
+      duration,
+      error: result.error,
+    });
+
+    // Audit: send event to relay for forwarding to LivOS
+    const auditEvent: DeviceAuditEvent = {
+      type: 'device_audit_event',
+      timestamp: new Date().toISOString(),
+      toolName: msg.tool,
+      params: truncatedParams,
+      success: result.success !== false,
+      duration,
+      error: result.error,
+    };
+    this.sendMessage(auditEvent);
   }
 
   // ---- Reconnection ----
