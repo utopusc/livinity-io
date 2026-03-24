@@ -8,6 +8,11 @@ import {
 	IconTrash,
 	IconRefresh,
 	IconDevices2,
+	IconHistory,
+	IconCheck,
+	IconX,
+	IconChevronDown,
+	IconChevronRight,
 } from '@tabler/icons-react'
 
 import {trpcReact} from '@/trpc/trpc'
@@ -63,10 +68,12 @@ function DeviceCard({
 	device,
 	onRename,
 	onRemove,
+	onActivity,
 }: {
 	device: DeviceData
 	onRename: (device: DeviceData) => void
 	onRemove: (device: DeviceData) => void
+	onActivity: (device: DeviceData) => void
 }) {
 	const meta = PLATFORM_META[device.platform] ?? PLATFORM_META.linux
 	const PlatformIcon = meta.icon
@@ -112,6 +119,13 @@ function DeviceCard({
 
 			{/* Actions */}
 			<div className='mt-4 flex items-center gap-2'>
+				<button
+					onClick={() => onActivity(device)}
+					className='rounded-md p-1.5 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+					aria-label='View activity'
+				>
+					<IconHistory size={16} />
+				</button>
 				<button
 					onClick={() => onRename(device)}
 					className='rounded-md p-1.5 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
@@ -284,6 +298,88 @@ function RemoveDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Activity dialog
+// ---------------------------------------------------------------------------
+
+function formatAuditTime(timestamp: string): string {
+	const date = new Date(timestamp)
+	const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+	if (seconds < 60) return 'just now'
+	const minutes = Math.floor(seconds / 60)
+	if (minutes < 60) return `${minutes}m ago`
+	const hours = Math.floor(minutes / 60)
+	if (hours < 24) return `${hours}h ago`
+	return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+}
+
+function AuditEntryRow({entry}: {entry: {timestamp: string; toolName: string; params: Record<string, unknown>; success: boolean; duration: number; error?: string}}) {
+	const [expanded, setExpanded] = useState(false)
+
+	return (
+		<div className='border-b border-border-subtle last:border-b-0'>
+			<button onClick={() => setExpanded(!expanded)} className='flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2'>
+				{entry.success ? (
+					<IconCheck size={16} className='shrink-0 text-green-500' />
+				) : (
+					<IconX size={16} className='shrink-0 text-red-500' />
+				)}
+				<Badge variant='default' className='shrink-0 text-xs'>
+					{entry.toolName}
+				</Badge>
+				<span className='flex-1 truncate text-sm text-text-secondary'>{entry.duration}ms</span>
+				<span className='shrink-0 text-xs text-text-tertiary'>{formatAuditTime(entry.timestamp)}</span>
+				{expanded ? <IconChevronDown size={14} className='shrink-0 text-text-tertiary' /> : <IconChevronRight size={14} className='shrink-0 text-text-tertiary' />}
+			</button>
+			{expanded && (
+				<div className='bg-surface-0 px-4 py-3'>
+					<pre className='max-h-40 overflow-auto rounded bg-surface-1 p-2 text-xs text-text-secondary'>{JSON.stringify(entry.params, null, 2)}</pre>
+					{entry.error && <p className='mt-2 text-xs text-red-400'>{entry.error}</p>}
+				</div>
+			)}
+		</div>
+	)
+}
+
+function ActivityDialog({
+	device,
+	open,
+	onOpenChange,
+}: {
+	device: DeviceData | null
+	open: boolean
+	onOpenChange: (open: boolean) => void
+}) {
+	const {data: auditLog, isLoading} = trpcReact.devices.auditLog.useQuery(
+		{deviceId: device?.deviceId ?? '', offset: 0, limit: 50},
+		{enabled: !!device && open, refetchInterval: 10000},
+	)
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className='max-w-lg'>
+				<DialogHeader>
+					<DialogTitle>Activity Log - {device?.deviceName}</DialogTitle>
+					<DialogDescription>Recent tool executions on this device.</DialogDescription>
+				</DialogHeader>
+				<div className='max-h-[400px] overflow-auto rounded border border-border-subtle'>
+					{isLoading ? (
+						<div className='flex items-center justify-center py-8'>
+							<p className='text-sm text-text-secondary'>Loading activity...</p>
+						</div>
+					) : !auditLog || auditLog.length === 0 ? (
+						<div className='flex items-center justify-center py-8'>
+							<p className='text-sm text-text-secondary'>No activity recorded yet</p>
+						</div>
+					) : (
+						auditLog.map((entry, i) => <AuditEntryRow key={`${entry.timestamp}-${i}`} entry={entry} />)
+					)}
+				</div>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -292,6 +388,7 @@ export default function MyDevicesPanel() {
 
 	const [renameTarget, setRenameTarget] = useState<DeviceData | null>(null)
 	const [removeTarget, setRemoveTarget] = useState<DeviceData | null>(null)
+	const [activityTarget, setActivityTarget] = useState<DeviceData | null>(null)
 
 	return (
 		<div className='flex h-full flex-col'>
@@ -333,6 +430,7 @@ export default function MyDevicesPanel() {
 								device={device}
 								onRename={setRenameTarget}
 								onRemove={setRemoveTarget}
+								onActivity={setActivityTarget}
 							/>
 						))}
 					</div>
@@ -342,6 +440,7 @@ export default function MyDevicesPanel() {
 			{/* Dialogs */}
 			<RenameDialog device={renameTarget} open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)} />
 			<RemoveDialog device={removeTarget} open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)} />
+			<ActivityDialog device={activityTarget} open={!!activityTarget} onOpenChange={(open) => !open && setActivityTarget(null)} />
 		</div>
 	)
 }
