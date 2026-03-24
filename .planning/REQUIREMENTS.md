@@ -28,8 +28,8 @@
 
 - [x] **RELAY-01**: Relay accepts device connections at /device/connect WebSocket endpoint
 - [x] **RELAY-02**: Relay maintains DeviceRegistry (user -> devices mapping)
-- [ ] **RELAY-03**: Relay routes tool_call/tool_result messages between LivOS tunnel and device
-- [ ] **RELAY-04**: Relay notifies LivOS when devices connect/disconnect
+- [x] **RELAY-03**: Relay routes tool_call/tool_result messages between LivOS tunnel and device
+- [x] **RELAY-04**: Relay notifies LivOS when devices connect/disconnect
 
 ### Shell -- Remote Shell Execution
 
@@ -125,8 +125,8 @@
 | AUTH-03 | Phase 48 | Complete |
 | SEC-01 | Phase 48 | Complete |
 | SEC-02 | Phase 48 | Complete |
-| RELAY-03 | Phase 49 | Pending |
-| RELAY-04 | Phase 49 | Pending |
+| RELAY-03 | Phase 49 | Complete |
+| RELAY-04 | Phase 49 | Complete |
 | TOOLS-01 | Phase 49 | Pending |
 | TOOLS-02 | Phase 49 | Pending |
 | TOOLS-03 | Phase 49 | Pending |

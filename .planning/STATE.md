@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.0
 milestone_name: Remote PC Control Agent
 status: unknown
-stopped_at: Completed 48-02-PLAN.md
-last_updated: "2026-03-24T05:53:50.535Z"
+stopped_at: Completed 49-01-PLAN.md
+last_updated: "2026-03-24T06:06:28.960Z"
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v14.0 -- Remote PC Control Agent
-**Current focus:** Phase 48 — Agent Binary + Authentication
+**Current focus:** Phase 49 — Relay Message Routing + DeviceBridge
 
 ## Current Position
 
-Phase: 49
-Plan: Not started
+Phase: 49 (Relay Message Routing + DeviceBridge) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Plan: Not started
 | 47 | 2 | 6min | 3min |
 | 48 | 1 | 3min | 3min |
 | Phase 48 P02 | 3min | 2 tasks | 3 files |
+| Phase 49 P01 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Plan: Not started
 - [Phase 48]: No JWT library for client-side decode -- base64url split+decode sufficient since relay verifies
 - [Phase 48]: No refresh token flow in v14.0 -- expired 24h tokens require re-running setup
 - [Phase 48]: Token expiry check in ConnectionManager.connect() with 5min buffer prevents reconnect storms
+- [Phase 49]: getByUserId iterates TunnelRegistry Map (acceptable at v14.0 scale of 50-100 tunnels)
+- [Phase 49]: Relay returns error TunnelDeviceToolResult immediately if target device not connected (no queueing in v14.0)
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T05:50:18.992Z
-Stopped at: Completed 48-02-PLAN.md
+Last session: 2026-03-24T06:06:28.957Z
+Stopped at: Completed 49-01-PLAN.md
 Resume file: None

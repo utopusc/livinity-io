@@ -160,7 +160,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 49-01-PLAN.md -- Relay message routing: tunnel protocol types for device events, forward tool_call/tool_result between LivOS tunnel and device WS
+- [x] 49-01-PLAN.md -- Relay message routing: tunnel protocol types for device events, forward tool_call/tool_result between LivOS tunnel and device WS
 - [ ] 49-02-PLAN.md -- DeviceBridge module in livinityd, Nexus proxy tool registration API, tunnel-client event handlers, execution callback
 
 ### Phase 50: Agent Core Tools -- Shell + Files
@@ -252,7 +252,7 @@ Plans:
 | 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 49. Relay Message Routing + DeviceBridge | v14.0 | 0/2 | Not started | - |
+| 49. Relay Message Routing + DeviceBridge | v14.0 | 1/2 | In Progress|  |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |
 | 52. My Devices UI | v14.0 | 0/2 | Not started | - |
