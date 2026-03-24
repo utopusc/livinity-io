@@ -34,9 +34,9 @@
 
 ### Tray -- System Tray Icon
 
-- [ ] **TRAY-01**: Agent shows a system tray icon when running (Windows/macOS/Linux)
-- [ ] **TRAY-02**: Tray icon shows connection status (green = connected, yellow = connecting, red = disconnected)
-- [ ] **TRAY-03**: Tray menu includes: Status, Open Setup, Disconnect, Quit
+- [x] **TRAY-01**: Agent shows a system tray icon when running (Windows/macOS/Linux)
+- [x] **TRAY-02**: Tray icon shows connection status (green = connected, yellow = connecting, red = disconnected)
+- [x] **TRAY-03**: Tray menu includes: Status, Open Setup, Disconnect, Quit
 
 ### Download -- livinity.io Download Page
 
@@ -79,9 +79,9 @@
 | LIN-01 | Phase 3 | Pending |
 | LIN-02 | Phase 3 | Pending |
 | LIN-03 | Phase 3 | Pending |
-| TRAY-01 | Phase 2 | Pending |
-| TRAY-02 | Phase 2 | Pending |
-| TRAY-03 | Phase 2 | Pending |
+| TRAY-01 | Phase 2 | Complete |
+| TRAY-02 | Phase 2 | Complete |
+| TRAY-03 | Phase 2 | Complete |
 | DL-01 | Phase 4 | Pending |
 | DL-02 | Phase 4 | Pending |
 | DL-03 | Phase 4 | Pending |

@@ -155,7 +155,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 02-01: System tray integration with status icons and context menu
+- [x] 02-01: System tray integration with status icons and context menu
 
 ### Phase 3: Platform Installers
 **Goal**: Users install the agent with a native installer and it auto-starts on boot without configuration
