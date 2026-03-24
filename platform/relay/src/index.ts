@@ -40,6 +40,10 @@ import type {
   TunnelWsFrame,
   TunnelWsClose,
   TunnelWsError as TunnelWsErrorMsg,
+  TunnelDeviceConnected,
+  TunnelDeviceDisconnected,
+  TunnelDeviceToolCall,
+  TunnelDeviceToolResult,
   ClientToRelayMessage,
   BidirectionalMessage,
 } from './protocol.js';
@@ -49,6 +53,7 @@ import type {
   DeviceAuth,
   DeviceConnected,
   DeviceAuthError,
+  DeviceToolCall,
   DeviceToRelayMessage,
 } from './device-protocol.js';
 
@@ -221,6 +226,33 @@ function onTunnelConnect(ws: WebSocket): void {
         handleWsError(msg as TunnelWsErrorMsg, tunnel);
         break;
 
+      case 'device_tool_call': {
+        const toolCallMsg = msg as TunnelDeviceToolCall;
+        const targetDevice = deviceRegistry.getDevice(tunnel.userId, toolCallMsg.deviceId);
+        if (!targetDevice || targetDevice.ws.readyState !== 1) {
+          // Device not connected -- send error result back
+          const errorResult: TunnelDeviceToolResult = {
+            type: 'device_tool_result',
+            requestId: toolCallMsg.requestId,
+            deviceId: toolCallMsg.deviceId,
+            result: { success: false, output: '', error: `Device '${toolCallMsg.deviceId}' is not connected` },
+          };
+          ws.send(JSON.stringify(errorResult));
+          break;
+        }
+        // Forward tool call to device (strip deviceId, add timeout default)
+        const deviceMsg: DeviceToolCall = {
+          type: 'device_tool_call',
+          requestId: toolCallMsg.requestId,
+          tool: toolCallMsg.tool,
+          params: toolCallMsg.params,
+          timeout: toolCallMsg.timeout ?? 30000,
+        };
+        targetDevice.ws.send(JSON.stringify(deviceMsg));
+        console.log(`[relay] Forwarded tool_call to device=${toolCallMsg.deviceId} tool=${toolCallMsg.tool} request=${toolCallMsg.requestId}`);
+        break;
+      }
+
       case 'pong':
         // Application-level pong — heartbeat uses WebSocket-level ping/pong
         break;
@@ -343,6 +375,21 @@ function onDeviceConnect(ws: WebSocket): void {
       ws.send(JSON.stringify(connectedMsg));
 
       console.log(`[relay] Device connected: ${authMsg.deviceName} (${authMsg.platform}) user=${tokenPayload.userId} device=${tokenPayload.deviceId}`);
+
+      // Notify LivOS tunnel that a device connected
+      const userTunnel = registry.getByUserId(tokenPayload.userId);
+      if (userTunnel && userTunnel.ws.readyState === 1) {
+        const event: TunnelDeviceConnected = {
+          type: 'device_connected',
+          deviceId: tokenPayload.deviceId,
+          deviceName: authMsg.deviceName,
+          platform: authMsg.platform,
+          tools: authMsg.tools,
+        };
+        userTunnel.ws.send(JSON.stringify(event));
+        console.log(`[relay] Notified LivOS tunnel of device connect: ${authMsg.deviceName}`);
+      }
+
       return;
     }
 
@@ -350,10 +397,23 @@ function onDeviceConnect(ws: WebSocket): void {
     if (!device) return;
 
     switch (msg.type) {
-      case 'device_tool_result':
-        // Phase 49 will handle routing tool results to the LivOS tunnel
-        console.log(`[relay] Device tool result: device=${device.deviceId} request=${msg.requestId}`);
+      case 'device_tool_result': {
+        // Forward tool result to the user's LivOS tunnel
+        const userTunnel = registry.getByUserId(device.userId);
+        if (userTunnel && userTunnel.ws.readyState === 1) {
+          const tunnelResult: TunnelDeviceToolResult = {
+            type: 'device_tool_result',
+            requestId: msg.requestId,
+            deviceId: device.deviceId,
+            result: msg.result,
+          };
+          userTunnel.ws.send(JSON.stringify(tunnelResult));
+          console.log(`[relay] Forwarded tool_result from device=${device.deviceId} request=${msg.requestId}`);
+        } else {
+          console.warn(`[relay] No tunnel for user=${device.userId} to deliver tool_result request=${msg.requestId}`);
+        }
         break;
+      }
 
       case 'device_pong':
         // Application-level pong — heartbeat uses WebSocket-level ping/pong
@@ -367,6 +427,17 @@ function onDeviceConnect(ws: WebSocket): void {
   ws.on('close', () => {
     clearTimeout(authTimer);
     if (deviceUserId && deviceDeviceId) {
+      // Notify LivOS tunnel that a device disconnected
+      const userTunnel = registry.getByUserId(deviceUserId);
+      if (userTunnel && userTunnel.ws.readyState === 1) {
+        const event: TunnelDeviceDisconnected = {
+          type: 'device_disconnected',
+          deviceId: deviceDeviceId,
+        };
+        userTunnel.ws.send(JSON.stringify(event));
+        console.log(`[relay] Notified LivOS tunnel of device disconnect: ${deviceDeviceId}`);
+      }
+
       console.log(`[relay] Device disconnected: device=${deviceDeviceId} user=${deviceUserId}`);
       deviceRegistry.markDisconnected(deviceUserId, deviceDeviceId);
     }

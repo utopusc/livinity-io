@@ -324,6 +324,17 @@ export class TunnelRegistry {
   }
 
   /**
+   * Find a tunnel connection by user ID.
+   * Iterates the registry (small Map, fine for v14.0).
+   */
+  getByUserId(userId: string): TunnelConnection | undefined {
+    for (const connection of this.tunnels.values()) {
+      if (connection.userId === userId) return connection;
+    }
+    return undefined;
+  }
+
+  /**
    * Find a tunnel connection by session ID.
    * Iterates the registry (small Map, fine for v8.0).
    */
