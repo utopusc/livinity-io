@@ -180,7 +180,11 @@ Plans:
   3. Computer use sessions respect a configurable step limit (e.g., max 50 actions) and stop gracefully when reached
   4. AI reports back to the user when the task is complete or explains why it could not be completed
   5. The computer use loop is a distinct mode in Nexus that the AI enters when a task requires visual desktop interaction
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 07-01-PLAN.md -- Vision enablement + tool result image flow fix in native tool calling path
+- [ ] 07-02-PLAN.md -- Computer use system prompt guidance + step limits + completion detection
 
 ### Phase 8: Live Monitoring UI
 **Goal**: Users can watch the AI operate their device in real time with a visual stream, action indicators, and session controls
@@ -213,6 +217,6 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 |-------|-----------|----------------|--------|-----------|
 | 5. Agent Mouse & Keyboard Tools | v15.0 | 0/2 | In progress | - |
 | 6. Screen Info & Screenshot Extensions | v15.0 | 0/1 | Not started | - |
-| 7. Computer Use Loop | v15.0 | 0/? | Not started | - |
+| 7. Computer Use Loop | v15.0 | 0/2 | Not started | - |
 | 8. Live Monitoring UI | v15.0 | 0/? | Not started | - |
 | 9. Security & Permissions | v15.0 | 0/? | Not started | - |
