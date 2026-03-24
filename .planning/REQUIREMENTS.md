@@ -67,8 +67,8 @@
 
 ### Audit -- Audit Logging
 
-- [ ] **AUDIT-01**: Every remote tool execution logged with timestamp, user, tool, parameters, result
-- [ ] **AUDIT-02**: Audit log viewable per device from LivOS UI
+- [x] **AUDIT-01**: Every remote tool execution logged with timestamp, user, tool, parameters, result
+- [x] **AUDIT-02**: Audit log viewable per device from LivOS UI
 
 ### Security
 
@@ -143,8 +143,8 @@
 | UI-01 | Phase 52 | Complete |
 | UI-02 | Phase 52 | Complete |
 | UI-03 | Phase 52 | Complete |
-| AUDIT-01 | Phase 53 | Pending |
-| AUDIT-02 | Phase 53 | Pending |
+| AUDIT-01 | Phase 53 | Complete |
+| AUDIT-02 | Phase 53 | Complete |
 | SEC-03 | Phase 53 | Pending |
 | SEC-04 | Phase 53 | Pending |
 

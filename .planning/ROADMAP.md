@@ -220,7 +220,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 53-01-PLAN.md -- End-to-end audit logging: agent local JSON-lines log, relay pass-through, LivOS Redis storage, tRPC query, UI Activity dialog
+- [x] 53-01-PLAN.md -- End-to-end audit logging: agent local JSON-lines log, relay pass-through, LivOS Redis storage, tRPC query, UI Activity dialog
 - [ ] 53-02-PLAN.md -- Security hardening: configurable dangerous command blocklist in shell tool, agent runs-as-user display in status
 
 ## Progress
@@ -256,4 +256,4 @@ Plans:
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 52. My Devices UI | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |
+| 53. Audit Logging + Security Hardening | v14.0 | 1/2 | In Progress|  |
