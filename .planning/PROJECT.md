@@ -33,27 +33,34 @@ Key validated capabilities:
   - ✓ Connection status, heartbeat, exponential backoff auto-reconnect
   - ✓ End-to-end audit logging (agent → relay → LivOS → UI)
   - ✓ Dangerous command blocklist (21 patterns, configurable)
+- ✓ Agent Installer & Setup UX — v14.1
+  - ✓ Web-based OAuth setup wizard (React SPA on local HTTP server)
+  - ✓ Cross-platform system tray icon with connection status
+  - ✓ Native installers: Windows .exe (Inno Setup), macOS .dmg, Linux .deb
+  - ✓ Auto-start on boot (registry, LaunchAgent, systemd)
+  - ✓ livinity.io/download with platform detection
 
-## Current Milestone: v14.1 — Agent Installer & Setup UX
+## Current Milestone: v15.0 — AI Computer Use
 
-**Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser. Users double-click to install, the agent opens a beautiful setup page for OAuth, then runs silently in the background with auto-start on boot.
+**Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices — Claude Computer Use style. The AI takes screenshots, analyzes them with multimodal vision, determines coordinates, and executes mouse/keyboard actions in a screenshot→analyze→action loop.
 
 **Target features:**
-- Native platform installers (Inno Setup .exe, create-dmg .dmg, fpm .deb)
-- Web-based setup wizard (local HTTP server + React UI for OAuth flow)
-- System tray icon with connection status
-- Auto-start on boot (Windows registry, macOS LaunchAgent, Linux systemd)
-- livinity.io /download page with platform detection and download links
+- Mouse & keyboard automation tools in the agent (click, type, press, drag, move, scroll)
+- Screenshot→analyze→action loop in Nexus AI (computer use mode)
+- Live screen monitoring UI in LivOS (real-time screenshot stream)
+- Security: user consent, emergency stop, per-action audit logging
+- Screen size and coordinate system handling
 
-### Active (v14.1 — Agent Installer & Setup UX)
+### Active (v15.0 — AI Computer Use)
 
-- [ ] Native Windows installer (.exe) with setup wizard
-- [ ] Native macOS installer (.dmg) with drag-to-Applications
-- [ ] Native Linux package (.deb) with systemd service
-- [ ] Web-based setup wizard (React UI for OAuth device flow)
-- [ ] System tray icon with connection status and menu
-- [ ] Auto-start on boot (per platform)
-- [ ] livinity.io /download page with platform detection
+- [ ] Mouse automation tools (click, double-click, right-click, move, drag)
+- [ ] Keyboard automation tools (type text, press keys, key combinations)
+- [ ] Screen info tool (get resolution, active window info)
+- [ ] Computer use agent loop in Nexus (screenshot→vision→action cycle)
+- [ ] Live screen monitoring in LivOS UI (streaming screenshots, action overlay)
+- [ ] User consent flow for computer control sessions
+- [ ] Emergency stop mechanism (hotkey kills AI control)
+- [ ] Per-action audit logging for all mouse/keyboard events
 
 ### Out of Scope
 
@@ -64,20 +71,24 @@ Key validated capabilities:
 - Multi-region tunnel relay — single relay (Server5) for now
 - White-label/reseller — direct platform only
 - Per-user MCP server settings — deferred
-- Full desktop streaming (RDP/VNC) — AI uses structured commands, not video
-- Per-device permission matrix — v14.1 (all-or-nothing for now)
-- Clipboard sync as AI tool — v14.1
-- Multi-device orchestration — v15+
+- Full desktop streaming (RDP/VNC) — AI uses structured screenshot+action, not video stream
+- Per-device permission matrix — future (all-or-nothing for now)
+- Clipboard sync as AI tool — future
+- Multi-device orchestration — future
+- Per-app computer use permissions — v15.1 (all-or-nothing for now)
+- Browser-only computer use mode — full desktop for now
 
 ## Context
 
-**Current State (post v14.0):**
+**Current State (post v14.1):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
 - Portainer-level Docker management: container CRUD, exec, stacks, events, engine info
 - Remote PC Control Agent: cross-platform agent binary, OAuth device flow, 9 AI tools, My Devices UI
 - Agent architecture: agent → relay /device/connect → DeviceBridge → Nexus proxy tools
+- Agent Installers: native .exe/.dmg/.deb, web setup wizard, system tray, auto-start, download page
+- Existing agent tools: shell, files (list/read/write/delete/rename), processes, screenshot, system info
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -111,6 +122,7 @@ Key validated capabilities:
 | OAuth Device Grant (RFC 8628) | Standard for headless device auth, good UX for non-technical users | ✓ Good |
 | Proxy tools in ToolRegistry (not MCP) | Simpler than MCP per device, uses existing ToolRegistry | ✓ Good |
 | Redis for ephemeral device state | Fits transient connection data, PostgreSQL only for persistent metadata | ✓ Good |
+| nut.js for computer use automation | TypeScript native, cross-platform mouse+keyboard, active maintenance | — Pending |
 
 ## Evolution
 
@@ -130,4 +142,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 — v14.1 milestone started (Agent Installer & Setup UX)*
+*Last updated: 2026-03-24 — v15.0 milestone started (AI Computer Use)*
