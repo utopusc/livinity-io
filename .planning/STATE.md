@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 08-01-PLAN.md (Live Monitoring Backend Infrastructure)
-last_updated: "2026-03-24T17:42:10.395Z"
+stopped_at: Completed 08-02-PLAN.md (Live Monitoring UI)
+last_updated: "2026-03-24T17:48:47.079Z"
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -49,6 +49,7 @@ Plan: 2 of 2
 | Phase 07 P01 | 3min | 2 tasks | 3 files |
 | Phase 07 P02 | 2min | 2 tasks | 2 files |
 | Phase 08 P01 | 4min | 2 tasks | 4 files |
+| Phase 08 P02 | 4min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -72,6 +73,9 @@ Plan: 2 of 2
 - [Phase 08]: Screenshot base64 included in SSE observation events only for device_*_screenshot tools (regex detection)
 - [Phase 08]: stopComputerUse deletes chatStatus entry entirely rather than setting a stopped flag
 - [Phase 08]: Computer use action entries use discriminated union type matching agent tool names (click, double_click, type, press, etc.)
+- [Phase 08]: ComputerUsePanel takes rendering priority over CanvasPanel when both active
+- [Phase 08]: Coordinate overlays use naturalWidth/clientWidth scaling for accurate positioning
+- [Phase 08]: Minimized computer use state shows pulsing green indicator rather than hiding completely
 
 ### Pending Todos
 
@@ -83,6 +87,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T17:42:10.392Z
-Stopped at: Completed 08-01-PLAN.md (Live Monitoring Backend Infrastructure)
+Last session: 2026-03-24T17:48:47.077Z
+Stopped at: Completed 08-02-PLAN.md (Live Monitoring UI)
 Resume file: None

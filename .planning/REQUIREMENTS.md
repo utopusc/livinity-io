@@ -37,7 +37,7 @@ Requirements for AI Computer Use milestone. Each maps to roadmap phases.
 ### Live Monitoring UI
 
 - [x] **UI-01**: LivOS shows a live screenshot stream of the device during computer use sessions
-- [ ] **UI-02**: Action overlay shows where AI clicked/typed on the live view (visual indicators)
+- [x] **UI-02**: Action overlay shows where AI clicked/typed on the live view (visual indicators)
 - [x] **UI-03**: Session timeline shows chronological list of AI actions taken (click, type, etc.)
 - [x] **UI-04**: User can pause, resume, or stop a computer use session from the LivOS UI
 
@@ -88,7 +88,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOOP-04 | Phase 7 | Complete |
 | LOOP-05 | Phase 7 | Complete |
 | UI-01 | Phase 8 | Complete |
-| UI-02 | Phase 8 | Pending |
+| UI-02 | Phase 8 | Complete |
 | UI-03 | Phase 8 | Complete |
 | UI-04 | Phase 8 | Complete |
 | SEC-01 | Phase 9 | Pending |
