@@ -9,7 +9,7 @@ await build({
   format: 'esm',
   outfile: 'dist/agent.js',
   banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
-  external: ['node-screenshots'],
+  external: ['node-screenshots', 'systray2'],
 });
 
 console.log('Built dist/agent.js');
