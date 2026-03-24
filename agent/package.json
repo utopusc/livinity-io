@@ -13,6 +13,7 @@
     "node-screenshots": "^0.2.8",
     "open": "^10.1.0",
     "systeminformation": "^5.31.5",
+    "systray2": "^2.1.4",
     "ws": "^8.18.0"
   },
   "devDependencies": {
