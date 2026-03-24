@@ -627,9 +627,21 @@ export class AgentLoop extends EventEmitter {
 
             toolCalls.push({ tool: toolCall.name, params: toolCall.input, result: toolResult });
 
-            const resultContent = toolResult.success
+            const resultText = toolResult.success
               ? toolResult.output
               : `Error: ${toolResult.error || toolResult.output}`;
+
+            // Build content: if tool returned images, create multimodal content array
+            let resultContent: string | Array<{ type: string; [k: string]: unknown }> = resultText;
+            if (toolResult.images && toolResult.images.length > 0) {
+              resultContent = [
+                { type: 'text', text: resultText },
+                ...toolResult.images.map(img => ({
+                  type: 'image_url' as const,
+                  image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+                })),
+              ];
+            }
 
             toolResultBlocks.push({
               type: 'tool_result',
@@ -664,9 +676,17 @@ export class AgentLoop extends EventEmitter {
 
           const toolResultText = toolResultBlocks.map(r => {
             const name = nativeToolUseBlocks.find(t => t.id === r.tool_use_id)?.name || 'unknown';
-            return `Tool "${name}": ${r.content}`;
+            const text = Array.isArray(r.content)
+              ? (r.content.find((c: any) => c.type === 'text') as any)?.text || ''
+              : r.content;
+            return `Tool "${name}": ${text}`;
           }).join('\n\n');
-          messages.push({ role: 'user', text: toolResultText });
+          // Collect all images from tool results for the ChatMessage path
+          const allToolImages = toolCalls.reduce<Array<{ base64: string; mimeType: string }>>((acc, tc) => {
+            if (tc.result?.images) acc.push(...tc.result.images);
+            return acc;
+          }, []);
+          messages.push({ role: 'user', text: toolResultText, ...(allToolImages.length > 0 ? { images: allToolImages } : {}) });
 
           if (turn === maxTurns - 1) {
             stoppedReason = 'max_turns';
