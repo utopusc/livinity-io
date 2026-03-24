@@ -170,7 +170,7 @@ Plans:
 
 Plans:
 - [x] 03-01: SEA build pipeline + Windows installer (Inno Setup .iss, shortcuts, auto-start, uninstaller)
-- [ ] 03-02: macOS installer (create-dmg, .app bundle with Info.plist and icon, LaunchAgent plist)
+- [x] 03-02: macOS installer (create-dmg, .app bundle with Info.plist and icon, LaunchAgent plist)
 - [ ] 03-03: Linux installer (fpm .deb package, systemd service unit file)
 
 ### Phase 4: Download Page
@@ -195,5 +195,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|-----------|----------------|--------|-----------|
 | 1. Web Setup Wizard | v14.1 | 2/2 | Complete    | 2026-03-24 |
 | 2. System Tray Icon | v14.1 | 0/1 | Complete    | 2026-03-24 |
-| 3. Platform Installers | v14.1 | 0/3 | Not started | - |
+| 3. Platform Installers | v14.1 | 2/3 | In Progress | - |
 | 4. Download Page | v14.1 | 0/1 | Not started | - |

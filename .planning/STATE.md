@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.1
 milestone_name: Agent Installer & Setup UX
 status: unknown
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-24T09:24:11.260Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-24T09:28:47.085Z"
 progress:
   total_phases: 11
   completed_phases: 9
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 3 (Platform Installers) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: 2 of 3
 | Phase 01 P02 | 4min | 2 tasks | 5 files |
 | Phase 02 P01 | 4min | 2 tasks | 5 files |
 | Phase 03 P01 | 12min | 2 tasks | 9 files |
+| Phase 03 P02 | 3min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -71,6 +72,9 @@ Plan: 2 of 3
 - [Phase 03]: CJS output format for esbuild SEA build (Node 24 SEA always runs embedderRunCjs)
 - [Phase 03]: Bundle systray2 into CJS output; only node-screenshots remains external (native .node addon)
 - [Phase 03]: traybin/ placed alongside SEA binary for __dirname resolution in bundled systray2 code
+- [Phase 03]: Launcher script as CFBundleExecutable to pass 'start --background' flag
+- [Phase 03]: In-memory plist generation in cli.ts instead of bundling template in SEA
+- [Phase 03]: installLaunchAgent() called after connect for idempotent auto-install on every macOS start
 
 ### Pending Todos
 
@@ -82,6 +86,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T09:24:11.256Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-03-24T09:28:47.082Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

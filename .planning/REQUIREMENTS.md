@@ -22,9 +22,9 @@
 
 ### Installer -- macOS
 
-- [ ] **MAC-01**: macOS .dmg created with create-dmg containing the agent .app bundle
-- [ ] **MAC-02**: .app bundle includes the SEA binary with proper Info.plist and icon
-- [ ] **MAC-03**: Agent registers as LaunchAgent for auto-start on login
+- [x] **MAC-01**: macOS .dmg created with create-dmg containing the agent .app bundle
+- [x] **MAC-02**: .app bundle includes the SEA binary with proper Info.plist and icon
+- [x] **MAC-03**: Agent registers as LaunchAgent for auto-start on login
 
 ### Installer -- Linux
 
@@ -73,9 +73,9 @@
 | WIN-02 | Phase 3 | Complete |
 | WIN-03 | Phase 3 | Complete |
 | WIN-04 | Phase 3 | Complete |
-| MAC-01 | Phase 3 | Pending |
-| MAC-02 | Phase 3 | Pending |
-| MAC-03 | Phase 3 | Pending |
+| MAC-01 | Phase 3 | Complete |
+| MAC-02 | Phase 3 | Complete |
+| MAC-03 | Phase 3 | Complete |
 | LIN-01 | Phase 3 | Pending |
 | LIN-02 | Phase 3 | Pending |
 | LIN-03 | Phase 3 | Pending |
