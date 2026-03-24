@@ -173,7 +173,7 @@ Plans:
   3. Shell command output is returned as structured JSON with stdout, stderr, and exit code
   4. User says "show me files on my Desktop" and the AI returns a directory listing with name, size, type, and modified date
   5. AI can read, create/write, delete, and rename files on the remote PC
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 50-01: Agent shell tool (cross-platform shell detection, child_process execution, structured JSON output)
