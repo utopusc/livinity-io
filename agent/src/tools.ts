@@ -1,4 +1,5 @@
 import { executeShell } from './tools/shell.js';
+import { executeFilesList, executeFilesRead, executeFilesWrite, executeFilesDelete, executeFilesRename } from './tools/files.js';
 
 export const TOOL_NAMES = [
   'shell',
@@ -21,7 +22,16 @@ export async function executeTool(
   switch (tool) {
     case 'shell':
       return executeShell(params);
-    // files_list, files_read, files_write, files_delete, files_rename — Phase 50-02
+    case 'files_list':
+      return executeFilesList(params);
+    case 'files_read':
+      return executeFilesRead(params);
+    case 'files_write':
+      return executeFilesWrite(params);
+    case 'files_delete':
+      return executeFilesDelete(params);
+    case 'files_rename':
+      return executeFilesRename(params);
     // processes, system_info, screenshot — Phase 51
     default:
       return { success: false, output: '', error: `Tool '${tool}' is not yet implemented` };
