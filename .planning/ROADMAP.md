@@ -110,7 +110,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry (completed 2026-03-24)
 - [x] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations (completed 2026-03-24)
 - [x] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection (completed 2026-03-24)
-- [ ] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove
+- [x] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove (completed 2026-03-24)
 - [ ] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user
 
 ## Phase Details
@@ -206,7 +206,7 @@ Plans:
 
 Plans:
 - [x] 52-01: Backend tRPC devices router (list, rename, remove) + Redis device state queries
-- [ ] 52-02: Frontend My Devices panel (device cards, status indicators, rename dialog, remove confirmation)
+- [x] 52-02: Frontend My Devices panel (device cards, status indicators, rename dialog, remove confirmation)
 
 ### Phase 53: Audit Logging + Security Hardening
 **Goal**: Every remote tool execution is logged for accountability, and dangerous operations are blocked by default
@@ -255,5 +255,5 @@ Plans:
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 52. My Devices UI | v14.0 | 1/2 | In Progress|  |
+| 52. My Devices UI | v14.0 | 2/2 | Complete   | 2026-03-24 |
 | 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |
