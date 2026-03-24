@@ -62,6 +62,9 @@ export const config = {
 
   /** TTL for cached API key auth results (avoids DB lookup on every message) */
   AUTH_CACHE_TTL_S: envInt('AUTH_CACHE_TTL_S', 300), // 5 min
+
+  /** Shared secret for verifying device JWT tokens (must match platform/web) */
+  DEVICE_JWT_SECRET: envStr('DEVICE_JWT_SECRET', 'dev-device-jwt-secret-change-me'),
 } as const;
 
 export type Config = typeof config;
