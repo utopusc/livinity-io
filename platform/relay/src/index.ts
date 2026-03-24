@@ -43,6 +43,14 @@ import type {
   ClientToRelayMessage,
   BidirectionalMessage,
 } from './protocol.js';
+import { DeviceConnection, DeviceRegistry } from './device-registry.js';
+import { verifyDeviceToken } from './device-auth.js';
+import type {
+  DeviceAuth,
+  DeviceConnected,
+  DeviceAuthError,
+  DeviceToRelayMessage,
+} from './device-protocol.js';
 
 // ---------------------------------------------------------------------------
 // Database & Redis
@@ -70,7 +78,8 @@ const bandwidthInterval = startBandwidthFlush(redis, pool);
 // ---------------------------------------------------------------------------
 
 const registry = new TunnelRegistry();
-const handleRequest = createRequestHandler(registry, redis, pool);
+const deviceRegistry = new DeviceRegistry();
+const handleRequest = createRequestHandler(registry, redis, pool, deviceRegistry);
 const server = http.createServer(handleRequest);
 
 // ---------------------------------------------------------------------------
@@ -78,6 +87,11 @@ const server = http.createServer(handleRequest);
 // ---------------------------------------------------------------------------
 
 const tunnelWss = new WebSocketServer({
+  noServer: true,
+  maxPayload: config.MAX_PAYLOAD_BYTES,
+});
+
+const deviceWss = new WebSocketServer({
   noServer: true,
   maxPayload: config.MAX_PAYLOAD_BYTES,
 });
@@ -235,6 +249,139 @@ function onTunnelConnect(ws: WebSocket): void {
 }
 
 // ---------------------------------------------------------------------------
+// Device WebSocket handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle a newly connected device WebSocket.
+ *
+ * The device must send a device_auth message within AUTH_TIMEOUT_MS.
+ * After successful auth, the device is registered in the DeviceRegistry.
+ */
+function onDeviceConnect(ws: WebSocket): void {
+  if (shouldRejectNewConnections()) {
+    console.warn('[relay] Rejecting new device connection: memory pressure too high');
+    ws.close(4004, 'Server under memory pressure');
+    return;
+  }
+
+  let authenticated = false;
+  let device: DeviceConnection | null = null;
+  let deviceUserId: string | null = null;
+  let deviceDeviceId: string | null = null;
+
+  const authTimer = setTimeout(() => {
+    if (!authenticated) {
+      ws.close(4001, 'Auth timeout');
+    }
+  }, config.AUTH_TIMEOUT_MS);
+
+  ws.on('message', (data) => {
+    let msg: DeviceToRelayMessage;
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      ws.close(4002, 'Invalid JSON');
+      return;
+    }
+
+    // --- First message must be device_auth ---
+    if (!authenticated) {
+      if (msg.type !== 'device_auth') {
+        ws.close(4002, 'Expected device_auth message');
+        return;
+      }
+
+      clearTimeout(authTimer);
+
+      const authMsg = msg as DeviceAuth;
+      const tokenPayload = verifyDeviceToken(authMsg.deviceToken);
+
+      if (!tokenPayload) {
+        const errorMsg: DeviceAuthError = {
+          type: 'device_auth_error',
+          error: 'Invalid or expired device token',
+        };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(4002, 'Invalid device token');
+        return;
+      }
+
+      // Verify deviceId in token matches the one sent in the auth message
+      if (tokenPayload.deviceId !== authMsg.deviceId) {
+        const errorMsg: DeviceAuthError = {
+          type: 'device_auth_error',
+          error: 'Device ID mismatch',
+        };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(4002, 'Device ID mismatch');
+        return;
+      }
+
+      authenticated = true;
+      deviceUserId = tokenPayload.userId;
+      deviceDeviceId = tokenPayload.deviceId;
+
+      const sessionId = nanoid();
+
+      device = new DeviceConnection({
+        userId: tokenPayload.userId,
+        deviceId: tokenPayload.deviceId,
+        deviceName: authMsg.deviceName,
+        platform: authMsg.platform,
+        tools: authMsg.tools,
+        ws,
+        sessionId,
+      });
+
+      deviceRegistry.register(tokenPayload.userId, tokenPayload.deviceId, device);
+
+      const connectedMsg: DeviceConnected = {
+        type: 'device_connected',
+        sessionId,
+      };
+      ws.send(JSON.stringify(connectedMsg));
+
+      console.log(`[relay] Device connected: ${authMsg.deviceName} (${authMsg.platform}) user=${tokenPayload.userId} device=${tokenPayload.deviceId}`);
+      return;
+    }
+
+    // --- Authenticated message routing ---
+    if (!device) return;
+
+    switch (msg.type) {
+      case 'device_tool_result':
+        // Phase 49 will handle routing tool results to the LivOS tunnel
+        console.log(`[relay] Device tool result: device=${device.deviceId} request=${msg.requestId}`);
+        break;
+
+      case 'device_pong':
+        // Application-level pong — heartbeat uses WebSocket-level ping/pong
+        break;
+
+      default:
+        break;
+    }
+  });
+
+  ws.on('close', () => {
+    clearTimeout(authTimer);
+    if (deviceUserId && deviceDeviceId) {
+      console.log(`[relay] Device disconnected: device=${deviceDeviceId} user=${deviceUserId}`);
+      deviceRegistry.markDisconnected(deviceUserId, deviceDeviceId);
+    }
+  });
+
+  ws.on('error', (err) => {
+    clearTimeout(authTimer);
+    if (deviceUserId && deviceDeviceId) {
+      console.error(`[relay] Device error (${deviceDeviceId}):`, err.message);
+      deviceRegistry.markDisconnected(deviceUserId, deviceDeviceId);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade handling
 // ---------------------------------------------------------------------------
 
@@ -244,6 +391,13 @@ server.on('upgrade', (req, socket, head) => {
   if (url.startsWith('/tunnel/connect')) {
     tunnelWss.handleUpgrade(req, socket, head, (ws) => {
       onTunnelConnect(ws);
+    });
+    return;
+  }
+
+  if (url.startsWith('/device/connect')) {
+    deviceWss.handleUpgrade(req, socket, head, (ws) => {
+      onDeviceConnect(ws);
     });
     return;
   }
@@ -289,6 +443,17 @@ function shutdown(signal: string): void {
     }
     console.log(`[relay] Notified ${username} of shutdown`);
   }
+
+  // Disconnect all device agents
+  for (const connection of deviceRegistry.allConnections()) {
+    try {
+      connection.ws.send(JSON.stringify({ type: 'relay_shutdown' }));
+    } catch {
+      // Already closed
+    }
+    connection.destroy('relay shutdown');
+  }
+  console.log(`[relay] Disconnected ${deviceRegistry.totalDevices} device(s)`);
 
   stopBandwidthFlush(bandwidthInterval);
 
