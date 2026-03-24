@@ -31,3 +31,4 @@ logs/
 
 # Archives (local cleanup storage)
 _archive/
+agent-app/release/
