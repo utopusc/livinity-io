@@ -14,6 +14,7 @@ import type {
 } from './types.js';
 import { TOOL_NAMES, executeToolStub } from './tools.js';
 import { writeState, removePid, type CredentialsData } from './state.js';
+import { isTokenExpired } from './auth.js';
 
 // ---------------------------------------------------------------------------
 // Reconnection manager with exponential backoff + jitter
@@ -77,6 +78,19 @@ export class ConnectionManager {
 
   connect(): void {
     if (this.destroyed) return;
+
+    // Check token expiry before attempting connection
+    if (isTokenExpired(this.credentials.deviceToken)) {
+      console.log('[agent] Device token has expired. Cannot reconnect. Run `livinity-agent setup` to re-authenticate.');
+      this.status = 'error';
+      writeState({
+        status: 'token_expired',
+        connectedAt: undefined,
+        relayUrl: this.credentials.relayUrl,
+        deviceName: this.credentials.deviceName,
+      });
+      return;
+    }
 
     this.status = 'connecting';
     const wsUrl = `${this.credentials.relayUrl}/device/connect`;
