@@ -26,8 +26,8 @@
 
 ### Relay -- Relay Server Extension
 
-- [ ] **RELAY-01**: Relay accepts device connections at /device/connect WebSocket endpoint
-- [ ] **RELAY-02**: Relay maintains DeviceRegistry (user -> devices mapping)
+- [x] **RELAY-01**: Relay accepts device connections at /device/connect WebSocket endpoint
+- [x] **RELAY-02**: Relay maintains DeviceRegistry (user -> devices mapping)
 - [ ] **RELAY-03**: Relay routes tool_call/tool_result messages between LivOS tunnel and device
 - [ ] **RELAY-04**: Relay notifies LivOS when devices connect/disconnect
 
@@ -114,8 +114,8 @@
 | PLAT-01 | Phase 47 | Complete |
 | PLAT-02 | Phase 47 | Complete |
 | PLAT-03 | Phase 47 | Complete |
-| RELAY-01 | Phase 47 | Pending |
-| RELAY-02 | Phase 47 | Pending |
+| RELAY-01 | Phase 47 | Complete |
+| RELAY-02 | Phase 47 | Complete |
 | AGENT-01 | Phase 48 | Pending |
 | AGENT-02 | Phase 48 | Pending |
 | AGENT-03 | Phase 48 | Pending |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.0
 milestone_name: Remote PC Control Agent
 status: unknown
-stopped_at: Completed 47-01-PLAN.md
-last_updated: "2026-03-24T05:24:07.647Z"
+stopped_at: Completed 47-02-PLAN.md
+last_updated: "2026-03-24T05:29:27.193Z"
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -44,6 +44,7 @@ Plan: 2 of 2
 ## Accumulated Context
 
 | Phase 47 P01 | 3min | 2 tasks | 9 files |
+| Phase 47 P02 | 3min | 2 tasks | 7 files |
 
 ### Decisions
 
@@ -56,6 +57,8 @@ Plan: 2 of 2
 - Auth flow: OAuth Device Authorization Grant (RFC 8628) -- user approves in browser
 - [Phase 47]: RFC 8628 device auth: XXXX-XXXX user codes, HS256 JWT with DEVICE_JWT_SECRET, 15min grant expiry, 24h token expiry
 - [Phase 47]: Consumed device grants are deleted (not status-updated) to prevent device_code reuse
+- [Phase 47]: DeviceRegistry uses nested Map<userId, Map<deviceId, DeviceConnection>> for multi-device per user
+- [Phase 47]: Device connections follow same lifecycle as tunnels: auth timeout, heartbeat, reconnect buffer, graceful shutdown
 
 ### Pending Todos
 
@@ -67,6 +70,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T05:24:07.644Z
-Stopped at: Completed 47-01-PLAN.md
+Last session: 2026-03-24T05:29:27.190Z
+Stopped at: Completed 47-02-PLAN.md
 Resume file: None

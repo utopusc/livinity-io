@@ -105,7 +105,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 **Milestone Goal:** Build a cross-platform agent (Windows/Mac/Linux) that users install on their PCs, authenticates via livinity.io OAuth Device Authorization Grant, connects through the existing relay server, and exposes local PC capabilities as AI-callable tools in Nexus. Users control their remote PCs via natural language through the LivOS AI chat.
 
-- [ ] **Phase 47: Platform OAuth + Relay Device Infrastructure** - livinity.io device endpoints, relay DeviceRegistry, /device/connect WebSocket
+- [x] **Phase 47: Platform OAuth + Relay Device Infrastructure** - livinity.io device endpoints, relay DeviceRegistry, /device/connect WebSocket (completed 2026-03-24)
 - [ ] **Phase 48: Agent Binary + Authentication** - Node.js SEA agent scaffold, OAuth device flow, connection manager, heartbeat
 - [ ] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry
 - [ ] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations
@@ -129,7 +129,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 Plans:
 - [x] 47-01: livinity.io device OAuth endpoints (register, token, approve) + /device approval page
-- [ ] 47-02: Relay DeviceRegistry + /device/connect WebSocket endpoint with JWT validation
+- [x] 47-02: Relay DeviceRegistry + /device/connect WebSocket endpoint with JWT validation
 
 ### Phase 48: Agent Binary + Authentication
 **Goal**: Users can download a single binary for their platform, authenticate it via OAuth device flow, and it maintains a persistent connection to the relay with auto-reconnect
@@ -250,7 +250,7 @@ Plans:
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete | 2026-03-23 |
 | 45. Docker Compose Stacks | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 1/2 | In Progress|  |
+| 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete   | 2026-03-24 |
 | 48. Agent Binary + Authentication | v14.0 | 0/2 | Not started | - |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 0/2 | Not started | - |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
