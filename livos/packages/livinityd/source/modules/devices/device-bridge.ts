@@ -60,10 +60,14 @@ const DEVICE_TOOL_SCHEMAS: Record<
 		parameters: [],
 	},
 	screenshot: {
-		description: 'Capture a screenshot of the display',
+		description: 'Capture a screenshot of the display. Returns JPEG image with coordinate metadata (dimensions, scaling factor, monitor bounds, active window).',
 		parameters: [
 			{name: 'display', type: 'number', description: 'Display index (default: primary)', required: false},
 		],
+	},
+	screen_info: {
+		description: 'Get screen/display information: resolution, scaling factor, display count, and active window title/position',
+		parameters: [],
 	},
 	mouse_click: {
 		description: 'Left-click the mouse at screen coordinates',

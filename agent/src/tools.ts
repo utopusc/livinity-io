@@ -3,6 +3,7 @@ import { executeFilesList, executeFilesRead, executeFilesWrite, executeFilesDele
 import { executeProcesses } from './tools/processes.js';
 import { executeSystemInfo } from './tools/system-info.js';
 import { executeScreenshot } from './tools/screenshot.js';
+import { executeScreenInfo } from './tools/screen-info.js';
 import { executeMouseClick, executeMouseDoubleClick, executeMouseRightClick, executeMouseMove, executeMouseDrag, executeMouseScroll } from './tools/mouse.js';
 import { executeKeyboardType, executeKeyboardPress } from './tools/keyboard.js';
 
@@ -16,6 +17,7 @@ export const TOOL_NAMES = [
   'processes',
   'system_info',
   'screenshot',
+  'screen_info',
   // Phase 5: Mouse & Keyboard tools
   'mouse_click',
   'mouse_double_click',
@@ -52,6 +54,8 @@ export async function executeTool(
       return executeSystemInfo(params);
     case 'screenshot':
       return executeScreenshot(params);
+    case 'screen_info':
+      return executeScreenInfo(params);
     case 'mouse_click':
       return executeMouseClick(params);
     case 'mouse_double_click':
