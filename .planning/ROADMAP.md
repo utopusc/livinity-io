@@ -217,11 +217,11 @@ Plans:
   2. User can view the audit log for a specific device from the LivOS UI
   3. Agent runs as the logged-in OS user (not root/SYSTEM) by default
   4. A configurable dangerous command blocklist prevents execution of destructive commands (rm -rf /, format, shutdown, registry delete, etc.)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 53-01: Audit logging (agent-side local log + relay-forwarded events + LivOS storage + UI display)
-- [ ] 53-02: Security hardening (user-level execution, command blocklist, agent-side enforcement)
+- [ ] 53-01-PLAN.md -- End-to-end audit logging: agent local JSON-lines log, relay pass-through, LivOS Redis storage, tRPC query, UI Activity dialog
+- [ ] 53-02-PLAN.md -- Security hardening: configurable dangerous command blocklist in shell tool, agent runs-as-user display in status
 
 ## Progress
 
