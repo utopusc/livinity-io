@@ -183,7 +183,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Vision enablement + tool result image flow fix in native tool calling path
+- [x] 07-01-PLAN.md -- Vision enablement + tool result image flow fix in native tool calling path
 - [ ] 07-02-PLAN.md -- Computer use system prompt guidance + step limits + completion detection
 
 ### Phase 8: Live Monitoring UI

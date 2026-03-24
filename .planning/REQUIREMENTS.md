@@ -28,8 +28,8 @@ Requirements for AI Computer Use milestone. Each maps to roadmap phases.
 
 ### Computer Use Loop
 
-- [ ] **LOOP-01**: Nexus AI can enter "computer use" mode -- an autonomous screenshot-analyze-action cycle
-- [ ] **LOOP-02**: AI uses multimodal vision to analyze screenshots and determine next action coordinates
+- [x] **LOOP-01**: Nexus AI can enter "computer use" mode -- an autonomous screenshot-analyze-action cycle
+- [x] **LOOP-02**: AI uses multimodal vision to analyze screenshots and determine next action coordinates
 - [ ] **LOOP-03**: Computer use sessions have configurable step limits (max actions per session)
 - [ ] **LOOP-04**: AI can report task completion or failure back to the user with reasoning
 - [ ] **LOOP-05**: User can request computer use tasks via natural language ("Open Chrome and go to YouTube")
@@ -82,8 +82,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | KEY-02 | Phase 5 | Complete |
 | SCREEN-01 | Phase 6 | Complete |
 | SCREEN-02 | Phase 6 | Complete |
-| LOOP-01 | Phase 7 | Pending |
-| LOOP-02 | Phase 7 | Pending |
+| LOOP-01 | Phase 7 | Complete |
+| LOOP-02 | Phase 7 | Complete |
 | LOOP-03 | Phase 7 | Pending |
 | LOOP-04 | Phase 7 | Pending |
 | LOOP-05 | Phase 7 | Pending |
