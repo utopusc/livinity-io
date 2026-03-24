@@ -195,7 +195,11 @@ Plans:
   2. Visual indicators overlay each screenshot showing where the AI clicked or what it typed (crosshair on click point, text badge for typed text)
   3. A session timeline panel lists every action chronologically with type, coordinates/text, and timestamp
   4. User can pause, resume, or stop the session from the LivOS UI, and the AI responds immediately to those controls
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- Backend: SSE screenshot passthrough, extended chatStatus with computer use fields, pause/stop/resume tRPC mutations
+- [ ] 08-02-PLAN.md -- Frontend: ComputerUsePanel component with screenshot display, action overlay, timeline, and session controls
 
 ### Phase 9: Security & Permissions
 **Goal**: Users maintain full control over AI computer use with explicit consent, an emergency stop, per-action audit logging, and automatic session timeouts
@@ -218,5 +222,5 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 | 5. Agent Mouse & Keyboard Tools | v15.0 | 0/2 | In progress | - |
 | 6. Screen Info & Screenshot Extensions | v15.0 | 0/1 | Not started | - |
 | 7. Computer Use Loop | v15.0 | 0/2 | Not started | - |
-| 8. Live Monitoring UI | v15.0 | 0/? | Not started | - |
+| 8. Live Monitoring UI | v15.0 | 0/2 | Not started | - |
 | 9. Security & Permissions | v15.0 | 0/? | Not started | - |
