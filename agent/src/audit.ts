@@ -11,6 +11,10 @@ export interface AuditEntry {
   success: boolean;
   duration: number;
   error?: string;
+  // Computer use detail fields (SEC-03)
+  coordinates?: { x: number; y: number };
+  text?: string;
+  key?: string;
 }
 
 // ---- Constants ----

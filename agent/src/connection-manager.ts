@@ -268,6 +268,31 @@ export class ConnectionManager {
 
     // Audit: local file log (fire-and-forget)
     const truncatedParams = truncateParams(msg.params);
+
+    // Enrich audit with computer use details (SEC-03)
+    const MOUSE_TOOLS = ['mouse_click', 'mouse_double_click', 'mouse_right_click', 'mouse_move', 'mouse_drag', 'mouse_scroll'];
+    const KEYBOARD_TOOLS = ['keyboard_type', 'keyboard_press'];
+
+    let coordinates: { x: number; y: number } | undefined;
+    let auditText: string | undefined;
+    let auditKey: string | undefined;
+
+    if (MOUSE_TOOLS.includes(msg.tool)) {
+      coordinates = { x: Number(msg.params.x) || 0, y: Number(msg.params.y) || 0 };
+    }
+    if (msg.tool === 'keyboard_type') {
+      auditText = String(msg.params.text || '').slice(0, 200);
+    }
+    if (msg.tool === 'keyboard_press') {
+      auditKey = String(msg.params.key || '');
+    }
+
+    const enrichment = {
+      ...(coordinates ? { coordinates } : {}),
+      ...(auditText !== undefined ? { text: auditText } : {}),
+      ...(auditKey !== undefined ? { key: auditKey } : {}),
+    };
+
     appendAuditLog({
       timestamp: new Date().toISOString(),
       toolName: msg.tool,
@@ -275,6 +300,7 @@ export class ConnectionManager {
       success: result.success !== false,
       duration,
       error: result.error,
+      ...enrichment,
     });
 
     // Audit: send event to relay for forwarding to LivOS
@@ -286,6 +312,7 @@ export class ConnectionManager {
       success: result.success !== false,
       duration,
       error: result.error,
+      ...enrichment,
     };
     this.sendMessage(auditEvent);
   }
