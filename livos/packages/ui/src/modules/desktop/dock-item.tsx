@@ -21,6 +21,7 @@ import {
 	TbChartLine,
 	TbSearch,
 	TbNews,
+	TbDevices2,
 } from 'react-icons/tb'
 
 import {NotificationBadge} from '@/components/ui/notification-badge'
@@ -35,6 +36,7 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_live-usage': 'Live Usage',
 	'LIVINITY_ai-chat': 'AI Chat',
 	'LIVINITY_server-control': 'Server',
+	'LIVINITY_my-devices': 'Devices',
 	'LIVINITY_subagents': 'Agents',
 	'LIVINITY_schedules': 'Schedules',
 	'LIVINITY_terminal': 'Terminal',
@@ -56,6 +58,7 @@ const DOCK_ICONS: Record<string, IconType> = {
 	'LIVINITY_live-usage': TbChartBar,
 	'LIVINITY_ai-chat': TbMessageCircle,
 	'LIVINITY_server-control': TbServer,
+	'LIVINITY_my-devices': TbDevices2,
 	'LIVINITY_subagents': TbRobot,
 	'LIVINITY_schedules': TbCalendarTime,
 	'LIVINITY_terminal': TbTerminal2,

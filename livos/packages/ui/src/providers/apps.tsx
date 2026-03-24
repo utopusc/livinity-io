@@ -75,6 +75,13 @@ export const systemApps = [
 		systemAppTo: '/server-control',
 	},
 	{
+		id: 'LIVINITY_my-devices',
+		name: 'Devices',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: '/my-devices',
+	},
+	{
 		id: 'LIVINITY_subagents',
 		name: 'Agents',
 		icon: '/figma-exports/dock-settings.png',
