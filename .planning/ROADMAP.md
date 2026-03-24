@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v13.0 Portainer-Level Server Management — match every Portainer feature: container creation, config editing, exec terminal, compose stacks, enhanced images/networks/volumes, bulk ops, events.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14.0 Remote PC Control Agent -- build a cross-platform agent that runs on users' PCs, authenticates via livinity.io OAuth, connects through the existing relay, and exposes local PC capabilities (shell, files, processes, screenshots) as AI-callable tools in the Nexus ToolRegistry.
 
 ## Milestones
 
@@ -12,13 +12,14 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v13
 - [x] **v10.0 App Store Platform** - Phases 16-25 (shipped 2026-03-21)
 - [x] **v11.0 Nexus Agent Fixes** - Phases 26-34 (shipped 2026-03-22)
 - [x] **v12.0 Server Management Dashboard** - Phases 35-40 (shipped 2026-03-22)
-- [ ] **v13.0 Portainer-Level Server Management** - Phases 41-46 (in progress)
+- [x] **v13.0 Portainer-Level Server Management** - Phases 41-46 (shipped 2026-03-23)
+- [ ] **v14.0 Remote PC Control Agent** - Phases 47-53 (in progress)
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (35, 36, 37...): Planned milestone work
-- Decimal phases (35.1, 35.2): Urgent insertions (marked with INSERTED)
+- Integer phases (47, 48, 49...): Planned milestone work
+- Decimal phases (47.1, 47.2): Urgent insertions (marked with INSERTED)
 
 <details>
 <summary>v10.0 App Store Platform (Phases 16-25) - SHIPPED 2026-03-21</summary>
@@ -70,299 +71,161 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v13
 - [x] **Phase 33: progress_report Multi-Channel** -- Route progress reports to correct channel based on context (completed 2026-03-22)
 - [x] **Phase 34: Miscellaneous Fixes** -- JSON parse safety, dead code removal, atomic recordRun, parentSessionId fix, complexity limit (completed 2026-03-22)
 
-### Phase 26: Sub-agent Scheduler Coupling Fix
-**Goal**: When schedule is provided in subagent_create, the scheduler ALWAYS registers -- never silently skips due to missing scheduled_task
-**Depends on**: Nothing
-**Requirements**: SCHED-01, SCHED-02, SCHED-03
-**Success Criteria**:
-  1. subagent_create with schedule but no scheduled_task returns an error message (not silent success)
-  2. Parameter descriptions clearly indicate schedule+scheduled_task coupling requirement
-  3. subagent_create output includes schedule registration confirmation
-**Plans**: 1/1 complete
+</details>
 
-### Phase 27: Cron Tool BullMQ Migration
-**Goal**: Cron tool tasks persist across process restarts by using BullMQ instead of setTimeout
-**Depends on**: Nothing
-**Requirements**: CRON-01, CRON-02
-**Success Criteria**:
-  1. Cron tool uses this.config.cronQueue (BullMQ) for scheduling
-  2. setTimeout fallback only when cronQueue is unavailable
-  3. Scheduled tasks survive nexus-core restart
-**Plans**: 1/1 complete
+<details>
+<summary>v12.0 Server Management Dashboard (Phases 35-40) - SHIPPED 2026-03-22</summary>
 
-### Phase 28: Tool Profile Name Mismatch Fix
-**Goal**: TOOL_PROFILES map names match actual registered tool names so profile-based filtering works correctly
-**Depends on**: Nothing
-**Requirements**: PROF-01
-**Success Criteria**:
-  1. Every tool name in TOOL_PROFILES exists as a registered tool in daemon.ts
-  2. No phantom tool names (read_file, docker, send_whatsapp, etc.)
-**Plans**: 1/1 complete
+**Milestone Goal:** Build a comprehensive server management UI in LivOS -- full Docker container lifecycle, images/volumes/networks, PM2 process management, and enhanced system monitoring.
 
-### Phase 29: MultiAgentManager Cleanup
-**Goal**: Stale sessions are periodically cleaned from the active set, preventing maxConcurrent exhaustion
-**Depends on**: Nothing
-**Requirements**: SESS-01, SESS-02
-**Success Criteria**:
-  1. cleanup() called periodically (every 5 min or every inbox cycle)
-  2. Sequential Redis exists calls converted to pipeline for efficiency
-**Plans**: 1/1 complete
-
-### Phase 30: Multi-Channel Notification Routing
-**Goal**: Scheduled and loop sub-agent results route to the channel that created them, not just WhatsApp
-**Depends on**: Nothing
-**Requirements**: ROUTE-01, ROUTE-02, ROUTE-03
-**Success Criteria**:
-  1. SubagentConfig has createdVia field ('whatsapp'|'telegram'|'discord'|'web')
-  2. subagent_create saves channel source from currentChannelContext
-  3. Schedule/loop handlers route results to correct channel
-**Plans**: 1/1 complete
-
-### Phase 31: Skills->Tools Naming Fix
-**Goal**: SubagentConfig.skills field renamed to tools for clarity since it contains tool names not skill names
-**Depends on**: Nothing
-**Requirements**: NAME-01, NAME-02
-**Success Criteria**:
-  1. SubagentConfig uses 'tools' field instead of 'skills'
-  2. subagent_create parameter updated
-  3. executeSubagentTask reads 'tools' field
-**Plans**: 1/1 complete
-
-### Phase 32: Native System Prompt Improvements
-**Goal**: NATIVE_SYSTEM_PROMPT includes tool awareness, sub-agent guidance, and consolidated messaging rules
-**Depends on**: Nothing
-**Requirements**: PROMPT-01, PROMPT-02, PROMPT-03
-**Success Criteria**:
-  1. Native prompt lists all tool categories
-  2. Sub-agent mechanism guidance included (spawn_subagent vs subagent_create vs sessions_create)
-  3. WhatsApp rules moved from dead AGENT_SYSTEM_PROMPT to native prompt
-**Plans**: 1/1 complete
-
-### Phase 33: progress_report Multi-Channel
-**Goal**: progress_report tool works from any channel context, not just WhatsApp
-**Depends on**: Phase 30 (multi-channel infrastructure)
-**Requirements**: PROG-01
-**Success Criteria**:
-  1. progress_report checks currentChannelContext and routes to correct channel
-  2. Returns error message when no channel context available
-**Plans**: 1/1 complete
-
-### Phase 34: Miscellaneous Fixes
-**Goal**: Clean up remaining issues -- JSON parse safety, dead code removal, atomic Redis ops, parentSessionId fix, complexity limit increase
-**Depends on**: Nothing
-**Requirements**: MISC-01, MISC-02, MISC-03, MISC-04, MISC-05, MISC-06
-**Success Criteria**:
-  1. SELF_REFLECTION_PROMPT has try/catch + regex fallback for JSON.parse
-  2. SUBAGENT_ROUTING_PROMPT removed (dead code)
-  3. loopIterationPrompt removed (dead code)
-  4. SubagentManager.recordRun uses atomic Redis Lua script
-  5. sessions_create parentSessionId uses session UUID not chatId
-  6. COMPLEXITY_PROMPT uses 1000 char limit instead of 500
-**Plans**: 1/1 complete
+- [x] **Phase 35: Docker Backend + Container List/Actions UI** (completed 2026-03-22)
+- [x] **Phase 36: Container Detail View + Logs + Stats** (completed 2026-03-22)
+- [x] **Phase 37: Images, Volumes, Networks** (completed 2026-03-22)
+- [x] **Phase 38: PM2 Process Management** (completed 2026-03-22)
+- [x] **Phase 39: Enhanced System Monitoring + Overview Tab** (completed 2026-03-22)
+- [x] **Phase 40: Polish, Edge Cases & Deployment** (completed 2026-03-22)
 
 </details>
 
-### v12.0 Server Management Dashboard
+<details>
+<summary>v13.0 Portainer-Level Server Management (Phases 41-46) - SHIPPED 2026-03-23</summary>
 
-**Milestone Goal:** Build a comprehensive server management UI in LivOS -- full Docker container lifecycle (inspect, logs, exec, remove, stats), Docker images/volumes/networks, PM2 process management, and enhanced system monitoring. Production-grade server administration from the browser.
+**Milestone Goal:** Match every Portainer feature -- container creation with full config, container edit + recreate, exec terminal, compose stack management, enhanced image/network/volume CRUD, bulk operations, Docker events, and engine info.
 
-- [x] **Phase 35: Docker Backend + Container List/Actions UI** -- Dockerode singleton, protected container registry, tRPC docker router, container list with actions, tabbed dashboard shell (completed 2026-03-22)
-- [x] **Phase 36: Container Detail View + Logs + Stats** -- Container inspect detail drawer, log streaming with xterm, per-container CPU/memory stats (completed 2026-03-22)
-- [x] **Phase 37: Images, Volumes, Networks** -- Docker image list/remove/prune, volume list/remove, network list/inspect tabs (completed 2026-03-22)
-- [x] **Phase 38: PM2 Process Management** -- PM2 process list, start/stop/restart actions, process logs and details (completed 2026-03-22)
-- [x] **Phase 39: Enhanced System Monitoring + Overview Tab** -- Network I/O, disk I/O, process list, overview dashboard with system health (completed 2026-03-22)
-- [x] **Phase 40: Polish, Edge Cases & Deployment** -- Error handling for Docker daemon unavailability, confirmation UX audit, deprecated route cleanup, production deployment (completed 2026-03-22)
+- [x] **Phase 41: Container Creation** (completed 2026-03-23)
+- [x] **Phase 42: Container Edit & Recreate** (completed 2026-03-23)
+- [x] **Phase 43: Exec Terminal + Enhanced Logs** (completed 2026-03-23)
+- [x] **Phase 44: Bulk Ops + Enhanced Images + Networks + Volumes** (completed 2026-03-23)
+- [x] **Phase 45: Docker Compose Stacks** (completed 2026-03-23)
+- [x] **Phase 46: Events + Engine Info + Polish** (completed 2026-03-23)
+
+</details>
+
+### v14.0 Remote PC Control Agent
+
+**Milestone Goal:** Build a cross-platform agent (Windows/Mac/Linux) that users install on their PCs, authenticates via livinity.io OAuth Device Authorization Grant, connects through the existing relay server, and exposes local PC capabilities as AI-callable tools in Nexus. Users control their remote PCs via natural language through the LivOS AI chat.
+
+- [ ] **Phase 47: Platform OAuth + Relay Device Infrastructure** - livinity.io device endpoints, relay DeviceRegistry, /device/connect WebSocket
+- [ ] **Phase 48: Agent Binary + Authentication** - Node.js SEA agent scaffold, OAuth device flow, connection manager, heartbeat
+- [ ] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry
+- [ ] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations
+- [ ] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection
+- [ ] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove
+- [ ] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user
 
 ## Phase Details
 
-### Phase 35: Docker Backend + Container List/Actions UI
-**Goal**: Admin users can see all Docker containers and perform lifecycle actions (start, stop, restart, remove) with safety guardrails preventing infrastructure damage
-**Depends on**: Nothing (first phase of v12.0)
-**Requirements**: DOCK-01, DOCK-02, DOCK-06, DOCK-07, UI-01, UI-04, UI-05, SEC-01, SEC-02, SEC-03
+### Phase 47: Platform OAuth + Relay Device Infrastructure
+**Goal**: Devices can register via OAuth Device Authorization Grant and establish authenticated WebSocket connections to the relay server
+**Depends on**: Nothing (first phase of v14.0; builds on existing relay codebase on Server5 and livinity.io platform)
+**Requirements**: PLAT-01, PLAT-02, PLAT-03, RELAY-01, RELAY-02
 **Success Criteria** (what must be TRUE):
-  1. User opens Server Management and sees a tabbed interface with Containers as the default active tab
-  2. Container list shows all running and stopped containers with name, image, state, ports, and resource usage columns
-  3. User can start, stop, and restart any non-protected container from action buttons in the list
-  4. User cannot stop or remove Redis, PostgreSQL, Caddy, or LivOS core containers -- UI disables actions and backend rejects requests
-  5. Remove requires a confirmation dialog where user must type the container name before proceeding
-**Plans**: 2 plans
-Plans:
-- [x] 35-01-PLAN.md -- Docker backend module (types, singleton, tRPC router, protected registry, httpOnlyPaths)
-- [x] 35-02-PLAN.md -- Frontend tabbed UI shell with container table, actions, remove dialog
-
-### Phase 36: Container Detail View + Logs + Stats
-**Goal**: User can drill into any container to see its full configuration, stream its logs in real-time, and monitor its resource usage
-**Depends on**: Phase 35
-**Requirements**: DOCK-03, DOCK-04, DOCK-05, UI-03
-**Success Criteria** (what must be TRUE):
-  1. Clicking a container opens a detail view (slide-over or modal) with tabbed sections: Info, Logs, Stats
-  2. Info tab shows ports, volumes, environment variables, networks, mounts, restart policy, and health status
-  3. Logs tab streams container logs in real-time with ANSI color rendering, tail limit (default 500 lines), auto-scroll, and text search
-  4. Stats tab shows live CPU percentage and memory usage for the selected container, updating without page refresh
-**Plans**: 2 plans
-Plans:
-- [x] 36-01-PLAN.md -- Backend tRPC queries (inspectContainer, containerLogs, containerStats)
-- [x] 36-02-PLAN.md -- Frontend ContainerDetailSheet with Info/Logs/Stats tabs
-
-### Phase 37: Images, Volumes, Networks
-**Goal**: User can manage secondary Docker resources -- view and clean up images, inspect volumes, and see network topology
-**Depends on**: Phase 35
-**Requirements**: IMG-01, IMG-02, IMG-03, VOL-01, VOL-02, VOL-03, VOL-04
-**Success Criteria** (what must be TRUE):
-  1. Images tab lists all Docker images with name, tag, size, and creation date
-  2. User can remove individual images and prune all dangling/unused images with confirmation and space-reclaimed feedback
-  3. Volumes tab lists all volumes with name, driver, and mount point; user can remove unused volumes with confirmation
-  4. Networks tab lists all networks with name, driver, and connected container count; user can inspect a network to see its connected containers
-**Plans**: 2 plans
-Plans:
-- [x] 37-01-PLAN.md -- Backend tRPC routes for images, volumes, networks (types, domain functions, routes, httpOnlyPaths)
-- [x] 37-02-PLAN.md -- Frontend ImagesTab, VolumesTab, NetworksTab replacing placeholders
-
-### Phase 38: PM2 Process Management
-**Goal**: User can monitor and control all PM2-managed processes from the dashboard -- a unique LivOS capability no other self-hosted UI provides
-**Depends on**: Phase 35 (tabbed UI shell, admin auth)
-**Requirements**: PM2-01, PM2-02, PM2-03, PM2-04
-**Success Criteria** (what must be TRUE):
-  1. PM2 tab lists all processes with name, status (online/stopped/errored), CPU%, memory usage, uptime, and restart count
-  2. User can start, stop, and restart individual PM2 processes from the list
-  3. User can view PM2 process logs (stdout and stderr) with tail and auto-scroll
-  4. User can see process details including pid, script path, working directory, and Node version
-**Plans**: 2 plans
-Plans:
-- [x] 38-01-PLAN.md -- PM2 backend module (types, domain functions, tRPC routes, httpOnlyPaths)
-- [x] 38-02-PLAN.md -- Frontend PM2Tab with process table, actions, inline detail panel, log viewer
-
-### Phase 39: Enhanced System Monitoring + Overview Tab
-**Goal**: User has a comprehensive view of server health -- system-wide metrics, network traffic, disk I/O, and a process list, all unified in an overview dashboard
-**Depends on**: Phase 35 (tabbed UI), Phase 36 (stats patterns), Phase 38 (PM2 data)
-**Requirements**: MON-01, MON-02, MON-03, UI-02
-**Success Criteria** (what must be TRUE):
-  1. Monitoring tab shows real-time network interface traffic (bytes in/out, current speed) as charts
-  2. Monitoring tab shows real-time disk I/O metrics (read/write speed) as charts
-  3. Monitoring tab shows a process list sorted by CPU or memory usage
-  4. Overview tab displays a system health dashboard with CPU, RAM, Disk, and Network sparklines alongside container count and PM2 process summary
-**Plans**: 2 plans
-Plans:
-- [x] 39-01-PLAN.md -- Backend monitoring module + frontend Monitoring tab (network/disk charts, process table)
-- [x] 39-02-PLAN.md -- Frontend Overview tab with system health cards, container/PM2 summaries, network throughput
-
-### Phase 40: Polish, Edge Cases & Deployment
-**Goal**: The server management dashboard handles all edge cases gracefully, deprecated Docker routes are cleaned up, and the feature is deployed to production
-**Depends on**: Phases 35-39
-**Requirements**: None (hardening phase -- validates requirements delivered in Phases 35-39)
-**Success Criteria** (what must be TRUE):
-  1. When Docker daemon is unreachable, all Docker tabs show a clear error state (not a crash or infinite spinner)
-  2. All destructive operations (remove container, remove image, prune, remove volume) have consistent confirmation dialog UX
-  3. Deprecated Docker routes in ai/routes.ts are cleaned up or aliased without breaking existing AI tool calls
-  4. Dashboard is deployed to production (Server4) and functional with real containers/processes
+  1. An HTTP client can POST /api/device/register on livinity.io and receive a device_code + user_code pair
+  2. A logged-in user can visit livinity.io/device, enter the user_code, and approve the device
+  3. An HTTP client can poll POST /api/device/token and receive a device JWT after user approval
+  4. A WebSocket client can connect to the relay at /device/connect with a valid device JWT and appear in the DeviceRegistry
+  5. The relay tracks which devices belong to which user and disconnects devices with invalid/expired tokens
 **Plans**: TBD
 
-### v13.0 Portainer-Level Server Management
-
-**Milestone Goal:** Match every Portainer feature — container creation with full config, container edit + recreate, exec terminal, compose stack management, enhanced image/network/volume CRUD, bulk operations, Docker events, and engine info.
-
-- [x] **Phase 41: Container Creation** — Full container creation form (name, image, ports, volumes, env, restart, resources, health, network) + window resize (completed 2026-03-23)
-- [x] **Phase 42: Container Edit & Recreate** — Edit existing container config + recreate, duplicate, rename (completed 2026-03-23)
-- [x] **Phase 43: Exec Terminal + Enhanced Logs** — xterm.js shell into containers, log search/download/timestamps/wrap (completed 2026-03-23)
-- [x] **Phase 44: Bulk Ops + Images + Networks + Volumes** — Multi-select bulk actions, image pull/tag/history, network create/remove, volume create/usage (completed 2026-03-23)
-- [x] **Phase 45: Docker Compose Stacks** — Stack list, deploy from YAML editor, edit/redeploy, start/stop, remove, env vars (completed 2026-03-23)
-- [x] **Phase 46: Events + Engine Info + Polish** — Docker event log, engine info, final polish (completed 2026-03-23)
-
-### Phase 41: Container Creation
-**Goal**: User can create a new Docker container from any image with full configuration — ports, volumes, env vars, restart policy, resource limits, health check, and network settings — via a tabbed creation form
-**Depends on**: Phase 35 (docker backend module)
-**Requirements**: CREATE-01, CREATE-02, CREATE-03, CREATE-04, CREATE-05, CREATE-06, CREATE-07, CREATE-08, UI-01, UI-02
-**Success Criteria**:
-  1. User can open a "Create Container" form from the Containers tab
-  2. Form has tabbed sections: General, Network, Volumes, Environment, Resources, Health Check
-  3. User fills in image name, port mappings, volume mounts, env vars, restart policy, memory/CPU limits, and health check
-  4. Container is created and appears in the container list
-  5. Server Management window is at least 1400x900
-**Plans**: 2 plans
 Plans:
-- [x] 41-01-PLAN.md -- Backend createContainer mutation (types, domain function, tRPC route, httpOnlyPaths)
-- [x] 41-02-PLAN.md -- Frontend tabbed creation form (6 tabs) + Add Container button + window resize
+- [ ] 47-01: livinity.io device OAuth endpoints (register, token, approve) + /device approval page
+- [ ] 47-02: Relay DeviceRegistry + /device/connect WebSocket endpoint with JWT validation
 
-### Phase 42: Container Edit & Recreate
-**Goal**: User can edit any existing container's configuration (ports, env, volumes, restart, resources) and recreate it, or duplicate/rename it
-**Depends on**: Phase 41 (creation form reused for edit)
-**Requirements**: EDIT-01, EDIT-02, EDIT-03, EDIT-04, EDIT-05, EDIT-06, EDIT-07, UI-03
-**Success Criteria**:
-  1. User clicks "Edit" on a container → creation form opens pre-filled with current config
-  2. User changes ports/env/volumes/restart/resources → clicks "Recreate" → old container stopped, new created with same name
-  3. User can "Duplicate" a container → creation form with cloned config but empty name
-  4. User can rename a container
-**Plans**: 2 plans
-Plans:
-- [x] 42-01-PLAN.md — Backend recreateContainer and renameContainer mutations (domain functions, tRPC routes, httpOnlyPaths)
-- [x] 42-02-PLAN.md — Frontend edit/duplicate modes in ContainerCreateForm + Edit/Duplicate/Rename actions + Rename dialog
+### Phase 48: Agent Binary + Authentication
+**Goal**: Users can download a single binary for their platform, authenticate it via OAuth device flow, and it maintains a persistent connection to the relay with auto-reconnect
+**Depends on**: Phase 47
+**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, AUTH-01, AUTH-02, AUTH-03, SEC-01, SEC-02
+**Success Criteria** (what must be TRUE):
+  1. User downloads a single executable binary for Windows, macOS, or Linux and runs it without installing dependencies
+  2. Running `livinity-agent setup` initiates OAuth device flow -- displays a code and URL, waits for user approval, stores the device token
+  3. Running `livinity-agent start` connects to the relay via WSS, maintains heartbeat, and auto-reconnects with exponential backoff on connection loss
+  4. Running `livinity-agent status` shows connection state, device name, and relay endpoint
+  5. Agent reports its list of available tools to the relay on successful connection
+**Plans**: TBD
 
-### Phase 43: Exec Terminal + Enhanced Logs
-**Goal**: User can open a terminal shell into any running container and logs have search, download, timestamps toggle, and wrap toggle
-**Depends on**: Phase 35 (docker backend)
-**Requirements**: EXEC-01, EXEC-02, EXEC-03, LOGS-01, LOGS-02, LOGS-03, LOGS-04
-**Success Criteria**:
-  1. User clicks "Console" on a running container → xterm.js terminal opens with bash/sh shell selection
-  2. Terminal handles resize, supports copy/paste
-  3. Log viewer has search input that highlights matches
-  4. User can download logs as .log file
-  5. Timestamps and line wrap are toggleable
-**Plans**: 2 plans
 Plans:
-- [x] 43-01-PLAN.md -- Backend docker exec WebSocket handler + frontend Console tab with xterm.js
-- [x] 43-02-PLAN.md -- Enhanced LogsTab with search/highlight, download, timestamps toggle, line wrap toggle
+- [ ] 48-01: Agent project scaffold (esbuild + SEA config, CLI commands, connection manager, heartbeat)
+- [ ] 48-02: OAuth device flow integration (setup command, token storage, token refresh)
 
-### Phase 44: Bulk Ops + Enhanced Images + Networks + Volumes
-**Goal**: User can perform bulk container actions, pull/tag images, create networks, create volumes, and see container-volume associations
-**Depends on**: Phase 35-37 (existing tabs)
-**Requirements**: ACT-01, ACT-02, ACT-03, IMG-01, IMG-02, IMG-03, NET-01, NET-02, NET-03, VOL-01, VOL-02
-**Success Criteria**:
-  1. Container table has checkboxes for multi-select → bulk start/stop/restart/remove
-  2. User can kill (SIGKILL) and pause/resume containers
-  3. User can pull image by name:tag with progress bar
-  4. User can tag an image and see layer history
-  5. User can create a network with driver/subnet/gateway
-  6. User can create a volume with driver options
-  7. Volume detail shows which containers use it
-**Plans**: 3 plans
-Plans:
-- [x] 44-01-PLAN.md -- Bulk container actions (kill/pause/resume) + multi-select bulk operations
-- [x] 44-02-PLAN.md -- Enhanced image management (pull, tag, layer history)
-- [x] 44-03-PLAN.md -- Network create/remove/disconnect + Volume create/usage
+### Phase 49: Relay Message Routing + DeviceBridge
+**Goal**: AI tool calls on LivOS flow through the relay to the correct device agent and results return to the AI, with device tools dynamically appearing and disappearing in the Nexus ToolRegistry
+**Depends on**: Phase 47, Phase 48
+**Requirements**: RELAY-03, RELAY-04, TOOLS-01, TOOLS-02, TOOLS-03
+**Success Criteria** (what must be TRUE):
+  1. When a device connects to the relay, LivOS receives a device_connected event via the existing tunnel WebSocket
+  2. When a device disconnects, LivOS receives a device_disconnected event and the device's proxy tools are removed from ToolRegistry
+  3. LivOS can send a tool_call message through the relay to a specific device and receive the tool_result back
+  4. Connected device tools appear in the Nexus ToolRegistry with `device_{deviceId}_` prefix (e.g., `device_desktop-pc_shell`)
+  5. The AI can select and invoke a device proxy tool and receive the result as part of the normal agent loop
+**Plans**: TBD
 
-### Phase 45: Docker Compose Stacks
-**Goal**: User can manage Docker Compose stacks — list, deploy from YAML editor, edit and redeploy, start/stop, remove, and set stack env vars
-**Depends on**: Phase 35 (docker backend)
-**Requirements**: STACK-01, STACK-02, STACK-03, STACK-04, STACK-05, STACK-06, UI-04
-**Success Criteria**:
-  1. Stacks tab shows list of compose stacks with name, status, container count
-  2. User can deploy a new stack by pasting/editing YAML in a code editor
-  3. User can edit existing stack's YAML and redeploy
-  4. User can start/stop entire stack
-  5. User can remove stack with optional volume cleanup
-  6. Stack-level environment variables can be set
-**Plans**: 2 plans
 Plans:
-- [x] 45-01-PLAN.md -- Backend stack module (types, domain functions with execa, tRPC routes, httpOnlyPaths)
-- [x] 45-02-PLAN.md -- Frontend StacksTab with stack list, deploy/edit form, remove dialog, env vars
+- [ ] 49-01: Relay device message routing (tool_call_forward / tool_result_forward between LivOS tunnel and device)
+- [ ] 49-02: DeviceBridge module in livinityd (proxy tool registration, executeOnDevice, event handling)
 
-### Phase 46: Events + Engine Info + Polish
-**Goal**: Docker event log, engine info display, and final polish for the complete Portainer-level experience
-**Depends on**: Phases 41-45
-**Requirements**: EVENT-01, EVENT-02, ENGINE-01, UI-05, UI-06
-**Success Criteria**:
-  1. Events tab shows real-time Docker event log (container/image/volume/network actions)
-  2. Events can be filtered by type and time range
-  3. Engine info section shows Docker version, OS, kernel, storage driver, CPUs, memory
-  4. All features deployed and functional
-**Plans**: 2 plans
+### Phase 50: Agent Core Tools -- Shell + Files
+**Goal**: The AI can execute shell commands and perform file operations on the user's remote PC via natural language
+**Depends on**: Phase 48, Phase 49
+**Requirements**: SHELL-01, SHELL-02, SHELL-03, FILES-01, FILES-02, FILES-03, FILES-04
+**Success Criteria** (what must be TRUE):
+  1. User says "run `ls -la` on my desktop PC" and the AI executes the command and returns formatted output
+  2. Agent uses PowerShell on Windows and bash/zsh on macOS/Linux automatically
+  3. Shell command output is returned as structured JSON with stdout, stderr, and exit code
+  4. User says "show me files on my Desktop" and the AI returns a directory listing with name, size, type, and modified date
+  5. AI can read, create/write, delete, and rename files on the remote PC
+**Plans**: TBD
+
 Plans:
-- [x] 46-01-PLAN.md -- Backend Docker events query + engine info query (types, domain functions, tRPC routes)
-- [x] 46-02-PLAN.md -- Frontend Events tab + engine info section in Overview tab
+- [ ] 50-01: Agent shell tool (cross-platform shell detection, child_process execution, structured JSON output)
+- [ ] 50-02: Agent files tool (list, read, write, delete, rename with metadata)
+
+### Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info
+**Goal**: The AI can inspect running processes, capture screenshots, and collect system information from the remote PC
+**Depends on**: Phase 48, Phase 49
+**Requirements**: PROC-01, PROC-02, SCREEN-01
+**Success Criteria** (what must be TRUE):
+  1. User says "what's eating CPU on my PC" and the AI returns a process list with PID, name, CPU%, and memory usage
+  2. AI can collect system info including OS version, CPU model, RAM total/used, disk usage, hostname, and IP addresses
+  3. User says "take a screenshot of my desktop" and the AI captures and displays the remote PC's screen
+**Plans**: TBD
+
+Plans:
+- [ ] 51-01: Agent process + system info tools (systeminformation, structured output)
+- [ ] 51-02: Agent screenshot tool (node-screenshots, JPEG compression, base64 transport)
+
+### Phase 52: My Devices UI
+**Goal**: Users can see all their connected devices, their status, and manage them from the LivOS interface
+**Depends on**: Phase 49 (DeviceBridge provides device state)
+**Requirements**: UI-01, UI-02, UI-03
+**Success Criteria** (what must be TRUE):
+  1. LivOS shows a "My Devices" panel listing all registered devices with name, OS icon, platform, and connection status
+  2. Each device shows whether it is online (green) or offline (gray) with a last-seen timestamp
+  3. User can rename a device from the UI
+  4. User can remove a device, which revokes its token and disconnects it
+**Plans**: TBD
+
+Plans:
+- [ ] 52-01: Backend tRPC devices router (list, rename, remove) + Redis device state queries
+- [ ] 52-02: Frontend My Devices panel (device cards, status indicators, rename dialog, remove confirmation)
+
+### Phase 53: Audit Logging + Security Hardening
+**Goal**: Every remote tool execution is logged for accountability, and dangerous operations are blocked by default
+**Depends on**: Phase 50, Phase 51, Phase 52
+**Requirements**: AUDIT-01, AUDIT-02, SEC-03, SEC-04
+**Success Criteria** (what must be TRUE):
+  1. Every remote tool execution is logged with timestamp, user, device, tool name, parameters, and result summary
+  2. User can view the audit log for a specific device from the LivOS UI
+  3. Agent runs as the logged-in OS user (not root/SYSTEM) by default
+  4. A configurable dangerous command blocklist prevents execution of destructive commands (rm -rf /, format, shutdown, registry delete, etc.)
+**Plans**: TBD
+
+Plans:
+- [ ] 53-01: Audit logging (agent-side local log + relay-forwarded events + LivOS storage + UI display)
+- [ ] 53-02: Security hardening (user-level execution, command blocklist, agent-side enforcement)
 
 ## Progress
 
-**Execution Order:** 35 -> 36 -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46
+**Execution Order:** 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -375,15 +238,22 @@ Plans:
 | 32. System Prompts | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 33. Progress Report | v11.0 | 1/1 | Complete | 2026-03-22 |
 | 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 35. Docker Backend + Container List | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 38. PM2 Process Management | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 39. System Monitoring + Overview | v12.0 | 2/2 | Complete    | 2026-03-22 |
-| 40. Polish & Deployment | v12.0 | 0/? | Complete    | 2026-03-22 |
-| 41. Container Creation | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 42. Container Edit & Recreate | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete    | 2026-03-23 |
-| 45. Docker Compose Stacks | v13.0 | 2/2 | Complete    | 2026-03-23 |
-| 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete    | 2026-03-23 |
+| 35. Docker Backend + Container List | v12.0 | 2/2 | Complete | 2026-03-22 |
+| 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete | 2026-03-22 |
+| 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete | 2026-03-22 |
+| 38. PM2 Process Management | v12.0 | 2/2 | Complete | 2026-03-22 |
+| 39. System Monitoring + Overview | v12.0 | 2/2 | Complete | 2026-03-22 |
+| 40. Polish & Deployment | v12.0 | 0/? | Complete | 2026-03-22 |
+| 41. Container Creation | v13.0 | 2/2 | Complete | 2026-03-23 |
+| 42. Container Edit & Recreate | v13.0 | 2/2 | Complete | 2026-03-23 |
+| 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete | 2026-03-23 |
+| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete | 2026-03-23 |
+| 45. Docker Compose Stacks | v13.0 | 2/2 | Complete | 2026-03-23 |
+| 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
+| 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 0/2 | Not started | - |
+| 48. Agent Binary + Authentication | v14.0 | 0/2 | Not started | - |
+| 49. Relay Message Routing + DeviceBridge | v14.0 | 0/2 | Not started | - |
+| 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
+| 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |
+| 52. My Devices UI | v14.0 | 0/2 | Not started | - |
+| 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |
