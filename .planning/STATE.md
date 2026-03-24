@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 07-01-PLAN.md (Vision + Tool Result Images)
-last_updated: "2026-03-24T17:15:19.085Z"
+stopped_at: Completed 07-02-PLAN.md (Computer Use Loop Guidance + Step Limits)
+last_updated: "2026-03-24T17:20:08.231Z"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -47,6 +47,7 @@ Plan: 2 of 2
 | Phase 05 P02 | 2min | 2 tasks | 3 files |
 | Phase 06 P01 | 2min | 2 tasks | 4 files |
 | Phase 07 P01 | 3min | 2 tasks | 3 files |
+| Phase 07 P02 | 2min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -64,6 +65,9 @@ Plan: 2 of 2
 - [Phase 07]: Widened ToolResultBlock.content and OpenAIChatMessage.content to support multimodal arrays alongside strings
 - [Phase 07]: Used data URI base64 encoding for image_url blocks in tool result content
 - [Phase 07]: Tool images collected via toolCalls.reduce for ChatMessage path (robust reference-based matching)
+- [Phase 07]: Step limit counts mouse/keyboard actions only (not screenshots) for fair computer use metering
+- [Phase 07]: Graceful stop via message injection rather than hard loop break for computer use limits
+- [Phase 07]: Default 50 actions per session, max_turns cap raised from 100 to 200 for computer use
 
 ### Pending Todos
 
@@ -75,6 +79,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T17:15:19.082Z
-Stopped at: Completed 07-01-PLAN.md (Vision + Tool Result Images)
+Last session: 2026-03-24T17:20:08.228Z
+Stopped at: Completed 07-02-PLAN.md (Computer Use Loop Guidance + Step Limits)
 Resume file: None

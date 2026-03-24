@@ -184,7 +184,7 @@ Plans:
 
 Plans:
 - [x] 07-01-PLAN.md -- Vision enablement + tool result image flow fix in native tool calling path
-- [ ] 07-02-PLAN.md -- Computer use system prompt guidance + step limits + completion detection
+- [x] 07-02-PLAN.md -- Computer use system prompt guidance + step limits + completion detection
 
 ### Phase 8: Live Monitoring UI
 **Goal**: Users can watch the AI operate their device in real time with a visual stream, action indicators, and session controls
