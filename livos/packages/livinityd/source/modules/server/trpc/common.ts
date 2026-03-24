@@ -80,4 +80,8 @@ export const httpOnlyPaths = [
 	// Device management -- use HTTP for reliability through relay tunnel
 	'devices.rename',
 	'devices.remove',
+	// Computer use session control -- use HTTP for reliability
+	'ai.pauseComputerUse',
+	'ai.resumeComputerUse',
+	'ai.stopComputerUse',
 ] as const
