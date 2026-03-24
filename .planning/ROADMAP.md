@@ -254,6 +254,6 @@ Plans:
 | 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete   | 2026-03-24 |
+| 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 52. My Devices UI | v14.0 | 0/2 | Not started | - |
 | 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |
