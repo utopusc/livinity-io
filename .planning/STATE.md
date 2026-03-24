@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 07-02-PLAN.md (Computer Use Loop Guidance + Step Limits)
-last_updated: "2026-03-24T17:23:52.672Z"
+stopped_at: Completed 08-01-PLAN.md (Live Monitoring Backend Infrastructure)
+last_updated: "2026-03-24T17:42:10.395Z"
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v15.0 -- AI Computer Use
-**Current focus:** Phase 07 — computer-use-loop
+**Current focus:** Phase 08 — live-monitoring-ui
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
+Phase: 08 (live-monitoring-ui) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Plan: Not started
 | Phase 06 P01 | 2min | 2 tasks | 4 files |
 | Phase 07 P01 | 3min | 2 tasks | 3 files |
 | Phase 07 P02 | 2min | 2 tasks | 2 files |
+| Phase 08 P01 | 4min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -68,6 +69,9 @@ Plan: Not started
 - [Phase 07]: Step limit counts mouse/keyboard actions only (not screenshots) for fair computer use metering
 - [Phase 07]: Graceful stop via message injection rather than hard loop break for computer use limits
 - [Phase 07]: Default 50 actions per session, max_turns cap raised from 100 to 200 for computer use
+- [Phase 08]: Screenshot base64 included in SSE observation events only for device_*_screenshot tools (regex detection)
+- [Phase 08]: stopComputerUse deletes chatStatus entry entirely rather than setting a stopped flag
+- [Phase 08]: Computer use action entries use discriminated union type matching agent tool names (click, double_click, type, press, etc.)
 
 ### Pending Todos
 
@@ -79,6 +83,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T17:20:08.228Z
-Stopped at: Completed 07-02-PLAN.md (Computer Use Loop Guidance + Step Limits)
+Last session: 2026-03-24T17:42:10.392Z
+Stopped at: Completed 08-01-PLAN.md (Live Monitoring Backend Infrastructure)
 Resume file: None
