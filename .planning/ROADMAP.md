@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14.0 Remote PC Control Agent -- build a cross-platform agent that runs on users' PCs, authenticates via livinity.io OAuth, connects through the existing relay, and exposes local PC capabilities (shell, files, processes, screenshots) as AI-callable tools in the Nexus ToolRegistry.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14.1 Agent Installer & Setup UX -- replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb), a web-based setup wizard that opens in the browser for OAuth, a system tray icon for background status, and a livinity.io download page with platform detection.
 
 ## Milestones
 
@@ -13,13 +13,14 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **v11.0 Nexus Agent Fixes** - Phases 26-34 (shipped 2026-03-22)
 - [x] **v12.0 Server Management Dashboard** - Phases 35-40 (shipped 2026-03-22)
 - [x] **v13.0 Portainer-Level Server Management** - Phases 41-46 (shipped 2026-03-23)
-- [ ] **v14.0 Remote PC Control Agent** - Phases 47-53 (in progress)
+- [x] **v14.0 Remote PC Control Agent** - Phases 47-53 (shipped 2026-03-24)
+- [ ] **v14.1 Agent Installer & Setup UX** - Phases 1-4 (in progress)
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (47, 48, 49...): Planned milestone work
-- Decimal phases (47.1, 47.2): Urgent insertions (marked with INSERTED)
+- Integer phases (1, 2, 3, 4): Planned milestone work (reset for v14.1)
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 <details>
 <summary>v10.0 App Store Platform (Phases 16-25) - SHIPPED 2026-03-21</summary>
@@ -61,15 +62,15 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 **Milestone Goal:** Fix 27 issues across the Nexus AI agent system -- sub-agent scheduling, cron persistence, tool profiles, session cleanup, multi-channel routing, naming consistency, system prompts, and dead code removal.
 
-- [x] **Phase 26: Sub-agent Scheduler Coupling Fix** -- Validate schedule+scheduled_task coupling, error on missing scheduled_task (completed 2026-03-22)
-- [x] **Phase 27: Cron Tool BullMQ Migration** -- Replace setTimeout with BullMQ cronQueue for restart-persistent scheduled tasks (completed 2026-03-22)
-- [x] **Phase 28: Tool Profile Name Mismatch Fix** -- Align TOOL_PROFILES names with actual registered tool names in daemon.ts (completed 2026-03-22)
-- [x] **Phase 29: MultiAgentManager Cleanup** -- Wire cleanup() into periodic call, convert sequential Redis exists to pipeline (completed 2026-03-22)
-- [x] **Phase 30: Multi-Channel Notification Routing** -- Add createdVia field, route scheduled/loop results to correct channel (completed 2026-03-22)
-- [x] **Phase 31: Skills->Tools Naming Fix** -- Rename SubagentConfig.skills to tools, update all references (completed 2026-03-22)
-- [x] **Phase 32: Native System Prompt Improvements** -- Add tool awareness, sub-agent guidance, consolidate WhatsApp rules (completed 2026-03-22)
-- [x] **Phase 33: progress_report Multi-Channel** -- Route progress reports to correct channel based on context (completed 2026-03-22)
-- [x] **Phase 34: Miscellaneous Fixes** -- JSON parse safety, dead code removal, atomic recordRun, parentSessionId fix, complexity limit (completed 2026-03-22)
+- [x] **Phase 26: Sub-agent Scheduler Coupling Fix** (completed 2026-03-22)
+- [x] **Phase 27: Cron Tool BullMQ Migration** (completed 2026-03-22)
+- [x] **Phase 28: Tool Profile Name Mismatch Fix** (completed 2026-03-22)
+- [x] **Phase 29: MultiAgentManager Cleanup** (completed 2026-03-22)
+- [x] **Phase 30: Multi-Channel Notification Routing** (completed 2026-03-22)
+- [x] **Phase 31: Skills->Tools Naming Fix** (completed 2026-03-22)
+- [x] **Phase 32: Native System Prompt Improvements** (completed 2026-03-22)
+- [x] **Phase 33: progress_report Multi-Channel** (completed 2026-03-22)
+- [x] **Phase 34: Miscellaneous Fixes** (completed 2026-03-22)
 
 </details>
 
@@ -101,159 +102,98 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 </details>
 
-### v14.0 Remote PC Control Agent
+<details>
+<summary>v14.0 Remote PC Control Agent (Phases 47-53) - SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** Build a cross-platform agent (Windows/Mac/Linux) that users install on their PCs, authenticates via livinity.io OAuth Device Authorization Grant, connects through the existing relay server, and exposes local PC capabilities as AI-callable tools in Nexus. Users control their remote PCs via natural language through the LivOS AI chat.
+**Milestone Goal:** Build a cross-platform agent (Windows/Mac/Linux) that users install on their PCs, authenticates via livinity.io OAuth Device Authorization Grant, connects through the existing relay server, and exposes local PC capabilities as AI-callable tools in Nexus.
 
-- [x] **Phase 47: Platform OAuth + Relay Device Infrastructure** - livinity.io device endpoints, relay DeviceRegistry, /device/connect WebSocket (completed 2026-03-24)
-- [x] **Phase 48: Agent Binary + Authentication** - Node.js SEA agent scaffold, OAuth device flow, connection manager, heartbeat (completed 2026-03-24)
-- [x] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry (completed 2026-03-24)
-- [x] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations (completed 2026-03-24)
-- [x] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection (completed 2026-03-24)
-- [x] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove (completed 2026-03-24)
-- [x] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user (completed 2026-03-24)
+- [x] **Phase 47: Platform OAuth + Relay Device Infrastructure** (completed 2026-03-24)
+- [x] **Phase 48: Agent Binary + Authentication** (completed 2026-03-24)
+- [x] **Phase 49: Relay Message Routing + DeviceBridge** (completed 2026-03-24)
+- [x] **Phase 50: Agent Core Tools -- Shell + Files** (completed 2026-03-24)
+- [x] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** (completed 2026-03-24)
+- [x] **Phase 52: My Devices UI** (completed 2026-03-24)
+- [x] **Phase 53: Audit Logging + Security Hardening** (completed 2026-03-24)
+
+</details>
+
+### v14.1 Agent Installer & Setup UX
+
+**Milestone Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser. Users double-click to install, the agent opens a beautiful setup page for OAuth, then runs silently in the background with auto-start on boot.
+
+- [ ] **Phase 1: Web Setup Wizard** - Local HTTP server serves a React UI for OAuth device flow, replacing CLI setup
+- [ ] **Phase 2: System Tray Icon** - Cross-platform tray icon with connection status and context menu
+- [ ] **Phase 3: Platform Installers** - Native installers for Windows (.exe), macOS (.dmg), and Linux (.deb) with auto-start
+- [ ] **Phase 4: Download Page** - livinity.io/download with platform detection and setup instructions
 
 ## Phase Details
 
-### Phase 47: Platform OAuth + Relay Device Infrastructure
-**Goal**: Devices can register via OAuth Device Authorization Grant and establish authenticated WebSocket connections to the relay server
-**Depends on**: Nothing (first phase of v14.0; builds on existing relay codebase on Server5 and livinity.io platform)
-**Requirements**: PLAT-01, PLAT-02, PLAT-03, RELAY-01, RELAY-02
+### Phase 1: Web Setup Wizard
+**Goal**: Users connect their account through a beautiful browser-based wizard instead of the terminal
+**Depends on**: Nothing (first phase; builds on existing agent at agent/ with CLI OAuth flow)
+**Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05
 **Success Criteria** (what must be TRUE):
-  1. An HTTP client can POST /api/device/register on livinity.io and receive a device_code + user_code pair
-  2. A logged-in user can visit livinity.io/device, enter the user_code, and approve the device
-  3. An HTTP client can poll POST /api/device/token and receive a device JWT after user approval
-  4. A WebSocket client can connect to the relay at /device/connect with a valid device JWT and appear in the DeviceRegistry
-  5. The relay tracks which devices belong to which user and disconnects devices with invalid/expired tokens
-**Plans**: 2 plans
+  1. Running the agent for the first time opens a browser tab to a local setup page
+  2. The setup page shows a polished UI with a clear "Connect Your Account" call-to-action
+  3. Clicking connect displays a device code and a link to livinity.io for approval
+  4. After approving on livinity.io, the setup page shows "Connected!" with the device name
+  5. The setup page closes itself and the agent continues running silently in the background
+**Plans**: TBD
 
 Plans:
-- [x] 47-01: livinity.io device OAuth endpoints (register, token, approve) + /device approval page
-- [x] 47-02: Relay DeviceRegistry + /device/connect WebSocket endpoint with JWT validation
+- [ ] 01-01: Local HTTP server and React setup UI
+- [ ] 01-02: OAuth device flow integration and success state
 
-### Phase 48: Agent Binary + Authentication
-**Goal**: Users can download a single binary for their platform, authenticate it via OAuth device flow, and it maintains a persistent connection to the relay with auto-reconnect
-**Depends on**: Phase 47
-**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, AUTH-01, AUTH-02, AUTH-03, SEC-01, SEC-02
+### Phase 2: System Tray Icon
+**Goal**: Users can see their agent's connection status at a glance and access controls from the system tray
+**Depends on**: Phase 1
+**Requirements**: TRAY-01, TRAY-02, TRAY-03
 **Success Criteria** (what must be TRUE):
-  1. User downloads a single executable binary for Windows, macOS, or Linux and runs it without installing dependencies
-  2. Running `livinity-agent setup` initiates OAuth device flow -- displays a code and URL, waits for user approval, stores the device token
-  3. Running `livinity-agent start` connects to the relay via WSS, maintains heartbeat, and auto-reconnects with exponential backoff on connection loss
-  4. Running `livinity-agent status` shows connection state, device name, and relay endpoint
-  5. Agent reports its list of available tools to the relay on successful connection
-**Plans**: 2 plans
+  1. A Livinity icon appears in the system tray when the agent is running on Windows, macOS, and Linux
+  2. The tray icon color reflects connection status -- green for connected, yellow for connecting, red for disconnected
+  3. Right-clicking the tray icon shows a menu with Status, Open Setup, Disconnect, and Quit options
+**Plans**: TBD
 
 Plans:
-- [x] 48-01-PLAN.md -- Agent project scaffold, CLI commands, ConnectionManager with heartbeat & reconnect, tool stubs
-- [x] 48-02-PLAN.md -- OAuth device flow (setup command), token storage, token expiry check
+- [ ] 02-01: System tray integration with status icons and context menu
 
-### Phase 49: Relay Message Routing + DeviceBridge
-**Goal**: AI tool calls on LivOS flow through the relay to the correct device agent and results return to the AI, with device tools dynamically appearing and disappearing in the Nexus ToolRegistry
-**Depends on**: Phase 47, Phase 48
-**Requirements**: RELAY-03, RELAY-04, TOOLS-01, TOOLS-02, TOOLS-03
+### Phase 3: Platform Installers
+**Goal**: Users install the agent with a native installer and it auto-starts on boot without configuration
+**Depends on**: Phase 1, Phase 2
+**Requirements**: WIN-01, WIN-02, WIN-03, WIN-04, MAC-01, MAC-02, MAC-03, LIN-01, LIN-02, LIN-03
 **Success Criteria** (what must be TRUE):
-  1. When a device connects to the relay, LivOS receives a device_connected event via the existing tunnel WebSocket
-  2. When a device disconnects, LivOS receives a device_disconnected event and the device's proxy tools are removed from ToolRegistry
-  3. LivOS can send a tool_call message through the relay to a specific device and receive the tool_result back
-  4. Connected device tools appear in the Nexus ToolRegistry with `device_{deviceId}_` prefix (e.g., `device_desktop-pc_shell`)
-  5. The AI can select and invoke a device proxy tool and receive the result as part of the normal agent loop
-**Plans**: 2 plans
+  1. On Windows, double-clicking the .exe runs an Inno Setup installer that places the agent in Program Files with Start Menu and optional Desktop shortcuts
+  2. On Windows, after installation the agent auto-starts on boot and can be cleanly uninstalled removing files, shortcuts, and registry entries
+  3. On macOS, opening the .dmg shows a drag-to-Applications window with a proper .app bundle containing icon and Info.plist, and the agent registers as a LaunchAgent for auto-start on login
+  4. On Linux, installing the .deb places the binary and creates a systemd service that runs as the installing user and auto-starts on boot
+**Plans**: TBD
 
 Plans:
-- [x] 49-01-PLAN.md -- Relay message routing: tunnel protocol types for device events, forward tool_call/tool_result between LivOS tunnel and device WS
-- [x] 49-02-PLAN.md -- DeviceBridge module in livinityd, Nexus proxy tool registration API, tunnel-client event handlers, execution callback
+- [ ] 03-01: Windows installer (Inno Setup script, shortcuts, auto-start registry, uninstaller)
+- [ ] 03-02: macOS installer (create-dmg, .app bundle with Info.plist and icon, LaunchAgent plist)
+- [ ] 03-03: Linux installer (fpm .deb package, systemd service unit file)
 
-### Phase 50: Agent Core Tools -- Shell + Files
-**Goal**: The AI can execute shell commands and perform file operations on the user's remote PC via natural language
-**Depends on**: Phase 48, Phase 49
-**Requirements**: SHELL-01, SHELL-02, SHELL-03, FILES-01, FILES-02, FILES-03, FILES-04
+### Phase 4: Download Page
+**Goal**: Users find and download the correct installer from livinity.io without confusion
+**Depends on**: Phase 3
+**Requirements**: DL-01, DL-02, DL-03
 **Success Criteria** (what must be TRUE):
-  1. User says "run `ls -la` on my desktop PC" and the AI executes the command and returns formatted output
-  2. Agent uses PowerShell on Windows and bash/zsh on macOS/Linux automatically
-  3. Shell command output is returned as structured JSON with stdout, stderr, and exit code
-  4. User says "show me files on my Desktop" and the AI returns a directory listing with name, size, type, and modified date
-  5. AI can read, create/write, delete, and rename files on the remote PC
-**Plans**: 2 plans
+  1. Visiting livinity.io/download auto-detects the user's OS and highlights the matching download button
+  2. Download links for all three platforms (Windows, macOS, Linux) are visible with platform icons
+  3. The page includes brief setup instructions covering download, install, and connect steps
+**Plans**: TBD
 
 Plans:
-- [x] 50-01: Agent shell tool (cross-platform shell detection, child_process execution, structured JSON output)
-- [x] 50-02: Agent files tool (list, read, write, delete, rename with metadata)
-
-### Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info
-**Goal**: The AI can inspect running processes, capture screenshots, and collect system information from the remote PC
-**Depends on**: Phase 48, Phase 49
-**Requirements**: PROC-01, PROC-02, SCREEN-01
-**Success Criteria** (what must be TRUE):
-  1. User says "what's eating CPU on my PC" and the AI returns a process list with PID, name, CPU%, and memory usage
-  2. AI can collect system info including OS version, CPU model, RAM total/used, disk usage, hostname, and IP addresses
-  3. User says "take a screenshot of my desktop" and the AI captures and displays the remote PC's screen
-**Plans**: 2 plans
-
-Plans:
-- [x] 51-01-PLAN.md -- Processes + system info tools (systeminformation, structured output, DeviceBridge schemas)
-- [x] 51-02-PLAN.md -- Screenshot tool (node-screenshots, JPEG compression, base64 transport, graceful fallback)
-
-### Phase 52: My Devices UI
-**Goal**: Users can see all their connected devices, their status, and manage them from the LivOS interface
-**Depends on**: Phase 49 (DeviceBridge provides device state)
-**Requirements**: UI-01, UI-02, UI-03
-**Success Criteria** (what must be TRUE):
-  1. LivOS shows a "My Devices" panel listing all registered devices with name, OS icon, platform, and connection status
-  2. Each device shows whether it is online (green) or offline (gray) with a last-seen timestamp
-  3. User can rename a device from the UI
-  4. User can remove a device, which revokes its token and disconnects it
-**Plans**: 2 plans
-
-Plans:
-- [x] 52-01: Backend tRPC devices router (list, rename, remove) + Redis device state queries
-- [x] 52-02: Frontend My Devices panel (device cards, status indicators, rename dialog, remove confirmation)
-
-### Phase 53: Audit Logging + Security Hardening
-**Goal**: Every remote tool execution is logged for accountability, and dangerous operations are blocked by default
-**Depends on**: Phase 50, Phase 51, Phase 52
-**Requirements**: AUDIT-01, AUDIT-02, SEC-03, SEC-04
-**Success Criteria** (what must be TRUE):
-  1. Every remote tool execution is logged with timestamp, user, device, tool name, parameters, and result summary
-  2. User can view the audit log for a specific device from the LivOS UI
-  3. Agent runs as the logged-in OS user (not root/SYSTEM) by default
-  4. A configurable dangerous command blocklist prevents execution of destructive commands (rm -rf /, format, shutdown, registry delete, etc.)
-**Plans**: 2 plans
-
-Plans:
-- [x] 53-01-PLAN.md -- End-to-end audit logging: agent local JSON-lines log, relay pass-through, LivOS Redis storage, tRPC query, UI Activity dialog
-- [x] 53-02-PLAN.md -- Security hardening: configurable dangerous command blocklist in shell tool, agent runs-as-user display in status
+- [ ] 04-01: Download page with platform detection, download links, and setup instructions
 
 ## Progress
 
-**Execution Order:** 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53
+**Execution Order:**
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 26. Scheduler Coupling | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 27. Cron BullMQ | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 28. Tool Profiles | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 29. Session Cleanup | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 30. Multi-Channel | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 31. Skills->Tools | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 32. System Prompts | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 33. Progress Report | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 34. Misc Fixes | v11.0 | 1/1 | Complete | 2026-03-22 |
-| 35. Docker Backend + Container List | v12.0 | 2/2 | Complete | 2026-03-22 |
-| 36. Container Detail + Logs + Stats | v12.0 | 2/2 | Complete | 2026-03-22 |
-| 37. Images, Volumes, Networks | v12.0 | 2/2 | Complete | 2026-03-22 |
-| 38. PM2 Process Management | v12.0 | 2/2 | Complete | 2026-03-22 |
-| 39. System Monitoring + Overview | v12.0 | 2/2 | Complete | 2026-03-22 |
-| 40. Polish & Deployment | v12.0 | 0/? | Complete | 2026-03-22 |
-| 41. Container Creation | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 42. Container Edit & Recreate | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 43. Exec Terminal + Enhanced Logs | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete | 2026-03-23 |
-| 45. Docker Compose Stacks | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 52. My Devices UI | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 53. Audit Logging + Security Hardening | v14.0 | 2/2 | Complete    | 2026-03-24 |
+| 1. Web Setup Wizard | v14.1 | 0/2 | Not started | - |
+| 2. System Tray Icon | v14.1 | 0/1 | Not started | - |
+| 3. Platform Installers | v14.1 | 0/3 | Not started | - |
+| 4. Download Page | v14.1 | 0/1 | Not started | - |

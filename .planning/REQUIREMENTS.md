@@ -64,32 +64,33 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | TBD | Pending |
-| SETUP-02 | TBD | Pending |
-| SETUP-03 | TBD | Pending |
-| SETUP-04 | TBD | Pending |
-| SETUP-05 | TBD | Pending |
-| WIN-01 | TBD | Pending |
-| WIN-02 | TBD | Pending |
-| WIN-03 | TBD | Pending |
-| WIN-04 | TBD | Pending |
-| MAC-01 | TBD | Pending |
-| MAC-02 | TBD | Pending |
-| MAC-03 | TBD | Pending |
-| LIN-01 | TBD | Pending |
-| LIN-02 | TBD | Pending |
-| LIN-03 | TBD | Pending |
-| TRAY-01 | TBD | Pending |
-| TRAY-02 | TBD | Pending |
-| TRAY-03 | TBD | Pending |
-| DL-01 | TBD | Pending |
-| DL-02 | TBD | Pending |
-| DL-03 | TBD | Pending |
+| SETUP-01 | Phase 1 | Pending |
+| SETUP-02 | Phase 1 | Pending |
+| SETUP-03 | Phase 1 | Pending |
+| SETUP-04 | Phase 1 | Pending |
+| SETUP-05 | Phase 1 | Pending |
+| WIN-01 | Phase 3 | Pending |
+| WIN-02 | Phase 3 | Pending |
+| WIN-03 | Phase 3 | Pending |
+| WIN-04 | Phase 3 | Pending |
+| MAC-01 | Phase 3 | Pending |
+| MAC-02 | Phase 3 | Pending |
+| MAC-03 | Phase 3 | Pending |
+| LIN-01 | Phase 3 | Pending |
+| LIN-02 | Phase 3 | Pending |
+| LIN-03 | Phase 3 | Pending |
+| TRAY-01 | Phase 2 | Pending |
+| TRAY-02 | Phase 2 | Pending |
+| TRAY-03 | Phase 2 | Pending |
+| DL-01 | Phase 4 | Pending |
+| DL-02 | Phase 4 | Pending |
+| DL-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v14.1 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
+*Traceability updated: 2026-03-24*
