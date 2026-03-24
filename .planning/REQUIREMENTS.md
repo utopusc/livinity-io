@@ -14,9 +14,9 @@
 
 ### Auth -- Device Authentication
 
-- [ ] **AUTH-01**: Agent performs OAuth Device Authorization Grant via `setup` command
-- [ ] **AUTH-02**: User approves device at livinity.io/device by entering the displayed code
-- [ ] **AUTH-03**: Agent stores device token securely and auto-refreshes on expiry
+- [x] **AUTH-01**: Agent performs OAuth Device Authorization Grant via `setup` command
+- [x] **AUTH-02**: User approves device at livinity.io/device by entering the displayed code
+- [x] **AUTH-03**: Agent stores device token securely and auto-refreshes on expiry
 
 ### Platform -- livinity.io Device Endpoints
 
@@ -73,7 +73,7 @@
 ### Security
 
 - [x] **SEC-01**: All agent-relay transport uses WSS (TLS 1.3)
-- [ ] **SEC-02**: Device tokens are JWTs with 24h expiry and auto-refresh
+- [x] **SEC-02**: Device tokens are JWTs with 24h expiry and auto-refresh
 - [ ] **SEC-03**: Agent runs as logged-in user (not root/SYSTEM) by default
 - [ ] **SEC-04**: Dangerous command blocklist enforced on agent side
 
@@ -120,11 +120,11 @@
 | AGENT-02 | Phase 48 | Complete |
 | AGENT-03 | Phase 48 | Complete |
 | AGENT-04 | Phase 48 | Complete |
-| AUTH-01 | Phase 48 | Pending |
-| AUTH-02 | Phase 48 | Pending |
-| AUTH-03 | Phase 48 | Pending |
+| AUTH-01 | Phase 48 | Complete |
+| AUTH-02 | Phase 48 | Complete |
+| AUTH-03 | Phase 48 | Complete |
 | SEC-01 | Phase 48 | Complete |
-| SEC-02 | Phase 48 | Pending |
+| SEC-02 | Phase 48 | Complete |
 | RELAY-03 | Phase 49 | Pending |
 | RELAY-04 | Phase 49 | Pending |
 | TOOLS-01 | Phase 49 | Pending |
