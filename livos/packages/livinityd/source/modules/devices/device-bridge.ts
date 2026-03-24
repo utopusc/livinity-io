@@ -49,11 +49,14 @@ const DEVICE_TOOL_SCHEMAS: Record<
 		],
 	},
 	processes: {
-		description: 'List running processes',
-		parameters: [],
+		description: 'List running processes with CPU and memory usage',
+		parameters: [
+			{name: 'sortBy', type: 'string', description: 'Sort by "cpu" or "memory" (default: cpu)', required: false},
+			{name: 'limit', type: 'number', description: 'Max processes to return (default: 20)', required: false},
+		],
 	},
 	system_info: {
-		description: 'Get system information (OS, CPU, RAM, disk)',
+		description: 'Get system information: OS, CPU, RAM, disk usage, network, uptime',
 		parameters: [],
 	},
 	screenshot: {

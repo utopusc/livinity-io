@@ -1,5 +1,7 @@
 import { executeShell } from './tools/shell.js';
 import { executeFilesList, executeFilesRead, executeFilesWrite, executeFilesDelete, executeFilesRename } from './tools/files.js';
+import { executeProcesses } from './tools/processes.js';
+import { executeSystemInfo } from './tools/system-info.js';
 
 export const TOOL_NAMES = [
   'shell',
@@ -18,7 +20,7 @@ export type ToolName = typeof TOOL_NAMES[number];
 export async function executeTool(
   tool: string,
   params: Record<string, unknown>,
-): Promise<{ success: boolean; output: string; error?: string; data?: unknown }> {
+): Promise<{ success: boolean; output: string; error?: string; data?: unknown; images?: Array<{ base64: string; mimeType: string }> }> {
   switch (tool) {
     case 'shell':
       return executeShell(params);
@@ -32,7 +34,11 @@ export async function executeTool(
       return executeFilesDelete(params);
     case 'files_rename':
       return executeFilesRename(params);
-    // processes, system_info, screenshot — Phase 51
+    case 'processes':
+      return executeProcesses(params);
+    case 'system_info':
+      return executeSystemInfo(params);
+    // screenshot — Phase 51 Plan 02
     default:
       return { success: false, output: '', error: `Tool '${tool}' is not yet implemented` };
   }
