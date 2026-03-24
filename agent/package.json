@@ -12,6 +12,7 @@
     "build:installer:linux": "bash installer/linux/build-deb.sh"
   },
   "dependencies": {
+    "@jitsi/robotjs": "^0.6.21",
     "express": "^4.21.0",
     "node-screenshots": "^0.2.8",
     "open": "^10.1.0",
