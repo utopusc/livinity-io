@@ -79,7 +79,7 @@ interface OpenAIFunctionTool {
 
 interface OpenAIChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string | null;
+  content?: string | null | Array<{ type: string; [k: string]: unknown }>;
   tool_calls?: Array<{
     id: string;
     type: 'function';
@@ -208,7 +208,7 @@ function convertRawMessages(raw: unknown[]): OpenAIChatMessage[] {
           hasToolResults = true;
           out.push({
             role: 'tool',
-            content: typeof b.content === 'string' ? b.content : JSON.stringify(b.content),
+            content: Array.isArray(b.content) ? b.content : (typeof b.content === 'string' ? b.content : JSON.stringify(b.content)),
             tool_call_id: b.tool_use_id as string,
           });
         }
@@ -289,7 +289,7 @@ interface KimiOAuthCreds {
 
 export class KimiProvider implements AIProvider {
   readonly id = 'kimi';
-  readonly supportsVision = false; // Kimi K2.5 vision TBD
+  readonly supportsVision = true;
   readonly supportsToolCalling = true;
 
   private redis: Redis | null = null;
