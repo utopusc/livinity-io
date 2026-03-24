@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import { hostname } from 'node:os';
+import { hostname, userInfo } from 'node:os';
 import { readCredentials, readState, readPid, writePid, removePid } from './state.js';
 import { ConnectionManager } from './connection-manager.js';
 import { deviceFlowSetup, isTokenExpired } from './auth.js';
@@ -88,6 +88,12 @@ export async function startCommand(): Promise<void> {
   process.on('SIGTERM', shutdown);
 
   console.log(`Agent started (PID ${process.pid}). Press Ctrl+C to stop.`);
+  try {
+    const user = userInfo();
+    console.log(`[agent] Running as OS user: ${user.username}`);
+  } catch {
+    // userInfo() can throw on some platforms
+  }
 }
 
 // ---- stop ----
@@ -147,5 +153,12 @@ export async function statusCommand(): Promise<void> {
   console.log(`Device:      ${credentials?.deviceName ?? 'unknown'}`);
   console.log(`Relay:       ${credentials?.relayUrl ?? 'unknown'}`);
   console.log(`Connected:   ${state.connectedAt ?? 'never'}`);
+  // Show current OS user for security transparency
+  try {
+    const user = userInfo();
+    console.log(`Running as: ${user.username}`);
+  } catch {
+    console.log(`Running as: unknown`);
+  }
   console.log('');
 }
