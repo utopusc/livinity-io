@@ -19,6 +19,7 @@ import domain from '../../domain/routes.js'
 import docker from '../../docker/routes.js'
 import monitoring from '../../monitoring/routes.js'
 import pm2 from '../../pm2/routes.js'
+import devices from '../../devices/routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -41,6 +42,7 @@ const appRouter = router({
 	docker,
 	monitoring,
 	pm2,
+	devices,
 })
 
 export type AppRouter = typeof appRouter

@@ -77,4 +77,7 @@ export const httpOnlyPaths = [
 	'docker.removeStack',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
+	// Device management -- use HTTP for reliability through relay tunnel
+	'devices.rename',
+	'devices.remove',
 ] as const
