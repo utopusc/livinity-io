@@ -33,9 +33,9 @@
 
 ### Shell -- Remote Shell Execution
 
-- [ ] **SHELL-01**: AI can execute shell commands on the remote PC
-- [ ] **SHELL-02**: Agent uses the correct shell per OS (PowerShell/bash/zsh)
-- [ ] **SHELL-03**: Command output returns as structured JSON result
+- [x] **SHELL-01**: AI can execute shell commands on the remote PC
+- [x] **SHELL-02**: Agent uses the correct shell per OS (PowerShell/bash/zsh)
+- [x] **SHELL-03**: Command output returns as structured JSON result
 
 ### Files -- Remote File Operations
 
@@ -130,9 +130,9 @@
 | TOOLS-01 | Phase 49 | Complete |
 | TOOLS-02 | Phase 49 | Complete |
 | TOOLS-03 | Phase 49 | Complete |
-| SHELL-01 | Phase 50 | Pending |
-| SHELL-02 | Phase 50 | Pending |
-| SHELL-03 | Phase 50 | Pending |
+| SHELL-01 | Phase 50 | Complete |
+| SHELL-02 | Phase 50 | Complete |
+| SHELL-03 | Phase 50 | Complete |
 | FILES-01 | Phase 50 | Pending |
 | FILES-02 | Phase 50 | Pending |
 | FILES-03 | Phase 50 | Pending |

@@ -176,7 +176,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 50-01: Agent shell tool (cross-platform shell detection, child_process execution, structured JSON output)
+- [x] 50-01: Agent shell tool (cross-platform shell detection, child_process execution, structured JSON output)
 - [ ] 50-02: Agent files tool (list, read, write, delete, rename with metadata)
 
 ### Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info
@@ -253,7 +253,7 @@ Plans:
 | 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
+| 50. Agent Core Tools -- Shell + Files | v14.0 | 1/2 | In Progress|  |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |
 | 52. My Devices UI | v14.0 | 0/2 | Not started | - |
 | 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |

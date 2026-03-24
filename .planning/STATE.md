@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.0
 milestone_name: Remote PC Control Agent
 status: unknown
-stopped_at: Completed 49-02-PLAN.md
-last_updated: "2026-03-24T06:15:24.736Z"
+stopped_at: Completed 50-01-PLAN.md
+last_updated: "2026-03-24T06:22:33.857Z"
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v14.0 -- Remote PC Control Agent
-**Current focus:** Phase 49 — Relay Message Routing + DeviceBridge
+**Current focus:** Phase 50 — Agent Core Tools -- Shell + Files
 
 ## Current Position
 
-Phase: 50
-Plan: Not started
+Phase: 50 (Agent Core Tools -- Shell + Files) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: Not started
 | Phase 48 P02 | 3min | 2 tasks | 3 files |
 | Phase 49 P01 | 3min | 2 tasks | 4 files |
 | Phase 49 P02 | 3min | 1 tasks | 5 files |
+| Phase 50-01 P01 | 2min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Plan: Not started
 - [Phase 49]: Relay returns error TunnelDeviceToolResult immediately if target device not connected (no queueing in v14.0)
 - [Phase 49]: Used crypto.randomUUID() instead of nanoid in DeviceBridge (not a direct dependency)
 - [Phase 49]: Proxy tool registration uses HTTP callback pattern: Nexus POSTs to livinityd /internal/device-tool-execute
+- [Phase 50]: Non-zero exit codes are valid results (success: true) -- only spawn failures are errors
+- [Phase 50]: Output truncated at 100KB per stream to protect WebSocket transport
+- [Phase 50]: Each tool is a separate file in agent/src/tools/ exporting a single async function
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T06:12:13.424Z
-Stopped at: Completed 49-02-PLAN.md
+Last session: 2026-03-24T06:22:33.854Z
+Stopped at: Completed 50-01-PLAN.md
 Resume file: None
