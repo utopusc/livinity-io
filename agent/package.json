@@ -8,7 +8,8 @@
     "build": "node esbuild.config.mjs",
     "build:sea": "node build-sea.mjs",
     "build:installer:win": "installer\\windows\\build-installer.bat",
-    "build:installer:mac": "bash installer/macos/build-dmg.sh"
+    "build:installer:mac": "bash installer/macos/build-dmg.sh",
+    "build:installer:linux": "bash installer/linux/build-deb.sh"
   },
   "dependencies": {
     "express": "^4.21.0",
