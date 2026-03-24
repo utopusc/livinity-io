@@ -2,6 +2,7 @@ import { executeShell } from './tools/shell.js';
 import { executeFilesList, executeFilesRead, executeFilesWrite, executeFilesDelete, executeFilesRename } from './tools/files.js';
 import { executeProcesses } from './tools/processes.js';
 import { executeSystemInfo } from './tools/system-info.js';
+import { executeScreenshot } from './tools/screenshot.js';
 
 export const TOOL_NAMES = [
   'shell',
@@ -38,8 +39,9 @@ export async function executeTool(
       return executeProcesses(params);
     case 'system_info':
       return executeSystemInfo(params);
-    // screenshot — Phase 51 Plan 02
+    case 'screenshot':
+      return executeScreenshot(params);
     default:
-      return { success: false, output: '', error: `Tool '${tool}' is not yet implemented` };
+      return { success: false, output: '', error: `Unknown tool: ${tool}` };
   }
 }
