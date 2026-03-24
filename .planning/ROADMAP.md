@@ -200,7 +200,7 @@ Plans:
 Plans:
 - [x] 08-01-PLAN.md -- Backend: SSE screenshot passthrough, extended chatStatus with computer use fields, pause/stop/resume tRPC mutations
 - [x] 08-02-PLAN.md -- Frontend: ComputerUsePanel component with screenshot display, action overlay, timeline, and session controls
-- [ ] 08-03-PLAN.md -- Gap closure: Wire stop button to actually abort SSE stream via AbortController
+- [x] 08-03-PLAN.md -- Gap closure: Wire stop button to actually abort SSE stream via AbortController
 
 ### Phase 9: Security & Permissions
 **Goal**: Users maintain full control over AI computer use with explicit consent, an emergency stop, per-action audit logging, and automatic session timeouts

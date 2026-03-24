@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 08-02-PLAN.md (Live Monitoring UI)
-last_updated: "2026-03-24T17:48:47.079Z"
+stopped_at: Completed 08-03-PLAN.md (Stop Control Gap Closure)
+last_updated: "2026-03-24T18:00:33.238Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State
@@ -50,6 +50,7 @@ Plan: 2 of 2
 | Phase 07 P02 | 2min | 2 tasks | 2 files |
 | Phase 08 P01 | 4min | 2 tasks | 4 files |
 | Phase 08 P02 | 4min | 2 tasks | 2 files |
+| Phase 08 P03 | 2min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -76,6 +77,8 @@ Plan: 2 of 2
 - [Phase 08]: ComputerUsePanel takes rendering priority over CanvasPanel when both active
 - [Phase 08]: Coordinate overlays use naturalWidth/clientWidth scaling for accurate positioning
 - [Phase 08]: Minimized computer use state shows pulsing green indicator rather than hiding completely
+- [Phase 08]: AbortController with setTimeout fallback replaces AbortSignal.timeout for combined manual+timeout abort
+- [Phase 08]: Pause remains cosmetic (UI badge only) -- documented architectural decision, not a bug
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T17:48:47.077Z
-Stopped at: Completed 08-02-PLAN.md (Live Monitoring UI)
+Last session: 2026-03-24T18:00:33.235Z
+Stopped at: Completed 08-03-PLAN.md (Stop Control Gap Closure)
 Resume file: None
