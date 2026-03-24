@@ -1,0 +1,19 @@
+[Unit]
+Description=Livinity Agent - Remote PC Control
+Documentation=https://livinity.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/livinity-agent start --background
+ExecStop=/usr/local/bin/livinity-agent stop
+Restart=on-failure
+RestartSec=10
+User=__USER__
+Group=__USER__
+Environment=HOME=/home/__USER__
+WorkingDirectory=/home/__USER__
+
+[Install]
+WantedBy=multi-user.target
