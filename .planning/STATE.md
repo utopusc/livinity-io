@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 05-01-PLAN.md (Mouse and Keyboard Tools)
-last_updated: "2026-03-24T16:39:51.305Z"
+stopped_at: Completed 05-02-PLAN.md (SEA Build + DeviceBridge Schemas)
+last_updated: "2026-03-24T16:43:58.085Z"
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -44,6 +44,7 @@ Plan: 2 of 2
 ## Accumulated Context
 
 | Phase 05 P01 | 2min | 2 tasks | 4 files |
+| Phase 05 P02 | 2min | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -54,6 +55,8 @@ Plan: 2 of 2
 - Vision analysis uses Kimi multimodal API for screenshot understanding
 - [Phase 05]: Used @jitsi/robotjs over nut-js: free MIT license, prebuilt N-API binaries, same native addon pattern as node-screenshots
 - [Phase 05]: Synchronous require() for robotjs lazy loading (CJS native addon via node-gyp-build)
+- [Phase 05]: SEA build follows same external+copy pattern for robotjs as node-screenshots (no new build patterns)
+- [Phase 05]: keyboard_press uses single key param with combo syntax (ctrl+c) rather than separate key/modifier
 
 ### Pending Todos
 
@@ -65,6 +68,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T16:39:51.303Z
-Stopped at: Completed 05-01-PLAN.md (Mouse and Keyboard Tools)
+Last session: 2026-03-24T16:43:58.082Z
+Stopped at: Completed 05-02-PLAN.md (SEA Build + DeviceBridge Schemas)
 Resume file: None

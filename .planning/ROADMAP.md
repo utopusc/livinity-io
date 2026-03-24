@@ -156,7 +156,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15
 
 Plans:
 - [x] 05-01-PLAN.md -- Agent mouse/keyboard tool implementations with @jitsi/robotjs
-- [ ] 05-02-PLAN.md -- SEA build pipeline + DeviceBridge schema registration
+- [x] 05-02-PLAN.md -- SEA build pipeline + DeviceBridge schema registration
 
 ### Phase 6: Screen Info & Screenshot Extensions
 **Goal**: AI has full awareness of the device's display geometry and screenshots carry coordinate metadata for accurate targeting
