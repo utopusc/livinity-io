@@ -51,7 +51,7 @@
 
 ### Screen -- Screenshot Capture
 
-- [ ] **SCREEN-01**: AI can capture on-demand screenshot of the remote PC display
+- [x] **SCREEN-01**: AI can capture on-demand screenshot of the remote PC display
 
 ### Tools -- AI Tool Integration
 
@@ -139,7 +139,7 @@
 | FILES-04 | Phase 50 | Complete |
 | PROC-01 | Phase 51 | Complete |
 | PROC-02 | Phase 51 | Complete |
-| SCREEN-01 | Phase 51 | Pending |
+| SCREEN-01 | Phase 51 | Complete |
 | UI-01 | Phase 52 | Pending |
 | UI-02 | Phase 52 | Pending |
 | UI-03 | Phase 52 | Pending |

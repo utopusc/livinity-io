@@ -109,7 +109,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **Phase 48: Agent Binary + Authentication** - Node.js SEA agent scaffold, OAuth device flow, connection manager, heartbeat (completed 2026-03-24)
 - [x] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry (completed 2026-03-24)
 - [x] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations (completed 2026-03-24)
-- [ ] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection
+- [x] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection (completed 2026-03-24)
 - [ ] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove
 - [ ] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user
 
@@ -191,7 +191,7 @@ Plans:
 
 Plans:
 - [x] 51-01-PLAN.md -- Processes + system info tools (systeminformation, structured output, DeviceBridge schemas)
-- [ ] 51-02-PLAN.md -- Screenshot tool (node-screenshots, JPEG compression, base64 transport, graceful fallback)
+- [x] 51-02-PLAN.md -- Screenshot tool (node-screenshots, JPEG compression, base64 transport, graceful fallback)
 
 ### Phase 52: My Devices UI
 **Goal**: Users can see all their connected devices, their status, and manage them from the LivOS interface
@@ -254,6 +254,6 @@ Plans:
 | 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 1/2 | In Progress|  |
+| 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete   | 2026-03-24 |
 | 52. My Devices UI | v14.0 | 0/2 | Not started | - |
 | 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |
