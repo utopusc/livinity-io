@@ -9,9 +9,9 @@
 
 - [x] **SETUP-01**: Agent starts a local HTTP server and opens browser to a setup wizard page on first run
 - [x] **SETUP-02**: Setup wizard shows a polished React UI with "Connect Your Account" flow
-- [ ] **SETUP-03**: Setup wizard initiates OAuth device flow, displays the code, and polls for approval
-- [ ] **SETUP-04**: After approval, setup wizard shows success state with device name and "Connected!" confirmation
-- [ ] **SETUP-05**: Setup wizard auto-closes after successful setup, agent continues running in background
+- [x] **SETUP-03**: Setup wizard initiates OAuth device flow, displays the code, and polls for approval
+- [x] **SETUP-04**: After approval, setup wizard shows success state with device name and "Connected!" confirmation
+- [x] **SETUP-05**: Setup wizard auto-closes after successful setup, agent continues running in background
 
 ### Installer -- Windows
 
@@ -66,9 +66,9 @@
 |-------------|-------|--------|
 | SETUP-01 | Phase 1 | Complete |
 | SETUP-02 | Phase 1 | Complete |
-| SETUP-03 | Phase 1 | Pending |
-| SETUP-04 | Phase 1 | Pending |
-| SETUP-05 | Phase 1 | Pending |
+| SETUP-03 | Phase 1 | Complete |
+| SETUP-04 | Phase 1 | Complete |
+| SETUP-05 | Phase 1 | Complete |
 | WIN-01 | Phase 3 | Pending |
 | WIN-02 | Phase 3 | Pending |
 | WIN-03 | Phase 3 | Pending |

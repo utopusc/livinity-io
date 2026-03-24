@@ -142,7 +142,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 
 Plans:
 - [x] 01-01: Local HTTP server and React setup UI
-- [ ] 01-02: OAuth device flow integration and success state
+- [x] 01-02: OAuth device flow integration and success state
 
 ### Phase 2: System Tray Icon
 **Goal**: Users can see their agent's connection status at a glance and access controls from the system tray
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Web Setup Wizard | v14.1 | 1/2 | In progress | - |
+| 1. Web Setup Wizard | v14.1 | 2/2 | Complete | 2026-03-24 |
 | 2. System Tray Icon | v14.1 | 0/1 | Not started | - |
 | 3. Platform Installers | v14.1 | 0/3 | Not started | - |
 | 4. Download Page | v14.1 | 0/1 | Not started | - |

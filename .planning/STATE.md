@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.1
 milestone_name: Agent Installer & Setup UX
 status: unknown
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-24T08:37:30.953Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-24T08:44:12.840Z"
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -44,6 +44,7 @@ Plan: 2 of 2
 ## Accumulated Context
 
 | Phase 01 P01 | 3min | 2 tasks | 16 files |
+| Phase 01 P02 | 4min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -59,6 +60,9 @@ Plan: 2 of 2
 - [Phase 01]: Separate setup-ui/ project with own package.json for independent SPA build pipeline
 - [Phase 01]: Express serves pre-built SPA via express.static on port 19191 with 19191-19199 fallback
 - [Phase 01]: updateSetupState()/getSetupState() exported for Plan 02 OAuth integration
+- [Phase 01]: OAuth flow implemented directly in setup-server.ts for non-blocking async; waitForSetup() bridges server and CLI
+- [Phase 01]: CLI defaults to web setup mode; --cli flag for terminal fallback
+- [Phase 01]: Build pipeline: setup-ui builds first, esbuild copies dist/ alongside agent.js
 
 ### Pending Todos
 
@@ -70,6 +74,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T08:37:30.950Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-24T08:44:12.837Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
