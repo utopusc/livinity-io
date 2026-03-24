@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import { hostname, userInfo, homedir } from 'node:os';
-import { createWriteStream, mkdirSync } from 'node:fs';
+import { createWriteStream, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCredentials, readState, readPid, writePid, removePid } from './state.js';
 import { ConnectionManager } from './connection-manager.js';
@@ -59,6 +59,51 @@ export async function setupCommand(options: { cli?: boolean } = {}): Promise<voi
     console.error(`Setup failed: ${message}`);
     process.exit(1);
   }
+}
+
+// ---- macOS LaunchAgent ----
+
+function generateLaunchAgentPlist(agentPath: string): string {
+  const home = homedir();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.livinity.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${agentPath}</string>
+        <string>start</string>
+        <string>--background</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>${home}/.livinity/agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>${home}/.livinity/agent.log</string>
+</dict>
+</plist>`;
+}
+
+function installLaunchAgent(): void {
+  if (process.platform !== 'darwin') return;
+
+  const agentPath = process.execPath;
+  const launchAgentsDir = join(homedir(), 'Library', 'LaunchAgents');
+  const plistPath = join(launchAgentsDir, 'io.livinity.agent.plist');
+
+  // Ensure ~/Library/LaunchAgents/ exists
+  if (!existsSync(launchAgentsDir)) {
+    mkdirSync(launchAgentsDir, { recursive: true });
+  }
+
+  const plistContent = generateLaunchAgentPlist(agentPath);
+  writeFileSync(plistPath, plistContent, 'utf-8');
+  console.log('Installed LaunchAgent for auto-start on login');
 }
 
 // ---- start ----
@@ -169,6 +214,15 @@ export async function startCommand(): Promise<void> {
   }
 
   manager.connect();
+
+  // Install macOS LaunchAgent for auto-start on login (idempotent, non-fatal)
+  if (process.platform === 'darwin') {
+    try {
+      installLaunchAgent();
+    } catch (err) {
+      console.warn('[agent] Failed to install LaunchAgent:', (err as Error).message);
+    }
+  }
 
   // Register signal handlers for graceful shutdown
   const shutdown = () => {
