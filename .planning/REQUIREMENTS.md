@@ -1,96 +1,106 @@
-# Requirements: Livinity v14.1 -- Agent Installer & Setup UX
+# Requirements: Livinity v15.0 -- AI Computer Use
 
 **Defined:** 2026-03-24
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v14.1 Requirements
+## v15.0 Requirements
 
-### Setup -- Web-Based Setup Wizard
+Requirements for AI Computer Use milestone. Each maps to roadmap phases.
 
-- [x] **SETUP-01**: Agent starts a local HTTP server and opens browser to a setup wizard page on first run
-- [x] **SETUP-02**: Setup wizard shows a polished React UI with "Connect Your Account" flow
-- [x] **SETUP-03**: Setup wizard initiates OAuth device flow, displays the code, and polls for approval
-- [x] **SETUP-04**: After approval, setup wizard shows success state with device name and "Connected!" confirmation
-- [x] **SETUP-05**: Setup wizard auto-closes after successful setup, agent continues running in background
+### Mouse Automation
 
-### Installer -- Windows
+- [ ] **MOUSE-01**: AI can click at specific screen coordinates (left click)
+- [ ] **MOUSE-02**: AI can double-click at specific screen coordinates
+- [ ] **MOUSE-03**: AI can right-click at specific screen coordinates
+- [ ] **MOUSE-04**: AI can move the mouse cursor to specific coordinates
+- [ ] **MOUSE-05**: AI can drag from one coordinate to another (drag and drop)
+- [ ] **MOUSE-06**: AI can scroll up/down at current position or specific coordinates
 
-- [x] **WIN-01**: Windows .exe installer built with Inno Setup packages the SEA binary
-- [x] **WIN-02**: Installer creates Start Menu shortcut and optional Desktop shortcut
-- [x] **WIN-03**: Installer registers agent for auto-start on Windows boot (Registry Run key or Task Scheduler)
-- [x] **WIN-04**: Installer includes uninstaller that removes files, shortcuts, and auto-start entry
+### Keyboard Automation
 
-### Installer -- macOS
+- [ ] **KEY-01**: AI can type arbitrary text strings on the device
+- [ ] **KEY-02**: AI can press individual keys and key combinations (Enter, Tab, Ctrl+C, Alt+F4, etc.)
 
-- [x] **MAC-01**: macOS .dmg created with create-dmg containing the agent .app bundle
-- [x] **MAC-02**: .app bundle includes the SEA binary with proper Info.plist and icon
-- [x] **MAC-03**: Agent registers as LaunchAgent for auto-start on login
+### Screen
 
-### Installer -- Linux
+- [ ] **SCREEN-01**: AI can query screen resolution and display configuration
+- [ ] **SCREEN-02**: Screenshot tool returns coordinate metadata for vision analysis (existing tool extended)
 
-- [x] **LIN-01**: Linux .deb package built with fpm containing the SEA binary
-- [x] **LIN-02**: .deb includes systemd service file for auto-start on boot
-- [x] **LIN-03**: systemd service runs agent as the installing user (not root)
+### Computer Use Loop
 
-### Tray -- System Tray Icon
+- [ ] **LOOP-01**: Nexus AI can enter "computer use" mode -- an autonomous screenshot-analyze-action cycle
+- [ ] **LOOP-02**: AI uses multimodal vision to analyze screenshots and determine next action coordinates
+- [ ] **LOOP-03**: Computer use sessions have configurable step limits (max actions per session)
+- [ ] **LOOP-04**: AI can report task completion or failure back to the user with reasoning
+- [ ] **LOOP-05**: User can request computer use tasks via natural language ("Open Chrome and go to YouTube")
 
-- [x] **TRAY-01**: Agent shows a system tray icon when running (Windows/macOS/Linux)
-- [x] **TRAY-02**: Tray icon shows connection status (green = connected, yellow = connecting, red = disconnected)
-- [x] **TRAY-03**: Tray menu includes: Status, Open Setup, Disconnect, Quit
+### Live Monitoring UI
 
-### Download -- livinity.io Download Page
+- [ ] **UI-01**: LivOS shows a live screenshot stream of the device during computer use sessions
+- [ ] **UI-02**: Action overlay shows where AI clicked/typed on the live view (visual indicators)
+- [ ] **UI-03**: Session timeline shows chronological list of AI actions taken (click, type, etc.)
+- [ ] **UI-04**: User can pause, resume, or stop a computer use session from the LivOS UI
 
-- [x] **DL-01**: livinity.io/download page detects user's platform and shows appropriate download button
-- [x] **DL-02**: Page shows download links for all 3 platforms with icons
-- [x] **DL-03**: Page includes brief setup instructions (download, install, connect)
+### Security
 
-## Future Requirements (v15.0+)
+- [ ] **SEC-01**: User must explicitly consent before AI takes mouse/keyboard control of a device
+- [ ] **SEC-02**: Emergency stop hotkey (3x Escape) immediately kills AI control on the device
+- [ ] **SEC-03**: Every mouse/keyboard action is logged to the audit trail with coordinates and timestamps
+- [ ] **SEC-04**: Computer use sessions auto-timeout after configurable inactivity period
 
-- **FUT-01**: Code signing for binaries (Windows Authenticode, macOS codesign, Linux GPG)
-- **FUT-02**: Auto-update mechanism (check for new version, download, replace)
-- **FUT-03**: Tauri rewrite for smaller binary size (~10MB vs ~60MB)
+## Future Requirements (v15.1+)
+
+- **ACU-01**: Per-application permission scoping (only allow AI to control specific apps)
+- **ACU-02**: Visual element recognition (OCR/object detection for UI elements, not just coordinates)
+- **ACU-03**: Multi-monitor awareness and cross-monitor navigation
+- **ACU-04**: Clipboard read/write as AI tool
+- **ACU-05**: Multi-device orchestration (AI controls multiple devices in sequence)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Electron GUI | Too heavy (100MB+) for a background agent |
-| Tauri rewrite | Requires Rust toolchain, defer to v15.0 |
-| Agent settings GUI | Web setup is one-time; ongoing settings via LivOS UI |
-| Homebrew/Chocolatey/APT repo | Direct download first, package managers later |
-| CI/CD cross-platform builds | GitHub Actions matrix deferred -- local builds for now |
+| Full desktop streaming (RDP/VNC) | AI uses screenshot+action, not continuous video -- lower bandwidth, structured control |
+| Browser-only sandbox mode | Full desktop for v15.0; browser sandboxing is v15.1+ |
+| Voice commands during computer use | Separate feature, not needed for core computer use |
+| Mobile device control | Desktop-only for v15.0 (Windows/Mac/Linux) |
+| Self-hosted vision model | Uses Kimi multimodal API; local model is future |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | Phase 1 | Complete |
-| SETUP-02 | Phase 1 | Complete |
-| SETUP-03 | Phase 1 | Complete |
-| SETUP-04 | Phase 1 | Complete |
-| SETUP-05 | Phase 1 | Complete |
-| WIN-01 | Phase 3 | Complete |
-| WIN-02 | Phase 3 | Complete |
-| WIN-03 | Phase 3 | Complete |
-| WIN-04 | Phase 3 | Complete |
-| MAC-01 | Phase 3 | Complete |
-| MAC-02 | Phase 3 | Complete |
-| MAC-03 | Phase 3 | Complete |
-| LIN-01 | Phase 3 | Complete |
-| LIN-02 | Phase 3 | Complete |
-| LIN-03 | Phase 3 | Complete |
-| TRAY-01 | Phase 2 | Complete |
-| TRAY-02 | Phase 2 | Complete |
-| TRAY-03 | Phase 2 | Complete |
-| DL-01 | Phase 4 | Complete |
-| DL-02 | Phase 4 | Complete |
-| DL-03 | Phase 4 | Complete |
+| MOUSE-01 | -- | Pending |
+| MOUSE-02 | -- | Pending |
+| MOUSE-03 | -- | Pending |
+| MOUSE-04 | -- | Pending |
+| MOUSE-05 | -- | Pending |
+| MOUSE-06 | -- | Pending |
+| KEY-01 | -- | Pending |
+| KEY-02 | -- | Pending |
+| SCREEN-01 | -- | Pending |
+| SCREEN-02 | -- | Pending |
+| LOOP-01 | -- | Pending |
+| LOOP-02 | -- | Pending |
+| LOOP-03 | -- | Pending |
+| LOOP-04 | -- | Pending |
+| LOOP-05 | -- | Pending |
+| UI-01 | -- | Pending |
+| UI-02 | -- | Pending |
+| UI-03 | -- | Pending |
+| UI-04 | -- | Pending |
+| SEC-01 | -- | Pending |
+| SEC-02 | -- | Pending |
+| SEC-03 | -- | Pending |
+| SEC-04 | -- | Pending |
 
 **Coverage:**
-- v14.1 requirements: 21 total
-- Mapped to phases: 21
-- Unmapped: 0
+- v15.0 requirements: 23 total
+- Mapped to phases: 0
+- Unmapped: 23
 
 ---
 *Requirements defined: 2026-03-24*
-*Traceability updated: 2026-03-24*
+*Last updated: 2026-03-24 after initial definition*
