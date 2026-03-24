@@ -44,8 +44,8 @@ Requirements for AI Computer Use milestone. Each maps to roadmap phases.
 ### Security
 
 - [ ] **SEC-01**: User must explicitly consent before AI takes mouse/keyboard control of a device
-- [ ] **SEC-02**: Emergency stop hotkey (3x Escape) immediately kills AI control on the device
-- [ ] **SEC-03**: Every mouse/keyboard action is logged to the audit trail with coordinates and timestamps
+- [x] **SEC-02**: Emergency stop hotkey (3x Escape) immediately kills AI control on the device
+- [x] **SEC-03**: Every mouse/keyboard action is logged to the audit trail with coordinates and timestamps
 - [ ] **SEC-04**: Computer use sessions auto-timeout after configurable inactivity period
 
 ## Future Requirements (v15.1+)
@@ -92,8 +92,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-03 | Phase 8 | Complete |
 | UI-04 | Phase 8 | Complete |
 | SEC-01 | Phase 9 | Pending |
-| SEC-02 | Phase 9 | Pending |
-| SEC-03 | Phase 9 | Pending |
+| SEC-02 | Phase 9 | Complete |
+| SEC-03 | Phase 9 | Complete |
 | SEC-04 | Phase 9 | Pending |
 
 **Coverage:**

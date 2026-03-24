@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 08-03-PLAN.md (Stop Control Gap Closure)
-last_updated: "2026-03-24T18:04:33.174Z"
+stopped_at: Completed 09-01-PLAN.md (Agent Security Controls)
+last_updated: "2026-03-24T18:19:05.139Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v15.0 -- AI Computer Use
-**Current focus:** Phase 08 — live-monitoring-ui
+**Current focus:** Phase 09 — security-permissions
 
 ## Current Position
 
-Phase: 9
-Plan: Not started
+Phase: 09 (security-permissions) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: Not started
 | Phase 08 P01 | 4min | 2 tasks | 4 files |
 | Phase 08 P02 | 4min | 2 tasks | 2 files |
 | Phase 08 P03 | 2min | 2 tasks | 2 files |
+| Phase 09 P01 | 2min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -79,6 +80,9 @@ Plan: Not started
 - [Phase 08]: Minimized computer use state shows pulsing green indicator rather than hiding completely
 - [Phase 08]: AbortController with setTimeout fallback replaces AbortSignal.timeout for combined manual+timeout abort
 - [Phase 08]: Pause remains cosmetic (UI badge only) -- documented architectural decision, not a bug
+- [Phase 09]: Emergency stop via tool-call interception rather than global keyboard hook (no new native deps)
+- [Phase 09]: triggerEmergencyStop() exported for external callers like Electron tray app
+- [Phase 09]: Audit enrichment uses spread pattern for optional coordinates/text/key fields
 
 ### Pending Todos
 
@@ -90,6 +94,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T18:00:33.235Z
-Stopped at: Completed 08-03-PLAN.md (Stop Control Gap Closure)
+Last session: 2026-03-24T18:19:05.136Z
+Stopped at: Completed 09-01-PLAN.md (Agent Security Controls)
 Resume file: None
