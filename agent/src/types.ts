@@ -48,6 +48,13 @@ export interface DeviceAuditEvent {
   error?: string;
 }
 
+/** Emergency stop signal from device (SEC-02) */
+export interface DeviceEmergencyStop {
+  type: 'device_emergency_stop';
+  timestamp: string;
+  reason: 'escape_hotkey';
+}
+
 // ---- Relay -> Device ----
 
 /** Device connection confirmed */
@@ -84,7 +91,8 @@ export type DeviceToRelayMessage =
   | DeviceAuth
   | DeviceToolResult
   | DevicePong
-  | DeviceAuditEvent;
+  | DeviceAuditEvent
+  | DeviceEmergencyStop;
 
 /** Messages from relay to device agent */
 export type RelayToDeviceMessage =
