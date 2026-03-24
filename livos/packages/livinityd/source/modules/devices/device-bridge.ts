@@ -91,6 +91,8 @@ interface DeviceBridgeOptions {
 }
 
 const DEVICE_REDIS_PREFIX = 'livos:devices:'
+const AUDIT_REDIS_SUFFIX = ':audit'
+const AUDIT_MAX_ENTRIES = 1000
 const REQUEST_TIMEOUT_MS = 30_000
 
 export class DeviceBridge {
@@ -264,6 +266,75 @@ export class DeviceBridge {
 		clearTimeout(pending.timeout)
 		this.pendingRequests.delete(event.requestId)
 		pending.resolve(event.result)
+	}
+
+	// -- Audit Event Handler (called by TunnelClient on device_audit_event) --
+
+	onAuditEvent(event: {
+		deviceId: string
+		timestamp: string
+		toolName: string
+		params: Record<string, unknown>
+		success: boolean
+		duration: number
+		error?: string
+	}): void {
+		const device = this.connectedDevices.get(event.deviceId)
+		const deviceName = device?.deviceName ?? event.deviceId
+
+		const entry = {
+			timestamp: event.timestamp,
+			toolName: event.toolName,
+			params: event.params,
+			success: event.success,
+			duration: event.duration,
+			deviceId: event.deviceId,
+			deviceName,
+			...(event.error ? {error: event.error} : {}),
+		}
+
+		const key = `${DEVICE_REDIS_PREFIX}${event.deviceId}${AUDIT_REDIS_SUFFIX}`
+		this.redis
+			.rpush(key, JSON.stringify(entry))
+			.then(() => this.redis.ltrim(key, -AUDIT_MAX_ENTRIES, -1))
+			.catch((err) => this.logger.error(`[device-bridge] Failed to store audit event:`, err))
+
+		this.logger.log(`[device-bridge] Audit: ${event.toolName} on ${event.deviceId} success=${event.success}`)
+	}
+
+	async getAuditLog(
+		deviceId: string,
+		offset: number,
+		limit: number,
+	): Promise<
+		Array<{
+			timestamp: string
+			toolName: string
+			params: Record<string, unknown>
+			success: boolean
+			duration: number
+			deviceId: string
+			deviceName: string
+			error?: string
+		}>
+	> {
+		const key = `${DEVICE_REDIS_PREFIX}${deviceId}${AUDIT_REDIS_SUFFIX}`
+		const raw = await this.redis.lrange(key, 0, -1)
+		if (!raw || raw.length === 0) return []
+
+		// Redis list is oldest-first, reverse for newest-first
+		const entries = raw
+			.map((item) => {
+				try {
+					return JSON.parse(item)
+				} catch {
+					return null
+				}
+			})
+			.filter(Boolean)
+			.reverse()
+
+		return entries.slice(offset, offset + limit)
 	}
 
 	// -- Queries --

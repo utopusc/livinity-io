@@ -113,6 +113,17 @@ interface TunnelDeviceToolResult {
 	result: {success: boolean; output: string; error?: string; data?: unknown; images?: Array<{base64: string; mimeType: string}>}
 }
 
+interface TunnelDeviceAuditEvent {
+	type: 'device_audit_event'
+	deviceId: string
+	timestamp: string
+	toolName: string
+	params: Record<string, unknown>
+	success: boolean
+	duration: number
+	error?: string
+}
+
 type RelayToClientMessage =
 	| TunnelRequest
 	| TunnelWsUpgrade
@@ -124,6 +135,7 @@ type RelayToClientMessage =
 	| TunnelDeviceConnected
 	| TunnelDeviceDisconnected
 	| TunnelDeviceToolResult
+	| TunnelDeviceAuditEvent
 
 type BidirectionalMessage = TunnelWsFrame | TunnelWsClose
 
@@ -348,6 +360,11 @@ export default class TunnelClient {
 			case 'device_tool_result':
 				if (this._deviceBridge) {
 					this._deviceBridge.onToolResult(msg)
+				}
+				break
+			case 'device_audit_event':
+				if (this._deviceBridge) {
+					this._deviceBridge.onAuditEvent(msg)
 				}
 				break
 		}
