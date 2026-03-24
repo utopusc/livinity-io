@@ -1,158 +1,95 @@
-# Requirements: Livinity v14.0 -- Remote PC Control Agent
+# Requirements: Livinity v14.1 -- Agent Installer & Setup UX
 
-**Defined:** 2026-03-23
+**Defined:** 2026-03-24
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v14.0 Requirements
+## v14.1 Requirements
 
-### Agent -- Remote Agent Binary
+### Setup -- Web-Based Setup Wizard
 
-- [x] **AGENT-01**: User can download a single binary for their platform (Windows/Mac/Linux)
-- [x] **AGENT-02**: Agent runs as background daemon with start/stop/status CLI commands
-- [x] **AGENT-03**: Agent auto-reconnects with exponential backoff on connection loss
-- [x] **AGENT-04**: Agent reports its available tools to the relay on connect
+- [ ] **SETUP-01**: Agent starts a local HTTP server and opens browser to a setup wizard page on first run
+- [ ] **SETUP-02**: Setup wizard shows a polished React UI with "Connect Your Account" flow
+- [ ] **SETUP-03**: Setup wizard initiates OAuth device flow, displays the code, and polls for approval
+- [ ] **SETUP-04**: After approval, setup wizard shows success state with device name and "Connected!" confirmation
+- [ ] **SETUP-05**: Setup wizard auto-closes after successful setup, agent continues running in background
 
-### Auth -- Device Authentication
+### Installer -- Windows
 
-- [x] **AUTH-01**: Agent performs OAuth Device Authorization Grant via `setup` command
-- [x] **AUTH-02**: User approves device at livinity.io/device by entering the displayed code
-- [x] **AUTH-03**: Agent stores device token securely and auto-refreshes on expiry
+- [ ] **WIN-01**: Windows .exe installer built with Inno Setup packages the SEA binary
+- [ ] **WIN-02**: Installer creates Start Menu shortcut and optional Desktop shortcut
+- [ ] **WIN-03**: Installer registers agent for auto-start on Windows boot (Registry Run key or Task Scheduler)
+- [ ] **WIN-04**: Installer includes uninstaller that removes files, shortcuts, and auto-start entry
 
-### Platform -- livinity.io Device Endpoints
+### Installer -- macOS
 
-- [x] **PLAT-01**: livinity.io exposes POST /api/device/register (generates device_code + user_code)
-- [x] **PLAT-02**: livinity.io exposes POST /api/device/token (agent polls for approval)
-- [x] **PLAT-03**: livinity.io has /device approval page where user enters code
+- [ ] **MAC-01**: macOS .dmg created with create-dmg containing the agent .app bundle
+- [ ] **MAC-02**: .app bundle includes the SEA binary with proper Info.plist and icon
+- [ ] **MAC-03**: Agent registers as LaunchAgent for auto-start on login
 
-### Relay -- Relay Server Extension
+### Installer -- Linux
 
-- [x] **RELAY-01**: Relay accepts device connections at /device/connect WebSocket endpoint
-- [x] **RELAY-02**: Relay maintains DeviceRegistry (user -> devices mapping)
-- [x] **RELAY-03**: Relay routes tool_call/tool_result messages between LivOS tunnel and device
-- [x] **RELAY-04**: Relay notifies LivOS when devices connect/disconnect
+- [ ] **LIN-01**: Linux .deb package built with fpm containing the SEA binary
+- [ ] **LIN-02**: .deb includes systemd service file for auto-start on boot
+- [ ] **LIN-03**: systemd service runs agent as the installing user (not root)
 
-### Shell -- Remote Shell Execution
+### Tray -- System Tray Icon
 
-- [x] **SHELL-01**: AI can execute shell commands on the remote PC
-- [x] **SHELL-02**: Agent uses the correct shell per OS (PowerShell/bash/zsh)
-- [x] **SHELL-03**: Command output returns as structured JSON result
+- [ ] **TRAY-01**: Agent shows a system tray icon when running (Windows/macOS/Linux)
+- [ ] **TRAY-02**: Tray icon shows connection status (green = connected, yellow = connecting, red = disconnected)
+- [ ] **TRAY-03**: Tray menu includes: Status, Open Setup, Disconnect, Quit
 
-### Files -- Remote File Operations
+### Download -- livinity.io Download Page
 
-- [x] **FILES-01**: AI can list directory contents with metadata (name, size, type, modified date)
-- [x] **FILES-02**: AI can read file contents from the remote PC
-- [x] **FILES-03**: AI can write/create files on the remote PC
-- [x] **FILES-04**: AI can delete and rename files on the remote PC
+- [ ] **DL-01**: livinity.io/download page detects user's platform and shows appropriate download button
+- [ ] **DL-02**: Page shows download links for all 3 platforms with icons
+- [ ] **DL-03**: Page includes brief setup instructions (download, install, connect)
 
-### Proc -- Process & System Info
+## Future Requirements (v15.0+)
 
-- [x] **PROC-01**: AI can list running processes with PID, name, CPU%, memory
-- [x] **PROC-02**: AI can collect system info (OS, CPU, RAM, disk, hostname, IPs, uptime)
-
-### Screen -- Screenshot Capture
-
-- [x] **SCREEN-01**: AI can capture on-demand screenshot of the remote PC display
-
-### Tools -- AI Tool Integration
-
-- [x] **TOOLS-01**: Connected device tools dynamically register in Nexus ToolRegistry as proxy tools
-- [x] **TOOLS-02**: Tools unregister when device disconnects
-- [x] **TOOLS-03**: Tool names prefixed with `device_{deviceId}_` to avoid collisions
-
-### UI -- My Devices Panel
-
-- [x] **UI-01**: LivOS shows "My Devices" panel listing connected devices
-- [x] **UI-02**: Each device shows name, OS, platform icon, connection status, last seen
-- [x] **UI-03**: User can rename or remove a device
-
-### Audit -- Audit Logging
-
-- [x] **AUDIT-01**: Every remote tool execution logged with timestamp, user, tool, parameters, result
-- [x] **AUDIT-02**: Audit log viewable per device from LivOS UI
-
-### Security
-
-- [x] **SEC-01**: All agent-relay transport uses WSS (TLS 1.3)
-- [x] **SEC-02**: Device tokens are JWTs with 24h expiry and auto-refresh
-- [x] **SEC-03**: Agent runs as logged-in user (not root/SYSTEM) by default
-- [x] **SEC-04**: Dangerous command blocklist enforced on agent side
-
-## Future Requirements (v14.1)
-
-### Permissions
-
-- **PERM-01**: Per-device permission matrix (shell scope, file path restrictions)
-- **PERM-02**: User can configure what AI can do per device from UI
-
-### Enhanced Capabilities
-
-- **ENH-01**: Clipboard sync as AI-readable tool
-- **ENH-02**: Process kill/terminate capability
-- **ENH-03**: Service management (systemd/launchctl/sc)
-- **ENH-04**: File search (find by name/content on remote PC)
-- **ENH-05**: Multi-monitor screenshot selection
-- **ENH-06**: Agent auto-update mechanism
-- **ENH-07**: Agent tray icon / config UI
+- **FUT-01**: Code signing for binaries (Windows Authenticode, macOS codesign, Linux GPG)
+- **FUT-02**: Auto-update mechanism (check for new version, download, replace)
+- **FUT-03**: Tauri rewrite for smaller binary size (~10MB vs ~60MB)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Full desktop streaming (RDP/VNC) | Different product -- 90% of RustDesk is video streaming. AI doesn't need live video |
-| Keyboard/mouse takeover | AI executes structured commands, not GUI interaction |
-| Multi-device orchestration | v15+ after single-device is proven |
-| Wake-on-LAN | Requires LAN peer, niche use case |
-| Browser automation on remote PC | Enormous attack surface, credential theft risk |
-| Real-time screen recording | Privacy invasion, massive storage, legal issues |
-| Mobile agent (Android/iOS) | Fundamentally different capabilities, separate product |
-| Application install abstraction | Shell IS the abstraction -- AI knows which package manager per OS |
+| Electron GUI | Too heavy (100MB+) for a background agent |
+| Tauri rewrite | Requires Rust toolchain, defer to v15.0 |
+| Agent settings GUI | Web setup is one-time; ongoing settings via LivOS UI |
+| Homebrew/Chocolatey/APT repo | Direct download first, package managers later |
+| CI/CD cross-platform builds | GitHub Actions matrix deferred -- local builds for now |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAT-01 | Phase 47 | Complete |
-| PLAT-02 | Phase 47 | Complete |
-| PLAT-03 | Phase 47 | Complete |
-| RELAY-01 | Phase 47 | Complete |
-| RELAY-02 | Phase 47 | Complete |
-| AGENT-01 | Phase 48 | Complete |
-| AGENT-02 | Phase 48 | Complete |
-| AGENT-03 | Phase 48 | Complete |
-| AGENT-04 | Phase 48 | Complete |
-| AUTH-01 | Phase 48 | Complete |
-| AUTH-02 | Phase 48 | Complete |
-| AUTH-03 | Phase 48 | Complete |
-| SEC-01 | Phase 48 | Complete |
-| SEC-02 | Phase 48 | Complete |
-| RELAY-03 | Phase 49 | Complete |
-| RELAY-04 | Phase 49 | Complete |
-| TOOLS-01 | Phase 49 | Complete |
-| TOOLS-02 | Phase 49 | Complete |
-| TOOLS-03 | Phase 49 | Complete |
-| SHELL-01 | Phase 50 | Complete |
-| SHELL-02 | Phase 50 | Complete |
-| SHELL-03 | Phase 50 | Complete |
-| FILES-01 | Phase 50 | Complete |
-| FILES-02 | Phase 50 | Complete |
-| FILES-03 | Phase 50 | Complete |
-| FILES-04 | Phase 50 | Complete |
-| PROC-01 | Phase 51 | Complete |
-| PROC-02 | Phase 51 | Complete |
-| SCREEN-01 | Phase 51 | Complete |
-| UI-01 | Phase 52 | Complete |
-| UI-02 | Phase 52 | Complete |
-| UI-03 | Phase 52 | Complete |
-| AUDIT-01 | Phase 53 | Complete |
-| AUDIT-02 | Phase 53 | Complete |
-| SEC-03 | Phase 53 | Complete |
-| SEC-04 | Phase 53 | Complete |
+| SETUP-01 | TBD | Pending |
+| SETUP-02 | TBD | Pending |
+| SETUP-03 | TBD | Pending |
+| SETUP-04 | TBD | Pending |
+| SETUP-05 | TBD | Pending |
+| WIN-01 | TBD | Pending |
+| WIN-02 | TBD | Pending |
+| WIN-03 | TBD | Pending |
+| WIN-04 | TBD | Pending |
+| MAC-01 | TBD | Pending |
+| MAC-02 | TBD | Pending |
+| MAC-03 | TBD | Pending |
+| LIN-01 | TBD | Pending |
+| LIN-02 | TBD | Pending |
+| LIN-03 | TBD | Pending |
+| TRAY-01 | TBD | Pending |
+| TRAY-02 | TBD | Pending |
+| TRAY-03 | TBD | Pending |
+| DL-01 | TBD | Pending |
+| DL-02 | TBD | Pending |
+| DL-03 | TBD | Pending |
 
 **Coverage:**
-- v14.0 requirements: 36 total
-- Mapped to phases: 36
-- Unmapped: 0
+- v14.1 requirements: 21 total
+- Mapped to phases: 0
+- Unmapped: 21
 
 ---
-*Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after roadmap creation*
+*Requirements defined: 2026-03-24*
