@@ -187,11 +187,11 @@ Plans:
   1. User says "what's eating CPU on my PC" and the AI returns a process list with PID, name, CPU%, and memory usage
   2. AI can collect system info including OS version, CPU model, RAM total/used, disk usage, hostname, and IP addresses
   3. User says "take a screenshot of my desktop" and the AI captures and displays the remote PC's screen
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 51-01: Agent process + system info tools (systeminformation, structured output)
-- [ ] 51-02: Agent screenshot tool (node-screenshots, JPEG compression, base64 transport)
+- [ ] 51-01-PLAN.md -- Processes + system info tools (systeminformation, structured output, DeviceBridge schemas)
+- [ ] 51-02-PLAN.md -- Screenshot tool (node-screenshots, JPEG compression, base64 transport, graceful fallback)
 
 ### Phase 52: My Devices UI
 **Goal**: Users can see all their connected devices, their status, and manage them from the LivOS interface
