@@ -3,6 +3,7 @@ import { hostname, userInfo } from 'node:os';
 import { readCredentials, readState, readPid, writePid, removePid } from './state.js';
 import { ConnectionManager } from './connection-manager.js';
 import { deviceFlowSetup, isTokenExpired } from './auth.js';
+import { startTray, updateTrayStatus, killTray } from './tray.js';
 
 // ---- setup ----
 
@@ -108,13 +109,48 @@ export async function startCommand(): Promise<void> {
   writePid(process.pid);
 
   // Create connection manager and connect
-  const manager = new ConnectionManager({ credentials });
+  const manager = new ConnectionManager({
+    credentials,
+    onStatusChange: (status) => updateTrayStatus(status),
+  });
+
+  // Initialize system tray (non-blocking -- continues even if tray fails)
+  try {
+    await startTray({
+      onDisconnect: () => {
+        console.log('[agent] Disconnect requested from tray');
+        manager.disconnect();
+      },
+      onQuit: () => {
+        console.log('[agent] Quit requested from tray');
+        manager.disconnect();
+        killTray();
+        process.exit(0);
+      },
+      onOpenSetup: async () => {
+        console.log('[agent] Opening setup wizard from tray');
+        try {
+          const { startSetupServer } = await import('./setup-server.js');
+          const server = await startSetupServer();
+          console.log(`Setup wizard opened at http://localhost:${server.port}`);
+          // Don't await waitForSetup -- let it run in background
+        } catch (err) {
+          console.error('[agent] Failed to open setup:', err);
+        }
+      },
+    });
+  } catch (err) {
+    // Tray failure is non-fatal -- agent works without tray (headless servers, SSH)
+    console.warn('[agent] System tray not available:', (err as Error).message);
+  }
+
   manager.connect();
 
   // Register signal handlers for graceful shutdown
   const shutdown = () => {
     console.log('\n[agent] Shutting down...');
     manager.disconnect();
+    killTray();
     process.exit(0);
   };
 

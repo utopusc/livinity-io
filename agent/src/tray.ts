@@ -1,5 +1,18 @@
-import SysTray from 'systray2';
+import SysTrayDefault from 'systray2';
+import type { MenuItem, Menu, ClickEvent, Conf } from 'systray2';
 import { deflateSync } from 'node:zlib';
+
+// systray2 is a CJS module with `export default class SysTray`.
+// In ESM context via esbuild banner createRequire, the default import may be the module namespace.
+// We cast through unknown to get a usable constructor.
+const SysTray = SysTrayDefault as unknown as {
+  new (conf: Conf): {
+    ready(): Promise<void>;
+    onClick(listener: (action: ClickEvent) => void): Promise<unknown>;
+    sendAction(action: unknown): Promise<unknown>;
+    kill(exitNode?: boolean): Promise<void>;
+  };
+};
 
 // ---- Types ----
 
@@ -114,9 +127,9 @@ const ICON_DISCONNECTED = generateColoredIcon(0xef, 0x44, 0x44); // Red #ef4444
 
 // ---- Module State ----
 
-let systrayInstance: SysTray | null = null;
-let statusItem: { title: string; tooltip: string; enabled: boolean; checked: boolean; hidden?: boolean } | null = null;
-let currentMenu: Record<string, unknown> | null = null;
+let systrayInstance: InstanceType<typeof SysTray> | null = null;  // eslint-disable-line
+let statusItem: MenuItem | null = null;
+let currentMenu: Menu | null = null;
 
 // ---- Status Mapping ----
 
@@ -184,21 +197,23 @@ export async function startTray(callbacks: TrayCallbacks): Promise<void> {
     checked: false,
   };
 
-  const menu = {
+  const separator: MenuItem = { title: '<SEPARATOR>', tooltip: '', enabled: true };
+
+  const menu: Menu = {
     icon: ICON_CONNECTED,
     title: '',
     tooltip: 'Livinity Agent \u2014 Connected',
     items: [
       statusItem,
-      SysTray.separator,
+      separator,
       openSetupItem,
       disconnectItem,
-      SysTray.separator,
+      { ...separator },
       quitItem,
     ],
   };
 
-  currentMenu = menu as unknown as Record<string, unknown>;
+  currentMenu = menu;
 
   systrayInstance = new SysTray({ menu, debug: false, copyDir: false });
 
@@ -236,11 +251,11 @@ export function updateTrayStatus(status: TrayStatus): void {
   });
 
   // Update tray icon and tooltip
-  (currentMenu as Record<string, unknown>).icon = newIcon;
-  (currentMenu as Record<string, unknown>).tooltip = newTooltip;
+  currentMenu.icon = newIcon;
+  currentMenu.tooltip = newTooltip;
   systrayInstance.sendAction({
     type: 'update-menu',
-    item: currentMenu,
+    menu: currentMenu,
   });
 }
 
