@@ -625,6 +625,24 @@ class Server {
 			}),
 		}))
 
+		// Internal endpoint for Nexus proxy tool callbacks (device tool execution)
+		this.app.post('/internal/device-tool-execute', express.json(), async (req, res) => {
+			try {
+				const {tool, params} = req.body
+				if (!tool) {
+					return res.status(400).json({success: false, output: '', error: 'Missing tool name'})
+				}
+				const bridge = this.livinityd.deviceBridge
+				if (!bridge) {
+					return res.status(503).json({success: false, output: '', error: 'DeviceBridge not initialized'})
+				}
+				const result = await bridge.executeOnDevice(tool, params)
+				res.json(result)
+			} catch (err: any) {
+				res.json({success: false, output: '', error: err.message})
+			}
+		})
+
 		// Handle tRPC routes
 		this.app.use('/trpc', trpcExpressHandler)
 		this.mountWebSocketServer('/trpc', (wss) => {

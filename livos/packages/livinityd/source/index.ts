@@ -19,6 +19,7 @@ import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
 import AiModule from './modules/ai/index.js'
 import TunnelClient from './modules/platform/tunnel-client.js'
+import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
@@ -110,6 +111,7 @@ export default class Livinityd {
 	backups: Backups
 	ai: AiModule
 	tunnelClient: TunnelClient
+	deviceBridge!: DeviceBridge
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -209,6 +211,14 @@ export default class Livinityd {
 		// Initialize TunnelClient after ai.start() creates the Redis connection
 		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
 		await this.tunnelClient.start()
+
+		// Initialize DeviceBridge for remote device proxy tools
+		this.deviceBridge = new DeviceBridge({
+			redis: this.ai.redis,
+			sendTunnelMessage: (msg) => this.tunnelClient.sendDeviceMessage(msg),
+			logger: this.logger.createChildLogger('devices'),
+		})
+		this.tunnelClient.setDeviceBridge(this.deviceBridge)
 
 		// Start backups last because it depends on files
 		this.backups.start()

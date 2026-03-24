@@ -12,6 +12,7 @@ import { requireApiKey, extractUserIdFromRequest } from './auth.js';
 import { Daemon } from './daemon.js';
 import { Brain } from './brain.js';
 import { ToolRegistry } from './tool-registry.js';
+import type { Tool, ToolResult } from './types.js';
 import { AgentLoop } from './agent.js';
 import type { AgentEvent } from './agent.js';
 import { KimiAgentRunner } from './kimi-agent-runner.js';
@@ -696,6 +697,43 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     } catch (err) {
       res.status(400).json({ error: formatErrorMessage(err) });
     }
+  });
+
+  // ── External Tool Registration (for device proxy tools) ────────
+
+  app.post('/api/tools/register', async (req, res) => {
+    try {
+      const { name, description, parameters, callbackUrl } = req.body;
+      if (!name || !description || !callbackUrl) {
+        return res.status(400).json({ error: 'name, description, and callbackUrl are required' });
+      }
+      // Create a tool whose execute function POSTs to callbackUrl
+      const tool: Tool = {
+        name,
+        description,
+        parameters: parameters || [],
+        execute: async (params) => {
+          const resp = await fetch(callbackUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool: name, params }),
+          });
+          if (!resp.ok) {
+            return { success: false, output: '', error: `Callback failed: ${resp.status}` };
+          }
+          return await resp.json() as ToolResult;
+        },
+      };
+      toolRegistry.register(tool);
+      res.json({ registered: true, name });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/tools/:name', async (req, res) => {
+    const existed = toolRegistry.unregister(req.params.name);
+    res.json({ unregistered: existed, name: req.params.name });
   });
 
   // ── Nexus Config API ────────────────────────────────────────────
