@@ -157,11 +157,11 @@ Plans:
   3. LivOS can send a tool_call message through the relay to a specific device and receive the tool_result back
   4. Connected device tools appear in the Nexus ToolRegistry with `device_{deviceId}_` prefix (e.g., `device_desktop-pc_shell`)
   5. The AI can select and invoke a device proxy tool and receive the result as part of the normal agent loop
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 49-01: Relay device message routing (tool_call_forward / tool_result_forward between LivOS tunnel and device)
-- [ ] 49-02: DeviceBridge module in livinityd (proxy tool registration, executeOnDevice, event handling)
+- [ ] 49-01-PLAN.md -- Relay message routing: tunnel protocol types for device events, forward tool_call/tool_result between LivOS tunnel and device WS
+- [ ] 49-02-PLAN.md -- DeviceBridge module in livinityd, Nexus proxy tool registration API, tunnel-client event handlers, execution callback
 
 ### Phase 50: Agent Core Tools -- Shell + Files
 **Goal**: The AI can execute shell commands and perform file operations on the user's remote PC via natural language
