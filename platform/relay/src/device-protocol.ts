@@ -66,6 +66,18 @@ export interface DevicePing {
   ts: number;
 }
 
+// ---- Internal relay routing types ----
+
+/** Internal relay type -- wraps DeviceToolCall with routing metadata (not sent over wire to device) */
+export interface DeviceToolCallForward {
+  userId: string;
+  requestId: string;
+  deviceId: string;
+  tool: string;
+  params: Record<string, unknown>;
+  timeout: number;
+}
+
 // ---- Union types ----
 
 /** Messages from device agent to relay */

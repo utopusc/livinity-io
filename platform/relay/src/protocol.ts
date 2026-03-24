@@ -1,7 +1,7 @@
 /**
  * Tunnel Protocol Message Types
  *
- * Defines all 14 message types used between the relay server and tunnel clients.
+ * Defines all 18 message types used between the relay server and tunnel clients.
  * JSON+base64 envelope protocol — request/response bodies are base64-encoded.
  *
  * Message flow:
@@ -77,6 +77,36 @@ export interface TunnelQuotaExceeded {
   resetsAt: string;
 }
 
+/** Sent to LivOS when a device agent connects to the relay */
+export interface TunnelDeviceConnected {
+  type: 'device_connected';
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  /** Tool names the device supports */
+  tools: string[];
+}
+
+/** Sent to LivOS when a device agent disconnects from the relay */
+export interface TunnelDeviceDisconnected {
+  type: 'device_disconnected';
+  deviceId: string;
+}
+
+/** Device tool result forwarded from relay to LivOS */
+export interface TunnelDeviceToolResult {
+  type: 'device_tool_result';
+  requestId: string;
+  deviceId: string;
+  result: {
+    success: boolean;
+    output: string;
+    error?: string;
+    data?: unknown;
+    images?: Array<{ base64: string; mimeType: string }>;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Client → Relay messages (5 types)
 // ---------------------------------------------------------------------------
@@ -125,6 +155,17 @@ export interface TunnelPong {
   ts: number;
 }
 
+/** LivOS sends this to invoke a tool on a remote device */
+export interface TunnelDeviceToolCall {
+  type: 'device_tool_call';
+  requestId: string;
+  deviceId: string;
+  tool: string;
+  params: Record<string, unknown>;
+  /** Max execution time in ms, defaults to 30000 */
+  timeout?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Bidirectional messages (2 types)
 // ---------------------------------------------------------------------------
@@ -163,7 +204,10 @@ export type RelayToClientMessage =
   | TunnelRelayShutdown
   | TunnelConnected
   | TunnelAuthError
-  | TunnelQuotaExceeded;
+  | TunnelQuotaExceeded
+  | TunnelDeviceConnected
+  | TunnelDeviceDisconnected
+  | TunnelDeviceToolResult;
 
 /** All messages sent from the tunnel client to the relay */
 export type ClientToRelayMessage =
@@ -171,7 +215,8 @@ export type ClientToRelayMessage =
   | TunnelResponse
   | TunnelWsReady
   | TunnelWsError
-  | TunnelPong;
+  | TunnelPong
+  | TunnelDeviceToolCall;
 
 /** Messages that can flow in either direction */
 export type BidirectionalMessage =
@@ -207,4 +252,8 @@ export type MessageTypeMap = {
   'pong': TunnelPong;
   'ws_frame': TunnelWsFrame;
   'ws_close': TunnelWsClose;
+  'device_connected': TunnelDeviceConnected;
+  'device_disconnected': TunnelDeviceDisconnected;
+  'device_tool_call': TunnelDeviceToolCall;
+  'device_tool_result': TunnelDeviceToolResult;
 };
