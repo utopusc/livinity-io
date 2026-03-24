@@ -57,6 +57,7 @@ class ReconnectionManager {
 
 export interface ConnectionManagerOptions {
   credentials: CredentialsData;
+  onStatusChange?: (status: 'connected' | 'connecting' | 'disconnected' | 'error') => void;
 }
 
 export class ConnectionManager {
@@ -68,9 +69,11 @@ export class ConnectionManager {
   private destroyed = false;
 
   private credentials: CredentialsData;
+  private onStatusChange?: (status: 'connected' | 'connecting' | 'disconnected' | 'error') => void;
 
   constructor(options: ConnectionManagerOptions) {
     this.credentials = options.credentials;
+    this.onStatusChange = options.onStatusChange;
   }
 
   // ---- Lifecycle ----
@@ -82,6 +85,7 @@ export class ConnectionManager {
     if (isTokenExpired(this.credentials.deviceToken)) {
       console.log('[agent] Device token has expired. Cannot reconnect. Run `livinity-agent setup` to re-authenticate.');
       this.status = 'error';
+      this.onStatusChange?.('error');
       writeState({
         status: 'token_expired',
         connectedAt: undefined,
@@ -92,6 +96,7 @@ export class ConnectionManager {
     }
 
     this.status = 'connecting';
+    this.onStatusChange?.('connecting');
     const wsUrl = `${this.credentials.relayUrl}/device/connect`;
     console.log(`[agent] Connecting to ${wsUrl}`);
 
@@ -130,6 +135,7 @@ export class ConnectionManager {
       console.log(`[agent] Connection closed (was ${this.status})`);
       if (this.status === 'connected' || this.status === 'connecting') {
         this.status = 'disconnected';
+        this.onStatusChange?.('disconnected');
         writeState({
           status: 'disconnected',
           relayUrl: this.credentials.relayUrl,
@@ -162,6 +168,7 @@ export class ConnectionManager {
     }
 
     this.status = 'disconnected';
+    this.onStatusChange?.('disconnected');
     this.sessionId = null;
 
     writeState({
@@ -185,6 +192,7 @@ export class ConnectionManager {
       case 'device_connected':
         this.sessionId = msg.sessionId;
         this.status = 'connected';
+        this.onStatusChange?.('connected');
         this.reconnection.reset();
         writeState({
           status: 'connected',
@@ -197,6 +205,7 @@ export class ConnectionManager {
 
       case 'device_auth_error':
         this.status = 'error';
+        this.onStatusChange?.('error');
         console.error(`[agent] Authentication error: ${msg.error}`);
         // Do NOT reconnect on auth errors — token is invalid
         if (this.ws) {
