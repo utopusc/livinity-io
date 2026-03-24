@@ -108,7 +108,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **Phase 47: Platform OAuth + Relay Device Infrastructure** - livinity.io device endpoints, relay DeviceRegistry, /device/connect WebSocket (completed 2026-03-24)
 - [x] **Phase 48: Agent Binary + Authentication** - Node.js SEA agent scaffold, OAuth device flow, connection manager, heartbeat (completed 2026-03-24)
 - [x] **Phase 49: Relay Message Routing + DeviceBridge** - Tool call forwarding through relay, proxy tool registration in Nexus ToolRegistry (completed 2026-03-24)
-- [ ] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations
+- [x] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations (completed 2026-03-24)
 - [ ] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection
 - [ ] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove
 - [ ] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user
@@ -177,7 +177,7 @@ Plans:
 
 Plans:
 - [x] 50-01: Agent shell tool (cross-platform shell detection, child_process execution, structured JSON output)
-- [ ] 50-02: Agent files tool (list, read, write, delete, rename with metadata)
+- [x] 50-02: Agent files tool (list, read, write, delete, rename with metadata)
 
 ### Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info
 **Goal**: The AI can inspect running processes, capture screenshots, and collect system information from the remote PC
@@ -253,7 +253,7 @@ Plans:
 | 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 48. Agent Binary + Authentication | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 50. Agent Core Tools -- Shell + Files | v14.0 | 1/2 | In Progress|  |
+| 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete   | 2026-03-24 |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |
 | 52. My Devices UI | v14.0 | 0/2 | Not started | - |
 | 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |

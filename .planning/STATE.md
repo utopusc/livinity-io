@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.0
 milestone_name: Remote PC Control Agent
 status: unknown
-stopped_at: Completed 50-01-PLAN.md
-last_updated: "2026-03-24T06:22:33.857Z"
+stopped_at: Completed 50-02-PLAN.md
+last_updated: "2026-03-24T06:26:27.358Z"
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -45,6 +45,7 @@ Plan: 2 of 2
 | Phase 49 P01 | 3min | 2 tasks | 4 files |
 | Phase 49 P02 | 3min | 1 tasks | 5 files |
 | Phase 50-01 P01 | 2min | 1 tasks | 3 files |
+| Phase 50 P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Plan: 2 of 2
 - [Phase 50]: Non-zero exit codes are valid results (success: true) -- only spawn failures are errors
 - [Phase 50]: Output truncated at 100KB per stream to protect WebSocket transport
 - [Phase 50]: Each tool is a separate file in agent/src/tools/ exporting a single async function
+- [Phase 50]: safePath resolves paths relative to homedir, rejects .. traversal via relative() comparison
+- [Phase 50]: File read hard-limited to 1MB; files_delete is non-recursive (single file only)
 
 ### Pending Todos
 
@@ -89,6 +92,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T06:22:33.854Z
-Stopped at: Completed 50-01-PLAN.md
+Last session: 2026-03-24T06:26:27.355Z
+Stopped at: Completed 50-02-PLAN.md
 Resume file: None

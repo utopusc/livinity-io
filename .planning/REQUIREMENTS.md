@@ -39,10 +39,10 @@
 
 ### Files -- Remote File Operations
 
-- [ ] **FILES-01**: AI can list directory contents with metadata (name, size, type, modified date)
-- [ ] **FILES-02**: AI can read file contents from the remote PC
-- [ ] **FILES-03**: AI can write/create files on the remote PC
-- [ ] **FILES-04**: AI can delete and rename files on the remote PC
+- [x] **FILES-01**: AI can list directory contents with metadata (name, size, type, modified date)
+- [x] **FILES-02**: AI can read file contents from the remote PC
+- [x] **FILES-03**: AI can write/create files on the remote PC
+- [x] **FILES-04**: AI can delete and rename files on the remote PC
 
 ### Proc -- Process & System Info
 
@@ -133,10 +133,10 @@
 | SHELL-01 | Phase 50 | Complete |
 | SHELL-02 | Phase 50 | Complete |
 | SHELL-03 | Phase 50 | Complete |
-| FILES-01 | Phase 50 | Pending |
-| FILES-02 | Phase 50 | Pending |
-| FILES-03 | Phase 50 | Pending |
-| FILES-04 | Phase 50 | Pending |
+| FILES-01 | Phase 50 | Complete |
+| FILES-02 | Phase 50 | Complete |
+| FILES-03 | Phase 50 | Complete |
+| FILES-04 | Phase 50 | Complete |
 | PROC-01 | Phase 51 | Pending |
 | PROC-02 | Phase 51 | Pending |
 | SCREEN-01 | Phase 51 | Pending |
