@@ -122,7 +122,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 **Milestone Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser. Users double-click to install, the agent opens a beautiful setup page for OAuth, then runs silently in the background with auto-start on boot.
 
 - [x] **Phase 1: Web Setup Wizard** - Local HTTP server serves a React UI for OAuth device flow, replacing CLI setup (completed 2026-03-24)
-- [ ] **Phase 2: System Tray Icon** - Cross-platform tray icon with connection status and context menu
+- [x] **Phase 2: System Tray Icon** - Cross-platform tray icon with connection status and context menu (completed 2026-03-24)
 - [ ] **Phase 3: Platform Installers** - Native installers for Windows (.exe), macOS (.dmg), and Linux (.deb) with auto-start
 - [ ] **Phase 4: Download Page** - livinity.io/download with platform detection and setup instructions
 
@@ -194,6 +194,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. Web Setup Wizard | v14.1 | 2/2 | Complete    | 2026-03-24 |
-| 2. System Tray Icon | v14.1 | 0/1 | Not started | - |
+| 2. System Tray Icon | v14.1 | 0/1 | Complete    | 2026-03-24 |
 | 3. Platform Installers | v14.1 | 0/3 | Not started | - |
 | 4. Download Page | v14.1 | 0/1 | Not started | - |
