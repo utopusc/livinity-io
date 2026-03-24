@@ -84,4 +84,7 @@ export const httpOnlyPaths = [
 	'ai.pauseComputerUse',
 	'ai.resumeComputerUse',
 	'ai.stopComputerUse',
+	// Computer use consent -- use HTTP for reliability
+	'ai.grantConsent',
+	'ai.denyConsent',
 ] as const

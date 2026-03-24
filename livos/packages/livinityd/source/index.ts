@@ -217,6 +217,9 @@ export default class Livinityd {
 			redis: this.ai.redis,
 			sendTunnelMessage: (msg) => this.tunnelClient.sendDeviceMessage(msg),
 			logger: this.logger.createChildLogger('devices'),
+			onEmergencyStop: (deviceId: string) => {
+				this.ai.abortDeviceSessions(deviceId)
+			},
 		})
 		this.tunnelClient.setDeviceBridge(this.deviceBridge)
 
