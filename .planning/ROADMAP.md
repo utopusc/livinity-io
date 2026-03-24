@@ -181,7 +181,7 @@ Plans:
   1. Visiting livinity.io/download auto-detects the user's OS and highlights the matching download button
   2. Download links for all three platforms (Windows, macOS, Linux) are visible with platform icons
   3. The page includes brief setup instructions covering download, install, and connect steps
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 04-01: Download page with platform detection, download links, and setup instructions
