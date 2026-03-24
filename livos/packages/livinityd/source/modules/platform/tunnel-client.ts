@@ -92,6 +92,27 @@ interface TunnelWsClose {
 	reason?: string
 }
 
+// Device event messages (relay -> client)
+interface TunnelDeviceConnected {
+	type: 'device_connected'
+	deviceId: string
+	deviceName: string
+	platform: string
+	tools: string[]
+}
+
+interface TunnelDeviceDisconnected {
+	type: 'device_disconnected'
+	deviceId: string
+}
+
+interface TunnelDeviceToolResult {
+	type: 'device_tool_result'
+	requestId: string
+	deviceId: string
+	result: {success: boolean; output: string; error?: string; data?: unknown; images?: Array<{base64: string; mimeType: string}>}
+}
+
 type RelayToClientMessage =
 	| TunnelRequest
 	| TunnelWsUpgrade
@@ -100,6 +121,9 @@ type RelayToClientMessage =
 	| TunnelConnected
 	| TunnelAuthError
 	| TunnelQuotaExceeded
+	| TunnelDeviceConnected
+	| TunnelDeviceDisconnected
+	| TunnelDeviceToolResult
 
 type BidirectionalMessage = TunnelWsFrame | TunnelWsClose
 
@@ -160,10 +184,21 @@ export default class TunnelClient {
 	private relayUrl: string
 	private logger: {log: (...args: any[]) => void; error: (...args: any[]) => void}
 
+	private _deviceBridge: any = null
+
 	constructor({redis, relayUrl, logger}: TunnelClientOptions) {
 		this.redis = redis
 		this.relayUrl = relayUrl ?? 'wss://relay.livinity.io'
 		this.logger = logger ?? {log: console.log, error: console.error}
+	}
+
+	setDeviceBridge(bridge: any): void {
+		this._deviceBridge = bridge
+	}
+
+	/** Send a message through the tunnel WebSocket (used by DeviceBridge for tool calls) */
+	sendDeviceMessage(msg: Record<string, unknown>): void {
+		this.sendMessage(msg)
 	}
 
 	// ─── Lifecycle ─────────────────────────────────────────────────
@@ -299,6 +334,21 @@ export default class TunnelClient {
 				break
 			case 'ws_close':
 				this.handleWsClose(msg)
+				break
+			case 'device_connected':
+				if (this._deviceBridge) {
+					this._deviceBridge.onDeviceConnected(msg)
+				}
+				break
+			case 'device_disconnected':
+				if (this._deviceBridge) {
+					this._deviceBridge.onDeviceDisconnected(msg)
+				}
+				break
+			case 'device_tool_result':
+				if (this._deviceBridge) {
+					this._deviceBridge.onToolResult(msg)
+				}
 				break
 		}
 	}
