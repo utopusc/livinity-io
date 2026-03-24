@@ -100,6 +100,7 @@ function Navbar() {
           <a href="#files" className="text-sm text-neutral-400 transition-colors hover:text-black">Files</a>
           <a href="#ai" className="text-sm text-neutral-400 transition-colors hover:text-black">AI</a>
           <a href="#pricing" className="text-sm text-neutral-400 transition-colors hover:text-black">Pricing</a>
+          <Link href="/download" className="text-sm text-neutral-400 transition-colors hover:text-black">Download</Link>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/login" className="text-sm font-medium text-neutral-500 transition-colors hover:text-black">Sign in</Link>
@@ -682,6 +683,7 @@ function Footer() {
         <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
           <span className="text-lg font-bold tracking-tight text-black">livinity.io</span>
           <div className="flex items-center gap-8 text-sm text-neutral-400">
+            <Link href="/download" className="transition-colors hover:text-black">Download</Link>
             <Link href="/login" className="transition-colors hover:text-black">Sign in</Link>
             <Link href="/register" className="transition-colors hover:text-black">Sign up</Link>
             <a href="https://changelog.livinity.io" className="transition-colors hover:text-black">Changelog</a>
