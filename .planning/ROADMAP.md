@@ -166,10 +166,10 @@ Plans:
   2. On Windows, after installation the agent auto-starts on boot and can be cleanly uninstalled removing files, shortcuts, and registry entries
   3. On macOS, opening the .dmg shows a drag-to-Applications window with a proper .app bundle containing icon and Info.plist, and the agent registers as a LaunchAgent for auto-start on login
   4. On Linux, installing the .deb places the binary and creates a systemd service that runs as the installing user and auto-starts on boot
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: Windows installer (Inno Setup script, shortcuts, auto-start registry, uninstaller)
+- [ ] 03-01: SEA build pipeline + Windows installer (Inno Setup .iss, shortcuts, auto-start, uninstaller)
 - [ ] 03-02: macOS installer (create-dmg, .app bundle with Info.plist and icon, LaunchAgent plist)
 - [ ] 03-03: Linux installer (fpm .deb package, systemd service unit file)
 
