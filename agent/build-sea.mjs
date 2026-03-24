@@ -61,7 +61,18 @@ function copyFile(src, dest, label) {
 // ── Step 0: Clean dist ──────────────────────────────────────────────────
 console.log('[build-sea] Cleaning dist/...');
 if (existsSync(distDir)) {
-  rmSync(distDir, { recursive: true, force: true });
+  try {
+    rmSync(distDir, { recursive: true, force: true });
+  } catch (err) {
+    console.log(`[build-sea] Warning: Could not fully clean dist/ (${err.code}). Cleaning files individually...`);
+    // Clean individual files that we'll overwrite
+    for (const f of ['agent.js', 'sea-prep.blob', 'livinity-agent.exe', 'livinity-agent']) {
+      try { rmSync(join(distDir, f), { force: true }); } catch {}
+    }
+    for (const d of ['setup-ui', 'traybin', 'node_modules']) {
+      try { rmSync(join(distDir, d), { recursive: true, force: true }); } catch {}
+    }
+  }
 }
 mkdirSync(distDir, { recursive: true });
 

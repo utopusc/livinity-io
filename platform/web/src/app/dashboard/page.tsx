@@ -3,11 +3,20 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  createdAt: string;
+  lastSeen: string | null;
+}
+
 interface DashboardData {
   user: { id: string; username: string; email: string; emailVerified: boolean };
   apiKey: { hasKey: boolean; prefix: string | null };
   server: { online: boolean; url: string };
   bandwidth: { usedBytes: number; limitBytes: number; usedPercent: number };
+  devices?: DeviceInfo[];
 }
 
 function formatBytes(bytes: number): string {
@@ -207,6 +216,47 @@ export default function DashboardPage() {
             <div className={`h-full rounded-full transition-all ${bwColor}`} style={{ width: `${Math.min(bwPercent, 100)}%` }} />
           </div>
           <p className="mt-2 text-xs text-zinc-400">{bwPercent}% of monthly free tier used</p>
+        </div>
+
+        {/* Devices */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">My Devices</h2>
+            <a href="/device" className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+              + Add Device
+            </a>
+          </div>
+          {data.devices && data.devices.length > 0 ? (
+            <div className="space-y-3">
+              {data.devices.map((device) => (
+                <div key={device.deviceId} className="flex items-center justify-between rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">
+                      {device.platform === 'win32' ? '🖥️' : device.platform === 'darwin' ? '💻' : '🐧'}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{device.deviceName}</p>
+                      <p className="text-xs text-zinc-400">
+                        {device.platform === 'win32' ? 'Windows' : device.platform === 'darwin' ? 'macOS' : 'Linux'}
+                        {device.lastSeen ? ` · Last seen ${new Date(device.lastSeen).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                    <span className="text-xs text-zinc-400">Registered</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-sm text-zinc-500 mb-2">No devices connected yet.</p>
+              <p className="text-xs text-zinc-400">
+                Download the <a href="/download" className="text-blue-600 hover:underline">Livinity Agent</a> and install it on your PC to get started.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Apps */}
