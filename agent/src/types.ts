@@ -46,6 +46,10 @@ export interface DeviceAuditEvent {
   success: boolean;
   duration: number;
   error?: string;
+  // Computer use enrichment (SEC-03)
+  coordinates?: { x: number; y: number };
+  text?: string;
+  key?: string;
 }
 
 /** Emergency stop signal from device (SEC-02) */
