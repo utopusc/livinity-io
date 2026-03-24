@@ -44,6 +44,7 @@ import type {
   TunnelDeviceDisconnected,
   TunnelDeviceToolCall,
   TunnelDeviceToolResult,
+  TunnelDeviceAuditEvent,
   ClientToRelayMessage,
   BidirectionalMessage,
 } from './protocol.js';
@@ -51,6 +52,7 @@ import { DeviceConnection, DeviceRegistry } from './device-registry.js';
 import { verifyDeviceToken } from './device-auth.js';
 import type {
   DeviceAuth,
+  DeviceAuditEvent,
   DeviceConnected,
   DeviceAuthError,
   DeviceToolCall,
@@ -411,6 +413,26 @@ function onDeviceConnect(ws: WebSocket): void {
           console.log(`[relay] Forwarded tool_result from device=${device.deviceId} request=${msg.requestId}`);
         } else {
           console.warn(`[relay] No tunnel for user=${device.userId} to deliver tool_result request=${msg.requestId}`);
+        }
+        break;
+      }
+
+      case 'device_audit_event': {
+        // Forward audit event to the user's LivOS tunnel
+        const userTunnel = registry.getByUserId(device.userId);
+        if (userTunnel && userTunnel.ws.readyState === 1) {
+          const auditMsg = msg as DeviceAuditEvent;
+          const tunnelAudit: TunnelDeviceAuditEvent = {
+            type: 'device_audit_event',
+            deviceId: device.deviceId,
+            timestamp: auditMsg.timestamp,
+            toolName: auditMsg.toolName,
+            params: auditMsg.params,
+            success: auditMsg.success,
+            duration: auditMsg.duration,
+            error: auditMsg.error,
+          };
+          userTunnel.ws.send(JSON.stringify(tunnelAudit));
         }
         break;
       }

@@ -37,6 +37,17 @@ export interface DevicePong {
   ts: number;
 }
 
+/** Audit event for tool execution tracking */
+export interface DeviceAuditEvent {
+  type: 'device_audit_event';
+  timestamp: string;
+  toolName: string;
+  params: Record<string, unknown>;
+  success: boolean;
+  duration: number;
+  error?: string;
+}
+
 // ---- Relay -> Device ----
 
 /** Device connection confirmed */
@@ -84,7 +95,8 @@ export interface DeviceToolCallForward {
 export type DeviceToRelayMessage =
   | DeviceAuth
   | DeviceToolResult
-  | DevicePong;
+  | DevicePong
+  | DeviceAuditEvent;
 
 /** Messages from relay to device agent */
 export type RelayToDeviceMessage =

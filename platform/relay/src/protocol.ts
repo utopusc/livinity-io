@@ -107,6 +107,18 @@ export interface TunnelDeviceToolResult {
   };
 }
 
+/** Device audit event forwarded from relay to LivOS */
+export interface TunnelDeviceAuditEvent {
+  type: 'device_audit_event';
+  deviceId: string;
+  timestamp: string;
+  toolName: string;
+  params: Record<string, unknown>;
+  success: boolean;
+  duration: number;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Client → Relay messages (5 types)
 // ---------------------------------------------------------------------------
@@ -207,7 +219,8 @@ export type RelayToClientMessage =
   | TunnelQuotaExceeded
   | TunnelDeviceConnected
   | TunnelDeviceDisconnected
-  | TunnelDeviceToolResult;
+  | TunnelDeviceToolResult
+  | TunnelDeviceAuditEvent;
 
 /** All messages sent from the tunnel client to the relay */
 export type ClientToRelayMessage =
@@ -256,4 +269,5 @@ export type MessageTypeMap = {
   'device_disconnected': TunnelDeviceDisconnected;
   'device_tool_call': TunnelDeviceToolCall;
   'device_tool_result': TunnelDeviceToolResult;
+  'device_audit_event': TunnelDeviceAuditEvent;
 };
