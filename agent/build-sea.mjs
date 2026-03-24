@@ -192,6 +192,34 @@ if (!nativeCopied) {
   console.warn('[build-sea] WARNING: No platform-specific node-screenshots native package found');
 }
 
+// 6d. @jitsi/robotjs -- native mouse/keyboard automation (uses node-gyp-build + prebuilds/)
+console.log('[build-sea] Copying @jitsi/robotjs...');
+const robotjsDest = join(distDir, 'node_modules', '@jitsi', 'robotjs');
+copyFile(
+  join(nodeModules, '@jitsi', 'robotjs', 'index.js'),
+  join(robotjsDest, 'index.js'),
+  '@jitsi/robotjs/index.js',
+);
+copyFile(
+  join(nodeModules, '@jitsi', 'robotjs', 'package.json'),
+  join(robotjsDest, 'package.json'),
+  '@jitsi/robotjs/package.json',
+);
+// Copy prebuilt native binaries for all platforms
+copyDir(
+  join(nodeModules, '@jitsi', 'robotjs', 'prebuilds'),
+  join(robotjsDest, 'prebuilds'),
+  '@jitsi/robotjs/prebuilds/',
+);
+
+// 6e. node-gyp-build -- runtime dependency for @jitsi/robotjs to locate .node files
+// It's a pure-JS module that resolves prebuilds/ based on platform/arch.
+copyDir(
+  join(nodeModules, 'node-gyp-build'),
+  join(distDir, 'node_modules', 'node-gyp-build'),
+  'node-gyp-build/',
+);
+
 // ── Step 7: Copy setup-ui assets ────────────────────────────────────────
 // Already copied by esbuild.config.mjs, but verify
 if (existsSync(join(distDir, 'setup-ui', 'index.html'))) {
@@ -211,4 +239,6 @@ console.log('[build-sea] Contents:');
 console.log(`  - ${binaryName} (standalone SEA binary)`);
 console.log('  - node_modules/systray2/ (tray binary + JS)');
 console.log('  - node_modules/node-screenshots/ (native addon)');
+console.log('  - node_modules/@jitsi/robotjs/ (mouse/keyboard native addon)');
+console.log('  - node_modules/node-gyp-build/ (native addon loader)');
 console.log('  - setup-ui/ (web setup wizard assets)');

@@ -17,6 +17,13 @@ const seaExternalsPlugin = {
       path: 'node-screenshots',
       external: true,
     }));
+
+    // @jitsi/robotjs has a native .node addon loaded via node-gyp-build.
+    // Same pattern as node-screenshots: mark external, copy alongside binary.
+    build.onResolve({ filter: /^@jitsi\/robotjs$/ }, () => ({
+      path: '@jitsi/robotjs',
+      external: true,
+    }));
   },
 };
 
