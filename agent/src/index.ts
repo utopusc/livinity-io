@@ -1,6 +1,13 @@
 #!/usr/bin/env node
+import path from 'node:path';
 import { setupCommand, startCommand, stopCommand, statusCommand } from './cli.js';
 import { AGENT_VERSION } from './config.js';
+
+// SEA binary: set CWD to exe directory so systray2 finds traybin/ and setup-ui/ is resolved correctly
+const exeDir = path.dirname(process.execPath);
+if (!process.execPath.includes('node')) {
+  try { process.chdir(exeDir); } catch {}
+}
 
 async function main(): Promise<void> {
   const command = process.argv[2];

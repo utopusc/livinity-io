@@ -48,6 +48,30 @@ export async function GET(req: NextRequest) {
     // Relay unreachable
   }
 
+  // Get user's registered devices
+  let devices: { deviceId: string; deviceName: string; platform: string; createdAt: string; lastSeen: string | null }[] = [];
+  try {
+    const devicesResult = await pool.query<{
+      device_id: string;
+      device_name: string;
+      platform: string;
+      created_at: string;
+      last_seen: string | null;
+    }>(
+      'SELECT device_id, device_name, platform, created_at, last_seen FROM devices WHERE user_id = $1 AND (revoked IS NULL OR revoked = false) ORDER BY created_at DESC',
+      [user.userId],
+    );
+    devices = devicesResult.rows.map((r) => ({
+      deviceId: r.device_id,
+      deviceName: r.device_name,
+      platform: r.platform,
+      createdAt: r.created_at,
+      lastSeen: r.last_seen,
+    }));
+  } catch {
+    // devices table may not exist yet
+  }
+
   return NextResponse.json({
     user: {
       id: user.userId,
@@ -68,6 +92,7 @@ export async function GET(req: NextRequest) {
       limitBytes: bandwidth.limitBytes,
       usedPercent: Math.round((bandwidth.usedBytes / bandwidth.limitBytes) * 100),
     },
+    devices,
   });
 }
 

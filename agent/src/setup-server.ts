@@ -208,42 +208,34 @@ async function runDeviceFlow(deviceName: string): Promise<void> {
 // ---- Dist Path Resolution ----
 
 function resolveDistPath(): string {
-  // Resolve "this directory" in both ESM and CJS/SEA contexts
-  let thisDir: string;
-  try {
-    // ESM context: import.meta.url is available
-    thisDir = path.dirname(fileURLToPath(import.meta.url));
-  } catch {
-    // CJS/SEA context: use __dirname or process.argv[0] directory
-    thisDir = typeof __dirname !== 'undefined'
-      ? __dirname
-      : path.dirname(process.execPath);
-  }
-
-  // In dev: agent/src/setup-server.ts -> agent/setup-ui/dist
-  // In built: agent/dist/agent.js -> agent/dist/setup-ui (copied by esbuild config)
-  // In built (alt): agent/dist/agent.js -> agent/setup-ui/dist
-  // SEA binary directory: setup-ui is alongside the .exe
+  // SEA binary: process.execPath is the .exe location — setup-ui/ is alongside it
+  // Dev mode (tsx): __dirname or import.meta.url points to source
   const exeDir = path.dirname(process.execPath);
+  const isSEA = (process as any).pkg || require('node:module').isBuiltin?.('node:sea') || !process.execPath.includes('node');
 
   const candidates = [
-    path.join(thisDir, 'setup-ui'),             // dist/setup-ui (built mode, copied)
-    path.join(thisDir, '..', 'setup-ui', 'dist'), // dev mode
-    path.join(thisDir, '..', '..', 'setup-ui', 'dist'),
-    // For SEA/bundled mode: relative to binary location or cwd
+    // SEA: setup-ui/ next to the .exe (highest priority for binary)
     path.join(exeDir, 'setup-ui'),
-    path.join(process.cwd(), 'setup-ui', 'dist'),
+    // CWD: user may run exe from its directory
     path.join(process.cwd(), 'setup-ui'),
+    // Dev mode: agent/src/ -> agent/setup-ui/dist
+    path.join(__dirname, '..', 'setup-ui', 'dist'),
+    path.join(__dirname, 'setup-ui'),
+    // Dev mode alt paths
+    path.join(__dirname, '..', '..', 'setup-ui', 'dist'),
+    path.join(process.cwd(), 'setup-ui', 'dist'),
   ];
 
   for (const candidate of candidates) {
     if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, 'index.html'))) {
+      console.log(`Setup UI found at: ${candidate}`);
       return candidate;
     }
   }
 
-  // Fallback to first candidate -- Express will show 404 if missing
-  return candidates[0];
+  console.error(`Setup UI not found! Searched: ${candidates.join(', ')}`);
+  // Fallback to exeDir -- most likely location for SEA
+  return path.join(exeDir, 'setup-ui');
 }
 
 // ---- Server ----
@@ -282,6 +274,16 @@ export async function startSetupServer(): Promise<{
   app.use(express.json());
 
   const distPath = resolveDistPath();
+  console.log(`Serving setup UI from: ${distPath}`);
+
+  // Enable CORS for development
+  app.use((_req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    if (_req.method === 'OPTIONS') { res.sendStatus(200); return; }
+    next();
+  });
 
   // Serve static SPA files
   app.use(express.static(distPath));
@@ -366,19 +368,19 @@ export async function startSetupServer(): Promise<{
 
   console.log(`Setup server running at http://localhost:${boundPort}`);
 
-  // Auto-open browser using platform-native commands (no ESM dependency)
+  // Auto-open browser using platform-native commands
   const url = `http://localhost:${boundPort}`;
   try {
-    const platform = process.platform;
-    if (platform === 'win32') {
-      execSync(`start "" "${url}"`, { stdio: 'ignore', shell: true });
-    } else if (platform === 'darwin') {
+    const plat = process.platform;
+    if (plat === 'win32') {
+      // PowerShell Start-Process is most reliable in SEA/child_process contexts
+      execSync(`powershell -Command "Start-Process '${url}'"`, { stdio: 'ignore', windowsHide: true });
+    } else if (plat === 'darwin') {
       execSync(`open "${url}"`, { stdio: 'ignore' });
     } else {
       execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
     }
   } catch {
-    // Silently ignore if browser cannot be opened (headless environments)
     console.log(`Open ${url} in your browser to complete setup.`);
   }
 

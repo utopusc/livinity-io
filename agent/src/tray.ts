@@ -1,18 +1,19 @@
-import SysTrayDefault from 'systray2';
+import SysTrayModule from 'systray2';
 import type { MenuItem, Menu, ClickEvent, Conf } from 'systray2';
 import { deflateSync } from 'node:zlib';
 
-// systray2 is a CJS module with `export default class SysTray`.
-// In ESM context via esbuild banner createRequire, the default import may be the module namespace.
-// We cast through unknown to get a usable constructor.
-const SysTray = SysTrayDefault as unknown as {
-  new (conf: Conf): {
-    ready(): Promise<void>;
-    onClick(listener: (action: ClickEvent) => void): Promise<unknown>;
-    sendAction(action: unknown): Promise<unknown>;
-    kill(exitNode?: boolean): Promise<void>;
-  };
-};
+// systray2 CJS interop: require('systray2') = {default: SysTray}.
+// esbuild CJS bundle wraps it so import gets {default: fn} not fn directly.
+const _raw = SysTrayModule as any;
+const SysTray: new (conf: Conf) => {
+  ready(): Promise<void>;
+  onClick(listener: (action: ClickEvent) => void): Promise<unknown>;
+  sendAction(action: unknown): Promise<unknown>;
+  kill(exitNode?: boolean): Promise<void>;
+} = typeof _raw === 'function' ? _raw
+  : typeof _raw?.default === 'function' ? _raw.default
+  : typeof _raw?.default?.default === 'function' ? _raw.default.default
+  : _raw;
 
 // ---- Types ----
 
