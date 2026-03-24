@@ -207,17 +207,30 @@ async function runDeviceFlow(deviceName: string): Promise<void> {
 // ---- Dist Path Resolution ----
 
 function resolveDistPath(): string {
-  // Try dev-mode path first: relative to this source file
-  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  // Resolve "this directory" in both ESM and CJS/SEA contexts
+  let thisDir: string;
+  try {
+    // ESM context: import.meta.url is available
+    thisDir = path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    // CJS/SEA context: use __dirname or process.argv[0] directory
+    thisDir = typeof __dirname !== 'undefined'
+      ? __dirname
+      : path.dirname(process.execPath);
+  }
 
   // In dev: agent/src/setup-server.ts -> agent/setup-ui/dist
   // In built: agent/dist/agent.js -> agent/dist/setup-ui (copied by esbuild config)
   // In built (alt): agent/dist/agent.js -> agent/setup-ui/dist
+  // SEA binary directory: setup-ui is alongside the .exe
+  const exeDir = path.dirname(process.execPath);
+
   const candidates = [
     path.join(thisDir, 'setup-ui'),             // dist/setup-ui (built mode, copied)
     path.join(thisDir, '..', 'setup-ui', 'dist'), // dev mode
     path.join(thisDir, '..', '..', 'setup-ui', 'dist'),
-    // For SEA/bundled mode: relative to cwd
+    // For SEA/bundled mode: relative to binary location or cwd
+    path.join(exeDir, 'setup-ui'),
     path.join(process.cwd(), 'setup-ui', 'dist'),
     path.join(process.cwd(), 'setup-ui'),
   ];

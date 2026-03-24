@@ -1,15 +1,38 @@
 import { build } from 'esbuild';
 import { cpSync, existsSync } from 'node:fs';
 
+// Plugin to handle native/external modules for SEA compatibility.
+// In SEA mode, `require('systray2')` etc. must resolve from the binary's directory,
+// not from the embedded module resolver. We bundle most of systray2 but mark
+// the actual require calls for native modules to use a path-based resolver.
+const seaExternalsPlugin = {
+  name: 'sea-externals',
+  setup(build) {
+    // systray2 depends on fs-extra — let esbuild bundle it
+    // But systray2's own module needs special handling because it uses __dirname
+    // to find the tray binary. We'll let esbuild bundle it normally.
+    // The key issue is that 'node-screenshots' has a native .node addon
+    // that cannot be bundled. Mark it as external.
+    build.onResolve({ filter: /^node-screenshots$/ }, () => ({
+      path: 'node-screenshots',
+      external: true,
+    }));
+  },
+};
+
 await build({
   entryPoints: ['src/index.ts'],
   bundle: true,
   platform: 'node',
   target: 'node22',
-  format: 'esm',
+  format: 'cjs',
   outfile: 'dist/agent.js',
-  banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
-  external: ['node-screenshots', 'systray2'],
+  plugins: [seaExternalsPlugin],
+  // In CJS mode, import.meta is not available.
+  // Our setup-server.ts has a try/catch fallback for this.
+  define: {
+    'import.meta.url': 'undefined',
+  },
 });
 
 console.log('Built dist/agent.js');
