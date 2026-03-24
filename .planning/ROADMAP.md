@@ -134,7 +134,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15
 
 **Milestone Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices -- Claude Computer Use style. The AI takes screenshots, analyzes them with multimodal vision, determines coordinates, and executes mouse/keyboard actions in a screenshot-analyze-action loop with live monitoring and security controls.
 
-- [ ] **Phase 5: Agent Mouse & Keyboard Tools** - nut.js-powered mouse and keyboard automation tools in the agent
+- [ ] **Phase 5: Agent Mouse & Keyboard Tools** - @jitsi/robotjs-powered mouse and keyboard automation tools in the agent
 - [ ] **Phase 6: Screen Info & Screenshot Extensions** - Screen metadata and coordinate-aware screenshot output
 - [ ] **Phase 7: Computer Use Loop** - Autonomous screenshot-analyze-action cycle in Nexus AI
 - [ ] **Phase 8: Live Monitoring UI** - Real-time session viewer with action overlay and controls
@@ -144,7 +144,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15
 
 ### Phase 5: Agent Mouse & Keyboard Tools
 **Goal**: AI can physically interact with a device's desktop -- clicking, typing, dragging, and scrolling -- through the existing agent tool system
-**Depends on**: Nothing (builds on existing agent at agent/ with 9 tools and nut.js dependency)
+**Depends on**: Nothing (builds on existing agent at agent/ with 9 tools and @jitsi/robotjs)
 **Requirements**: MOUSE-01, MOUSE-02, MOUSE-03, MOUSE-04, MOUSE-05, MOUSE-06, KEY-01, KEY-02
 **Success Criteria** (what must be TRUE):
   1. AI can instruct the agent to click at screen coordinates (x, y) with left, double, or right click, and the click visibly occurs on the device
@@ -152,7 +152,11 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15
   3. AI can instruct the agent to press key combinations (Ctrl+C, Alt+Tab, Enter, etc.) and the device responds to those keys
   4. AI can instruct the agent to drag from one coordinate to another (drag and drop) and scroll at a position
   5. All mouse/keyboard tools follow the existing tool dispatcher pattern (TOOL_NAMES + switch case) and route through DeviceBridge as proxy tools
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md -- Agent mouse/keyboard tool implementations with @jitsi/robotjs
+- [ ] 05-02-PLAN.md -- SEA build pipeline + DeviceBridge schema registration
 
 ### Phase 6: Screen Info & Screenshot Extensions
 **Goal**: AI has full awareness of the device's display geometry and screenshots carry coordinate metadata for accurate targeting
@@ -204,7 +208,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 5. Agent Mouse & Keyboard Tools | v15.0 | 0/? | Not started | - |
+| 5. Agent Mouse & Keyboard Tools | v15.0 | 0/2 | In progress | - |
 | 6. Screen Info & Screenshot Extensions | v15.0 | 0/? | Not started | - |
 | 7. Computer Use Loop | v15.0 | 0/? | Not started | - |
 | 8. Live Monitoring UI | v15.0 | 0/? | Not started | - |
