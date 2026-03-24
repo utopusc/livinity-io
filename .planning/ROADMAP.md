@@ -169,7 +169,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: SEA build pipeline + Windows installer (Inno Setup .iss, shortcuts, auto-start, uninstaller)
+- [x] 03-01: SEA build pipeline + Windows installer (Inno Setup .iss, shortcuts, auto-start, uninstaller)
 - [ ] 03-02: macOS installer (create-dmg, .app bundle with Info.plist and icon, LaunchAgent plist)
 - [ ] 03-03: Linux installer (fpm .deb package, systemd service unit file)
 

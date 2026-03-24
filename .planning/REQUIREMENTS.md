@@ -15,10 +15,10 @@
 
 ### Installer -- Windows
 
-- [ ] **WIN-01**: Windows .exe installer built with Inno Setup packages the SEA binary
-- [ ] **WIN-02**: Installer creates Start Menu shortcut and optional Desktop shortcut
-- [ ] **WIN-03**: Installer registers agent for auto-start on Windows boot (Registry Run key or Task Scheduler)
-- [ ] **WIN-04**: Installer includes uninstaller that removes files, shortcuts, and auto-start entry
+- [x] **WIN-01**: Windows .exe installer built with Inno Setup packages the SEA binary
+- [x] **WIN-02**: Installer creates Start Menu shortcut and optional Desktop shortcut
+- [x] **WIN-03**: Installer registers agent for auto-start on Windows boot (Registry Run key or Task Scheduler)
+- [x] **WIN-04**: Installer includes uninstaller that removes files, shortcuts, and auto-start entry
 
 ### Installer -- macOS
 
@@ -69,10 +69,10 @@
 | SETUP-03 | Phase 1 | Complete |
 | SETUP-04 | Phase 1 | Complete |
 | SETUP-05 | Phase 1 | Complete |
-| WIN-01 | Phase 3 | Pending |
-| WIN-02 | Phase 3 | Pending |
-| WIN-03 | Phase 3 | Pending |
-| WIN-04 | Phase 3 | Pending |
+| WIN-01 | Phase 3 | Complete |
+| WIN-02 | Phase 3 | Complete |
+| WIN-03 | Phase 3 | Complete |
+| WIN-04 | Phase 3 | Complete |
 | MAC-01 | Phase 3 | Pending |
 | MAC-02 | Phase 3 | Pending |
 | MAC-03 | Phase 3 | Pending |
