@@ -109,8 +109,21 @@ run(postjectCmd, 'Inject SEA blob via postject');
 // ── Step 6: Copy native dependencies ────────────────────────────────────
 console.log('[build-sea] Copying native dependencies...');
 
-// 6a. systray2 — needs index.js, package.json, and traybin/ with platform binaries
+// 6a. systray2 — bundled by esbuild, but traybin/ Go binary must be alongside the SEA binary.
+// systray2 resolves its binary via: path.join(__dirname, 'traybin', binName)
+// In SEA mode, __dirname = directory containing the .exe, so we need dist/traybin/
+copyDir(
+  join(nodeModules, 'systray2', 'traybin'),
+  join(distDir, 'traybin'),
+  'traybin/ (systray2 Go binaries)',
+);
+// Also keep the node_modules structure for non-SEA runs
 const systrayDest = join(distDir, 'node_modules', 'systray2');
+copyDir(
+  join(nodeModules, 'systray2', 'traybin'),
+  join(systrayDest, 'traybin'),
+  'node_modules/systray2/traybin/',
+);
 copyFile(
   join(nodeModules, 'systray2', 'index.js'),
   join(systrayDest, 'index.js'),
@@ -120,17 +133,6 @@ copyFile(
   join(nodeModules, 'systray2', 'package.json'),
   join(systrayDest, 'package.json'),
   'systray2/package.json',
-);
-copyDir(
-  join(nodeModules, 'systray2', 'traybin'),
-  join(systrayDest, 'traybin'),
-  'systray2/traybin/',
-);
-// Also copy index.d.ts for completeness
-copyFile(
-  join(nodeModules, 'systray2', 'index.d.ts'),
-  join(systrayDest, 'index.d.ts'),
-  'systray2/index.d.ts',
 );
 
 // 6b. node-screenshots — needs index.js, package.json

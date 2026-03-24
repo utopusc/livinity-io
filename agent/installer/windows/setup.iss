@@ -39,13 +39,13 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 ; Main SEA binary
 Source: "..\..\dist\livinity-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; systray2 — tray binary + JS wrapper (required for system tray icon)
-Source: "..\..\dist\node_modules\systray2\*"; DestDir: "{app}\node_modules\systray2"; Flags: ignoreversion recursesubdirs createallsubdirs
+; systray2 traybin — Go binary for system tray (bundled JS, but needs Go binary alongside .exe)
+Source: "..\..\dist\traybin\*"; DestDir: "{app}\traybin"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; node-screenshots — JS wrapper + index
+; node-screenshots — JS wrapper + index (external from bundle, loaded via require)
 Source: "..\..\dist\node_modules\node-screenshots\*"; DestDir: "{app}\node_modules\node-screenshots"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; node-screenshots — Windows x64 native binary
+; node-screenshots — Windows x64 native binary (.node addon)
 Source: "..\..\dist\node_modules\node-screenshots-win32-x64-msvc\*"; DestDir: "{app}\node_modules\node-screenshots-win32-x64-msvc"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; setup-ui — web-based setup wizard assets
