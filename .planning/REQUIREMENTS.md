@@ -74,8 +74,8 @@
 
 - [x] **SEC-01**: All agent-relay transport uses WSS (TLS 1.3)
 - [x] **SEC-02**: Device tokens are JWTs with 24h expiry and auto-refresh
-- [ ] **SEC-03**: Agent runs as logged-in user (not root/SYSTEM) by default
-- [ ] **SEC-04**: Dangerous command blocklist enforced on agent side
+- [x] **SEC-03**: Agent runs as logged-in user (not root/SYSTEM) by default
+- [x] **SEC-04**: Dangerous command blocklist enforced on agent side
 
 ## Future Requirements (v14.1)
 
@@ -145,8 +145,8 @@
 | UI-03 | Phase 52 | Complete |
 | AUDIT-01 | Phase 53 | Complete |
 | AUDIT-02 | Phase 53 | Complete |
-| SEC-03 | Phase 53 | Pending |
-| SEC-04 | Phase 53 | Pending |
+| SEC-03 | Phase 53 | Complete |
+| SEC-04 | Phase 53 | Complete |
 
 **Coverage:**
 - v14.0 requirements: 36 total

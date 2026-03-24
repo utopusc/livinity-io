@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v14.0
 milestone_name: Remote PC Control Agent
 status: unknown
-stopped_at: Completed 53-01-PLAN.md
-last_updated: "2026-03-24T07:22:07.539Z"
+stopped_at: Completed 53-02-PLAN.md
+last_updated: "2026-03-24T07:26:07.026Z"
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -51,6 +51,7 @@ Plan: 2 of 2
 | Phase 52-01 P01 | 3min | 2 tasks | 4 files |
 | Phase 52 P02 | 6min | 2 tasks | 8 files |
 | Phase 53 P01 | 7min | 2 tasks | 10 files |
+| Phase 53 P02 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Plan: 2 of 2
 - [Phase 53]: Redis RPUSH+LTRIM pattern caps audit entries at 1000 per device
 - [Phase 53]: Params truncated at 500 chars, content field omitted for file writes
 - [Phase 53]: devices.auditLog is a tRPC query (not mutation) so no httpOnlyPaths needed
+- [Phase 53]: Case-insensitive regex matching for blocklist patterns
+- [Phase 53]: Mtime-based cache invalidation for blocklist config (no file watcher)
+- [Phase 53]: userInfo() in try/catch for cross-platform safety
 
 ### Pending Todos
 
@@ -111,6 +115,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T07:22:07.536Z
-Stopped at: Completed 53-01-PLAN.md
+Last session: 2026-03-24T07:26:07.022Z
+Stopped at: Completed 53-02-PLAN.md
 Resume file: None

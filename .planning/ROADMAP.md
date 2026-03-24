@@ -111,7 +111,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 - [x] **Phase 50: Agent Core Tools -- Shell + Files** - Remote shell execution, file listing, read, write, delete operations (completed 2026-03-24)
 - [x] **Phase 51: Agent Extended Tools -- Processes + Screenshot + System Info** - Process listing, screenshot capture, system information collection (completed 2026-03-24)
 - [x] **Phase 52: My Devices UI** - Device list panel in LivOS, device status, rename, remove (completed 2026-03-24)
-- [ ] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user
+- [x] **Phase 53: Audit Logging + Security Hardening** - Operation audit log, dangerous command blocklist, agent runs as user (completed 2026-03-24)
 
 ## Phase Details
 
@@ -221,7 +221,7 @@ Plans:
 
 Plans:
 - [x] 53-01-PLAN.md -- End-to-end audit logging: agent local JSON-lines log, relay pass-through, LivOS Redis storage, tRPC query, UI Activity dialog
-- [ ] 53-02-PLAN.md -- Security hardening: configurable dangerous command blocklist in shell tool, agent runs-as-user display in status
+- [x] 53-02-PLAN.md -- Security hardening: configurable dangerous command blocklist in shell tool, agent runs-as-user display in status
 
 ## Progress
 
@@ -256,4 +256,4 @@ Plans:
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 52. My Devices UI | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 53. Audit Logging + Security Hardening | v14.0 | 1/2 | In Progress|  |
+| 53. Audit Logging + Security Hardening | v14.0 | 2/2 | Complete   | 2026-03-24 |
