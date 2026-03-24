@@ -138,7 +138,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
   3. Clicking connect displays a device code and a link to livinity.io for approval
   4. After approving on livinity.io, the setup page shows "Connected!" with the device name
   5. The setup page closes itself and the agent continues running silently in the background
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 01-01: Local HTTP server and React setup UI
