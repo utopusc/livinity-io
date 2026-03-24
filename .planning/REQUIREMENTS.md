@@ -61,9 +61,9 @@
 
 ### UI -- My Devices Panel
 
-- [ ] **UI-01**: LivOS shows "My Devices" panel listing connected devices
-- [ ] **UI-02**: Each device shows name, OS, platform icon, connection status, last seen
-- [ ] **UI-03**: User can rename or remove a device
+- [x] **UI-01**: LivOS shows "My Devices" panel listing connected devices
+- [x] **UI-02**: Each device shows name, OS, platform icon, connection status, last seen
+- [x] **UI-03**: User can rename or remove a device
 
 ### Audit -- Audit Logging
 
@@ -140,9 +140,9 @@
 | PROC-01 | Phase 51 | Complete |
 | PROC-02 | Phase 51 | Complete |
 | SCREEN-01 | Phase 51 | Complete |
-| UI-01 | Phase 52 | Pending |
-| UI-02 | Phase 52 | Pending |
-| UI-03 | Phase 52 | Pending |
+| UI-01 | Phase 52 | Complete |
+| UI-02 | Phase 52 | Complete |
+| UI-03 | Phase 52 | Complete |
 | AUDIT-01 | Phase 53 | Pending |
 | AUDIT-02 | Phase 53 | Pending |
 | SEC-03 | Phase 53 | Pending |

@@ -205,7 +205,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 52-01: Backend tRPC devices router (list, rename, remove) + Redis device state queries
+- [x] 52-01: Backend tRPC devices router (list, rename, remove) + Redis device state queries
 - [ ] 52-02: Frontend My Devices panel (device cards, status indicators, rename dialog, remove confirmation)
 
 ### Phase 53: Audit Logging + Security Hardening
@@ -255,5 +255,5 @@ Plans:
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 2/2 | Complete    | 2026-03-24 |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 52. My Devices UI | v14.0 | 0/2 | Not started | - |
+| 52. My Devices UI | v14.0 | 1/2 | In Progress|  |
 | 53. Audit Logging + Security Hardening | v14.0 | 0/2 | Not started | - |
