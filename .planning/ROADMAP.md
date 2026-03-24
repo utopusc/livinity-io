@@ -125,7 +125,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
   3. An HTTP client can poll POST /api/device/token and receive a device JWT after user approval
   4. A WebSocket client can connect to the relay at /device/connect with a valid device JWT and appear in the DeviceRegistry
   5. The relay tracks which devices belong to which user and disconnects devices with invalid/expired tokens
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 47-01: livinity.io device OAuth endpoints (register, token, approve) + /device approval page
