@@ -128,7 +128,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v14
 **Plans**: 2 plans
 
 Plans:
-- [ ] 47-01: livinity.io device OAuth endpoints (register, token, approve) + /device approval page
+- [x] 47-01: livinity.io device OAuth endpoints (register, token, approve) + /device approval page
 - [ ] 47-02: Relay DeviceRegistry + /device/connect WebSocket endpoint with JWT validation
 
 ### Phase 48: Agent Binary + Authentication
@@ -250,7 +250,7 @@ Plans:
 | 44. Bulk Ops + Images + Networks + Volumes | v13.0 | 3/3 | Complete | 2026-03-23 |
 | 45. Docker Compose Stacks | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
-| 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 0/2 | Not started | - |
+| 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 1/2 | In Progress|  |
 | 48. Agent Binary + Authentication | v14.0 | 0/2 | Not started | - |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 0/2 | Not started | - |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |

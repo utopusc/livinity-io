@@ -20,9 +20,9 @@
 
 ### Platform -- livinity.io Device Endpoints
 
-- [ ] **PLAT-01**: livinity.io exposes POST /api/device/register (generates device_code + user_code)
-- [ ] **PLAT-02**: livinity.io exposes POST /api/device/token (agent polls for approval)
-- [ ] **PLAT-03**: livinity.io has /device approval page where user enters code
+- [x] **PLAT-01**: livinity.io exposes POST /api/device/register (generates device_code + user_code)
+- [x] **PLAT-02**: livinity.io exposes POST /api/device/token (agent polls for approval)
+- [x] **PLAT-03**: livinity.io has /device approval page where user enters code
 
 ### Relay -- Relay Server Extension
 
@@ -111,9 +111,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAT-01 | Phase 47 | Pending |
-| PLAT-02 | Phase 47 | Pending |
-| PLAT-03 | Phase 47 | Pending |
+| PLAT-01 | Phase 47 | Complete |
+| PLAT-02 | Phase 47 | Complete |
+| PLAT-03 | Phase 47 | Complete |
 | RELAY-01 | Phase 47 | Pending |
 | RELAY-02 | Phase 47 | Pending |
 | AGENT-01 | Phase 48 | Pending |
