@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 05-02-PLAN.md (SEA Build + DeviceBridge Schemas)
-last_updated: "2026-03-24T16:47:23.862Z"
+stopped_at: Completed 06-01-PLAN.md (Screen Info + Screenshot Extensions)
+last_updated: "2026-03-24T16:56:09.265Z"
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v15.0 -- AI Computer Use
-**Current focus:** Phase 05 — computer-use
+**Current focus:** Phase 06 — screen-info-screenshot-extensions
 
 ## Current Position
 
-Phase: 6
-Plan: Not started
+Phase: 06 (screen-info-screenshot-extensions) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 
 | Phase 05 P01 | 2min | 2 tasks | 4 files |
 | Phase 05 P02 | 2min | 2 tasks | 3 files |
+| Phase 06 P01 | 2min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -57,6 +58,8 @@ Plan: Not started
 - [Phase 05]: Synchronous require() for robotjs lazy loading (CJS native addon via node-gyp-build)
 - [Phase 05]: SEA build follows same external+copy pattern for robotjs as node-screenshots (no new build patterns)
 - [Phase 05]: keyboard_press uses single key param with combo syntax (ctrl+c) rather than separate key/modifier
+- [Phase 06]: Used node-screenshots Monitor.all()+Window.all() for screen_info (richer data than robotjs)
+- [Phase 06]: Screenshot data returns both image dims and monitor dims (differ on HiDPI)
 
 ### Pending Todos
 
@@ -68,6 +71,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T16:43:58.082Z
-Stopped at: Completed 05-02-PLAN.md (SEA Build + DeviceBridge Schemas)
+Last session: 2026-03-24T16:56:09.262Z
+Stopped at: Completed 06-01-PLAN.md (Screen Info + Screenshot Extensions)
 Resume file: None

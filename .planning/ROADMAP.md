@@ -168,7 +168,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- screen_info tool + screenshot coordinate metadata + dispatcher/DeviceBridge registration
+- [x] 06-01-PLAN.md -- screen_info tool + screenshot coordinate metadata + dispatcher/DeviceBridge registration
 
 ### Phase 7: Computer Use Loop
 **Goal**: Users can give the AI a natural language task and it autonomously operates the device's desktop through a screenshot-vision-action cycle until the task is done

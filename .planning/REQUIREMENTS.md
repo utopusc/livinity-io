@@ -23,8 +23,8 @@ Requirements for AI Computer Use milestone. Each maps to roadmap phases.
 
 ### Screen
 
-- [ ] **SCREEN-01**: AI can query screen resolution and display configuration
-- [ ] **SCREEN-02**: Screenshot tool returns coordinate metadata for vision analysis (existing tool extended)
+- [x] **SCREEN-01**: AI can query screen resolution and display configuration
+- [x] **SCREEN-02**: Screenshot tool returns coordinate metadata for vision analysis (existing tool extended)
 
 ### Computer Use Loop
 
@@ -80,8 +80,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MOUSE-06 | Phase 5 | Complete |
 | KEY-01 | Phase 5 | Complete |
 | KEY-02 | Phase 5 | Complete |
-| SCREEN-01 | Phase 6 | Pending |
-| SCREEN-02 | Phase 6 | Pending |
+| SCREEN-01 | Phase 6 | Complete |
+| SCREEN-02 | Phase 6 | Complete |
 | LOOP-01 | Phase 7 | Pending |
 | LOOP-02 | Phase 7 | Pending |
 | LOOP-03 | Phase 7 | Pending |
