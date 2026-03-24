@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v15.0
 milestone_name: AI Computer Use
 status: unknown
-stopped_at: Completed 09-01-PLAN.md (Agent Security Controls)
-last_updated: "2026-03-24T18:19:05.139Z"
+stopped_at: Completed 09-02-PLAN.md (Security Permissions - Consent/Emergency Stop/Timeout)
+last_updated: "2026-03-24T18:29:34.853Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 2 of 2
 | Phase 08 P02 | 4min | 2 tasks | 2 files |
 | Phase 08 P03 | 2min | 2 tasks | 2 files |
 | Phase 09 P01 | 2min | 2 tasks | 4 files |
+| Phase 09 P02 | 8min | 2 tasks | 11 files |
 
 ### Decisions
 
@@ -83,6 +84,9 @@ Plan: 2 of 2
 - [Phase 09]: Emergency stop via tool-call interception rather than global keyboard hook (no new native deps)
 - [Phase 09]: triggerEmergencyStop() exported for external callers like Electron tray app
 - [Phase 09]: Audit enrichment uses spread pattern for optional coordinates/text/key fields
+- [Phase 09]: Consent gate uses polling loop (200ms interval) in chatStatus rather than event-based
+- [Phase 09]: Auto-timeout is soft (message injection) matching existing step limit pattern
+- [Phase 09]: Emergency stop callback via DeviceBridgeOptions for clean dependency injection
 
 ### Pending Todos
 
@@ -94,6 +98,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-24T18:19:05.136Z
-Stopped at: Completed 09-01-PLAN.md (Agent Security Controls)
+Last session: 2026-03-24T18:29:34.851Z
+Stopped at: Completed 09-02-PLAN.md (Security Permissions - Consent/Emergency Stop/Timeout)
 Resume file: None

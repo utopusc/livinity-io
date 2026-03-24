@@ -215,7 +215,7 @@ Plans:
 
 Plans:
 - [x] 09-01-PLAN.md -- Agent emergency stop escape key listener + enriched audit events with coordinates/text
-- [ ] 09-02-PLAN.md -- Backend consent gate + emergency stop protocol wiring + auto-timeout + frontend consent dialog
+- [x] 09-02-PLAN.md -- Backend consent gate + emergency stop protocol wiring + auto-timeout + frontend consent dialog
 
 ## Progress
 
