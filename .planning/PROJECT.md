@@ -34,9 +34,26 @@ Key validated capabilities:
   - ✓ End-to-end audit logging (agent → relay → LivOS → UI)
   - ✓ Dangerous command blocklist (21 patterns, configurable)
 
-### Active
+## Current Milestone: v14.1 — Agent Installer & Setup UX
 
-(None — planning next milestone)
+**Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser. Users double-click to install, the agent opens a beautiful setup page for OAuth, then runs silently in the background with auto-start on boot.
+
+**Target features:**
+- Native platform installers (Inno Setup .exe, create-dmg .dmg, fpm .deb)
+- Web-based setup wizard (local HTTP server + React UI for OAuth flow)
+- System tray icon with connection status
+- Auto-start on boot (Windows registry, macOS LaunchAgent, Linux systemd)
+- livinity.io /download page with platform detection and download links
+
+### Active (v14.1 — Agent Installer & Setup UX)
+
+- [ ] Native Windows installer (.exe) with setup wizard
+- [ ] Native macOS installer (.dmg) with drag-to-Applications
+- [ ] Native Linux package (.deb) with systemd service
+- [ ] Web-based setup wizard (React UI for OAuth device flow)
+- [ ] System tray icon with connection status and menu
+- [ ] Auto-start on boot (per platform)
+- [ ] livinity.io /download page with platform detection
 
 ### Out of Scope
 
@@ -113,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after v14.0 milestone (Remote PC Control Agent)*
+*Last updated: 2026-03-24 — v14.1 milestone started (Agent Installer & Setup UX)*
