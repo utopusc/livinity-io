@@ -309,6 +309,36 @@ export default router({
 		return status || null
 	}),
 
+	/** Pause an active computer use session */
+	pauseComputerUse: privateProcedure.input(z.object({conversationId: z.string()})).mutation(({ctx, input}) => {
+		const status = ctx.livinityd.ai.chatStatus.get(input.conversationId)
+		if (!status || !status.computerUse) {
+			throw new TRPCError({code: 'NOT_FOUND', message: 'No active computer use session'})
+		}
+		ctx.livinityd.ai.chatStatus.set(input.conversationId, {...status, paused: true})
+		return {ok: true}
+	}),
+
+	/** Resume a paused computer use session */
+	resumeComputerUse: privateProcedure.input(z.object({conversationId: z.string()})).mutation(({ctx, input}) => {
+		const status = ctx.livinityd.ai.chatStatus.get(input.conversationId)
+		if (!status || !status.computerUse) {
+			throw new TRPCError({code: 'NOT_FOUND', message: 'No active computer use session'})
+		}
+		ctx.livinityd.ai.chatStatus.set(input.conversationId, {...status, paused: false})
+		return {ok: true}
+	}),
+
+	/** Stop an active computer use session (clears session state) */
+	stopComputerUse: privateProcedure.input(z.object({conversationId: z.string()})).mutation(({ctx, input}) => {
+		const status = ctx.livinityd.ai.chatStatus.get(input.conversationId)
+		if (!status) {
+			throw new TRPCError({code: 'NOT_FOUND', message: 'No active session'})
+		}
+		ctx.livinityd.ai.chatStatus.delete(input.conversationId)
+		return {ok: true}
+	}),
+
 	/** Get pending tool approvals */
 	getPendingApprovals: privateProcedure.query(async () => {
 		const apiUrl = getNexusApiUrl()
