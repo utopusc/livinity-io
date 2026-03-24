@@ -191,6 +191,22 @@ export function Dock() {
 					}
 				/>
 				<DockItem
+					appId='LIVINITY_my-devices'
+					iconSize={iconSize}
+					iconSizeZoomed={iconSizeZoomed}
+					open={false}
+					mouseX={mouseX}
+					onOpenWindow={(originRect) =>
+						handleOpenWindow(
+							'LIVINITY_my-devices',
+							'/my-devices',
+							'Devices',
+							systemAppsKeyed['LIVINITY_my-devices'].icon,
+							originRect,
+						)
+					}
+				/>
+				<DockItem
 					appId='LIVINITY_subagents'
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}

@@ -12,6 +12,7 @@ const ServerControlWindowContent = React.lazy(() => import('./app-contents/serve
 const SubagentsWindowContent = React.lazy(() => import('./app-contents/subagents-content'))
 const SchedulesWindowContent = React.lazy(() => import('./app-contents/schedules-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
+const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
 const ChromeWindowContent = React.lazy(() => import('./app-contents/chrome-content'))
 
 type WindowContentProps = {
@@ -20,7 +21,7 @@ type WindowContentProps = {
 }
 
 // Apps that manage their own scroll and layout (no wrapper padding/scroll)
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_server-control', 'LIVINITY_chrome',
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_chrome',
 	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
@@ -61,6 +62,9 @@ function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: s
 
 		case 'LIVINITY_server-control':
 			return <ServerControlWindowContent />
+
+		case 'LIVINITY_my-devices':
+			return <MyDevicesWindowContent />
 
 		case 'LIVINITY_subagents':
 			return <SubagentsWindowContent />

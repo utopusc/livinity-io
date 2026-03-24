@@ -1,7 +1,7 @@
 import {AnimatePresence, motion} from 'framer-motion'
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {ErrorBoundary} from 'react-error-boundary'
-import {TbChevronRight, TbFolder, TbLayoutGrid, TbMessage, TbSearch, TbServer, TbSettings} from 'react-icons/tb'
+import {TbChevronRight, TbDevices2, TbFolder, TbLayoutGrid, TbMessage, TbSearch, TbServer, TbSettings} from 'react-icons/tb'
 import {useNavigate} from 'react-router-dom'
 
 import {cmdkSearchProviders} from '@/components/cmdk-providers'
@@ -342,6 +342,23 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 						)
 					} else {
 						navigate(systemAppsKeyed['LIVINITY_server-control'].systemAppTo)
+					}
+					onClose()
+				},
+			},
+			{
+				label: 'Devices',
+				icon: <TbDevices2 className='text-neutral-600' />,
+				onSelect: () => {
+					if (windowManager) {
+						windowManager.openWindow(
+							'LIVINITY_my-devices',
+							'/my-devices',
+							'Devices',
+							systemAppsKeyed['LIVINITY_my-devices'].icon,
+						)
+					} else {
+						navigate(systemAppsKeyed['LIVINITY_my-devices'].systemAppTo)
 					}
 					onClose()
 				},
