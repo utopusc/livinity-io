@@ -202,7 +202,7 @@ Plans:
   2. Each device shows whether it is online (green) or offline (gray) with a last-seen timestamp
   3. User can rename a device from the UI
   4. User can remove a device, which revokes its token and disconnects it
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 52-01: Backend tRPC devices router (list, rename, remove) + Redis device state queries
