@@ -46,8 +46,8 @@
 
 ### Proc -- Process & System Info
 
-- [ ] **PROC-01**: AI can list running processes with PID, name, CPU%, memory
-- [ ] **PROC-02**: AI can collect system info (OS, CPU, RAM, disk, hostname, IPs, uptime)
+- [x] **PROC-01**: AI can list running processes with PID, name, CPU%, memory
+- [x] **PROC-02**: AI can collect system info (OS, CPU, RAM, disk, hostname, IPs, uptime)
 
 ### Screen -- Screenshot Capture
 
@@ -137,8 +137,8 @@
 | FILES-02 | Phase 50 | Complete |
 | FILES-03 | Phase 50 | Complete |
 | FILES-04 | Phase 50 | Complete |
-| PROC-01 | Phase 51 | Pending |
-| PROC-02 | Phase 51 | Pending |
+| PROC-01 | Phase 51 | Complete |
+| PROC-02 | Phase 51 | Complete |
 | SCREEN-01 | Phase 51 | Pending |
 | UI-01 | Phase 52 | Pending |
 | UI-02 | Phase 52 | Pending |
