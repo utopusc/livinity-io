@@ -106,6 +106,50 @@ function installLaunchAgent(): void {
   console.log('Installed LaunchAgent for auto-start on login');
 }
 
+// ---- Linux systemd user service ----
+
+function installSystemdService(): void {
+  if (process.platform !== 'linux') return;
+
+  const home = homedir();
+  const serviceDir = join(home, '.config', 'systemd', 'user');
+  const servicePath = join(serviceDir, 'livinity-agent.service');
+
+  // Skip if already installed as user service
+  if (existsSync(servicePath)) return;
+
+  // Skip if running inside a .deb install (system service exists)
+  if (existsSync('/etc/systemd/system/livinity-agent.service')) return;
+
+  const agentPath = process.execPath;
+  const serviceContent = `[Unit]
+Description=Livinity Agent - Remote PC Control
+Documentation=https://livinity.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${agentPath} start --background
+ExecStop=${agentPath} stop
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+`;
+
+  try {
+    mkdirSync(serviceDir, { recursive: true });
+    writeFileSync(servicePath, serviceContent, 'utf-8');
+    console.log('[agent] Installed systemd user service for auto-start');
+    console.log('[agent] Enable with: systemctl --user enable livinity-agent && systemctl --user start livinity-agent');
+  } catch (err) {
+    // Non-fatal -- skip if can't write
+    console.warn('[agent] Could not install systemd user service:', (err as Error).message);
+  }
+}
+
 // ---- start ----
 
 export async function startCommand(): Promise<void> {
@@ -221,6 +265,15 @@ export async function startCommand(): Promise<void> {
       installLaunchAgent();
     } catch (err) {
       console.warn('[agent] Failed to install LaunchAgent:', (err as Error).message);
+    }
+  }
+
+  // Install Linux systemd user service for auto-start (idempotent, non-fatal)
+  if (process.platform === 'linux') {
+    try {
+      installSystemdService();
+    } catch (err) {
+      console.warn('[agent] Failed to install systemd service:', (err as Error).message);
     }
   }
 
