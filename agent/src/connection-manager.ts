@@ -8,6 +8,7 @@ import {
 import type {
   DeviceAuth,
   DeviceAuditEvent,
+  DeviceEmergencyStop,
   DeviceToolCall,
   DeviceToolResult,
   DeviceToRelayMessage,
@@ -17,6 +18,7 @@ import { appendAuditLog, truncateParams } from './audit.js';
 import { TOOL_NAMES, executeTool } from './tools.js';
 import { writeState, removePid, type CredentialsData } from './state.js';
 import { isTokenExpired } from './auth.js';
+import { setEmergencyStopCallback, recordEscapePress } from './emergency-stop.js';
 
 // ---------------------------------------------------------------------------
 // Reconnection manager with exponential backoff + jitter
@@ -120,6 +122,17 @@ export class ConnectionManager {
       };
       this.ws!.send(JSON.stringify(authMsg));
       console.log('[agent] Auth message sent');
+
+      // Wire emergency stop callback (SEC-02)
+      setEmergencyStopCallback(() => {
+        console.log('[agent] EMERGENCY STOP triggered (3x Escape)');
+        const stopMsg: DeviceEmergencyStop = {
+          type: 'device_emergency_stop',
+          timestamp: new Date().toISOString(),
+          reason: 'escape_hotkey',
+        };
+        this.sendMessage(stopMsg);
+      });
     });
 
     this.ws.on('message', (data) => {
@@ -233,6 +246,18 @@ export class ConnectionManager {
       result = { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
     }
     const duration = Date.now() - startTime;
+
+    // Emergency stop detection: track escape key presses (SEC-02)
+    if (
+      msg.tool === 'keyboard_press' &&
+      typeof msg.params.key === 'string' &&
+      msg.params.key.toLowerCase() === 'escape'
+    ) {
+      if (recordEscapePress()) {
+        // Emergency stop triggered — still send the tool result, then stop
+        console.log('[agent] Emergency stop triggered via keyboard_press escape detection');
+      }
+    }
 
     const response: DeviceToolResult = {
       type: 'device_tool_result',
