@@ -244,6 +244,7 @@ export default class AiModule {
 		actions?: Array<{type: 'click' | 'double_click' | 'right_click' | 'type' | 'press' | 'drag' | 'scroll' | 'move' | 'screenshot'; x?: number; y?: number; text?: string; key?: string; timestamp: number}>;
 		paused?: boolean;
 	}>()
+	activeStreams = new Map<string, AbortController>()
 
 	constructor({livinityd, redisUrl}: AiModuleOptions) {
 		this.livinityd = livinityd
@@ -341,12 +342,17 @@ export default class AiModule {
 		const toolCalls: Array<{tool: string; params: Record<string, unknown>; result: {success: boolean; output: string}}> = []
 		const pendingToolCalls = new Map<string, {tool: string; params: Record<string, unknown>}>()
 
+		const controller = new AbortController()
+		this.activeStreams.set(conversationId, controller)
+		// Timeout fallback: abort after 10 minutes if not manually stopped
+		const timeout = setTimeout(() => controller.abort(), 600_000)
+
 		try {
 			const response = await fetch(`${livApiUrl}/api/agent/stream`, {
 				method: 'POST',
 				headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
 				body: JSON.stringify({task, max_turns: 30, conversationId, userPersonalization}),
-				signal: AbortSignal.timeout(600_000),
+				signal: controller.signal,
 			})
 
 			if (!response.ok || !response.body) {
@@ -514,8 +520,16 @@ export default class AiModule {
 				}
 			}
 		} catch (error) {
-			this.logger.error('Liv bridge error', error)
-			finalAnswer = finalAnswer || `Error communicating with Liv AI: ${getErrorMessage(error)}`
+			if (error instanceof DOMException && error.name === 'AbortError') {
+				this.logger.log(`Chat stream aborted for ${conversationId}`)
+				finalAnswer = finalAnswer || 'Computer use session stopped by user.'
+			} else {
+				this.logger.error('Liv bridge error', error)
+				finalAnswer = finalAnswer || `Error communicating with Liv AI: ${getErrorMessage(error)}`
+			}
+		} finally {
+			clearTimeout(timeout)
+			this.activeStreams.delete(conversationId)
 		}
 
 		const assistantMsg: ChatMessage = {
