@@ -141,11 +141,11 @@ Plans:
   3. Running `livinity-agent start` connects to the relay via WSS, maintains heartbeat, and auto-reconnects with exponential backoff on connection loss
   4. Running `livinity-agent status` shows connection state, device name, and relay endpoint
   5. Agent reports its list of available tools to the relay on successful connection
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 48-01: Agent project scaffold (esbuild + SEA config, CLI commands, connection manager, heartbeat)
-- [ ] 48-02: OAuth device flow integration (setup command, token storage, token refresh)
+- [ ] 48-01-PLAN.md -- Agent project scaffold, CLI commands, ConnectionManager with heartbeat & reconnect, tool stubs
+- [ ] 48-02-PLAN.md -- OAuth device flow (setup command), token storage, token expiry check
 
 ### Phase 49: Relay Message Routing + DeviceBridge
 **Goal**: AI tool calls on LivOS flow through the relay to the correct device agent and results return to the AI, with device tools dynamically appearing and disappearing in the Nexus ToolRegistry
