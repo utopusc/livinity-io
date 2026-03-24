@@ -22,6 +22,7 @@ import {
 	IconShieldCheck,
 	IconShieldX,
 	IconScreenshot,
+	IconDeviceDesktop,
 } from '@tabler/icons-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -491,12 +492,16 @@ export default function AiChat() {
 
 	const computerUseData = computerUseQuery.data as {
 		computerUse?: boolean
+		computerUseConsent?: boolean
 		screenshot?: string
 		actions?: Array<{type: string; x?: number; y?: number; text?: string; key?: string; timestamp: number}>
 		paused?: boolean
 	} | null
 
 	const isComputerUseActive = !!computerUseData?.computerUse
+	const needsConsent = !!computerUseData?.computerUse && !computerUseData?.computerUseConsent
+	const grantConsentMutation = trpcReact.ai.grantConsent.useMutation()
+	const denyConsentMutation = trpcReact.ai.denyConsent.useMutation()
 
 	useEffect(() => {
 		if (conversationQuery.data) {
@@ -851,6 +856,43 @@ export default function AiChat() {
 							<IconCode size={16} className='text-cyan-400' />
 							{canvasArtifact.title}
 						</button>
+					)}
+
+					{/* SEC-01: Consent dialog before computer use starts */}
+					{needsConsent && (
+						<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'>
+							<div className='mx-4 w-full max-w-sm rounded-radius-xl border border-border-default bg-surface-base p-6 shadow-elevation-3'>
+								{/* Icon */}
+								<div className='mb-4 flex justify-center'>
+									<div className='flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10'>
+										<IconDeviceDesktop size={24} className='text-amber-500' />
+									</div>
+								</div>
+								{/* Title */}
+								<h3 className='mb-2 text-center text-heading-md font-semibold text-text-primary'>
+									AI wants to control your device
+								</h3>
+								{/* Description */}
+								<p className='mb-6 text-center text-body-sm text-text-secondary'>
+									The AI is requesting permission to use your mouse and keyboard. You can stop control at any time.
+								</p>
+								{/* Buttons */}
+								<div className='flex gap-3'>
+									<button
+										onClick={() => denyConsentMutation.mutate({conversationId: activeConversationId})}
+										className='flex-1 rounded-radius-lg border border-border-default bg-surface-1 px-4 py-2.5 text-body-sm font-medium text-text-secondary transition-colors hover:bg-surface-2'
+									>
+										Deny
+									</button>
+									<button
+										onClick={() => grantConsentMutation.mutate({conversationId: activeConversationId})}
+										className='flex-1 rounded-radius-lg bg-accent-primary px-4 py-2.5 text-body-sm font-medium text-white transition-colors hover:bg-accent-primary-hover'
+									>
+										Allow
+									</button>
+								</div>
+							</div>
+						</div>
 					)}
 
 					{/* Computer Use Panel — desktop split-pane (takes priority over canvas) */}
