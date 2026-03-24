@@ -144,7 +144,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 48-01-PLAN.md -- Agent project scaffold, CLI commands, ConnectionManager with heartbeat & reconnect, tool stubs
+- [x] 48-01-PLAN.md -- Agent project scaffold, CLI commands, ConnectionManager with heartbeat & reconnect, tool stubs
 - [ ] 48-02-PLAN.md -- OAuth device flow (setup command), token storage, token expiry check
 
 ### Phase 49: Relay Message Routing + DeviceBridge
@@ -251,7 +251,7 @@ Plans:
 | 45. Docker Compose Stacks | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 46. Events + Engine Info + Polish | v13.0 | 2/2 | Complete | 2026-03-23 |
 | 47. Platform OAuth + Relay Device Infrastructure | v14.0 | 2/2 | Complete    | 2026-03-24 |
-| 48. Agent Binary + Authentication | v14.0 | 0/2 | Not started | - |
+| 48. Agent Binary + Authentication | v14.0 | 1/2 | In Progress|  |
 | 49. Relay Message Routing + DeviceBridge | v14.0 | 0/2 | Not started | - |
 | 50. Agent Core Tools -- Shell + Files | v14.0 | 0/2 | Not started | - |
 | 51. Agent Extended Tools -- Processes + Screenshot | v14.0 | 0/2 | Not started | - |

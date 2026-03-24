@@ -7,10 +7,10 @@
 
 ### Agent -- Remote Agent Binary
 
-- [ ] **AGENT-01**: User can download a single binary for their platform (Windows/Mac/Linux)
-- [ ] **AGENT-02**: Agent runs as background daemon with start/stop/status CLI commands
-- [ ] **AGENT-03**: Agent auto-reconnects with exponential backoff on connection loss
-- [ ] **AGENT-04**: Agent reports its available tools to the relay on connect
+- [x] **AGENT-01**: User can download a single binary for their platform (Windows/Mac/Linux)
+- [x] **AGENT-02**: Agent runs as background daemon with start/stop/status CLI commands
+- [x] **AGENT-03**: Agent auto-reconnects with exponential backoff on connection loss
+- [x] **AGENT-04**: Agent reports its available tools to the relay on connect
 
 ### Auth -- Device Authentication
 
@@ -72,7 +72,7 @@
 
 ### Security
 
-- [ ] **SEC-01**: All agent-relay transport uses WSS (TLS 1.3)
+- [x] **SEC-01**: All agent-relay transport uses WSS (TLS 1.3)
 - [ ] **SEC-02**: Device tokens are JWTs with 24h expiry and auto-refresh
 - [ ] **SEC-03**: Agent runs as logged-in user (not root/SYSTEM) by default
 - [ ] **SEC-04**: Dangerous command blocklist enforced on agent side
@@ -116,14 +116,14 @@
 | PLAT-03 | Phase 47 | Complete |
 | RELAY-01 | Phase 47 | Complete |
 | RELAY-02 | Phase 47 | Complete |
-| AGENT-01 | Phase 48 | Pending |
-| AGENT-02 | Phase 48 | Pending |
-| AGENT-03 | Phase 48 | Pending |
-| AGENT-04 | Phase 48 | Pending |
+| AGENT-01 | Phase 48 | Complete |
+| AGENT-02 | Phase 48 | Complete |
+| AGENT-03 | Phase 48 | Complete |
+| AGENT-04 | Phase 48 | Complete |
 | AUTH-01 | Phase 48 | Pending |
 | AUTH-02 | Phase 48 | Pending |
 | AUTH-03 | Phase 48 | Pending |
-| SEC-01 | Phase 48 | Pending |
+| SEC-01 | Phase 48 | Complete |
 | SEC-02 | Phase 48 | Pending |
 | RELAY-03 | Phase 49 | Pending |
 | RELAY-04 | Phase 49 | Pending |
