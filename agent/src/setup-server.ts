@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { AGENT_VERSION } from './config.js';
 import { PLATFORM_URL } from './auth.js';
@@ -368,18 +368,19 @@ export async function startSetupServer(): Promise<{
 
   console.log(`Setup server running at http://localhost:${boundPort}`);
 
-  // Auto-open browser using platform-native commands
+  // Auto-open browser — explorer.exe is the most reliable method on Windows (even in SEA binaries)
   const url = `http://localhost:${boundPort}`;
   try {
     const plat = process.platform;
+    let child;
     if (plat === 'win32') {
-      // PowerShell Start-Process is most reliable in SEA/child_process contexts
-      execSync(`powershell -Command "Start-Process '${url}'"`, { stdio: 'ignore', windowsHide: true });
+      child = spawn('explorer.exe', [url], { detached: true, stdio: 'ignore' });
     } else if (plat === 'darwin') {
-      execSync(`open "${url}"`, { stdio: 'ignore' });
+      child = spawn('open', [url], { detached: true, stdio: 'ignore' });
     } else {
-      execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+      child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
     }
+    child.unref();
   } catch {
     console.log(`Open ${url} in your browser to complete setup.`);
   }
