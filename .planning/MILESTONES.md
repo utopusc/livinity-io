@@ -1,5 +1,24 @@
 # Milestones
 
+## v14.1 Agent Installer & Setup UX (Shipped: 2026-03-24)
+
+**Phases completed:** 12 phases, 19 plans, 35 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- Removed 4 .bak files and added .gitignore patterns to prevent future backup file commits
+- React 18 setup wizard SPA with Vite/Tailwind/Framer Motion serving 4 screens (Welcome, Connecting, Success, Error) via Express on port 19191 with 3 API endpoint stubs
+- OAuth device flow wired into Express setup server with SPA polling, auto-close on success, CLI web-first routing, and esbuild pipeline copying setup-ui alongside agent bundle
+- Complete .gitignore coverage for .env files and canonical .env.example template with 29 documented environment variables
+- Cross-platform system tray icon with programmatic PNG icons (green/yellow/red), status-change callback in ConnectionManager, and context menu with Disconnect/Setup/Quit actions
+- Complete SEA binary build pipeline with CJS format, Inno Setup installer script with auto-start registry key, and --background flag for silent boot operation
+- macOS .app bundle with Info.plist, build-dmg.sh using hdiutil for drag-to-install DMG, and LaunchAgent auto-install for boot persistence
+- Linux .deb build pipeline with fpm, systemd service (system + user dual strategy), and CLI auto-install for auto-start on boot
+- livinity.io/download page with navigator.userAgent OS detection, 3-platform download buttons (Windows .exe, macOS .dmg, Linux .deb), inline SVG platform icons, and 3-step setup guide
+
+---
+
 ## v14.0 Remote PC Control Agent (Shipped: 2026-03-24)
 
 **Phases completed:** 7 phases, 14 plans, 26 tasks

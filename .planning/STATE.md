@@ -4,7 +4,7 @@ milestone: v14.1
 milestone_name: Agent Installer & Setup UX
 status: unknown
 stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-24T09:49:57.142Z"
+last_updated: "2026-03-24T09:50:07.924Z"
 progress:
   total_phases: 12
   completed_phases: 11
