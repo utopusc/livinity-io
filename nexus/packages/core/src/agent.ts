@@ -65,6 +65,8 @@ export interface AgentConfig {
   approvalPolicy?: 'always' | 'destructive' | 'never';
   /** User personalization preferences (role, style, use cases) from onboarding/settings */
   userPersonalization?: UserPersonalization;
+  /** Maximum computer use actions (screenshot+click/type cycles) per session. Default: 50. */
+  computerUseStepLimit?: number;
 }
 
 /** Resolve agent config with defaults from NexusConfig */
@@ -478,6 +480,10 @@ export class AgentLoop extends EventEmitter {
     const startTime = Date.now();
     const prefix = depth > 0 ? `Subagent[${depth}]` : 'Agent';
 
+    // Computer use step tracking (mouse/keyboard actions on device)
+    let computerUseSteps = 0;
+    const computerUseStepLimit = this.config.computerUseStepLimit ?? 50;
+
     const taskWithContext = this.config.contextPrefix
       ? `${this.config.contextPrefix}\n\n## Current Task\n${task}`
       : `Task: ${task}`;
@@ -711,6 +717,26 @@ export class AgentLoop extends EventEmitter {
             return acc;
           }, []);
           messages.push({ role: 'user', text: toolResultText, ...(allToolImages.length > 0 ? { images: allToolImages } : {}) });
+
+          // Track computer use steps — count mouse/keyboard device tool calls
+          for (const toolCall of nativeToolUseBlocks) {
+            if (/^device_.*_(mouse_|keyboard_)/.test(toolCall.name)) {
+              computerUseSteps++;
+            }
+          }
+          if (computerUseSteps >= computerUseStepLimit) {
+            const limitMsg = `\n\n[SYSTEM] Computer use step limit reached (${computerUseSteps}/${computerUseStepLimit} mouse/keyboard actions). Stop taking mouse/keyboard actions. Take a final screenshot to see current state, then provide your final answer to the user explaining what was accomplished and what remains.`;
+            // Append to the last provider message (tool results)
+            const lastProviderMsg = providerMessages[providerMessages.length - 1] as any;
+            if (Array.isArray(lastProviderMsg?.content)) {
+              const lastBlock = lastProviderMsg.content[lastProviderMsg.content.length - 1];
+              if (lastBlock && typeof lastBlock.content === 'string') {
+                lastBlock.content += limitMsg;
+              }
+            }
+            messages[messages.length - 1].text += limitMsg;
+            logger.warn(`${prefix}: computer use step limit reached`, { computerUseSteps, computerUseStepLimit });
+          }
 
           if (turn === maxTurns - 1) {
             stoppedReason = 'max_turns';
