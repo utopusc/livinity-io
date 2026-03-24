@@ -7,7 +7,8 @@
     "dev": "tsx src/index.ts",
     "build": "node esbuild.config.mjs",
     "build:sea": "node build-sea.mjs",
-    "build:installer:win": "installer\\windows\\build-installer.bat"
+    "build:installer:win": "installer\\windows\\build-installer.bat",
+    "build:installer:mac": "bash installer/macos/build-dmg.sh"
   },
   "dependencies": {
     "express": "^4.21.0",
