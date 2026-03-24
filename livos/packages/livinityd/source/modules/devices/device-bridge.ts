@@ -65,6 +65,64 @@ const DEVICE_TOOL_SCHEMAS: Record<
 			{name: 'display', type: 'number', description: 'Display index (default: primary)', required: false},
 		],
 	},
+	mouse_click: {
+		description: 'Left-click the mouse at screen coordinates',
+		parameters: [
+			{name: 'x', type: 'number', description: 'X coordinate (pixels from left)', required: true},
+			{name: 'y', type: 'number', description: 'Y coordinate (pixels from top)', required: true},
+		],
+	},
+	mouse_double_click: {
+		description: 'Double-click the mouse at screen coordinates',
+		parameters: [
+			{name: 'x', type: 'number', description: 'X coordinate', required: true},
+			{name: 'y', type: 'number', description: 'Y coordinate', required: true},
+		],
+	},
+	mouse_right_click: {
+		description: 'Right-click the mouse at screen coordinates',
+		parameters: [
+			{name: 'x', type: 'number', description: 'X coordinate', required: true},
+			{name: 'y', type: 'number', description: 'Y coordinate', required: true},
+		],
+	},
+	mouse_move: {
+		description: 'Move the mouse cursor to screen coordinates without clicking',
+		parameters: [
+			{name: 'x', type: 'number', description: 'X coordinate', required: true},
+			{name: 'y', type: 'number', description: 'Y coordinate', required: true},
+		],
+	},
+	mouse_drag: {
+		description: 'Drag the mouse from one position to another (click-hold-move-release)',
+		parameters: [
+			{name: 'fromX', type: 'number', description: 'Start X coordinate', required: true},
+			{name: 'fromY', type: 'number', description: 'Start Y coordinate', required: true},
+			{name: 'toX', type: 'number', description: 'End X coordinate', required: true},
+			{name: 'toY', type: 'number', description: 'End Y coordinate', required: true},
+		],
+	},
+	mouse_scroll: {
+		description: 'Scroll the mouse wheel up or down, optionally at specific coordinates',
+		parameters: [
+			{name: 'direction', type: 'string', description: 'Scroll direction: "up" or "down" (default: down)', required: true},
+			{name: 'amount', type: 'number', description: 'Scroll amount in clicks (default: 3)', required: false},
+			{name: 'x', type: 'number', description: 'X coordinate to scroll at (optional, uses current position if omitted)', required: false},
+			{name: 'y', type: 'number', description: 'Y coordinate to scroll at (optional)', required: false},
+		],
+	},
+	keyboard_type: {
+		description: 'Type a text string using the keyboard (into the currently focused input)',
+		parameters: [
+			{name: 'text', type: 'string', description: 'Text to type', required: true},
+		],
+	},
+	keyboard_press: {
+		description: 'Press a key or key combination (e.g., "enter", "ctrl+c", "alt+tab", "f5")',
+		parameters: [
+			{name: 'key', type: 'string', description: 'Key to press. Use "+" for combinations: "ctrl+c", "alt+f4", "shift+tab". Supported keys: a-z, 0-9, f1-f12, enter, tab, escape, space, backspace, delete, up, down, left, right, home, end, pageup, pagedown, insert, printscreen. Modifiers: ctrl/control, alt, shift, command/cmd.', required: true},
+		],
+	},
 }
 
 interface PendingRequest {
