@@ -211,7 +211,11 @@ Plans:
   2. Pressing Escape three times rapidly on the device immediately terminates AI control regardless of session state
   3. Every mouse/keyboard action (click x,y / type "text" / press Ctrl+C) is recorded to the audit trail with coordinates, timestamp, and screenshot reference
   4. Computer use sessions that have no AI activity for a configurable period (default 60s) auto-terminate and notify the user
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md -- Agent emergency stop escape key listener + enriched audit events with coordinates/text
+- [ ] 09-02-PLAN.md -- Backend consent gate + emergency stop protocol wiring + auto-timeout + frontend consent dialog
 
 ## Progress
 
@@ -224,4 +228,4 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 | 6. Screen Info & Screenshot Extensions | v15.0 | 0/1 | Not started | - |
 | 7. Computer Use Loop | v15.0 | 0/2 | Not started | - |
 | 8. Live Monitoring UI | v15.0 | 0/3 | Not started | - |
-| 9. Security & Permissions | v15.0 | 0/? | Not started | - |
+| 9. Security & Permissions | v15.0 | 0/2 | Not started | - |
