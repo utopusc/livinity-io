@@ -329,11 +329,16 @@ export default router({
 		return {ok: true}
 	}),
 
-	/** Stop an active computer use session (clears session state) */
+	/** Stop an active computer use session (aborts SSE stream and clears session state) */
 	stopComputerUse: privateProcedure.input(z.object({conversationId: z.string()})).mutation(({ctx, input}) => {
 		const status = ctx.livinityd.ai.chatStatus.get(input.conversationId)
 		if (!status) {
 			throw new TRPCError({code: 'NOT_FOUND', message: 'No active session'})
+		}
+		// Abort the active SSE stream to nexus — this kills the agent loop
+		const controller = ctx.livinityd.ai.activeStreams.get(input.conversationId)
+		if (controller) {
+			controller.abort()
 		}
 		ctx.livinityd.ai.chatStatus.delete(input.conversationId)
 		return {ok: true}
