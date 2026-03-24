@@ -25,3 +25,31 @@ export const installHistory = pgTable('install_history', {
   instance_name: text('instance_name').notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// =========================================================================
+// Devices (registered remote agents)
+// =========================================================================
+export const devices = pgTable('devices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  user_id: uuid('user_id').notNull(),
+  device_id: uuid('device_id').notNull().unique(),
+  device_name: text('device_name').notNull(),
+  platform: text('platform').notNull(),  // 'win32' | 'darwin' | 'linux'
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  last_seen: timestamp('last_seen', { withTimezone: true }),
+  revoked: boolean('revoked').notNull().default(false),
+});
+
+// =========================================================================
+// Device Grants (OAuth device flow pending approvals)
+// =========================================================================
+export const deviceGrants = pgTable('device_grants', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  user_id: uuid('user_id'),  // nullable until approved
+  device_code: text('device_code').notNull().unique(),
+  user_code: text('user_code').notNull().unique(),
+  status: text('status').notNull().default('pending'),  // 'pending' | 'approved' | 'expired'
+  device_info: jsonb('device_info'),  // { deviceName, platform, agentVersion }
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
