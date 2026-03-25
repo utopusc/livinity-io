@@ -265,14 +265,18 @@ When you have access to device tools (device_*_screenshot, device_*_mouse_click,
 4. **Verify**: Take another screenshot after each action to confirm it worked. Did the button get clicked? Did the text appear? Did the window open?
 5. **Repeat**: Continue the loop until the task is complete or you determine it cannot be completed.
 
+### Coordinate System (CRITICAL)
+
+The screenshot tool returns an image and metadata including displayWidth and displayHeight. These are the SCALED dimensions that define YOUR coordinate space. When you call mouse_click, mouse_move, etc., use coordinates within this scaled space (0,0 at top-left to displayWidth,displayHeight at bottom-right). The agent automatically converts your coordinates to actual screen coordinates.
+
+Example: If screenshot says "AI sees as 1366x768", and you want to click a button that appears at roughly the center-right of the image, use coordinates like mouse_click(x=1000, y=384). Do NOT use the actual screen resolution (e.g. 2560x1440) — always use the displayWidth x displayHeight from the screenshot output.
+
 ### Important Guidelines
 
-- Use device_*_screen_info to understand display geometry (resolution, scale factor, multi-monitor layout) before your first action
 - When clicking, aim for the CENTER of UI elements, not edges
 - If you cannot find a UI element after 3 screenshots, report failure rather than clicking randomly
 - For text input: click the text field FIRST (mouse_click), then type (keyboard_type)
 - For keyboard shortcuts: use keyboard_press with combo syntax (e.g. "ctrl+c", "alt+tab")
-- Account for scale factor: if scaleFactor > 1 (HiDPI), screenshot pixel coordinates may differ from screen coordinates. Use the monitorWidth/monitorHeight from screenshot metadata for actual screen dimensions.
 - Report completion: When the task is done, take a final screenshot to confirm and tell the user what you accomplished
 - Report failure: If you cannot complete the task, explain what you tried, what went wrong, and what the user could do manually
 
@@ -414,7 +418,7 @@ export class AgentLoop extends EventEmitter {
 
     // Detect active provider for tool calling mode
     const activeProvider = await brain.getActiveProviderId();
-    const useNativeTools = activeProvider === 'kimi';
+    const useNativeTools = activeProvider === 'kimi' || activeProvider === 'claude';
 
     // Prepare tool definitions if using native tool calling
     let nativeTools: ToolDefinition[] | undefined;
@@ -666,14 +670,23 @@ export class AgentLoop extends EventEmitter {
               : `Error: ${toolResult.error || toolResult.output}`;
 
             // Build content: if tool returned images, create multimodal content array
+            // Claude requires Anthropic image format; Kimi uses OpenAI image_url format
             let resultContent: string | Array<{ type: string; [k: string]: unknown }> = resultText;
             if (toolResult.images && toolResult.images.length > 0) {
               resultContent = [
                 { type: 'text', text: resultText },
-                ...toolResult.images.map(img => ({
-                  type: 'image_url' as const,
-                  image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
-                })),
+                ...toolResult.images.map(img => {
+                  if (activeProvider === 'claude') {
+                    return {
+                      type: 'image' as const,
+                      source: { type: 'base64' as const, media_type: img.mimeType, data: img.base64 },
+                    };
+                  }
+                  return {
+                    type: 'image_url' as const,
+                    image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+                  };
+                }),
               ];
             }
 
