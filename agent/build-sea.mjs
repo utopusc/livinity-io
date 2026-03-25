@@ -220,6 +220,38 @@ copyDir(
   'node-gyp-build/',
 );
 
+// 6f. sharp — image processing (resize screenshots)
+console.log('[build-sea] Copying sharp...');
+const sharpDest = join(distDir, 'node_modules', 'sharp');
+copyDir(
+  join(nodeModules, 'sharp'),
+  sharpDest,
+  'sharp/',
+);
+// Copy @img/sharp-* platform-specific native packages
+const imgPkgs = [
+  '@img/sharp-win32-x64',
+  '@img/sharp-darwin-x64',
+  '@img/sharp-darwin-arm64',
+  '@img/sharp-linux-x64',
+  '@img/sharp-linux-arm64',
+  '@img/sharp-linuxmusl-x64',
+  '@img/sharp-linuxmusl-arm64',
+];
+for (const pkg of imgPkgs) {
+  const src = join(nodeModules, ...pkg.split('/'));
+  if (existsSync(src)) {
+    copyDir(src, join(distDir, 'node_modules', ...pkg.split('/')), pkg);
+  }
+}
+// Copy sharp's JS dependencies (color, detect-libc, semver)
+for (const dep of ['color', 'color-convert', 'color-name', 'color-string', 'detect-libc', 'semver', 'is-arrayish', 'simple-swizzle']) {
+  const src = join(nodeModules, dep);
+  if (existsSync(src)) {
+    copyDir(src, join(distDir, 'node_modules', dep), dep);
+  }
+}
+
 // ── Step 7: Copy setup-ui assets ────────────────────────────────────────
 // Already copied by esbuild.config.mjs, but verify
 if (existsSync(join(distDir, 'setup-ui', 'index.html'))) {

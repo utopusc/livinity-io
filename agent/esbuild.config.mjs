@@ -24,6 +24,12 @@ const seaExternalsPlugin = {
       path: '@jitsi/robotjs',
       external: true,
     }));
+
+    // sharp has native platform-specific binaries (@img/sharp-*)
+    build.onResolve({ filter: /^sharp$/ }, () => ({
+      path: 'sharp',
+      external: true,
+    }));
   },
 };
 

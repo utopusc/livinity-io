@@ -546,8 +546,22 @@ Conversation:`;
   };
   processInboxQueue(); // Start the blocking listener
 
+  let isShuttingDown = false;
   const shutdown = async () => {
+    if (isShuttingDown) return; // Prevent double shutdown
+    isShuttingDown = true;
     logger.info('Shutting down...');
+
+    // Close HTTP server FIRST to release port immediately
+    await new Promise<void>((resolve) => {
+      httpServer.close(() => {
+        logger.info('HTTP server closed, port released');
+        resolve();
+      });
+      // Force close after 3s if connections are hanging
+      setTimeout(resolve, 3000);
+    });
+
     redisCircuitBreaker.destroy();
     voiceGateway.stop();
     wsGateway.stop();

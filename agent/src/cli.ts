@@ -6,6 +6,7 @@ import { readCredentials, readState, readPid, writePid, removePid } from './stat
 import { ConnectionManager } from './connection-manager.js';
 import { deviceFlowSetup, isTokenExpired } from './auth.js';
 import { startTray, updateTrayStatus, killTray } from './tray.js';
+import { initScreenElements } from './tools/screen-elements.js';
 
 // ---- setup ----
 
@@ -220,6 +221,9 @@ export async function startCommand(): Promise<void> {
 
   // Write PID file
   writePid(process.pid);
+
+  // Initialize DPI awareness + UIA subprocess (Windows only)
+  initScreenElements();
 
   // Create connection manager and connect
   const manager = new ConnectionManager({
