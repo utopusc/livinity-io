@@ -4,6 +4,7 @@ import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { execSync, spawn } from 'child_process';
+import { createHash } from 'crypto';
 
 const PLATFORM_URL = 'https://livinity.io';
 const AGENT_VERSION = '1.0.0';
@@ -593,6 +594,12 @@ while ($true) {
   private aiTargetW = 0;
   private aiTargetH = 0;
 
+  // Screenshot caching: skip re-capture when accessibility tree hasn't changed
+  private lastElementHash: string = '';
+  private lastScreenshotBase64: string = '';
+  private lastScreenshotOutput: string = '';
+  private lastScreenshotData: any = null;
+
   // Target resolutions (Anthropic recommended — stays under API auto-resize limits)
   private static SCALE_TARGETS = [
     { w: 1280, h: 800, ratio: 1280 / 800 },   // WXGA 16:10
@@ -601,6 +608,29 @@ while ($true) {
   ];
 
   private async toolScreenshot(): Promise<any> {
+    // AIP-03: Return cached screenshot if accessibility tree hasn't changed
+    if (this.lastElementHash && this.lastScreenshotBase64 && this.lastScreenshotData) {
+      try {
+        const result = await this.queryUia();
+        if (result.elements && result.elements.length > 0) {
+          const header = 'id|window|control_type|name|(cx,cy)';
+          const body = (result.elements as string[]).join('\n');
+          const text = `${header}\n${body}`;
+          const currentHash = createHash('sha256').update(text).digest('hex');
+          if (currentHash === this.lastElementHash) {
+            return {
+              success: true,
+              output: this.lastScreenshotOutput + ' [cached — accessibility tree unchanged]',
+              data: { ...this.lastScreenshotData, cached: true },
+              images: [{ base64: this.lastScreenshotBase64, mimeType: 'image/jpeg' }],
+            };
+          }
+        }
+      } catch {
+        // UIA query failed — fall through to fresh screenshot
+      }
+    }
+
     try {
       const ns = require('node-screenshots');
       const sharp = require('sharp');
@@ -649,17 +679,22 @@ while ($true) {
 
       const base64 = resizedJpeg.toString('base64');
 
+      // Cache for AIP-03 screenshot caching
+      this.lastScreenshotBase64 = base64;
+      this.lastScreenshotOutput = `Screenshot captured: ${physicalW}x${physicalH} physical, ${logicalW}x${logicalH} logical, resized to ${targetW}x${targetH} for AI. Coordinate space: 0,0 to ${targetW},${targetH}. Scale factor: ${scaleFactor}.`;
+      this.lastScreenshotData = {
+        width: logicalW, height: logicalH,
+        displayWidth: targetW, displayHeight: targetH,
+        physicalWidth: physicalW, physicalHeight: physicalH,
+        scaleFactor: scaleFactor,
+        monitorX: primary.x(), monitorY: primary.y(),
+        size: resizedJpeg.length,
+      };
+
       return {
         success: true,
-        output: `Screenshot captured: ${physicalW}x${physicalH} physical, ${logicalW}x${logicalH} logical, resized to ${targetW}x${targetH} for AI. Coordinate space: 0,0 to ${targetW},${targetH}. Scale factor: ${scaleFactor}.`,
-        data: {
-          width: logicalW, height: logicalH,
-          displayWidth: targetW, displayHeight: targetH,
-          physicalWidth: physicalW, physicalHeight: physicalH,
-          scaleFactor: scaleFactor,
-          monitorX: primary.x(), monitorY: primary.y(),
-          size: resizedJpeg.length,
-        },
+        output: this.lastScreenshotOutput,
+        data: this.lastScreenshotData,
         images: [{ base64, mimeType: 'image/jpeg' }],
       };
     } catch (e: any) { return { error: `Screenshot failed: ${e.message}` }; }
@@ -695,6 +730,7 @@ while ($true) {
       const count: number = result.count || 0;
 
       if (count === 0) {
+        this.lastElementHash = '';  // No elements = invalidate cache
         return {
           success: true,
           output: `No interactive elements found in "${window}".`,
@@ -707,6 +743,9 @@ while ($true) {
       const header = 'id|window|control_type|name|(cx,cy)';
       const body = elements.join('\n');
       const text = `${header}\n${body}`;
+
+      // Compute hash for screenshot caching (AIP-03)
+      this.lastElementHash = createHash('sha256').update(text).digest('hex');
 
       return {
         success: true,
