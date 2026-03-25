@@ -240,7 +240,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     tagline: 'A safe home for all your data',
     version: '28.0.0',
     category: 'files',
-    port: 8080,
+    port: 8085,
     description: 'Nextcloud Hub is the industry-leading, fully open-source, on-premises content collaboration platform.',
     website: 'https://nextcloud.com',
     developer: 'Nextcloud GmbH',
@@ -263,7 +263,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
           image: 'nextcloud:latest',
           restart: 'unless-stopped',
           volumes: ['${APP_DATA_DIR}/html:/var/www/html'],
-          ports: ['127.0.0.1:8080:80'],
+          ports: ['127.0.0.1:8085:80'],
           healthcheck: {
             test: ['CMD-SHELL', 'curl -f http://localhost:80/status.php || exit 1'],
             interval: '30s',
