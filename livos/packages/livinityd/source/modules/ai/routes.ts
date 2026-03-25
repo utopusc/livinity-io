@@ -223,6 +223,210 @@ export default router({
 		}
 	}),
 
+	// ── Claude Auth ──────────────────────────────────────────
+
+	/** Check Claude auth status (proxies to Nexus /api/claude/status) */
+	getClaudeStatus: privateProcedure.query(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/claude/status`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				throw new Error(`Nexus API error: ${response.status}`)
+			}
+			return (await response.json()) as {
+				authenticated: boolean
+				method?: string
+				provider: string
+			}
+		} catch (error) {
+			ctx.livinityd.logger.error('Failed to get Claude status', error)
+			return {authenticated: false, provider: 'claude'}
+		}
+	}),
+
+	/** Set Claude API key (proxies to Nexus /api/claude/set-api-key) */
+	setClaudeApiKey: privateProcedure
+		.input(z.object({apiKey: z.string().min(1)}))
+		.mutation(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(`${nexusUrl}/api/claude/set-api-key`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+					},
+					body: JSON.stringify({apiKey: input.apiKey}),
+				})
+				if (!response.ok) {
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || `Nexus API error: ${response.status}`,
+					})
+				}
+				return {success: true}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to set Claude API key', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to set Claude API key',
+				})
+			}
+		}),
+
+	/** Start Claude OAuth PKCE login (proxies to Nexus /api/claude/start-login) */
+	claudeStartLogin: privateProcedure.mutation(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/claude/start-login`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+			})
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: errorData.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return (await response.json()) as Record<string, unknown>
+		} catch (error) {
+			if (error instanceof TRPCError) throw error
+			ctx.livinityd.logger.error('Failed to start Claude login', error)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(error) || 'Failed to start Claude login',
+			})
+		}
+	}),
+
+	/** Submit OAuth code for Claude login (proxies to Nexus /api/claude/submit-code) */
+	claudeSubmitCode: privateProcedure
+		.input(z.object({code: z.string().min(1)}))
+		.mutation(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(`${nexusUrl}/api/claude/submit-code`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+					},
+					body: JSON.stringify({code: input.code}),
+				})
+				if (!response.ok) {
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || `Nexus API error: ${response.status}`,
+					})
+				}
+				return {success: true}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to submit Claude code', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to submit Claude login code',
+				})
+			}
+		}),
+
+	/** Logout from Claude (proxies to Nexus /api/claude/logout) */
+	claudeLogout: privateProcedure.mutation(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/claude/logout`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+			})
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: errorData.error || `Nexus API error: ${response.status}`,
+				})
+			}
+			return (await response.json()) as {success: boolean}
+		} catch (error) {
+			if (error instanceof TRPCError) throw error
+			ctx.livinityd.logger.error('Failed to logout from Claude', error)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(error) || 'Failed to logout from Claude',
+			})
+		}
+	}),
+
+	// ── Provider Management ──────────────────────────────────
+
+	/** Get all providers with availability (proxies to Nexus /api/providers) */
+	getProviders: privateProcedure.query(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/providers`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				throw new Error(`Nexus API error: ${response.status}`)
+			}
+			return (await response.json()) as {
+				providers: Array<{name: string; available: boolean}>
+				primaryProvider: string
+				fallbackOrder: string[]
+			}
+		} catch (error) {
+			ctx.livinityd.logger.error('Failed to get providers', error)
+			return {providers: [], primaryProvider: 'kimi', fallbackOrder: ['kimi']}
+		}
+	}),
+
+	/** Set primary AI provider (proxies to Nexus PUT /api/provider/primary) */
+	setPrimaryProvider: privateProcedure
+		.input(z.object({provider: z.enum(['claude', 'kimi'])}))
+		.mutation(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(`${nexusUrl}/api/provider/primary`, {
+					method: 'PUT',
+					headers: {
+						'Content-Type': 'application/json',
+						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+					},
+					body: JSON.stringify({provider: input.provider}),
+				})
+				if (!response.ok) {
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || `Nexus API error: ${response.status}`,
+					})
+				}
+				return (await response.json()) as {
+					success: boolean
+					primaryProvider: string
+					fallbackOrder: string[]
+				}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to set primary provider', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to set primary provider',
+				})
+			}
+		}),
+
 	// ── Nexus Config ─────────────────────────────────────────
 
 	/** Get Nexus AI configuration from backend */
