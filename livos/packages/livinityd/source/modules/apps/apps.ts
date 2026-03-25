@@ -424,11 +424,11 @@ export default class Apps {
 		} catch {
 			throw new Error('App template not found')
 		}
-		const manifestVersionValid = semver.valid(manifest.manifestVersion)
+		const manifestVersionValid = semver.valid(manifest.manifestVersion) || semver.valid(semver.coerce(manifest.manifestVersion))
 		if (!manifestVersionValid) {
 			throw new Error('App manifest version is invalid')
 		}
-		const livinityVersionValid = semver.valid(this.#livinityd.version)
+		const livinityVersionValid = semver.valid(this.#livinityd.version) || semver.valid(semver.coerce(this.#livinityd.version))
 		const manifestVersionIsSupported = !!livinityVersionValid && semver.lte(manifestVersionValid, livinityVersionValid)
 		if (!manifestVersionIsSupported) {
 			throw new Error(`App manifest version not supported`)
