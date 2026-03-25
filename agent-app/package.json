@@ -33,6 +33,14 @@
     "files": [
       "dist/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/@jitsi/robotjs/**",
+      "node_modules/node-screenshots/**",
+      "node_modules/node-screenshots-win32-x64-msvc/**",
+      "node_modules/node-gyp-build/**",
+      "node_modules/sharp/**",
+      "node_modules/@img/**"
     ]
   },
   "devDependencies": {
@@ -51,9 +59,12 @@
     "vite": "^5.4.0"
   },
   "dependencies": {
+    "@jitsi/robotjs": "^0.6.21",
     "framer-motion": "^11.0.0",
+    "node-screenshots": "^0.2.8",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "sharp": "^0.34.5",
     "ws": "^8.18.0"
   }
 }
