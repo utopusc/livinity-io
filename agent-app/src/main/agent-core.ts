@@ -320,7 +320,7 @@ while ($true) {
           deviceId: this.credentials!.deviceId,
           deviceName: this.credentials!.deviceName,
           platform: this.credentials!.platform,
-          tools: ['shell', 'files_list', 'files_read', 'files_write', 'files_delete', 'files_rename', 'processes', 'system_info', 'screenshot', 'screen_info', 'mouse_click', 'mouse_double_click', 'mouse_right_click', 'mouse_move', 'mouse_drag', 'mouse_scroll', 'keyboard_type', 'keyboard_press'],
+          tools: ['shell', 'files_list', 'files_read', 'files_write', 'files_delete', 'files_rename', 'processes', 'system_info', 'screenshot', 'screen_info', 'screen_elements', 'mouse_click', 'mouse_double_click', 'mouse_right_click', 'mouse_move', 'mouse_drag', 'mouse_scroll', 'keyboard_type', 'keyboard_press'],
         }));
       });
 
@@ -463,6 +463,7 @@ while ($true) {
       case 'system_info': return this.toolSystemInfo();
       case 'screenshot': return this.toolScreenshot();
       case 'screen_info': return this.toolScreenInfo();
+      case 'screen_elements': return this.toolScreenElements();
       case 'mouse_click': return this.toolMouseClick(params);
       case 'mouse_double_click': return this.toolMouseDoubleClick(params);
       case 'mouse_right_click': return this.toolMouseRightClick(params);
@@ -677,6 +678,46 @@ while ($true) {
     } catch (e: any) { return { error: `Screen info failed: ${e.message}` }; }
   }
 
+  private async toolScreenElements(): Promise<any> {
+    try {
+      const result = await this.queryUia();
+
+      if (result.error) {
+        return {
+          success: false,
+          output: '',
+          error: `screen_elements: ${result.error}`,
+        };
+      }
+
+      const elements: string[] = result.elements || [];
+      const window: string = result.window || '';
+      const count: number = result.count || 0;
+
+      if (count === 0) {
+        return {
+          success: true,
+          output: `No interactive elements found in "${window}".`,
+          data: { elements: [], window, count: 0 },
+        };
+      }
+
+      // Format as pipe-delimited text block for AI consumption
+      // Format: id|window|control_type|name|(cx,cy)
+      const header = 'id|window|control_type|name|(cx,cy)';
+      const body = elements.join('\n');
+      const text = `${header}\n${body}`;
+
+      return {
+        success: true,
+        output: `Found ${count} interactive elements in "${window}". Coordinates are in logical screen pixels. Pass to mouse_click with raw:true to use directly.\n\n${text}`,
+        data: { elements, window, count },
+      };
+    } catch (e: any) {
+      return { error: `screen_elements failed: ${e.message}` };
+    }
+  }
+
   // --- Mouse & Keyboard Tools (robotjs) ---
 
   private robotjs: any = null;
@@ -712,53 +753,53 @@ while ($true) {
   private toolMouseClick(params: any): any {
     const robot = this.ensureRobot();
     if (!robot) return { error: 'robotjs not available' };
-    const x = this.toScreenX(params.x || 0);
-    const y = this.toScreenY(params.y || 0);
+    const x = params.raw ? Math.round(params.x || 0) : this.toScreenX(params.x || 0);
+    const y = params.raw ? Math.round(params.y || 0) : this.toScreenY(params.y || 0);
     robot.moveMouse(x, y);
     robot.mouseClick('left');
-    return { success: true, output: `Clicked at screen (${x}, ${y}) [AI coord: ${params.x}, ${params.y}]` };
+    return { success: true, output: `Clicked at screen (${x}, ${y}) [AI coord: ${params.x}, ${params.y}]${params.raw ? ' [raw/element coords]' : ''}` };
   }
 
   private toolMouseDoubleClick(params: any): any {
     const robot = this.ensureRobot();
     if (!robot) return { error: 'robotjs not available' };
-    const x = this.toScreenX(params.x || 0);
-    const y = this.toScreenY(params.y || 0);
+    const x = params.raw ? Math.round(params.x || 0) : this.toScreenX(params.x || 0);
+    const y = params.raw ? Math.round(params.y || 0) : this.toScreenY(params.y || 0);
     robot.moveMouse(x, y);
     robot.mouseClick('left', true);
-    return { success: true, output: `Double-clicked at screen (${x}, ${y})` };
+    return { success: true, output: `Double-clicked at screen (${x}, ${y})${params.raw ? ' [raw/element coords]' : ''}` };
   }
 
   private toolMouseRightClick(params: any): any {
     const robot = this.ensureRobot();
     if (!robot) return { error: 'robotjs not available' };
-    const x = this.toScreenX(params.x || 0);
-    const y = this.toScreenY(params.y || 0);
+    const x = params.raw ? Math.round(params.x || 0) : this.toScreenX(params.x || 0);
+    const y = params.raw ? Math.round(params.y || 0) : this.toScreenY(params.y || 0);
     robot.moveMouse(x, y);
     robot.mouseClick('right');
-    return { success: true, output: `Right-clicked at screen (${x}, ${y})` };
+    return { success: true, output: `Right-clicked at screen (${x}, ${y})${params.raw ? ' [raw/element coords]' : ''}` };
   }
 
   private toolMouseMove(params: any): any {
     const robot = this.ensureRobot();
     if (!robot) return { error: 'robotjs not available' };
-    const x = this.toScreenX(params.x || 0);
-    const y = this.toScreenY(params.y || 0);
+    const x = params.raw ? Math.round(params.x || 0) : this.toScreenX(params.x || 0);
+    const y = params.raw ? Math.round(params.y || 0) : this.toScreenY(params.y || 0);
     robot.moveMouse(x, y);
-    return { success: true, output: `Moved mouse to screen (${x}, ${y})` };
+    return { success: true, output: `Moved mouse to screen (${x}, ${y})${params.raw ? ' [raw/element coords]' : ''}` };
   }
 
   private toolMouseDrag(params: any): any {
     const robot = this.ensureRobot();
     if (!robot) return { error: 'robotjs not available' };
-    const fromX = this.toScreenX(params.fromX || 0);
-    const fromY = this.toScreenY(params.fromY || 0);
-    const toX = this.toScreenX(params.toX || 0);
-    const toY = this.toScreenY(params.toY || 0);
+    const fromX = params.raw ? Math.round(params.fromX || 0) : this.toScreenX(params.fromX || 0);
+    const fromY = params.raw ? Math.round(params.fromY || 0) : this.toScreenY(params.fromY || 0);
+    const toX = params.raw ? Math.round(params.toX || 0) : this.toScreenX(params.toX || 0);
+    const toY = params.raw ? Math.round(params.toY || 0) : this.toScreenY(params.toY || 0);
     robot.moveMouse(fromX, fromY);
     robot.mouseToggle('down');
     try { robot.moveMouse(toX, toY); } finally { robot.mouseToggle('up'); }
-    return { success: true, output: `Dragged from screen (${fromX}, ${fromY}) to (${toX}, ${toY})` };
+    return { success: true, output: `Dragged from screen (${fromX}, ${fromY}) to (${toX}, ${toY})${params.raw ? ' [raw/element coords]' : ''}` };
   }
 
   private toolMouseScroll(params: any): any {
@@ -767,10 +808,12 @@ while ($true) {
     const amount = params.amount || 3;
     const direction = (params.direction || 'down') === 'up' ? amount : -amount;
     if (params.x != null && params.y != null) {
-      robot.moveMouse(this.toScreenX(params.x), this.toScreenY(params.y));
+      const sx = params.raw ? Math.round(params.x) : this.toScreenX(params.x);
+      const sy = params.raw ? Math.round(params.y) : this.toScreenY(params.y);
+      robot.moveMouse(sx, sy);
     }
     robot.scrollMouse(0, direction);
-    return { success: true, output: `Scrolled ${params.direction || 'down'} by ${amount}` };
+    return { success: true, output: `Scrolled ${params.direction || 'down'} by ${amount}${params.raw ? ' [raw/element coords]' : ''}` };
   }
 
   private static KEY_ALIASES: Record<string, string> = {
