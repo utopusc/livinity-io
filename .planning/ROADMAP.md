@@ -191,7 +191,9 @@ Plans:
   3. Each element in the screen_elements response includes id, window title, control type, display name, and center (x, y) coordinates in a structured text format the AI can parse
   4. Element list contains only interactive elements (buttons, text fields, links, menu items, checkboxes) and is capped at 50-100 elements maximum to prevent token overflow
   5. Calling screen_elements responds within 500ms on average because the UIA backend uses a persistent subprocess rather than cold-starting PowerShell on every call
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 02-01-PLAN.md -- DPI awareness, persistent PowerShell subprocess, screen_elements tool
 
 ### Phase 3: AI Prompt Optimization & Hybrid Mode
 **Goal**: AI uses accessibility tree element coordinates as its primary targeting method, only falling back to screenshot pixel analysis when no matching element exists
@@ -210,6 +212,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. DPI Fix & Screenshot Pipeline | v17.0 | 0/1 | Not started | - |
-| 2. Windows UIA Accessibility Tree | v17.0 | 0/? | Not started | - |
+| 1. DPI Fix & Screenshot Pipeline | v17.0 | 1/1 | Complete | 2026-03-25 |
+| 2. Windows UIA Accessibility Tree | v17.0 | 0/1 | Not started | - |
 | 3. AI Prompt Optimization & Hybrid Mode | v17.0 | 0/? | Not started | - |
