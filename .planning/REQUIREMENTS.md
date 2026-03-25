@@ -1,54 +1,58 @@
-# Requirements: Livinity v16.0 -- Multi-Provider AI
+# Requirements: Livinity v17.0 Precision Computer Use
 
-**Defined:** 2026-03-24
+**Defined:** 2026-03-25
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v16.0 Requirements
+## v17.0 Requirements
 
-Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
+Requirements for precision computer use. Each maps to roadmap phases.
 
-### Provider Infrastructure
+### Screenshot Pipeline (DPI Fix)
 
-- [x] **PROV-01**: ClaudeProvider git history'den geri yuklenir ve ProviderManager'a kaydedilir
-- [x] **PROV-02**: `@anthropic-ai/sdk` bagimliligi eklenir
-- [x] **PROV-03**: ProviderManager fallback dongusu Claude + Kimi ile calisir
-- [x] **PROV-04**: Config semasinda provider secimi (`primary: 'claude' | 'kimi'`) bulunur
+- [ ] **DPI-01**: Agent resizes screenshots from physical to logical pixel dimensions using sharp before sending to AI
+- [ ] **DPI-02**: Screenshot coordinate metadata reports logical dimensions (monitor.width/height) not physical (image.width/height)
+- [ ] **DPI-03**: toScreenX/toScreenY uses 1:1 mapping after proper resize (no broken scaling logic)
+- [ ] **DPI-04**: AI system prompt clearly states coordinate space is logical pixels with explicit dimensions
 
-### Authentication
+### Windows Accessibility Tree
 
-- [x] **AUTH-01**: Kullanici Claude API key'ini Settings'ten girebilir
-- [x] **AUTH-02**: Claude API key Redis'te guvenli saklanir
-- [x] **AUTH-03**: Kullanici opsiyonel olarak OAuth PKCE ile Claude'a baglanabilir
+- [ ] **UIA-01**: Agent sets DPI awareness to PerMonitorAwareV2 at startup on Windows
+- [ ] **UIA-02**: `screen_elements` tool traverses Windows UIA tree and returns interactive elements with center coordinates
+- [ ] **UIA-03**: Elements formatted as structured text for AI: id, window, control_type, name, coordinates
+- [ ] **UIA-04**: Element list filtered to interactive elements only, capped at 50-100 elements to prevent token explosion
+- [ ] **UIA-05**: UIA backend uses persistent subprocess (not cold-start PowerShell per call) for acceptable latency
 
-### Feature Parity
+### AI Prompt & Hybrid Mode
 
-- [x] **FEAT-01**: Claude provider streaming yanit destekler
-- [x] **FEAT-02**: Claude provider tool calling destekler
-- [x] **FEAT-03**: Claude provider vision/multimodal destekler
-- [x] **FEAT-04**: Model tier mapping calisir (haiku/sonnet/opus)
-
-### User Interface
-
-- [x] **UI-01**: Settings'te provider secim toggle'i bulunur
-- [x] **UI-02**: Aktif provider durumu UI'da gorunur
-- [x] **UI-03**: Provider degistirildiginde yeni konusmalar secili provider'i kullanir
+- [ ] **AIP-01**: Computer use system prompt updated: "Use element coordinates from screen_elements, screenshot for visual context only"
+- [ ] **AIP-02**: Hybrid mode: AI tries accessibility tree coordinates first, falls back to screenshot coordinates if no matching element
+- [ ] **AIP-03**: Agent skips screenshot re-capture when accessibility tree content hasn't changed since last capture
 
 ## Future Requirements
 
-### Provider Extension
+### Cross-Platform Accessibility
 
-- **PROV-05**: OpenAI/GPT provider destegi
-- **PROV-06**: Per-conversation provider switching
-- **PROV-07**: Multi-provider simultaneous (A/B comparison)
+- **XPA-01**: macOS AXUIElement accessibility tree integration via Swift CLI binary
+- **XPA-02**: Linux AT-SPI2 accessibility tree integration via Python/pyatspi2
+- **XPA-03**: Unified screen_elements interface across all platforms with platform detection
+
+### Enhanced Features
+
+- **ENH-01**: Element highlighting — draw bounding boxes on screenshot matching accessibility tree elements
+- **ENH-02**: Multi-monitor accessibility tree support with per-monitor DPI handling
+- **ENH-03**: Accessibility tree diff detection for incremental updates
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| OpenAI/GPT support | Only Claude + Kimi for now |
-| Multi-provider simultaneous | One provider at a time |
-| Per-conversation provider switching | Global setting only |
-| Provider-specific tool formats in UI | Abstracted away by AIProvider interface |
+| Full desktop streaming (RDP/VNC) | Stays as structured screenshot+action approach |
+| OCR-based element detection | Using OS native accessibility tree instead |
+| Browser-only automation (Playwright) | This is desktop-level automation |
+| Custom ML model for UI detection | Leveraging OS built-in accessibility APIs |
+| Multi-monitor orchestration | Single primary monitor for now |
+| macOS accessibility (this milestone) | Requires Swift binary build pipeline, deferred |
+| Linux accessibility (this milestone) | AT-SPI2 availability varies by distro, deferred |
 
 ## Traceability
 
@@ -56,26 +60,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | Phase 1 | Complete |
-| PROV-02 | Phase 1 | Complete |
-| PROV-03 | Phase 3 | Complete |
-| PROV-04 | Phase 3 | Complete |
-| AUTH-01 | Phase 3 | Complete |
-| AUTH-02 | Phase 3 | Complete |
-| AUTH-03 | Phase 3 | Complete |
-| FEAT-01 | Phase 2 | Complete |
-| FEAT-02 | Phase 2 | Complete |
-| FEAT-03 | Phase 2 | Complete |
-| FEAT-04 | Phase 2 | Complete |
-| UI-01 | Phase 4 | Complete |
-| UI-02 | Phase 4 | Complete |
-| UI-03 | Phase 4 | Complete |
+| DPI-01 | — | Pending |
+| DPI-02 | — | Pending |
+| DPI-03 | — | Pending |
+| DPI-04 | — | Pending |
+| UIA-01 | — | Pending |
+| UIA-02 | — | Pending |
+| UIA-03 | — | Pending |
+| UIA-04 | — | Pending |
+| UIA-05 | — | Pending |
+| AIP-01 | — | Pending |
+| AIP-02 | — | Pending |
+| AIP-03 | — | Pending |
 
 **Coverage:**
-- v16.0 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0
+- v17.0 requirements: 12 total
+- Mapped to phases: 0
+- Unmapped: 12 ⚠️
 
 ---
-*Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after roadmap creation*
+*Requirements defined: 2026-03-25*
+*Last updated: 2026-03-25 after initial definition*
