@@ -177,7 +177,9 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v17
   2. Screenshot coordinate metadata returned to AI reports logical dimensions (e.g., 1707x960) not physical dimensions (e.g., 2560x1440)
   3. toScreenX/toScreenY in agent-core.ts converts AI coordinates to screen coordinates using 1:1 mapping (no broken scaling math)
   4. AI system prompt explicitly states the coordinate space is logical pixels and includes the screenshot dimensions
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 01-01-PLAN.md -- Install sharp, fix screenshot resize + coordinate mapping, update AI prompt
 
 ### Phase 2: Windows UIA Accessibility Tree
 **Goal**: AI can query the Windows desktop for interactive UI elements and receive structured data with element names, types, and precise clickable coordinates
@@ -208,6 +210,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. DPI Fix & Screenshot Pipeline | v17.0 | 0/? | Not started | - |
+| 1. DPI Fix & Screenshot Pipeline | v17.0 | 0/1 | Not started | - |
 | 2. Windows UIA Accessibility Tree | v17.0 | 0/? | Not started | - |
 | 3. AI Prompt Optimization & Hybrid Mode | v17.0 | 0/? | Not started | - |
