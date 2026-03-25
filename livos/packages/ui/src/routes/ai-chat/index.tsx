@@ -329,6 +329,7 @@ function ConversationSidebar({
 	onDelete,
 	activeView,
 	onViewChange,
+	activeProvider,
 	className,
 }: {
 	conversations: Array<{id: string; title: string; updatedAt: number; messageCount: number}>
@@ -338,6 +339,7 @@ function ConversationSidebar({
 	onDelete: (id: string) => void
 	activeView: SidebarView
 	onViewChange: (view: SidebarView) => void
+	activeProvider: string
 	className?: string
 }) {
 	return (
@@ -348,6 +350,9 @@ function ConversationSidebar({
 						<IconBrain size={14} className='text-violet-400' />
 					</div>
 					<h2 className='text-body font-semibold text-text-primary'>Liv AI</h2>
+					<span className='rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
+						{activeProvider}
+					</span>
 				</div>
 				<button
 					onClick={onNew}
@@ -440,6 +445,9 @@ export default function AiChat() {
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 	const activeRequestRef = useRef<number>(0)
 	const isMobile = useIsMobile()
+
+	const providersQuery = trpcReact.ai.getProviders.useQuery(undefined, {refetchInterval: 30_000})
+	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
 
 	const activeConversationId = searchParams.get('conv') || `conv_${Date.now()}`
 
@@ -655,6 +663,7 @@ export default function AiChat() {
 		onDelete: handleDeleteConversation,
 		activeView,
 		onViewChange: setActiveView,
+		activeProvider,
 	}
 
 	return (
@@ -686,7 +695,12 @@ export default function AiChat() {
 									>
 										<IconMenu2 size={20} />
 									</button>
+									<div className='flex items-center gap-2'>
 									<span className='text-body font-semibold text-text-primary'>Liv AI</span>
+									<span className='rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
+										{activeProvider}
+									</span>
+								</div>
 									<button
 										onClick={handleNewConversation}
 										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
