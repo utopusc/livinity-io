@@ -68,13 +68,24 @@ Key validated capabilities:
   - ✓ Accessibility-first AI prompt: Elements-First Workflow with screenshot fallback
   - ✓ SHA-256 hash-based screenshot caching (skip re-capture when tree unchanged)
 
-## Current Milestone: None (v17.0 complete)
+## Current Milestone: v18.0 Remote Desktop Streaming
 
-**Goal:** Planning next milestone.
+**Goal:** Deploy a web-based remote desktop streaming service via install.sh, letting users access their server's GUI through `pc.{username}.livinity.io` in a browser — zero-client VNC/RDP alternative.
+
+**Target features:**
+- Web-based remote desktop streaming (browser only, no client)
+- install.sh auto-setup with GUI detection (skip on headless)
+- Caddy subdomain routing (`pc.{username}.livinity.io`)
+- LivOS JWT authentication integration
+- Low-latency Linux desktop streaming
 
 ### Active
 
-(None — defining next milestone)
+- [ ] Web-based remote desktop streaming service
+- [ ] install.sh integration with GUI detection
+- [ ] Caddy reverse proxy subdomain routing for pc.{username}
+- [ ] LivOS JWT auth protection for desktop streams
+- [ ] Per-user desktop session isolation
 
 ### Out of Scope
 
@@ -84,7 +95,10 @@ Key validated capabilities:
 - Multi-region tunnel relay — single relay (Server5) for now
 - White-label/reseller — direct platform only
 - Per-user MCP server settings — deferred
-- Full desktop streaming (RDP/VNC) — AI uses structured screenshot+action, not video stream
+- ~~Full desktop streaming (RDP/VNC)~~ — now in scope for v18.0
+- Audio streaming — deferred to future version
+- Multi-monitor desktop streaming — single display for v1
+- File transfer via desktop stream — deferred to future version
 - Per-device permission matrix — future (all-or-nothing for now)
 - Clipboard sync as AI tool — future
 - Multi-device orchestration — future
@@ -170,4 +184,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after v17.0 milestone (Precision Computer Use)*
+*Last updated: 2026-03-25 after v18.0 milestone start (Remote Desktop Streaming)*
