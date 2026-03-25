@@ -19,8 +19,11 @@ import { logger } from '../logger.js';
 export class ProviderManager {
   private providers: Map<string, AIProvider> = new Map();
   private fallbackOrder: string[] = [];
+  private redis: Redis | null = null;
 
   constructor(redis?: Redis) {
+    this.redis = redis ?? null;
+
     const kimi = new KimiProvider(redis);
     this.providers.set('kimi', kimi);
 
@@ -28,6 +31,41 @@ export class ProviderManager {
     this.providers.set('claude', claude);
 
     this.fallbackOrder = ['kimi', 'claude'];
+  }
+
+  /**
+   * Initialize provider order from config.
+   * Call after construction to load primary_provider preference from Redis.
+   */
+  async init(): Promise<void> {
+    if (!this.redis) return;
+
+    try {
+      // Read primary_provider from Redis config (set by API or ConfigManager)
+      // Try individual key first (set by PUT /api/provider/primary), then fall back to config blob
+      let primary = await this.redis.get('nexus:config:primary_provider');
+
+      if (!primary) {
+        // Try reading from the NexusConfig JSON blob
+        const configBlob = await this.redis.get('nexus:config');
+        if (configBlob) {
+          try {
+            const config = JSON.parse(configBlob);
+            primary = config.provider?.primaryProvider;
+          } catch { /* ignore parse errors */ }
+        }
+      }
+
+      if (primary && this.providers.has(primary)) {
+        const secondary = primary === 'claude' ? 'kimi' : 'claude';
+        this.fallbackOrder = [primary, secondary].filter((id) => this.providers.has(id));
+        logger.info('ProviderManager: fallback order set from config', { order: this.fallbackOrder });
+      } else {
+        logger.info('ProviderManager: using default fallback order', { order: this.fallbackOrder });
+      }
+    } catch (err: any) {
+      logger.warn('ProviderManager: failed to read config, using default order', { error: err.message });
+    }
   }
 
   async chat(options: ProviderChatOptions): Promise<ProviderChatResult> {
@@ -198,5 +236,9 @@ export class ProviderManager {
 
   setFallbackOrder(order: string[]): void {
     this.fallbackOrder = order.filter((id) => this.providers.has(id));
+  }
+
+  getFallbackOrder(): string[] {
+    return [...this.fallbackOrder];
   }
 }

@@ -2,6 +2,7 @@ import type { Redis } from 'ioredis';
 import { ProviderManager } from './providers/manager.js';
 import { normalizeMessages } from './providers/normalize.js';
 import type { ToolDefinition, ToolUseBlock, ProviderStreamChunk } from './providers/types.js';
+import { logger } from './logger.js';
 
 export type ModelTier = 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
 
@@ -45,6 +46,10 @@ export class Brain {
 
   constructor(redis?: Redis) {
     this.manager = new ProviderManager(redis);
+    // Init is async — we fire and forget, the default order works until init completes
+    this.manager.init().catch((err) => {
+      logger.warn('ProviderManager init failed', { error: (err as Error).message });
+    });
   }
 
   async think(options: { prompt: string; systemPrompt?: string; tier?: ModelTier; maxTokens?: number }): Promise<string> {
