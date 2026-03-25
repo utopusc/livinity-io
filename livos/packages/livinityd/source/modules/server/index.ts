@@ -786,11 +786,30 @@ class Server {
 		// TODO: We can remove this if we move to express 5
 		wrapHandlersWithAsyncHandler(this.app._router)
 
-		// Start the server
-		const listen = promisify(this.server.listen.bind(this.server)) as (port: number) => Promise<void>
-		await listen(this.livinityd.port)
-		this.port = (this.server.address() as any).port
-		this.logger.log(`Listening on port ${this.port}`)
+		// Start the server with retry — handles EADDRINUSE during PM2 restarts
+		const targetPort = this.livinityd.port
+		await new Promise<void>((resolve, reject) => {
+			let attempts = 0
+			const maxAttempts = 30
+			const tryListen = () => {
+				this.server.listen(targetPort, () => {
+					this.port = (this.server.address() as any).port
+					this.logger.log(`Listening on port ${this.port}`)
+					resolve()
+				})
+				this.server.once('error', (err: NodeJS.ErrnoException) => {
+					if (err.code === 'EADDRINUSE' && attempts < maxAttempts) {
+						attempts++
+						this.logger.log(`Port ${targetPort} in use, retrying in 1s... (${attempts}/${maxAttempts})`)
+						this.server.close()
+						setTimeout(tryListen, 1000)
+					} else {
+						reject(err)
+					}
+				})
+			}
+			tryListen()
+		})
 
 		return this
 	}

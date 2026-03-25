@@ -59,14 +59,13 @@ if (args.help) {
 // TODO: Validate these args are valid
 const livinityd = new Livinityd(args as LivinitydOptions)
 
-// Shutdown cleanly on SIGINT and SIGTERM
+// Shutdown on SIGINT and SIGTERM — exit immediately to release port.
+// PM2 manages process lifecycle, so graceful cleanup is best-effort.
 let isShuttingDown = false
-async function cleanShutdown(signal: string) {
+function cleanShutdown(signal: string) {
 	if (isShuttingDown) return
 	isShuttingDown = true
-
-	livinityd.logger.log(`Received ${signal}, shutting down cleanly...`)
-	await livinityd.stop()
+	livinityd.logger.log(`Received ${signal}, exiting immediately to release port`)
 	process.exit(0)
 }
 process.on('SIGINT', cleanShutdown.bind(null, 'SIGINT'))
