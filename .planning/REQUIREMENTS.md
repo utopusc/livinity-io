@@ -16,11 +16,11 @@ Requirements for precision computer use. Each maps to roadmap phases.
 
 ### Windows Accessibility Tree
 
-- [ ] **UIA-01**: Agent sets DPI awareness to PerMonitorAwareV2 at startup on Windows
-- [ ] **UIA-02**: `screen_elements` tool traverses Windows UIA tree and returns interactive elements with center coordinates
-- [ ] **UIA-03**: Elements formatted as structured text for AI: id, window, control_type, name, coordinates
-- [ ] **UIA-04**: Element list filtered to interactive elements only, capped at 50-100 elements to prevent token explosion
-- [ ] **UIA-05**: UIA backend uses persistent subprocess (not cold-start PowerShell per call) for acceptable latency
+- [x] **UIA-01**: Agent sets DPI awareness to PerMonitorAwareV2 at startup on Windows
+- [x] **UIA-02**: `screen_elements` tool traverses Windows UIA tree and returns interactive elements with center coordinates
+- [x] **UIA-03**: Elements formatted as structured text for AI: id, window, control_type, name, coordinates
+- [x] **UIA-04**: Element list filtered to interactive elements only, capped at 50-100 elements to prevent token explosion
+- [x] **UIA-05**: UIA backend uses persistent subprocess (not cold-start PowerShell per call) for acceptable latency
 
 ### AI Prompt & Hybrid Mode
 
@@ -64,11 +64,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DPI-02 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
 | DPI-03 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
 | DPI-04 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
-| UIA-01 | Phase 2: Windows UIA Accessibility Tree | Pending |
-| UIA-02 | Phase 2: Windows UIA Accessibility Tree | Pending |
-| UIA-03 | Phase 2: Windows UIA Accessibility Tree | Pending |
-| UIA-04 | Phase 2: Windows UIA Accessibility Tree | Pending |
-| UIA-05 | Phase 2: Windows UIA Accessibility Tree | Pending |
+| UIA-01 | Phase 2: Windows UIA Accessibility Tree | Complete |
+| UIA-02 | Phase 2: Windows UIA Accessibility Tree | Complete |
+| UIA-03 | Phase 2: Windows UIA Accessibility Tree | Complete |
+| UIA-04 | Phase 2: Windows UIA Accessibility Tree | Complete |
+| UIA-05 | Phase 2: Windows UIA Accessibility Tree | Complete |
 | AIP-01 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
 | AIP-02 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
 | AIP-03 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |

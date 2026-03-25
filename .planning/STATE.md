@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v17.0
 milestone_name: Precision Computer Use
 status: unknown
-stopped_at: Completed 01-01-PLAN.md (DPI fix & screenshot pipeline)
-last_updated: "2026-03-25T09:12:01.546Z"
+stopped_at: Completed 02-01-PLAN.md (Windows UIA accessibility tree)
+last_updated: "2026-03-25T09:31:33.785Z"
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v17.0 -- Precision Computer Use
-**Current focus:** Phase 01 — dpi-fix-screenshot-pipeline
+**Current focus:** Phase 02 — windows-uia-accessibility-tree
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
+Phase: 02 (windows-uia-accessibility-tree) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: Not started
 ## Accumulated Context
 
 | Phase 01 P01 | 4min | 2 tasks | 4 files |
+| Phase 02 P01 | 5min | 2 tasks | 1 files |
 
 ### Decisions
 
@@ -57,6 +58,10 @@ Plan: Not started
 - [Phase 01]: Used sharp JPEG input instead of raw BGRA to avoid color channel issues with node-screenshots
 - [Phase 01]: SCALE_TARGETS matched against logical dimensions (not physical) for aspect ratio comparison
 - [Phase 01]: Coordinate chain established: AI coords * (logical/target) = robotjs logical coords
+- [Phase 02]: Persistent PowerShell subprocess for UIA queries (not cold-start per call)
+- [Phase 02]: Custom control type substituted for ToggleButton (not a valid UIA ControlType)
+- [Phase 02]: raw flag on mouse tools for element coordinates (backward compatible, no new tools)
+- [Phase 02]: Pipe-delimited text format for screen_elements output (compact token usage)
 
 ### Pending Todos
 
@@ -68,6 +73,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-25T09:08:42.042Z
-Stopped at: Completed 01-01-PLAN.md (DPI fix & screenshot pipeline)
+Last session: 2026-03-25T09:31:33.782Z
+Stopped at: Completed 02-01-PLAN.md (Windows UIA accessibility tree)
 Resume file: None
