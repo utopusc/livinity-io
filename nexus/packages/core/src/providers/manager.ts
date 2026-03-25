@@ -1,6 +1,6 @@
 /**
  * ProviderManager — Orchestrates AI providers.
- * Kimi is the sole provider.
+ * Manages Kimi and Claude providers.
  */
 
 import type { Redis } from 'ioredis';
@@ -13,6 +13,7 @@ import type {
   ModelTier,
 } from './types.js';
 import { KimiProvider } from './kimi.js';
+import { ClaudeProvider } from './claude.js';
 import { logger } from '../logger.js';
 
 export class ProviderManager {
@@ -22,7 +23,11 @@ export class ProviderManager {
   constructor(redis?: Redis) {
     const kimi = new KimiProvider(redis);
     this.providers.set('kimi', kimi);
-    this.fallbackOrder = ['kimi'];
+
+    const claude = new ClaudeProvider(redis);
+    this.providers.set('claude', claude);
+
+    this.fallbackOrder = ['kimi', 'claude'];
   }
 
   async chat(options: ProviderChatOptions): Promise<ProviderChatResult> {
