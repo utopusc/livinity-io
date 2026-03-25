@@ -351,6 +351,8 @@ export default class Apps {
 			// Create minimal data directory for manifest
 			const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
 			await fse.mkdirp(appDataDirectory)
+			// Ensure owned by 1000:1000 (most containers run as UID 1000)
+			await $`chown -R 1000:1000 ${appDataDirectory}`.catch(() => {})
 			// Write a minimal livinity-app.yml manifest
 			const builtinApp = getBuiltinApp(appId)
 			if (builtinApp) {
@@ -440,6 +442,9 @@ export default class Apps {
 
 		// We use rsync to copy to preserve permissions
 		await $`rsync --archive --verbose --exclude ".gitkeep" ${appTemplatePath}/. ${appDataDirectory}`
+
+		// Ensure app data directory is owned by 1000:1000 (most containers run as UID 1000)
+		await $`chown -R 1000:1000 ${appDataDirectory}`.catch(() => {})
 
 		// Clean up generated template directory (not needed after rsync)
 		if (isGeneratedTemplate) {
