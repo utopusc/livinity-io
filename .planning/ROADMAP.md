@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15.0 AI Computer Use -- enable the AI to see the screen, click, type, and navigate applications on connected devices via a screenshot-analyze-action loop, with live monitoring UI and security controls.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16.0 Multi-Provider AI -- restore Claude (Anthropic) as a second AI provider alongside Kimi, with full feature parity (streaming, tool calling, vision), authentication, config schema, and a Settings UI toggle to switch between providers.
 
 ## Milestones
 
@@ -15,13 +15,15 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15
 - [x] **v13.0 Portainer-Level Server Management** - Phases 41-46 (shipped 2026-03-23)
 - [x] **v14.0 Remote PC Control Agent** - Phases 47-53 (shipped 2026-03-24)
 - [x] **v14.1 Agent Installer & Setup UX** - Phases 1-4 (shipped 2026-03-24)
-- [ ] **v15.0 AI Computer Use** - Phases 5-9 (in progress)
+- [x] **v15.0 AI Computer Use** - Phases 5-9 (shipped 2026-03-24)
+- [ ] **v16.0 Multi-Provider AI** - Phases 1-4 (in progress)
 
 ## Phases
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3, 4): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+- v16.0 uses reset phase numbering (starts at 1)
 
 <details>
 <summary>v10.0 App Store Platform (Phases 16-25) - SHIPPED 2026-03-21</summary>
@@ -130,102 +132,82 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v15
 
 </details>
 
-### v15.0 AI Computer Use
+<details>
+<summary>v15.0 AI Computer Use (Phases 5-9) - SHIPPED 2026-03-24</summary>
 
 **Milestone Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices -- Claude Computer Use style. The AI takes screenshots, analyzes them with multimodal vision, determines coordinates, and executes mouse/keyboard actions in a screenshot-analyze-action loop with live monitoring and security controls.
 
-- [ ] **Phase 5: Agent Mouse & Keyboard Tools** - @jitsi/robotjs-powered mouse and keyboard automation tools in the agent
-- [ ] **Phase 6: Screen Info & Screenshot Extensions** - Screen metadata and coordinate-aware screenshot output
-- [ ] **Phase 7: Computer Use Loop** - Autonomous screenshot-analyze-action cycle in Nexus AI
-- [ ] **Phase 8: Live Monitoring UI** - Real-time session viewer with action overlay and controls
-- [ ] **Phase 9: Security & Permissions** - Consent flow, emergency stop, audit logging, auto-timeout
+- [x] **Phase 5: Agent Mouse & Keyboard Tools** (completed 2026-03-24)
+- [x] **Phase 6: Screen Info & Screenshot Extensions** (completed 2026-03-24)
+- [x] **Phase 7: Computer Use Loop** (completed 2026-03-24)
+- [x] **Phase 8: Live Monitoring UI** (completed 2026-03-24)
+- [x] **Phase 9: Security & Permissions** (completed 2026-03-24)
+
+</details>
+
+### v16.0 Multi-Provider AI
+
+**Milestone Goal:** Add Claude (Anthropic) as a second AI provider alongside Kimi, with full feature parity and a Settings UI toggle. ClaudeProvider is restored from git history (467 lines, commit 1ea5513^), not built from scratch. The agent loop already uses Anthropic message format internally, so Claude needs no message conversion.
+
+- [ ] **Phase 1: Provider Restore & Registration** - Restore ClaudeProvider from git, add SDK, register in ProviderManager
+- [ ] **Phase 2: Feature Parity** - Streaming, tool calling, vision, and model tier mapping for Claude
+- [ ] **Phase 3: Auth & Config** - API key management, OAuth PKCE, config schema, fallback loop
+- [ ] **Phase 4: Settings UI & Integration** - Provider toggle, status display, conversation routing
 
 ## Phase Details
 
-### Phase 5: Agent Mouse & Keyboard Tools
-**Goal**: AI can physically interact with a device's desktop -- clicking, typing, dragging, and scrolling -- through the existing agent tool system
-**Depends on**: Nothing (builds on existing agent at agent/ with 9 tools and @jitsi/robotjs)
-**Requirements**: MOUSE-01, MOUSE-02, MOUSE-03, MOUSE-04, MOUSE-05, MOUSE-06, KEY-01, KEY-02
+### Phase 1: Provider Restore & Registration
+**Goal**: ClaudeProvider exists in the codebase, compiles, and is registered in ProviderManager as an available provider alongside Kimi
+**Depends on**: Nothing (first phase)
+**Requirements**: PROV-01, PROV-02
 **Success Criteria** (what must be TRUE):
-  1. AI can instruct the agent to click at screen coordinates (x, y) with left, double, or right click, and the click visibly occurs on the device
-  2. AI can instruct the agent to type a text string and the characters appear in the focused application on the device
-  3. AI can instruct the agent to press key combinations (Ctrl+C, Alt+Tab, Enter, etc.) and the device responds to those keys
-  4. AI can instruct the agent to drag from one coordinate to another (drag and drop) and scroll at a position
-  5. All mouse/keyboard tools follow the existing tool dispatcher pattern (TOOL_NAMES + switch case) and route through DeviceBridge as proxy tools
-**Plans**: 2 plans
+  1. ClaudeProvider class is restored from git history and lives at its canonical path in nexus/packages/core/src/providers/
+  2. `@anthropic-ai/sdk` is listed in package.json dependencies and installs without errors
+  3. ProviderManager.getProvider('claude') returns an instance of ClaudeProvider
+  4. `npm run build --workspace=packages/core` succeeds with zero TypeScript errors
+**Plans**: TBD
 
-Plans:
-- [x] 05-01-PLAN.md -- Agent mouse/keyboard tool implementations with @jitsi/robotjs
-- [x] 05-02-PLAN.md -- SEA build pipeline + DeviceBridge schema registration
-
-### Phase 6: Screen Info & Screenshot Extensions
-**Goal**: AI has full awareness of the device's display geometry and screenshots carry coordinate metadata for accurate targeting
-**Depends on**: Phase 5 (mouse/keyboard tools need screen context to be useful)
-**Requirements**: SCREEN-01, SCREEN-02
+### Phase 2: Feature Parity
+**Goal**: Claude provider handles all AI capabilities identically to Kimi -- streaming responses, tool calling, vision/multimodal input, and model tier routing
+**Depends on**: Phase 1 (ClaudeProvider must exist and compile)
+**Requirements**: FEAT-01, FEAT-02, FEAT-03, FEAT-04
 **Success Criteria** (what must be TRUE):
-  1. AI can query a device's screen resolution, display count, and active window title/position
-  2. Screenshot tool returns image dimensions and scaling factor alongside the JPEG data so the AI can map pixel coordinates to actual screen positions
-**Plans**: 1 plan
+  1. User sends a message with Claude as the active provider and receives a streaming response that appears token-by-token in the AI chat UI
+  2. AI can call tools (shell, files, etc.) through Claude provider using Anthropic native tool_use format, with results flowing back correctly
+  3. User sends an image (screenshot, uploaded file) and Claude analyzes it and responds with visual understanding
+  4. Model tier selection (fast/balanced/quality) maps to Claude models (haiku/sonnet/opus) and requests use the correct model
+**Plans**: TBD
 
-Plans:
-- [x] 06-01-PLAN.md -- screen_info tool + screenshot coordinate metadata + dispatcher/DeviceBridge registration
-
-### Phase 7: Computer Use Loop
-**Goal**: Users can give the AI a natural language task and it autonomously operates the device's desktop through a screenshot-vision-action cycle until the task is done
-**Depends on**: Phase 5 (needs mouse/keyboard tools), Phase 6 (needs screen info/screenshot metadata)
-**Requirements**: LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05
+### Phase 3: Auth & Config
+**Goal**: Users can authenticate Claude with their API key (or OAuth), the key is securely stored, the config schema supports provider selection, and fallback between providers works
+**Depends on**: Phase 1 (provider must be registered), Phase 2 (provider must be functional to test fallback)
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, PROV-04, PROV-03
 **Success Criteria** (what must be TRUE):
-  1. User can say "Open Chrome and go to YouTube" and the AI enters computer use mode -- taking a screenshot, analyzing it with vision, clicking/typing, then repeating until the task is complete
-  2. AI correctly identifies UI elements (buttons, text fields, icons) from screenshots and clicks at accurate coordinates
-  3. Computer use sessions respect a configurable step limit (e.g., max 50 actions) and stop gracefully when reached
-  4. AI reports back to the user when the task is complete or explains why it could not be completed
-  5. The computer use loop is a distinct mode in Nexus that the AI enters when a task requires visual desktop interaction
-**Plans**: 2 plans
+  1. User opens Settings, enters a Claude API key, and it is accepted and validated against the Anthropic API
+  2. Claude API key is stored in Redis (not plaintext in config files) and persists across server restarts
+  3. User can optionally authenticate via OAuth PKCE flow instead of pasting an API key
+  4. Config schema includes `primary: 'claude' | 'kimi'` and changing it switches which provider handles new requests
+  5. When the primary provider fails (rate limit, auth error), ProviderManager automatically falls back to the secondary provider
+**Plans**: TBD
 
-Plans:
-- [x] 07-01-PLAN.md -- Vision enablement + tool result image flow fix in native tool calling path
-- [x] 07-02-PLAN.md -- Computer use system prompt guidance + step limits + completion detection
-
-### Phase 8: Live Monitoring UI
-**Goal**: Users can watch the AI operate their device in real time with a visual stream, action indicators, and session controls
-**Depends on**: Phase 7 (needs the computer use loop to produce sessions and actions)
-**Requirements**: UI-01, UI-02, UI-03, UI-04
+### Phase 4: Settings UI & Integration
+**Goal**: Users can switch between Claude and Kimi from the Settings UI, see which provider is active, and new conversations use the selected provider
+**Depends on**: Phase 3 (config schema and auth must exist for the toggle to control)
+**Requirements**: UI-01, UI-02, UI-03
 **Success Criteria** (what must be TRUE):
-  1. When a computer use session is active, the LivOS AI chat shows a live screenshot feed of the device updating after each action
-  2. Visual indicators overlay each screenshot showing where the AI clicked or what it typed (crosshair on click point, text badge for typed text)
-  3. A session timeline panel lists every action chronologically with type, coordinates/text, and timestamp
-  4. User can pause, resume, or stop the session from the LivOS UI, and the AI responds immediately to those controls
-**Plans**: 3 plans
-
-Plans:
-- [x] 08-01-PLAN.md -- Backend: SSE screenshot passthrough, extended chatStatus with computer use fields, pause/stop/resume tRPC mutations
-- [x] 08-02-PLAN.md -- Frontend: ComputerUsePanel component with screenshot display, action overlay, timeline, and session controls
-- [x] 08-03-PLAN.md -- Gap closure: Wire stop button to actually abort SSE stream via AbortController
-
-### Phase 9: Security & Permissions
-**Goal**: Users maintain full control over AI computer use with explicit consent, an emergency stop, per-action audit logging, and automatic session timeouts
-**Depends on**: Phase 7 (needs the loop to gate with consent), Phase 8 (needs the UI to surface controls)
-**Requirements**: SEC-01, SEC-02, SEC-03, SEC-04
-**Success Criteria** (what must be TRUE):
-  1. Before the AI takes mouse/keyboard control, the user sees a consent dialog in LivOS and must explicitly approve the session
-  2. Pressing Escape three times rapidly on the device immediately terminates AI control regardless of session state
-  3. Every mouse/keyboard action (click x,y / type "text" / press Ctrl+C) is recorded to the audit trail with coordinates, timestamp, and screenshot reference
-  4. Computer use sessions that have no AI activity for a configurable period (default 60s) auto-terminate and notify the user
-**Plans**: 2 plans
-
-Plans:
-- [x] 09-01-PLAN.md -- Agent emergency stop escape key listener + enriched audit events with coordinates/text
-- [x] 09-02-PLAN.md -- Backend consent gate + emergency stop protocol wiring + auto-timeout + frontend consent dialog
+  1. Settings page has a provider selection control (toggle or dropdown) showing Claude and Kimi with their authentication status
+  2. Active provider is visible in the AI chat interface (indicator showing whether Claude or Kimi is responding)
+  3. After switching providers in Settings, the next new conversation uses the newly selected provider
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 5. Agent Mouse & Keyboard Tools | v15.0 | 0/2 | In progress | - |
-| 6. Screen Info & Screenshot Extensions | v15.0 | 0/1 | Not started | - |
-| 7. Computer Use Loop | v15.0 | 0/2 | Not started | - |
-| 8. Live Monitoring UI | v15.0 | 0/3 | Not started | - |
-| 9. Security & Permissions | v15.0 | 0/2 | Not started | - |
+| 1. Provider Restore & Registration | v16.0 | 0/0 | Not started | - |
+| 2. Feature Parity | v16.0 | 0/0 | Not started | - |
+| 3. Auth & Config | v16.0 | 0/0 | Not started | - |
+| 4. Settings UI & Integration | v16.0 | 0/0 | Not started | - |

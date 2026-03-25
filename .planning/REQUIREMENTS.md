@@ -7,37 +7,37 @@
 
 Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
 
-### Provider Altyapı
+### Provider Infrastructure
 
-- [ ] **PROV-01**: ClaudeProvider git geçmişinden geri yüklenir ve ProviderManager'a kaydedilir
-- [ ] **PROV-02**: `@anthropic-ai/sdk` bağımlılığı eklenir
-- [ ] **PROV-03**: ProviderManager fallback döngüsü Claude + Kimi ile çalışır
-- [ ] **PROV-04**: Config şemasında provider seçimi (`primary: 'claude' | 'kimi'`) bulunur
+- [ ] **PROV-01**: ClaudeProvider git history'den geri yuklenir ve ProviderManager'a kaydedilir
+- [ ] **PROV-02**: `@anthropic-ai/sdk` bagimliligi eklenir
+- [ ] **PROV-03**: ProviderManager fallback dongusu Claude + Kimi ile calisir
+- [ ] **PROV-04**: Config semasinda provider secimi (`primary: 'claude' | 'kimi'`) bulunur
 
-### Kimlik Doğrulama
+### Authentication
 
-- [ ] **AUTH-01**: Kullanıcı Claude API key'ini Settings'ten girebilir
-- [ ] **AUTH-02**: Claude API key Redis'te güvenli saklanır
-- [ ] **AUTH-03**: Kullanıcı opsiyonel olarak OAuth PKCE ile Claude'a bağlanabilir
+- [ ] **AUTH-01**: Kullanici Claude API key'ini Settings'ten girebilir
+- [ ] **AUTH-02**: Claude API key Redis'te guvenli saklanir
+- [ ] **AUTH-03**: Kullanici opsiyonel olarak OAuth PKCE ile Claude'a baglanabilir
 
-### Özellik Paritesi
+### Feature Parity
 
-- [ ] **FEAT-01**: Claude provider streaming yanıt destekler
+- [ ] **FEAT-01**: Claude provider streaming yanit destekler
 - [ ] **FEAT-02**: Claude provider tool calling destekler
 - [ ] **FEAT-03**: Claude provider vision/multimodal destekler
-- [ ] **FEAT-04**: Model tier mapping çalışır (haiku/sonnet/opus)
+- [ ] **FEAT-04**: Model tier mapping calisir (haiku/sonnet/opus)
 
-### Kullanıcı Arayüzü
+### User Interface
 
-- [ ] **UI-01**: Settings'te provider seçim toggle'ı bulunur
-- [ ] **UI-02**: Aktif provider durumu UI'da görünür
-- [ ] **UI-03**: Provider değiştirildiğinde yeni konuşmalar seçili provider'ı kullanır
+- [ ] **UI-01**: Settings'te provider secim toggle'i bulunur
+- [ ] **UI-02**: Aktif provider durumu UI'da gorunur
+- [ ] **UI-03**: Provider degistirildiginde yeni konusmalar secili provider'i kullanir
 
 ## Future Requirements
 
-### Provider Genişletme
+### Provider Extension
 
-- **PROV-05**: OpenAI/GPT provider desteği
+- **PROV-05**: OpenAI/GPT provider destegi
 - **PROV-06**: Per-conversation provider switching
 - **PROV-07**: Multi-provider simultaneous (A/B comparison)
 
@@ -56,26 +56,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | — | Pending |
-| PROV-02 | — | Pending |
-| PROV-03 | — | Pending |
-| PROV-04 | — | Pending |
-| AUTH-01 | — | Pending |
-| AUTH-02 | — | Pending |
-| AUTH-03 | — | Pending |
-| FEAT-01 | — | Pending |
-| FEAT-02 | — | Pending |
-| FEAT-03 | — | Pending |
-| FEAT-04 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
+| PROV-01 | Phase 1 | Pending |
+| PROV-02 | Phase 1 | Pending |
+| PROV-03 | Phase 3 | Pending |
+| PROV-04 | Phase 3 | Pending |
+| AUTH-01 | Phase 3 | Pending |
+| AUTH-02 | Phase 3 | Pending |
+| AUTH-03 | Phase 3 | Pending |
+| FEAT-01 | Phase 2 | Pending |
+| FEAT-02 | Phase 2 | Pending |
+| FEAT-03 | Phase 2 | Pending |
+| FEAT-04 | Phase 2 | Pending |
+| UI-01 | Phase 4 | Pending |
+| UI-02 | Phase 4 | Pending |
+| UI-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v16.0 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after initial definition*
+*Last updated: 2026-03-24 after roadmap creation*
