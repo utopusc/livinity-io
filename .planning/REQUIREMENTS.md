@@ -38,7 +38,7 @@ Requirements for precision computer use. Each maps to roadmap phases.
 
 ### Enhanced Features
 
-- **ENH-01**: Element highlighting — draw bounding boxes on screenshot matching accessibility tree elements
+- **ENH-01**: Element highlighting -- draw bounding boxes on screenshot matching accessibility tree elements
 - **ENH-02**: Multi-monitor accessibility tree support with per-monitor DPI handling
 - **ENH-03**: Accessibility tree diff detection for incremental updates
 
@@ -60,24 +60,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DPI-01 | — | Pending |
-| DPI-02 | — | Pending |
-| DPI-03 | — | Pending |
-| DPI-04 | — | Pending |
-| UIA-01 | — | Pending |
-| UIA-02 | — | Pending |
-| UIA-03 | — | Pending |
-| UIA-04 | — | Pending |
-| UIA-05 | — | Pending |
-| AIP-01 | — | Pending |
-| AIP-02 | — | Pending |
-| AIP-03 | — | Pending |
+| DPI-01 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
+| DPI-02 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
+| DPI-03 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
+| DPI-04 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
+| UIA-01 | Phase 2: Windows UIA Accessibility Tree | Pending |
+| UIA-02 | Phase 2: Windows UIA Accessibility Tree | Pending |
+| UIA-03 | Phase 2: Windows UIA Accessibility Tree | Pending |
+| UIA-04 | Phase 2: Windows UIA Accessibility Tree | Pending |
+| UIA-05 | Phase 2: Windows UIA Accessibility Tree | Pending |
+| AIP-01 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
+| AIP-02 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
+| AIP-03 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
 
 **Coverage:**
 - v17.0 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 after initial definition*
+*Last updated: 2026-03-25 after roadmap creation (traceability populated)*

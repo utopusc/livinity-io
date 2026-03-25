@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16.0 Multi-Provider AI -- restore Claude (Anthropic) as a second AI provider alongside Kimi, with full feature parity (streaming, tool calling, vision), authentication, config schema, and a Settings UI toggle to switch between providers.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v17.0 Precision Computer Use -- fix the DPI-induced coordinate mismatch in the screenshot pipeline, integrate Windows UI Automation accessibility tree for precise element targeting, and optimize AI prompts for accessibility-first computer use with screenshot fallback.
 
 ## Milestones
 
@@ -16,14 +16,15 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16
 - [x] **v14.0 Remote PC Control Agent** - Phases 47-53 (shipped 2026-03-24)
 - [x] **v14.1 Agent Installer & Setup UX** - Phases 1-4 (shipped 2026-03-24)
 - [x] **v15.0 AI Computer Use** - Phases 5-9 (shipped 2026-03-24)
-- [ ] **v16.0 Multi-Provider AI** - Phases 1-4 (in progress)
+- [x] **v16.0 Multi-Provider AI** - Phases 1-4 (shipped 2026-03-25)
+- [ ] **v17.0 Precision Computer Use** - Phases 1-3 (in progress)
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (1, 2, 3, 4): Planned milestone work
+- Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-- v16.0 uses reset phase numbering (starts at 1)
+- v17.0 uses reset phase numbering (starts at 1)
 
 <details>
 <summary>v10.0 App Store Platform (Phases 16-25) - SHIPPED 2026-03-21</summary>
@@ -123,7 +124,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16
 <details>
 <summary>v14.1 Agent Installer & Setup UX (Phases 1-4) - SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser. Users double-click to install, the agent opens a beautiful setup page for OAuth, then runs silently in the background with auto-start on boot.
+**Milestone Goal:** Replace CLI-only agent setup with polished native installers (Windows .exe, macOS .dmg, Linux .deb) and a web-based setup wizard that opens in the browser.
 
 - [x] **Phase 1: Web Setup Wizard** (completed 2026-03-24)
 - [x] **Phase 2: System Tray Icon** (completed 2026-03-24)
@@ -135,7 +136,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16
 <details>
 <summary>v15.0 AI Computer Use (Phases 5-9) - SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices -- Claude Computer Use style. The AI takes screenshots, analyzes them with multimodal vision, determines coordinates, and executes mouse/keyboard actions in a screenshot-analyze-action loop with live monitoring and security controls.
+**Milestone Goal:** Enable the AI to see the screen, click, type, and navigate applications on connected devices -- Claude Computer Use style.
 
 - [x] **Phase 5: Agent Mouse & Keyboard Tools** (completed 2026-03-24)
 - [x] **Phase 6: Screen Info & Screenshot Extensions** (completed 2026-03-24)
@@ -145,79 +146,68 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16
 
 </details>
 
-### v16.0 Multi-Provider AI
+<details>
+<summary>v16.0 Multi-Provider AI (Phases 1-4) - SHIPPED 2026-03-25</summary>
 
-**Milestone Goal:** Add Claude (Anthropic) as a second AI provider alongside Kimi, with full feature parity and a Settings UI toggle. ClaudeProvider is restored from git history (467 lines, commit 1ea5513^), not built from scratch. The agent loop already uses Anthropic message format internally, so Claude needs no message conversion.
+**Milestone Goal:** Add Claude (Anthropic) as a second AI provider alongside Kimi, with full feature parity and a Settings UI toggle.
 
-- [ ] **Phase 1: Provider Restore & Registration** - Restore ClaudeProvider from git, add SDK, register in ProviderManager
-- [ ] **Phase 2: Feature Parity** - Streaming, tool calling, vision, and model tier mapping for Claude
-- [x] **Phase 3: Auth & Config** - API key management, OAuth PKCE, config schema, fallback loop (completed 2026-03-25)
-- [ ] **Phase 4: Settings UI & Integration** - Provider toggle, status display, conversation routing
+- [x] **Phase 1: Provider Restore & Registration** (completed 2026-03-25)
+- [x] **Phase 2: Feature Parity** (completed 2026-03-25)
+- [x] **Phase 3: Auth & Config** (completed 2026-03-25)
+- [x] **Phase 4: Settings UI & Integration** (completed 2026-03-25)
+
+</details>
+
+### v17.0 Precision Computer Use
+
+**Milestone Goal:** Fix Computer Use coordinate mismatch (DPI scaling) and implement accessibility tree integration for precise element targeting. Screenshots resized to logical pixels, Windows UIA tree exposed as a tool, AI prompted to prefer element coordinates over pixel-guessing.
+
+- [ ] **Phase 1: DPI Fix & Screenshot Pipeline** - Fix screenshot resize + coordinate mapping so AI coordinates match screen coordinates
+- [ ] **Phase 2: Windows UIA Accessibility Tree** - Expose interactive UI elements with coordinates via screen_elements tool
+- [ ] **Phase 3: AI Prompt Optimization & Hybrid Mode** - Teach AI to prefer accessibility tree, fall back to screenshots
 
 ## Phase Details
 
-### Phase 1: Provider Restore & Registration
-**Goal**: ClaudeProvider exists in the codebase, compiles, and is registered in ProviderManager as an available provider alongside Kimi
-**Depends on**: Nothing (first phase)
-**Requirements**: PROV-01, PROV-02
+### Phase 1: DPI Fix & Screenshot Pipeline
+**Goal**: Screenshots sent to AI match the logical pixel coordinate space that robotjs uses for mouse control, eliminating the DPI mismatch that causes misclicks
+**Depends on**: Nothing (first phase, prerequisite for all others)
+**Requirements**: DPI-01, DPI-02, DPI-03, DPI-04
 **Success Criteria** (what must be TRUE):
-  1. ClaudeProvider class is restored from git history and lives at its canonical path in nexus/packages/core/src/providers/
-  2. `@anthropic-ai/sdk` is listed in package.json dependencies and installs without errors
-  3. ProviderManager.getProvider('claude') returns an instance of ClaudeProvider
-  4. `npm run build --workspace=packages/core` succeeds with zero TypeScript errors
-**Plans:** 1 plan
-Plans:
-- [x] 01-01-PLAN.md -- Restore ClaudeProvider, add SDK, register in ProviderManager
+  1. On a 150% DPI Windows display, the AI receives a screenshot resized to logical pixel dimensions (not physical), and clicking the center of a visible button hits that button accurately
+  2. Screenshot coordinate metadata returned to AI reports logical dimensions (e.g., 1707x960) not physical dimensions (e.g., 2560x1440)
+  3. toScreenX/toScreenY in agent-core.ts converts AI coordinates to screen coordinates using 1:1 mapping (no broken scaling math)
+  4. AI system prompt explicitly states the coordinate space is logical pixels and includes the screenshot dimensions
+**Plans**: TBD
 
-### Phase 2: Feature Parity
-**Goal**: Claude provider handles all AI capabilities identically to Kimi -- streaming responses, tool calling, vision/multimodal input, and model tier routing
-**Depends on**: Phase 1 (ClaudeProvider must exist and compile)
-**Requirements**: FEAT-01, FEAT-02, FEAT-03, FEAT-04
+### Phase 2: Windows UIA Accessibility Tree
+**Goal**: AI can query the Windows desktop for interactive UI elements and receive structured data with element names, types, and precise clickable coordinates
+**Depends on**: Phase 1 (coordinate space must be correct before element coordinates are meaningful)
+**Requirements**: UIA-01, UIA-02, UIA-03, UIA-04, UIA-05
 **Success Criteria** (what must be TRUE):
-  1. User sends a message with Claude as the active provider and receives a streaming response that appears token-by-token in the AI chat UI
-  2. AI can call tools (shell, files, etc.) through Claude provider using Anthropic native tool_use format, with results flowing back correctly
-  3. User sends an image (screenshot, uploaded file) and Claude analyzes it and responds with visual understanding
-  4. Model tier selection (fast/balanced/quality) maps to Claude models (haiku/sonnet/opus) and requests use the correct model
-**Plans:** 1 plan
-Plans:
-- [x] 02-01-PLAN.md -- Enable native tool calling for Claude, fix image format conversion, verify model tier mapping
+  1. Agent process on Windows sets DPI awareness to PerMonitorAwareV2 at startup, verified by GetProcessDpiAwareness returning the correct value
+  2. User asks AI to "click the Save button" and the screen_elements tool returns a JSON list of interactive elements including that button with its center coordinates
+  3. Each element in the screen_elements response includes id, window title, control type, display name, and center (x, y) coordinates in a structured text format the AI can parse
+  4. Element list contains only interactive elements (buttons, text fields, links, menu items, checkboxes) and is capped at 50-100 elements maximum to prevent token overflow
+  5. Calling screen_elements responds within 500ms on average because the UIA backend uses a persistent subprocess rather than cold-starting PowerShell on every call
+**Plans**: TBD
 
-### Phase 3: Auth & Config
-**Goal**: Users can authenticate Claude with their API key (or OAuth), the key is securely stored, the config schema supports provider selection, and fallback between providers works
-**Depends on**: Phase 1 (provider must be registered), Phase 2 (provider must be functional to test fallback)
-**Requirements**: AUTH-01, AUTH-02, AUTH-03, PROV-04, PROV-03
+### Phase 3: AI Prompt Optimization & Hybrid Mode
+**Goal**: AI uses accessibility tree element coordinates as its primary targeting method, only falling back to screenshot pixel analysis when no matching element exists
+**Depends on**: Phase 1 (correct coordinates), Phase 2 (elements available)
+**Requirements**: AIP-01, AIP-02, AIP-03
 **Success Criteria** (what must be TRUE):
-  1. User opens Settings, enters a Claude API key, and it is accepted and validated against the Anthropic API
-  2. Claude API key is stored in Redis (not plaintext in config files) and persists across server restarts
-  3. User can optionally authenticate via OAuth PKCE flow instead of pasting an API key
-  4. Config schema includes `primary: 'claude' | 'kimi'` and changing it switches which provider handles new requests
-  5. When the primary provider fails (rate limit, auth error), ProviderManager automatically falls back to the secondary provider
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 03-01-PLAN.md -- Claude auth API routes and config schema for provider selection
-- [x] 03-02-PLAN.md -- Config-driven fallback order and provider management API
-
-### Phase 4: Settings UI & Integration
-**Goal**: Users can switch between Claude and Kimi from the Settings UI, see which provider is active, and new conversations use the selected provider
-**Depends on**: Phase 3 (config schema and auth must exist for the toggle to control)
-**Requirements**: UI-01, UI-02, UI-03
-**Success Criteria** (what must be TRUE):
-  1. Settings page has a provider selection control (toggle or dropdown) showing Claude and Kimi with their authentication status
-  2. Active provider is visible in the AI chat interface (indicator showing whether Claude or Kimi is responding)
-  3. After switching providers in Settings, the next new conversation uses the newly selected provider
-**Plans:** 1/2 plans executed
-Plans:
-- [x] 04-01-PLAN.md -- tRPC routes for Claude auth proxy and provider management
-- [x] 04-02-PLAN.md -- Provider toggle in Settings UI and provider badge in AI chat
+  1. Computer use system prompt instructs the AI to call screen_elements first and use element coordinates for clicking, with screenshots reserved for visual context and fallback
+  2. When the AI needs to click a button that appears in the accessibility tree, it uses the element's center coordinates directly instead of analyzing the screenshot to guess pixel positions
+  3. When the accessibility tree content has not changed since the last capture, the agent skips re-capturing a screenshot, reducing unnecessary vision API calls and latency
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Provider Restore & Registration | v16.0 | 0/1 | Planning complete | - |
-| 2. Feature Parity | v16.0 | 0/1 | Planning complete | - |
-| 3. Auth & Config | v16.0 | 2/2 | Complete   | 2026-03-25 |
-| 4. Settings UI & Integration | v16.0 | 1/2 | In Progress|  |
+| 1. DPI Fix & Screenshot Pipeline | v17.0 | 0/? | Not started | - |
+| 2. Windows UIA Accessibility Tree | v17.0 | 0/? | Not started | - |
+| 3. AI Prompt Optimization & Hybrid Mode | v17.0 | 0/? | Not started | - |
