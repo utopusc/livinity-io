@@ -1,58 +1,75 @@
-# Requirements: Livinity v17.0 Precision Computer Use
+# Requirements: Livinity v18.0 Remote Desktop Streaming
 
 **Defined:** 2026-03-25
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v17.0 Requirements
+## v18.0 Requirements
 
-Requirements for precision computer use. Each maps to roadmap phases.
+Requirements for remote desktop streaming milestone. Each maps to roadmap phases.
 
-### Screenshot Pipeline (DPI Fix)
+### Installation & Setup
 
-- [x] **DPI-01**: Agent resizes screenshots from physical to logical pixel dimensions using sharp before sending to AI
-- [x] **DPI-02**: Screenshot coordinate metadata reports logical dimensions (monitor.width/height) not physical (image.width/height)
-- [x] **DPI-03**: toScreenX/toScreenY uses 1:1 mapping after proper resize (no broken scaling logic)
-- [x] **DPI-04**: AI system prompt clearly states coordinate space is logical pixels with explicit dimensions
+- [ ] **INST-01**: install.sh detects GUI presence (X11/Wayland) and skips desktop streaming setup on headless servers
+- [ ] **INST-02**: install.sh installs x11vnc and configures systemd service with `-localhost` binding
+- [ ] **INST-03**: x11vnc registered as NativeApp in livinityd with systemd lifecycle management and port health-checking
 
-### Windows Accessibility Tree
+### Streaming Infrastructure
 
-- [x] **UIA-01**: Agent sets DPI awareness to PerMonitorAwareV2 at startup on Windows
-- [x] **UIA-02**: `screen_elements` tool traverses Windows UIA tree and returns interactive elements with center coordinates
-- [x] **UIA-03**: Elements formatted as structured text for AI: id, window, control_type, name, coordinates
-- [x] **UIA-04**: Element list filtered to interactive elements only, capped at 50-100 elements to prevent token explosion
-- [x] **UIA-05**: UIA backend uses persistent subprocess (not cold-start PowerShell per call) for acceptable latency
+- [ ] **STRM-01**: livinityd provides `/ws/desktop` WebSocket endpoint that bridges to x11vnc TCP socket (localhost:5900)
+- [ ] **STRM-02**: WebSocket bridge validates JWT auth on upgrade and checks Origin header
+- [ ] **STRM-03**: Caddy generates `pc.{domain}` subdomain with nativeApps JWT cookie gating and `stream_close_delay` for reload resilience
 
-### AI Prompt & Hybrid Mode
+### Browser Viewer
 
-- [x] **AIP-01**: Computer use system prompt updated: "Use element coordinates from screen_elements, screenshot for visual context only"
-- [x] **AIP-02**: Hybrid mode: AI tries accessibility tree coordinates first, falls back to screenshot coordinates if no matching element
-- [x] **AIP-03**: Agent skips screenshot re-capture when accessibility tree content hasn't changed since last capture
+- [ ] **VIEW-01**: User can see their server desktop rendered in real-time in the browser via noVNC
+- [ ] **VIEW-02**: User can control remote desktop with mouse (click, move, drag, scroll) with correct coordinate scaling
+- [ ] **VIEW-03**: User can type on remote desktop including special characters and international keyboards
+- [ ] **VIEW-04**: User can enter fullscreen mode for immersive experience and better shortcut capture
+- [ ] **VIEW-05**: User sees connection status indicator (connected/reconnecting/disconnected with latency)
+- [ ] **VIEW-06**: Connection auto-reconnects on network interruption with exponential backoff
 
-## Future Requirements
+### Integration
 
-### Cross-Platform Accessibility
+- [ ] **INTG-01**: Desktop viewer accessible via `pc.{username}.livinity.io` subdomain through tunnel relay
+- [ ] **INTG-02**: Desktop session persists across browser tab close/reopen (VNC session stays alive)
+- [ ] **INTG-03**: Desktop viewer fits browser viewport with dynamic resolution (server-side resize via xrandr)
 
-- **XPA-01**: macOS AXUIElement accessibility tree integration via Swift CLI binary
-- **XPA-02**: Linux AT-SPI2 accessibility tree integration via Python/pyatspi2
-- **XPA-03**: Unified screen_elements interface across all platforms with platform detection
+## v2 Requirements
 
-### Enhanced Features
+Deferred to future release. Tracked but not in current roadmap.
 
-- **ENH-01**: Element highlighting -- draw bounding boxes on screenshot matching accessibility tree elements
-- **ENH-02**: Multi-monitor accessibility tree support with per-monitor DPI handling
-- **ENH-03**: Accessibility tree diff detection for incremental updates
+### Clipboard & Input
+
+- **CLIP-01**: User can copy/paste text between local machine and remote desktop
+- **CLIP-02**: User can paste images from local clipboard to remote (Chromium only)
+
+### Adaptive & Mobile
+
+- **ADPT-01**: Stream quality adapts automatically based on connection bandwidth
+- **MOBL-01**: User can interact with remote desktop via touch controls on mobile/tablet
+- **MOBL-02**: On-screen virtual keyboard for mobile devices
+
+### Advanced
+
+- **ADVN-01**: Audio streaming from remote desktop to browser
+- **ADVN-02**: Multi-monitor support with display selector
+- **ADVN-03**: File transfer via desktop stream drag-and-drop
+- **ADVN-04**: Wayland native support via wayvnc (no XWayland dependency)
+- **ADVN-05**: Per-user desktop session isolation (separate X sessions)
 
 ## Out of Scope
 
+Explicitly excluded. Documented to prevent scope creep.
+
 | Feature | Reason |
 |---------|--------|
-| Full desktop streaming (RDP/VNC) | Stays as structured screenshot+action approach |
-| OCR-based element detection | Using OS native accessibility tree instead |
-| Browser-only automation (Playwright) | This is desktop-level automation |
-| Custom ML model for UI detection | Leveraging OS built-in accessibility APIs |
-| Multi-monitor orchestration | Single primary monitor for now |
-| macOS accessibility (this milestone) | Requires Swift binary build pipeline, deferred |
-| Linux accessibility (this milestone) | AT-SPI2 availability varies by distro, deferred |
+| Windows/macOS remote desktop | LivOS servers are Linux only |
+| WebRTC transport | WebSocket through Caddy/tunnel is simpler, WebRTC adds STUN/TURN complexity |
+| Apache Guacamole | Requires Tomcat (Java), separate auth system, over-engineered for single-server |
+| KasmVNC | Replaces X server entirely, container-focused, wrong for streaming host desktop |
+| USB device redirection | WebUSB is Chromium-only, requires kernel drivers on both ends |
+| Printing redirection | Servers don't print, extremely niche |
+| Virtual desktop (Xvfb) | Goal is streaming the real host desktop, not creating virtual ones |
 
 ## Traceability
 
@@ -60,24 +77,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DPI-01 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
-| DPI-02 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
-| DPI-03 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
-| DPI-04 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
-| UIA-01 | Phase 2: Windows UIA Accessibility Tree | Complete |
-| UIA-02 | Phase 2: Windows UIA Accessibility Tree | Complete |
-| UIA-03 | Phase 2: Windows UIA Accessibility Tree | Complete |
-| UIA-04 | Phase 2: Windows UIA Accessibility Tree | Complete |
-| UIA-05 | Phase 2: Windows UIA Accessibility Tree | Complete |
-| AIP-01 | Phase 3: AI Prompt Optimization & Hybrid Mode | Complete |
-| AIP-02 | Phase 3: AI Prompt Optimization & Hybrid Mode | Complete |
-| AIP-03 | Phase 3: AI Prompt Optimization & Hybrid Mode | Complete |
+| INST-01 | — | Pending |
+| INST-02 | — | Pending |
+| INST-03 | — | Pending |
+| STRM-01 | — | Pending |
+| STRM-02 | — | Pending |
+| STRM-03 | — | Pending |
+| VIEW-01 | — | Pending |
+| VIEW-02 | — | Pending |
+| VIEW-03 | — | Pending |
+| VIEW-04 | — | Pending |
+| VIEW-05 | — | Pending |
+| VIEW-06 | — | Pending |
+| INTG-01 | — | Pending |
+| INTG-02 | — | Pending |
+| INTG-03 | — | Pending |
 
 **Coverage:**
-- v17.0 requirements: 12 total
-- Mapped to phases: 12
-- Unmapped: 0
+- v18.0 requirements: 15 total
+- Mapped to phases: 0
+- Unmapped: 15
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 after roadmap creation (traceability populated)*
+*Last updated: 2026-03-25 after initial definition*
