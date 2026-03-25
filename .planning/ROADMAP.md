@@ -2,7 +2,7 @@
 
 ## Overview
 
-Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v17.0 Precision Computer Use -- fix the DPI-induced coordinate mismatch in the screenshot pipeline, integrate Windows UI Automation accessibility tree for precise element targeting, and optimize AI prompts for accessibility-first computer use with screenshot fallback.
+Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v18.0 Remote Desktop Streaming -- deploy a browser-based remote desktop viewer at `pc.{username}.livinity.io`, letting users see and control their server's GUI through any browser with zero client software.
 
 ## Milestones
 
@@ -17,14 +17,15 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v17
 - [x] **v14.1 Agent Installer & Setup UX** - Phases 1-4 (shipped 2026-03-24)
 - [x] **v15.0 AI Computer Use** - Phases 5-9 (shipped 2026-03-24)
 - [x] **v16.0 Multi-Provider AI** - Phases 1-4 (shipped 2026-03-25)
-- [ ] **v17.0 Precision Computer Use** - Phases 1-3 (in progress)
+- [x] **v17.0 Precision Computer Use** - Phases 1-3 (shipped 2026-03-25)
+- [ ] **v18.0 Remote Desktop Streaming** - Phases 4-6 (in progress)
 
 ## Phases
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-- v17.0 uses reset phase numbering (starts at 1)
+- v18.0 continues from v17.0 Phase 3 (starts at Phase 4)
 
 <details>
 <summary>v10.0 App Store Platform (Phases 16-25) - SHIPPED 2026-03-21</summary>
@@ -158,62 +159,79 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v17
 
 </details>
 
-### v17.0 Precision Computer Use
+<details>
+<summary>v17.0 Precision Computer Use (Phases 1-3) - SHIPPED 2026-03-25</summary>
 
 **Milestone Goal:** Fix Computer Use coordinate mismatch (DPI scaling) and implement accessibility tree integration for precise element targeting. Screenshots resized to logical pixels, Windows UIA tree exposed as a tool, AI prompted to prefer element coordinates over pixel-guessing.
 
-- [ ] **Phase 1: DPI Fix & Screenshot Pipeline** - Fix screenshot resize + coordinate mapping so AI coordinates match screen coordinates
-- [ ] **Phase 2: Windows UIA Accessibility Tree** - Expose interactive UI elements with coordinates via screen_elements tool
-- [ ] **Phase 3: AI Prompt Optimization & Hybrid Mode** - Teach AI to prefer accessibility tree, fall back to screenshots
+- [x] **Phase 1: DPI Fix & Screenshot Pipeline** (completed 2026-03-25)
+- [x] **Phase 2: Windows UIA Accessibility Tree** (completed 2026-03-25)
+- [x] **Phase 3: AI Prompt Optimization & Hybrid Mode** (completed 2026-03-25)
+
+</details>
+
+### v18.0 Remote Desktop Streaming
+
+**Milestone Goal:** Deploy a browser-based remote desktop streaming service via install.sh, letting users see and control their server's GUI through `pc.{username}.livinity.io` in any browser -- zero-client VNC alternative with JWT auth, auto-reconnect, and dynamic resolution.
+
+- [ ] **Phase 4: Server Infrastructure** - Install x11vnc via install.sh with GUI detection, register as NativeApp, configure Caddy subdomain
+- [ ] **Phase 5: WebSocket Proxy & Auth** - Bridge browser WebSocket to VNC TCP socket with JWT validation and Caddy stream resilience
+- [ ] **Phase 6: Browser Viewer & Integration** - noVNC React viewer with full input, connection management, and tunnel subdomain routing
 
 ## Phase Details
 
-### Phase 1: DPI Fix & Screenshot Pipeline
-**Goal**: Screenshots sent to AI match the logical pixel coordinate space that robotjs uses for mouse control, eliminating the DPI mismatch that causes misclicks
-**Depends on**: Nothing (first phase, prerequisite for all others)
-**Requirements**: DPI-01, DPI-02, DPI-03, DPI-04
+### Phase 4: Server Infrastructure
+**Goal**: Server has a running VNC capture service that can be tested with any standard VNC client, installed automatically by install.sh with GUI detection
+**Depends on**: Nothing (first phase of v18.0)
+**Requirements**: INST-01, INST-02, INST-03, STRM-03
 **Success Criteria** (what must be TRUE):
-  1. On a 150% DPI Windows display, the AI receives a screenshot resized to logical pixel dimensions (not physical), and clicking the center of a visible button hits that button accurately
-  2. Screenshot coordinate metadata returned to AI reports logical dimensions (e.g., 1707x960) not physical dimensions (e.g., 2560x1440)
-  3. toScreenX/toScreenY in agent-core.ts converts AI coordinates to screen coordinates using 1:1 mapping (no broken scaling math)
-  4. AI system prompt explicitly states the coordinate space is logical pixels and includes the screenshot dimensions
-**Plans**: 1 plan
-Plans:
-- [x] 01-01-PLAN.md -- Install sharp, fix screenshot resize + coordinate mapping, update AI prompt
+  1. Running install.sh on a headless server (no X11/Wayland) skips desktop streaming setup entirely without errors
+  2. Running install.sh on a GUI server installs x11vnc, creates a systemd service bound to localhost only, and the service starts successfully
+  3. x11vnc appears as a NativeApp in livinityd with working start/stop lifecycle and port health-checking
+  4. Caddy generates a `pc.{domain}` subdomain block with `stream_close_delay` and JWT cookie gating in the Caddyfile
+**Plans**: TBD
 
-### Phase 2: Windows UIA Accessibility Tree
-**Goal**: AI can query the Windows desktop for interactive UI elements and receive structured data with element names, types, and precise clickable coordinates
-**Depends on**: Phase 1 (coordinate space must be correct before element coordinates are meaningful)
-**Requirements**: UIA-01, UIA-02, UIA-03, UIA-04, UIA-05
-**Success Criteria** (what must be TRUE):
-  1. Agent process on Windows sets DPI awareness to PerMonitorAwareV2 at startup, verified by GetProcessDpiAwareness returning the correct value
-  2. User asks AI to "click the Save button" and the screen_elements tool returns a JSON list of interactive elements including that button with its center coordinates
-  3. Each element in the screen_elements response includes id, window title, control type, display name, and center (x, y) coordinates in a structured text format the AI can parse
-  4. Element list contains only interactive elements (buttons, text fields, links, menu items, checkboxes) and is capped at 50-100 elements maximum to prevent token overflow
-  5. Calling screen_elements responds within 500ms on average because the UIA backend uses a persistent subprocess rather than cold-starting PowerShell on every call
-**Plans**: 1 plan
 Plans:
-- [x] 02-01-PLAN.md -- DPI awareness, persistent PowerShell subprocess, screen_elements tool
+- [ ] 04-01: TBD
+- [ ] 04-02: TBD
 
-### Phase 3: AI Prompt Optimization & Hybrid Mode
-**Goal**: AI uses accessibility tree element coordinates as its primary targeting method, only falling back to screenshot pixel analysis when no matching element exists
-**Depends on**: Phase 1 (correct coordinates), Phase 2 (elements available)
-**Requirements**: AIP-01, AIP-02, AIP-03
+### Phase 5: WebSocket Proxy & Auth
+**Goal**: Browser can establish an authenticated WebSocket connection to the VNC stream through livinityd, with JWT validation on upgrade and Origin header protection
+**Depends on**: Phase 4 (VNC server and Caddy subdomain must exist)
+**Requirements**: STRM-01, STRM-02, INTG-02
 **Success Criteria** (what must be TRUE):
-  1. Computer use system prompt instructs the AI to call screen_elements first and use element coordinates for clicking, with screenshots reserved for visual context and fallback
-  2. When the AI needs to click a button that appears in the accessibility tree, it uses the element's center coordinates directly instead of analyzing the screenshot to guess pixel positions
-  3. When the accessibility tree content has not changed since the last capture, the agent skips re-capturing a screenshot, reducing unnecessary vision API calls and latency
-**Plans**: 1 plan
+  1. A WebSocket connection to `/ws/desktop` successfully bridges to the x11vnc TCP socket and streams VNC data bidirectionally
+  2. Connecting to `/ws/desktop` without a valid JWT token is rejected at the WebSocket upgrade step (HTTP 401)
+  3. Connecting to `/ws/desktop` with a mismatched Origin header is rejected (HTTP 403)
+  4. Closing the browser tab does not kill the x11vnc process -- the VNC session persists for reconnection
+**Plans**: TBD
+
 Plans:
-- [x] 03-01-PLAN.md -- Rewrite AI prompt for accessibility-first hybrid mode + screenshot caching
+- [ ] 05-01: TBD
+
+### Phase 6: Browser Viewer & Integration
+**Goal**: Users can see and control their server desktop in real-time through `pc.{username}.livinity.io` with full mouse/keyboard input, connection resilience, and proper viewport scaling
+**Depends on**: Phase 5 (authenticated WebSocket bridge must work)
+**Requirements**: VIEW-01, VIEW-02, VIEW-03, VIEW-04, VIEW-05, VIEW-06, INTG-01, INTG-03
+**Success Criteria** (what must be TRUE):
+  1. User navigates to `pc.{username}.livinity.io` in a browser and sees their server desktop rendered in real-time via noVNC
+  2. User can click, drag, scroll, and type (including special characters) on the remote desktop with correct coordinate scaling at any viewport size
+  3. User can enter fullscreen mode and the remote desktop resizes to fill the browser viewport via server-side xrandr
+  4. Connection status indicator shows connected/reconnecting/disconnected states with latency, and the viewer auto-reconnects on network interruption with exponential backoff
+  5. Desktop viewer is accessible through the tunnel relay at `pc.{username}.livinity.io` (not just local network)
+**Plans**: TBD
+
+Plans:
+- [ ] 06-01: TBD
+- [ ] 06-02: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3
+Phases execute in numeric order: 4 -> 5 -> 6
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. DPI Fix & Screenshot Pipeline | v17.0 | 1/1 | Complete | 2026-03-25 |
-| 2. Windows UIA Accessibility Tree | v17.0 | 0/1 | Not started | - |
-| 3. AI Prompt Optimization & Hybrid Mode | v17.0 | 0/1 | Not started | - |
+| 4. Server Infrastructure | v18.0 | 0/2 | Not started | - |
+| 5. WebSocket Proxy & Auth | v18.0 | 0/1 | Not started | - |
+| 6. Browser Viewer & Integration | v18.0 | 0/2 | Not started | - |

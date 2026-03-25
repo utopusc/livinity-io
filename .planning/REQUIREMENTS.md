@@ -77,27 +77,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | — | Pending |
-| INST-02 | — | Pending |
-| INST-03 | — | Pending |
-| STRM-01 | — | Pending |
-| STRM-02 | — | Pending |
-| STRM-03 | — | Pending |
-| VIEW-01 | — | Pending |
-| VIEW-02 | — | Pending |
-| VIEW-03 | — | Pending |
-| VIEW-04 | — | Pending |
-| VIEW-05 | — | Pending |
-| VIEW-06 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
+| INST-01 | Phase 4 | Pending |
+| INST-02 | Phase 4 | Pending |
+| INST-03 | Phase 4 | Pending |
+| STRM-01 | Phase 5 | Pending |
+| STRM-02 | Phase 5 | Pending |
+| STRM-03 | Phase 4 | Pending |
+| VIEW-01 | Phase 6 | Pending |
+| VIEW-02 | Phase 6 | Pending |
+| VIEW-03 | Phase 6 | Pending |
+| VIEW-04 | Phase 6 | Pending |
+| VIEW-05 | Phase 6 | Pending |
+| VIEW-06 | Phase 6 | Pending |
+| INTG-01 | Phase 6 | Pending |
+| INTG-02 | Phase 5 | Pending |
+| INTG-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v18.0 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 after initial definition*
+*Last updated: 2026-03-25 after roadmap creation (all 15 requirements mapped)*
