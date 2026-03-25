@@ -192,7 +192,10 @@ Plans:
   3. User can optionally authenticate via OAuth PKCE flow instead of pasting an API key
   4. Config schema includes `primary: 'claude' | 'kimi'` and changing it switches which provider handles new requests
   5. When the primary provider fails (rate limit, auth error), ProviderManager automatically falls back to the secondary provider
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 03-01-PLAN.md -- Claude auth API routes and config schema for provider selection
+- [ ] 03-02-PLAN.md -- Config-driven fallback order and provider management API
 
 ### Phase 4: Settings UI & Integration
 **Goal**: Users can switch between Claude and Kimi from the Settings UI, see which provider is active, and new conversations use the selected provider
@@ -213,5 +216,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|-----------|----------------|--------|-----------|
 | 1. Provider Restore & Registration | v16.0 | 0/1 | Planning complete | - |
 | 2. Feature Parity | v16.0 | 0/1 | Planning complete | - |
-| 3. Auth & Config | v16.0 | 0/0 | Not started | - |
+| 3. Auth & Config | v16.0 | 0/2 | Planning complete | - |
 | 4. Settings UI & Integration | v16.0 | 0/0 | Not started | - |
