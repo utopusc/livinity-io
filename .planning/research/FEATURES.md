@@ -1,326 +1,300 @@
-# Feature Research: Remote PC Control Agent
+# Feature Research: Precision Computer Use (v17.0)
 
-**Domain:** Cross-platform remote PC control agent for AI-driven management
-**Researched:** 2026-03-23
-**Confidence:** HIGH (based on analysis of RustDesk, MeshCentral, Tailscale, Teleport, TeamViewer, Claude Computer Use, Open Interpreter)
+**Domain:** Accessibility tree integration, DPI-aware coordinate handling, and cross-platform element targeting for AI computer use
+**Researched:** 2026-03-25
+**Confidence:** HIGH for DPI/screenshot pipeline fixes, MEDIUM for accessibility tree cross-platform, LOW for Linux AT-SPI2 via Node.js
+
+## Context: What Exists Today
+
+The Livinity agent (agent-core.ts) currently has:
+- 8 desktop automation tools (6 mouse + 2 keyboard) via @jitsi/robotjs
+- Screenshot capture via node-screenshots (JPEG encoding, base64 transfer)
+- screen_info tool returning display resolution, scale factor, monitor positions
+- Autonomous screenshot-then-analyze-then-act-then-verify loop (50-action step limit)
+- Live monitoring panel with screenshot feed, click overlays, action timeline
+- Coordinate scaling logic (screenScaleX/Y) intended to map AI coordinates to screen coordinates
+
+**Known broken:** Screenshots capture in physical pixels (e.g., 2560x1440 on a 150% DPI display) but robotjs operates in logical pixels (1707x960). The scaling logic in toScreenX/toScreenY does not account for DPI scaling at all -- it only handles the downscale-for-API case. node-screenshots does not have a resize method, so the agent sends full-resolution images and tells the AI about target dimensions, but the API auto-resizes internally, creating an opaque coordinate mismatch.
 
 ## Feature Landscape
 
-### Table Stakes (Users Expect These)
+### Table Stakes (Must Fix / Must Have)
 
-Features users assume exist. Missing these = product feels incomplete or untrustworthy.
+Features that fix broken behavior or match what every serious computer use implementation does. Missing these means the product fundamentally does not work reliably.
 
-#### 1. Device Registration and Discovery
+#### 1. Screenshot Pipeline Fix (Physical to Logical Pixels)
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| One-command agent install | Every competitor (RustDesk, MeshCentral, Tailscale) does this. Friction = abandonment | MEDIUM | Single binary download + `./livinity-agent install` or MSI/DMG/DEB. Auto-registers on first run |
-| OAuth-based device registration | Users expect to log in once and have the device appear. MeshCentral agents auto-register in under 60 seconds | MEDIUM | Agent opens browser for livinity.io OAuth, receives device token, registers with LivOS |
-| Unique device identity | All tools assign persistent device IDs. RustDesk uses numeric IDs, MeshCentral uses agent GUIDs | LOW | Generate UUID on first install, persist in agent config file. Survives reboots and updates |
-| Device naming (human-readable) | Tailscale MagicDNS auto-generates names from hostname. Users expect "Bruce-Desktop" not "a3f7c2d1" | LOW | Default to OS hostname, allow rename from LivOS UI |
-| Online/offline status indicator | Every remote tool shows green/red dots. Users need instant trust signal | LOW | WebSocket heartbeat (30s interval), show last-seen timestamp when offline |
-| Auto-reconnection | Tailscale, RustDesk all handle network changes silently. Dropping and not recovering is unacceptable | MEDIUM | Exponential backoff reconnect (1s, 2s, 4s... max 60s). Handle WiFi switches, sleep/wake, IP changes |
+| Feature | Why Required | Complexity | Notes |
+|---------|-------------|------------|-------|
+| Resize screenshots to logical pixel dimensions using sharp | Current pipeline sends physical-pixel screenshots. Anthropic docs explicitly say: resize screenshots yourself and scale coordinates back up. Without this, AI coordinates are in an undefined space | LOW | `sharp(buffer).resize(logicalWidth, logicalHeight).jpeg().toBuffer()`. Sharp is already a common Node.js dep, ~6MB |
+| Report logical dimensions in screenshot metadata | The screenshot tool currently reports physical `captureW x captureH` but the AI needs to know the coordinate space it should use | LOW | Change `data.width`/`data.height` to report logical dimensions. Add `physicalWidth`/`physicalHeight` for diagnostics |
+| Calculate correct scale factor from display API | `node-screenshots` `Monitor.scaleFactor()` already returns the DPI scale. Use it: `logicalWidth = physicalWidth / scaleFactor` | LOW | Single line of math. Critical foundation for everything else |
 
-#### 2. Remote Shell / Terminal
+**Anthropic official guidance (HIGH confidence, from docs):** "The API constrains images to a maximum of 1568 pixels on the longest edge and approximately 1.15 megapixels total. To fix coordinate mismatches, resize screenshots yourself and scale Claude's coordinates back up." Recommended resolutions: 1024x768 (XGA), 1280x800 (WXGA), 1366x768 (FWXGA).
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Interactive shell session | Core feature of every remote management tool. Teleport, MeshCentral, Tailscale SSH all provide this | HIGH | Spawn PTY (pseudo-terminal) on agent side, stream stdin/stdout over WebSocket. Must handle Windows (ConPTY), macOS/Linux (posix PTY) |
-| Cross-platform shell detection | Users expect the right shell: PowerShell on Windows, bash/zsh on macOS/Linux | LOW | Detect OS, spawn appropriate default shell. Allow override in agent config |
-| Working directory persistence | Shell sessions should remember cwd between commands within a session | LOW | Maintain PTY session state. Already handled by PTY approach |
-| Environment variable access | Remote shell must see user's PATH, HOME, etc. MeshCentral agents run in user context | MEDIUM | Agent must run as the logged-in user (or configurable user), not just SYSTEM/root |
-| Command output streaming | Users expect real-time output, not batch. Teleport streams SSH output in browser | MEDIUM | Chunked WebSocket streaming. Buffer management for large outputs (e.g., `find /`) |
-| Shell session timeout | Security requirement. Teleport enforces idle timeouts | LOW | Configurable idle timeout (default 30 min), explicit session close |
+#### 2. Coordinate Mapping Fix (toScreenX/toScreenY)
 
-#### 3. File Transfer and Browsing
+| Feature | Why Required | Complexity | Notes |
+|---------|-------------|------------|-------|
+| Fix toScreenX/toScreenY to use logical pixel space | Current logic only handles downscale. It needs to: (1) map from AI image coords to logical pixels, (2) account for DPI if robotjs uses physical coords | LOW | Replace the current broken conditional with: `screenX = Math.round(aiX / imageScale)` where imageScale = displayWidth_sentToAI / logicalScreenWidth |
+| Handle multi-monitor coordinate offsets | robotjs moveMouse uses absolute desktop coordinates. Multi-monitor setups need monitor X/Y offsets added | MEDIUM | Use `monitorX`/`monitorY` from node-screenshots. Already captured but not used in coordinate math |
+| Validate coordinates before execution | Anthropic docs show returning error for out-of-bounds coords. Current code does not validate | LOW | Check `0 <= x < logicalWidth && 0 <= y < logicalHeight` before calling robotjs |
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Remote directory listing | Every tool has a file browser. MeshCentral "Files" tab, RustDesk file manager | MEDIUM | Agent lists directory contents with metadata (size, type, modified date, permissions) |
-| File upload (LivOS to PC) | Basic file transfer is table stakes. TeamViewer, AnyDesk, RustDesk all do this | MEDIUM | Chunked upload over WebSocket/HTTP. Resume support for large files. Progress indication |
-| File download (PC to LivOS) | Bidirectional transfer expected. TeamViewer offers drag-and-drop in both directions | MEDIUM | Stream file from agent to LivOS. Same chunked protocol as upload |
-| Path navigation (breadcrumbs) | Users expect to browse like a file manager, not type raw paths | LOW | UI concern. Agent returns directory tree data, LivOS renders breadcrumb navigation |
-| File metadata (size, date, perms) | Standard in every file browser. MeshCentral shows full file details | LOW | Agent stat() calls, return structured JSON |
-| Create/delete/rename files | Basic file operations. LivOS already has a file manager, users expect parity | LOW | Agent exposes CRUD file operations via API |
+#### 3. DPI Awareness at Agent Startup (Windows)
 
-#### 4. Process Management
+| Feature | Why Required | Complexity | Notes |
+|---------|-------------|------------|-------|
+| Call SetProcessDpiAwarenessContext(PerMonitorAwareV2) at process startup | Without this, Windows virtualizes coordinates for "DPI-unaware" apps. robotjs may receive virtualized coordinates that do not match actual pixel positions | MEDIUM | Requires native addon or ffi call. Can use `ffi-napi` to call `user32.dll!SetProcessDpiAwarenessContext(-4)` at startup. The `-4` constant is DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 |
+| Detect actual DPI per monitor at runtime | Windows can have different DPI per monitor. Need to know which monitor the target element is on | MEDIUM | `GetDpiForMonitor()` via ffi-napi or use node-screenshots scaleFactor per monitor. Already partially available |
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Process list with resource usage | ManageEngine, MeshCentral, Remote Utilities all show running processes with CPU/RAM. Users expect a task manager view | MEDIUM | Cross-platform: Windows (WMI/tasklist), macOS (ps aux), Linux (proc filesystem). Return PID, name, CPU%, memory, user |
-| Kill/terminate process | Every remote management tool supports this. Action1, N-able all provide remote kill | LOW | Send SIGTERM/SIGKILL (Unix) or TerminateProcess (Windows). Require confirmation in UI |
-| Service status listing | IT admins expect to see and manage services. ManageEngine, Remote Utilities show services tab | MEDIUM | Windows (sc query), Linux (systemctl list-units), macOS (launchctl list). Return name, status, startup type |
+**Microsoft docs (HIGH confidence):** "Calling SetProcessDpiAwarenessContext with per-monitor V2 awareness does not cause use of a virtualized coordinate system, so it will generally give you 1 coordinate = 1 pixel even on high-DPI displays."
 
-#### 5. System Information Collection
+### Differentiators (Accessibility Tree Integration)
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| OS version and type | Every device management tool shows this. MeshCentral displays in device list | LOW | Agent reports at registration and on heartbeat changes |
-| CPU, RAM, disk overview | Standard dashboard data. MeshCentral, EMCO inventory, PDQ all collect this | LOW | Agent collects on connect and periodically (every 5 min). Report total/used/free |
-| Hostname and network info | Users need to know which machine they are controlling. IP address, MAC for WoL | LOW | Report hostname, local IPs, MAC addresses, public IP |
-| Uptime | Standard system health indicator | LOW | Agent reports OS uptime. Simple cross-platform API call |
+Features that go beyond screenshot-only computer use. These are what Windows-Use, nut.js, and advanced agents implement. Not strictly required for basic functionality, but dramatically improve accuracy and efficiency.
 
-#### 6. Screenshot / Screen Capture
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| On-demand screenshot | MeshCentral, Alloy Remote Screenshot, MIS all support this. AI needs visual context | MEDIUM | Capture primary display, compress as JPEG/PNG, send to LivOS. Windows (GDI/DXGI), macOS (CGDisplayCreateImage), Linux (X11/Wayland grab) |
-| Multi-monitor awareness | RustDesk supports multi-monitor. Users with 2+ screens need to specify which one | MEDIUM | Enumerate displays, capture specific or all. Report display topology |
-
-#### 7. Connection and Security
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| TLS-encrypted transport | Every production tool uses encryption. TeamViewer AES-256, RustDesk NaCl E2EE | MEDIUM | TLS 1.3 for agent-to-relay. Token-based auth on every connection |
-| Authentication token rotation | Security baseline. Tokens should not be permanent | LOW | Short-lived JWT or device tokens, auto-refresh via relay |
-| Heartbeat / keepalive | All tools maintain persistent connections with health checks | LOW | 30-second ping/pong over WebSocket. Detect stale connections server-side |
-
----
-
-### Differentiators (Competitive Advantage)
-
-These are what make LivOS's remote agent fundamentally different from RustDesk/MeshCentral/TeamViewer. The key insight: **traditional tools are human-operated via GUI; LivOS's agent is AI-operated via structured tool APIs.**
+#### 4. Windows UI Automation (UIA) Accessibility Tree
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **AI-native tool interface** | Agent exposes structured JSON APIs (not GUI). AI calls `shell.execute("ls -la")`, `files.list("/home")`, `process.kill(1234)` as tools. No other remote desktop tool is designed API-first for AI consumption | HIGH | This is the core differentiator. Every capability is a well-typed tool the AI can invoke. Inspired by Claude Computer Use's tool approach but without needing screenshots for every action |
-| **Natural language device control** | User says "show me what's eating CPU on my desktop" and AI runs process list, identifies culprit, offers to kill it. No clicking through menus | MEDIUM | Orchestration layer in LivOS's existing AI agent. Agent provides raw capabilities, AI provides intelligence |
-| **Structured output for AI reasoning** | Agent returns typed JSON (not raw terminal text). Process list returns `{pid, name, cpu, mem}` not a text table. AI can reason over data without parsing | MEDIUM | Design all agent responses as structured data. AI gets machine-readable data, not human-readable text. This is what separates this from just "SSH + LLM" |
-| **Per-device permission scoping** | User configures what AI can do per device: "shell: read-only, files: home directory only, processes: view only". Fine-grained RBAC per device | HIGH | Permission matrix: {device} x {capability} x {scope}. More granular than MeshCentral's group-level permissions. Critical for trust |
-| **Audit log with AI intent** | Logs not just "ran command X" but "AI ran command X because user asked to free disk space". Links AI reasoning to actions | MEDIUM | Extend existing LivOS audit system. Each tool invocation logs: user request, AI reasoning, tool call, result |
-| **Multi-device orchestration** | "Update node.js on all my machines" -- AI runs commands across multiple devices in parallel. MeshCentral supports multi-device commands but requires manual scripting | HIGH | Fan-out tool execution. AI decides per-device commands (apt vs brew vs choco). Aggregate results. Defer to v2+ |
-| **Contextual system awareness** | Agent continuously reports system state so AI can proactively suggest: "Your desktop is running low on disk, want me to clean temp files?" | MEDIUM | Periodic telemetry (every 5 min): disk, CPU, RAM, notable processes. AI can reference without explicit query |
-| **Clipboard bridge** | Copy on PC, paste in LivOS AI chat (and vice versa). AI can read clipboard as context for requests | MEDIUM | RustDesk and TeamViewer have clipboard sync but it is human-to-human. LivOS makes clipboard an AI-readable tool |
-| **Wake-on-LAN integration** | "Turn on my desktop" from LivOS. Agent on another device on the same LAN sends WoL packet | MEDIUM | Requires a peer agent on the same LAN (or the LivOS server itself if co-located). Store MAC addresses from device registration |
-| **Zero-config tunnel routing** | Agent connects outbound to livinity.io relay, no port forwarding needed. Like Tailscale but without installing a VPN on both sides | MEDIUM | Agent maintains persistent outbound WebSocket to relay. LivOS connects to relay. Relay bridges the two. Already have relay infrastructure from livinity.io platform |
+| Enumerate interactive elements via Windows UIA API | Eliminates guessing from screenshots. AI gets exact element names, types, and positions. Windows-Use uses this as primary input (no vision model needed). Benchmarks show UIA-backed agents outperform pixel-only agents | HIGH | Three implementation paths: (A) PowerShell subprocess calling System.Windows.Automation .NET classes, (B) @bright-fish/node-ui-automation native addon wrapping COM UIA, (C) @nut-tree/element-inspector. **Recommend (A) for v1 because zero native dep risk** |
+| Element serialization as structured text for AI | The AI needs a compact, parseable representation of UI elements. Windows-Use sends this as primary context instead of screenshots | MEDIUM | Format: indexed list with role, name, value, bounding rect. See "Element Serialization Format" section below |
+| Center-point coordinates for each element | AI can click by element ID rather than guessing pixel coordinates | LOW | Each element's bounding rect provides `(x + width/2, y + height/2)` in logical pixels |
+| Focused window scoping | Only enumerate elements of the foreground/active window, not entire desktop tree. Full tree can have 10,000+ nodes | MEDIUM | Get foreground window handle via `GetForegroundWindow()`, walk only that subtree. Critical for performance |
+| Depth-limited tree traversal | Full accessibility trees are enormous. Limit to interactive elements and 3-4 levels deep | MEDIUM | Filter by control patterns (InvokePattern, TogglePattern, ValuePattern, SelectionItemPattern) to find clickable/typeable elements |
 
----
+**Windows-Use approach (MEDIUM confidence, from GitHub analysis):** Windows-Use uses `use_accessibility=True` (default) with UIA as the primary perception mechanism. Vision (`use_vision=False` by default) is optional supplement. Their 13 tools operate on structured element data, not pixel coordinates.
 
-### Anti-Features (Commonly Requested, Often Problematic)
+#### 5. `screen_elements` Tool
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **Full desktop streaming (RDP/VNC)** | "I want to see my desktop screen live" | Extremely complex (codec, latency, bandwidth). RustDesk's core codebase is 90% video streaming. Massive engineering effort for marginal AI value. AI does not need a live video feed to run shell commands | On-demand screenshots when AI needs visual context. Users who need full remote desktop should use RustDesk/MeshCentral alongside LivOS |
-| **Keyboard/mouse takeover** | "I want to control the mouse remotely" | Same as above -- full remote desktop is a different product. Also creates dangerous AI autonomy concerns (AI moving your mouse) | AI executes structured commands (shell, file ops). For the rare case needing visual interaction, screenshots + coordinate-based clicks could be a v3+ exploration |
-| **Unattended access without user consent** | "Agent should work even when I'm not logged in" | Security nightmare for an AI-controlled agent. User must explicitly trust and configure | Agent runs as user-level service (not root/SYSTEM by default). Elevated mode available but opt-in with clear warnings |
-| **Browser automation on remote PC** | "Have the AI browse the web on my desktop" | Enormous attack surface, credential theft risk, unreliable | AI can open URLs via shell command. Full browser automation is out of scope -- use dedicated tools (Playwright, etc.) |
-| **Real-time screen recording** | "Record everything happening on my screen" | Privacy invasion, massive storage, legal issues in many jurisdictions | Audit log of AI actions is sufficient. Point-in-time screenshots on AI request only |
-| **Chat/messaging between devices** | "Let me send messages to my PC" | Feature creep -- there are a million chat apps | AI chat in LivOS IS the communication channel. Commands flow through AI, not direct messaging |
-| **Application install abstraction** | "Install Chrome on my PC remotely via a unified API" | Cross-platform package management is a bottomless pit (chocolatey vs winget vs brew vs apt vs snap vs flatpak) | AI can execute install commands via shell. No abstraction layer needed -- the shell IS the abstraction. AI knows which package manager to use per OS |
-| **Remote printing** | "Print a document on my remote PC" | Extremely niche, complex driver issues | Shell command: `lpr` / `print` via remote shell if truly needed |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| New tool returning structured element list | Single tool call gives AI a complete picture of what can be interacted with, plus precise coordinates for each element | MEDIUM | Returns JSON array of `{ id, role, name, value, x, y, width, height, clickX, clickY, enabled, focused }`. Replaces need for screenshot in many cases |
+| Element count and summary in output text | AI needs a quick textual summary alongside the structured data: "Found 23 interactive elements in window 'Settings'" | LOW | Simple string generation from element list |
+| Optional filtering by element type | AI can request only buttons, or only text fields, reducing token consumption | LOW | Parameter: `filter?: 'button' | 'text' | 'menu' | 'all'` |
+| Caching with change detection | If accessibility tree has not changed since last call, return cached result and skip re-enumeration. Reduces unnecessary work in the action loop | MEDIUM | Hash the element tree structure. If hash matches previous, return `{ changed: false, cachedAt: timestamp }` |
 
----
+#### 6. macOS AXUIElement Accessibility Backend
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Enumerate elements via macOS Accessibility API (AXUIElement) | Same structured element data as Windows, enabling cross-platform parity | HIGH | macOS requires: (1) Accessibility permission granted in System Preferences, (2) Swift or Objective-C bridge to call AXUIElementCopyAttributeValues. Libraries: AXorcist (Swift), DFAXUIElement (Swift). **Must be called from a compiled helper binary, not Node.js directly** |
+| Swift helper binary invoked as subprocess | Node.js cannot call AXUIElement APIs directly. A small Swift CLI tool can enumerate the tree and output JSON to stdout | HIGH | ~200 lines of Swift. Compile with `swiftc` at build time. Ship as part of agent binary or compile on first run. macOS-only binary |
+| Permission detection and user prompt | macOS blocks accessibility access until user explicitly grants it in System Preferences > Privacy > Accessibility | MEDIUM | Check `AXIsProcessTrusted()`. If false, show dialog explaining how to grant permission. Critical for UX -- without this, the feature silently fails |
+
+**Apple docs (HIGH confidence):** AXUIElement is the core type for accessibility clients. It requires explicit user permission. Libraries like AXorcist and AccessibilityNavigator provide modern Swift wrappers.
+
+#### 7. Linux AT-SPI2 Accessibility Backend
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Enumerate elements via AT-SPI2 D-Bus protocol | Completes the cross-platform story. Linux GNOME/GTK apps expose accessibility via AT-SPI2 | HIGH | AT-SPI2 uses D-Bus. Can be accessed via: (1) Python pyatspi2 as subprocess, (2) Direct D-Bus calls from Node.js via `dbus-native` npm package, (3) `gdbus` CLI subprocess. **Recommend (1) pyatspi2 subprocess for reliability** |
+| Handle missing accessibility support | Many Linux apps (especially Qt/KDE, Electron) have poor or no accessibility tree support. Need graceful fallback | MEDIUM | Detect empty/stub trees. Return `{ available: false, reason: 'No accessibility support for this window' }` and fall back to screenshot mode |
+
+**AT-SPI2 docs (MEDIUM confidence):** AT-SPI2 is a D-Bus protocol where toolkit widgets expose their content. Python bindings (pyatspi2) are the most well-documented access path. GTK apps have good support; Qt apps have partial support; Electron apps have variable support depending on `--force-renderer-accessibility` flag.
+
+#### 8. Unified Cross-Platform screen_elements Interface
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Platform-agnostic element format | AI gets same JSON structure regardless of OS. Same prompt works everywhere | MEDIUM | Normalize platform-specific properties (UIA ControlType, AX role, AT-SPI role) to common set: button, textField, checkbox, menu, menuItem, link, list, listItem, tab, window, generic |
+| Platform detection and backend routing | Agent detects OS at startup and loads appropriate accessibility backend | LOW | `process.platform` switch: win32 -> UIA, darwin -> AXUIElement, linux -> AT-SPI2 |
+| Graceful degradation | If accessibility backend fails or is unavailable, fall back to screenshot-only mode (current behavior) | LOW | Try-catch around accessibility calls. Return `{ available: false }` and continue with screenshot-based computer use |
+
+### Differentiators: AI Prompt Optimization
+
+#### 9. Accessibility-First AI Prompting
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Send accessibility tree as primary context, screenshot as secondary | Dramatically reduces token consumption and improves accuracy. The AI reads structured element data first, only uses screenshot for visual layout context | MEDIUM | Modify agent loop system prompt: "You have a structured list of UI elements with their coordinates. Use element IDs and coordinates from this list. Only request a screenshot if the element list is insufficient" |
+| Element ID-based click targets | Instead of AI guessing pixel coordinates from a screenshot, it references `element_id: 7` and the agent looks up coordinates | LOW | AI returns `{ tool: 'mouse_click', params: { element_id: 7 } }` instead of `{ params: { x: 483, y: 217 } }`. Agent resolves element_id to clickX/clickY from cached tree |
+| Smart screenshot skipping | If accessibility tree is unchanged and last action was keyboard input, skip screenshot capture. Saves ~200ms per loop iteration and reduces token cost | MEDIUM | Track tree hash. If `hash === previousHash && lastAction.type !== 'mouse'`, skip screenshot on next iteration |
+
+#### 10. Hybrid Mode (Accessibility + Screenshot Fallback)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Automatic mode selection per action | Use accessibility coordinates when element is found in tree. Fall back to screenshot coordinates when element is not in tree (custom-drawn UIs, games, etc.) | MEDIUM | If AI provides `element_id`, use tree coordinates. If AI provides raw `x, y`, use screenshot coordinate mapping. Both paths work simultaneously |
+| Screenshot annotation with element overlays | Optionally draw bounding boxes and element IDs on screenshots before sending to AI. Bridges gap between structured data and visual context | HIGH | Use sharp to composite rectangles and text labels onto screenshot buffer. Token cost increases but accuracy may improve for complex UIs. **Defer -- high effort, unclear ROI** |
+| Confidence-based mode switching | If accessibility tree has very few elements (< 3), switch to screenshot-primary mode automatically | LOW | Simple heuristic check after tree enumeration |
+
+## Anti-Features (Do NOT Build)
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Full desktop tree enumeration | Enumerating the entire accessibility tree from root can return 10,000+ nodes, takes seconds, and overwhelms the AI context window | Only enumerate the focused/foreground window subtree, max 3-4 levels deep, interactive elements only |
+| Vision-based element detection (OmniParser) | OmniParser/V2 is a separate ML model (1-2GB) that detects UI elements from screenshots. Requires GPU, adds massive latency, and is overkill when the OS already provides accessibility trees | Use the OS accessibility APIs. They are free, instant, and more accurate. OmniParser is for environments without accessibility support (headless VMs, game UIs) |
+| Browser DOM inspection | Building a separate browser automation layer (like Playwright) adds enormous complexity and scope creep | Use the OS accessibility tree which already exposes browser UI elements. If the user wants browser automation specifically, that is a separate future milestone |
+| Real-time screen streaming / VNC | Video streaming is a completely different architecture (WebRTC, codec, bandwidth). The screenshot-then-act loop is the right architecture for AI agents | Keep discrete screenshot captures. The loop approach matches Anthropic and OpenAI reference implementations |
+| Custom accessibility tree for Electron apps | Forcing `--force-renderer-accessibility` on user's Electron apps or injecting accessibility providers is invasive and fragile | Accept that some apps have poor accessibility trees and fall back to screenshot mode gracefully |
+| Multi-monitor element enumeration | Scanning all monitors' accessibility trees multiplies complexity and confuses the AI about which screen to target | Only enumerate elements on the primary monitor or the monitor containing the active/focused window |
+
+## Element Serialization Format
+
+The format AI receives for `screen_elements` output. Based on analysis of Windows-Use, nut.js element-inspector, and Playwright accessibility snapshots:
+
+### Recommended Format (Compact Indexed List)
+
+```
+Window: "Settings" (1920x1080)
+[1] button "Save" at (850, 950) enabled
+[2] button "Cancel" at (960, 950) enabled
+[3] textField "Username" value="admin" at (400, 200) enabled focused
+[4] checkbox "Enable notifications" checked at (400, 300) enabled
+[5] combobox "Theme" value="Dark" at (400, 400) enabled
+[6] tab "General" at (100, 50) selected
+[7] tab "Advanced" at (200, 50)
+[8] link "Documentation" at (400, 500) enabled
+```
+
+**Why this format:**
+- Numbered IDs let AI reference elements unambiguously: "Click element [3]"
+- Compact enough to fit in context alongside screenshot
+- Human-readable for debugging
+- Role + name + value + coordinates + state covers all interaction needs
+- Coordinates are center-points in logical pixels (ready for clicking)
+
+### Full JSON Structure (Internal)
+
+```typescript
+interface ScreenElement {
+  id: number;              // Sequential ID for this snapshot
+  role: string;            // Normalized: button, textField, checkbox, etc.
+  name: string;            // Accessible name / label
+  value?: string;          // Current value (for inputs, combos, etc.)
+  clickX: number;          // Center X in logical pixels
+  clickY: number;          // Center Y in logical pixels
+  width: number;           // Element width in logical pixels
+  height: number;          // Element height in logical pixels
+  enabled: boolean;
+  focused: boolean;
+  selected?: boolean;
+  checked?: boolean;
+  expandState?: 'expanded' | 'collapsed';
+  children?: ScreenElement[];  // For tree views, menus
+}
+```
+
+## Coordinate Space Handling
+
+### The Three Coordinate Spaces
+
+1. **Physical pixels** -- What the display hardware uses. On a 2560x1440 display at 150% DPI, this is 2560x1440.
+2. **Logical pixels** -- What the OS and apps use. On that same display, this is 1707x960 (physical / scaleFactor).
+3. **AI image pixels** -- What the AI sees after the screenshot is resized to fit API limits. If we resize to 1280x800, the AI operates in that space.
+
+### Correct Pipeline
+
+```
+Capture (physical pixels: 2560x1440)
+    |
+    v
+Resize with sharp (to recommended target: 1280x800 or 1366x768)
+    |
+    v
+Send to AI (display_width_px: 1280, display_height_px: 800)
+    |
+    v
+AI returns coordinates in AI image space (e.g., click at 640, 400)
+    |
+    v
+Scale up: screenX = aiX * (logicalWidth / imageWidth)
+          screenY = aiY * (logicalHeight / imageHeight)
+    |
+    v
+robotjs.moveMouse(screenX + monitorOffsetX, screenY + monitorOffsetY)
+```
+
+### When Accessibility Tree Coordinates Are Used
+
+```
+screen_elements returns clickX, clickY in logical pixels
+    |
+    v
+AI says: click element [3] (which has clickX=400, clickY=200)
+    |
+    v
+robotjs.moveMouse(400 + monitorOffsetX, 200 + monitorOffsetY)
+```
+
+No scaling needed -- accessibility tree coordinates are already in logical pixel space.
 
 ## Feature Dependencies
 
 ```
-[Device Registration & Auth]
-    |
-    +--requires--> [Secure Tunnel / WebSocket Connection]
-    |                   |
-    |                   +--enables--> [Remote Shell]
-    |                   +--enables--> [File Transfer]
-    |                   +--enables--> [Process Management]
-    |                   +--enables--> [Screenshot Capture]
-    |                   +--enables--> [Clipboard Sync]
-    |                   +--enables--> [System Info Collection]
-    |
-    +--enables--> [Device Dashboard UI ("My Devices")]
-
-[Per-Device Permissions]
-    +--requires--> [Device Registration & Auth]
-    +--gates-----> [Remote Shell] (scope: full/read-only/disabled)
-    +--gates-----> [File Transfer] (scope: full/read-only/path-restricted)
-    +--gates-----> [Process Management] (scope: view/kill/disabled)
-    +--gates-----> [Screenshot Capture] (scope: allowed/disabled)
-
-[AI Tool Integration]
-    +--requires--> [Remote Shell]
-    +--requires--> [File Transfer]
-    +--requires--> [Process Management]
-    +--requires--> [Screenshot Capture]
-    +--requires--> [System Info Collection]
-    +--enhances--> [Audit Log] (adds AI intent/reasoning)
-
-[Audit Log]
-    +--requires--> [Device Registration & Auth]
-    +--requires--> [All tool invocations to emit events]
-
-[Wake-on-LAN]
-    +--requires--> [Device Registration] (for MAC address storage)
-    +--requires--> [Peer agent on same LAN OR LivOS on same network]
-    +--independent of--> [Secure Tunnel] (WoL is a LAN broadcast)
-
-[Multi-Device Orchestration]
-    +--requires--> [AI Tool Integration] (per-device)
-    +--requires--> [Multiple registered devices]
-    +--conflicts with--> [MVP scope] (defer to v2)
+DPI Awareness (3) ──────────────┐
+                                v
+Screenshot Pipeline Fix (1) ──> Coordinate Mapping Fix (2) ──> AI Prompt Update (9)
+                                ^                                    |
+                                |                                    v
+Windows UIA (4) ──> screen_elements Tool (5) ──> Hybrid Mode (10)
+                                ^
+macOS AXUIElement (6) ─────────┤
+                                |
+Linux AT-SPI2 (7) ─────────────┤
+                                |
+Unified Interface (8) ─────────┘
 ```
 
-### Dependency Notes
+**Critical path:** Features 1-3 (DPI/screenshot/coordinate fixes) are prerequisites for everything else and independently fix the existing broken behavior.
 
-- **Secure Tunnel is the foundation.** Every feature flows through it. Must be phase 1.
-- **Device Registration gates everything.** No device identity = no permissions, no audit, no tools.
-- **AI Tool Integration is the final assembly.** Shell, files, processes, screenshots are primitives. AI tools compose them. Must come after primitives are solid.
-- **Per-Device Permissions can be added incrementally.** Start with all-or-nothing (device connected = full access), add granular permissions before public release.
-- **Wake-on-LAN is independent** but low priority. Requires LAN peer or co-located LivOS, which is not the primary use case (LivOS is a remote server).
+**Parallel track:** Features 4-8 (accessibility tree) can start after 1-3, with Windows UIA first (primary development platform), then macOS and Linux.
 
----
+**Integration:** Features 9-10 (AI prompt optimization and hybrid mode) come last, requiring both the fixed pipeline and at least one accessibility backend.
 
-## MVP Definition
+## MVP Recommendation
 
-### Launch With (v1 -- Prove the Concept)
+### Phase 1: Fix What Is Broken (Critical, Unblocks Everything)
+1. **Screenshot resize via sharp** -- physical to logical pixel conversion
+2. **Correct coordinate metadata** -- report logical dimensions to AI
+3. **Fix toScreenX/toScreenY** -- proper bidirectional coordinate mapping
+4. **DPI awareness on Windows** -- SetProcessDpiAwarenessContext call at startup
 
-Minimum viable product -- what is needed to validate "AI controls your remote PC."
+### Phase 2: Windows Accessibility Tree (Primary Differentiator)
+5. **Windows UIA via PowerShell subprocess** -- enumerate focused window elements
+6. **screen_elements tool** -- new tool with compact indexed element list
+7. **Element ID-based clicking** -- AI references elements by ID
+8. **AI prompt update** -- accessibility-first prompting strategy
 
-- [ ] **Cross-platform agent binary** (Win/Mac/Linux) -- single binary, one-command install
-- [ ] **livinity.io OAuth device registration** -- agent authenticates, appears in "My Devices"
-- [ ] **Secure WebSocket tunnel** through livinity.io relay -- no port forwarding
-- [ ] **Remote shell execution** -- AI can run commands on the PC
-- [ ] **Remote file listing and transfer** -- AI can browse and move files
-- [ ] **Process listing** -- AI can see what is running
-- [ ] **On-demand screenshot** -- AI can see the screen when needed
-- [ ] **System info collection** -- OS, CPU, RAM, disk reported at registration
-- [ ] **Basic audit log** -- every remote operation logged with timestamp and user
-- [ ] **"My Devices" UI panel** in LivOS -- list connected devices with status
-- [ ] **AI tool definitions** for shell, files, processes, screenshot -- wired into existing Nexus agent
+### Phase 3: Cross-Platform + Hybrid (Complete the Story)
+9. **macOS AXUIElement via Swift helper** -- compiled binary subprocess
+10. **Linux AT-SPI2 via pyatspi2** -- Python subprocess
+11. **Unified cross-platform interface** -- normalize roles and properties
+12. **Hybrid mode** -- automatic fallback from accessibility to screenshot coordinates
 
-### Add After Validation (v1.x)
+### Defer
+- **Screenshot annotation with element overlays** -- unclear ROI, adds ~150ms per screenshot, high implementation effort
+- **OmniParser / vision-based element detection** -- unnecessary when OS accessibility APIs are available
+- **Browser DOM inspection** -- separate scope entirely
+- **Multi-monitor element enumeration** -- complexity not justified for initial release
 
-Features to add once core is working and users are connecting devices.
+## Competitive Landscape
 
-- [ ] **Per-device permission matrix** -- when users want to restrict what AI can do per device
-- [ ] **Clipboard sync as AI tool** -- when users ask "read my clipboard" or "copy this to my PC"
-- [ ] **Service management** (start/stop/restart services) -- when users manage server-like PCs
-- [ ] **File search** (find files by name/content on remote PC) -- when AI needs to locate files
-- [ ] **Process kill** -- when users want AI to manage runaway processes (view-only in v1 is safer)
-- [ ] **Persistent agent config UI** -- in-agent tray icon / web UI for agent settings
-- [ ] **Agent auto-update mechanism** -- pull new versions from livinity.io without manual reinstall
+| Product | Approach | Accessibility Tree? | DPI Handling | Cross-Platform |
+|---------|----------|-----------------------|--------------|----------------|
+| Anthropic computer-use-demo | Screenshot only + coordinate scaling | No | Manual resize recommended | Linux (Docker VM) only |
+| OpenAI CUA / Operator | Screenshot (vision) primary | No (vision-only per research) | Not documented | Browser only (Operator) |
+| Windows-Use (CursorTouch) | Accessibility tree primary, vision optional | Yes (Windows UIA) | Not documented | Windows only |
+| nut.js + element-inspector | Both (programmatic) | Yes (Windows, macOS planned) | Handled by nut.js | Windows (beta), macOS planned |
+| OmniParser V2 (Microsoft) | Vision ML model | No (detects from screenshots) | Resolution-dependent | Any (screenshot input) |
+| **Livinity v17.0 (target)** | **Hybrid: accessibility first, screenshot fallback** | **Yes (Win/Mac/Linux)** | **Full DPI pipeline fix** | **Windows, macOS, Linux** |
 
-### Future Consideration (v2+)
-
-Features to defer until product-market fit is established.
-
-- [ ] **Multi-device orchestration** -- "run this on all my machines" fan-out
-- [ ] **Wake-on-LAN** -- requires LAN peer, niche use case
-- [ ] **Scheduled tasks / cron management** -- when users want recurring remote operations
-- [ ] **Remote notification delivery** -- push notifications to PC from LivOS
-- [ ] **Network topology mapping** -- show how devices relate (same LAN, etc.)
-- [ ] **Bandwidth/usage tracking per device** -- for power users managing quotas
-- [ ] **Coordinate-based click/type** -- screenshot + click for GUI automation (Claude Computer Use style). Massive complexity, defer significantly
-- [ ] **Mobile agent** (Android/iOS) -- fundamentally different capabilities, separate product
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Agent binary (cross-platform) | HIGH | HIGH | P1 |
-| OAuth device registration | HIGH | MEDIUM | P1 |
-| Secure tunnel (WebSocket relay) | HIGH | HIGH | P1 |
-| Remote shell execution | HIGH | HIGH | P1 |
-| File listing and transfer | HIGH | MEDIUM | P1 |
-| Process listing | MEDIUM | LOW | P1 |
-| On-demand screenshot | MEDIUM | MEDIUM | P1 |
-| System info collection | MEDIUM | LOW | P1 |
-| Basic audit log | HIGH | LOW | P1 |
-| "My Devices" UI | HIGH | MEDIUM | P1 |
-| AI tool definitions | HIGH | MEDIUM | P1 |
-| Per-device permissions | HIGH | MEDIUM | P2 |
-| Clipboard sync | MEDIUM | MEDIUM | P2 |
-| Service management | MEDIUM | MEDIUM | P2 |
-| Process kill | MEDIUM | LOW | P2 |
-| Agent auto-update | MEDIUM | MEDIUM | P2 |
-| Agent tray icon / config UI | LOW | MEDIUM | P2 |
-| File search | MEDIUM | LOW | P2 |
-| Multi-device orchestration | HIGH | HIGH | P3 |
-| Wake-on-LAN | LOW | MEDIUM | P3 |
-| Scheduled tasks | LOW | MEDIUM | P3 |
-| GUI automation (click/type) | MEDIUM | VERY HIGH | P3 |
-
-**Priority key:**
-- P1: Must have for launch -- proves the concept works
-- P2: Should have, add when core is stable
-- P3: Nice to have, future consideration
-
----
-
-## Competitor Feature Analysis
-
-| Feature | RustDesk | MeshCentral | Tailscale | Teleport | TeamViewer | LivOS Agent (Planned) |
-|---------|----------|-------------|-----------|----------|------------|----------------------|
-| **Primary Interface** | GUI (desktop app) | Web UI | CLI + admin console | Web UI + CLI | GUI (desktop app) | AI chat (natural language) |
-| **Remote Desktop Streaming** | Full (VP8/VP9/AV1/H264/H265) | Full (WebRTC) | No (SSH/network only) | No (SSH/browser shell) | Full (proprietary) | No -- screenshot on demand |
-| **Remote Shell** | Via remote desktop | Web terminal | Tailscale SSH | SSH + browser shell | Via remote desktop | Structured API + PTY stream |
-| **File Transfer** | Drag-and-drop GUI | Web file browser | Via SSH/SCP | SCP + directory sharing | Drag-and-drop + file box | AI-driven + structured API |
-| **Process Management** | No dedicated feature | Web task manager | No | Session recording | Via remote desktop | Structured API (list, kill) |
-| **System Info** | Basic (in About) | Hardware/software inventory | Device posture | Node metadata | System details | Structured JSON telemetry |
-| **Screenshot** | Live streaming | Remote desktop view | No | Session recording | Live streaming | On-demand capture API |
-| **Clipboard Sync** | Yes (bidirectional) | Yes | No | No | Yes | Yes (AI-readable tool) |
-| **Wake-on-LAN** | LAN discovery only | Server/agent/Intel AMT | No (MagicDNS) | No | Yes (with agent) | Via LAN peer (future) |
-| **Multi-Device UI** | Address book | Web device groups | Admin console | Cluster dashboard | Device list | "My Devices" panel |
-| **Audit Log** | Basic (Pro) | Event log per device/user | Device activity | Full session recording + replay | Session logging (Enterprise) | Per-action log with AI intent |
-| **Permissions** | Password-only | Fine-grained per user/group | ACL policies | RBAC + per-session MFA | Password + allowlist | Per-device capability matrix |
-| **AI Integration** | None | None | None | AI session summaries (v18.2+) | None | Core architecture -- AI is the primary operator |
-| **Self-Hosted** | Yes (relay server) | Yes (full server) | No (SaaS + DERP) | Yes (cluster) | No (SaaS) | Yes (LivOS IS the server) |
-| **Agent Size** | ~15MB | ~4MB (C agent) | ~25MB | ~50MB+ | ~25MB | Target: <15MB |
-| **Install Complexity** | Download + run | URL + one-click install | CLI install | CLI install | Download + run | Single command or download |
-
----
-
-## What Separates AI-Driven Control from Traditional Remote Desktop
-
-### Traditional tools (RustDesk, TeamViewer, MeshCentral) are designed for:
-- A human staring at a screen, clicking through a file browser, typing in a terminal
-- Optimized for visual fidelity and low latency of the remote desktop stream
-- Manual everything -- user drives every action
-- Single device at a time, no context between sessions
-
-### LivOS's AI-driven agent is designed for:
-1. **Intent-based, not action-based.** User says "clean up temp files" not `rm -rf /tmp/*`
-2. **Multi-step reasoning.** AI checks what is in /tmp, identifies safe targets, confirms, then deletes
-3. **Structured data over screenshots.** JSON responses are kilobytes vs megabytes for video frames; AI reasons over typed data not parsed terminal text
-4. **Cross-device awareness.** AI knows the state of all your devices, can compare and coordinate
-5. **Error recovery.** If a command fails, AI can diagnose and retry with a different approach
-6. **Explanation.** AI explains what it did and why, creating implicit documentation
-7. **Proactive insights.** Agent telemetry lets AI suggest actions before user asks
-
-### Engineering implications of AI-first design:
-- **Simpler agent** -- no video encoding/decoding, no GUI rendering engine
-- **Faster development** -- structured API is easier to build than a video pipeline
-- **Better AI performance** -- JSON data beats screenshot parsing for most tasks
-- **Lower bandwidth** -- structured responses vs video stream
-- **Unique positioning** -- nobody else is building remote access AI-first
-
-### Closest competitor: Teleport
-Teleport added AI session summaries in v18.2 (Sep 2025) and MCP server support in v18.1. But Teleport's AI is a post-hoc analyzer of SSH sessions, not the primary operator. LivOS makes AI the primary interface -- the agent exists to serve the AI, not a human GUI user.
-
----
+**Livinity's differentiator:** The only cross-platform computer use agent that combines accessibility tree integration with proper DPI-aware screenshot handling AND supports multiple AI providers (Claude + Kimi). Windows-Use only does Windows. Anthropic's reference only does screenshots. OpenAI only does vision. Livinity does all of it.
 
 ## Sources
 
-- [RustDesk Official](https://rustdesk.com/) -- feature overview, self-hosted remote desktop
-- [RustDesk GitHub](https://github.com/rustdesk/rustdesk) -- releases, codec support, clipboard architecture
-- [RustDesk Clipboard Deep Wiki](https://deepwiki.com/rustdesk/rustdesk/4.4-file-transfer-service) -- clipboard sync architecture, format support
-- [MeshCentral GitHub](https://github.com/Ylianst/MeshCentral) -- agent architecture, device groups, permissions
-- [MeshCentral Documentation](https://docs.meshcentral.com/meshcentral/) -- agent features, WoL, file transfer
-- [MeshCentral Agent Info](https://ylianst.github.io/MeshCentral/meshcentral/agents/) -- agent registration, C agent architecture
-- [MeshCentral Blog - Access Rights](https://meshcentral2.blogspot.com/2020/10/meshcentral-access-rights-remote-exec.html) -- fine-grained permissions, session recording
-- [MeshCentral Blog - WoL and Multi-Agent](https://meshcentral2.blogspot.com/2021/05/meshcentral-assistant-image-multi-agent.html) -- Wake-on-LAN methods
-- [Tailscale SSH Docs](https://tailscale.com/kb/1193/tailscale-ssh) -- SSH integration, WireGuard encryption
-- [Tailscale MagicDNS](https://tailscale.com/docs/features/magicdns) -- automatic device naming
-- [Tailscale Device Management](https://tailscale.com/docs/features/access-control/device-management) -- device posture, fleet management
-- [Teleport Platform](https://goteleport.com/) -- identity-based access, AI session summaries (v18.2+)
-- [Teleport GitHub](https://github.com/gravitational/teleport) -- v18 features, MCP server support
-- [TeamViewer File Transfer](https://www.teamviewer.com/en/solutions/use-cases/file-transfer/) -- AES-256, drag-drop, file box
-- [TeamViewer Remote Support](https://www.teamviewer.com/en/platform/one/features/remote-support-control/) -- cross-platform features
-- [Claude Computer Use Tool Docs](https://docs.claude.com/en/docs/agents-and-tools/tool-use/computer-use-tool) -- screenshot + action loop, API design
-- [Open Interpreter](https://github.com/openinterpreter/open-interpreter) -- natural language shell/file/OS control, Computer API
-- [AI Computer Use Agents Survey (arXiv)](https://arxiv.org/abs/2501.16150) -- comprehensive survey of ACU foundations and challenges
-- [ManageEngine Remote Task Manager](https://www.manageengine.com/remote-desktop-management/remote-task-manager.html) -- remote process management features
-- [BeyondTrust Audit](https://www.beyondtrust.com/products/remote-support/features/audit) -- session recording, audit trail patterns
-
----
-*Feature research for: Remote PC Control Agent (v14.0)*
-*Researched: 2026-03-23*
+- [Anthropic Computer Use Tool Documentation](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool) -- HIGH confidence, official API docs
+- [Windows-Use (CursorTouch) GitHub](https://github.com/CursorTouch/Windows-Use) -- MEDIUM confidence, open source implementation
+- [nut.js Element Inspector Plugin](https://nutjs.dev/plugins/element-inspector) -- MEDIUM confidence, official docs
+- [nut.js Element Inspection Blog](https://nutjs.dev/blog/element-inspection) -- MEDIUM confidence
+- [Microsoft UI Automation Overview](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-uiautomationoverview) -- HIGH confidence, official docs
+- [Apple AXUIElement Documentation](https://developer.apple.com/documentation/applicationservices/axuielement) -- HIGH confidence, official docs
+- [AT-SPI2 Architecture](https://gnome.pages.gitlab.gnome.org/at-spi2-core/devel-docs/architecture.html) -- HIGH confidence, official GNOME docs
+- [SetProcessDpiAwarenessContext (Microsoft)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext) -- HIGH confidence, official docs
+- [sharp Image Processing](https://sharp.pixelplumbing.com/api-resize/) -- HIGH confidence, official docs
+- [@bright-fish/node-ui-automation](https://github.com/bright-fish/node-ui-automation) -- LOW confidence, small package, unclear maintenance
+- [OmniParser V2 (Microsoft Research)](https://microsoft.github.io/OmniParser/) -- MEDIUM confidence, research project
+- [A11y-CUA Dataset (accessibility gap in CUAs)](https://arxiv.org/html/2602.09310) -- MEDIUM confidence, academic paper
+- [AXorcist (Swift AX wrapper)](https://github.com/steipete/AXorcist) -- MEDIUM confidence, open source
+- [pyatspi2 Examples](https://www.freedesktop.org/wiki/Accessibility/PyAtSpi2Example/) -- MEDIUM confidence, official wiki
