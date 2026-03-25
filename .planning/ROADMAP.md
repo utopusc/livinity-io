@@ -178,7 +178,9 @@ Plans:
   2. AI can call tools (shell, files, etc.) through Claude provider using Anthropic native tool_use format, with results flowing back correctly
   3. User sends an image (screenshot, uploaded file) and Claude analyzes it and responds with visual understanding
   4. Model tier selection (fast/balanced/quality) maps to Claude models (haiku/sonnet/opus) and requests use the correct model
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 02-01-PLAN.md -- Enable native tool calling for Claude, fix image format conversion, verify model tier mapping
 
 ### Phase 3: Auth & Config
 **Goal**: Users can authenticate Claude with their API key (or OAuth), the key is securely stored, the config schema supports provider selection, and fallback between providers works
@@ -210,6 +212,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. Provider Restore & Registration | v16.0 | 0/1 | Planning complete | - |
-| 2. Feature Parity | v16.0 | 0/0 | Not started | - |
+| 2. Feature Parity | v16.0 | 0/1 | Planning complete | - |
 | 3. Auth & Config | v16.0 | 0/0 | Not started | - |
 | 4. Settings UI & Integration | v16.0 | 0/0 | Not started | - |
