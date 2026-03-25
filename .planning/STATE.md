@@ -1,31 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v16.0
-milestone_name: Multi-Provider AI
-status: unknown
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-25T06:38:26.253Z"
+milestone: v17.0
+milestone_name: Precision Computer Use
+status: defining_requirements
+stopped_at: Milestone started
+last_updated: "2026-03-25T07:00:00.000Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-24)
+See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v16.0 -- Multi-Provider AI
-**Current focus:** Phase 04 — settings-ui-integration
+**Current milestone:** v17.0 -- Precision Computer Use
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-25 — Milestone v17.0 started
 
 ## Performance Metrics
 
@@ -43,36 +45,12 @@ Plan: Not started
 
 ## Accumulated Context
 
-| Phase 01 P01 | 2min | 2 tasks | 6 files |
-| Phase 02-feature-parity P01 | 2min | 2 tasks | 2 files |
-| Phase 03 P01 | 2min | 2 tasks | 2 files |
-| Phase 03 P02 | 3min | 2 tasks | 3 files |
-| Phase 04 P01 | 2min | 2 tasks | 2 files |
-| Phase 04 P02 | 4min | 2 tasks | 2 files |
-
 ### Decisions
 
-- v16.0 uses --reset-phase-numbers, phases start at 1
-- Claude (Anthropic) added as second AI provider alongside Kimi
-- Provider selection is global (not per-conversation)
-- ClaudeProvider restored from git history (commit 1ea5513^), not built from scratch
-- Agent loop uses Anthropic format internally -- Claude needs NO message conversion
-- 4 phases derived: Restore -> Feature Parity -> Auth & Config -> Settings UI
-- [Phase 01]: Kimi stays first in fallback order, Claude second
-- [Phase 01]: Used @anthropic-ai/sdk ^0.80.0 (latest stable)
-- [Phase 02-feature-parity]: useNativeTools extended to Claude -- single-line change enables full native tool calling
-- [Phase 02-feature-parity]: Provider-aware image format branching in tool_result (Claude: Anthropic format, Kimi: OpenAI format)
-- [Phase 03]: Claude API key validated against Anthropic /v1/models endpoint before storing
-- [Phase 03]: primaryProvider defaults to kimi for backward compatibility
-- [Phase 03]: ProviderSelectionSchema is .strict().optional() so existing configs still validate
-- [Phase 03]: Dual Redis read strategy: individual key tried first, then NexusConfig JSON blob fallback
-- [Phase 03]: Fire-and-forget init(): default fallback order works until async Redis load completes
-- [Phase 03]: PUT /api/provider/primary writes to both individual Redis key and config blob for consistency
-- [Phase 04]: Claude auth routes follow exact same fetch-proxy pattern as Kimi auth routes for consistency
-- [Phase 04]: Query routes (getClaudeStatus, getProviders) omitted from httpOnlyPaths — work fine over WebSocket
-- [Phase 04]: Claude auth offers both API key and OAuth PKCE as parallel options
-- [Phase 04]: Provider badge in chat uses 30s refetch interval for responsiveness
-- [Phase 04]: Active Model section dynamically reflects selected provider name and description
+- v17.0 uses --reset-phase-numbers, phases start at 1
+- Coordinate fix: sharp resize from physical → logical pixels before sending to AI
+- Accessibility tree approach inspired by Windows-Use (CursorTouch/Windows-Use)
+- Cross-platform: Windows UIA, macOS AXUIElement, Linux AT-SPI2
 
 ### Pending Todos
 
@@ -84,6 +62,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-25T06:24:32.660Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-25
+Stopped at: Defining requirements
 Resume file: None

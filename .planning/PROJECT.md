@@ -60,13 +60,36 @@ Key validated capabilities:
   - ✓ Active provider badge in AI chat interface
   - ✓ Config-driven primary_provider with automatic fallback on failure
 
-## Current Milestone: None (v16.0 complete)
+## Current Milestone: v17.0 Precision Computer Use
 
-**Goal:** Planning next milestone.
+
+**Goal:** Fix Computer Use coordinate mismatch (DPI scaling) and implement accessibility tree integration for precise element targeting across Windows, macOS, and Linux.
+
+**Target features:**
+- Fix screenshot pipeline: sharp resize from physical to logical pixels, correct coordinate metadata
+- Fix toScreenX/toScreenY broken scaling logic in agent-core.ts
+- Windows UI Automation (UIA) accessibility tree via PowerShell/FFI
+- `screen_elements` tool returning interactive elements with center coordinates
+- DPI awareness (PerMonitorAwareV2) at agent startup
+- macOS AXUIElement and Linux AT-SPI2 accessibility backends
+- AI prompt optimization: accessibility tree first, screenshot for visual context only
+- Hybrid mode: element coordinates preferred, screenshot fallback
 
 ### Active
 
-(None — defining next milestone)
+- [ ] Fix screenshot resize pipeline (physical → logical pixels via sharp)
+- [ ] Fix coordinate metadata (report logical dimensions)
+- [ ] Fix toScreenX/toScreenY broken scaling in agent-core.ts
+- [ ] Windows UIA accessibility tree integration
+- [ ] `screen_elements` tool with structured element output
+- [ ] DPI awareness at agent startup (Windows)
+- [ ] macOS AXUIElement accessibility backend
+- [ ] Linux AT-SPI2 accessibility backend
+- [ ] Unified cross-platform screen_elements interface
+- [ ] AI prompt update for accessibility-first computer use
+- [ ] Hybrid mode: accessibility tree → screenshot fallback
+- [ ] Element highlighting on screenshots (optional)
+- [ ] Reduce unnecessary screenshots when accessibility tree unchanged
 
 ### Out of Scope
 
@@ -89,14 +112,15 @@ Key validated capabilities:
 
 ## Context
 
-**Current State (post v16.0):**
+**Current State (post v16.0, starting v17.0):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
 - Portainer-level Docker management: container CRUD, exec, stacks, events, engine info
 - Remote PC Control Agent: cross-platform agent binary, OAuth device flow, 9 AI tools, My Devices UI
 - AI Computer Use: autonomous screenshot→analyze→act loop, live monitoring, emergency stop
-- **Multi-Provider AI: Claude + Kimi dual provider with Settings toggle, config-driven fallback, API key + OAuth PKCE auth**
+- Multi-Provider AI: Claude + Kimi dual provider with Settings toggle, config-driven fallback
+- **Known issue:** Computer Use coordinate mismatch — screenshots in physical pixels, robotjs in logical pixels, DPI scaling causes misclicks
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -153,4 +177,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after v16.0 milestone (Multi-Provider AI)*
+*Last updated: 2026-03-25 after starting v17.0 milestone (Precision Computer Use)*
