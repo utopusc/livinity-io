@@ -277,6 +277,19 @@ main() {
     }
 
     install_docker() {
+        # Always ensure iptables-legacy even if Docker is already installed
+        # Docker requires iptables-legacy — nftables backend causes network creation failures
+        if iptables --version 2>/dev/null | grep -q nf_tables; then
+            info "Switching to iptables-legacy for Docker compatibility..."
+            update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+            update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
+            # Restart Docker if it's running to pick up the new iptables
+            if systemctl is-active --quiet docker 2>/dev/null; then
+                systemctl restart docker
+                info "Docker restarted with iptables-legacy"
+            fi
+        fi
+
         if command -v docker &>/dev/null; then
             ok "Docker $(docker --version | cut -d' ' -f3 | tr -d ',') already installed"
             return 0
@@ -301,6 +314,15 @@ main() {
         apt-get update -qq
         apt-get install -y -qq docker-ce docker-ce-cli containerd.io \
             docker-buildx-plugin docker-compose-plugin
+
+        # Switch to iptables-legacy if nftables is active (Ubuntu 22.04+/24.04)
+        # Docker requires iptables-legacy — nftables backend causes DOCKER-ISOLATION-STAGE-2 errors
+        if iptables --version 2>/dev/null | grep -q nf_tables; then
+            info "Switching to iptables-legacy for Docker compatibility..."
+            update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+            update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
+            ok "Switched to iptables-legacy"
+        fi
 
         systemctl enable docker
         systemctl start docker
@@ -356,10 +378,11 @@ main() {
         # Create app-data directory (mounted by auth as /app-data)
         mkdir -p "$data_dir/app-data"
 
-        # Tor container runs as 1000:1000, needs ownership on mounted volumes
+        # Containers run as 1000:1000, need ownership on mounted volumes
         chown -R 1000:1000 "$data_dir/tor"
+        chown -R 1000:1000 "$data_dir/app-data"
 
-        ok "Docker prerequisites ready (tor/data, app-data)"
+        ok "Docker prerequisites ready (tor/data, app-data with 1000:1000 ownership)"
     }
 
     install_python() {
