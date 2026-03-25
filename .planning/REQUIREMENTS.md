@@ -11,7 +11,7 @@ Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
 
 - [x] **PROV-01**: ClaudeProvider git history'den geri yuklenir ve ProviderManager'a kaydedilir
 - [x] **PROV-02**: `@anthropic-ai/sdk` bagimliligi eklenir
-- [ ] **PROV-03**: ProviderManager fallback dongusu Claude + Kimi ile calisir
+- [x] **PROV-03**: ProviderManager fallback dongusu Claude + Kimi ile calisir
 - [x] **PROV-04**: Config semasinda provider secimi (`primary: 'claude' | 'kimi'`) bulunur
 
 ### Authentication
@@ -58,7 +58,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | PROV-01 | Phase 1 | Complete |
 | PROV-02 | Phase 1 | Complete |
-| PROV-03 | Phase 3 | Pending |
+| PROV-03 | Phase 3 | Complete |
 | PROV-04 | Phase 3 | Complete |
 | AUTH-01 | Phase 3 | Complete |
 | AUTH-02 | Phase 3 | Complete |
