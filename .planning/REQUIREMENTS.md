@@ -22,10 +22,10 @@ Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
 
 ### Feature Parity
 
-- [ ] **FEAT-01**: Claude provider streaming yanit destekler
-- [ ] **FEAT-02**: Claude provider tool calling destekler
-- [ ] **FEAT-03**: Claude provider vision/multimodal destekler
-- [ ] **FEAT-04**: Model tier mapping calisir (haiku/sonnet/opus)
+- [x] **FEAT-01**: Claude provider streaming yanit destekler
+- [x] **FEAT-02**: Claude provider tool calling destekler
+- [x] **FEAT-03**: Claude provider vision/multimodal destekler
+- [x] **FEAT-04**: Model tier mapping calisir (haiku/sonnet/opus)
 
 ### User Interface
 
@@ -63,10 +63,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-01 | Phase 3 | Pending |
 | AUTH-02 | Phase 3 | Pending |
 | AUTH-03 | Phase 3 | Pending |
-| FEAT-01 | Phase 2 | Pending |
-| FEAT-02 | Phase 2 | Pending |
-| FEAT-03 | Phase 2 | Pending |
-| FEAT-04 | Phase 2 | Pending |
+| FEAT-01 | Phase 2 | Complete |
+| FEAT-02 | Phase 2 | Complete |
+| FEAT-03 | Phase 2 | Complete |
+| FEAT-04 | Phase 2 | Complete |
 | UI-01 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |
 | UI-03 | Phase 4 | Pending |

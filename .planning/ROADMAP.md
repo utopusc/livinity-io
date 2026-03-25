@@ -180,7 +180,7 @@ Plans:
   4. Model tier selection (fast/balanced/quality) maps to Claude models (haiku/sonnet/opus) and requests use the correct model
 **Plans:** 1 plan
 Plans:
-- [ ] 02-01-PLAN.md -- Enable native tool calling for Claude, fix image format conversion, verify model tier mapping
+- [x] 02-01-PLAN.md -- Enable native tool calling for Claude, fix image format conversion, verify model tier mapping
 
 ### Phase 3: Auth & Config
 **Goal**: Users can authenticate Claude with their API key (or OAuth), the key is securely stored, the config schema supports provider selection, and fallback between providers works
