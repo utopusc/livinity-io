@@ -1,70 +1,54 @@
-# Requirements: Livinity v15.0 -- AI Computer Use
+# Requirements: Livinity v16.0 -- Multi-Provider AI
 
 **Defined:** 2026-03-24
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v15.0 Requirements
+## v16.0 Requirements
 
-Requirements for AI Computer Use milestone. Each maps to roadmap phases.
+Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
 
-### Mouse Automation
+### Provider Altyapı
 
-- [x] **MOUSE-01**: AI can click at specific screen coordinates (left click)
-- [x] **MOUSE-02**: AI can double-click at specific screen coordinates
-- [x] **MOUSE-03**: AI can right-click at specific screen coordinates
-- [x] **MOUSE-04**: AI can move the mouse cursor to specific coordinates
-- [x] **MOUSE-05**: AI can drag from one coordinate to another (drag and drop)
-- [x] **MOUSE-06**: AI can scroll up/down at current position or specific coordinates
+- [ ] **PROV-01**: ClaudeProvider git geçmişinden geri yüklenir ve ProviderManager'a kaydedilir
+- [ ] **PROV-02**: `@anthropic-ai/sdk` bağımlılığı eklenir
+- [ ] **PROV-03**: ProviderManager fallback döngüsü Claude + Kimi ile çalışır
+- [ ] **PROV-04**: Config şemasında provider seçimi (`primary: 'claude' | 'kimi'`) bulunur
 
-### Keyboard Automation
+### Kimlik Doğrulama
 
-- [x] **KEY-01**: AI can type arbitrary text strings on the device
-- [x] **KEY-02**: AI can press individual keys and key combinations (Enter, Tab, Ctrl+C, Alt+F4, etc.)
+- [ ] **AUTH-01**: Kullanıcı Claude API key'ini Settings'ten girebilir
+- [ ] **AUTH-02**: Claude API key Redis'te güvenli saklanır
+- [ ] **AUTH-03**: Kullanıcı opsiyonel olarak OAuth PKCE ile Claude'a bağlanabilir
 
-### Screen
+### Özellik Paritesi
 
-- [x] **SCREEN-01**: AI can query screen resolution and display configuration
-- [x] **SCREEN-02**: Screenshot tool returns coordinate metadata for vision analysis (existing tool extended)
+- [ ] **FEAT-01**: Claude provider streaming yanıt destekler
+- [ ] **FEAT-02**: Claude provider tool calling destekler
+- [ ] **FEAT-03**: Claude provider vision/multimodal destekler
+- [ ] **FEAT-04**: Model tier mapping çalışır (haiku/sonnet/opus)
 
-### Computer Use Loop
+### Kullanıcı Arayüzü
 
-- [x] **LOOP-01**: Nexus AI can enter "computer use" mode -- an autonomous screenshot-analyze-action cycle
-- [x] **LOOP-02**: AI uses multimodal vision to analyze screenshots and determine next action coordinates
-- [x] **LOOP-03**: Computer use sessions have configurable step limits (max actions per session)
-- [x] **LOOP-04**: AI can report task completion or failure back to the user with reasoning
-- [x] **LOOP-05**: User can request computer use tasks via natural language ("Open Chrome and go to YouTube")
+- [ ] **UI-01**: Settings'te provider seçim toggle'ı bulunur
+- [ ] **UI-02**: Aktif provider durumu UI'da görünür
+- [ ] **UI-03**: Provider değiştirildiğinde yeni konuşmalar seçili provider'ı kullanır
 
-### Live Monitoring UI
+## Future Requirements
 
-- [x] **UI-01**: LivOS shows a live screenshot stream of the device during computer use sessions
-- [x] **UI-02**: Action overlay shows where AI clicked/typed on the live view (visual indicators)
-- [x] **UI-03**: Session timeline shows chronological list of AI actions taken (click, type, etc.)
-- [x] **UI-04**: User can pause, resume, or stop a computer use session from the LivOS UI
+### Provider Genişletme
 
-### Security
-
-- [x] **SEC-01**: User must explicitly consent before AI takes mouse/keyboard control of a device
-- [x] **SEC-02**: Emergency stop hotkey (3x Escape) immediately kills AI control on the device
-- [x] **SEC-03**: Every mouse/keyboard action is logged to the audit trail with coordinates and timestamps
-- [x] **SEC-04**: Computer use sessions auto-timeout after configurable inactivity period
-
-## Future Requirements (v15.1+)
-
-- **ACU-01**: Per-application permission scoping (only allow AI to control specific apps)
-- **ACU-02**: Visual element recognition (OCR/object detection for UI elements, not just coordinates)
-- **ACU-03**: Multi-monitor awareness and cross-monitor navigation
-- **ACU-04**: Clipboard read/write as AI tool
-- **ACU-05**: Multi-device orchestration (AI controls multiple devices in sequence)
+- **PROV-05**: OpenAI/GPT provider desteği
+- **PROV-06**: Per-conversation provider switching
+- **PROV-07**: Multi-provider simultaneous (A/B comparison)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Full desktop streaming (RDP/VNC) | AI uses screenshot+action, not continuous video -- lower bandwidth, structured control |
-| Browser-only sandbox mode | Full desktop for v15.0; browser sandboxing is v15.1+ |
-| Voice commands during computer use | Separate feature, not needed for core computer use |
-| Mobile device control | Desktop-only for v15.0 (Windows/Mac/Linux) |
-| Self-hosted vision model | Uses Kimi multimodal API; local model is future |
+| OpenAI/GPT support | Only Claude + Kimi for now |
+| Multi-provider simultaneous | One provider at a time |
+| Per-conversation provider switching | Global setting only |
+| Provider-specific tool formats in UI | Abstracted away by AIProvider interface |
 
 ## Traceability
 
@@ -72,35 +56,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOUSE-01 | Phase 5 | Complete |
-| MOUSE-02 | Phase 5 | Complete |
-| MOUSE-03 | Phase 5 | Complete |
-| MOUSE-04 | Phase 5 | Complete |
-| MOUSE-05 | Phase 5 | Complete |
-| MOUSE-06 | Phase 5 | Complete |
-| KEY-01 | Phase 5 | Complete |
-| KEY-02 | Phase 5 | Complete |
-| SCREEN-01 | Phase 6 | Complete |
-| SCREEN-02 | Phase 6 | Complete |
-| LOOP-01 | Phase 7 | Complete |
-| LOOP-02 | Phase 7 | Complete |
-| LOOP-03 | Phase 7 | Complete |
-| LOOP-04 | Phase 7 | Complete |
-| LOOP-05 | Phase 7 | Complete |
-| UI-01 | Phase 8 | Complete |
-| UI-02 | Phase 8 | Complete |
-| UI-03 | Phase 8 | Complete |
-| UI-04 | Phase 8 | Complete |
-| SEC-01 | Phase 9 | Complete |
-| SEC-02 | Phase 9 | Complete |
-| SEC-03 | Phase 9 | Complete |
-| SEC-04 | Phase 9 | Complete |
+| PROV-01 | — | Pending |
+| PROV-02 | — | Pending |
+| PROV-03 | — | Pending |
+| PROV-04 | — | Pending |
+| AUTH-01 | — | Pending |
+| AUTH-02 | — | Pending |
+| AUTH-03 | — | Pending |
+| FEAT-01 | — | Pending |
+| FEAT-02 | — | Pending |
+| FEAT-03 | — | Pending |
+| FEAT-04 | — | Pending |
+| UI-01 | — | Pending |
+| UI-02 | — | Pending |
+| UI-03 | — | Pending |
 
 **Coverage:**
-- v15.0 requirements: 23 total
-- Mapped to phases: 23
-- Unmapped: 0
+- v16.0 requirements: 14 total
+- Mapped to phases: 0
+- Unmapped: 14
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after roadmap creation -- all 23 requirements mapped to Phases 5-9*
+*Last updated: 2026-03-24 after initial definition*
