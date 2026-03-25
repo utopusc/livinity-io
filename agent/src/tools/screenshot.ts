@@ -116,17 +116,12 @@ export async function executeScreenshot(
     const logW = Math.round(physicalW / scaleFactor);
     const logH = Math.round(physicalH / scaleFactor);
 
-    // Find best target resolution by aspect ratio
-    const ratio = logW / logH;
-    let targetW = logW;
-    let targetH = logH;
-    for (const t of SCALE_TARGETS) {
-      if (Math.abs(t.ratio - ratio) < 0.02 && t.w <= logW) {
-        targetW = t.w;
-        targetH = t.h;
-        break;
-      }
-    }
+    // Use logical resolution directly — no resize.
+    // AI models may internally resize images, causing coordinate space mismatch
+    // if we pre-resize. By sending at logical resolution with JPEG quality reduction,
+    // we keep coordinates 1:1 with the screen.
+    const targetW = logW;
+    const targetH = logH;
 
     // Store for coordinate mapping (used by mouse tools)
     logicalScreenW = logW;
@@ -137,19 +132,18 @@ export async function executeScreenshot(
     const image = monitor.captureImageSync();
     const jpegInput = Buffer.from(image.toJpegSync());
 
-    // Resize via sharp if available, otherwise send original
+    // Compress with sharp for smaller payload, but keep original dimensions
+    // so coordinates are 1:1 with screen — no resize, no coordinate mismatch
     let finalJpeg: Buffer;
-    if (sharpFn && (targetW !== physicalW || targetH !== physicalH)) {
-      finalJpeg = await sharpFn(jpegInput)
-        .resize(targetW, targetH, { fit: 'fill' })
-        .jpeg({ quality: 80 })
-        .toBuffer();
+    await ensureSharp();
+    if (sharpFn) {
+      try {
+        finalJpeg = await sharpFn(jpegInput).jpeg({ quality: 60 }).toBuffer();
+      } catch {
+        finalJpeg = jpegInput;
+      }
     } else {
       finalJpeg = jpegInput;
-      if (sharpError) {
-        // sharp not available, send original size but still report target dims
-        // AI coordinates won't perfectly match but it's better than crashing
-      }
     }
 
     const base64 = finalJpeg.toString('base64');
