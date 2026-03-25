@@ -191,6 +191,11 @@ export default class Apps {
 			this.logger.error(`Failed to set permissions for Tor data directory`, error)
 		}
 
+		// Fix all app-data permissions before starting (containers run as UID 1000)
+		try {
+			await $`chown -R 1000:1000 ${this.#livinityd.dataDirectory}/app-data`.catch(() => {})
+		} catch {}
+
 		this.logger.log('Starting apps')
 		// Snapshot of currently installed apps (minus apps missing their data directories that will be reinstalled)
 		// We start these apps (save Promise), fire reinstalls without awaiting, then await the starts.
