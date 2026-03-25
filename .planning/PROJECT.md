@@ -59,37 +59,22 @@ Key validated capabilities:
   - ✓ Provider toggle in Settings UI with per-provider auth cards
   - ✓ Active provider badge in AI chat interface
   - ✓ Config-driven primary_provider with automatic fallback on failure
+- ✓ Precision Computer Use — v17.0
+  - ✓ DPI-aware screenshot pipeline: sharp resize from physical to logical pixels
+  - ✓ Fixed coordinate mapping chain: AI target → logical → robotjs (no DPI mismatch)
+  - ✓ Windows UI Automation accessibility tree via persistent PowerShell subprocess
+  - ✓ `screen_elements` tool: 11 interactive types, pipe-delimited, 100 element cap
+  - ✓ DPI awareness (PerMonitorAwareV2) at agent startup on Windows
+  - ✓ Accessibility-first AI prompt: Elements-First Workflow with screenshot fallback
+  - ✓ SHA-256 hash-based screenshot caching (skip re-capture when tree unchanged)
 
-## Current Milestone: v17.0 Precision Computer Use
+## Current Milestone: None (v17.0 complete)
 
-
-**Goal:** Fix Computer Use coordinate mismatch (DPI scaling) and implement accessibility tree integration for precise element targeting across Windows, macOS, and Linux.
-
-**Target features:**
-- Fix screenshot pipeline: sharp resize from physical to logical pixels, correct coordinate metadata
-- Fix toScreenX/toScreenY broken scaling logic in agent-core.ts
-- Windows UI Automation (UIA) accessibility tree via PowerShell/FFI
-- `screen_elements` tool returning interactive elements with center coordinates
-- DPI awareness (PerMonitorAwareV2) at agent startup
-- macOS AXUIElement and Linux AT-SPI2 accessibility backends
-- AI prompt optimization: accessibility tree first, screenshot for visual context only
-- Hybrid mode: element coordinates preferred, screenshot fallback
+**Goal:** Planning next milestone.
 
 ### Active
 
-- [ ] Fix screenshot resize pipeline (physical → logical pixels via sharp)
-- [ ] Fix coordinate metadata (report logical dimensions)
-- [ ] Fix toScreenX/toScreenY broken scaling in agent-core.ts
-- [ ] Windows UIA accessibility tree integration
-- [ ] `screen_elements` tool with structured element output
-- [ ] DPI awareness at agent startup (Windows)
-- [ ] macOS AXUIElement accessibility backend
-- [ ] Linux AT-SPI2 accessibility backend
-- [ ] Unified cross-platform screen_elements interface
-- [ ] AI prompt update for accessibility-first computer use
-- [ ] Hybrid mode: accessibility tree → screenshot fallback
-- [ ] Element highlighting on screenshots (optional)
-- [ ] Reduce unnecessary screenshots when accessibility tree unchanged
+(None — defining next milestone)
 
 ### Out of Scope
 
@@ -105,6 +90,10 @@ Key validated capabilities:
 - Multi-device orchestration — future
 - Per-app computer use permissions — future (all-or-nothing for now)
 - Browser-only computer use mode — full desktop for now
+- macOS AXUIElement accessibility — requires Swift CLI binary build pipeline
+- Linux AT-SPI2 accessibility — availability varies by distro
+- Multi-monitor accessibility tree — single primary for now
+- Element highlighting on screenshots — future enhancement
 - Multi-provider simultaneous use — one provider at a time
 - OpenAI/GPT support — only Claude + Kimi for now
 - Per-conversation provider switching — global setting only
@@ -120,7 +109,7 @@ Key validated capabilities:
 - Remote PC Control Agent: cross-platform agent binary, OAuth device flow, 9 AI tools, My Devices UI
 - AI Computer Use: autonomous screenshot→analyze→act loop, live monitoring, emergency stop
 - Multi-Provider AI: Claude + Kimi dual provider with Settings toggle, config-driven fallback
-- **Known issue:** Computer Use coordinate mismatch — screenshots in physical pixels, robotjs in logical pixels, DPI scaling causes misclicks
+- **Precision Computer Use: DPI-aware screenshots (sharp resize), Windows UIA accessibility tree (screen_elements tool), accessibility-first AI prompt with hybrid fallback, hash-based screenshot caching**
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -155,6 +144,10 @@ Key validated capabilities:
 | Proxy tools in ToolRegistry (not MCP) | Simpler than MCP per device, uses existing ToolRegistry | ✓ Good |
 | Redis for ephemeral device state | Fits transient connection data, PostgreSQL only for persistent metadata | ✓ Good |
 | nut.js for computer use automation | TypeScript native, cross-platform mouse+keyboard, active maintenance | — Pending |
+| sharp for screenshot resize | De facto Node.js image processing, Anthropic uses same approach | ✓ Good |
+| PowerShell UIA persistent subprocess | .NET built-in on Windows, zero external deps, stdin/stdout IPC | ✓ Good |
+| Pipe-delimited element format | Compact tokens, proven by Windows-Use, AI-parseable | ✓ Good |
+| Accessibility-first prompt (not screenshot-first) | Element coords more reliable than pixel-guessing | ✓ Good |
 | Restore ClaudeProvider from git (not rewrite) | 467 lines already working, agent loop uses Anthropic format natively | ✓ Good |
 | Config-driven provider fallback | Redis primary_provider + ProviderManager.init() on startup | ✓ Good |
 | API key + OAuth PKCE dual auth for Claude | Flexibility: API key for quick setup, OAuth for subscription users | ✓ Good |
@@ -177,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after starting v17.0 milestone (Precision Computer Use)*
+*Last updated: 2026-03-25 after v17.0 milestone (Precision Computer Use)*

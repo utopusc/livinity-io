@@ -1,5 +1,17 @@
 # Milestones
 
+## v17.0 Precision Computer Use (Shipped: 2026-03-25)
+
+**Phases completed:** 3 phases, 3 plans, 6 tasks
+
+**Key accomplishments:**
+
+- Sharp-based screenshot resize from physical to target resolution with correct coordinate mapping chain (AI -> logical -> robotjs) and explicit AI prompt coordinate documentation
+- Windows UIA accessibility tree via persistent PowerShell subprocess with screen_elements tool returning pipe-delimited interactive elements and raw coordinate flag for all mouse tools
+- Accessibility-first AI system prompt with Elements-First Workflow and SHA-256 hash-based screenshot caching that skips re-capture when the UIA accessibility tree is unchanged
+
+---
+
 ## v16.0 Multi-Provider AI (Shipped: 2026-03-25)
 
 **Phases completed:** 4 phases, 6 plans, 12 tasks
