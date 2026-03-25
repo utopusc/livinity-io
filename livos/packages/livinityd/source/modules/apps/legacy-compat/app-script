@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 # This script is copied in from <1.0 Livinity and modified to work with livinityd.
 # It provides a compatibility layer so the old app system works reliably.
