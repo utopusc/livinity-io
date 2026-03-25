@@ -60,8 +60,135 @@ export class AgentCore extends EventEmitter {
   private reconnectDelay = 1000;
   private auditLog: AuditEntry[] = [];
 
+  // Persistent PowerShell subprocess for Windows UIA queries
+  private uiaProcess: import('child_process').ChildProcess | null = null;
+  private uiaReady = false;
+  private uiaPending: { resolve: (data: any) => void; reject: (err: Error) => void; timer: NodeJS.Timeout } | null = null;
+  private uiaBuffer = '';
+
+  private static initDpiAwareness(): void {
+    if (process.platform !== 'win32') return;
+    try {
+      execSync(
+        'powershell.exe -NoProfile -Command "Add-Type -TypeDefinition \'' +
+        'using System; using System.Runtime.InteropServices; public class DpiHelper { ' +
+        '[DllImport(\\\"user32.dll\\\")] public static extern int SetProcessDpiAwarenessContext(IntPtr value); ' +
+        '}\' -Language CSharp; [DpiHelper]::SetProcessDpiAwarenessContext([IntPtr]::new(-4))"',
+        { timeout: 5000, stdio: 'ignore' }
+      );
+    } catch {
+      // May fail if already set by Electron manifest — that's fine
+    }
+  }
+
+  private static readonly UIA_SCRIPT = `
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+
+function Get-InteractiveElements {
+  $fw = [System.Windows.Automation.AutomationElement]::FocusedElement
+  if (-not $fw) { return '{"elements":[],"window":"","error":"No focused element"}' }
+
+  # Walk up to find the containing window
+  $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+  $win = $fw
+  while ($win) {
+    $ct = $win.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::ControlTypeProperty)
+    if ($ct -eq [System.Windows.Automation.ControlType]::Window) { break }
+    $parent = $walker.GetParent($win)
+    if (-not $parent -or $parent.Equals([System.Windows.Automation.AutomationElement]::RootElement)) { break }
+    $win = $parent
+  }
+
+  $windowTitle = ''
+  try { $windowTitle = $win.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::NameProperty) } catch {}
+  if ($windowTitle.Length -gt 30) { $windowTitle = $windowTitle.Substring(0, 30) }
+
+  # Define interactive control types
+  $interactiveTypes = @(
+    [System.Windows.Automation.ControlType]::Button,
+    [System.Windows.Automation.ControlType]::Edit,
+    [System.Windows.Automation.ControlType]::ComboBox,
+    [System.Windows.Automation.ControlType]::CheckBox,
+    [System.Windows.Automation.ControlType]::RadioButton,
+    [System.Windows.Automation.ControlType]::MenuItem,
+    [System.Windows.Automation.ControlType]::Hyperlink,
+    [System.Windows.Automation.ControlType]::ListItem,
+    [System.Windows.Automation.ControlType]::TabItem,
+    [System.Windows.Automation.ControlType]::Slider,
+    [System.Windows.Automation.ControlType]::Custom
+  )
+
+  # Build OR condition for interactive types
+  $conditions = @()
+  foreach ($t in $interactiveTypes) {
+    $conditions += New-Object System.Windows.Automation.PropertyCondition(
+      [System.Windows.Automation.AutomationElement]::ControlTypeProperty, $t
+    )
+  }
+  $orCondition = New-Object System.Windows.Automation.OrCondition($conditions)
+
+  $allElements = $win.FindAll([System.Windows.Automation.TreeScope]::Descendants, $orCondition)
+
+  $results = @()
+  $id = 0
+  foreach ($el in $allElements) {
+    if ($id -ge 100) { break }
+    try {
+      $rect = $el.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::BoundingRectangleProperty)
+      if ($rect -eq [System.Windows.Rect]::Empty) { continue }
+      $isOffscreen = $el.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::IsOffscreenProperty)
+      if ($isOffscreen) { continue }
+      $isEnabled = $el.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::IsEnabledProperty)
+      if (-not $isEnabled) { continue }
+
+      $name = ''
+      try { $name = $el.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::NameProperty) } catch {}
+      if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+      $ctName = $el.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::ControlTypeProperty).ProgrammaticName
+      $ctName = $ctName -replace 'ControlType\\\\.', ''
+
+      $cx = [int]($rect.X + $rect.Width / 2)
+      $cy = [int]($rect.Y + $rect.Height / 2)
+
+      $id++
+      $results += "$id|$windowTitle|$ctName|$name|($cx,$cy)"
+    } catch { continue }
+  }
+
+  $output = @{ elements = $results; window = $windowTitle; count = $results.Count } | ConvertTo-Json -Compress
+  return $output
+}
+
+# REPL loop: read JSON commands from stdin, execute, write JSON to stdout
+while ($true) {
+  $line = [Console]::In.ReadLine()
+  if ($null -eq $line) { break }
+  try {
+    $cmd = $line | ConvertFrom-Json
+    if ($cmd.action -eq 'query') {
+      $result = Get-InteractiveElements
+      [Console]::Out.WriteLine($result)
+      [Console]::Out.Flush()
+    } elseif ($cmd.action -eq 'ping') {
+      [Console]::Out.WriteLine('{"pong":true}')
+      [Console]::Out.Flush()
+    } else {
+      [Console]::Out.WriteLine('{"error":"unknown action"}')
+      [Console]::Out.Flush()
+    }
+  } catch {
+    $err = $_.Exception.Message -replace '"', "'"
+    [Console]::Out.WriteLine("{""error"":""$err""}")
+    [Console]::Out.Flush()
+  }
+}
+`;
+
   constructor() {
     super();
+    AgentCore.initDpiAwareness();
     this.state = {
       connectionStatus: 'disconnected',
       setupStatus: 'none',
@@ -77,6 +204,8 @@ export class AgentCore extends EventEmitter {
     };
     this.loadCredentials();
     this.loadAuditLog();
+    // Pre-warm UIA subprocess on Windows for faster first query
+    this.spawnUiaProcess();
   }
 
   getState(): AgentState {
@@ -667,6 +796,121 @@ export class AgentCore extends EventEmitter {
     const modifiers = parts.slice(0, -1).map((m: string) => AgentCore.KEY_ALIASES[m] || m);
     robot.keyTap(key, modifiers.length ? modifiers : undefined);
     return { success: true, output: `Pressed ${raw}` };
+  }
+
+  // --- UIA Subprocess Lifecycle ---
+
+  private spawnUiaProcess(): void {
+    if (process.platform !== 'win32') return;
+    if (this.uiaProcess) return;
+
+    const child = spawn('powershell.exe', [
+      '-NoProfile', '-NoLogo', '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command', '-'
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    child.on('exit', () => {
+      this.uiaProcess = null;
+      this.uiaReady = false;
+      if (this.uiaPending) {
+        this.uiaPending.reject(new Error('UIA process exited'));
+        clearTimeout(this.uiaPending.timer);
+        this.uiaPending = null;
+      }
+    });
+
+    child.on('error', () => {
+      this.uiaProcess = null;
+      this.uiaReady = false;
+    });
+
+    child.stdout!.on('data', (data: Buffer) => {
+      this.uiaBuffer += data.toString();
+      const lines = this.uiaBuffer.split('\n');
+      this.uiaBuffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (!this.uiaReady) {
+          // First output after loading script = ready signal
+          this.uiaReady = true;
+          continue;
+        }
+        if (this.uiaPending) {
+          const pending = this.uiaPending;
+          this.uiaPending = null;
+          clearTimeout(pending.timer);
+          try {
+            pending.resolve(JSON.parse(trimmed));
+          } catch {
+            pending.resolve({ error: 'Invalid JSON from UIA', raw: trimmed });
+          }
+        }
+      }
+    });
+
+    child.stderr!.on('data', () => { /* ignore stderr noise */ });
+
+    this.uiaProcess = child;
+
+    // Send the UIA script to the persistent process, then a ready signal
+    child.stdin!.write(AgentCore.UIA_SCRIPT + '\n');
+    child.stdin!.write('Write-Output "ready"\n');
+  }
+
+  private queryUia(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (process.platform !== 'win32') {
+        resolve({ error: `Not available on ${process.platform}` });
+        return;
+      }
+
+      // Auto-spawn / auto-restart on crash
+      if (!this.uiaProcess) {
+        this.spawnUiaProcess();
+      }
+
+      if (!this.uiaProcess || !this.uiaProcess.stdin) {
+        resolve({ error: 'Failed to start UIA subprocess' });
+        return;
+      }
+
+      // If not ready yet, wait up to 5 seconds
+      const waitForReady = (attempts: number) => {
+        if (this.uiaReady) {
+          this.sendUiaQuery(resolve, reject);
+          return;
+        }
+        if (attempts <= 0) {
+          resolve({ error: 'UIA subprocess not ready (timeout)' });
+          return;
+        }
+        setTimeout(() => waitForReady(attempts - 1), 100);
+      };
+
+      waitForReady(50); // 50 * 100ms = 5s max wait
+    });
+  }
+
+  private sendUiaQuery(resolve: (data: any) => void, reject: (err: Error) => void): void {
+    if (this.uiaPending) {
+      resolve({ error: 'UIA query already in progress' });
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (this.uiaPending) {
+        this.uiaPending = null;
+        resolve({ error: 'UIA query timed out (3s)' });
+      }
+    }, 3000);
+
+    this.uiaPending = { resolve, reject, timer };
+    this.uiaProcess!.stdin!.write('{"action":"query"}\n');
   }
 
   // --- Utilities ---
