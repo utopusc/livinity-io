@@ -95,6 +95,10 @@ export class ClaudeProvider implements AIProvider {
     const tier = options.tier || 'sonnet';
     const model = CLAUDE_MODELS[tier] || CLAUDE_MODELS.sonnet;
     const maxTokens = options.maxOutputTokens || 4096;
+    // rawMessages from agent loop contain Anthropic-native content blocks:
+    // assistant: [{ type: 'text', ... }, { type: 'tool_use', id, name, input }]
+    // user:      [{ type: 'tool_result', tool_use_id, content, is_error }]
+    // These pass directly to the Anthropic SDK without conversion.
     const claudeMessages = (options.rawMessages as Anthropic.MessageParam[])
       || prepareForProvider(options.messages, 'claude') as Anthropic.MessageParam[];
 
@@ -144,6 +148,10 @@ export class ClaudeProvider implements AIProvider {
     const tier = options.tier || 'sonnet';
     const model = CLAUDE_MODELS[tier] || CLAUDE_MODELS.sonnet;
     const maxTokens = options.maxOutputTokens || 4096;
+    // rawMessages from agent loop contain Anthropic-native content blocks:
+    // assistant: [{ type: 'text', ... }, { type: 'tool_use', id, name, input }]
+    // user:      [{ type: 'tool_result', tool_use_id, content, is_error }]
+    // These pass directly to the Anthropic SDK without conversion.
     const claudeMessages = (options.rawMessages as Anthropic.MessageParam[])
       || prepareForProvider(options.messages, 'claude') as Anthropic.MessageParam[];
 
