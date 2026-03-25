@@ -511,6 +511,63 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // -- Provider Management --
+
+  /** List all AI providers and their availability */
+  app.get('/api/providers', async (_req, res) => {
+    try {
+      const pm = brain.getProviderManager();
+      const providers = await pm.listProviders();
+      const fallbackOrder = pm.getFallbackOrder();
+      const primaryProvider = await redis.get('nexus:config:primary_provider') || 'kimi';
+
+      res.json({
+        providers,
+        primaryProvider,
+        fallbackOrder,
+      });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Set the primary AI provider */
+  app.put('/api/provider/primary', async (req, res) => {
+    try {
+      const { provider } = req.body as { provider: string };
+
+      if (!provider || !['claude', 'kimi'].includes(provider)) {
+        res.status(400).json({ error: 'Invalid provider. Must be "claude" or "kimi".' });
+        return;
+      }
+
+      // Store in Redis for persistence
+      await redis.set('nexus:config:primary_provider', provider);
+
+      // Also update the NexusConfig blob if it exists
+      const configBlob = await redis.get('nexus:config');
+      if (configBlob) {
+        try {
+          const config = JSON.parse(configBlob);
+          if (!config.provider) config.provider = {};
+          config.provider.primaryProvider = provider;
+          config.updatedAt = new Date().toISOString();
+          await redis.set('nexus:config', JSON.stringify(config));
+        } catch { /* ignore parse errors */ }
+      }
+
+      // Immediately update fallback order in running ProviderManager
+      const pm = brain.getProviderManager();
+      const secondary = provider === 'claude' ? 'kimi' : 'claude';
+      pm.setFallbackOrder([provider, secondary]);
+
+      logger.info('Primary provider switched', { provider, fallbackOrder: pm.getFallbackOrder() });
+      res.json({ success: true, primaryProvider: provider, fallbackOrder: pm.getFallbackOrder() });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── Gmail OAuth API (authenticated) ────────────────────────────
 
   /** Helper: get Gmail credentials from Redis config (with env var fallback) */
