@@ -1257,6 +1257,15 @@ FWSVC
         fi
     fi
 
+    # === Post-install patches ===
+    # Ensure app-script has chown fix for container volume permissions
+    local app_script="$LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-script"
+    if [[ -f "$app_script" ]] && ! grep -q 'chown.*1000.*app_data' "$app_script"; then
+        # Inject chown before docker-compose up in the start_app() function
+        sed -i '/compose "\${app}" up --detach --build/i\  # Fix permissions for containers running as UID 1000\n  local app_data="${LIVINITY_ROOT}/app-data/${app}"\n  if [[ -d "${app_data}" ]]; then\n    chown -R 1000:1000 "${app_data}" 2>/dev/null || true\n  fi' "$app_script"
+        ok "App-script patched with volume permission fix"
+    fi
+
     # === Done ===
     show_banner
 }
