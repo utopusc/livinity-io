@@ -490,8 +490,28 @@ Conversation:`;
   const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
-  const httpServer = apiApp.listen(apiPort, apiHost, () => {
-    logger.info(`API server on http://${apiHost}:${apiPort}`);
+  // Listen with retry — handles EADDRINUSE during PM2 restarts when old process
+  // hasn't released the port yet. Retries up to 10 times with 1s delay.
+  const httpServer = await new Promise<ReturnType<typeof apiApp.listen>>((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = 30;
+    const tryListen = () => {
+      const server = apiApp.listen(apiPort, apiHost, () => {
+        logger.info(`API server on http://${apiHost}:${apiPort}`);
+        resolve(server);
+      });
+      server.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE' && attempts < maxAttempts) {
+          attempts++;
+          logger.warn(`Port ${apiPort} in use, retrying in 1s... (${attempts}/${maxAttempts})`);
+          server.close();
+          setTimeout(tryListen, 1000);
+        } else {
+          reject(err);
+        }
+      });
+    };
+    tryListen();
   });
 
   // Dedicated Redis subscriber connection for WebSocket gateway pub/sub
@@ -547,41 +567,46 @@ Conversation:`;
   processInboxQueue(); // Start the blocking listener
 
   let isShuttingDown = false;
-  const shutdown = async () => {
-    if (isShuttingDown) return; // Prevent double shutdown
+  const shutdown = () => {
+    if (isShuttingDown) return;
     isShuttingDown = true;
-    logger.info('Shutting down...');
+    logger.info('Shutting down — closing HTTP server and exiting...');
 
-    // Close HTTP server FIRST to release port immediately
-    await new Promise<void>((resolve) => {
-      httpServer.close(() => {
-        logger.info('HTTP server closed, port released');
-        resolve();
-      });
-      // Force close after 3s if connections are hanging
-      setTimeout(resolve, 3000);
-    });
+    // Close HTTP server to release port
+    httpServer.close();
 
-    redisCircuitBreaker.destroy();
-    voiceGateway.stop();
-    wsGateway.stop();
-    heartbeatRunner.stop();
-    await cronWorker.close();
-    await cronQueue.close();
-    await memoryExtractionWorker.close();
-    await memoryExtractionQueue.close();
-    await multiAgentWorker.close();
-    await multiAgentQueue.close();
-    await channelManager.disconnectAll();
-    await mcpClientManager.stop();
-    await taskManager.cleanup();
-    await webhookManager.close();
-    await daemon.stop();
-    await voiceRedisSub.quit().catch(() => {}); // Close voice pub/sub subscriber connection
-    await redisSub.quit().catch(() => {}); // Close pub/sub subscriber connection
-    await inboxRedis.quit().catch(() => {}); // Close blocking connection
-    await redis.quit();
-    process.exit(0);
+    // Force exit in 1.5s — the ONLY reliable way to release the port quickly.
+    // Async cleanup (Redis, queues) is best-effort within this window.
+    // PM2 will SIGKILL after kill_timeout anyway, so this just makes it predictable.
+    setTimeout(() => process.exit(0), 1500).unref();
+
+    // Best-effort async cleanup (runs within the 1.5s window)
+    (async () => {
+      try {
+        inboxRedis.disconnect();
+        redisSub.disconnect();
+        voiceRedisSub.disconnect();
+        redisCircuitBreaker.destroy();
+        voiceGateway.stop();
+        wsGateway.stop();
+        heartbeatRunner.stop();
+        await cronWorker.close();
+        await cronQueue.close();
+        await memoryExtractionWorker.close();
+        await memoryExtractionQueue.close();
+        await multiAgentWorker.close();
+        await multiAgentQueue.close();
+        await channelManager.disconnectAll();
+        await mcpClientManager.stop();
+        await taskManager.cleanup();
+        await webhookManager.close();
+        await daemon.stop();
+        await redis.quit();
+        process.exit(0);
+      } catch {
+        // Cleanup failed — force exit timeout will handle it
+      }
+    })();
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
