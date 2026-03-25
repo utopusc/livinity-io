@@ -117,4 +117,10 @@ export const PROVIDER_COST_DEFAULTS = {
     sonnet: { input: 0.30, output: 1.20 },
     opus: { input: 0.60, output: 2.40 },
   },
+  claude: {
+    flash: { input: 0.80, output: 4.00 },
+    haiku: { input: 0.80, output: 4.00 },
+    sonnet: { input: 3.00, output: 15.00 },
+    opus: { input: 15.00, output: 75.00 },
+  },
 } as const;
