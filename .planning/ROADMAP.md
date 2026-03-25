@@ -165,7 +165,9 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16
   2. `@anthropic-ai/sdk` is listed in package.json dependencies and installs without errors
   3. ProviderManager.getProvider('claude') returns an instance of ClaudeProvider
   4. `npm run build --workspace=packages/core` succeeds with zero TypeScript errors
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 01-01-PLAN.md -- Restore ClaudeProvider, add SDK, register in ProviderManager
 
 ### Phase 2: Feature Parity
 **Goal**: Claude provider handles all AI capabilities identically to Kimi -- streaming responses, tool calling, vision/multimodal input, and model tier routing
@@ -207,7 +209,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Provider Restore & Registration | v16.0 | 0/0 | Not started | - |
+| 1. Provider Restore & Registration | v16.0 | 0/1 | Planning complete | - |
 | 2. Feature Parity | v16.0 | 0/0 | Not started | - |
 | 3. Auth & Config | v16.0 | 0/0 | Not started | - |
 | 4. Settings UI & Integration | v16.0 | 0/0 | Not started | - |
