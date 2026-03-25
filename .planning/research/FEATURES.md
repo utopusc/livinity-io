@@ -1,300 +1,247 @@
-# Feature Research: Precision Computer Use (v17.0)
+# Feature Research: Web-Based Remote Desktop Streaming
 
-**Domain:** Accessibility tree integration, DPI-aware coordinate handling, and cross-platform element targeting for AI computer use
+**Domain:** Browser-based remote desktop streaming for self-hosted servers
 **Researched:** 2026-03-25
-**Confidence:** HIGH for DPI/screenshot pipeline fixes, MEDIUM for accessibility tree cross-platform, LOW for Linux AT-SPI2 via Node.js
-
-## Context: What Exists Today
-
-The Livinity agent (agent-core.ts) currently has:
-- 8 desktop automation tools (6 mouse + 2 keyboard) via @jitsi/robotjs
-- Screenshot capture via node-screenshots (JPEG encoding, base64 transfer)
-- screen_info tool returning display resolution, scale factor, monitor positions
-- Autonomous screenshot-then-analyze-then-act-then-verify loop (50-action step limit)
-- Live monitoring panel with screenshot feed, click overlays, action timeline
-- Coordinate scaling logic (screenScaleX/Y) intended to map AI coordinates to screen coordinates
-
-**Known broken:** Screenshots capture in physical pixels (e.g., 2560x1440 on a 150% DPI display) but robotjs operates in logical pixels (1707x960). The scaling logic in toScreenX/toScreenY does not account for DPI scaling at all -- it only handles the downscale-for-API case. node-screenshots does not have a resize method, so the agent sends full-resolution images and tells the AI about target dimensions, but the API auto-resizes internally, creating an opaque coordinate mismatch.
+**Confidence:** HIGH (well-established domain with mature solutions; Apache Guacamole, KasmVNC, noVNC, Chrome Remote Desktop all provide reference implementations)
 
 ## Feature Landscape
 
-### Table Stakes (Must Fix / Must Have)
+### Table Stakes (Users Expect These)
 
-Features that fix broken behavior or match what every serious computer use implementation does. Missing these means the product fundamentally does not work reliably.
+Features users assume exist in any web-based remote desktop. Missing these = product feels broken or unusable.
 
-#### 1. Screenshot Pipeline Fix (Physical to Logical Pixels)
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **Real-time screen rendering** | Core purpose of the product. Users expect to see their desktop in the browser with <100ms visible latency | HIGH | Requires efficient screen capture, encoding (JPEG/WebP/PNG), WebSocket transport, and canvas rendering. 30 FPS minimum for usable interaction; 60 FPS for desktop-like feel. KasmVNC achieves 60fps at 1080p with WebP+JPEG mix |
+| **Mouse input (click, move, drag, scroll)** | Cannot interact with desktop without mouse. Every remote desktop solution supports this | MEDIUM | Map browser mouse events to remote coordinates. Must handle coordinate scaling when display is scaled/fit-to-window. Scroll wheel must map correctly |
+| **Keyboard input (typing + shortcuts)** | Cannot interact with desktop without keyboard. Users expect to type naturally including special characters | HIGH | Must capture key events before browser processes them. `event.preventDefault()` on keydown. Handle international keyboards, dead keys, IME. Browser steals some shortcuts (Ctrl+W, Ctrl+T, F5, F11) -- these CANNOT be intercepted in non-fullscreen mode |
+| **Dynamic resolution / fit-to-window** | Users expect the remote desktop to fill their browser viewport, not show a tiny fixed-size box or require scrolling | MEDIUM | Two approaches: (1) scale the rendered image client-side (simpler, blurry), (2) tell the server to resize the virtual display to match browser viewport (crisp, requires xrandr/KasmVNC allow_resize). LivOS should use approach (2) -- server-side resize to match client dimensions |
+| **Connection status indicator** | Users need to know if they're connected, reconnecting, or disconnected. Without this, a frozen screen is ambiguous -- is the remote machine frozen, or is the connection dead? | LOW | Simple status badge: Connected (green), Reconnecting (yellow), Disconnected (red). Show latency in ms. RDP uses 1-4 bars based on RTT + bandwidth |
+| **Automatic reconnection** | Network blips are common. Users should not have to manually refresh the page or re-navigate to resume their session | MEDIUM | Exponential backoff reconnect on WebSocket close. noVNC has `reconnect` and `reconnect_delay` options. The remote desktop session on the server persists -- only the viewer connection drops. LivOS already implements this pattern in the agent relay (heartbeat + exponential backoff) |
+| **Text clipboard sync (copy/paste)** | Users absolutely expect to copy text on their local machine and paste into the remote desktop, and vice versa. Without this, the remote desktop feels like a video stream, not a workspace | HIGH | Browser Clipboard API (navigator.clipboard) requires HTTPS + secure context + user gesture for read. Chromium browsers support it well; Firefox has restrictions. Guacamole uses a sidebar text area as fallback. KasmVNC has seamless clipboard on Chromium. LivOS approach: use Clipboard API with Guacamole-style text area fallback for non-Chromium |
+| **Authentication gate** | The remote desktop must not be publicly accessible. Users expect login before access | LOW | LivOS already has JWT auth + `livinity_token` cookie. Caddy `nativeApps` pattern already does cookie-based gating with login redirect. Zero new work -- just register `pc` subdomain as a native app |
+| **Cursor rendering** | Users need to see where their mouse is on the remote desktop. Dual-cursor (local + remote) is standard but jarring | MEDIUM | Best UX: hide the local cursor over the canvas, render only the remote cursor position. This avoids the "two cursors" problem. On high-latency connections, show local cursor as dot with remote cursor as arrow (Guacamole approach). KasmVNC hides local cursor and renders server cursor in the stream |
+| **Session persistence across reconnects** | When the browser tab is closed or network drops, the remote desktop session should persist on the server. Reopening the URL should reconnect to the same session, not start a new login | MEDIUM | The VNC/RDP session runs independently of the viewer connection. Closing the browser only drops the WebSocket -- the X11 session stays alive. On reconnect, the viewer re-attaches. This is inherent in VNC architecture. Important: set idle timeout (e.g., 30 min) so abandoned sessions eventually clean up |
+| **Fullscreen mode** | Users expect to go fullscreen for an immersive desktop experience. This also enables capturing more keyboard shortcuts | LOW | Use Fullscreen API (`element.requestFullscreen()`). Provide a toolbar button. In fullscreen, most browser shortcuts are suppressed, solving the Ctrl+W/Ctrl+T problem. Escape exits fullscreen (browser-enforced, cannot override). Show a floating toolbar overlay for connection controls |
 
-| Feature | Why Required | Complexity | Notes |
-|---------|-------------|------------|-------|
-| Resize screenshots to logical pixel dimensions using sharp | Current pipeline sends physical-pixel screenshots. Anthropic docs explicitly say: resize screenshots yourself and scale coordinates back up. Without this, AI coordinates are in an undefined space | LOW | `sharp(buffer).resize(logicalWidth, logicalHeight).jpeg().toBuffer()`. Sharp is already a common Node.js dep, ~6MB |
-| Report logical dimensions in screenshot metadata | The screenshot tool currently reports physical `captureW x captureH` but the AI needs to know the coordinate space it should use | LOW | Change `data.width`/`data.height` to report logical dimensions. Add `physicalWidth`/`physicalHeight` for diagnostics |
-| Calculate correct scale factor from display API | `node-screenshots` `Monitor.scaleFactor()` already returns the DPI scale. Use it: `logicalWidth = physicalWidth / scaleFactor` | LOW | Single line of math. Critical foundation for everything else |
+### Differentiators (Competitive Advantage)
 
-**Anthropic official guidance (HIGH confidence, from docs):** "The API constrains images to a maximum of 1568 pixels on the longest edge and approximately 1.15 megapixels total. To fix coordinate mismatches, resize screenshots yourself and scale Claude's coordinates back up." Recommended resolutions: 1024x768 (XGA), 1280x800 (WXGA), 1366x768 (FWXGA).
-
-#### 2. Coordinate Mapping Fix (toScreenX/toScreenY)
-
-| Feature | Why Required | Complexity | Notes |
-|---------|-------------|------------|-------|
-| Fix toScreenX/toScreenY to use logical pixel space | Current logic only handles downscale. It needs to: (1) map from AI image coords to logical pixels, (2) account for DPI if robotjs uses physical coords | LOW | Replace the current broken conditional with: `screenX = Math.round(aiX / imageScale)` where imageScale = displayWidth_sentToAI / logicalScreenWidth |
-| Handle multi-monitor coordinate offsets | robotjs moveMouse uses absolute desktop coordinates. Multi-monitor setups need monitor X/Y offsets added | MEDIUM | Use `monitorX`/`monitorY` from node-screenshots. Already captured but not used in coordinate math |
-| Validate coordinates before execution | Anthropic docs show returning error for out-of-bounds coords. Current code does not validate | LOW | Check `0 <= x < logicalWidth && 0 <= y < logicalHeight` before calling robotjs |
-
-#### 3. DPI Awareness at Agent Startup (Windows)
-
-| Feature | Why Required | Complexity | Notes |
-|---------|-------------|------------|-------|
-| Call SetProcessDpiAwarenessContext(PerMonitorAwareV2) at process startup | Without this, Windows virtualizes coordinates for "DPI-unaware" apps. robotjs may receive virtualized coordinates that do not match actual pixel positions | MEDIUM | Requires native addon or ffi call. Can use `ffi-napi` to call `user32.dll!SetProcessDpiAwarenessContext(-4)` at startup. The `-4` constant is DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 |
-| Detect actual DPI per monitor at runtime | Windows can have different DPI per monitor. Need to know which monitor the target element is on | MEDIUM | `GetDpiForMonitor()` via ffi-napi or use node-screenshots scaleFactor per monitor. Already partially available |
-
-**Microsoft docs (HIGH confidence):** "Calling SetProcessDpiAwarenessContext with per-monitor V2 awareness does not cause use of a virtualized coordinate system, so it will generally give you 1 coordinate = 1 pixel even on high-DPI displays."
-
-### Differentiators (Accessibility Tree Integration)
-
-Features that go beyond screenshot-only computer use. These are what Windows-Use, nut.js, and advanced agents implement. Not strictly required for basic functionality, but dramatically improve accuracy and efficiency.
-
-#### 4. Windows UI Automation (UIA) Accessibility Tree
+Features that set LivOS remote desktop apart from generic VNC-in-browser. Aligned with LivOS core value: "one-command deployment, accessible anywhere."
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Enumerate interactive elements via Windows UIA API | Eliminates guessing from screenshots. AI gets exact element names, types, and positions. Windows-Use uses this as primary input (no vision model needed). Benchmarks show UIA-backed agents outperform pixel-only agents | HIGH | Three implementation paths: (A) PowerShell subprocess calling System.Windows.Automation .NET classes, (B) @bright-fish/node-ui-automation native addon wrapping COM UIA, (C) @nut-tree/element-inspector. **Recommend (A) for v1 because zero native dep risk** |
-| Element serialization as structured text for AI | The AI needs a compact, parseable representation of UI elements. Windows-Use sends this as primary context instead of screenshots | MEDIUM | Format: indexed list with role, name, value, bounding rect. See "Element Serialization Format" section below |
-| Center-point coordinates for each element | AI can click by element ID rather than guessing pixel coordinates | LOW | Each element's bounding rect provides `(x + width/2, y + height/2)` in logical pixels |
-| Focused window scoping | Only enumerate elements of the foreground/active window, not entire desktop tree. Full tree can have 10,000+ nodes | MEDIUM | Get foreground window handle via `GetForegroundWindow()`, walk only that subtree. Critical for performance |
-| Depth-limited tree traversal | Full accessibility trees are enormous. Limit to interactive elements and 3-4 levels deep | MEDIUM | Filter by control patterns (InvokePattern, TogglePattern, ValuePattern, SelectionItemPattern) to find clickable/typeable elements |
+| **Zero-config install via install.sh** | Competitors (Guacamole, Kasm Workspaces) require multi-step Docker/manual setup. LivOS auto-detects GUI presence at install time and configures everything. User just opens `pc.username.livinity.io` | MEDIUM | install.sh checks for X11/Wayland display server (`systemctl list-units --type=target \| grep graphical` or `loginctl show-session`). If GUI detected: install VNC server, configure systemd service, add Caddy subdomain. If headless: skip entirely. Fits LivOS "one command" ethos |
+| **Integrated JWT auth (no separate login)** | Guacamole has its own auth system. KasmVNC has its own auth. With LivOS, the user is already logged in -- the remote desktop is just another "app" behind the same session cookie. No double-login | LOW | Existing `nativeApps` Caddy pattern handles this. The `livinity_token` cookie is already set by LivOS login. Caddy checks for cookie presence, redirects to `/login` if absent. The streaming backend receives already-authenticated requests |
+| **AI-aware desktop (existing agent integration)** | LivOS already has AI Computer Use (v15.0-v17.0) with screenshot analysis, accessibility tree, mouse/keyboard automation. The remote desktop viewer is the visual companion -- users can watch AI operate their desktop in real-time. No competitor offers this combination | LOW | The remote desktop stream and the AI Computer Use system share the same X11 session. When AI takes actions via robotjs, the user sees them in real-time through the stream. The existing live monitoring UI (screenshot feed + action timeline) could be integrated into the streaming view |
+| **Per-user session isolation** | In multi-user LivOS, each user gets their own desktop session. User A cannot see User B's desktop | HIGH | Requires per-user X11 sessions or per-user VNC instances. For v1, this is out of scope (single display, single user). For future: Xvfb per user, or container-based desktop isolation. Flag this as v2 feature |
+| **Adaptive quality based on connection** | Automatically reduce image quality and frame rate when bandwidth is low, increase when bandwidth is available. Smooth experience regardless of connection quality | MEDIUM | KasmVNC does this natively with dynamic JPEG/WebP quality settings based on screen change rates. If using KasmVNC as the backend, this is built-in. If custom: measure WebSocket send buffer backpressure to estimate bandwidth, adjust JPEG quality (30-90) and frame rate (10-60 fps) accordingly |
+| **Mobile-friendly touch controls** | LivOS is "accessible anywhere" -- that includes phones and tablets. Users should be able to interact with their server desktop from a phone in a pinch | MEDIUM | Touch-to-click, pinch-to-zoom, two-finger scroll, three-finger right-click. Guacamole's touch emulation is the gold standard here: relative pointer mode (drag to move cursor), tap to click, two-finger tap for right-click. Virtual keyboard trigger button for mobile. Important: this is a "works" feature, not a "great" feature -- full productivity on mobile is unrealistic for a desktop environment |
 
-**Windows-Use approach (MEDIUM confidence, from GitHub analysis):** Windows-Use uses `use_accessibility=True` (default) with UIA as the primary perception mechanism. Vision (`use_vision=False` by default) is optional supplement. Their 13 tools operate on structured element data, not pixel coordinates.
+### Anti-Features (Commonly Requested, Often Problematic)
 
-#### 5. `screen_elements` Tool
+Features that seem good but create substantial complexity, maintenance burden, or UX problems for limited value.
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| New tool returning structured element list | Single tool call gives AI a complete picture of what can be interacted with, plus precise coordinates for each element | MEDIUM | Returns JSON array of `{ id, role, name, value, x, y, width, height, clickX, clickY, enabled, focused }`. Replaces need for screenshot in many cases |
-| Element count and summary in output text | AI needs a quick textual summary alongside the structured data: "Found 23 interactive elements in window 'Settings'" | LOW | Simple string generation from element list |
-| Optional filtering by element type | AI can request only buttons, or only text fields, reducing token consumption | LOW | Parameter: `filter?: 'button' | 'text' | 'menu' | 'all'` |
-| Caching with change detection | If accessibility tree has not changed since last call, return cached result and skip re-enumeration. Reduces unnecessary work in the action loop | MEDIUM | Hash the element tree structure. If hash matches previous, return `{ changed: false, cachedAt: timestamp }` |
-
-#### 6. macOS AXUIElement Accessibility Backend
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Enumerate elements via macOS Accessibility API (AXUIElement) | Same structured element data as Windows, enabling cross-platform parity | HIGH | macOS requires: (1) Accessibility permission granted in System Preferences, (2) Swift or Objective-C bridge to call AXUIElementCopyAttributeValues. Libraries: AXorcist (Swift), DFAXUIElement (Swift). **Must be called from a compiled helper binary, not Node.js directly** |
-| Swift helper binary invoked as subprocess | Node.js cannot call AXUIElement APIs directly. A small Swift CLI tool can enumerate the tree and output JSON to stdout | HIGH | ~200 lines of Swift. Compile with `swiftc` at build time. Ship as part of agent binary or compile on first run. macOS-only binary |
-| Permission detection and user prompt | macOS blocks accessibility access until user explicitly grants it in System Preferences > Privacy > Accessibility | MEDIUM | Check `AXIsProcessTrusted()`. If false, show dialog explaining how to grant permission. Critical for UX -- without this, the feature silently fails |
-
-**Apple docs (HIGH confidence):** AXUIElement is the core type for accessibility clients. It requires explicit user permission. Libraries like AXorcist and AccessibilityNavigator provide modern Swift wrappers.
-
-#### 7. Linux AT-SPI2 Accessibility Backend
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Enumerate elements via AT-SPI2 D-Bus protocol | Completes the cross-platform story. Linux GNOME/GTK apps expose accessibility via AT-SPI2 | HIGH | AT-SPI2 uses D-Bus. Can be accessed via: (1) Python pyatspi2 as subprocess, (2) Direct D-Bus calls from Node.js via `dbus-native` npm package, (3) `gdbus` CLI subprocess. **Recommend (1) pyatspi2 subprocess for reliability** |
-| Handle missing accessibility support | Many Linux apps (especially Qt/KDE, Electron) have poor or no accessibility tree support. Need graceful fallback | MEDIUM | Detect empty/stub trees. Return `{ available: false, reason: 'No accessibility support for this window' }` and fall back to screenshot mode |
-
-**AT-SPI2 docs (MEDIUM confidence):** AT-SPI2 is a D-Bus protocol where toolkit widgets expose their content. Python bindings (pyatspi2) are the most well-documented access path. GTK apps have good support; Qt apps have partial support; Electron apps have variable support depending on `--force-renderer-accessibility` flag.
-
-#### 8. Unified Cross-Platform screen_elements Interface
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Platform-agnostic element format | AI gets same JSON structure regardless of OS. Same prompt works everywhere | MEDIUM | Normalize platform-specific properties (UIA ControlType, AX role, AT-SPI role) to common set: button, textField, checkbox, menu, menuItem, link, list, listItem, tab, window, generic |
-| Platform detection and backend routing | Agent detects OS at startup and loads appropriate accessibility backend | LOW | `process.platform` switch: win32 -> UIA, darwin -> AXUIElement, linux -> AT-SPI2 |
-| Graceful degradation | If accessibility backend fails or is unavailable, fall back to screenshot-only mode (current behavior) | LOW | Try-catch around accessibility calls. Return `{ available: false }` and continue with screenshot-based computer use |
-
-### Differentiators: AI Prompt Optimization
-
-#### 9. Accessibility-First AI Prompting
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Send accessibility tree as primary context, screenshot as secondary | Dramatically reduces token consumption and improves accuracy. The AI reads structured element data first, only uses screenshot for visual layout context | MEDIUM | Modify agent loop system prompt: "You have a structured list of UI elements with their coordinates. Use element IDs and coordinates from this list. Only request a screenshot if the element list is insufficient" |
-| Element ID-based click targets | Instead of AI guessing pixel coordinates from a screenshot, it references `element_id: 7` and the agent looks up coordinates | LOW | AI returns `{ tool: 'mouse_click', params: { element_id: 7 } }` instead of `{ params: { x: 483, y: 217 } }`. Agent resolves element_id to clickX/clickY from cached tree |
-| Smart screenshot skipping | If accessibility tree is unchanged and last action was keyboard input, skip screenshot capture. Saves ~200ms per loop iteration and reduces token cost | MEDIUM | Track tree hash. If `hash === previousHash && lastAction.type !== 'mouse'`, skip screenshot on next iteration |
-
-#### 10. Hybrid Mode (Accessibility + Screenshot Fallback)
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Automatic mode selection per action | Use accessibility coordinates when element is found in tree. Fall back to screenshot coordinates when element is not in tree (custom-drawn UIs, games, etc.) | MEDIUM | If AI provides `element_id`, use tree coordinates. If AI provides raw `x, y`, use screenshot coordinate mapping. Both paths work simultaneously |
-| Screenshot annotation with element overlays | Optionally draw bounding boxes and element IDs on screenshots before sending to AI. Bridges gap between structured data and visual context | HIGH | Use sharp to composite rectangles and text labels onto screenshot buffer. Token cost increases but accuracy may improve for complex UIs. **Defer -- high effort, unclear ROI** |
-| Confidence-based mode switching | If accessibility tree has very few elements (< 3), switch to screenshot-primary mode automatically | LOW | Simple heuristic check after tree enumeration |
-
-## Anti-Features (Do NOT Build)
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Full desktop tree enumeration | Enumerating the entire accessibility tree from root can return 10,000+ nodes, takes seconds, and overwhelms the AI context window | Only enumerate the focused/foreground window subtree, max 3-4 levels deep, interactive elements only |
-| Vision-based element detection (OmniParser) | OmniParser/V2 is a separate ML model (1-2GB) that detects UI elements from screenshots. Requires GPU, adds massive latency, and is overkill when the OS already provides accessibility trees | Use the OS accessibility APIs. They are free, instant, and more accurate. OmniParser is for environments without accessibility support (headless VMs, game UIs) |
-| Browser DOM inspection | Building a separate browser automation layer (like Playwright) adds enormous complexity and scope creep | Use the OS accessibility tree which already exposes browser UI elements. If the user wants browser automation specifically, that is a separate future milestone |
-| Real-time screen streaming / VNC | Video streaming is a completely different architecture (WebRTC, codec, bandwidth). The screenshot-then-act loop is the right architecture for AI agents | Keep discrete screenshot captures. The loop approach matches Anthropic and OpenAI reference implementations |
-| Custom accessibility tree for Electron apps | Forcing `--force-renderer-accessibility` on user's Electron apps or injecting accessibility providers is invasive and fragile | Accept that some apps have poor accessibility trees and fall back to screenshot mode gracefully |
-| Multi-monitor element enumeration | Scanning all monitors' accessibility trees multiplies complexity and confuses the AI about which screen to target | Only enumerate elements on the primary monitor or the monitor containing the active/focused window |
-
-## Element Serialization Format
-
-The format AI receives for `screen_elements` output. Based on analysis of Windows-Use, nut.js element-inspector, and Playwright accessibility snapshots:
-
-### Recommended Format (Compact Indexed List)
-
-```
-Window: "Settings" (1920x1080)
-[1] button "Save" at (850, 950) enabled
-[2] button "Cancel" at (960, 950) enabled
-[3] textField "Username" value="admin" at (400, 200) enabled focused
-[4] checkbox "Enable notifications" checked at (400, 300) enabled
-[5] combobox "Theme" value="Dark" at (400, 400) enabled
-[6] tab "General" at (100, 50) selected
-[7] tab "Advanced" at (200, 50)
-[8] link "Documentation" at (400, 500) enabled
-```
-
-**Why this format:**
-- Numbered IDs let AI reference elements unambiguously: "Click element [3]"
-- Compact enough to fit in context alongside screenshot
-- Human-readable for debugging
-- Role + name + value + coordinates + state covers all interaction needs
-- Coordinates are center-points in logical pixels (ready for clicking)
-
-### Full JSON Structure (Internal)
-
-```typescript
-interface ScreenElement {
-  id: number;              // Sequential ID for this snapshot
-  role: string;            // Normalized: button, textField, checkbox, etc.
-  name: string;            // Accessible name / label
-  value?: string;          // Current value (for inputs, combos, etc.)
-  clickX: number;          // Center X in logical pixels
-  clickY: number;          // Center Y in logical pixels
-  width: number;           // Element width in logical pixels
-  height: number;          // Element height in logical pixels
-  enabled: boolean;
-  focused: boolean;
-  selected?: boolean;
-  checked?: boolean;
-  expandState?: 'expanded' | 'collapsed';
-  children?: ScreenElement[];  // For tree views, menus
-}
-```
-
-## Coordinate Space Handling
-
-### The Three Coordinate Spaces
-
-1. **Physical pixels** -- What the display hardware uses. On a 2560x1440 display at 150% DPI, this is 2560x1440.
-2. **Logical pixels** -- What the OS and apps use. On that same display, this is 1707x960 (physical / scaleFactor).
-3. **AI image pixels** -- What the AI sees after the screenshot is resized to fit API limits. If we resize to 1280x800, the AI operates in that space.
-
-### Correct Pipeline
-
-```
-Capture (physical pixels: 2560x1440)
-    |
-    v
-Resize with sharp (to recommended target: 1280x800 or 1366x768)
-    |
-    v
-Send to AI (display_width_px: 1280, display_height_px: 800)
-    |
-    v
-AI returns coordinates in AI image space (e.g., click at 640, 400)
-    |
-    v
-Scale up: screenX = aiX * (logicalWidth / imageWidth)
-          screenY = aiY * (logicalHeight / imageHeight)
-    |
-    v
-robotjs.moveMouse(screenX + monitorOffsetX, screenY + monitorOffsetY)
-```
-
-### When Accessibility Tree Coordinates Are Used
-
-```
-screen_elements returns clickX, clickY in logical pixels
-    |
-    v
-AI says: click element [3] (which has clickX=400, clickY=200)
-    |
-    v
-robotjs.moveMouse(400 + monitorOffsetX, 200 + monitorOffsetY)
-```
-
-No scaling needed -- accessibility tree coordinates are already in logical pixel space.
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **Audio streaming** | "I want to hear my desktop" -- video playback, system sounds, music | Audio adds massive complexity: PulseAudio/PipeWire capture, Opus encoding, separate WebRTC audio channel, sync with video frames, browser autoplay policies. Doubles bandwidth. Most server desktops have no meaningful audio. PROJECT.md explicitly defers this | Defer to v2+. If needed, use WebRTC audio channel added later as separate concern. For v1, document that audio is not streamed |
+| **File transfer via drag-and-drop** | "I want to drag files from my desktop to the remote" | Requires virtual drive mapping (SFTP/RDPDR), upload progress UI, large file handling, security scanning. Guacamole does this but it is one of their most bug-reported features. LivOS already has a File Manager app | Use the existing LivOS File Manager (`files.username.livinity.io`) for file transfer. It is already built, tested, and accessible via subdomain. Adding a second file transfer mechanism through the desktop stream is redundant |
+| **Multi-monitor support** | "I have two monitors on my server" | Browser tab can only show one viewport. Multi-monitor in web requires opening multiple browser tabs/windows for each display (Citrix approach) -- confusing UX. PROJECT.md explicitly scopes to single display | Single display for v1. If the server has multiple monitors, stream the primary. Add monitor selector in v2 if demand materializes |
+| **Clipboard sync for images/files** | "I want to paste screenshots between local and remote" | Binary clipboard requires Chromium-only `navigator.clipboard.read()` with MIME type negotiation. Does not work in Firefox or Safari. Creates false expectation of full clipboard support | Support text-only clipboard sync in v1. This covers 95% of clipboard use (URLs, code snippets, passwords). Binary clipboard is a v2 Chromium-only enhancement |
+| **Printing redirection** | "I want to print from remote to my local printer" | Requires virtual printer driver on remote, PDF generation, download to browser, then local print dialog. Extremely niche for a server OS. No web-based solution does this well | Not applicable for LivOS use case. Servers do not print |
+| **USB device redirection** | "I want to use my local USB device on the remote" | WebUSB API is Chromium-only and restricted. USB redirection requires kernel-level drivers on both ends. No browser-based solution supports this | Out of scope. Use SSH or agent tools for device access |
+| **Hardware-accelerated video decode (WebRTC)** | "Use WebRTC for lower latency" | WebRTC adds STUN/TURN infrastructure, codec negotiation, ICE candidates, and NAT traversal complexity. For a same-LAN or tunnel-proxied connection, WebSocket + canvas is simpler and sufficient. KasmVNC supports WebRTC but it is optional for high-latency scenarios | Start with WebSocket + canvas (proven, simple). WebRTC can be added later as an optional transport for users with high-latency tunnels. The tunnel relay already solves NAT traversal |
 
 ## Feature Dependencies
 
 ```
-DPI Awareness (3) ──────────────┐
-                                v
-Screenshot Pipeline Fix (1) ──> Coordinate Mapping Fix (2) ──> AI Prompt Update (9)
-                                ^                                    |
-                                |                                    v
-Windows UIA (4) ──> screen_elements Tool (5) ──> Hybrid Mode (10)
-                                ^
-macOS AXUIElement (6) ─────────┤
-                                |
-Linux AT-SPI2 (7) ─────────────┤
-                                |
-Unified Interface (8) ─────────┘
+[Authentication (JWT/Cookie)] (EXISTING)
+    |
+    v
+[Caddy Subdomain Routing: pc.{user}.domain] (EXISTING PATTERN)
+    |
+    v
+[VNC Server on Desktop] (NEW - core dependency)
+    |
+    +---> [Screen Capture & Encoding]
+    |         |
+    |         v
+    |     [WebSocket Transport]
+    |         |
+    |         v
+    |     [Browser Canvas Rendering] ----> [Dynamic Resolution]
+    |
+    +---> [Mouse Input Handling] --------> [Cursor Rendering]
+    |
+    +---> [Keyboard Input Handling] -----> [Shortcut Passthrough]
+    |
+    +---> [Clipboard Sync]
+    |
+    +---> [Connection Management]
+              |
+              +---> [Status Indicator]
+              +---> [Auto-Reconnect]
+              +---> [Session Persistence]
+
+[Fullscreen Mode] --enhances--> [Keyboard Input Handling] (captures more shortcuts)
+
+[Touch Controls] --enhances--> [Mouse Input Handling] (alternative input method)
+
+[Adaptive Quality] --enhances--> [Screen Capture & Encoding] (bandwidth optimization)
+
+[AI Computer Use (v15-17)] --shares-session--> [VNC Server on Desktop] (same X11 session)
+
+[install.sh GUI Detection] --gates--> [VNC Server on Desktop] (skip on headless)
 ```
 
-**Critical path:** Features 1-3 (DPI/screenshot/coordinate fixes) are prerequisites for everything else and independently fix the existing broken behavior.
+### Dependency Notes
 
-**Parallel track:** Features 4-8 (accessibility tree) can start after 1-3, with Windows UIA first (primary development platform), then macOS and Linux.
+- **Authentication requires nothing new:** LivOS JWT + `livinity_token` cookie + Caddy `nativeApps` pattern is already implemented. The remote desktop just needs to be registered as a native app subdomain.
+- **VNC Server is the foundational dependency:** Everything else (rendering, input, clipboard) flows through the VNC protocol or the chosen streaming backend. This must be set up first.
+- **Keyboard Input benefits from Fullscreen:** In normal browser mode, Ctrl+W, Ctrl+T, Ctrl+N, F5, F11, and other browser shortcuts cannot be intercepted. Fullscreen mode suppresses most of these. Users should be encouraged to go fullscreen for best experience.
+- **AI Computer Use shares the X11 session:** The VNC server and robotjs both operate on the same display (`:0` or `:1`). No conflict -- VNC streams what robotjs manipulates. This is a natural integration point.
+- **install.sh GUI detection gates the entire feature:** On headless servers (no X11/Wayland), the remote desktop feature should be silently skipped. Detection: `systemctl list-units --type=target | grep graphical.target` or check for `$DISPLAY` environment variable.
 
-**Integration:** Features 9-10 (AI prompt optimization and hybrid mode) come last, requiring both the fixed pipeline and at least one accessibility backend.
+## MVP Definition
 
-## MVP Recommendation
+### Launch With (v1 -- v18.0 milestone)
 
-### Phase 1: Fix What Is Broken (Critical, Unblocks Everything)
-1. **Screenshot resize via sharp** -- physical to logical pixel conversion
-2. **Correct coordinate metadata** -- report logical dimensions to AI
-3. **Fix toScreenX/toScreenY** -- proper bidirectional coordinate mapping
-4. **DPI awareness on Windows** -- SetProcessDpiAwarenessContext call at startup
+Minimum viable remote desktop streaming. Validates the concept and is genuinely usable for server administration.
 
-### Phase 2: Windows Accessibility Tree (Primary Differentiator)
-5. **Windows UIA via PowerShell subprocess** -- enumerate focused window elements
-6. **screen_elements tool** -- new tool with compact indexed element list
-7. **Element ID-based clicking** -- AI references elements by ID
-8. **AI prompt update** -- accessibility-first prompting strategy
+- [ ] **VNC server auto-setup in install.sh** -- detect GUI, install KasmVNC or TigerVNC, configure systemd service, bind to localhost only
+- [ ] **Caddy subdomain registration** -- `pc.{username}.{domain}` using existing `nativeApps` pattern with JWT cookie gating
+- [ ] **WebSocket proxy/bridge** -- either direct WebSocket passthrough (KasmVNC has built-in web client) or a lightweight websockify bridge for TigerVNC
+- [ ] **Real-time screen rendering in browser** -- HTML5 canvas, minimum 30 FPS, server-side resolution matching client viewport
+- [ ] **Mouse input** -- click (left/right/middle), move, drag, scroll wheel, coordinate mapping with display scaling
+- [ ] **Keyboard input** -- full key capture with `event.preventDefault()`, dead keys, modifier keys (Ctrl, Alt, Shift, Super)
+- [ ] **Text clipboard sync** -- bidirectional text copy/paste using Clipboard API with text area fallback
+- [ ] **Connection status indicator** -- green/yellow/red badge with latency display
+- [ ] **Auto-reconnect on disconnect** -- exponential backoff, session persistence on server side
+- [ ] **Fullscreen mode** -- button + Fullscreen API for immersive experience and better keyboard capture
+- [ ] **Cursor rendering** -- hide local cursor over canvas, render remote cursor from stream
 
-### Phase 3: Cross-Platform + Hybrid (Complete the Story)
-9. **macOS AXUIElement via Swift helper** -- compiled binary subprocess
-10. **Linux AT-SPI2 via pyatspi2** -- Python subprocess
-11. **Unified cross-platform interface** -- normalize roles and properties
-12. **Hybrid mode** -- automatic fallback from accessibility to screenshot coordinates
+### Add After Validation (v18.x)
 
-### Defer
-- **Screenshot annotation with element overlays** -- unclear ROI, adds ~150ms per screenshot, high implementation effort
-- **OmniParser / vision-based element detection** -- unnecessary when OS accessibility APIs are available
-- **Browser DOM inspection** -- separate scope entirely
-- **Multi-monitor element enumeration** -- complexity not justified for initial release
+Features to add once the core streaming is stable and users are actively using it.
 
-## Competitive Landscape
+- [ ] **Adaptive quality** -- dynamic JPEG/WebP quality based on bandwidth estimation (add when users report performance issues over tunnels)
+- [ ] **Mobile touch controls** -- touch-to-click, pinch-to-zoom, virtual keyboard button (add when analytics show mobile usage)
+- [ ] **On-screen keyboard for special keys** -- Ctrl+Alt+Del, Print Screen, Super key, function keys (add when users request specific shortcuts that cannot be captured)
+- [ ] **Connection quality history** -- latency/FPS graph over time for debugging connection issues
+- [ ] **Session timeout configuration** -- admin setting for idle timeout duration (default 30 min, configurable)
 
-| Product | Approach | Accessibility Tree? | DPI Handling | Cross-Platform |
-|---------|----------|-----------------------|--------------|----------------|
-| Anthropic computer-use-demo | Screenshot only + coordinate scaling | No | Manual resize recommended | Linux (Docker VM) only |
-| OpenAI CUA / Operator | Screenshot (vision) primary | No (vision-only per research) | Not documented | Browser only (Operator) |
-| Windows-Use (CursorTouch) | Accessibility tree primary, vision optional | Yes (Windows UIA) | Not documented | Windows only |
-| nut.js + element-inspector | Both (programmatic) | Yes (Windows, macOS planned) | Handled by nut.js | Windows (beta), macOS planned |
-| OmniParser V2 (Microsoft) | Vision ML model | No (detects from screenshots) | Resolution-dependent | Any (screenshot input) |
-| **Livinity v17.0 (target)** | **Hybrid: accessibility first, screenshot fallback** | **Yes (Win/Mac/Linux)** | **Full DPI pipeline fix** | **Windows, macOS, Linux** |
+### Future Consideration (v2+)
 
-**Livinity's differentiator:** The only cross-platform computer use agent that combines accessibility tree integration with proper DPI-aware screenshot handling AND supports multiple AI providers (Claude + Kimi). Windows-Use only does Windows. Anthropic's reference only does screenshots. OpenAI only does vision. Livinity does all of it.
+Features to defer until remote desktop is proven and multi-user demand exists.
+
+- [ ] **Audio streaming** -- PulseAudio/PipeWire capture + Opus encoding + WebRTC audio channel. Only if users specifically demand it
+- [ ] **Per-user desktop isolation** -- Xvfb per user or container-based desktops for multi-user LivOS. Requires significant architecture work
+- [ ] **Multi-monitor support** -- monitor selector UI, ability to choose which display to stream
+- [ ] **Binary clipboard (images)** -- Chromium-only Clipboard API for image copy/paste
+- [ ] **WebRTC transport** -- optional lower-latency transport for high-latency tunnel connections
+- [ ] **File drag-and-drop** -- drag files from local browser to remote desktop surface
+- [ ] **Recording/playback** -- record desktop sessions for audit or training (Guacamole supports this)
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority | LivOS Dependency |
+|---------|------------|---------------------|----------|------------------|
+| Screen rendering (30+ FPS) | HIGH | HIGH | P1 | None (new) |
+| Mouse input (click/move/drag/scroll) | HIGH | MEDIUM | P1 | None (new) |
+| Keyboard input + shortcuts | HIGH | HIGH | P1 | None (new) |
+| JWT auth gate | HIGH | LOW | P1 | Existing Caddy nativeApps pattern |
+| Auto-reconnect | HIGH | MEDIUM | P1 | Existing pattern from agent relay |
+| Connection status indicator | HIGH | LOW | P1 | None (new) |
+| Text clipboard sync | HIGH | HIGH | P1 | Browser Clipboard API |
+| Dynamic resolution / fit-to-window | HIGH | MEDIUM | P1 | VNC server config (allow_resize) |
+| Fullscreen mode | MEDIUM | LOW | P1 | Browser Fullscreen API |
+| Cursor rendering (single cursor) | MEDIUM | MEDIUM | P1 | VNC server cursor handling |
+| Session persistence | MEDIUM | LOW | P1 | Inherent in VNC architecture |
+| install.sh GUI detection + setup | HIGH | MEDIUM | P1 | Existing install.sh |
+| Adaptive quality | MEDIUM | MEDIUM | P2 | VNC server encoding config |
+| Mobile touch controls | MEDIUM | MEDIUM | P2 | Touch event handlers |
+| On-screen special key keyboard | LOW | LOW | P2 | UI component |
+| Session timeout config | LOW | LOW | P2 | Admin settings UI |
+| Audio streaming | LOW | HIGH | P3 | PulseAudio/PipeWire + WebRTC |
+| Per-user isolation | MEDIUM | HIGH | P3 | Xvfb/container per user |
+| Multi-monitor | LOW | MEDIUM | P3 | xrandr/display enumeration |
+| WebRTC transport | LOW | HIGH | P3 | STUN/TURN infrastructure |
+
+**Priority key:**
+- P1: Must have for v18.0 launch
+- P2: Should have, add in v18.x iterations
+- P3: Nice to have, defer to future milestone
+
+## Competitor Feature Analysis
+
+| Feature | Apache Guacamole | KasmVNC (built-in client) | noVNC + websockify | Chrome Remote Desktop | LivOS v18.0 Approach |
+|---------|-----------------|-------------------------------|--------------------|-----------------------|---------------------|
+| **Browser-only (no client)** | Yes | Yes | Yes | No (extension) | Yes -- pure browser |
+| **Protocol support** | VNC, RDP, SSH, Telnet | VNC only | VNC only | Proprietary | VNC (sufficient for Linux) |
+| **Auth integration** | Own auth + LDAP/SAML/header | Own auth or API key | None (external) | Google account | LivOS JWT cookie (existing) |
+| **Setup complexity** | Docker + Tomcat + guacd + DB | Single binary + web files | Python websockify + HTML | Google-managed | install.sh one-command |
+| **Dynamic resolution** | VNC: sometimes; RDP: initial only | Yes (allow_resize: true) | Depends on VNC server | Yes | Yes (server-side resize) |
+| **Clipboard** | Text via sidebar panel | Seamless text on Chromium; binary | Text only | Full (native client) | Text via Clipboard API + fallback |
+| **Touch support** | Excellent (3 touch modes) | Basic | Basic | Excellent (3 modes) | Basic touch-to-click for v1 |
+| **Reconnect** | Manual | Manual | Configurable auto | Automatic | Automatic with exponential backoff |
+| **Image encoding** | PNG (server-side) | WebP + JPEG + QOI (adaptive) | Raw framebuffer + Tight | H.264/VP8 | Depends on backend choice |
+| **Audio** | RDP only | PulseAudio capture | No | Yes | No (deferred) |
+| **File transfer** | Yes (SFTP/RDPDR drag-drop) | No | No | Yes | No (use existing File Manager) |
+| **Latency (LAN)** | ~50-100ms | ~16-33ms (60fps) | ~50-100ms | ~16-33ms | Target: <50ms LAN, <150ms tunnel |
+| **Self-hosted** | Yes | Yes | Yes | No | Yes |
+| **AI integration** | No | No | No | No | Yes (shares X11 with AI Computer Use) |
+
+### Key Competitor Insight
+
+No existing solution combines remote desktop streaming with AI desktop automation. LivOS uniquely owns this intersection: users can both watch their desktop and have AI operate it, through the same authenticated web interface. This is the primary differentiator.
+
+## Integration Points with Existing LivOS Infrastructure
+
+| LivOS Component | Integration | Effort |
+|-----------------|------------|--------|
+| **Caddy reverse proxy** | Add `pc` subdomain to `nativeApps` array in `generateFullCaddyfile()`. Cookie-based JWT gating already implemented. WebSocket upgrade headers must be configured | LOW |
+| **JWT authentication** | No changes needed. Existing `livinity_token` cookie validates user. Caddy handles redirect-to-login for unauthenticated requests | NONE |
+| **install.sh** | Add GUI detection section. Check for graphical.target or display server. Conditionally install VNC server, configure systemd service, add firewall rule for VNC port (localhost only) | MEDIUM |
+| **Multi-user routing** | In multi-user mode, wildcard Caddy block routes to livinityd (port 8080). App gateway extracts username from subdomain, validates session, routes to per-user VNC port. Pattern matches existing Docker app routing | MEDIUM |
+| **AI Computer Use (v15-17)** | Shares same X11 display. No integration needed -- robotjs and VNC server both operate on the same framebuffer. AI actions visible in real-time naturally | NONE |
+| **Agent relay (Server5)** | Remote desktop streams locally (not through relay). `pc.username.livinity.io` resolves to user's LivOS server directly via Cloudflare Tunnel or direct DNS. Relay is not involved | NONE |
+
+## Behavioral Expectations (User Mental Model)
+
+Users coming from Chrome Remote Desktop, TeamViewer, AnyDesk, or RDP have specific expectations:
+
+| Behavior | What Users Expect | LivOS Approach |
+|----------|-------------------|----------------|
+| **First connection** | Open URL, see desktop immediately (after auth) | JWT cookie auto-validates. If logged in, desktop streams instantly. If not, redirect to login, then back to desktop |
+| **Resize browser window** | Remote desktop resizes to match | Server-side xrandr resize via VNC protocol. 200ms debounce on window resize events |
+| **Close browser tab** | Desktop keeps running, re-opening URL reconnects | VNC session persists. WebSocket reconnect on page load |
+| **Network interruption** | Brief freeze, then auto-recovery | Auto-reconnect with exponential backoff. Show "Reconnecting..." overlay |
+| **Copy text locally, paste remotely** | Ctrl+V works in remote desktop | Clipboard API intercepts paste, sends text to VNC server clipboard |
+| **Ctrl+Alt+Del** | Security screen on remote machine | On-screen button (cannot capture this combo in browser). Or use Ctrl+Alt+End as alternative shortcut |
+| **Latency** | Responsive enough for terminal work, file browsing, basic GUI. Not expected to be "gaming quality" | Target <50ms LAN, <150ms tunnel. 30 FPS minimum. Acceptable for server admin tasks |
+| **Mobile access** | Basic ability to check on server from phone | Touch-to-click, pinch-to-zoom. Not a primary use case but should work |
 
 ## Sources
 
-- [Anthropic Computer Use Tool Documentation](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool) -- HIGH confidence, official API docs
-- [Windows-Use (CursorTouch) GitHub](https://github.com/CursorTouch/Windows-Use) -- MEDIUM confidence, open source implementation
-- [nut.js Element Inspector Plugin](https://nutjs.dev/plugins/element-inspector) -- MEDIUM confidence, official docs
-- [nut.js Element Inspection Blog](https://nutjs.dev/blog/element-inspection) -- MEDIUM confidence
-- [Microsoft UI Automation Overview](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-uiautomationoverview) -- HIGH confidence, official docs
-- [Apple AXUIElement Documentation](https://developer.apple.com/documentation/applicationservices/axuielement) -- HIGH confidence, official docs
-- [AT-SPI2 Architecture](https://gnome.pages.gitlab.gnome.org/at-spi2-core/devel-docs/architecture.html) -- HIGH confidence, official GNOME docs
-- [SetProcessDpiAwarenessContext (Microsoft)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext) -- HIGH confidence, official docs
-- [sharp Image Processing](https://sharp.pixelplumbing.com/api-resize/) -- HIGH confidence, official docs
-- [@bright-fish/node-ui-automation](https://github.com/bright-fish/node-ui-automation) -- LOW confidence, small package, unclear maintenance
-- [OmniParser V2 (Microsoft Research)](https://microsoft.github.io/OmniParser/) -- MEDIUM confidence, research project
-- [A11y-CUA Dataset (accessibility gap in CUAs)](https://arxiv.org/html/2602.09310) -- MEDIUM confidence, academic paper
-- [AXorcist (Swift AX wrapper)](https://github.com/steipete/AXorcist) -- MEDIUM confidence, open source
-- [pyatspi2 Examples](https://www.freedesktop.org/wiki/Accessibility/PyAtSpi2Example/) -- MEDIUM confidence, official wiki
+- [Apache Guacamole Manual v1.6.0 - User Interface](https://guacamole.apache.org/doc/gug/using-guacamole.html)
+- [Apache Guacamole - HTTP Header Authentication](https://guacamole.apache.org/doc/gug/header-auth.html)
+- [Apache Guacamole - Reverse Proxy](https://guacamole.apache.org/doc/gug/reverse-proxy.html)
+- [Apache Guacamole - Configuration](https://guacamole.apache.org/doc/gug/configuring-guacamole.html)
+- [KasmVNC - Features](https://kasm.com/kasmvnc)
+- [KasmVNC - GitHub](https://github.com/kasmtech/KasmVNC)
+- [KasmVNC - Client Side Documentation](https://kasmweb.com/kasmvnc/docs/master/clientside.html)
+- [KasmVNC - Configuration](https://www.kasmweb.com/kasmvnc/docs/latest/configuration.html)
+- [KasmVNC - Video Rendering Options](https://github.com/kasmtech/KasmVNC/wiki/Video-Rendering-Options)
+- [noVNC - Embedding Documentation](https://novnc.com/noVNC/docs/EMBEDDING.html)
+- [MDN - Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API)
+- [web.dev - Unblocking Clipboard Access](https://web.dev/articles/async-clipboard)
+- [Microsoft - RDP Bandwidth Requirements](https://learn.microsoft.com/en-us/azure/virtual-desktop/rdp-bandwidth)
+- [Microsoft - Frame Rate Limited to 30 FPS](https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/frame-rate-limited-to-30-fps)
+- [Microsoft - Graphics Encoding over RDP](https://learn.microsoft.com/en-us/azure/virtual-desktop/graphics-encoding)
+- [Kasm VNC vs Other Linux VNC Tools](https://www.cendio.com/blog/kasm-vnc-alternatives/)
+- [Kasm Workspaces vs Apache Guacamole](https://symalon.com/en/kasm-workspaces-vs-apache-guacamole-a-comparison-of-open-source-remote-desktop-solutions/)
+- [noVNC Auto-reconnect Issue #799](https://github.com/novnc/noVNC/issues/799)
+- [LinuxServer.io - Webtop 2.0](https://www.linuxserver.io/blog/webtop-2-0-the-year-of-the-linux-desktop)
+
+---
+*Feature research for: Web-based remote desktop streaming (v18.0)*
+*Researched: 2026-03-25*
