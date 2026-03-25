@@ -87,4 +87,10 @@ export const httpOnlyPaths = [
 	// Computer use consent -- use HTTP for reliability
 	'ai.grantConsent',
 	'ai.denyConsent',
+	// Claude auth and provider management -- use HTTP to avoid WS connection dependency
+	'ai.setClaudeApiKey',
+	'ai.claudeStartLogin',
+	'ai.claudeSubmitCode',
+	'ai.claudeLogout',
+	'ai.setPrimaryProvider',
 ] as const
