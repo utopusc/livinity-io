@@ -278,15 +278,23 @@ main() {
 
     install_docker() {
         # Always ensure iptables-legacy even if Docker is already installed
-        # Docker requires iptables-legacy — nftables backend causes network creation failures
+        # Docker requires iptables-legacy — nftables backend causes DOCKER-ISOLATION-STAGE-2 errors
+        local switched_iptables=false
         if iptables --version 2>/dev/null | grep -q nf_tables; then
             info "Switching to iptables-legacy for Docker compatibility..."
             update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
             update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
-            # Restart Docker if it's running to pick up the new iptables
-            if systemctl is-active --quiet docker 2>/dev/null; then
+            switched_iptables=true
+        fi
+
+        # Also check: Docker may have stale iptables chains even with legacy mode
+        # If DOCKER-ISOLATION-STAGE-2 chain doesn't exist, Docker needs restart
+        if command -v docker &>/dev/null && systemctl is-active --quiet docker 2>/dev/null; then
+            if ! iptables -L DOCKER-ISOLATION-STAGE-2 &>/dev/null || [ "$switched_iptables" = true ]; then
+                info "Restarting Docker to rebuild iptables chains..."
                 systemctl restart docker
-                info "Docker restarted with iptables-legacy"
+                sleep 3
+                ok "Docker restarted with working iptables chains"
             fi
         fi
 
@@ -314,15 +322,6 @@ main() {
         apt-get update -qq
         apt-get install -y -qq docker-ce docker-ce-cli containerd.io \
             docker-buildx-plugin docker-compose-plugin
-
-        # Switch to iptables-legacy if nftables is active (Ubuntu 22.04+/24.04)
-        # Docker requires iptables-legacy — nftables backend causes DOCKER-ISOLATION-STAGE-2 errors
-        if iptables --version 2>/dev/null | grep -q nf_tables; then
-            info "Switching to iptables-legacy for Docker compatibility..."
-            update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
-            update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
-            ok "Switched to iptables-legacy"
-        fi
 
         systemctl enable docker
         systemctl start docker
