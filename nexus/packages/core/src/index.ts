@@ -566,47 +566,12 @@ Conversation:`;
   };
   processInboxQueue(); // Start the blocking listener
 
-  let isShuttingDown = false;
   const shutdown = () => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    logger.info('Shutting down — closing HTTP server and exiting...');
-
-    // Close HTTP server to release port
-    httpServer.close();
-
-    // Force exit in 1.5s — the ONLY reliable way to release the port quickly.
-    // Async cleanup (Redis, queues) is best-effort within this window.
-    // PM2 will SIGKILL after kill_timeout anyway, so this just makes it predictable.
-    setTimeout(() => process.exit(0), 1500).unref();
-
-    // Best-effort async cleanup (runs within the 1.5s window)
-    (async () => {
-      try {
-        inboxRedis.disconnect();
-        redisSub.disconnect();
-        voiceRedisSub.disconnect();
-        redisCircuitBreaker.destroy();
-        voiceGateway.stop();
-        wsGateway.stop();
-        heartbeatRunner.stop();
-        await cronWorker.close();
-        await cronQueue.close();
-        await memoryExtractionWorker.close();
-        await memoryExtractionQueue.close();
-        await multiAgentWorker.close();
-        await multiAgentQueue.close();
-        await channelManager.disconnectAll();
-        await mcpClientManager.stop();
-        await taskManager.cleanup();
-        await webhookManager.close();
-        await daemon.stop();
-        await redis.quit();
-        process.exit(0);
-      } catch {
-        // Cleanup failed — force exit timeout will handle it
-      }
-    })();
+    // Immediate exit — releases port instantly so PM2 restart works.
+    // Redis connections, queues, etc. have their own reconnect logic.
+    // PM2 manages process lifecycle — no need for graceful cleanup.
+    logger.info('Shutting down — immediate exit');
+    process.exit(0);
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
