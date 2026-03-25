@@ -203,7 +203,9 @@ Plans:
   1. Computer use system prompt instructs the AI to call screen_elements first and use element coordinates for clicking, with screenshots reserved for visual context and fallback
   2. When the AI needs to click a button that appears in the accessibility tree, it uses the element's center coordinates directly instead of analyzing the screenshot to guess pixel positions
   3. When the accessibility tree content has not changed since the last capture, the agent skips re-capturing a screenshot, reducing unnecessary vision API calls and latency
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 03-01-PLAN.md -- Rewrite AI prompt for accessibility-first hybrid mode + screenshot caching
 
 ## Progress
 
@@ -214,4 +216,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|-----------|----------------|--------|-----------|
 | 1. DPI Fix & Screenshot Pipeline | v17.0 | 1/1 | Complete | 2026-03-25 |
 | 2. Windows UIA Accessibility Tree | v17.0 | 0/1 | Not started | - |
-| 3. AI Prompt Optimization & Hybrid Mode | v17.0 | 0/? | Not started | - |
+| 3. AI Prompt Optimization & Hybrid Mode | v17.0 | 0/1 | Not started | - |
