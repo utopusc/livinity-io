@@ -179,7 +179,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v17
   4. AI system prompt explicitly states the coordinate space is logical pixels and includes the screenshot dimensions
 **Plans**: 1 plan
 Plans:
-- [ ] 01-01-PLAN.md -- Install sharp, fix screenshot resize + coordinate mapping, update AI prompt
+- [x] 01-01-PLAN.md -- Install sharp, fix screenshot resize + coordinate mapping, update AI prompt
 
 ### Phase 2: Windows UIA Accessibility Tree
 **Goal**: AI can query the Windows desktop for interactive UI elements and receive structured data with element names, types, and precise clickable coordinates

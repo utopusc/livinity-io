@@ -9,10 +9,10 @@ Requirements for precision computer use. Each maps to roadmap phases.
 
 ### Screenshot Pipeline (DPI Fix)
 
-- [ ] **DPI-01**: Agent resizes screenshots from physical to logical pixel dimensions using sharp before sending to AI
-- [ ] **DPI-02**: Screenshot coordinate metadata reports logical dimensions (monitor.width/height) not physical (image.width/height)
-- [ ] **DPI-03**: toScreenX/toScreenY uses 1:1 mapping after proper resize (no broken scaling logic)
-- [ ] **DPI-04**: AI system prompt clearly states coordinate space is logical pixels with explicit dimensions
+- [x] **DPI-01**: Agent resizes screenshots from physical to logical pixel dimensions using sharp before sending to AI
+- [x] **DPI-02**: Screenshot coordinate metadata reports logical dimensions (monitor.width/height) not physical (image.width/height)
+- [x] **DPI-03**: toScreenX/toScreenY uses 1:1 mapping after proper resize (no broken scaling logic)
+- [x] **DPI-04**: AI system prompt clearly states coordinate space is logical pixels with explicit dimensions
 
 ### Windows Accessibility Tree
 
@@ -60,10 +60,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DPI-01 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
-| DPI-02 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
-| DPI-03 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
-| DPI-04 | Phase 1: DPI Fix & Screenshot Pipeline | Pending |
+| DPI-01 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
+| DPI-02 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
+| DPI-03 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
+| DPI-04 | Phase 1: DPI Fix & Screenshot Pipeline | Complete |
 | UIA-01 | Phase 2: Windows UIA Accessibility Tree | Pending |
 | UIA-02 | Phase 2: Windows UIA Accessibility Tree | Pending |
 | UIA-03 | Phase 2: Windows UIA Accessibility Tree | Pending |

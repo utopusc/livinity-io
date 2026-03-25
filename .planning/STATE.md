@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v17.0
 milestone_name: Precision Computer Use
-status: ready_to_plan
-stopped_at: Roadmap created
-last_updated: "2026-03-25T08:00:00.000Z"
+status: unknown
+stopped_at: Completed 01-01-PLAN.md (DPI fix & screenshot pipeline)
+last_updated: "2026-03-25T09:08:42.045Z"
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Project State
@@ -20,16 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v17.0 -- Precision Computer Use
-**Current focus:** Phase 1 -- DPI Fix & Screenshot Pipeline
+**Current focus:** Phase 01 — dpi-fix-screenshot-pipeline
 
 ## Current Position
 
-Phase: 1 of 3 (DPI Fix & Screenshot Pipeline)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-25 -- Roadmap created with 3 phases, 12 requirements mapped
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 01 (dpi-fix-screenshot-pipeline) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -47,6 +43,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
+| Phase 01 P01 | 4min | 2 tasks | 4 files |
+
 ### Decisions
 
 - v17.0 uses --reset-phase-numbers, phases start at 1
@@ -56,6 +54,9 @@ Progress: [░░░░░░░░░░] 0%
 - Accessibility tree filtered to 50-100 interactive elements max
 - macOS/Linux accessibility deferred to future milestone (XPA-01, XPA-02, XPA-03)
 - node-screenshots pixel semantics need empirical verification on 150% DPI display
+- [Phase 01]: Used sharp JPEG input instead of raw BGRA to avoid color channel issues with node-screenshots
+- [Phase 01]: SCALE_TARGETS matched against logical dimensions (not physical) for aspect ratio comparison
+- [Phase 01]: Coordinate chain established: AI coords * (logical/target) = robotjs logical coords
 
 ### Pending Todos
 
@@ -67,6 +68,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-25
-Stopped at: Roadmap created, ready to plan Phase 1
+Last session: 2026-03-25T09:08:42.042Z
+Stopped at: Completed 01-01-PLAN.md (DPI fix & screenshot pipeline)
 Resume file: None
