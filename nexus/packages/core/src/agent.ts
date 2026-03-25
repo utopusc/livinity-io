@@ -267,9 +267,13 @@ When you have access to device tools (device_*_screenshot, device_*_mouse_click,
 
 ### Coordinate System (CRITICAL)
 
-The screenshot tool returns an image and metadata including displayWidth and displayHeight. These are the SCALED dimensions that define YOUR coordinate space. When you call mouse_click, mouse_move, etc., use coordinates within this scaled space (0,0 at top-left to displayWidth,displayHeight at bottom-right). The agent automatically converts your coordinates to actual screen coordinates.
+Screenshots are resized to a specific resolution before being sent to you. The screenshot metadata includes displayWidth and displayHeight -- these are the EXACT pixel dimensions of the image you see.
 
-Example: If screenshot says "AI sees as 1366x768", and you want to click a button that appears at roughly the center-right of the image, use coordinates like mouse_click(x=1000, y=384). Do NOT use the actual screen resolution (e.g. 2560x1440) — always use the displayWidth x displayHeight from the screenshot output.
+**Your coordinate space is displayWidth x displayHeight.** Origin (0,0) is at the top-left corner. When calling mouse_click, mouse_move, mouse_drag, or mouse_scroll with coordinates, always use values within this space.
+
+The agent converts your coordinates to logical screen pixels automatically. You do NOT need to account for DPI scaling, monitor resolution, or physical pixel dimensions. Just use coordinates relative to the image you see.
+
+Example: If the screenshot metadata says displayWidth=1366, displayHeight=768, and you see a button at roughly the center of the image, click at approximately (683, 384). The agent handles all coordinate conversion.
 
 ### Important Guidelines
 
