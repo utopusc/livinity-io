@@ -458,26 +458,42 @@ export default class AiModule {
 						if (/^device_.*_(mouse_|keyboard_)/.test(rawName)) {
 							const currentStatus = this.chatStatus.get(conversationId)
 							if (currentStatus && !currentStatus.computerUseConsent) {
-								// Set consentRequired flag -- frontend will show dialog
-								this.chatStatus.set(conversationId, {
-									...currentStatus,
-									computerUse: true,
-									status: 'Waiting for consent...',
-								})
-								// Wait for consent with timeout (poll every 200ms, max 60s)
-								const consentStart = Date.now()
-								while (Date.now() - consentStart < 60_000) {
-									await new Promise(r => setTimeout(r, 200))
+								// Check auto-consent setting
+								let autoConsent = false
+								try {
+									const val = await this.redis.get('nexus:config:computer_use_auto_consent')
+									autoConsent = val === 'true' || val === '1'
+								} catch {}
+
+								if (autoConsent) {
+									// Auto-grant consent without showing dialog
+									this.chatStatus.set(conversationId, {
+										...currentStatus,
+										computerUse: true,
+										computerUseConsent: true,
+									})
+								} else {
+									// Set consentRequired flag -- frontend will show dialog
+									this.chatStatus.set(conversationId, {
+										...currentStatus,
+										computerUse: true,
+										status: 'Waiting for consent...',
+									})
+									// Wait for consent with timeout (poll every 200ms, max 60s)
+									const consentStart = Date.now()
+									while (Date.now() - consentStart < 60_000) {
+										await new Promise(r => setTimeout(r, 200))
+										const latest = this.chatStatus.get(conversationId)
+										if (!latest) break // Session was cancelled
+										if (latest.computerUseConsent) break // Consent granted
+									}
 									const latest = this.chatStatus.get(conversationId)
-									if (!latest) break // Session was cancelled
-									if (latest.computerUseConsent) break // Consent granted
-								}
-								const latest = this.chatStatus.get(conversationId)
-								if (!latest?.computerUseConsent) {
-									// Consent not granted -- abort the session
-									const ctrl = this.activeStreams.get(conversationId)
-									if (ctrl) ctrl.abort()
-									break // Exit the SSE read loop
+									if (!latest?.computerUseConsent) {
+										// Consent not granted -- abort the session
+										const ctrl = this.activeStreams.get(conversationId)
+										if (ctrl) ctrl.abort()
+										break // Exit the SSE read loop
+									}
 								}
 							}
 						}

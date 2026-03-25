@@ -93,4 +93,5 @@ export const httpOnlyPaths = [
 	'ai.claudeSubmitCode',
 	'ai.claudeLogout',
 	'ai.setPrimaryProvider',
+	'ai.setComputerUseAutoConsent',
 ] as const

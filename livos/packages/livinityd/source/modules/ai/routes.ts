@@ -1856,4 +1856,26 @@ export default router({
 			return await response.json() as {success: boolean}
 		}),
 
+	// ── Computer Use Consent Settings ──────────────────────────
+
+	/** Get computer use auto-consent setting */
+	getComputerUseAutoConsent: privateProcedure.query(async ({ctx}) => {
+		try {
+			const redis = ctx.livinityd.ai.redis
+			const val = await redis.get('nexus:config:computer_use_auto_consent')
+			return {autoConsent: val === 'true' || val === '1'}
+		} catch {
+			return {autoConsent: false}
+		}
+	}),
+
+	/** Set computer use auto-consent (skip permission dialog) */
+	setComputerUseAutoConsent: privateProcedure
+		.input(z.object({enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => {
+			const redis = ctx.livinityd.ai.redis
+			await redis.set('nexus:config:computer_use_auto_consent', input.enabled ? 'true' : 'false')
+			return {ok: true, autoConsent: input.enabled}
+		}),
+
 })

@@ -104,6 +104,7 @@ const VoiceContentLazy = React.lazy(() =>
 const UsersSectionLazy = React.lazy(() =>
 	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
 )
+const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,7 +156,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
 	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'Kimi account & model', adminOnly: true},
+	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
 	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi', adminOnly: true},
@@ -348,7 +349,7 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 		case '2fa':
 			return <TwoFaSection />
 		case 'ai-config':
-			return <AiConfigSection />
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AiConfigLazy /></Suspense>
 		case 'nexus-config':
 			return <NexusConfigSection />
 		case 'integrations':
