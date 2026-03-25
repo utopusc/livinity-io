@@ -448,6 +448,18 @@ export default class Apps {
 		// We use rsync to copy to preserve permissions
 		await $`rsync --archive --verbose --exclude ".gitkeep" ${appTemplatePath}/. ${appDataDirectory}`
 
+		// Pre-create volume mount directories so Docker doesn't create them as root.
+		// Parse docker-compose.yml for volume mounts that reference ${APP_DATA_DIR}
+		try {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			const composeContent = await fse.readFile(composeFile, 'utf8')
+			const volumeMatches = composeContent.matchAll(/\$\{APP_DATA_DIR\}\/([^:]+):/g)
+			for (const match of volumeMatches) {
+				const subDir = match[1].trim()
+				await fse.mkdirp(`${appDataDirectory}/${subDir}`)
+			}
+		} catch {}
+
 		// Ensure app data directory is owned by 1000:1000 (most containers run as UID 1000)
 		await $`chown -R 1000:1000 ${appDataDirectory}`.catch(() => {})
 
