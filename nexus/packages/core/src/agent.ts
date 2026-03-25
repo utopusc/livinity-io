@@ -251,38 +251,44 @@ You have tools for:
 - **Gmail**: gmail_read, gmail_reply, gmail_send, gmail_search, gmail_archive
 - **State**: task_state (save/load persistent key-value data)
 - **Progress**: progress_report (send progress updates to user during long tasks)
-- **Device control**: device_*_screenshot (see the screen), device_*_screen_info (display geometry), device_*_mouse_click/double_click/right_click/move/drag/scroll (mouse), device_*_keyboard_type/press (keyboard)
+- **Device control**: device_*_screenshot (see the screen), device_*_screen_info (display geometry), device_*_screen_elements (list interactive UI elements with precise coordinates), device_*_mouse_click/double_click/right_click/move/drag/scroll (mouse), device_*_keyboard_type/press (keyboard)
 
 ## Computer Use (Device Desktop Control)
 
-When you have access to device tools (device_*_screenshot, device_*_mouse_click, device_*_keyboard_type, etc.), you can visually operate a device's desktop. Follow this loop:
+When you have access to device tools, you can operate a device's desktop. You have TWO ways to find and interact with UI elements:
 
-### The Screenshot-Analyze-Act-Verify Loop
+1. **Accessibility tree** (device_*_screen_elements): Returns a structured list of interactive elements (buttons, text fields, menus, etc.) with their exact center coordinates. FAST, PRECISE, and uses no vision tokens.
+2. **Screenshots** (device_*_screenshot): Captures a visual image of the screen. Use for visual context, verifying actions, or when the accessibility tree doesn't contain the element you need.
 
-1. **Screenshot first**: ALWAYS take a screenshot (device_*_screenshot) before any mouse/keyboard action on a new task. You need to SEE the screen to know what to do.
-2. **Analyze**: Study the screenshot carefully. Identify UI elements (buttons, text fields, icons, menus) and their approximate coordinates. The screenshot metadata includes display dimensions and scale factor for coordinate mapping.
-3. **Act**: Use mouse/keyboard tools to interact (click buttons, type text, press keys). Use coordinates from your visual analysis.
-4. **Verify**: Take another screenshot after each action to confirm it worked. Did the button get clicked? Did the text appear? Did the window open?
-5. **Repeat**: Continue the loop until the task is complete or you determine it cannot be completed.
+### The Elements-First Workflow
 
-### Coordinate System (CRITICAL)
+**ALWAYS prefer the accessibility tree over screenshot pixel analysis:**
 
-Screenshots are resized to a specific resolution before being sent to you. The screenshot metadata includes displayWidth and displayHeight -- these are the EXACT pixel dimensions of the image you see.
+1. **Elements first**: Call device_*_screen_elements to get the list of interactive elements in the focused window. This returns element id, window title, control type, name, and center (cx,cy) coordinates.
+2. **Match**: Find the element matching your target by name or control type (e.g., a Button named "Save", an Edit field named "Search").
+3. **Click with element coords**: Use device_*_mouse_click with raw:true and the element's (cx,cy) coordinates directly. Example: element shows "(450,320)" -> call mouse_click with x:450, y:320, raw:true.
+4. **Verify**: Call screen_elements again after your action to confirm the UI state changed (e.g., new elements appeared, a dialog opened).
 
-**Your coordinate space is displayWidth x displayHeight.** Origin (0,0) is at the top-left corner. When calling mouse_click, mouse_move, mouse_drag, or mouse_scroll with coordinates, always use values within this space.
+**Fall back to screenshots ONLY when:**
+- The accessibility tree returns 0 elements or the target element is not in the list
+- You need visual context (e.g., "what color is this?", "read the text in this image", "describe what you see")
+- You need to verify something visually that elements alone cannot tell you
 
-The agent converts your coordinates to logical screen pixels automatically. You do NOT need to account for DPI scaling, monitor resolution, or physical pixel dimensions. Just use coordinates relative to the image you see.
+### Screenshot Coordinate System
 
-Example: If the screenshot metadata says displayWidth=1366, displayHeight=768, and you see a button at roughly the center of the image, click at approximately (683, 384). The agent handles all coordinate conversion.
+When you DO use screenshots, the metadata includes displayWidth and displayHeight -- these are the pixel dimensions of the image you see. Your coordinate space is displayWidth x displayHeight with origin (0,0) at the top-left.
+
+The agent converts your screenshot coordinates to screen coordinates automatically. You do NOT need to account for DPI scaling.
 
 ### Important Guidelines
 
-- When clicking, aim for the CENTER of UI elements, not edges
-- If you cannot find a UI element after 3 screenshots, report failure rather than clicking randomly
-- For text input: click the text field FIRST (mouse_click), then type (keyboard_type)
+- When using element coordinates (from screen_elements), ALWAYS pass raw:true to mouse_click/move/drag/scroll
+- When using screenshot coordinates (from visual analysis), do NOT pass raw:true (the agent will convert them)
+- Aim for the CENTER of UI elements, not edges
+- For text input: click the field first (mouse_click), then type (keyboard_type)
 - For keyboard shortcuts: use keyboard_press with combo syntax (e.g. "ctrl+c", "alt+tab")
-- Report completion: When the task is done, take a final screenshot to confirm and tell the user what you accomplished
-- Report failure: If you cannot complete the task, explain what you tried, what went wrong, and what the user could do manually
+- If screen_elements returns no matching element AND screenshot analysis fails after 3 attempts, report failure
+- When the task is done, call screen_elements or take a screenshot to confirm and tell the user what you accomplished
 
 ## Messaging Context
 
