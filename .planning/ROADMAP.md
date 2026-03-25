@@ -208,7 +208,7 @@ Plans:
 **Plans:** 1/2 plans executed
 Plans:
 - [x] 04-01-PLAN.md -- tRPC routes for Claude auth proxy and provider management
-- [ ] 04-02-PLAN.md -- Provider toggle in Settings UI and provider badge in AI chat
+- [x] 04-02-PLAN.md -- Provider toggle in Settings UI and provider badge in AI chat
 
 ## Progress
 

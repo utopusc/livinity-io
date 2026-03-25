@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v16.0
 milestone_name: Multi-Provider AI
 status: unknown
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-25T06:18:04.352Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-25T06:24:32.662Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 2 of 2
 | Phase 03 P01 | 2min | 2 tasks | 2 files |
 | Phase 03 P02 | 3min | 2 tasks | 3 files |
 | Phase 04 P01 | 2min | 2 tasks | 2 files |
+| Phase 04 P02 | 4min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -69,6 +70,9 @@ Plan: 2 of 2
 - [Phase 03]: PUT /api/provider/primary writes to both individual Redis key and config blob for consistency
 - [Phase 04]: Claude auth routes follow exact same fetch-proxy pattern as Kimi auth routes for consistency
 - [Phase 04]: Query routes (getClaudeStatus, getProviders) omitted from httpOnlyPaths — work fine over WebSocket
+- [Phase 04]: Claude auth offers both API key and OAuth PKCE as parallel options
+- [Phase 04]: Provider badge in chat uses 30s refetch interval for responsiveness
+- [Phase 04]: Active Model section dynamically reflects selected provider name and description
 
 ### Pending Todos
 
@@ -80,6 +84,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-25T06:18:04.350Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-25T06:24:32.660Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
