@@ -489,6 +489,13 @@ start_app() {
 
   execute_hook "${app}" "pre-start"
 
+  # Ensure app data directory is owned by 1000:1000 (most containers run as UID 1000)
+  # This prevents EACCES errors when containers try to write to mounted volumes
+  local app_data="${LIVINITY_ROOT}/app-data/${app}"
+  if [[ -d "${app_data}" ]]; then
+    chown -R 1000:1000 "${app_data}" 2>/dev/null || true
+  fi
+
   # Start all the app's containers
   compose "${app}" up --detach --build
 
