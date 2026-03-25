@@ -63,8 +63,8 @@ export default function AiConfigPage() {
 
 	const claudeStartLoginMutation = trpcReact.ai.claudeStartLogin.useMutation({
 		onSuccess: (data: any) => {
-			if (data?.verificationUrl) {
-				setClaudeOAuthData({verificationUrl: data.verificationUrl})
+			if (data?.url || data?.verificationUrl) {
+				setClaudeOAuthData({verificationUrl: data.url || data.verificationUrl})
 			}
 		},
 	})
@@ -158,7 +158,7 @@ export default function AiConfigPage() {
 					<div className='flex gap-3'>
 						{(['kimi', 'claude'] as const).map((provider) => {
 							const isActive = primaryProvider === provider
-							const providerData = providersQ.data?.providers?.find((p) => p.name === provider)
+							const providerData = providersQ.data?.providers?.find((p) => p.id === provider)
 							const isAvailable = providerData?.available ?? false
 							return (
 								<button
