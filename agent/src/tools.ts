@@ -6,6 +6,7 @@ import { executeScreenshot } from './tools/screenshot.js';
 import { executeScreenInfo } from './tools/screen-info.js';
 import { executeMouseClick, executeMouseDoubleClick, executeMouseRightClick, executeMouseMove, executeMouseDrag, executeMouseScroll } from './tools/mouse.js';
 import { executeKeyboardType, executeKeyboardPress } from './tools/keyboard.js';
+import { executeScreenElements } from './tools/screen-elements.js';
 
 export const TOOL_NAMES = [
   'shell',
@@ -18,6 +19,7 @@ export const TOOL_NAMES = [
   'system_info',
   'screenshot',
   'screen_info',
+  'screen_elements',
   // Phase 5: Mouse & Keyboard tools
   'mouse_click',
   'mouse_double_click',
@@ -56,6 +58,8 @@ export async function executeTool(
       return executeScreenshot(params);
     case 'screen_info':
       return executeScreenInfo(params);
+    case 'screen_elements':
+      return executeScreenElements(params);
     case 'mouse_click':
       return executeMouseClick(params);
     case 'mouse_double_click':

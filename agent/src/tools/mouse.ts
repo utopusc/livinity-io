@@ -6,8 +6,20 @@
  */
 
 import type * as RobotJS from '@jitsi/robotjs';
+import { logicalScreenW, aiTargetW, logicalScreenH, aiTargetH } from './screenshot.js';
 
 type ToolResult = { success: boolean; output: string; error?: string; data?: unknown };
+
+// Convert AI target coordinates to logical screen coordinates
+// raw=true means coords are already in logical space (from screen_elements)
+function toScreenX(x: number, raw: boolean): number {
+  if (raw || !aiTargetW || !logicalScreenW) return Math.round(x);
+  return Math.round(x * (logicalScreenW / aiTargetW));
+}
+function toScreenY(y: number, raw: boolean): number {
+  if (raw || !aiTargetH || !logicalScreenH) return Math.round(y);
+  return Math.round(y * (logicalScreenH / aiTargetH));
+}
 
 let robot: typeof RobotJS | null = null;
 let loadError: string | null = null;
@@ -45,15 +57,18 @@ export async function executeMouseClick(
   const robotErr = checkRobot();
   if (robotErr) return robotErr;
 
-  const x = params.x as number;
-  const y = params.y as number;
-  const coordErr = validateCoords(x, y);
+  const rawX = params.x as number;
+  const rawY = params.y as number;
+  const coordErr = validateCoords(rawX, rawY);
   if (coordErr) return coordErr;
+  const raw = !!params.raw;
+  const x = toScreenX(rawX, raw);
+  const y = toScreenY(rawY, raw);
 
   try {
     robot!.moveMouse(x, y);
     robot!.mouseClick('left');
-    return { success: true, output: `Left-clicked at (${x}, ${y})`, data: { x, y, button: 'left' } };
+    return { success: true, output: `Left-clicked at (${x}, ${y})${raw ? ' [raw/element coords]' : ` [AI coord: ${rawX}, ${rawY}]`}`, data: { x, y, button: 'left', raw } };
   } catch (err: unknown) {
     return { success: false, output: '', error: 'Mouse click failed: ' + (err instanceof Error ? err.message : String(err)) };
   }
@@ -66,15 +81,18 @@ export async function executeMouseDoubleClick(
   const robotErr = checkRobot();
   if (robotErr) return robotErr;
 
-  const x = params.x as number;
-  const y = params.y as number;
-  const coordErr = validateCoords(x, y);
+  const rawX = params.x as number;
+  const rawY = params.y as number;
+  const coordErr = validateCoords(rawX, rawY);
   if (coordErr) return coordErr;
+  const raw = !!params.raw;
+  const x = toScreenX(rawX, raw);
+  const y = toScreenY(rawY, raw);
 
   try {
     robot!.moveMouse(x, y);
     robot!.mouseClick('left', true);
-    return { success: true, output: `Double-clicked at (${x}, ${y})`, data: { x, y, button: 'double' } };
+    return { success: true, output: `Double-clicked at (${x}, ${y})${raw ? ' [raw/element coords]' : ''}`, data: { x, y, button: 'double', raw } };
   } catch (err: unknown) {
     return { success: false, output: '', error: 'Mouse double-click failed: ' + (err instanceof Error ? err.message : String(err)) };
   }
@@ -87,15 +105,18 @@ export async function executeMouseRightClick(
   const robotErr = checkRobot();
   if (robotErr) return robotErr;
 
-  const x = params.x as number;
-  const y = params.y as number;
-  const coordErr = validateCoords(x, y);
+  const rawX = params.x as number;
+  const rawY = params.y as number;
+  const coordErr = validateCoords(rawX, rawY);
   if (coordErr) return coordErr;
+  const raw = !!params.raw;
+  const x = toScreenX(rawX, raw);
+  const y = toScreenY(rawY, raw);
 
   try {
     robot!.moveMouse(x, y);
     robot!.mouseClick('right');
-    return { success: true, output: `Right-clicked at (${x}, ${y})`, data: { x, y, button: 'right' } };
+    return { success: true, output: `Right-clicked at (${x}, ${y})${raw ? ' [raw/element coords]' : ''}`, data: { x, y, button: 'right', raw } };
   } catch (err: unknown) {
     return { success: false, output: '', error: 'Mouse right-click failed: ' + (err instanceof Error ? err.message : String(err)) };
   }
@@ -108,14 +129,17 @@ export async function executeMouseMove(
   const robotErr = checkRobot();
   if (robotErr) return robotErr;
 
-  const x = params.x as number;
-  const y = params.y as number;
-  const coordErr = validateCoords(x, y);
+  const rawX = params.x as number;
+  const rawY = params.y as number;
+  const coordErr = validateCoords(rawX, rawY);
   if (coordErr) return coordErr;
+  const raw = !!params.raw;
+  const x = toScreenX(rawX, raw);
+  const y = toScreenY(rawY, raw);
 
   try {
     robot!.moveMouse(x, y);
-    return { success: true, output: `Moved mouse to (${x}, ${y})`, data: { x, y } };
+    return { success: true, output: `Moved mouse to (${x}, ${y})${raw ? ' [raw/element coords]' : ''}`, data: { x, y, raw } };
   } catch (err: unknown) {
     return { success: false, output: '', error: 'Mouse move failed: ' + (err instanceof Error ? err.message : String(err)) };
   }
@@ -128,18 +152,24 @@ export async function executeMouseDrag(
   const robotErr = checkRobot();
   if (robotErr) return robotErr;
 
-  const fromX = params.fromX as number;
-  const fromY = params.fromY as number;
-  const toX = params.toX as number;
-  const toY = params.toY as number;
+  const rawFromX = params.fromX as number;
+  const rawFromY = params.fromY as number;
+  const rawToX = params.toX as number;
+  const rawToY = params.toY as number;
 
   if (
-    typeof fromX !== 'number' || typeof fromY !== 'number' ||
-    typeof toX !== 'number' || typeof toY !== 'number' ||
-    fromX < 0 || fromY < 0 || toX < 0 || toY < 0
+    typeof rawFromX !== 'number' || typeof rawFromY !== 'number' ||
+    typeof rawToX !== 'number' || typeof rawToY !== 'number' ||
+    rawFromX < 0 || rawFromY < 0 || rawToX < 0 || rawToY < 0
   ) {
     return { success: false, output: '', error: 'Parameters fromX, fromY, toX, toY are required numbers >= 0' };
   }
+
+  const raw = !!params.raw;
+  const fromX = toScreenX(rawFromX, raw);
+  const fromY = toScreenY(rawFromY, raw);
+  const toX = toScreenX(rawToX, raw);
+  const toY = toScreenY(rawToY, raw);
 
   try {
     robot!.moveMouse(fromX, fromY);
@@ -147,12 +177,12 @@ export async function executeMouseDrag(
     try {
       robot!.moveMouse(toX, toY);
     } finally {
-      robot!.mouseToggle('up'); // ALWAYS release, even on error
+      robot!.mouseToggle('up');
     }
     return {
       success: true,
-      output: `Dragged from (${fromX}, ${fromY}) to (${toX}, ${toY})`,
-      data: { fromX, fromY, toX, toY },
+      output: `Dragged from (${fromX}, ${fromY}) to (${toX}, ${toY})${raw ? ' [raw/element coords]' : ''}`,
+      data: { fromX, fromY, toX, toY, raw },
     };
   } catch (err: unknown) {
     return { success: false, output: '', error: 'Drag failed: ' + (err instanceof Error ? err.message : String(err)) };
@@ -176,12 +206,13 @@ export async function executeMouseScroll(
   const y = params.y as number | undefined;
 
   try {
+    const raw = !!params.raw;
     // Move to position if coordinates given
     if (typeof x === 'number' && typeof y === 'number') {
       if (x < 0 || y < 0) {
         return { success: false, output: '', error: 'Coordinates x and y must be >= 0' };
       }
-      robot!.moveMouse(x, y);
+      robot!.moveMouse(toScreenX(x, raw), toScreenY(y, raw));
     }
 
     const scrollY = direction === 'up' ? amount : -amount;
