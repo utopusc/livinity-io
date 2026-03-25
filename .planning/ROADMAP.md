@@ -205,9 +205,9 @@ Plans:
   1. Settings page has a provider selection control (toggle or dropdown) showing Claude and Kimi with their authentication status
   2. Active provider is visible in the AI chat interface (indicator showing whether Claude or Kimi is responding)
   3. After switching providers in Settings, the next new conversation uses the newly selected provider
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 04-01-PLAN.md -- tRPC routes for Claude auth proxy and provider management
+- [x] 04-01-PLAN.md -- tRPC routes for Claude auth proxy and provider management
 - [ ] 04-02-PLAN.md -- Provider toggle in Settings UI and provider badge in AI chat
 
 ## Progress
@@ -220,4 +220,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Provider Restore & Registration | v16.0 | 0/1 | Planning complete | - |
 | 2. Feature Parity | v16.0 | 0/1 | Planning complete | - |
 | 3. Auth & Config | v16.0 | 2/2 | Complete   | 2026-03-25 |
-| 4. Settings UI & Integration | v16.0 | 0/2 | Planning complete | - |
+| 4. Settings UI & Integration | v16.0 | 1/2 | In Progress|  |

@@ -29,9 +29,9 @@ Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
 
 ### User Interface
 
-- [ ] **UI-01**: Settings'te provider secim toggle'i bulunur
+- [x] **UI-01**: Settings'te provider secim toggle'i bulunur
 - [ ] **UI-02**: Aktif provider durumu UI'da gorunur
-- [ ] **UI-03**: Provider degistirildiginde yeni konusmalar secili provider'i kullanir
+- [x] **UI-03**: Provider degistirildiginde yeni konusmalar secili provider'i kullanir
 
 ## Future Requirements
 
@@ -67,9 +67,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FEAT-02 | Phase 2 | Complete |
 | FEAT-03 | Phase 2 | Complete |
 | FEAT-04 | Phase 2 | Complete |
-| UI-01 | Phase 4 | Pending |
+| UI-01 | Phase 4 | Complete |
 | UI-02 | Phase 4 | Pending |
-| UI-03 | Phase 4 | Pending |
+| UI-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v16.0 requirements: 14 total

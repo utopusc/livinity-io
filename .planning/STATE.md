@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v16.0
 milestone_name: Multi-Provider AI
 status: unknown
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-25T06:05:08.823Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-25T06:18:04.352Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v16.0 -- Multi-Provider AI
-**Current focus:** Phase 03 — auth-config
+**Current focus:** Phase 04 — settings-ui-integration
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
+Phase: 04 (settings-ui-integration) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: Not started
 | Phase 02-feature-parity P01 | 2min | 2 tasks | 2 files |
 | Phase 03 P01 | 2min | 2 tasks | 2 files |
 | Phase 03 P02 | 3min | 2 tasks | 3 files |
+| Phase 04 P01 | 2min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -66,6 +67,8 @@ Plan: Not started
 - [Phase 03]: Dual Redis read strategy: individual key tried first, then NexusConfig JSON blob fallback
 - [Phase 03]: Fire-and-forget init(): default fallback order works until async Redis load completes
 - [Phase 03]: PUT /api/provider/primary writes to both individual Redis key and config blob for consistency
+- [Phase 04]: Claude auth routes follow exact same fetch-proxy pattern as Kimi auth routes for consistency
+- [Phase 04]: Query routes (getClaudeStatus, getProviders) omitted from httpOnlyPaths — work fine over WebSocket
 
 ### Pending Todos
 
@@ -77,6 +80,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-25T05:59:47.037Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-25T06:18:04.350Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None
