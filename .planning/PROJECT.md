@@ -51,18 +51,32 @@ Key validated capabilities:
   - ✓ Enriched audit logging with coordinates/text for all computer use actions
   - ✓ 60-second inactivity auto-timeout
 
-## Current Milestone: None (v15.0 complete)
+## Current Milestone: v16.0 Multi-Provider AI
 
-**Goal:** Planning next milestone.
+**Goal:** Add Claude (Anthropic) as a second AI provider alongside Kimi, with a settings toggle to switch between them.
+
+**Target features:**
+- Restore ClaudeProvider from git history (467 lines, fully functional)
+- Re-add `@anthropic-ai/sdk` package dependency
+- Register Claude in ProviderManager alongside Kimi (fallback support)
+- Claude auth endpoints (API key + optional OAuth PKCE)
+- Provider selection config (`primary: 'claude' | 'kimi'`)
+- Provider toggle in Settings UI
+- Both providers support: streaming, tool calling, vision, model tiers
 
 ### Active
 
-(None — defining next milestone)
+- [ ] Restore ClaudeProvider and register in ProviderManager
+- [ ] Add `@anthropic-ai/sdk` dependency
+- [ ] Claude authentication (API key + OAuth PKCE)
+- [ ] Provider selection in config schema
+- [ ] Provider toggle in Settings UI
+- [ ] Streaming, tool calling, vision support for both providers
+- [ ] Model tier mapping (haiku/sonnet/opus)
 
 ### Out of Scope
 
 - Mobile app — web-first approach, mobile later
-- Self-hosted LLM support — Kimi Code only for now
 - Payment/billing system — deferred (Stripe/Lemonsqueezy TBD)
 - Dark theme for livinity.io — light/premium theme only
 - Multi-region tunnel relay — single relay (Server5) for now
@@ -74,6 +88,10 @@ Key validated capabilities:
 - Multi-device orchestration — future
 - Per-app computer use permissions — v15.1 (all-or-nothing for now)
 - Browser-only computer use mode — full desktop for now
+- Multi-provider simultaneous use — one provider at a time
+- OpenAI/GPT support — only Claude + Kimi for now
+- Per-conversation provider switching — global setting only
+- Provider-specific tool formats in UI — abstracted away
 
 ## Context
 
@@ -139,4 +157,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after v15.0 milestone (AI Computer Use)*
+*Last updated: 2026-03-24 after v16.0 milestone start (Multi-Provider AI)*
