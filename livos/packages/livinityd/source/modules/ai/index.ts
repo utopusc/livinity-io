@@ -540,6 +540,7 @@ export default class AiModule {
 						const toolName = formatToolName(rawName)
 						const prev = this.chatStatus.get(conversationId)
 						this.chatStatus.set(conversationId, {
+							...prev,
 							status: 'Processing result...',
 							tool: toolName,
 							steps: prev?.steps ?? [],
