@@ -50,29 +50,23 @@ Key validated capabilities:
   - ✓ Emergency stop: 3x Escape hotkey → full protocol chain → session abort
   - ✓ Enriched audit logging with coordinates/text for all computer use actions
   - ✓ 60-second inactivity auto-timeout
+- ✓ Multi-Provider AI — v16.0
+  - ✓ ClaudeProvider restored (467 lines) with @anthropic-ai/sdk
+  - ✓ Dual provider: Claude + Kimi in ProviderManager with config-driven fallback
+  - ✓ Native tool calling, streaming, vision/multimodal for both providers
+  - ✓ Model tier mapping: haiku/sonnet/opus (Claude) + kimi-for-coding (Kimi)
+  - ✓ Claude auth: API key input + OAuth PKCE, Redis-backed storage
+  - ✓ Provider toggle in Settings UI with per-provider auth cards
+  - ✓ Active provider badge in AI chat interface
+  - ✓ Config-driven primary_provider with automatic fallback on failure
 
-## Current Milestone: v16.0 Multi-Provider AI
+## Current Milestone: None (v16.0 complete)
 
-**Goal:** Add Claude (Anthropic) as a second AI provider alongside Kimi, with a settings toggle to switch between them.
-
-**Target features:**
-- Restore ClaudeProvider from git history (467 lines, fully functional)
-- Re-add `@anthropic-ai/sdk` package dependency
-- Register Claude in ProviderManager alongside Kimi (fallback support)
-- Claude auth endpoints (API key + optional OAuth PKCE)
-- Provider selection config (`primary: 'claude' | 'kimi'`)
-- Provider toggle in Settings UI
-- Both providers support: streaming, tool calling, vision, model tiers
+**Goal:** Planning next milestone.
 
 ### Active
 
-- [ ] Restore ClaudeProvider and register in ProviderManager
-- [ ] Add `@anthropic-ai/sdk` dependency
-- [ ] Claude authentication (API key + OAuth PKCE)
-- [ ] Provider selection in config schema
-- [ ] Provider toggle in Settings UI
-- [ ] Streaming, tool calling, vision support for both providers
-- [ ] Model tier mapping (haiku/sonnet/opus)
+(None — defining next milestone)
 
 ### Out of Scope
 
@@ -86,7 +80,7 @@ Key validated capabilities:
 - Per-device permission matrix — future (all-or-nothing for now)
 - Clipboard sync as AI tool — future
 - Multi-device orchestration — future
-- Per-app computer use permissions — v15.1 (all-or-nothing for now)
+- Per-app computer use permissions — future (all-or-nothing for now)
 - Browser-only computer use mode — full desktop for now
 - Multi-provider simultaneous use — one provider at a time
 - OpenAI/GPT support — only Claude + Kimi for now
@@ -95,15 +89,14 @@ Key validated capabilities:
 
 ## Context
 
-**Current State (post v14.1):**
+**Current State (post v16.0):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
 - Portainer-level Docker management: container CRUD, exec, stacks, events, engine info
 - Remote PC Control Agent: cross-platform agent binary, OAuth device flow, 9 AI tools, My Devices UI
-- Agent architecture: agent → relay /device/connect → DeviceBridge → Nexus proxy tools
-- Agent Installers: native .exe/.dmg/.deb, web setup wizard, system tray, auto-start, download page
-- Existing agent tools: shell, files (list/read/write/delete/rename), processes, screenshot, system info
+- AI Computer Use: autonomous screenshot→analyze→act loop, live monitoring, emergency stop
+- **Multi-Provider AI: Claude + Kimi dual provider with Settings toggle, config-driven fallback, API key + OAuth PKCE auth**
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -138,6 +131,9 @@ Key validated capabilities:
 | Proxy tools in ToolRegistry (not MCP) | Simpler than MCP per device, uses existing ToolRegistry | ✓ Good |
 | Redis for ephemeral device state | Fits transient connection data, PostgreSQL only for persistent metadata | ✓ Good |
 | nut.js for computer use automation | TypeScript native, cross-platform mouse+keyboard, active maintenance | — Pending |
+| Restore ClaudeProvider from git (not rewrite) | 467 lines already working, agent loop uses Anthropic format natively | ✓ Good |
+| Config-driven provider fallback | Redis primary_provider + ProviderManager.init() on startup | ✓ Good |
+| API key + OAuth PKCE dual auth for Claude | Flexibility: API key for quick setup, OAuth for subscription users | ✓ Good |
 
 ## Evolution
 
@@ -157,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after v16.0 milestone start (Multi-Provider AI)*
+*Last updated: 2026-03-25 after v16.0 milestone (Multi-Provider AI)*

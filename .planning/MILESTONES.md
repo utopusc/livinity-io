@@ -1,5 +1,20 @@
 # Milestones
 
+## v16.0 Multi-Provider AI (Shipped: 2026-03-25)
+
+**Phases completed:** 4 phases, 6 plans, 12 tasks
+
+**Key accomplishments:**
+
+- ClaudeProvider restored from git history (467 lines) with Anthropic SDK, registered in ProviderManager alongside Kimi, building with zero TypeScript errors
+- Native tool calling and Anthropic image format enabled for Claude in the agent loop, with model tier mapping verified
+- Five Claude auth API routes (API key + OAuth PKCE) and provider selection config with primaryProvider field defaulting to kimi
+- Config-driven ProviderManager fallback order from Redis with provider listing and switching API routes
+- Seven tRPC proxy routes for Claude authentication (API key, OAuth PKCE, status, logout) and provider listing/switching, with httpOnlyPaths registration for mutations
+- Provider toggle with Claude/Kimi auth cards in Settings, and active provider badge in AI chat sidebar
+
+---
+
 ## v15.0 AI Computer Use (Shipped: 2026-03-24)
 
 **Phases completed:** 5 phases, 10 plans, 20 tasks
