@@ -205,7 +205,7 @@ Plans:
   3. When the accessibility tree content has not changed since the last capture, the agent skips re-capturing a screenshot, reducing unnecessary vision API calls and latency
 **Plans**: 1 plan
 Plans:
-- [ ] 03-01-PLAN.md -- Rewrite AI prompt for accessibility-first hybrid mode + screenshot caching
+- [x] 03-01-PLAN.md -- Rewrite AI prompt for accessibility-first hybrid mode + screenshot caching
 
 ## Progress
 

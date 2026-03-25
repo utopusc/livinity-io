@@ -24,9 +24,9 @@ Requirements for precision computer use. Each maps to roadmap phases.
 
 ### AI Prompt & Hybrid Mode
 
-- [ ] **AIP-01**: Computer use system prompt updated: "Use element coordinates from screen_elements, screenshot for visual context only"
-- [ ] **AIP-02**: Hybrid mode: AI tries accessibility tree coordinates first, falls back to screenshot coordinates if no matching element
-- [ ] **AIP-03**: Agent skips screenshot re-capture when accessibility tree content hasn't changed since last capture
+- [x] **AIP-01**: Computer use system prompt updated: "Use element coordinates from screen_elements, screenshot for visual context only"
+- [x] **AIP-02**: Hybrid mode: AI tries accessibility tree coordinates first, falls back to screenshot coordinates if no matching element
+- [x] **AIP-03**: Agent skips screenshot re-capture when accessibility tree content hasn't changed since last capture
 
 ## Future Requirements
 
@@ -69,9 +69,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UIA-03 | Phase 2: Windows UIA Accessibility Tree | Complete |
 | UIA-04 | Phase 2: Windows UIA Accessibility Tree | Complete |
 | UIA-05 | Phase 2: Windows UIA Accessibility Tree | Complete |
-| AIP-01 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
-| AIP-02 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
-| AIP-03 | Phase 3: AI Prompt Optimization & Hybrid Mode | Pending |
+| AIP-01 | Phase 3: AI Prompt Optimization & Hybrid Mode | Complete |
+| AIP-02 | Phase 3: AI Prompt Optimization & Hybrid Mode | Complete |
+| AIP-03 | Phase 3: AI Prompt Optimization & Hybrid Mode | Complete |
 
 **Coverage:**
 - v17.0 requirements: 12 total

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v17.0
 milestone_name: Precision Computer Use
 status: unknown
-stopped_at: Completed 02-01-PLAN.md (Windows UIA accessibility tree)
-last_updated: "2026-03-25T09:35:25.467Z"
+stopped_at: Completed 03-01-PLAN.md (AI prompt optimization & hybrid mode)
+last_updated: "2026-03-25T09:52:40.973Z"
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v17.0 -- Precision Computer Use
-**Current focus:** Phase 02 — windows-uia-accessibility-tree
+**Current focus:** Phase 03 — ai-prompt-optimization-hybrid-mode
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Phase: 03 (ai-prompt-optimization-hybrid-mode) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 
 | Phase 01 P01 | 4min | 2 tasks | 4 files |
 | Phase 02 P01 | 5min | 2 tasks | 1 files |
+| Phase 03 P01 | 3min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -62,6 +63,9 @@ Plan: Not started
 - [Phase 02]: Custom control type substituted for ToggleButton (not a valid UIA ControlType)
 - [Phase 02]: raw flag on mouse tools for element coordinates (backward compatible, no new tools)
 - [Phase 02]: Pipe-delimited text format for screen_elements output (compact token usage)
+- [Phase 03]: Replaced Screenshot-Analyze-Act-Verify loop with Elements-First Workflow in AI prompt
+- [Phase 03]: SHA-256 hash of pipe-delimited element text as cache key for screenshot deduplication
+- [Phase 03]: toolScreenshot() re-queries UIA live to compute current hash (not just trusting stored hash)
 
 ### Pending Todos
 
@@ -73,6 +77,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-25T09:31:33.782Z
-Stopped at: Completed 02-01-PLAN.md (Windows UIA accessibility tree)
+Last session: 2026-03-25T09:52:40.970Z
+Stopped at: Completed 03-01-PLAN.md (AI prompt optimization & hybrid mode)
 Resume file: None
