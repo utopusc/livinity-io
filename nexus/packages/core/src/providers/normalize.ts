@@ -91,8 +91,27 @@ export function validateAlternation(messages: ProviderMessage[]): { valid: boole
  * Convert ProviderMessage[] to provider-specific format.
  * Applies mergeConsecutiveRoles before conversion.
  */
-export function prepareForProvider(messages: ProviderMessage[], provider: 'kimi'): unknown[] {
+export function prepareForProvider(messages: ProviderMessage[], provider: 'kimi' | 'claude'): unknown[] {
   const merged = mergeConsecutiveRoles(messages);
+
+  // Claude uses Anthropic SDK format — convert ProviderMessage[] to Anthropic.MessageParam[]
+  if (provider === 'claude') {
+    return merged.map((msg) => {
+      if (msg.images && msg.images.length > 0) {
+        return {
+          role: msg.role,
+          content: [
+            { type: 'text' as const, text: msg.content },
+            ...msg.images.map((img) => ({
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: img.mimeType, data: img.base64 },
+            })),
+          ],
+        };
+      }
+      return { role: msg.role, content: msg.content };
+    });
+  }
 
   // Kimi uses OpenAI-compatible message format
   return merged.map((msg) => {
@@ -117,7 +136,7 @@ export function prepareForProvider(messages: ProviderMessage[], provider: 'kimi'
  */
 export function normalizeAndPrepare(
   rawMessages: Array<{ role: string; text?: string; content?: string; images?: Array<{ base64: string; mimeType: string }> }>,
-  provider: 'kimi',
+  provider: 'kimi' | 'claude',
 ): unknown[] {
   const normalized = normalizeMessages(rawMessages);
   return prepareForProvider(normalized, provider);
