@@ -191,7 +191,7 @@ export class AgentCore extends EventEmitter {
           deviceId: this.credentials!.deviceId,
           deviceName: this.credentials!.deviceName,
           platform: this.credentials!.platform,
-          tools: ['shell', 'files_list', 'files_read', 'files_write', 'files_delete', 'files_rename', 'processes', 'system_info', 'screenshot'],
+          tools: ['shell', 'files_list', 'files_read', 'files_write', 'files_delete', 'files_rename', 'processes', 'system_info', 'screenshot', 'screen_info', 'mouse_click', 'mouse_double_click', 'mouse_right_click', 'mouse_move', 'mouse_drag', 'mouse_scroll', 'keyboard_type', 'keyboard_press'],
         }));
       });
 
@@ -265,34 +265,42 @@ export class AgentCore extends EventEmitter {
   private async handleToolCall(msg: any): Promise<void> {
     const start = Date.now();
     let result: any;
-    let success = true;
 
     try {
-      result = await this.executeTool(msg.tool, msg.params || {});
+      const raw = await this.executeTool(msg.tool, msg.params || {});
+      // Normalize to { success, output, error?, data?, images? } format
+      if (raw && raw.error) {
+        result = { success: false, output: '', error: raw.error };
+      } else if (raw && raw.success !== undefined && raw.output !== undefined) {
+        // Already in standard format (screenshot, mouse, keyboard tools)
+        result = raw;
+      } else {
+        // Raw data from legacy tools — wrap it
+        const output = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        result = { success: true, output, data: raw };
+      }
     } catch (err: any) {
-      result = { error: err.message };
-      success = false;
+      result = { success: false, output: '', error: err.message };
     }
 
     const duration = Date.now() - start;
 
-    // Send result back
+    // Send result back (same format as standalone agent)
     this.ws?.send(JSON.stringify({
       type: 'device_tool_result',
       requestId: msg.requestId,
-      deviceId: this.credentials?.deviceId,
-      success,
       result,
     }));
 
     // Audit log
+    const toolSuccess = result?.success ?? false;
     const entry: AuditEntry = {
       timestamp: new Date().toISOString(),
       tool: msg.tool,
       params: JSON.stringify(msg.params || {}).slice(0, 200),
-      success,
+      success: toolSuccess,
       duration,
-      error: success ? undefined : result?.error,
+      error: toolSuccess ? undefined : result?.error,
     };
     this.auditLog.push(entry);
     if (this.auditLog.length > 500) this.auditLog.shift();
@@ -306,7 +314,7 @@ export class AgentCore extends EventEmitter {
       timestamp: entry.timestamp,
       toolName: msg.tool,
       params: entry.params,
-      success,
+      success: toolSuccess,
       duration,
       error: entry.error,
     }));
@@ -325,6 +333,15 @@ export class AgentCore extends EventEmitter {
       case 'processes': return this.toolProcesses(params);
       case 'system_info': return this.toolSystemInfo();
       case 'screenshot': return this.toolScreenshot();
+      case 'screen_info': return this.toolScreenInfo();
+      case 'mouse_click': return this.toolMouseClick(params);
+      case 'mouse_double_click': return this.toolMouseDoubleClick(params);
+      case 'mouse_right_click': return this.toolMouseRightClick(params);
+      case 'mouse_move': return this.toolMouseMove(params);
+      case 'mouse_drag': return this.toolMouseDrag(params);
+      case 'mouse_scroll': return this.toolMouseScroll(params);
+      case 'keyboard_type': return this.toolKeyboardType(params);
+      case 'keyboard_press': return this.toolKeyboardPress(params);
       default: return { error: `Unknown tool: ${tool}` };
     }
   }
@@ -434,9 +451,222 @@ export class AgentCore extends EventEmitter {
     };
   }
 
-  private toolScreenshot(): any {
-    // Placeholder — requires native addon
-    return { error: 'Screenshot not available in Electron mode (use Windows Snipping Tool)' };
+  // Coordinate mapping: screenshots are resized from physical pixels to a target resolution via sharp.
+  // AI returns coordinates in the resized image space → we map to logical screen space for robotjs.
+  // Chain: AI coords (target space) * (logical / target) = logical coords (robotjs space).
+  private screenWidth = 0;
+  private screenHeight = 0;
+  // Logical screen dimensions (physical / scaleFactor) — what robotjs uses
+  private logicalScreenW = 0;
+  private logicalScreenH = 0;
+  // AI target dimensions (what the resized screenshot image actually is)
+  private aiTargetW = 0;
+  private aiTargetH = 0;
+
+  // Target resolutions (Anthropic recommended — stays under API auto-resize limits)
+  private static SCALE_TARGETS = [
+    { w: 1280, h: 800, ratio: 1280 / 800 },   // WXGA 16:10
+    { w: 1366, h: 768, ratio: 1366 / 768 },   // FWXGA ~16:9
+    { w: 1024, h: 768, ratio: 1024 / 768 },   // XGA 4:3
+  ];
+
+  private async toolScreenshot(): Promise<any> {
+    try {
+      const ns = require('node-screenshots');
+      const sharp = require('sharp');
+      const monitors = ns.Monitor.all();
+      const primary = monitors.find((m: any) => m.isPrimary()) || monitors[0];
+      if (!primary) return { error: 'No display found' };
+
+      const physicalW = primary.width();   // Physical pixels (e.g., 2560)
+      const physicalH = primary.height();  // Physical pixels (e.g., 1440)
+      const scaleFactor = primary.scaleFactor(); // e.g., 1.5
+
+      // Logical dimensions = what robotjs uses for mouse coordinates
+      const logicalW = Math.round(physicalW / scaleFactor);
+      const logicalH = Math.round(physicalH / scaleFactor);
+
+      // Find best Anthropic target by aspect ratio of logical dimensions
+      const ratio = logicalW / logicalH;
+      let targetW = logicalW;
+      let targetH = logicalH;
+      for (const t of AgentCore.SCALE_TARGETS) {
+        if (Math.abs(t.ratio - ratio) < 0.02 && t.w <= logicalW) {
+          targetW = t.w;
+          targetH = t.h;
+          break;
+        }
+      }
+
+      // Store for coordinate mapping
+      this.logicalScreenW = logicalW;
+      this.logicalScreenH = logicalH;
+      this.aiTargetW = targetW;
+      this.aiTargetH = targetH;
+      // Keep legacy fields for backward compat
+      this.screenWidth = logicalW;
+      this.screenHeight = logicalH;
+
+      const image = primary.captureImageSync();
+
+      // Use sharp to ACTUALLY resize the image from physical to target resolution
+      // node-screenshots toJpegSync() returns a JPEG buffer — sharp can read JPEG directly
+      const jpegInput = Buffer.from(image.toJpegSync());
+      const resizedJpeg = await sharp(jpegInput)
+        .resize(targetW, targetH, { fit: 'fill' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+
+      const base64 = resizedJpeg.toString('base64');
+
+      return {
+        success: true,
+        output: `Screenshot captured: ${physicalW}x${physicalH} physical, ${logicalW}x${logicalH} logical, resized to ${targetW}x${targetH} for AI. Coordinate space: 0,0 to ${targetW},${targetH}. Scale factor: ${scaleFactor}.`,
+        data: {
+          width: logicalW, height: logicalH,
+          displayWidth: targetW, displayHeight: targetH,
+          physicalWidth: physicalW, physicalHeight: physicalH,
+          scaleFactor: scaleFactor,
+          monitorX: primary.x(), monitorY: primary.y(),
+          size: resizedJpeg.length,
+        },
+        images: [{ base64, mimeType: 'image/jpeg' }],
+      };
+    } catch (e: any) { return { error: `Screenshot failed: ${e.message}` }; }
+  }
+
+  private toolScreenInfo(): any {
+    try {
+      const ns = require('node-screenshots');
+      const monitors = ns.Monitor.all();
+      const displays = monitors.map((m: any) => ({
+        id: m.id?.() ?? 0, x: m.x(), y: m.y(), width: m.width(), height: m.height(),
+        scaleFactor: m.scaleFactor(), rotation: m.rotation?.() ?? 0, isPrimary: m.isPrimary(),
+      }));
+      const primary = displays.find((d: any) => d.isPrimary) || displays[0];
+      return { success: true, output: `${displays.length} display(s)`, data: { displays, displayCount: displays.length, primaryDisplay: primary } };
+    } catch (e: any) { return { error: `Screen info failed: ${e.message}` }; }
+  }
+
+  // --- Mouse & Keyboard Tools (robotjs) ---
+
+  private robotjs: any = null;
+  private robotjsLoaded = false;
+
+  private ensureRobot(): any {
+    if (this.robotjsLoaded) return this.robotjs;
+    try {
+      this.robotjs = require('@jitsi/robotjs');
+      this.robotjsLoaded = true;
+    } catch (e: any) {
+      this.robotjsLoaded = true;
+      this.robotjs = null;
+    }
+    return this.robotjs;
+  }
+
+  // Map AI coordinates (in resized screenshot space) to logical screen coordinates (for robotjs)
+  // Chain: AI coord * (logicalScreen / aiTarget) = logical screen coord
+  private toScreenX(x: number): number {
+    if (this.aiTargetW > 0 && this.logicalScreenW > 0) {
+      return Math.round(x * (this.logicalScreenW / this.aiTargetW));
+    }
+    return Math.round(x);
+  }
+  private toScreenY(y: number): number {
+    if (this.aiTargetH > 0 && this.logicalScreenH > 0) {
+      return Math.round(y * (this.logicalScreenH / this.aiTargetH));
+    }
+    return Math.round(y);
+  }
+
+  private toolMouseClick(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const x = this.toScreenX(params.x || 0);
+    const y = this.toScreenY(params.y || 0);
+    robot.moveMouse(x, y);
+    robot.mouseClick('left');
+    return { success: true, output: `Clicked at screen (${x}, ${y}) [AI coord: ${params.x}, ${params.y}]` };
+  }
+
+  private toolMouseDoubleClick(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const x = this.toScreenX(params.x || 0);
+    const y = this.toScreenY(params.y || 0);
+    robot.moveMouse(x, y);
+    robot.mouseClick('left', true);
+    return { success: true, output: `Double-clicked at screen (${x}, ${y})` };
+  }
+
+  private toolMouseRightClick(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const x = this.toScreenX(params.x || 0);
+    const y = this.toScreenY(params.y || 0);
+    robot.moveMouse(x, y);
+    robot.mouseClick('right');
+    return { success: true, output: `Right-clicked at screen (${x}, ${y})` };
+  }
+
+  private toolMouseMove(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const x = this.toScreenX(params.x || 0);
+    const y = this.toScreenY(params.y || 0);
+    robot.moveMouse(x, y);
+    return { success: true, output: `Moved mouse to screen (${x}, ${y})` };
+  }
+
+  private toolMouseDrag(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const fromX = this.toScreenX(params.fromX || 0);
+    const fromY = this.toScreenY(params.fromY || 0);
+    const toX = this.toScreenX(params.toX || 0);
+    const toY = this.toScreenY(params.toY || 0);
+    robot.moveMouse(fromX, fromY);
+    robot.mouseToggle('down');
+    try { robot.moveMouse(toX, toY); } finally { robot.mouseToggle('up'); }
+    return { success: true, output: `Dragged from screen (${fromX}, ${fromY}) to (${toX}, ${toY})` };
+  }
+
+  private toolMouseScroll(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const amount = params.amount || 3;
+    const direction = (params.direction || 'down') === 'up' ? amount : -amount;
+    if (params.x != null && params.y != null) {
+      robot.moveMouse(this.toScreenX(params.x), this.toScreenY(params.y));
+    }
+    robot.scrollMouse(0, direction);
+    return { success: true, output: `Scrolled ${params.direction || 'down'} by ${amount}` };
+  }
+
+  private static KEY_ALIASES: Record<string, string> = {
+    ctrl: 'control', cmd: 'command', win: 'command', meta: 'command',
+    esc: 'escape', del: 'delete', ins: 'insert', bs: 'backspace',
+    ret: 'return', cr: 'return', pgup: 'pageup', pgdn: 'pagedown',
+  };
+
+  private toolKeyboardType(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const text = String(params.text || '');
+    robot.typeString(text);
+    return { success: true, output: `Typed ${text.length} characters` };
+  }
+
+  private toolKeyboardPress(params: any): any {
+    const robot = this.ensureRobot();
+    if (!robot) return { error: 'robotjs not available' };
+    const raw = String(params.key || '');
+    const parts = raw.toLowerCase().split('+').map((s: string) => s.trim());
+    const key = AgentCore.KEY_ALIASES[parts[parts.length - 1]] || parts[parts.length - 1];
+    const modifiers = parts.slice(0, -1).map((m: string) => AgentCore.KEY_ALIASES[m] || m);
+    robot.keyTap(key, modifiers.length ? modifiers : undefined);
+    return { success: true, output: `Pressed ${raw}` };
   }
 
   // --- Utilities ---
