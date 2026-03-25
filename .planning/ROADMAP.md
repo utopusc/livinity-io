@@ -167,7 +167,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v16
   4. `npm run build --workspace=packages/core` succeeds with zero TypeScript errors
 **Plans:** 1 plan
 Plans:
-- [ ] 01-01-PLAN.md -- Restore ClaudeProvider, add SDK, register in ProviderManager
+- [x] 01-01-PLAN.md -- Restore ClaudeProvider, add SDK, register in ProviderManager
 
 ### Phase 2: Feature Parity
 **Goal**: Claude provider handles all AI capabilities identically to Kimi -- streaming responses, tool calling, vision/multimodal input, and model tier routing
