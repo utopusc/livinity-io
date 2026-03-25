@@ -194,7 +194,7 @@ Plans:
   5. When the primary provider fails (rate limit, auth error), ProviderManager automatically falls back to the secondary provider
 **Plans:** 2 plans
 Plans:
-- [ ] 03-01-PLAN.md -- Claude auth API routes and config schema for provider selection
+- [x] 03-01-PLAN.md -- Claude auth API routes and config schema for provider selection
 - [ ] 03-02-PLAN.md -- Config-driven fallback order and provider management API
 
 ### Phase 4: Settings UI & Integration

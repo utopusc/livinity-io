@@ -12,13 +12,13 @@ Requirements for Multi-Provider AI milestone. Each maps to roadmap phases.
 - [x] **PROV-01**: ClaudeProvider git history'den geri yuklenir ve ProviderManager'a kaydedilir
 - [x] **PROV-02**: `@anthropic-ai/sdk` bagimliligi eklenir
 - [ ] **PROV-03**: ProviderManager fallback dongusu Claude + Kimi ile calisir
-- [ ] **PROV-04**: Config semasinda provider secimi (`primary: 'claude' | 'kimi'`) bulunur
+- [x] **PROV-04**: Config semasinda provider secimi (`primary: 'claude' | 'kimi'`) bulunur
 
 ### Authentication
 
-- [ ] **AUTH-01**: Kullanici Claude API key'ini Settings'ten girebilir
-- [ ] **AUTH-02**: Claude API key Redis'te guvenli saklanir
-- [ ] **AUTH-03**: Kullanici opsiyonel olarak OAuth PKCE ile Claude'a baglanabilir
+- [x] **AUTH-01**: Kullanici Claude API key'ini Settings'ten girebilir
+- [x] **AUTH-02**: Claude API key Redis'te guvenli saklanir
+- [x] **AUTH-03**: Kullanici opsiyonel olarak OAuth PKCE ile Claude'a baglanabilir
 
 ### Feature Parity
 
@@ -59,10 +59,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROV-01 | Phase 1 | Complete |
 | PROV-02 | Phase 1 | Complete |
 | PROV-03 | Phase 3 | Pending |
-| PROV-04 | Phase 3 | Pending |
-| AUTH-01 | Phase 3 | Pending |
-| AUTH-02 | Phase 3 | Pending |
-| AUTH-03 | Phase 3 | Pending |
+| PROV-04 | Phase 3 | Complete |
+| AUTH-01 | Phase 3 | Complete |
+| AUTH-02 | Phase 3 | Complete |
+| AUTH-03 | Phase 3 | Complete |
 | FEAT-01 | Phase 2 | Complete |
 | FEAT-02 | Phase 2 | Complete |
 | FEAT-03 | Phase 2 | Complete |
