@@ -278,6 +278,15 @@ export const VoiceConfigSchema = z.object({
   sttModel: z.string().default('nova-3'),
 }).strict().optional();
 
+// ─── Provider Configuration ───────────────────────────────────────────────────
+
+export const ProviderSelectionSchema = z.object({
+  /** Which provider handles new requests: 'claude' or 'kimi' */
+  primaryProvider: z.enum(['claude', 'kimi']).default('kimi'),
+}).strict().optional();
+
+export type ProviderSelection = z.infer<typeof ProviderSelectionSchema>;
+
 // ─── Main Nexus Configuration Schema ───────────────────────────────────────
 
 export const NexusConfigSchema = z.object({
@@ -290,6 +299,9 @@ export const NexusConfigSchema = z.object({
   models: ModelsConfigSchema,
   agent: AgentDefaultsSchema,
   subagents: SubagentConfigSchema,
+
+  // Provider selection
+  provider: ProviderSelectionSchema,
 
   // Tools
   tools: ToolPolicySchema,
@@ -377,6 +389,9 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
     maxTokens: 50000,
     timeoutMs: 120000,
     archiveAfterMinutes: 60,
+  },
+  provider: {
+    primaryProvider: 'kimi',
   },
   tools: {
     profile: 'full',
