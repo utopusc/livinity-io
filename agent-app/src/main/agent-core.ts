@@ -646,17 +646,12 @@ while ($true) {
       const logicalW = Math.round(physicalW / scaleFactor);
       const logicalH = Math.round(physicalH / scaleFactor);
 
-      // Find best Anthropic target by aspect ratio of logical dimensions
-      const ratio = logicalW / logicalH;
-      let targetW = logicalW;
-      let targetH = logicalH;
-      for (const t of AgentCore.SCALE_TARGETS) {
-        if (Math.abs(t.ratio - ratio) < 0.02 && t.w <= logicalW) {
-          targetW = t.w;
-          targetH = t.h;
-          break;
-        }
-      }
+      // Use logical resolution directly — no resize.
+      // AI models may internally resize images, causing coordinate space mismatch
+      // if we pre-resize. By sending at logical resolution with JPEG quality reduction,
+      // we keep coordinates 1:1 with the screen.
+      const targetW = logicalW;
+      const targetH = logicalH;
 
       // Store for coordinate mapping
       this.logicalScreenW = logicalW;
@@ -668,16 +663,19 @@ while ($true) {
       this.screenHeight = logicalH;
 
       const image = primary.captureImageSync();
-
-      // Use sharp to ACTUALLY resize the image from physical to target resolution
-      // node-screenshots toJpegSync() returns a JPEG buffer — sharp can read JPEG directly
       const jpegInput = Buffer.from(image.toJpegSync());
-      const resizedJpeg = await sharp(jpegInput)
-        .resize(targetW, targetH, { fit: 'fill' })
-        .jpeg({ quality: 80 })
-        .toBuffer();
 
-      const base64 = resizedJpeg.toString('base64');
+      // Compress with sharp for smaller payload, but keep original dimensions
+      // so coordinates are 1:1 with screen — no resize, no coordinate mismatch
+      let finalJpeg: Buffer;
+      try {
+        const sharp = require('sharp');
+        finalJpeg = await sharp(jpegInput).jpeg({ quality: 60 }).toBuffer();
+      } catch {
+        finalJpeg = jpegInput; // sharp unavailable — use original
+      }
+
+      const base64 = finalJpeg.toString('base64');
 
       // Cache for AIP-03 screenshot caching
       this.lastScreenshotBase64 = base64;
