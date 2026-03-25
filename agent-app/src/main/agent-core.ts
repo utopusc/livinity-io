@@ -686,7 +686,7 @@ while ($true) {
         physicalWidth: physicalW, physicalHeight: physicalH,
         scaleFactor: scaleFactor,
         monitorX: primary.x(), monitorY: primary.y(),
-        size: resizedJpeg.length,
+        size: finalJpeg.length,
       };
 
       return {
