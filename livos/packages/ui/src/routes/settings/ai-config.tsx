@@ -1,12 +1,14 @@
 import {useEffect, useRef, useState} from 'react'
-import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck, TbBrain} from 'react-icons/tb'
+import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck, TbBrain, TbKey} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
+import {Input} from '@/shadcn-components/ui/input'
 import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
 
 export default function AiConfigPage() {
+	// -- Kimi login state -----------------------------------------------
 	const [loginSession, setLoginSession] = useState<{
 		sessionId: string
 		verificationUrl: string
@@ -15,14 +17,26 @@ export default function AiConfigPage() {
 	const [copied, setCopied] = useState(false)
 	const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+	// -- Claude state ---------------------------------------------------
+	const [claudeApiKey, setClaudeApiKey] = useState('')
+	const [claudeApiKeySaved, setClaudeApiKeySaved] = useState(false)
+	const [claudeOAuthCode, setClaudeOAuthCode] = useState('')
+	const [claudeOAuthData, setClaudeOAuthData] = useState<{verificationUrl: string} | null>(null)
+
+	// -- Queries --------------------------------------------------------
 	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery(undefined, {
-		// Don't poll status during active login — the poll endpoint handles that
 		enabled: !loginSession,
 	})
+	const claudeStatusQ = trpcReact.ai.getClaudeStatus.useQuery()
+	const providersQ = trpcReact.ai.getProviders.useQuery()
 	const utils = trpcReact.useUtils()
 
-	const isConnected = kimiStatusQ.data?.authenticated ?? false
+	const isKimiConnected = kimiStatusQ.data?.authenticated ?? false
+	const isClaudeConnected = claudeStatusQ.data?.authenticated ?? false
+	const claudeAuthMethod = claudeStatusQ.data?.method
+	const primaryProvider = providersQ.data?.primaryProvider ?? 'kimi'
 
+	// -- Kimi mutations -------------------------------------------------
 	const loginMutation = trpcReact.ai.kimiLogin.useMutation({
 		onSuccess: (data) => {
 			setLoginSession(data)
@@ -36,7 +50,49 @@ export default function AiConfigPage() {
 		},
 	})
 
-	// Poll login session for auth completion
+	// -- Claude mutations -----------------------------------------------
+	const setClaudeApiKeyMutation = trpcReact.ai.setClaudeApiKey.useMutation({
+		onSuccess: () => {
+			setClaudeApiKeySaved(true)
+			setClaudeApiKey('')
+			utils.ai.getClaudeStatus.invalidate()
+			utils.ai.getProviders.invalidate()
+			setTimeout(() => setClaudeApiKeySaved(false), 2000)
+		},
+	})
+
+	const claudeStartLoginMutation = trpcReact.ai.claudeStartLogin.useMutation({
+		onSuccess: (data: any) => {
+			if (data?.verificationUrl) {
+				setClaudeOAuthData({verificationUrl: data.verificationUrl})
+			}
+		},
+	})
+
+	const claudeSubmitCodeMutation = trpcReact.ai.claudeSubmitCode.useMutation({
+		onSuccess: () => {
+			setClaudeOAuthData(null)
+			setClaudeOAuthCode('')
+			utils.ai.getClaudeStatus.invalidate()
+			utils.ai.getProviders.invalidate()
+		},
+	})
+
+	const claudeLogoutMutation = trpcReact.ai.claudeLogout.useMutation({
+		onSuccess: () => {
+			utils.ai.getClaudeStatus.invalidate()
+			utils.ai.getProviders.invalidate()
+		},
+	})
+
+	// -- Provider selection mutation ------------------------------------
+	const setPrimaryProviderMutation = trpcReact.ai.setPrimaryProvider.useMutation({
+		onSuccess: () => {
+			utils.ai.getProviders.invalidate()
+		},
+	})
+
+	// -- Kimi poll for login completion ---------------------------------
 	const pollQ = trpcReact.ai.kimiLoginPoll.useQuery(
 		{sessionId: loginSession?.sessionId ?? ''},
 		{
@@ -45,7 +101,6 @@ export default function AiConfigPage() {
 		},
 	)
 
-	// When poll returns success, clear login session and refresh status
 	useEffect(() => {
 		if (pollQ.data?.status === 'success') {
 			setLoginSession(null)
@@ -53,20 +108,19 @@ export default function AiConfigPage() {
 		}
 	}, [pollQ.data?.status, utils.ai.getKimiStatus])
 
-	// When status changes to connected, clear login session
 	useEffect(() => {
-		if (isConnected && loginSession) {
+		if (isKimiConnected && loginSession) {
 			setLoginSession(null)
 		}
-	}, [isConnected, loginSession])
+	}, [isKimiConnected, loginSession])
 
-	// Cleanup poll interval on unmount
 	useEffect(() => {
 		return () => {
 			if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
 		}
 	}, [])
 
+	// -- Handlers -------------------------------------------------------
 	const handleLogin = () => {
 		loginMutation.mutate()
 	}
@@ -79,16 +133,68 @@ export default function AiConfigPage() {
 		}
 	}
 
+	const handleSaveClaudeApiKey = () => {
+		if (claudeApiKey.trim()) {
+			setClaudeApiKeyMutation.mutate({apiKey: claudeApiKey.trim()})
+		}
+	}
+
+	const handleClaudeOAuthLogin = () => {
+		claudeStartLoginMutation.mutate()
+	}
+
+	const handleSubmitClaudeCode = () => {
+		if (claudeOAuthCode.trim()) {
+			claudeSubmitCodeMutation.mutate({code: claudeOAuthCode.trim()})
+		}
+	}
+
 	return (
-		<SettingsPageLayout title='AI Configuration' description='Configure how LivOS connects to Kimi AI'>
+		<SettingsPageLayout title='AI Configuration' description='Configure AI providers for LivOS'>
 			<div className='max-w-lg space-y-8'>
+				{/* -- Primary Provider Selector ----------------------------- */}
+				<div className='space-y-4'>
+					<h2 className='text-body font-semibold'>Primary Provider</h2>
+					<div className='flex gap-3'>
+						{(['kimi', 'claude'] as const).map((provider) => {
+							const isActive = primaryProvider === provider
+							const providerData = providersQ.data?.providers?.find((p) => p.name === provider)
+							const isAvailable = providerData?.available ?? false
+							return (
+								<button
+									key={provider}
+									onClick={() => setPrimaryProviderMutation.mutate({provider})}
+									disabled={setPrimaryProviderMutation.isPending}
+									className={`flex-1 rounded-radius-md border p-3 cursor-pointer transition-colors ${
+										isActive
+											? 'border-brand bg-brand/10'
+											: 'border-border-default bg-surface-base hover:bg-surface-1'
+									}`}
+								>
+									<div className='flex items-center justify-between'>
+										<span className='text-body-sm font-medium capitalize'>{provider}</span>
+										<span
+											className={`h-2 w-2 rounded-full ${
+												isAvailable ? 'bg-green-400' : 'bg-text-tertiary'
+											}`}
+										/>
+									</div>
+									{isActive && (
+										<span className='mt-1 block text-caption text-brand'>Active</span>
+									)}
+								</button>
+							)
+						})}
+					</div>
+				</div>
+
 				{/* -- Kimi Provider ---------------------------------------- */}
 				<div className='space-y-4'>
 					<h2 className='text-body font-semibold'>Kimi Account</h2>
 
 					<div
 						className={`rounded-radius-md border p-4 space-y-3 ${
-							isConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
+							isKimiConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
 						}`}
 					>
 						{kimiStatusQ.isLoading ? (
@@ -96,7 +202,7 @@ export default function AiConfigPage() {
 								<TbLoader2 className='h-4 w-4 animate-spin' />
 								Checking status...
 							</div>
-						) : isConnected ? (
+						) : isKimiConnected ? (
 							<div className='space-y-3'>
 								<div className='flex items-center gap-2 text-body-sm text-green-400'>
 									<TbCircleCheck className='h-4 w-4' />
@@ -126,7 +232,7 @@ export default function AiConfigPage() {
 								)}
 							</div>
 						) : loginSession ? (
-							/* Login in progress — show verification URL + code */
+							/* Login in progress -- show verification URL + code */
 							<div className='space-y-3'>
 								<div className='flex items-center gap-2 text-body-sm text-blue-400'>
 									<TbLoader2 className='h-4 w-4 animate-spin' />
@@ -202,16 +308,189 @@ export default function AiConfigPage() {
 					</div>
 				</div>
 
+				{/* -- Claude Provider -------------------------------------- */}
+				<div className='space-y-4'>
+					<h2 className='text-body font-semibold'>Claude Account</h2>
+
+					<div
+						className={`rounded-radius-md border p-4 space-y-3 ${
+							isClaudeConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
+						}`}
+					>
+						{claudeStatusQ.isLoading ? (
+							<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
+								<TbLoader2 className='h-4 w-4 animate-spin' />
+								Checking status...
+							</div>
+						) : isClaudeConnected ? (
+							<div className='space-y-3'>
+								<div className='flex items-center gap-2 text-body-sm text-green-400'>
+									<TbCircleCheck className='h-4 w-4' />
+									Connected to Claude
+								</div>
+								<p className='text-caption text-text-secondary'>
+									Authenticated via {claudeAuthMethod === 'api_key' ? 'API key' : claudeAuthMethod === 'oauth' ? 'OAuth' : claudeAuthMethod ?? 'API key'}.
+								</p>
+								<Button
+									variant='secondary'
+									size='sm'
+									onClick={() => claudeLogoutMutation.mutate()}
+									disabled={claudeLogoutMutation.isPending}
+								>
+									{claudeLogoutMutation.isPending ? (
+										<>
+											<TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...
+										</>
+									) : (
+										<>
+											<TbLogout className='h-4 w-4' /> Sign Out
+										</>
+									)}
+								</Button>
+								{claudeLogoutMutation.isError && (
+									<p className='text-caption text-red-400'>{claudeLogoutMutation.error.message}</p>
+								)}
+							</div>
+						) : claudeOAuthData ? (
+							/* OAuth in progress -- show code input */
+							<div className='space-y-3'>
+								<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+									<TbLoader2 className='h-4 w-4 animate-spin' />
+									Waiting for authorization...
+								</div>
+								<p className='text-caption text-text-secondary'>
+									Complete authorization in the browser, then paste the code below:
+								</p>
+								<a
+									href={claudeOAuthData.verificationUrl}
+									target='_blank'
+									rel='noopener noreferrer'
+									className='block w-full'
+								>
+									<Button variant='primary' size='sm' className='w-full'>
+										Open Claude Authorization Page
+									</Button>
+								</a>
+								<div className='flex gap-2'>
+									<Input
+										sizeVariant='short-square'
+										placeholder='Paste authorization code'
+										value={claudeOAuthCode}
+										onValueChange={setClaudeOAuthCode}
+									/>
+									<Button
+										variant='primary'
+										size='sm'
+										onClick={handleSubmitClaudeCode}
+										disabled={!claudeOAuthCode.trim() || claudeSubmitCodeMutation.isPending}
+									>
+										{claudeSubmitCodeMutation.isPending ? (
+											<TbLoader2 className='h-4 w-4 animate-spin' />
+										) : (
+											'Submit'
+										)}
+									</Button>
+								</div>
+								{claudeSubmitCodeMutation.isError && (
+									<p className='text-caption text-red-400'>{claudeSubmitCodeMutation.error.message}</p>
+								)}
+								<Button
+									variant='secondary'
+									size='sm'
+									onClick={() => {
+										setClaudeOAuthData(null)
+										setClaudeOAuthCode('')
+									}}
+									className='w-full'
+								>
+									Cancel
+								</Button>
+							</div>
+						) : (
+							<div className='space-y-4'>
+								<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+									<TbAlertCircle className='h-4 w-4' />
+									Not connected
+								</div>
+
+								{/* API Key auth */}
+								<div className='space-y-2'>
+									<p className='text-caption font-medium text-text-secondary'>
+										<TbKey className='mr-1 inline h-3.5 w-3.5' />
+										API Key
+									</p>
+									<div className='flex gap-2'>
+										<Input
+											sizeVariant='short-square'
+											placeholder='sk-ant-...'
+											value={claudeApiKey}
+											onValueChange={setClaudeApiKey}
+											type='password'
+										/>
+										<Button
+											variant='primary'
+											size='sm'
+											onClick={handleSaveClaudeApiKey}
+											disabled={!claudeApiKey.trim() || setClaudeApiKeyMutation.isPending}
+										>
+											{setClaudeApiKeyMutation.isPending ? (
+												<TbLoader2 className='h-4 w-4 animate-spin' />
+											) : claudeApiKeySaved ? (
+												<>
+													<TbCheck className='h-4 w-4' /> Saved
+												</>
+											) : (
+												'Save'
+											)}
+										</Button>
+									</div>
+									{setClaudeApiKeyMutation.isError && (
+										<p className='text-caption text-red-400'>{setClaudeApiKeyMutation.error.message}</p>
+									)}
+								</div>
+
+								{/* OAuth auth */}
+								<div className='space-y-2'>
+									<p className='text-caption font-medium text-text-secondary'>Or</p>
+									<Button
+										variant='secondary'
+										size='sm'
+										onClick={handleClaudeOAuthLogin}
+										disabled={claudeStartLoginMutation.isPending}
+									>
+										{claudeStartLoginMutation.isPending ? (
+											<>
+												<TbLoader2 className='h-4 w-4 animate-spin' /> Starting...
+											</>
+										) : (
+											<>
+												<TbLogin className='h-4 w-4' /> Sign in with Claude
+											</>
+										)}
+									</Button>
+									{claudeStartLoginMutation.isError && (
+										<p className='text-caption text-red-400'>{claudeStartLoginMutation.error.message}</p>
+									)}
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
+
 				{/* -- Active Model ---------------------------------------- */}
 				<div className='space-y-4'>
 					<h2 className='text-body font-semibold'>Active Model</h2>
 					<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-2'>
 						<div className='flex items-center gap-2'>
 							<TbBrain className='h-4 w-4 text-brand' />
-							<span className='text-body-sm font-medium text-text-primary'>Kimi for Coding</span>
+							<span className='text-body-sm font-medium text-text-primary'>
+								{primaryProvider === 'claude' ? 'Claude (Anthropic)' : 'Kimi for Coding'}
+							</span>
 						</div>
 						<p className='text-caption text-text-secondary'>
-							Thinking model with 128K context. Used for all AI tasks including chat, tool calling, and background agents.
+							{primaryProvider === 'claude'
+								? 'Claude AI model. Used for all AI tasks including chat, tool calling, and background agents.'
+								: 'Thinking model with 128K context. Used for all AI tasks including chat, tool calling, and background agents.'}
 						</p>
 					</div>
 				</div>
