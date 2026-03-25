@@ -33,6 +33,7 @@ import type { WsGatewayDeps } from './ws-gateway.js';
 import type { UsageTracker } from './usage-tracker.js';
 import type { WebhookManager } from './webhook-manager.js';
 import { isCommand, handleCommand } from './commands.js';
+import type { ClaudeProvider } from './providers/claude.js';
 
 interface ApiDeps {
   daemon: Daemon;
@@ -380,6 +381,130 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       await redis.del('nexus:kimi:authenticated');
       await redis.del('nexus:config:kimi_api_key');
       logger.info('Kimi CLI logout completed');
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Claude Auth API ─────────────────────────────────────────────
+
+  /** Set Claude API key — validates against Anthropic API and stores in Redis */
+  app.post('/api/claude/set-api-key', async (req, res) => {
+    try {
+      const { apiKey } = req.body as { apiKey?: string };
+      if (!apiKey || typeof apiKey !== 'string' || !apiKey.startsWith('sk-ant-')) {
+        res.status(400).json({ error: 'Invalid API key format' });
+        return;
+      }
+
+      // Validate against Anthropic API
+      const validateResp = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+      });
+
+      if (!validateResp.ok) {
+        res.status(401).json({ error: `API key validation failed: ${validateResp.status}` });
+        return;
+      }
+
+      // Store key and set auth method
+      await redis.set('nexus:config:anthropic_api_key', apiKey);
+      await redis.set('nexus:config:claude_auth_method', 'api-key');
+      logger.info('Claude API key set and validated');
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get Claude authentication status */
+  app.get('/api/claude/status', async (_req, res) => {
+    try {
+      const provider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!provider) {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+
+      const authMethod = (await redis.get('nexus:config:claude_auth_method')) || 'api-key';
+
+      if (authMethod === 'api-key') {
+        const key = await redis.get('nexus:config:anthropic_api_key');
+        res.json({ authenticated: !!key, method: 'api-key', provider: 'claude' });
+      } else {
+        // sdk-subscription
+        const status = await provider.getCliStatus();
+        res.json({
+          authenticated: status.authenticated,
+          method: 'sdk-subscription',
+          provider: 'claude',
+          user: status.user,
+          cliInstalled: status.installed,
+        });
+      }
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Start Claude OAuth PKCE login flow */
+  app.post('/api/claude/start-login', async (_req, res) => {
+    try {
+      const provider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!provider) {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+
+      const result = await provider.startLogin();
+      // Set auth method to sdk-subscription since user is using OAuth
+      await redis.set('nexus:config:claude_auth_method', 'sdk-subscription');
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Submit OAuth authorization code for Claude */
+  app.post('/api/claude/submit-code', async (req, res) => {
+    try {
+      const { code } = req.body as { code?: string };
+      if (!code || typeof code !== 'string') {
+        res.status(400).json({ error: 'Missing authorization code' });
+        return;
+      }
+
+      const provider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!provider) {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+
+      const result = await provider.submitLoginCode(code);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Logout from Claude — clears credentials and auth state */
+  app.post('/api/claude/logout', async (_req, res) => {
+    try {
+      const provider = brain.getProviderManager().getProvider('claude') as ClaudeProvider | undefined;
+      if (!provider) {
+        res.status(503).json({ error: 'Claude provider not available' });
+        return;
+      }
+
+      await provider.logout();
+      // Clear Redis keys
+      await redis.del('nexus:config:anthropic_api_key');
+      await redis.del('nexus:config:claude_auth_method');
+      logger.info('Claude logout completed, auth state cleared');
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
