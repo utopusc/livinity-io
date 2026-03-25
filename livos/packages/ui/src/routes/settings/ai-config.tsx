@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react'
-import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck, TbBrain, TbKey} from 'react-icons/tb'
+import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCheck, TbBrain, TbKey, TbShieldCheck} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
@@ -494,7 +494,54 @@ export default function AiConfigPage() {
 						</p>
 					</div>
 				</div>
+
+				{/* -- Computer Use Settings --------------------------------- */}
+				<div className='space-y-4'>
+					<h2 className='text-body font-semibold'>Computer Use</h2>
+					<ComputerUseConsentToggle />
+				</div>
 			</div>
 		</SettingsPageLayout>
+	)
+}
+
+function ComputerUseConsentToggle() {
+	const consentQ = trpcReact.ai.getComputerUseAutoConsent.useQuery()
+	const utils = trpcReact.useUtils()
+	const setConsentMutation = trpcReact.ai.setComputerUseAutoConsent.useMutation({
+		onSuccess: () => {
+			utils.ai.getComputerUseAutoConsent.invalidate()
+		},
+	})
+
+	const autoConsent = consentQ.data?.autoConsent ?? false
+
+	return (
+		<div className='rounded-radius-md border border-border-default bg-surface-base p-4 space-y-3'>
+			<div className='flex items-center justify-between'>
+				<div className='flex items-center gap-2'>
+					<TbShieldCheck className='h-4 w-4 text-text-secondary' />
+					<span className='text-body-sm font-medium text-text-primary'>Auto-approve device control</span>
+				</div>
+				<button
+					onClick={() => setConsentMutation.mutate({enabled: !autoConsent})}
+					disabled={setConsentMutation.isPending}
+					className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+						autoConsent ? 'bg-brand' : 'bg-surface-3'
+					}`}
+				>
+					<span
+						className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+							autoConsent ? 'translate-x-6' : 'translate-x-1'
+						}`}
+					/>
+				</button>
+			</div>
+			<p className='text-caption text-text-secondary'>
+				{autoConsent
+					? 'AI can control mouse and keyboard on connected devices without asking permission each time.'
+					: 'AI will ask for permission before taking control of mouse and keyboard on connected devices.'}
+			</p>
+		</div>
 	)
 }
