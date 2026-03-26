@@ -6,8 +6,10 @@ type NativeAppState = 'unknown' | 'starting' | 'running' | 'stopping' | 'stopped
 export interface NativeAppConfig {
 	id: string
 	serviceName: string // systemd service name, e.g. 'livos-chrome'
-	port: number // noVNC port to check health
+	port: number // port to health-check via ss -tlnp
 	idleTimeoutMs: number // auto-stop after idle (default 30 min)
+	subdomain?: string // Caddy subdomain prefix (default: id)
+	proxyPort?: number // Caddy reverse_proxy target port (default: port)
 }
 
 export class NativeApp {
@@ -19,6 +21,8 @@ export class NativeApp {
 	state: NativeAppState = 'stopped'
 	stateProgress = 0
 	idleTimeoutMs: number
+	subdomain: string
+	proxyPort: number
 	#idleTimer: ReturnType<typeof setTimeout> | null = null
 
 	constructor(livinityd: Livinityd, config: NativeAppConfig) {
@@ -27,6 +31,8 @@ export class NativeApp {
 		this.serviceName = config.serviceName
 		this.port = config.port
 		this.idleTimeoutMs = config.idleTimeoutMs
+		this.subdomain = config.subdomain || config.id
+		this.proxyPort = config.proxyPort || config.port
 		this.logger = livinityd.logger.createChildLogger(`native-${config.id}`)
 	}
 
@@ -111,5 +117,14 @@ export class NativeApp {
 	}
 }
 
-// Registry of native app configurations (empty — Chrome moved to Docker)
-export const NATIVE_APP_CONFIGS: NativeAppConfig[] = []
+// Registry of native app configurations
+export const NATIVE_APP_CONFIGS: NativeAppConfig[] = [
+	{
+		id: 'desktop-stream',
+		serviceName: 'livos-x11vnc',
+		port: 5900,
+		idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+		subdomain: 'pc',
+		proxyPort: 8080,
+	},
+]
