@@ -64,7 +64,14 @@ async function rebuildCaddy(redis: Redis): Promise<{firewallResult: {success: bo
 	// Check if tunnel mode is active — if so, Caddy stays on :80 only
 	const config = await getConfig(redis)
 	const isTunnel = !!(config as any)?.tunnel
-	return await applyCaddyConfig(caddyConfig, isTunnel)
+	// Include NativeApp subdomains so domain reconfiguration doesn't erase them
+	const {NATIVE_APP_CONFIGS} = await import('../apps/native-app.js')
+	const nativeApps = NATIVE_APP_CONFIGS.map((app) => ({
+		subdomain: app.subdomain || app.id,
+		port: app.proxyPort || app.port,
+		streaming: app.id === 'desktop-stream',
+	}))
+	return await applyCaddyConfig(caddyConfig, isTunnel, nativeApps)
 }
 
 const domain = router({

@@ -86,7 +86,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 	}
 
 	// Native app subdomains — JWT-gated via cookie check
-	// Redirects to login page if no livinity_token cookie is present
+	// Redirects to login page if no LIVINITY_SESSION cookie is present
 	// Streaming apps get stream_close_delay (survive Caddy reloads) and stream_timeout (max session length)
 	for (const nApp of nativeApps) {
 		if (!config.mainDomain) continue
@@ -101,7 +101,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		blocks.push(`${fullDomain} {
 	@notauth {
 		not {
-			header Cookie *livinity_token=*
+			header Cookie *LIVINITY_SESSION=*
 		}
 	}
 	handle @notauth {
@@ -156,9 +156,9 @@ export async function reloadCaddy(): Promise<void> {
  * Apply a full Caddy configuration with main domain and subdomains.
  * Ensures firewall ports are open before applying.
  */
-export async function applyCaddyConfig(config: CaddyConfig, tunnel = false): Promise<{firewallResult: {success: boolean; method: string; message: string}}> {
+export async function applyCaddyConfig(config: CaddyConfig, tunnel = false, nativeApps: Array<{subdomain: string; port: number; streaming?: boolean}> = []): Promise<{firewallResult: {success: boolean; method: string; message: string}}> {
 	const firewallResult = await ensureFirewallPorts()
-	const content = generateFullCaddyfile(config, false, tunnel)
+	const content = generateFullCaddyfile(config, false, tunnel, nativeApps)
 	await writeCaddyfile(content)
 	await reloadCaddy()
 	return {firewallResult}
