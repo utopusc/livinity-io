@@ -87,6 +87,7 @@ main() {
     detect_gui() {
         HAS_GUI=false
         GUI_TYPE="none"
+        DESKTOP_USER=""
 
         # Method 1: Check systemd default target
         local default_target
@@ -97,7 +98,38 @@ main() {
             return 0
         fi
 
-        # Method 2: Check for running X11 display
+        # Graphical target is set — find the desktop user (first non-root GUI user)
+        DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
+            | awk '{print $3}' | while read -r u; do
+                [[ "$u" != "root" ]] && echo "$u" && break
+            done)
+        [[ -z "$DESKTOP_USER" ]] && DESKTOP_USER=$(ls /home/ 2>/dev/null | head -1)
+        local desktop_uid
+        desktop_uid=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
+
+        # Method 2: Check session type (x11 or wayland)
+        local session_type="unknown"
+        local session_id
+        session_id=$(loginctl list-sessions --no-legend 2>/dev/null | grep -v root | awk 'NR==1{print $1}')
+        if [[ -n "$session_id" ]]; then
+            session_type=$(loginctl show-session "$session_id" -p Type --value 2>/dev/null || echo "unknown")
+        fi
+
+        if [[ "$session_type" == "wayland" ]]; then
+            # Wayland detected — switch to X11 for x11vnc compatibility
+            HAS_GUI=true
+            GUI_TYPE="x11"
+            warn "Wayland session detected — switching GDM to X11 for desktop streaming"
+            if [[ -f /etc/gdm3/custom.conf ]]; then
+                sed -i 's/^#\?WaylandEnable=.*/WaylandEnable=false/' /etc/gdm3/custom.conf
+                grep -q 'WaylandEnable=false' /etc/gdm3/custom.conf || \
+                    sed -i '/^\[daemon\]/a WaylandEnable=false' /etc/gdm3/custom.conf
+                ok "GDM configured for X11 (will take effect on next login/reboot)"
+            fi
+            return 0
+        fi
+
+        # Method 3: Check for running X11 display
         if [[ -e /tmp/.X11-unix/X0 ]]; then
             HAS_GUI=true
             GUI_TYPE="x11"
@@ -105,24 +137,10 @@ main() {
             return 0
         fi
 
-        # Method 3: Check for Wayland
-        if ls /run/user/*/wayland-* &>/dev/null 2>&1; then
-            HAS_GUI=true
-            GUI_TYPE="wayland"
-            warn "Wayland detected -- x11vnc requires XWayland (native Wayland capture not supported in v1)"
-            return 0
-        fi
-
-        # Graphical target set but no display running (GUI installed, no monitor/session yet)
-        # Still install x11vnc -- it will work once a display session starts
-        if [[ "$default_target" == "graphical.target" ]]; then
-            HAS_GUI=true
-            GUI_TYPE="x11"
-            info "Graphical target set but no active display session -- installing x11vnc for when session starts"
-            return 0
-        fi
-
-        info "No GUI detected (headless server) -- desktop streaming will be skipped"
+        # Graphical target set but no display running yet
+        HAS_GUI=true
+        GUI_TYPE="x11"
+        info "Graphical target set — installing desktop streaming for when session starts"
     }
 
     check_root() {
@@ -512,14 +530,9 @@ JAIL
             return 0
         fi
 
-        if command -v x11vnc &>/dev/null; then
-            ok "x11vnc already installed"
-            return 0
-        fi
-
-        info "Installing x11vnc for desktop streaming..."
-        apt-get install -y -qq x11vnc
-        ok "x11vnc installed"
+        info "Installing desktop streaming dependencies..."
+        apt-get install -y -qq x11vnc xdotool x11-xserver-utils
+        ok "x11vnc + xdotool + xrandr installed"
     }
 
     setup_desktop_streaming() {
@@ -530,8 +543,83 @@ JAIL
 
         step "Configuring desktop streaming"
 
-        # Create systemd service for x11vnc
-        cat > /etc/systemd/system/livos-x11vnc.service << 'UNIT'
+        # ── Resolve desktop user and UID ──────────────────────
+        local desktop_user="${DESKTOP_USER:-$(ls /home/ 2>/dev/null | head -1)}"
+        local desktop_uid
+        desktop_uid=$(id -u "$desktop_user" 2>/dev/null || echo "1000")
+
+        # ── 1. HDMI force service (headless PCs without monitors) ──
+        # Tricks Intel/AMD GPU into thinking a monitor is connected,
+        # so GNOME actually renders the desktop instead of a black screen.
+        cat > /etc/systemd/system/livos-hdmi-force.service << 'UNIT'
+[Unit]
+Description=LivOS Force HDMI output for headless desktop streaming
+DefaultDependencies=no
+Before=display-manager.service
+After=systemd-modules-load.service systemd-udevd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '\
+  sleep 1; \
+  for conn in /sys/kernel/debug/dri/0/HDMI-A-*; do \
+    [ -f "$conn/force" ] && echo on > "$conn/force" 2>/dev/null && break; \
+  done; \
+  for conn in /sys/kernel/debug/dri/0/DP-*; do \
+    [ -f "$conn/force" ] && echo on > "$conn/force" 2>/dev/null && break; \
+  done; \
+  exit 0'
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+        systemctl daemon-reload
+        systemctl enable --now livos-hdmi-force 2>/dev/null
+        ok "HDMI force service installed (headless monitor emulation)"
+
+        # ── 2. xrandr resolution setup script ──────────────────
+        # Sets 1920x1080 on the forced output after X starts.
+        # Runs as the desktop user since Xauthority belongs to them.
+        cat > /usr/local/bin/livos-set-resolution << 'SCRIPT'
+#!/bin/bash
+# LivOS: Set desktop resolution for streaming (runs as desktop user)
+export DISPLAY=:0
+XAUTH=$(find /run/user/$(id -u)/gdm -name 'Xauthority' 2>/dev/null | head -1)
+[ -z "$XAUTH" ] && XAUTH="$HOME/.Xauthority"
+export XAUTHORITY="$XAUTH"
+
+# Wait for Xorg to be ready
+for i in $(seq 1 30); do
+    xrandr &>/dev/null && break
+    sleep 1
+done
+
+# Find the first connected output
+OUTPUT=$(xrandr | grep ' connected' | head -1 | awk '{print $1}')
+[ -z "$OUTPUT" ] && exit 0
+
+# Check if 1920x1080 already available
+if xrandr | grep -q '1920x1080'; then
+    xrandr --output "$OUTPUT" --mode 1920x1080 2>/dev/null || \
+    xrandr --output "$OUTPUT" --mode '1920x1080_60.00' 2>/dev/null
+else
+    # Create 1920x1080 modeline and apply
+    MODELINE=$(cvt 1920 1080 60 2>/dev/null | grep Modeline | sed 's/Modeline //')
+    MODE_NAME=$(echo "$MODELINE" | cut -d'"' -f2)
+    xrandr --newmode $MODELINE 2>/dev/null
+    xrandr --addmode "$OUTPUT" "$MODE_NAME" 2>/dev/null
+    xrandr --output "$OUTPUT" --mode "$MODE_NAME" 2>/dev/null
+fi
+SCRIPT
+        chmod +x /usr/local/bin/livos-set-resolution
+        ok "Resolution setup script installed"
+
+        # ── 3. x11vnc systemd service ──────────────────────────
+        # Runs as the desktop user (not root) to access X shared memory.
+        # Uses -auth with the user's Xauthority from GDM.
+        cat > /etc/systemd/system/livos-x11vnc.service << UNIT
 [Unit]
 Description=LivOS Desktop Streaming (x11vnc)
 After=display-manager.service
@@ -539,27 +627,43 @@ Wants=display-manager.service
 
 [Service]
 Type=simple
-User=root
-ExecStart=/usr/bin/x11vnc -display :0 -rfbport 5900 -localhost -shared -forever -noxdamage -ncache 10 -threads -nopw
+User=${desktop_user}
+Environment=DISPLAY=:0
+ExecStartPre=/usr/local/bin/livos-set-resolution
+ExecStart=/bin/bash -c '\
+  XAUTH=\$(find /run/user/${desktop_uid}/gdm -name "Xauthority" 2>/dev/null | head -1); \
+  [ -z "\$XAUTH" ] && XAUTH="/home/${desktop_user}/.Xauthority"; \
+  exec /usr/bin/x11vnc -display :0 -auth "\$XAUTH" -localhost -rfbport 5900 -nopw -shared -forever -noxdamage -ncache 10'
 Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
 UNIT
 
         systemctl daemon-reload
-        # Do NOT enable -- started on-demand by NativeApp idle timeout system
-        ok "Desktop streaming service created (livos-x11vnc.service)"
+        systemctl enable livos-x11vnc 2>/dev/null
+        ok "x11vnc service created (runs as $desktop_user, auto-starts on boot)"
 
-        # Store GUI detection result in Redis for livinityd to read
+        # ── 4. Store config in Redis ───────────────────────────
         source "$LIVOS_DIR/.env" 2>/dev/null || true
         local redis_pass
         redis_pass=$(echo "$REDIS_URL" | sed -n 's|redis://:\(.*\)@.*|\1|p')
+        [[ -z "$redis_pass" ]] && redis_pass=$(grep -oP 'requirepass \K.*' /etc/redis/redis.conf 2>/dev/null)
         if [[ -n "$redis_pass" ]]; then
-            redis-cli -a "$redis_pass" SET livos:desktop:gui_type "$GUI_TYPE" 2>/dev/null
-            redis-cli -a "$redis_pass" SET livos:desktop:has_gui "true" 2>/dev/null
+            redis-cli -a "$redis_pass" --no-auth-warning SET livos:desktop:gui_type "$GUI_TYPE" 2>/dev/null
+            redis-cli -a "$redis_pass" --no-auth-warning SET livos:desktop:has_gui "true" 2>/dev/null
+            redis-cli -a "$redis_pass" --no-auth-warning SET livos:desktop:user "$desktop_user" 2>/dev/null
             ok "Desktop streaming config stored in Redis"
+        fi
+
+        # ── 5. Try to start now if X is running ───────────────
+        if [[ -e /tmp/.X11-unix/X0 ]]; then
+            systemctl start livos-x11vnc 2>/dev/null && \
+                ok "x11vnc started (VNC on localhost:5900)" || \
+                info "x11vnc will start on next login/reboot"
+        else
+            info "x11vnc will start automatically when desktop session begins"
         fi
     }
 
