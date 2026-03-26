@@ -31,7 +31,7 @@ describe('/ws/desktop WebSocket-to-TCP bridge handler', () => {
 		// Specifically in the desktop handler context, must check for token
 		const desktopBlock = extractDesktopBlock(serverSource)
 		expect(desktopBlock).toContain('401 Unauthorized')
-		expect(desktopBlock).toMatch(/!token/)
+		expect(desktopBlock).toMatch(/!desktop[Tt]oken/)
 	})
 
 	it('Test 2: rejects connections with invalid JWT token with HTTP 401', () => {
