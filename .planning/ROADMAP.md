@@ -42,9 +42,9 @@ Plans:
 ### Phase 09: Tunnel Sync + LivOS Domain Receiver
 **Goal:** Verified domains sync from platform to LivOS via tunnel, stored locally for app gateway routing.
 **Requirements:** DOM-03, DOM-06, DOM-07
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 09-01-PLAN.md — Protocol types + relay domain-sync endpoint + LivOS receiver + DNS re-verify sync
+- [x] 09-01-PLAN.md — Protocol types + relay domain-sync endpoint + LivOS receiver + DNS re-verify sync
 - [ ] 09-02-PLAN.md — App gateway custom domain routing + relay targetApp resolution
 **Scope:**
 - New tunnel message types: `domain_sync` (add/update/remove), `domain_sync_ack`, `domain_list_sync`

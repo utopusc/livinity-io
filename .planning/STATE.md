@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Custom Domain Management
 status: unknown
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-03-26T11:32:51.475Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-26T11:47:09.044Z"
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v19.0 -- Custom Domain Management
-**Current focus:** Phase 08 — Relay Integration + Custom Domain Routing
+**Current focus:** Phase 09 — Tunnel Sync + LivOS Domain Receiver
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
+Phase: 09 (Tunnel Sync + LivOS Domain Receiver) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: Not started
 | Phase 07 P02 | 3min | 2 tasks | 2 files |
 | Phase 08 P01 | 3min | 2 tasks | 5 files |
 | Phase 08 P02 | 2min | 2 tasks | 3 files |
+| Phase 09 P01 | 4min | 2 tasks | 9 files |
 
 ### Decisions
 
@@ -71,6 +72,9 @@ Plan: Not started
 - [Phase 08]: Parent domain fallback: subdomains of verified custom domains inherit TLS authorization
 - [Phase 08]: Custom domain HTTP/WS routing runs only as fallback after parseSubdomain -- preserves existing routing
 - [Phase 08]: handleWsUpgrade uses optional targetAppOverride param; null for custom domains until Phase 09 app mapping
+- [Phase 09]: Redis dual-key pattern: livos:custom_domain:{hostname} for O(1) gateway lookup + livos:custom_domains list for iteration
+- [Phase 09]: domain_list_sync on both new connect and reconnect ensures LivOS always has latest domain state
+- [Phase 09]: dns-polling notifies relay after DB update; gracefully handles offline tunnels since reconnect sync covers gaps
 
 ### Pending Todos
 
@@ -83,6 +87,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T11:30:08.454Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-03-26T11:47:09.041Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
