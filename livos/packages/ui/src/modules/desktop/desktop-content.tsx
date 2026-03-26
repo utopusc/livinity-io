@@ -284,6 +284,36 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}
 		appItems.push(chromeItem)
 
+		// Web app shortcuts — launch Chrome with specific URL
+		const webApps = [
+			{id: 'LIVINITY_gmail', label: 'Gmail', icon: '/figma-exports/app-gmail.png', url: 'https://mail.google.com'},
+			{id: 'LIVINITY_facebook', label: 'Facebook', icon: '/figma-exports/app-facebook.png', url: 'https://www.facebook.com'},
+			{id: 'LIVINITY_whatsapp', label: 'WhatsApp', icon: '/figma-exports/app-whatsapp.png', url: 'https://web.whatsapp.com'},
+			{id: 'LIVINITY_youtube', label: 'YouTube', icon: '/figma-exports/app-youtube.png', url: 'https://www.youtube.com'},
+		]
+		for (const wa of webApps) {
+			appItems.push({
+				id: wa.id,
+				node: (
+					<motion.div
+						initial={{opacity: 0, scale: 0}}
+						animate={{opacity: 1, scale: 1}}
+						transition={{type: 'spring', stiffness: 400, damping: 25}}
+					>
+						<AppIcon
+							label={wa.label}
+							src={wa.icon}
+							onClick={() => {
+								if (windowManager) {
+									windowManager.openWindow(wa.id, wa.url, wa.label, wa.icon)
+								}
+							}}
+						/>
+					</motion.div>
+				),
+			})
+		}
+
 		const folderItems: AppGridItem[] = folders.map((folder) => ({
 			id: `folder-${folder.name}`,
 			node: (

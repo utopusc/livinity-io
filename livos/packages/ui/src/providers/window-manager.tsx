@@ -81,6 +81,7 @@ const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_facebook': {width: 1280, height: 800},
 	'LIVINITY_gmail': {width: 1280, height: 800},
 	'LIVINITY_youtube': {width: 1280, height: 800},
+	'LIVINITY_whatsapp': {width: 1280, height: 800},
 	'LIVINITY_tradingview': {width: 1400, height: 850},
 	'LIVINITY_google': {width: 1280, height: 800},
 	'LIVINITY_yahoo': {width: 1280, height: 800},
