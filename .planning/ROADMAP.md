@@ -189,11 +189,11 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v18
   2. Running install.sh on a GUI server installs x11vnc, creates a systemd service bound to localhost only, and the service starts successfully
   3. x11vnc appears as a NativeApp in livinityd with working start/stop lifecycle and port health-checking
   4. Caddy generates a `pc.{domain}` subdomain block with `stream_close_delay` and JWT cookie gating in the Caddyfile
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- install.sh GUI detection + x11vnc installation + systemd service
+- [ ] 04-02-PLAN.md -- NativeApp registration + Caddy subdomain with stream_close_delay
 
 ### Phase 5: WebSocket Proxy & Auth
 **Goal**: Browser can establish an authenticated WebSocket connection to the VNC stream through livinityd, with JWT validation on upgrade and Origin header protection
