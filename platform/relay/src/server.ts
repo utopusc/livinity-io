@@ -15,6 +15,7 @@ import { handleHealthRequest } from './health.js';
 import { proxyHttpRequest } from './request-proxy.js';
 import { serveOfflinePage } from './offline-page.js';
 import { checkQuota } from './bandwidth.js';
+import { isCustomDomainAuthorized } from './custom-domains.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
 import type { DeviceRegistry } from './device-registry.js';
 import type { TunnelQuotaExceeded } from './protocol.js';
@@ -32,6 +33,7 @@ async function handleAskRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   pool: pg.Pool,
+  redis: Redis,
 ): Promise<void> {
   // Only allow from localhost
   const remote = req.socket.remoteAddress;
@@ -57,6 +59,22 @@ async function handleAskRequest(
       res.end(JSON.stringify({ allowed: true }));
       return;
     }
+
+    // Check if it's a verified custom domain (Phase 08 - DOM-04, DOM-NF-02)
+    // Only runs when parseSubdomain found no username, preserving existing
+    // *.livinity.io routing (DOM-NF-04). Redis-cached for <1ms lookups (DOM-NF-01).
+    try {
+      const authorized = await isCustomDomainAuthorized(pool, redis, domain);
+      if (authorized) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ allowed: true }));
+        return;
+      }
+    } catch (err) {
+      console.error('[relay] Ask endpoint custom domain check error:', err);
+      // Fall through to 404 — deny cert on error (safe default)
+    }
+
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ allowed: false }));
     return;
@@ -100,7 +118,7 @@ export function createRequestHandler(
       const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
 
       if (req.url.startsWith('/internal/ask')) {
-        await handleAskRequest(req, res, pool);
+        await handleAskRequest(req, res, pool, redis);
         return;
       }
 
