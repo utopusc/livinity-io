@@ -131,6 +131,33 @@ interface TunnelDeviceEmergencyStop {
 	reason: string
 }
 
+/** Platform syncs custom domain configuration to LivOS */
+interface TunnelDomainSync {
+	type: 'domain_sync'
+	action: 'add' | 'update' | 'remove'
+	domain: string
+	appMapping?: Record<string, string>
+	status?: string
+}
+
+/** LivOS acknowledges domain sync */
+interface TunnelDomainSyncAck {
+	type: 'domain_sync_ack'
+	domain: string
+	success: boolean
+	error?: string
+}
+
+/** Full domain list sync (sent on tunnel connect/reconnect) */
+interface TunnelDomainListSync {
+	type: 'domain_list_sync'
+	domains: Array<{
+		domain: string
+		appMapping: Record<string, string>
+		status: string
+	}>
+}
+
 type RelayToClientMessage =
 	| TunnelRequest
 	| TunnelWsUpgrade
@@ -144,6 +171,8 @@ type RelayToClientMessage =
 	| TunnelDeviceToolResult
 	| TunnelDeviceAuditEvent
 	| TunnelDeviceEmergencyStop
+	| TunnelDomainSync
+	| TunnelDomainListSync
 
 type BidirectionalMessage = TunnelWsFrame | TunnelWsClose
 
@@ -380,6 +409,12 @@ export default class TunnelClient {
 					this._deviceBridge.onEmergencyStop(msg)
 				}
 				break
+			case 'domain_sync':
+				this.handleDomainSync(msg as TunnelDomainSync)
+				break
+			case 'domain_list_sync':
+				this.handleDomainListSync(msg as TunnelDomainListSync)
+				break
 		}
 	}
 
@@ -613,6 +648,77 @@ export default class TunnelClient {
 			}
 		}
 		this.localWsSockets.clear()
+	}
+
+	// ─── Domain sync handlers ─────────────────────────────────────
+
+	private async handleDomainSync(msg: TunnelDomainSync): Promise<void> {
+		try {
+			if (msg.action === 'remove') {
+				// Delete from Redis cache
+				await this.redis.del(`livos:custom_domain:${msg.domain}`)
+				// Rebuild the full domain list in Redis from remaining domains
+				await this.rebuildDomainCache()
+				this.logger.log(`[tunnel] Domain removed: ${msg.domain}`)
+			} else {
+				// Upsert: store domain info in Redis per-domain key for fast O(1) lookup
+				const domainInfo = JSON.stringify({
+					domain: msg.domain,
+					appMapping: msg.appMapping || {},
+					status: msg.status || 'active',
+				})
+				await this.redis.set(`livos:custom_domain:${msg.domain}`, domainInfo)
+				// Rebuild the full domain list in Redis
+				await this.rebuildDomainCache()
+				this.logger.log(`[tunnel] Domain synced: ${msg.domain} (${msg.action})`)
+			}
+			// Send ack
+			this.sendMessage({type: 'domain_sync_ack', domain: msg.domain, success: true})
+		} catch (err) {
+			const errorMsg = err instanceof Error ? err.message : String(err)
+			this.logger.error(`[tunnel] Domain sync failed for ${msg.domain}: ${errorMsg}`)
+			this.sendMessage({type: 'domain_sync_ack', domain: msg.domain, success: false, error: errorMsg})
+		}
+	}
+
+	private async handleDomainListSync(msg: TunnelDomainListSync): Promise<void> {
+		try {
+			// Clear all existing custom domain keys
+			const existingKeys = await this.redis.keys('livos:custom_domain:*')
+			if (existingKeys.length > 0) {
+				await this.redis.del(...existingKeys)
+			}
+			// Store each domain
+			const pipeline = this.redis.pipeline()
+			for (const d of msg.domains) {
+				pipeline.set(`livos:custom_domain:${d.domain}`, JSON.stringify({
+					domain: d.domain,
+					appMapping: d.appMapping,
+					status: d.status,
+				}))
+			}
+			// Also store the full list for iteration
+			pipeline.set('livos:custom_domains', JSON.stringify(msg.domains))
+			await pipeline.exec()
+			this.logger.log(`[tunnel] Full domain list synced: ${msg.domains.length} domain(s)`)
+		} catch (err) {
+			this.logger.error(`[tunnel] Domain list sync failed: ${err}`)
+		}
+	}
+
+	private async rebuildDomainCache(): Promise<void> {
+		// Scan for all per-domain keys and rebuild the list
+		const keys = await this.redis.keys('livos:custom_domain:*')
+		const domains: Array<{domain: string; appMapping: Record<string, string>; status: string}> = []
+		if (keys.length > 0) {
+			const values = await this.redis.mget(...keys)
+			for (const val of values) {
+				if (val) {
+					try { domains.push(JSON.parse(val)) } catch {}
+				}
+			}
+		}
+		await this.redis.set('livos:custom_domains', JSON.stringify(domains))
 	}
 
 	// ─── Reconnection ─────────────────────────────────────────────
