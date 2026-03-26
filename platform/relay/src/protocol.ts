@@ -127,6 +127,33 @@ export interface TunnelDeviceEmergencyStop {
   reason: string;
 }
 
+/** Platform syncs custom domain configuration to LivOS */
+export interface TunnelDomainSync {
+  type: 'domain_sync';
+  action: 'add' | 'update' | 'remove';
+  domain: string;
+  appMapping?: Record<string, string>;  // subdomain prefix -> app slug ("root" = bare domain)
+  status?: string;  // 'dns_verified' | 'active' | 'dns_changed' | 'removed'
+}
+
+/** LivOS acknowledges domain sync */
+export interface TunnelDomainSyncAck {
+  type: 'domain_sync_ack';
+  domain: string;
+  success: boolean;
+  error?: string;
+}
+
+/** Full domain list sync (sent on tunnel connect/reconnect) */
+export interface TunnelDomainListSync {
+  type: 'domain_list_sync';
+  domains: Array<{
+    domain: string;
+    appMapping: Record<string, string>;
+    status: string;
+  }>;
+}
+
 // ---------------------------------------------------------------------------
 // Client → Relay messages (5 types)
 // ---------------------------------------------------------------------------
@@ -229,7 +256,9 @@ export type RelayToClientMessage =
   | TunnelDeviceDisconnected
   | TunnelDeviceToolResult
   | TunnelDeviceAuditEvent
-  | TunnelDeviceEmergencyStop;
+  | TunnelDeviceEmergencyStop
+  | TunnelDomainSync
+  | TunnelDomainListSync;
 
 /** All messages sent from the tunnel client to the relay */
 export type ClientToRelayMessage =
@@ -238,7 +267,8 @@ export type ClientToRelayMessage =
   | TunnelWsReady
   | TunnelWsError
   | TunnelPong
-  | TunnelDeviceToolCall;
+  | TunnelDeviceToolCall
+  | TunnelDomainSyncAck;
 
 /** Messages that can flow in either direction */
 export type BidirectionalMessage =
@@ -280,4 +310,7 @@ export type MessageTypeMap = {
   'device_tool_result': TunnelDeviceToolResult;
   'device_audit_event': TunnelDeviceAuditEvent;
   'device_emergency_stop': TunnelDeviceEmergencyStop;
+  'domain_sync': TunnelDomainSync;
+  'domain_sync_ack': TunnelDomainSyncAck;
+  'domain_list_sync': TunnelDomainListSync;
 };

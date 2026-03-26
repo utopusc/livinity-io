@@ -71,3 +71,17 @@ CREATE TABLE IF NOT EXISTS invites (
   used_at TIMESTAMPTZ,
   used_by UUID REFERENCES users(id)
 );
+
+-- =========================================================================
+-- Custom Domains (synced from platform via tunnel, v19.0)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS custom_domains (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain      TEXT NOT NULL UNIQUE,
+  app_mapping JSONB NOT NULL DEFAULT '{}',
+  status      TEXT NOT NULL DEFAULT 'active',
+  synced_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
