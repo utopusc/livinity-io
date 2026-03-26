@@ -192,7 +192,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v18
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- install.sh GUI detection + x11vnc installation + systemd service
+- [x] 04-01-PLAN.md -- install.sh GUI detection + x11vnc installation + systemd service
 - [ ] 04-02-PLAN.md -- NativeApp registration + Caddy subdomain with stream_close_delay
 
 ### Phase 5: WebSocket Proxy & Auth

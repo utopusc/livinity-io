@@ -9,8 +9,8 @@ Requirements for remote desktop streaming milestone. Each maps to roadmap phases
 
 ### Installation & Setup
 
-- [ ] **INST-01**: install.sh detects GUI presence (X11/Wayland) and skips desktop streaming setup on headless servers
-- [ ] **INST-02**: install.sh installs x11vnc and configures systemd service with `-localhost` binding
+- [x] **INST-01**: install.sh detects GUI presence (X11/Wayland) and skips desktop streaming setup on headless servers
+- [x] **INST-02**: install.sh installs x11vnc and configures systemd service with `-localhost` binding
 - [ ] **INST-03**: x11vnc registered as NativeApp in livinityd with systemd lifecycle management and port health-checking
 
 ### Streaming Infrastructure
@@ -77,8 +77,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 4 | Pending |
-| INST-02 | Phase 4 | Pending |
+| INST-01 | Phase 4 | Complete |
+| INST-02 | Phase 4 | Complete |
 | INST-03 | Phase 4 | Pending |
 | STRM-01 | Phase 5 | Pending |
 | STRM-02 | Phase 5 | Pending |
