@@ -15,7 +15,7 @@ import { handleHealthRequest } from './health.js';
 import { proxyHttpRequest } from './request-proxy.js';
 import { serveOfflinePage } from './offline-page.js';
 import { checkQuota } from './bandwidth.js';
-import { isCustomDomainAuthorized } from './custom-domains.js';
+import { isCustomDomainAuthorized, lookupCustomDomain } from './custom-domains.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
 import type { DeviceRegistry } from './device-registry.js';
 import type { TunnelQuotaExceeded } from './protocol.js';
@@ -166,7 +166,52 @@ export function createRequestHandler(
       return;
     }
 
-    // No subdomain — nothing to proxy
+    // Custom domain routing (DOM-04) — only when parseSubdomain found no
+    // username, so all existing *.livinity.io routing is unchanged (DOM-NF-04).
+    if (!username) {
+      const hostname = req.headers.host?.split(':')[0]?.toLowerCase();
+      if (hostname) {
+        const customDomain = await lookupCustomDomain(pool, redis, hostname);
+        if (customDomain) {
+          const cdTunnel = registry.get(customDomain.username);
+          if (!cdTunnel || cdTunnel.ws.readyState !== 1) {
+            // Check if the tunnel is in reconnect mode — buffer the request
+            if (cdTunnel && cdTunnel.isReconnecting()) {
+              const buffered = cdTunnel.bufferRequest(req, res);
+              if (buffered) return;
+            }
+            serveOfflinePage(res, customDomain.username);
+            return;
+          }
+
+          // Check bandwidth quota (same as subdomain path)
+          const cdQuota = await checkQuota(redis, cdTunnel.userId);
+          if (!cdQuota.allowed) {
+            const now = new Date();
+            const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+            const resetsAt = nextMonth.toISOString();
+            res.writeHead(429, { 'Content-Type': 'text/plain', 'Retry-After': '86400' });
+            res.end(`Bandwidth quota exceeded. Your monthly limit resets on ${resetsAt.split('T')[0]}.`);
+            const quotaMsg: TunnelQuotaExceeded = {
+              type: 'quota_exceeded',
+              usedBytes: cdQuota.usedBytes,
+              limitBytes: cdQuota.limitBytes,
+              resetsAt,
+            };
+            try { cdTunnel.ws.send(JSON.stringify(quotaMsg)); } catch {}
+            return;
+          }
+
+          // Custom domains don't have appName from subdomain parsing.
+          // In Phase 09, targetApp will come from domain-to-app mapping.
+          // For now, route to the main LivOS UI (targetApp = null).
+          proxyHttpRequest(cdTunnel, req, res, null);
+          return;
+        }
+      }
+    }
+
+    // No subdomain and not a custom domain — nothing to proxy
     if (!username) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');
