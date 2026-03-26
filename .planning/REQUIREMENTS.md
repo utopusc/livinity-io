@@ -21,18 +21,18 @@ Requirements for remote desktop streaming milestone. Each maps to roadmap phases
 
 ### Browser Viewer
 
-- [ ] **VIEW-01**: User can see their server desktop rendered in real-time in the browser via noVNC
-- [ ] **VIEW-02**: User can control remote desktop with mouse (click, move, drag, scroll) with correct coordinate scaling
-- [ ] **VIEW-03**: User can type on remote desktop including special characters and international keyboards
-- [ ] **VIEW-04**: User can enter fullscreen mode for immersive experience and better shortcut capture
-- [ ] **VIEW-05**: User sees connection status indicator (connected/reconnecting/disconnected with latency)
-- [ ] **VIEW-06**: Connection auto-reconnects on network interruption with exponential backoff
+- [x] **VIEW-01**: User can see their server desktop rendered in real-time in the browser via noVNC
+- [x] **VIEW-02**: User can control remote desktop with mouse (click, move, drag, scroll) with correct coordinate scaling
+- [x] **VIEW-03**: User can type on remote desktop including special characters and international keyboards
+- [x] **VIEW-04**: User can enter fullscreen mode for immersive experience and better shortcut capture
+- [x] **VIEW-05**: User sees connection status indicator (connected/reconnecting/disconnected with latency)
+- [x] **VIEW-06**: Connection auto-reconnects on network interruption with exponential backoff
 
 ### Integration
 
-- [ ] **INTG-01**: Desktop viewer accessible via `pc.{username}.livinity.io` subdomain through tunnel relay
+- [x] **INTG-01**: Desktop viewer accessible via `pc.{username}.livinity.io` subdomain through tunnel relay
 - [x] **INTG-02**: Desktop session persists across browser tab close/reopen (VNC session stays alive)
-- [ ] **INTG-03**: Desktop viewer fits browser viewport with dynamic resolution (server-side resize via xrandr)
+- [x] **INTG-03**: Desktop viewer fits browser viewport with dynamic resolution (server-side resize via xrandr)
 
 ## v2 Requirements
 
@@ -83,15 +83,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STRM-01 | Phase 5 | Complete |
 | STRM-02 | Phase 5 | Complete |
 | STRM-03 | Phase 4 | Complete |
-| VIEW-01 | Phase 6 | Pending |
-| VIEW-02 | Phase 6 | Pending |
-| VIEW-03 | Phase 6 | Pending |
-| VIEW-04 | Phase 6 | Pending |
-| VIEW-05 | Phase 6 | Pending |
-| VIEW-06 | Phase 6 | Pending |
-| INTG-01 | Phase 6 | Pending |
+| VIEW-01 | Phase 6 | Complete |
+| VIEW-02 | Phase 6 | Complete |
+| VIEW-03 | Phase 6 | Complete |
+| VIEW-04 | Phase 6 | Complete |
+| VIEW-05 | Phase 6 | Complete |
+| VIEW-06 | Phase 6 | Complete |
+| INTG-01 | Phase 6 | Complete |
 | INTG-02 | Phase 5 | Complete |
-| INTG-03 | Phase 6 | Pending |
+| INTG-03 | Phase 6 | Complete |
 
 **Coverage:**
 - v18.0 requirements: 15 total

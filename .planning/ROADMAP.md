@@ -222,7 +222,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- Server routes + noVNC standalone desktop viewer with full input, connection management, xrandr resize, and tunnel accessibility
+- [x] 06-01-PLAN.md -- Server routes + noVNC standalone desktop viewer with full input, connection management, xrandr resize, and tunnel accessibility
 
 ## Progress
 

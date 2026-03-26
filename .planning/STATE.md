@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v18.0
 milestone_name: Remote Desktop Streaming
 status: unknown
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-26T05:22:19.225Z"
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-26T05:38:06.796Z"
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v18.0 -- Remote Desktop Streaming
-**Current focus:** Phase 05 — websocket-proxy-auth
+**Current focus:** Phase 06 — browser-viewer-integration
 
 ## Current Position
 
-Phase: 6
-Plan: Not started
+Phase: 06 (browser-viewer-integration) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: Not started
 | Phase 04 P01 | 2min | 1 tasks | 1 files |
 | Phase 04 P02 | 3min | 3 tasks | 3 files |
 | Phase 05 P01 | 5min | 2 tasks | 2 files |
+| Phase 06 P01 | 5min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -61,6 +62,9 @@ Plan: Not started
 - [Phase 05]: desktopToken variable name avoids shadowing voice proxy token in same upgrade handler scope
 - [Phase 05]: Three-layer idle prevention: connection reset, throttled data-activity reset (60s), periodic heartbeat (5min)
 - [Phase 05]: Origin validation allows all subdomains via endsWith; non-browser clients (no Origin) allowed through
+- [Phase 06]: Vendored noVNC ESM source (core/ + vendor/) instead of npm CJS package -- browser script type=module requires ESM
+- [Phase 06]: NativeApp subdomain bypass in app gateway prevents 404 for pc.{domain}
+- [Phase 06]: Server-side xrandr resize via POST /api/desktop/resize with cvt modeline creation for custom resolutions
 
 ### Pending Todos
 
@@ -73,6 +77,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T05:19:11.420Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-03-26T05:38:06.792Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
