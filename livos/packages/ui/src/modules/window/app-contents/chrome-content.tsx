@@ -9,28 +9,26 @@ export default function ChromeWindowContent({url}: ChromeWindowProps) {
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
-		setState('launching')
+		const controller = new AbortController()
+		const timeout = setTimeout(() => controller.abort(), 15000)
 
+		// Fire and don't wait — show stream immediately
 		fetch('/api/chrome/launch', {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
 			credentials: 'include',
 			body: JSON.stringify({url: url || undefined}),
-		})
-			.then((res) => res.json())
-			.then((data) => {
-				if (data.success) {
-					setTimeout(() => setState('ready'), data.already_running ? 200 : 1500)
-				} else {
-					setError(data.error || 'Failed to launch Chrome')
-					setState('error')
-				}
-			})
-			.catch((err) => {
-				setError(err.message)
-				setState('error')
-			})
-	}, []) // runs every mount (new window = new mount)
+			signal: controller.signal,
+		}).catch(() => {})
+
+		clearTimeout(timeout)
+
+		// Show desktop viewer after a short delay regardless of API response
+		// Chrome is either already running or will start in background
+		setTimeout(() => setState('ready'), 500)
+
+		return () => controller.abort()
+	}, [])
 
 	if (state === 'error') {
 		return (
