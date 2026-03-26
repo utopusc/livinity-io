@@ -84,6 +84,47 @@ main() {
         ok "Architecture: $ARCH ($raw_arch)"
     }
 
+    detect_gui() {
+        HAS_GUI=false
+        GUI_TYPE="none"
+
+        # Method 1: Check systemd default target
+        local default_target
+        default_target=$(systemctl get-default 2>/dev/null || echo "unknown")
+
+        if [[ "$default_target" != "graphical.target" ]]; then
+            info "Systemd target: $default_target (not graphical) -- no desktop streaming"
+            return 0
+        fi
+
+        # Method 2: Check for running X11 display
+        if [[ -e /tmp/.X11-unix/X0 ]]; then
+            HAS_GUI=true
+            GUI_TYPE="x11"
+            ok "Display server detected: X11"
+            return 0
+        fi
+
+        # Method 3: Check for Wayland
+        if ls /run/user/*/wayland-* &>/dev/null 2>&1; then
+            HAS_GUI=true
+            GUI_TYPE="wayland"
+            warn "Wayland detected -- x11vnc requires XWayland (native Wayland capture not supported in v1)"
+            return 0
+        fi
+
+        # Graphical target set but no display running (GUI installed, no monitor/session yet)
+        # Still install x11vnc -- it will work once a display session starts
+        if [[ "$default_target" == "graphical.target" ]]; then
+            HAS_GUI=true
+            GUI_TYPE="x11"
+            info "Graphical target set but no active display session -- installing x11vnc for when session starts"
+            return 0
+        fi
+
+        info "No GUI detected (headless server) -- desktop streaming will be skipped"
+    }
+
     check_root() {
         if [[ $EUID -ne 0 ]]; then
             fail "This script must be run as root (use: sudo bash install.sh)"
@@ -461,6 +502,65 @@ JAIL
 
         systemctl enable --now fail2ban
         ok "fail2ban configured: SSH jail active (maxretry=5, bantime=1h)"
+    }
+
+    # ── Desktop Streaming (x11vnc) ─────────────────────────
+
+    install_x11vnc() {
+        if ! $HAS_GUI; then
+            info "Skipping x11vnc (no GUI detected)"
+            return 0
+        fi
+
+        if command -v x11vnc &>/dev/null; then
+            ok "x11vnc already installed"
+            return 0
+        fi
+
+        info "Installing x11vnc for desktop streaming..."
+        apt-get install -y -qq x11vnc
+        ok "x11vnc installed"
+    }
+
+    setup_desktop_streaming() {
+        if ! $HAS_GUI; then
+            info "Skipping desktop streaming setup (no GUI)"
+            return 0
+        fi
+
+        step "Configuring desktop streaming"
+
+        # Create systemd service for x11vnc
+        cat > /etc/systemd/system/livos-x11vnc.service << 'UNIT'
+[Unit]
+Description=LivOS Desktop Streaming (x11vnc)
+After=display-manager.service
+Wants=display-manager.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/x11vnc -display :0 -rfbport 5900 -localhost -shared -forever -noxdamage -ncache 10 -threads -nopw
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+        systemctl daemon-reload
+        # Do NOT enable -- started on-demand by NativeApp idle timeout system
+        ok "Desktop streaming service created (livos-x11vnc.service)"
+
+        # Store GUI detection result in Redis for livinityd to read
+        source "$LIVOS_DIR/.env" 2>/dev/null || true
+        local redis_pass
+        redis_pass=$(echo "$REDIS_URL" | sed -n 's|redis://:\(.*\)@.*|\1|p')
+        if [[ -n "$redis_pass" ]]; then
+            redis-cli -a "$redis_pass" SET livos:desktop:gui_type "$GUI_TYPE" 2>/dev/null
+            redis-cli -a "$redis_pass" SET livos:desktop:has_gui "true" 2>/dev/null
+            ok "Desktop streaming config stored in Redis"
+        fi
     }
 
     # ── SSH Hardening ──────────────────────────────────────────
@@ -1148,6 +1248,7 @@ FWSVC
     check_root
     detect_os
     detect_arch
+    detect_gui
     detect_tty
     check_whiptail
     ok "Pre-flight passed"
@@ -1170,6 +1271,7 @@ FWSVC
     install_caddy
     install_cloudflared
     install_fail2ban
+    install_x11vnc
     ok "All system dependencies ready"
 
     # === Configuration ===
@@ -1222,6 +1324,9 @@ FWSVC
     # === Services ===
     create_systemd_service
     start_services
+
+    # === Desktop Streaming ===
+    setup_desktop_streaming
 
     # === Caddy ===
     configure_caddy
