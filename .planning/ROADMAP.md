@@ -176,7 +176,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v18
 
 - [ ] **Phase 4: Server Infrastructure** - Install x11vnc via install.sh with GUI detection, register as NativeApp, configure Caddy subdomain
 - [ ] **Phase 5: WebSocket Proxy & Auth** - Bridge browser WebSocket to VNC TCP socket with JWT validation and Caddy stream resilience
-- [ ] **Phase 6: Browser Viewer & Integration** - noVNC React viewer with full input, connection management, and tunnel subdomain routing
+- [ ] **Phase 6: Browser Viewer & Integration** - noVNC standalone viewer with full input, connection management, and tunnel subdomain routing
 
 ## Phase Details
 
@@ -219,11 +219,10 @@ Plans:
   3. User can enter fullscreen mode and the remote desktop resizes to fill the browser viewport via server-side xrandr
   4. Connection status indicator shows connected/reconnecting/disconnected states with latency, and the viewer auto-reconnects on network interruption with exponential backoff
   5. Desktop viewer is accessible through the tunnel relay at `pc.{username}.livinity.io` (not just local network)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md -- Server routes + noVNC standalone desktop viewer with full input, connection management, xrandr resize, and tunnel accessibility
 
 ## Progress
 
@@ -234,4 +233,4 @@ Phases execute in numeric order: 4 -> 5 -> 6
 |-------|-----------|----------------|--------|-----------|
 | 4. Server Infrastructure | v18.0 | 0/2 | Not started | - |
 | 5. WebSocket Proxy & Auth | v18.0 | 0/1 | Not started | - |
-| 6. Browser Viewer & Integration | v18.0 | 0/2 | Not started | - |
+| 6. Browser Viewer & Integration | v18.0 | 0/1 | Not started | - |
