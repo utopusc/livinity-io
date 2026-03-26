@@ -1020,6 +1020,9 @@ ENVFILE
             # Build mcp-server (optional)
             cd packages/mcp-server && npx tsc 2>/dev/null && cd ../.. || cd ../..
 
+            # Build memory service (required for liv-memory.service)
+            cd packages/memory && npx tsc 2>/dev/null && cd ../.. || cd ../..
+
             cd "$LIVOS_DIR"
             ok "Nexus packages built"
 
@@ -1040,17 +1043,6 @@ ENVFILE
             fi
         fi
 
-        # Python venv for memory service
-        local memory_dir="$nexus_dir/packages/memory"
-        if [[ -f "$memory_dir/src/requirements.txt" ]]; then
-            info "Setting up Python venv for memory service..."
-            if [[ ! -d "$memory_dir/venv" ]]; then
-                python3 -m venv "$memory_dir/venv"
-            fi
-            "$memory_dir/venv/bin/pip" install -q -r "$memory_dir/src/requirements.txt"
-            ok "Python venv ready"
-        fi
-
         # Symlink .env for Nexus
         if [[ -d "$nexus_dir" ]] && [[ ! -L "$nexus_dir/.env" ]]; then
             ln -sf /opt/livos/.env "$nexus_dir/.env"
@@ -1060,7 +1052,14 @@ ENVFILE
         # Create directories
         mkdir -p "$LIVOS_DIR/logs"
         mkdir -p "$LIVOS_DIR/data"
-        ok "Directories created"
+        mkdir -p "$LIVOS_DIR/data/secrets"
+
+        # Write JWT secret to the file livinityd reads at runtime
+        # This ensures .env JWT_SECRET and data/secrets/jwt match
+        echo -n "$SECRET_JWT" > "$LIVOS_DIR/data/secrets/jwt"
+        chmod 600 "$LIVOS_DIR/data/secrets/jwt"
+
+        ok "Directories and secrets created"
 
         # Make app-script executable
         chmod +x "$LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-script" 2>/dev/null || true
@@ -1115,21 +1114,36 @@ ENVFILE
 
         sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE livos TO livos;"
 
+        # PostgreSQL 15+ revoked default CREATE on public schema for non-superusers
+        sudo -u postgres psql -d livos -c "GRANT ALL ON SCHEMA public TO livos;" 2>/dev/null || true
+
         ok "PostgreSQL: database 'livos' ready"
     }
 
     configure_caddy() {
         step "Configuring Caddy"
 
-        cat > /etc/caddy/Caddyfile << 'CADDYFILE'
+        local domain="${CONFIG_DOMAIN:-localhost}"
+        local use_https="${CONFIG_USE_HTTPS:-false}"
+
+        if [[ "$use_https" == "true" ]] && [[ "$domain" != "localhost" ]]; then
+            cat > /etc/caddy/Caddyfile << CADDYFILE
+${domain} {
+    reverse_proxy localhost:8080
+}
+CADDYFILE
+            ok "Caddy configured: ${domain} with auto-TLS → localhost:8080"
+        else
+            cat > /etc/caddy/Caddyfile << 'CADDYFILE'
 :80 {
     reverse_proxy localhost:8080
 }
 CADDYFILE
+            ok "Caddy configured: :80 → localhost:8080 (HTTP only)"
+        fi
 
         systemctl enable caddy
         systemctl restart caddy
-        ok "Caddy configured: :80 → localhost:8080 (full reverse proxy)"
     }
 
     # ── Systemd Services ──────────────────────────────────────
@@ -1146,6 +1160,9 @@ CADDYFILE
         # Ensure home dir exists (for npx cache used by MCP servers)
         mkdir -p /home/livos
         chown livos:livos /home/livos
+
+        # Add livos to docker group (needed by liv-worker.service)
+        usermod -aG docker livos 2>/dev/null || true
 
         # Set ownership
         chown -R livos:livos "$LIVOS_DIR"
@@ -1270,15 +1287,37 @@ UNIT
         systemctl start liv-core.service
         systemctl start liv-worker.service
 
-        # Check if services started
-        sleep 2
-        if systemctl is-active --quiet livos.service; then
-            ok "LivOS service running"
+        # Check all services
+        sleep 5
+        local all_ok=true
+        for svc in livos liv-core liv-memory liv-worker; do
+            if systemctl is-active --quiet "${svc}.service"; then
+                ok "${svc} running"
+            else
+                warn "${svc} may not have started - check: journalctl -u ${svc}.service"
+                all_ok=false
+            fi
+        done
+
+        # HTTP health check
+        if curl -sf -o /dev/null --max-time 5 http://localhost:8080 2>/dev/null; then
+            ok "LivOS UI responding on :8080"
         else
-            warn "LivOS service may not have started correctly - check: journalctl -u livos.service"
+            warn "LivOS UI not responding yet (may need a few more seconds)"
         fi
 
-        ok "All services started"
+        # Redis connectivity
+        local redis_pass
+        redis_pass=$(echo "${REDIS_URL:-}" | sed -n 's|redis://:\(.*\)@.*|\1|p')
+        if [[ -n "$redis_pass" ]] && redis-cli -a "$redis_pass" ping 2>/dev/null | grep -q PONG; then
+            ok "Redis responding"
+        fi
+
+        if $all_ok; then
+            ok "All services started"
+        else
+            warn "Some services need attention (see warnings above)"
+        fi
     }
 
     # ── Firewall Configuration ────────────────────────────────
@@ -1295,10 +1334,10 @@ UNIT
         ufw allow 22/tcp   2>/dev/null || true   # SSH
         ufw allow 80/tcp   2>/dev/null || true   # HTTP (Caddy)
         ufw allow 443/tcp  2>/dev/null || true   # HTTPS (Caddy)
-        ufw allow 8080/tcp 2>/dev/null || true   # LivOS UI direct access
+        # Port 8080 NOT opened — LivOS accessed through Caddy only (defense in depth)
         ufw --force enable 2>/dev/null || true
         ufw reload 2>/dev/null || true
-        ok "UFW: SSH(22) + HTTP(80) + HTTPS(443) + LivOS(8080) allowed"
+        ok "UFW: SSH(22) + HTTP(80) + HTTPS(443) allowed"
 
         # ── Docker DOCKER-USER chain (defense-in-depth) ──
         # Docker publishes ports by inserting DNAT rules that bypass UFW.
