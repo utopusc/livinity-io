@@ -53,3 +53,22 @@ export const deviceGrants = pgTable('device_grants', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
 });
+
+// =========================================================================
+// Custom Domains (user-registered custom domains, v19.0)
+// =========================================================================
+export const customDomains = pgTable('custom_domains', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  user_id: uuid('user_id').notNull(),
+  domain: text('domain').notNull().unique(),
+  verification_token: text('verification_token').notNull(),
+  status: text('status').notNull().default('pending_dns'),
+  // Status values: pending_dns | dns_verified | dns_failed | active | dns_changed | error
+  dns_a_verified: boolean('dns_a_verified').notNull().default(false),
+  dns_txt_verified: boolean('dns_txt_verified').notNull().default(false),
+  error_message: text('error_message'),
+  last_dns_check: timestamp('last_dns_check', { withTimezone: true }),
+  verified_at: timestamp('verified_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
