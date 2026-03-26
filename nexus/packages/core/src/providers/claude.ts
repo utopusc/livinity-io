@@ -255,17 +255,36 @@ export class ClaudeProvider implements AIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
+    // 1. Check Redis API key
+    try {
+      await this.getApiKey();
+      return true;
+    } catch {}
+
+    // 2. Check Claude credentials file (~/.claude/.credentials.json)
+    // Anthropic SDK reads this automatically for OAuth-authenticated users
+    try {
+      const { existsSync, readFileSync } = await import('fs');
+      const { join } = await import('path');
+      const home = process.env.HOME || process.env.USERPROFILE || '/root';
+      const credsPath = join(home, '.claude', '.credentials.json');
+      if (existsSync(credsPath)) {
+        const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
+        if (creds.claudeAiOauth?.accessToken) return true;
+      }
+    } catch {}
+
+    // 3. Check ANTHROPIC_API_KEY env var
+    if (process.env.ANTHROPIC_API_KEY) return true;
+
+    // 4. Fallback: check CLI status
     const method = await this.getAuthMethod();
     if (method === 'sdk-subscription') {
       const status = await this.getCliStatus();
       return status.installed && status.authenticated;
     }
-    try {
-      await this.getApiKey();
-      return true;
-    } catch {
-      return false;
-    }
+
+    return false;
   }
 
   getModels(): Record<string, string> {
