@@ -974,9 +974,16 @@ class Server {
 		// Both UI (Remote Desktop stream) and AI (Chrome MCP) use the same Chrome.
 		this.app.post('/api/chrome/launch', express.json(), async (request, response) => {
 			try {
+				const url = request.body?.url || ''
+
 				// Check if MCP-ready Chrome is already running
 				const {exitCode: portCheck} = await $({shell: true, reject: false})`curl -s -o /dev/null -w '' http://127.0.0.1:9222/json/version`
 				if (portCheck === 0) {
+					// Chrome running — open URL via CDP if requested
+					if (url) {
+						await $({shell: true, reject: false})`curl -s -X PUT "http://127.0.0.1:9222/json/new?${url}"`
+						this.logger.log(`Chrome CDP: opened ${url} in new tab`)
+					}
 					return response.json({success: true, already_running: true, debugging_port: 9222})
 				}
 
@@ -991,7 +998,6 @@ class Server {
 				const xauth = (await $({shell: true, reject: false})`find /run/user/${uid}/gdm -name 'Xauthority' 2>/dev/null | head -1`).stdout.trim()
 					|| `/home/${desktopUser}/.Xauthority`
 
-				const url = request.body?.url || ''
 				const urlArg = url ? `"${url}"` : ''
 
 				// Launch Chrome via the livos-launch-chrome script (installed by install.sh)
