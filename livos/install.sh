@@ -553,7 +553,7 @@ XAUTH=$(find /run/user/$(id -u)/gdm -name Xauthority 2>/dev/null | head -1)
 [ -z "$XAUTH" ] && XAUTH="$HOME/.Xauthority"
 export XAUTHORITY="$XAUTH"
 exec google-chrome-stable \
-    --start-fullscreen \
+    --start-maximized \
     --no-first-run \
     --no-default-browser-check \
     --disable-infobars \
