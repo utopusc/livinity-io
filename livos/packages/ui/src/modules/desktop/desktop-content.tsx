@@ -241,16 +241,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 					<AppIcon
 						label='Remote Desktop'
 						src='/figma-exports/dock-remote-desktop.png'
-						onClick={() => {
-							if (windowManager) {
-								windowManager.openWindow(
-									'LIVINITY_remote-desktop',
-									'/remote-desktop',
-									'Remote Desktop',
-									'/figma-exports/dock-remote-desktop.png',
-								)
-							}
-						}}
+						onClick={() => openStreamApp('LIVINITY_remote-desktop', '/remote-desktop', 'Remote Desktop', '/figma-exports/dock-remote-desktop.png')}
 					/>
 				</motion.div>
 			),
@@ -268,16 +259,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 					<AppIcon
 						label='Chrome'
 						src='/figma-exports/dock-chrome.png'
-						onClick={() => {
-							if (windowManager) {
-								windowManager.openWindow(
-									'LIVINITY_chrome',
-									'/chrome',
-									'Chrome',
-									'/figma-exports/dock-chrome.png',
-								)
-							}
-						}}
+						onClick={() => openStreamApp('LIVINITY_chrome', '/chrome', 'Chrome', '/figma-exports/dock-chrome.png')}
 					/>
 				</motion.div>
 			),
@@ -285,6 +267,19 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		appItems.push(chromeItem)
 
 		// Web app shortcuts — launch Chrome with specific URL
+		// All stream apps share a single window (close previous before opening new)
+		const streamAppIds = new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail', 'LIVINITY_facebook', 'LIVINITY_whatsapp', 'LIVINITY_youtube'])
+		const openStreamApp = (appId: string, route: string, title: string, icon: string) => {
+			if (!windowManager) return
+			// Close any existing stream app windows
+			for (const win of windowManager.windows) {
+				if (streamAppIds.has(win.appId) && win.appId !== appId) {
+					windowManager.closeWindow(win.id)
+				}
+			}
+			windowManager.openWindow(appId, route, title, icon)
+		}
+
 		const webApps = [
 			{id: 'LIVINITY_gmail', label: 'Gmail', icon: '/figma-exports/app-gmail.png', url: 'https://mail.google.com'},
 			{id: 'LIVINITY_facebook', label: 'Facebook', icon: '/figma-exports/app-facebook.png', url: 'https://www.facebook.com'},
@@ -303,11 +298,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 						<AppIcon
 							label={wa.label}
 							src={wa.icon}
-							onClick={() => {
-								if (windowManager) {
-									windowManager.openWindow(wa.id, wa.url, wa.label, wa.icon)
-								}
-							}}
+							onClick={() => openStreamApp(wa.id, wa.url, wa.label, wa.icon)}
 						/>
 					</motion.div>
 				),
