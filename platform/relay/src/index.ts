@@ -111,6 +111,35 @@ const deviceWss = new WebSocketServer({
 });
 
 /**
+ * Send full list of verified/active custom domains to a tunnel client on connect.
+ * Ensures LivOS always has the latest domain state, even after reconnect.
+ */
+async function sendDomainListSync(ws: WebSocket, userId: string): Promise<void> {
+  try {
+    const result = await pool.query<{
+      domain: string;
+      status: string;
+      app_mapping: Record<string, string> | null;
+    }>(
+      `SELECT domain, status, app_mapping FROM custom_domains
+       WHERE user_id = $1 AND status IN ('dns_verified', 'active')`,
+      [userId]
+    );
+    const domains = result.rows.map(r => ({
+      domain: r.domain,
+      appMapping: r.app_mapping || {},
+      status: r.status,
+    }));
+    if (domains.length > 0) {
+      ws.send(JSON.stringify({ type: 'domain_list_sync', domains }));
+      console.log(`[relay] Sent domain_list_sync: ${domains.length} domain(s) for user ${userId}`);
+    }
+  } catch (err) {
+    console.error('[relay] Failed to send domain_list_sync:', err);
+  }
+}
+
+/**
  * Handle a newly connected tunnel WebSocket.
  *
  * The client must send an auth message within AUTH_TIMEOUT_MS.
@@ -184,6 +213,7 @@ function onTunnelConnect(ws: WebSocket): void {
             assignedUrl: `https://${result.username}.${config.RELAY_HOST}`,
           };
           ws.send(JSON.stringify(connectedMsg));
+          sendDomainListSync(ws, result.userId);
 
           console.log(`[relay] Tunnel reconnected: ${result.username} (session=${authMsg.sessionId})`);
           return;
@@ -208,6 +238,7 @@ function onTunnelConnect(ws: WebSocket): void {
         assignedUrl: `https://${result.username}.${config.RELAY_HOST}`,
       };
       ws.send(JSON.stringify(connectedMsg));
+      sendDomainListSync(ws, result.userId);
 
       console.log(`[relay] Tunnel connected: ${result.username} (session=${sessionId})`);
       return;
@@ -264,6 +295,11 @@ function onTunnelConnect(ws: WebSocket): void {
 
       case 'pong':
         // Application-level pong — heartbeat uses WebSocket-level ping/pong
+        break;
+
+      case 'domain_sync_ack':
+        // Log acknowledgment; no further action needed
+        console.log(`[relay] Domain sync ack from ${tunnelUsername}: ${(msg as any).domain} success=${(msg as any).success}`);
         break;
 
       default:

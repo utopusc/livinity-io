@@ -66,6 +66,7 @@ export const customDomains = pgTable('custom_domains', {
   // Status values: pending_dns | dns_verified | dns_failed | active | dns_changed | error
   dns_a_verified: boolean('dns_a_verified').notNull().default(false),
   dns_txt_verified: boolean('dns_txt_verified').notNull().default(false),
+  app_mapping: jsonb('app_mapping').notNull().default({}),
   error_message: text('error_message'),
   last_dns_check: timestamp('last_dns_check', { withTimezone: true }),
   verified_at: timestamp('verified_at', { withTimezone: true }),

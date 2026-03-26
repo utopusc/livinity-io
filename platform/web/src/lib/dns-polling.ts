@@ -3,6 +3,25 @@ import { customDomains } from '@/db/schema';
 import { verifyDomainDns } from '@/lib/dns-verify';
 import { eq, and, or, lt, sql, isNull } from 'drizzle-orm';
 
+const RELAY_DOMAIN_SYNC_URL = 'http://localhost:4000/internal/domain-sync';
+
+async function notifyRelayDomainSync(
+  userId: string,
+  action: 'add' | 'update' | 'remove',
+  domain: string,
+  status: string,
+): Promise<void> {
+  try {
+    await fetch(RELAY_DOMAIN_SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action, domain, status }),
+    });
+  } catch (err) {
+    console.error(`[dns-polling] Failed to notify relay of domain sync for ${domain}:`, err);
+  }
+}
+
 const FAST_INTERVAL_MS = 30_000; // 30 seconds (first hour after domain addition)
 const SLOW_INTERVAL_MS = 5 * 60_000; // 5 minutes (after first hour)
 const REVERIFY_INTERVAL_MS = 12 * 60 * 60_000; // 12 hours for re-verification of active domains
@@ -107,6 +126,11 @@ export async function pollPendingDomains(): Promise<void> {
         .update(customDomains)
         .set(updateData)
         .where(eq(customDomains.id, domain.id));
+
+      // Notify relay to sync domain to LivOS when verified
+      if (updateData.status === 'dns_verified') {
+        await notifyRelayDomainSync(domain.user_id, 'add', domain.domain, 'dns_verified');
+      }
     }
 
     // 2. Re-verify active/verified domains every 12 hours
@@ -141,6 +165,9 @@ export async function pollPendingDomains(): Promise<void> {
             error_message: 'DNS records have changed. Please verify your DNS configuration.',
           })
           .where(eq(customDomains.id, domain.id));
+
+        // Notify relay to update domain status on LivOS
+        await notifyRelayDomainSync(domain.user_id, 'update', domain.domain, 'dns_changed');
       } else {
         await db
           .update(customDomains)

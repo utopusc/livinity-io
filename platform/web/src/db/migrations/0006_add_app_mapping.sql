@@ -1,0 +1,1 @@
+ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS app_mapping JSONB NOT NULL DEFAULT '{}';
