@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Desktop -- Livinity</title>
+  <style>
+    /* Full viewport, no margins, dark background for letterboxing */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; }
+
+    #desktop-canvas { width: 100vw; height: 100vh; }
+
+    /* Floating toolbar -- top center, auto-hides after 3s */
+    #toolbar {
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(12px);
+      border-radius: 10px; padding: 8px 16px;
+      color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px; z-index: 1000;
+      transition: opacity 0.3s ease;
+      opacity: 1;
+    }
+    #toolbar.hidden { opacity: 0; pointer-events: none; }
+
+    /* Status badge */
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; margin-right: 4px;
+    }
+    .status-connected { background: #22c55e; }
+    .status-reconnecting { background: #eab308; animation: pulse 1s infinite; }
+    .status-disconnected { background: #ef4444; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* Toolbar buttons */
+    .tb-btn {
+      background: rgba(255,255,255,0.1); border: none; color: white;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-family: inherit;
+      transition: background 0.15s;
+    }
+    .tb-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* Loading overlay */
+    #loading-overlay {
+      position: fixed; inset: 0; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: #1a1a1a; color: #888; z-index: 2000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .spinner {
+      width: 40px; height: 40px; border: 3px solid #333;
+      border-top-color: #888; border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error page */
+    #error-overlay {
+      position: fixed; inset: 0; display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: #1a1a1a; color: #ccc; z-index: 2000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #error-overlay h2 { font-size: 20px; margin-bottom: 8px; }
+    #error-overlay p { color: #888; font-size: 14px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <!-- Loading overlay shown during initial connection -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div>Connecting to desktop...</div>
+  </div>
+
+  <!-- Error overlay shown when VNC is unavailable -->
+  <div id="error-overlay">
+    <h2>Desktop Unavailable</h2>
+    <p id="error-message">Could not connect to the desktop stream.</p>
+    <button class="tb-btn" onclick="location.reload()">Retry</button>
+  </div>
+
+  <!-- noVNC renders into this container -->
+  <div id="desktop-canvas"></div>
+
+  <!-- Floating toolbar -->
+  <div id="toolbar">
+    <span id="status-badge">
+      <span class="status-dot status-connected"></span>
+      <span id="status-text">Connecting...</span>
+    </span>
+    <span id="latency-display" style="color: #888; font-size: 12px;"></span>
+    <button class="tb-btn" id="fullscreen-btn" title="Fullscreen (F11)">Fullscreen</button>
+    <button class="tb-btn" id="disconnect-btn" title="Disconnect">Disconnect</button>
+  </div>
+
+  <script type="module">
+    import RFB from '/novnc/core/rfb.js';
+
+    // -- Configuration --
+    const RECONNECT_BASE_DELAY = 1000;  // 1s
+    const RECONNECT_MAX_DELAY = 30000;  // 30s
+    const TOOLBAR_HIDE_DELAY = 3000;    // 3s
+    const RESIZE_DEBOUNCE = 300;        // 300ms
+
+    // -- State --
+    let rfb = null;
+    let reconnectDelay = RECONNECT_BASE_DELAY;
+    let reconnectTimer = null;
+    let toolbarTimer = null;
+    let resizeTimer = null;
+    let connectionState = 'disconnected'; // connected | reconnecting | disconnected
+    let latencyInterval = null;
+    let connectTime = 0;
+
+    // -- DOM refs --
+    const canvas = document.getElementById('desktop-canvas');
+    const toolbar = document.getElementById('toolbar');
+    const statusDot = toolbar.querySelector('.status-dot');
+    const statusText = document.getElementById('status-text');
+    const latencyDisplay = document.getElementById('latency-display');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const errorOverlay = document.getElementById('error-overlay');
+    const errorMessage = document.getElementById('error-message');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+
+    // -- JWT Token --
+    function getToken() {
+      const cookies = document.cookie.split(';').map(c => c.trim());
+      for (const c of cookies) {
+        if (c.startsWith('livinity_token=')) return c.slice('livinity_token='.length);
+        if (c.startsWith('LIVINITY_SESSION=')) return c.slice('LIVINITY_SESSION='.length);
+      }
+      return '';
+    }
+
+    // -- WebSocket URL --
+    function getWsUrl() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const token = getToken();
+      return `${proto}//${location.host}/ws/desktop?token=${encodeURIComponent(token)}`;
+    }
+
+    // -- Status Updates --
+    function setStatus(state, text) {
+      connectionState = state;
+      statusDot.className = 'status-dot status-' + state;
+      statusText.textContent = text || state.charAt(0).toUpperCase() + state.slice(1);
+    }
+
+    // -- Latency Measurement --
+    // noVNC doesn't expose per-frame latency directly.
+    // Show connection duration as a basic session indicator.
+    function startLatencyMeasurement() {
+      if (latencyInterval) clearInterval(latencyInterval);
+
+      latencyInterval = setInterval(() => {
+        if (rfb && connectionState === 'connected') {
+          const elapsed = Math.round((Date.now() - connectTime) / 1000);
+          if (elapsed < 60) {
+            latencyDisplay.textContent = '';
+          } else {
+            const mins = Math.floor(elapsed / 60);
+            latencyDisplay.textContent = `${mins}m connected`;
+          }
+        }
+      }, 5000);
+    }
+
+    // -- Connect --
+    function connect() {
+      if (rfb) {
+        rfb.disconnect();
+        rfb = null;
+      }
+
+      const url = getWsUrl();
+      setStatus('reconnecting', 'Connecting...');
+
+      try {
+        rfb = new RFB(canvas, url, {
+          credentials: { password: '' },
+          wsProtocols: ['binary'],
+        });
+
+        // noVNC settings per CONTEXT.md decisions
+        rfb.scaleViewport = true;
+        rfb.resizeSession = false; // We handle resize via xrandr API
+        rfb.showDotCursor = false; // Hide local cursor dot, show remote only
+        rfb.background = '#1a1a1a';
+        rfb.qualityLevel = 6;
+        rfb.compressionLevel = 2;
+
+        // -- Event Handlers --
+        rfb.addEventListener('connect', () => {
+          setStatus('connected', 'Connected');
+          reconnectDelay = RECONNECT_BASE_DELAY; // Reset backoff
+          connectTime = Date.now();
+          loadingOverlay.style.display = 'none';
+          errorOverlay.style.display = 'none';
+          startLatencyMeasurement();
+          // Send initial resize to match viewport
+          sendResize();
+        });
+
+        rfb.addEventListener('disconnect', (e) => {
+          if (latencyInterval) clearInterval(latencyInterval);
+
+          if (e.detail.clean) {
+            // Clean disconnect (user clicked disconnect)
+            setStatus('disconnected', 'Disconnected');
+            latencyDisplay.textContent = '';
+          } else {
+            // Unexpected disconnect -- auto-reconnect
+            setStatus('reconnecting', `Reconnecting in ${reconnectDelay / 1000}s...`);
+            latencyDisplay.textContent = '';
+            scheduleReconnect();
+          }
+        });
+
+        rfb.addEventListener('credentialsrequired', () => {
+          // x11vnc may ask for VNC password -- send empty (auth is via JWT)
+          rfb.sendCredentials({ password: '' });
+        });
+
+        rfb.addEventListener('desktopname', (e) => {
+          document.title = `${e.detail.name} -- Livinity`;
+        });
+
+      } catch (err) {
+        console.error('noVNC connect error:', err);
+        setStatus('disconnected', 'Connection failed');
+        loadingOverlay.style.display = 'none';
+        errorOverlay.style.display = 'flex';
+        errorMessage.textContent = err.message || 'Could not connect to the desktop stream.';
+      }
+    }
+
+    // -- Auto-Reconnect with Exponential Backoff --
+    function scheduleReconnect() {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        // Re-read token on reconnect (may have been refreshed)
+        connect();
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
+        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY);
+      }, reconnectDelay);
+    }
+
+    // -- Dynamic Resolution via xrandr --
+    function sendResize() {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(async () => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        // Send logical pixels -- xrandr works with logical resolution
+        try {
+          await fetch('/api/desktop/resize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ width, height }),
+          });
+        } catch (err) {
+          console.warn('Resize failed:', err);
+        }
+      }, RESIZE_DEBOUNCE);
+    }
+
+    // Listen for viewport resize
+    window.addEventListener('resize', sendResize);
+
+    // -- Fullscreen Toggle --
+    fullscreenBtn.addEventListener('click', () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      fullscreenBtn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+      // Trigger resize after fullscreen change
+      setTimeout(sendResize, 200);
+    });
+
+    // -- Disconnect Button --
+    disconnectBtn.addEventListener('click', () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (rfb) rfb.disconnect();
+      setStatus('disconnected', 'Disconnected');
+      latencyDisplay.textContent = '';
+    });
+
+    // -- Toolbar Auto-Hide --
+    function showToolbar() {
+      toolbar.classList.remove('hidden');
+      if (toolbarTimer) clearTimeout(toolbarTimer);
+      toolbarTimer = setTimeout(() => {
+        if (connectionState === 'connected') {
+          toolbar.classList.add('hidden');
+        }
+      }, TOOLBAR_HIDE_DELAY);
+    }
+
+    // Show toolbar on mouse move near top of screen
+    document.addEventListener('mousemove', (e) => {
+      if (e.clientY < 80) showToolbar();
+    });
+
+    // Keep toolbar visible when hovering it
+    toolbar.addEventListener('mouseenter', () => {
+      if (toolbarTimer) clearTimeout(toolbarTimer);
+      toolbar.classList.remove('hidden');
+    });
+    toolbar.addEventListener('mouseleave', () => {
+      toolbarTimer = setTimeout(() => {
+        if (connectionState === 'connected') {
+          toolbar.classList.add('hidden');
+        }
+      }, TOOLBAR_HIDE_DELAY);
+    });
+
+    // -- Initialize --
+    connect();
+  </script>
+</body>
+</html>
