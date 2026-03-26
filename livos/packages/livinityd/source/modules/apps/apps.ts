@@ -764,6 +764,7 @@ export default class Apps {
 			return {
 				subdomain: app.subdomain,
 				port: app.proxyPort,
+				streaming: app.id === 'desktop-stream',
 			}
 		})
 
