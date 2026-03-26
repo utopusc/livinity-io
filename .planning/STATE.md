@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Custom Domain Management
 status: unknown
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-26T11:15:43.790Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-26T11:26:12.787Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v19.0 -- Custom Domain Management
-**Current focus:** Phase 07 — Platform Domain CRUD + DNS Verification
+**Current focus:** Phase 08 — Relay Integration + Custom Domain Routing
 
 ## Current Position
 
-Phase: 08
-Plan: Not started
+Phase: 08 (Relay Integration + Custom Domain Routing) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 
 | Phase 07 P01 | 3min | 2 tasks | 6 files |
 | Phase 07 P02 | 3min | 2 tasks | 2 files |
+| Phase 08 P01 | 3min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -64,6 +65,9 @@ Plan: Not started
 - [Phase 07]: Blocked livinity.io/livinity.app from custom domain registration (security)
 - [Phase 07]: Domain list fetched alongside dashboard data on 10s polling interval
 - [Phase 07]: DNS polling: 30s base interval with per-domain age-based throttling (30s fast / 5min slow)
+- [Phase 08]: Custom domain check runs only as fallback after parseSubdomain (preserves existing routing)
+- [Phase 08]: Negative cache 30s TTL prevents repeated DB queries for unknown domains
+- [Phase 08]: Parent domain fallback: subdomains of verified custom domains inherit TLS authorization
 
 ### Pending Todos
 
@@ -76,6 +80,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T11:11:48.287Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-26T11:26:12.785Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
