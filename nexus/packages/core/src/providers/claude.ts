@@ -80,6 +80,7 @@ export class ClaudeProvider implements AIProvider {
   }
 
   private async getClient(): Promise<Anthropic> {
+    // Try explicit API key (Redis or ANTHROPIC_API_KEY env)
     try {
       const apiKey = await this.getApiKey();
       if (this.client && apiKey === this.cachedApiKey) return this.client;
@@ -87,11 +88,14 @@ export class ClaudeProvider implements AIProvider {
       this.cachedApiKey = apiKey;
       return this.client;
     } catch {
-      // No explicit key — let SDK auto-detect from ~/.claude/.credentials.json
-      if (this.client && this.cachedApiKey === '__auto__') return this.client;
-      this.client = new Anthropic();
-      this.cachedApiKey = '__auto__';
-      return this.client;
+      // Fall back to ANTHROPIC_AUTH_TOKEN env var (OAuth token set at startup)
+      if (process.env.ANTHROPIC_AUTH_TOKEN) {
+        if (this.client && this.cachedApiKey === '__auth_token__') return this.client;
+        this.client = new Anthropic({ authToken: process.env.ANTHROPIC_AUTH_TOKEN });
+        this.cachedApiKey = '__auth_token__';
+        return this.client;
+      }
+      throw new Error('No Anthropic API key configured');
     }
   }
 

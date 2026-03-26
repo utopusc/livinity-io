@@ -18,6 +18,7 @@ export type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
 
 // ── Agent Runners ──────────────────────────────────────────────
 export { KimiAgentRunner } from './kimi-agent-runner.js';
+export { SdkAgentRunner } from './sdk-agent-runner.js';
 
 // ── Skill Types ─────────────────────────────────────────────
 export type {
