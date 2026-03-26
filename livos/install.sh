@@ -103,7 +103,17 @@ main() {
             | awk '{print $3}' | while read -r u; do
                 [[ "$u" != "root" ]] && echo "$u" && break
             done)
-        [[ -z "$DESKTOP_USER" ]] && DESKTOP_USER=$(ls /home/ 2>/dev/null | head -1)
+        # Fallback: find first real user in /home/ with a valid uid
+        if [[ -z "$DESKTOP_USER" ]]; then
+            for d in /home/*/; do
+                local candidate
+                candidate=$(basename "$d")
+                if id -u "$candidate" &>/dev/null; then
+                    DESKTOP_USER="$candidate"
+                    break
+                fi
+            done
+        fi
 
         # No desktop user found — graphical target but no GUI session (headless server)
         if [[ -z "$DESKTOP_USER" ]]; then
