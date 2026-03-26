@@ -969,6 +969,64 @@ class Server {
 			}
 		})
 
+		// ── Chrome Launch/Kill ───────────────────────────────────────────────
+		// POST /api/chrome/launch — starts Google Chrome on the X11 display
+		// POST /api/chrome/kill — kills all Chrome processes
+		// GET  /api/chrome/status — check if Chrome is running
+		this.app.post('/api/chrome/launch', express.json(), async (request, response) => {
+			try {
+				const sessionToken = request?.cookies?.LIVINITY_SESSION
+				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
+				const isValid = await this.verifyToken(sessionToken).catch(() => false)
+				if (!isValid) return response.status(401).json({error: 'unauthorized'})
+
+				// Check if Chrome is already running
+				const {stdout: pgrep} = await $({shell: true, reject: false})`pgrep -f 'google-chrome' | head -1`
+				if (pgrep.trim()) {
+					return response.json({success: true, already_running: true, pid: parseInt(pgrep.trim())})
+				}
+
+				// Find the desktop user's UID for DISPLAY/XAUTHORITY
+				const desktopUser = (await this.livinityd.ai.redis.get('livos:desktop:user').catch(() => null)) || 'bruce'
+				const {stdout: uidStr} = await $({shell: true, reject: false})`id -u ${desktopUser}`
+				const uid = uidStr.trim() || '1000'
+				const xauth = (await $({shell: true, reject: false})`find /run/user/${uid}/gdm -name 'Xauthority' 2>/dev/null | head -1`).stdout.trim()
+					|| `/home/${desktopUser}/.Xauthority`
+
+				const url = request.body?.url || 'about:blank'
+				const chromeCmd = `google-chrome-stable --no-first-run --no-default-browser-check --disable-infobars --remote-debugging-port=9222 "${url}"`
+
+				// Launch Chrome as the desktop user
+				await $({shell: true, reject: false})`su - ${desktopUser} -c 'export DISPLAY=:0; export XAUTHORITY="${xauth}"; nohup ${chromeCmd} &>/dev/null &'`
+
+				this.logger.log(`Chrome launched on display :0 for user ${desktopUser}`)
+				return response.json({success: true, already_running: false, debugging_port: 9222})
+			} catch (err: any) {
+				this.logger.error('Chrome launch error:', err)
+				return response.status(500).json({error: err.message})
+			}
+		})
+
+		this.app.post('/api/chrome/kill', async (request, response) => {
+			try {
+				const sessionToken = request?.cookies?.LIVINITY_SESSION
+				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
+				const isValid = await this.verifyToken(sessionToken).catch(() => false)
+				if (!isValid) return response.status(401).json({error: 'unauthorized'})
+
+				await $({shell: true, reject: false})`pkill -f 'google-chrome'`
+				return response.json({success: true})
+			} catch (err: any) {
+				return response.status(500).json({error: err.message})
+			}
+		})
+
+		this.app.get('/api/chrome/status', async (_request, response) => {
+			const {stdout} = await $({shell: true, reject: false})`pgrep -f 'google-chrome' | head -1`
+			const running = !!stdout.trim()
+			response.json({running, pid: running ? parseInt(stdout.trim()) : null, debugging_port: running ? 9222 : null})
+		})
+
 		// If we have no API route hits then serve the ui at the root.
 		// We proxy through to the ui dev server during development with
 		// process.env.LIVINITY_UI_PROXY otherwise in production we

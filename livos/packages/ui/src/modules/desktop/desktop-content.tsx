@@ -257,6 +257,33 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}
 		appItems.push(remoteDesktopItem)
 
+		const chromeItem: AppGridItem = {
+			id: 'LIVINITY_chrome',
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<AppIcon
+						label='Chrome'
+						src='/figma-exports/dock-chrome.png'
+						onClick={() => {
+							if (windowManager) {
+								windowManager.openWindow(
+									'LIVINITY_chrome',
+									'/chrome',
+									'Chrome',
+									'/figma-exports/dock-chrome.png',
+								)
+							}
+						}}
+					/>
+				</motion.div>
+			),
+		}
+		appItems.push(chromeItem)
+
 		const folderItems: AppGridItem[] = folders.map((folder) => ({
 			id: `folder-${folder.name}`,
 			node: (

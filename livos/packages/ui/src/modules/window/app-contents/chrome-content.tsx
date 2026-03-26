@@ -1,99 +1,70 @@
 import {useEffect, useRef, useState} from 'react'
-import {trpcReact} from '@/trpc/trpc'
 
 type ChromeWindowProps = {
-	url?: string // optional URL to open in Chrome via CDP
+	url?: string
 }
 
 export default function ChromeWindowContent({url}: ChromeWindowProps) {
-	const [streamUrl, setStreamUrl] = useState<string | null>(null)
+	const [state, setState] = useState<'launching' | 'ready' | 'error'>('launching')
 	const [error, setError] = useState<string | null>(null)
-	const started = useRef(false)
-
-	// Check if Chrome app is running
-	const statusQ = trpcReact.apps.state.useQuery(undefined, {
-		refetchInterval: streamUrl ? false : 3000,
-	})
+	const launched = useRef(false)
 
 	useEffect(() => {
-		if (started.current || !statusQ.data) return
+		if (launched.current) return
+		launched.current = true
 
-		// Find the chromium app in the app list
-		const chromeApp = statusQ.data.find((a: any) => a.id === 'chromium')
+		// Launch Chrome on the server's X11 display
+		fetch('/api/chrome/launch', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			credentials: 'include',
+			body: JSON.stringify({url: url || undefined}),
+		})
+			.then((res) => res.json())
+			.then((data) => {
+				if (data.success) {
+					// Give Chrome a moment to render on the display
+					setTimeout(() => setState('ready'), data.already_running ? 200 : 1500)
+				} else {
+					setError(data.error || 'Failed to launch Chrome')
+					setState('error')
+				}
+			})
+			.catch((err) => {
+				setError(err.message)
+				setState('error')
+			})
+	}, [url])
 
-		if (!chromeApp) {
-			setError('Chrome is not installed. Install it from the App Store first.')
-			return
-		}
-
-		if (chromeApp.status === 'running' || chromeApp.status === 'ready') {
-			started.current = true
-			// Chrome is running — build the KasmVNC URL
-			// KasmVNC runs on the app's subdomain via Caddy reverse proxy
-			const subdomain = 'chrome'
-			const host = window.location.hostname
-			const proto = window.location.protocol
-			// Subdomain pattern: chrome.{main-domain}
-			const parts = host.split('.')
-			let kasmUrl: string
-			if (parts.length >= 2) {
-				// e.g., bolcay.livinity.io → chrome.bolcay.livinity.io
-				kasmUrl = `${proto}//${subdomain}.${host}/`
-			} else {
-				// localhost fallback
-				kasmUrl = `${proto}//${host}:3000/`
-			}
-			setStreamUrl(kasmUrl)
-
-			// If a URL was requested, open it in Chrome via CDP after a short delay
-			if (url) {
-				setTimeout(() => openUrlInChrome(url), 2000)
-			}
-		}
-	}, [statusQ.data, url])
-
-	if (error) {
+	if (state === 'error') {
 		return (
 			<div className='flex h-full items-center justify-center bg-neutral-900'>
 				<div className='text-center'>
 					<p className='text-lg font-medium text-red-400'>Chrome</p>
 					<p className='mt-2 text-sm text-neutral-400'>{error}</p>
+					<p className='mt-1 text-xs text-neutral-500'>Google Chrome must be installed on the server</p>
 				</div>
 			</div>
 		)
 	}
 
-	if (!streamUrl) {
+	if (state === 'launching') {
 		return (
 			<div className='flex h-full items-center justify-center bg-neutral-900'>
 				<div className='text-center'>
-					<div className='mx-auto h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent' />
-					<p className='mt-4 text-sm text-neutral-400'>Connecting to Chrome...</p>
+					<div className='mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent' />
+					<p className='mt-4 text-sm text-neutral-400'>Launching Chrome...</p>
 				</div>
 			</div>
 		)
 	}
 
+	// Show the remote desktop stream — Chrome is visible on the X11 display
 	return (
 		<iframe
-			src={streamUrl}
+			src='/desktop-viewer'
 			className='h-full w-full border-0'
-			allow='clipboard-read; clipboard-write'
+			allow='clipboard-read; clipboard-write; fullscreen'
 		/>
 	)
-}
-
-// Open a URL in Chrome via CDP (Chrome DevTools Protocol)
-async function openUrlInChrome(url: string) {
-	try {
-		// CDP is accessible via the app's proxy on port 9222
-		const cdpBase = `${window.location.protocol}//${window.location.hostname}:9222`
-		const res = await fetch(`${cdpBase}/json/new?${url}`, {method: 'PUT'}).catch(() => null)
-		if (!res) {
-			// Fallback: try via tRPC or just let the user navigate manually
-			console.log('CDP not reachable, user will navigate manually')
-		}
-	} catch {
-		// Silent fail — user can navigate manually in Chrome
-	}
 }
