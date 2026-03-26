@@ -67,25 +67,23 @@ Key validated capabilities:
   - ✓ DPI awareness (PerMonitorAwareV2) at agent startup on Windows
   - ✓ Accessibility-first AI prompt: Elements-First Workflow with screenshot fallback
   - ✓ SHA-256 hash-based screenshot caching (skip re-capture when tree unchanged)
+- ✓ Remote Desktop Streaming — v18.0
+  - ✓ install.sh GUI detection (X11/Wayland/headless) with x11vnc systemd service
+  - ✓ NativeApp lifecycle for x11vnc with auto-start, idle timeout, port health-check
+  - ✓ Caddy `pc.{domain}` subdomain with JWT cookie gating and stream_close_delay
+  - ✓ /ws/desktop WebSocket-to-TCP bridge with JWT auth + Origin validation
+  - ✓ Standalone noVNC browser viewer with full mouse/keyboard input
+  - ✓ Connection status, auto-reconnect (exponential backoff 1s-30s)
+  - ✓ Fullscreen mode with dynamic xrandr resolution resize
+  - ✓ Accessible via tunnel relay at `pc.{username}.livinity.io`
 
-## Current Milestone: v18.0 Remote Desktop Streaming
+## Current Milestone: None (v18.0 complete)
 
-**Goal:** Deploy a web-based remote desktop streaming service via install.sh, letting users access their server's GUI through `pc.{username}.livinity.io` in a browser — zero-client VNC/RDP alternative.
-
-**Target features:**
-- Web-based remote desktop streaming (browser only, no client)
-- install.sh auto-setup with GUI detection (skip on headless)
-- Caddy subdomain routing (`pc.{username}.livinity.io`)
-- LivOS JWT authentication integration
-- Low-latency Linux desktop streaming
+**Goal:** Planning next milestone.
 
 ### Active
 
-- [ ] Web-based remote desktop streaming service
-- [ ] install.sh integration with GUI detection
-- [ ] Caddy reverse proxy subdomain routing for pc.{username}
-- [ ] LivOS JWT auth protection for desktop streams
-- [ ] Per-user desktop session isolation
+(None — defining next milestone)
 
 ### Out of Scope
 
@@ -95,10 +93,11 @@ Key validated capabilities:
 - Multi-region tunnel relay — single relay (Server5) for now
 - White-label/reseller — direct platform only
 - Per-user MCP server settings — deferred
-- ~~Full desktop streaming (RDP/VNC)~~ — now in scope for v18.0
-- Audio streaming — deferred to future version
-- Multi-monitor desktop streaming — single display for v1
+- Audio streaming via desktop stream — deferred to future version
+- Multi-monitor desktop streaming — single display for now
 - File transfer via desktop stream — deferred to future version
+- Clipboard sync via desktop stream — deferred to future version
+- Per-user desktop session isolation — single shared display for now
 - Per-device permission matrix — future (all-or-nothing for now)
 - Clipboard sync as AI tool — future
 - Multi-device orchestration — future
@@ -115,7 +114,7 @@ Key validated capabilities:
 
 ## Context
 
-**Current State (post v16.0, starting v17.0):**
+**Current State (post v18.0):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
@@ -123,7 +122,8 @@ Key validated capabilities:
 - Remote PC Control Agent: cross-platform agent binary, OAuth device flow, 9 AI tools, My Devices UI
 - AI Computer Use: autonomous screenshot→analyze→act loop, live monitoring, emergency stop
 - Multi-Provider AI: Claude + Kimi dual provider with Settings toggle, config-driven fallback
-- **Precision Computer Use: DPI-aware screenshots (sharp resize), Windows UIA accessibility tree (screen_elements tool), accessibility-first AI prompt with hybrid fallback, hash-based screenshot caching**
+- Precision Computer Use: DPI-aware screenshots, Windows UIA accessibility tree, accessibility-first AI prompt
+- **Remote Desktop Streaming: x11vnc + noVNC web viewer at `pc.{username}.livinity.io`, install.sh auto-setup with GUI detection, JWT-protected WebSocket bridge, fullscreen + auto-reconnect + xrandr resize**
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -165,6 +165,11 @@ Key validated capabilities:
 | Restore ClaudeProvider from git (not rewrite) | 467 lines already working, agent loop uses Anthropic format natively | ✓ Good |
 | Config-driven provider fallback | Redis primary_provider + ProviderManager.init() on startup | ✓ Good |
 | API key + OAuth PKCE dual auth for Claude | Flexibility: API key for quick setup, OAuth for subscription users | ✓ Good |
+| x11vnc + noVNC (not Guacamole/KasmVNC) | Lightweight, streams actual host display, no Java/separate auth | ✓ Good |
+| WS-to-TCP bridge in livinityd (not websockify) | Reuses existing WS auth patterns, no separate process | ✓ Good |
+| NativeApp for x11vnc (not Docker) | Must capture host X11 display, Docker can't access it | ✓ Good |
+| Standalone HTML viewer (not React embed) | Self-contained page for `pc.{domain}`, no build step | ✓ Good |
+| Vendored noVNC ESM (not npm CJS) | npm package ships CJS only, browser needs ESM imports | ✓ Good |
 
 ## Evolution
 
@@ -184,4 +189,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after v18.0 milestone start (Remote Desktop Streaming)*
+*Last updated: 2026-03-26 after v18.0 milestone (Remote Desktop Streaming)*

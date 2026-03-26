@@ -1,5 +1,18 @@
 # Milestones
 
+## v18.0 Remote Desktop Streaming (Shipped: 2026-03-26)
+
+**Phases completed:** 3 phases, 4 plans, 8 tasks
+
+**Key accomplishments:**
+
+- Three bash functions (detect_gui, install_x11vnc, setup_desktop_streaming) added to install.sh with localhost-only x11vnc systemd service for desktop capture
+- x11vnc registered as desktop-stream NativeApp with pc.{domain} Caddy subdomain, JWT cookie gating, and stream_close_delay 5m for WebSocket resilience during reloads
+- /ws/desktop WebSocket-to-TCP bridge with JWT auth, Origin validation, NativeApp auto-start, and three-layer idle prevention
+- Standalone noVNC desktop viewer at pc.{domain} with full input, auto-reconnect, fullscreen, dynamic xrandr resize, and app gateway NativeApp bypass
+
+---
+
 ## v17.0 Precision Computer Use (Shipped: 2026-03-25)
 
 **Phases completed:** 3 phases, 3 plans, 6 tasks
