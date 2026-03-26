@@ -204,10 +204,10 @@ Plans:
   2. Connecting to `/ws/desktop` without a valid JWT token is rejected at the WebSocket upgrade step (HTTP 401)
   3. Connecting to `/ws/desktop` with a mismatched Origin header is rejected (HTTP 403)
   4. Closing the browser tab does not kill the x11vnc process -- the VNC session persists for reconnection
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md -- /ws/desktop WebSocket-to-TCP bridge with JWT auth, Origin validation, and NativeApp auto-start
 
 ### Phase 6: Browser Viewer & Integration
 **Goal**: Users can see and control their server desktop in real-time through `pc.{username}.livinity.io` with full mouse/keyboard input, connection resilience, and proper viewport scaling
