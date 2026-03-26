@@ -213,6 +213,8 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		overlayed: {opacity: 0, scale: 0.98, transition: {duration: 0.1}},
 	}
 
+	const windowManager = useWindowManagerOptional()
+
 	const gridItems: AppGridItem[] = useMemo(() => {
 		const appItems: AppGridItem[] = userApps.map((app) => ({
 			id: app.id,
@@ -226,6 +228,34 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 				</motion.div>
 			),
 		}))
+
+		// Hardcoded system apps on desktop
+		const remoteDesktopItem: AppGridItem = {
+			id: 'LIVINITY_remote-desktop',
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<AppIcon
+						label='Remote Desktop'
+						src='/figma-exports/dock-remote-desktop.png'
+						onClick={() => {
+							if (windowManager) {
+								windowManager.openWindow(
+									'LIVINITY_remote-desktop',
+									'/remote-desktop',
+									'Remote Desktop',
+									'/figma-exports/dock-remote-desktop.png',
+								)
+							}
+						}}
+					/>
+				</motion.div>
+			),
+		}
+		appItems.push(remoteDesktopItem)
 
 		const folderItems: AppGridItem[] = folders.map((folder) => ({
 			id: `folder-${folder.name}`,

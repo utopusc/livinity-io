@@ -875,7 +875,15 @@ class Server {
 		const novncVendorPath = join(dirname(fileURLToPath(import.meta.url)), 'novnc-vendor')
 		this.app.use('/novnc', express.static(novncVendorPath))
 
-		// ── Desktop Viewer Page ──────────────────────────────────────────────
+		// ── Desktop Viewer (same-origin route) ─────────────────────────────
+		// Serves the desktop viewer from /desktop-viewer so it can be embedded
+		// in LivOS UI iframe without cross-origin subdomain issues
+		this.app.get('/desktop-viewer', async (_request, response) => {
+			const viewerPath = join(dirname(fileURLToPath(import.meta.url)), 'desktop-viewer.html')
+			response.sendFile(viewerPath)
+		})
+
+		// ── Desktop Viewer Page (subdomain) ─────────────────────────────────
 		// Serves the standalone noVNC desktop viewer when accessing pc.{domain}
 		this.app.get('*', async (request, response, next) => {
 			const host = request.hostname

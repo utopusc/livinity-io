@@ -254,22 +254,6 @@ export function Dock() {
 						)
 					}
 				/>
-				<DockItem
-					appId='LIVINITY_remote-desktop'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIVINITY_remote-desktop',
-							'/remote-desktop',
-							'Remote Desktop',
-							systemAppsKeyed['LIVINITY_remote-desktop'].icon,
-							originRect,
-						)
-					}
-				/>
 				{/* Recent apps */}
 				<RecentAppsDock mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
 			</motion.div>
