@@ -22,6 +22,7 @@ export interface CustomDomainInfo {
   username: string;
   domain: string;
   status: string;
+  appMapping: Record<string, string>;  // Phase 09: domain-to-app mapping
 }
 
 // ---------------------------------------------------------------------------
@@ -130,8 +131,9 @@ async function queryDomainInfo(
     username: string;
     domain: string;
     status: string;
+    app_mapping: Record<string, string> | null;
   }>(
-    `SELECT cd.user_id, u.username, cd.domain, cd.status
+    `SELECT cd.user_id, u.username, cd.domain, cd.status, cd.app_mapping
      FROM custom_domains cd
      JOIN users u ON u.id = cd.user_id
      WHERE cd.domain = $1
@@ -148,6 +150,7 @@ async function queryDomainInfo(
     username: row.username,
     domain: row.domain,
     status: row.status,
+    appMapping: row.app_mapping || {},
   };
 }
 
@@ -237,8 +240,9 @@ export async function warmDomainCache(
     username: string;
     domain: string;
     status: string;
+    app_mapping: Record<string, string> | null;
   }>(
-    `SELECT cd.user_id, u.username, cd.domain, cd.status
+    `SELECT cd.user_id, u.username, cd.domain, cd.status, cd.app_mapping
      FROM custom_domains cd
      JOIN users u ON u.id = cd.user_id
      WHERE cd.status = ANY($1)`,
@@ -252,6 +256,7 @@ export async function warmDomainCache(
       username: row.username,
       domain: row.domain,
       status: row.status,
+      appMapping: row.app_mapping || {},
     };
     pipeline.set(`${CACHE_PREFIX}${row.domain}`, JSON.stringify(info), 'EX', POSITIVE_TTL_S);
     pipeline.set(`${AUTH_CACHE_PREFIX}${row.domain}`, '1', 'EX', POSITIVE_TTL_S);
@@ -275,4 +280,39 @@ export async function invalidateDomainCache(
 ): Promise<void> {
   const lower = domain.toLowerCase();
   await redis.del(`${CACHE_PREFIX}${lower}`, `${AUTH_CACHE_PREFIX}${lower}`);
+}
+
+// ---------------------------------------------------------------------------
+// resolveCustomDomainApp
+// ---------------------------------------------------------------------------
+
+/**
+ * Given a hostname and a CustomDomainInfo, resolve the target app slug
+ * from the domain's appMapping.
+ *
+ * For "mysite.com" with appMapping {"root": "code-server", "blog": "ghost"}:
+ *   hostname "mysite.com" -> "code-server" (root mapping)
+ *   hostname "blog.mysite.com" -> "ghost" (subdomain prefix mapping)
+ *   hostname "unknown.mysite.com" -> null (no mapping)
+ */
+export function resolveCustomDomainApp(
+  hostname: string,
+  domainInfo: CustomDomainInfo,
+): string | null {
+  const lower = hostname.toLowerCase();
+  const baseDomain = domainInfo.domain.toLowerCase();
+
+  if (lower === baseDomain) {
+    return domainInfo.appMapping['root'] || null;
+  }
+
+  if (lower.endsWith(`.${baseDomain}`)) {
+    const prefix = lower.slice(0, -(baseDomain.length + 1));
+    // Only support single-level prefix (e.g., "blog", not "a.blog")
+    if (!prefix.includes('.')) {
+      return domainInfo.appMapping[prefix] || null;
+    }
+  }
+
+  return null;
 }
