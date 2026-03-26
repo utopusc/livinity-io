@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url'
 import {dirname, join} from 'node:path'
 import {createGzip} from 'node:zlib'
 import {pipeline} from 'node:stream/promises'
+import {createConnection} from 'node:net'
 
 import {$} from 'execa'
 import express from 'express'
@@ -532,6 +533,118 @@ class Server {
 					upstream.on('error', (err) => {
 						this.logger.error(`WS voice proxy: upstream error`, err)
 						proxyWss.close()
+						socket.destroy()
+					})
+
+					return
+				}
+
+				// ── Desktop Stream WebSocket-to-TCP Proxy ──────────────────
+				// /ws/desktop bridges browser WebSocket connections to x11vnc's
+				// VNC TCP socket on localhost:5900. Binary frames flow bidirectionally.
+				if (pathname === '/ws/desktop') {
+					// 1. Origin validation
+					const origin = request.headers.origin
+					if (origin) {
+						const domainCfgRaw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
+						let allowedDomain = ''
+						if (domainCfgRaw) {
+							const dc = JSON.parse(domainCfgRaw)
+							if (dc.active && dc.domain) allowedDomain = dc.domain
+						}
+						if (allowedDomain) {
+							const originUrl = new URL(origin)
+							const originHost = originUrl.hostname
+							if (originHost !== allowedDomain && !originHost.endsWith('.' + allowedDomain)) {
+								this.logger.verbose('WS desktop rejected: origin mismatch', origin)
+								socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+								socket.destroy()
+								return
+							}
+						}
+					}
+
+					// 2. JWT auth (token from query param or LIVINITY_SESSION cookie)
+					let desktopToken = searchParams.get('token')
+					if (!desktopToken) {
+						const cookieHeader = request.headers.cookie || ''
+						const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
+						if (sessionMatch) desktopToken = sessionMatch[1]
+					}
+					if (!desktopToken) {
+						this.logger.verbose('WS desktop rejected: no token')
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const desktopAuthValid = await this.verifyToken(desktopToken).catch(() => false)
+					if (!desktopAuthValid) {
+						this.logger.verbose('WS desktop rejected: invalid token')
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 3. NativeApp auto-start
+					const hasGui = await this.livinityd.ai.redis.get('livos:desktop:has_gui').catch(() => null)
+					if (hasGui !== 'true') {
+						this.logger.verbose('WS desktop rejected: no GUI available')
+						socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const desktopApp = this.livinityd.apps.getNativeApp('desktop-stream')
+					if (!desktopApp) {
+						this.logger.verbose('WS desktop rejected: desktop-stream app not registered')
+						socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					if (desktopApp.state !== 'ready') {
+						try {
+							await desktopApp.start()
+						} catch (err) {
+							this.logger.error('WS desktop: failed to start x11vnc', err)
+							socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+							socket.destroy()
+							return
+						}
+					}
+					desktopApp.resetIdleTimer()
+
+					// 4. Create TCP connection to x11vnc
+					const vnc = createConnection({host: '127.0.0.1', port: 5900})
+					const desktopWss = new WebSocketServer({noServer: true})
+
+					vnc.on('connect', () => {
+						this.logger.verbose('WS desktop: VNC TCP connected, upgrading client')
+						desktopWss.handleUpgrade(request, socket, head, (ws) => {
+							desktopWss.close()
+							ws.binaryType = 'nodebuffer'
+
+							// Bidirectional binary relay
+							ws.on('message', (data) => {
+								if (vnc.writable) vnc.write(Buffer.from(data as ArrayBuffer))
+							})
+							vnc.on('data', (data) => {
+								if (ws.readyState === 1) ws.send(data)
+							})
+
+							// Cleanup: close one side when the other disconnects
+							ws.on('close', () => vnc.destroy())
+							vnc.on('close', () => ws.close())
+							vnc.on('error', (err) => {
+								this.logger.error('WS desktop: VNC TCP error', err)
+								ws.close(1011, 'VNC connection error')
+							})
+							ws.on('error', () => vnc.destroy())
+						})
+					})
+
+					vnc.on('error', (err) => {
+						this.logger.error('WS desktop: VNC TCP connect error', err)
+						desktopWss.close()
+						socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n')
 						socket.destroy()
 					})
 
