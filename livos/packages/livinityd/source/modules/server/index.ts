@@ -975,10 +975,6 @@ class Server {
 		// GET  /api/chrome/status — check if Chrome is running
 		this.app.post('/api/chrome/launch', express.json(), async (request, response) => {
 			try {
-				const sessionToken = request?.cookies?.LIVINITY_SESSION
-				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
-				const isValid = await this.verifyToken(sessionToken).catch(() => false)
-				if (!isValid) return response.status(401).json({error: 'unauthorized'})
 
 				// Check if Chrome is already running
 				const {stdout: pgrep} = await $({shell: true, reject: false})`pgrep -f 'google-chrome' | head -1`
@@ -1009,10 +1005,6 @@ class Server {
 
 		this.app.post('/api/chrome/kill', async (request, response) => {
 			try {
-				const sessionToken = request?.cookies?.LIVINITY_SESSION
-				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
-				const isValid = await this.verifyToken(sessionToken).catch(() => false)
-				if (!isValid) return response.status(401).json({error: 'unauthorized'})
 
 				await $({shell: true, reject: false})`pkill -f 'google-chrome'`
 				return response.json({success: true})
