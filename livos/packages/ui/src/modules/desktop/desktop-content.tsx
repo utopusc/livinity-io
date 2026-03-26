@@ -215,6 +215,20 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 
 	const windowManager = useWindowManagerOptional()
 
+	// Stream apps share a single window — close previous before opening new
+	const streamAppIds = useMemo(() => new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail', 'LIVINITY_facebook', 'LIVINITY_whatsapp', 'LIVINITY_youtube']), [])
+	const openStreamApp = useCallback((appId: string, route: string, title: string, icon: string) => {
+		if (!windowManager) return
+		// Close ALL other stream app windows
+		for (const win of windowManager.windows) {
+			if (streamAppIds.has(win.appId)) {
+				windowManager.closeWindow(win.id)
+			}
+		}
+		// Small delay to ensure close happens before open
+		setTimeout(() => windowManager.openWindow(appId, route, title, icon), 50)
+	}, [windowManager, streamAppIds])
+
 	const gridItems: AppGridItem[] = useMemo(() => {
 		const appItems: AppGridItem[] = userApps.map((app) => ({
 			id: app.id,
@@ -267,19 +281,6 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		appItems.push(chromeItem)
 
 		// Web app shortcuts — launch Chrome with specific URL
-		// All stream apps share a single window (close previous before opening new)
-		const streamAppIds = new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail', 'LIVINITY_facebook', 'LIVINITY_whatsapp', 'LIVINITY_youtube'])
-		const openStreamApp = (appId: string, route: string, title: string, icon: string) => {
-			if (!windowManager) return
-			// Close any existing stream app windows
-			for (const win of windowManager.windows) {
-				if (streamAppIds.has(win.appId) && win.appId !== appId) {
-					windowManager.closeWindow(win.id)
-				}
-			}
-			windowManager.openWindow(appId, route, title, icon)
-		}
-
 		const webApps = [
 			{id: 'LIVINITY_gmail', label: 'Gmail', icon: '/figma-exports/app-gmail.png', url: 'https://mail.google.com'},
 			{id: 'LIVINITY_facebook', label: 'Facebook', icon: '/figma-exports/app-facebook.png', url: 'https://www.facebook.com'},
@@ -348,7 +349,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, folders, widgets])
+	}, [userApps, folders, widgets, openStreamApp])
 
 	return (
 		<motion.div className='flex h-full w-full select-none flex-col' variants={variants} animate={variant} initial={{opacity: 1}} transition={{duration: 0.15, ease: 'easeOut'}}>
