@@ -211,6 +211,7 @@ class ReconnectionManager {
 import http from 'node:http'
 import WebSocket from 'ws'
 import type {Redis} from 'ioredis'
+import {getPool} from '../database/index.js'
 
 const REDIS_PREFIX = 'livos:platform:'
 
@@ -659,6 +660,15 @@ export default class TunnelClient {
 				await this.redis.del(`livos:custom_domain:${msg.domain}`)
 				// Rebuild the full domain list in Redis from remaining domains
 				await this.rebuildDomainCache()
+				// Persist removal to PostgreSQL
+				const pgPool = getPool()
+				if (pgPool) {
+					try {
+						await pgPool.query('DELETE FROM custom_domains WHERE domain = $1', [msg.domain])
+					} catch (pgErr) {
+						this.logger.error(`[tunnel] PG delete failed for ${msg.domain}: ${pgErr}`)
+					}
+				}
 				this.logger.log(`[tunnel] Domain removed: ${msg.domain}`)
 			} else {
 				// Upsert: store domain info in Redis per-domain key for fast O(1) lookup
@@ -670,6 +680,23 @@ export default class TunnelClient {
 				await this.redis.set(`livos:custom_domain:${msg.domain}`, domainInfo)
 				// Rebuild the full domain list in Redis
 				await this.rebuildDomainCache()
+				// Persist upsert to PostgreSQL
+				const pgPool = getPool()
+				if (pgPool) {
+					try {
+						await pgPool.query(
+							`INSERT INTO custom_domains (domain, app_mapping, status, synced_at)
+							 VALUES ($1, $2, $3, NOW())
+							 ON CONFLICT (domain) DO UPDATE
+							 SET app_mapping = EXCLUDED.app_mapping,
+							     status = EXCLUDED.status,
+							     synced_at = NOW()`,
+							[msg.domain, JSON.stringify(msg.appMapping || {}), msg.status || 'active']
+						)
+					} catch (pgErr) {
+						this.logger.error(`[tunnel] PG upsert failed for ${msg.domain}: ${pgErr}`)
+					}
+				}
 				this.logger.log(`[tunnel] Domain synced: ${msg.domain} (${msg.action})`)
 			}
 			// Send ack
@@ -700,6 +727,28 @@ export default class TunnelClient {
 			// Also store the full list for iteration
 			pipeline.set('livos:custom_domains', JSON.stringify(msg.domains))
 			await pipeline.exec()
+			// Persist full domain list to PostgreSQL (transactional replace)
+			const pgPool = getPool()
+			if (pgPool) {
+				const client = await pgPool.connect()
+				try {
+					await client.query('BEGIN')
+					await client.query('DELETE FROM custom_domains')
+					for (const d of msg.domains) {
+						await client.query(
+							`INSERT INTO custom_domains (domain, app_mapping, status, synced_at)
+							 VALUES ($1, $2, $3, NOW())`,
+							[d.domain, JSON.stringify(d.appMapping), d.status]
+						)
+					}
+					await client.query('COMMIT')
+				} catch (pgErr) {
+					await client.query('ROLLBACK').catch(() => {})
+					this.logger.error(`[tunnel] PG domain list sync failed: ${pgErr}`)
+				} finally {
+					client.release()
+				}
+			}
 			this.logger.log(`[tunnel] Full domain list synced: ${msg.domains.length} domain(s)`)
 		} catch (err) {
 			this.logger.error(`[tunnel] Domain list sync failed: ${err}`)
