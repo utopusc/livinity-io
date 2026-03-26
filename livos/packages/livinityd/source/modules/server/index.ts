@@ -976,11 +976,15 @@ class Server {
 		this.app.post('/api/chrome/launch', express.json(), async (request, response) => {
 			try {
 
-				// Check if Chrome is already running
-				const {stdout: pgrep} = await $({shell: true, reject: false})`pgrep -f 'google-chrome' | head -1`
-				if (pgrep.trim()) {
-					return response.json({success: true, already_running: true, pid: parseInt(pgrep.trim())})
+				// Check if Chrome is already running by testing debugging port
+				const {exitCode: portCheck} = await $({shell: true, reject: false})`curl -s -o /dev/null -w '' http://127.0.0.1:9222/json/version`
+				if (portCheck === 0) {
+					return response.json({success: true, already_running: true, debugging_port: 9222})
 				}
+
+				// Kill any zombie Chrome processes before fresh launch
+				await $({shell: true, reject: false})`killall -9 google-chrome-stable 2>/dev/null`
+				await new Promise(r => setTimeout(r, 1000))
 
 				// Find the desktop user's UID for DISPLAY/XAUTHORITY
 				const desktopUser = (await this.livinityd.ai.redis.get('livos:desktop:user').catch(() => null)) || 'bruce'
@@ -990,7 +994,7 @@ class Server {
 					|| `/home/${desktopUser}/.Xauthority`
 
 				const url = request.body?.url || 'about:blank'
-				const chromeCmd = `google-chrome-stable --no-first-run --no-default-browser-check --disable-infobars --remote-debugging-port=9222 "${url}"`
+				const chromeCmd = `google-chrome-stable --no-first-run --no-default-browser-check --disable-infobars --remote-debugging-port=9222 --user-data-dir=/tmp/livos-chrome-profile "${url}"`
 
 				// Launch Chrome as the desktop user
 				await $({shell: true, reject: false})`su - ${desktopUser} -c 'export DISPLAY=:0; export XAUTHORITY="${xauth}"; nohup ${chromeCmd} &>/dev/null &'`
@@ -1006,7 +1010,7 @@ class Server {
 		this.app.post('/api/chrome/kill', async (request, response) => {
 			try {
 
-				await $({shell: true, reject: false})`pkill -f 'google-chrome'`
+				await $({shell: true, reject: false})`killall -9 google-chrome-stable 2>/dev/null`
 				return response.json({success: true})
 			} catch (err: any) {
 				return response.status(500).json({error: err.message})
@@ -1014,9 +1018,9 @@ class Server {
 		})
 
 		this.app.get('/api/chrome/status', async (_request, response) => {
-			const {stdout} = await $({shell: true, reject: false})`pgrep -f 'google-chrome' | head -1`
-			const running = !!stdout.trim()
-			response.json({running, pid: running ? parseInt(stdout.trim()) : null, debugging_port: running ? 9222 : null})
+			const {exitCode} = await $({shell: true, reject: false})`curl -s -o /dev/null -w '' http://127.0.0.1:9222/json/version`
+			const running = exitCode === 0
+			response.json({running, debugging_port: running ? 9222 : null})
 		})
 
 		// If we have no API route hits then serve the ui at the root.
