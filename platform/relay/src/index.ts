@@ -23,7 +23,7 @@ import { verifyApiKey } from './auth.js';
 import { handleTunnelResponse, proxyHttpRequest, setRedis } from './request-proxy.js';
 import { startBandwidthFlush, stopBandwidthFlush } from './bandwidth.js';
 import { shouldRejectNewConnections } from './health.js';
-import { warmDomainCache, lookupCustomDomain } from './custom-domains.js';
+import { warmDomainCache, lookupCustomDomain, resolveCustomDomainApp } from './custom-domains.js';
 import { parseSubdomain } from './subdomain-parser.js';
 import {
   handleWsUpgrade,
@@ -573,7 +573,8 @@ server.on('upgrade', async (req, socket, head) => {
       if (customDomain) {
         const tunnel = registry.get(customDomain.username);
         if (tunnel && tunnel.ws.readyState === 1) {
-          handleWsUpgrade(req, socket, head, tunnel, null);
+          const targetApp = resolveCustomDomainApp(hostname!, customDomain);
+          handleWsUpgrade(req, socket, head, tunnel, targetApp);
           return;
         }
       }

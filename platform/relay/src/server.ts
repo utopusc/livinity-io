@@ -15,7 +15,7 @@ import { handleHealthRequest } from './health.js';
 import { proxyHttpRequest } from './request-proxy.js';
 import { serveOfflinePage } from './offline-page.js';
 import { checkQuota } from './bandwidth.js';
-import { isCustomDomainAuthorized, lookupCustomDomain } from './custom-domains.js';
+import { isCustomDomainAuthorized, lookupCustomDomain, resolveCustomDomainApp } from './custom-domains.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
 import type { DeviceRegistry } from './device-registry.js';
 import type { TunnelQuotaExceeded } from './protocol.js';
@@ -247,10 +247,9 @@ export function createRequestHandler(
             return;
           }
 
-          // Custom domains don't have appName from subdomain parsing.
-          // In Phase 09, targetApp will come from domain-to-app mapping.
-          // For now, route to the main LivOS UI (targetApp = null).
-          proxyHttpRequest(cdTunnel, req, res, null);
+          // Resolve target app from custom domain's app_mapping (DOM-06)
+          const targetApp = resolveCustomDomainApp(hostname!, customDomain);
+          proxyHttpRequest(cdTunnel, req, res, targetApp);
           return;
         }
       }
