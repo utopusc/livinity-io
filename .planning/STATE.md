@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Custom Domain Management
 status: unknown
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-03-26T11:47:09.044Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-03-26T11:53:00.641Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 2 of 2
 | Phase 08 P01 | 3min | 2 tasks | 5 files |
 | Phase 08 P02 | 2min | 2 tasks | 3 files |
 | Phase 09 P01 | 4min | 2 tasks | 9 files |
+| Phase 09-tunnel-sync-livos-domain-receiver P02 | 3min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -75,6 +76,9 @@ Plan: 2 of 2
 - [Phase 09]: Redis dual-key pattern: livos:custom_domain:{hostname} for O(1) gateway lookup + livos:custom_domains list for iteration
 - [Phase 09]: domain_list_sync on both new connect and reconnect ensures LivOS always has latest domain state
 - [Phase 09]: dns-polling notifies relay after DB update; gracefully handles offline tunnels since reconnect sync covers gaps
+- [Phase 09]: Custom domain traffic is public-facing (no LivOS auth required)
+- [Phase 09]: appGatewayProxyCache moved to class property for shared access between subdomain and custom domain routing
+- [Phase 09]: resolveCustomDomainApp returns null for unmapped prefixes, allowing graceful fallback
 
 ### Pending Todos
 
@@ -87,6 +91,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T11:47:09.041Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-03-26T11:53:00.638Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
