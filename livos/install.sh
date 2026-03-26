@@ -522,6 +522,33 @@ JAIL
         ok "fail2ban configured: SSH jail active (maxretry=5, bantime=1h)"
     }
 
+    # ── Google Chrome ──────────────────────────────────────
+
+    install_chrome() {
+        if command -v google-chrome &>/dev/null || command -v google-chrome-stable &>/dev/null; then
+            ok "Google Chrome already installed"
+            return 0
+        fi
+
+        info "Installing Google Chrome..."
+        local deb_url="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+        local tmp_deb="/tmp/google-chrome.deb"
+
+        wget -q -O "$tmp_deb" "$deb_url" || fail "Failed to download Google Chrome"
+        apt-get install -y -qq "$tmp_deb" 2>/dev/null || {
+            # Fix missing dependencies
+            apt-get install -f -y -qq
+            apt-get install -y -qq "$tmp_deb"
+        }
+        rm -f "$tmp_deb"
+
+        if command -v google-chrome-stable &>/dev/null; then
+            ok "Google Chrome installed"
+        else
+            warn "Google Chrome installation may have failed"
+        fi
+    }
+
     # ── Desktop Streaming (x11vnc) ─────────────────────────
 
     install_x11vnc() {
@@ -1375,6 +1402,7 @@ FWSVC
     install_caddy
     install_cloudflared
     install_fail2ban
+    install_chrome
     install_x11vnc
     ok "All system dependencies ready"
 
