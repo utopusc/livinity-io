@@ -23,6 +23,7 @@ import { verifyApiKey } from './auth.js';
 import { handleTunnelResponse, proxyHttpRequest, setRedis } from './request-proxy.js';
 import { startBandwidthFlush, stopBandwidthFlush } from './bandwidth.js';
 import { shouldRejectNewConnections } from './health.js';
+import { warmDomainCache } from './custom-domains.js';
 import { parseSubdomain } from './subdomain-parser.js';
 import {
   handleWsUpgrade,
@@ -75,6 +76,10 @@ const schema = fs.readFileSync(schemaPath, 'utf-8');
 
 await pool.query(schema);
 console.log('[relay] Schema applied');
+
+// Pre-populate Redis cache with all verified/active custom domains
+await warmDomainCache(pool, redis);
+console.log('[relay] Custom domain cache warmed');
 
 // Provide Redis to request-proxy for bandwidth tracking
 setRedis(redis);
