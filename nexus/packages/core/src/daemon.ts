@@ -3158,7 +3158,7 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
     const subNexusConfig = this.getNexusConfig();
     const subApprovalPolicy = subNexusConfig?.approval?.policy ?? 'destructive';
 
-    const subAuthMethod = 'api-key'; // Kimi uses API key auth
+    const subAuthMethod = (await this.config.redis.get('nexus:config:claude_auth_method')) || 'api-key';
 
     const agentConfig = {
       brain: this.config.brain,
@@ -3175,7 +3175,10 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
       sessionId: randomUUID(),
     };
 
-    const agent = new AgentLoop(agentConfig);
+    // Use SdkAgentRunner when Claude subscription (OAuth) auth is active
+    const agent = subAuthMethod === 'sdk-subscription'
+      ? new SdkAgentRunner(agentConfig)
+      : new AgentLoop(agentConfig);
 
     // Record the user message in history
     await this.config.subagentManager.addMessage(subagentId, {
