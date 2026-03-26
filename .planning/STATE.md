@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Custom Domain Management
 status: unknown
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-03-26T11:53:00.641Z"
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-03-26T12:04:01.430Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 7
+  completed_plans: 7
 ---
 
 # Project State
@@ -49,6 +49,7 @@ Plan: 2 of 2
 | Phase 08 P02 | 2min | 2 tasks | 3 files |
 | Phase 09 P01 | 4min | 2 tasks | 9 files |
 | Phase 09-tunnel-sync-livos-domain-receiver P02 | 3min | 2 tasks | 4 files |
+| Phase 09 P03 | 3min | 1 tasks | 1 files |
 
 ### Decisions
 
@@ -79,6 +80,8 @@ Plan: 2 of 2
 - [Phase 09]: Custom domain traffic is public-facing (no LivOS auth required)
 - [Phase 09]: appGatewayProxyCache moved to class property for shared access between subdomain and custom domain routing
 - [Phase 09]: resolveCustomDomainApp returns null for unmapped prefixes, allowing graceful fallback
+- [Phase 09]: Use getPool() module-level singleton for PG access in tunnel-client instead of constructor injection
+- [Phase 09]: PG writes are non-blocking alongside Redis: failures logged but do not break domain sync flow
 
 ### Pending Todos
 
@@ -91,6 +94,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T11:53:00.638Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-03-26T12:04:01.427Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None

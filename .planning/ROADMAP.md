@@ -42,11 +42,11 @@ Plans:
 ### Phase 09: Tunnel Sync + LivOS Domain Receiver
 **Goal:** Verified domains sync from platform to LivOS via tunnel, stored locally for app gateway routing.
 **Requirements:** DOM-03, DOM-06, DOM-07
-**Plans:** 3 plans (2 complete, 1 gap closure)
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 09-01-PLAN.md — Protocol types + relay domain-sync endpoint + LivOS receiver + DNS re-verify sync
 - [x] 09-02-PLAN.md — App gateway custom domain routing + relay targetApp resolution
-- [ ] 09-03-PLAN.md — Gap closure: Add PostgreSQL persistence to LivOS domain sync handlers
+- [x] 09-03-PLAN.md — Gap closure: Add PostgreSQL persistence to LivOS domain sync handlers
 **Scope:**
 - New tunnel message types: `domain_sync` (add/update/remove), `domain_sync_ack`, `domain_list_sync`
 - Platform sends domain_sync on verification, LivOS receives and stores in local PostgreSQL + Redis
