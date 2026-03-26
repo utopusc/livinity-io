@@ -9,6 +9,10 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v19
 ### Phase 07: Platform Domain CRUD + DNS Verification
 **Goal:** Users can add/remove custom domains on livinity.io dashboard and verify ownership via DNS.
 **Requirements:** DOM-01, DOM-02
+**Plans:** 2 plans
+Plans:
+- [ ] 07-01-PLAN.md — Database schema + API routes + DNS verification logic
+- [ ] 07-02-PLAN.md — Dashboard Domains UI + background DNS polling service
 **Scope:**
 - `custom_domains` Drizzle table (domain, user_id, verification_token, status, timestamps)
 - CRUD API routes on livinity.io (POST/GET/DELETE /api/domains)
