@@ -622,22 +622,41 @@ class Server {
 							desktopWss.close()
 							ws.binaryType = 'nodebuffer'
 
+							// Reset idle timer periodically while connection is active (every 5 min)
+							const idleResetInterval = setInterval(() => {
+								desktopApp.resetIdleTimer()
+							}, 5 * 60 * 1000)
+
 							// Bidirectional binary relay
 							ws.on('message', (data) => {
 								if (vnc.writable) vnc.write(Buffer.from(data as ArrayBuffer))
 							})
+
+							// Throttled idle timer reset on VNC data activity (max once per 60s)
+							let lastIdleReset = Date.now()
 							vnc.on('data', (data) => {
 								if (ws.readyState === 1) ws.send(data)
+								const now = Date.now()
+								if (now - lastIdleReset > 60_000) {
+									desktopApp.resetIdleTimer()
+									lastIdleReset = now
+								}
 							})
 
 							// Cleanup: close one side when the other disconnects
-							ws.on('close', () => vnc.destroy())
+							ws.on('close', () => {
+								clearInterval(idleResetInterval)
+								vnc.destroy()
+							})
 							vnc.on('close', () => ws.close())
 							vnc.on('error', (err) => {
 								this.logger.error('WS desktop: VNC TCP error', err)
 								ws.close(1011, 'VNC connection error')
 							})
-							ws.on('error', () => vnc.destroy())
+							ws.on('error', () => {
+								clearInterval(idleResetInterval)
+								vnc.destroy()
+							})
 						})
 					})
 
