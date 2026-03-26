@@ -544,6 +544,24 @@ JAIL
 
         if command -v google-chrome-stable &>/dev/null; then
             ok "Google Chrome installed"
+
+            # Create launcher script with remote debugging for MCP
+            cat > /usr/local/bin/livos-launch-chrome << 'LAUNCHER'
+#!/bin/bash
+export DISPLAY=:0
+XAUTH=$(find /run/user/$(id -u)/gdm -name Xauthority 2>/dev/null | head -1)
+[ -z "$XAUTH" ] && XAUTH="$HOME/.Xauthority"
+export XAUTHORITY="$XAUTH"
+exec google-chrome-stable \
+    --no-first-run \
+    --no-default-browser-check \
+    --disable-infobars \
+    --remote-debugging-port=9222 \
+    --user-data-dir=$HOME/.config/livos-chrome \
+    "$@"
+LAUNCHER
+            chmod +x /usr/local/bin/livos-launch-chrome
+            ok "Chrome launcher created (/usr/local/bin/livos-launch-chrome)"
         else
             warn "Google Chrome installation may have failed"
         fi
