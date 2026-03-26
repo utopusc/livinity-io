@@ -633,7 +633,7 @@ ExecStartPre=/usr/local/bin/livos-set-resolution
 ExecStart=/bin/bash -c '\
   XAUTH=\$(find /run/user/${desktop_uid}/gdm -name "Xauthority" 2>/dev/null | head -1); \
   [ -z "\$XAUTH" ] && XAUTH="/home/${desktop_user}/.Xauthority"; \
-  exec /usr/bin/x11vnc -display :0 -auth "\$XAUTH" -localhost -rfbport 5900 -nopw -shared -forever -noxdamage -ncache 10'
+  exec /usr/bin/x11vnc -display :0 -auth "\$XAUTH" -localhost -rfbport 5900 -nopw -shared -forever -noxdamage'
 Restart=on-failure
 RestartSec=5
 
