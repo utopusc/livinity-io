@@ -40,6 +40,10 @@ export const httpOnlyPaths = [
 	// Platform relay tunnel routes — use HTTP to avoid WS connection dependency
 	'domain.platform.setApiKey',
 	'domain.platform.disconnect',
+	// Custom domain management — use HTTP for reliability
+	'domain.platform.listCustomDomains',
+	'domain.platform.updateAppMapping',
+	'domain.platform.removeCustomDomain',
 	// File operations — use HTTP for reliability through relay tunnel
 	'files.createDirectory',
 	'files.copy',
