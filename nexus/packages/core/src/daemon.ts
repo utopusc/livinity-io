@@ -8,6 +8,7 @@ import { Scheduler } from './scheduler.js';
 import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
 import { KimiAgentRunner } from './kimi-agent-runner.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
 import { SkillLoader } from './skill-loader.js';
 import { SubagentManager } from './subagent-manager.js';
 import { ScheduleManager } from './schedule-manager.js';
@@ -1079,7 +1080,11 @@ export class Daemon {
         sessionId: randomUUID(),
       };
 
-      const agent = new AgentLoop(agentConfig);
+      // Use SdkAgentRunner when Claude subscription (OAuth) auth is active
+      const authMethod = (await this.config.redis.get('nexus:config:claude_auth_method')) || 'api-key';
+      const agent = authMethod === 'sdk-subscription'
+        ? new SdkAgentRunner(agentConfig)
+        : new AgentLoop(agentConfig);
 
       // Voice TTS streaming: buffer agent text at sentence boundaries and publish to Redis
       const voiceSessionId = intent.params?.voiceSessionId as string | undefined;
