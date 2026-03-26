@@ -1,103 +1,71 @@
-# Requirements: Livinity v18.0 Remote Desktop Streaming
+# Requirements: v19.0 Custom Domain Management
 
-**Defined:** 2026-03-25
-**Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
+**Goal:** Users add custom domains on livinity.io dashboard, domains sync to LivOS via tunnel relay, appear in Servers app Domains tab, and connect to apps with auto-SSL Caddy reverse proxy.
 
-## v18.0 Requirements
-
-Requirements for remote desktop streaming milestone. Each maps to roadmap phases.
-
-### Installation & Setup
-
-- [x] **INST-01**: install.sh detects GUI presence (X11/Wayland) and skips desktop streaming setup on headless servers
-- [x] **INST-02**: install.sh installs x11vnc and configures systemd service with `-localhost` binding
-- [x] **INST-03**: x11vnc registered as NativeApp in livinityd with systemd lifecycle management and port health-checking
-
-### Streaming Infrastructure
-
-- [x] **STRM-01**: livinityd provides `/ws/desktop` WebSocket endpoint that bridges to x11vnc TCP socket (localhost:5900)
-- [x] **STRM-02**: WebSocket bridge validates JWT auth on upgrade and checks Origin header
-- [x] **STRM-03**: Caddy generates `pc.{domain}` subdomain with nativeApps JWT cookie gating and `stream_close_delay` for reload resilience
-
-### Browser Viewer
-
-- [x] **VIEW-01**: User can see their server desktop rendered in real-time in the browser via noVNC
-- [x] **VIEW-02**: User can control remote desktop with mouse (click, move, drag, scroll) with correct coordinate scaling
-- [x] **VIEW-03**: User can type on remote desktop including special characters and international keyboards
-- [x] **VIEW-04**: User can enter fullscreen mode for immersive experience and better shortcut capture
-- [x] **VIEW-05**: User sees connection status indicator (connected/reconnecting/disconnected with latency)
-- [x] **VIEW-06**: Connection auto-reconnects on network interruption with exponential backoff
-
-### Integration
-
-- [x] **INTG-01**: Desktop viewer accessible via `pc.{username}.livinity.io` subdomain through tunnel relay
-- [x] **INTG-02**: Desktop session persists across browser tab close/reopen (VNC session stays alive)
-- [x] **INTG-03**: Desktop viewer fits browser viewport with dynamic resolution (server-side resize via xrandr)
-
-## v2 Requirements
-
-Deferred to future release. Tracked but not in current roadmap.
-
-### Clipboard & Input
-
-- **CLIP-01**: User can copy/paste text between local machine and remote desktop
-- **CLIP-02**: User can paste images from local clipboard to remote (Chromium only)
-
-### Adaptive & Mobile
-
-- **ADPT-01**: Stream quality adapts automatically based on connection bandwidth
-- **MOBL-01**: User can interact with remote desktop via touch controls on mobile/tablet
-- **MOBL-02**: On-screen virtual keyboard for mobile devices
-
-### Advanced
-
-- **ADVN-01**: Audio streaming from remote desktop to browser
-- **ADVN-02**: Multi-monitor support with display selector
-- **ADVN-03**: File transfer via desktop stream drag-and-drop
-- **ADVN-04**: Wayland native support via wayvnc (no XWayland dependency)
-- **ADVN-05**: Per-user desktop session isolation (separate X sessions)
-
-## Out of Scope
-
-Explicitly excluded. Documented to prevent scope creep.
-
-| Feature | Reason |
-|---------|--------|
-| Windows/macOS remote desktop | LivOS servers are Linux only |
-| WebRTC transport | WebSocket through Caddy/tunnel is simpler, WebRTC adds STUN/TURN complexity |
-| Apache Guacamole | Requires Tomcat (Java), separate auth system, over-engineered for single-server |
-| KasmVNC | Replaces X server entirely, container-focused, wrong for streaming host desktop |
-| USB device redirection | WebUSB is Chromium-only, requires kernel drivers on both ends |
-| Printing redirection | Servers don't print, extremely niche |
-| Virtual desktop (Xvfb) | Goal is streaming the real host desktop, not creating virtual ones |
-
-## Traceability
-
-Which phases cover which requirements. Updated during roadmap creation.
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| INST-01 | Phase 4 | Complete |
-| INST-02 | Phase 4 | Complete |
-| INST-03 | Phase 4 | Complete |
-| STRM-01 | Phase 5 | Complete |
-| STRM-02 | Phase 5 | Complete |
-| STRM-03 | Phase 4 | Complete |
-| VIEW-01 | Phase 6 | Complete |
-| VIEW-02 | Phase 6 | Complete |
-| VIEW-03 | Phase 6 | Complete |
-| VIEW-04 | Phase 6 | Complete |
-| VIEW-05 | Phase 6 | Complete |
-| VIEW-06 | Phase 6 | Complete |
-| INTG-01 | Phase 6 | Complete |
-| INTG-02 | Phase 5 | Complete |
-| INTG-03 | Phase 6 | Complete |
-
-**Coverage:**
-- v18.0 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
+**Research basis:** v19-STACK.md, v19-FEATURES.md, v19-ARCHITECTURE.md, v19-PITFALLS.md
 
 ---
-*Requirements defined: 2026-03-25*
-*Last updated: 2026-03-25 after roadmap creation (all 15 requirements mapped)*
+
+## Functional Requirements
+
+### DOM-01: Domain Registration (Platform)
+Users can add custom domains on the livinity.io dashboard. The system generates a unique TXT verification token and displays DNS instructions (A record + TXT record). Domain is stored in `custom_domains` PostgreSQL table with status `pending_dns`.
+
+**UAT:** User adds "mysite.com" on dashboard, sees DNS instructions with A record IP and TXT token, domain appears in list as "Pending DNS".
+
+### DOM-02: DNS Verification
+Platform periodically checks DNS for added domains using Node.js `dns/promises`. Verifies both: (1) A record points to relay IP (45.137.194.102), (2) TXT record at `_livinity-verification.{domain}` matches generated token. Domain transitions to `verified` when both pass.
+
+**UAT:** After configuring DNS, domain status changes from "Pending DNS" to "Verified" within 5 minutes. Invalid DNS shows helpful error messages.
+
+### DOM-03: Domain Sync via Tunnel
+When domain is verified, platform sends `domain_sync` tunnel message through relay WebSocket to the user's LivOS instance. On LivOS reconnect, full domain list is synced via `domain_list_sync`. LivOS stores domains in local PostgreSQL + Redis cache.
+
+**UAT:** Verified domain appears in LivOS within 30 seconds. If LivOS was offline during verification, domain syncs on reconnect.
+
+### DOM-04: Relay Custom Domain Routing
+Relay's Caddy `on_demand_tls` ask endpoint is extended to authorize custom domains from the database. A new catch-all `https://` block handles custom domain traffic, proxying to the relay which routes through the tunnel to the correct LivOS instance.
+
+**UAT:** Browsing `https://mysite.com` receives a valid Let's Encrypt SSL certificate and reaches the LivOS instance.
+
+### DOM-05: Domains Tab in Servers App
+Existing Servers/Docker management app gains a "Domains" tab showing all user domains with status (pending, verified, active, error), mapped app, SSL status. Supports add/remove domain actions that proxy to livinity.io API.
+
+**UAT:** User opens Servers app, clicks Domains tab, sees domain list with colored status badges. Can remove domains.
+
+### DOM-06: Domain-to-App Mapping
+Users map custom domains and subdomains to Docker apps. e.g., `mysite.com` -> homepage app, `api.mysite.com` -> backend app. Mapping is stored on LivOS and extends the app gateway to route based on custom domain hostname.
+
+**UAT:** User maps `mysite.com` to their homepage app, maps `api.mysite.com` to a different app. Both resolve correctly.
+
+### DOM-07: Periodic Re-verification
+Background job re-checks DNS every 12 hours. If A record no longer points to relay IP, domain status transitions to `dns_changed` and traffic routing is paused. User is notified to fix DNS.
+
+**UAT:** If user changes A record away from relay IP, domain goes to "DNS Changed" status within 12 hours and stops serving traffic.
+
+---
+
+## Non-Functional Requirements
+
+### DOM-NF-01: Ask Endpoint Performance
+Caddy's ask endpoint must respond within 200ms (Caddy timeout is 500ms by default). Use PostgreSQL indexed domain column + Redis cache for sub-5ms lookups.
+
+### DOM-NF-02: Let's Encrypt Safety
+DNS must be verified before domain is authorized in ask endpoint. Never attempt SSL provisioning for unverified domains. Respects LE rate limits (50 certs/domain/week).
+
+### DOM-NF-03: Zero New Dependencies
+All functionality uses Node.js built-ins (`dns/promises`, `crypto`), existing Caddy on-demand TLS, existing Drizzle ORM, and existing tunnel protocol.
+
+### DOM-NF-04: Existing Routing Preservation
+Custom domain support must not break existing `*.livinity.io` and `*.livinity.app` subdomain routing. Custom domain lookup is a secondary path after the existing subdomain check.
+
+---
+
+## Out of Scope (v19.0)
+
+- Wildcard custom domains (`*.mysite.com`) -- requires DNS-01 challenge
+- CNAME record support -- A record only for v19.0
+- Custom SSL certificate upload -- Caddy auto-SSL only
+- Domain transfer between users
+- Payment/billing integration for domain limits
+- Multi-region relay support
