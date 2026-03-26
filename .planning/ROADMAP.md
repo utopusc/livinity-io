@@ -61,10 +61,10 @@ Plans:
 ### Phase 10: LivOS Domains UI + Dashboard Polish
 **Goal:** Users manage domains in Servers app and livinity.io dashboard with full status visibility.
 **Requirements:** DOM-05
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 10-01-PLAN.md — LivOS Domains tab: tRPC routes + UI component in Servers app
-- [ ] 10-02-PLAN.md — livinity.io dashboard polish: SSL status, re-verify, error states
+- [x] 10-02-PLAN.md — livinity.io dashboard polish: SSL status, re-verify, error states
 **Scope:**
 - Domains tab in Servers app: domain list with status badges (pending/verified/active/error/dns_changed)
 - Domain-to-app mapping UI: dropdown to select Docker app for each domain/subdomain
