@@ -76,6 +76,7 @@ const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
+	'LIVINITY_remote-desktop': {width: 1400, height: 900},
 	'LIVINITY_chrome': {width: 1280, height: 800},
 	'LIVINITY_facebook': {width: 1280, height: 800},
 	'LIVINITY_gmail': {width: 1280, height: 800},

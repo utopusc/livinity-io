@@ -103,6 +103,13 @@ export const systemApps = [
 		systemAppTo: '/terminal',
 	},
 	{
+		id: 'LIVINITY_remote-desktop',
+		name: 'Remote Desktop',
+		icon: '/figma-exports/dock-remote-desktop.png',
+		systemApp: true,
+		systemAppTo: '/remote-desktop',
+	},
+	{
 		id: 'LIVINITY_chrome',
 		name: 'Chrome',
 		icon: '/figma-exports/dock-settings.png',
