@@ -52,6 +52,7 @@ import {useDockerEvents, type EventTypeFilter, type TimeRangeKey} from '@/hooks/
 import {useEngineInfo} from '@/hooks/use-engine-info'
 import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
+import {DomainsTab} from './domains-tab'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {Table, TableHeader, TableBody, TableHead, TableRow, TableCell} from '@/shadcn-components/ui/table'
@@ -3341,6 +3342,7 @@ export default function ServerControl() {
 					<TabsTrigger value='events'>Events</TabsTrigger>
 					<TabsTrigger value='pm2'>PM2</TabsTrigger>
 					<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
+					<TabsTrigger value='domains'>Domains</TabsTrigger>
 				</TabsList>
 
 				{/* Overview Tab */}
@@ -3712,6 +3714,9 @@ export default function ServerControl() {
 				</TabsContent>
 				<TabsContent value='monitoring' className='flex-1 overflow-auto'>
 					<MonitoringTab />
+				</TabsContent>
+				<TabsContent value='domains' className='flex-1 overflow-auto'>
+					<DomainsTab />
 				</TabsContent>
 			</Tabs>
 
