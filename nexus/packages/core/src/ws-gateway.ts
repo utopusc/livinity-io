@@ -18,6 +18,7 @@ import { logger } from './logger.js';
 import { verifyApiKey, verifyJwt } from './auth.js';
 import { AgentLoop } from './agent.js';
 import { KimiAgentRunner } from './kimi-agent-runner.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
 import type { AgentEvent, AgentResult } from './agent.js';
 import type { Brain } from './brain.js';
 import type { ToolRegistry } from './tool-registry.js';
@@ -88,7 +89,7 @@ export interface NotificationPayload {
 
 interface WsSession {
   id: string;
-  agent: AgentLoop | KimiAgentRunner;
+  agent: AgentLoop | KimiAgentRunner | SdkAgentRunner;
   status: 'running' | 'complete' | 'cancelled' | 'error';
   startedAt: number;
   task: string;
