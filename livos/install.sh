@@ -102,7 +102,7 @@ main() {
         DESKTOP_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
             | awk '{print $3}' | while read -r u; do
                 [[ "$u" != "root" ]] && echo "$u" && break
-            done)
+            done) || true
         # Fallback: find first real user in /home/ with a valid uid
         if [[ -z "$DESKTOP_USER" ]]; then
             for d in /home/*/; do
