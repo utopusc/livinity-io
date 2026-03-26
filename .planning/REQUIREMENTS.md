@@ -11,13 +11,13 @@ Requirements for remote desktop streaming milestone. Each maps to roadmap phases
 
 - [x] **INST-01**: install.sh detects GUI presence (X11/Wayland) and skips desktop streaming setup on headless servers
 - [x] **INST-02**: install.sh installs x11vnc and configures systemd service with `-localhost` binding
-- [ ] **INST-03**: x11vnc registered as NativeApp in livinityd with systemd lifecycle management and port health-checking
+- [x] **INST-03**: x11vnc registered as NativeApp in livinityd with systemd lifecycle management and port health-checking
 
 ### Streaming Infrastructure
 
 - [ ] **STRM-01**: livinityd provides `/ws/desktop` WebSocket endpoint that bridges to x11vnc TCP socket (localhost:5900)
 - [ ] **STRM-02**: WebSocket bridge validates JWT auth on upgrade and checks Origin header
-- [ ] **STRM-03**: Caddy generates `pc.{domain}` subdomain with nativeApps JWT cookie gating and `stream_close_delay` for reload resilience
+- [x] **STRM-03**: Caddy generates `pc.{domain}` subdomain with nativeApps JWT cookie gating and `stream_close_delay` for reload resilience
 
 ### Browser Viewer
 
@@ -79,10 +79,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | INST-01 | Phase 4 | Complete |
 | INST-02 | Phase 4 | Complete |
-| INST-03 | Phase 4 | Pending |
+| INST-03 | Phase 4 | Complete |
 | STRM-01 | Phase 5 | Pending |
 | STRM-02 | Phase 5 | Pending |
-| STRM-03 | Phase 4 | Pending |
+| STRM-03 | Phase 4 | Complete |
 | VIEW-01 | Phase 6 | Pending |
 | VIEW-02 | Phase 6 | Pending |
 | VIEW-03 | Phase 6 | Pending |

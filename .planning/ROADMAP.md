@@ -193,7 +193,7 @@ Livinity roadmap tracks all milestones from v10.0 onward. Current milestone: v18
 
 Plans:
 - [x] 04-01-PLAN.md -- install.sh GUI detection + x11vnc installation + systemd service
-- [ ] 04-02-PLAN.md -- NativeApp registration + Caddy subdomain with stream_close_delay
+- [x] 04-02-PLAN.md -- NativeApp registration + Caddy subdomain with stream_close_delay
 
 ### Phase 5: WebSocket Proxy & Auth
 **Goal**: Browser can establish an authenticated WebSocket connection to the VNC stream through livinityd, with JWT validation on upgrade and Origin header protection

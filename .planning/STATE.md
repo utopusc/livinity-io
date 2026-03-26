@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v18.0
 milestone_name: Remote Desktop Streaming
 status: unknown
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-26T04:56:30.133Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-26T05:02:17.561Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -44,6 +44,7 @@ Plan: 2 of 2
 ## Accumulated Context
 
 | Phase 04 P01 | 2min | 1 tasks | 1 files |
+| Phase 04 P02 | 3min | 3 tasks | 3 files |
 
 ### Decisions
 
@@ -53,6 +54,9 @@ Plan: 2 of 2
 - STRM-03 (Caddy subdomain) placed in Phase 4 (infrastructure) since it must exist before proxy routes through it
 - [Phase 04]: x11vnc service NOT auto-enabled -- on-demand start by NativeApp
 - [Phase 04]: GUI detection: 3-tier cascade (systemd target, X11 socket, Wayland socket)
+- [Phase 04]: proxyPort 8080 routes through livinityd not directly to x11vnc -- enables WebSocket proxy middleware in Phase 5
+- [Phase 04]: stream_close_delay 5m prevents Caddy reload from killing active desktop WebSocket connections
+- [Phase 04]: streaming flag is per-app boolean so non-streaming native apps get no extra Caddy directives
 
 ### Pending Todos
 
@@ -65,6 +69,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T04:56:30.131Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-26T05:02:17.559Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
