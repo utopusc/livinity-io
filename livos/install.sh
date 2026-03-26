@@ -127,7 +127,7 @@ main() {
         # Method 2: Check session type (x11 or wayland)
         local session_type="unknown"
         local session_id
-        session_id=$(loginctl list-sessions --no-legend 2>/dev/null | grep -v root | awk 'NR==1{print $1}')
+        session_id=$(loginctl list-sessions --no-legend 2>/dev/null | grep -v root | awk 'NR==1{print $1}') || true
         if [[ -n "$session_id" ]]; then
             session_type=$(loginctl show-session "$session_id" -p Type --value 2>/dev/null || echo "unknown")
         fi
