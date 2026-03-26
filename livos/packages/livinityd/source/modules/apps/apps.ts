@@ -761,10 +761,9 @@ export default class Apps {
 
 		// Gather native app subdomain info for JWT-gated Caddy blocks
 		const nativeAppSubdomains = this.nativeInstances.map((app) => {
-			const builtinApp = getBuiltinApp(app.id)
 			return {
-				subdomain: builtinApp?.installOptions?.subdomain || app.id,
-				port: app.port,
+				subdomain: app.subdomain,
+				port: app.proxyPort,
 			}
 		})
 
