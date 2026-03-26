@@ -104,6 +104,13 @@ main() {
                 [[ "$u" != "root" ]] && echo "$u" && break
             done)
         [[ -z "$DESKTOP_USER" ]] && DESKTOP_USER=$(ls /home/ 2>/dev/null | head -1)
+
+        # No desktop user found — graphical target but no GUI session (headless server)
+        if [[ -z "$DESKTOP_USER" ]]; then
+            info "Graphical target set but no desktop user found -- no desktop streaming"
+            return 0
+        fi
+
         local desktop_uid
         desktop_uid=$(id -u "$DESKTOP_USER" 2>/dev/null || echo "1000")
 
