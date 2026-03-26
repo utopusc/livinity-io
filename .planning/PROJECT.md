@@ -77,13 +77,28 @@ Key validated capabilities:
   - ✓ Fullscreen mode with dynamic xrandr resolution resize
   - ✓ Accessible via tunnel relay at `pc.{username}.livinity.io`
 
-## Current Milestone: None (v18.0 complete)
+## Current Milestone: v19.0 Custom Domain Management
 
-**Goal:** Planning next milestone.
+**Goal:** Users add custom domains on livinity.io dashboard, domains sync to LivOS via tunnel relay, appear in Servers app Domains tab, and connect to apps with auto-SSL Caddy reverse proxy.
+
+**Target features:**
+- Custom domain registration on livinity.io dashboard (add domain, DNS instructions)
+- DNS verification (A record routing + TXT record ownership)
+- Domain sync from platform to LivOS via tunnel relay WebSocket
+- Domains tab in existing Servers/Docker app showing all user domains with status
+- Domain→app mapping with subdomain support (mysite.com→app1, blog.mysite.com→app2)
+- Auto Caddy config with Let's Encrypt SSL for custom domains
+- Domain status tracking (pending DNS, verified, active, error)
 
 ### Active
 
-(None — defining next milestone)
+- [ ] Custom domain CRUD on livinity.io dashboard
+- [ ] DNS verification (A record + TXT record)
+- [ ] Domain sync via tunnel relay to LivOS
+- [ ] Domains tab in Servers app with status display
+- [ ] Domain-to-app mapping with subdomain support
+- [ ] Auto Caddy reverse proxy config with Let's Encrypt SSL
+- [ ] Domain status lifecycle (pending → verified → active)
 
 ### Out of Scope
 
@@ -189,4 +204,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after v18.0 milestone (Remote Desktop Streaming)*
+*Last updated: 2026-03-26 after v19.0 milestone start (Custom Domain Management)*
