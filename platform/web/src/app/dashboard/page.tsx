@@ -58,6 +58,14 @@ function getDomainBadge(status: string) {
   }
 }
 
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -368,8 +376,28 @@ export default function DashboardPage() {
                         </button>
                         <div>
                           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{domain.domain}</p>
-                          {domain.error_message && (
-                            <p className="text-xs text-red-500 dark:text-red-400 mt-0.5">{domain.error_message}</p>
+                          {domain.last_dns_check && (
+                            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">Last checked: {timeAgo(domain.last_dns_check)}</p>
+                          )}
+                          {/* SSL Status - shown for verified/active domains */}
+                          {(domain.status === 'active' || domain.status === 'dns_verified') && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              {domain.status === 'active' ? (
+                                <>
+                                  <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                  </svg>
+                                  <span className="text-xs text-emerald-600 dark:text-emerald-400">SSL Active</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="h-3.5 w-3.5 text-yellow-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                  </svg>
+                                  <span className="text-xs text-yellow-600 dark:text-yellow-400">SSL Pending</span>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -382,7 +410,7 @@ export default function DashboardPage() {
                           disabled={verifyingId === domain.id}
                           className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
                         >
-                          {verifyingId === domain.id ? 'Checking...' : 'Verify'}
+                          {verifyingId === domain.id ? 'Checking...' : domain.last_dns_check ? 'Re-verify' : 'Verify'}
                         </button>
                         <button
                           onClick={() => handleDeleteDomain(domain.id)}
@@ -392,6 +420,29 @@ export default function DashboardPage() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Inline Error Banner for failed/error/dns_changed domains */}
+                    {(domain.status === 'dns_failed' || domain.status === 'error' || domain.status === 'dns_changed') && (
+                      <div className="mx-3 mb-3 flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 dark:bg-red-950/30">
+                        <div className="flex items-center gap-2">
+                          <svg className="h-4 w-4 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                          <p className="text-xs text-red-700 dark:text-red-300">
+                            {domain.status === 'dns_changed'
+                              ? 'DNS records have changed. Please verify your A record still points to 45.137.194.102.'
+                              : domain.error_message || 'DNS verification failed. Check your DNS configuration.'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleVerifyDomain(domain.id)}
+                          disabled={verifyingId === domain.id}
+                          className="shrink-0 rounded-md bg-red-100 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800"
+                        >
+                          {verifyingId === domain.id ? 'Retrying...' : 'Retry'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* DNS Instructions (expanded) */}
                     {isExpanded && (
