@@ -63,6 +63,7 @@ class Server {
 	app?: express.Express
 	server?: http.Server
 	webSocketRouter = new Map<string, WebSocketServer>()
+	private appGatewayProxyCache = new Map<number, ReturnType<typeof createProxyMiddleware>>()
 
 	constructor({livinityd}: ServerOptions) {
 		this.livinityd = livinityd
@@ -102,6 +103,81 @@ class Server {
 
 	async verifyProxyToken(token: string) {
 		return jwt.verifyProxyToken(token, await this.getJwtSecret())
+	}
+
+	/**
+	 * Route a request to a Docker container based on custom domain mapping.
+	 * Returns true if the request was handled, false if not a custom domain.
+	 * Custom domain traffic is public-facing — no LivOS auth required.
+	 */
+	private async routeCustomDomain(
+		request: express.Request,
+		response: express.Response,
+		hostname: string,
+	): Promise<boolean> {
+		// Try exact hostname lookup first
+		let domainInfoRaw = await this.livinityd.ai.redis.get(`livos:custom_domain:${hostname}`)
+		let domainInfo: {domain: string; appMapping: Record<string, string>; status: string} | null = null
+		let subPrefix = 'root'
+
+		if (domainInfoRaw) {
+			domainInfo = JSON.parse(domainInfoRaw)
+		} else {
+			// Try parent domain (e.g., blog.mysite.com -> mysite.com)
+			const parts = hostname.split('.')
+			if (parts.length > 2) {
+				const parentDomain = parts.slice(1).join('.')
+				domainInfoRaw = await this.livinityd.ai.redis.get(`livos:custom_domain:${parentDomain}`)
+				if (domainInfoRaw) {
+					domainInfo = JSON.parse(domainInfoRaw)
+					subPrefix = parts[0] // e.g., "blog"
+				}
+			}
+		}
+
+		if (!domainInfo || domainInfo.status === 'dns_changed') return false
+
+		const appSlug = domainInfo.appMapping[subPrefix]
+		if (!appSlug) {
+			// Domain matched but no app mapped for this prefix
+			response.status(503).send('No app configured for this domain')
+			return true
+		}
+
+		// Resolve appSlug to a port via the subdomain config in Redis
+		const subdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
+		const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+			subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+		const subConfig = subdomains.find((s) => s.appId === appSlug && s.enabled)
+
+		if (!subConfig) {
+			response.status(503).send(`App "${appSlug}" is not installed or not running`)
+			return true
+		}
+
+		// Get or create cached proxy for this port
+		let proxy = this.appGatewayProxyCache.get(subConfig.port)
+		if (!proxy) {
+			this.logger.log(`Custom domain gateway: creating proxy for ${appSlug} port ${subConfig.port}`)
+			proxy = createProxyMiddleware({
+				target: `http://127.0.0.1:${subConfig.port}`,
+				changeOrigin: true,
+				logProvider: () => ({
+					log: this.logger.verbose,
+					debug: this.logger.verbose,
+					info: this.logger.verbose,
+					warn: this.logger.verbose,
+					error: this.logger.error,
+				}),
+			})
+			this.appGatewayProxyCache.set(subConfig.port, proxy)
+		}
+
+		this.logger.verbose(`Custom domain: ${hostname} -> ${appSlug} port ${subConfig.port}`)
+		return new Promise<boolean>((resolve) => {
+			proxy!(request, response, () => resolve(false))
+			response.on('finish', () => resolve(true))
+		})
 	}
 
 	// Creates an isolated WebSocket server and mounts it at a specific path
@@ -186,7 +262,7 @@ class Server {
 		// When Caddy wildcards all subdomains to livinityd, this middleware
 		// intercepts subdomain requests and proxies to the correct container
 		// based on the logged-in user's session.
-		const appGatewayProxyCache = new Map<number, ReturnType<typeof createProxyMiddleware>>()
+		// Also handles custom domain routing (DOM-06) for public-facing traffic.
 
 		this.app.use(async (request, response, next) => {
 			try {
@@ -201,8 +277,15 @@ class Server {
 
 				const mainDomain: string = domainConfig.domain
 
-				// Check if this is a subdomain request
-				if (host === mainDomain || !host.endsWith(`.${mainDomain}`)) return next()
+				// Main domain itself — fall through to normal routes
+				if (host === mainDomain) return next()
+
+				// Not a subdomain of mainDomain — check custom domains (DOM-06)
+				if (!host.endsWith(`.${mainDomain}`)) {
+					const customDomainResult = await this.routeCustomDomain(request, response, host)
+					if (customDomainResult) return // Handled by custom domain routing
+					return next() // Not a custom domain either, fall through
+				}
 
 				const subdomain = host.slice(0, -mainDomain.length - 1)
 				if (!subdomain || subdomain.includes('.')) return next()
@@ -283,7 +366,7 @@ class Server {
 				}
 
 				// Get or create cached proxy for this port
-				let proxy = appGatewayProxyCache.get(targetPort)
+				let proxy = this.appGatewayProxyCache.get(targetPort)
 				if (!proxy) {
 					this.logger.log(`App gateway: creating proxy for port ${targetPort}`)
 					proxy = createProxyMiddleware({
@@ -298,7 +381,7 @@ class Server {
 							error: this.logger.error,
 						}),
 					})
-					appGatewayProxyCache.set(targetPort, proxy)
+					this.appGatewayProxyCache.set(targetPort, proxy)
 				}
 
 				this.logger.verbose(`App gateway: ${subdomain}.${mainDomain} -> 127.0.0.1:${targetPort}`)
@@ -474,6 +557,73 @@ class Server {
 									socket.destroy()
 								})
 								return
+							}
+						}
+					}
+				}
+
+				// ── Custom Domain WebSocket Proxy (DOM-06) ──────────────────
+				// Route WebSocket upgrades for custom domains to correct container.
+				// No auth required — custom domain traffic is public-facing.
+				if (domainConfigRaw) {
+					const domainConfig = JSON.parse(domainConfigRaw)
+					if (domainConfig.active && domainConfig.domain) {
+						// Only check if host is NOT a subdomain of mainDomain (those are handled above)
+						if (upgradeHost !== domainConfig.domain && !upgradeHost.endsWith(`.${domainConfig.domain}`)) {
+							let cdInfoRaw = await this.livinityd.ai.redis.get(`livos:custom_domain:${upgradeHost}`)
+							let cdInfo: {domain: string; appMapping: Record<string, string>; status: string} | null = null
+							let cdSubPrefix = 'root'
+
+							if (cdInfoRaw) {
+								cdInfo = JSON.parse(cdInfoRaw)
+							} else {
+								const parts = upgradeHost.split('.')
+								if (parts.length > 2) {
+									const parentDomain = parts.slice(1).join('.')
+									cdInfoRaw = await this.livinityd.ai.redis.get(`livos:custom_domain:${parentDomain}`)
+									if (cdInfoRaw) {
+										cdInfo = JSON.parse(cdInfoRaw)
+										cdSubPrefix = parts[0]
+									}
+								}
+							}
+
+							if (cdInfo && cdInfo.status !== 'dns_changed') {
+								const appSlug = cdInfo.appMapping[cdSubPrefix]
+								if (appSlug) {
+									const cdSubdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
+									const cdSubdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+										cdSubdomainsRaw ? JSON.parse(cdSubdomainsRaw) : []
+									const cdSubConfig = cdSubdomains.find((s) => s.appId === appSlug && s.enabled)
+
+									if (cdSubConfig) {
+										const upstream = new WebSocket(
+											`ws://127.0.0.1:${cdSubConfig.port}${pathname}${request.url?.includes('?') ? '?' + request.url.split('?')[1] : ''}`,
+										)
+										const proxyWss = new WebSocketServer({noServer: true})
+
+										upstream.on('open', () => {
+											proxyWss.handleUpgrade(request, socket, head, (clientWs) => {
+												proxyWss.close()
+												clientWs.on('message', (data, isBinary) => {
+													if (upstream.readyState === WebSocket.OPEN) upstream.send(data, {binary: isBinary})
+												})
+												upstream.on('message', (data, isBinary) => {
+													if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data, {binary: isBinary})
+												})
+												clientWs.on('close', () => upstream.close())
+												upstream.on('close', () => clientWs.close())
+												clientWs.on('error', () => upstream.close())
+												upstream.on('error', () => clientWs.close())
+											})
+										})
+										upstream.on('error', () => {
+											proxyWss.close()
+											socket.destroy()
+										})
+										return
+									}
+								}
 							}
 						}
 					}
