@@ -26,10 +26,10 @@ Plans:
 ### Phase 08: Relay Integration + Custom Domain Routing
 **Goal:** Relay's Caddy serves custom domains with auto-SSL and routes traffic through tunnel to correct LivOS.
 **Requirements:** DOM-04, DOM-NF-01, DOM-NF-02, DOM-NF-04
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 08-01-PLAN.md — DB schema + Redis cache module + ask endpoint extension + Caddyfile
-- [ ] 08-02-PLAN.md — Custom domain HTTP + WebSocket request routing through tunnel
+- [x] 08-02-PLAN.md — Custom domain HTTP + WebSocket request routing through tunnel
 **Scope:**
 - Extend relay's `/internal/ask` endpoint to check `custom_domains` table (only verified domains)
 - Add Caddyfile catch-all `https://` block with `on_demand` TLS for custom domains
