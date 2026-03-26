@@ -80,15 +80,19 @@ export class ClaudeProvider implements AIProvider {
   }
 
   private async getClient(): Promise<Anthropic> {
-    const apiKey = await this.getApiKey();
-
-    if (this.client && apiKey === this.cachedApiKey) {
+    try {
+      const apiKey = await this.getApiKey();
+      if (this.client && apiKey === this.cachedApiKey) return this.client;
+      this.client = new Anthropic({ apiKey });
+      this.cachedApiKey = apiKey;
+      return this.client;
+    } catch {
+      // No explicit key — let SDK auto-detect from ~/.claude/.credentials.json
+      if (this.client && this.cachedApiKey === '__auto__') return this.client;
+      this.client = new Anthropic();
+      this.cachedApiKey = '__auto__';
       return this.client;
     }
-
-    this.client = new Anthropic({ apiKey });
-    this.cachedApiKey = apiKey;
-    return this.client;
   }
 
   async chat(options: ProviderChatOptions): Promise<ProviderChatResult> {
