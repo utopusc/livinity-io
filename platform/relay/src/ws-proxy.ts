@@ -63,11 +63,15 @@ export function handleWsUpgrade(
   socket: Duplex,
   head: Buffer,
   tunnel: TunnelConnection,
+  targetAppOverride?: string | null,
 ): void {
   const wsId = nanoid();
 
-  // Parse target app from subdomain
-  const { appName } = parseSubdomain(req.headers.host);
+  // Use override if provided, otherwise parse from subdomain.
+  // Custom domain callers pass explicit null (no app targeting until Phase 09).
+  const appName = targetAppOverride !== undefined
+    ? targetAppOverride
+    : parseSubdomain(req.headers.host).appName;
 
   const upgradeMsg: TunnelWsUpgrade = {
     type: 'ws_upgrade',

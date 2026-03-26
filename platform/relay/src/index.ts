@@ -23,7 +23,7 @@ import { verifyApiKey } from './auth.js';
 import { handleTunnelResponse, proxyHttpRequest, setRedis } from './request-proxy.js';
 import { startBandwidthFlush, stopBandwidthFlush } from './bandwidth.js';
 import { shouldRejectNewConnections } from './health.js';
-import { warmDomainCache } from './custom-domains.js';
+import { warmDomainCache, lookupCustomDomain } from './custom-domains.js';
 import { parseSubdomain } from './subdomain-parser.js';
 import {
   handleWsUpgrade,
@@ -501,7 +501,7 @@ function onDeviceConnect(ws: WebSocket): void {
 // Upgrade handling
 // ---------------------------------------------------------------------------
 
-server.on('upgrade', (req, socket, head) => {
+server.on('upgrade', async (req, socket, head) => {
   const url = req.url ?? '';
 
   if (url.startsWith('/tunnel/connect')) {
@@ -519,12 +519,28 @@ server.on('upgrade', (req, socket, head) => {
   }
 
   // User subdomain WebSocket proxying
-  const { username, appName } = parseSubdomain(req.headers.host);
+  const { username } = parseSubdomain(req.headers.host);
   if (username) {
     const tunnel = registry.get(username);
     if (tunnel && tunnel.ws.readyState === 1 /* WebSocket.OPEN */) {
       handleWsUpgrade(req, socket, head, tunnel);
       return;
+    }
+  }
+
+  // Custom domain WebSocket proxying (DOM-04) — only when parseSubdomain
+  // found no username, so existing *.livinity.io WS routing is unchanged.
+  if (!username) {
+    const hostname = req.headers.host?.split(':')[0]?.toLowerCase();
+    if (hostname) {
+      const customDomain = await lookupCustomDomain(pool, redis, hostname);
+      if (customDomain) {
+        const tunnel = registry.get(customDomain.username);
+        if (tunnel && tunnel.ws.readyState === 1) {
+          handleWsUpgrade(req, socket, head, tunnel, null);
+          return;
+        }
+      }
     }
   }
 
