@@ -213,6 +213,15 @@ class Server {
 					subdomainsRaw ? JSON.parse(subdomainsRaw) : []
 				const subConfig = subdomains.find((s) => s.subdomain === subdomain && s.enabled)
 
+				// Skip NativeApp subdomains (e.g., "pc" for desktop streaming)
+				// They're handled by dedicated Express routes below, not the app gateway
+				if (!subConfig) {
+					const isNative = this.livinityd.apps.nativeInstances.some(
+						(app) => app.subdomain === subdomain
+					)
+					if (isNative) return next()
+				}
+
 				if (!subConfig) {
 					return response.status(404).send('App not found')
 				}
@@ -857,6 +866,98 @@ class Server {
 				await pipeline(journal.stdout!, createGzip(), response)
 			} catch (error) {
 				this.logger.error(`Error streaming logs`, error)
+			}
+		})
+
+		// ── noVNC Static Files ─────────────────────────────────────────────
+		// Serve the vendored noVNC ESM source files for the desktop viewer.
+		// Maps /novnc/* to the novnc-vendor/ directory alongside this file.
+		const novncVendorPath = join(dirname(fileURLToPath(import.meta.url)), 'novnc-vendor')
+		this.app.use('/novnc', express.static(novncVendorPath))
+
+		// ── Desktop Viewer Page ──────────────────────────────────────────────
+		// Serves the standalone noVNC desktop viewer when accessing pc.{domain}
+		this.app.get('*', async (request, response, next) => {
+			const host = request.hostname
+			if (!host) return next()
+
+			const domainConfigRaw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
+			if (!domainConfigRaw) return next()
+			const domainConfig = JSON.parse(domainConfigRaw)
+			if (!domainConfig.active || !domainConfig.domain) return next()
+
+			const mainDomain: string = domainConfig.domain
+			if (host === mainDomain || !host.endsWith(`.${mainDomain}`)) return next()
+
+			const subdomain = host.slice(0, -mainDomain.length - 1)
+			const desktopApp = this.livinityd.apps.nativeInstances.find(
+				(app) => app.subdomain === subdomain && app.id === 'desktop-stream'
+			)
+			if (!desktopApp) return next()
+
+			// Serve the desktop viewer HTML page
+			const viewerPath = join(dirname(fileURLToPath(import.meta.url)), 'desktop-viewer.html')
+			response.sendFile(viewerPath)
+		})
+
+		// ── Desktop Resolution Resize ────────────────────────────────────────
+		// POST /api/desktop/resize — adjusts server display resolution via xrandr
+		// Called by the desktop viewer when the browser viewport changes
+		this.app.post('/api/desktop/resize', express.json(), async (request, response) => {
+			try {
+				// Auth check: require valid session token
+				const sessionToken = request?.cookies?.LIVINITY_SESSION
+				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
+				const isValid = await this.verifyToken(sessionToken).catch(() => false)
+				if (!isValid) return response.status(401).json({error: 'unauthorized'})
+
+				const {width, height} = request.body
+				if (!width || !height || typeof width !== 'number' || typeof height !== 'number') {
+					return response.status(400).json({error: 'width and height required as numbers'})
+				}
+
+				// Clamp to reasonable bounds
+				const w = Math.max(640, Math.min(3840, Math.round(width)))
+				const h = Math.max(480, Math.min(2160, Math.round(height)))
+				const modeName = `${w}x${h}`
+
+				// Try to set the resolution via xrandr
+				// First try setting existing mode, then create new mode if needed
+				try {
+					const output = (await $({shell: true})`xrandr | grep ' connected' | head -1 | awk '{print $1}'`).stdout.trim()
+					await $`xrandr --output ${output} --mode ${modeName}`
+					this.logger.verbose(`Desktop resize: set ${modeName}`)
+					return response.json({success: true, width: w, height: h})
+				} catch {
+					// Mode doesn't exist — create it via cvt + xrandr --newmode + --addmode
+					try {
+						const cvtResult = await $`cvt ${w} ${h} 60`
+						// Parse modeline from cvt output: "Modeline "1920x1080_60.00" 173.00 ..."
+						const modeline = cvtResult.stdout.split('\n').find((l: string) => l.startsWith('Modeline'))
+						if (!modeline) throw new Error('cvt produced no modeline')
+						// Extract mode name and params from: Modeline "name" params...
+						const parts = modeline.replace('Modeline ', '').trim()
+						const modeNameQuoted = parts.match(/"([^"]+)"/)
+						if (!modeNameQuoted) throw new Error('Failed to parse cvt modeline')
+						const cvtModeName = modeNameQuoted[1]
+						const modeParams = parts.slice(parts.indexOf('"', parts.indexOf('"') + 1) + 1).trim()
+
+						const output = (await $({shell: true})`xrandr | grep ' connected' | head -1 | awk '{print $1}'`).stdout.trim()
+
+						// Add the new mode
+						await $({shell: true})`xrandr --newmode "${cvtModeName}" ${modeParams}`
+						await $`xrandr --addmode ${output} ${cvtModeName}`
+						await $`xrandr --output ${output} --mode ${cvtModeName}`
+						this.logger.verbose(`Desktop resize: created and set ${cvtModeName}`)
+						return response.json({success: true, width: w, height: h})
+					} catch (err: any) {
+						this.logger.error('Desktop resize: xrandr failed', err)
+						return response.status(500).json({error: 'Failed to resize display', detail: err.message})
+					}
+				}
+			} catch (err: any) {
+				this.logger.error('Desktop resize error:', err)
+				return response.status(500).json({error: err.message})
 			}
 		})
 
