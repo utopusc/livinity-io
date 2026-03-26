@@ -430,22 +430,10 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         return;
       }
 
+      // Check if Claude is actually usable (credentials file, API key, or CLI)
+      const available = await provider.isAvailable();
       const authMethod = (await redis.get('nexus:config:claude_auth_method')) || 'api-key';
-
-      if (authMethod === 'api-key') {
-        const key = await redis.get('nexus:config:anthropic_api_key');
-        res.json({ authenticated: !!key, method: 'api-key', provider: 'claude' });
-      } else {
-        // sdk-subscription
-        const status = await provider.getCliStatus();
-        res.json({
-          authenticated: status.authenticated,
-          method: 'sdk-subscription',
-          provider: 'claude',
-          user: status.user,
-          cliInstalled: status.installed,
-        });
-      }
+      res.json({ authenticated: available, method: authMethod, provider: 'claude' });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
