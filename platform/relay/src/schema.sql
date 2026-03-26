@@ -149,6 +149,9 @@ CREATE INDEX IF NOT EXISTS idx_custom_domains_user_id ON custom_domains(user_id)
 CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
 CREATE INDEX IF NOT EXISTS idx_custom_domains_status ON custom_domains(status);
 
+-- Phase 09: Add app_mapping column for domain-to-app routing
+ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS app_mapping JSONB NOT NULL DEFAULT '{}';
+
 -- =========================================================================
 -- Phase 9 test data (run manually):
 -- INSERT INTO users (id, username, email)

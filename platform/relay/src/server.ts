@@ -151,6 +151,51 @@ export function createRequestHandler(
         return;
       }
 
+      if (req.url.startsWith('/internal/domain-sync') && isLocal && req.method === 'POST') {
+        // Collect POST body
+        const bodyChunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
+        req.on('end', async () => {
+          try {
+            const body = JSON.parse(Buffer.concat(bodyChunks).toString());
+            const { userId, action, domain, appMapping, status } = body;
+            if (!userId || !action || !domain) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'missing userId, action, or domain' }));
+              return;
+            }
+            // Find the user's tunnel
+            const tunnel = registry.getByUserId(userId);
+            if (!tunnel || tunnel.ws.readyState !== 1) {
+              // Tunnel offline -- domain will sync on reconnect via domain_list_sync
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ synced: false, reason: 'tunnel_offline' }));
+              return;
+            }
+            // Send domain_sync through the tunnel
+            const syncMsg = {
+              type: 'domain_sync' as const,
+              action,
+              domain,
+              ...(appMapping ? { appMapping } : {}),
+              ...(status ? { status } : {}),
+            };
+            tunnel.ws.send(JSON.stringify(syncMsg));
+
+            // Invalidate relay Redis cache for this domain
+            const { invalidateDomainCache } = await import('./custom-domains.js');
+            await invalidateDomainCache(redis, domain);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ synced: true }));
+          } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'internal error' }));
+          }
+        });
+        return;
+      }
+
       if (!isLocal) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'forbidden' }));
