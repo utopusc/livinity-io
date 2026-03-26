@@ -16,6 +16,7 @@ import type { Tool, ToolResult } from './types.js';
 import { AgentLoop } from './agent.js';
 import type { AgentEvent } from './agent.js';
 import { KimiAgentRunner } from './kimi-agent-runner.js';
+import { SdkAgentRunner } from './sdk-agent-runner.js';
 import type { McpConfigManager } from './mcp-config-manager.js';
 import type { McpRegistryClient } from './mcp-registry-client.js';
 import type { McpClientManager } from './mcp-client-manager.js';
@@ -2036,7 +2037,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-    const authMethod = 'api-key'; // Kimi uses API key auth
+    const authMethod = (await redis.get('nexus:config:claude_auth_method')) || 'api-key';
 
     const agentConfig = {
       brain,
@@ -2055,9 +2056,12 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       computerUseStepLimit: computer_use_step_limit || 50,
     };
 
-    const agent = new AgentLoop(agentConfig);
+    // Use SdkAgentRunner when Claude subscription (OAuth) auth is active
+    const agent = authMethod === 'sdk-subscription'
+      ? new SdkAgentRunner(agentConfig)
+      : new AgentLoop(agentConfig);
 
-    logger.info('SSE: using agent mode', { mode: 'api-key' });
+    logger.info('SSE: using agent mode', { mode: authMethod });
 
     agent.on('event', sendEvent);
 
