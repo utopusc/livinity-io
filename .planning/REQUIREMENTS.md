@@ -15,8 +15,8 @@ Requirements for remote desktop streaming milestone. Each maps to roadmap phases
 
 ### Streaming Infrastructure
 
-- [ ] **STRM-01**: livinityd provides `/ws/desktop` WebSocket endpoint that bridges to x11vnc TCP socket (localhost:5900)
-- [ ] **STRM-02**: WebSocket bridge validates JWT auth on upgrade and checks Origin header
+- [x] **STRM-01**: livinityd provides `/ws/desktop` WebSocket endpoint that bridges to x11vnc TCP socket (localhost:5900)
+- [x] **STRM-02**: WebSocket bridge validates JWT auth on upgrade and checks Origin header
 - [x] **STRM-03**: Caddy generates `pc.{domain}` subdomain with nativeApps JWT cookie gating and `stream_close_delay` for reload resilience
 
 ### Browser Viewer
@@ -31,7 +31,7 @@ Requirements for remote desktop streaming milestone. Each maps to roadmap phases
 ### Integration
 
 - [ ] **INTG-01**: Desktop viewer accessible via `pc.{username}.livinity.io` subdomain through tunnel relay
-- [ ] **INTG-02**: Desktop session persists across browser tab close/reopen (VNC session stays alive)
+- [x] **INTG-02**: Desktop session persists across browser tab close/reopen (VNC session stays alive)
 - [ ] **INTG-03**: Desktop viewer fits browser viewport with dynamic resolution (server-side resize via xrandr)
 
 ## v2 Requirements
@@ -80,8 +80,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INST-01 | Phase 4 | Complete |
 | INST-02 | Phase 4 | Complete |
 | INST-03 | Phase 4 | Complete |
-| STRM-01 | Phase 5 | Pending |
-| STRM-02 | Phase 5 | Pending |
+| STRM-01 | Phase 5 | Complete |
+| STRM-02 | Phase 5 | Complete |
 | STRM-03 | Phase 4 | Complete |
 | VIEW-01 | Phase 6 | Pending |
 | VIEW-02 | Phase 6 | Pending |
@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIEW-05 | Phase 6 | Pending |
 | VIEW-06 | Phase 6 | Pending |
 | INTG-01 | Phase 6 | Pending |
-| INTG-02 | Phase 5 | Pending |
+| INTG-02 | Phase 5 | Complete |
 | INTG-03 | Phase 6 | Pending |
 
 **Coverage:**

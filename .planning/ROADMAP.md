@@ -207,7 +207,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 05-01-PLAN.md -- /ws/desktop WebSocket-to-TCP bridge with JWT auth, Origin validation, and NativeApp auto-start
+- [x] 05-01-PLAN.md -- /ws/desktop WebSocket-to-TCP bridge with JWT auth, Origin validation, and NativeApp auto-start
 
 ### Phase 6: Browser Viewer & Integration
 **Goal**: Users can see and control their server desktop in real-time through `pc.{username}.livinity.io` with full mouse/keyboard input, connection resilience, and proper viewport scaling
