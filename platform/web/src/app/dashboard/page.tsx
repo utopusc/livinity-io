@@ -3,6 +3,19 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface DomainRecord {
+  id: string;
+  domain: string;
+  status: 'pending_dns' | 'dns_verified' | 'dns_failed' | 'active' | 'dns_changed' | 'error';
+  verification_token: string;
+  dns_a_verified: boolean;
+  dns_txt_verified: boolean;
+  error_message: string | null;
+  last_dns_check: string | null;
+  verified_at: string | null;
+  created_at: string;
+}
+
 interface DeviceInfo {
   deviceId: string;
   deviceName: string;
@@ -26,6 +39,25 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+function getDomainBadge(status: string) {
+  switch (status) {
+    case 'active':
+      return { label: 'Active', color: 'bg-emerald-100 text-emerald-700' };
+    case 'dns_verified':
+      return { label: 'DNS Verified', color: 'bg-emerald-100 text-emerald-700' };
+    case 'pending_dns':
+      return { label: 'Pending DNS', color: 'bg-yellow-100 text-yellow-700' };
+    case 'dns_failed':
+      return { label: 'DNS Failed', color: 'bg-red-100 text-red-700' };
+    case 'dns_changed':
+      return { label: 'DNS Changed', color: 'bg-orange-100 text-orange-700' };
+    case 'error':
+      return { label: 'Error', color: 'bg-red-100 text-red-700' };
+    default:
+      return { label: status, color: 'bg-zinc-100 text-zinc-700' };
+  }
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -46,6 +78,70 @@ export default function DashboardPage() {
   const [installCmd, setInstallCmd] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
 
+  // Domain state
+  const [domains, setDomains] = useState<DomainRecord[]>([]);
+  const [domainInput, setDomainInput] = useState('');
+  const [addingDomain, setAddingDomain] = useState(false);
+  const [domainError, setDomainError] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null);
+
+  const fetchDomains = useCallback(async () => {
+    try {
+      const res = await fetch('/api/domains');
+      if (res.ok) {
+        const d = await res.json();
+        setDomains(d.domains || []);
+      }
+    } catch {}
+  }, []);
+
+  async function handleAddDomain(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = domainInput.trim().toLowerCase();
+    if (!trimmed) return;
+    setAddingDomain(true);
+    setDomainError(null);
+    try {
+      const res = await fetch('/api/domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: trimmed }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setDomainInput('');
+        await fetchDomains();
+        setExpandedDomainId(d.domain?.id || null);
+      } else {
+        setDomainError(d.error || 'Failed to add domain');
+      }
+    } catch {
+      setDomainError('Network error. Please try again.');
+    } finally {
+      setAddingDomain(false);
+    }
+  }
+
+  async function handleVerifyDomain(id: string) {
+    setVerifyingId(id);
+    try {
+      await fetch(`/api/domains/${id}/verify`, { method: 'POST' });
+      await fetchDomains();
+    } catch {}
+    finally { setVerifyingId(null); }
+  }
+
+  async function handleDeleteDomain(id: string) {
+    if (!confirm('Remove this domain? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/domains/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchDomains();
+      }
+    } catch {}
+  }
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/dashboard');
@@ -56,13 +152,13 @@ export default function DashboardPage() {
     finally { setLoading(false); }
   }, [router]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); fetchDomains(); }, [fetchData, fetchDomains]);
 
-  // Poll connection status every 10s
+  // Poll connection status + domains every 10s
   useEffect(() => {
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(() => { fetchData(); fetchDomains(); }, 10000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, fetchDomains]);
 
   async function generateKey(action: string) {
     setGenerating(true);
@@ -216,6 +312,151 @@ export default function DashboardPage() {
             <div className={`h-full rounded-full transition-all ${bwColor}`} style={{ width: `${Math.min(bwPercent, 100)}%` }} />
           </div>
           <p className="mt-2 text-xs text-zinc-400">{bwPercent}% of monthly free tier used</p>
+        </div>
+
+        {/* Custom Domains */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Custom Domains</h2>
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                {domains.length}/3
+              </span>
+            </div>
+          </div>
+
+          {/* Add Domain Form */}
+          <form onSubmit={handleAddDomain} className="mb-4 flex gap-2">
+            <input
+              type="text"
+              value={domainInput}
+              onChange={(e) => { setDomainInput(e.target.value); setDomainError(null); }}
+              placeholder="yourdomain.com"
+              className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-500"
+              disabled={addingDomain}
+            />
+            <button
+              type="submit"
+              disabled={addingDomain || !domainInput.trim()}
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              {addingDomain ? 'Adding...' : 'Add Domain'}
+            </button>
+          </form>
+          {domainError && (
+            <p className="mb-4 text-sm text-red-600 dark:text-red-400">{domainError}</p>
+          )}
+
+          {/* Domain List */}
+          {domains.length > 0 ? (
+            <div className="space-y-3">
+              {domains.map((domain) => {
+                const badge = getDomainBadge(domain.status);
+                const isExpanded = expandedDomainId === domain.id;
+                return (
+                  <div key={domain.id} className="rounded-lg border border-zinc-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-between p-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setExpandedDomainId(isExpanded ? null : domain.id)}
+                          className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                        >
+                          <svg className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{domain.domain}</p>
+                          {domain.error_message && (
+                            <p className="text-xs text-red-500 dark:text-red-400 mt-0.5">{domain.error_message}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                        <button
+                          onClick={() => handleVerifyDomain(domain.id)}
+                          disabled={verifyingId === domain.id}
+                          className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                        >
+                          {verifyingId === domain.id ? 'Checking...' : 'Verify'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDomain(domain.id)}
+                          className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* DNS Instructions (expanded) */}
+                    {isExpanded && (
+                      <div className="border-t border-zinc-100 p-3 dark:border-zinc-800">
+                        <div className="rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800">
+                          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">DNS Instructions</h4>
+
+                          {/* A Record */}
+                          <div className="mb-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">A Record</p>
+                                <p className="mt-1 font-mono text-sm text-zinc-900 dark:text-zinc-50">{domain.domain}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {domain.dns_a_verified && (
+                                  <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                                <span className="font-mono text-sm text-zinc-600 dark:text-zinc-300">45.137.194.102</span>
+                                <CopyButton text="45.137.194.102" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* TXT Record */}
+                          <div className="mb-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">TXT Record</p>
+                                <p className="mt-1 font-mono text-sm text-zinc-900 dark:text-zinc-50">_livinity-verification.{domain.domain}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {domain.dns_txt_verified && (
+                                  <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+                            <div className="mt-2 flex items-center">
+                              <code className="flex-1 break-all rounded bg-zinc-100 px-2 py-1 font-mono text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                liv_verify={domain.verification_token}
+                              </code>
+                              <CopyButton text={`liv_verify=${domain.verification_token}`} />
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                            DNS changes can take up to 48 hours to propagate. We check automatically.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-sm text-zinc-500 mb-1">No custom domains yet.</p>
+              <p className="text-xs text-zinc-400">Add a domain above to get started with custom domain routing.</p>
+            </div>
+          )}
         </div>
 
         {/* Devices */}
