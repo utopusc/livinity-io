@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-03-27T09:01:27.466Z"
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-03-27T09:30:19.750Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 12 — MCP Tool Bridge
+**Current focus:** Phase 13 — WebSocket Streaming Transport
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
+Phase: 13 (WebSocket Streaming Transport) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 
 | Phase 11 P01 | 4min | 2 tasks | 2 files |
 | Phase 12 P01 | 3min | 2 tasks | 2 files |
+| Phase 13 P01 | 15min | 2 tasks | 6 files |
 
 ### Decisions
 
@@ -60,6 +61,10 @@ Plan: Not started
 - [Phase 12]: 50k char truncation limit (~12.5k tokens) balances detail vs SDK context budget
 - [Phase 12]: Images forwarded as MCP image content blocks preserving mimeType from ToolResult
 - [Phase 12]: Exported buildSdkTools and paramTypeToZod for direct testing without SDK subprocess
+- [Phase 13]: AsyncIterable prompt mode with createInputChannel for mid-conversation message injection
+- [Phase 13]: Zero-transformation SDK message relay: { type: 'sdk_message', data: SDKMessage }
+- [Phase 13]: Single session per user via Map<userId, ActiveSession> with cleanup-on-new-start
+- [Phase 13]: No session kill on WS disconnect -- allows reconnection on tab refresh
 
 ### Pending Todos
 
@@ -72,6 +77,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T08:57:40.572Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-03-27T09:30:19.747Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None

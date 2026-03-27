@@ -73,7 +73,7 @@ Plans:
   4. Connection resilience: in-progress conversations resume gracefully after a brief network interruption
 **Plans:** 2 plans
 Plans:
-- [ ] 13-01-PLAN.md — Server-side AgentSessionManager + /ws/agent WebSocket endpoint
+- [x] 13-01-PLAN.md — Server-side AgentSessionManager + /ws/agent WebSocket endpoint
 - [ ] 13-02-PLAN.md — Client-side useAgentSocket hook + AI chat wiring
 
 ### Phase 14: Chat UI Foundation
@@ -141,7 +141,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 |-------|-----------|----------------|--------|-----------|
 | 11. Agent SDK Backend Integration | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 12. MCP Tool Bridge | v20.0 | 1/1 | Complete    | 2026-03-27 |
-| 13. WebSocket Streaming Transport | v20.0 | 0/2 | Not started | - |
+| 13. WebSocket Streaming Transport | v20.0 | 1/2 | In progress | - |
 | 14. Chat UI Foundation | v20.0 | 0/? | Not started | - |
 | 15. Live Tool Call Visualization | v20.0 | 0/? | Not started | - |
 | 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
