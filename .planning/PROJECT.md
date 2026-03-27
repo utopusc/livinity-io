@@ -129,7 +129,7 @@ Key validated capabilities:
 
 ## Context
 
-**Current State (post v18.0):**
+**Current State (post v19.0 — Custom Domain Management):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
@@ -138,7 +138,8 @@ Key validated capabilities:
 - AI Computer Use: autonomous screenshot→analyze→act loop, live monitoring, emergency stop
 - Multi-Provider AI: Claude + Kimi dual provider with Settings toggle, config-driven fallback
 - Precision Computer Use: DPI-aware screenshots, Windows UIA accessibility tree, accessibility-first AI prompt
-- **Remote Desktop Streaming: x11vnc + noVNC web viewer at `pc.{username}.livinity.io`, install.sh auto-setup with GUI detection, JWT-protected WebSocket bridge, fullscreen + auto-reconnect + xrandr resize**
+- Remote Desktop Streaming: x11vnc + noVNC web viewer at `pc.{username}.livinity.io`, install.sh auto-setup with GUI detection, JWT-protected WebSocket bridge, fullscreen + auto-reconnect + xrandr resize
+- **Custom Domain Management: Platform domain CRUD + DNS verification, relay Caddy auto-SSL routing, tunnel domain sync, LivOS domains UI, Settings "My Domains" section with tunnel-synced domains and Configure dialog**
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
@@ -204,4 +205,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after v19.0 milestone start (Custom Domain Management)*
+*Last updated: 2026-03-27 after v19.0 milestone completion (Custom Domain Management — all phases complete)*
