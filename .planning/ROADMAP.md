@@ -75,6 +75,22 @@ Plans:
 **Key risk:** None significant -- thin UI layer over working backend.
 **Dependencies:** Phase 09 (domain data must be in LivOS before UI can display it)
 
+### Phase 10.1: Settings My Domains
+**Goal:** Replace old "Domain & HTTPS" wizard in Settings with "My Domains" section showing tunnel-synced domains from livinity.io.
+**Requirements:** None (sub-phase, completes Settings UI transition)
+**Plans:** 1 plan
+Plans:
+- [ ] 10.1-01-PLAN.md — Swap Settings menu item + create MyDomainsSection component
+**Scope:**
+- Replace Settings menu item from "Domain & HTTPS" to "My Domains"
+- New MyDomainsSection component adapted from existing DomainsTab pattern
+- Reads from existing domain.platform.* tRPC routes (no new backend)
+- Domain list with status badges, app mapping dropdowns, 10s polling
+- Empty state with link to livinity.io dashboard
+- Remove old DomainSection/DomainSetupInner references from settings-content.tsx
+**Key risk:** None -- thin UI swap over existing working backend.
+**Dependencies:** Phase 10 (domain UI patterns and tRPC routes must exist)
+
 ---
 
 ## Requirement Coverage Matrix
