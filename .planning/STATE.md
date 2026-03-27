@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-03-27T11:18:25.522Z"
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-03-27T11:33:45Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,26 +20,26 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 16 — Mid-Conversation Interaction
+**Current focus:** Phase 17 — Session Management + History
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
+Phase: 17 (Session Management + History) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: --
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 7min
+- Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 17 | 1 | 7min | 7min |
 
 ## Accumulated Context
 
@@ -51,6 +51,7 @@ Plan: Not started
 | Phase 14 P02 | 5min | 2 tasks | 1 files |
 | Phase 15 P01 | 7min | 2 tasks | 2 files |
 | Phase 16 P01 | 5min | 2 tasks | 2 files |
+| Phase 17 P01 | 7min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -84,6 +85,9 @@ Plan: Not started
 - [Phase 15]: 1500-char output truncation with show more/less toggle for tool call cards
 - [Phase 16]: onSend callback overloaded by parent: ChatInput always calls onSend(), parent routes to sendFollowUp or sendMessage based on streaming state
 - [Phase 16]: Textarea stays enabled during streaming with placeholder 'Type to send a follow-up...' to signal interactivity
+- [Phase 17]: Turn accumulation in consumeAndRelay: accumulate text + tool calls, flush on result message
+- [Phase 17]: onTurnComplete callback pattern: AgentSessionManager stays storage-agnostic, ws-agent.ts bridges to AiModule
+- [Phase 17]: Tool outputs captured from user tool_result blocks matching pending tool calls
 
 ### Pending Todos
 
@@ -96,6 +100,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T11:15:35.674Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-03-27T11:33:45Z
+Stopped at: Completed 17-01-PLAN.md
 Resume file: None
