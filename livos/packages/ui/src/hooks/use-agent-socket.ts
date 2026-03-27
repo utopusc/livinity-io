@@ -10,6 +10,8 @@ export interface ChatToolCall {
 	input: Record<string, unknown>
 	status: 'running' | 'complete' | 'error'
 	output?: string
+	elapsedSeconds?: number
+	errorMessage?: string
 }
 
 export interface ChatMessage {
@@ -185,6 +187,36 @@ export function useAgentSocket() {
 					for (const tc of toolCalls) {
 						dispatch({type: 'ADD_TOOL_CALL', toolCall: tc})
 					}
+
+					// Also check for tool_result blocks in assistant message (non-streaming fallback)
+					const toolResultBlocks = (data.message?.content || []).filter(
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						(block: any) => block.type === 'tool_result',
+					)
+					for (const block of toolResultBlocks) {
+						if (!block.tool_use_id) continue
+						let outputString = ''
+						if (typeof block.content === 'string') {
+							outputString = block.content
+						} else if (Array.isArray(block.content)) {
+							outputString = block.content
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								.filter((b: any) => b.type === 'text' && b.text)
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								.map((b: any) => b.text)
+								.join('\n')
+						}
+						const isError = block.is_error === true
+						dispatch({
+							type: 'UPDATE_TOOL_CALL',
+							toolCallId: block.tool_use_id,
+							updates: {
+								status: isError ? 'error' : 'complete',
+								output: outputString,
+								...(isError ? {errorMessage: outputString} : {}),
+							},
+						})
+					}
 					break
 				}
 
@@ -223,19 +255,21 @@ export function useAgentSocket() {
 
 						case 'content_block_stop': {
 							// If we were accumulating tool input JSON, parse and update
+							// Keep status as 'running' -- tool input is finalized but execution hasn't started yet
 							if (currentToolIdRef.current && toolInputBufferRef.current) {
 								try {
 									const input = JSON.parse(toolInputBufferRef.current)
 									dispatch({
 										type: 'UPDATE_TOOL_CALL',
 										toolCallId: currentToolIdRef.current,
-										updates: {input, status: 'complete'},
+										updates: {input, status: 'running'},
 									})
 								} catch {
+									// Input JSON didn't parse; keep running status, tool will still execute
 									dispatch({
 										type: 'UPDATE_TOOL_CALL',
 										toolCallId: currentToolIdRef.current,
-										updates: {status: 'complete'},
+										updates: {status: 'running'},
 									})
 								}
 								currentToolIdRef.current = null
@@ -247,6 +281,67 @@ export function useAgentSocket() {
 						case 'message_stop':
 							flushBuffer()
 							break
+					}
+					break
+				}
+
+				case 'tool_progress': {
+					// Tool is executing -- update elapsed time on matching tool call
+					if (data.tool_use_id && data.elapsed_time_seconds != null) {
+						dispatch({
+							type: 'UPDATE_TOOL_CALL',
+							toolCallId: data.tool_use_id,
+							updates: {elapsedSeconds: data.elapsed_time_seconds},
+						})
+					}
+					break
+				}
+
+				case 'tool_use_summary': {
+					// Tool execution completed -- mark preceding tool calls as complete with summary
+					const summary = data.summary || ''
+					const ids: string[] = data.preceding_tool_use_ids || []
+					for (const id of ids) {
+						dispatch({
+							type: 'UPDATE_TOOL_CALL',
+							toolCallId: id,
+							updates: {status: 'complete', output: summary},
+						})
+					}
+					break
+				}
+
+				case 'user': {
+					// User message with tool_result blocks -- extract actual tool output
+					const contentBlocks = data.message?.content
+					if (Array.isArray(contentBlocks)) {
+						for (const block of contentBlocks) {
+							if (block.type === 'tool_result' && block.tool_use_id) {
+								// Build output string from content (may be string or array of text blocks)
+								let outputString = ''
+								if (typeof block.content === 'string') {
+									outputString = block.content
+								} else if (Array.isArray(block.content)) {
+									outputString = block.content
+										// eslint-disable-next-line @typescript-eslint/no-explicit-any
+										.filter((b: any) => b.type === 'text' && b.text)
+										// eslint-disable-next-line @typescript-eslint/no-explicit-any
+										.map((b: any) => b.text)
+										.join('\n')
+								}
+
+								const isError = block.is_error === true
+								dispatch({
+									type: 'UPDATE_TOOL_CALL',
+									toolCallId: block.tool_use_id,
+									updates: {
+										status: isError ? 'error' : 'complete',
+										output: outputString,
+										...(isError ? {errorMessage: outputString} : {}),
+									},
+								})
+							}
+						}
 					}
 					break
 				}
