@@ -77,28 +77,20 @@ Key validated capabilities:
   - ✓ Fullscreen mode with dynamic xrandr resolution resize
   - ✓ Accessible via tunnel relay at `pc.{username}.livinity.io`
 
-## Current Milestone: v19.0 Custom Domain Management
+### Validated (v19.0)
 
-**Goal:** Users add custom domains on livinity.io dashboard, domains sync to LivOS via tunnel relay, appear in Servers app Domains tab, and connect to apps with auto-SSL Caddy reverse proxy.
+- ✓ Custom domain CRUD on livinity.io dashboard — v19.0
+- ✓ DNS verification (A record + TXT record with Cloudflare DoH cross-validation) — v19.0
+- ✓ Domain sync via tunnel relay to LivOS (Redis + PostgreSQL) — v19.0
+- ✓ Domains tab in Servers app with colored status badges — v19.0
+- ✓ Domain-to-app mapping via Docker container selection — v19.0
+- ✓ Auto Caddy on-demand TLS with Let's Encrypt for custom domains — v19.0
+- ✓ Domain status lifecycle (pending → verified → active → dns_changed) — v19.0
+- ✓ Settings "My Domains" section replacing old Domain & HTTPS wizard — v19.0
 
-**Target features:**
-- Custom domain registration on livinity.io dashboard (add domain, DNS instructions)
-- DNS verification (A record routing + TXT record ownership)
-- Domain sync from platform to LivOS via tunnel relay WebSocket
-- Domains tab in existing Servers/Docker app showing all user domains with status
-- Domain→app mapping with subdomain support (mysite.com→app1, blog.mysite.com→app2)
-- Auto Caddy config with Let's Encrypt SSL for custom domains
-- Domain status tracking (pending DNS, verified, active, error)
+### Active (next milestone)
 
-### Active
-
-- [ ] Custom domain CRUD on livinity.io dashboard
-- [ ] DNS verification (A record + TXT record)
-- [ ] Domain sync via tunnel relay to LivOS
-- [ ] Domains tab in Servers app with status display
-- [ ] Domain-to-app mapping with subdomain support
-- [ ] Auto Caddy reverse proxy config with Let's Encrypt SSL
-- [ ] Domain status lifecycle (pending → verified → active)
+*No active requirements — run `/gsd:new-milestone` to define next milestone*
 
 ### Out of Scope
 
@@ -186,6 +178,12 @@ Key validated capabilities:
 | NativeApp for x11vnc (not Docker) | Must capture host X11 display, Docker can't access it | ✓ Good |
 | Standalone HTML viewer (not React embed) | Self-contained page for `pc.{domain}`, no build step | ✓ Good |
 | Vendored noVNC ESM (not npm CJS) | npm package ships CJS only, browser needs ESM imports | ✓ Good |
+| Drizzle ORM for platform domain schema | Type-safe, lightweight, works with Next.js server components | ✓ Good |
+| Dual DNS resolver (system + Cloudflare DoH) | Cross-validation prevents false positives from cached DNS | ✓ Good |
+| Redis cache for relay ask endpoint | Sub-5ms domain authorization, Caddy 500ms timeout safe | ✓ Good |
+| Catch-all HTTPS block (not per-domain) | Auto-scales with on_demand_tls, no Caddyfile changes per domain | ✓ Good |
+| domain_sync tunnel messages (not API polling) | Real-time sync, works offline with reconnect batch sync | ✓ Good |
+| Reuse domain.platform.* routes (not new aliases) | Avoids dead code, existing routes already complete | ✓ Good |
 
 ## Evolution
 
@@ -205,4 +203,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v19.0 milestone completion (Custom Domain Management — all phases complete)*
+*Last updated: 2026-03-27 after v19.0 milestone shipped (Custom Domain Management — 5 phases, 10 plans, 19 tasks)*

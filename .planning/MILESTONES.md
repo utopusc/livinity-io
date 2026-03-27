@@ -1,5 +1,24 @@
 # Milestones
 
+## v19.0 Custom Domain Management (Shipped: 2026-03-27)
+
+**Phases completed:** 5 phases, 10 plans, 19 tasks
+
+**Key accomplishments:**
+
+- Custom domain CRUD API with Drizzle schema, dual-resolver DNS verification (system + Cloudflare DoH), and 3-domain free tier limit
+- Custom Domains dashboard section with add/verify/delete UI, expandable DNS instructions (A record + TXT), colored status badges, and background polling service with 30s/5min tiered intervals
+- Redis-cached custom domain authorization in relay ask endpoint with Caddyfile catch-all for Let's Encrypt TLS provisioning
+- Custom domain HTTP and WebSocket traffic routed through domain owner's tunnel with full bandwidth/reconnect/offline handling
+- Domain sync pipeline from platform through relay to LivOS with Redis storage, reconnect resilience, and DNS re-verification triggers
+- End-to-end custom domain to Docker app routing: relay resolves targetApp from app_mapping, LivOS routes HTTP and WebSocket traffic to correct container port
+- PostgreSQL INSERT/UPDATE/DELETE added to tunnel-client.ts domain sync handlers alongside existing Redis writes, closing the DOM-03 verification gap
+- Domains tab in Servers app with tRPC CRUD routes, colored status badges, Docker app mapping dropdown, and domain removal via tunnel sync
+- Enhanced domain cards with SSL status indicators, re-verify timing display, and inline error banners with retry buttons
+- Replaced "Domain & HTTPS" wizard in Settings with "My Domains" section showing tunnel-synced domains from livinity.io, with Configure dialog for app mapping and conditional Caddy integration
+
+---
+
 ## v18.0 Remote Desktop Streaming (Shipped: 2026-03-26)
 
 **Phases completed:** 3 phases, 4 plans, 8 tasks
