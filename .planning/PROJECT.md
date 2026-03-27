@@ -138,7 +138,7 @@ Key validated capabilities:
 
 ## Context
 
-**Current State (post v19.0 — Custom Domain Management):**
+**Current State (post v19.0, Phase 11 of v20.0 complete):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
@@ -149,6 +149,7 @@ Key validated capabilities:
 - Precision Computer Use: DPI-aware screenshots, Windows UIA accessibility tree, accessibility-first AI prompt
 - Remote Desktop Streaming: x11vnc + noVNC web viewer at `pc.{username}.livinity.io`, install.sh auto-setup with GUI detection, JWT-protected WebSocket bridge, fullscreen + auto-reconnect + xrandr resize
 - **Custom Domain Management: Platform domain CRUD + DNS verification, relay Caddy auto-SSL routing, tunnel domain sync, LivOS domains UI, Settings "My Domains" section with tunnel-synced domains and Configure dialog**
+- **v20.0 Phase 11 (Agent SDK Backend Integration):** SdkAgentRunner is now the default agent runner for /api/agent/stream. 60s watchdog, per-tier budget caps ($2-$10), restricted subprocess env. ProviderManager preserved alongside as fallback.
 
 **Infrastructure:**
 - Server4 (45.137.194.103) = LivOS production (livinity.cloud)
