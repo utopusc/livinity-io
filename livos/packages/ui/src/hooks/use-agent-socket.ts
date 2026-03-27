@@ -372,8 +372,8 @@ export function useAgentSocket() {
 
 					setIsStreaming(false)
 
-					if (data.subtype === 'error') {
-						const errorMsg = data.error?.message || data.error || 'Unknown error'
+					if (data.subtype !== 'success') {
+						const errorMsg = data.errors?.[0]?.message || data.error?.message || data.error || `Agent stopped: ${data.subtype || 'unknown reason'}`
 						dispatch({type: 'ADD_ERROR', message: String(errorMsg)})
 					}
 					break
