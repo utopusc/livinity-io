@@ -1,5 +1,15 @@
 # Milestones
 
+## v20.0 Live Agent UI (Shipped: 2026-03-27)
+
+**Phases completed:** 0 phases, 0 plans, 0 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v19.0 Custom Domain Management (Shipped: 2026-03-27)
 
 **Phases completed:** 5 phases, 10 plans, 19 tasks

@@ -88,26 +88,25 @@ Key validated capabilities:
 - ✓ Domain status lifecycle (pending → verified → active → dns_changed) — v19.0
 - ✓ Settings "My Domains" section replacing old Domain & HTTPS wizard — v19.0
 
-## Current Milestone: v20.0 Live Agent UI
+### Validated (v20.0)
 
-**Goal:** Replace the Nexus API-based AI chat with Claude Agent SDK, delivering a real-time Claude Code-like experience in the browser — live tool calls, streaming output, and mid-conversation interaction.
+- ✓ Claude Agent SDK as default agent runner (SdkAgentRunner, 60s watchdog, per-tier budget caps) — v20.0
+- ✓ MCP tool bridge hardened (image support, 50k truncation, per-tool logging) — v20.0
+- ✓ Real-time WebSocket streaming (/ws/agent, AgentSessionManager, auto-reconnect) — v20.0
+- ✓ Professional chat UI (streamdown + Shiki, streaming markdown, auto-scroll) — v20.0
+- ✓ Live tool call visualization (animated expandable cards, tool-specific renderers) — v20.0
+- ✓ Mid-conversation interaction (follow-ups + interrupt while agent works) — v20.0
+- ✓ Conversation persistence (Redis storage, sidebar history, page refresh restore) — v20.0
+- ✓ Cost tracking ($X.XXXX badge from SDK result, budget enforcement) — v20.0
+- ✓ Nexus AI Settings panel removed — v20.0
 
-**Target features:**
-- Remove Nexus AI API layer (agent loop, provider abstraction, token/tool limits)
-- Remove Nexus AI Settings panel (token limits, tool limits, model selection)
-- Claude Agent SDK backend integration (direct SDK, server-side)
-- Real-time streaming UI — see thinking, tool calls, output as they happen
-- Live agent activity feed (what files it's reading, what tools it's calling)
-- Mid-conversation interaction — add messages while agent is working
-- Professional, lag-free chat interface (no SSE buffering delays)
+## Current State (post v20.0 — Live Agent UI)
+
+AI Chat now uses Claude Agent SDK directly via WebSocket streaming. Professional chat interface with live tool call cards, mid-conversation interaction, conversation history, and cost tracking. Old Nexus AI settings removed. ProviderManager preserved as fallback.
 
 ### Active
 
-- [ ] Claude Agent SDK backend replacing Nexus API
-- [ ] Real-time streaming agent output in browser
-- [ ] Live tool call visualization
-- [ ] Mid-conversation message injection
-- [ ] Clean removal of old Nexus AI settings
+*No active requirements — planning next milestone*
 
 ### Out of Scope
 
@@ -138,7 +137,7 @@ Key validated capabilities:
 
 ## Context
 
-**Current State (post v19.0, Phase 11 of v20.0 complete):**
+**Current State (post v20.0 — Live Agent UI shipped):**
 - LivOS running on production (Server4: 45.137.194.103, livinity.cloud)
 - Mini PC test server (bruce-EQ: 10.69.31.68, livinity.live via CF Tunnel)
 - Multi-user fully working: PostgreSQL, JWT, per-user Docker, app gateway
