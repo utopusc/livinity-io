@@ -88,9 +88,26 @@ Key validated capabilities:
 - ✓ Domain status lifecycle (pending → verified → active → dns_changed) — v19.0
 - ✓ Settings "My Domains" section replacing old Domain & HTTPS wizard — v19.0
 
-### Active (next milestone)
+## Current Milestone: v20.0 Live Agent UI
 
-*No active requirements — run `/gsd:new-milestone` to define next milestone*
+**Goal:** Replace the Nexus API-based AI chat with Claude Agent SDK, delivering a real-time Claude Code-like experience in the browser — live tool calls, streaming output, and mid-conversation interaction.
+
+**Target features:**
+- Remove Nexus AI API layer (agent loop, provider abstraction, token/tool limits)
+- Remove Nexus AI Settings panel (token limits, tool limits, model selection)
+- Claude Agent SDK backend integration (direct SDK, server-side)
+- Real-time streaming UI — see thinking, tool calls, output as they happen
+- Live agent activity feed (what files it's reading, what tools it's calling)
+- Mid-conversation interaction — add messages while agent is working
+- Professional, lag-free chat interface (no SSE buffering delays)
+
+### Active
+
+- [ ] Claude Agent SDK backend replacing Nexus API
+- [ ] Real-time streaming agent output in browser
+- [ ] Live tool call visualization
+- [ ] Mid-conversation message injection
+- [ ] Clean removal of old Nexus AI settings
 
 ### Out of Scope
 
@@ -203,4 +220,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v19.0 milestone shipped (Custom Domain Management — 5 phases, 10 plans, 19 tasks)*
+*Last updated: 2026-03-27 after v20.0 milestone start (Live Agent UI)*

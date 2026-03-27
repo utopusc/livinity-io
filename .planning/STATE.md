@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v19.0
-milestone_name: Custom Domain Management
-status: milestone_complete
-stopped_at: v19.0 milestone shipped
+milestone: v20.0
+milestone_name: Live Agent UI
+status: defining_requirements
+stopped_at: Milestone started
 last_updated: "2026-03-27T05:07:07.235Z"
 progress:
   total_phases: 5
@@ -19,12 +19,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v19.0 -- Custom Domain Management (SHIPPED 2026-03-27)
-**Current focus:** Planning next milestone
+**Current milestone:** v20.0 -- Live Agent UI
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Milestone v19.0 complete. Run `/gsd:new-milestone` to start next milestone.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-27 — Milestone v20.0 started
 
 ## Performance Metrics
 
