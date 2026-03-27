@@ -116,6 +116,8 @@ export function useAgentSocket() {
 	const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
 	const [isStreaming, setIsStreaming] = useState(false)
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+	const [totalCost, setTotalCost] = useState<number>(0)
+	const [usageStats, setUsageStats] = useState<{inputTokens: number; outputTokens: number; durationMs: number; numTurns: number} | null>(null)
 
 	const wsRef = useRef<WebSocket | null>(null)
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -354,6 +356,20 @@ export function useAgentSocket() {
 				case 'result': {
 					flushBuffer()
 					dispatch({type: 'FINALIZE_MESSAGE'})
+
+					// Extract cost and usage from SDK result
+					if (data.total_cost_usd != null) {
+						setTotalCost(data.total_cost_usd)
+					}
+					if (data.usage) {
+						setUsageStats({
+							inputTokens: data.usage.input_tokens ?? 0,
+							outputTokens: data.usage.output_tokens ?? 0,
+							durationMs: data.duration_ms ?? 0,
+							numTurns: data.num_turns ?? 0,
+						})
+					}
+
 					setIsStreaming(false)
 
 					if (data.subtype === 'error') {
@@ -547,6 +563,8 @@ export function useAgentSocket() {
 		dispatch({type: 'CLEAR'})
 		resetBuffer()
 		conversationIdRef.current = null
+		setTotalCost(0)
+		setUsageStats(null)
 	}, [resetBuffer])
 
 	return {
@@ -557,6 +575,8 @@ export function useAgentSocket() {
 		connectionStatus,
 		currentSessionId,
 		conversationId: conversationIdRef.current,
+		totalCost,
+		usageStats,
 
 		// Actions
 		sendMessage,
