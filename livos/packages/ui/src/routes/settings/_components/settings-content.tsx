@@ -125,7 +125,7 @@ type SettingsSection =
 	| 'usage'
 	| 'webhooks'
 	| 'voice'
-	| 'domain'
+	| 'my-domains'
 	| 'backups'
 	| 'migration'
 	| 'language'
@@ -157,7 +157,7 @@ const MENU_ITEMS: MenuItem[] = [
 	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
-	{id: 'domain', icon: TbWorld, label: 'Domain & HTTPS', description: 'Custom domain & SSL', adminOnly: true},
+	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi', adminOnly: true},
 	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Debug & diagnostics', adminOnly: true},
@@ -364,8 +364,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <WebhooksSection />
 		case 'voice':
 			return <VoiceSection />
-		case 'domain':
-			return <DomainSection />
+		case 'my-domains':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MyDomainsSectionLazy /></Suspense>
 		case 'backups':
 			return <BackupsSection />
 		case 'migration':
@@ -1576,18 +1576,7 @@ function VoiceSection() {
 // Other Sections (Simplified)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Lazy-loaded domain setup content
-const DomainSetupInner = React.lazy(() =>
-	import('@/routes/settings/domain-setup').then((m) => ({default: m.DomainSetupDialogContent})),
-)
-
-function DomainSection() {
-	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-			<DomainSetupInner onClose={() => {}} />
-		</Suspense>
-	)
-}
+const MyDomainsSectionLazy = React.lazy(() => import('./my-domains-section'))
 
 // Lazy-loaded backup setup/restore content
 const BackupSetupWizard = React.lazy(() =>
