@@ -36,7 +36,6 @@ const DeviceInfoDialog = React.lazy(() => import('@/routes/settings/device-info'
 const BackupsRestoreDialog = React.lazy(() => import('@/features/backups/index'))
 
 // New settings pages (no popup dialogs)
-const NexusConfigPage = React.lazy(() => import('@/routes/settings/nexus-config'))
 const AiConfigPage = React.lazy(() => import('@/routes/settings/ai-config'))
 const IntegrationsPage = React.lazy(() => import('@/routes/settings/integrations'))
 const DomainSetupPage = React.lazy(() => import('@/routes/settings/domain-setup'))
@@ -142,7 +141,6 @@ export function Settings() {
 						<Route path='/software-update/confirm' Component={SoftwareUpdateConfirmDialog} />
 						<Route path='/advanced/:advancedSelection?' Component={AdvancedSettingsDrawerOrDialog} />
 						{/* New settings pages - embedded, no popups */}
-						<Route path='/nexus-config' Component={NexusConfigPage} />
 						<Route path='/ai-config' Component={AiConfigPage} />
 						<Route path='/integrations' Component={IntegrationsPage} />
 						<Route path='/domain-setup' Component={DomainSetupPage} />
