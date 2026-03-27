@@ -20,6 +20,10 @@ export type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
 export { KimiAgentRunner } from './kimi-agent-runner.js';
 export { SdkAgentRunner } from './sdk-agent-runner.js';
 
+// ── Agent Session Manager ──────────────────────────────────────
+export { AgentSessionManager, createInputChannel } from './agent-session.js';
+export type { ActiveSession, AgentWsMessage, ClientWsMessage } from './agent-session.js';
+
 // ── Skill Types ─────────────────────────────────────────────
 export type {
   SkillFrontmatter,

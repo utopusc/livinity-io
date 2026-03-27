@@ -140,7 +140,7 @@ export function buildSdkTools(
 }
 
 /** Check if Chrome CDP is reachable at the given HTTP URL */
-function isCdpReachable(url: string): Promise<boolean> {
+export function isCdpReachable(url: string): Promise<boolean> {
   return new Promise((resolve) => {
     const parsed = new URL(url.replace(/^ws:\/\//, 'http://'));
     const req = request(
@@ -154,7 +154,7 @@ function isCdpReachable(url: string): Promise<boolean> {
 }
 
 /** Model tier to SDK model string */
-function tierToModel(tier?: string): string | undefined {
+export function tierToModel(tier?: string): string | undefined {
   switch (tier) {
     case 'opus': return 'claude-opus-4-6';
     case 'sonnet': return 'claude-sonnet-4-5';
