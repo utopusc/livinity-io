@@ -111,7 +111,9 @@ Plans:
   1. User can type and send a message while Claude is in the middle of a multi-step task
   2. User can type "stop" or click a stop button and the agent halts its current work
   3. User can send "also check the tests" mid-task and the agent incorporates the instruction in its next turn
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 16-01-PLAN.md — Enable ChatInput during streaming + dual-path sendFollowUp/sendMessage routing
 
 ### Phase 17: Session Management + History
 **Goal**: Conversations persist across sessions and users can browse and resume past conversations from a sidebar
@@ -149,7 +151,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 14. Chat UI Foundation | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 15. Live Tool Call Visualization | v20.0 | 3/3 | Complete    | 2026-03-27 |
-| 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
+| 16. Mid-Conversation Interaction | v20.0 | 0/1 | Not started | - |
 | 17. Session Management + History | v20.0 | 0/? | Not started | - |
 | 18. Cost Control + Settings Cleanup | v20.0 | 0/? | Not started | - |
 
