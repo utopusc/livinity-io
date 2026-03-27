@@ -145,7 +145,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 11. Agent SDK Backend Integration | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 12. MCP Tool Bridge | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
-| 14. Chat UI Foundation | v20.0 | 2/2 | Complete   | 2026-03-27 |
+| 14. Chat UI Foundation | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 15. Live Tool Call Visualization | v20.0 | 0/? | Not started | - |
 | 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
 | 17. Session Management + History | v20.0 | 0/? | Not started | - |
