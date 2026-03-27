@@ -29,7 +29,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 11: Agent SDK Backend Integration** - Claude Agent SDK subprocess running server-side in livinityd, processing user messages (completed 2026-03-27)
 - [x] **Phase 12: MCP Tool Bridge** - Existing LivOS tools (shell, files, Docker, etc.) exposed as MCP tools the SDK can call autonomously (completed 2026-03-27)
 - [x] **Phase 13: WebSocket Streaming Transport** - Real-time WebSocket bridge streaming SDK events from backend to browser
-- [ ] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks
+- [x] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks (completed 2026-03-27)
 - [ ] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time
 - [ ] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working
 - [ ] **Phase 17: Session Management + History** - Persistent conversations with resume capability and browsable history sidebar
@@ -85,10 +85,10 @@ Plans:
   2. Streaming text appears smoothly without layout jumps or flicker
   3. The chat interface feels responsive and professional — no visual artifacts from the old chat system
   4. Error states (SDK failure, network error, rate limit) display clearly with actionable messages
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 14-01-PLAN.md — Install streamdown + create message components (StreamingMessage, ChatInput, message types)
-- [ ] 14-02-PLAN.md — Wire new components into AI Chat view, replace old rendering
+- [x] 14-02-PLAN.md — Wire new components into AI Chat view, replace old rendering
 
 ### Phase 15: Live Tool Call Visualization
 **Goal**: Users see exactly what the agent is doing — every tool call appears as an expandable card with name, inputs, status, and output
@@ -145,7 +145,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 11. Agent SDK Backend Integration | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 12. MCP Tool Bridge | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
-| 14. Chat UI Foundation | v20.0 | 1/2 | In Progress|  |
+| 14. Chat UI Foundation | v20.0 | 2/2 | Complete   | 2026-03-27 |
 | 15. Live Tool Call Visualization | v20.0 | 0/? | Not started | - |
 | 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
 | 17. Session Management + History | v20.0 | 0/? | Not started | - |

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-03-27T10:28:40.761Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-03-27T10:36:42.293Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -48,6 +48,7 @@ Plan: 2 of 2
 | Phase 13 P01 | 15min | 2 tasks | 6 files |
 | Phase 13 P02 | 15min | 2 tasks | 2 files |
 | Phase 14 P01 | 7min | 3 tasks | 5 files |
+| Phase 14 P02 | 5min | 2 tasks | 1 files |
 
 ### Decisions
 
@@ -73,6 +74,9 @@ Plan: 2 of 2
 - [Phase 14]: Error messages detected by id prefix 'err_' matching ADD_ERROR reducer pattern
 - [Phase 14]: Streamdown animated mode with isAnimating tied to message streaming state
 - [Phase 14]: Component-per-role pattern: separate components for user/assistant/system/error with ChatMessageItem dispatcher
+- [Phase 14]: Removed tRPC send mutation fallback -- WebSocket is now the only message path
+- [Phase 14]: Auto-scroll pauses at 100px distance-from-bottom threshold
+- [Phase 14]: VoiceButton removed from input area (tightly coupled to old state)
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T10:28:40.759Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-03-27T10:36:42.290Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
