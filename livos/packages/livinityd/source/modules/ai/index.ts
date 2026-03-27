@@ -608,7 +608,7 @@ export default class AiModule {
 		return assistantMsg
 	}
 
-	private async saveConversation(conversation: Conversation, userId?: string): Promise<void> {
+	async saveConversation(conversation: Conversation, userId?: string): Promise<void> {
 		const prefix = this.userKeyPrefix(userId)
 		try {
 			await this.redis.set(`${prefix}conv:${conversation.id}`, JSON.stringify(conversation))
@@ -632,6 +632,22 @@ export default class AiModule {
 			}
 		} catch {}
 		return undefined
+	}
+
+	async getOrCreateConversation(id: string, title: string, userId?: string): Promise<Conversation> {
+		const existing = await this.getConversation(id, userId)
+		if (existing) return existing
+		const conv: Conversation = {
+			id,
+			title,
+			messages: [],
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+		}
+		const cacheKey = userId ? `${userId}:${id}` : id
+		this.conversations.set(cacheKey, conv)
+		await this.saveConversation(conv, userId)
+		return conv
 	}
 
 	async listConversations(userId?: string): Promise<Array<{id: string; title: string; updatedAt: number; messageCount: number}>> {
