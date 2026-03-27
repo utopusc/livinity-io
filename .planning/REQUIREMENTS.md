@@ -89,25 +89,25 @@ Keep ProviderManager and Kimi/Claude provider abstraction intact. Agent SDK is a
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SDK-01 | TBD | Pending |
-| SDK-02 | TBD | Pending |
-| SDK-03 | TBD | Pending |
-| SDK-04 | TBD | Pending |
-| SDK-05 | TBD | Pending |
-| SDK-06 | TBD | Pending |
-| SDK-07 | TBD | Pending |
-| SDK-08 | TBD | Pending |
-| SDK-09 | TBD | Pending |
-| SDK-10 | TBD | Pending |
-| SDK-NF-01 | TBD | Pending |
-| SDK-NF-02 | TBD | Pending |
-| SDK-NF-03 | TBD | Pending |
+| SDK-01 | Phase 11 | Pending |
+| SDK-02 | Phase 12 | Pending |
+| SDK-03 | Phase 13 | Pending |
+| SDK-04 | Phase 15 | Pending |
+| SDK-05 | Phase 16 | Pending |
+| SDK-06 | Phase 17 | Pending |
+| SDK-07 | Phase 17 | Pending |
+| SDK-08 | Phase 18 | Pending |
+| SDK-09 | Phase 18 | Pending |
+| SDK-10 | Phase 14 | Pending |
+| SDK-NF-01 | Phase 13 | Pending |
+| SDK-NF-02 | Phase 13 | Pending |
+| SDK-NF-03 | Phase 11 | Pending |
 
 **Coverage:**
 - v20.0 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-27*
-*Last updated: 2026-03-27 after initial definition*
+*Last updated: 2026-03-27 after roadmap creation*
