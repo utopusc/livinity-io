@@ -45,7 +45,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   1. User sends a message in AI Chat and receives a coherent response from Claude Agent SDK (not the old Nexus agent loop)
   2. The SDK subprocess starts, processes the message, and returns a result without crashing or hanging
   3. Existing ProviderManager and Kimi/Claude provider abstractions remain intact and functional alongside the new SDK path
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 11-01-PLAN.md — Make SdkAgentRunner default, add watchdog/budget/env safety
 
 ### Phase 12: MCP Tool Bridge
 **Goal**: Claude Agent SDK can autonomously call existing LivOS tools (shell, files, Docker, screenshot, etc.) during its agent loop
@@ -132,7 +134,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 11. Agent SDK Backend Integration | v20.0 | 0/? | Not started | - |
+| 11. Agent SDK Backend Integration | v20.0 | 0/1 | Planning | - |
 | 12. MCP Tool Bridge | v20.0 | 0/? | Not started | - |
 | 13. WebSocket Streaming Transport | v20.0 | 0/? | Not started | - |
 | 14. Chat UI Foundation | v20.0 | 0/? | Not started | - |
