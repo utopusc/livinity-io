@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-03-27T11:33:45Z"
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-03-27T11:42:44Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,26 +20,26 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 17 — Session Management + History
+**Current focus:** Phase 17 — Session Management + History (COMPLETE)
 
 ## Current Position
 
-Phase: 17 (Session Management + History) — EXECUTING
-Plan: 2 of 2
+Phase: 17 (Session Management + History) — COMPLETE
+Plan: 2 of 2 (done)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1
-- Average duration: 7min
-- Total execution time: 0.1 hours
+- Total plans completed: 2
+- Average duration: 6min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 17 | 1 | 7min | 7min |
+| 17 | 2 | 12min | 6min |
 
 ## Accumulated Context
 
@@ -52,6 +52,7 @@ Plan: 2 of 2
 | Phase 15 P01 | 7min | 2 tasks | 2 files |
 | Phase 16 P01 | 5min | 2 tasks | 2 files |
 | Phase 17 P01 | 7min | 2 tasks | 5 files |
+| Phase 17 P02 | 5min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -88,6 +89,9 @@ Plan: 2 of 2
 - [Phase 17]: Turn accumulation in consumeAndRelay: accumulate text + tool calls, flush on result message
 - [Phase 17]: onTurnComplete callback pattern: AgentSessionManager stays storage-agnostic, ws-agent.ts bridges to AiModule
 - [Phase 17]: Tool outputs captured from user tool_result blocks matching pending tool calls
+- [Phase 17]: conversationIdRef uses useRef not useState -- avoids re-renders, parent manages via URL params
+- [Phase 17]: useUtils() imperative fetch for sidebar conversation click -- user-triggered, not auto-fetch
+- [Phase 17]: initialConvLoaded ref gate prevents double-load on mount when isConnected changes
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T11:33:45Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-03-27T11:42:44Z
+Stopped at: Completed 17-02-PLAN.md
 Resume file: None

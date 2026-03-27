@@ -124,10 +124,10 @@ Plans:
   2. Past conversations appear in a sidebar list with auto-generated title, timestamp, and message count
   3. User clicks a past conversation and sees the full message history
   4. User can start a new conversation from the sidebar without losing old ones
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 17-01-PLAN.md — Backend persistence: wire SDK sessions to Redis conversation storage + tRPC routes
-- [ ] 17-02-PLAN.md — Frontend history: load conversations from sidebar + conversationId tracking
+- [x] 17-02-PLAN.md — Frontend history: load conversations from sidebar + conversationId tracking
 
 ### Phase 18: Cost Control + Settings Cleanup
 **Goal**: Users see real-time cost tracking per conversation and the old Nexus AI settings (token/tool limits) are removed
@@ -155,7 +155,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 14. Chat UI Foundation | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 15. Live Tool Call Visualization | v20.0 | 3/3 | Complete    | 2026-03-27 |
 | 16. Mid-Conversation Interaction | v20.0 | 1/1 | Complete    | 2026-03-27 |
-| 17. Session Management + History | v20.0 | 1/2 | In progress | - |
+| 17. Session Management + History | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 18. Cost Control + Settings Cleanup | v20.0 | 0/? | Not started | - |
 
 ---
