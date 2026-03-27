@@ -20,7 +20,7 @@ import {TextEffect} from '@/components/motion-primitives/text-effect'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
-import {useAgentSocket} from '@/hooks/use-agent-socket'
+import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 import {ChatMessageItem} from './chat-messages'
@@ -156,6 +156,7 @@ export default function AiChat() {
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const isMobile = useIsMobile()
 	const agent = useAgentSocket()
+	const utils = trpcReact.useUtils()
 
 	const providersQuery = trpcReact.ai.getProviders.useQuery(undefined, {refetchInterval: 30_000})
 	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
@@ -263,6 +264,32 @@ export default function AiChat() {
 		}
 	}, [displayMessages, agent.isStreaming])
 
+	// Refetch conversation list when streaming ends so sidebar updates
+	const prevStreamingRef = useRef(false)
+	useEffect(() => {
+		if (prevStreamingRef.current && !agent.isStreaming) {
+			// Streaming just ended — refetch conversation list to show updated sidebar
+			conversationsQuery.refetch()
+		}
+		prevStreamingRef.current = agent.isStreaming
+	}, [agent.isStreaming, conversationsQuery])
+
+	// Load conversation messages on mount if URL has ?conv= param (page refresh)
+	const initialConvLoaded = useRef(false)
+	useEffect(() => {
+		const convId = searchParams.get('conv')
+		if (convId && !initialConvLoaded.current && agent.isConnected) {
+			initialConvLoaded.current = true
+			utils.ai.getConversationMessages.fetch({id: convId}).then((result) => {
+				if (result?.messages && result.messages.length > 0) {
+					agent.loadConversation(result.messages as ChatMessage[], convId)
+				}
+			}).catch(() => {
+				// Conversation not found in Redis — show empty chat (new conversation)
+			})
+		}
+	}, [searchParams, agent.isConnected, utils])
+
 	const handleStop = useCallback(() => {
 		agent.interrupt()
 	}, [agent])
@@ -277,9 +304,9 @@ export default function AiChat() {
 		if (agent.isStreaming) {
 			agent.sendFollowUp(text)
 		} else {
-			agent.sendMessage(text)
+			agent.sendMessage(text, undefined, activeConversationId)
 		}
-	}, [input, agent])
+	}, [input, agent, activeConversationId])
 
 	const handleNewConversation = () => {
 		agent.clearMessages()
@@ -298,14 +325,27 @@ export default function AiChat() {
 		conversationsQuery.refetch()
 	}
 
+	const handleSelectConversation = useCallback(async (id: string) => {
+		setSearchParams({conv: id})
+		setActiveView('chat')
+		setSidebarOpen(false)
+
+		try {
+			const result = await utils.ai.getConversationMessages.fetch({id})
+			if (result?.messages) {
+				agent.loadConversation(result.messages as ChatMessage[], id)
+			}
+		} catch (err) {
+			console.error('Failed to load conversation:', err)
+			// Show empty chat rather than crash
+			agent.clearMessages()
+		}
+	}, [setSearchParams, utils, agent])
+
 	const sidebarProps = {
 		conversations: conversationsQuery.data || [],
 		activeId: searchParams.get('conv'),
-		onSelect: (id: string) => {
-			setSearchParams({conv: id})
-			setActiveView('chat')
-			setSidebarOpen(false)
-		},
+		onSelect: handleSelectConversation,
 		onNew: () => {
 			handleNewConversation()
 			setSidebarOpen(false)
