@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-03-27T10:01:15.075Z"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-03-27T10:28:40.761Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 13 — WebSocket Streaming Transport
+**Current focus:** Phase 14 — Chat UI Foundation
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
+Phase: 14 (Chat UI Foundation) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: Not started
 | Phase 12 P01 | 3min | 2 tasks | 2 files |
 | Phase 13 P01 | 15min | 2 tasks | 6 files |
 | Phase 13 P02 | 15min | 2 tasks | 2 files |
+| Phase 14 P01 | 7min | 3 tasks | 5 files |
 
 ### Decisions
 
@@ -69,6 +70,9 @@ Plan: Not started
 - [Phase 13]: useReducer for message state to avoid stale closures in WebSocket callbacks
 - [Phase 13]: requestAnimationFrame batching for stream deltas -- mutable ref accumulation, RAF flush
 - [Phase 13]: Dual-path send: WebSocket when connected, tRPC mutation fallback when disconnected
+- [Phase 14]: Error messages detected by id prefix 'err_' matching ADD_ERROR reducer pattern
+- [Phase 14]: Streamdown animated mode with isAnimating tied to message streaming state
+- [Phase 14]: Component-per-role pattern: separate components for user/assistant/system/error with ChatMessageItem dispatcher
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T09:50:53.898Z
-Stopped at: Completed 13-02-PLAN.md
+Last session: 2026-03-27T10:28:40.759Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
