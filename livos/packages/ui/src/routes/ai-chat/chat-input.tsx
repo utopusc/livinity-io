@@ -35,15 +35,15 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault()
-			if (!isStreaming && value.trim()) {
+			if (value.trim()) {
 				onSend()
 			}
 		}
 	}
 
-	const placeholder = !isConnected ? 'Reconnecting...' : isStreaming ? 'Agent is working...' : 'Message Liv...'
+	const placeholder = !isConnected ? 'Reconnecting...' : isStreaming ? 'Type to send a follow-up...' : 'Message Liv...'
 
-	const isDisabled = disabled || isStreaming
+	const isDisabled = disabled || false
 
 	return (
 		<div className='border-t border-zinc-800 bg-zinc-950 p-3 md:p-4'>
@@ -61,17 +61,26 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						'placeholder:text-zinc-500 outline-none transition-colors',
 						'focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20',
 						'disabled:opacity-50',
-						!isConnected && 'opacity-50',
 					)}
 				/>
 				{isStreaming ? (
-					<button
-						onClick={onStop}
-						className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
-						title='Stop'
-					>
-						<IconPlayerStop size={18} />
-					</button>
+					<>
+						<button
+							onClick={onSend}
+							disabled={!value.trim()}
+							className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600/80 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+							title='Send follow-up'
+						>
+							<IconSend size={18} />
+						</button>
+						<button
+							onClick={onStop}
+							className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
+							title='Stop'
+						>
+							<IconPlayerStop size={18} />
+						</button>
+					</>
 				) : (
 					<button
 						onClick={onSend}
