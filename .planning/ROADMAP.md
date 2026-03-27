@@ -78,9 +78,9 @@ Plans:
 ### Phase 10.1: Settings My Domains
 **Goal:** Replace old "Domain & HTTPS" wizard in Settings with "My Domains" section showing tunnel-synced domains from livinity.io.
 **Requirements:** None (sub-phase, completes Settings UI transition)
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 10.1-01-PLAN.md — Swap Settings menu item + create MyDomainsSection component
+- [x] 10.1-01-PLAN.md — Swap Settings menu item + create MyDomainsSection component
 **Scope:**
 - Replace Settings menu item from "Domain & HTTPS" to "My Domains"
 - New MyDomainsSection component adapted from existing DomainsTab pattern

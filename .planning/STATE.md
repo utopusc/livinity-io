@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Custom Domain Management
 status: unknown
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-03-26T12:29:14.508Z"
+stopped_at: Completed 10.1-01-PLAN.md
+last_updated: "2026-03-27T04:46:49.561Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v19.0 -- Custom Domain Management
-**Current focus:** Phase 10 — LivOS Domains UI + Dashboard Polish
+**Current focus:** Phase 10.1 — settings-my-domains
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
+Phase: 10.1 (settings-my-domains) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: Not started
 | Phase 09 P03 | 3min | 1 tasks | 1 files |
 | Phase 10 P02 | 2min | 1 tasks | 1 files |
 | Phase 10 P01 | 4min | 2 tasks | 4 files |
+| Phase 10.1 P01 | 7min | 3 tasks | 3 files |
 
 ### Decisions
 
@@ -87,6 +88,9 @@ Plan: Not started
 - [Phase 10]: SSL status shown only for active and dns_verified domains; error banner placed between header and DNS instructions
 - [Phase 10]: Used sendDeviceMessage (public) for tunnel notifications in domain CRUD routes
 - [Phase 10]: Domain polling at 10s interval matching existing dashboard polling pattern
+- [Phase 10.1]: Reused existing domain.platform.* tRPC routes instead of creating duplicate domain.myDomains.* routes
+- [Phase 10.1]: Caddy reconfiguration gated on tunnel status (livos:platform:status): direct mode only
+- [Phase 10.1]: Configure dialog pattern (button + Dialog + Apply) instead of inline Select mutation
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-26T12:26:08.910Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-03-27T04:46:49.558Z
+Stopped at: Completed 10.1-01-PLAN.md
 Resume file: None
