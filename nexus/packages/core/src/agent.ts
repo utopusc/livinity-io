@@ -334,7 +334,55 @@ When using Chrome browser tools (mcp_chrome_browser_*):
 
 You have long-term memory via memory_search and memory_add tools:
 - When the user asks about something from past conversations, use memory_search FIRST
-- When you learn important facts or preferences, use memory_add to save them`;
+- When you learn important facts or preferences, use memory_add to save them
+
+## Domain & Caddy Configuration
+
+This server uses **Caddy** as a reverse proxy with automatic HTTPS via Let's Encrypt.
+
+### How Domain Setup Works
+- Users configure their domain in **Settings > Domain & HTTPS** in the LivOS UI
+- Domain config is stored in Redis: \`livos:domain:config\` (main domain) and \`livos:domain:subdomains\` (app subdomains)
+- Caddy automatically provisions SSL certificates via Let's Encrypt when a domain is configured
+- The Caddyfile is at \`/etc/caddy/Caddyfile\`
+
+### Caddy Modes
+1. **No domain (IP only)**: Caddy listens on \`:80\`, reverse proxies to \`127.0.0.1:8080\`
+2. **Direct domain**: Caddy listens on the domain (e.g. \`mysite.com\`), auto-provisions HTTPS, reverse proxies to \`127.0.0.1:8080\`
+3. **Tunnel mode**: HTTPS terminated at Cloudflare/relay edge, Caddy stays on \`:80\` only
+
+### Subdomain Routing
+- Each Docker app can have a subdomain: \`app.domain.com\` → container port
+- NativeApps (desktop-stream, chrome) get JWT-gated subdomains: \`pc.domain.com\`, \`chrome.domain.com\`
+- Subdomains are managed via tRPC routes: \`domain.setAppSubdomain\`, \`domain.listSubdomains\`
+
+### Caddyfile Structure Example
+\`\`\`
+mysite.com {
+    reverse_proxy 127.0.0.1:8080
+}
+jellyfin.mysite.com {
+    reverse_proxy 127.0.0.1:8096
+}
+pc.mysite.com {
+    @notauth { not { header Cookie *LIVINITY_SESSION=* } }
+    handle @notauth { redir https://mysite.com/login?redirect={scheme}://{host}{uri} }
+    reverse_proxy 127.0.0.1:8080 { stream_close_delay 5m }
+}
+\`\`\`
+
+### Shell Commands You Can Use
+- \`caddy reload --config /etc/caddy/Caddyfile\` — reload config without downtime
+- \`caddy validate --config /etc/caddy/Caddyfile\` — validate config syntax
+- \`systemctl status caddy\` — check Caddy service status
+- \`cat /etc/caddy/Caddyfile\` — view current config
+- \`caddy fmt --overwrite /etc/caddy/Caddyfile\` — auto-format Caddyfile
+
+### Important Notes
+- NEVER manually edit the Caddyfile without reloading Caddy afterwards
+- Domain changes should go through the tRPC API (\`domain.setDomain\`, \`domain.activate\`) which handles Caddyfile generation + reload atomically
+- If the user asks to add a domain, guide them to Settings > Domain & HTTPS, or use the tRPC API
+- Port 80 and 443 must be open in the firewall for Let's Encrypt HTTP-01 challenge`;
 
 export class AgentLoop extends EventEmitter {
   private config: AgentConfig;
