@@ -31,10 +31,26 @@ export type AgentWsMessage =
 
 /** Client -> Server WebSocket messages */
 export type ClientWsMessage =
-  | { type: 'start'; prompt: string; sessionId?: string; model?: string }
+  | { type: 'start'; prompt: string; sessionId?: string; model?: string; conversationId?: string }
   | { type: 'message'; text: string }
   | { type: 'interrupt' }
   | { type: 'cancel' };
+
+// ── Turn Data ───────────────────────────────────────────────
+
+/** Data accumulated from a single agent turn for persistence */
+export interface TurnData {
+  sessionId: string;
+  conversationId?: string;
+  userPrompt: string;
+  assistantContent: string;
+  toolCalls: Array<{
+    name: string;
+    input: Record<string, unknown>;
+    output?: string;
+    isError?: boolean;
+  }>;
+}
 
 // ── Input Channel ────────────────────────────────────────────
 
@@ -94,6 +110,7 @@ export function createInputChannel() {
 export interface ActiveSession {
   userId: string;
   sessionId: string;
+  conversationId?: string;
   abortController: AbortController;
   inputChannel: ReturnType<typeof createInputChannel>;
   startedAt: number;
@@ -126,6 +143,7 @@ export class AgentSessionManager {
     prompt: string,
     model: string | undefined,
     onMessage: (msg: AgentWsMessage) => void,
+    opts?: { conversationId?: string; onTurnComplete?: (turn: TurnData) => void },
   ): Promise<string> {
     // Cancel existing session for this user
     this.cleanup(userId);
@@ -137,6 +155,7 @@ export class AgentSessionManager {
     const session: ActiveSession = {
       userId,
       sessionId,
+      conversationId: opts?.conversationId,
       abortController,
       inputChannel,
       startedAt: Date.now(),
@@ -148,7 +167,7 @@ export class AgentSessionManager {
     onMessage({ type: 'session_ready', sessionId });
 
     // Start the relay loop in a detached promise (long-running)
-    this.consumeAndRelay(userId, prompt, model, onMessage).catch((err) => {
+    this.consumeAndRelay(userId, prompt, model, onMessage, opts?.onTurnComplete).catch((err) => {
       logger.error('AgentSessionManager: consumeAndRelay failed', { userId, error: err.message });
     });
 
@@ -158,12 +177,16 @@ export class AgentSessionManager {
   /**
    * Consume SDK query() messages and relay them to the WebSocket client.
    * This is the main relay loop that bridges SDK output to the browser.
+   *
+   * Accumulates assistant text and tool calls per turn, calling onTurnComplete
+   * when a 'result' message arrives so the caller can persist the conversation.
    */
   private async consumeAndRelay(
     userId: string,
     prompt: string,
     model: string | undefined,
     onMessage: (msg: AgentWsMessage) => void,
+    onTurnComplete?: (turn: TurnData) => void,
   ): Promise<void> {
     const session = this.sessions.get(userId);
     if (!session) return;
@@ -252,6 +275,7 @@ export class AgentSessionManager {
     logger.info('AgentSessionManager: starting session', {
       userId,
       sessionId: session.sessionId,
+      conversationId: session.conversationId,
       model: tierToModel(tier),
       maxTurns,
       maxBudgetUsd,
@@ -269,6 +293,34 @@ export class AgentSessionManager {
         session.abortController.abort();
       }
     }, 10_000);
+
+    // Turn accumulation for persistence
+    let accumulatedText = '';
+    const accumulatedToolCalls: TurnData['toolCalls'] = [];
+    // Track current user prompt (starts with initial prompt, updated on follow-up messages)
+    let currentUserPrompt = prompt;
+
+    /** Flush accumulated turn data to the onTurnComplete callback */
+    const flushTurn = () => {
+      if (!onTurnComplete) return;
+      if (!accumulatedText && accumulatedToolCalls.length === 0) return;
+
+      try {
+        onTurnComplete({
+          sessionId: session.sessionId,
+          conversationId: session.conversationId,
+          userPrompt: currentUserPrompt,
+          assistantContent: accumulatedText,
+          toolCalls: [...accumulatedToolCalls],
+        });
+      } catch (err: any) {
+        logger.error('AgentSessionManager: onTurnComplete callback error', { error: err.message });
+      }
+
+      // Reset accumulators for next turn
+      accumulatedText = '';
+      accumulatedToolCalls.length = 0;
+    };
 
     try {
       // Push the initial user prompt into the input channel
@@ -296,10 +348,67 @@ export class AgentSessionManager {
         },
       });
 
-      // Relay each SDK message to the WebSocket client
+      // Relay each SDK message to the WebSocket client and accumulate turn data
       for await (const message of messages) {
         lastMessageTime = Date.now();
         onMessage({ type: 'sdk_message', data: message });
+
+        // Accumulate data for persistence
+        const msg = message as any;
+
+        if (msg.type === 'assistant') {
+          // Assistant message — extract text content blocks
+          const betaMessage = msg.message;
+          if (betaMessage && Array.isArray(betaMessage.content)) {
+            for (const block of betaMessage.content) {
+              if (block.type === 'text' && block.text) {
+                accumulatedText = block.text;
+              } else if (block.type === 'tool_use') {
+                accumulatedToolCalls.push({
+                  name: block.name,
+                  input: block.input || {},
+                });
+              }
+            }
+          }
+        } else if (msg.type === 'stream_event') {
+          // Streaming content delta — append text
+          if (msg.event === 'content_block_delta' && msg.delta?.type === 'text_delta' && msg.delta.text) {
+            accumulatedText += msg.delta.text;
+          }
+        } else if (msg.type === 'user') {
+          // User message — may contain tool_result blocks with outputs
+          const contentBlocks = msg.message?.content;
+          if (Array.isArray(contentBlocks)) {
+            for (const block of contentBlocks) {
+              if (block.type === 'tool_result' && block.tool_use_id) {
+                // Find the matching tool call and attach output
+                const tc = accumulatedToolCalls.find(
+                  (t) => !t.output && accumulatedToolCalls.indexOf(t) >= 0,
+                );
+                if (tc) {
+                  let outputStr = '';
+                  if (typeof block.content === 'string') {
+                    outputStr = block.content;
+                  } else if (Array.isArray(block.content)) {
+                    outputStr = block.content
+                      .filter((b: any) => b.type === 'text' && b.text)
+                      .map((b: any) => b.text)
+                      .join('\n');
+                  }
+                  tc.output = outputStr;
+                  tc.isError = block.is_error === true;
+                }
+              } else if (block.type === 'text' && block.text) {
+                // Follow-up user message — update current prompt
+                currentUserPrompt = block.text;
+              }
+            }
+          }
+        } else if (msg.type === 'result') {
+          // End of turn — flush accumulated data
+          flushTurn();
+        }
       }
     } catch (err: any) {
       // Only send error if not an abort (abort is intentional)
@@ -312,6 +421,8 @@ export class AgentSessionManager {
         onMessage({ type: 'error', message: err.message });
       }
     } finally {
+      // Flush any remaining accumulated content that wasn't flushed by a result message
+      flushTurn();
       clearInterval(watchdog);
       this.cleanup(userId);
     }
@@ -325,10 +436,14 @@ export class AgentSessionManager {
     userId: string,
     msg: ClientWsMessage,
     onMessage: (msg: AgentWsMessage) => void,
+    opts?: { onTurnComplete?: (turn: TurnData) => void },
   ): Promise<void> {
     switch (msg.type) {
       case 'start': {
-        await this.startSession(userId, msg.prompt, msg.model, onMessage);
+        await this.startSession(userId, msg.prompt, msg.model, onMessage, {
+          conversationId: msg.conversationId,
+          onTurnComplete: opts?.onTurnComplete,
+        });
         break;
       }
       case 'message': {

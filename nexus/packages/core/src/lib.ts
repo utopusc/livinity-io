@@ -22,7 +22,7 @@ export { SdkAgentRunner } from './sdk-agent-runner.js';
 
 // ── Agent Session Manager ──────────────────────────────────────
 export { AgentSessionManager, createInputChannel } from './agent-session.js';
-export type { ActiveSession, AgentWsMessage, ClientWsMessage } from './agent-session.js';
+export type { ActiveSession, AgentWsMessage, ClientWsMessage, TurnData } from './agent-session.js';
 
 // ── Skill Types ─────────────────────────────────────────────
 export type {

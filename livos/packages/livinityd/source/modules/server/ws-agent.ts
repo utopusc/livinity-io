@@ -5,6 +5,9 @@
  * SDK query() sessions. Messages flow:
  *   Browser -> WebSocket -> this handler -> AgentSessionManager -> SDK -> relay back
  *
+ * After each turn, the handler persists user + assistant messages to Redis
+ * via AiModule so conversation history survives page refresh.
+ *
  * JWT auth is handled by the existing upgrade handler in server/index.ts.
  * This handler only needs to extract the userId from the already-verified token.
  */
@@ -16,18 +19,79 @@ import {
 	AgentSessionManager,
 	type AgentWsMessage,
 	type ClientWsMessage,
+	type TurnData,
 } from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
 import type createLogger from '../utilities/logger.js'
+import type AiModule from '../ai/index.js'
+import type {ChatMessage, Conversation} from '../ai/index.js'
+
+/**
+ * Save a completed turn's messages to Redis conversation storage.
+ * Creates the conversation on first turn (auto-titles from user prompt).
+ */
+async function saveToConversation(
+	turn: TurnData,
+	userId: string,
+	ai: AiModule,
+	logger: ReturnType<typeof createLogger>,
+): Promise<void> {
+	if (!turn.conversationId) return // No persistence for unnamed sessions
+
+	try {
+		const conversation = await ai.getOrCreateConversation(
+			turn.conversationId,
+			turn.userPrompt.slice(0, 60),
+			userId,
+		)
+
+		const now = Date.now()
+
+		// Push user message
+		const userMsg: ChatMessage = {
+			id: `msg_${now}_user`,
+			role: 'user',
+			content: turn.userPrompt,
+			timestamp: now,
+		}
+		conversation.messages.push(userMsg)
+
+		// Push assistant message with tool calls mapped to legacy format
+		const assistantMsg: ChatMessage = {
+			id: `msg_${now + 1}_assistant`,
+			role: 'assistant',
+			content: turn.assistantContent,
+			toolCalls: turn.toolCalls.length > 0
+				? turn.toolCalls.map((tc: TurnData['toolCalls'][number]) => ({
+					tool: tc.name,
+					params: tc.input,
+					result: {
+						success: !tc.isError,
+						output: tc.output || '',
+					},
+				}))
+				: undefined,
+			timestamp: now + 1,
+		}
+		conversation.messages.push(assistantMsg)
+
+		conversation.updatedAt = now
+		await ai.saveConversation(conversation, userId)
+	} catch (err: any) {
+		logger.error('WS agent: failed to save conversation turn', err)
+	}
+}
 
 export function createAgentWebSocketHandler(opts: {
 	livinityd: Livinityd
 	logger: ReturnType<typeof createLogger>
 }) {
+	const ai = opts.livinityd.ai
+
 	// Create a single AgentSessionManager instance shared across all connections
 	const sessionManager = new AgentSessionManager({
-		toolRegistry: opts.livinityd.ai.toolRegistry,
+		toolRegistry: ai.toolRegistry,
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {
@@ -69,7 +133,9 @@ export function createAgentWebSocketHandler(opts: {
 			try {
 				const msg = JSON.parse(data.toString()) as ClientWsMessage
 				logger.verbose(`WS agent: received ${msg.type} from userId=${userId}`)
-				await sessionManager.handleMessage(userId, msg, sendMessage)
+				await sessionManager.handleMessage(userId, msg, sendMessage, {
+					onTurnComplete: (turn: TurnData) => saveToConversation(turn, userId, ai, logger),
+				})
 			} catch (err: any) {
 				logger.error('WS agent: message handling error', err)
 				sendMessage({type: 'error', message: err.message || 'Unknown error'})
