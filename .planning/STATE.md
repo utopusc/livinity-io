@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-03-27T09:30:19.750Z"
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-03-27T09:50:53.901Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -46,6 +46,7 @@ Plan: 2 of 2
 | Phase 11 P01 | 4min | 2 tasks | 2 files |
 | Phase 12 P01 | 3min | 2 tasks | 2 files |
 | Phase 13 P01 | 15min | 2 tasks | 6 files |
+| Phase 13 P02 | 15min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -65,6 +66,9 @@ Plan: 2 of 2
 - [Phase 13]: Zero-transformation SDK message relay: { type: 'sdk_message', data: SDKMessage }
 - [Phase 13]: Single session per user via Map<userId, ActiveSession> with cleanup-on-new-start
 - [Phase 13]: No session kill on WS disconnect -- allows reconnection on tab refresh
+- [Phase 13]: useReducer for message state to avoid stale closures in WebSocket callbacks
+- [Phase 13]: requestAnimationFrame batching for stream deltas -- mutable ref accumulation, RAF flush
+- [Phase 13]: Dual-path send: WebSocket when connected, tRPC mutation fallback when disconnected
 
 ### Pending Todos
 
@@ -77,6 +81,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T09:30:19.747Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-03-27T09:50:53.898Z
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None

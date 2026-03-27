@@ -28,7 +28,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 - [x] **Phase 11: Agent SDK Backend Integration** - Claude Agent SDK subprocess running server-side in livinityd, processing user messages (completed 2026-03-27)
 - [x] **Phase 12: MCP Tool Bridge** - Existing LivOS tools (shell, files, Docker, etc.) exposed as MCP tools the SDK can call autonomously (completed 2026-03-27)
-- [ ] **Phase 13: WebSocket Streaming Transport** - Real-time WebSocket bridge streaming SDK events from backend to browser
+- [x] **Phase 13: WebSocket Streaming Transport** - Real-time WebSocket bridge streaming SDK events from backend to browser
 - [ ] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks
 - [ ] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time
 - [ ] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working
@@ -74,7 +74,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 13-01-PLAN.md — Server-side AgentSessionManager + /ws/agent WebSocket endpoint
-- [ ] 13-02-PLAN.md — Client-side useAgentSocket hook + AI chat wiring
+- [x] 13-02-PLAN.md — Client-side useAgentSocket hook + AI chat wiring
 
 ### Phase 14: Chat UI Foundation
 **Goal**: A clean, professional chat interface purpose-built for agent interactions replaces the old AI Chat message rendering
@@ -141,7 +141,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 |-------|-----------|----------------|--------|-----------|
 | 11. Agent SDK Backend Integration | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 12. MCP Tool Bridge | v20.0 | 1/1 | Complete    | 2026-03-27 |
-| 13. WebSocket Streaming Transport | v20.0 | 1/2 | In progress | - |
+| 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 14. Chat UI Foundation | v20.0 | 0/? | Not started | - |
 | 15. Live Tool Call Visualization | v20.0 | 0/? | Not started | - |
 | 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
