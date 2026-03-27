@@ -655,6 +655,45 @@ export default router({
 		return ctx.livinityd.ai.deleteConversation(input.id, userId)
 	}),
 
+	/** Get conversation messages in UI ChatMessage format */
+	getConversationMessages: privateProcedure
+		.input(z.object({id: z.string()}))
+		.query(async ({ctx, input}) => {
+			const userId = ctx.currentUser?.id
+			const conversation = await ctx.livinityd!.ai.getConversation(input.id, userId)
+			if (!conversation) return {messages: []}
+			// Transform backend ChatMessage to UI ChatMessage format
+			const messages = conversation.messages.map((msg) => ({
+				id: msg.id,
+				role: msg.role as 'user' | 'assistant',
+				content: msg.content,
+				toolCalls: msg.toolCalls?.map((tc, i) => ({
+					id: `${msg.id}_tool_${i}`,
+					name: tc.tool,
+					input: tc.params,
+					status: (tc.result.success ? 'complete' : 'error') as 'complete' | 'error',
+					output: tc.result.output,
+					...(tc.result.success ? {} : {errorMessage: tc.result.output}),
+				})),
+				isStreaming: false,
+				timestamp: msg.timestamp,
+			}))
+			return {messages, title: conversation.title}
+		}),
+
+	/** Update a conversation title */
+	updateConversationTitle: privateProcedure
+		.input(z.object({id: z.string(), title: z.string().min(1).max(200)}))
+		.mutation(async ({ctx, input}) => {
+			const userId = ctx.currentUser?.id
+			const conversation = await ctx.livinityd!.ai.getConversation(input.id, userId)
+			if (!conversation) throw new TRPCError({code: 'NOT_FOUND', message: 'Conversation not found'})
+			conversation.title = input.title
+			conversation.updatedAt = Date.now()
+			await ctx.livinityd!.ai.saveConversation(conversation, userId)
+			return {success: true}
+		}),
+
 	// ── Tools ──────────────────────────────────────────────
 
 	/** List all registered AI tools */
