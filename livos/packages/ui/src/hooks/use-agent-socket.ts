@@ -36,6 +36,7 @@ type MessageAction =
 	| {type: 'FINALIZE_MESSAGE'}
 	| {type: 'ADD_ERROR'; message: string}
 	| {type: 'CLEAR'}
+	| {type: 'LOAD_MESSAGES'; messages: ChatMessage[]}
 
 function messagesReducer(state: ChatMessage[], action: MessageAction): ChatMessage[] {
 	switch (action.type) {
@@ -100,6 +101,9 @@ function messagesReducer(state: ChatMessage[], action: MessageAction): ChatMessa
 		case 'CLEAR':
 			return []
 
+		case 'LOAD_MESSAGES':
+			return action.messages
+
 		default:
 			return state
 	}
@@ -117,6 +121,7 @@ export function useAgentSocket() {
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const backoffRef = useRef(1000) // Start at 1s
 	const intentionalCloseRef = useRef(false)
+	const conversationIdRef = useRef<string | null>(null)
 
 	// Stream accumulation refs (Pattern 3: batched state updates)
 	const bufferRef = useRef('')
@@ -464,11 +469,14 @@ export function useAgentSocket() {
 	// --- Actions ---
 
 	const sendMessage = useCallback(
-		(prompt: string, model?: string) => {
+		(prompt: string, model?: string, conversationId?: string) => {
 			const ws = wsRef.current
 			if (!ws || ws.readyState !== WebSocket.OPEN) return
 
 			resetBuffer()
+
+			// Track the active conversation
+			if (conversationId) conversationIdRef.current = conversationId
 
 			const userMsg: ChatMessage = {
 				id: `msg_${Date.now()}_user`,
@@ -480,12 +488,13 @@ export function useAgentSocket() {
 			dispatch({type: 'START_ASSISTANT_MESSAGE', id: `msg_${Date.now()}_assistant`})
 			setIsStreaming(true)
 
-			const payload: {type: string; prompt: string; sessionId?: string; model?: string} = {
+			const payload: {type: string; prompt: string; sessionId?: string; model?: string; conversationId?: string} = {
 				type: 'start',
 				prompt,
 			}
 			if (currentSessionId) payload.sessionId = currentSessionId
 			if (model) payload.model = model
+			if (conversationIdRef.current) payload.conversationId = conversationIdRef.current
 			ws.send(JSON.stringify(payload))
 		},
 		[currentSessionId, resetBuffer],
@@ -528,9 +537,16 @@ export function useAgentSocket() {
 		setIsStreaming(false)
 	}, [flushBuffer])
 
+	const loadConversation = useCallback((messages: ChatMessage[], conversationId: string) => {
+		dispatch({type: 'LOAD_MESSAGES', messages})
+		conversationIdRef.current = conversationId
+		resetBuffer()
+	}, [resetBuffer])
+
 	const clearMessages = useCallback(() => {
 		dispatch({type: 'CLEAR'})
 		resetBuffer()
+		conversationIdRef.current = null
 	}, [resetBuffer])
 
 	return {
@@ -540,6 +556,7 @@ export function useAgentSocket() {
 		isStreaming,
 		connectionStatus,
 		currentSessionId,
+		conversationId: conversationIdRef.current,
 
 		// Actions
 		sendMessage,
@@ -547,5 +564,6 @@ export function useAgentSocket() {
 		interrupt,
 		cancel,
 		clearMessages,
+		loadConversation,
 	}
 }
