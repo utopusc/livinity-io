@@ -1,11 +1,17 @@
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 
+import {AnimatePresence, motion} from 'framer-motion'
 import {
 	IconAlertTriangle,
+	IconBox,
+	IconCheck,
 	IconChevronDown,
 	IconChevronRight,
+	IconFile,
 	IconLoader2,
+	IconTerminal2,
 	IconTool,
+	IconX,
 } from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
@@ -13,7 +19,7 @@ import type {ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
 
 import {StreamingMessage} from './streaming-message'
 
-// --- AgentToolCallDisplay ---
+// --- Helpers ---
 
 /** Strip mcp__servername__ prefix for display */
 function formatToolName(name: string): string {
@@ -21,17 +27,187 @@ function formatToolName(name: string): string {
 	return match ? match[1] : name
 }
 
+/** Get the raw tool name for classification (strip mcp prefix) */
+function getRawToolName(name: string): string {
+	return formatToolName(name).toLowerCase()
+}
+
+/** Determine tool-specific icon and color from tool name */
+function getToolIcon(name: string): {icon: typeof IconTool; color: string} {
+	const raw = getRawToolName(name)
+	if (/shell|command|bash|exec/.test(raw)) {
+		return {icon: IconTerminal2, color: 'text-amber-400'}
+	}
+	if (/file|read|write|edit/.test(raw)) {
+		return {icon: IconFile, color: 'text-blue-400'}
+	}
+	if (/docker|container/.test(raw)) {
+		return {icon: IconBox, color: 'text-cyan-400'}
+	}
+	return {icon: IconTool, color: 'text-blue-400'}
+}
+
+/** Check if tool is a shell/command type */
+function isShellTool(name: string): boolean {
+	return /shell|command|bash|exec/.test(getRawToolName(name))
+}
+
+/** Check if tool is a file read type */
+function isFileReadTool(name: string): boolean {
+	return /read_file|file_read/.test(getRawToolName(name))
+}
+
+/** Format elapsed seconds for display */
+function formatElapsed(seconds: number): string {
+	if (seconds < 1) return '<1s'
+	if (seconds < 60) return `${seconds.toFixed(1)}s`
+	const mins = Math.floor(seconds / 60)
+	const secs = seconds % 60
+	return `${mins}m ${secs.toFixed(0)}s`
+}
+
+// --- Tool Output Rendering ---
+
+function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
+	const raw = getRawToolName(toolCall.name)
+
+	// Shell commands: show just the command string
+	if (isShellTool(toolCall.name) && toolCall.input.command) {
+		return (
+			<div className='rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300'>
+				<span className='text-zinc-500'>$ </span>
+				{String(toolCall.input.command)}
+			</div>
+		)
+	}
+
+	// File operations: show just the path
+	if (/file|read|write|edit/.test(raw)) {
+		const path = toolCall.input.path || toolCall.input.file_path || toolCall.input.filename
+		if (path) {
+			return (
+				<div className='rounded bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-300'>
+					{String(path)}
+				</div>
+			)
+		}
+	}
+
+	// Default: prettified JSON
+	return (
+		<pre className='overflow-x-auto whitespace-pre-wrap text-xs text-zinc-400'>
+			{JSON.stringify(toolCall.input, null, 2)}
+		</pre>
+	)
+}
+
+function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
+	const [showFull, setShowFull] = useState(false)
+
+	if (toolCall.output == null) return null
+
+	const output = toolCall.output
+	const isLong = output.length > 1500
+	const displayOutput = !showFull && isLong ? output.slice(0, 1500) + '...' : output
+
+	// Shell commands: monospace pre with command header
+	if (isShellTool(toolCall.name)) {
+		return (
+			<div>
+				<pre className='max-h-60 overflow-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300'>
+					{displayOutput}
+				</pre>
+				{isLong && (
+					<button
+						onClick={(e) => {
+							e.stopPropagation()
+							setShowFull(!showFull)
+						}}
+						className='mt-1 text-xs text-blue-400 hover:text-blue-300'
+					>
+						{showFull ? 'Show less' : `Show more (${output.length.toLocaleString()} chars)`}
+					</button>
+				)}
+			</div>
+		)
+	}
+
+	// File read: filename header + content
+	if (isFileReadTool(toolCall.name)) {
+		const filePath = (toolCall.input.path || toolCall.input.file_path) as string | undefined
+		return (
+			<div>
+				{filePath && (
+					<div className='mb-1 font-mono text-xs text-zinc-500'>{filePath}</div>
+				)}
+				<pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300'>
+					{displayOutput}
+				</pre>
+				{isLong && (
+					<button
+						onClick={(e) => {
+							e.stopPropagation()
+							setShowFull(!showFull)
+						}}
+						className='mt-1 text-xs text-blue-400 hover:text-blue-300'
+					>
+						{showFull ? 'Show less' : `Show more (${output.length.toLocaleString()} chars)`}
+					</button>
+				)}
+			</div>
+		)
+	}
+
+	// Default: scrollable output
+	return (
+		<div>
+			<pre className='max-h-60 overflow-auto whitespace-pre-wrap text-xs text-zinc-400'>
+				{displayOutput}
+			</pre>
+			{isLong && (
+				<button
+					onClick={(e) => {
+						e.stopPropagation()
+						setShowFull(!showFull)
+					}}
+					className='mt-1 text-xs text-blue-400 hover:text-blue-300'
+				>
+					{showFull ? 'Show less' : `Show more (${output.length.toLocaleString()} chars)`}
+				</button>
+			)}
+		</div>
+	)
+}
+
+// --- AgentToolCallDisplay ---
+
 export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	const [expanded, setExpanded] = useState(false)
 
-	const statusBadge = (() => {
+	// Auto-expand on error
+	useEffect(() => {
+		if (toolCall.status === 'error') {
+			setExpanded(true)
+		}
+	}, [toolCall.status])
+
+	const {icon: ToolIcon, color: iconColor} = getToolIcon(toolCall.name)
+
+	const statusIndicator = (() => {
 		switch (toolCall.status) {
 			case 'running':
-				return <IconLoader2 size={14} className='ml-auto animate-spin text-zinc-400' />
+				return (
+					<span className='ml-auto flex items-center gap-1.5 text-zinc-400'>
+						{toolCall.elapsedSeconds != null && (
+							<span className='font-mono text-xs'>{formatElapsed(toolCall.elapsedSeconds)}</span>
+						)}
+						<IconLoader2 size={14} className='animate-spin' />
+					</span>
+				)
 			case 'complete':
-				return <span className='ml-auto text-xs text-green-400'>OK</span>
+				return <IconCheck size={14} className='ml-auto text-green-400' />
 			case 'error':
-				return <span className='ml-auto text-xs text-red-400'>FAIL</span>
+				return <IconX size={14} className='ml-auto text-red-400' />
 		}
 	})()
 
@@ -42,26 +218,43 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/50'
 			>
 				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-				<IconTool size={14} className='text-blue-400' />
-				<span className='font-mono font-medium text-blue-400'>{formatToolName(toolCall.name)}</span>
-				{statusBadge}
+				<ToolIcon size={14} className={iconColor} />
+				<span className={cn('font-mono font-medium', iconColor)}>{formatToolName(toolCall.name)}</span>
+				{statusIndicator}
 			</button>
-			{expanded && (
-				<div className='border-t border-zinc-700/50 px-3 py-2'>
-					<div className='mb-1 text-xs uppercase text-zinc-500'>Input</div>
-					<pre className='mb-2 overflow-x-auto whitespace-pre-wrap text-xs text-zinc-400'>
-						{JSON.stringify(toolCall.input, null, 2)}
-					</pre>
-					{toolCall.output != null && (
-						<>
-							<div className='mb-1 text-xs uppercase text-zinc-500'>Output</div>
-							<pre className='max-h-40 overflow-auto whitespace-pre-wrap text-xs text-zinc-400'>
-								{toolCall.output.slice(0, 2000)}
-							</pre>
-						</>
-					)}
-				</div>
-			)}
+			<AnimatePresence initial={false}>
+				{expanded && (
+					<motion.div
+						key='content'
+						initial={{height: 0, opacity: 0}}
+						animate={{height: 'auto', opacity: 1}}
+						exit={{height: 0, opacity: 0}}
+						transition={{duration: 0.2, ease: 'easeInOut'}}
+						className='overflow-hidden'
+					>
+						<div className='border-t border-zinc-700/50 px-3 py-2'>
+							{/* Error banner */}
+							{toolCall.status === 'error' && (toolCall.errorMessage || toolCall.output) && (
+								<div className='mb-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400'>
+									{toolCall.errorMessage || toolCall.output}
+								</div>
+							)}
+
+							{/* Input section */}
+							<div className='mb-1 text-xs uppercase text-zinc-500'>Input</div>
+							<div className='mb-2'>{renderToolInput(toolCall)}</div>
+
+							{/* Output section */}
+							{toolCall.output != null && toolCall.status !== 'error' && (
+								<>
+									<div className='mb-1 text-xs uppercase text-zinc-500'>Output</div>
+									<ToolOutput toolCall={toolCall} />
+								</>
+							)}
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	)
 }
