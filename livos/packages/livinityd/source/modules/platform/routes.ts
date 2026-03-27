@@ -1,6 +1,7 @@
 import {z} from 'zod'
 import {router, privateProcedure} from '../server/trpc/trpc.js'
 import {getPool} from '../database/index.js'
+import {applyCaddyConfig} from '../domain/caddy.js'
 
 const REDIS_PREFIX = 'livos:platform:'
 const DOMAIN_PREFIX = 'livos:custom_domain:'
@@ -149,6 +150,44 @@ const platform = router({
 				appMapping: domainInfo.appMapping,
 				status: domainInfo.status,
 			})
+
+			// Conditionally apply Caddy config for custom domains
+			// In tunnel mode, the relay handles TLS for custom domains — Caddy stays on :80
+			// In direct mode (no tunnel), Caddy must serve custom domains with auto-SSL
+			const tunnelStatus = await redis.get('livos:platform:status')
+			const isTunnelConnected = tunnelStatus === 'connected'
+			if (!isTunnelConnected) {
+				try {
+					// Build Caddy config using main domain + native apps (same pattern as domain/routes.ts rebuildCaddy)
+					const allDomainsRaw = await redis.get('livos:custom_domains')
+					const allDomains = allDomainsRaw ? JSON.parse(allDomainsRaw) as Array<{domain: string; appMapping: Record<string, string>}> : []
+
+					const {NATIVE_APP_CONFIGS} = await import('../apps/native-app.js')
+					const nativeApps = NATIVE_APP_CONFIGS.map((app) => ({
+						subdomain: app.subdomain || app.id,
+						port: app.proxyPort || app.port,
+						streaming: app.id === 'desktop-stream',
+					}))
+
+					// Read main domain config for base Caddy config
+					const mainConfigRaw = await redis.get('livos:domain:config')
+					const mainConfig = mainConfigRaw ? JSON.parse(mainConfigRaw) : null
+					const subdomainsRaw = await redis.get('livos:domain:subdomains')
+					const subdomains = subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+
+					if (mainConfig?.domain && mainConfig?.active) {
+						const caddyConfig = {
+							mainDomain: mainConfig.domain,
+							subdomains: subdomains.filter((s: any) => s.enabled),
+						}
+						await applyCaddyConfig(caddyConfig, false, nativeApps)
+						console.log(`[platform] Caddy updated for custom domain mapping (direct mode)`)
+					}
+				} catch (caddyErr) {
+					// Log but don't fail the mutation — mapping itself succeeded
+					console.error(`[platform] Caddy update failed (non-fatal): ${caddyErr}`)
+				}
+			}
 
 			return {success: true, appMapping: domainInfo.appMapping}
 		}),
