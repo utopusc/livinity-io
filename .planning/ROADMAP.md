@@ -71,7 +71,7 @@ Plans:
   2. First token appears in the UI within 500ms of the SDK starting to stream
   3. WebSocket auto-reconnects on disconnect without losing the current conversation state
   4. Connection resilience: in-progress conversations resume gracefully after a brief network interruption
-**Plans:** 2 plans
+**Plans:** 1/0 plans complete
 Plans:
 - [x] 13-01-PLAN.md — Server-side AgentSessionManager + /ws/agent WebSocket endpoint
 - [x] 13-02-PLAN.md — Client-side useAgentSocket hook + AI chat wiring
