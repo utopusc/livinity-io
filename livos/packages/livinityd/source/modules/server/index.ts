@@ -144,23 +144,45 @@ class Server {
 			return true
 		}
 
-		// Resolve appSlug to a port via the subdomain config in Redis
-		const subdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
-		const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
-			subdomainsRaw ? JSON.parse(subdomainsRaw) : []
-		const subConfig = subdomains.find((s) => s.appId === appSlug && s.enabled)
+		// Resolve appSlug to a port — try Docker container first, then fall back to subdomain config
+		let targetPort: number | null = null
 
-		if (!subConfig) {
+		// Strategy 1: Look up Docker container by name and get its published host port
+		try {
+			const containers = await this.livinityd.apps.docker.listContainers({all: false})
+			const container = containers.find(
+				(c) =>
+					c.Names.some((n) => n === `/${appSlug}` || n === appSlug) ||
+					c.Names.some((n) => n.replace('/', '').includes(appSlug)),
+			)
+			if (container) {
+				const portBinding = container.Ports.find((p) => p.PublicPort && p.Type === 'tcp')
+				if (portBinding) targetPort = portBinding.PublicPort
+			}
+		} catch {
+			// Docker lookup failed, fall back to subdomain config
+		}
+
+		// Strategy 2: Fall back to old subdomain config in Redis
+		if (!targetPort) {
+			const subdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
+			const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+				subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+			const subConfig = subdomains.find((s) => (s.appId === appSlug || s.subdomain === appSlug) && s.enabled)
+			if (subConfig) targetPort = subConfig.port
+		}
+
+		if (!targetPort) {
 			response.status(503).send(`App "${appSlug}" is not installed or not running`)
 			return true
 		}
 
 		// Get or create cached proxy for this port
-		let proxy = this.appGatewayProxyCache.get(subConfig.port)
+		let proxy = this.appGatewayProxyCache.get(targetPort)
 		if (!proxy) {
-			this.logger.log(`Custom domain gateway: creating proxy for ${appSlug} port ${subConfig.port}`)
+			this.logger.log(`Custom domain gateway: creating proxy for ${appSlug} port ${targetPort}`)
 			proxy = createProxyMiddleware({
-				target: `http://127.0.0.1:${subConfig.port}`,
+				target: `http://127.0.0.1:${targetPort}`,
 				changeOrigin: true,
 				logProvider: () => ({
 					log: this.logger.verbose,
@@ -170,10 +192,10 @@ class Server {
 					error: this.logger.error,
 				}),
 			})
-			this.appGatewayProxyCache.set(subConfig.port, proxy)
+			this.appGatewayProxyCache.set(targetPort, proxy)
 		}
 
-		this.logger.verbose(`Custom domain: ${hostname} -> ${appSlug} port ${subConfig.port}`)
+		this.logger.verbose(`Custom domain: ${hostname} -> ${appSlug} port ${targetPort}`)
 		return new Promise<boolean>((resolve) => {
 			proxy!(request, response, () => resolve(false))
 			response.on('finish', () => resolve(true))
@@ -591,14 +613,31 @@ class Server {
 							if (cdInfo && cdInfo.status !== 'dns_changed') {
 								const appSlug = cdInfo.appMapping[cdSubPrefix]
 								if (appSlug) {
-									const cdSubdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
-									const cdSubdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
-										cdSubdomainsRaw ? JSON.parse(cdSubdomainsRaw) : []
-									const cdSubConfig = cdSubdomains.find((s) => s.appId === appSlug && s.enabled)
+									// Resolve port: Docker container first, then subdomain config
+									let cdTargetPort: number | null = null
+									try {
+										const cdContainers = await this.livinityd.apps.docker.listContainers({all: false})
+										const cdContainer = cdContainers.find(
+											(c) =>
+												c.Names.some((n) => n === `/${appSlug}` || n === appSlug) ||
+												c.Names.some((n) => n.replace('/', '').includes(appSlug)),
+										)
+										if (cdContainer) {
+											const cdPortBinding = cdContainer.Ports.find((p) => p.PublicPort && p.Type === 'tcp')
+											if (cdPortBinding) cdTargetPort = cdPortBinding.PublicPort
+										}
+									} catch { /* fall back */ }
+									if (!cdTargetPort) {
+										const cdSubdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
+										const cdSubdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+											cdSubdomainsRaw ? JSON.parse(cdSubdomainsRaw) : []
+										const cdSubConfig = cdSubdomains.find((s) => (s.appId === appSlug || s.subdomain === appSlug) && s.enabled)
+										if (cdSubConfig) cdTargetPort = cdSubConfig.port
+									}
 
-									if (cdSubConfig) {
+									if (cdTargetPort) {
 										const upstream = new WebSocket(
-											`ws://127.0.0.1:${cdSubConfig.port}${pathname}${request.url?.includes('?') ? '?' + request.url.split('?')[1] : ''}`,
+											`ws://127.0.0.1:${cdTargetPort}${pathname}${request.url?.includes('?') ? '?' + request.url.split('?')[1] : ''}`,
 										)
 										const proxyWss = new WebSocketServer({noServer: true})
 
