@@ -37,6 +37,7 @@ import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
+import {useAgentSocket, type ChatMessage as AgentChatMessage} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
@@ -445,6 +446,7 @@ export default function AiChat() {
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 	const activeRequestRef = useRef<number>(0)
 	const isMobile = useIsMobile()
+	const agent = useAgentSocket()
 
 	const providersQuery = trpcReact.ai.getProviders.useQuery(undefined, {refetchInterval: 30_000})
 	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
@@ -545,33 +547,67 @@ export default function AiChat() {
 		}
 	}, [canvasLoadQuery.data])
 
+	// Derive which messages to display: agent WS messages when available, tRPC fallback otherwise
+	const useAgentPath = agent.isConnected || agent.messages.length > 0
+	const displayMessages: Message[] = useAgentPath
+		? agent.messages.map((m: AgentChatMessage) => ({
+				id: m.id,
+				role: m.role === 'system' ? ('assistant' as const) : m.role,
+				content: m.content,
+				toolCalls: m.toolCalls?.map((tc) => ({
+					tool: tc.name,
+					params: tc.input,
+					result: {
+						success: tc.status !== 'error',
+						output: tc.output || (tc.status === 'running' ? 'Running...' : ''),
+					},
+				})),
+				timestamp: m.timestamp,
+			}))
+		: messages
+	const isAgentActive = useAgentPath && agent.isStreaming
+	const isAnyLoading = useAgentPath ? isAgentActive : isLoading
+
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
-	}, [messages, isLoading])
+	}, [displayMessages, isAnyLoading])
 
 	const handleStop = useCallback(() => {
-		activeRequestRef.current = 0
-		setIsLoading(false)
-		setMessages((prev) => [
-			...prev,
-			{
-				id: `msg_${Date.now()}_stopped`,
-				role: 'assistant',
-				content: '_Stopped._',
-				timestamp: Date.now(),
-			},
-		])
+		if (useAgentPath) {
+			agent.interrupt()
+		} else {
+			activeRequestRef.current = 0
+			setIsLoading(false)
+			setMessages((prev) => [
+				...prev,
+				{
+					id: `msg_${Date.now()}_stopped`,
+					role: 'assistant',
+					content: '_Stopped._',
+					timestamp: Date.now(),
+				},
+			])
+		}
 		inputRef.current?.focus()
-	}, [])
+	}, [useAgentPath, agent])
 
 	const handleSend = useCallback(async () => {
 		const text = input.trim()
-		if (!text || isLoading) return
+		if (!text || isAnyLoading) return
 
+		setInput('')
+
+		// WebSocket path: send via agent hook
+		if (agent.isConnected) {
+			agent.sendMessage(text)
+			inputRef.current?.focus()
+			return
+		}
+
+		// Fallback: tRPC mutation path
 		const reqId = Date.now()
 		activeRequestRef.current = reqId
 
-		setInput('')
 		setIsLoading(true)
 
 		const userMsg: Message = {
@@ -622,7 +658,7 @@ export default function AiChat() {
 			}
 			inputRef.current?.focus()
 		}
-	}, [input, isLoading, activeConversationId, searchParams, setSearchParams, sendMutation, conversationsQuery])
+	}, [input, isAnyLoading, agent, activeConversationId, searchParams, setSearchParams, sendMutation, conversationsQuery])
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Enter' && !e.shiftKey) {
@@ -633,6 +669,7 @@ export default function AiChat() {
 
 	const handleNewConversation = () => {
 		setMessages([])
+		agent.clearMessages()
 		setCanvasArtifact(null)
 		setCanvasMinimized(false)
 		setComputerUseMinimized(false)
@@ -711,8 +748,27 @@ export default function AiChat() {
 							</div>
 						)}
 
+						{/* WebSocket connection status indicator */}
+						<div className='flex items-center gap-2 border-b border-border-default bg-surface-base px-4 py-1.5'>
+							<span
+								className={cn(
+									'inline-block h-2 w-2 rounded-full',
+									agent.connectionStatus === 'connected' && 'bg-green-500',
+									agent.connectionStatus === 'reconnecting' && 'bg-yellow-500 animate-pulse',
+									agent.connectionStatus === 'disconnected' && 'bg-red-500',
+								)}
+							/>
+							<span className='text-caption-sm text-text-tertiary'>
+								{agent.connectionStatus === 'connected'
+									? 'Agent connected'
+									: agent.connectionStatus === 'reconnecting'
+										? 'Reconnecting...'
+										: 'Agent disconnected'}
+							</span>
+						</div>
+
 						<div className='flex-1 overflow-y-auto overscroll-contain p-3 md:p-6'>
-							{messages.length === 0 ? (
+							{displayMessages.length === 0 ? (
 								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
 									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
 										<IconBrain size={32} className='text-violet-400' />
@@ -751,14 +807,20 @@ export default function AiChat() {
 								</div>
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
-									{messages.map((msg) => (
+									{displayMessages.map((msg) => (
 										<ChatMessage key={msg.id} message={msg} />
 									))}
-									{isLoading && (
+									{isAnyLoading && !useAgentPath && (
 										<StatusIndicator
 											conversationId={activeConversationId}
 											isLoading={isLoading}
 										/>
+									)}
+t								{isAgentActive && (
+										<div className='flex items-center gap-2 px-1 py-2 text-body-sm text-text-tertiary'>
+											<IconLoader2 size={14} className='animate-spin text-violet-400' />
+											<span>Agent is responding...</span>
+										</div>
 									)}
 									<div ref={messagesEndRef} />
 								</div>
@@ -773,8 +835,8 @@ export default function AiChat() {
 										value={input}
 										onChange={(e) => setInput(e.target.value)}
 										onKeyDown={handleKeyDown}
-										placeholder={isLoading ? 'Working...' : 'Message Liv...'}
-										disabled={isLoading}
+										placeholder={isAnyLoading ? 'Working...' : 'Message Liv...'}
+										disabled={isAnyLoading}
 										rows={1}
 										className='w-full resize-none rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body text-text-primary placeholder-text-tertiary outline-none transition-colors focus-within:border-brand focus-within:ring-3 focus-within:ring-brand/20 disabled:opacity-50'
 										style={{maxHeight: '120px'}}
@@ -792,7 +854,7 @@ export default function AiChat() {
 								</div>
 								<Suspense fallback={null}>
 									<VoiceButton
-										disabled={isLoading}
+										disabled={isAnyLoading}
 										onTranscript={(text) => {
 											// Display voice transcript as a user message for visual feedback
 											const voiceMsg: Message = {
@@ -805,7 +867,7 @@ export default function AiChat() {
 										}}
 									/>
 								</Suspense>
-								{isLoading ? (
+								{isAnyLoading ? (
 									<button
 										onClick={handleStop}
 										className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-radius-md border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
