@@ -71,7 +71,7 @@ Plans:
   2. First token appears in the UI within 500ms of the SDK starting to stream
   3. WebSocket auto-reconnects on disconnect without losing the current conversation state
   4. Connection resilience: in-progress conversations resume gracefully after a brief network interruption
-**Plans:** 1/0 plans complete
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 13-01-PLAN.md — Server-side AgentSessionManager + /ws/agent WebSocket endpoint
 - [x] 13-02-PLAN.md — Client-side useAgentSocket hook + AI chat wiring
@@ -85,7 +85,10 @@ Plans:
   2. Streaming text appears smoothly without layout jumps or flicker
   3. The chat interface feels responsive and professional — no visual artifacts from the old chat system
   4. Error states (SDK failure, network error, rate limit) display clearly with actionable messages
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 14-01-PLAN.md — Install streamdown + create message components (StreamingMessage, ChatInput, message types)
+- [ ] 14-02-PLAN.md — Wire new components into AI Chat view, replace old rendering
 
 ### Phase 15: Live Tool Call Visualization
 **Goal**: Users see exactly what the agent is doing — every tool call appears as an expandable card with name, inputs, status, and output
@@ -142,7 +145,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 11. Agent SDK Backend Integration | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 12. MCP Tool Bridge | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
-| 14. Chat UI Foundation | v20.0 | 0/? | Not started | - |
+| 14. Chat UI Foundation | v20.0 | 0/2 | In progress | - |
 | 15. Live Tool Call Visualization | v20.0 | 0/? | Not started | - |
 | 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
 | 17. Session Management + History | v20.0 | 0/? | Not started | - |
