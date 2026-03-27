@@ -2037,8 +2037,6 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
-    const authMethod = (await redis.get('nexus:config:claude_auth_method')) || 'api-key';
-
     const agentConfig = {
       brain,
       toolRegistry,
@@ -2056,12 +2054,14 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       computerUseStepLimit: computer_use_step_limit || 50,
     };
 
-    // Use SdkAgentRunner when Claude subscription (OAuth) auth is active
-    const agent = authMethod === 'sdk-subscription'
-      ? new SdkAgentRunner(agentConfig)
-      : new AgentLoop(agentConfig);
+    // v20.0: SDK is the default agent runner. AgentLoop preserved as fallback.
+    // To force legacy mode, set Redis key nexus:config:agent_runner to 'legacy'.
+    const runnerMode = (await redis.get('nexus:config:agent_runner')) || 'sdk';
+    const agent = runnerMode === 'legacy'
+      ? new AgentLoop(agentConfig)
+      : new SdkAgentRunner(agentConfig);
 
-    logger.info('SSE: using agent mode', { mode: authMethod });
+    logger.info('SSE: agent runner', { mode: runnerMode });
 
     agent.on('event', sendEvent);
 
