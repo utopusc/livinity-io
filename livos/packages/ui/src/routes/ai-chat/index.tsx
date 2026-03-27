@@ -418,6 +418,14 @@ export default function AiChat() {
 										? 'Reconnecting...'
 										: 'Agent disconnected'}
 							</span>
+							{agent.totalCost > 0 && (
+								<span
+									className='ml-auto text-caption-sm font-mono text-text-tertiary'
+									title={agent.usageStats ? `Input: ${agent.usageStats.inputTokens.toLocaleString()} tokens | Output: ${agent.usageStats.outputTokens.toLocaleString()} tokens | ${(agent.usageStats.durationMs / 1000).toFixed(1)}s` : undefined}
+								>
+									${agent.totalCost.toFixed(4)}
+								</span>
+							)}
 						</div>
 
 						<div
