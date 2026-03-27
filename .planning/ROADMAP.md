@@ -31,7 +31,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 13: WebSocket Streaming Transport** - Real-time WebSocket bridge streaming SDK events from backend to browser
 - [x] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks (completed 2026-03-27)
 - [x] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time (completed 2026-03-27)
-- [ ] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working
+- [x] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working (completed 2026-03-27)
 - [ ] **Phase 17: Session Management + History** - Persistent conversations with resume capability and browsable history sidebar
 - [ ] **Phase 18: Cost Control + Settings Cleanup** - Budget caps, real-time cost display, and removal of old Nexus AI settings
 
@@ -111,9 +111,9 @@ Plans:
   1. User can type and send a message while Claude is in the middle of a multi-step task
   2. User can type "stop" or click a stop button and the agent halts its current work
   3. User can send "also check the tests" mid-task and the agent incorporates the instruction in its next turn
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 16-01-PLAN.md — Enable ChatInput during streaming + dual-path sendFollowUp/sendMessage routing
+- [x] 16-01-PLAN.md — Enable ChatInput during streaming + dual-path sendFollowUp/sendMessage routing
 
 ### Phase 17: Session Management + History
 **Goal**: Conversations persist across sessions and users can browse and resume past conversations from a sidebar
@@ -151,7 +151,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 14. Chat UI Foundation | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 15. Live Tool Call Visualization | v20.0 | 3/3 | Complete    | 2026-03-27 |
-| 16. Mid-Conversation Interaction | v20.0 | 0/1 | Not started | - |
+| 16. Mid-Conversation Interaction | v20.0 | 1/1 | Complete   | 2026-03-27 |
 | 17. Session Management + History | v20.0 | 0/? | Not started | - |
 | 18. Cost Control + Settings Cleanup | v20.0 | 0/? | Not started | - |
 

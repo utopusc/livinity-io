@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-03-27T11:03:16.703Z"
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-03-27T11:15:35.676Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 15 — Live Tool Call Visualization
+**Current focus:** Phase 16 — Mid-Conversation Interaction
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 16 (Mid-Conversation Interaction) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Plan: Not started
 | Phase 14 P01 | 7min | 3 tasks | 5 files |
 | Phase 14 P02 | 5min | 2 tasks | 1 files |
 | Phase 15 P01 | 7min | 2 tasks | 2 files |
+| Phase 16 P01 | 5min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -81,6 +82,8 @@ Plan: Not started
 - [Phase 15]: content_block_stop keeps status running not complete -- tool input finalization != execution complete
 - [Phase 15]: Tool output from both tool_use_summary (summary) and user tool_result (actual content) -- dual completion paths
 - [Phase 15]: 1500-char output truncation with show more/less toggle for tool call cards
+- [Phase 16]: onSend callback overloaded by parent: ChatInput always calls onSend(), parent routes to sendFollowUp or sendMessage based on streaming state
+- [Phase 16]: Textarea stays enabled during streaming with placeholder 'Type to send a follow-up...' to signal interactivity
 
 ### Pending Todos
 
@@ -93,6 +96,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T10:57:59.844Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-03-27T11:15:35.674Z
+Stopped at: Completed 16-01-PLAN.md
 Resume file: None
