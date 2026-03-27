@@ -269,9 +269,16 @@ export default function AiChat() {
 
 	const handleSend = useCallback(() => {
 		const text = input.trim()
-		if (!text || agent.isStreaming) return
+		if (!text) return
 		setInput('')
-		agent.sendMessage(text)
+		// Reset textarea height after clearing
+		const textarea = document.querySelector('textarea')
+		if (textarea) textarea.style.height = 'auto'
+		if (agent.isStreaming) {
+			agent.sendFollowUp(text)
+		} else {
+			agent.sendMessage(text)
+		}
 	}, [input, agent])
 
 	const handleNewConversation = () => {
