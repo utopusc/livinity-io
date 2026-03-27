@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-03-27T08:26:55.708Z"
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-03-27T08:57:40.574Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 11 — Agent SDK Backend Integration
+**Current focus:** Phase 12 — MCP Tool Bridge
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
+Phase: 12 (MCP Tool Bridge) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: Not started
 ## Accumulated Context
 
 | Phase 11 P01 | 4min | 2 tasks | 2 files |
+| Phase 12 P01 | 3min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -56,6 +57,9 @@ Plan: Not started
 - [Phase 11]: SDK is default agent runner; legacy AgentLoop accessible via Redis key nexus:config:agent_runner=legacy
 - [Phase 11]: Watchdog 60s + budget caps (opus=0, sonnet=, haiku/flash=) protect against hangs and runaway costs
 - [Phase 11]: Subprocess env restricted to HOME, PATH, NODE_ENV, LANG, ANTHROPIC_API_KEY only
+- [Phase 12]: 50k char truncation limit (~12.5k tokens) balances detail vs SDK context budget
+- [Phase 12]: Images forwarded as MCP image content blocks preserving mimeType from ToolResult
+- [Phase 12]: Exported buildSdkTools and paramTypeToZod for direct testing without SDK subprocess
 
 ### Pending Todos
 
@@ -68,6 +72,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T08:23:01.093Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-03-27T08:57:40.572Z
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
