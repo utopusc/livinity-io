@@ -213,10 +213,32 @@ CRITICAL RULES:
       task = `${this.config.contextPrefix}\n\n## Current Task\n${task}`;
     }
 
+    // Budget cap per tier to prevent runaway costs (Pitfall 9)
+    const budgetByTier: Record<string, number> = {
+      opus: 10.0,
+      sonnet: 5.0,
+      haiku: 2.0,
+      flash: 2.0,
+    };
+    const maxBudgetUsd = budgetByTier[tier] ?? 5.0;
+
+    // Minimal subprocess environment to avoid leaking secrets (Pitfall 12)
+    const safeEnv: Record<string, string | undefined> = {
+      HOME: process.env.HOME || '/root',
+      PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+      NODE_ENV: process.env.NODE_ENV || 'production',
+      LANG: process.env.LANG || 'en_US.UTF-8',
+      // ANTHROPIC_API_KEY is handled by the SDK internally
+    };
+    if (process.env.ANTHROPIC_API_KEY) {
+      safeEnv.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+    }
+
     logger.info('SdkAgentRunner: starting task', {
       task: task.slice(0, 100),
       maxTurns,
       tier,
+      maxBudgetUsd,
       toolCount: sdkTools.length,
     });
 
@@ -233,6 +255,17 @@ CRITICAL RULES:
     let estimatedTokens = 0; // Running estimate for token budget enforcement
     let tokenBudgetExceeded = false;
 
+    // Stream read watchdog: abort if no SDK message arrives within 60s (Pitfall 2)
+    const abortController = new AbortController();
+    let lastMessageTime = Date.now();
+
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastMessageTime > 60_000) {
+        logger.warn('SdkAgentRunner: watchdog triggered — no message in 60s, aborting');
+        abortController.abort();
+      }
+    }, 10_000);
+
     try {
       const messages = query({
         prompt: task,
@@ -242,15 +275,19 @@ CRITICAL RULES:
           tools: [],        // Disable built-in Claude Code tools
           allowedTools,     // Auto-approve all Nexus MCP tools
           maxTurns,
+          maxBudgetUsd,
           model: tierToModel(tier),
           permissionMode: 'dontAsk',
           persistSession: false,
+          abortController,  // Pass abort controller for watchdog + external cancellation
+          env: safeEnv,     // Restrict subprocess environment
         },
       });
 
       let turnLimitReached = false;
 
       for await (const message of messages) {
+        lastMessageTime = Date.now(); // Reset watchdog on each message
         turns++;
 
         // Safety: break if turn limit exceeded (SDK may keep running)
@@ -362,6 +399,8 @@ CRITICAL RULES:
         toolCalls,
         stoppedReason: 'error',
       };
+    } finally {
+      clearInterval(watchdog);
     }
   }
 }
