@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-03-27T11:51:09.779Z"
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-03-27T12:13:55.699Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 17 — Session Management + History (COMPLETE)
+**Current focus:** Phase 18 — Cost Control + Settings Cleanup
 
 ## Current Position
 
-Phase: 18
-Plan: Not started
+Phase: 18 (Cost Control + Settings Cleanup) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Plan: Not started
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 17 | 2 | 12min | 6min |
+| Phase 18 P01 | 14min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,8 @@ Plan: Not started
 - [Phase 17]: conversationIdRef uses useRef not useState -- avoids re-renders, parent manages via URL params
 - [Phase 17]: useUtils() imperative fetch for sidebar conversation click -- user-triggered, not auto-fetch
 - [Phase 17]: initialConvLoaded ref gate prevents double-load on mount when isConnected changes
+- [Phase 18]: Cost displayed in connection status bar (subtle, non-intrusive placement)
+- [Phase 18]: PersonalizationCard removed alongside NexusConfigSection (only consumer)
 
 ### Pending Todos
 
@@ -104,6 +107,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T11:42:44Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-03-27T12:13:55.697Z
+Stopped at: Completed 18-01-PLAN.md
 Resume file: None

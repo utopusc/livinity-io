@@ -33,7 +33,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time (completed 2026-03-27)
 - [x] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working (completed 2026-03-27)
 - [x] **Phase 17: Session Management + History** - Persistent conversations with resume capability and browsable history sidebar (completed 2026-03-27)
-- [ ] **Phase 18: Cost Control + Settings Cleanup** - Budget caps, real-time cost display, and removal of old Nexus AI settings
+- [x] **Phase 18: Cost Control + Settings Cleanup** - Budget caps, real-time cost display, and removal of old Nexus AI settings (completed 2026-03-27)
 
 ## Phase Details
 
@@ -138,9 +138,9 @@ Plans:
   2. System respects the maxBudgetUsd cap and stops gracefully when the budget is exceeded
   3. Settings no longer shows the "Nexus AI Settings" panel with token/tool limit sliders
   4. AI configuration is minimal — API key and model preference only
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 18-01-PLAN.md — Cost badge in chat from SDK result + remove Nexus AI Settings panel
+- [x] 18-01-PLAN.md — Cost badge in chat from SDK result + remove Nexus AI Settings panel
 
 ## Progress
 
@@ -158,7 +158,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 15. Live Tool Call Visualization | v20.0 | 3/3 | Complete    | 2026-03-27 |
 | 16. Mid-Conversation Interaction | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 17. Session Management + History | v20.0 | 2/2 | Complete    | 2026-03-27 |
-| 18. Cost Control + Settings Cleanup | v20.0 | 0/1 | Not started | - |
+| 18. Cost Control + Settings Cleanup | v20.0 | 1/1 | Complete   | 2026-03-27 |
 
 ---
 
