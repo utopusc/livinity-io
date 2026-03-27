@@ -29,7 +29,7 @@ import type { ToolPolicy } from './tool-registry.js';
 import { logger } from './logger.js';
 
 /** Convert our ToolParameter type string to a Zod type */
-function paramTypeToZod(type: string, description?: string, enumValues?: string[]): z.ZodTypeAny {
+export function paramTypeToZod(type: string, description?: string, enumValues?: string[]): z.ZodTypeAny {
   if (enumValues && enumValues.length > 0) {
     return z.enum(enumValues as [string, ...string[]]).describe(description || '');
   }
@@ -59,8 +59,11 @@ function paramTypeToZod(type: string, description?: string, enumValues?: string[
   return field;
 }
 
+/** Maximum tool output size in characters (~12.5k tokens) to prevent SDK context exhaustion */
+const MAX_TOOL_OUTPUT = 50_000;
+
 /** Build SDK MCP tool definitions from Nexus ToolRegistry */
-function buildSdkTools(
+export function buildSdkTools(
   toolRegistry: ToolRegistry,
   toolPolicy?: ToolPolicy,
 ): SdkMcpToolDefinition<any>[] {
@@ -87,14 +90,50 @@ function buildSdkTools(
       async (args: Record<string, unknown>) => {
         // SDK mode: skip Nexus approval gate — Claude Code CLI handles permissions
         // via permissionMode + allowedTools. No need for double approval.
-        const result = await toolRegistry.execute(name, args);
-        return {
-          content: [{
-            type: 'text' as const,
-            text: result.success ? result.output : `Error: ${result.error || result.output}`,
-          }],
-          isError: !result.success,
-        };
+        const startMs = Date.now();
+        try {
+          const result = await toolRegistry.execute(name, args);
+          const elapsed = Date.now() - startMs;
+
+          // Build MCP content array with text + optional images
+          const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
+
+          // Add text content (truncate if too large to prevent SDK context exhaustion)
+          let text = result.success ? result.output : `Error: ${result.error || result.output}`;
+          if (text.length > MAX_TOOL_OUTPUT) {
+            text = text.slice(0, MAX_TOOL_OUTPUT) + `\n...[truncated — ${text.length} chars total, showing first ${MAX_TOOL_OUTPUT}]`;
+          }
+          if (text) {
+            content.push({ type: 'text' as const, text });
+          }
+
+          // Forward images from ToolResult as MCP image content blocks
+          if (result.images && result.images.length > 0) {
+            for (const img of result.images) {
+              content.push({
+                type: 'image' as const,
+                data: img.base64,
+                mimeType: img.mimeType || 'image/png',
+              });
+            }
+          }
+
+          // Fallback: if no content at all, add empty text
+          if (content.length === 0) {
+            content.push({ type: 'text' as const, text: '(no output)' });
+          }
+
+          logger.info(`MCP tool "${name}" completed`, { elapsed, success: result.success, outputLen: result.output?.length ?? 0, imageCount: result.images?.length ?? 0 });
+
+          return { content, isError: !result.success };
+        } catch (err: any) {
+          const elapsed = Date.now() - startMs;
+          logger.error(`MCP tool "${name}" threw`, { elapsed, error: err.message });
+          return {
+            content: [{ type: 'text' as const, text: `Tool execution error: ${err.message}` }],
+            isError: true,
+          };
+        }
       },
     );
   });
