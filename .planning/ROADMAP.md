@@ -26,7 +26,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Milestone Goal:** Replace the Nexus API-based AI chat with Claude Agent SDK, delivering a real-time Claude Code-like experience in the browser — live tool calls, streaming output, and mid-conversation interaction.
 
-- [ ] **Phase 11: Agent SDK Backend Integration** - Claude Agent SDK subprocess running server-side in livinityd, processing user messages
+- [x] **Phase 11: Agent SDK Backend Integration** - Claude Agent SDK subprocess running server-side in livinityd, processing user messages (completed 2026-03-27)
 - [ ] **Phase 12: MCP Tool Bridge** - Existing LivOS tools (shell, files, Docker, etc.) exposed as MCP tools the SDK can call autonomously
 - [ ] **Phase 13: WebSocket Streaming Transport** - Real-time WebSocket bridge streaming SDK events from backend to browser
 - [ ] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks
@@ -45,9 +45,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   1. User sends a message in AI Chat and receives a coherent response from Claude Agent SDK (not the old Nexus agent loop)
   2. The SDK subprocess starts, processes the message, and returns a result without crashing or hanging
   3. Existing ProviderManager and Kimi/Claude provider abstractions remain intact and functional alongside the new SDK path
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 11-01-PLAN.md — Make SdkAgentRunner default, add watchdog/budget/env safety
+- [x] 11-01-PLAN.md — Make SdkAgentRunner default, add watchdog/budget/env safety
 
 ### Phase 12: MCP Tool Bridge
 **Goal**: Claude Agent SDK can autonomously call existing LivOS tools (shell, files, Docker, screenshot, etc.) during its agent loop
@@ -134,7 +134,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 11. Agent SDK Backend Integration | v20.0 | 0/1 | Planning | - |
+| 11. Agent SDK Backend Integration | v20.0 | 1/1 | Complete   | 2026-03-27 |
 | 12. MCP Tool Bridge | v20.0 | 0/? | Not started | - |
 | 13. WebSocket Streaming Transport | v20.0 | 0/? | Not started | - |
 | 14. Chat UI Foundation | v20.0 | 0/? | Not started | - |
