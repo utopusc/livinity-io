@@ -607,7 +607,11 @@ LAUNCHER
         step "Configuring desktop streaming"
 
         # ── Resolve desktop user and UID ──────────────────────
-        local desktop_user="${DESKTOP_USER:-$(ls /home/ 2>/dev/null | head -1)}"
+        local desktop_user="${DESKTOP_USER}"
+        if [[ -z "$desktop_user" ]]; then
+            info "No desktop user detected — skipping desktop streaming setup"
+            return 0
+        fi
         local desktop_uid
         desktop_uid=$(id -u "$desktop_user" 2>/dev/null || echo "1000")
 
@@ -663,18 +667,24 @@ done
 OUTPUT=$(xrandr | grep ' connected' | head -1 | awk '{print $1}')
 [ -z "$OUTPUT" ] && exit 0
 
-# Check if 1920x1080 already available
-if xrandr | grep -q '1920x1080'; then
-    xrandr --output "$OUTPUT" --mode 1920x1080 2>/dev/null || \
-    xrandr --output "$OUTPUT" --mode '1920x1080_60.00' 2>/dev/null
-else
-    # Create 1920x1080 modeline and apply
-    MODELINE=$(cvt 1920 1080 60 2>/dev/null | grep Modeline | sed 's/Modeline //')
-    MODE_NAME=$(echo "$MODELINE" | cut -d'"' -f2)
-    xrandr --newmode $MODELINE 2>/dev/null
-    xrandr --addmode "$OUTPUT" "$MODE_NAME" 2>/dev/null
-    xrandr --output "$OUTPUT" --mode "$MODE_NAME" 2>/dev/null
+# Try native 1920x1080 first
+if xrandr | grep -qE '^\s+1920x1080\s'; then
+    xrandr --output "$OUTPUT" --mode 1920x1080 2>/dev/null && exit 0
 fi
+
+# Create custom 1920x1080 mode via cvt
+MODELINE=$(cvt 1920 1080 60 2>/dev/null | grep Modeline | sed 's/Modeline //')
+MODE_NAME=$(echo "$MODELINE" | cut -d'"' -f2)
+xrandr --newmode $MODELINE 2>/dev/null  # ignore "already exists" error
+
+# Try addmode by name first, then by mode ID (xrandr bug workaround)
+xrandr --addmode "$OUTPUT" "$MODE_NAME" 2>/dev/null || {
+    MODE_ID=$(xrandr --verbose 2>/dev/null | grep "$MODE_NAME" | grep -o '0x[0-9a-f]*' | head -1)
+    [ -n "$MODE_ID" ] && xrandr --addmode "$OUTPUT" "$MODE_ID" 2>/dev/null
+}
+
+xrandr --output "$OUTPUT" --mode "$MODE_NAME" 2>/dev/null
+exit 0
 SCRIPT
         chmod +x /usr/local/bin/livos-set-resolution
         ok "Resolution setup script installed"
