@@ -92,7 +92,7 @@ Keep ProviderManager and Kimi/Claude provider abstraction intact. Agent SDK is a
 | SDK-01 | Phase 11 | Complete |
 | SDK-02 | Phase 12 | Complete |
 | SDK-03 | Phase 13 | Complete |
-| SDK-04 | Phase 15 | Pending |
+| SDK-04 | Phase 15 | Complete |
 | SDK-05 | Phase 16 | Pending |
 | SDK-06 | Phase 17 | Pending |
 | SDK-07 | Phase 17 | Pending |

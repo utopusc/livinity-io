@@ -30,7 +30,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 12: MCP Tool Bridge** - Existing LivOS tools (shell, files, Docker, etc.) exposed as MCP tools the SDK can call autonomously (completed 2026-03-27)
 - [x] **Phase 13: WebSocket Streaming Transport** - Real-time WebSocket bridge streaming SDK events from backend to browser
 - [x] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks (completed 2026-03-27)
-- [ ] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time
+- [x] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time (completed 2026-03-27)
 - [ ] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working
 - [ ] **Phase 17: Session Management + History** - Persistent conversations with resume capability and browsable history sidebar
 - [ ] **Phase 18: Cost Control + Settings Cleanup** - Budget caps, real-time cost display, and removal of old Nexus AI settings
@@ -99,9 +99,9 @@ Plans:
   2. Shell commands show the command being run and its output in an expandable card
   3. Tool cards show execution status in real-time (running spinner, complete checkmark, error indicator)
   4. Tool call cards are collapsible — users can expand for details or collapse to keep the chat compact
-**Plans:** 1 plan
+**Plans:** 3/3 plans complete
 Plans:
-- [ ] 15-01-PLAN.md — Fix tool lifecycle in reducer + animated tool-specific card components
+- [x] 15-01-PLAN.md — Fix tool lifecycle in reducer + animated tool-specific card components
 
 ### Phase 16: Mid-Conversation Interaction
 **Goal**: Users can type and send messages while the agent is actively working, with support for interrupting or redirecting the agent
@@ -148,7 +148,7 @@ Note: Phases 13, 12 can execute in parallel after Phase 11. Phases 15, 16, 17, 1
 | 12. MCP Tool Bridge | v20.0 | 1/1 | Complete    | 2026-03-27 |
 | 13. WebSocket Streaming Transport | v20.0 | 2/2 | Complete    | 2026-03-27 |
 | 14. Chat UI Foundation | v20.0 | 2/2 | Complete    | 2026-03-27 |
-| 15. Live Tool Call Visualization | v20.0 | 0/1 | In progress | - |
+| 15. Live Tool Call Visualization | v20.0 | 3/3 | Complete   | 2026-03-27 |
 | 16. Mid-Conversation Interaction | v20.0 | 0/? | Not started | - |
 | 17. Session Management + History | v20.0 | 0/? | Not started | - |
 | 18. Cost Control + Settings Cleanup | v20.0 | 0/? | Not started | - |

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Live Agent UI
 status: unknown
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-03-27T10:40:37.632Z"
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-03-27T10:57:59.846Z"
 progress:
   total_phases: 8
   completed_phases: 0
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v20.0 -- Live Agent UI
-**Current focus:** Phase 14 — Chat UI Foundation
+**Current focus:** Phase 15 — Live Tool Call Visualization
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15 (Live Tool Call Visualization) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Plan: Not started
 | Phase 13 P02 | 15min | 2 tasks | 2 files |
 | Phase 14 P01 | 7min | 3 tasks | 5 files |
 | Phase 14 P02 | 5min | 2 tasks | 1 files |
+| Phase 15 P01 | 7min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -77,6 +78,9 @@ Plan: Not started
 - [Phase 14]: Removed tRPC send mutation fallback -- WebSocket is now the only message path
 - [Phase 14]: Auto-scroll pauses at 100px distance-from-bottom threshold
 - [Phase 14]: VoiceButton removed from input area (tightly coupled to old state)
+- [Phase 15]: content_block_stop keeps status running not complete -- tool input finalization != execution complete
+- [Phase 15]: Tool output from both tool_use_summary (summary) and user tool_result (actual content) -- dual completion paths
+- [Phase 15]: 1500-char output truncation with show more/less toggle for tool call cards
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-27T10:36:42.290Z
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-03-27T10:57:59.844Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None
