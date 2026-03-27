@@ -24,6 +24,7 @@ import * as jwt from '../jwt.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
+import {createAgentWebSocketHandler} from './ws-agent.js'
 
 import fileApi from '../files/api.js'
 
@@ -989,6 +990,13 @@ class Server {
 		this.mountWebSocketServer('/ws/docker-exec', (wss) => {
 			const logger = this.logger.createChildLogger('docker-exec')
 			wss.on('connection', createDockerExecHandler({logger}))
+		})
+
+		// Handle agent streaming WebSocket routes
+		this.mountWebSocketServer('/ws/agent', (wss) => {
+			const logger = this.logger.createChildLogger('ws-agent')
+			const handler = createAgentWebSocketHandler({livinityd: this.livinityd, logger})
+			wss.on('connection', handler)
 		})
 
 		// Handle API routes
