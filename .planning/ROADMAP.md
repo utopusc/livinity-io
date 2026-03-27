@@ -32,7 +32,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 14: Chat UI Foundation** - Fresh chat interface built for agent interactions with streaming text, markdown, code blocks (completed 2026-03-27)
 - [x] **Phase 15: Live Tool Call Visualization** - Tool calls rendered as expandable cards showing name, inputs, status, and output in real-time (completed 2026-03-27)
 - [x] **Phase 16: Mid-Conversation Interaction** - Users can send messages and interrupt while the agent is working (completed 2026-03-27)
-- [ ] **Phase 17: Session Management + History** - Persistent conversations with resume capability and browsable history sidebar
+- [x] **Phase 17: Session Management + History** - Persistent conversations with resume capability and browsable history sidebar (completed 2026-03-27)
 - [ ] **Phase 18: Cost Control + Settings Cleanup** - Budget caps, real-time cost display, and removal of old Nexus AI settings
 
 ## Phase Details
