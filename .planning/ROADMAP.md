@@ -47,7 +47,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 20: Conversation Persistence & History** - Message history persistence across sessions with browsable conversation sidebar (completed 2026-03-28)
 - [x] **Phase 21: Sidebar Agents Tab** - Renamed LivHub to Agents with agent listing, status display, and detail views (completed 2026-03-28)
 - [x] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation (completed 2026-03-28)
-- [ ] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection
+- [x] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection (completed 2026-03-28)
 - [ ] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state
 - [ ] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed
 - [ ] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity
@@ -118,7 +118,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 23-01-PLAN.md — Backend: Nexus GET /api/slash-commands endpoint + livinityd tRPC proxy query
-- [ ] 23-02-PLAN.md — Frontend: SlashCommandMenu component + ChatInput integration with keyboard navigation
+- [x] 23-02-PLAN.md — Frontend: SlashCommandMenu component + ChatInput integration with keyboard navigation
 
 ### Phase 24: Tool Conditional Registration
 **Goal**: Tools for disconnected integrations (WhatsApp, Telegram, Discord, Slack, Gmail) are not registered in daemon.ts, keeping the tool list clean and relevant
@@ -184,7 +184,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 20. Conversation Persistence & History | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 21. Sidebar Agents Tab | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 22. Agent Interaction & Management | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 23. Slash Command Menu | v21.0 | 1/2 | In Progress|  |
+| 23. Slash Command Menu | v21.0 | 2/2 | Complete   | 2026-03-28 |
 | 24. Tool Conditional Registration | v21.0 | 0/TBD | Not started | - |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 0/TBD | Not started | - |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 0/TBD | Not started | - |

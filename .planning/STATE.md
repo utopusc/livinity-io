@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-03-28T10:51:50.335Z"
+stopped_at: Completed 23-02-PLAN.md
+last_updated: "2026-03-28T10:58:36.034Z"
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -60,6 +60,8 @@ Plan: 2 of 2
 - [Phase 23]: Used X-API-Key header casing matching existing proxy pattern in routes.ts
 - [Phase 23]: Slash command descriptions truncated to 80 chars for compact frontend payload
 - [Phase 23]: tRPC listSlashCommands returns empty array on failure (graceful degradation)
+- [Phase 23]: filteredCommandsRef pattern for Enter key selection: parent owns keyboard, menu exposes filtered list via ref
+- [Phase 23]: UI-action commands (/new, /agents) intercepted locally via onSlashAction callback, not sent to backend
 
 ### Pending Todos
 
@@ -71,6 +73,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T10:51:50.331Z
-Stopped at: Completed 23-01-PLAN.md
+Last session: 2026-03-28T10:58:36.031Z
+Stopped at: Completed 23-02-PLAN.md
 Resume file: None

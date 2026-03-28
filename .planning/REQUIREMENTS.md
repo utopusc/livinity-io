@@ -29,11 +29,11 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 
 ### Slash Commands
 
-- [ ] **SLSH-01**: User sees a dropdown menu above the input field when typing `/`
-- [ ] **SLSH-02**: User can see built-in commands (/usage, /new, /help, /agents, /loops, /skills) in the dropdown
+- [x] **SLSH-01**: User sees a dropdown menu above the input field when typing `/`
+- [x] **SLSH-02**: User can see built-in commands (/usage, /new, /help, /agents, /loops, /skills) in the dropdown
 - [x] **SLSH-03**: User can see dynamic commands fetched from backend (tools + skill triggers) via listSlashCommands tRPC query
-- [ ] **SLSH-04**: User can filter commands by typing after `/` (e.g., `/us` filters to `/usage`)
-- [ ] **SLSH-05**: User can select a command to insert it into input and send
+- [x] **SLSH-04**: User can filter commands by typing after `/` (e.g., `/us` filters to `/usage`)
+- [x] **SLSH-05**: User can select a command to insert it into input and send
 
 ### AGI Mechanism
 
@@ -100,11 +100,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGNT-04 | Phase 22 | Complete |
 | AGNT-05 | Phase 22 | Complete |
 | AGNT-06 | Phase 22 | Complete |
-| SLSH-01 | Phase 23 | Pending |
-| SLSH-02 | Phase 23 | Pending |
+| SLSH-01 | Phase 23 | Complete |
+| SLSH-02 | Phase 23 | Complete |
 | SLSH-03 | Phase 23 | Complete |
-| SLSH-04 | Phase 23 | Pending |
-| SLSH-05 | Phase 23 | Pending |
+| SLSH-04 | Phase 23 | Complete |
+| SLSH-05 | Phase 23 | Complete |
 | TOOL-01 | Phase 24 | Pending |
 | TOOL-02 | Phase 24 | Pending |
 | TOOL-03 | Phase 24 | Pending |
