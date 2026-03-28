@@ -23,6 +23,19 @@ export interface ChatMessage {
 	timestamp: number
 }
 
+export interface AgentStep {
+	id: string
+	tool: string
+	description: string
+	status: 'running' | 'complete' | 'error'
+}
+
+export interface AgentStatus {
+	phase: 'idle' | 'thinking' | 'executing' | 'responding'
+	currentTool: string | null
+	steps: AgentStep[]
+}
+
 type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting'
 
 // --- Reducer ---
@@ -109,6 +122,26 @@ function messagesReducer(state: ChatMessage[], action: MessageAction): ChatMessa
 	}
 }
 
+// --- Helpers ---
+
+function describeToolBrief(toolName: string): string {
+	const raw = toolName.replace(/^mcp__[^_]+__/, '').toLowerCase()
+	if (/shell|command|bash|exec/.test(raw)) return 'Running shell command'
+	if (/read_file|file_read/.test(raw)) return 'Reading file'
+	if (/write_file|file_write|create_file/.test(raw)) return 'Writing file'
+	if (/edit_file|file_edit|apply_diff/.test(raw)) return 'Editing file'
+	if (/list_dir|directory/.test(raw)) return 'Listing directory'
+	if (/search|grep|find_symbol|find_file/.test(raw)) return 'Searching codebase'
+	if (/docker|container/.test(raw)) return 'Managing Docker'
+	if (/memory|remember/.test(raw)) return 'Accessing memory'
+	if (/http|fetch|request|api/.test(raw)) return 'Making HTTP request'
+	if (/screenshot|screen/.test(raw)) return 'Taking screenshot'
+	if (/computer_use|click|type|key/.test(raw)) return 'Using computer'
+	if (/canvas/.test(raw)) return 'Working on canvas'
+	if (/skill/.test(raw)) return 'Running skill'
+	return `Using ${toolName.replace(/^mcp__[^_]+__/, '')}`
+}
+
 // --- Hook ---
 
 export function useAgentSocket() {
@@ -118,6 +151,8 @@ export function useAgentSocket() {
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
 	const [totalCost, setTotalCost] = useState<number>(0)
 	const [usageStats, setUsageStats] = useState<{inputTokens: number; outputTokens: number; durationMs: number; numTurns: number} | null>(null)
+	const [agentStatus, setAgentStatus] = useState<AgentStatus>({phase: 'idle', currentTool: null, steps: []})
+	const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	const wsRef = useRef<WebSocket | null>(null)
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -157,6 +192,10 @@ export function useAgentSocket() {
 		if (rafRef.current) {
 			cancelAnimationFrame(rafRef.current)
 			rafRef.current = undefined
+		}
+		if (thinkingTimerRef.current) {
+			clearTimeout(thinkingTimerRef.current)
+			thinkingTimerRef.current = null
 		}
 	}, [])
 
@@ -246,6 +285,25 @@ export function useAgentSocket() {
 								currentToolIdRef.current = contentBlock.id
 								toolInputBufferRef.current = ''
 								dispatch({type: 'ADD_TOOL_CALL', toolCall})
+								// Clear thinking debounce timer
+								if (thinkingTimerRef.current) {
+									clearTimeout(thinkingTimerRef.current)
+									thinkingTimerRef.current = null
+								}
+								setAgentStatus(prev => ({
+									...prev,
+									phase: 'executing',
+									currentTool: contentBlock.name,
+									steps: [
+										...prev.steps.filter(s => s.id !== contentBlock.id),
+										{
+											id: contentBlock.id,
+											tool: contentBlock.name,
+											description: describeToolBrief(contentBlock.name),
+											status: 'running',
+										},
+									],
+								}))
 							}
 							break
 						}
@@ -254,6 +312,10 @@ export function useAgentSocket() {
 							const delta = data.delta
 							if (delta?.type === 'text_delta' && delta.text) {
 								appendDelta(delta.text)
+								setAgentStatus(prev => {
+									if (prev.phase === 'responding') return prev
+									return {...prev, phase: 'responding', currentTool: null}
+								})
 							} else if (delta?.type === 'input_json_delta' && delta.partial_json) {
 								toolInputBufferRef.current += delta.partial_json
 							}
@@ -315,6 +377,21 @@ export function useAgentSocket() {
 							updates: {status: 'complete', output: summary},
 						})
 					}
+					setAgentStatus(prev => {
+						const updatedSteps = prev.steps.map(s =>
+							ids.includes(s.id) ? {...s, status: 'complete' as const} : s
+						)
+						// Debounce transition to 'thinking' to avoid flicker between rapid tool calls
+						if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current)
+						thinkingTimerRef.current = setTimeout(() => {
+							setAgentStatus(p => {
+								if (p.phase === 'executing' || p.phase === 'responding') return p
+								return {...p, phase: 'thinking'}
+							})
+							thinkingTimerRef.current = null
+						}, 300)
+						return {...prev, currentTool: null, steps: updatedSteps}
+					})
 					break
 				}
 
@@ -371,6 +448,11 @@ export function useAgentSocket() {
 					}
 
 					setIsStreaming(false)
+					setAgentStatus({phase: 'idle', currentTool: null, steps: []})
+					if (thinkingTimerRef.current) {
+						clearTimeout(thinkingTimerRef.current)
+						thinkingTimerRef.current = null
+					}
 
 					if (data.subtype !== 'success') {
 						const errorMsg = data.errors?.[0]?.message || data.error?.message || data.error || `Agent stopped: ${data.subtype || 'unknown reason'}`
@@ -475,6 +557,10 @@ export function useAgentSocket() {
 				cancelAnimationFrame(rafRef.current)
 				rafRef.current = undefined
 			}
+			if (thinkingTimerRef.current) {
+				clearTimeout(thinkingTimerRef.current)
+				thinkingTimerRef.current = null
+			}
 			if (wsRef.current) {
 				wsRef.current.close(1000)
 				wsRef.current = null
@@ -503,6 +589,7 @@ export function useAgentSocket() {
 			dispatch({type: 'ADD_USER_MESSAGE', message: userMsg})
 			dispatch({type: 'START_ASSISTANT_MESSAGE', id: `msg_${Date.now()}_assistant`})
 			setIsStreaming(true)
+			setAgentStatus({phase: 'thinking', currentTool: null, steps: []})
 
 			const payload: {type: string; prompt: string; sessionId?: string; model?: string; conversationId?: string} = {
 				type: 'start',
@@ -541,6 +628,7 @@ export function useAgentSocket() {
 		flushBuffer()
 		dispatch({type: 'FINALIZE_MESSAGE'})
 		setIsStreaming(false)
+		setAgentStatus({phase: 'idle', currentTool: null, steps: []})
 	}, [flushBuffer])
 
 	const cancel = useCallback(() => {
@@ -551,6 +639,7 @@ export function useAgentSocket() {
 		flushBuffer()
 		dispatch({type: 'FINALIZE_MESSAGE'})
 		setIsStreaming(false)
+		setAgentStatus({phase: 'idle', currentTool: null, steps: []})
 	}, [flushBuffer])
 
 	const loadConversation = useCallback((messages: ChatMessage[], conversationId: string) => {
@@ -565,6 +654,7 @@ export function useAgentSocket() {
 		conversationIdRef.current = null
 		setTotalCost(0)
 		setUsageStats(null)
+		setAgentStatus({phase: 'idle', currentTool: null, steps: []})
 	}, [resetBuffer])
 
 	return {
@@ -577,6 +667,7 @@ export function useAgentSocket() {
 		conversationId: conversationIdRef.current,
 		totalCost,
 		usageStats,
+		agentStatus,
 
 		// Actions
 		sendMessage,
