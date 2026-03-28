@@ -64,7 +64,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   1. User sees markdown-formatted partial text streaming below StatusIndicator as the agent generates its response
   2. User can see which tools are being called, whether the agent is thinking, and what work steps are in progress -- all updating in real-time
   3. When the agent finishes processing, the streaming partial answer disappears and is replaced by the complete response rendered as a proper chat message
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 19-01-PLAN.md — Enhance useAgentSocket with agentStatus tracking, create AgentStatusOverlay component, wire into chat message rendering
 
 ### Phase 20: Conversation Persistence & History
 **Goal**: Users can close AI Chat, reopen it later, and pick up where they left off -- with a browsable list of past conversations
@@ -167,7 +169,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 19. AI Chat Streaming Visibility | v21.0 | 0/TBD | Not started | - |
+| 19. AI Chat Streaming Visibility | v21.0 | 0/1 | Planning complete | - |
 | 20. Conversation Persistence & History | v21.0 | 0/TBD | Not started | - |
 | 21. Sidebar Agents Tab | v21.0 | 0/TBD | Not started | - |
 | 22. Agent Interaction & Management | v21.0 | 0/TBD | Not started | - |
