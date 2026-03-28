@@ -890,7 +890,7 @@ export default router({
 		}
 	}),
 
-	/** Execute a subagent with a message */
+	/** Execute a subagent task via Nexus daemon pipeline (proper history recording) */
 	executeSubagent: privateProcedure
 		.input(
 			z.object({
@@ -899,27 +899,123 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			// Get subagent from Nexus
 			try {
 				const nexusUrl = getNexusApiUrl()
-				const response = await fetch(`${nexusUrl}/api/subagents/${input.id}`, {
-					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
-				})
+				const response = await fetch(
+					`${nexusUrl}/api/subagents/${encodeURIComponent(input.id)}/execute`,
+					{
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+						},
+						body: JSON.stringify({message: input.message}),
+					},
+				)
 				if (!response.ok) {
-					throw new TRPCError({code: 'NOT_FOUND', message: 'Subagent not found'})
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: response.status === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || `Nexus API error: ${response.status}`,
+					})
 				}
-				const subagent = await response.json()
-				const prompt = subagent.systemPrompt
-					? `[Acting as subagent "${subagent.name}": ${subagent.systemPrompt}]\n\n${input.message}`
-					: input.message
-				const result = await ctx.livinityd.ai.chat(`subagent-${input.id}-${Date.now()}`, prompt)
-				return {content: result.content}
+				return await response.json()
 			} catch (error) {
 				if (error instanceof TRPCError) throw error
 				ctx.livinityd.logger.error('Failed to execute subagent', error)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: getErrorMessage(error) || 'Failed to execute subagent',
+				})
+			}
+		}),
+
+	/** Get loop status for a subagent */
+	getLoopStatus: privateProcedure
+		.input(z.object({id: z.string().min(1).max(64)}))
+		.query(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(
+					`${nexusUrl}/api/loops/${encodeURIComponent(input.id)}/status`,
+					{
+						headers: process.env.LIV_API_KEY
+							? {'X-API-Key': process.env.LIV_API_KEY}
+							: {},
+					},
+				)
+				if (!response.ok) {
+					return {subagentId: input.id, running: false, iteration: 0, intervalMs: 0, state: null}
+				}
+				return await response.json()
+			} catch (error) {
+				ctx.livinityd.logger.error('Failed to get loop status', error)
+				return {subagentId: input.id, running: false, iteration: 0, intervalMs: 0, state: null}
+			}
+		}),
+
+	/** Start a loop for a subagent */
+	startLoop: privateProcedure
+		.input(z.object({id: z.string().min(1).max(64)}))
+		.mutation(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(
+					`${nexusUrl}/api/loops/${encodeURIComponent(input.id)}/start`,
+					{
+						method: 'POST',
+						headers: process.env.LIV_API_KEY
+							? {'X-API-Key': process.env.LIV_API_KEY}
+							: {},
+					},
+				)
+				if (!response.ok) {
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: response.status === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || 'Failed to start loop',
+					})
+				}
+				return await response.json()
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to start loop', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to start loop',
+				})
+			}
+		}),
+
+	/** Stop a loop for a subagent */
+	stopLoop: privateProcedure
+		.input(z.object({id: z.string().min(1).max(64)}))
+		.mutation(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(
+					`${nexusUrl}/api/loops/${encodeURIComponent(input.id)}/stop`,
+					{
+						method: 'POST',
+						headers: process.env.LIV_API_KEY
+							? {'X-API-Key': process.env.LIV_API_KEY}
+							: {},
+					},
+				)
+				if (!response.ok) {
+					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: errorData.error || 'Failed to stop loop',
+					})
+				}
+				return await response.json()
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to stop loop', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to stop loop',
 				})
 			}
 		}),
