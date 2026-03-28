@@ -206,36 +206,17 @@ export class AgentSessionManager {
     // Build MCP tool definitions from Nexus ToolRegistry
     const sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
 
-    // Create an SDK MCP server that hosts our Nexus tools
-    const mcpServer = createSdkMcpServer({
-      name: 'nexus-tools',
-      tools: sdkTools,
-    });
+    // Build allowedTools and MCP servers only if we have tools
+    const allowedTools: string[] = [];
+    const mcpServers: Record<string, any> = {};
 
-    // Build allowedTools list so Claude Code auto-approves our MCP tools
-    const allowedTools = sdkTools.map((t: any) => `mcp__nexus-tools__${t.name}`);
-
-    // Build MCP servers config
-    const mcpServers: Record<string, any> = {
-      'nexus-tools': mcpServer,
-    };
-
-    // Add Chrome DevTools MCP if Chrome CDP is reachable
-    const browserUrl = (nexusConfig?.browser?.cdpUrl ?? 'ws://127.0.0.1:9223').replace(
-      /^ws:\/\//,
-      'http://',
-    );
-    if (nexusConfig?.browser?.enabled !== false) {
-      const cdpReachable = await isCdpReachable(browserUrl).catch(() => false);
-      if (cdpReachable) {
-        mcpServers['chrome-devtools'] = {
-          type: 'stdio' as const,
-          command: 'chrome-devtools-mcp',
-          args: ['--browserUrl', browserUrl, '--no-usage-statistics'],
-        };
-        allowedTools.push('mcp__chrome-devtools__*');
-        logger.info('AgentSessionManager: Chrome DevTools MCP enabled', { browserUrl });
-      }
+    if (sdkTools.length > 0) {
+      const mcpServer = createSdkMcpServer({
+        name: 'nexus-tools',
+        tools: sdkTools,
+      });
+      mcpServers['nexus-tools'] = mcpServer;
+      allowedTools.push(...sdkTools.map((t: any) => `mcp__nexus-tools__${t.name}`));
     }
 
     // Build system prompt
@@ -331,13 +312,21 @@ export class AgentSessionManager {
         parent_tool_use_id: null,
       });
 
+      logger.info('AgentSessionManager: calling SDK query()', {
+        userId,
+        model: tierToModel(tier),
+        mcpServerCount: Object.keys(mcpServers).length,
+        toolCount: sdkTools.length,
+        allowedToolCount: allowedTools.length,
+      });
+
       const messages = query({
         prompt: session.inputChannel.generator,
         options: {
           systemPrompt,
-          mcpServers,
+          mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
           tools: [],
-          allowedTools,
+          allowedTools: allowedTools.length > 0 ? allowedTools : undefined,
           maxTurns,
           maxBudgetUsd,
           model: tierToModel(tier),
@@ -349,8 +338,11 @@ export class AgentSessionManager {
         },
       });
 
+      logger.info('AgentSessionManager: SDK query() returned, starting relay loop');
+
       // Relay each SDK message to the WebSocket client and accumulate turn data
       for await (const message of messages) {
+        logger.info('AgentSessionManager: received SDK message', { type: (message as any).type });
         lastMessageTime = Date.now();
         onMessage({ type: 'sdk_message', data: message });
 
