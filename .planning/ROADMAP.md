@@ -46,7 +46,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 19: AI Chat Streaming Visibility** - Real-time partial answer streaming and tool/thinking state visibility during agent processing (completed 2026-03-28)
 - [x] **Phase 20: Conversation Persistence & History** - Message history persistence across sessions with browsable conversation sidebar (completed 2026-03-28)
 - [x] **Phase 21: Sidebar Agents Tab** - Renamed LivHub to Agents with agent listing, status display, and detail views (completed 2026-03-28)
-- [ ] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation
+- [x] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation (completed 2026-03-28)
 - [ ] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection
 - [ ] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state
 - [ ] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed
@@ -104,7 +104,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 22-01-PLAN.md — Backend: Nexus REST endpoints for subagent execution and loop management, tRPC proxy routes, httpOnlyPaths
-- [ ] 22-02-PLAN.md — Frontend: Message input, loop controls, and compact create form in agents-panel.tsx
+- [x] 22-02-PLAN.md — Frontend: Message input, loop controls, and compact create form in agents-panel.tsx
 
 ### Phase 23: Slash Command Menu
 **Goal**: Users can type `/` in the chat input to get a searchable dropdown of built-in and dynamic commands for quick actions
@@ -180,7 +180,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 20. Conversation Persistence & History | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 21. Sidebar Agents Tab | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 22. Agent Interaction & Management | v21.0 | 1/2 | In Progress|  |
+| 22. Agent Interaction & Management | v21.0 | 2/2 | Complete   | 2026-03-28 |
 | 23. Slash Command Menu | v21.0 | 0/TBD | Not started | - |
 | 24. Tool Conditional Registration | v21.0 | 0/TBD | Not started | - |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 0/TBD | Not started | - |

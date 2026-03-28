@@ -25,7 +25,7 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 - [x] **AGNT-03**: User can click an agent to view its chat history, last result, and configuration
 - [x] **AGNT-04**: User can send a message to an agent directly from the Agents tab
 - [x] **AGNT-05**: User can see loop agent details: current iteration, last state, and stop/start controls
-- [ ] **AGNT-06**: User can create a new agent from the Agents tab (compact form)
+- [x] **AGNT-06**: User can create a new agent from the Agents tab (compact form)
 
 ### Slash Commands
 
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGNT-03 | Phase 21 | Complete |
 | AGNT-04 | Phase 22 | Complete |
 | AGNT-05 | Phase 22 | Complete |
-| AGNT-06 | Phase 22 | Pending |
+| AGNT-06 | Phase 22 | Complete |
 | SLSH-01 | Phase 23 | Pending |
 | SLSH-02 | Phase 23 | Pending |
 | SLSH-03 | Phase 23 | Pending |

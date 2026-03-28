@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-03-28T10:25:34.838Z"
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-03-28T10:32:21.484Z"
 progress:
   total_phases: 10
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -55,6 +55,8 @@ Plan: 2 of 2
 - [Phase 21]: Kept SkillsPanel rendering block intact for backward compatibility; Agents tab read-only per Phase 21 scope
 - [Phase 22]: Proxy executeSubagent through Nexus REST for proper history recording, tool scoping, and memory context
 - [Phase 22]: Loop start/stop endpoints update subagent status alongside LoopRunner control for consistent state
+- [Phase 22-02]: Compact create form omits tools/systemPrompt/schedule (sidebar space constraints, defaults to all tools)
+- [Phase 22-02]: LoopControls conditionally rendered via hasLoopConfig flag to prevent unnecessary API calls
 
 ### Pending Todos
 
@@ -66,6 +68,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T10:25:34.835Z
-Stopped at: Completed 22-01-PLAN.md
+Last session: 2026-03-28T10:32:21.482Z
+Stopped at: Completed 22-02-PLAN.md
 Resume file: None
