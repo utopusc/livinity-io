@@ -95,6 +95,25 @@ export class ClaudeProvider implements AIProvider {
         this.cachedApiKey = '__auth_token__';
         return this.client;
       }
+
+      // Fall back to OAuth credentials file (~/.claude/.credentials.json)
+      try {
+        const fs = await import('fs');
+        const pathMod = await import('path');
+        const home = process.env.HOME || process.env.USERPROFILE || '/root';
+        const credsPath = pathMod.join(home, '.claude', '.credentials.json');
+        if (fs.existsSync(credsPath)) {
+          const creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
+          const token = creds.claudeAiOauth?.accessToken;
+          if (token) {
+            if (this.client && this.cachedApiKey === '__oauth_file__') return this.client;
+            this.client = new Anthropic({ authToken: token });
+            this.cachedApiKey = '__oauth_file__';
+            return this.client;
+          }
+        }
+      } catch {}
+
       throw new Error('No Anthropic API key configured');
     }
   }
@@ -465,6 +484,11 @@ export class ClaudeProvider implements AIProvider {
       fs.chmodSync(credPath, 0o600);
 
       logger.info('ClaudeProvider: credentials saved', { path: credPath });
+
+      // Set auth method to sdk-subscription so SdkAgentRunner is used
+      if (this.redis) {
+        await this.redis.set(AUTH_METHOD_KEY, 'sdk-subscription');
+      }
 
       // Clear state
       this.pendingOAuth = null;
