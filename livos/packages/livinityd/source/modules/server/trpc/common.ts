@@ -98,4 +98,9 @@ export const httpOnlyPaths = [
 	'ai.claudeLogout',
 	'ai.setPrimaryProvider',
 	'ai.setComputerUseAutoConsent',
+	// Subagent execution -- use HTTP for reliability (can take 10-60s)
+	'ai.executeSubagent',
+	// Loop management -- use HTTP to avoid WS connection dependency
+	'ai.startLoop',
+	'ai.stopLoop',
 ] as const
