@@ -135,6 +135,11 @@ export class Daemon {
     return this.config.channelManager;
   }
 
+  /** Expose loop runner for external consumers (API) */
+  get loopRunner(): LoopRunner {
+    return this.config.loopRunner;
+  }
+
   /** Expose heartbeat runner for external consumers (API) */
   get heartbeatRunner(): HeartbeatRunner | undefined {
     return this.config.heartbeatRunner;
@@ -3088,7 +3093,7 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
   }
 
   /** Execute a task as a specific subagent with its own context and system prompt */
-  private async executeSubagentTask(subagentId: string, task: string, previousState?: string): Promise<string> {
+  public async executeSubagentTask(subagentId: string, task: string, previousState?: string): Promise<string> {
     const config = await this.config.subagentManager.get(subagentId);
     if (!config) throw new Error(`Subagent "${subagentId}" not found.`);
     if (config.status !== 'active') throw new Error(`Subagent "${subagentId}" is ${config.status}.`);

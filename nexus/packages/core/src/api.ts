@@ -1117,6 +1117,87 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  /** Execute a subagent task (proper pipeline with history recording) */
+  app.post('/api/subagents/:id/execute', async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message || typeof message !== 'string') {
+        res.status(400).json({ error: 'message is required' });
+        return;
+      }
+      const result = await daemon.executeSubagentTask(req.params.id, message);
+      res.json({ content: result });
+    } catch (err) {
+      logger.error('Execute subagent error', { id: req.params.id, error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Loop Management API ────────────────────────────────────
+
+  /** List all active loops */
+  app.get('/api/loops', async (_req, res) => {
+    try {
+      const loops = daemon.loopRunner.listActive();
+      res.json(loops);
+    } catch (err) {
+      logger.error('List loops error', { error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get loop status for a subagent */
+  app.get('/api/loops/:id/status', async (req, res) => {
+    try {
+      const state = await daemon.loopRunner.getState(req.params.id);
+      const loops = daemon.loopRunner.listActive();
+      const active = loops.find(l => l.subagentId === req.params.id);
+      res.json({
+        subagentId: req.params.id,
+        running: !!active,
+        iteration: active?.iteration || 0,
+        intervalMs: active?.intervalMs || 0,
+        state: state || null,
+      });
+    } catch (err) {
+      logger.error('Get loop status error', { id: req.params.id, error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Start a loop for a subagent */
+  app.post('/api/loops/:id/start', async (req, res) => {
+    try {
+      const config = await daemon.subagentManager.get(req.params.id);
+      if (!config) {
+        res.status(404).json({ error: 'Subagent not found' });
+        return;
+      }
+      if (!config.loop) {
+        res.status(400).json({ error: 'Subagent has no loop configuration' });
+        return;
+      }
+      await daemon.subagentManager.update(req.params.id, { status: 'active' });
+      await daemon.loopRunner.start(config);
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error('Start loop error', { id: req.params.id, error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Stop a loop for a subagent */
+  app.post('/api/loops/:id/stop', async (req, res) => {
+    try {
+      daemon.loopRunner.stopOne(req.params.id);
+      await daemon.subagentManager.update(req.params.id, { status: 'stopped' });
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error('Stop loop error', { id: req.params.id, error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   // ── Schedule API ────────────────────────────────────────────
 
   /** List all schedules */
