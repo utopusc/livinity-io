@@ -204,7 +204,7 @@ export class AgentSessionManager {
       : undefined;
 
     // Build MCP tool definitions from Nexus ToolRegistry
-    const sdkTools = buildSdkTools(this.toolRegistry, toolPolicy);
+    const sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
 
     // Create an SDK MCP server that hosts our Nexus tools
     const mcpServer = createSdkMcpServer({
