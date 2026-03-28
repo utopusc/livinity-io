@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay} from '@tabler/icons-react'
+import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay, IconSend, IconPlayerStop, IconPlus} from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
@@ -100,6 +100,139 @@ function AgentList({onSelect}: {onSelect: (id: string) => void}) {
 	)
 }
 
+// ── Message Input ─────────────────────────────────────────────
+
+function MessageInput({agentId}: {agentId: string}) {
+	const [message, setMessage] = useState('')
+	const executeMutation = trpcReact.ai.executeSubagent.useMutation()
+	const utils = trpcReact.useUtils()
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (!message.trim() || executeMutation.isPending) return
+		try {
+			await executeMutation.mutateAsync({id: agentId, message: message.trim()})
+			setMessage('')
+			utils.ai.getSubagentHistory.invalidate({id: agentId})
+			utils.ai.getSubagent.invalidate({id: agentId})
+		} catch {
+			// handled by tRPC
+		}
+	}
+
+	return (
+		<div className='border-t border-border-default px-3 py-2'>
+			<form onSubmit={handleSubmit} className='flex items-center gap-2'>
+				<input
+					type='text'
+					value={message}
+					onChange={(e) => setMessage(e.target.value)}
+					placeholder='Send a message...'
+					disabled={executeMutation.isPending}
+					className='flex-1 rounded-radius-sm border border-border-default bg-surface-base px-3 py-2 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
+				/>
+				<button
+					type='submit'
+					disabled={!message.trim() || executeMutation.isPending}
+					className='rounded-radius-sm p-2 text-text-secondary transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-50'
+				>
+					{executeMutation.isPending ? (
+						<IconLoader2 size={14} className='animate-spin' />
+					) : (
+						<IconSend size={14} />
+					)}
+				</button>
+			</form>
+		</div>
+	)
+}
+
+// ── Loop Controls ─────────────────────────────────────────────
+
+function LoopControls({agentId, hasLoopConfig}: {agentId: string; hasLoopConfig: boolean}) {
+	const loopQuery = trpcReact.ai.getLoopStatus.useQuery({id: agentId}, {refetchInterval: 5_000, enabled: hasLoopConfig})
+	const startMutation = trpcReact.ai.startLoop.useMutation()
+	const stopMutation = trpcReact.ai.stopLoop.useMutation()
+	const utils = trpcReact.useUtils()
+
+	if (!hasLoopConfig) return null
+
+	const loop = loopQuery.data as any
+	const isRunning = loop?.running ?? false
+
+	const handleStart = async () => {
+		try {
+			await startMutation.mutateAsync({id: agentId})
+			utils.ai.getLoopStatus.invalidate({id: agentId})
+			utils.ai.listSubagents.invalidate()
+		} catch {
+			// handled by tRPC
+		}
+	}
+
+	const handleStop = async () => {
+		try {
+			await stopMutation.mutateAsync({id: agentId})
+			utils.ai.getLoopStatus.invalidate({id: agentId})
+			utils.ai.listSubagents.invalidate()
+		} catch {
+			// handled by tRPC
+		}
+	}
+
+	return (
+		<div>
+			<h4 className='mb-1.5 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
+				Loop Status
+			</h4>
+			<div className='rounded-radius-sm bg-surface-1 p-3 space-y-2'>
+				<div className='flex items-center justify-between'>
+					<div className='flex items-center gap-2'>
+						<div className={cn('h-2 w-2 rounded-full', isRunning ? 'bg-green-500' : 'bg-red-500/50')} />
+						<span className='text-caption text-text-secondary'>
+							{isRunning ? 'Running' : 'Stopped'}
+						</span>
+					</div>
+					<span className='text-caption-sm text-text-tertiary'>
+						Iteration {loop?.iteration || 0}
+					</span>
+				</div>
+				{loop?.intervalMs && (
+					<p className='text-caption-sm text-text-tertiary'>
+						Every {Math.round((loop.intervalMs || 0) / 1000)}s
+					</p>
+				)}
+				{loop?.state && (
+					<p className='font-mono text-[10px] text-text-tertiary'>
+						{String(loop.state).length > 100 ? String(loop.state).slice(0, 100) + '...' : String(loop.state)}
+					</p>
+				)}
+				<div>
+					{isRunning ? (
+						<button
+							onClick={handleStop}
+							disabled={stopMutation.isPending}
+							className='flex items-center gap-1.5 rounded-radius-sm bg-red-500/10 px-3 py-1.5 text-caption font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50'
+						>
+							<IconPlayerStop size={14} />
+							{stopMutation.isPending ? 'Stopping...' : 'Stop'}
+						</button>
+					) : (
+						<button
+							onClick={handleStart}
+							disabled={startMutation.isPending}
+							className='flex items-center gap-1.5 rounded-radius-sm bg-green-500/10 px-3 py-1.5 text-caption font-medium text-green-400 transition-colors hover:bg-green-500/20 disabled:opacity-50'
+						>
+							<IconPlayerPlay size={14} />
+							{startMutation.isPending ? 'Starting...' : 'Start'}
+						</button>
+					)}
+				</div>
+			</div>
+		</div>
+	)
+}
+
 // ── Agent Detail ───────────────────────────────────────────────
 
 function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
@@ -176,6 +309,9 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 						</span>
 					)}
 				</div>
+
+				{/* Loop Controls */}
+				<LoopControls agentId={agentId} hasLoopConfig={!!agent.loop || !!agent.schedule} />
 
 				{/* Last Result */}
 				{lastResult && (
@@ -272,6 +408,9 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 					)}
 				</div>
 			</div>
+
+			{/* Message Input (pinned to bottom) */}
+			<MessageInput agentId={agentId} />
 		</div>
 	)
 }
