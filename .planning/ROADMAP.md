@@ -101,7 +101,10 @@ Plans:
   1. User can send a message to any agent directly from the Agents tab and see the response
   2. User can view loop agent details (current iteration, last state) and use stop/start controls to manage the loop
   3. User can create a new agent from a compact form in the Agents tab without leaving the sidebar
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — Backend: Nexus REST endpoints for subagent execution and loop management, tRPC proxy routes, httpOnlyPaths
+- [ ] 22-02-PLAN.md — Frontend: Message input, loop controls, and compact create form in agents-panel.tsx
 
 ### Phase 23: Slash Command Menu
 **Goal**: Users can type `/` in the chat input to get a searchable dropdown of built-in and dynamic commands for quick actions
@@ -177,7 +180,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 20. Conversation Persistence & History | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 21. Sidebar Agents Tab | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 22. Agent Interaction & Management | v21.0 | 0/TBD | Not started | - |
+| 22. Agent Interaction & Management | v21.0 | 0/2 | Not started | - |
 | 23. Slash Command Menu | v21.0 | 0/TBD | Not started | - |
 | 24. Tool Conditional Registration | v21.0 | 0/TBD | Not started | - |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 0/TBD | Not started | - |
