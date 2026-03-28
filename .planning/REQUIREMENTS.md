@@ -88,42 +88,42 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAT-01 | — | Pending |
-| CHAT-02 | — | Pending |
-| CHAT-03 | — | Pending |
-| CHAT-04 | — | Pending |
-| CHAT-05 | — | Pending |
-| CHAT-06 | — | Pending |
-| AGNT-01 | — | Pending |
-| AGNT-02 | — | Pending |
-| AGNT-03 | — | Pending |
-| AGNT-04 | — | Pending |
-| AGNT-05 | — | Pending |
-| AGNT-06 | — | Pending |
-| SLSH-01 | — | Pending |
-| SLSH-02 | — | Pending |
-| SLSH-03 | — | Pending |
-| SLSH-04 | — | Pending |
-| SLSH-05 | — | Pending |
-| AGI-01 | — | Pending |
-| AGI-02 | — | Pending |
-| AGI-03 | — | Pending |
-| AGI-04 | — | Pending |
-| AGI-05 | — | Pending |
-| AGI-06 | — | Pending |
-| TOOL-01 | — | Pending |
-| TOOL-02 | — | Pending |
-| TOOL-03 | — | Pending |
-| TOOL-04 | — | Pending |
-| SPRT-01 | — | Pending |
-| SPRT-02 | — | Pending |
-| SPRT-03 | — | Pending |
+| CHAT-01 | Phase 19 | Pending |
+| CHAT-02 | Phase 19 | Pending |
+| CHAT-03 | Phase 19 | Pending |
+| CHAT-04 | Phase 20 | Pending |
+| CHAT-05 | Phase 20 | Pending |
+| CHAT-06 | Phase 20 | Pending |
+| AGNT-01 | Phase 21 | Pending |
+| AGNT-02 | Phase 21 | Pending |
+| AGNT-03 | Phase 21 | Pending |
+| AGNT-04 | Phase 22 | Pending |
+| AGNT-05 | Phase 22 | Pending |
+| AGNT-06 | Phase 22 | Pending |
+| SLSH-01 | Phase 23 | Pending |
+| SLSH-02 | Phase 23 | Pending |
+| SLSH-03 | Phase 23 | Pending |
+| SLSH-04 | Phase 23 | Pending |
+| SLSH-05 | Phase 23 | Pending |
+| TOOL-01 | Phase 24 | Pending |
+| TOOL-02 | Phase 24 | Pending |
+| TOOL-03 | Phase 24 | Pending |
+| TOOL-04 | Phase 24 | Pending |
+| AGI-01 | Phase 25 | Pending |
+| AGI-02 | Phase 25 | Pending |
+| AGI-03 | Phase 26 | Pending |
+| AGI-04 | Phase 26 | Pending |
+| AGI-05 | Phase 27 | Pending |
+| AGI-06 | Phase 27 | Pending |
+| SPRT-01 | Phase 28 | Pending |
+| SPRT-02 | Phase 28 | Pending |
+| SPRT-03 | Phase 28 | Pending |
 
 **Coverage:**
 - v21.0 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30
+- Mapped to phases: 30
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*
