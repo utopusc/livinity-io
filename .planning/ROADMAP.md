@@ -165,7 +165,9 @@ Plans:
   1. After completing a task, the AI evaluates its own performance and identifies areas for improvement (e.g., missing skills, slow patterns, repeated failures)
   2. Self-evaluation triggers concrete improvement actions: creating new skills, updating existing skills, installing tools, or setting schedules
   3. A Self-Improvement Agent runs as a meta-agent loop, continuously scanning for and filling capability gaps across the system
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 27-01-PLAN.md — Self-Evaluation system prompt section + pre-seeded Self-Improvement Agent with 6-hour loop
 
 ### Phase 28: System Prompt Optimization
 **Goal**: The agent system prompt is concise, context-window efficient, and gives the AI clear self-awareness of its capabilities and limits
@@ -194,7 +196,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |
+| 27. Self-Evaluation & Improvement Loop | v21.0 | 0/1 | Not started | - |
 | 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |
 
 ---
