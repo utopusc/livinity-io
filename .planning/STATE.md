@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 21-02-PLAN.md
-last_updated: "2026-03-28T10:03:00.411Z"
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-03-28T10:25:34.838Z"
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v21.0 -- Autonomous Agent Platform
-**Current focus:** Phase 21 — Sidebar Agents Tab
+**Current focus:** Phase 22 — Agent Interaction & Management
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Phase: 22 (Agent Interaction & Management) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -53,6 +53,8 @@ Plan: Not started
 - [Phase 20]: Null-safe activeConversationId (string|null) with conv ID generated only on explicit user action
 - [Phase 21]: History endpoint returns empty array on error (graceful degradation), getSubagent throws TRPCError NOT_FOUND
 - [Phase 21]: Kept SkillsPanel rendering block intact for backward compatibility; Agents tab read-only per Phase 21 scope
+- [Phase 22]: Proxy executeSubagent through Nexus REST for proper history recording, tool scoping, and memory context
+- [Phase 22]: Loop start/stop endpoints update subagent status alongside LoopRunner control for consistent state
 
 ### Pending Todos
 
@@ -64,6 +66,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T09:59:40.310Z
-Stopped at: Completed 21-02-PLAN.md
+Last session: 2026-03-28T10:25:34.835Z
+Stopped at: Completed 22-01-PLAN.md
 Resume file: None
