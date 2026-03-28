@@ -160,38 +160,40 @@ export function useAgentSocket() {
 	const intentionalCloseRef = useRef(false)
 	const conversationIdRef = useRef<string | null>(null)
 
-	// Stream accumulation refs (Pattern 3: batched state updates)
-	const bufferRef = useRef('')
-	const rafRef = useRef<number>()
+	// Stream accumulation refs — uses setTimeout(100ms) instead of requestAnimationFrame
+	// because RAF is suspended in background tabs, causing all text to appear at once.
+	// Pattern from claudecodeui: separate accumulated ref (never reset mid-stream) from timer ref.
+	const accumulatedRef = useRef('')
+	const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	// Track current tool input JSON accumulation
 	const toolInputBufferRef = useRef('')
 	const currentToolIdRef = useRef<string | null>(null)
 
 	const appendDelta = useCallback((text: string) => {
-		bufferRef.current += text
-		if (!rafRef.current) {
-			rafRef.current = requestAnimationFrame(() => {
-				dispatch({type: 'UPDATE_STREAMING_CONTENT', content: bufferRef.current})
-				rafRef.current = undefined
-			})
+		accumulatedRef.current += text
+		if (!streamTimerRef.current) {
+			streamTimerRef.current = setTimeout(() => {
+				streamTimerRef.current = null
+				dispatch({type: 'UPDATE_STREAMING_CONTENT', content: accumulatedRef.current})
+			}, 80)
 		}
 	}, [])
 
 	const flushBuffer = useCallback(() => {
-		if (rafRef.current) {
-			cancelAnimationFrame(rafRef.current)
-			rafRef.current = undefined
+		if (streamTimerRef.current) {
+			clearTimeout(streamTimerRef.current)
+			streamTimerRef.current = null
 		}
-		dispatch({type: 'UPDATE_STREAMING_CONTENT', content: bufferRef.current})
+		dispatch({type: 'UPDATE_STREAMING_CONTENT', content: accumulatedRef.current})
 	}, [])
 
 	const resetBuffer = useCallback(() => {
-		bufferRef.current = ''
+		accumulatedRef.current = ''
 		toolInputBufferRef.current = ''
 		currentToolIdRef.current = null
-		if (rafRef.current) {
-			cancelAnimationFrame(rafRef.current)
-			rafRef.current = undefined
+		if (streamTimerRef.current) {
+			clearTimeout(streamTimerRef.current)
+			streamTimerRef.current = null
 		}
 		if (thinkingTimerRef.current) {
 			clearTimeout(thinkingTimerRef.current)
@@ -228,7 +230,7 @@ export function useAgentSocket() {
 						status: 'running' as const,
 					}))
 
-					bufferRef.current = content
+					accumulatedRef.current = content
 					flushBuffer()
 					for (const tc of toolCalls) {
 						dispatch({type: 'ADD_TOOL_CALL', toolCall: tc})
