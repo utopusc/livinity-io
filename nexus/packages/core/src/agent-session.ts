@@ -334,7 +334,7 @@ export class AgentSessionManager {
           persistSession: false,
           abortController: session.abortController,
           env: safeEnv,
-          // SDK emits stream_event/content_block_delta natively — no includePartialMessages needed
+          includePartialMessages: true,
         },
       });
 
@@ -342,7 +342,8 @@ export class AgentSessionManager {
 
       // Relay each SDK message to the WebSocket client and accumulate turn data
       for await (const message of messages) {
-        logger.info('AgentSessionManager: received SDK message', { type: (message as any).type });
+        const m = message as any;
+        logger.info('AgentSessionManager: SDK msg', { type: m.type, event: m.event, deltaType: m.delta?.type, hasText: !!m.delta?.text });
         lastMessageTime = Date.now();
         onMessage({ type: 'sdk_message', data: message });
 
