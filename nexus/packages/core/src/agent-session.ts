@@ -345,6 +345,7 @@ export class AgentSessionManager {
           persistSession: false,
           abortController: session.abortController,
           env: safeEnv,
+          includePartialMessages: true,
         },
       });
 
