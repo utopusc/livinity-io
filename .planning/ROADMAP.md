@@ -51,7 +51,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state (completed 2026-03-28)
 - [x] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed (completed 2026-03-28)
 - [x] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity (completed 2026-03-28)
-- [ ] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent
+- [x] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent (completed 2026-03-28)
 - [ ] **Phase 28: System Prompt Optimization** - Concise system prompt, shortened tool descriptions, self-awareness instructions
 
 ## Phase Details
@@ -167,7 +167,7 @@ Plans:
   3. A Self-Improvement Agent runs as a meta-agent loop, continuously scanning for and filling capability gaps across the system
 **Plans**: 1 plan
 Plans:
-- [ ] 27-01-PLAN.md — Self-Evaluation system prompt section + pre-seeded Self-Improvement Agent with 6-hour loop
+- [x] 27-01-PLAN.md — Self-Evaluation system prompt section + pre-seeded Self-Improvement Agent with 6-hour loop
 
 ### Phase 28: System Prompt Optimization
 **Goal**: The agent system prompt is concise, context-window efficient, and gives the AI clear self-awareness of its capabilities and limits
@@ -196,7 +196,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 27. Self-Evaluation & Improvement Loop | v21.0 | 0/1 | Not started | - |
+| 27. Self-Evaluation & Improvement Loop | v21.0 | 1/1 | Complete   | 2026-03-28 |
 | 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |
 
 ---
