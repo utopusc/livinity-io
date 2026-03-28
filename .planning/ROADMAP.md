@@ -177,7 +177,9 @@ Plans:
   1. The system prompt in agent.ts is measurably shorter (fewer tokens) while retaining all essential behavioral instructions
   2. Tool descriptions are shortened to essential information only -- no redundant explanations or verbose parameter docs
   3. The AI demonstrates self-awareness: it knows what it can do, what it cannot do, and when to escalate to the user rather than attempting tasks beyond its capabilities
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 28-01-PLAN.md — Optimize NATIVE_SYSTEM_PROMPT (remove redundancy, condense sections, add self-awareness) + shorten all 43 tool descriptions in daemon.ts
 
 ## Progress
 
@@ -197,7 +199,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |
+| 28. System Prompt Optimization | v21.0 | 0/1 | Not started | - |
 
 ---
 
