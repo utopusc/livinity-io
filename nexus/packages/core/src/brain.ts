@@ -1,4 +1,7 @@
 import type { Redis } from 'ioredis';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ProviderManager } from './providers/manager.js';
 import { normalizeMessages } from './providers/normalize.js';
 import type { ToolDefinition, ToolUseBlock, ProviderStreamChunk } from './providers/types.js';
@@ -41,8 +44,14 @@ interface ChatStreamResult {
   getUsage: () => { inputTokens: number; outputTokens: number };
 }
 
+interface TierConfig {
+  defaultTier: ModelTier;
+  rules: Record<string, string[]>;
+}
+
 export class Brain {
   private manager: ProviderManager;
+  private tierConfig: TierConfig;
 
   constructor(redis?: Redis) {
     this.manager = new ProviderManager(redis);
@@ -50,6 +59,33 @@ export class Brain {
     this.manager.init().catch((err) => {
       logger.warn('ProviderManager init failed', { error: (err as Error).message });
     });
+    this.tierConfig = this.loadTierConfig();
+  }
+
+  private loadTierConfig(): TierConfig {
+    const defaults: TierConfig = {
+      defaultTier: 'flash',
+      rules: {
+        none: ['docker_command', 'file_read', 'cron_set', 'status_check', 'direct_execute', 'shell_command', 'system_monitor', 'file_operation', 'service_management'],
+        flash: ['classify', 'summarize', 'parse_message', 'simple_answer', 'format'],
+        sonnet: ['research', 'analyze', 'code_review', 'write_content', 'debug'],
+        opus: ['complex_plan', 'architecture', 'multi_step_reasoning'],
+      },
+    };
+
+    try {
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const configPath = resolve(__dirname, '..', '..', '..', 'config', 'tiers.json');
+      if (existsSync(configPath)) {
+        const raw = readFileSync(configPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        logger.debug('Brain: loaded tiers.json', { path: configPath });
+        return { defaultTier: parsed.defaultTier || 'flash', rules: parsed.rules || defaults.rules };
+      }
+    } catch (err) {
+      logger.warn('Brain: failed to load tiers.json, using defaults', { error: (err as Error).message });
+    }
+    return defaults;
   }
 
   async think(options: { prompt: string; systemPrompt?: string; tier?: ModelTier; maxTokens?: number }): Promise<string> {
@@ -97,15 +133,14 @@ export class Brain {
   }
 
   selectTier(intentType: string): ModelTier {
-    const noAi = ['docker_command', 'file_read', 'cron_set', 'status_check', 'direct_execute', 'shell_command', 'system_monitor', 'file_operation', 'service_management'];
-    if (noAi.includes(intentType)) return 'none';
-    const cheap = ['classify', 'summarize', 'parse_message', 'simple_answer', 'format'];
-    if (cheap.includes(intentType)) return 'flash';
-    const mid = ['research', 'analyze', 'code_review', 'write_content', 'debug'];
-    if (mid.includes(intentType)) return 'sonnet';
-    const strong = ['complex_plan', 'architecture', 'multi_step_reasoning'];
-    if (strong.includes(intentType)) return 'opus';
-    return 'flash';
+    for (const [tier, intents] of Object.entries(this.tierConfig.rules)) {
+      if (intents.includes(intentType)) {
+        logger.debug('selectTier', { intentType, tier });
+        return tier as ModelTier;
+      }
+    }
+    logger.debug('selectTier', { intentType, tier: this.tierConfig.defaultTier, fallback: true });
+    return this.tierConfig.defaultTier;
   }
 
   /** Get the ID of the primary available provider */
