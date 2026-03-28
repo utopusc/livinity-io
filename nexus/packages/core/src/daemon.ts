@@ -1313,7 +1313,7 @@ ${task}`;
 
     toolRegistry.register({
       name: 'status',
-      description: 'Get Nexus daemon health status (uptime, container count, cycle count)',
+      description: 'Get daemon health: uptime, containers, cycles',
       parameters: [],
       execute: async () => {
         const containers = await dockerManager.list();
@@ -1328,9 +1328,9 @@ ${task}`;
 
     toolRegistry.register({
       name: 'logs',
-      description: 'Read the last N lines from the Nexus daemon log file',
+      description: 'Read daemon log file',
       parameters: [
-        { name: 'lines', type: 'number', description: 'Number of log lines to return', required: false, default: 20 },
+        { name: 'lines', type: 'number', description: 'Lines to return', required: false, default: 20 },
       ],
       execute: async (params) => {
         const { readFileSync } = await import('fs');
@@ -1347,10 +1347,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'shell',
-      description: 'Execute a shell command on the server. Supports any Linux command. Dangerous commands are blocked.',
+      description: 'Execute a shell command on the server',
       parameters: [
-        { name: 'cmd', type: 'string', description: 'The shell command to execute', required: true },
-        { name: 'timeout', type: 'number', description: 'Timeout in milliseconds', required: false, default: 30000 },
+        { name: 'cmd', type: 'string', description: 'Shell command', required: true },
+        { name: 'timeout', type: 'number', description: 'Timeout (ms)', required: false, default: 30000 },
       ],
       execute: async (params) => {
         const cmd = params.cmd as string;
@@ -1367,7 +1367,7 @@ ${task}`;
 
     toolRegistry.register({
       name: 'docker_list',
-      description: 'List all Docker containers with their current state',
+      description: 'List Docker containers and their state',
       parameters: [],
       execute: async () => {
         const containers = await dockerManager.list();
@@ -1378,11 +1378,11 @@ ${task}`;
 
     toolRegistry.register({
       name: 'docker_manage',
-      description: 'Manage Docker container lifecycle: start, stop, restart, inspect, or get logs',
+      description: 'Start, stop, restart, inspect, or get logs for a Docker container',
       parameters: [
         { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['start', 'stop', 'restart', 'inspect', 'logs'] },
         { name: 'name', type: 'string', description: 'Container name', required: true },
-        { name: 'tail', type: 'number', description: 'Number of log lines (for logs operation)', required: false, default: 100 },
+        { name: 'tail', type: 'number', description: 'Log lines to return', required: false, default: 100 },
       ],
       execute: async (params) => {
         const { operation, name } = params as { operation: string; name: string };
@@ -1411,10 +1411,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'docker_exec',
-      description: 'Execute a command inside a running Docker container',
+      description: 'Execute a command inside a Docker container',
       parameters: [
         { name: 'container', type: 'string', description: 'Container name', required: true },
-        { name: 'cmd', type: 'string', description: 'Command to execute inside the container', required: true },
+        { name: 'cmd', type: 'string', description: 'Command to execute', required: true },
       ],
       execute: async (params) => {
         const { container: containerName, cmd } = params as { container: string; cmd: string };
@@ -1433,10 +1433,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'pm2',
-      description: 'Manage Node.js processes via PM2: list, restart, stop, start, reload, logs, status',
+      description: 'Manage PM2 processes: list, restart, stop, start, reload, logs, status',
       parameters: [
         { name: 'operation', type: 'string', description: 'PM2 operation', required: true, enum: ['list', 'restart', 'stop', 'start', 'reload', 'logs', 'status'] },
-        { name: 'name', type: 'string', description: 'Process name (required for restart/stop/start/reload/logs)', required: false },
+        { name: 'name', type: 'string', description: 'Process name', required: false },
       ],
       execute: async (params) => {
         const { operation, name } = params as { operation: string; name?: string };
@@ -1468,9 +1468,9 @@ ${task}`;
 
     toolRegistry.register({
       name: 'sysinfo',
-      description: 'Get system resource information: CPU, RAM, disk usage, network connections, or full overview',
+      description: 'Get system resource info: CPU, RAM, disk, network',
       parameters: [
-        { name: 'topic', type: 'string', description: 'What system info to retrieve', required: false, enum: ['all', 'cpu', 'ram', 'disk', 'network', 'uptime'], default: 'all' },
+        { name: 'topic', type: 'string', description: 'Info topic', required: false, enum: ['all', 'cpu', 'ram', 'disk', 'network', 'uptime'], default: 'all' },
       ],
       execute: async (params) => {
         const topic = (params.topic as string) || 'all';
@@ -1495,11 +1495,11 @@ ${task}`;
 
     toolRegistry.register({
       name: 'files',
-      description: 'File system operations: read, write, list directory, stat, delete, or create directory',
+      description: 'File operations: read, write, list, stat, delete, mkdir',
       parameters: [
-        { name: 'operation', type: 'string', description: 'File operation to perform', required: true, enum: ['read', 'write', 'list', 'stat', 'delete', 'mkdir'] },
-        { name: 'path', type: 'string', description: 'File or directory path', required: true },
-        { name: 'content', type: 'string', description: 'Content to write (required for write operation)', required: false },
+        { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['read', 'write', 'list', 'stat', 'delete', 'mkdir'] },
+        { name: 'path', type: 'string', description: 'Path', required: true },
+        { name: 'content', type: 'string', description: 'Content to write', required: false },
       ],
       execute: async (params) => {
         const { operation, path, content } = params as { operation: string; path: string; content?: string };
@@ -1554,11 +1554,11 @@ ${task}`;
 
     toolRegistry.register({
       name: 'cron',
-      description: 'Schedule a task to execute after a delay. The task message re-enters the inbox and gets processed normally. Response will be sent back to the original channel.',
+      description: 'Schedule a delayed task for later execution',
       parameters: [
         { name: 'delay', type: 'number', description: 'Delay amount', required: true },
         { name: 'unit', type: 'string', description: 'Time unit', required: true, enum: ['minutes', 'hours'] },
-        { name: 'task', type: 'string', description: 'Task/command to execute when timer fires (goes through normal classification)', required: true },
+        { name: 'task', type: 'string', description: 'Task to execute when timer fires', required: true },
       ],
       execute: async (params) => {
         const { delay, unit, task } = params as { delay: number; unit: string; task: string };
@@ -1594,9 +1594,9 @@ ${task}`;
 
     toolRegistry.register({
       name: 'scrape',
-      description: 'Scrape a URL and return its content as markdown using Firecrawl. Use this for reading web pages, extracting text, or analyzing websites.',
+      description: 'Fetch a URL and return content as markdown',
       parameters: [
-        { name: 'url', type: 'string', description: 'The URL to scrape', required: true },
+        { name: 'url', type: 'string', description: 'URL', required: true },
         { name: 'format', type: 'string', description: 'Output format', required: false, enum: ['markdown', 'text', 'html'], default: 'markdown' },
       ],
       execute: async (params) => {
@@ -1629,10 +1629,10 @@ ${task}`;
     if (waConfig?.enabled !== false) {
       toolRegistry.register({
         name: 'whatsapp_send',
-        description: 'Send a WhatsApp message to a specific contact by name. Use this when the user asks you to message someone (e.g. "send Fei a message", "tell Emre hello"). The message will be delivered to that contact\'s chat.',
+        description: 'Send a WhatsApp message to a contact by name',
         parameters: [
-          { name: 'contact', type: 'string', description: 'Contact name (case-insensitive)', required: true },
-          { name: 'message', type: 'string', description: 'Message text to send', required: true },
+          { name: 'contact', type: 'string', description: 'Contact name', required: true },
+          { name: 'message', type: 'string', description: 'Message text', required: true },
         ],
         execute: async (params) => {
           const { contact, message } = params as { contact: string; message: string };
@@ -1701,11 +1701,11 @@ ${task}`;
     if (hasConnectedChannel) {
       toolRegistry.register({
         name: 'channel_send',
-        description: 'Send a message via a connected messaging channel (Telegram, Discord, Slack). Use this when the user asks to send a Telegram/Discord message or test a channel. Defaults to the last active chat for that channel.',
+        description: 'Send a message to a Telegram, Discord, Slack, or Matrix channel',
         parameters: [
-          { name: 'channel', type: 'string', description: 'Channel ID: "telegram", "discord", "slack", or "matrix"', required: true },
-          { name: 'text', type: 'string', description: 'Message text to send', required: true },
-          { name: 'chatId', type: 'string', description: 'Specific chat/channel ID (optional, defaults to last active chat)', required: false },
+          { name: 'channel', type: 'string', description: 'Channel ID', required: true },
+          { name: 'text', type: 'string', description: 'Message text', required: true },
+          { name: 'chatId', type: 'string', description: 'Chat/channel ID (defaults to last active)', required: false },
         ],
         execute: async (params) => {
           const { channel, text, chatId: explicitChatId } = params as { channel: string; text: string; chatId?: string };
@@ -1746,10 +1746,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'memory_search',
-      description: 'Search long-term memory for previously stored knowledge. Use this to recall facts, preferences, past conversations, or any information saved with memory_add.',
+      description: 'Search long-term memory for stored knowledge',
       parameters: [
-        { name: 'query', type: 'string', description: 'Search query — what are you looking for?', required: true },
-        { name: 'limit', type: 'number', description: 'Max results to return', required: false, default: 5 },
+        { name: 'query', type: 'string', description: 'Search query', required: true },
+        { name: 'limit', type: 'number', description: 'Max results', required: false, default: 5 },
       ],
       execute: async (params) => {
         const { query, limit } = params as { query: string; limit?: number };
@@ -1790,11 +1790,11 @@ ${task}`;
 
     toolRegistry.register({
       name: 'memory_add',
-      description: 'Store information in long-term memory for future retrieval. Use this to remember facts, user preferences, important events, or any knowledge worth retaining.',
+      description: 'Store information in long-term memory',
       parameters: [
-        { name: 'content', type: 'string', description: 'The information to remember', required: true },
-        { name: 'tags', type: 'string', description: 'Comma-separated tags for categorization (e.g. "user_pref,server,config")', required: false },
-        { name: 'source', type: 'string', description: 'Where this info came from (e.g. "whatsapp", "agent", "user")', required: false },
+        { name: 'content', type: 'string', description: 'Content to store', required: true },
+        { name: 'tags', type: 'string', description: 'Comma-separated tags', required: false },
+        { name: 'source', type: 'string', description: 'Source identifier', required: false },
       ],
       execute: async (params) => {
         const { content, tags, source } = params as { content: string; tags?: string; source?: string };
@@ -1824,10 +1824,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'web_search',
-      description: 'Search Google for any query and return results as markdown. Use this to research topics, find documentation, discover tools, or gather information before executing tasks.',
+      description: 'Search Google and return results as markdown',
       parameters: [
-        { name: 'query', type: 'string', description: 'The search query', required: true },
-        { name: 'max_results', type: 'number', description: 'Max results to return (1-10)', required: false, default: 5 },
+        { name: 'query', type: 'string', description: 'Search query', required: true },
+        { name: 'max_results', type: 'number', description: 'Max results (1-10)', required: false, default: 5 },
       ],
       execute: async (params) => {
         const { query, max_results } = params as { query: string; max_results?: number };
@@ -1866,12 +1866,12 @@ ${task}`;
 
     toolRegistry.register({
       name: 'task_state',
-      description: 'Save, load, list, or delete persistent state for multi-phase workflows. Use this to store research findings, plans, intermediate results across agent phases.',
+      description: 'Persistent key-value store for multi-phase workflows',
       parameters: [
         { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['save', 'load', 'list', 'delete'] },
         { name: 'key', type: 'string', description: 'State key name', required: true },
-        { name: 'data', type: 'string', description: 'JSON string data to save (required for save operation)', required: false },
-        { name: 'ttl', type: 'number', description: 'Time-to-live in seconds (default: 86400 = 24h)', required: false, default: 86400 },
+        { name: 'data', type: 'string', description: 'JSON data to save', required: false },
+        { name: 'ttl', type: 'number', description: 'TTL in seconds', required: false, default: 86400 },
       ],
       execute: async (params) => {
         const { operation, key, data, ttl } = params as { operation: string; key: string; data?: string; ttl?: number };
@@ -1914,10 +1914,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'progress_report',
-      description: 'Send a progress update during long-running tasks without ending the agent loop. Use this to keep the user informed about multi-step operations. Works across all channels (WhatsApp, Telegram, Discord, Web).',
+      description: 'Send a progress update to user during long tasks',
       parameters: [
-        { name: 'message', type: 'string', description: 'Progress message to send', required: true },
-        { name: 'jid', type: 'string', description: 'WhatsApp JID to send to (auto-detected if from WhatsApp context)', required: false },
+        { name: 'message', type: 'string', description: 'Progress message', required: true },
+        { name: 'jid', type: 'string', description: 'WhatsApp JID (auto-detected)', required: false },
       ],
       execute: async (params) => {
         const { message, jid } = params as { message: string; jid?: string };
@@ -1964,21 +1964,21 @@ ${task}`;
 
     toolRegistry.register({
       name: 'subagent_create',
-      description: 'Create a new persistent subagent with a specific role, tools, and optional schedule or loop. Subagents run autonomously on tasks.',
+      description: 'Create a persistent subagent with role, tools, and optional schedule/loop',
       parameters: [
-        { name: 'id', type: 'string', description: 'Unique ID (kebab-case, e.g. "lead-finder")', required: true },
+        { name: 'id', type: 'string', description: 'Unique kebab-case ID', required: true },
         { name: 'name', type: 'string', description: 'Display name', required: true },
         { name: 'description', type: 'string', description: 'What this subagent does', required: true },
-        { name: 'tools', type: 'string', description: 'Comma-separated tool names to give this agent access to, or "*" for all tools', required: false },
-        { name: 'system_prompt', type: 'string', description: 'Custom system prompt for the subagent', required: false },
-        { name: 'schedule', type: 'string', description: 'Cron expression (e.g. "0 9 * * MON-FRI" for weekdays at 9am). Must be used together with scheduled_task.', required: false },
-        { name: 'timezone', type: 'string', description: 'IANA timezone for schedule (e.g. "Europe/Istanbul")', required: false },
-        { name: 'scheduled_task', type: 'string', description: 'Task to execute on schedule trigger (REQUIRED when schedule is set)', required: false },
-        { name: 'loop_interval_ms', type: 'number', description: 'Loop interval in ms (for continuous execution)', required: false },
-        { name: 'loop_task', type: 'string', description: 'Task to execute each loop iteration', required: false },
-        { name: 'loop_max_iterations', type: 'number', description: 'Max loop iterations (0 = unlimited)', required: false },
-        { name: 'tier', type: 'string', description: 'Model tier: flash, sonnet, or opus', required: false, enum: ['flash', 'sonnet', 'opus'] },
-        { name: 'max_turns', type: 'number', description: 'Max agent turns per execution', required: false },
+        { name: 'tools', type: 'string', description: 'Tool names (comma-separated) or "*"', required: false },
+        { name: 'system_prompt', type: 'string', description: 'Custom system prompt', required: false },
+        { name: 'schedule', type: 'string', description: 'Cron expression', required: false },
+        { name: 'timezone', type: 'string', description: 'IANA timezone', required: false },
+        { name: 'scheduled_task', type: 'string', description: 'Task for schedule trigger', required: false },
+        { name: 'loop_interval_ms', type: 'number', description: 'Loop interval (ms)', required: false },
+        { name: 'loop_task', type: 'string', description: 'Task per loop iteration', required: false },
+        { name: 'loop_max_iterations', type: 'number', description: 'Max iterations (0=unlimited)', required: false },
+        { name: 'tier', type: 'string', description: 'Model tier', required: false, enum: ['flash', 'sonnet', 'opus'] },
+        { name: 'max_turns', type: 'number', description: 'Max turns per execution', required: false },
       ],
       execute: async (params) => {
         const { id, name, description, tools: toolsParam, system_prompt, schedule, timezone, scheduled_task,
@@ -2043,7 +2043,7 @@ ${task}`;
 
     toolRegistry.register({
       name: 'subagent_list',
-      description: 'List all subagents with their status, schedule, and run history',
+      description: 'List all subagents with status, schedule, and run history',
       parameters: [],
       execute: async () => {
         try {
@@ -2074,10 +2074,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'subagent_message',
-      description: 'Send a message/task to a specific subagent for execution. The subagent will process it with its own context and tools.',
+      description: 'Send a task to a subagent for execution',
       parameters: [
         { name: 'id', type: 'string', description: 'Subagent ID', required: true },
-        { name: 'message', type: 'string', description: 'Message or task for the subagent', required: true },
+        { name: 'message', type: 'string', description: 'Task message', required: true },
       ],
       execute: async (params) => {
         const { id, message } = params as { id: string; message: string };
@@ -2094,13 +2094,13 @@ ${task}`;
 
     toolRegistry.register({
       name: 'subagent_schedule',
-      description: 'Manage subagent schedules: add, remove, or list cron-based recurring tasks',
+      description: 'Manage subagent cron schedules: add, remove, list',
       parameters: [
         { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['add', 'remove', 'list'] },
-        { name: 'id', type: 'string', description: 'Subagent ID (required for add/remove)', required: false },
-        { name: 'cron', type: 'string', description: 'Cron expression (required for add)', required: false },
-        { name: 'task', type: 'string', description: 'Task to execute on schedule (required for add)', required: false },
-        { name: 'timezone', type: 'string', description: 'IANA timezone (e.g. "Europe/Istanbul")', required: false },
+        { name: 'id', type: 'string', description: 'Subagent ID', required: false },
+        { name: 'cron', type: 'string', description: 'Cron expression', required: false },
+        { name: 'task', type: 'string', description: 'Scheduled task', required: false },
+        { name: 'timezone', type: 'string', description: 'IANA timezone', required: false },
       ],
       execute: async (params) => {
         const { operation, id, cron, task, timezone } = params as Record<string, any>;
@@ -2140,12 +2140,12 @@ ${task}`;
 
     toolRegistry.register({
       name: 'skill_generate',
-      description: 'Generate a new AI skill file from a description. The AI will create a complete TypeScript skill with proper frontmatter, triggers, and handler.',
+      description: 'Generate a new AI skill file from a description',
       parameters: [
         { name: 'description', type: 'string', description: 'What the skill should do', required: true },
         { name: 'name', type: 'string', description: 'Skill name (kebab-case)', required: false },
-        { name: 'triggers', type: 'string', description: 'Comma-separated trigger patterns', required: false },
-        { name: 'tools', type: 'string', description: 'Comma-separated tool names the skill needs', required: false },
+        { name: 'triggers', type: 'string', description: 'Trigger patterns (comma-separated)', required: false },
+        { name: 'tools', type: 'string', description: 'Required tool names (comma-separated)', required: false },
       ],
       execute: async (params) => {
         const { description, name, triggers, tools } = params as Record<string, any>;
@@ -2171,10 +2171,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'loop_manage',
-      description: 'Manage subagent loops: start, stop, or list continuous execution loops',
+      description: 'Manage subagent loops: start, stop, list, status',
       parameters: [
         { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['start', 'stop', 'list', 'status'] },
-        { name: 'id', type: 'string', description: 'Subagent ID (required for start/stop/status)', required: false },
+        { name: 'id', type: 'string', description: 'Subagent ID', required: false },
       ],
       execute: async (params) => {
         const { operation, id } = params as { operation: string; id?: string };
@@ -2228,10 +2228,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'mcp_registry_search',
-      description: 'Search the official MCP Registry for available servers to install. Use this to discover MCP tools and integrations.',
+      description: 'Search the MCP Registry for available servers',
       parameters: [
-        { name: 'query', type: 'string', description: 'Search query (e.g. "filesystem", "github", "slack")', required: false },
-        { name: 'limit', type: 'number', description: 'Max results to return (default 10)', required: false, default: 10 },
+        { name: 'query', type: 'string', description: 'Search query', required: false },
+        { name: 'limit', type: 'number', description: 'Max results', required: false, default: 10 },
       ],
       execute: async (params) => {
         const registry = this.config.mcpRegistryClient;
@@ -2271,16 +2271,16 @@ ${task}`;
 
     toolRegistry.register({
       name: 'mcp_install',
-      description: 'Install an MCP server from the registry or manually. After install, the server connects automatically and its tools become available.',
+      description: 'Install an MCP server from registry or manually',
       parameters: [
-        { name: 'name', type: 'string', description: 'Server name (kebab-case identifier)', required: true },
+        { name: 'name', type: 'string', description: 'Server name (kebab-case)', required: true },
         { name: 'transport', type: 'string', description: 'Transport type', required: true, enum: ['stdio', 'streamableHttp'] },
-        { name: 'command', type: 'string', description: 'Command to spawn (stdio transport, e.g. "npx")', required: false },
-        { name: 'args', type: 'string', description: 'Comma-separated arguments (stdio transport, e.g. "-y,@modelcontextprotocol/server-filesystem,/tmp")', required: false },
-        { name: 'url', type: 'string', description: 'Server URL (streamableHttp transport)', required: false },
-        { name: 'env', type: 'string', description: 'Environment variables as KEY=VALUE pairs separated by commas', required: false },
-        { name: 'description', type: 'string', description: 'What this server does', required: false },
-        { name: 'installed_from', type: 'string', description: 'Registry identifier (auto-set when installing from registry)', required: false },
+        { name: 'command', type: 'string', description: 'Spawn command (stdio)', required: false },
+        { name: 'args', type: 'string', description: 'Comma-separated args (stdio)', required: false },
+        { name: 'url', type: 'string', description: 'Server URL (streamableHttp)', required: false },
+        { name: 'env', type: 'string', description: 'KEY=VALUE pairs, comma-separated', required: false },
+        { name: 'description', type: 'string', description: 'Server description', required: false },
+        { name: 'installed_from', type: 'string', description: 'Registry identifier', required: false },
       ],
       execute: async (params) => {
         const configMgr = this.config.mcpConfigManager;
@@ -2329,7 +2329,7 @@ ${task}`;
 
     toolRegistry.register({
       name: 'mcp_list',
-      description: 'List all installed MCP servers with their status, transport type, and discovered tools.',
+      description: 'List installed MCP servers with status and tools',
       parameters: [],
       execute: async () => {
         const configMgr = this.config.mcpConfigManager;
@@ -2363,7 +2363,7 @@ ${task}`;
 
     toolRegistry.register({
       name: 'mcp_manage',
-      description: 'Manage an installed MCP server: restart, enable, disable, or remove it.',
+      description: 'Manage an MCP server: restart, enable, disable, remove',
       parameters: [
         { name: 'name', type: 'string', description: 'Server name', required: true },
         { name: 'action', type: 'string', description: 'Action to perform', required: true, enum: ['restart', 'enable', 'disable', 'remove'] },
@@ -2409,10 +2409,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'mcp_config_raw',
-      description: 'Get or set the raw JSON configuration for all MCP servers. Use "get" to read, "set" to write.',
+      description: 'Get or set raw JSON config for MCP servers',
       parameters: [
-        { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['get', 'set'] },
-        { name: 'json', type: 'string', description: 'JSON config to save (required for "set")', required: false },
+        { name: 'operation', type: 'string', description: 'Operation', required: true, enum: ['get', 'set'] },
+        { name: 'json', type: 'string', description: 'JSON config (for set)', required: false },
       ],
       execute: async (params) => {
         const configMgr = this.config.mcpConfigManager;
@@ -2441,10 +2441,10 @@ ${task}`;
 
     toolRegistry.register({
       name: 'webhook_create',
-      description: 'Create a new webhook endpoint with a unique URL and HMAC secret. Returns the URL, ID, and secret (secret is shown only once).',
+      description: 'Create a webhook endpoint with HMAC secret',
       parameters: [
-        { name: 'name', type: 'string', description: 'Human-readable name for this webhook', required: true },
-        { name: 'secret', type: 'string', description: 'Custom HMAC secret (optional — auto-generated if omitted)', required: false },
+        { name: 'name', type: 'string', description: 'Webhook name', required: true },
+        { name: 'secret', type: 'string', description: 'Custom HMAC secret (auto-generated if omitted)', required: false },
       ],
       execute: async (params) => {
         const webhookMgr = this.config.webhookManager;
@@ -2466,7 +2466,7 @@ ${task}`;
 
     toolRegistry.register({
       name: 'webhook_list',
-      description: 'List all registered webhook endpoints with their name, ID, delivery count, and last used time.',
+      description: 'List registered webhook endpoints',
       parameters: [],
       execute: async () => {
         const webhookMgr = this.config.webhookManager;
@@ -2488,9 +2488,9 @@ ${task}`;
 
     toolRegistry.register({
       name: 'webhook_delete',
-      description: 'Delete a webhook endpoint by ID. This permanently removes the endpoint and its secret.',
+      description: 'Delete a webhook endpoint by ID',
       parameters: [
-        { name: 'id', type: 'string', description: 'Webhook ID (UUID) to delete', required: true },
+        { name: 'id', type: 'string', description: 'Webhook ID', required: true },
       ],
       execute: async (params) => {
         const webhookMgr = this.config.webhookManager;
@@ -2526,7 +2526,7 @@ ${task}`;
     if (gp && gmailConnected) {
       toolRegistry.register({
         name: 'gmail_read',
-        description: 'Read a specific email by ID. Returns full email detail including subject, from, to, cc, date, body, and labels.',
+        description: 'Read a specific email by ID',
         parameters: [
           { name: 'id', type: 'string', description: 'Gmail message ID', required: true },
         ],
@@ -2555,10 +2555,10 @@ ${task}`;
 
       toolRegistry.register({
         name: 'gmail_reply',
-        description: 'Reply to an email thread. The reply is sent to the original sender with proper In-Reply-To and References headers.',
+        description: 'Reply to an email thread',
         parameters: [
-          { name: 'id', type: 'string', description: 'Gmail message ID to reply to', required: true },
-          { name: 'body', type: 'string', description: 'Reply body text', required: true },
+          { name: 'id', type: 'string', description: 'Message ID to reply to', required: true },
+          { name: 'body', type: 'string', description: 'Reply body', required: true },
         ],
         execute: async (params) => {
           const { id, body } = params as { id: string; body: string };
@@ -2574,11 +2574,11 @@ ${task}`;
 
       toolRegistry.register({
         name: 'gmail_send',
-        description: 'Compose and send a new email to any address.',
+        description: 'Compose and send a new email',
         parameters: [
-          { name: 'to', type: 'string', description: 'Recipient email address', required: true },
-          { name: 'subject', type: 'string', description: 'Email subject', required: true },
-          { name: 'body', type: 'string', description: 'Email body text', required: true },
+          { name: 'to', type: 'string', description: 'Recipient email', required: true },
+          { name: 'subject', type: 'string', description: 'Subject', required: true },
+          { name: 'body', type: 'string', description: 'Email body', required: true },
         ],
         execute: async (params) => {
           const { to, subject, body } = params as { to: string; subject: string; body: string };
@@ -2594,10 +2594,10 @@ ${task}`;
 
       toolRegistry.register({
         name: 'gmail_search',
-        description: 'Search emails with a Gmail search query. Supports all Gmail search operators (from:, to:, subject:, has:attachment, before:, after:, etc).',
+        description: 'Search emails with Gmail query operators',
         parameters: [
           { name: 'query', type: 'string', description: 'Gmail search query', required: true },
-          { name: 'max_results', type: 'number', description: 'Maximum number of results (default: 10)', required: false, default: 10 },
+          { name: 'max_results', type: 'number', description: 'Max results', required: false, default: 10 },
         ],
         execute: async (params) => {
           const { query, max_results } = params as { query: string; max_results?: number };
@@ -2619,9 +2619,9 @@ ${task}`;
 
       toolRegistry.register({
         name: 'gmail_archive',
-        description: 'Archive an email by removing it from the inbox. The email remains accessible via search.',
+        description: 'Archive an email (remove from inbox)',
         parameters: [
-          { name: 'id', type: 'string', description: 'Gmail message ID to archive', required: true },
+          { name: 'id', type: 'string', description: 'Gmail message ID', required: true },
         ],
         execute: async (params) => {
           const id = params.id as string;
@@ -2648,10 +2648,10 @@ ${task}`;
 
       toolRegistry.register({
         name: 'sessions_create',
-        description: 'Spawn a sub-agent session to perform a specific task. Sub-agents are limited to 8 turns and 50k tokens. Maximum 2 concurrent sub-agents.',
+        description: 'Spawn a sub-agent session for a specific task',
         parameters: [
-          { name: 'task', type: 'string', description: 'Clear description of the task for the sub-agent', required: true },
-          { name: 'max_turns', type: 'number', description: 'Maximum turns (default 8, max 8)', required: false },
+          { name: 'task', type: 'string', description: 'Task description', required: true },
+          { name: 'max_turns', type: 'number', description: 'Max turns (default 8)', required: false },
         ],
         execute: async (params) => {
           try {
@@ -2687,9 +2687,9 @@ ${task}`;
 
       toolRegistry.register({
         name: 'sessions_list',
-        description: 'List active sub-agent sessions, optionally filtered by parent session.',
+        description: 'List active sub-agent sessions',
         parameters: [
-          { name: 'parent_session_id', type: 'string', description: 'Filter by parent session ID (optional)', required: false },
+          { name: 'parent_session_id', type: 'string', description: 'Filter by parent session', required: false },
         ],
         execute: async (params) => {
           try {
@@ -2709,10 +2709,10 @@ ${task}`;
 
       toolRegistry.register({
         name: 'sessions_send',
-        description: 'Send a message to a sub-agent session. The sub-agent will process the message and update its state.',
+        description: 'Send a message to a sub-agent session',
         parameters: [
-          { name: 'session_id', type: 'string', description: 'The sub-agent session ID', required: true },
-          { name: 'message', type: 'string', description: 'Message to send to the sub-agent', required: true },
+          { name: 'session_id', type: 'string', description: 'Session ID', required: true },
+          { name: 'message', type: 'string', description: 'Message to send', required: true },
         ],
         execute: async (params) => {
           try {
@@ -2761,9 +2761,9 @@ ${task}`;
 
       toolRegistry.register({
         name: 'sessions_history',
-        description: 'Read the conversation history of a sub-agent session, including its result if completed.',
+        description: 'Read sub-agent session history and result',
         parameters: [
-          { name: 'session_id', type: 'string', description: 'The sub-agent session ID', required: true },
+          { name: 'session_id', type: 'string', description: 'Session ID', required: true },
         ],
         execute: async (params) => {
           try {
@@ -2812,29 +2812,18 @@ ${task}`;
 
       toolRegistry.register({
         name: 'canvas_render',
-        description: `Render interactive content in the Live Canvas panel next to the chat. Content appears as a split-pane alongside the conversation.
+        description: `Render interactive content in the Live Canvas panel next to the chat.
 
-Types and content format:
-- react: A React functional component using JSX. Must define a function named App (or Main/Dashboard). Available: React 18, Tailwind CSS, useState/useEffect/useRef/useMemo/useCallback.
-  Example: function App() { const [count, setCount] = useState(0); return <div className="p-8"><h1 className="text-2xl font-bold">{count}</h1><button onClick={() => setCount(c => c+1)} className="bg-blue-500 px-4 py-2 rounded text-white">+</button></div> }
-
-- html: Complete HTML document or HTML fragment. Tailwind CSS available via CDN.
-  Example: <div class="p-8 text-center"><h1 class="text-3xl font-bold text-blue-400">Hello World</h1></div>
-
-- svg: SVG markup. Will be centered on dark background.
-  Example: <svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="#6366f1"/></svg>
-
-- mermaid: Mermaid diagram definition (graph, flowchart, sequence, class, ER, gantt, pie, etc). Renders with dark theme.
-  Example: graph TD; A[Start] --> B{Decision}; B -->|Yes| C[OK]; B -->|No| D[End]
-
-- recharts: React component using Recharts library. All Recharts components (LineChart, BarChart, PieChart, AreaChart, ResponsiveContainer, etc) are available as globals.
-  Example: function App() { const data = [{name:'Jan',value:400},{name:'Feb',value:300}]; return <ResponsiveContainer width="100%" height={400}><BarChart data={data}><XAxis dataKey="name"/><YAxis/><Bar dataKey="value" fill="#6366f1"/></BarChart></ResponsiveContainer> }
-
-Use this when users ask for visual output: dashboards, charts, diagrams, UI mockups, interactive widgets.`,
+Types:
+- react: React functional component (App/Main/Dashboard). React 18 + Tailwind + hooks available.
+- html: HTML document or fragment. Tailwind CSS available.
+- svg: SVG markup, centered on dark background.
+- mermaid: Diagram definition (graph, sequence, ER, gantt, pie, etc). Dark theme.
+- recharts: React component using Recharts (LineChart, BarChart, PieChart, etc as globals).`,
         parameters: [
           { name: 'type', type: 'string', description: 'Artifact type', required: true, enum: ['react', 'html', 'svg', 'mermaid', 'recharts'] },
-          { name: 'title', type: 'string', description: 'Short title for the artifact (e.g. "Docker Dashboard", "Memory Usage Chart")', required: true },
-          { name: 'content', type: 'string', description: 'The source code. For react/recharts: define a function App() component. For html: full HTML or fragment. For svg: SVG markup. For mermaid: diagram definition text. Do NOT wrap in markdown code blocks.', required: true },
+          { name: 'title', type: 'string', description: 'Short title', required: true },
+          { name: 'content', type: 'string', description: 'Source code for the artifact', required: true },
         ],
         execute: async (params) => {
           const { type, title, content } = params as { type: string; title: string; content: string };
@@ -2862,11 +2851,11 @@ Use this when users ask for visual output: dashboards, charts, diagrams, UI mock
 
       toolRegistry.register({
         name: 'canvas_update',
-        description: 'Update the content of an existing Live Canvas artifact. Use this to modify a previously rendered artifact (e.g., "add a memory chart to the dashboard"). The artifact ID is returned by canvas_render.',
+        description: 'Update content of an existing Live Canvas artifact',
         parameters: [
-          { name: 'artifactId', type: 'string', description: 'The artifact ID from a previous canvas_render call', required: true },
-          { name: 'content', type: 'string', description: 'The complete updated source code (replaces the entire content)', required: true },
-          { name: 'title', type: 'string', description: 'Optional: update the title', required: false },
+          { name: 'artifactId', type: 'string', description: 'Artifact ID', required: true },
+          { name: 'content', type: 'string', description: 'Updated source code', required: true },
+          { name: 'title', type: 'string', description: 'Updated title', required: false },
         ],
         execute: async (params) => {
           const { artifactId, content, title } = params as { artifactId: string; content: string; title?: string };
