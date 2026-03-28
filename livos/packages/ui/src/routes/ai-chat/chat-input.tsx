@@ -1,8 +1,10 @@
-import {useEffect, useRef} from 'react'
+import {useEffect, useRef, useState} from 'react'
 
 import {IconPlayerStop, IconSend} from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
+
+import {SlashCommandMenu, type SlashCommand} from './slash-command-menu'
 
 interface ChatInputProps {
 	value: string
@@ -12,10 +14,23 @@ interface ChatInputProps {
 	isStreaming: boolean
 	isConnected: boolean
 	disabled?: boolean
+	onSlashAction?: (action: string) => void
 }
 
-export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConnected, disabled}: ChatInputProps) {
+export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConnected, disabled, onSlashAction}: ChatInputProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const [selectedIndex, setSelectedIndex] = useState(0)
+	const [filteredCount, setFilteredCount] = useState(0)
+	const filteredCommandsRef = useRef<SlashCommand[]>([])
+
+	// Slash menu visibility: show when input starts with / and has no spaces
+	const showSlashMenu = value.startsWith('/') && !value.includes(' ')
+	const slashFilter = showSlashMenu ? value.slice(1).toLowerCase() : ''
+
+	// Reset selectedIndex when filter changes
+	useEffect(() => {
+		setSelectedIndex(0)
+	}, [slashFilter])
 
 	// Focus textarea on mount
 	useEffect(() => {
@@ -32,7 +47,44 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 		}
 	}
 
+	const handleSelectCommand = (command: SlashCommand) => {
+		// UI-action commands handled locally
+		if (command.name === '/new' || command.name === '/agents') {
+			onChange('')
+			onSlashAction?.(command.name)
+			return
+		}
+		// All other commands: insert and send
+		onChange(command.name)
+		setTimeout(() => onSend(), 0)
+	}
+
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		// Slash menu keyboard navigation takes priority
+		if (showSlashMenu && filteredCount > 0) {
+			if (e.key === 'ArrowUp') {
+				e.preventDefault()
+				setSelectedIndex((prev) => Math.max(0, prev - 1))
+				return
+			}
+			if (e.key === 'ArrowDown') {
+				e.preventDefault()
+				setSelectedIndex((prev) => Math.min(filteredCount - 1, prev + 1))
+				return
+			}
+			if (e.key === 'Enter') {
+				e.preventDefault()
+				const cmd = filteredCommandsRef.current[selectedIndex]
+				if (cmd) handleSelectCommand(cmd)
+				return
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault()
+				onChange('')
+				return
+			}
+		}
+		// Existing Enter-to-send logic (only fires when slash menu is NOT open)
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault()
 			if (value.trim()) {
@@ -46,8 +98,17 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 	const isDisabled = disabled || false
 
 	return (
-		<div className='border-t border-zinc-800 bg-zinc-950 p-3 md:p-4'>
-			<div className='mx-auto flex max-w-3xl items-end gap-3'>
+		<div className='border-t border-border-default bg-surface-base p-3 md:p-4'>
+			<div className='relative mx-auto flex max-w-3xl items-end gap-3'>
+				{showSlashMenu && (
+					<SlashCommandMenu
+						filter={slashFilter}
+						selectedIndex={selectedIndex}
+						onSelect={handleSelectCommand}
+						onFilteredCountChange={setFilteredCount}
+						filteredCommandsRef={filteredCommandsRef}
+					/>
+				)}
 				<textarea
 					ref={textareaRef}
 					value={value}
@@ -57,9 +118,9 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 					disabled={isDisabled}
 					rows={1}
 					className={cn(
-						'w-full resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100',
-						'placeholder:text-zinc-500 outline-none transition-colors',
-						'focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20',
+						'w-full resize-none rounded-lg border border-border-default bg-surface-1 px-4 py-3 text-sm text-text-primary',
+						'placeholder:text-text-tertiary outline-none transition-colors',
+						'focus:border-brand/50 focus:ring-1 focus:ring-brand/20',
 						'disabled:opacity-50',
 					)}
 				/>
@@ -94,7 +155,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 			</div>
 			{!isConnected && !isStreaming && (
 				<div className='mx-auto mt-1 max-w-3xl'>
-					<span className='text-xs text-zinc-500'>Disconnected -- attempting to reconnect...</span>
+					<span className='text-xs text-text-tertiary'>Disconnected -- attempting to reconnect...</span>
 				</div>
 			)}
 		</div>
