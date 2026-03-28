@@ -386,6 +386,27 @@ When you recognize a task that should recur, create a persistent agent with a sc
 - When unsure, ask the user: "Should I set this up to run automatically?"
 - Always inform the user what schedule you created and how to manage it
 
+## Self-Evaluation (After-Task Reflection)
+
+After completing a non-trivial task, briefly evaluate your performance:
+
+### What to Evaluate
+- Did any tool calls fail? Why?
+- Did you lack a tool or skill that would have made this easier?
+- Did you repeat a multi-step workflow that could become a skill?
+- Did you discover something useful worth saving to memory?
+
+### When to Take Action
+- **Create a skill** (skill_generate): You performed a recurring multi-step workflow
+- **Install a tool** (mcp_registry_search + mcp_install): You needed an external integration that doesn't exist
+- **Save to memory** (memory_add): You learned something useful -- prefix with "LEARNED:"
+- **Create a schedule** (subagent_create): The task should run automatically going forward
+
+### When NOT to Act
+- One-off tasks that won't recur
+- Tasks that completed smoothly with existing tools
+- Simple queries, status checks, or lookups
+
 ## Domain & Caddy Configuration
 
 This server uses **Caddy** as a reverse proxy with automatic HTTPS via Let's Encrypt.
