@@ -48,7 +48,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 21: Sidebar Agents Tab** - Renamed LivHub to Agents with agent listing, status display, and detail views (completed 2026-03-28)
 - [x] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation (completed 2026-03-28)
 - [x] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection (completed 2026-03-28)
-- [ ] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state
+- [x] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state (completed 2026-03-28)
 - [ ] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed
 - [ ] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity
 - [ ] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent
@@ -131,7 +131,7 @@ Plans:
   4. Tool implementations (the actual handler code) are unchanged -- only the registration gate logic is new
 **Plans**: 1 plan
 Plans:
-- [ ] 24-01-PLAN.md — Add conditional registration gates for whatsapp_send, channel_send, and gmail_* tools in daemon.ts
+- [x] 24-01-PLAN.md — Add conditional registration gates for whatsapp_send, channel_send, and gmail_* tools in daemon.ts
 
 ### Phase 25: Autonomous Skill & Tool Creation
 **Goal**: The AI can identify capability gaps and fill them by creating new skills or installing MCP tools without human intervention
@@ -187,7 +187,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 21. Sidebar Agents Tab | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 22. Agent Interaction & Management | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 24. Tool Conditional Registration | v21.0 | 0/1 | Not started | - |
+| 24. Tool Conditional Registration | v21.0 | 1/1 | Complete   | 2026-03-28 |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 0/TBD | Not started | - |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 0/TBD | Not started | - |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |

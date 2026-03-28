@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 23-02-PLAN.md
-last_updated: "2026-03-28T11:01:31.737Z"
+stopped_at: Completed 24-01-PLAN.md
+last_updated: "2026-03-28T11:13:17.477Z"
 progress:
   total_phases: 10
-  completed_phases: 5
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 6
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v21.0 -- Autonomous Agent Platform
-**Current focus:** Phase 23 — Slash Command Menu
+**Current focus:** Phase 24 — Tool Conditional Registration
 
 ## Current Position
 
-Phase: 24
-Plan: Not started
+Phase: 24 (Tool Conditional Registration) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -62,6 +62,9 @@ Plan: Not started
 - [Phase 23]: tRPC listSlashCommands returns empty array on failure (graceful degradation)
 - [Phase 23]: filteredCommandsRef pattern for Enter key selection: parent owns keyboard, menu exposes filtered list via ref
 - [Phase 23]: UI-action commands (/new, /agents) intercepted locally via onSlashAction callback, not sent to backend
+- [Phase 24]: Used waConfig?.enabled !== false for backward compat (enabled defaults true in schema)
+- [Phase 24]: Check status.connected || status.enabled for channels (register tool when configured even if not yet connected at startup)
+- [Phase 24]: try/catch around getStatus() for graceful degradation when channel status check fails
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T10:58:36.031Z
-Stopped at: Completed 23-02-PLAN.md
+Last session: 2026-03-28T11:13:17.474Z
+Stopped at: Completed 24-01-PLAN.md
 Resume file: None

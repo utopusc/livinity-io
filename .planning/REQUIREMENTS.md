@@ -46,10 +46,10 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 
 ### Tool Cleanup
 
-- [ ] **TOOL-01**: daemon.ts conditionally registers whatsapp_send only when WHATSAPP_ENABLED is true
-- [ ] **TOOL-02**: daemon.ts conditionally registers channel_send only when at least one messaging integration (Telegram/Discord/Slack) is connected
-- [ ] **TOOL-03**: daemon.ts conditionally registers gmail_* tools only when Gmail OAuth is connected
-- [ ] **TOOL-04**: Tool implementations remain unchanged — only registration logic is modified
+- [x] **TOOL-01**: daemon.ts conditionally registers whatsapp_send only when WHATSAPP_ENABLED is true
+- [x] **TOOL-02**: daemon.ts conditionally registers channel_send only when at least one messaging integration (Telegram/Discord/Slack) is connected
+- [x] **TOOL-03**: daemon.ts conditionally registers gmail_* tools only when Gmail OAuth is connected
+- [x] **TOOL-04**: Tool implementations remain unchanged — only registration logic is modified
 
 ### System Prompt
 
@@ -105,10 +105,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SLSH-03 | Phase 23 | Complete |
 | SLSH-04 | Phase 23 | Complete |
 | SLSH-05 | Phase 23 | Complete |
-| TOOL-01 | Phase 24 | Pending |
-| TOOL-02 | Phase 24 | Pending |
-| TOOL-03 | Phase 24 | Pending |
-| TOOL-04 | Phase 24 | Pending |
+| TOOL-01 | Phase 24 | Complete |
+| TOOL-02 | Phase 24 | Complete |
+| TOOL-03 | Phase 24 | Complete |
+| TOOL-04 | Phase 24 | Complete |
 | AGI-01 | Phase 25 | Pending |
 | AGI-02 | Phase 25 | Pending |
 | AGI-03 | Phase 26 | Pending |
