@@ -1,5 +1,26 @@
 # Milestones
 
+## v21.0 Autonomous Agent Platform (Shipped: 2026-03-28)
+
+**Phases completed:** 10 phases, 13 plans, 26 tasks
+
+**Key accomplishments:**
+
+- Real-time agent processing overlay with thinking indicator, tool badges, and step list derived from WebSocket events in useAgentSocket hook
+- Auto-load most recent conversation on AI Chat mount via localStorage + backend fallback, with null-safe query guards and fixed getConversation await bug
+- Nexus REST history endpoint, enhanced list() with description/tier, and two tRPC proxy queries (getSubagent, getSubagentHistory) for the Agents panel frontend
+- Agents tab replacing LivHub in AI Chat sidebar with list/detail AgentsPanel showing agent status, history, configuration, and run metrics
+- Nexus REST endpoints for subagent execution (with history recording) and loop management, tRPC proxy routes, httpOnlyPaths for all mutations
+- MessageInput for agent messaging, LoopControls with start/stop and iteration display, compact CreateAgentForm with name/description/tier in sidebar
+- REST endpoint + tRPC proxy for listing built-in commands, tools, and skills as a unified slash command catalog
+- SlashCommandMenu dropdown with 6 built-in commands, dynamic backend commands via tRPC, real-time filtering, and full keyboard navigation wired into ChatInput
+- Self-Improvement system prompt section with skill creation, MCP tool installation guidance, and act-vs-ask decision criteria, plus enhanced tool response messages for availability timing
+- JSON-driven selectTier() reading from nexus/config/tiers.json with fallback defaults, plus Autonomous Scheduling system prompt teaching AI when/how to create recurring schedules and loops
+- Self-evaluation system prompt section with after-task reflection guidance plus pre-seeded Self-Improvement Agent meta-loop running every 6 hours on flash tier
+- NATIVE_SYSTEM_PROMPT condensed 72% (221 to 84 lines, ~3214 to ~899 tokens) with Self-Awareness section and all 43 tool descriptions shortened
+
+---
+
 ## v20.0 Live Agent UI (Shipped: 2026-03-27)
 
 **Phases completed:** 0 phases, 0 plans, 0 tasks
