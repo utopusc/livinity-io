@@ -33,7 +33,7 @@ import { WsGateway } from './ws-gateway.js';
 import type { WsGatewayDeps } from './ws-gateway.js';
 import type { UsageTracker } from './usage-tracker.js';
 import type { WebhookManager } from './webhook-manager.js';
-import { isCommand, handleCommand } from './commands.js';
+import { isCommand, handleCommand, listCommands } from './commands.js';
 import type { ClaudeProvider } from './providers/claude.js';
 
 interface ApiDeps {
@@ -2049,6 +2049,48 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       res.json({ success: deleted });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  // ── Slash Commands Listing ──────────────────────────────────
+  app.get('/api/slash-commands', async (_req, res) => {
+    try {
+      const commands: Array<{name: string; description: string; category: string}> = [];
+
+      // 1. Built-in slash commands from commands.ts
+      const cmdDescriptions: Record<string, string> = {
+        '/help': 'Show available commands',
+        '/new': 'Start new conversation',
+        '/usage': 'Show token usage and costs',
+        '/think': 'Set thinking level (off/low/medium/high)',
+        '/verbose': 'Set verbose level (0-3)',
+        '/model': 'Change model tier (flash/sonnet/opus)',
+        '/status': 'Show current session settings',
+        '/reset': 'Reset preferences to defaults',
+        '/compact': 'Compact conversation history',
+        '/activation': 'Set group trigger mode',
+        '/stats': 'Show usage statistics',
+      };
+      for (const cmd of listCommands()) {
+        commands.push({name: cmd, description: cmdDescriptions[cmd] || '', category: 'command'});
+      }
+
+      // 2. Registered tools from ToolRegistry
+      for (const name of toolRegistry.list()) {
+        const tool = toolRegistry.get(name);
+        commands.push({name: `/${name}`, description: tool?.description?.slice(0, 80) || '', category: 'tool'});
+      }
+
+      // 3. Loaded skills from SkillLoader
+      if (skillLoader) {
+        for (const skill of skillLoader.listSkills()) {
+          commands.push({name: `/${skill.name}`, description: skill.description?.slice(0, 80) || '', category: 'skill'});
+        }
+      }
+
+      res.json({commands});
+    } catch (err) {
+      res.status(500).json({error: formatErrorMessage(err)});
     }
   });
 
