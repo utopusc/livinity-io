@@ -141,7 +141,9 @@ Plans:
   1. When the AI determines it needs a capability it does not have, it autonomously creates a new skill file in nexus/skills/ with appropriate schema and logic
   2. When the AI needs an external tool, it searches the MCP registry via mcp_registry_search and installs the tool via mcp_install without user prompting
   3. Newly created skills and installed tools are immediately usable in subsequent agent turns
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 25-01-PLAN.md — System prompt Self-Improvement section + enhanced skill_generate and mcp_install tool responses
 
 ### Phase 26: Autonomous Schedule & Tier Management
 **Goal**: The AI can manage its own execution patterns -- creating recurring schedules for repetitive tasks and selecting the right model tier for each task's complexity
@@ -188,7 +190,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 22. Agent Interaction & Management | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 25. Autonomous Skill & Tool Creation | v21.0 | 0/TBD | Not started | - |
+| 25. Autonomous Skill & Tool Creation | v21.0 | 0/1 | In progress | - |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 0/TBD | Not started | - |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |
 | 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |
