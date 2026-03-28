@@ -129,7 +129,9 @@ Plans:
   2. channel_send tool only appears when at least one messaging integration (Telegram/Discord/Slack) is connected
   3. gmail_* tools only appear when Gmail OAuth is connected
   4. Tool implementations (the actual handler code) are unchanged -- only the registration gate logic is new
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 24-01-PLAN.md — Add conditional registration gates for whatsapp_send, channel_send, and gmail_* tools in daemon.ts
 
 ### Phase 25: Autonomous Skill & Tool Creation
 **Goal**: The AI can identify capability gaps and fill them by creating new skills or installing MCP tools without human intervention
@@ -185,7 +187,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 21. Sidebar Agents Tab | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 22. Agent Interaction & Management | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 24. Tool Conditional Registration | v21.0 | 0/TBD | Not started | - |
+| 24. Tool Conditional Registration | v21.0 | 0/1 | Not started | - |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 0/TBD | Not started | - |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 0/TBD | Not started | - |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |
