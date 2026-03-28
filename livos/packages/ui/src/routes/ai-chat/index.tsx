@@ -161,7 +161,7 @@ export default function AiChat() {
 	const providersQuery = trpcReact.ai.getProviders.useQuery(undefined, {refetchInterval: 30_000})
 	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
 
-	const activeConversationId = searchParams.get('conv') || `conv_${Date.now()}`
+	const activeConversationId = searchParams.get('conv') ?? null
 
 	const conversationsQuery = trpcReact.ai.listConversations.useQuery(undefined, {
 		refetchInterval: 10_000,
@@ -180,18 +180,18 @@ export default function AiChat() {
 
 	// Poll for canvas artifacts while agent is streaming
 	const canvasQuery = trpcReact.ai.listCanvasArtifacts.useQuery(
-		{conversationId: activeConversationId},
+		{conversationId: activeConversationId!},
 		{
-			enabled: agent.isStreaming,
+			enabled: !!activeConversationId && agent.isStreaming,
 			refetchInterval: agent.isStreaming ? 1000 : false,
 		},
 	)
 
 	// One-time fetch when conversation is loaded (for re-opening conversations with canvas)
 	const canvasLoadQuery = trpcReact.ai.listCanvasArtifacts.useQuery(
-		{conversationId: activeConversationId},
+		{conversationId: activeConversationId!},
 		{
-			enabled: !!searchParams.get('conv') && !agent.isStreaming,
+			enabled: !!activeConversationId && !!searchParams.get('conv') && !agent.isStreaming,
 			refetchInterval: false,
 			staleTime: 30000,
 		},
@@ -199,9 +199,9 @@ export default function AiChat() {
 
 	// Poll chatStatus for computer use session detection
 	const computerUseQuery = trpcReact.ai.getChatStatus.useQuery(
-		{conversationId: activeConversationId},
+		{conversationId: activeConversationId!},
 		{
-			enabled: agent.isStreaming,
+			enabled: !!activeConversationId && agent.isStreaming,
 			refetchInterval: agent.isStreaming ? 500 : false,
 		},
 	)
@@ -291,6 +291,38 @@ export default function AiChat() {
 		}
 	}, [searchParams, agent.isConnected, utils])
 
+	// Auto-load most recent conversation when no ?conv= URL param
+	const autoLoadAttempted = useRef(false)
+	useEffect(() => {
+		if (autoLoadAttempted.current) return
+		if (searchParams.get('conv')) return // URL already has a conversation
+		autoLoadAttempted.current = true
+
+		// Priority 1: localStorage last-used conversation
+		const lastId = localStorage.getItem('liv:lastConversationId')
+		if (lastId) {
+			setSearchParams({conv: lastId}, {replace: true})
+			return
+		}
+
+		// Priority 2: Most recent conversation from backend
+		utils.ai.listConversations.fetch().then((convs) => {
+			if (convs && convs.length > 0) {
+				setSearchParams({conv: convs[0].id}, {replace: true})
+			}
+		}).catch(() => {
+			// No conversations — stay on empty state
+		})
+	}, [searchParams, setSearchParams, utils])
+
+	// Persist current conversation to localStorage for next visit
+	useEffect(() => {
+		const convId = searchParams.get('conv')
+		if (convId) {
+			localStorage.setItem('liv:lastConversationId', convId)
+		}
+	}, [searchParams])
+
 	const handleStop = useCallback(() => {
 		agent.interrupt()
 	}, [agent])
@@ -308,13 +340,14 @@ export default function AiChat() {
 			if (agent.isStreaming) {
 				agent.sendFollowUp(text)
 			} else {
-				agent.sendMessage(text, undefined, activeConversationId)
+				agent.sendMessage(text, undefined, activeConversationId || `conv_${Date.now()}`)
 			}
 		} else {
 			// Fallback to tRPC send (legacy path — works without WebSocket)
 			try {
+				const convId = activeConversationId || `conv_${Date.now()}`
 				const result = await sendMutation.mutateAsync({
-					conversationId: activeConversationId,
+					conversationId: convId,
 					message: text,
 				})
 				if (result?.message) {
@@ -323,7 +356,7 @@ export default function AiChat() {
 						...agent.messages,
 						{id: `user_${Date.now()}`, role: 'user', content: text, isStreaming: false},
 						{id: `asst_${Date.now()}`, role: 'assistant', content: result.message.content || '', isStreaming: false, toolCalls: []},
-					], activeConversationId)
+					], convId)
 				}
 			} catch (err: any) {
 				console.error('Send failed:', err)
@@ -332,16 +365,21 @@ export default function AiChat() {
 	}, [input, agent, activeConversationId, sendMutation])
 
 	const handleNewConversation = () => {
+		const newId = `conv_${Date.now()}`
 		agent.clearMessages()
 		setCanvasArtifact(null)
 		setCanvasMinimized(false)
 		setComputerUseMinimized(false)
-		setSearchParams({conv: `conv_${Date.now()}`})
+		setSearchParams({conv: newId})
+		localStorage.setItem('liv:lastConversationId', newId)
 		setActiveView('chat')
 	}
 
 	const handleDeleteConversation = async (id: string) => {
 		await deleteMutation.mutateAsync({id})
+		if (localStorage.getItem('liv:lastConversationId') === id) {
+			localStorage.removeItem('liv:lastConversationId')
+		}
 		if (id === activeConversationId) {
 			handleNewConversation()
 		}
@@ -350,6 +388,7 @@ export default function AiChat() {
 
 	const handleSelectConversation = useCallback(async (id: string) => {
 		setSearchParams({conv: id})
+		localStorage.setItem('liv:lastConversationId', id)
 		setActiveView('chat')
 		setSidebarOpen(false)
 
@@ -577,13 +616,13 @@ export default function AiChat() {
 								{/* Buttons */}
 								<div className='flex gap-3'>
 									<button
-										onClick={() => denyConsentMutation.mutate({conversationId: activeConversationId})}
+										onClick={() => denyConsentMutation.mutate({conversationId: activeConversationId!})}
 										className='flex-1 rounded-radius-lg border border-border-default bg-surface-1 px-4 py-2.5 text-body-sm font-medium text-text-secondary transition-colors hover:bg-surface-2'
 									>
 										Deny
 									</button>
 									<button
-										onClick={() => grantConsentMutation.mutate({conversationId: activeConversationId})}
+										onClick={() => grantConsentMutation.mutate({conversationId: activeConversationId!})}
 										className='flex-1 rounded-radius-lg bg-accent-primary px-4 py-2.5 text-body-sm font-medium text-white transition-colors hover:bg-accent-primary-hover'
 									>
 										Allow
@@ -598,7 +637,7 @@ export default function AiChat() {
 						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 							<div className='w-1/2 min-w-[360px]'>
 								<ComputerUsePanel
-									conversationId={activeConversationId}
+									conversationId={activeConversationId!}
 									screenshot={computerUseData?.screenshot || null}
 									actions={(computerUseData?.actions || []) as any}
 									paused={!!computerUseData?.paused}
@@ -613,7 +652,7 @@ export default function AiChat() {
 						<Suspense fallback={null}>
 							<div className='fixed inset-0 z-50 bg-surface-base'>
 								<ComputerUsePanel
-									conversationId={activeConversationId}
+									conversationId={activeConversationId!}
 									screenshot={computerUseData?.screenshot || null}
 									actions={(computerUseData?.actions || []) as any}
 									paused={!!computerUseData?.paused}
