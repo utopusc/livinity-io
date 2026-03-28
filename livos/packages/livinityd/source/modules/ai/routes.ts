@@ -638,7 +638,7 @@ export default router({
 	/** Get a single conversation */
 	getConversation: privateProcedure.input(z.object({id: z.string()})).query(async ({ctx, input}) => {
 		const userId = ctx.currentUser?.id
-		const conversation = ctx.livinityd.ai.getConversation(input.id, userId)
+		const conversation = await ctx.livinityd.ai.getConversation(input.id, userId)
 		if (!conversation) throw new TRPCError({code: 'NOT_FOUND', message: 'Conversation not found'})
 		return conversation
 	}),
