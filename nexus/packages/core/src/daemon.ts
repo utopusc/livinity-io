@@ -198,7 +198,7 @@ export class Daemon {
     this.registerHandlers();
 
     // Register tools (agent-facing, with schemas)
-    this.registerTools();
+    await this.registerTools();
     logger.info(`Tool registry: ${this.config.toolRegistry.size} tools registered`);
 
     // Load skills from skills/ directory
@@ -1252,7 +1252,7 @@ ${task}`;
     });
   }
 
-  private registerTools() {
+  private async registerTools(): Promise<void> {
     const { toolRegistry, dockerManager, shell } = this.config;
 
     toolRegistry.register({
@@ -1567,93 +1567,124 @@ ${task}`;
       },
     });
 
-    // ── WhatsApp messaging tool ────────────────────────────────────────
+    // ── WhatsApp messaging tool (conditional: only when WhatsApp is enabled) ──
 
-    toolRegistry.register({
-      name: 'whatsapp_send',
-      description: 'Send a WhatsApp message to a specific contact by name. Use this when the user asks you to message someone (e.g. "send Fei a message", "tell Emre hello"). The message will be delivered to that contact\'s chat.',
-      parameters: [
-        { name: 'contact', type: 'string', description: 'Contact name (case-insensitive)', required: true },
-        { name: 'message', type: 'string', description: 'Message text to send', required: true },
-      ],
-      execute: async (params) => {
-        const { contact, message } = params as { contact: string; message: string };
-        if (!contact || !message) return { success: false, output: '', error: 'Contact name and message are required.' };
+    const waConfig = this.config.configManager?.get()?.channels?.whatsapp;
+    if (waConfig?.enabled !== false) {
+      toolRegistry.register({
+        name: 'whatsapp_send',
+        description: 'Send a WhatsApp message to a specific contact by name. Use this when the user asks you to message someone (e.g. "send Fei a message", "tell Emre hello"). The message will be delivered to that contact\'s chat.',
+        parameters: [
+          { name: 'contact', type: 'string', description: 'Contact name (case-insensitive)', required: true },
+          { name: 'message', type: 'string', description: 'Message text to send', required: true },
+        ],
+        execute: async (params) => {
+          const { contact, message } = params as { contact: string; message: string };
+          if (!contact || !message) return { success: false, output: '', error: 'Contact name and message are required.' };
 
-        try {
-          // Look up contact JID from name mapping
-          const jid = await this.config.redis.hget('nexus:wa_contacts', contact.toLowerCase());
-          if (!jid) {
-            // Try partial match
-            const allContacts = await this.config.redis.hgetall('nexus:wa_contacts');
-            const match = Object.entries(allContacts).find(([name]) =>
-              name.includes(contact.toLowerCase()) || contact.toLowerCase().includes(name)
-            );
-            if (!match) {
-              const available = Object.keys(allContacts).join(', ') || 'none';
-              return { success: false, output: '', error: `Contact "${contact}" not found. Known contacts: ${available}` };
+          try {
+            // Look up contact JID from name mapping
+            const jid = await this.config.redis.hget('nexus:wa_contacts', contact.toLowerCase());
+            if (!jid) {
+              // Try partial match
+              const allContacts = await this.config.redis.hgetall('nexus:wa_contacts');
+              const match = Object.entries(allContacts).find(([name]) =>
+                name.includes(contact.toLowerCase()) || contact.toLowerCase().includes(name)
+              );
+              if (!match) {
+                const available = Object.keys(allContacts).join(', ') || 'none';
+                return { success: false, output: '', error: `Contact "${contact}" not found. Known contacts: ${available}` };
+              }
+              // Found partial match
+              await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
+                jid: match[1],
+                text: message,
+                timestamp: Date.now(),
+              }));
+              return { success: true, output: `Message sent to ${match[0]} (${match[1]}): "${message.slice(0, 80)}"` };
             }
-            // Found partial match
+
             await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-              jid: match[1],
+              jid,
               text: message,
               timestamp: Date.now(),
             }));
-            return { success: true, output: `Message sent to ${match[0]} (${match[1]}): "${message.slice(0, 80)}"` };
+            return { success: true, output: `Message sent to ${contact} (${jid}): "${message.slice(0, 80)}"` };
+          } catch (err) {
+            return { success: false, output: '', error: `WhatsApp send error: ${formatErrorMessage(err)}` };
+          }
+        },
+      });
+      logger.info('Tool registered: whatsapp_send (WhatsApp enabled)');
+    } else {
+      logger.info('Tool skipped: whatsapp_send (WhatsApp not enabled)');
+    }
+
+    // ── Channel messaging tool (conditional: only when at least one messaging channel is connected) ──
+
+    const channelMgr = this.config.channelManager;
+    let hasConnectedChannel = false;
+    if (channelMgr) {
+      const messagingChannels: Array<'telegram' | 'discord' | 'slack'> = ['telegram', 'discord', 'slack'];
+      for (const ch of messagingChannels) {
+        const provider = channelMgr.getProvider(ch);
+        if (provider) {
+          try {
+            const status = await provider.getStatus();
+            if (status.connected || status.enabled) {
+              hasConnectedChannel = true;
+              break;
+            }
+          } catch {
+            // If getStatus fails, skip this channel
+          }
+        }
+      }
+    }
+
+    if (hasConnectedChannel) {
+      toolRegistry.register({
+        name: 'channel_send',
+        description: 'Send a message via a connected messaging channel (Telegram, Discord, Slack). Use this when the user asks to send a Telegram/Discord message or test a channel. Defaults to the last active chat for that channel.',
+        parameters: [
+          { name: 'channel', type: 'string', description: 'Channel ID: "telegram", "discord", "slack", or "matrix"', required: true },
+          { name: 'text', type: 'string', description: 'Message text to send', required: true },
+          { name: 'chatId', type: 'string', description: 'Specific chat/channel ID (optional, defaults to last active chat)', required: false },
+        ],
+        execute: async (params) => {
+          const { channel, text, chatId: explicitChatId } = params as { channel: string; text: string; chatId?: string };
+          if (!channel || !text) return { success: false, output: '', error: 'Channel and text are required.' };
+
+          const validChannels = ['telegram', 'discord', 'slack', 'matrix'];
+          if (!validChannels.includes(channel)) {
+            return { success: false, output: '', error: `Invalid channel "${channel}". Use: ${validChannels.join(', ')}` };
           }
 
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid,
-            text: message,
-            timestamp: Date.now(),
-          }));
-          return { success: true, output: `Message sent to ${contact} (${jid}): "${message.slice(0, 80)}"` };
-        } catch (err) {
-          return { success: false, output: '', error: `WhatsApp send error: ${formatErrorMessage(err)}` };
-        }
-      },
-    });
+          try {
+            const targetChatId = explicitChatId || await this.config.redis.get(`nexus:${channel}:last_chat_id`);
+            if (!targetChatId) {
+              return { success: false, output: '', error: `No chat ID for ${channel}. Send a message to the bot first to register a chat.` };
+            }
 
-    // ── Channel messaging tool (Telegram, Discord, Slack, etc.) ──────
+            const success = await this.config.channelManager!.sendMessage(
+              channel as 'telegram' | 'discord' | 'slack' | 'matrix',
+              targetChatId,
+              text,
+            );
 
-    toolRegistry.register({
-      name: 'channel_send',
-      description: 'Send a message via a connected messaging channel (Telegram, Discord, Slack). Use this when the user asks to send a Telegram/Discord message or test a channel. Defaults to the last active chat for that channel.',
-      parameters: [
-        { name: 'channel', type: 'string', description: 'Channel ID: "telegram", "discord", "slack", or "matrix"', required: true },
-        { name: 'text', type: 'string', description: 'Message text to send', required: true },
-        { name: 'chatId', type: 'string', description: 'Specific chat/channel ID (optional, defaults to last active chat)', required: false },
-      ],
-      execute: async (params) => {
-        const { channel, text, chatId: explicitChatId } = params as { channel: string; text: string; chatId?: string };
-        if (!channel || !text) return { success: false, output: '', error: 'Channel and text are required.' };
-
-        const validChannels = ['telegram', 'discord', 'slack', 'matrix'];
-        if (!validChannels.includes(channel)) {
-          return { success: false, output: '', error: `Invalid channel "${channel}". Use: ${validChannels.join(', ')}` };
-        }
-
-        try {
-          const targetChatId = explicitChatId || await this.config.redis.get(`nexus:${channel}:last_chat_id`);
-          if (!targetChatId) {
-            return { success: false, output: '', error: `No chat ID for ${channel}. Send a message to the bot first to register a chat.` };
+            if (success) {
+              return { success: true, output: `Message sent via ${channel} to chat ${targetChatId}: "${text.slice(0, 100)}"` };
+            }
+            return { success: false, output: '', error: `Failed to send via ${channel} — channel may not be connected.` };
+          } catch (err) {
+            return { success: false, output: '', error: `Channel send error: ${formatErrorMessage(err)}` };
           }
-
-          const success = await this.config.channelManager!.sendMessage(
-            channel as 'telegram' | 'discord' | 'slack' | 'matrix',
-            targetChatId,
-            text,
-          );
-
-          if (success) {
-            return { success: true, output: `Message sent via ${channel} to chat ${targetChatId}: "${text.slice(0, 100)}"` };
-          }
-          return { success: false, output: '', error: `Failed to send via ${channel} — channel may not be connected.` };
-        } catch (err) {
-          return { success: false, output: '', error: `Channel send error: ${formatErrorMessage(err)}` };
-        }
-      },
-    });
+        },
+      });
+      logger.info('Tool registered: channel_send (messaging channel connected)');
+    } else {
+      logger.info('Tool skipped: channel_send (no messaging channels connected)');
+    }
 
     // ── Memory tools (Cognee integration via localhost:3300) ──────────
 
@@ -2423,10 +2454,20 @@ ${task}`;
       },
     });
 
-    // ── Gmail MCP Tools ──────────────────────────────────────────────
+    // ── Gmail MCP Tools (conditional: only when Gmail OAuth is connected) ──
 
     const gp = this.config.gmailProvider;
+    let gmailConnected = false;
     if (gp) {
+      try {
+        const gmailStatus = await gp.getStatus();
+        gmailConnected = gmailStatus.connected;
+      } catch {
+        // If getStatus fails, Gmail is not connected
+      }
+    }
+
+    if (gp && gmailConnected) {
       toolRegistry.register({
         name: 'gmail_read',
         description: 'Read a specific email by ID. Returns full email detail including subject, from, to, cc, date, body, and labels.',
@@ -2539,6 +2580,8 @@ ${task}`;
       });
 
       logger.info('Gmail MCP tools registered (gmail_read, gmail_reply, gmail_send, gmail_search, gmail_archive)');
+    } else {
+      logger.info('Tool skipped: gmail_* tools (Gmail OAuth not connected)');
     }
 
     // ── Multi-agent session tools ────────────────────────────────────────
