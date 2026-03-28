@@ -729,6 +729,46 @@ export default router({
 		}
 	}),
 
+	/** Get a single subagent by ID (full config) */
+	getSubagent: privateProcedure
+		.input(z.object({id: z.string()}))
+		.query(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const response = await fetch(`${nexusUrl}/api/subagents/${encodeURIComponent(input.id)}`, {
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) {
+					throw new TRPCError({code: 'NOT_FOUND', message: 'Subagent not found'})
+				}
+				return await response.json()
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd.logger.error('Failed to get subagent', error)
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Failed to get subagent'})
+			}
+		}),
+
+	/** Get subagent conversation history */
+	getSubagentHistory: privateProcedure
+		.input(z.object({id: z.string(), limit: z.number().int().min(1).max(100).optional()}))
+		.query(async ({ctx, input}) => {
+			try {
+				const nexusUrl = getNexusApiUrl()
+				const limitParam = input.limit ? `?limit=${input.limit}` : ''
+				const response = await fetch(`${nexusUrl}/api/subagents/${encodeURIComponent(input.id)}/history${limitParam}`, {
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) {
+					throw new Error(`Nexus API error: ${response.status}`)
+				}
+				return await response.json()
+			} catch (error) {
+				ctx.livinityd.logger.error('Failed to get subagent history', error)
+				return []
+			}
+		}),
+
 	/** Create a new subagent */
 	createSubagent: privateProcedure
 		.input(
