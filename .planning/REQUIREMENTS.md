@@ -1,113 +1,129 @@
-# Requirements: v20.0 Live Agent UI
+# Requirements: Livinity v21.0 — Autonomous Agent Platform
 
-**Defined:** 2026-03-27
-**Core Value:** Real-time Claude Code-like AI experience in the browser — see everything the agent does, interact while it works.
+**Defined:** 2026-03-28
+**Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-**Research basis:** .planning/research/02-claude-agent-sdk.md
+**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows, ai-config.tsx auth section) MUST NOT be modified.
 
----
+## v21.0 Requirements
 
-## Functional Requirements
+Requirements for v21.0 milestone. Each maps to roadmap phases.
 
-### SDK-01: Agent SDK Backend Integration
-Replace the Nexus agent loop with Claude Agent SDK `query()` running server-side in livinityd. The SDK subprocess handles the agent loop, tool execution, retries, and context management. Backend streams SDK events to the frontend via WebSocket.
+### AI Chat Visibility
 
-**UAT:** User sends a message in AI Chat, Claude Agent SDK processes it server-side, response streams back in real-time.
+- [ ] **CHAT-01**: User can see partial AI response streaming live below StatusIndicator as markdown while agent is processing
+- [ ] **CHAT-02**: User can see tool calls, thinking state, and work steps in real-time during agent processing
+- [ ] **CHAT-03**: When processing completes, partial answer is replaced by full response as a proper chat message
+- [ ] **CHAT-04**: User can close and reopen the AI Chat tab and see previous messages loaded from Redis
+- [ ] **CHAT-05**: User can see a list of past conversations in a sidebar panel
+- [ ] **CHAT-06**: User can click a past conversation to load its full message history
 
-### SDK-02: Custom MCP Tools from ToolRegistry
-Wrap existing LivOS tools (shell, file operations, Docker, screenshot, etc.) as MCP tools using `tool()` + `createSdkMcpServer()`. The SDK can call these tools during its autonomous loop.
+### Sidebar Agents
 
-**UAT:** Claude autonomously reads files, runs shell commands, and manages Docker containers using existing LivOS tools during a conversation.
+- [ ] **AGNT-01**: User sees "Agents" tab (renamed from "LivHub") in AI Chat sidebar
+- [ ] **AGNT-02**: User can see a list of active agents with status (active/paused/stopped), last run time, and run count
+- [ ] **AGNT-03**: User can click an agent to view its chat history, last result, and configuration
+- [ ] **AGNT-04**: User can send a message to an agent directly from the Agents tab
+- [ ] **AGNT-05**: User can see loop agent details: current iteration, last state, and stop/start controls
+- [ ] **AGNT-06**: User can create a new agent from the Agents tab (compact form)
 
-### SDK-03: Real-Time Streaming Chat
-Stream Claude's text output character-by-character to the browser as it's generated. Use `includePartialMessages: true` with `stream_event` type `content_block_delta`. No buffering delays — text appears immediately.
+### Slash Commands
 
-**UAT:** User sees Claude's response appear word-by-word in the chat, similar to Claude Code CLI output speed.
+- [ ] **SLSH-01**: User sees a dropdown menu above the input field when typing `/`
+- [ ] **SLSH-02**: User can see built-in commands (/usage, /new, /help, /agents, /loops, /skills) in the dropdown
+- [ ] **SLSH-03**: User can see dynamic commands fetched from backend (tools + skill triggers) via listSlashCommands tRPC query
+- [ ] **SLSH-04**: User can filter commands by typing after `/` (e.g., `/us` filters to `/usage`)
+- [ ] **SLSH-05**: User can select a command to insert it into input and send
 
-### SDK-04: Live Tool Call Visualization
-Display tool calls as expandable cards in the chat — showing tool name, input parameters, execution status (running/complete/error), and output. Tool calls appear in real-time as the agent works.
+### AGI Mechanism
 
-**UAT:** When Claude reads a file, user sees a "Read file.ts" card expand with the file content. Shell commands show the command and output.
+- [ ] **AGI-01**: AI can autonomously create new skills when it determines one is needed, writing to nexus/skills/
+- [ ] **AGI-02**: AI can autonomously search and install MCP tools via mcp_registry_search + mcp_install
+- [ ] **AGI-03**: AI can autonomously create and manage schedules and loops, analyzing tasks to determine recurrence needs
+- [ ] **AGI-04**: AI selects appropriate model tier based on task complexity (flash/haiku for simple, sonnet for reasoning, opus for architecture) via enhanced selectTier() with configurable rules in nexus/config/tiers.json
+- [ ] **AGI-05**: AI can evaluate its own performance after completing a task and trigger self-improvement actions (create skills, update skills, install tools, set schedules)
+- [ ] **AGI-06**: Self-Improvement Agent runs as a meta-agent loop, continuously identifying and filling capability gaps
 
-### SDK-05: Mid-Conversation Interaction
-Allow users to type and send messages while the agent is still working. Uses the SDK's async generator prompt pattern with `interrupt()` for stopping current work, or queuing the new message for the next turn.
+### Tool Cleanup
 
-**UAT:** While Claude is executing a multi-step task, user types "stop" or "also check the tests" and the agent responds appropriately.
+- [ ] **TOOL-01**: daemon.ts conditionally registers whatsapp_send only when WHATSAPP_ENABLED is true
+- [ ] **TOOL-02**: daemon.ts conditionally registers channel_send only when at least one messaging integration (Telegram/Discord/Slack) is connected
+- [ ] **TOOL-03**: daemon.ts conditionally registers gmail_* tools only when Gmail OAuth is connected
+- [ ] **TOOL-04**: Tool implementations remain unchanged — only registration logic is modified
 
-### SDK-06: Session Management
-Persist conversation sessions with `session_id`. Users can resume previous conversations. Sessions stored in Redis with metadata (title, timestamp, message count).
+### System Prompt
 
-**UAT:** User closes the chat window, reopens it, and can continue the same conversation. Past conversations appear in a sidebar list.
+- [ ] **SPRT-01**: Agent system prompt in agent.ts is optimized for conciseness and context window efficiency
+- [ ] **SPRT-02**: Tool descriptions are shortened to essential information only
+- [ ] **SPRT-03**: Agent has self-awareness instructions (capabilities, limits, when to escalate)
 
-### SDK-07: Conversation History
-Browse past conversations in a sidebar. Each conversation shows title (auto-generated from first message), timestamp, and message count. Click to load and optionally resume.
+## v22.0+ Requirements (Future)
 
-**UAT:** User sees a list of past conversations, clicks one, sees the full message history, and can continue the conversation.
+### Advanced Agent Features
 
-### SDK-08: Cost Control
-Replace token/tool limit settings with `maxBudgetUsd` per session. Display real-time cost tracking in the UI (from SDK's `duration_api_ms` and token usage in result messages).
+- **AGNT-F01**: Agent marketplace for sharing custom agents between users
+- **AGNT-F02**: Multi-agent collaboration (agents can delegate to other agents)
+- **AGNT-F03**: Agent templates with pre-configured tool sets
 
-**UAT:** User sees estimated cost per conversation. System respects the budget cap and stops gracefully when exceeded.
+### AI Capabilities
 
-### SDK-09: Remove Nexus AI Settings
-Remove the Nexus AI Settings panel from LivOS Settings (token limits, tool limits, model tier selection). These are replaced by SDK-native controls (maxBudgetUsd, model selection via SDK).
+- **AGI-F01**: AI can modify its own system prompt based on user feedback
+- **AGI-F02**: AI can create and manage webhooks for external event triggers
+- **AGI-F03**: Cross-instance agent communication between LivOS servers
 
-**UAT:** Settings no longer shows "Nexus AI Settings" with token/tool limit sliders. AI configuration is minimal (API key, model preference).
-
-### SDK-10: New Chat UI
-Replace the entire AI Chat message rendering with a new component designed for agent interactions. Clean, professional design with support for streaming text, tool call cards, thinking indicators, and error states. Not a patch on the old chat — a fresh implementation.
-
-**UAT:** AI Chat looks and feels like a professional AI agent interface. Messages render cleanly with markdown, code blocks are syntax-highlighted, tool calls are collapsible cards.
-
----
-
-## Non-Functional Requirements
-
-### SDK-NF-01: Streaming Latency
-First token must appear in the UI within 500ms of the SDK starting to stream. WebSocket transport, not SSE polling.
-
-### SDK-NF-02: Connection Resilience
-WebSocket auto-reconnects on disconnect. In-progress conversations resume gracefully. No lost messages.
-
-### SDK-NF-03: Provider Layer Preserved
-Keep ProviderManager and Kimi/Claude provider abstraction intact. Agent SDK is a new path alongside (not replacing) the existing provider system. Future milestones may switch between providers.
-
----
-
-## Out of Scope (v20.0)
+## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Kimi Agent SDK integration | Only Claude Agent SDK for now — Kimi has no equivalent |
-| MCP server marketplace | Custom MCP servers are for internal tools only |
-| Voice input in chat | Deferred — text-only for v20.0 |
-| Multi-agent orchestration | Single agent per conversation for v20.0 |
-| File upload in chat | Deferred to future — use file manager |
-| Code execution sandbox | SDK handles its own sandboxing |
+| Auth system modifications | Critical constraint — OAuth, JWT, API key, login flows must not change |
+| New AI providers | Claude + Kimi dual provider already working |
+| Mobile app for agent management | Web-first approach |
+| Agent billing/metering | Payment system deferred |
+| Voice interaction with agents | Deferred, complex integration |
+| Visual agent builder (drag-and-drop) | Too complex for v21.0, text-based creation sufficient |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SDK-01 | Phase 11 | Complete |
-| SDK-02 | Phase 12 | Complete |
-| SDK-03 | Phase 13 | Complete |
-| SDK-04 | Phase 15 | Complete |
-| SDK-05 | Phase 16 | Complete |
-| SDK-06 | Phase 17 | Complete |
-| SDK-07 | Phase 17 | Complete |
-| SDK-08 | Phase 18 | Complete |
-| SDK-09 | Phase 18 | Complete |
-| SDK-10 | Phase 14 | Complete |
-| SDK-NF-01 | Phase 13 | Complete |
-| SDK-NF-02 | Phase 13 | Complete |
-| SDK-NF-03 | Phase 11 | Complete |
+| CHAT-01 | — | Pending |
+| CHAT-02 | — | Pending |
+| CHAT-03 | — | Pending |
+| CHAT-04 | — | Pending |
+| CHAT-05 | — | Pending |
+| CHAT-06 | — | Pending |
+| AGNT-01 | — | Pending |
+| AGNT-02 | — | Pending |
+| AGNT-03 | — | Pending |
+| AGNT-04 | — | Pending |
+| AGNT-05 | — | Pending |
+| AGNT-06 | — | Pending |
+| SLSH-01 | — | Pending |
+| SLSH-02 | — | Pending |
+| SLSH-03 | — | Pending |
+| SLSH-04 | — | Pending |
+| SLSH-05 | — | Pending |
+| AGI-01 | — | Pending |
+| AGI-02 | — | Pending |
+| AGI-03 | — | Pending |
+| AGI-04 | — | Pending |
+| AGI-05 | — | Pending |
+| AGI-06 | — | Pending |
+| TOOL-01 | — | Pending |
+| TOOL-02 | — | Pending |
+| TOOL-03 | — | Pending |
+| TOOL-04 | — | Pending |
+| SPRT-01 | — | Pending |
+| SPRT-02 | — | Pending |
+| SPRT-03 | — | Pending |
 
 **Coverage:**
-- v20.0 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0
+- v21.0 requirements: 30 total
+- Mapped to phases: 0
+- Unmapped: 30
 
 ---
-*Requirements defined: 2026-03-27*
-*Last updated: 2026-03-27 after Phase 17 completion*
+*Requirements defined: 2026-03-28*
+*Last updated: 2026-03-28 after initial definition*
