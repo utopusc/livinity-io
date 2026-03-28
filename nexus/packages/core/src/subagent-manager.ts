@@ -89,9 +89,9 @@ export class SubagentManager {
   }
 
   /** List all subagents (summary) */
-  async list(): Promise<Array<{ id: string; name: string; status: string; schedule?: string; lastRunAt?: number; runCount: number }>> {
+  async list(): Promise<Array<{ id: string; name: string; status: string; description?: string; tier?: string; schedule?: string; lastRunAt?: number; runCount: number }>> {
     const index = await this.redis.hgetall(INDEX_KEY);
-    const results: Array<{ id: string; name: string; status: string; schedule?: string; lastRunAt?: number; runCount: number }> = [];
+    const results: Array<{ id: string; name: string; status: string; description?: string; tier?: string; schedule?: string; lastRunAt?: number; runCount: number }> = [];
 
     for (const id of Object.keys(index)) {
       const config = await this.get(id);
@@ -100,6 +100,8 @@ export class SubagentManager {
           id: config.id,
           name: config.name,
           status: config.status,
+          description: config.description,
+          tier: config.tier,
           schedule: config.schedule,
           lastRunAt: config.lastRunAt,
           runCount: config.runCount,

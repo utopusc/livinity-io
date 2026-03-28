@@ -1040,6 +1040,23 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  /** Get subagent conversation history */
+  app.get('/api/subagents/:id/history', async (req, res) => {
+    try {
+      const subagentManager = daemon.subagentManager;
+      if (!subagentManager) {
+        res.status(503).json({ error: 'Subagent manager not initialized' });
+        return;
+      }
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+      const messages = await subagentManager.getHistory(req.params.id, limit);
+      res.json(messages);
+    } catch (err) {
+      logger.error('Get subagent history error', { error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   /** Create a new subagent */
   app.post('/api/subagents', async (req, res) => {
     try {
