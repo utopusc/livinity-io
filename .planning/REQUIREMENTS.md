@@ -53,9 +53,9 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 
 ### System Prompt
 
-- [ ] **SPRT-01**: Agent system prompt in agent.ts is optimized for conciseness and context window efficiency
-- [ ] **SPRT-02**: Tool descriptions are shortened to essential information only
-- [ ] **SPRT-03**: Agent has self-awareness instructions (capabilities, limits, when to escalate)
+- [x] **SPRT-01**: Agent system prompt in agent.ts is optimized for conciseness and context window efficiency
+- [x] **SPRT-02**: Tool descriptions are shortened to essential information only
+- [x] **SPRT-03**: Agent has self-awareness instructions (capabilities, limits, when to escalate)
 
 ## v22.0+ Requirements (Future)
 
@@ -115,9 +115,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGI-04 | Phase 26 | Complete |
 | AGI-05 | Phase 27 | Complete |
 | AGI-06 | Phase 27 | Complete |
-| SPRT-01 | Phase 28 | Pending |
-| SPRT-02 | Phase 28 | Pending |
-| SPRT-03 | Phase 28 | Pending |
+| SPRT-01 | Phase 28 | Complete |
+| SPRT-02 | Phase 28 | Complete |
+| SPRT-03 | Phase 28 | Complete |
 
 **Coverage:**
 - v21.0 requirements: 30 total

@@ -52,7 +52,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed (completed 2026-03-28)
 - [x] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity (completed 2026-03-28)
 - [x] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent (completed 2026-03-28)
-- [ ] **Phase 28: System Prompt Optimization** - Concise system prompt, shortened tool descriptions, self-awareness instructions
+- [x] **Phase 28: System Prompt Optimization** - Concise system prompt, shortened tool descriptions, self-awareness instructions (completed 2026-03-28)
 
 ## Phase Details
 
@@ -179,7 +179,7 @@ Plans:
   3. The AI demonstrates self-awareness: it knows what it can do, what it cannot do, and when to escalate to the user rather than attempting tasks beyond its capabilities
 **Plans**: 1 plan
 Plans:
-- [ ] 28-01-PLAN.md — Optimize NATIVE_SYSTEM_PROMPT (remove redundancy, condense sections, add self-awareness) + shorten all 43 tool descriptions in daemon.ts
+- [x] 28-01-PLAN.md — Optimize NATIVE_SYSTEM_PROMPT (remove redundancy, condense sections, add self-awareness) + shorten all 43 tool descriptions in daemon.ts
 
 ## Progress
 
@@ -199,7 +199,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 28. System Prompt Optimization | v21.0 | 0/1 | Not started | - |
+| 28. System Prompt Optimization | v21.0 | 1/1 | Complete   | 2026-03-28 |
 
 ---
 

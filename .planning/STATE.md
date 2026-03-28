@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 27-01-PLAN.md
-last_updated: "2026-03-28T12:11:24.329Z"
+stopped_at: Completed 28-01-PLAN.md
+last_updated: "2026-03-28T12:30:13.164Z"
 progress:
   total_phases: 10
-  completed_phases: 9
-  total_plans: 12
-  completed_plans: 12
+  completed_phases: 10
+  total_plans: 13
+  completed_plans: 13
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v21.0 -- Autonomous Agent Platform
-**Current focus:** Phase 27 — Self-Evaluation & Improvement Loop
+**Current focus:** Phase 28 — System Prompt Optimization
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
+Phase: 28 (System Prompt Optimization) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -73,6 +73,8 @@ Plan: Not started
 - [Phase 27]: Flash tier for Self-Improvement Agent to minimize cost; user can upgrade via Agents tab
 - [Phase 27]: seedBuiltInAgents() pattern: get() before create(), respect user stop/delete, loopRunner.start() only on first creation
 - [Phase 27]: Self-Evaluation section is 18 lines (under 20-line budget); createdBy: system skips channel routing
+- [Phase 28]: Removed Tool Overview and How You Work sections from NATIVE_SYSTEM_PROMPT (redundant with native tool calling)
+- [Phase 28]: Self-Awareness section placed after Rules, before Browser Safety; canvas_render kept 7-line type docs (essential for correct content)
 
 ### Pending Todos
 
@@ -84,6 +86,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T12:08:03.920Z
-Stopped at: Completed 27-01-PLAN.md
+Last session: 2026-03-28T12:30:13.161Z
+Stopped at: Completed 28-01-PLAN.md
 Resume file: None
