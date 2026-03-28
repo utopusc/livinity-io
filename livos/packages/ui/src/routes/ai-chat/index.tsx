@@ -20,7 +20,7 @@ import {TextEffect} from '@/components/motion-primitives/text-effect'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
-import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
+import {useAgentSocket, type ChatMessage, type AgentStatus} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 import {ChatMessageItem} from './chat-messages'
@@ -167,6 +167,7 @@ export default function AiChat() {
 		refetchInterval: 10_000,
 	})
 	const deleteMutation = trpcReact.ai.deleteConversation.useMutation()
+	const sendMutation = trpcReact.ai.send.useMutation()
 
 	// Canvas state
 	const [canvasArtifact, setCanvasArtifact] = useState<{
@@ -294,19 +295,41 @@ export default function AiChat() {
 		agent.interrupt()
 	}, [agent])
 
-	const handleSend = useCallback(() => {
+	const handleSend = useCallback(async () => {
 		const text = input.trim()
 		if (!text) return
 		setInput('')
 		// Reset textarea height after clearing
 		const textarea = document.querySelector('textarea')
 		if (textarea) textarea.style.height = 'auto'
-		if (agent.isStreaming) {
-			agent.sendFollowUp(text)
+
+		if (agent.isConnected && agent.connectionStatus === 'connected') {
+			// WebSocket path (new v20.0)
+			if (agent.isStreaming) {
+				agent.sendFollowUp(text)
+			} else {
+				agent.sendMessage(text, undefined, activeConversationId)
+			}
 		} else {
-			agent.sendMessage(text, undefined, activeConversationId)
+			// Fallback to tRPC send (legacy path — works without WebSocket)
+			try {
+				const result = await sendMutation.mutateAsync({
+					conversationId: activeConversationId,
+					message: text,
+				})
+				if (result?.message) {
+					// Add both user and assistant messages to display
+					agent.loadConversation([
+						...agent.messages,
+						{id: `user_${Date.now()}`, role: 'user', content: text, isStreaming: false},
+						{id: `asst_${Date.now()}`, role: 'assistant', content: result.message.content || '', isStreaming: false, toolCalls: []},
+					], activeConversationId)
+				}
+			} catch (err: any) {
+				console.error('Send failed:', err)
+			}
 		}
-	}, [input, agent, activeConversationId])
+	}, [input, agent, activeConversationId, sendMutation])
 
 	const handleNewConversation = () => {
 		agent.clearMessages()
@@ -469,9 +492,20 @@ export default function AiChat() {
 								</div>
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
-									{displayMessages.map((msg) => (
-										<ChatMessageItem key={msg.id} message={msg} />
-									))}
+									{displayMessages.map((msg, idx) => {
+										// Only pass agentStatus to the last message if it's a streaming assistant message
+										const isLastStreamingAssistant =
+											msg.role === 'assistant' &&
+											msg.isStreaming &&
+											idx === displayMessages.length - 1
+										return (
+											<ChatMessageItem
+												key={msg.id}
+												message={msg}
+												agentStatus={isLastStreamingAssistant ? agent.agentStatus : undefined}
+											/>
+										)
+									})}
 									<div ref={messagesEndRef} />
 								</div>
 							)}

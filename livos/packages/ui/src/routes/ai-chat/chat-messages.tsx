@@ -15,8 +15,9 @@ import {
 } from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
-import type {ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
+import type {AgentStatus, ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
 
+import {AgentStatusOverlay} from './agent-status-overlay'
 import {StreamingMessage} from './streaming-message'
 
 // --- Helpers ---
@@ -74,8 +75,8 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 	// Shell commands: show just the command string
 	if (isShellTool(toolCall.name) && toolCall.input.command) {
 		return (
-			<div className='rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300'>
-				<span className='text-zinc-500'>$ </span>
+			<div className='rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
+				<span className='text-text-tertiary'>$ </span>
 				{String(toolCall.input.command)}
 			</div>
 		)
@@ -86,7 +87,7 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 		const path = toolCall.input.path || toolCall.input.file_path || toolCall.input.filename
 		if (path) {
 			return (
-				<div className='rounded bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-300'>
+				<div className='rounded bg-surface-2 px-2 py-1.5 font-mono text-xs text-text-primary'>
 					{String(path)}
 				</div>
 			)
@@ -95,7 +96,7 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 
 	// Default: prettified JSON
 	return (
-		<pre className='overflow-x-auto whitespace-pre-wrap text-xs text-zinc-400'>
+		<pre className='overflow-x-auto whitespace-pre-wrap text-xs text-text-secondary'>
 			{JSON.stringify(toolCall.input, null, 2)}
 		</pre>
 	)
@@ -114,7 +115,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	if (isShellTool(toolCall.name)) {
 		return (
 			<div>
-				<pre className='max-h-60 overflow-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300'>
+				<pre className='max-h-60 overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 					{displayOutput}
 				</pre>
 				{isLong && (
@@ -138,9 +139,9 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 		return (
 			<div>
 				{filePath && (
-					<div className='mb-1 font-mono text-xs text-zinc-500'>{filePath}</div>
+					<div className='mb-1 font-mono text-xs text-text-tertiary'>{filePath}</div>
 				)}
-				<pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300'>
+				<pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 					{displayOutput}
 				</pre>
 				{isLong && (
@@ -161,7 +162,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	// Default: scrollable output
 	return (
 		<div>
-			<pre className='max-h-60 overflow-auto whitespace-pre-wrap text-xs text-zinc-400'>
+			<pre className='max-h-60 overflow-auto whitespace-pre-wrap text-xs text-text-secondary'>
 				{displayOutput}
 			</pre>
 			{isLong && (
@@ -197,7 +198,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 		switch (toolCall.status) {
 			case 'running':
 				return (
-					<span className='ml-auto flex items-center gap-1.5 text-zinc-400'>
+					<span className='ml-auto flex items-center gap-1.5 text-text-secondary'>
 						{toolCall.elapsedSeconds != null && (
 							<span className='font-mono text-xs'>{formatElapsed(toolCall.elapsedSeconds)}</span>
 						)}
@@ -212,10 +213,10 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	})()
 
 	return (
-		<div className='rounded-lg border border-zinc-700/50 bg-zinc-900/50 text-sm'>
+		<div className='rounded-lg border border-border-default bg-surface-1 text-sm'>
 			<button
 				onClick={() => setExpanded(!expanded)}
-				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/50'
+				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2'
 			>
 				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
 				<ToolIcon size={14} className={iconColor} />
@@ -232,7 +233,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 						transition={{duration: 0.2, ease: 'easeInOut'}}
 						className='overflow-hidden'
 					>
-						<div className='border-t border-zinc-700/50 px-3 py-2'>
+						<div className='border-t border-border-default px-3 py-2'>
 							{/* Error banner */}
 							{toolCall.status === 'error' && (toolCall.errorMessage || toolCall.output) && (
 								<div className='mb-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400'>
@@ -241,13 +242,13 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 							)}
 
 							{/* Input section */}
-							<div className='mb-1 text-xs uppercase text-zinc-500'>Input</div>
+							<div className='mb-1 text-xs uppercase text-text-tertiary'>Input</div>
 							<div className='mb-2'>{renderToolInput(toolCall)}</div>
 
 							{/* Output section */}
 							{toolCall.output != null && toolCall.status !== 'error' && (
 								<>
-									<div className='mb-1 text-xs uppercase text-zinc-500'>Output</div>
+									<div className='mb-1 text-xs uppercase text-text-tertiary'>Output</div>
 									<ToolOutput toolCall={toolCall} />
 								</>
 							)}
@@ -273,10 +274,14 @@ export function UserMessage({message}: {message: ChatMessage}) {
 
 // --- AssistantMessage ---
 
-export function AssistantMessage({message}: {message: ChatMessage}) {
+export function AssistantMessage({message, agentStatus}: {message: ChatMessage; agentStatus?: AgentStatus}) {
 	return (
 		<div className='flex justify-start'>
 			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4'>
+				{/* Status overlay -- only visible while this message is streaming */}
+				{message.isStreaming && agentStatus && agentStatus.phase !== 'idle' && (
+					<AgentStatusOverlay status={agentStatus} />
+				)}
 				<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
 				{message.toolCalls && message.toolCalls.length > 0 && (
 					<div className='mt-2 space-y-1'>
@@ -295,7 +300,7 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 export function SystemMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='py-2 text-center'>
-			<span className='text-xs italic text-zinc-500'>{message.content}</span>
+			<span className='text-xs italic text-text-tertiary'>{message.content}</span>
 		</div>
 	)
 }
@@ -325,13 +330,13 @@ function isErrorMessage(message: ChatMessage): boolean {
 	return message.id.startsWith('err_')
 }
 
-export function ChatMessageItem({message}: {message: ChatMessage}) {
+export function ChatMessageItem({message, agentStatus}: {message: ChatMessage; agentStatus?: AgentStatus}) {
 	if (message.role === 'user') {
 		return <UserMessage message={message} />
 	}
 
 	if (message.role === 'assistant') {
-		return <AssistantMessage message={message} />
+		return <AssistantMessage message={message} agentStatus={agentStatus} />
 	}
 
 	// System messages -- check if it's an error
