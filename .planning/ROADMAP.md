@@ -90,7 +90,7 @@ Plans:
   3. User clicks an agent and sees its chat history, last result, and configuration details in a detail view
 **Plans**: 2 plans
 Plans:
-- [ ] 21-01-PLAN.md — Add history REST endpoint in Nexus, enhance list() with description/tier, add getSubagent and getSubagentHistory tRPC queries
+- [x] 21-01-PLAN.md — Add history REST endpoint in Nexus, enhance list() with description/tier, add getSubagent and getSubagentHistory tRPC queries
 - [ ] 21-02-PLAN.md — Rename LivHub tab to Agents, create AgentsPanel with list/detail views
 
 ### Phase 22: Agent Interaction & Management
@@ -176,7 +176,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 |-------|-----------|----------------|--------|-----------|
 | 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 20. Conversation Persistence & History | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 21. Sidebar Agents Tab | v21.0 | 0/2 | Not started | - |
+| 21. Sidebar Agents Tab | v21.0 | 1/2 | In Progress|  |
 | 22. Agent Interaction & Management | v21.0 | 0/TBD | Not started | - |
 | 23. Slash Command Menu | v21.0 | 0/TBD | Not started | - |
 | 24. Tool Conditional Registration | v21.0 | 0/TBD | Not started | - |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-03-28T09:35:51.209Z"
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-03-28T09:52:56.642Z"
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v21.0 -- Autonomous Agent Platform
-**Current focus:** Phase 20 — Conversation Persistence & History
+**Current focus:** Phase 21 — Sidebar Agents Tab
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
+Phase: 21 (Sidebar Agents Tab) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: Not started
 - [Phase 20]: localStorage persistence for last-used conversation ID (liv:lastConversationId)
 - [Phase 20]: Auto-load priority: URL param > localStorage > most recent backend conv > empty state
 - [Phase 20]: Null-safe activeConversationId (string|null) with conv ID generated only on explicit user action
+- [Phase 21]: History endpoint returns empty array on error (graceful degradation), getSubagent throws TRPCError NOT_FOUND
 
 ### Pending Todos
 
@@ -62,6 +63,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T09:33:16.982Z
-Stopped at: Completed 20-01-PLAN.md
+Last session: 2026-03-28T09:52:56.638Z
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None
