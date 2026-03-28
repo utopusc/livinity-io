@@ -76,7 +76,9 @@ Plans:
   1. User closes the AI Chat tab, reopens it, and sees their previous messages loaded from Redis (not a blank chat)
   2. User sees a list of past conversations in a sidebar panel with identifying information (title/timestamp)
   3. User clicks any past conversation and its full message history loads into the chat view
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 20-01-PLAN.md — Fix mount auto-load logic, add localStorage persistence, fix missing await in getConversation route
 
 ### Phase 21: Sidebar Agents Tab
 **Goal**: Users can discover and inspect all agents from a dedicated Agents tab that replaces the old LivHub section in the AI Chat sidebar
@@ -170,7 +172,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 20. Conversation Persistence & History | v21.0 | 0/TBD | Not started | - |
+| 20. Conversation Persistence & History | v21.0 | 0/1 | Not started | - |
 | 21. Sidebar Agents Tab | v21.0 | 0/TBD | Not started | - |
 | 22. Agent Interaction & Management | v21.0 | 0/TBD | Not started | - |
 | 23. Slash Command Menu | v21.0 | 0/TBD | Not started | - |
