@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-03-28T09:52:56.642Z"
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-03-28T09:59:40.313Z"
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 2 of 2
 - [Phase 20]: Auto-load priority: URL param > localStorage > most recent backend conv > empty state
 - [Phase 20]: Null-safe activeConversationId (string|null) with conv ID generated only on explicit user action
 - [Phase 21]: History endpoint returns empty array on error (graceful degradation), getSubagent throws TRPCError NOT_FOUND
+- [Phase 21]: Kept SkillsPanel rendering block intact for backward compatibility; Agents tab read-only per Phase 21 scope
 
 ### Pending Todos
 
@@ -63,6 +64,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T09:52:56.638Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-03-28T09:59:40.310Z
+Stopped at: Completed 21-02-PLAN.md
 Resume file: None

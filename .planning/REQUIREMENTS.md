@@ -20,7 +20,7 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 
 ### Sidebar Agents
 
-- [ ] **AGNT-01**: User sees "Agents" tab (renamed from "LivHub") in AI Chat sidebar
+- [x] **AGNT-01**: User sees "Agents" tab (renamed from "LivHub") in AI Chat sidebar
 - [x] **AGNT-02**: User can see a list of active agents with status (active/paused/stopped), last run time, and run count
 - [x] **AGNT-03**: User can click an agent to view its chat history, last result, and configuration
 - [ ] **AGNT-04**: User can send a message to an agent directly from the Agents tab
@@ -94,7 +94,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHAT-04 | Phase 20 | Complete |
 | CHAT-05 | Phase 20 | Complete |
 | CHAT-06 | Phase 20 | Complete |
-| AGNT-01 | Phase 21 | Pending |
+| AGNT-01 | Phase 21 | Complete |
 | AGNT-02 | Phase 21 | Complete |
 | AGNT-03 | Phase 21 | Complete |
 | AGNT-04 | Phase 22 | Pending |
