@@ -50,7 +50,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection (completed 2026-03-28)
 - [x] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state (completed 2026-03-28)
 - [x] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed (completed 2026-03-28)
-- [ ] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity
+- [x] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity (completed 2026-03-28)
 - [ ] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent
 - [ ] **Phase 28: System Prompt Optimization** - Concise system prompt, shortened tool descriptions, self-awareness instructions
 
@@ -155,7 +155,7 @@ Plans:
   3. Tier selection rules are configurable in nexus/config/tiers.json and the AI's selectTier() function reads them at runtime
 **Plans**: 1 plan
 Plans:
-- [ ] 26-01-PLAN.md — Configurable tiers.json + selectTier() refactor + Autonomous Scheduling system prompt section
+- [x] 26-01-PLAN.md — Configurable tiers.json + selectTier() refactor + Autonomous Scheduling system prompt section
 
 ### Phase 27: Self-Evaluation & Improvement Loop
 **Goal**: The AI evaluates its own performance after tasks and continuously identifies capability gaps to fill -- creating a self-improving feedback loop
@@ -193,7 +193,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 26. Autonomous Schedule & Tier Management | v21.0 | 0/1 | Not started | - |
+| 26. Autonomous Schedule & Tier Management | v21.0 | 1/1 | Complete   | 2026-03-28 |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |
 | 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |
 
