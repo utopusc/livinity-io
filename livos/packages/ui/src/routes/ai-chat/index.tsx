@@ -12,6 +12,7 @@ import {
 	IconCode,
 	IconScreenshot,
 	IconDeviceDesktop,
+	IconRobot,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -28,10 +29,11 @@ import {ChatInput} from './chat-input'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
+const AgentsPanel = lazy(() => import('./agents-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
 const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
 
-type SidebarView = 'chat' | 'mcp' | 'skills'
+type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents'
 
 function ConversationSidebar({
 	conversations,
@@ -95,13 +97,13 @@ function ConversationSidebar({
 					MCP
 				</button>
 				<button
-					onClick={() => onViewChange('skills')}
+					onClick={() => onViewChange('agents')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'skills' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+						activeView === 'agents' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
 					)}
 				>
-					<IconPuzzle size={14} />
-					LivHub
+					<IconRobot size={14} />
+					Agents
 				</button>
 			</div>
 
@@ -139,7 +141,7 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{(activeView === 'mcp' || activeView === 'skills') && (
+			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
 				<div className='flex-1' />
 			)}
 		</div>
@@ -687,6 +689,13 @@ export default function AiChat() {
 				<div className='flex-1 overflow-hidden'>
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<SkillsPanel />
+					</Suspense>
+				</div>
+			)}
+			{activeView === 'agents' && (
+				<div className='flex-1 overflow-hidden'>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<AgentsPanel />
 					</Suspense>
 				</div>
 			)}
