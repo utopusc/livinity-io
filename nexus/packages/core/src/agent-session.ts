@@ -334,7 +334,7 @@ export class AgentSessionManager {
           persistSession: false,
           abortController: session.abortController,
           env: safeEnv,
-          includePartialMessages: true,
+          // SDK emits stream_event/content_block_delta natively — no includePartialMessages needed
         },
       });
 
