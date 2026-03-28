@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-03-28T10:35:27.755Z"
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-03-28T10:51:50.335Z"
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v21.0 -- Autonomous Agent Platform
-**Current focus:** Phase 22 — Agent Interaction & Management
+**Current focus:** Phase 23 — Slash Command Menu
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
+Phase: 23 (Slash Command Menu) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -57,6 +57,9 @@ Plan: Not started
 - [Phase 22]: Loop start/stop endpoints update subagent status alongside LoopRunner control for consistent state
 - [Phase 22-02]: Compact create form omits tools/systemPrompt/schedule (sidebar space constraints, defaults to all tools)
 - [Phase 22-02]: LoopControls conditionally rendered via hasLoopConfig flag to prevent unnecessary API calls
+- [Phase 23]: Used X-API-Key header casing matching existing proxy pattern in routes.ts
+- [Phase 23]: Slash command descriptions truncated to 80 chars for compact frontend payload
+- [Phase 23]: tRPC listSlashCommands returns empty array on failure (graceful degradation)
 
 ### Pending Todos
 
@@ -68,6 +71,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T10:32:21.482Z
-Stopped at: Completed 22-02-PLAN.md
+Last session: 2026-03-28T10:51:50.331Z
+Stopped at: Completed 23-01-PLAN.md
 Resume file: None
