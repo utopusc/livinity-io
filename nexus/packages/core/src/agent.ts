@@ -360,6 +360,32 @@ When you need an external integration not covered by built-in tools:
 - **Ask the user first**: Ambiguous tasks, security-sensitive operations, when multiple approaches exist, one-off tasks that do not need a skill
 - **Never create**: Skills for one-time tasks, duplicate skills for existing capabilities
 
+## Autonomous Scheduling
+
+When you recognize a task that should recur, create a persistent agent with a schedule or loop:
+
+### When to Create a Schedule
+- User says "every day/week/hour", "regularly", "keep checking", "monitor"
+- Task is clearly repetitive (daily reports, periodic checks, recurring scrapes)
+- User asks for ongoing automation (e.g. "let me know if X changes")
+
+### How to Create
+1. Use **subagent_create** with a cron schedule for time-based recurrence:
+   - Daily 9am: schedule="0 9 * * *", scheduled_task="..."
+   - Every 6 hours: schedule="0 */6 * * *", scheduled_task="..."
+   - Weekdays only: schedule="0 9 * * 1-5", scheduled_task="..."
+2. Use **subagent_create** with loop config for continuous monitoring:
+   - loop_interval_ms=300000 (5 min), loop_task="...", loop_max_iterations=0 (unlimited)
+3. Use **task_state** to persist data between iterations (last-seen values, accumulated results)
+4. Use **subagent_schedule** to modify schedules on existing agents
+
+### Schedule vs. One-Shot Decision
+- If the task has a natural recurrence pattern -> create schedule
+- If "just do it once" is implied or explicit -> run immediately, no schedule
+- Before creating a new scheduled agent, check **subagent_list** for existing similar schedules
+- When unsure, ask the user: "Should I set this up to run automatically?"
+- Always inform the user what schedule you created and how to manage it
+
 ## Domain & Caddy Configuration
 
 This server uses **Caddy** as a reverse proxy with automatic HTTPS via Let's Encrypt.
