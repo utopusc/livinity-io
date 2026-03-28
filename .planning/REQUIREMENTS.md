@@ -11,9 +11,9 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 
 ### AI Chat Visibility
 
-- [ ] **CHAT-01**: User can see partial AI response streaming live below StatusIndicator as markdown while agent is processing
-- [ ] **CHAT-02**: User can see tool calls, thinking state, and work steps in real-time during agent processing
-- [ ] **CHAT-03**: When processing completes, partial answer is replaced by full response as a proper chat message
+- [x] **CHAT-01**: User can see partial AI response streaming live below StatusIndicator as markdown while agent is processing
+- [x] **CHAT-02**: User can see tool calls, thinking state, and work steps in real-time during agent processing
+- [x] **CHAT-03**: When processing completes, partial answer is replaced by full response as a proper chat message
 - [ ] **CHAT-04**: User can close and reopen the AI Chat tab and see previous messages loaded from Redis
 - [ ] **CHAT-05**: User can see a list of past conversations in a sidebar panel
 - [ ] **CHAT-06**: User can click a past conversation to load its full message history
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAT-01 | Phase 19 | Pending |
-| CHAT-02 | Phase 19 | Pending |
-| CHAT-03 | Phase 19 | Pending |
+| CHAT-01 | Phase 19 | Complete |
+| CHAT-02 | Phase 19 | Complete |
+| CHAT-03 | Phase 19 | Complete |
 | CHAT-04 | Phase 20 | Pending |
 | CHAT-05 | Phase 20 | Pending |
 | CHAT-06 | Phase 20 | Pending |

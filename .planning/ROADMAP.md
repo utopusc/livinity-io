@@ -43,7 +43,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) must NOT be modified in any phase.
 
-- [ ] **Phase 19: AI Chat Streaming Visibility** - Real-time partial answer streaming and tool/thinking state visibility during agent processing
+- [x] **Phase 19: AI Chat Streaming Visibility** - Real-time partial answer streaming and tool/thinking state visibility during agent processing (completed 2026-03-28)
 - [ ] **Phase 20: Conversation Persistence & History** - Message history persistence across sessions with browsable conversation sidebar
 - [ ] **Phase 21: Sidebar Agents Tab** - Renamed LivHub to Agents with agent listing, status display, and detail views
 - [ ] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation
@@ -66,7 +66,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   3. When the agent finishes processing, the streaming partial answer disappears and is replaced by the complete response rendered as a proper chat message
 **Plans**: 1 plan
 Plans:
-- [ ] 19-01-PLAN.md — Enhance useAgentSocket with agentStatus tracking, create AgentStatusOverlay component, wire into chat message rendering
+- [x] 19-01-PLAN.md — Enhance useAgentSocket with agentStatus tracking, create AgentStatusOverlay component, wire into chat message rendering
 
 ### Phase 20: Conversation Persistence & History
 **Goal**: Users can close AI Chat, reopen it later, and pick up where they left off -- with a browsable list of past conversations
@@ -169,7 +169,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 19. AI Chat Streaming Visibility | v21.0 | 0/1 | Planning complete | - |
+| 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete   | 2026-03-28 |
 | 20. Conversation Persistence & History | v21.0 | 0/TBD | Not started | - |
 | 21. Sidebar Agents Tab | v21.0 | 0/TBD | Not started | - |
 | 22. Agent Interaction & Management | v21.0 | 0/TBD | Not started | - |
