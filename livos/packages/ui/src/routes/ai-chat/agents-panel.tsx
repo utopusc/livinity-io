@@ -6,7 +6,7 @@ import {cn} from '@/shadcn-lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────
 
-type AgentsView = {mode: 'list'} | {mode: 'detail'; agentId: string}
+type AgentsView = {mode: 'list'} | {mode: 'detail'; agentId: string} | {mode: 'create'}
 
 // ── Status Badge ───────────────────────────────────────────────
 
@@ -415,6 +415,86 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 	)
 }
 
+// ── Create Agent Form ──────────────────────────────────────────
+
+function CreateAgentForm({onClose}: {onClose: () => void}) {
+	const [form, setForm] = useState({name: '', description: '', tier: 'sonnet' as 'flash' | 'sonnet' | 'opus'})
+	const createMutation = trpcReact.ai.createSubagent.useMutation()
+	const utils = trpcReact.useUtils()
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (!form.name.trim() || createMutation.isPending) return
+		const id = form.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+		try {
+			await createMutation.mutateAsync({
+				id,
+				name: form.name,
+				description: form.description,
+				tier: form.tier,
+			})
+			utils.ai.listSubagents.invalidate()
+			onClose()
+		} catch {
+			// handled by tRPC
+		}
+	}
+
+	return (
+		<form onSubmit={handleSubmit} className='space-y-3 rounded-radius-sm border border-border-default bg-surface-1 p-3'>
+			<div className='flex items-center justify-between'>
+				<span className='text-body-sm font-semibold text-text-primary'>New Agent</span>
+				<button type='button' onClick={onClose} className='text-caption text-text-tertiary transition-colors hover:text-text-secondary'>
+					Cancel
+				</button>
+			</div>
+
+			<div>
+				<label className='mb-1 block text-caption-sm font-medium text-text-tertiary'>Name</label>
+				<input
+					value={form.name}
+					onChange={(e) => setForm((f) => ({...f, name: e.target.value}))}
+					placeholder='e.g. Research Assistant'
+					required
+					className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
+				/>
+			</div>
+
+			<div>
+				<label className='mb-1 block text-caption-sm font-medium text-text-tertiary'>Description</label>
+				<textarea
+					value={form.description}
+					onChange={(e) => setForm((f) => ({...f, description: e.target.value}))}
+					placeholder='What does this agent do?'
+					rows={2}
+					className='w-full resize-none rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
+				/>
+			</div>
+
+			<div>
+				<label className='mb-1 block text-caption-sm font-medium text-text-tertiary'>Model Tier</label>
+				<select
+					value={form.tier}
+					onChange={(e) => setForm((f) => ({...f, tier: e.target.value as 'flash' | 'sonnet' | 'opus'}))}
+					className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none focus:border-brand'
+				>
+					<option value='flash'>flash</option>
+					<option value='sonnet'>sonnet</option>
+					<option value='opus'>opus</option>
+				</select>
+			</div>
+
+			<button
+				type='submit'
+				disabled={!form.name.trim() || createMutation.isPending}
+				className='w-full rounded-radius-sm bg-brand px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50'
+			>
+				{createMutation.isPending ? 'Creating...' : 'Create Agent'}
+			</button>
+		</form>
+	)
+}
+
 // ── Main Panel ─────────────────────────────────────────────────
 
 export default function AgentsPanel() {
@@ -429,19 +509,29 @@ export default function AgentsPanel() {
 						<div className='flex h-8 w-8 items-center justify-center rounded-radius-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20'>
 							<IconRobot size={16} className='text-blue-400' />
 						</div>
-						<div>
+						<div className='flex-1'>
 							<h2 className='text-body font-semibold text-text-primary'>Agents</h2>
 							<p className='text-caption-sm text-text-tertiary'>
 								Autonomous AI agents running on your server
 							</p>
 						</div>
+						<button
+							onClick={() => setView({mode: 'create'})}
+							className='rounded-radius-sm p-1.5 text-text-secondary transition-colors hover:bg-surface-2 hover:text-brand'
+						>
+							<IconPlus size={16} />
+						</button>
 					</div>
 				</div>
 			)}
 
 			{/* Content */}
 			<div className='flex-1 overflow-y-auto'>
-				{view.mode === 'list' ? (
+				{view.mode === 'create' ? (
+					<div className='p-3'>
+						<CreateAgentForm onClose={() => setView({mode: 'list'})} />
+					</div>
+				) : view.mode === 'list' ? (
 					<div className='p-3'>
 						<AgentList onSelect={(id) => setView({mode: 'detail', agentId: id})} />
 					</div>
