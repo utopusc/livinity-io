@@ -2053,4 +2053,23 @@ export default router({
 			return {ok: true, autoConsent: input.enabled}
 		}),
 
+	// ── Slash Commands ─────────────────────────────────────────
+
+	/** List all available slash commands from Nexus (built-in + tools + skills) */
+	listSlashCommands: privateProcedure.query(async () => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const headers: Record<string, string> = {}
+			if (process.env.LIV_API_KEY) {
+				headers['X-API-Key'] = process.env.LIV_API_KEY
+			}
+			const response = await fetch(`${nexusUrl}/api/slash-commands`, {headers})
+			if (!response.ok) return {commands: []}
+			const data = await response.json() as {commands: Array<{name: string; description: string; category: string}>}
+			return data
+		} catch {
+			return {commands: []}
+		}
+	}),
+
 })
