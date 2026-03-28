@@ -49,7 +49,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation (completed 2026-03-28)
 - [x] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection (completed 2026-03-28)
 - [x] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state (completed 2026-03-28)
-- [ ] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed
+- [x] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed (completed 2026-03-28)
 - [ ] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity
 - [ ] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent
 - [ ] **Phase 28: System Prompt Optimization** - Concise system prompt, shortened tool descriptions, self-awareness instructions
@@ -143,7 +143,7 @@ Plans:
   3. Newly created skills and installed tools are immediately usable in subsequent agent turns
 **Plans**: 1 plan
 Plans:
-- [ ] 25-01-PLAN.md — System prompt Self-Improvement section + enhanced skill_generate and mcp_install tool responses
+- [x] 25-01-PLAN.md — System prompt Self-Improvement section + enhanced skill_generate and mcp_install tool responses
 
 ### Phase 26: Autonomous Schedule & Tier Management
 **Goal**: The AI can manage its own execution patterns -- creating recurring schedules for repetitive tasks and selecting the right model tier for each task's complexity
@@ -190,7 +190,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 22. Agent Interaction & Management | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 25. Autonomous Skill & Tool Creation | v21.0 | 0/1 | In progress | - |
+| 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete   | 2026-03-28 |
 | 26. Autonomous Schedule & Tier Management | v21.0 | 0/TBD | Not started | - |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |
 | 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |

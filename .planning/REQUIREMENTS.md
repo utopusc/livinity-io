@@ -37,8 +37,8 @@ Requirements for v21.0 milestone. Each maps to roadmap phases.
 
 ### AGI Mechanism
 
-- [ ] **AGI-01**: AI can autonomously create new skills when it determines one is needed, writing to nexus/skills/
-- [ ] **AGI-02**: AI can autonomously search and install MCP tools via mcp_registry_search + mcp_install
+- [x] **AGI-01**: AI can autonomously create new skills when it determines one is needed, writing to nexus/skills/
+- [x] **AGI-02**: AI can autonomously search and install MCP tools via mcp_registry_search + mcp_install
 - [ ] **AGI-03**: AI can autonomously create and manage schedules and loops, analyzing tasks to determine recurrence needs
 - [ ] **AGI-04**: AI selects appropriate model tier based on task complexity (flash/haiku for simple, sonnet for reasoning, opus for architecture) via enhanced selectTier() with configurable rules in nexus/config/tiers.json
 - [ ] **AGI-05**: AI can evaluate its own performance after completing a task and trigger self-improvement actions (create skills, update skills, install tools, set schedules)
@@ -109,8 +109,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOOL-02 | Phase 24 | Complete |
 | TOOL-03 | Phase 24 | Complete |
 | TOOL-04 | Phase 24 | Complete |
-| AGI-01 | Phase 25 | Pending |
-| AGI-02 | Phase 25 | Pending |
+| AGI-01 | Phase 25 | Complete |
+| AGI-02 | Phase 25 | Complete |
 | AGI-03 | Phase 26 | Pending |
 | AGI-04 | Phase 26 | Pending |
 | AGI-05 | Phase 27 | Pending |
