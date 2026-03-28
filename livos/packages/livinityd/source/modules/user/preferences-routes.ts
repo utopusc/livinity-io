@@ -1,4 +1,3 @@
-import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {router, privateProcedure} from '../server/trpc/trpc.js'
@@ -11,9 +10,7 @@ import {
 export default router({
 	// Get all preferences for the current user
 	getAll: privateProcedure.query(async ({ctx}) => {
-		if (!ctx.currentUser) {
-			throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Multi-user mode required'})
-		}
+		if (!ctx.currentUser) return {}
 		return getUserPreferences(ctx.currentUser.id)
 	}),
 
@@ -25,9 +22,7 @@ export default router({
 			}),
 		)
 		.query(async ({ctx, input}) => {
-			if (!ctx.currentUser) {
-				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Multi-user mode required'})
-			}
+			if (!ctx.currentUser) return {}
 			return getUserPreferences(ctx.currentUser.id, input.keys)
 		}),
 
@@ -40,9 +35,7 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			if (!ctx.currentUser) {
-				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Multi-user mode required'})
-			}
+			if (!ctx.currentUser) return true
 			await setUserPreference(ctx.currentUser.id, input.key, input.value)
 			return true
 		}),
@@ -55,9 +48,7 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			if (!ctx.currentUser) {
-				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Multi-user mode required'})
-			}
+			if (!ctx.currentUser) return true
 			await deleteUserPreference(ctx.currentUser.id, input.key)
 			return true
 		}),

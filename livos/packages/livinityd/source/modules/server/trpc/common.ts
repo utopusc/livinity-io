@@ -103,4 +103,9 @@ export const httpOnlyPaths = [
 	// Loop management -- use HTTP to avoid WS connection dependency
 	'ai.startLoop',
 	'ai.stopLoop',
+	// Preferences -- use HTTP so they work with legacy single-user tokens
+	'preferences.getAll',
+	'preferences.get',
+	'preferences.set',
+	'preferences.delete',
 ] as const
