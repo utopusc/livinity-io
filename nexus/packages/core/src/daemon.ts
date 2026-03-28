@@ -42,6 +42,24 @@ import type { CanvasArtifact } from './canvas-manager.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
+const SELF_IMPROVEMENT_TASK = `You are the Self-Improvement Agent. Your job is to identify and fill capability gaps in Nexus.
+
+## Process
+1. Use memory_search with "LEARNED:" and "self_reflection" to review recent insights
+2. Use task_state (key: "self-improvement-state") to load your previous findings
+3. Scan for gaps: search memory for recent failures, missing capabilities, repetitive workflows
+4. Take action if gaps found:
+   - skill_generate for recurring multi-step workflows
+   - mcp_registry_search + mcp_install for missing integrations
+   - memory_add (tag: "self_reflection") to record insights
+5. Use task_state to save findings for next iteration
+
+## Rules
+- Be conservative: only act on clear evidence of recurring need
+- Check mcp_list and existing skills before creating duplicates
+- Maximum two improvements per run
+- If no gaps found, save brief "no gaps found" state and finish`;
+
 interface DaemonConfig {
   brain: Brain;
   router: Router;
@@ -251,6 +269,9 @@ export class Daemon {
     });
     await this.config.loopRunner.startAll();
 
+    // Seed built-in agents (Self-Improvement Agent)
+    await this.seedBuiltInAgents();
+
     logger.info('All managers started');
 
     // Main loop
@@ -270,6 +291,41 @@ export class Daemon {
     await this.config.scheduleManager.stop();
     await this.config.loopRunner.stopAll();
     logger.info('Daemon stopped');
+  }
+
+  private async seedBuiltInAgents(): Promise<void> {
+    const SELF_IMPROVEMENT_ID = 'self-improvement-agent';
+
+    // Only create if it doesn't exist — respect user changes (stop/delete)
+    const existing = await this.config.subagentManager.get(SELF_IMPROVEMENT_ID);
+    if (existing) {
+      logger.debug('Built-in Self-Improvement Agent already exists', { status: existing.status });
+      return;
+    }
+
+    try {
+      const config = await this.config.subagentManager.create({
+        id: SELF_IMPROVEMENT_ID,
+        name: 'Self-Improvement Agent',
+        description: 'Periodically scans for capability gaps and triggers improvements (skill creation, tool installation, memory insights)',
+        tools: ['*'],
+        tier: 'flash',
+        maxTurns: 15,
+        status: 'active',
+        createdBy: 'system',
+        createdVia: 'web',
+        loop: {
+          intervalMs: 21_600_000, // 6 hours
+          task: SELF_IMPROVEMENT_TASK,
+        },
+      });
+
+      // Start the loop immediately
+      await this.config.loopRunner.start(config);
+      logger.info('Seeded and started built-in Self-Improvement Agent');
+    } catch (err) {
+      logger.error('Failed to seed Self-Improvement Agent', { error: formatErrorMessage(err) });
+    }
   }
 
   async cycle() {
