@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: Autonomous Agent Platform
 status: unknown
-stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-03-28T09:15:09.707Z"
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-03-28T09:33:16.984Z"
 progress:
   total_phases: 10
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v21.0 -- Autonomous Agent Platform
-**Current focus:** Phase 19 — AI Chat Streaming Visibility
+**Current focus:** Phase 20 — Conversation Persistence & History
 
 ## Current Position
 
-Phase: 20
-Plan: Not started
+Phase: 20 (Conversation Persistence & History) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -48,6 +48,9 @@ Plan: Not started
 - [Phase 19]: Client-side status derivation from WebSocket events, not server-side polling
 - [Phase 19]: 300ms debounce on thinking transition to prevent flicker between rapid tool calls
 - [Phase 19]: Status overlay only rendered for last streaming assistant message
+- [Phase 20]: localStorage persistence for last-used conversation ID (liv:lastConversationId)
+- [Phase 20]: Auto-load priority: URL param > localStorage > most recent backend conv > empty state
+- [Phase 20]: Null-safe activeConversationId (string|null) with conv ID generated only on explicit user action
 
 ### Pending Todos
 
@@ -59,6 +62,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-28T09:10:30.466Z
-Stopped at: Completed 19-01-PLAN.md
+Last session: 2026-03-28T09:33:16.982Z
+Stopped at: Completed 20-01-PLAN.md
 Resume file: None

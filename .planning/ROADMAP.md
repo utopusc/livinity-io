@@ -44,7 +44,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) must NOT be modified in any phase.
 
 - [x] **Phase 19: AI Chat Streaming Visibility** - Real-time partial answer streaming and tool/thinking state visibility during agent processing (completed 2026-03-28)
-- [ ] **Phase 20: Conversation Persistence & History** - Message history persistence across sessions with browsable conversation sidebar
+- [x] **Phase 20: Conversation Persistence & History** - Message history persistence across sessions with browsable conversation sidebar (completed 2026-03-28)
 - [ ] **Phase 21: Sidebar Agents Tab** - Renamed LivHub to Agents with agent listing, status display, and detail views
 - [ ] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation
 - [ ] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection
@@ -78,7 +78,7 @@ Plans:
   3. User clicks any past conversation and its full message history loads into the chat view
 **Plans**: 1 plan
 Plans:
-- [ ] 20-01-PLAN.md — Fix mount auto-load logic, add localStorage persistence, fix missing await in getConversation route
+- [x] 20-01-PLAN.md — Fix mount auto-load logic, add localStorage persistence, fix missing await in getConversation route
 
 ### Phase 21: Sidebar Agents Tab
 **Goal**: Users can discover and inspect all agents from a dedicated Agents tab that replaces the old LivHub section in the AI Chat sidebar
@@ -172,7 +172,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 20. Conversation Persistence & History | v21.0 | 0/1 | Not started | - |
+| 20. Conversation Persistence & History | v21.0 | 1/1 | Complete   | 2026-03-28 |
 | 21. Sidebar Agents Tab | v21.0 | 0/TBD | Not started | - |
 | 22. Agent Interaction & Management | v21.0 | 0/TBD | Not started | - |
 | 23. Slash Command Menu | v21.0 | 0/TBD | Not started | - |
