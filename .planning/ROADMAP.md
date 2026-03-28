@@ -153,7 +153,9 @@ Plans:
   1. When the AI identifies a task that should recur (e.g., daily backup check), it autonomously creates a schedule or loop using ScheduleManager/LoopRunner
   2. The AI selects the appropriate model tier based on task complexity: flash/haiku for simple lookups, sonnet for reasoning, opus for architecture decisions
   3. Tier selection rules are configurable in nexus/config/tiers.json and the AI's selectTier() function reads them at runtime
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 26-01-PLAN.md — Configurable tiers.json + selectTier() refactor + Autonomous Scheduling system prompt section
 
 ### Phase 27: Self-Evaluation & Improvement Loop
 **Goal**: The AI evaluates its own performance after tasks and continuously identifies capability gaps to fill -- creating a self-improving feedback loop
@@ -191,7 +193,7 @@ Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in paral
 | 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
 | 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
 | 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 26. Autonomous Schedule & Tier Management | v21.0 | 0/TBD | Not started | - |
+| 26. Autonomous Schedule & Tier Management | v21.0 | 0/1 | Not started | - |
 | 27. Self-Evaluation & Improvement Loop | v21.0 | 0/TBD | Not started | - |
 | 28. System Prompt Optimization | v21.0 | 0/TBD | Not started | - |
 
