@@ -100,13 +100,30 @@ Key validated capabilities:
 - ✓ Cost tracking ($X.XXXX badge from SDK result, budget enforcement) — v20.0
 - ✓ Nexus AI Settings panel removed — v20.0
 
+## Current Milestone: v21.0 Autonomous Agent Platform
+
+**Goal:** Transform AI Chat into a fully autonomous agent platform with real-time visibility, agent management, and self-improving AI capabilities.
+
+**Target features:**
+- AI Chat real-time processing visibility (partialAnswer streaming, message history persistence)
+- Sidebar Agents tab (LivHub → Agents, agent listing, interaction, loop controls)
+- Slash command `/` menu (dropdown, built-in + dynamic commands, search/filter)
+- AGI mechanism (autonomous skill creation, MCP tool install, schedule/loop management, smart tier selection, self-evaluation loop)
+- Unused tool conditional registration cleanup
+- System prompt optimization
+
 ## Current State (post v20.0 — Live Agent UI)
 
 AI Chat now uses Claude Agent SDK directly via WebSocket streaming. Professional chat interface with live tool call cards, mid-conversation interaction, conversation history, and cost tracking. Old Nexus AI settings removed. ProviderManager preserved as fallback.
 
 ### Active
 
-*No active requirements — planning next milestone*
+- [ ] AI Chat real-time processing visibility (partialAnswer streaming, history persistence)
+- [ ] Sidebar LivHub → Agents transformation with agent management
+- [ ] Slash command `/` dropdown menu with dynamic commands
+- [ ] AGI mechanism — autonomous skill/tool/schedule creation, self-improvement
+- [ ] Unused tool conditional registration cleanup
+- [ ] System prompt optimization
 
 ### Out of Scope
 
@@ -220,4 +237,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after v20.0 milestone start (Live Agent UI)*
+*Last updated: 2026-03-28 after v21.0 milestone start (Autonomous Agent Platform)*
