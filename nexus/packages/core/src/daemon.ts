@@ -2104,7 +2104,7 @@ ${task}`;
           });
 
           if (result.success) {
-            return { success: true, output: `Skill generated: ${result.filePath}` };
+            return { success: true, output: `Skill generated and compiled: ${result.filePath}\nThe skill is now available for trigger-based activation in future conversations. Inform the user what was created and how to trigger it.` };
           }
           return { success: false, output: '', error: `Skill generation failed: ${result.error}` };
         } catch (err) {
@@ -2264,7 +2264,7 @@ ${task}`;
             installedAt: Date.now(),
           });
 
-          return { success: true, output: `MCP server "${name}" installed and will connect shortly.` };
+          return { success: true, output: `MCP server "${name}" installed and connecting. Its tools will be available in your next conversation. Use mcp_list to verify installation status.` };
         } catch (err) {
           return { success: false, output: '', error: `Install error: ${formatErrorMessage(err)}` };
         }
