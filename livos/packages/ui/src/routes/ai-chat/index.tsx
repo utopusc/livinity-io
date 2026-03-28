@@ -377,6 +377,14 @@ export default function AiChat() {
 		setActiveView('chat')
 	}
 
+	const handleSlashAction = useCallback((action: string) => {
+		if (action === '/new') {
+			handleNewConversation()
+		} else if (action === '/agents') {
+			setActiveView('agents')
+		}
+	}, [handleNewConversation])
+
 	const handleDeleteConversation = async (id: string) => {
 		await deleteMutation.mutateAsync({id})
 		if (localStorage.getItem('liv:lastConversationId') === id) {
@@ -559,6 +567,7 @@ export default function AiChat() {
 							onStop={handleStop}
 							isStreaming={agent.isStreaming}
 							isConnected={agent.isConnected}
+							onSlashAction={handleSlashAction}
 						/>
 					</div>
 
