@@ -386,15 +386,27 @@ export class AgentSessionManager {
 
         // Build SDK tools AFTER registering discover_capability
         sdkTools = buildSdkTools(scopedRegistry, toolPolicy);
-        logger.info('AgentSessionManager: intent-based tool selection', {
-          userId,
-          intentCapabilities: intentResult.capabilities.length,
-          intentTools: intentToolNames.length,
-          fromCache: intentResult.fromCache,
-          totalContextCost: intentResult.totalContextCost,
-          sdkToolCount: sdkTools.length,
-          hasDiscoverCapability: true,
-        });
+
+        // Fallback: if IntentRouter returned very few tools (< 5), the capability registry
+        // may not be fully populated yet. Fall back to full tool set to avoid breaking UX.
+        const MIN_INTENT_TOOLS = 5;
+        if (sdkTools.length < MIN_INTENT_TOOLS) {
+          logger.warn('AgentSessionManager: IntentRouter returned too few tools, falling back to full registry', {
+            intentToolCount: sdkTools.length,
+            threshold: MIN_INTENT_TOOLS,
+          });
+          sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
+        } else {
+          logger.info('AgentSessionManager: intent-based tool selection', {
+            userId,
+            intentCapabilities: intentResult.capabilities.length,
+            intentTools: intentToolNames.length,
+            fromCache: intentResult.fromCache,
+            totalContextCost: intentResult.totalContextCost,
+            sdkToolCount: sdkTools.length,
+            hasDiscoverCapability: true,
+          });
+        }
       } catch (err: any) {
         // Fallback to full tool set if intent routing fails
         logger.error('AgentSessionManager: intent routing failed, using full tool set', { error: err.message });
