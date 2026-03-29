@@ -657,7 +657,7 @@ export default router({
 		return ctx.livinityd.ai.deleteConversation(input.id, userId)
 	}),
 
-	/** Get conversation messages in UI ChatMessage format */
+	/** Get conversation messages in UI ChatMessage format with blocks */
 	getConversationMessages: privateProcedure
 		.input(z.object({id: z.string()}))
 		.query(async ({ctx, input}) => {
@@ -665,21 +665,40 @@ export default router({
 			const conversation = await ctx.livinityd!.ai.getConversation(input.id, userId)
 			if (!conversation) return {messages: []}
 			// Transform backend ChatMessage to UI ChatMessage format
-			const messages = conversation.messages.map((msg) => ({
-				id: msg.id,
-				role: msg.role as 'user' | 'assistant',
-				content: msg.content,
-				toolCalls: msg.toolCalls?.map((tc, i) => ({
+			const messages = conversation.messages.map((msg) => {
+				const toolCalls = msg.toolCalls?.map((tc, i) => ({
 					id: `${msg.id}_tool_${i}`,
 					name: tc.tool,
 					input: tc.params,
 					status: (tc.result.success ? 'complete' : 'error') as 'complete' | 'error',
 					output: tc.result.output,
 					...(tc.result.success ? {} : {errorMessage: tc.result.output}),
-				})),
-				isStreaming: false,
-				timestamp: msg.timestamp,
-			}))
+				}))
+
+				// Strip "Previous conversation:" prefix from saved user messages
+				let content = msg.content
+				if (msg.role === 'user' && content.startsWith('Previous conversation:')) {
+					const match = content.match(/\nCurrent message: ([\s\S]*)$/)
+					if (match) content = match[1]
+				}
+
+				// Build blocks array — text block + tool call blocks for proper UI rendering
+				const blocks: any[] = []
+				if (content) blocks.push({type: 'text', content})
+				if (toolCalls) {
+					for (const tc of toolCalls) blocks.push({type: 'tool', toolCall: tc})
+				}
+
+				return {
+					id: msg.id,
+					role: msg.role as 'user' | 'assistant',
+					content,
+					blocks,
+					toolCalls,
+					isStreaming: false,
+					timestamp: msg.timestamp,
+				}
+			})
 			return {messages, title: conversation.title}
 		}),
 
