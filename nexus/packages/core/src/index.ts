@@ -445,7 +445,7 @@ Conversation:`;
     skillRegistryClient,
     toolRegistry,
     redis,
-    mcpClientManager,
+    mcpConfigManager,
     subagentManager,
   });
   marketplaceMcp.registerTools();
