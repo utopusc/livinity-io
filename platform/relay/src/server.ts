@@ -81,7 +81,7 @@ async function handleAskRequest(
   }
 
   // Allow infrastructure subdomains that aren't user accounts
-  const INFRA_SUBDOMAINS = new Set(['relay', 'api', 'www', 'status', 'apps', 'changelog']);
+  const INFRA_SUBDOMAINS = new Set(['relay', 'api', 'www', 'status', 'apps', 'changelog', 'mcp']);
   if (INFRA_SUBDOMAINS.has(username)) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ allowed: true }));
