@@ -28,8 +28,8 @@ import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 import {ChatMessageItem} from './chat-messages'
 import {ChatInput} from './chat-input'
 
-const McpPanel = lazy(() => import('./mcp-panel').then((m) => ({default: m.McpPanel})))
-const SkillsPanel = lazy(() => import('./skills-panel').then((m) => ({default: m.SkillsPanel})))
+const McpPanel = lazy(() => import('./mcp-panel'))
+const SkillsPanel = lazy(() => import('./skills-panel'))
 const AgentsPanel = lazy(() => import('./agents-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
 const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
