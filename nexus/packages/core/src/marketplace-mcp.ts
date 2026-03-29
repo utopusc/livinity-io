@@ -51,7 +51,7 @@ interface MarketplaceEntry {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const MARKETPLACE_INDEX_URL =
-  process.env.MARKETPLACE_URL || 'http://45.137.194.102:4100/api/catalog';
+  process.env.MARKETPLACE_URL || 'https://mcp.livinity.io/api/catalog';
 const REDIS_INDEX_KEY = 'nexus:marketplace:index';
 const REDIS_INDEX_TTL = 3600; // 1 hour in seconds
 const REDIS_INSTALLED_PREFIX = 'nexus:marketplace:installed:';
