@@ -1,6 +1,8 @@
 import {z} from 'zod'
 import {observable} from '@trpc/server/observable'
 import {TRPCError} from '@trpc/server'
+import * as fs from 'fs'
+import * as path from 'path'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
 import {getUserPreference, setUserPreference} from '../database/index.js'
@@ -2129,6 +2131,96 @@ export default router({
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch capability'})
 			}
 			return await response.json()
+		}),
+
+	// ── Prompt Templates ────────────────────────────────────────
+
+	/** List all prompt templates (builtin + custom) */
+	listPrompts: privateProcedure
+		.query(async () => {
+			const defaultPrompts = [
+				{name: 'Coding Assistant', description: 'Expert programmer focused on code quality', prompt: 'You are an expert programmer. Write clean, well-documented code. Always explain your approach before writing code.', builtin: true},
+				{name: 'DevOps Engineer', description: 'Infrastructure and deployment specialist', prompt: 'You are a DevOps specialist. Focus on infrastructure, CI/CD, Docker, and system reliability. Prefer automation over manual steps.', builtin: true},
+				{name: 'Content Creator', description: 'Writing and content generation assistant', prompt: 'You are a skilled content creator. Write engaging, clear prose. Adapt tone to the audience. Structure content with headings and bullet points.', builtin: true},
+				{name: 'Research Analyst', description: 'Deep research and analysis assistant', prompt: 'You are a research analyst. Provide thorough, well-sourced analysis. Consider multiple perspectives. Cite specific data points.', builtin: true},
+			]
+			const filePath = path.join(process.cwd(), 'data', 'prompt-templates.json')
+			try {
+				const raw = await fs.promises.readFile(filePath, 'utf-8')
+				const custom = JSON.parse(raw) as Array<{name: string; description: string; prompt: string; builtin: boolean}>
+				return {prompts: [...defaultPrompts, ...custom]}
+			} catch {
+				return {prompts: defaultPrompts}
+			}
+		}),
+
+	/** Save a custom prompt template */
+	savePrompt: privateProcedure
+		.input(z.object({
+			name: z.string().min(1).max(100),
+			description: z.string().max(300).default(''),
+			prompt: z.string().min(1).max(5000),
+		}))
+		.mutation(async ({input}) => {
+			const filePath = path.join(process.cwd(), 'data', 'prompt-templates.json')
+			let existing: Array<{name: string; description: string; prompt: string; builtin: boolean}> = []
+			try {
+				const raw = await fs.promises.readFile(filePath, 'utf-8')
+				existing = JSON.parse(raw)
+			} catch { /* file doesn't exist yet */ }
+			existing.push({name: input.name, description: input.description, prompt: input.prompt, builtin: false})
+			const dir = path.dirname(filePath)
+			await fs.promises.mkdir(dir, {recursive: true})
+			await fs.promises.writeFile(filePath, JSON.stringify(existing, null, 2), 'utf-8')
+			return {success: true}
+		}),
+
+	/** Delete a custom prompt template (cannot delete builtins) */
+	deletePrompt: privateProcedure
+		.input(z.object({
+			name: z.string().min(1),
+		}))
+		.mutation(async ({input}) => {
+			const filePath = path.join(process.cwd(), 'data', 'prompt-templates.json')
+			let existing: Array<{name: string; description: string; prompt: string; builtin: boolean}> = []
+			try {
+				const raw = await fs.promises.readFile(filePath, 'utf-8')
+				existing = JSON.parse(raw)
+			} catch {
+				return {success: true, deleted: false}
+			}
+			const before = existing.length
+			existing = existing.filter(p => !(p.name === input.name && !p.builtin))
+			const deleted = existing.length < before
+			await fs.promises.writeFile(filePath, JSON.stringify(existing, null, 2), 'utf-8')
+			return {success: true, deleted}
+		}),
+
+	// ── Analytics ────────────────────────────────────────────────
+
+	/** Get analytics data from the capability registry */
+	getAnalytics: privateProcedure
+		.query(async () => {
+			const nexusUrl = getNexusApiUrl()
+			try {
+				const response = await fetch(`${nexusUrl}/api/capabilities`, {
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) throw new Error('Failed to fetch capabilities')
+				const data = await response.json() as {capabilities: Array<{id: string; name: string; type: string; status: string; provides_tools?: string[]; metadata?: {success_rate?: number}; last_used_at?: number}>; total: number}
+				const toolStats = data.capabilities.map(c => ({
+					name: c.name,
+					type: c.type,
+					toolCount: c.provides_tools?.length ?? 0,
+					successRate: c.metadata?.success_rate ?? null,
+					lastUsed: c.last_used_at ?? 0,
+				})).sort((a, b) => b.toolCount - a.toolCount)
+				const totalCapabilities = data.total
+				const activeCapabilities = data.capabilities.filter(c => c.status === 'active').length
+				return {toolStats, totalCapabilities, activeCapabilities}
+			} catch {
+				return {toolStats: [], totalCapabilities: 0, activeCapabilities: 0}
+			}
 		}),
 
 })
