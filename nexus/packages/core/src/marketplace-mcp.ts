@@ -132,26 +132,33 @@ export class MarketplaceMcp {
     return {
       name: 'livinity_search',
       description:
-        'Search the Livinity Marketplace for capabilities by keyword or tag. Returns matching capabilities with name, type, version, description, and tags.',
+        'Search the Livinity Marketplace (2800+ capabilities). Use "query" for keyword search and "type" to filter. Available types: mcp (80), agent (403), skill (2270), hook (53), prompt (2). Use query="*" to browse all items of a type. Examples: query="react" type="agent" finds React agents. query="*" type="hook" lists all hooks.',
       parameters: [
         {
           name: 'query',
           type: 'string',
-          description: 'Keyword or tag to search for',
+          description: 'Search keyword (e.g. "react", "docker", "security"). Use "*" to list all items.',
           required: true,
         },
         {
           name: 'type',
           type: 'string',
-          description: 'Filter by capability type',
+          description: 'Filter by type: mcp, agent, skill, hook, or prompt',
           required: false,
-          enum: ['tool', 'skill', 'mcp', 'hook', 'agent'],
+          enum: ['skill', 'mcp', 'hook', 'agent', 'prompt'],
+        },
+        {
+          name: 'limit',
+          type: 'number',
+          description: 'Max results to return (default 20, max 100)',
+          required: false,
         },
       ],
       execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
         try {
           const query = (params.query as string || '').toLowerCase().trim();
           const typeFilter = params.type as CapabilityType | undefined;
+          const limit = Math.min(Math.max((params.limit as number) || 20, 1), 100);
 
           const entries = await this.fetchIndex();
 
@@ -165,25 +172,31 @@ export class MarketplaceMcp {
                 return nameMatch || descMatch || tagMatch;
               });
 
+          const totalBeforeType = matches.length;
+
           if (typeFilter) {
             matches = matches.filter((e) => e.type === typeFilter);
           }
 
-          matches = matches.slice(0, MAX_SEARCH_RESULTS);
+          const totalMatches = matches.length;
+          matches = matches.slice(0, limit);
 
           const results = matches.map((e) => ({
+            id: e.id || `${e.type}:${e.name}`,
             name: e.name,
             type: e.type,
-            version: e.version,
             description: e.description,
             tags: e.tags,
             author: e.author,
           }));
 
+          // Summary line at top so AI understands the scope
+          const summary = `Found ${totalMatches} results${totalMatches > limit ? ` (showing first ${limit}, use limit param for more)` : ''}. Marketplace total: ${entries.length} items.`;
+
           return {
             success: true,
-            output: JSON.stringify(results, null, 2),
-            data: results,
+            output: summary + '\n\n' + JSON.stringify(results, null, 2),
+            data: { results, total: totalMatches, showing: results.length, marketplace_total: entries.length },
           };
         } catch (err: any) {
           return { success: false, output: '', error: err.message };
@@ -388,26 +401,33 @@ export class MarketplaceMcp {
     return {
       name: 'livinity_recommend',
       description:
-        'Get marketplace capability recommendations based on tag overlap with currently installed capabilities. Returns scored suggestions.',
+        'Get personalized marketplace recommendations. Returns popular and relevant capabilities not yet installed. Use after livinity_search to get smart suggestions.',
       parameters: [
+        {
+          name: 'context',
+          type: 'string',
+          description: 'What the user is working on (e.g. "web development", "server monitoring"). Helps find relevant recommendations.',
+          required: false,
+        },
         {
           name: 'limit',
           type: 'number',
-          description: 'Maximum number of recommendations to return',
+          description: 'Max recommendations (default 10)',
           required: false,
-          default: 5,
+          default: 10,
         },
       ],
       execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
         try {
-          const limit = (params.limit as number) || 5;
+          const limit = (params.limit as number) || 10;
+          const context = (params.context as string || '').toLowerCase().trim();
 
           // 1. Fetch marketplace index
           const entries = await this.fetchIndex();
           if (entries.length === 0) {
             return {
               success: true,
-              output: JSON.stringify([]),
+              output: 'Marketplace is empty or unreachable.',
               data: [],
             };
           }
@@ -416,35 +436,41 @@ export class MarketplaceMcp {
           const installed = this.deps.capabilityRegistry.list();
           const installedIds = new Set(installed.map((c) => c.id));
 
-          // 3. Collect all tags from installed capabilities
-          const installedTags = new Set<string>();
+          // 3. Collect tags from installed + context
+          const relevantTags = new Set<string>();
           for (const cap of installed) {
             for (const tag of cap.semantic_tags) {
-              installedTags.add(tag.toLowerCase());
+              relevantTags.add(tag.toLowerCase());
+            }
+          }
+          // Add context words as tags for matching
+          if (context) {
+            for (const word of context.split(/\s+/)) {
+              if (word.length > 2) relevantTags.add(word);
             }
           }
 
-          // 4. Score marketplace entries by tag overlap
+          // 4. Score marketplace entries
           const scored: Array<{ entry: MarketplaceEntry; score: number }> = [];
 
           for (const entry of entries) {
-            // Skip already installed
-            const capId = `${entry.type}:${entry.name}`;
+            const capId = entry.id || `${entry.type}:${entry.name}`;
             if (installedIds.has(capId)) continue;
 
-            if (installedTags.size === 0) {
-              // No installed tags — treat all as equally recommended ("popular")
-              scored.push({ entry, score: 0 });
-            } else {
-              // Count tag overlap
-              let overlap = 0;
-              for (const tag of entry.tags) {
-                if (installedTags.has(tag.toLowerCase())) {
-                  overlap++;
-                }
-              }
-              scored.push({ entry, score: overlap });
+            let score = 0;
+            // Tag overlap scoring
+            for (const tag of (entry.tags || [])) {
+              if (relevantTags.has(tag.toLowerCase())) score += 2;
             }
+            // Description keyword matching from context
+            if (context) {
+              for (const word of context.split(/\s+/)) {
+                if (word.length > 2 && entry.description.toLowerCase().includes(word)) score += 1;
+                if (word.length > 2 && entry.name.toLowerCase().includes(word)) score += 3;
+              }
+            }
+            // Boost diverse types (prefer showing 1 of each type)
+            scored.push({ entry, score });
           }
 
           // 5. Sort by score descending, then alphabetically
@@ -480,7 +506,7 @@ export class MarketplaceMcp {
     return {
       name: 'livinity_list',
       description:
-        'List installed capabilities. Filter by source to see only marketplace-installed capabilities or all capabilities.',
+        'List currently installed capabilities on this server + marketplace stats. Shows what is active and what is available to install.',
       parameters: [
         {
           name: 'source',
@@ -510,10 +536,19 @@ export class MarketplaceMcp {
             source: c.source,
           }));
 
+          // Add marketplace stats
+          const marketplaceEntries = await this.fetchIndex();
+          const mktByType: Record<string, number> = {};
+          for (const e of marketplaceEntries) {
+            mktByType[e.type] = (mktByType[e.type] || 0) + 1;
+          }
+
+          const summary = `Installed: ${results.length} capabilities.\nMarketplace available: ${marketplaceEntries.length} total (${Object.entries(mktByType).map(([t, c]) => `${c} ${t}s`).join(', ')}).\nUse livinity_search to find and livinity_install to add new capabilities.`;
+
           return {
             success: true,
-            output: JSON.stringify(results, null, 2),
-            data: results,
+            output: summary + '\n\n' + JSON.stringify(results, null, 2),
+            data: { installed: results, marketplace_stats: mktByType, marketplace_total: marketplaceEntries.length },
           };
         } catch (err: any) {
           return { success: false, output: '', error: err.message };
