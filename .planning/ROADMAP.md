@@ -106,7 +106,9 @@ Plans:
   2. Only capabilities above a configurable confidence threshold are selected -- low-confidence matches are filtered out
   3. Tool definitions loaded into the agent's context never exceed 30% of the context window budget
   4. Repeated intents hit a Redis cache and resolve in under 100ms without re-computing matches
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 31-01-PLAN.md — IntentRouter class with scoring/caching/budget + agent-session wiring
 
 ### Phase 32: Auto-Provisioning Engine
 **Goal**: Agent sessions dynamically load only the capabilities relevant to the user's intent, with the AI able to discover and install missing capabilities mid-conversation
@@ -173,7 +175,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 |-------|-----------|----------------|--------|-----------|
 | 29. Unified Capability Registry | v22.0 | 2/2 | Complete    | 2026-03-29 |
 | 30. Agents Panel Redesign | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 31. Intent Router v2 | v22.0 | 0/? | Not started | - |
+| 31. Intent Router v2 | v22.0 | 0/1 | In progress | - |
 | 32. Auto-Provisioning Engine | v22.0 | 0/? | Not started | - |
 | 33. Livinity Marketplace MCP | v22.0 | 0/? | Not started | - |
 | 34. AI Self-Modification | v22.0 | 0/? | Not started | - |
