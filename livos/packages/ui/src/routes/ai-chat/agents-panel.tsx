@@ -1,5 +1,5 @@
-import {useState} from 'react'
-import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay, IconSend, IconPlayerStop, IconPlus} from '@tabler/icons-react'
+import {useState, useRef, useEffect} from 'react'
+import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay, IconSend, IconPlayerStop, IconPlus, IconSettings, IconChevronDown, IconChevronUp} from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
@@ -237,7 +237,17 @@ function LoopControls({agentId, hasLoopConfig}: {agentId: string; hasLoopConfig:
 
 function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 	const agentQuery = trpcReact.ai.getSubagent.useQuery({id: agentId})
-	const historyQuery = trpcReact.ai.getSubagentHistory.useQuery({id: agentId, limit: 50})
+	const historyQuery = trpcReact.ai.getSubagentHistory.useQuery({id: agentId, limit: 50}, {refetchInterval: 3_000})
+	const [showConfig, setShowConfig] = useState(false)
+	const chatEndRef = useRef<HTMLDivElement>(null)
+	const chatContainerRef = useRef<HTMLDivElement>(null)
+
+	// Auto-scroll to bottom when history changes or on first load
+	useEffect(() => {
+		if (chatEndRef.current) {
+			chatEndRef.current.scrollIntoView({behavior: 'smooth'})
+		}
+	}, [historyQuery.data])
 
 	if (agentQuery.isLoading) {
 		return (
@@ -252,161 +262,123 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 		return (
 			<div className='flex h-full flex-col items-center justify-center'>
 				<p className='text-body-sm text-text-tertiary'>Agent not found</p>
-				<button
-					onClick={onBack}
-					className='mt-2 text-caption text-brand hover:underline'
-				>
-					Back to list
-				</button>
+				<button onClick={onBack} className='mt-2 text-caption text-brand hover:underline'>Back to list</button>
 			</div>
 		)
 	}
 
 	const history = Array.isArray(historyQuery.data) ? historyQuery.data : []
-	const lastResult = agent.lastResult
-		? agent.lastResult.length > 200
-			? agent.lastResult.slice(0, 200) + '...'
-			: agent.lastResult
-		: null
 
 	return (
 		<div className='flex h-full flex-col'>
-			{/* Header */}
-			<div className='flex flex-shrink-0 items-center gap-3 border-b border-border-default px-4 py-3'>
+			{/* Header — agent name + status + back */}
+			<div className='flex flex-shrink-0 items-center gap-3 border-b border-border-default px-4 py-2.5'>
 				<button
 					onClick={onBack}
 					className='rounded-radius-sm p-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
 				>
 					<IconArrowLeft size={16} />
 				</button>
-				<div className='min-w-0 flex-1'>
-					<h3 className='truncate text-body font-semibold text-text-primary'>
-						{agent.name || agent.id}
-					</h3>
+				<div className='flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20'>
+					<IconRobot size={14} className='text-blue-400' />
 				</div>
+				<div className='min-w-0 flex-1'>
+					<div className='flex items-center gap-2'>
+						<h3 className='truncate text-body-sm font-semibold text-text-primary'>{agent.name || agent.id}</h3>
+						<StatusBadge status={agent.status} />
+					</div>
+					<div className='flex items-center gap-3 text-[10px] text-text-tertiary'>
+						<span>{agent.tier}</span>
+						{agent.runCount > 0 && <span>{agent.runCount} runs</span>}
+						{agent.lastRunAt && <span>{formatDistanceToNow(agent.lastRunAt, {addSuffix: true})}</span>}
+					</div>
+				</div>
+				<button
+					onClick={() => setShowConfig(!showConfig)}
+					className={cn('rounded-radius-sm p-1.5 transition-colors', showConfig ? 'bg-surface-2 text-brand' : 'text-text-tertiary hover:bg-surface-2 hover:text-text-secondary')}
+					title='Agent settings'
+				>
+					<IconSettings size={16} />
+				</button>
 			</div>
 
-			{/* Content */}
-			<div className='flex-1 overflow-y-auto p-3 space-y-4'>
-				{/* Status + Meta */}
-				<div className='flex flex-wrap items-center gap-2'>
-					<StatusBadge status={agent.status} />
-					{agent.tier && (
-						<span className='rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-text-tertiary'>
-							{agent.tier}
-						</span>
-					)}
-					{agent.runCount !== undefined && (
-						<span className='flex items-center gap-1 text-caption-sm text-text-tertiary'>
-							<IconPlayerPlay size={10} />
-							{agent.runCount} run{agent.runCount !== 1 ? 's' : ''}
-						</span>
-					)}
-					{agent.lastRunAt && (
-						<span className='flex items-center gap-1 text-caption-sm text-text-tertiary'>
-							<IconClock size={10} />
-							{formatDistanceToNow(agent.lastRunAt, {addSuffix: true})}
-						</span>
-					)}
-				</div>
+			{/* Collapsible Config Panel */}
+			{showConfig && (
+				<div className='flex-shrink-0 border-b border-border-default bg-surface-1/50 p-3 space-y-3'>
+					{/* Loop Controls */}
+					<LoopControls agentId={agentId} hasLoopConfig={!!agent.loop || !!agent.schedule} />
 
-				{/* Loop Controls */}
-				<LoopControls agentId={agentId} hasLoopConfig={!!agent.loop || !!agent.schedule} />
-
-				{/* Last Result */}
-				{lastResult && (
-					<div>
-						<h4 className='mb-1.5 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
-							Last Result
-						</h4>
-						<div className='rounded-radius-sm bg-surface-1 p-3 text-caption text-text-secondary'>
-							{lastResult}
-						</div>
-					</div>
-				)}
-
-				{/* Configuration */}
-				<div>
-					<h4 className='mb-1.5 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
-						Configuration
-					</h4>
-					<div className='space-y-2 rounded-radius-sm bg-surface-1 p-3'>
+					{/* Quick Config */}
+					<div className='space-y-1.5'>
 						{agent.description && (
-							<div>
-								<span className='text-caption-sm font-medium text-text-tertiary'>Description</span>
-								<p className='mt-0.5 text-caption text-text-secondary'>{agent.description}</p>
+							<div className='flex gap-2'>
+								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Desc</span>
+								<p className='text-caption-sm text-text-secondary'>{agent.description.length > 120 ? agent.description.slice(0, 120) + '...' : agent.description}</p>
 							</div>
 						)}
-						<div>
-							<span className='text-caption-sm font-medium text-text-tertiary'>Tools</span>
-							<p className='mt-0.5 text-caption text-text-secondary'>
-								{agent.tools && agent.tools.length > 0
-									? agent.tools.join(', ')
-									: 'No tools configured'}
+						<div className='flex gap-2'>
+							<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Tools</span>
+							<p className='text-caption-sm text-text-secondary'>
+								{agent.tools && agent.tools.length > 0 ? agent.tools.join(', ') : 'All tools'}
 							</p>
 						</div>
-						<div>
-							<span className='text-caption-sm font-medium text-text-tertiary'>Schedule</span>
-							<p className='mt-0.5 font-mono text-caption text-text-secondary'>
-								{agent.schedule || 'No schedule'}
-							</p>
-						</div>
+						{agent.schedule && (
+							<div className='flex gap-2'>
+								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Cron</span>
+								<p className='font-mono text-caption-sm text-text-secondary'>{agent.schedule}</p>
+							</div>
+						)}
 						{agent.systemPrompt && (
-							<div>
-								<span className='text-caption-sm font-medium text-text-tertiary'>System Prompt</span>
-								<p className='mt-0.5 font-mono text-caption text-text-secondary'>
-									{agent.systemPrompt.length > 100
-										? agent.systemPrompt.slice(0, 100) + '...'
-										: agent.systemPrompt}
+							<div className='flex gap-2'>
+								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Prompt</span>
+								<p className='text-caption-sm text-text-secondary'>
+									{agent.systemPrompt.length > 150 ? agent.systemPrompt.slice(0, 150) + '...' : agent.systemPrompt}
 								</p>
 							</div>
 						)}
 					</div>
 				</div>
+			)}
 
-				{/* Chat History */}
-				<div>
-					<h4 className='mb-1.5 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
-						Chat History
-					</h4>
-					{historyQuery.isLoading ? (
-						<div className='flex items-center justify-center py-4'>
-							<IconLoader2 size={16} className='animate-spin text-text-tertiary' />
-						</div>
-					) : history.length === 0 ? (
-						<p className='rounded-radius-sm bg-surface-1 p-3 text-center text-caption text-text-tertiary'>
-							No conversation history
-						</p>
-					) : (
-						<div className='space-y-2'>
-							{history.map((msg: any, idx: number) => (
+			{/* Chat area — scrollable, starts at bottom */}
+			<div ref={chatContainerRef} className='flex-1 overflow-y-auto px-4 py-3'>
+				{historyQuery.isLoading ? (
+					<div className='flex h-full items-center justify-center'>
+						<IconLoader2 size={16} className='animate-spin text-text-tertiary' />
+					</div>
+				) : history.length === 0 ? (
+					<div className='flex h-full flex-col items-center justify-center text-center'>
+						<IconRobot size={32} className='mb-2 text-text-tertiary' />
+						<p className='text-caption text-text-tertiary'>No conversation yet</p>
+						<p className='mt-1 text-[10px] text-text-tertiary'>Send a message to start chatting with this agent</p>
+					</div>
+				) : (
+					<div className='space-y-3'>
+						{history.map((msg: any, idx: number) => (
+							<div
+								key={idx}
+								className={cn('flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}
+							>
 								<div
-									key={idx}
 									className={cn(
-										'flex flex-col',
-										msg.role === 'user' ? 'items-end' : 'items-start',
+										'max-w-[90%] rounded-xl px-3.5 py-2.5 text-body-sm leading-relaxed',
+										msg.role === 'user'
+											? 'bg-brand/10 text-text-primary rounded-br-sm'
+											: 'bg-surface-1 text-text-secondary rounded-bl-sm',
 									)}
 								>
-									<div
-										className={cn(
-											'max-w-[85%] rounded-radius-sm px-3 py-2 text-caption',
-											msg.role === 'user'
-												? 'bg-brand/10 text-text-primary'
-												: 'bg-surface-1 text-text-secondary',
-										)}
-									>
-										{msg.text}
-									</div>
-									{msg.ts && (
-										<span className='mt-0.5 text-[10px] text-text-tertiary'>
-											{formatDistanceToNow(msg.ts, {addSuffix: true})}
-										</span>
-									)}
+									<pre className='whitespace-pre-wrap break-words font-sans'>{msg.text}</pre>
 								</div>
-							))}
-						</div>
-					)}
-				</div>
+								{msg.ts && (
+									<span className='mt-1 text-[10px] text-text-tertiary'>
+										{formatDistanceToNow(msg.ts, {addSuffix: true})}
+									</span>
+								)}
+							</div>
+						))}
+						<div ref={chatEndRef} />
+					</div>
+				)}
 			</div>
 
 			{/* Message Input (pinned to bottom) */}
