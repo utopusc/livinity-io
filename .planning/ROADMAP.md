@@ -80,9 +80,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   2. Each capability entry includes a manifest with semantic tags, trigger conditions, estimated context cost, and dependency information
   3. On Nexus startup, the registry auto-populates by syncing from the existing ToolRegistry, SkillLoader, and McpClientManager without manual registration
   4. User can search capabilities by semantic tag, name substring, or type filter and get relevant results
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 29-01-PLAN.md — CapabilityManifest types + CapabilityRegistry class with sync engine
+- [x] 29-01-PLAN.md — CapabilityManifest types + CapabilityRegistry class with sync engine
 - [ ] 29-02-PLAN.md — REST API endpoints + tRPC proxy + startup wiring
 
 ### Phase 30: Agents Panel Redesign
@@ -169,7 +169,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 29. Unified Capability Registry | v22.0 | 0/2 | Planning | - |
+| 29. Unified Capability Registry | v22.0 | 1/2 | In Progress|  |
 | 30. Agents Panel Redesign | v22.0 | 0/? | Not started | - |
 | 31. Intent Router v2 | v22.0 | 0/? | Not started | - |
 | 32. Auto-Provisioning Engine | v22.0 | 0/? | Not started | - |
