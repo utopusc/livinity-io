@@ -175,7 +175,7 @@ export function useAgentSocket() {
 			streamTimerRef.current = setTimeout(() => {
 				streamTimerRef.current = null
 				dispatch({type: 'UPDATE_STREAMING_CONTENT', content: accumulatedRef.current})
-			}, 80)
+			}, 50)
 		}
 	}, [])
 
@@ -268,7 +268,19 @@ export function useAgentSocket() {
 					break
 				}
 
-				case 'stream_event': {
+				case 'stream_delta': {
+					// Compact normalized text delta from server (claudecodeui pattern)
+					if (data.text) {
+						appendDelta(data.text)
+						setAgentStatus(prev => {
+							if (prev.phase === 'responding') return prev
+							return {...prev, phase: 'responding', currentTool: null}
+						})
+					}
+					break
+				}
+
+			case 'stream_event': {
 					const event = data.event
 					switch (event) {
 						case 'message_start':
@@ -554,10 +566,6 @@ export function useAgentSocket() {
 			if (reconnectTimerRef.current) {
 				clearTimeout(reconnectTimerRef.current)
 				reconnectTimerRef.current = null
-			}
-			if (rafRef.current) {
-				cancelAnimationFrame(rafRef.current)
-				rafRef.current = undefined
 			}
 			if (thinkingTimerRef.current) {
 				clearTimeout(thinkingTimerRef.current)

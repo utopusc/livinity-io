@@ -303,6 +303,28 @@ export class Daemon {
       return;
     }
 
+    // Skip if no API credentials are available (ANTHROPIC_API_KEY or claude login)
+    // The agent requires Claude API access; without it, the loop would fail on every execution.
+    const hasApiKey = !!process.env.ANTHROPIC_API_KEY;
+    let hasCliAuth = false;
+    if (!hasApiKey) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const { homedir } = await import('node:os');
+        const { join } = await import('node:path');
+        const credPath = join(homedir(), '.claude', 'credentials.json');
+        const creds = JSON.parse(await readFile(credPath, 'utf8'));
+        hasCliAuth = !!(creds && (creds.apiKey || creds.oauthToken || Object.keys(creds).length > 0));
+      } catch {
+        // Credentials file not found or unreadable
+      }
+    }
+
+    if (!hasApiKey && !hasCliAuth) {
+      logger.info('Skipping Self-Improvement Agent: no Anthropic API key or claude login found');
+      return;
+    }
+
     try {
       const config = await this.config.subagentManager.create({
         id: SELF_IMPROVEMENT_ID,

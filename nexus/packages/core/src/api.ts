@@ -870,6 +870,29 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // ── Tool List & Execute (used by livos AgentSessionManager proxy) ────────
+
+  app.get('/api/tools', (_req, res) => {
+    const tools = toolRegistry.listAll();
+    res.json(tools.map(t => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+      requiresApproval: t.requiresApproval || false,
+    })));
+  });
+
+  app.post('/api/tools/:name/execute', async (req, res) => {
+    const { name } = req.params;
+    const params = req.body || {};
+    try {
+      const result = await toolRegistry.execute(name, params);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, output: '', error: err.message });
+    }
+  });
+
   // ── External Tool Registration (for device proxy tools) ────────
 
   app.post('/api/tools/register', async (req, res) => {

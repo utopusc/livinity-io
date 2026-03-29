@@ -341,11 +341,18 @@ export class AgentSessionManager {
       logger.info('AgentSessionManager: SDK query() returned, starting relay loop');
 
       // Relay each SDK message to the WebSocket client and accumulate turn data
+      // Stream events are normalized to compact format for lower latency over tunnel.
       for await (const message of messages) {
         const m = message as any;
-        logger.info('AgentSessionManager: SDK msg', { type: m.type, event: m.event, deltaType: m.delta?.type, hasText: !!m.delta?.text });
         lastMessageTime = Date.now();
-        onMessage({ type: 'sdk_message', data: message });
+
+        // Normalize stream text deltas to compact format (claudecodeui pattern)
+        // Instead of sending the full SDK message, send just { type: 'stream_delta', text }
+        if (m.type === 'stream_event' && m.event === 'content_block_delta' && m.delta?.type === 'text_delta' && m.delta.text) {
+          onMessage({ type: 'sdk_message', data: { type: 'stream_delta', text: m.delta.text } as any });
+        } else {
+          onMessage({ type: 'sdk_message', data: message });
+        }
 
         // Accumulate data for persistence
         const msg = message as any;

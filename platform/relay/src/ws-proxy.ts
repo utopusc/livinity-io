@@ -47,7 +47,11 @@ interface PendingWsUpgrade {
 const pendingUpgrades = new Map<string, PendingWsUpgrade>();
 
 /** Shared WebSocketServer instance (noServer mode) for all browser upgrades */
-const browserWss = new WebSocketServer({ noServer: true });
+const browserWss = new WebSocketServer({
+  noServer: true,
+  // Disable per-message compression to reduce latency for streaming frames
+  perMessageDeflate: false,
+});
 
 // ---------------------------------------------------------------------------
 // Handlers

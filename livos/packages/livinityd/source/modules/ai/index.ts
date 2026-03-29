@@ -214,13 +214,35 @@ function formatCommand(name: string, params: Record<string, unknown>): string {
 	return `${name}(${args})`
 }
 
+/**
+ * Minimal duck-typed ToolRegistry for when @nexus/core/lib ToolRegistry is not importable.
+ * Implements the subset of methods used by AgentSessionManager.consumeAndRelay():
+ *   - register(), get(), list(), listFiltered(), execute(), size
+ */
+function createMinimalToolRegistry() {
+	const tools = new Map<string, any>()
+	return {
+		register(tool: any) { tools.set(tool.name, tool) },
+		get(name: string) { return tools.get(name) },
+		list() { return Array.from(tools.keys()) },
+		listAll() { return Array.from(tools.values()) },
+		listFiltered(_policy?: any) { return Array.from(tools.keys()) },
+		async execute(name: string, params: Record<string, unknown>) {
+			const tool = tools.get(name)
+			if (!tool) return {success: false, output: '', error: `Unknown tool: ${name}`}
+			return await tool.execute(params)
+		},
+		get size() { return tools.size },
+	}
+}
+
 export default class AiModule {
 	livinityd: Livinityd
 	logger: Livinityd['logger']
 	redis!: Redis
 	subagentManager!: SubagentManager
 	scheduleManager!: ScheduleManager
-	toolRegistry: any
+	toolRegistry: any = null
 
 	private redisUrl: string
 	private conversations = new Map<string, Conversation>()
@@ -264,7 +286,85 @@ export default class AiModule {
 		this.subagentManager = new SubagentManager(this.redis)
 		this.scheduleManager = new ScheduleManager(this.redis)
 
+		// Fetch tool definitions from nexus and create proxy ToolRegistry
+		await this.fetchToolRegistry()
+
 		this.logger.log('AI module started')
+	}
+
+	/**
+	 * Fetch tool definitions from nexus API and create a proxy ToolRegistry.
+	 * Each tool's execute() proxies to nexus POST /api/tools/:name/execute.
+	 * Retries with backoff since nexus may not be ready at startup.
+	 */
+	async fetchToolRegistry(): Promise<void> {
+		const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
+		const apiKey = process.env.LIV_API_KEY || ''
+
+		// Retry up to 5 times with 3s delay — nexus may still be starting
+		for (let attempt = 1; attempt <= 5; attempt++) {
+			try {
+				const response = await fetch(`${livApiUrl}/api/tools`, {
+					headers: apiKey ? {'X-API-Key': apiKey} : {},
+					signal: AbortSignal.timeout(5000),
+				})
+				if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+				const tools = (await response.json()) as Array<{
+					name: string
+					description: string
+					parameters: Array<{name: string; type: string; description: string; required?: boolean; enum?: string[]; default?: unknown}>
+					requiresApproval?: boolean
+				}>
+
+				// Try to import ToolRegistry from @nexus/core/lib, fallback to minimal
+				let registry: any
+				try {
+					const mod = await import('@nexus/core/lib') as any
+					if (mod.ToolRegistry) {
+						registry = new mod.ToolRegistry()
+					} else {
+						registry = createMinimalToolRegistry()
+					}
+				} catch {
+					registry = createMinimalToolRegistry()
+				}
+				this.toolRegistry = registry
+
+				for (const t of tools) {
+					this.toolRegistry.register({
+						name: t.name,
+						description: t.description,
+						parameters: t.parameters,
+						requiresApproval: t.requiresApproval || false,
+						execute: async (params: Record<string, unknown>) => {
+							const res = await fetch(`${livApiUrl}/api/tools/${t.name}/execute`, {
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+									...(apiKey ? {'X-API-Key': apiKey} : {}),
+								},
+								body: JSON.stringify(params),
+								signal: AbortSignal.timeout(300_000), // 5 min timeout for long-running tools
+							})
+							if (!res.ok) {
+								return {success: false, output: '', error: `Nexus API error: ${res.status}`}
+							}
+							return await res.json()
+						},
+					})
+				}
+
+				this.logger.log(`Tool registry populated from nexus: ${tools.length} tools`)
+				return
+			} catch (err) {
+				this.logger.error(`Failed to fetch tools from nexus (attempt ${attempt}/5)`, err)
+				if (attempt < 5) {
+					await new Promise((r) => setTimeout(r, 3000))
+				}
+			}
+		}
+		this.logger.error('Could not populate tool registry — agent will have no tools')
 	}
 
 	async stop() {
