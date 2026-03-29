@@ -113,13 +113,22 @@ Key validated capabilities:
 - ✓ Self-evaluation after-task reflection + pre-seeded Self-Improvement Agent (6-hour loop, flash tier) — v21.0
 - ✓ System prompt optimized: 72% token reduction (3214→899 tokens), self-awareness section added — v21.0
 
-## Current State (post v21.0 — Autonomous Agent Platform)
+## Current Milestone: v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace
 
-AI Chat now features a real-time agent status overlay, conversation persistence, and an Agents tab for managing subagents. Slash command menu provides quick access to built-in and dynamic commands. AI can autonomously create skills, install MCP tools, manage schedules, and select model tiers. Self-Improvement Agent runs on a 6-hour loop. System prompt optimized with 72% token reduction and self-awareness instructions.
+**Goal:** Transform Livinity into an AI Agent Marketplace + Orchestration Platform where the system auto-discovers, installs, and orchestrates capabilities based on user intent.
+
+**Target features:**
+- Unified Capability Registry (tools + skills + MCPs + hooks + agents in single model)
+- Livinity Marketplace MCP (single MCP exposing entire ecosystem)
+- Intent Router v2 (embedding-based semantic matching with confidence scoring)
+- Auto-Provisioning Engine (dynamic session tool/skill/MCP loading)
+- AI Self-Modification (autonomous skill/hook/agent creation + testing)
+- Agents Panel Redesign (unified capability management hub with analytics)
+- Learning Loop (usage pattern mining, auto-suggestion, A/B testing)
 
 ### Active
 
-*No active requirements — planning next milestone*
+*Defining requirements for v22.0*
 
 ### Out of Scope
 
