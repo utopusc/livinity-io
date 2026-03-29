@@ -6,13 +6,11 @@ import {
 	IconTrash,
 	IconBrain,
 	IconLoader2,
-	IconPlug,
 	IconMenu2,
 	IconPuzzle,
 	IconCode,
 	IconScreenshot,
 	IconDeviceDesktop,
-	IconRobot,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -27,13 +25,11 @@ import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 import {ChatMessageItem} from './chat-messages'
 import {ChatInput} from './chat-input'
 
-const McpPanel = lazy(() => import('./mcp-panel'))
-const SkillsPanel = lazy(() => import('./skills-panel'))
-const AgentsPanel = lazy(() => import('./agents-panel'))
+const CapabilitiesPanel = lazy(() => import('./capabilities-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
 const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
 
-type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents'
+type SidebarView = 'chat' | 'capabilities'
 
 function ConversationSidebar({
 	conversations,
@@ -88,22 +84,13 @@ function ConversationSidebar({
 					Chat
 				</button>
 				<button
-					onClick={() => onViewChange('mcp')}
+					onClick={() => onViewChange('capabilities')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+						activeView === 'capabilities' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
 					)}
 				>
-					<IconPlug size={14} />
-					MCP
-				</button>
-				<button
-					onClick={() => onViewChange('agents')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'agents' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
-					)}
-				>
-					<IconRobot size={14} />
-					Agents
+					<IconPuzzle size={14} />
+					Capabilities
 				</button>
 			</div>
 
@@ -141,7 +128,7 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
+			{activeView === 'capabilities' && (
 				<div className='flex-1' />
 			)}
 		</div>
@@ -381,7 +368,7 @@ export default function AiChat() {
 		if (action === '/new') {
 			handleNewConversation()
 		} else if (action === '/agents') {
-			setActiveView('agents')
+			setActiveView('capabilities')
 		}
 	}, [handleNewConversation])
 
@@ -681,24 +668,10 @@ export default function AiChat() {
 				</div>
 			)}
 
-			{activeView === 'mcp' && (
+			{activeView === 'capabilities' && (
 				<div className='flex-1 overflow-hidden'>
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-						<McpPanel />
-					</Suspense>
-				</div>
-			)}
-			{activeView === 'skills' && (
-				<div className='flex-1 overflow-hidden'>
-					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-						<SkillsPanel />
-					</Suspense>
-				</div>
-			)}
-			{activeView === 'agents' && (
-				<div className='flex-1 overflow-hidden'>
-					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-						<AgentsPanel />
+						<CapabilitiesPanel />
 					</Suspense>
 				</div>
 			)}
