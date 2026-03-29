@@ -101,7 +101,7 @@ function CreateSubagentForm({onClose}: {onClose: () => void}) {
 						onChange={(e) => setForm((f) => ({...f, tier: e.target.value as any}))}
 						className='w-full rounded-lg border border-border-default bg-surface-base px-3 py-2 text-sm text-text-primary outline-none focus:border-brand'
 					>
-						<option value='flash'>Flash (fast, cheap)</option>
+						<option value='haiku'>Haiku (fast, cheap)</option>
 						<option value='sonnet'>Sonnet (balanced)</option>
 						<option value='opus'>Opus (powerful)</option>
 					</select>

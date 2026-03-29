@@ -40,14 +40,18 @@ interface MarketplaceEntry {
   version: string;
   description: string;
   author?: string;
+  category?: string;
+  install_command?: string;
   tags: string[];
   triggers: string[];
   provides_tools: string[];
   requires: string[];
   conflicts: string[];
   context_cost: number;
-  tier: 'flash' | 'sonnet' | 'opus' | 'any';
+  tier: 'haiku' | 'sonnet' | 'opus' | 'any';
   path: string; // e.g. "marketplace/skills/server-health"
+  id?: string;
+  config?: any;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -167,12 +171,19 @@ export class MarketplaceMcp {
           // '*' or empty query returns all entries
           let matches = (!query || query === '*')
             ? entries
-            : entries.filter((entry) => {
-                const nameMatch = entry.name.toLowerCase().includes(query);
-                const descMatch = entry.description.toLowerCase().includes(query);
-                const tagMatch = entry.tags.some((t) => t.toLowerCase().includes(query));
-                return nameMatch || descMatch || tagMatch;
-              });
+            : (() => {
+                const words = query.split(/\s+/).filter(w => w.length > 1);
+                if (words.length === 0) return entries;
+                return entries.filter((entry) => {
+                  const haystack = [
+                    entry.name, entry.description, entry.author || '',
+                    entry.category || '', entry.install_command || '',
+                    ...(entry.tags || []), ...(entry.triggers || []),
+                  ].join(' ').toLowerCase();
+                  // OR: any word matches → include result
+                  return words.some(word => haystack.includes(word));
+                });
+              })();
 
           const totalBeforeType = matches.length;
 
@@ -246,8 +257,8 @@ export class MarketplaceMcp {
 
           switch (entry.type) {
             case 'mcp': {
-              // Clean server name: lowercase, alphanumeric + hyphens only
-              const serverName = (entry.name || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || capabilityId.replace('mcp:', '');
+              // Clean server name from capability ID (not entry.name which may contain special chars)
+              const serverName = capabilityId.replace('mcp:', '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
               if (this.deps.mcpConfigManager && config.command) {
                 await this.deps.mcpConfigManager.installServer({
                   name: serverName,

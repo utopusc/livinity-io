@@ -169,9 +169,7 @@ export function createAgentWebSocketHandler(opts: {
 
 	const sessionManager = new AgentSessionManager({
 		toolRegistry: lazyToolRegistry,
-		// intentRouter disabled — CapabilityRegistry only has 4 entries (2 MCPs + 2 agents)
-		// Re-enable once registry is populated with all 67+ tools via mcp.livinity.io
-		// intentRouter,
+		intentRouter,
 		redis: ai.redis,
 		learningEngine,
 	})

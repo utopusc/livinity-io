@@ -334,7 +334,7 @@ export class Daemon {
         name: 'Self-Improvement Agent',
         description: 'Periodically scans for capability gaps and triggers improvements (skill creation, tool installation, memory insights)',
         tools: ['*'],
-        tier: 'flash',
+        tier: 'haiku',
         maxTurns: 15,
         status: 'active',
         createdBy: 'system',
@@ -1089,12 +1089,12 @@ export class Daemon {
         task = `${memoryContext}\n${task}`;
       }
 
-      // Complexity assessment — quick flash call to determine routing
+      // Complexity assessment — quick haiku call to determine routing
       let complexity = 3; // default to moderate
       try {
         const scoreText = await this.config.brain.think({
           prompt: COMPLEXITY_PROMPT + task.slice(0, 1000),
-          tier: 'flash',
+          tier: 'haiku',
           maxTokens: 5,
         });
         const parsed = parseInt(scoreText.trim());
@@ -1156,7 +1156,7 @@ export class Daemon {
         maxTurns: effectiveMaxTurns,
         maxTokens: agentDefaults?.maxTokens ?? parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
         timeoutMs: agentDefaults?.timeoutMs ?? parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
-        tier: effectiveTier as 'flash' | 'haiku' | 'sonnet' | 'opus',
+        tier: effectiveTier as 'haiku' | 'sonnet' | 'opus',
         maxDepth: agentDefaults?.maxDepth ?? parseInt(process.env.AGENT_MAX_DEPTH || '3'),
         onAction: this.buildActionCallback(intent.from, intent.source),
         thinkLevel: userThinkLevel ?? configThinkLevel,
@@ -2002,7 +2002,7 @@ ${task}`;
         { name: 'loop_interval_ms', type: 'number', description: 'Loop interval (ms)', required: false },
         { name: 'loop_task', type: 'string', description: 'Task per loop iteration', required: false },
         { name: 'loop_max_iterations', type: 'number', description: 'Max iterations (0=unlimited)', required: false },
-        { name: 'tier', type: 'string', description: 'Model tier', required: false, enum: ['flash', 'sonnet', 'opus'] },
+        { name: 'tier', type: 'string', description: 'Model tier', required: false, enum: ['haiku', 'sonnet', 'opus'] },
         { name: 'max_turns', type: 'number', description: 'Max turns per execution', required: false },
       ],
       execute: async (params) => {
@@ -2308,13 +2308,24 @@ ${task}`;
 
     toolRegistry.register({
       name: 'create_agent_template',
-      description: 'Create a persistent agent template with a system prompt, tool set, and optional scheduling. The agent appears in the Agents panel immediately.',
+      description: `Create a persistent agent template with a system prompt, tool set, and optional scheduling. The agent appears in the Agents panel immediately.
+
+IMPORTANT: Generate a DETAILED system prompt following this structure:
+1. Identity & Role (2-3 sentences) — Who is this agent? What domain does it operate in?
+2. Goals (bullet list) — Primary goal, secondary goals, success metrics.
+3. Available Tools & How to Use Them — List specific tools, when to use each, tool chains (e.g. "search → analyze → report").
+4. Workflow Steps — Step-by-step process, decision points (if X then Y), error handling ("if blocked, try alternative").
+5. Output Format — How to present results, reporting structure, progress updates.
+6. Constraints & Safety — What NOT to do, rate limits, user approval gates.
+7. State Management — What to remember between runs, how to track progress, where to store findings.
+
+Do NOT generate short or generic system prompts. Each section should have concrete, actionable instructions.`,
       parameters: [
         { name: 'name', type: 'string', description: 'Agent display name', required: true },
         { name: 'description', type: 'string', description: 'What this agent does', required: true },
-        { name: 'system_prompt', type: 'string', description: 'Custom system prompt for this agent', required: true },
+        { name: 'system_prompt', type: 'string', description: 'Detailed system prompt following the 7-section structure above', required: true },
         { name: 'tools', type: 'string', description: 'Tool names (comma-separated) or "*" for all tools', required: false },
-        { name: 'tier', type: 'string', description: 'Model tier', required: false, enum: ['flash', 'sonnet', 'opus'] },
+        { name: 'tier', type: 'string', description: 'Model tier', required: false, enum: ['haiku', 'sonnet', 'opus'] },
         { name: 'schedule', type: 'string', description: 'Cron expression for scheduled execution', required: false },
         { name: 'scheduled_task', type: 'string', description: 'Task to execute on schedule (required if schedule is set)', required: false },
         { name: 'loop_interval_ms', type: 'number', description: 'Loop interval in ms for continuous execution', required: false },
@@ -2400,6 +2411,89 @@ ${task}`;
           return { success: true, output };
         } catch (err) {
           return { success: false, output: '', error: `Create agent template error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    // ── Agent Workspace Tools ──────────────────────────────────────
+
+    toolRegistry.register({
+      name: 'agent_save',
+      description: 'Save data to an agent\'s persistent workspace. Use this to store findings, results, or any data the agent needs to remember between runs.',
+      parameters: [
+        { name: 'agent_id', type: 'string', description: 'Agent ID', required: true },
+        { name: 'key', type: 'string', description: 'Data key (e.g. "jobs-found", "applications", "progress")', required: true },
+        { name: 'data', type: 'string', description: 'JSON data to save', required: true },
+      ],
+      execute: async (params) => {
+        const { agent_id, key, data: dataStr } = params as Record<string, string>;
+        if (!agent_id || !key || !dataStr) {
+          return { success: false, output: '', error: 'agent_id, key, and data are required' };
+        }
+        try {
+          const parsed = JSON.parse(dataStr);
+          await this.config.subagentManager.saveData(agent_id, key, parsed);
+          return { success: true, output: `Saved "${key}" to agent workspace (${agent_id})` };
+        } catch (err: any) {
+          return { success: false, output: '', error: `agent_save error: ${err.message}` };
+        }
+      },
+    });
+
+    toolRegistry.register({
+      name: 'agent_load',
+      description: 'Load data from an agent\'s persistent workspace. Use this to retrieve previously saved findings or state.',
+      parameters: [
+        { name: 'agent_id', type: 'string', description: 'Agent ID', required: true },
+        { name: 'key', type: 'string', description: 'Data key to load. Use "list" to see all available keys.', required: true },
+      ],
+      execute: async (params) => {
+        const { agent_id, key } = params as Record<string, string>;
+        if (!agent_id || !key) {
+          return { success: false, output: '', error: 'agent_id and key are required' };
+        }
+        try {
+          if (key === 'list') {
+            const keys = await this.config.subagentManager.listFindings(agent_id);
+            return { success: true, output: keys.length > 0 ? `Available keys: ${keys.join(', ')}` : 'No saved data yet.' };
+          }
+          const data = await this.config.subagentManager.loadData(agent_id, key);
+          if (data === null) {
+            return { success: true, output: `No data found for key "${key}" in agent ${agent_id}` };
+          }
+          return { success: true, output: JSON.stringify(data, null, 2), data };
+        } catch (err: any) {
+          return { success: false, output: '', error: `agent_load error: ${err.message}` };
+        }
+      },
+    });
+
+    toolRegistry.register({
+      name: 'agent_state',
+      description: 'Update or read an agent\'s current state (progress, current task, iteration count, etc.).',
+      parameters: [
+        { name: 'agent_id', type: 'string', description: 'Agent ID', required: true },
+        { name: 'progress', type: 'string', description: 'Progress description (e.g. "3/10 jobs applied")', required: false },
+        { name: 'current_task', type: 'string', description: 'What the agent is currently doing', required: false },
+        { name: 'read_only', type: 'boolean', description: 'If true, just read the current state without updating', required: false },
+      ],
+      execute: async (params) => {
+        const { agent_id, progress, current_task, read_only } = params as Record<string, any>;
+        if (!agent_id) {
+          return { success: false, output: '', error: 'agent_id is required' };
+        }
+        try {
+          if (read_only) {
+            const state = await this.config.subagentManager.getState(agent_id);
+            return { success: true, output: state ? JSON.stringify(state, null, 2) : 'No state recorded yet.' };
+          }
+          const updates: Record<string, unknown> = {};
+          if (progress) updates.progress = progress;
+          if (current_task) updates.currentTask = current_task;
+          await this.config.subagentManager.updateState(agent_id, updates);
+          return { success: true, output: `State updated for agent ${agent_id}: ${JSON.stringify(updates)}` };
+        } catch (err: any) {
+          return { success: false, output: '', error: `agent_state error: ${err.message}` };
         }
       },
     });
@@ -3495,7 +3589,7 @@ Types:
       maxTurns: config.maxTurns,
       maxTokens: 300_000,
       timeoutMs: 600_000,
-      tier: config.tier as 'flash' | 'haiku' | 'sonnet' | 'opus',
+      tier: config.tier as 'haiku' | 'sonnet' | 'opus',
       systemPromptOverride: systemPrompt,
       contextPrefix: contextPrefix || undefined,
       approvalManager: this.config.approvalManager,
@@ -3579,7 +3673,7 @@ Types:
       const response = await this.config.brain.think({
         prompt: context,
         systemPrompt: SELF_REFLECTION_PROMPT,
-        tier: 'flash',
+        tier: 'haiku',
         maxTokens: 1024,
       });
 

@@ -174,7 +174,7 @@ export class ConfigManager {
       this.config.agent!.timeoutMs = parseInt(env.NEXUS_AGENT_TIMEOUT_MS, 10);
     }
     if (env.NEXUS_AGENT_TIER) {
-      this.config.agent!.tier = env.NEXUS_AGENT_TIER as 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
+      this.config.agent!.tier = env.NEXUS_AGENT_TIER as 'none' | 'haiku' | 'sonnet' | 'opus';
     }
 
     // Retry settings

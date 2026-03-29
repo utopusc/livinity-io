@@ -483,7 +483,7 @@ export class WsGateway {
       ),
       maxTokens: agentDefaults?.maxTokens || 200000,
       timeoutMs: agentDefaults?.timeoutMs || 600000,
-      tier: ((tier as any) || agentDefaults?.tier || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
+      tier: ((tier as any) || agentDefaults?.tier || 'sonnet') as 'haiku' | 'sonnet' | 'opus',
       maxDepth: agentDefaults?.maxDepth || 3,
       stream: true,
       approvalManager: this.deps.daemon.approvalManager,

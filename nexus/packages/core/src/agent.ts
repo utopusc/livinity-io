@@ -24,8 +24,8 @@ export interface AgentConfig {
   maxTurns?: number;
   maxTokens?: number;
   timeoutMs?: number;
-  /** Model tier: none (no model), flash (fast), haiku (small), sonnet (balanced), opus (most capable) */
-  tier?: 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
+  /** Model tier: none (no model), haiku (fast/cheap), sonnet (balanced), opus (most capable) */
+  tier?: 'none' | 'haiku' | 'sonnet' | 'opus';
   /** Current nesting depth (0 = root agent) */
   depth?: number;
   /** Maximum nesting depth for subagents */

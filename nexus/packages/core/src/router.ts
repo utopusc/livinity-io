@@ -64,7 +64,7 @@ IMPORTANT: Prefer specific actions (shell, sysinfo, files, docker-manage, pm2) f
 
 Respond in JSON only:
 {"type":"<intent_type>","action":"<action_name>","params":{}}`,
-      tier: 'flash',
+      tier: 'haiku',
       maxTokens: 200,
     });
 

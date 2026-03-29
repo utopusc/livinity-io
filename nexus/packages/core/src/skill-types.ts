@@ -12,7 +12,7 @@ export interface SkillFrontmatter {
   /** Trigger patterns — regex strings or keywords that route messages to this skill */
   triggers: string[];
   /** Model tier for this skill's agent loop */
-  model_tier: 'flash' | 'sonnet' | 'opus';
+  model_tier: 'haiku' | 'sonnet' | 'opus';
   /** Optional: custom tools this skill registers */
   custom_tools?: string[];
   /** Skill type: 'simple' runs handler directly, 'autonomous' runs multi-phase pipeline */
@@ -38,7 +38,7 @@ export interface RunAgentOptions {
   /** Tool names the agent can use (defaults to skill's declared tools) */
   tools?: string[];
   /** Model tier override */
-  tier?: 'flash' | 'sonnet' | 'opus';
+  tier?: 'haiku' | 'sonnet' | 'opus';
   /** Max turns for this agent run */
   maxTurns?: number;
   /** Max tokens for this agent run */
@@ -74,7 +74,7 @@ export interface SkillContext {
   /** Send a WhatsApp progress update without ending the agent loop */
   sendProgress: (message: string) => Promise<void>;
   /** One-shot Brain call for classification/synthesis (no tool use) */
-  think: (prompt: string, options?: { tier?: 'flash' | 'sonnet' | 'opus'; maxTokens?: number; systemPrompt?: string }) => Promise<string>;
+  think: (prompt: string, options?: { tier?: 'haiku' | 'sonnet' | 'opus'; maxTokens?: number; systemPrompt?: string }) => Promise<string>;
   /** WhatsApp sender JID (if triggered from WhatsApp) */
   whatsappJid?: string;
 }

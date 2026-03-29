@@ -159,7 +159,7 @@ export function tierToModel(tier?: string): string | undefined {
     case 'opus': return 'claude-opus-4-6';
     case 'sonnet': return 'claude-sonnet-4-5';
     case 'haiku': return 'claude-haiku-4-5';
-    case 'flash': return 'claude-haiku-4-5';
+    case 'flash': return 'claude-haiku-4-5'; // legacy alias
     default: return 'claude-sonnet-4-5';
   }
 }
