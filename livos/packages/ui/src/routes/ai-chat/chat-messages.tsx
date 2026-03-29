@@ -7,8 +7,10 @@ import {
 	IconCheck,
 	IconChevronDown,
 	IconChevronRight,
+	IconDownload,
 	IconFile,
 	IconLoader2,
+	IconPuzzle,
 	IconTerminal2,
 	IconTool,
 	IconX,
@@ -17,6 +19,7 @@ import {
 import {cn} from '@/shadcn-lib/utils'
 import type {ChatMessage, ChatToolCall, ContentBlock} from '@/hooks/use-agent-socket'
 import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
+import {trpcReact} from '@/trpc/trpc'
 
 import {StreamingMessage} from './streaming-message'
 
@@ -180,6 +183,124 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	)
 }
 
+// --- CapabilityRecommendationCard ---
+
+/** Check if a tool call is a livinity marketplace tool */
+function isMarketplaceTool(name: string): boolean {
+	const raw = formatToolName(name).toLowerCase()
+	return raw === 'livinity_search' || raw === 'livinity_recommend' || raw === 'livinity_install'
+}
+
+function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
+	const [status, setStatus] = useState<'idle' | 'installing' | 'installed' | 'rejected'>('idle')
+	const installMutation = trpcReact.ai.installMarketplaceCapability.useMutation({
+		onSuccess: () => setStatus('installed'),
+		onError: () => setStatus('idle'),
+	})
+
+	// Parse the tool output to extract capability info
+	let capabilities: Array<{name: string; description: string; type: string; tools: string[]}> = []
+	try {
+		const parsed = JSON.parse(toolCall.output || '{}')
+		if (parsed.results && Array.isArray(parsed.results)) {
+			// livinity_search output
+			capabilities = parsed.results.map((r: any) => ({
+				name: r.name || 'Unknown',
+				description: r.description || '',
+				type: r.type || 'skill',
+				tools: r.provides_tools || [],
+			}))
+		} else if (parsed.installed && parsed.name) {
+			// livinity_install output — already installed
+			return (
+				<div className='my-2 flex items-center gap-2 rounded-radius-lg border border-green-500/20 bg-green-500/5 px-3 py-2'>
+					<IconCheck size={16} className='text-green-400' />
+					<span className='text-caption text-green-400'>Installed: {parsed.name}</span>
+				</div>
+			)
+		}
+	} catch {
+		return null // Can't parse output, skip rendering the card
+	}
+
+	if (capabilities.length === 0) return null
+
+	return (
+		<div className='my-2 space-y-2'>
+			{capabilities.slice(0, 3).map((cap) => (
+				<div
+					key={cap.name}
+					className='rounded-radius-lg border border-border-default bg-surface-1 p-3'
+				>
+					<div className='flex items-start gap-2.5'>
+						<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-radius-md bg-violet-500/10'>
+							<IconPuzzle size={16} className='text-violet-400' />
+						</div>
+						<div className='min-w-0 flex-1'>
+							<div className='flex items-center gap-2'>
+								<span className='text-body-sm font-semibold text-text-primary'>{cap.name}</span>
+								<span className='rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-tertiary'>{cap.type}</span>
+							</div>
+							{cap.description && (
+								<p className='mt-0.5 text-caption text-text-secondary line-clamp-2'>{cap.description}</p>
+							)}
+							{cap.tools.length > 0 && (
+								<div className='mt-1.5 flex flex-wrap gap-1'>
+									{cap.tools.slice(0, 5).map((t) => (
+										<span key={t} className='rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-tertiary'>{t}</span>
+									))}
+									{cap.tools.length > 5 && (
+										<span className='text-[10px] text-text-tertiary'>+{cap.tools.length - 5} more</span>
+									)}
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* Action buttons */}
+					<div className='mt-3 flex gap-2'>
+						{status === 'idle' && (
+							<>
+								<button
+									onClick={() => {
+										setStatus('installing')
+										installMutation.mutate({name: cap.name})
+									}}
+									className='flex items-center gap-1.5 rounded-radius-md bg-accent-primary px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-accent-primary-hover'
+								>
+									<IconDownload size={14} />
+									Install
+								</button>
+								<button
+									onClick={() => setStatus('rejected')}
+									className='rounded-radius-md border border-border-default px-3 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-2'
+								>
+									Dismiss
+								</button>
+							</>
+						)}
+						{status === 'installing' && (
+							<div className='flex items-center gap-1.5 text-caption text-text-tertiary'>
+								<IconLoader2 size={14} className='animate-spin' />
+								Installing...
+							</div>
+						)}
+						{status === 'installed' && (
+							<div className='flex items-center gap-1.5 text-caption text-green-400'>
+								<IconCheck size={14} />
+								Installed successfully
+							</div>
+						)}
+						{status === 'rejected' && (
+							<span className='text-caption text-text-tertiary'>Dismissed</span>
+						)}
+					</div>
+				</div>
+			))}
+		</div>
+	)
+}
+
 // --- AgentToolCallDisplay (Claude Code inline style) ---
 
 /** Build a brief one-line input summary for the tool header */
@@ -271,6 +392,11 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 							{/* Output */}
 							{toolCall.output != null && toolCall.status !== 'error' && (
 								<ToolOutput toolCall={toolCall} />
+							)}
+
+							{/* Marketplace capability recommendation card */}
+							{isMarketplaceTool(toolCall.name) && toolCall.status === 'complete' && (
+								<CapabilityRecommendationCard toolCall={toolCall} />
 							)}
 
 							{/* Input details (only if no output yet) */}
