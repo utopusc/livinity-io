@@ -480,10 +480,18 @@ function AnalyticsView() {
 		)
 	}
 
-	const data = analyticsQuery.data as {toolStats: Array<{name: string; type: string; toolCount: number; successRate: number | null; lastUsed: number}>; totalCapabilities: number; activeCapabilities: number} | undefined
+	const data = analyticsQuery.data as {
+		toolStats: Array<{name: string; type: string; toolCount: number; successRate: number | null; lastUsed: number}>;
+		totalCapabilities: number;
+		activeCapabilities: number;
+		usageStats?: Array<{tool: string; totalCalls: number; successRate: number}>;
+		coOccurrences?: Array<{toolA: string; toolB: string; count: number}>;
+	} | undefined
 	if (!data) return <p className='p-4 text-caption text-text-tertiary'>No analytics data available</p>
 
 	const maxTools = Math.max(1, ...data.toolStats.map(s => s.toolCount))
+	const totalCalls = data.usageStats?.reduce((sum, s) => sum + s.totalCalls, 0) ?? 0
+	const maxCalls = Math.max(1, ...(data.usageStats?.map(s => s.totalCalls) ?? [1]))
 
 	return (
 		<div className='p-3 space-y-4'>
@@ -497,7 +505,64 @@ function AnalyticsView() {
 					<div className='text-heading-sm font-bold text-green-400'>{data.activeCapabilities}</div>
 					<div className='text-caption-sm text-text-tertiary'>Active</div>
 				</div>
+				{totalCalls > 0 && (
+					<div className='flex-1 rounded-radius-sm bg-surface-1 p-3 text-center'>
+						<div className='text-heading-sm font-bold text-cyan-400'>{totalCalls.toLocaleString()}</div>
+						<div className='text-caption-sm text-text-tertiary'>Total Calls</div>
+					</div>
+				)}
 			</div>
+
+			{/* Tool Usage (from Redis stream) */}
+			{data.usageStats && data.usageStats.length > 0 && (
+				<>
+					<h3 className='text-caption font-semibold uppercase tracking-wide text-text-tertiary'>Tool Usage (Last 5000 calls)</h3>
+
+					{/* Usage table header */}
+					<div className='flex items-center gap-2 px-1 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
+						<span className='flex-1'>Tool</span>
+						<span className='w-16 text-right'>Calls</span>
+						<span className='w-16 text-right'>Success</span>
+					</div>
+
+					{/* Usage rows */}
+					{data.usageStats.map(stat => (
+						<div key={stat.tool} className='flex items-center gap-2 rounded-radius-sm border border-border-subtle bg-surface-base p-2'>
+							<div className='min-w-0 flex-1'>
+								<span className='block truncate text-caption font-medium text-text-primary'>{stat.tool}</span>
+								{/* CSS bar showing relative call count */}
+								<div className='mt-1 h-1 w-full rounded-full bg-surface-2'>
+									<div className='h-1 rounded-full bg-cyan-500' style={{width: `${(stat.totalCalls / maxCalls) * 100}%`}} />
+								</div>
+							</div>
+							<span className='w-16 text-right text-caption-sm text-text-secondary'>{stat.totalCalls}</span>
+							<span className='w-16 text-right text-caption-sm text-text-secondary'>{stat.successRate}%</span>
+						</div>
+					))}
+				</>
+			)}
+
+			{/* Commonly Used Together (co-occurrences) */}
+			{data.coOccurrences && data.coOccurrences.length > 0 && (
+				<>
+					<h3 className='text-caption font-semibold uppercase tracking-wide text-text-tertiary'>Commonly Used Together</h3>
+					<div className='space-y-1'>
+						{data.coOccurrences.map((pair, i) => (
+							<div key={i} className='flex items-center gap-2 rounded-radius-sm bg-surface-1 px-2.5 py-1.5'>
+								<span className='min-w-0 flex-1 truncate text-caption text-text-secondary'>
+									{pair.toolA} <span className='text-text-tertiary'>+</span> {pair.toolB}
+								</span>
+								<span className='rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-text-tertiary'>
+									{pair.count}x
+								</span>
+							</div>
+						))}
+					</div>
+				</>
+			)}
+
+			{/* Registry Overview (existing capability stats) */}
+			<h3 className='text-caption font-semibold uppercase tracking-wide text-text-tertiary'>Registry Overview</h3>
 
 			{/* Table header */}
 			<div className='flex items-center gap-2 px-1 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
