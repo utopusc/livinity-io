@@ -5,13 +5,14 @@
  * SDK query() sessions. Messages flow:
  *   Browser -> WebSocket -> this handler -> AgentSessionManager -> SDK -> relay back
  *
- * After each turn, the handler persists user + assistant messages to Redis
- * via AiModule so conversation history survives page refresh.
+ * Session keys are per-connection (not per-user) so multiple tabs don't
+ * cancel each other's sessions.
  *
- * JWT auth is handled by the existing upgrade handler in server/index.ts.
- * This handler only needs to extract the userId from the already-verified token.
+ * Conversation history is loaded from Redis and prepended to the prompt
+ * so the AI remembers previous messages in the same conversation.
  */
 
+import {randomUUID} from 'node:crypto'
 import {WebSocket} from 'ws'
 import type {IncomingMessage} from 'http'
 
@@ -29,7 +30,6 @@ import type {ChatMessage, Conversation} from '../ai/index.js'
 
 /**
  * Save a completed turn's messages to Redis conversation storage.
- * Creates the conversation on first turn (auto-titles from user prompt).
  */
 async function saveToConversation(
 	turn: TurnData,
@@ -37,7 +37,7 @@ async function saveToConversation(
 	ai: AiModule,
 	logger: ReturnType<typeof createLogger>,
 ): Promise<void> {
-	if (!turn.conversationId) return // No persistence for unnamed sessions
+	if (!turn.conversationId) return
 
 	try {
 		const conversation = await ai.getOrCreateConversation(
@@ -48,7 +48,6 @@ async function saveToConversation(
 
 		const now = Date.now()
 
-		// Push user message
 		const userMsg: ChatMessage = {
 			id: `msg_${now}_user`,
 			role: 'user',
@@ -57,7 +56,6 @@ async function saveToConversation(
 		}
 		conversation.messages.push(userMsg)
 
-		// Push assistant message with tool calls mapped to legacy format
 		const assistantMsg: ChatMessage = {
 			id: `msg_${now + 1}_assistant`,
 			role: 'assistant',
@@ -83,20 +81,44 @@ async function saveToConversation(
 	}
 }
 
+/**
+ * Build a context prefix from conversation history so the AI remembers
+ * previous messages. Returns empty string if no history.
+ */
+async function buildConversationContext(
+	conversationId: string | undefined,
+	userId: string,
+	ai: AiModule,
+): Promise<string> {
+	if (!conversationId) return ''
+
+	try {
+		const conversation = await ai.getConversation(conversationId, userId)
+		if (!conversation || conversation.messages.length === 0) return ''
+
+		// Take last 10 messages for context (avoid token overflow)
+		const recent = conversation.messages.slice(-10)
+		const history = recent
+			.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+			.join('\n\n')
+
+		return `Previous conversation:\n${history}\n\nCurrent message: `
+	} catch {
+		return ''
+	}
+}
+
 export function createAgentWebSocketHandler(opts: {
 	livinityd: Livinityd
 	logger: ReturnType<typeof createLogger>
 }) {
 	const ai = opts.livinityd.ai
 
-	// Create a lazy ToolRegistry proxy that delegates to ai.toolRegistry.
-	// This is needed because ai.toolRegistry is populated asynchronously after startup
-	// (fetched from nexus API), but AgentSessionManager is created synchronously here.
+	// Lazy ToolRegistry proxy — delegates to ai.toolRegistry when available
 	const lazyToolRegistry = new Proxy({} as any, {
 		get(_target, prop) {
 			const real = ai.toolRegistry
 			if (!real) {
-				// Registry not yet loaded — return safe defaults
 				if (prop === 'listFiltered') return () => []
 				if (prop === 'list') return () => []
 				if (prop === 'listAll') return () => []
@@ -110,7 +132,6 @@ export function createAgentWebSocketHandler(opts: {
 		},
 	})
 
-	// Create a single AgentSessionManager instance shared across all connections
 	const sessionManager = new AgentSessionManager({
 		toolRegistry: lazyToolRegistry,
 	})
@@ -118,43 +139,55 @@ export function createAgentWebSocketHandler(opts: {
 	return (ws: WebSocket, request: IncomingMessage) => {
 		const logger = opts.logger
 
-		// Extract userId from JWT payload (already verified in upgrade handler)
-		// Decode JWT payload to extract userId (token was already verified during upgrade)
+		// Each WebSocket connection gets a unique session key so multiple tabs
+		// don't cancel each other's sessions.
+		const connectionId = randomUUID().slice(0, 8)
+
+		// Extract userId from JWT
 		const url = new URL(request.url || '/', 'http://localhost')
 		const token = url.searchParams.get('token')
-		let userId = 'admin' // fallback for legacy single-user tokens
+		let userId = 'admin'
 
 		if (token) {
 			try {
 				const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
 				if (payload.userId) userId = payload.userId
 			} catch {
-				/* legacy token format, use 'admin' */
+				/* legacy token format */
 			}
 		}
 
-		logger.log(`WS agent: connected, userId=${userId}`)
+		// Per-connection session key prevents tab conflicts
+		const sessionKey = `${userId}:${connectionId}`
 
-		// 15-second heartbeat ping to keep connection alive through Caddy proxy
+		logger.log(`WS agent: connected, userId=${userId}, conn=${connectionId}`)
+
+		// 15-second heartbeat
 		const heartbeat = setInterval(() => {
-			if (ws.readyState === WebSocket.OPEN) {
-				ws.ping()
-			}
+			if (ws.readyState === WebSocket.OPEN) ws.ping()
 		}, 15_000)
 
-		// Message relay callback: sends AgentWsMessage to the WebSocket client
 		const sendMessage = (msg: AgentWsMessage) => {
 			if (ws.readyState === WebSocket.OPEN) {
 				ws.send(JSON.stringify(msg))
 			}
 		}
 
-		// Handle incoming messages from the browser
+		// Handle incoming messages
 		ws.on('message', async (data) => {
 			try {
-				const msg = JSON.parse(data.toString()) as ClientWsMessage
-				logger.verbose(`WS agent: received ${msg.type} from userId=${userId}`)
-				await sessionManager.handleMessage(userId, msg, sendMessage, {
+				const raw = JSON.parse(data.toString()) as ClientWsMessage
+
+				// For 'start' messages: prepend conversation history to prompt
+				if (raw.type === 'start' && raw.conversationId) {
+					const context = await buildConversationContext(raw.conversationId, userId, ai)
+					if (context) {
+						raw.prompt = context + raw.prompt
+					}
+				}
+
+				logger.verbose(`WS agent: received ${raw.type} from ${sessionKey}`)
+				await sessionManager.handleMessage(sessionKey, raw, sendMessage, {
 					onTurnComplete: (turn: TurnData) => saveToConversation(turn, userId, ai, logger),
 				})
 			} catch (err: any) {
@@ -163,12 +196,11 @@ export function createAgentWebSocketHandler(opts: {
 			}
 		})
 
-		// Handle WebSocket close -- cleanup heartbeat but don't kill session
-		// The session will be replaced when a new start message arrives,
-		// or the SDK query will complete naturally.
+		// Cleanup on close — kill this connection's session
 		ws.on('close', () => {
-			logger.log(`WS agent: disconnected, userId=${userId}`)
+			logger.log(`WS agent: disconnected, ${sessionKey}`)
 			clearInterval(heartbeat)
+			sessionManager.cleanup(sessionKey)
 		})
 
 		ws.on('error', (err) => {
