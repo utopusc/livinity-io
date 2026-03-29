@@ -193,6 +193,11 @@ export class IntentRouter {
       selected.push(cap);
     }
 
+    // 8b. Expand dependencies — ensure required capabilities are included
+    const expanded = this.expandDependencies(selected, allCapabilities);
+    selected.length = 0;
+    selected.push(...expanded);
+
     // 9. Always include core tools
     const selectedIds = new Set(selected.map((c) => c.id));
     for (const toolName of CORE_TOOL_NAMES) {
@@ -232,6 +237,83 @@ export class IntentRouter {
 
     // 11. Return
     return result;
+  }
+
+  // ── Dependency Resolution ───────────────────────────────────────────────────
+
+  /**
+   * Expand `requires` dependencies for selected capabilities.
+   *
+   * Performs depth-first resolution: for each selected capability, recursively
+   * adds any required capabilities that are not yet in the set. Circular
+   * dependencies are detected via a `visited` set and logged as warnings.
+   *
+   * Dependencies are added with `_score: 0` (dependency-injected, not intent-matched).
+   */
+  private expandDependencies(
+    selected: ScoredCapability[],
+    allCapabilities: CapabilityManifest[],
+  ): ScoredCapability[] {
+    const capMap = new Map<string, CapabilityManifest>();
+    for (const cap of allCapabilities) {
+      capMap.set(cap.id, cap);
+    }
+
+    const resultMap = new Map<string, ScoredCapability>();
+    for (const cap of selected) {
+      resultMap.set(cap.id, cap);
+    }
+
+    const visited = new Set<string>();
+
+    const resolve = (capId: string) => {
+      if (visited.has(capId)) return;
+      visited.add(capId);
+
+      const cap = resultMap.get(capId) || capMap.get(capId);
+      if (!cap) return;
+
+      for (const depId of cap.requires) {
+        if (resultMap.has(depId)) {
+          // Dependency already in result set — still need to resolve its transitive deps
+          if (!visited.has(depId)) {
+            resolve(depId);
+          }
+          continue;
+        }
+
+        // Check for circular dependency
+        if (visited.has(depId)) {
+          logger.warn('IntentRouter: circular dependency detected', { capId, depId });
+          continue;
+        }
+
+        const depCap = capMap.get(depId);
+        if (!depCap) {
+          logger.warn('IntentRouter: required dependency not found in registry', { capId, depId });
+          continue;
+        }
+
+        // Add dependency with score 0 (dependency-injected)
+        resultMap.set(depId, { ...depCap, _score: 0 });
+        // Recursively resolve transitive dependencies
+        resolve(depId);
+      }
+    };
+
+    // Resolve dependencies for each originally selected capability
+    for (const cap of selected) {
+      resolve(cap.id);
+    }
+
+    return Array.from(resultMap.values());
+  }
+
+  // ── Public Accessors ──────────────────────────────────────────────────────
+
+  /** Expose getCapabilities for discover_capability tool */
+  async getCapabilitiesList(): Promise<CapabilityManifest[]> {
+    return this.deps.getCapabilities();
   }
 
   // ── Scoring ─────────────────────────────────────────────────────────────────
@@ -321,4 +403,32 @@ export class IntentRouter {
     }
     return Array.from(toolNames);
   }
+}
+
+// ── System Prompt Composition ───────────────────────────────────────────────
+
+/**
+ * Compose a per-session system prompt by appending capability-specific
+ * instruction sections to a base prompt.
+ *
+ * For each capability that has `metadata.instructions` (string), a section
+ * is appended: `## {capability.name} Instructions\n{instructions}`.
+ *
+ * This function does NOT enforce token budgets — the caller is responsible
+ * for limiting context_cost via the IntentRouter budget cap.
+ */
+export function composeSystemPrompt(
+  basePrompt: string,
+  capabilities: CapabilityManifest[],
+): string {
+  let prompt = basePrompt;
+
+  for (const cap of capabilities) {
+    const instructions = cap.metadata?.instructions;
+    if (typeof instructions === 'string' && instructions.trim()) {
+      prompt += `\n\n## ${cap.name} Instructions\n${instructions}`;
+    }
+  }
+
+  return prompt;
 }
