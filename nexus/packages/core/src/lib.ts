@@ -35,6 +35,9 @@ export type { IntentRouterDeps, IntentResult, ScoredCapability } from './intent-
 // ── Capability Types ──────────────────────────────────────────
 export type { CapabilityManifest } from './capability-registry.js';
 
+// ── Marketplace MCP ──────────────────────────────────────────
+export { MarketplaceMcp } from './marketplace-mcp.js';
+
 // ── Skill Types ─────────────────────────────────────────────
 export type {
   SkillFrontmatter,
