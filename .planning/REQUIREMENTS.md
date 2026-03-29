@@ -18,10 +18,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 ### Router — Intent Router v2
 
-- [ ] **RTR-01**: System classifies user intent and selects relevant capabilities using semantic matching
-- [ ] **RTR-02**: Capability matches include confidence scores with threshold filtering
-- [ ] **RTR-03**: Context window budget management keeps tool definitions under 30% of context
-- [ ] **RTR-04**: Intent-to-capability mapping is cached in Redis for sub-second repeat loading
+- [x] **RTR-01**: System classifies user intent and selects relevant capabilities using semantic matching
+- [x] **RTR-02**: Capability matches include confidence scores with threshold filtering
+- [x] **RTR-03**: Context window budget management keeps tool definitions under 30% of context
+- [x] **RTR-04**: Intent-to-capability mapping is cached in Redis for sub-second repeat loading
 
 ### Provisioning — Auto-Provisioning Engine
 
@@ -93,10 +93,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | REG-02 | Phase 29 | Complete |
 | REG-03 | Phase 29 | Complete |
 | REG-04 | Phase 29 | Complete |
-| RTR-01 | Phase 31 | Pending |
-| RTR-02 | Phase 31 | Pending |
-| RTR-03 | Phase 31 | Pending |
-| RTR-04 | Phase 31 | Pending |
+| RTR-01 | Phase 31 | Complete |
+| RTR-02 | Phase 31 | Complete |
+| RTR-03 | Phase 31 | Complete |
+| RTR-04 | Phase 31 | Complete |
 | PRV-01 | Phase 32 | Pending |
 | PRV-02 | Phase 32 | Pending |
 | PRV-03 | Phase 32 | Pending |

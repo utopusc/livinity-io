@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v22.0
 milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
 status: unknown
-stopped_at: Completed 30-01-PLAN.md
-last_updated: "2026-03-29T04:40:25.077Z"
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-03-29T05:04:39.420Z"
 progress:
   total_phases: 8
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v22.0 -- Livinity AGI Platform — Capability Orchestration & Marketplace
-**Current focus:** Phase 30 — Agents Panel Redesign
+**Current focus:** Phase 31 — Intent Router v2
 
 ## Current Position
 
-Phase: 31
-Plan: Not started
+Phase: 31 (Intent Router v2) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 | Phase 29 P01 | 2min | 1 tasks | 1 files |
 | Phase 29 P02 | 3min | 2 tasks | 3 files |
 | Phase 30 P01 | 5min | 2 tasks | 2 files |
+| Phase 31 P01 | 5min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Plan: Not started
 - [Phase 30]: Default active tab is Skills as most commonly used capability type
 - [Phase 30]: Success rate shows em-dash when absent (Phase 36 populates real values)
 - [Phase 30]: Inline CapabilityManifest type in UI (no cross-package import from nexus-core)
+- [Phase 31]: getCapabilities() function dep for cross-context compatibility (nexus direct vs livinityd HTTP)
+- [Phase 31]: Brain is optional in IntentRouterDeps — livinityd uses keyword matching only, no LLM fallback
+- [Phase 31]: Scoped ToolRegistry pattern: intent-filter first, then apply tool policy on top
 
 ### Pending Todos
 
@@ -74,6 +78,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-29T04:35:49.221Z
-Stopped at: Completed 30-01-PLAN.md
+Last session: 2026-03-29T05:04:39.417Z
+Stopped at: Completed 31-01-PLAN.md
 Resume file: None
