@@ -29,6 +29,7 @@ import { SkillInstaller } from './skill-installer.js';
 import { WebhookManager } from './webhook-manager.js';
 import { MultiAgentManager } from './multi-agent.js';
 import { CanvasManager } from './canvas-manager.js';
+import { CapabilityRegistry } from './capability-registry.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { VoiceGateway } from './voice/index.js';
 import { Queue, Worker } from 'bullmq';
@@ -425,6 +426,18 @@ Conversation:`;
   await skillLoader.loadMarketplaceSkills(skillInstallDir);
   logger.info('SkillInstaller initialized', { installDir: skillInstallDir, registry: defaultSkillRegistry });
 
+  // Unified capability registry — aggregates tools, skills, MCPs, hooks, agents
+  const capabilityRegistry = new CapabilityRegistry({
+    redis,
+    toolRegistry,
+    skillLoader,
+    mcpClientManager,
+    mcpConfigManager,
+    subagentManager,
+  });
+  await capabilityRegistry.start();
+  logger.info('CapabilityRegistry initialized', { capabilities: capabilityRegistry.size });
+
   // ── BullMQ cron queue (replaces setTimeout-based scheduling) ──────────
   const cronQueue = new Queue('nexus-cron', {
     connection: bullConnection,
@@ -487,7 +500,7 @@ Conversation:`;
   daemon.setWebhookManager(webhookManager);
   logger.info('WebhookManager initialized');
 
-  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager });
+  const apiApp = createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager, capabilityRegistry });
   const apiPort = parseInt(process.env.API_PORT || '3200');
   const apiHost = process.env.API_HOST || '127.0.0.1';
   // Listen with retry — handles EADDRINUSE during PM2 restarts when old process
