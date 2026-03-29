@@ -39,10 +39,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 ### Self-Mod — AI Self-Modification
 
-- [ ] **MOD-01**: AI autonomously creates new skill files when it identifies a capability gap
-- [ ] **MOD-02**: AI can create hooks (pre-commit, post-completion, file-change triggers)
-- [ ] **MOD-03**: AI can create agent templates with system prompt, tool set, and scheduling config
-- [ ] **MOD-04**: Auto-created capabilities are tested and self-corrected on failure
+- [x] **MOD-01**: AI autonomously creates new skill files when it identifies a capability gap
+- [x] **MOD-02**: AI can create hooks (pre-commit, post-completion, file-change triggers)
+- [x] **MOD-03**: AI can create agent templates with system prompt, tool set, and scheduling config
+- [x] **MOD-04**: Auto-created capabilities are tested and self-corrected on failure
 
 ### UI — Agents Panel Redesign
 
@@ -105,10 +105,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | MKT-02 | Phase 33 | Complete |
 | MKT-03 | Phase 33 | Complete |
 | MKT-04 | Phase 33 | Complete |
-| MOD-01 | Phase 34 | Pending |
-| MOD-02 | Phase 34 | Pending |
-| MOD-03 | Phase 34 | Pending |
-| MOD-04 | Phase 34 | Pending |
+| MOD-01 | Phase 34 | Complete |
+| MOD-02 | Phase 34 | Complete |
+| MOD-03 | Phase 34 | Complete |
+| MOD-04 | Phase 34 | Complete |
 | UIP-01 | Phase 30 | Complete |
 | UIP-02 | Phase 30 | Complete |
 | UIP-03 | Phase 35 | Pending |
