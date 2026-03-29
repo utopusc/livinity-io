@@ -445,6 +445,8 @@ Conversation:`;
     skillRegistryClient,
     toolRegistry,
     redis,
+    mcpClientManager,
+    subagentManager,
   });
   marketplaceMcp.registerTools();
   logger.info('MarketplaceMcp initialized (5 tools registered)');

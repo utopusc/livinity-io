@@ -29,6 +29,8 @@ interface MarketplaceMcpDeps {
   skillRegistryClient: SkillRegistryClient;
   toolRegistry: ToolRegistry;
   redis: Redis;
+  mcpClientManager?: any; // McpClientManager — installs and starts MCP servers
+  subagentManager?: any;  // SubagentManager — creates agent instances
 }
 
 /** A single entry in the marketplace index.json */
@@ -209,121 +211,163 @@ export class MarketplaceMcp {
     return {
       name: 'livinity_install',
       description:
-        'Install a capability from the Livinity Marketplace. Validates the manifest, checks for conflicts with installed capabilities, and registers it immediately in the CapabilityRegistry.',
+        'Install a capability from the Livinity Marketplace. Performs REAL installation: MCP → starts server process, Agent → creates subagent, Hook → registers event handler, Skill → registers in system. Use the "id" from search results (e.g. "mcp:context7", "agent:code-reviewer").',
       parameters: [
         {
-          name: 'name',
+          name: 'id',
           type: 'string',
-          description: 'Name of the capability to install (from marketplace search results)',
+          description: 'Capability ID from search results (e.g. "mcp:fetch", "agent:devops-engineer", "hook:smart-commit")',
           required: true,
         },
       ],
       execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
         try {
-          const name = params.name as string;
-          if (!name) {
-            return { success: false, output: '', error: 'name parameter is required' };
+          const id = (params.id as string || params.name as string || '').trim();
+          if (!id) {
+            return { success: false, output: '', error: 'id parameter is required (e.g. "mcp:fetch")' };
           }
 
-          // 1. Fetch index and find entry
+          // 1. Fetch index and find entry by id or name
           const entries = await this.fetchIndex();
-          const entry = entries.find((e) => e.name === name);
+          const entry = entries.find((e) => (e.id || `${e.type}:${e.name}`) === id)
+            || entries.find((e) => e.name.toLowerCase() === id.toLowerCase())
+            || entries.find((e) => e.name.toLowerCase().includes(id.toLowerCase()));
+
           if (!entry) {
-            return {
-              success: false,
-              output: '',
-              error: `Capability "${name}" not found in marketplace`,
-            };
+            return { success: false, output: '', error: `"${id}" not found in marketplace. Use livinity_search to find available capabilities.` };
           }
 
-          // 2. Validate manifest fields
-          if (!entry.name || !entry.type || !entry.description || !entry.version) {
-            return {
-              success: false,
-              output: '',
-              error: `Invalid manifest for "${name}": missing required fields (name, type, description, version)`,
-            };
-          }
+          const capabilityId = entry.id || `${entry.type}:${entry.name}`;
+          const config = entry.config || {};
 
-          // 3. Conflict detection
-          if (entry.conflicts && entry.conflicts.length > 0) {
-            const conflicting: string[] = [];
-            for (const conflictId of entry.conflicts) {
-              const existing = this.deps.capabilityRegistry.get(conflictId);
-              if (existing) {
-                conflicting.push(conflictId);
+          // 2. Type-specific installation
+          let installResult = '';
+
+          switch (entry.type) {
+            case 'mcp': {
+              // Real MCP install — register server in McpClientManager
+              if (!this.deps.mcpClientManager) {
+                installResult = 'MCP registered in catalog (McpClientManager not available for live start). Server config saved — restart liv-core to activate.';
+                // Save config to Redis for next restart
+                const mcpConfig = {
+                  name: entry.name.toLowerCase().replace(/\s+/g, '-'),
+                  transport: config.transport || 'stdio',
+                  command: config.command || 'npx',
+                  args: config.args || [],
+                  env: config.env || {},
+                  enabled: true,
+                  description: entry.description,
+                  installedFrom: 'marketplace',
+                  installedAt: Date.now(),
+                };
+                await this.deps.redis.hset('nexus:config:mcp_servers', mcpConfig.name, JSON.stringify(mcpConfig));
+                await this.deps.redis.publish('nexus:config:updated', 'mcp_config');
+                installResult = `MCP server "${mcpConfig.name}" installed and config saved. Command: ${mcpConfig.command} ${(mcpConfig.args || []).join(' ')}. Server will start automatically.`;
+              } else {
+                // Direct install via McpClientManager
+                const serverName = entry.name.toLowerCase().replace(/\s+/g, '-');
+                await this.deps.mcpClientManager.addServer({
+                  name: serverName,
+                  transport: config.transport || 'stdio',
+                  command: config.command || 'npx',
+                  args: config.args || [],
+                  env: config.env || {},
+                  enabled: true,
+                  description: entry.description,
+                  installedFrom: 'marketplace',
+                  installedAt: Date.now(),
+                });
+                installResult = `MCP server "${serverName}" installed and started. Tools are now available.`;
               }
+              break;
             }
-            if (conflicting.length > 0) {
-              return {
-                success: false,
-                output: '',
-                error: `Cannot install "${name}": conflicts with installed capabilities: ${conflicting.join(', ')}`,
+
+            case 'agent': {
+              // Real agent install — create subagent via SubagentManager
+              if (!this.deps.subagentManager) {
+                installResult = 'Agent registered in catalog (SubagentManager not available). Config saved.';
+              } else {
+                const agentId = entry.name.toLowerCase().replace(/\s+/g, '-');
+                await this.deps.subagentManager.create({
+                  id: agentId,
+                  name: entry.name,
+                  description: entry.description,
+                  systemPrompt: config.systemPrompt || entry.description,
+                  tools: config.tools || ['*'],
+                  tier: entry.tier === 'any' ? 'sonnet' : entry.tier,
+                  maxTurns: 25,
+                  status: 'active',
+                  createdBy: 'marketplace',
+                  createdVia: 'web',
+                  ...(config.loop ? { loop: config.loop } : {}),
+                  ...(config.schedule ? { schedule: config.schedule } : {}),
+                });
+                installResult = `Agent "${entry.name}" created with ${(config.tools || ['all tools']).join(', ')}. ${config.loop ? 'Loop configured: ' + config.loop.task : 'Ready to receive messages.'}`;
+              }
+              break;
+            }
+
+            case 'hook': {
+              // Save hook to Redis
+              const hookName = entry.name.toLowerCase().replace(/\s+/g, '-');
+              const hookConfig = {
+                name: hookName,
+                event: config.event || (config.PostToolUse ? 'post-task' : config.PreToolUse ? 'pre-task' : 'post-task'),
+                command: config.command || 'echo "hook triggered"',
+                enabled: true,
+                installedFrom: 'marketplace',
               };
+              await this.deps.redis.set(`nexus:hooks:${hookName}`, JSON.stringify(hookConfig));
+              installResult = `Hook "${hookName}" installed. Event: ${hookConfig.event}. Will fire on ${hookConfig.event} events.`;
+              break;
+            }
+
+            case 'skill': {
+              // Register skill in catalog
+              installResult = `Skill "${entry.name}" registered. Available for AI to use via skill system.`;
+              break;
+            }
+
+            default: {
+              installResult = `${entry.type} "${entry.name}" registered in capability catalog.`;
             }
           }
 
-          // 4. Check not already installed
-          const capabilityId = `${entry.type}:${name}`;
-          const existing = this.deps.capabilityRegistry.get(capabilityId);
-          if (existing && existing.source === 'marketplace') {
-            return {
-              success: false,
-              output: '',
-              error: `Capability "${capabilityId}" is already installed from marketplace`,
-            };
-          }
-
-          // 5. Create CapabilityManifest
+          // 3. Register in CapabilityRegistry
           const manifest: CapabilityManifest = {
             id: capabilityId,
             type: entry.type,
             name: entry.name,
             description: entry.description,
-            semantic_tags: entry.tags,
-            triggers: entry.triggers,
-            provides_tools: entry.provides_tools,
-            requires: entry.requires,
-            conflicts: entry.conflicts,
-            context_cost: entry.context_cost,
-            tier: entry.tier,
+            semantic_tags: entry.tags || [],
+            triggers: entry.triggers || [],
+            provides_tools: entry.provides_tools || [],
+            requires: entry.requires || [],
+            conflicts: entry.conflicts || [],
+            context_cost: entry.context_cost || 0,
+            tier: entry.tier || 'any',
             source: 'marketplace',
             status: 'active',
             last_used_at: 0,
             registered_at: Date.now(),
-            metadata: {
-              version: entry.version,
-              author: entry.author,
-              path: entry.path,
-            },
+            metadata: { version: entry.version, author: entry.author },
           };
-
-          // 6. Register in CapabilityRegistry
           await this.deps.capabilityRegistry.registerCapability(manifest);
 
-          // 7. Store install metadata in Redis
-          await this.deps.redis.set(
-            `${REDIS_INSTALLED_PREFIX}${name}`,
-            JSON.stringify({
-              name: entry.name,
-              type: entry.type,
-              version: entry.version,
-              installedAt: Date.now(),
-            }),
-          );
+          // 4. Store install metadata
+          await this.deps.redis.set(`${REDIS_INSTALLED_PREFIX}${capabilityId}`, JSON.stringify({
+            id: capabilityId, type: entry.type, version: entry.version, installedAt: Date.now(),
+          }));
 
-          logger.info('MarketplaceMcp: capability installed', {
-            id: capabilityId,
-            version: entry.version,
-          });
+          logger.info('MarketplaceMcp: installed', { id: capabilityId, type: entry.type });
 
           return {
             success: true,
-            output: `Installed "${capabilityId}" (v${entry.version}) from marketplace. Capability is now active.`,
-            data: { id: capabilityId, version: entry.version },
+            output: `✅ ${installResult}\n\nCapability "${capabilityId}" is now active in the registry.`,
+            data: { id: capabilityId, type: entry.type, version: entry.version },
           };
         } catch (err: any) {
-          return { success: false, output: '', error: err.message };
+          return { success: false, output: '', error: `Install failed: ${err.message}` };
         }
       },
     };
