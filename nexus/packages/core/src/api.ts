@@ -35,6 +35,7 @@ import type { UsageTracker } from './usage-tracker.js';
 import type { WebhookManager } from './webhook-manager.js';
 import { isCommand, handleCommand, listCommands } from './commands.js';
 import type { ClaudeProvider } from './providers/claude.js';
+import type { CapabilityRegistry } from './capability-registry.js';
 
 interface ApiDeps {
   daemon: Daemon;
@@ -53,6 +54,7 @@ interface ApiDeps {
   dmPairingManager?: DmPairingManager;
   usageTracker?: UsageTracker;
   webhookManager?: WebhookManager;
+  capabilityRegistry?: CapabilityRegistry;
 }
 
 
@@ -928,6 +930,54 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   app.delete('/api/tools/:name', async (req, res) => {
     const existed = toolRegistry.unregister(req.params.name);
     res.json({ unregistered: existed, name: req.params.name });
+  });
+
+  // ── Capability Registry API ─────────────────────────────────────
+
+  /** List all capabilities with optional type/status filter */
+  app.get('/api/capabilities', (_req, res) => {
+    if (!deps.capabilityRegistry) {
+      return res.status(503).json({ error: 'Capability registry not available' });
+    }
+    const type = _req.query.type as string | undefined;
+    const status = _req.query.status as string | undefined;
+    const filter: { type?: any; status?: string } = {};
+    if (type && ['tool', 'skill', 'mcp', 'hook', 'agent'].includes(type)) {
+      filter.type = type;
+    }
+    if (status) filter.status = status;
+    const capabilities = deps.capabilityRegistry.list(Object.keys(filter).length > 0 ? filter : undefined);
+    res.json({ capabilities, total: capabilities.length });
+  });
+
+  /** Search capabilities by text, tags, or type */
+  app.get('/api/capabilities/search', (_req, res) => {
+    if (!deps.capabilityRegistry) {
+      return res.status(503).json({ error: 'Capability registry not available' });
+    }
+    const text = _req.query.q as string | undefined;
+    const tags = _req.query.tags ? (_req.query.tags as string).split(',') : undefined;
+    const type = _req.query.type as string | undefined;
+    const query: { text?: string; tags?: string[]; type?: any } = {};
+    if (text) query.text = text;
+    if (tags) query.tags = tags;
+    if (type && ['tool', 'skill', 'mcp', 'hook', 'agent'].includes(type)) {
+      query.type = type;
+    }
+    const results = deps.capabilityRegistry.search(query);
+    res.json({ results, total: results.length });
+  });
+
+  /** Get a single capability by ID (IDs contain colons, e.g. tool:shell) */
+  app.get('/api/capabilities/:id(*)', (req, res) => {
+    if (!deps.capabilityRegistry) {
+      return res.status(503).json({ error: 'Capability registry not available' });
+    }
+    const capability = deps.capabilityRegistry.get(req.params.id);
+    if (!capability) {
+      return res.status(404).json({ error: `Capability "${req.params.id}" not found` });
+    }
+    res.json(capability);
   });
 
   // ── Nexus Config API ────────────────────────────────────────────
