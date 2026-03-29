@@ -2196,6 +2196,82 @@ export default router({
 			return {success: true, deleted}
 		}),
 
+	// ── Marketplace Install ─────────────────────────────────────
+
+	/** Install a marketplace capability by name (fetches from GitHub marketplace index) */
+	installMarketplaceCapability: privateProcedure
+		.input(z.object({name: z.string().min(1)}))
+		.mutation(async ({input}) => {
+			const MARKETPLACE_URL = 'https://raw.githubusercontent.com/utopusc/livinity-skills/main/marketplace/index.json'
+			let marketplaceItems: any[] = []
+			try {
+				const idxRes = await fetch(MARKETPLACE_URL)
+				if (idxRes.ok) marketplaceItems = (await idxRes.json()) as any[]
+			} catch { /* marketplace not yet populated */ }
+
+			// Find the requested capability
+			const item = marketplaceItems.find((i: any) =>
+				i.name?.toLowerCase() === input.name.toLowerCase()
+			)
+			if (!item) {
+				throw new TRPCError({code: 'NOT_FOUND', message: `Capability "${input.name}" not found in marketplace`})
+			}
+
+			// Validate required manifest fields
+			if (!item.name || !item.type) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Invalid marketplace capability manifest'})
+			}
+
+			// Register via nexus capability registry API
+			const nexusUrl = getNexusApiUrl()
+			const headers: Record<string, string> = {'Content-Type': 'application/json'}
+			if (process.env.LIV_API_KEY) headers['X-API-Key'] = process.env.LIV_API_KEY
+
+			try {
+				const regRes = await fetch(`${nexusUrl}/api/capabilities`, {
+					method: 'POST',
+					headers,
+					body: JSON.stringify({
+						name: item.name,
+						type: item.type,
+						description: item.description || '',
+						provides_tools: item.provides_tools || [],
+						semantic_tags: item.semantic_tags || [],
+						source: 'marketplace',
+					}),
+				})
+				if (regRes.ok) {
+					const regData = (await regRes.json()) as {id?: string}
+					return {
+						found: true,
+						installed: true,
+						capability: {
+							name: item.name,
+							type: item.type,
+							description: item.description || '',
+							tools: item.provides_tools || [],
+							tags: item.semantic_tags || [],
+							registeredId: regData.id || null,
+						},
+					}
+				}
+			} catch { /* registration failed — fall through to return found-only */ }
+
+			// Fallback: return found capability info (registration may not be available)
+			return {
+				found: true,
+				installed: false,
+				capability: {
+					name: item.name,
+					type: item.type,
+					description: item.description || '',
+					tools: item.provides_tools || [],
+					tags: item.semantic_tags || [],
+					registeredId: null,
+				},
+			}
+		}),
+
 	// ── Analytics ────────────────────────────────────────────────
 
 	/** Get analytics data from the capability registry */
