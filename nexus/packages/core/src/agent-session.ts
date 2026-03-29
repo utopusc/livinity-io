@@ -16,9 +16,10 @@ import {
   type SDKMessage,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { ToolRegistry, ToolPolicy } from './tool-registry.js';
+import { ToolRegistry, type ToolPolicy } from './tool-registry.js';
 import type { NexusConfig } from './config/schema.js';
 import { buildSdkTools, tierToModel, isCdpReachable } from './sdk-agent-runner.js';
+import type { IntentRouter } from './intent-router.js';
 import { logger } from './logger.js';
 
 // ── Wire Protocol Types ──────────────────────────────────────
@@ -122,10 +123,12 @@ export class AgentSessionManager {
   private sessions = new Map<string, ActiveSession>();
   private toolRegistry: ToolRegistry;
   private nexusConfig?: NexusConfig;
+  private intentRouter: IntentRouter | null;
 
-  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig }) {
+  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig; intentRouter?: IntentRouter }) {
     this.toolRegistry = opts.toolRegistry;
     this.nexusConfig = opts.nexusConfig;
+    this.intentRouter = opts.intentRouter ?? null;
   }
 
   /** Get the active session for a user, if any */
@@ -203,8 +206,40 @@ export class AgentSessionManager {
         } as ToolPolicy)
       : undefined;
 
-    // Build MCP tool definitions from Nexus ToolRegistry
-    const sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
+    // Budget cap per tier (declared early — needed by IntentRouter)
+    const tier = model ?? agentDefaults?.tier ?? 'sonnet';
+
+    // Intent-based tool selection: use IntentRouter to select relevant tools
+    let sdkTools: ReturnType<typeof buildSdkTools> = [];
+    if (this.intentRouter) {
+      try {
+        const intentResult = await this.intentRouter.resolveCapabilities(prompt, tier);
+        const intentToolNames = this.intentRouter.getToolNamesFromCapabilities(intentResult.capabilities);
+        // Create a scoped registry containing only intent-matched tools
+        const scopedRegistry = new ToolRegistry();
+        for (const toolName of intentToolNames) {
+          const tool = this.toolRegistry.get(toolName);
+          if (tool) scopedRegistry.register(tool);
+        }
+        // Also apply tool policy (deny list etc.) on top of intent selection
+        sdkTools = buildSdkTools(scopedRegistry, toolPolicy);
+        logger.info('AgentSessionManager: intent-based tool selection', {
+          userId,
+          intentCapabilities: intentResult.capabilities.length,
+          intentTools: intentToolNames.length,
+          fromCache: intentResult.fromCache,
+          totalContextCost: intentResult.totalContextCost,
+          sdkToolCount: sdkTools.length,
+        });
+      } catch (err: any) {
+        // Fallback to full tool set if intent routing fails
+        logger.error('AgentSessionManager: intent routing failed, using full tool set', { error: err.message });
+        sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
+      }
+    } else {
+      // No intent router — use full tool set (backward compatible)
+      sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
+    }
 
     // Build allowedTools and MCP servers only if we have tools
     const allowedTools: string[] = [];
@@ -230,9 +265,6 @@ export class AgentSessionManager {
       `4. Be concise. For simple questions, respond in 1-2 sentences without using tools.\n` +
       `5. If a tool fails, try ONE alternative approach, then report the issue.\n` +
       `6. When the task is complete, provide your final answer immediately -- do not keep exploring.`;
-
-    // Budget cap per tier
-    const tier = model ?? agentDefaults?.tier ?? 'sonnet';
     const budgetByTier: Record<string, number> = {
       opus: 10.0,
       sonnet: 5.0,

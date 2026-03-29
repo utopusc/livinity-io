@@ -18,9 +18,11 @@ import type {IncomingMessage} from 'http'
 
 import {
 	AgentSessionManager,
+	IntentRouter,
 	type AgentWsMessage,
 	type ClientWsMessage,
 	type TurnData,
+	type CapabilityManifest,
 } from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
@@ -136,8 +138,33 @@ export function createAgentWebSocketHandler(opts: {
 		},
 	})
 
+	// IntentRouter — fetches capabilities from nexus API, uses livinityd Redis for caching
+	// brain is null in livinityd context (LLM fallback skipped — keyword matching only)
+	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
+	const apiKey = process.env.LIV_API_KEY || ''
+
+	const intentRouter = new IntentRouter({
+		redis: ai.redis,
+		getCapabilities: async () => {
+			try {
+				const res = await fetch(`${livApiUrl}/api/capabilities?status=active`, {
+					headers: apiKey ? {'X-Api-Key': apiKey} : {},
+					signal: AbortSignal.timeout(5000),
+				})
+				if (!res.ok) throw new Error(`HTTP ${res.status}`)
+				const data = await res.json() as {capabilities: CapabilityManifest[]}
+				return data.capabilities
+			} catch (err: any) {
+				opts.logger.error('IntentRouter: failed to fetch capabilities from nexus', err.message)
+				return []
+			}
+		},
+		// No brain in livinityd — LLM fallback is skipped, keyword matching only
+	})
+
 	const sessionManager = new AgentSessionManager({
 		toolRegistry: lazyToolRegistry,
+		intentRouter,
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {

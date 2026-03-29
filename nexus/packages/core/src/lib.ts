@@ -28,6 +28,13 @@ export type { ToolPolicy } from './tool-registry.js';
 export { AgentSessionManager, createInputChannel } from './agent-session.js';
 export type { ActiveSession, AgentWsMessage, ClientWsMessage, TurnData } from './agent-session.js';
 
+// ── Intent Router ─────────────────────────────────────────────
+export { IntentRouter } from './intent-router.js';
+export type { IntentRouterDeps, IntentResult, ScoredCapability } from './intent-router.js';
+
+// ── Capability Types ──────────────────────────────────────────
+export type { CapabilityManifest } from './capability-registry.js';
+
 // ── Skill Types ─────────────────────────────────────────────
 export type {
   SkillFrontmatter,
