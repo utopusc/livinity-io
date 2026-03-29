@@ -2389,6 +2389,54 @@ export default router({
 					completed: input.completed ? '1' : '0',
 					timestamp: String(Date.now()),
 				})
+
+				// Fire-and-forget: aggregate all feedback into capability success_rate
+				;(async () => {
+					try {
+						const nexusUrl = getNexusApiUrl()
+						const apiKey = process.env.LIV_API_KEY
+
+						// Scan all feedback keys
+						let cursor = '0'
+						const ratings: number[] = []
+						do {
+							const [newCursor, keys] = await redis.scan(cursor, 'MATCH', 'nexus:feedback:*', 'COUNT', 100)
+							cursor = newCursor
+							for (const key of keys) {
+								const data = await redis.hgetall(key)
+								if (data.rating) ratings.push(Number(data.rating))
+							}
+						} while (cursor !== '0')
+
+						if (ratings.length === 0) return
+
+						// Compute average rating and convert 1-5 scale to 0-100%
+						const avgRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length
+						const successRate = Math.round((avgRating / 5) * 100)
+
+						// Get all tool-type capabilities from nexus and update their success_rate
+						const capResponse = await fetch(`${nexusUrl}/api/capabilities?type=tool`, {
+							headers: apiKey ? {'X-Api-Key': apiKey} : {},
+						})
+						if (!capResponse.ok) return
+						const capData = await capResponse.json() as {capabilities: Array<{id: string}>}
+
+						// PATCH each tool capability with the aggregated success_rate
+						for (const cap of capData.capabilities.slice(0, 50)) {
+							await fetch(`${nexusUrl}/api/capabilities/${encodeURIComponent(cap.id)}`, {
+								method: 'PATCH',
+								headers: {
+									'Content-Type': 'application/json',
+									...(apiKey ? {'X-Api-Key': apiKey} : {}),
+								},
+								body: JSON.stringify({metadata: {success_rate: successRate}}),
+							}).catch(() => {})
+						}
+					} catch {
+						// Fire-and-forget — silently ignore errors
+					}
+				})()
+
 				return {success: true}
 			} catch {
 				return {success: false}

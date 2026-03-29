@@ -416,6 +416,24 @@ export class CapabilityRegistry {
   }
 
   /**
+   * Update metadata fields on an existing capability.
+   * Merges provided metadata into existing metadata, persists to Redis.
+   */
+  async updateMetadata(id: string, metadata: Record<string, unknown>): Promise<boolean> {
+    const existing = this.cache.get(id);
+    if (!existing) return false;
+    existing.metadata = { ...existing.metadata, ...metadata };
+    this.cache.set(id, existing);
+    const [type, ...nameParts] = id.split(':');
+    const name = nameParts.join(':');
+    await this.deps.redis.set(
+      `${CapabilityRegistry.REDIS_PREFIX}${type}:${name}`,
+      JSON.stringify(existing),
+    );
+    return true;
+  }
+
+  /**
    * Unregister a capability by ID.
    * Removes from in-memory cache and Redis.
    */
