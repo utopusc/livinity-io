@@ -32,10 +32,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 ### Marketplace — Livinity Marketplace MCP
 
-- [ ] **MKT-01**: Single MCP server exposes search, install, uninstall, recommend, and list tools
-- [ ] **MKT-02**: User can install any capability from marketplace with one command
-- [ ] **MKT-03**: Manifest validation and conflict detection before installation
-- [ ] **MKT-04**: GitHub-based registry supports community PR submissions
+- [x] **MKT-01**: Single MCP server exposes search, install, uninstall, recommend, and list tools
+- [x] **MKT-02**: User can install any capability from marketplace with one command
+- [x] **MKT-03**: Manifest validation and conflict detection before installation
+- [x] **MKT-04**: GitHub-based registry supports community PR submissions
 
 ### Self-Mod — AI Self-Modification
 
@@ -101,10 +101,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | PRV-02 | Phase 32 | Complete |
 | PRV-03 | Phase 32 | Complete |
 | PRV-04 | Phase 32 | Complete |
-| MKT-01 | Phase 33 | Pending |
-| MKT-02 | Phase 33 | Pending |
-| MKT-03 | Phase 33 | Pending |
-| MKT-04 | Phase 33 | Pending |
+| MKT-01 | Phase 33 | Complete |
+| MKT-02 | Phase 33 | Complete |
+| MKT-03 | Phase 33 | Complete |
+| MKT-04 | Phase 33 | Complete |
 | MOD-01 | Phase 34 | Pending |
 | MOD-02 | Phase 34 | Pending |
 | MOD-03 | Phase 34 | Pending |
