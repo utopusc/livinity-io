@@ -22,6 +22,7 @@ import { buildSdkTools, tierToModel, isCdpReachable } from './sdk-agent-runner.j
 import { composeSystemPrompt, type IntentResult } from './intent-router.js';
 import type { IntentRouter } from './intent-router.js';
 import type { Tool } from './types.js';
+import type Redis from 'ioredis';
 import { logger } from './logger.js';
 
 // ── Wire Protocol Types ──────────────────────────────────────
@@ -131,7 +132,19 @@ const BASE_SYSTEM_PROMPT =
   `3. Conversation history (if provided) is CONTEXT ONLY. Do NOT re-execute tasks from history.\n` +
   `4. Be concise. For simple questions, respond in 1-2 sentences without using tools.\n` +
   `5. If a tool fails, try ONE alternative approach, then report the issue.\n` +
-  `6. When the task is complete, provide your final answer immediately -- do not keep exploring.`;
+  `6. When the task is complete, provide your final answer immediately -- do not keep exploring.\n\n` +
+  `## Self-Modification\n` +
+  `When you identify a capability gap (a task you cannot complete with current tools):\n` +
+  `1. Use discover_capability to check if the capability already exists in the registry\n` +
+  `2. If not found, use livinity_search to check the marketplace\n` +
+  `3. If not in marketplace, create it yourself:\n` +
+  `   - Use skill_generate for reusable multi-step workflows\n` +
+  `   - Use create_hook for event-driven automation (pre-task, post-task, scheduled)\n` +
+  `   - Use create_agent_template for specialized agent roles\n` +
+  `4. After creating any capability, TEST IT IMMEDIATELY by invoking it with sample inputs\n` +
+  `5. If the test fails, analyze the error, fix the issue, and retry (up to 3 attempts total)\n` +
+  `6. If all 3 attempts fail, report the failure to the user with the error details\n` +
+  `Do NOT create capabilities speculatively -- only when you have a concrete need during the current task.`;
 
 // ── Agent Session Manager ────────────────────────────────────
 
@@ -140,11 +153,57 @@ export class AgentSessionManager {
   private toolRegistry: ToolRegistry;
   private nexusConfig?: NexusConfig;
   private intentRouter: IntentRouter | null;
+  private redis: Redis | null;
 
-  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig; intentRouter?: IntentRouter }) {
+  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig; intentRouter?: IntentRouter; redis?: Redis }) {
     this.toolRegistry = opts.toolRegistry;
     this.nexusConfig = opts.nexusConfig;
     this.intentRouter = opts.intentRouter ?? null;
+    this.redis = opts.redis ?? null;
+  }
+
+  /**
+   * Execute hooks matching the given event type.
+   * Reads hook configs from Redis (nexus:hooks:*), runs enabled hooks matching the event.
+   * Non-blocking: errors are logged but do not interrupt the session.
+   */
+  private async executeHooks(event: 'pre-task' | 'post-task', context: { prompt: string; userId: string }): Promise<void> {
+    if (!this.redis) return;
+
+    try {
+      // Scan for hook keys (small set, <50 expected)
+      const keys = await this.redis.keys('nexus:hooks:*');
+      if (keys.length === 0) return;
+
+      const pipeline = this.redis.pipeline();
+      for (const key of keys) pipeline.get(key);
+      const results = await pipeline.exec();
+      if (!results) return;
+
+      for (const [err, val] of results) {
+        if (err || !val) continue;
+        try {
+          const hook = JSON.parse(val as string);
+          if (!hook.enabled || hook.event !== event) continue;
+
+          logger.info('AgentSessionManager: firing hook', { name: hook.name, event, userId: context.userId });
+
+          // Execute hook command asynchronously (fire-and-forget, non-blocking)
+          const { exec } = await import('node:child_process');
+          exec(hook.command, { timeout: 30_000 }, (execErr, stdout, stderr) => {
+            if (execErr) {
+              logger.warn('AgentSessionManager: hook execution failed', { name: hook.name, error: execErr.message });
+            } else {
+              logger.info('AgentSessionManager: hook executed', { name: hook.name, stdout: stdout?.slice(0, 200) });
+            }
+          });
+        } catch (parseErr) {
+          // Skip malformed hook configs
+        }
+      }
+    } catch (err: any) {
+      logger.warn('AgentSessionManager: hook dispatch error', { event, error: err.message });
+    }
   }
 
   /** Get the active session for a user, if any */
@@ -380,6 +439,9 @@ export class AgentSessionManager {
       safeEnv.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     }
 
+    // Fire pre-task hooks (non-blocking)
+    this.executeHooks('pre-task', { prompt, userId }).catch(() => {});
+
     logger.info('AgentSessionManager: starting session', {
       userId,
       sessionId: session.sessionId,
@@ -573,6 +635,8 @@ export class AgentSessionManager {
     } finally {
       // Flush any remaining accumulated content that wasn't flushed by a result message
       flushTurn();
+      // Fire post-task hooks (non-blocking)
+      this.executeHooks('post-task', { prompt, userId }).catch(() => {});
       clearInterval(watchdog);
       // Only cleanup if WE are still the active session for this userId.
       // A new startSession() may have already replaced us — don't kill the new session!
