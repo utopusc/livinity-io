@@ -2072,4 +2072,63 @@ export default router({
 		}
 	}),
 
+	// ── Capability Registry ──────────────────────────────────────
+
+	/** List all capabilities from the unified registry */
+	listCapabilities: privateProcedure
+		.input(z.object({
+			type: z.enum(['tool', 'skill', 'mcp', 'hook', 'agent']).optional(),
+			status: z.string().optional(),
+		}).optional())
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const params = new URLSearchParams()
+			if (input?.type) params.set('type', input.type)
+			if (input?.status) params.set('status', input.status)
+			const qs = params.toString()
+			const response = await fetch(`${nexusUrl}/api/capabilities${qs ? '?' + qs : ''}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch capabilities'})
+			return await response.json() as {capabilities: any[]; total: number}
+		}),
+
+	/** Search capabilities by text, tags, or type */
+	searchCapabilities: privateProcedure
+		.input(z.object({
+			q: z.string().optional(),
+			tags: z.array(z.string()).optional(),
+			type: z.enum(['tool', 'skill', 'mcp', 'hook', 'agent']).optional(),
+		}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const params = new URLSearchParams()
+			if (input.q) params.set('q', input.q)
+			if (input.tags?.length) params.set('tags', input.tags.join(','))
+			if (input.type) params.set('type', input.type)
+			const qs = params.toString()
+			const response = await fetch(`${nexusUrl}/api/capabilities/search${qs ? '?' + qs : ''}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Failed to search capabilities'})
+			return await response.json() as {results: any[]; total: number}
+		}),
+
+	/** Get a single capability by ID */
+	getCapability: privateProcedure
+		.input(z.object({
+			id: z.string().min(1),
+		}))
+		.query(async ({input}) => {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/capabilities/${encodeURIComponent(input.id)}`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				if (response.status === 404) throw new TRPCError({code: 'NOT_FOUND', message: `Capability "${input.id}" not found`})
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch capability'})
+			}
+			return await response.json()
+		}),
+
 })
