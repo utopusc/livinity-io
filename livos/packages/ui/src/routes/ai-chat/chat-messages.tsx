@@ -309,15 +309,16 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 						<span>Thinking...</span>
 					</div>
 				)}
-				{/* Tool calls shown inline — Claude Code style */}
+				{/* Text content first */}
+				<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
+				{/* Tool calls below text — compact inline display */}
 				{message.toolCalls && message.toolCalls.length > 0 && (
-					<div className='mb-1'>
+					<div className='mt-1'>
 						{message.toolCalls.map((tc) => (
 							<AgentToolCallDisplay key={tc.id} toolCall={tc} />
 						))}
 					</div>
 				)}
-				<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
 			</div>
 		</div>
 	)
