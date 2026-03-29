@@ -227,6 +227,13 @@ export class Daemon {
     await this.config.skillLoader.startWatching();
     logger.info(`Skill loader: ${this.config.skillLoader.size} skills loaded`);
 
+    // Re-sync CapabilityRegistry now that all tools + skills are registered
+    // (initial sync at startup ran before daemon tools were registered)
+    if (this.config.capabilityRegistry) {
+      await this.config.capabilityRegistry.syncAll();
+      logger.info(`CapabilityRegistry re-synced after tool registration`, { capabilities: this.config.capabilityRegistry.size });
+    }
+
     // Start scheduler
     await this.config.scheduler.start();
 
