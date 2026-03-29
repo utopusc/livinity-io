@@ -190,6 +190,7 @@ export class MarketplaceMcp {
             description: e.description,
             tags: e.tags,
             author: e.author,
+            install_command: e.install_command,
           }));
 
           // Summary line at top so AI understands the scope
@@ -245,12 +246,13 @@ export class MarketplaceMcp {
 
           switch (entry.type) {
             case 'mcp': {
-              const serverName = entry.name.toLowerCase().replace(/\s+/g, '-');
-              if (this.deps.mcpConfigManager) {
+              // Clean server name: lowercase, alphanumeric + hyphens only
+              const serverName = (entry.name || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || capabilityId.replace('mcp:', '');
+              if (this.deps.mcpConfigManager && config.command) {
                 await this.deps.mcpConfigManager.installServer({
                   name: serverName,
                   transport: config.transport || 'stdio',
-                  command: config.command || 'npx',
+                  command: config.command,
                   args: config.args || [],
                   env: config.env || {},
                   enabled: true,
@@ -258,23 +260,9 @@ export class MarketplaceMcp {
                   installedFrom: 'marketplace',
                   installedAt: Date.now(),
                 });
-                installResult = `MCP server "${serverName}" installed and connecting. Command: ${config.command || 'npx'} ${(config.args || []).join(' ')}. Tools will be available shortly.`;
+                installResult = `MCP server "${serverName}" installed and connecting.\nCommand: ${config.command} ${(config.args || []).join(' ')}\nTools will be available in your next message.`;
               } else {
-                // Fallback: save to Redis config directly
-                const mcpConfig = {
-                  name: serverName,
-                  transport: config.transport || 'stdio',
-                  command: config.command || 'npx',
-                  args: config.args || [],
-                  env: config.env || {},
-                  enabled: true,
-                  description: entry.description,
-                  installedFrom: 'marketplace',
-                  installedAt: Date.now(),
-                };
-                await this.deps.redis.hset('nexus:config:mcp_servers', serverName, JSON.stringify(mcpConfig));
-                await this.deps.redis.publish('nexus:config:updated', 'mcp_config');
-                installResult = `MCP server "${serverName}" config saved. Restart liv-core to activate.`;
+                installResult = `MCP "${serverName}" registered but no config.command found. Use mcp_install tool manually with: name=${serverName}, transport=stdio, command=npx, args=${(config.args || []).join(',')}`;
               }
               break;
             }
