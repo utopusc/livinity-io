@@ -21,6 +21,7 @@ import type { NexusConfig } from './config/schema.js';
 import { buildSdkTools, tierToModel, isCdpReachable } from './sdk-agent-runner.js';
 import { composeSystemPrompt, type IntentResult } from './intent-router.js';
 import type { IntentRouter } from './intent-router.js';
+import type { LearningEngine } from './learning-engine.js';
 import type { Tool } from './types.js';
 import type Redis from 'ioredis';
 import { logger } from './logger.js';
@@ -154,12 +155,14 @@ export class AgentSessionManager {
   private nexusConfig?: NexusConfig;
   private intentRouter: IntentRouter | null;
   private redis: Redis | null;
+  private learningEngine: LearningEngine | null;
 
-  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig; intentRouter?: IntentRouter; redis?: Redis }) {
+  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig; intentRouter?: IntentRouter; redis?: Redis; learningEngine?: LearningEngine }) {
     this.toolRegistry = opts.toolRegistry;
     this.nexusConfig = opts.nexusConfig;
     this.intentRouter = opts.intentRouter ?? null;
     this.redis = opts.redis ?? null;
+    this.learningEngine = opts.learningEngine ?? null;
   }
 
   /**
@@ -600,6 +603,16 @@ export class AgentSessionManager {
                   }
                   tc.output = outputStr;
                   tc.isError = block.is_error === true;
+
+                  // Log tool call to learning engine (fire-and-forget)
+                  if (this.learningEngine && tc) {
+                    this.learningEngine.logToolCall({
+                      tool: tc.name,
+                      success: !block.is_error,
+                      duration_ms: 0, // duration not available from tool_result
+                      session_id: session.sessionId,
+                    });
+                  }
                 }
               } else if (block.type === 'text' && block.text) {
                 // Follow-up user message — update current prompt
