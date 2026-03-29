@@ -100,6 +100,8 @@ export const httpOnlyPaths = [
 	'ai.setComputerUseAutoConsent',
 	// Subagent execution -- use HTTP for reliability (can take 10-60s)
 	'ai.executeSubagent',
+	// Marketplace install -- use HTTP for mutation reliability
+	'ai.installMarketplaceCapability',
 	// Loop management -- use HTTP to avoid WS connection dependency
 	'ai.startLoop',
 	'ai.stopLoop',

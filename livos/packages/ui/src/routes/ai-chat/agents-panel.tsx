@@ -589,7 +589,7 @@ function CreateAgentForm({onClose}: {onClose: () => void}) {
 					onChange={(e) => setForm((f) => ({...f, tier: e.target.value as 'haiku' | 'sonnet' | 'opus'}))}
 					className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none focus:border-brand'
 				>
-					<option value='flash'>flash</option>
+					<option value='haiku'>haiku</option>
 					<option value='sonnet'>sonnet</option>
 					<option value='opus'>opus</option>
 				</select>

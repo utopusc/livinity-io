@@ -182,7 +182,7 @@ export class SkillLoader {
         description: result.description,
         tools: Array.isArray(result.tools) ? result.tools : [],
         triggers: Array.isArray(result.triggers) ? result.triggers : [],
-        model_tier: result.model_tier || 'flash',
+        model_tier: result.model_tier || 'haiku',
         type: result.type === 'autonomous' ? 'autonomous' : 'simple',
         phases: Array.isArray(result.phases) ? result.phases : undefined,
         max_turns: result.max_turns ? parseInt(result.max_turns) : undefined,
@@ -262,7 +262,7 @@ export class SkillLoader {
         maxTurns: agentOpts.maxTurns || skill.meta.max_turns || 15,
         maxTokens: agentOpts.maxTokens || skill.meta.max_tokens || 100_000,
         timeoutMs: agentOpts.timeoutMs || skill.meta.timeout_ms || 300_000,
-        tier: (agentOpts.tier || skill.meta.model_tier || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
+        tier: (agentOpts.tier || skill.meta.model_tier || 'sonnet') as 'haiku' | 'sonnet' | 'opus',
         systemPromptOverride: agentOpts.systemPrompt,
         contextPrefix: agentOpts.contextPrefix,
         onAction,
@@ -290,14 +290,14 @@ export class SkillLoader {
     // Build think helper
     const think = async (
       prompt: string,
-      thinkOpts?: { tier?: 'flash' | 'sonnet' | 'opus'; maxTokens?: number; systemPrompt?: string },
+      thinkOpts?: { tier?: 'haiku' | 'sonnet' | 'opus'; maxTokens?: number; systemPrompt?: string },
     ): Promise<string> => {
       if (!brain) {
         throw new Error('Brain not available — cannot think from skill');
       }
       return brain.think({
         prompt,
-        tier: thinkOpts?.tier || 'flash',
+        tier: thinkOpts?.tier || 'haiku',
         maxTokens: thinkOpts?.maxTokens || 1024,
         systemPrompt: thinkOpts?.systemPrompt,
       });

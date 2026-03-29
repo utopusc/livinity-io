@@ -247,11 +247,10 @@ Levels: ${formatVerboseLevels()}`;
 }
 
 async function handleModel(args: string[], ctx: CommandContext): Promise<CommandResult> {
-  const validTiers: ModelTier[] = ['flash', 'haiku', 'sonnet', 'opus'];
+  const validTiers: ModelTier[] = ['haiku', 'sonnet', 'opus'];
   const tierDescriptions: Record<ModelTier, string> = {
     none: 'AI disabled',
-    flash: 'Fastest - for simple tasks',
-    haiku: 'Light - for short responses',
+    haiku: 'Light - fastest, for simple tasks',
     sonnet: 'Balanced - general use (default)',
     opus: 'Most powerful - for complex analysis',
   };
@@ -288,11 +287,10 @@ Tiers: flash | haiku | sonnet | opus`;
 }
 
 async function handleNew(args: string[], ctx: CommandContext): Promise<CommandResult> {
-  const validTiers: ModelTier[] = ['flash', 'haiku', 'sonnet', 'opus'];
+  const validTiers: ModelTier[] = ['haiku', 'sonnet', 'opus'];
   const tierDescriptions: Record<ModelTier, string> = {
     none: 'AI disabled',
-    flash: 'Fastest - for simple tasks',
-    haiku: 'Light - for short responses',
+    haiku: 'Light - fastest, for simple tasks',
     sonnet: 'Balanced - general use (default)',
     opus: 'Most powerful - for complex analysis',
   };

@@ -154,7 +154,7 @@ export class IntentRouter {
 
         const llmResponse = await this.deps.brain.think({
           prompt: `Given this user message: "${message}"\n\nWhich of these capability categories are relevant? Return a JSON array of matching IDs.\n\nCapabilities:\n${capList}`,
-          tier: 'flash',
+          tier: 'haiku',
           maxTokens: 300,
         });
 

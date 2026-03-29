@@ -47,7 +47,7 @@ export interface TaskInfo {
 
 export interface SubmitTaskOptions {
   task: string;
-  tier?: 'flash' | 'haiku' | 'sonnet' | 'opus';
+  tier?: 'haiku' | 'sonnet' | 'opus';
   maxTurns?: number;
   maxTokens?: number;
   timeoutMs?: number;
@@ -312,7 +312,7 @@ export class TaskManager {
       maxTurns: maxTurns ?? 15,
       maxTokens: maxTokens ?? 100000,
       timeoutMs: timeoutMs ?? 300000,
-      tier: (tier || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
+      tier: (tier || 'sonnet') as 'haiku' | 'sonnet' | 'opus',
       stream: true,
       approvalManager: this.approvalManager,
       approvalPolicy,

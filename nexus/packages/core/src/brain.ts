@@ -7,7 +7,7 @@ import { normalizeMessages } from './providers/normalize.js';
 import type { ToolDefinition, ToolUseBlock, ProviderStreamChunk } from './providers/types.js';
 import { logger } from './logger.js';
 
-export type ModelTier = 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
+export type ModelTier = 'none' | 'haiku' | 'sonnet' | 'opus';
 
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -64,10 +64,10 @@ export class Brain {
 
   private loadTierConfig(): TierConfig {
     const defaults: TierConfig = {
-      defaultTier: 'flash',
+      defaultTier: 'haiku',
       rules: {
         none: ['docker_command', 'file_read', 'cron_set', 'status_check', 'direct_execute', 'shell_command', 'system_monitor', 'file_operation', 'service_management'],
-        flash: ['classify', 'summarize', 'parse_message', 'simple_answer', 'format'],
+        haiku: ['classify', 'summarize', 'parse_message', 'simple_answer', 'format'],
         sonnet: ['research', 'analyze', 'code_review', 'write_content', 'debug'],
         opus: ['complex_plan', 'architecture', 'multi_step_reasoning'],
       },
@@ -80,7 +80,7 @@ export class Brain {
         const raw = readFileSync(configPath, 'utf-8');
         const parsed = JSON.parse(raw);
         logger.debug('Brain: loaded tiers.json', { path: configPath });
-        return { defaultTier: parsed.defaultTier || 'flash', rules: parsed.rules || defaults.rules };
+        return { defaultTier: parsed.defaultTier || 'haiku', rules: parsed.rules || defaults.rules };
       }
     } catch (err) {
       logger.warn('Brain: failed to load tiers.json, using defaults', { error: (err as Error).message });

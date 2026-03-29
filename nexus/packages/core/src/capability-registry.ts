@@ -50,7 +50,7 @@ export interface CapabilityManifest {
   /** Approximate token cost of loading this capability's tool definitions */
   context_cost: number;
   /** Model tier for execution */
-  tier: 'flash' | 'sonnet' | 'opus' | 'any';
+  tier: 'haiku' | 'sonnet' | 'opus' | 'any';
   /** Origin of the capability */
   source: 'builtin' | 'marketplace' | 'custom' | 'system';
   /** Runtime status */
@@ -314,7 +314,7 @@ export class CapabilityRegistry {
         requires: [],
         conflicts: [],
         context_cost: 0,
-        tier: (agent.tier as 'flash' | 'sonnet' | 'opus') || 'any',
+        tier: (agent.tier as 'haiku' | 'sonnet' | 'opus') || 'any',
         source: 'custom',
         status: agent.status === 'active' ? 'active' : 'inactive',
         last_used_at: agent.lastRunAt || 0,

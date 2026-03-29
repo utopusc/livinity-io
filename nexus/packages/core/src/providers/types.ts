@@ -3,7 +3,7 @@
  * All providers implement the AIProvider interface.
  */
 
-export type ModelTier = 'none' | 'flash' | 'haiku' | 'sonnet' | 'opus';
+export type ModelTier = 'none' | 'haiku' | 'sonnet' | 'opus';
 
 /** Provider-neutral message format. Uses 'assistant' (not 'model'). */
 export interface ProviderMessage {

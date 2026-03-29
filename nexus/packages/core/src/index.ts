@@ -284,11 +284,11 @@ Conversation:`;
     async (job) => {
       const { conversation, response, userId, sessionId, source } = job.data;
       try {
-        // Use flash tier for cheap extraction
+        // Use haiku tier for cheap extraction
         const extractionResult = await brain.think({
           prompt: `${conversation}\n\nAssistant: ${response}`,
           systemPrompt: MEMORY_EXTRACTION_PROMPT,
-          tier: 'flash',
+          tier: 'haiku',
           maxTokens: 500,
         });
 

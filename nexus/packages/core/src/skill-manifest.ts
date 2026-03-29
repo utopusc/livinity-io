@@ -40,7 +40,7 @@ export interface SkillManifest {
   /** Skill execution mode */
   type: 'simple' | 'autonomous';
   /** Model tier for the skill's agent loop */
-  model_tier: 'flash' | 'sonnet' | 'opus';
+  model_tier: 'haiku' | 'sonnet' | 'opus';
   /** Max agent turns per phase */
   max_turns?: number;
   /** Max tokens per phase */
@@ -234,7 +234,7 @@ export function parseSkillManifest(content: string): SkillManifest | null {
     permissions,
 
     type: parsed.type === 'autonomous' ? 'autonomous' : 'simple',
-    model_tier: (['flash', 'sonnet', 'opus'].includes(parsed.model_tier) ? parsed.model_tier : 'flash') as 'flash' | 'sonnet' | 'opus',
+    model_tier: (['haiku', 'sonnet', 'opus'].includes(parsed.model_tier) ? parsed.model_tier : 'haiku') as 'haiku' | 'sonnet' | 'opus',
     max_turns: parsed.max_turns ? parseInt(String(parsed.max_turns), 10) : undefined,
     max_tokens: parsed.max_tokens ? parseInt(String(parsed.max_tokens), 10) : undefined,
     timeout_ms: parsed.timeout_ms ? parseInt(String(parsed.timeout_ms), 10) : undefined,

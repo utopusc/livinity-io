@@ -998,6 +998,38 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     res.json({ success: true, id });
   });
 
+  /** Register a new capability (used by UI install button) */
+  app.post('/api/capabilities', async (req, res) => {
+    if (!capabilityRegistry) {
+      return res.status(503).json({ error: 'Capability registry not available' });
+    }
+    const { name, type, description, provides_tools, semantic_tags, source } = req.body || {};
+    if (!name || !type) {
+      return res.status(400).json({ error: 'name and type are required' });
+    }
+    const id = `${type}:${name}`;
+    const manifest = {
+      id,
+      type,
+      name,
+      description: description || '',
+      semantic_tags: semantic_tags || [],
+      triggers: [],
+      provides_tools: provides_tools || [],
+      requires: [],
+      conflicts: [],
+      context_cost: 0,
+      tier: 'any' as const,
+      source: source || 'marketplace',
+      status: 'active' as const,
+      last_used_at: 0,
+      registered_at: Date.now(),
+      metadata: {},
+    };
+    await capabilityRegistry.registerCapability(manifest);
+    res.status(201).json({ id, success: true });
+  });
+
   // ── Nexus Config API ────────────────────────────────────────────
 
   app.get('/api/nexus/config', async (_req, res) => {
@@ -2155,7 +2187,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         '/usage': 'Show token usage and costs',
         '/think': 'Set thinking level (off/low/medium/high)',
         '/verbose': 'Set verbose level (0-3)',
-        '/model': 'Change model tier (flash/sonnet/opus)',
+        '/model': 'Change model tier (haiku/sonnet/opus)',
         '/status': 'Show current session settings',
         '/reset': 'Reset preferences to defaults',
         '/compact': 'Compact conversation history',
@@ -2275,7 +2307,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       maxTurns: Math.min(max_turns || agentDefaults?.maxTurns || parseInt(process.env.AGENT_MAX_TURNS || '30'), 200),
       maxTokens: agentDefaults?.maxTokens || parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
       timeoutMs: agentDefaults?.timeoutMs || parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
-      tier: (agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'flash' | 'haiku' | 'sonnet' | 'opus',
+      tier: (agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'haiku' | 'sonnet' | 'opus',
       maxDepth: agentDefaults?.maxDepth ?? parseInt(process.env.AGENT_MAX_DEPTH || '3'),
       stream: true,
       approvalManager,

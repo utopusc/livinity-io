@@ -1,5 +1,8 @@
 import { logger } from './logger.js';
 import type Redis from 'ioredis';
+import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** Persistent subagent configuration stored in Redis */
 export interface SubagentConfig {
@@ -26,7 +29,7 @@ export interface SubagentConfig {
     task: string;
   };
   /** Model tier */
-  tier: 'flash' | 'sonnet' | 'opus';
+  tier: 'haiku' | 'sonnet' | 'opus';
   /** Max turns per execution */
   maxTurns: number;
   /** Status */
@@ -56,9 +59,95 @@ const INDEX_KEY = 'nexus:subagents';
 
 export class SubagentManager {
   private redis: Redis;
+  private dataDir: string;
 
-  constructor(redis: Redis) {
+  constructor(redis: Redis, dataDir?: string) {
     this.redis = redis;
+    this.dataDir = dataDir || join(process.env.NEXUS_DATA_DIR || process.env.DATA_DIR || '/opt/nexus/data', 'agents');
+  }
+
+  /** Get workspace path for an agent */
+  getWorkspacePath(agentId: string): string {
+    return join(this.dataDir, agentId);
+  }
+
+  /** Ensure agent workspace directories exist */
+  private async ensureWorkspace(agentId: string): Promise<string> {
+    const base = this.getWorkspacePath(agentId);
+    await mkdir(join(base, 'history'), { recursive: true });
+    await mkdir(join(base, 'findings'), { recursive: true });
+    await mkdir(join(base, 'memory'), { recursive: true });
+    return base;
+  }
+
+  /** Save data to agent workspace */
+  async saveData(agentId: string, key: string, data: unknown): Promise<void> {
+    const base = await this.ensureWorkspace(agentId);
+    const safeName = key.replace(/[^a-z0-9_-]/gi, '-');
+    const filePath = join(base, 'findings', `${safeName}.json`);
+    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    logger.info('SubagentManager: saved data', { agentId, key });
+  }
+
+  /** Load data from agent workspace */
+  async loadData(agentId: string, key: string): Promise<unknown | null> {
+    const safeName = key.replace(/[^a-z0-9_-]/gi, '-');
+    const filePath = join(this.getWorkspacePath(agentId), 'findings', `${safeName}.json`);
+    try {
+      const raw = await readFile(filePath, 'utf-8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Update agent state in workspace */
+  async updateState(agentId: string, state: Record<string, unknown>): Promise<void> {
+    const base = await this.ensureWorkspace(agentId);
+    const filePath = join(base, 'state.json');
+    let current: Record<string, unknown> = {};
+    try {
+      const raw = await readFile(filePath, 'utf-8');
+      current = JSON.parse(raw);
+    } catch { /* first write */ }
+    const merged = { ...current, ...state, updatedAt: new Date().toISOString() };
+    await writeFile(filePath, JSON.stringify(merged, null, 2), 'utf-8');
+  }
+
+  /** Get agent state from workspace */
+  async getState(agentId: string): Promise<Record<string, unknown> | null> {
+    const filePath = join(this.getWorkspacePath(agentId), 'state.json');
+    try {
+      const raw = await readFile(filePath, 'utf-8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /** List saved findings keys */
+  async listFindings(agentId: string): Promise<string[]> {
+    const dir = join(this.getWorkspacePath(agentId), 'findings');
+    try {
+      const files = await readdir(dir);
+      return files.filter(f => f.endsWith('.json')).map(f => f.replace('.json', ''));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Save a run record to workspace history */
+  async saveRunHistory(agentId: string, input: string, output: string): Promise<void> {
+    const base = await this.ensureWorkspace(agentId);
+    const date = new Date().toISOString().slice(0, 10);
+    const files = await readdir(join(base, 'history')).catch(() => []);
+    const todayRuns = files.filter(f => f.startsWith(date)).length;
+    const fileName = `${date}-${String(todayRuns + 1).padStart(3, '0')}.json`;
+    await writeFile(join(base, 'history', fileName), JSON.stringify({
+      timestamp: new Date().toISOString(),
+      input: input.slice(0, 5000),
+      output: output.slice(0, 10000),
+    }, null, 2), 'utf-8');
   }
 
   /** Create a new subagent */
@@ -76,6 +165,9 @@ export class SubagentManager {
 
     await this.redis.set(`${PREFIX}${config.id}`, JSON.stringify(full));
     await this.redis.hset(INDEX_KEY, config.id, config.name);
+
+    // Create workspace directory
+    await this.ensureWorkspace(config.id);
 
     logger.info('SubagentManager: created', { id: config.id, name: config.name });
     return full;

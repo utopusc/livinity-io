@@ -18,7 +18,7 @@ export const RetryConfigSchema = z.object({
 
 // ─── Model Configuration ───────────────────────────────────────────────────
 
-export const ModelTierSchema = z.enum(['none', 'flash', 'haiku', 'sonnet', 'opus']);
+export const ModelTierSchema = z.enum(['none', 'haiku', 'sonnet', 'opus']);
 
 export const ModelConfigSchema = z.object({
   primary: z.string().optional(),
@@ -27,12 +27,11 @@ export const ModelConfigSchema = z.object({
 
 export const ModelsConfigSchema = z.object({
   default: z.string().default('kimi-for-coding'),
-  flash: z.string().default('kimi-for-coding'),
   haiku: z.string().default('kimi-for-coding'),
   sonnet: z.string().default('kimi-for-coding'),
   opus: z.string().default('kimi-for-coding'),
   fallbackEnabled: z.boolean().default(true),
-  fallbackOrder: z.array(z.string()).default(['flash', 'haiku', 'sonnet', 'opus']),
+  fallbackOrder: z.array(z.string()).default(['haiku', 'sonnet', 'opus']),
 }).strict().optional();
 
 // ─── Agent Configuration ───────────────────────────────────────────────────
@@ -367,12 +366,11 @@ export const DEFAULT_NEXUS_CONFIG: NexusConfig = {
   },
   models: {
     default: 'kimi-for-coding',
-    flash: 'kimi-for-coding',
     haiku: 'kimi-for-coding',
     sonnet: 'kimi-for-coding',
     opus: 'kimi-for-coding',
     fallbackEnabled: true,
-    fallbackOrder: ['flash', 'haiku', 'sonnet', 'opus'],
+    fallbackOrder: ['haiku', 'sonnet', 'opus'],
   },
   agent: {
     maxTurns: 30,
