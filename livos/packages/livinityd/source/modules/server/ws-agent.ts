@@ -96,10 +96,14 @@ async function buildConversationContext(
 		const conversation = await ai.getConversation(conversationId, userId)
 		if (!conversation || conversation.messages.length === 0) return ''
 
-		// Take last 10 messages for context (avoid token overflow)
-		const recent = conversation.messages.slice(-10)
+		// Take last 6 messages, truncate each to 300 chars to keep prompt manageable
+		const recent = conversation.messages.slice(-6)
 		const history = recent
-			.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+			.map((m) => {
+				const role = m.role === 'user' ? 'User' : 'Assistant'
+				const text = m.content.length > 300 ? m.content.slice(0, 300) + '...' : m.content
+				return `${role}: ${text}`
+			})
 			.join('\n\n')
 
 		return `Previous conversation:\n${history}\n\nCurrent message: `
