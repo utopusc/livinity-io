@@ -230,7 +230,12 @@ export function useAgentSocket() {
 						status: 'running' as const,
 					}))
 
-					accumulatedRef.current = content
+					// Only update text if the complete message has more content than what
+					// was already accumulated via streaming. Otherwise tool-only messages
+					// (no text blocks) would wipe the streamed text.
+					if (content && content.length >= accumulatedRef.current.length) {
+						accumulatedRef.current = content
+					}
 					flushBuffer()
 					for (const tc of toolCalls) {
 						dispatch({type: 'ADD_TOOL_CALL', toolCall: tc})
