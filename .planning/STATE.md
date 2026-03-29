@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v22.0
 milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
 status: unknown
-stopped_at: Completed 29-02-PLAN.md
-last_updated: "2026-03-29T04:17:14.659Z"
+stopped_at: Completed 30-01-PLAN.md
+last_updated: "2026-03-29T04:35:49.224Z"
 progress:
   total_phases: 8
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v22.0 -- Livinity AGI Platform — Capability Orchestration & Marketplace
-**Current focus:** Phase 29 — Unified Capability Registry
+**Current focus:** Phase 30 — Agents Panel Redesign
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
+Phase: 30 (Agents Panel Redesign) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: Not started
 *Updated after each plan completion*
 | Phase 29 P01 | 2min | 1 tasks | 1 files |
 | Phase 29 P02 | 3min | 2 tasks | 3 files |
+| Phase 30 P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,9 @@ Plan: Not started
 - [Phase 29]: In-memory Map cache for capability search (<200 entries, no Redis SCAN needed)
 - [Phase 29]: Skip mcp__ tools in syncTools to avoid double-counting with MCP capability entries
 - [Phase 29]: Used /:id(*) wildcard Express route param for colon-containing capability IDs
+- [Phase 30]: Default active tab is Skills as most commonly used capability type
+- [Phase 30]: Success rate shows em-dash when absent (Phase 36 populates real values)
+- [Phase 30]: Inline CapabilityManifest type in UI (no cross-package import from nexus-core)
 
 ### Pending Todos
 
@@ -70,6 +74,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-29T04:13:36.367Z
-Stopped at: Completed 29-02-PLAN.md
+Last session: 2026-03-29T04:35:49.221Z
+Stopped at: Completed 30-01-PLAN.md
 Resume file: None

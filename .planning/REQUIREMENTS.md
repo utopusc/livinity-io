@@ -46,8 +46,8 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 ### UI — Agents Panel Redesign
 
-- [ ] **UIP-01**: Unified dashboard shows skills, MCPs, hooks, and agents in a single tabbed view
-- [ ] **UIP-02**: Capability cards display status, tier, provided tools, last used, and success rate
+- [x] **UIP-01**: Unified dashboard shows skills, MCPs, hooks, and agents in a single tabbed view
+- [x] **UIP-02**: Capability cards display status, tier, provided tools, last used, and success rate
 - [ ] **UIP-03**: Auto-install dialog appears when AI recommends a new capability
 - [ ] **UIP-04**: System prompt editor with template library and custom prompt builder
 - [ ] **UIP-05**: Analytics view shows tool usage stats, popular combinations, and success rates
@@ -109,8 +109,8 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | MOD-02 | Phase 34 | Pending |
 | MOD-03 | Phase 34 | Pending |
 | MOD-04 | Phase 34 | Pending |
-| UIP-01 | Phase 30 | Pending |
-| UIP-02 | Phase 30 | Pending |
+| UIP-01 | Phase 30 | Complete |
+| UIP-02 | Phase 30 | Complete |
 | UIP-03 | Phase 35 | Pending |
 | UIP-04 | Phase 35 | Pending |
 | UIP-05 | Phase 35 | Pending |

@@ -61,7 +61,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) must NOT be modified. Streaming/block model/typewriter animation must NOT be broken. nexus-core runs compiled JS — MUST rebuild after source changes.
 
 - [x] **Phase 29: Unified Capability Registry** - Single registry model for all capability types (skills, MCPs, tools, hooks, agents) with manifests and semantic search (completed 2026-03-29)
-- [ ] **Phase 30: Agents Panel Redesign** - Unified dashboard with tabbed capability views and detailed status cards
+- [x] **Phase 30: Agents Panel Redesign** - Unified dashboard with tabbed capability views and detailed status cards (completed 2026-03-29)
 - [ ] **Phase 31: Intent Router v2** - Semantic intent classification with confidence-scored capability matching and context budget management
 - [ ] **Phase 32: Auto-Provisioning Engine** - Dynamic session capability loading based on intent with dependency resolution and system prompt composition
 - [ ] **Phase 33: Livinity Marketplace MCP** - Single MCP server exposing marketplace search, install, and management with GitHub-backed registry
@@ -93,9 +93,9 @@ Plans:
   1. The sidebar panel shows tabs for Skills, MCPs, Hooks, and Agents -- all populated from the unified registry
   2. Each capability card displays its status (active/inactive), tier, provided tools, last used timestamp, and success rate
   3. Clicking a capability shows its full manifest details including dependencies, tags, and configuration
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 30-01-PLAN.md — Unified capabilities panel with tabbed views + sidebar wiring
+- [x] 30-01-PLAN.md — Unified capabilities panel with tabbed views + sidebar wiring
 
 ### Phase 31: Intent Router v2
 **Goal**: The system automatically selects the right capabilities for a user's message using semantic matching with confidence scoring, keeping context window usage efficient
@@ -172,7 +172,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 29. Unified Capability Registry | v22.0 | 2/2 | Complete    | 2026-03-29 |
-| 30. Agents Panel Redesign | v22.0 | 0/1 | Not started | - |
+| 30. Agents Panel Redesign | v22.0 | 1/1 | Complete   | 2026-03-29 |
 | 31. Intent Router v2 | v22.0 | 0/? | Not started | - |
 | 32. Auto-Provisioning Engine | v22.0 | 0/? | Not started | - |
 | 33. Livinity Marketplace MCP | v22.0 | 0/? | Not started | - |
