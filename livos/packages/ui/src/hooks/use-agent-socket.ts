@@ -281,14 +281,17 @@ export function useAgentSocket() {
 				}
 
 			case 'stream_event': {
+					// SDK wraps events: data.event is an OBJECT {type, delta, ...}, not a string.
+					// Extract the event type for switching.
 					const event = data.event
-					switch (event) {
+					const eventType = typeof event === 'object' && event !== null ? event.type : event
+					switch (eventType) {
 						case 'message_start':
 							// Create a new assistant message entry if not already streaming
 							break
 
 						case 'content_block_start': {
-							const contentBlock = data.content_block
+							const contentBlock = event?.content_block ?? data.content_block
 							if (contentBlock?.type === 'tool_use') {
 								const toolCall = {
 									id: contentBlock.id,
@@ -323,7 +326,8 @@ export function useAgentSocket() {
 						}
 
 						case 'content_block_delta': {
-							const delta = data.delta
+							// Delta may be at event.delta (SDK object format) or data.delta (flat format)
+							const delta = event?.delta ?? data.delta
 							if (delta?.type === 'text_delta' && delta.text) {
 								appendDelta(delta.text)
 								setAgentStatus(prev => {
