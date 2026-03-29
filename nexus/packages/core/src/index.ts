@@ -30,6 +30,7 @@ import { WebhookManager } from './webhook-manager.js';
 import { MultiAgentManager } from './multi-agent.js';
 import { CanvasManager } from './canvas-manager.js';
 import { CapabilityRegistry } from './capability-registry.js';
+import { MarketplaceMcp } from './marketplace-mcp.js';
 import { createApiServer, setupWsGateway } from './api.js';
 import { VoiceGateway } from './voice/index.js';
 import { Queue, Worker } from 'bullmq';
@@ -437,6 +438,16 @@ Conversation:`;
   });
   await capabilityRegistry.start();
   logger.info('CapabilityRegistry initialized', { capabilities: capabilityRegistry.size });
+
+  // Livinity Marketplace — 5 tools for searching/installing/managing marketplace capabilities
+  const marketplaceMcp = new MarketplaceMcp({
+    capabilityRegistry,
+    skillRegistryClient,
+    toolRegistry,
+    redis,
+  });
+  marketplaceMcp.registerTools();
+  logger.info('MarketplaceMcp initialized (5 tools registered)');
 
   // ── BullMQ cron queue (replaces setTimeout-based scheduling) ──────────
   const cronQueue = new Queue('nexus-cron', {

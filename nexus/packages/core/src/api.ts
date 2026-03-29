@@ -85,7 +85,7 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
-export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager }: ApiDeps) {
+export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager, capabilityRegistry }: ApiDeps) {
   const app = express();
 
   // ── Dynamic Webhook Receiver (raw body, own HMAC auth — before json parser & API key auth) ──
@@ -936,7 +936,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
   /** List all capabilities with optional type/status filter */
   app.get('/api/capabilities', (_req, res) => {
-    if (!deps.capabilityRegistry) {
+    if (!capabilityRegistry) {
       return res.status(503).json({ error: 'Capability registry not available' });
     }
     const type = _req.query.type as string | undefined;
@@ -946,13 +946,13 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       filter.type = type;
     }
     if (status) filter.status = status;
-    const capabilities = deps.capabilityRegistry.list(Object.keys(filter).length > 0 ? filter : undefined);
+    const capabilities = capabilityRegistry.list(Object.keys(filter).length > 0 ? filter : undefined);
     res.json({ capabilities, total: capabilities.length });
   });
 
   /** Search capabilities by text, tags, or type */
   app.get('/api/capabilities/search', (_req, res) => {
-    if (!deps.capabilityRegistry) {
+    if (!capabilityRegistry) {
       return res.status(503).json({ error: 'Capability registry not available' });
     }
     const text = _req.query.q as string | undefined;
@@ -964,18 +964,19 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     if (type && ['tool', 'skill', 'mcp', 'hook', 'agent'].includes(type)) {
       query.type = type;
     }
-    const results = deps.capabilityRegistry.search(query);
+    const results = capabilityRegistry.search(query);
     res.json({ results, total: results.length });
   });
 
   /** Get a single capability by ID (IDs contain colons, e.g. tool:shell) */
   app.get('/api/capabilities/:id(*)', (req, res) => {
-    if (!deps.capabilityRegistry) {
+    if (!capabilityRegistry) {
       return res.status(503).json({ error: 'Capability registry not available' });
     }
-    const capability = deps.capabilityRegistry.get(req.params.id);
+    const id = (req.params as any)['id(*)'] || (req.params as any)[0] || '';
+    const capability = capabilityRegistry.get(id);
     if (!capability) {
-      return res.status(404).json({ error: `Capability "${req.params.id}" not found` });
+      return res.status(404).json({ error: `Capability "${id}" not found` });
     }
     res.json(capability);
   });
