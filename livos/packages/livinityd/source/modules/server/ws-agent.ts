@@ -165,6 +165,7 @@ export function createAgentWebSocketHandler(opts: {
 	const sessionManager = new AgentSessionManager({
 		toolRegistry: lazyToolRegistry,
 		intentRouter,
+		redis: ai.redis,
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {
