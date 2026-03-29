@@ -423,6 +423,13 @@ export class AgentSessionManager {
           flushTurn();
         }
       }
+      logger.info('AgentSessionManager: relay loop ended', {
+        userId,
+        sessionId: session.sessionId,
+        streamDeltaCount,
+        accumulatedTextLen: accumulatedText.length,
+        toolCallCount: accumulatedToolCalls.length,
+      });
     } catch (err: any) {
       // Only send error if not an abort (abort is intentional)
       if (err.name !== 'AbortError' && !session.abortController.signal.aborted) {
@@ -430,8 +437,11 @@ export class AgentSessionManager {
           userId,
           sessionId: session.sessionId,
           error: err.message,
+          stack: err.stack?.split('\n').slice(0, 3).join(' | '),
         });
         onMessage({ type: 'error', message: err.message });
+      } else {
+        logger.info('AgentSessionManager: session aborted', { userId, sessionId: session.sessionId });
       }
     } finally {
       // Flush any remaining accumulated content that wasn't flushed by a result message
