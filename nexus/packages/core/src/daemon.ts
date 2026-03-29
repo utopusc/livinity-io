@@ -39,6 +39,8 @@ import type { GmailProvider } from './channels/gmail.js';
 import type { MultiAgentManager } from './multi-agent.js';
 import { CanvasManager } from './canvas-manager.js';
 import type { CanvasArtifact } from './canvas-manager.js';
+import { CapabilityRegistry } from './capability-registry.js';
+import type { CapabilityManifest } from './capability-registry.js';
 
 const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
 
@@ -90,6 +92,7 @@ interface DaemonConfig {
   multiAgentManager?: MultiAgentManager;
   multiAgentQueue?: Queue;
   canvasManager?: CanvasManager;
+  capabilityRegistry?: CapabilityRegistry;
   intervalMs: number;
 }
 
@@ -2182,11 +2185,221 @@ ${task}`;
           });
 
           if (result.success) {
-            return { success: true, output: `Skill generated and compiled: ${result.filePath}\nThe skill is now available for trigger-based activation in future conversations. Inform the user what was created and how to trigger it.` };
+            // Register in CapabilityRegistry for same-session discovery (MOD-01)
+            if (this.config.capabilityRegistry) {
+              try {
+                const skillName = name || result.filePath?.split('/').pop()?.replace('.ts', '') || 'unknown';
+                const manifest: CapabilityManifest = {
+                  id: `skill:${skillName}`,
+                  type: 'skill',
+                  name: skillName,
+                  description: description,
+                  semantic_tags: triggers ? triggers.split(',').map((t: string) => t.trim()) : [],
+                  triggers: triggers ? triggers.split(',').map((t: string) => t.trim()) : [],
+                  provides_tools: tools ? tools.split(',').map((t: string) => t.trim()) : [],
+                  requires: [],
+                  conflicts: [],
+                  context_cost: Math.ceil(description.length / 4),
+                  tier: 'any',
+                  source: 'custom',
+                  status: 'active',
+                  last_used_at: 0,
+                  registered_at: Date.now(),
+                  metadata: { createdBy: 'ai-self-modification', filePath: result.filePath },
+                };
+                await this.config.capabilityRegistry.registerCapability(manifest);
+              } catch (regErr) {
+                // Non-fatal: skill was still created successfully
+                logger.warn('skill_generate: failed to register in CapabilityRegistry', { error: formatErrorMessage(regErr) });
+              }
+            }
+            return { success: true, output: `Skill generated and compiled: ${result.filePath}\nThe skill is now available for trigger-based activation in future conversations and registered in the capability registry. Test it immediately by invoking its trigger to verify correctness.` };
           }
           return { success: false, output: '', error: `Skill generation failed: ${result.error}` };
         } catch (err) {
           return { success: false, output: '', error: `Skill generate error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    // ── Self-Modification Tools (Phase 34) ──────────────────────────────
+
+    toolRegistry.register({
+      name: 'create_hook',
+      description: 'Create an event-driven hook that fires on pre-task, post-task, or scheduled events. The hook runs a shell command when triggered.',
+      parameters: [
+        { name: 'name', type: 'string', description: 'Unique hook name (kebab-case)', required: true },
+        { name: 'event', type: 'string', description: 'Event type that triggers this hook', required: true, enum: ['pre-task', 'post-task', 'scheduled'] },
+        { name: 'command', type: 'string', description: 'Shell command to execute when hook fires', required: true },
+        { name: 'description', type: 'string', description: 'What this hook does', required: false },
+        { name: 'schedule', type: 'string', description: 'Cron expression (required if event=scheduled)', required: false },
+        { name: 'enabled', type: 'boolean', description: 'Whether the hook is active (default: true)', required: false },
+      ],
+      execute: async (params) => {
+        const { name: hookName, event, command, description: hookDesc, schedule, enabled } = params as Record<string, any>;
+        if (!hookName || !event || !command) {
+          return { success: false, output: '', error: 'name, event, and command are required.' };
+        }
+        if (!['pre-task', 'post-task', 'scheduled'].includes(event)) {
+          return { success: false, output: '', error: 'event must be one of: pre-task, post-task, scheduled' };
+        }
+        if (event === 'scheduled' && !schedule) {
+          return { success: false, output: '', error: 'schedule (cron expression) is required for scheduled hooks.' };
+        }
+
+        try {
+          const hookConfig = {
+            name: hookName,
+            event,
+            command,
+            description: hookDesc || `Hook: ${hookName}`,
+            schedule: schedule || undefined,
+            enabled: enabled !== false,
+            createdAt: Date.now(),
+          };
+
+          // Store hook config in Redis
+          await this.config.redis.set(
+            `nexus:hooks:${hookName}`,
+            JSON.stringify(hookConfig),
+          );
+
+          // Register in CapabilityRegistry
+          if (this.config.capabilityRegistry) {
+            const manifest: CapabilityManifest = {
+              id: `hook:${hookName}`,
+              type: 'hook',
+              name: hookName,
+              description: hookDesc || `Hook: ${hookName} (${event})`,
+              semantic_tags: ['hook', event],
+              triggers: [event],
+              provides_tools: [],
+              requires: [],
+              conflicts: [],
+              context_cost: 0,
+              tier: 'any',
+              source: 'custom',
+              status: hookConfig.enabled ? 'active' : 'inactive',
+              last_used_at: 0,
+              registered_at: Date.now(),
+              metadata: { event, command, schedule },
+            };
+            await this.config.capabilityRegistry.registerCapability(manifest);
+          }
+
+          // If scheduled hook, register the schedule via ScheduleManager
+          if (event === 'scheduled' && schedule) {
+            await this.config.scheduleManager.addSchedule({
+              subagentId: `hook:${hookName}`,
+              task: command,
+              cron: schedule,
+            });
+          }
+
+          let output = `Hook "${hookName}" created (event: ${event}, command: "${command}")`;
+          if (schedule) output += `, schedule: ${schedule}`;
+          output += '. Test it by triggering the event to verify it works correctly.';
+          return { success: true, output };
+        } catch (err) {
+          return { success: false, output: '', error: `Create hook error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    toolRegistry.register({
+      name: 'create_agent_template',
+      description: 'Create a persistent agent template with a system prompt, tool set, and optional scheduling. The agent appears in the Agents panel immediately.',
+      parameters: [
+        { name: 'name', type: 'string', description: 'Agent display name', required: true },
+        { name: 'description', type: 'string', description: 'What this agent does', required: true },
+        { name: 'system_prompt', type: 'string', description: 'Custom system prompt for this agent', required: true },
+        { name: 'tools', type: 'string', description: 'Tool names (comma-separated) or "*" for all tools', required: false },
+        { name: 'tier', type: 'string', description: 'Model tier', required: false, enum: ['flash', 'sonnet', 'opus'] },
+        { name: 'schedule', type: 'string', description: 'Cron expression for scheduled execution', required: false },
+        { name: 'scheduled_task', type: 'string', description: 'Task to execute on schedule (required if schedule is set)', required: false },
+        { name: 'loop_interval_ms', type: 'number', description: 'Loop interval in ms for continuous execution', required: false },
+        { name: 'loop_task', type: 'string', description: 'Task for each loop iteration', required: false },
+      ],
+      execute: async (params) => {
+        const { name: agentName, description: agentDesc, system_prompt, tools: toolsParam,
+                tier, schedule, scheduled_task, loop_interval_ms, loop_task } = params as Record<string, any>;
+        if (!agentName || !agentDesc || !system_prompt) {
+          return { success: false, output: '', error: 'name, description, and system_prompt are required.' };
+        }
+        if (schedule && !scheduled_task) {
+          return { success: false, output: '', error: 'scheduled_task is required when schedule is set.' };
+        }
+
+        try {
+          // Generate kebab-case ID from name
+          const agentId = agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+          const config = await this.config.subagentManager.create({
+            id: agentId,
+            name: agentName,
+            description: agentDesc,
+            tools: toolsParam ? toolsParam.split(',').map((s: string) => s.trim()) : ['*'],
+            systemPrompt: system_prompt,
+            schedule: schedule || undefined,
+            timezone: undefined,
+            scheduledTask: scheduled_task || undefined,
+            loop: loop_interval_ms && loop_task ? {
+              intervalMs: loop_interval_ms,
+              task: loop_task,
+              maxIterations: undefined,
+            } : undefined,
+            tier: tier || 'sonnet',
+            maxTurns: 15,
+            status: 'active',
+            createdBy: this.currentWhatsAppJid || 'ai-self-modification',
+            createdVia: (this.currentChannelContext?.source as any) || 'web',
+            createdChatId: this.currentChannelContext?.chatId || undefined,
+          });
+
+          // Register schedule if provided
+          if (config.schedule && config.scheduledTask) {
+            await this.config.scheduleManager.addSchedule({
+              subagentId: config.id,
+              task: config.scheduledTask,
+              cron: config.schedule,
+            });
+          }
+
+          // Start loop if configured
+          if (config.loop) {
+            await this.config.loopRunner.start(config);
+          }
+
+          // Register in CapabilityRegistry
+          if (this.config.capabilityRegistry) {
+            const manifest: CapabilityManifest = {
+              id: `agent:${agentId}`,
+              type: 'agent',
+              name: agentName,
+              description: agentDesc,
+              semantic_tags: ['agent', 'template'],
+              triggers: [],
+              provides_tools: [],
+              requires: [],
+              conflicts: [],
+              context_cost: Math.ceil((system_prompt?.length || 0) / 4),
+              tier: (tier || 'sonnet') as any,
+              source: 'custom',
+              status: 'active',
+              last_used_at: 0,
+              registered_at: Date.now(),
+              metadata: { systemPrompt: system_prompt, tools: config.tools, schedule },
+            };
+            await this.config.capabilityRegistry.registerCapability(manifest);
+          }
+
+          let output = `Agent template "${agentName}" (${agentId}) created and registered.`;
+          if (config.schedule) output += ` Schedule: ${config.schedule}`;
+          if (config.loop) output += ` Loop: every ${config.loop.intervalMs}ms`;
+          output += ' The agent now appears in the Agents panel. Test it by checking subagent_list.';
+          return { success: true, output };
+        } catch (err) {
+          return { success: false, output: '', error: `Create agent template error: ${formatErrorMessage(err)}` };
         }
       },
     });

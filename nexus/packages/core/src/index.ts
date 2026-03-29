@@ -488,6 +488,7 @@ Conversation:`;
     multiAgentManager,
     multiAgentQueue,
     canvasManager,
+    capabilityRegistry,
     intervalMs: parseInt(process.env.DAEMON_INTERVAL_MS || '30000'),
   });
 
