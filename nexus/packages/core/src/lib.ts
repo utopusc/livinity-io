@@ -29,7 +29,7 @@ export { AgentSessionManager, createInputChannel } from './agent-session.js';
 export type { ActiveSession, AgentWsMessage, ClientWsMessage, TurnData } from './agent-session.js';
 
 // ── Intent Router ─────────────────────────────────────────────
-export { IntentRouter } from './intent-router.js';
+export { IntentRouter, composeSystemPrompt } from './intent-router.js';
 export type { IntentRouterDeps, IntentResult, ScoredCapability } from './intent-router.js';
 
 // ── Capability Types ──────────────────────────────────────────
