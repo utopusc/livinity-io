@@ -103,6 +103,8 @@ export const httpOnlyPaths = [
 	// Loop management -- use HTTP to avoid WS connection dependency
 	'ai.startLoop',
 	'ai.stopLoop',
+	// Conversation feedback -- use HTTP for mutation reliability
+	'ai.rateConversation',
 	// Preferences -- use HTTP so they work with legacy single-user tokens
 	'preferences.getAll',
 	'preferences.get',
