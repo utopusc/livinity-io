@@ -171,7 +171,10 @@ Plans:
   2. The system identifies commonly co-used capability combinations (e.g., "users who use tool A usually also need tool B") and surfaces these patterns
   3. Based on a user's intent history, the system proactively suggests capabilities the user has not yet installed but would likely benefit from
   4. Users can mark tasks as completed and optionally rate the AI's performance, which feeds back into capability confidence scores
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 36-01-PLAN.md — LearningEngine class + tool call logging + suggestion injection in IntentRouter
+- [ ] 36-02-PLAN.md — rateConversation tRPC route + enhanced analytics with real stream data
 
 ## Progress
 
@@ -189,7 +192,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | 33. Livinity Marketplace MCP | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 34. AI Self-Modification | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 35. Marketplace UI & Auto-Install | v22.0 | 2/2 | Complete    | 2026-03-29 |
-| 36. Learning Loop | v22.0 | 0/? | Not started | - |
+| 36. Learning Loop | v22.0 | 0/2 | Not started | - |
 
 ---
 
