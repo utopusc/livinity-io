@@ -180,7 +180,29 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	)
 }
 
-// --- AgentToolCallDisplay ---
+// --- AgentToolCallDisplay (Claude Code inline style) ---
+
+/** Build a brief one-line input summary for the tool header */
+function toolInputSummary(toolCall: ChatToolCall): string {
+	const raw = getRawToolName(toolCall.name)
+	if (isShellTool(toolCall.name) && toolCall.input.command) {
+		const cmd = String(toolCall.input.command).trim()
+		return cmd.length > 80 ? cmd.slice(0, 77) + '...' : cmd
+	}
+	if (/file|read|write|edit/.test(raw)) {
+		const path = toolCall.input.path || toolCall.input.file_path || toolCall.input.filename
+		if (path) return String(path)
+	}
+	if (/docker/.test(raw) && toolCall.input.action) {
+		return String(toolCall.input.action) + (toolCall.input.name ? ` ${toolCall.input.name}` : '')
+	}
+	const keys = Object.keys(toolCall.input).slice(0, 2)
+	if (keys.length === 0) return ''
+	return keys.map(k => {
+		const v = String(toolCall.input[k]).slice(0, 40)
+		return `${k}=${v}`
+	}).join(', ')
+}
 
 export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	const [expanded, setExpanded] = useState(false)
@@ -193,36 +215,41 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	}, [toolCall.status])
 
 	const {icon: ToolIcon, color: iconColor} = getToolIcon(toolCall.name)
+	const summary = toolInputSummary(toolCall)
 
-	const statusIndicator = (() => {
+	const statusDot = (() => {
 		switch (toolCall.status) {
 			case 'running':
-				return (
-					<span className='ml-auto flex items-center gap-1.5 text-text-secondary'>
-						{toolCall.elapsedSeconds != null && (
-							<span className='font-mono text-xs'>{formatElapsed(toolCall.elapsedSeconds)}</span>
-						)}
-						<IconLoader2 size={14} className='animate-spin' />
-					</span>
-				)
+				return <IconLoader2 size={12} className='flex-shrink-0 animate-spin text-blue-400' />
 			case 'complete':
-				return <IconCheck size={14} className='ml-auto text-green-400' />
+				return <span className='flex-shrink-0 inline-block h-2 w-2 rounded-full bg-green-400' />
 			case 'error':
-				return <IconX size={14} className='ml-auto text-red-400' />
+				return <span className='flex-shrink-0 inline-block h-2 w-2 rounded-full bg-red-400' />
 		}
 	})()
 
 	return (
-		<div className='rounded-lg border border-border-default bg-surface-1 text-sm'>
+		<div className='my-1'>
+			{/* Compact header — Claude Code style */}
 			<button
 				onClick={() => setExpanded(!expanded)}
-				className='flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2'
+				className='group flex w-full items-center gap-1.5 text-left text-xs hover:bg-surface-1/50 rounded px-1 py-0.5 -mx-1'
 			>
-				{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-				<ToolIcon size={14} className={iconColor} />
+				{statusDot}
+				<ToolIcon size={13} className={cn(iconColor, 'flex-shrink-0')} />
 				<span className={cn('font-mono font-medium', iconColor)}>{formatToolName(toolCall.name)}</span>
-				{statusIndicator}
+				{summary && (
+					<span className='truncate font-mono text-text-tertiary'>
+						{isShellTool(toolCall.name) ? `$ ${summary}` : summary}
+					</span>
+				)}
+				{toolCall.elapsedSeconds != null && toolCall.status === 'running' && (
+					<span className='ml-auto font-mono text-text-tertiary'>{formatElapsed(toolCall.elapsedSeconds)}</span>
+				)}
+				<IconChevronRight size={12} className={cn('ml-auto flex-shrink-0 text-text-tertiary transition-transform', expanded && 'rotate-90')} />
 			</button>
+
+			{/* Expandable output */}
 			<AnimatePresence initial={false}>
 				{expanded && (
 					<motion.div
@@ -230,27 +257,25 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 						initial={{height: 0, opacity: 0}}
 						animate={{height: 'auto', opacity: 1}}
 						exit={{height: 0, opacity: 0}}
-						transition={{duration: 0.2, ease: 'easeInOut'}}
+						transition={{duration: 0.15, ease: 'easeInOut'}}
 						className='overflow-hidden'
 					>
-						<div className='border-t border-border-default px-3 py-2'>
-							{/* Error banner */}
+						<div className='ml-5 mt-0.5 border-l-2 border-surface-2 pl-3 pb-1'>
+							{/* Error */}
 							{toolCall.status === 'error' && (toolCall.errorMessage || toolCall.output) && (
-								<div className='mb-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400'>
+								<div className='rounded bg-red-500/10 px-2 py-1 text-xs text-red-400'>
 									{toolCall.errorMessage || toolCall.output}
 								</div>
 							)}
 
-							{/* Input section */}
-							<div className='mb-1 text-xs uppercase text-text-tertiary'>Input</div>
-							<div className='mb-2'>{renderToolInput(toolCall)}</div>
-
-							{/* Output section */}
+							{/* Output */}
 							{toolCall.output != null && toolCall.status !== 'error' && (
-								<>
-									<div className='mb-1 text-xs uppercase text-text-tertiary'>Output</div>
-									<ToolOutput toolCall={toolCall} />
-								</>
+								<ToolOutput toolCall={toolCall} />
+							)}
+
+							{/* Input details (only if no output yet) */}
+							{toolCall.output == null && toolCall.status === 'running' && (
+								<div className='text-xs text-text-tertiary'>{renderToolInput(toolCall)}</div>
 							)}
 						</div>
 					</motion.div>
@@ -282,14 +307,15 @@ export function AssistantMessage({message, agentStatus}: {message: ChatMessage; 
 				{message.isStreaming && agentStatus && agentStatus.phase !== 'idle' && (
 					<AgentStatusOverlay status={agentStatus} />
 				)}
-				<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
+				{/* Tool calls shown inline above text — Claude Code style */}
 				{message.toolCalls && message.toolCalls.length > 0 && (
-					<div className='mt-2 space-y-1'>
+					<div className='mb-1'>
 						{message.toolCalls.map((tc) => (
 							<AgentToolCallDisplay key={tc.id} toolCall={tc} />
 						))}
 					</div>
 				)}
+				<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
 			</div>
 		</div>
 	)
