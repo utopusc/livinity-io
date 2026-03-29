@@ -6,7 +6,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 ## Milestones
 
-- ✅ **v19.0 Custom Domain Management** ��� Phases 07-10.1 (shipped 2026-03-27)
+- ✅ **v19.0 Custom Domain Management** — Phases 07-10.1 (shipped 2026-03-27)
 - ✅ **v20.0 Live Agent UI** — Phases 11-18 (shipped 2026-03-27)
 - ✅ **v21.0 Autonomous Agent Platform** — Phases 19-28 (shipped 2026-03-28)
 - **v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace** — Phases 29-36 (in progress)
@@ -157,7 +157,10 @@ Plans:
   1. When the AI recommends a new capability during conversation, an auto-install dialog appears in the chat UI letting the user approve or reject the installation
   2. A system prompt editor is available with a template library of pre-built prompts and a custom prompt builder for composing new prompts from capabilities
   3. An analytics view shows tool usage frequency, popular capability combinations, and per-tool success rates over time
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 35-01-PLAN.md — Prompts tab + Analytics tab in capabilities panel with tRPC routes
+- [ ] 35-02-PLAN.md — Auto-install recommendation cards inline in chat messages
 
 ### Phase 36: Learning Loop
 **Goal**: The system continuously learns from tool usage patterns, identifies commonly co-used capabilities, auto-suggests relevant tools, and incorporates user feedback into capability scoring
@@ -185,7 +188,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | 32. Auto-Provisioning Engine | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 33. Livinity Marketplace MCP | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 34. AI Self-Modification | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 35. Marketplace UI & Auto-Install | v22.0 | 0/? | Not started | - |
+| 35. Marketplace UI & Auto-Install | v22.0 | 0/2 | Not started | - |
 | 36. Learning Loop | v22.0 | 0/? | Not started | - |
 
 ---
