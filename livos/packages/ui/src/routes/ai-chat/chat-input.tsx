@@ -1,15 +1,25 @@
-import {useEffect, useRef, useState} from 'react'
+import {useEffect, useRef, useState, useCallback} from 'react'
 
-import {IconPlayerStop, IconSend} from '@tabler/icons-react'
+import {IconPlayerStop, IconSend, IconPaperclip, IconX, IconFile, IconPhoto} from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
 
 import {SlashCommandMenu, type SlashCommand} from './slash-command-menu'
 
+export interface FileAttachment {
+	name: string
+	mimeType: string
+	data: string // base64
+	size: number
+}
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,text/markdown,application/json'
+
 interface ChatInputProps {
 	value: string
 	onChange: (value: string) => void
-	onSend: () => void
+	onSend: (attachments?: FileAttachment[]) => void
 	onStop: () => void
 	isStreaming: boolean
 	isConnected: boolean
@@ -19,9 +29,36 @@ interface ChatInputProps {
 
 export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConnected, disabled, onSlashAction}: ChatInputProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [selectedIndex, setSelectedIndex] = useState(0)
 	const [filteredCount, setFilteredCount] = useState(0)
 	const filteredCommandsRef = useRef<SlashCommand[]>([])
+	const [attachments, setAttachments] = useState<FileAttachment[]>([])
+	const [isDragging, setIsDragging] = useState(false)
+
+	const processFiles = useCallback((files: FileList | File[]) => {
+		for (const file of Array.from(files)) {
+			if (file.size > MAX_FILE_SIZE) {
+				alert(`${file.name} is too large (max 20MB)`)
+				continue
+			}
+			const reader = new FileReader()
+			reader.onload = () => {
+				const base64 = (reader.result as string).split(',')[1]
+				setAttachments(prev => [...prev, {
+					name: file.name,
+					mimeType: file.type || 'application/octet-stream',
+					data: base64,
+					size: file.size,
+				}])
+			}
+			reader.readAsDataURL(file)
+		}
+	}, [])
+
+	const removeAttachment = useCallback((index: number) => {
+		setAttachments(prev => prev.filter((_, i) => i !== index))
+	}, [])
 
 	// Slash menu visibility: show when input starts with / and has no spaces
 	const showSlashMenu = value.startsWith('/') && !value.includes(' ')
@@ -56,7 +93,10 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 		}
 		// All other commands: insert and send
 		onChange(command.name)
-		setTimeout(() => onSend(), 0)
+		setTimeout(() => {
+			onSend(attachments.length > 0 ? attachments : undefined)
+			setAttachments([])
+		}, 0)
 	}
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -87,8 +127,9 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 		// Existing Enter-to-send logic (only fires when slash menu is NOT open)
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault()
-			if (value.trim()) {
-				onSend()
+			if (value.trim() || attachments.length > 0) {
+				onSend(attachments.length > 0 ? attachments : undefined)
+				setAttachments([])
 			}
 		}
 	}
@@ -97,9 +138,62 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 
 	const isDisabled = disabled || false
 
+	const handleDrop = useCallback((e: React.DragEvent) => {
+		e.preventDefault()
+		setIsDragging(false)
+		if (e.dataTransfer.files.length > 0) {
+			processFiles(e.dataTransfer.files)
+		}
+	}, [processFiles])
+
+	const handleDragOver = useCallback((e: React.DragEvent) => {
+		e.preventDefault()
+		setIsDragging(true)
+	}, [])
+
+	const handleDragLeave = useCallback((e: React.DragEvent) => {
+		e.preventDefault()
+		setIsDragging(false)
+	}, [])
+
+	const handlePaste = useCallback((e: React.ClipboardEvent) => {
+		const files = Array.from(e.clipboardData.items)
+			.filter(item => item.kind === 'file')
+			.map(item => item.getAsFile())
+			.filter((f): f is File => f !== null)
+		if (files.length > 0) {
+			e.preventDefault()
+			processFiles(files)
+		}
+	}, [processFiles])
+
+	const isImage = (mime: string) => mime.startsWith('image/')
+	const formatSize = (bytes: number) => bytes < 1024 ? `${bytes}B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)}KB` : `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+
 	return (
 		<div className='border-t border-border-default bg-surface-base p-3 md:p-4'>
-			<div className='relative mx-auto flex max-w-3xl items-end gap-3'>
+			<div
+				className={cn('relative mx-auto max-w-3xl', isDragging && 'rounded-lg ring-2 ring-brand/50 ring-offset-2 ring-offset-surface-base')}
+				onDrop={handleDrop}
+				onDragOver={handleDragOver}
+				onDragLeave={handleDragLeave}
+			>
+				{/* Attachment previews */}
+				{attachments.length > 0 && (
+					<div className='mb-2 flex flex-wrap gap-2'>
+						{attachments.map((att, i) => (
+							<div key={i} className='flex items-center gap-1.5 rounded-md border border-border-default bg-surface-1 px-2 py-1 text-xs text-text-secondary'>
+								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-blue-400' /> : <IconFile size={14} className='text-orange-400' />}
+								<span className='max-w-[120px] truncate'>{att.name}</span>
+								<span className='text-text-tertiary'>({formatSize(att.size)})</span>
+								<button onClick={() => removeAttachment(i)} className='ml-0.5 text-text-tertiary hover:text-red-400'>
+									<IconX size={12} />
+								</button>
+							</div>
+						))}
+					</div>
+				)}
+
 				{showSlashMenu && (
 					<SlashCommandMenu
 						filter={slashFilter}
@@ -109,49 +203,75 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						filteredCommandsRef={filteredCommandsRef}
 					/>
 				)}
-				<textarea
-					ref={textareaRef}
-					value={value}
-					onChange={(e) => handleChange(e.target.value)}
-					onKeyDown={handleKeyDown}
-					placeholder={placeholder}
-					disabled={isDisabled}
-					rows={1}
-					className={cn(
-						'w-full resize-none rounded-lg border border-border-default bg-surface-1 px-4 py-3 text-sm text-text-primary',
-						'placeholder:text-text-tertiary outline-none transition-colors',
-						'focus:border-brand/50 focus:ring-1 focus:ring-brand/20',
-						'disabled:opacity-50',
-					)}
-				/>
-				{isStreaming ? (
-					<>
+
+				<div className='flex items-end gap-2'>
+					{/* Attach button */}
+					<input
+						ref={fileInputRef}
+						type='file'
+						multiple
+						accept={ACCEPTED_TYPES}
+						className='hidden'
+						onChange={(e) => {
+							if (e.target.files) processFiles(e.target.files)
+							e.target.value = ''
+						}}
+					/>
+					<button
+						onClick={() => fileInputRef.current?.click()}
+						disabled={isDisabled}
+						className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-border-default bg-surface-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:opacity-40'
+						title='Attach file'
+					>
+						<IconPaperclip size={18} />
+					</button>
+
+					<textarea
+						ref={textareaRef}
+						value={value}
+						onChange={(e) => handleChange(e.target.value)}
+						onKeyDown={handleKeyDown}
+						onPaste={handlePaste}
+						placeholder={isDragging ? 'Drop files here...' : placeholder}
+						disabled={isDisabled}
+						rows={1}
+						className={cn(
+							'w-full resize-none rounded-lg border border-border-default bg-surface-1 px-4 py-3 text-sm text-text-primary',
+							'placeholder:text-text-tertiary outline-none transition-colors',
+							'focus:border-brand/50 focus:ring-1 focus:ring-brand/20',
+							'disabled:opacity-50',
+						)}
+					/>
+
+					{isStreaming ? (
+						<>
+							<button
+								onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
+								disabled={!value.trim() && attachments.length === 0}
+								className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600/80 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+								title='Send follow-up'
+							>
+								<IconSend size={18} />
+							</button>
+							<button
+								onClick={onStop}
+								className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
+								title='Stop'
+							>
+								<IconPlayerStop size={18} />
+							</button>
+						</>
+					) : (
 						<button
-							onClick={onSend}
-							disabled={!value.trim()}
-							className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600/80 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
-							title='Send follow-up'
+							onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
+							disabled={(!value.trim() && attachments.length === 0) || !isConnected}
+							className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+							title='Send'
 						>
 							<IconSend size={18} />
 						</button>
-						<button
-							onClick={onStop}
-							className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
-							title='Stop'
-						>
-							<IconPlayerStop size={18} />
-						</button>
-					</>
-				) : (
-					<button
-						onClick={onSend}
-						disabled={!value.trim() || !isConnected}
-						className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
-						title='Send'
-					>
-						<IconSend size={18} />
-					</button>
-				)}
+					)}
+				</div>
 			</div>
 			{!isConnected && !isStreaming && (
 				<div className='mx-auto mt-1 max-w-3xl'>
