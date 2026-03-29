@@ -15,9 +15,8 @@ import {
 } from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
-import type {AgentStatus, ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
+import type {ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
 
-import {AgentStatusOverlay} from './agent-status-overlay'
 import {StreamingMessage} from './streaming-message'
 
 // --- Helpers ---
@@ -299,15 +298,18 @@ export function UserMessage({message}: {message: ChatMessage}) {
 
 // --- AssistantMessage ---
 
-export function AssistantMessage({message, agentStatus}: {message: ChatMessage; agentStatus?: AgentStatus}) {
+export function AssistantMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='flex justify-start'>
 			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4'>
-				{/* Status overlay -- only visible while this message is streaming */}
-				{message.isStreaming && agentStatus && agentStatus.phase !== 'idle' && (
-					<AgentStatusOverlay status={agentStatus} />
+				{/* Thinking indicator — only while streaming with no content yet */}
+				{message.isStreaming && !message.content && (!message.toolCalls || message.toolCalls.length === 0) && (
+					<div className='flex items-center gap-2 py-1 text-sm text-text-secondary'>
+						<IconLoader2 size={14} className='animate-spin text-violet-400' />
+						<span>Thinking...</span>
+					</div>
 				)}
-				{/* Tool calls shown inline above text — Claude Code style */}
+				{/* Tool calls shown inline — Claude Code style */}
 				{message.toolCalls && message.toolCalls.length > 0 && (
 					<div className='mb-1'>
 						{message.toolCalls.map((tc) => (
@@ -356,13 +358,13 @@ function isErrorMessage(message: ChatMessage): boolean {
 	return message.id.startsWith('err_')
 }
 
-export function ChatMessageItem({message, agentStatus}: {message: ChatMessage; agentStatus?: AgentStatus}) {
+export function ChatMessageItem({message}: {message: ChatMessage}) {
 	if (message.role === 'user') {
 		return <UserMessage message={message} />
 	}
 
 	if (message.role === 'assistant') {
-		return <AssistantMessage message={message} agentStatus={agentStatus} />
+		return <AssistantMessage message={message} />
 	}
 
 	// System messages -- check if it's an error

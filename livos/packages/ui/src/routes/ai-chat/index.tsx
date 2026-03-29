@@ -542,16 +542,10 @@ export default function AiChat() {
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
 									{displayMessages.map((msg, idx) => {
-										// Only pass agentStatus to the last message if it's a streaming assistant message
-										const isLastStreamingAssistant =
-											msg.role === 'assistant' &&
-											msg.isStreaming &&
-											idx === displayMessages.length - 1
 										return (
 											<ChatMessageItem
 												key={msg.id}
 												message={msg}
-												agentStatus={isLastStreamingAssistant ? agent.agentStatus : undefined}
 											/>
 										)
 									})}
