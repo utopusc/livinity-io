@@ -3,6 +3,8 @@ import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay, IconSe
 import {formatDistanceToNow} from 'date-fns'
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
+import {ChatMessageItem} from './chat-messages'
+import type {ChatMessage, ContentBlock} from '@/hooks/use-agent-socket'
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -361,7 +363,7 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 								<div className='flex-1'>
 									<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Tier</label>
 									<select value={editForm.tier} onChange={e => setEditForm(f => ({...f, tier: e.target.value}))} className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none focus:border-brand'>
-										<option value='flash'>flash</option>
+										<option value='haiku'>haiku</option>
 										<option value='sonnet'>sonnet</option>
 										<option value='opus'>opus</option>
 									</select>
@@ -369,14 +371,19 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 								<div className='flex-1'>
 									<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Run every</label>
 									<div className='flex gap-1.5'>
-										<input type='number' min='1' max='999' value={editForm.intervalValue} onChange={e => {
+										<input type='number' min='1' max='999' value={editForm.intervalValue} disabled={editForm.intervalUnit === 'none'} onChange={e => {
 											const v = e.target.value
 											setEditForm(f => ({...f, intervalValue: v, schedule: intervalToCron(parseInt(v) || 1, f.intervalUnit)}))
-										}} className='w-16 rounded-radius-sm border border-border-default bg-surface-base px-2 py-1.5 text-caption text-text-primary outline-none focus:border-brand' />
+										}} className='w-16 rounded-radius-sm border border-border-default bg-surface-base px-2 py-1.5 text-caption text-text-primary outline-none focus:border-brand disabled:opacity-40' />
 										<select value={editForm.intervalUnit} onChange={e => {
 											const u = e.target.value
-											setEditForm(f => ({...f, intervalUnit: u, schedule: intervalToCron(parseInt(f.intervalValue) || 1, u)}))
+											if (u === 'none') {
+												setEditForm(f => ({...f, intervalUnit: u, schedule: ''}))
+											} else {
+												setEditForm(f => ({...f, intervalUnit: u, schedule: intervalToCron(parseInt(f.intervalValue) || 1, u)}))
+											}
 										}} className='flex-1 rounded-radius-sm border border-border-default bg-surface-base px-2 py-1.5 text-caption text-text-primary outline-none focus:border-brand'>
+											<option value='none'>No schedule</option>
 											<option value='minutes'>minutes</option>
 											<option value='hours'>hours</option>
 											<option value='days'>days</option>
@@ -476,7 +483,7 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 				</div>
 			)}
 
-			{/* Chat area — scrollable, starts at bottom */}
+			{/* Chat area — same rendering as AI Chat */}
 			<div ref={chatContainerRef} className='flex-1 overflow-y-auto px-4 py-3'>
 				{historyQuery.isLoading ? (
 					<div className='flex h-full items-center justify-center'>
@@ -489,29 +496,25 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 						<p className='mt-1 text-[10px] text-text-tertiary'>Send a message to start chatting with this agent</p>
 					</div>
 				) : (
-					<div className='space-y-3'>
-						{history.map((msg: any, idx: number) => (
-							<div
-								key={idx}
-								className={cn('flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}
-							>
-								<div
-									className={cn(
-										'max-w-[90%] rounded-xl px-3.5 py-2.5 text-body-sm leading-relaxed',
-										msg.role === 'user'
-											? 'bg-brand/10 text-text-primary rounded-br-sm'
-											: 'bg-surface-1 text-text-secondary rounded-bl-sm',
-									)}
-								>
-									<pre className='whitespace-pre-wrap break-words font-sans'>{msg.text}</pre>
-								</div>
-								{msg.ts && (
-									<span className='mt-1 text-[10px] text-text-tertiary'>
-										{formatDistanceToNow(msg.ts, {addSuffix: true})}
-									</span>
-								)}
-							</div>
-						))}
+					<div className='space-y-1'>
+						{history.map((msg: any, idx: number) => {
+							// Convert agent history message to ChatMessage format for ChatMessageItem
+							const chatMsg: ChatMessage = {
+								id: `agent-msg-${idx}`,
+								role: msg.role === 'user' ? 'user' : 'assistant',
+								content: msg.text || '',
+								blocks: [{type: 'text', content: msg.text || ''}] as ContentBlock[],
+								isStreaming: false,
+								timestamp: msg.ts || Date.now(),
+							}
+							return (
+								<ChatMessageItem
+									key={idx}
+									message={chatMsg}
+									isLast={idx === history.length - 1}
+								/>
+							)
+						})}
 						<div ref={chatEndRef} />
 					</div>
 				)}
@@ -526,7 +529,7 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 // ── Create Agent Form ──────────────────────────────────────────
 
 function CreateAgentForm({onClose}: {onClose: () => void}) {
-	const [form, setForm] = useState({name: '', description: '', tier: 'sonnet' as 'flash' | 'sonnet' | 'opus'})
+	const [form, setForm] = useState({name: '', description: '', tier: 'sonnet' as 'haiku' | 'sonnet' | 'opus'})
 	const createMutation = trpcReact.ai.createSubagent.useMutation()
 	const utils = trpcReact.useUtils()
 
@@ -583,7 +586,7 @@ function CreateAgentForm({onClose}: {onClose: () => void}) {
 				<label className='mb-1 block text-caption-sm font-medium text-text-tertiary'>Model Tier</label>
 				<select
 					value={form.tier}
-					onChange={(e) => setForm((f) => ({...f, tier: e.target.value as 'flash' | 'sonnet' | 'opus'}))}
+					onChange={(e) => setForm((f) => ({...f, tier: e.target.value as 'haiku' | 'sonnet' | 'opus'}))}
 					className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none focus:border-brand'
 				>
 					<option value='flash'>flash</option>
