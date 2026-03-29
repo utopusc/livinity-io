@@ -1,13 +1,13 @@
 import {useState, useEffect} from 'react'
-import {IconCode, IconPlug, IconWebhook, IconRobot, IconPuzzle, IconArrowLeft, IconLoader2, IconSearch} from '@tabler/icons-react'
+import {IconCode, IconPlug, IconWebhook, IconRobot, IconPuzzle, IconArrowLeft, IconLoader2, IconSearch, IconFileText, IconChartBar, IconTrash} from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────
 
-type CapabilityTab = 'skill' | 'mcp' | 'hook' | 'agent'
-type PanelView = {mode: 'list'} | {mode: 'detail'; capabilityId: string}
+type CapabilityTab = 'skill' | 'mcp' | 'hook' | 'agent' | 'prompts' | 'analytics'
+type PanelView = {mode: 'list'} | {mode: 'detail'; capabilityId: string} | {mode: 'prompts'} | {mode: 'analytics'}
 
 interface CapabilityManifest {
 	id: string
@@ -36,6 +36,8 @@ const TABS: {key: CapabilityTab; label: string; icon: typeof IconCode}[] = [
 	{key: 'mcp', label: 'MCPs', icon: IconPlug},
 	{key: 'hook', label: 'Hooks', icon: IconWebhook},
 	{key: 'agent', label: 'Agents', icon: IconRobot},
+	{key: 'prompts', label: 'Prompts', icon: IconFileText},
+	{key: 'analytics', label: 'Analytics', icon: IconChartBar},
 ]
 
 const TAB_ICON_COLORS: Record<CapabilityTab, string> = {
@@ -43,6 +45,8 @@ const TAB_ICON_COLORS: Record<CapabilityTab, string> = {
 	mcp: 'text-green-400',
 	hook: 'text-amber-400',
 	agent: 'text-blue-400',
+	prompts: 'text-orange-400',
+	analytics: 'text-pink-400',
 }
 
 const EMPTY_STATES: Record<CapabilityTab, {title: string; subtitle: string}> = {
@@ -50,6 +54,8 @@ const EMPTY_STATES: Record<CapabilityTab, {title: string; subtitle: string}> = {
 	mcp: {title: 'No MCP servers registered', subtitle: 'MCP servers will appear here when configured'},
 	hook: {title: 'No hooks registered', subtitle: 'Hooks will be available after Phase 34'},
 	agent: {title: 'No agents registered', subtitle: 'Create agents from the Agents page or let AI create them'},
+	prompts: {title: 'No prompts yet', subtitle: 'Create custom prompts or use built-in templates'},
+	analytics: {title: 'No capability data yet', subtitle: 'Analytics will populate as capabilities are used'},
 }
 
 function getTabIcon(type: string) {
@@ -349,6 +355,187 @@ function CapabilityList({activeTab, searchQuery, onSelect}: {activeTab: Capabili
 	)
 }
 
+// ── PromptsView ───────────────────────────────────────────────
+
+function PromptsView() {
+	const [showCreate, setShowCreate] = useState(false)
+	const [newName, setNewName] = useState('')
+	const [newDesc, setNewDesc] = useState('')
+	const [newPrompt, setNewPrompt] = useState('')
+
+	const promptsQuery = trpcReact.ai.listPrompts.useQuery(undefined, {refetchInterval: 10_000})
+	const saveMutation = trpcReact.ai.savePrompt.useMutation({
+		onSuccess: () => {
+			promptsQuery.refetch()
+			setShowCreate(false)
+			setNewName('')
+			setNewDesc('')
+			setNewPrompt('')
+		},
+	})
+	const deleteMutation = trpcReact.ai.deletePrompt.useMutation({onSuccess: () => promptsQuery.refetch()})
+
+	const prompts = (promptsQuery.data as any)?.prompts ?? []
+
+	if (promptsQuery.isLoading) {
+		return (
+			<div className='flex h-32 items-center justify-center'>
+				<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
+			</div>
+		)
+	}
+
+	return (
+		<div className='p-3 space-y-3'>
+			{/* Create button */}
+			<button
+				onClick={() => setShowCreate(!showCreate)}
+				className='rounded-radius-sm border border-border-default bg-surface-1 px-3 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+			>
+				{showCreate ? 'Cancel' : '+ New Prompt'}
+			</button>
+
+			{/* Create form */}
+			{showCreate && (
+				<div className='space-y-2 rounded-radius-sm border border-border-default bg-surface-1 p-3'>
+					<input
+						type='text'
+						value={newName}
+						onChange={(e) => setNewName(e.target.value)}
+						placeholder='Prompt name'
+						className='w-full rounded-radius-sm border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
+					/>
+					<input
+						type='text'
+						value={newDesc}
+						onChange={(e) => setNewDesc(e.target.value)}
+						placeholder='Description (optional)'
+						className='w-full rounded-radius-sm border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
+					/>
+					<textarea
+						value={newPrompt}
+						onChange={(e) => setNewPrompt(e.target.value)}
+						placeholder='System prompt text...'
+						className='min-h-[100px] w-full rounded-radius-sm border border-border-default bg-surface-base px-3 py-1.5 text-caption font-mono text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand resize-y'
+					/>
+					<button
+						onClick={() => saveMutation.mutate({name: newName, description: newDesc, prompt: newPrompt})}
+						disabled={!newName.trim() || !newPrompt.trim() || saveMutation.isLoading}
+						className='rounded-radius-sm bg-brand px-3 py-1.5 text-caption font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50'
+					>
+						Save Prompt
+					</button>
+				</div>
+			)}
+
+			{/* Prompt list */}
+			{prompts.length === 0 ? (
+				<div className='flex flex-col items-center justify-center px-4 py-12 text-center'>
+					<IconFileText size={40} className='mb-3 text-text-tertiary' />
+					<p className='text-body-sm font-medium text-text-secondary'>No prompts yet</p>
+					<p className='mt-1 text-caption-sm text-text-tertiary'>Create custom prompts or use built-in templates</p>
+				</div>
+			) : (
+				prompts.map((p: any) => (
+					<div key={p.name} className='rounded-radius-sm border border-border-subtle bg-surface-base p-2.5'>
+						<div className='flex items-center justify-between'>
+							<span className='text-body-sm font-medium text-text-primary'>{p.name}</span>
+							<div className='flex items-center gap-1'>
+								{p.builtin && (
+									<span className='rounded-full bg-violet-500/10 px-1.5 text-[10px] text-violet-400'>built-in</span>
+								)}
+								{!p.builtin && (
+									<button
+										onClick={() => deleteMutation.mutate({name: p.name})}
+										className='rounded p-0.5 text-text-tertiary transition-colors hover:text-red-400'
+									>
+										<IconTrash size={12} />
+									</button>
+								)}
+							</div>
+						</div>
+						{p.description && (
+							<p className='mt-0.5 text-caption-sm text-text-tertiary'>{p.description}</p>
+						)}
+						<pre className='mt-1.5 max-h-20 overflow-hidden text-ellipsis whitespace-pre-wrap rounded bg-surface-1 p-2 text-[11px] font-mono text-text-secondary'>
+							{p.prompt}
+						</pre>
+					</div>
+				))
+			)}
+		</div>
+	)
+}
+
+// ── AnalyticsView ─────────────────────────────────────────────
+
+function AnalyticsView() {
+	const analyticsQuery = trpcReact.ai.getAnalytics.useQuery(undefined, {refetchInterval: 10_000})
+
+	if (analyticsQuery.isLoading) {
+		return (
+			<div className='flex h-32 items-center justify-center'>
+				<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
+			</div>
+		)
+	}
+
+	const data = analyticsQuery.data as {toolStats: Array<{name: string; type: string; toolCount: number; successRate: number | null; lastUsed: number}>; totalCapabilities: number; activeCapabilities: number} | undefined
+	if (!data) return <p className='p-4 text-caption text-text-tertiary'>No analytics data available</p>
+
+	const maxTools = Math.max(1, ...data.toolStats.map(s => s.toolCount))
+
+	return (
+		<div className='p-3 space-y-4'>
+			{/* Summary cards row */}
+			<div className='flex gap-2'>
+				<div className='flex-1 rounded-radius-sm bg-surface-1 p-3 text-center'>
+					<div className='text-heading-sm font-bold text-text-primary'>{data.totalCapabilities}</div>
+					<div className='text-caption-sm text-text-tertiary'>Total</div>
+				</div>
+				<div className='flex-1 rounded-radius-sm bg-surface-1 p-3 text-center'>
+					<div className='text-heading-sm font-bold text-green-400'>{data.activeCapabilities}</div>
+					<div className='text-caption-sm text-text-tertiary'>Active</div>
+				</div>
+			</div>
+
+			{/* Table header */}
+			<div className='flex items-center gap-2 px-1 text-caption-sm font-semibold uppercase tracking-wide text-text-tertiary'>
+				<span className='flex-1'>Capability</span>
+				<span className='w-16 text-right'>Tools</span>
+				<span className='w-16 text-right'>Success</span>
+				<span className='w-20 text-right'>Last Used</span>
+			</div>
+
+			{/* Table rows */}
+			{data.toolStats.length === 0 ? (
+				<div className='flex flex-col items-center py-8'>
+					<IconChartBar size={40} className='mb-3 text-text-tertiary' />
+					<p className='text-body-sm text-text-secondary'>No capability data yet</p>
+					<p className='text-caption-sm text-text-tertiary'>Analytics will populate as capabilities are used</p>
+				</div>
+			) : (
+				data.toolStats.map(stat => (
+					<div key={stat.name} className='flex items-center gap-2 rounded-radius-sm border border-border-subtle bg-surface-base p-2'>
+						<div className='min-w-0 flex-1'>
+							<span className='block truncate text-caption font-medium text-text-primary'>{stat.name}</span>
+							{/* CSS bar showing relative tool count */}
+							<div className='mt-1 h-1 w-full rounded-full bg-surface-2'>
+								<div className='h-1 rounded-full bg-brand' style={{width: `${(stat.toolCount / maxTools) * 100}%`}} />
+							</div>
+						</div>
+						<span className='w-16 text-right text-caption-sm text-text-secondary'>{stat.toolCount}</span>
+						<span className='w-16 text-right text-caption-sm text-text-secondary'>{stat.successRate !== null ? `${stat.successRate}%` : '\u2014'}</span>
+						<span className='w-20 text-right text-caption-sm text-text-tertiary'>
+							{stat.lastUsed > 0 ? formatDistanceToNow(stat.lastUsed, {addSuffix: true}) : 'Never'}
+						</span>
+					</div>
+				))
+			)}
+		</div>
+	)
+}
+
 // ── Main Panel ─────────────────────────────────────────────────
 
 export default function CapabilitiesPanel() {
@@ -363,8 +550,8 @@ export default function CapabilitiesPanel() {
 
 	return (
 		<div className='flex h-full flex-col bg-surface-base'>
-			{/* Header (only in list mode) */}
-			{view.mode === 'list' && (
+			{/* Header (list mode, prompts, analytics) */}
+			{(view.mode === 'list' || activeTab === 'prompts' || activeTab === 'analytics') && (
 				<>
 					<div className='flex-shrink-0 border-b border-border-default px-4 py-3'>
 						<div className='flex items-center gap-3'>
@@ -402,25 +589,31 @@ export default function CapabilitiesPanel() {
 						})}
 					</div>
 
-					{/* Search bar */}
-					<div className='px-3 py-2'>
-						<div className='relative'>
-							<IconSearch size={14} className='absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary' />
-							<input
-								type='text'
-								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
-								placeholder='Search capabilities...'
-								className='w-full rounded-radius-sm border border-border-default bg-surface-base pl-8 pr-3 py-1.5 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
-							/>
+					{/* Search bar (hidden for prompts/analytics) */}
+					{activeTab !== 'prompts' && activeTab !== 'analytics' && (
+						<div className='px-3 py-2'>
+							<div className='relative'>
+								<IconSearch size={14} className='absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary' />
+								<input
+									type='text'
+									value={searchQuery}
+									onChange={(e) => setSearchQuery(e.target.value)}
+									placeholder='Search capabilities...'
+									className='w-full rounded-radius-sm border border-border-default bg-surface-base pl-8 pr-3 py-1.5 text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand'
+								/>
+							</div>
 						</div>
-					</div>
+					)}
 				</>
 			)}
 
 			{/* Content area */}
 			<div className='flex-1 overflow-y-auto'>
-				{view.mode === 'list' ? (
+				{activeTab === 'prompts' ? (
+					<PromptsView />
+				) : activeTab === 'analytics' ? (
+					<AnalyticsView />
+				) : view.mode === 'list' ? (
 					<div className='p-3'>
 						<CapabilityList
 							activeTab={activeTab}
@@ -428,12 +621,12 @@ export default function CapabilitiesPanel() {
 							onSelect={(id) => setView({mode: 'detail', capabilityId: id})}
 						/>
 					</div>
-				) : (
+				) : view.mode === 'detail' ? (
 					<CapabilityDetail
 						capabilityId={view.capabilityId}
 						onBack={() => setView({mode: 'list'})}
 					/>
-				)}
+				) : null}
 			</div>
 		</div>
 	)
