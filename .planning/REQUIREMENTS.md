@@ -14,7 +14,7 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 - [x] **REG-01**: User can view all capabilities (skills, MCPs, tools, hooks, agents) in a single registry
 - [x] **REG-02**: Each capability has a manifest with semantic tags, triggers, context cost, and dependency info
 - [x] **REG-03**: Registry auto-syncs from existing ToolRegistry, SkillLoader, and McpClientManager on startup
-- [ ] **REG-04**: User can search capabilities by semantic tags, name, or type via API
+- [x] **REG-04**: User can search capabilities by semantic tags, name, or type via API
 
 ### Router — Intent Router v2
 
@@ -92,7 +92,7 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | REG-01 | Phase 29 | Complete |
 | REG-02 | Phase 29 | Complete |
 | REG-03 | Phase 29 | Complete |
-| REG-04 | Phase 29 | Pending |
+| REG-04 | Phase 29 | Complete |
 | RTR-01 | Phase 31 | Pending |
 | RTR-02 | Phase 31 | Pending |
 | RTR-03 | Phase 31 | Pending |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v22.0
 milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
 status: unknown
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-03-29T04:08:21.267Z"
+stopped_at: Completed 29-02-PLAN.md
+last_updated: "2026-03-29T04:13:36.371Z"
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -43,6 +43,7 @@ Plan: 2 of 2
 
 *Updated after each plan completion*
 | Phase 29 P01 | 2min | 1 tasks | 1 files |
+| Phase 29 P02 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -57,6 +58,7 @@ Plan: 2 of 2
 - Phase 35 depends on Phase 30 + 33 + 36 because analytics view needs learning data and auto-install needs marketplace
 - [Phase 29]: In-memory Map cache for capability search (<200 entries, no Redis SCAN needed)
 - [Phase 29]: Skip mcp__ tools in syncTools to avoid double-counting with MCP capability entries
+- [Phase 29]: Used /:id(*) wildcard Express route param for colon-containing capability IDs
 
 ### Pending Todos
 
@@ -68,6 +70,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-29T04:08:21.264Z
-Stopped at: Completed 29-01-PLAN.md
+Last session: 2026-03-29T04:13:36.367Z
+Stopped at: Completed 29-02-PLAN.md
 Resume file: None
