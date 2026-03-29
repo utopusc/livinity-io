@@ -1,33 +1,52 @@
-import {useEffect, useRef} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import Markdown from 'react-markdown'
+import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 
 interface StreamingMessageProps {
 	content: string
 	isStreaming?: boolean
 }
 
-// Shared inline text styles — dark readable text
-const textStyle = {color: '#0f172a', fontSize: '14px', lineHeight: '1.6'}
+const textColor = '#0f172a'
+const textStyle = {color: textColor, fontSize: '14px', lineHeight: '1.6'}
 
-export function StreamingMessage({content, isStreaming = false}: StreamingMessageProps) {
-	const endRef = useRef<HTMLSpanElement>(null)
+/**
+ * Typewriter — gradually reveals targetText at ~60fps.
+ * If data arrives faster than display, it speeds up to catch up.
+ */
+function TypeWriter({targetText}: {targetText: string}) {
+	const [displayedLen, setDisplayedLen] = useState(0)
+	const rafRef = useRef<number>(0)
+	const prevTargetRef = useRef('')
 
-	// Auto-scroll cursor into view during streaming
+	// Reset when target text is shorter (new message)
 	useEffect(() => {
-		if (isStreaming && endRef.current) {
-			endRef.current.scrollIntoView({behavior: 'smooth', block: 'nearest'})
+		if (targetText.length < prevTargetRef.current.length) {
+			setDisplayedLen(0)
 		}
-	}, [content, isStreaming])
+		prevTargetRef.current = targetText
+	}, [targetText])
 
-	if (!content && !isStreaming) return null
+	useEffect(() => {
+		if (displayedLen >= targetText.length) return
 
-	// During streaming: plain text with blinking cursor for natural typing feel
-	if (isStreaming) {
-		return (
-			<div style={{...textStyle, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
-				{content}
+		rafRef.current = requestAnimationFrame(() => {
+			setDisplayedLen((prev) => {
+				const remaining = targetText.length - prev
+				// Adaptive speed: catch up if falling behind
+				const speed = remaining > 200 ? Math.ceil(remaining / 8) : remaining > 50 ? 4 : remaining > 10 ? 2 : 1
+				return Math.min(prev + speed, targetText.length)
+			})
+		})
+
+		return () => cancelAnimationFrame(rafRef.current)
+	}, [displayedLen, targetText])
+
+	return (
+		<span>
+			{targetText.slice(0, displayedLen)}
+			{displayedLen < targetText.length && (
 				<span
-					ref={endRef}
 					style={{
 						display: 'inline-block',
 						width: '2px',
@@ -38,25 +57,44 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 						animation: 'cursor-blink 1s step-end infinite',
 					}}
 				/>
+			)}
+		</span>
+	)
+}
+
+export function StreamingMessage({content, isStreaming = false}: StreamingMessageProps) {
+	if (!content && !isStreaming) return null
+
+	// While streaming: typewriter effect with blinking cursor
+	if (isStreaming) {
+		return (
+			<div style={{...textStyle, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+				{content ? (
+					<TypeWriter targetText={content} />
+				) : (
+					<TextShimmer className='text-sm' duration={1.5}>
+						Thinking...
+					</TextShimmer>
+				)}
 				<style>{`@keyframes cursor-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }`}</style>
 			</div>
 		)
 	}
 
-	// After streaming complete: render markdown for proper formatting
+	// After streaming: render markdown for proper formatting
 	return (
 		<div style={textStyle}>
 			<Markdown
 				components={{
-					p: ({children}) => <p style={{color: '#0f172a', marginBottom: '8px'}}>{children}</p>,
-					strong: ({children}) => <strong style={{color: '#0f172a', fontWeight: 700}}>{children}</strong>,
+					p: ({children}) => <p style={{color: textColor, marginBottom: '8px'}}>{children}</p>,
+					strong: ({children}) => <strong style={{color: textColor, fontWeight: 700}}>{children}</strong>,
 					em: ({children}) => <em style={{color: '#1e293b'}}>{children}</em>,
-					h1: ({children}) => <h1 style={{color: '#0f172a', fontSize: '18px', fontWeight: 700, marginTop: '16px', marginBottom: '8px'}}>{children}</h1>,
-					h2: ({children}) => <h2 style={{color: '#0f172a', fontSize: '16px', fontWeight: 700, marginTop: '12px', marginBottom: '8px'}}>{children}</h2>,
-					h3: ({children}) => <h3 style={{color: '#0f172a', fontSize: '14px', fontWeight: 700, marginTop: '8px', marginBottom: '4px'}}>{children}</h3>,
-					ul: ({children}) => <ul style={{color: '#0f172a', marginBottom: '8px', marginLeft: '16px', listStyleType: 'disc'}}>{children}</ul>,
-					ol: ({children}) => <ol style={{color: '#0f172a', marginBottom: '8px', marginLeft: '16px', listStyleType: 'decimal'}}>{children}</ol>,
-					li: ({children}) => <li style={{color: '#0f172a', marginBottom: '2px'}}>{children}</li>,
+					h1: ({children}) => <h1 style={{color: textColor, fontSize: '18px', fontWeight: 700, marginTop: '16px', marginBottom: '8px'}}>{children}</h1>,
+					h2: ({children}) => <h2 style={{color: textColor, fontSize: '16px', fontWeight: 700, marginTop: '12px', marginBottom: '8px'}}>{children}</h2>,
+					h3: ({children}) => <h3 style={{color: textColor, fontSize: '14px', fontWeight: 700, marginTop: '8px', marginBottom: '4px'}}>{children}</h3>,
+					ul: ({children}) => <ul style={{color: textColor, marginBottom: '8px', marginLeft: '16px', listStyleType: 'disc'}}>{children}</ul>,
+					ol: ({children}) => <ol style={{color: textColor, marginBottom: '8px', marginLeft: '16px', listStyleType: 'decimal'}}>{children}</ol>,
+					li: ({children}) => <li style={{color: textColor, marginBottom: '2px'}}>{children}</li>,
 					a: ({href, children}) => (
 						<a href={href} style={{color: '#2563eb', textDecoration: 'underline'}} target='_blank' rel='noreferrer'>
 							{children}
