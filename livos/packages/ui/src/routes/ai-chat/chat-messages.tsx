@@ -15,7 +15,7 @@ import {
 } from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
-import type {ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
+import type {ChatMessage, ChatToolCall, ContentBlock} from '@/hooks/use-agent-socket'
 
 import {StreamingMessage} from './streaming-message'
 
@@ -299,25 +299,39 @@ export function UserMessage({message}: {message: ChatMessage}) {
 // --- AssistantMessage ---
 
 export function AssistantMessage({message}: {message: ChatMessage}) {
+	const blocks = message.blocks && message.blocks.length > 0 ? message.blocks : null
+	const isLastBlockText = blocks && blocks[blocks.length - 1]?.type === 'text'
+
 	return (
 		<div className='flex justify-start'>
 			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4'>
-				{/* Thinking indicator — only while streaming with no content yet */}
-				{message.isStreaming && !message.content && (!message.toolCalls || message.toolCalls.length === 0) && (
+				{/* Thinking indicator — only while streaming with no content/blocks yet */}
+				{message.isStreaming && (!blocks || blocks.length === 0) && (
 					<div className='flex items-center gap-2 py-1 text-sm text-text-secondary'>
 						<IconLoader2 size={14} className='animate-spin text-violet-400' />
 						<span>Thinking...</span>
 					</div>
 				)}
-				{/* Text content first */}
-				<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
-				{/* Tool calls below text — compact inline display */}
-				{message.toolCalls && message.toolCalls.length > 0 && (
-					<div className='mt-1'>
-						{message.toolCalls.map((tc) => (
-							<AgentToolCallDisplay key={tc.id} toolCall={tc} />
-						))}
-					</div>
+				{/* Render blocks in order — text and tools interleaved */}
+				{blocks && blocks.map((block, idx) => {
+					if (block.type === 'text') {
+						const isLast = idx === blocks.length - 1
+						return (
+							<StreamingMessage
+								key={`text-${idx}`}
+								content={block.content}
+								isStreaming={message.isStreaming && isLast}
+							/>
+						)
+					}
+					if (block.type === 'tool') {
+						return <AgentToolCallDisplay key={block.toolCall.id} toolCall={block.toolCall} />
+					}
+					return null
+				})}
+				{/* Fallback: if no blocks, render content directly */}
+				{!blocks && message.content && (
+					<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
 				)}
 			</div>
 		</div>
