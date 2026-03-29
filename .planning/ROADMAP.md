@@ -67,7 +67,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 33: Livinity Marketplace MCP** - Single MCP server exposing marketplace search, install, and management with GitHub-backed registry (completed 2026-03-29)
 - [x] **Phase 34: AI Self-Modification** - Autonomous creation of skills, hooks, and agent templates with self-testing and auto-correction (completed 2026-03-29)
 - [x] **Phase 35: Marketplace UI & Auto-Install** - Auto-install dialog, system prompt editor with template library, and analytics dashboard (completed 2026-03-29)
-- [x] **Phase 36: Learning Loop** - Tool call logging, pattern mining, auto-suggestions, and user feedback scoring (completed 2026-03-29)
+- [ ] **Phase 36: Learning Loop** - Tool call logging, pattern mining, auto-suggestions, and user feedback scoring (gap closure in progress)
 
 ## Phase Details
 
@@ -171,10 +171,11 @@ Plans:
   2. The system identifies commonly co-used capability combinations (e.g., "users who use tool A usually also need tool B") and surfaces these patterns
   3. Based on a user's intent history, the system proactively suggests capabilities the user has not yet installed but would likely benefit from
   4. Users can mark tasks as completed and optionally rate the AI's performance, which feeds back into capability confidence scores
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete, 1 gap closure)
 Plans:
 - [x] 36-01-PLAN.md — LearningEngine class + tool call logging + suggestion injection in IntentRouter
 - [x] 36-02-PLAN.md — rateConversation tRPC route + enhanced analytics with real stream data
+- [ ] 36-03-PLAN.md — Gap closure: feedback aggregation into capability success_rate + chat UI feedback widget
 
 ## Progress
 
@@ -192,7 +193,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | 33. Livinity Marketplace MCP | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 34. AI Self-Modification | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 35. Marketplace UI & Auto-Install | v22.0 | 2/2 | Complete    | 2026-03-29 |
-| 36. Learning Loop | v22.0 | 2/2 | Complete   | 2026-03-29 |
+| 36. Learning Loop | v22.0 | 2/3 | Gap Closure | — |
 
 ---
 
