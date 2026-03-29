@@ -349,18 +349,18 @@ export class AgentSessionManager {
         lastMessageTime = Date.now();
 
         // Normalize stream text deltas to compact format (claudecodeui pattern)
-        // Instead of sending the full SDK message, send just { type: 'stream_delta', text }
-        if (m.type === 'stream_event' && m.event === 'content_block_delta' && m.delta?.type === 'text_delta' && m.delta.text) {
+        // SDK structure: m.type='stream_event', m.event={type:'content_block_delta', delta:{type:'text_delta', text:'...'}}
+        // Note: m.event is an OBJECT (not a string), and delta is inside m.event (not m.delta)
+        const evt = m.type === 'stream_event' ? m.event : null;
+        if (evt?.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
           streamDeltaCount++;
-          // Log every 500ms to avoid log spam but confirm streaming is working
           const now = Date.now();
           if (now - lastDeltaLogTime > 500) {
-            logger.info('AgentSessionManager: streaming', { deltaCount: streamDeltaCount, textLen: m.delta.text.length, totalAccum: accumulatedText.length });
+            logger.info('AgentSessionManager: streaming', { deltaCount: streamDeltaCount, textLen: evt.delta.text.length });
             lastDeltaLogTime = now;
           }
-          onMessage({ type: 'sdk_message', data: { type: 'stream_delta', text: m.delta.text } as any });
+          onMessage({ type: 'sdk_message', data: { type: 'stream_delta', text: evt.delta.text } as any });
         } else {
-          logger.info('AgentSessionManager: SDK msg', { type: m.type, event: m.event, subtype: m.subtype });
           onMessage({ type: 'sdk_message', data: message });
         }
 
@@ -384,8 +384,10 @@ export class AgentSessionManager {
           }
         } else if (msg.type === 'stream_event') {
           // Streaming content delta — append text
-          if (msg.event === 'content_block_delta' && msg.delta?.type === 'text_delta' && msg.delta.text) {
-            accumulatedText += msg.delta.text;
+          // SDK wraps events: msg.event is an object with .type, .delta, etc.
+          const streamEvt = msg.event;
+          if (streamEvt?.type === 'content_block_delta' && streamEvt.delta?.type === 'text_delta' && streamEvt.delta.text) {
+            accumulatedText += streamEvt.delta.text;
           }
         } else if (msg.type === 'user') {
           // User message — may contain tool_result blocks with outputs
