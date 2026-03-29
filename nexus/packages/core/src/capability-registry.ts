@@ -397,6 +397,39 @@ export class CapabilityRegistry {
     return results;
   }
 
+  // ── Public Mutation API ──────────────────────────────────────────────────
+
+  /**
+   * Register a single capability manifest.
+   * Adds to in-memory cache and persists to Redis.
+   * Used by MarketplaceMcp after installing marketplace capabilities.
+   */
+  async registerCapability(manifest: CapabilityManifest): Promise<void> {
+    this.cache.set(manifest.id, manifest);
+    const [type, ...nameParts] = manifest.id.split(':');
+    const name = nameParts.join(':');
+    await this.deps.redis.set(
+      `${CapabilityRegistry.REDIS_PREFIX}${type}:${name}`,
+      JSON.stringify(manifest),
+    );
+    logger.info('CapabilityRegistry: capability registered', { id: manifest.id, type: manifest.type });
+  }
+
+  /**
+   * Unregister a capability by ID.
+   * Removes from in-memory cache and Redis.
+   */
+  async unregisterCapability(id: string): Promise<boolean> {
+    const existed = this.cache.delete(id);
+    if (existed) {
+      const [type, ...nameParts] = id.split(':');
+      const name = nameParts.join(':');
+      await this.deps.redis.del(`${CapabilityRegistry.REDIS_PREFIX}${type}:${name}`);
+      logger.info('CapabilityRegistry: capability unregistered', { id });
+    }
+    return existed;
+  }
+
   /** Number of capabilities in the registry */
   get size(): number {
     return this.cache.size;
