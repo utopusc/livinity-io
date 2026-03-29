@@ -6,14 +6,13 @@ import {
 	IconTrash,
 	IconBrain,
 	IconLoader2,
+	IconPlug,
 	IconMenu2,
 	IconPuzzle,
-	IconRobot,
 	IconCode,
 	IconScreenshot,
 	IconDeviceDesktop,
-	IconThumbUp,
-	IconThumbDown,
+	IconRobot,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -79,23 +78,33 @@ function ConversationSidebar({
 			</div>
 
 			<div className='flex border-b border-border-default'>
-				{([
-					{key: 'chat' as const, icon: IconMessageCircle, label: 'Chat'},
-					{key: 'mcp' as const, icon: IconPuzzle, label: 'MCP'},
-					{key: 'skills' as const, icon: IconCode, label: 'Skills'},
-					{key: 'agents' as const, icon: IconBrain, label: 'Agents'},
-				] as const).map(({key, icon: Icon, label}) => (
-					<button
-						key={key}
-						onClick={() => onViewChange(key)}
-						className={cn('flex flex-1 items-center justify-center gap-1 py-2.5 text-caption font-medium transition-colors',
-							activeView === key ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
-						)}
-					>
-						<Icon size={13} />
-						{label}
-					</button>
-				))}
+				<button
+					onClick={() => onViewChange('chat')}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'chat' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
+				>
+					<IconMessageCircle size={14} />
+					Chat
+				</button>
+				<button
+					onClick={() => onViewChange('mcp')}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
+				>
+					<IconPlug size={14} />
+					MCP
+				</button>
+				<button
+					onClick={() => onViewChange('agents')}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'agents' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
+				>
+					<IconRobot size={14} />
+					Agents
+				</button>
 			</div>
 
 			{activeView === 'chat' && (
@@ -132,67 +141,9 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{activeView === 'mcp' && (
-				<Suspense fallback={<div className='flex flex-1 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-					<McpPanel />
-				</Suspense>
+			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
+				<div className='flex-1' />
 			)}
-
-			{activeView === 'skills' && (
-				<Suspense fallback={<div className='flex flex-1 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-					<SkillsPanel />
-				</Suspense>
-			)}
-
-			{activeView === 'agents' && (
-				<Suspense fallback={<div className='flex flex-1 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-					<AgentsPanel />
-				</Suspense>
-			)}
-		</div>
-	)
-}
-
-function FeedbackBar({conversationId, visible}: {conversationId: string; visible: boolean}) {
-	const rateMutation = trpcReact.ai.rateConversation.useMutation()
-	const [submitted, setSubmitted] = useState<'up' | 'down' | null>(null)
-
-	if (!visible || !conversationId) return null
-
-	const handleRate = (rating: 'up' | 'down') => {
-		setSubmitted(rating)
-		rateMutation.mutate({
-			conversationId,
-			rating: rating === 'up' ? 5 : 1,
-			completed: true,
-		})
-	}
-
-	if (submitted) {
-		return (
-			<div className='flex items-center justify-center gap-2 py-2 text-caption text-text-tertiary'>
-				<span>{submitted === 'up' ? 'Thanks for the feedback!' : "Sorry to hear that. We'll improve."}</span>
-			</div>
-		)
-	}
-
-	return (
-		<div className='flex items-center justify-center gap-3 py-2'>
-			<span className='text-caption text-text-tertiary'>Was this helpful?</span>
-			<button
-				onClick={() => handleRate('up')}
-				className='rounded-radius-md p-1.5 text-text-tertiary transition-colors hover:bg-green-500/10 hover:text-green-400'
-				title='Thumbs up'
-			>
-				<IconThumbUp size={16} />
-			</button>
-			<button
-				onClick={() => handleRate('down')}
-				className='rounded-radius-md p-1.5 text-text-tertiary transition-colors hover:bg-red-500/10 hover:text-red-400'
-				title='Thumbs down'
-			>
-				<IconThumbDown size={16} />
-			</button>
 		</div>
 	)
 }
@@ -603,12 +554,6 @@ export default function AiChat() {
 							)}
 						</div>
 
-						{/* Feedback bar -- shown after streaming ends and messages exist */}
-						<FeedbackBar
-							conversationId={activeConversationId || ''}
-							visible={!agent.isStreaming && displayMessages.length > 1}
-						/>
-
 						<ChatInput
 							value={input}
 							onChange={setInput}
@@ -736,8 +681,26 @@ export default function AiChat() {
 				</div>
 			)}
 
-			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
-				<div className='flex-1 overflow-hidden' />
+			{activeView === 'mcp' && (
+				<div className='flex-1 overflow-hidden'>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<McpPanel />
+					</Suspense>
+				</div>
+			)}
+			{activeView === 'skills' && (
+				<div className='flex-1 overflow-hidden'>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<SkillsPanel />
+					</Suspense>
+				</div>
+			)}
+			{activeView === 'agents' && (
+				<div className='flex-1 overflow-hidden'>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<AgentsPanel />
+					</Suspense>
+				</div>
 			)}
 		</div>
 	)
