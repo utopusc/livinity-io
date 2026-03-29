@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v22.0
 milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
 status: unknown
-stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-03-29T05:07:40.589Z"
+stopped_at: Completed 32-01-PLAN.md
+last_updated: "2026-03-29T05:18:53.055Z"
 progress:
   total_phases: 8
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 4
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v22.0 -- Livinity AGI Platform — Capability Orchestration & Marketplace
-**Current focus:** Phase 31 — Intent Router v2
+**Current focus:** Phase 32 — Auto-Provisioning Engine
 
 ## Current Position
 
-Phase: 32
-Plan: Not started
+Phase: 32 (Auto-Provisioning Engine) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: Not started
 | Phase 29 P02 | 3min | 2 tasks | 3 files |
 | Phase 30 P01 | 5min | 2 tasks | 2 files |
 | Phase 31 P01 | 5min | 2 tasks | 4 files |
+| Phase 32 P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,10 @@ Plan: Not started
 - [Phase 31]: getCapabilities() function dep for cross-context compatibility (nexus direct vs livinityd HTTP)
 - [Phase 31]: Brain is optional in IntentRouterDeps — livinityd uses keyword matching only, no LLM fallback
 - [Phase 31]: Scoped ToolRegistry pattern: intent-filter first, then apply tool policy on top
+- [Phase 32]: discover_capability returns text match info (SDK cannot hot-add tools to running query)
+- [Phase 32]: Dependencies injected with _score: 0 to distinguish from intent-matched capabilities
+- [Phase 32]: Circular dependencies logged as warnings and broken (not fatal)
+- [Phase 32]: composeSystemPrompt is budget-agnostic — caller enforces limits via context_cost
 
 ### Pending Todos
 
@@ -78,6 +83,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-29T05:04:39.417Z
-Stopped at: Completed 31-01-PLAN.md
+Last session: 2026-03-29T05:18:53.052Z
+Stopped at: Completed 32-01-PLAN.md
 Resume file: None

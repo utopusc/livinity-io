@@ -25,10 +25,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 ### Provisioning — Auto-Provisioning Engine
 
-- [ ] **PRV-01**: Session automatically loads relevant capabilities based on analyzed user intent
-- [ ] **PRV-02**: AI can discover and install missing capabilities mid-conversation
-- [ ] **PRV-03**: System dynamically composes system prompt based on loaded capabilities
-- [ ] **PRV-04**: Dependency resolution installs prerequisites before the capability that needs them
+- [x] **PRV-01**: Session automatically loads relevant capabilities based on analyzed user intent
+- [x] **PRV-02**: AI can discover and install missing capabilities mid-conversation
+- [x] **PRV-03**: System dynamically composes system prompt based on loaded capabilities
+- [x] **PRV-04**: Dependency resolution installs prerequisites before the capability that needs them
 
 ### Marketplace — Livinity Marketplace MCP
 
@@ -97,10 +97,10 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | RTR-02 | Phase 31 | Complete |
 | RTR-03 | Phase 31 | Complete |
 | RTR-04 | Phase 31 | Complete |
-| PRV-01 | Phase 32 | Pending |
-| PRV-02 | Phase 32 | Pending |
-| PRV-03 | Phase 32 | Pending |
-| PRV-04 | Phase 32 | Pending |
+| PRV-01 | Phase 32 | Complete |
+| PRV-02 | Phase 32 | Complete |
+| PRV-03 | Phase 32 | Complete |
+| PRV-04 | Phase 32 | Complete |
 | MKT-01 | Phase 33 | Pending |
 | MKT-02 | Phase 33 | Pending |
 | MKT-03 | Phase 33 | Pending |

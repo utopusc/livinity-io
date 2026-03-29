@@ -63,7 +63,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 29: Unified Capability Registry** - Single registry model for all capability types (skills, MCPs, tools, hooks, agents) with manifests and semantic search (completed 2026-03-29)
 - [x] **Phase 30: Agents Panel Redesign** - Unified dashboard with tabbed capability views and detailed status cards (completed 2026-03-29)
 - [x] **Phase 31: Intent Router v2** - Semantic intent classification with confidence-scored capability matching and context budget management (completed 2026-03-29)
-- [ ] **Phase 32: Auto-Provisioning Engine** - Dynamic session capability loading based on intent with dependency resolution and system prompt composition
+- [x] **Phase 32: Auto-Provisioning Engine** - Dynamic session capability loading based on intent with dependency resolution and system prompt composition (completed 2026-03-29)
 - [ ] **Phase 33: Livinity Marketplace MCP** - Single MCP server exposing marketplace search, install, and management with GitHub-backed registry
 - [ ] **Phase 34: AI Self-Modification** - Autonomous creation of skills, hooks, and agent templates with self-testing and auto-correction
 - [ ] **Phase 35: Marketplace UI & Auto-Install** - Auto-install dialog, system prompt editor with template library, and analytics dashboard
@@ -119,9 +119,9 @@ Plans:
   2. If the AI needs a capability not currently loaded, it can discover and install it mid-conversation without the user restarting
   3. The system prompt is dynamically composed based on the loaded capabilities -- different conversations get different system prompts
   4. When a capability has prerequisites (e.g., an MCP depends on a skill), the system installs prerequisites first automatically
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 32-01-PLAN.md — Dependency resolution + dynamic system prompt + discover_capability tool
+- [x] 32-01-PLAN.md — Dependency resolution + dynamic system prompt + discover_capability tool
 
 ### Phase 33: Livinity Marketplace MCP
 **Goal**: A single MCP server exposes the entire Livinity capability ecosystem with search, install, uninstall, and recommendation tools backed by a GitHub registry
@@ -178,7 +178,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | 29. Unified Capability Registry | v22.0 | 2/2 | Complete    | 2026-03-29 |
 | 30. Agents Panel Redesign | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 31. Intent Router v2 | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 32. Auto-Provisioning Engine | v22.0 | 0/1 | Not started | - |
+| 32. Auto-Provisioning Engine | v22.0 | 1/1 | Complete   | 2026-03-29 |
 | 33. Livinity Marketplace MCP | v22.0 | 0/? | Not started | - |
 | 34. AI Self-Modification | v22.0 | 0/? | Not started | - |
 | 35. Marketplace UI & Auto-Install | v22.0 | 0/? | Not started | - |
