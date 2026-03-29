@@ -1,0 +1,14 @@
+{
+  "name": "@livinity/marketplace",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node --import tsx src/index.ts",
+    "dev": "node --import tsx --watch src/index.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "tsx": "^4.19.0"
+  }
+}

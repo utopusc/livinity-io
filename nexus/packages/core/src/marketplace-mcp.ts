@@ -51,7 +51,7 @@ interface MarketplaceEntry {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const MARKETPLACE_INDEX_URL =
-  'https://raw.githubusercontent.com/utopusc/livinity-skills/main/marketplace/index.json';
+  process.env.MARKETPLACE_URL || 'https://mcp.livinity.io/api/catalog';
 const REDIS_INDEX_KEY = 'nexus:marketplace:index';
 const REDIS_INDEX_TTL = 3600; // 1 hour in seconds
 const REDIS_INSTALLED_PREFIX = 'nexus:marketplace:installed:';
@@ -95,32 +95,29 @@ export class MarketplaceMcp {
       // Cache miss or corrupt — fetch fresh
     }
 
-    // Fetch from GitHub
+    // Fetch from mcp.livinity.io marketplace API
     try {
       const response = await fetch(MARKETPLACE_INDEX_URL, {
         headers: {
           'User-Agent': 'Nexus-Marketplace/1.0',
           Accept: 'application/json',
         },
+        signal: AbortSignal.timeout(10000),
       });
 
-      if (response.status === 404) {
-        // Marketplace not yet populated — not an error
-        logger.info('MarketplaceMcp: index.json not found (marketplace empty)');
-        await this.deps.redis.setex(REDIS_INDEX_KEY, REDIS_INDEX_TTL, '[]');
-        return [];
-      }
-
       if (!response.ok) {
-        throw new Error(`GitHub returned ${response.status}`);
+        throw new Error(`Marketplace API returned ${response.status}`);
       }
 
-      const entries = (await response.json()) as MarketplaceEntry[];
+      const data = (await response.json()) as { items?: MarketplaceEntry[]; results?: MarketplaceEntry[] } | MarketplaceEntry[];
+
+      // Handle both {items: [...]} format (catalog endpoint) and raw array format
+      const entries: MarketplaceEntry[] = Array.isArray(data) ? data : (data.items || data.results || []);
 
       // Cache in Redis
       await this.deps.redis.setex(REDIS_INDEX_KEY, REDIS_INDEX_TTL, JSON.stringify(entries));
 
-      logger.info('MarketplaceMcp: index fetched', { entries: entries.length });
+      logger.info('MarketplaceMcp: catalog fetched from marketplace API', { entries: entries.length });
       return entries;
     } catch (err: any) {
       logger.error('MarketplaceMcp: failed to fetch index', { error: err.message });
