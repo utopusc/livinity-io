@@ -34,9 +34,17 @@ export type AgentWsMessage =
   | { type: 'error'; message: string }
   | { type: 'session_ready'; sessionId: string };
 
+/** File attachment from the UI */
+export interface FileAttachment {
+  name: string;
+  mimeType: string;
+  data: string; // base64
+  size: number;
+}
+
 /** Client -> Server WebSocket messages */
 export type ClientWsMessage =
-  | { type: 'start'; prompt: string; sessionId?: string; model?: string; conversationId?: string }
+  | { type: 'start'; prompt: string; sessionId?: string; model?: string; conversationId?: string; attachments?: FileAttachment[] }
   | { type: 'message'; text: string }
   | { type: 'interrupt' }
   | { type: 'cancel' };
@@ -224,7 +232,7 @@ export class AgentSessionManager {
     prompt: string,
     model: string | undefined,
     onMessage: (msg: AgentWsMessage) => void,
-    opts?: { conversationId?: string; onTurnComplete?: (turn: TurnData) => void },
+    opts?: { conversationId?: string; onTurnComplete?: (turn: TurnData) => void; attachments?: FileAttachment[] },
   ): Promise<string> {
     // Cancel existing session for this user
     this.cleanup(userId);
@@ -248,7 +256,7 @@ export class AgentSessionManager {
     onMessage({ type: 'session_ready', sessionId });
 
     // Start the relay loop in a detached promise (long-running)
-    this.consumeAndRelay(userId, prompt, model, onMessage, opts?.onTurnComplete).catch((err) => {
+    this.consumeAndRelay(userId, prompt, model, onMessage, opts?.onTurnComplete, opts?.attachments).catch((err) => {
       logger.error('AgentSessionManager: consumeAndRelay failed', { userId, error: err.message });
     });
 
@@ -268,6 +276,7 @@ export class AgentSessionManager {
     model: string | undefined,
     onMessage: (msg: AgentWsMessage) => void,
     onTurnComplete?: (turn: TurnData) => void,
+    attachments?: FileAttachment[],
   ): Promise<void> {
     const session = this.sessions.get(userId);
     if (!session) return;
@@ -508,10 +517,47 @@ export class AgentSessionManager {
     };
 
     try {
+      // Build content blocks — text + optional file attachments
+      const contentBlocks: any[] = [
+        { type: 'text', text: prompt },
+      ];
+
+      // Add file attachments as image/document content blocks
+      if (attachments?.length) {
+        for (const att of attachments) {
+          if (att.mimeType.startsWith('image/')) {
+            contentBlocks.push({
+              type: 'image',
+              source: { type: 'base64', media_type: att.mimeType, data: att.data },
+            });
+          } else if (att.mimeType === 'application/pdf') {
+            contentBlocks.push({
+              type: 'document',
+              source: { type: 'base64', media_type: att.mimeType, data: att.data },
+            });
+          } else {
+            // Text-based files: decode and append as text
+            try {
+              const decoded = Buffer.from(att.data, 'base64').toString('utf-8');
+              contentBlocks.push({
+                type: 'text',
+                text: `\n--- ${att.name} ---\n${decoded}\n--- end ${att.name} ---`,
+              });
+            } catch {
+              contentBlocks.push({ type: 'text', text: `[File: ${att.name} (${att.mimeType})]` });
+            }
+          }
+        }
+        logger.info('AgentSessionManager: attachments added to message', {
+          count: attachments.length,
+          types: attachments.map((a: FileAttachment) => a.mimeType),
+        });
+      }
+
       // Push the initial user prompt into the input channel
       session.inputChannel.push({
         type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+        message: { role: 'user', content: contentBlocks },
         session_id: session.sessionId,
         parent_tool_use_id: null,
       });
@@ -687,6 +733,7 @@ export class AgentSessionManager {
         await this.startSession(userId, msg.prompt, msg.model, onMessage, {
           conversationId: msg.conversationId,
           onTurnComplete: opts?.onTurnComplete,
+          attachments: msg.attachments || (msg as any)._attachments,
         });
         break;
       }

@@ -329,9 +329,9 @@ export default function AiChat() {
 		agent.interrupt()
 	}, [agent])
 
-	const handleSend = useCallback(async () => {
+	const handleSend = useCallback(async (attachments?: Array<{name: string; mimeType: string; data: string; size: number}>) => {
 		const text = input.trim()
-		if (!text) return
+		if (!text && (!attachments || attachments.length === 0)) return
 		setInput('')
 		// Reset textarea height after clearing
 		const textarea = document.querySelector('textarea')
@@ -342,7 +342,7 @@ export default function AiChat() {
 			if (agent.isStreaming) {
 				agent.sendFollowUp(text)
 			} else {
-				agent.sendMessage(text, undefined, activeConversationId || `conv_${Date.now()}`)
+				agent.sendMessage(text || 'Describe these files', undefined, activeConversationId || `conv_${Date.now()}`, attachments)
 			}
 		} else {
 			// Fallback to tRPC send (legacy path — works without WebSocket)

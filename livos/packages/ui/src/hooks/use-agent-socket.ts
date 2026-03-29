@@ -411,18 +411,22 @@ export function useAgentSocket() {
 	// --- Actions ---
 
 	const sendMessage = useCallback(
-		(prompt: string, model?: string, conversationId?: string) => {
+		(prompt: string, model?: string, conversationId?: string, attachments?: Array<{name: string; mimeType: string; data: string; size: number}>) => {
 			const ws = wsRef.current
 			if (!ws || ws.readyState !== WebSocket.OPEN) return
 			if (conversationId) conversationIdRef.current = conversationId
 			toolInputBufferRef.current = ''
 			currentToolIdRef.current = null
 
+			// Build user message with attachment indicators
+			const attachmentText = attachments?.length
+				? '\n' + attachments.map(a => `[Attached: ${a.name}]`).join(' ')
+				: ''
 			const userMsg: ChatMessage = {
 				id: `msg_${Date.now()}_user`,
 				role: 'user',
-				content: prompt,
-				blocks: [{type: 'text', content: prompt}],
+				content: prompt + attachmentText,
+				blocks: [{type: 'text', content: prompt + attachmentText}],
 				timestamp: Date.now(),
 			}
 			dispatch({type: 'ADD_USER_MESSAGE', message: userMsg})
@@ -430,10 +434,11 @@ export function useAgentSocket() {
 			setIsStreaming(true)
 			setAgentStatus({phase: 'thinking', currentTool: null})
 
-			const payload: Record<string, string | undefined> = {type: 'start', prompt}
+			const payload: Record<string, unknown> = {type: 'start', prompt}
 			if (currentSessionId) payload.sessionId = currentSessionId
 			if (model) payload.model = model
 			if (conversationIdRef.current) payload.conversationId = conversationIdRef.current
+			if (attachments?.length) payload.attachments = attachments
 			ws.send(JSON.stringify(payload))
 		},
 		[currentSessionId],

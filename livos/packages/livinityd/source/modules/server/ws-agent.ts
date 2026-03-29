@@ -227,6 +227,11 @@ export function createAgentWebSocketHandler(opts: {
 					}
 				}
 
+				// Pass attachments through to session manager
+				if (raw.type === 'start' && raw.attachments) {
+					;(raw as any)._attachments = raw.attachments
+				}
+
 				logger.verbose(`WS agent: received ${raw.type} from ${sessionKey}`)
 				await sessionManager.handleMessage(sessionKey, raw, sendMessage, {
 					onTurnComplete: (turn: TurnData) => saveToConversation(turn, userId, ai, logger),
