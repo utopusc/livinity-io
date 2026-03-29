@@ -57,7 +57,7 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 - [x] **LRN-01**: System logs every tool call execution to Redis stream with outcome data
 - [x] **LRN-02**: Pattern mining identifies commonly co-used capability combinations
 - [x] **LRN-03**: System auto-suggests relevant capabilities based on intent history
-- [ ] **LRN-04**: User feedback (task completion + explicit rating) feeds into capability scoring
+- [x] **LRN-04**: User feedback (task completion + explicit rating) feeds into capability scoring
 
 ## Future Requirements
 
@@ -117,7 +117,7 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | LRN-01 | Phase 36 | Complete |
 | LRN-02 | Phase 36 | Complete |
 | LRN-03 | Phase 36 | Complete |
-| LRN-04 | Phase 36 | Pending |
+| LRN-04 | Phase 36 | Complete |
 
 **Coverage:**
 - v22.0 requirements: 29 total
