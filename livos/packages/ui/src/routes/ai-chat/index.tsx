@@ -21,7 +21,7 @@ import {TextEffect} from '@/components/motion-primitives/text-effect'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
-import {useAgentSocket, type ChatMessage, type AgentStatus} from '@/hooks/use-agent-socket'
+import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 import {ChatMessageItem} from './chat-messages'
