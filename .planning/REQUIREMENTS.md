@@ -89,41 +89,41 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REG-01 | — | Pending |
-| REG-02 | — | Pending |
-| REG-03 | — | Pending |
-| REG-04 | — | Pending |
-| RTR-01 | — | Pending |
-| RTR-02 | — | Pending |
-| RTR-03 | — | Pending |
-| RTR-04 | — | Pending |
-| PRV-01 | — | Pending |
-| PRV-02 | — | Pending |
-| PRV-03 | — | Pending |
-| PRV-04 | — | Pending |
-| MKT-01 | — | Pending |
-| MKT-02 | — | Pending |
-| MKT-03 | — | Pending |
-| MKT-04 | — | Pending |
-| MOD-01 | — | Pending |
-| MOD-02 | — | Pending |
-| MOD-03 | — | Pending |
-| MOD-04 | — | Pending |
-| UIP-01 | — | Pending |
-| UIP-02 | — | Pending |
-| UIP-03 | — | Pending |
-| UIP-04 | — | Pending |
-| UIP-05 | — | Pending |
-| LRN-01 | — | Pending |
-| LRN-02 | — | Pending |
-| LRN-03 | — | Pending |
-| LRN-04 | — | Pending |
+| REG-01 | Phase 29 | Pending |
+| REG-02 | Phase 29 | Pending |
+| REG-03 | Phase 29 | Pending |
+| REG-04 | Phase 29 | Pending |
+| RTR-01 | Phase 31 | Pending |
+| RTR-02 | Phase 31 | Pending |
+| RTR-03 | Phase 31 | Pending |
+| RTR-04 | Phase 31 | Pending |
+| PRV-01 | Phase 32 | Pending |
+| PRV-02 | Phase 32 | Pending |
+| PRV-03 | Phase 32 | Pending |
+| PRV-04 | Phase 32 | Pending |
+| MKT-01 | Phase 33 | Pending |
+| MKT-02 | Phase 33 | Pending |
+| MKT-03 | Phase 33 | Pending |
+| MKT-04 | Phase 33 | Pending |
+| MOD-01 | Phase 34 | Pending |
+| MOD-02 | Phase 34 | Pending |
+| MOD-03 | Phase 34 | Pending |
+| MOD-04 | Phase 34 | Pending |
+| UIP-01 | Phase 30 | Pending |
+| UIP-02 | Phase 30 | Pending |
+| UIP-03 | Phase 35 | Pending |
+| UIP-04 | Phase 35 | Pending |
+| UIP-05 | Phase 35 | Pending |
+| LRN-01 | Phase 36 | Pending |
+| LRN-02 | Phase 36 | Pending |
+| LRN-03 | Phase 36 | Pending |
+| LRN-04 | Phase 36 | Pending |
 
 **Coverage:**
 - v22.0 requirements: 29 total
-- Mapped to phases: 0
-- Unmapped: 29
+- Mapped to phases: 29
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation (all 29 requirements mapped to phases 29-36)*

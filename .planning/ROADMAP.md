@@ -8,7 +8,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 - ✅ **v19.0 Custom Domain Management** — Phases 07-10.1 (shipped 2026-03-27)
 - ✅ **v20.0 Live Agent UI** — Phases 11-18 (shipped 2026-03-27)
-- **v21.0 Autonomous Agent Platform** — Phases 19-28 (in progress)
+- ✅ **v21.0 Autonomous Agent Platform** — Phases 19-28 (shipped 2026-03-28)
+- **v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace** — Phases 29-36 (in progress)
 
 ## Phases
 
@@ -37,169 +38,142 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v21.0 Autonomous Agent Platform (In Progress)
+<details>
+<summary>v21.0 Autonomous Agent Platform (Phases 19-28) — SHIPPED 2026-03-28</summary>
 
-**Milestone Goal:** Transform AI Chat into a fully autonomous agent platform with real-time processing visibility, agent management, slash commands, self-improving AI capabilities, and optimized system prompts.
+- [x] Phase 19: AI Chat Streaming Visibility (1/1 plans) — completed 2026-03-28
+- [x] Phase 20: Conversation Persistence & History (1/1 plans) — completed 2026-03-28
+- [x] Phase 21: Sidebar Agents Tab (2/2 plans) — completed 2026-03-28
+- [x] Phase 22: Agent Interaction & Management (2/2 plans) — completed 2026-03-28
+- [x] Phase 23: Slash Command Menu (2/2 plans) — completed 2026-03-28
+- [x] Phase 24: Tool Conditional Registration (1/1 plans) — completed 2026-03-28
+- [x] Phase 25: Autonomous Skill & Tool Creation (1/1 plans) — completed 2026-03-28
+- [x] Phase 26: Autonomous Schedule & Tier Management (1/1 plans) — completed 2026-03-28
+- [x] Phase 27: Self-Evaluation & Improvement Loop (1/1 plans) — completed 2026-03-28
+- [x] Phase 28: System Prompt Optimization (1/1 plans) — completed 2026-03-28
 
-**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) must NOT be modified in any phase.
+</details>
 
-- [x] **Phase 19: AI Chat Streaming Visibility** - Real-time partial answer streaming and tool/thinking state visibility during agent processing (completed 2026-03-28)
-- [x] **Phase 20: Conversation Persistence & History** - Message history persistence across sessions with browsable conversation sidebar (completed 2026-03-28)
-- [x] **Phase 21: Sidebar Agents Tab** - Renamed LivHub to Agents with agent listing, status display, and detail views (completed 2026-03-28)
-- [x] **Phase 22: Agent Interaction & Management** - Direct agent messaging, loop controls, and new agent creation (completed 2026-03-28)
-- [x] **Phase 23: Slash Command Menu** - Dropdown command menu with built-in and dynamic commands, filtering, and selection (completed 2026-03-28)
-- [x] **Phase 24: Tool Conditional Registration** - Conditional registration of messaging, email, and integration tools based on connection state (completed 2026-03-28)
-- [x] **Phase 25: Autonomous Skill & Tool Creation** - AI autonomously creates skills and installs MCP tools when needed (completed 2026-03-28)
-- [x] **Phase 26: Autonomous Schedule & Tier Management** - AI creates schedules/loops and selects model tier based on task complexity (completed 2026-03-28)
-- [x] **Phase 27: Self-Evaluation & Improvement Loop** - AI evaluates its own performance and triggers self-improvement actions via meta-agent (completed 2026-03-28)
-- [x] **Phase 28: System Prompt Optimization** - Concise system prompt, shortened tool descriptions, self-awareness instructions (completed 2026-03-28)
+### v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace (In Progress)
+
+**Milestone Goal:** Transform Livinity into an AI Agent Marketplace + Orchestration Platform where the system auto-discovers, installs, and orchestrates capabilities based on user intent.
+
+**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) must NOT be modified. Streaming/block model/typewriter animation must NOT be broken. nexus-core runs compiled JS — MUST rebuild after source changes.
+
+- [ ] **Phase 29: Unified Capability Registry** - Single registry model for all capability types (skills, MCPs, tools, hooks, agents) with manifests and semantic search
+- [ ] **Phase 30: Agents Panel Redesign** - Unified dashboard with tabbed capability views and detailed status cards
+- [ ] **Phase 31: Intent Router v2** - Semantic intent classification with confidence-scored capability matching and context budget management
+- [ ] **Phase 32: Auto-Provisioning Engine** - Dynamic session capability loading based on intent with dependency resolution and system prompt composition
+- [ ] **Phase 33: Livinity Marketplace MCP** - Single MCP server exposing marketplace search, install, and management with GitHub-backed registry
+- [ ] **Phase 34: AI Self-Modification** - Autonomous creation of skills, hooks, and agent templates with self-testing and auto-correction
+- [ ] **Phase 35: Marketplace UI & Auto-Install** - Auto-install dialog, system prompt editor with template library, and analytics dashboard
+- [ ] **Phase 36: Learning Loop** - Tool call logging, pattern mining, auto-suggestions, and user feedback scoring
 
 ## Phase Details
 
-### Phase 19: AI Chat Streaming Visibility
-**Goal**: Users see exactly what the AI is doing in real-time -- partial answer text streams live below the status indicator while tool calls, thinking, and work steps are visible during processing
-**Depends on**: Phase 18 (v20.0 complete)
-**Requirements**: CHAT-01, CHAT-02, CHAT-03
+### Phase 29: Unified Capability Registry
+**Goal**: All capability types (skills, MCPs, tools, hooks, agents) are discoverable through a single unified registry with rich metadata and semantic search
+**Depends on**: Phase 28 (v21.0 complete)
+**Requirements**: REG-01, REG-02, REG-03, REG-04
 **Success Criteria** (what must be TRUE):
-  1. User sees markdown-formatted partial text streaming below StatusIndicator as the agent generates its response
-  2. User can see which tools are being called, whether the agent is thinking, and what work steps are in progress -- all updating in real-time
-  3. When the agent finishes processing, the streaming partial answer disappears and is replaced by the complete response rendered as a proper chat message
-**Plans**: 1 plan
-Plans:
-- [x] 19-01-PLAN.md — Enhance useAgentSocket with agentStatus tracking, create AgentStatusOverlay component, wire into chat message rendering
+  1. User can query a single API endpoint and get back a list containing skills, MCPs, tools, hooks, and agents in a uniform format
+  2. Each capability entry includes a manifest with semantic tags, trigger conditions, estimated context cost, and dependency information
+  3. On Nexus startup, the registry auto-populates by syncing from the existing ToolRegistry, SkillLoader, and McpClientManager without manual registration
+  4. User can search capabilities by semantic tag, name substring, or type filter and get relevant results
+**Plans**: TBD
 
-### Phase 20: Conversation Persistence & History
-**Goal**: Users can close AI Chat, reopen it later, and pick up where they left off -- with a browsable list of past conversations
-**Depends on**: Phase 19
-**Requirements**: CHAT-04, CHAT-05, CHAT-06
+### Phase 30: Agents Panel Redesign
+**Goal**: Users manage all capabilities from a unified dashboard that replaces the current agents-only panel with a tabbed view spanning skills, MCPs, hooks, and agents
+**Depends on**: Phase 29
+**Requirements**: UIP-01, UIP-02
 **Success Criteria** (what must be TRUE):
-  1. User closes the AI Chat tab, reopens it, and sees their previous messages loaded from Redis (not a blank chat)
-  2. User sees a list of past conversations in a sidebar panel with identifying information (title/timestamp)
-  3. User clicks any past conversation and its full message history loads into the chat view
-**Plans**: 1 plan
-Plans:
-- [x] 20-01-PLAN.md — Fix mount auto-load logic, add localStorage persistence, fix missing await in getConversation route
+  1. The sidebar panel shows tabs for Skills, MCPs, Hooks, and Agents -- all populated from the unified registry
+  2. Each capability card displays its status (active/inactive), tier, provided tools, last used timestamp, and success rate
+  3. Clicking a capability shows its full manifest details including dependencies, tags, and configuration
+**Plans**: TBD
 
-### Phase 21: Sidebar Agents Tab
-**Goal**: Users can discover and inspect all agents from a dedicated Agents tab that replaces the old LivHub section in the AI Chat sidebar
-**Depends on**: Phase 20
-**Requirements**: AGNT-01, AGNT-02, AGNT-03
+### Phase 31: Intent Router v2
+**Goal**: The system automatically selects the right capabilities for a user's message using semantic matching with confidence scoring, keeping context window usage efficient
+**Depends on**: Phase 29
+**Requirements**: RTR-01, RTR-02, RTR-03, RTR-04
 **Success Criteria** (what must be TRUE):
-  1. The sidebar shows an "Agents" tab where "LivHub" used to be
-  2. User sees a list of all agents with their current status (active/paused/stopped), last run time, and total run count
-  3. User clicks an agent and sees its chat history, last result, and configuration details in a detail view
-**Plans**: 2 plans
-Plans:
-- [x] 21-01-PLAN.md — Add history REST endpoint in Nexus, enhance list() with description/tier, add getSubagent and getSubagentHistory tRPC queries
-- [x] 21-02-PLAN.md — Rename LivHub tab to Agents, create AgentsPanel with list/detail views
+  1. When a user sends a message, the system classifies intent and returns a ranked list of matching capabilities with confidence scores
+  2. Only capabilities above a configurable confidence threshold are selected -- low-confidence matches are filtered out
+  3. Tool definitions loaded into the agent's context never exceed 30% of the context window budget
+  4. Repeated intents hit a Redis cache and resolve in under 100ms without re-computing matches
+**Plans**: TBD
 
-### Phase 22: Agent Interaction & Management
-**Goal**: Users can interact with agents directly -- sending messages, controlling loops, and creating new agents -- all from the Agents tab
-**Depends on**: Phase 21
-**Requirements**: AGNT-04, AGNT-05, AGNT-06
+### Phase 32: Auto-Provisioning Engine
+**Goal**: Agent sessions dynamically load only the capabilities relevant to the user's intent, with the AI able to discover and install missing capabilities mid-conversation
+**Depends on**: Phase 29, Phase 31
+**Requirements**: PRV-01, PRV-02, PRV-03, PRV-04
 **Success Criteria** (what must be TRUE):
-  1. User can send a message to any agent directly from the Agents tab and see the response
-  2. User can view loop agent details (current iteration, last state) and use stop/start controls to manage the loop
-  3. User can create a new agent from a compact form in the Agents tab without leaving the sidebar
-**Plans**: 2 plans
-Plans:
-- [x] 22-01-PLAN.md — Backend: Nexus REST endpoints for subagent execution and loop management, tRPC proxy routes, httpOnlyPaths
-- [x] 22-02-PLAN.md — Frontend: Message input, loop controls, and compact create form in agents-panel.tsx
+  1. When a user starts a conversation, only capabilities matching the analyzed intent are loaded into the session -- not the entire tool set
+  2. If the AI needs a capability not currently loaded, it can discover and install it mid-conversation without the user restarting
+  3. The system prompt is dynamically composed based on the loaded capabilities -- different conversations get different system prompts
+  4. When a capability has prerequisites (e.g., an MCP depends on a skill), the system installs prerequisites first automatically
+**Plans**: TBD
 
-### Phase 23: Slash Command Menu
-**Goal**: Users can type `/` in the chat input to get a searchable dropdown of built-in and dynamic commands for quick actions
-**Depends on**: Phase 19
-**Requirements**: SLSH-01, SLSH-02, SLSH-03, SLSH-04, SLSH-05
+### Phase 33: Livinity Marketplace MCP
+**Goal**: A single MCP server exposes the entire Livinity capability ecosystem with search, install, uninstall, and recommendation tools backed by a GitHub registry
+**Depends on**: Phase 29
+**Requirements**: MKT-01, MKT-02, MKT-03, MKT-04
 **Success Criteria** (what must be TRUE):
-  1. Typing `/` in the chat input shows a dropdown menu above the input field
-  2. Dropdown lists built-in commands (/usage, /new, /help, /agents, /loops, /skills) and dynamic commands fetched from the backend via listSlashCommands tRPC query
-  3. Typing after `/` filters the visible commands in real-time (e.g., `/us` shows only `/usage`)
-  4. Selecting a command inserts it into the input field and sends it
-**Plans**: 2 plans
-Plans:
-- [x] 23-01-PLAN.md — Backend: Nexus GET /api/slash-commands endpoint + livinityd tRPC proxy query
-- [x] 23-02-PLAN.md — Frontend: SlashCommandMenu component + ChatInput integration with keyboard navigation
+  1. A single MCP server is running that exposes search, install, uninstall, recommend, and list as callable tools
+  2. User (or AI) can install any marketplace capability with a single tool call and it becomes immediately available in the registry
+  3. Before installation, the system validates the manifest and checks for conflicts with existing capabilities
+  4. The marketplace registry is backed by a GitHub repository that accepts community contributions via pull requests
+**Plans**: TBD
 
-### Phase 24: Tool Conditional Registration
-**Goal**: Tools for disconnected integrations (WhatsApp, Telegram, Discord, Slack, Gmail) are not registered in daemon.ts, keeping the tool list clean and relevant
-**Depends on**: Phase 18 (v20.0 complete, independent of other v21.0 phases)
-**Requirements**: TOOL-01, TOOL-02, TOOL-03, TOOL-04
+### Phase 34: AI Self-Modification
+**Goal**: The AI autonomously creates new skills, hooks, and agent templates when it identifies capability gaps, with automatic testing and self-correction on failure
+**Depends on**: Phase 29, Phase 32, Phase 33
+**Requirements**: MOD-01, MOD-02, MOD-03, MOD-04
 **Success Criteria** (what must be TRUE):
-  1. whatsapp_send tool only appears in the tool registry when WHATSAPP_ENABLED is true
-  2. channel_send tool only appears when at least one messaging integration (Telegram/Discord/Slack) is connected
-  3. gmail_* tools only appear when Gmail OAuth is connected
-  4. Tool implementations (the actual handler code) are unchanged -- only the registration gate logic is new
-**Plans**: 1 plan
-Plans:
-- [x] 24-01-PLAN.md — Add conditional registration gates for whatsapp_send, channel_send, and gmail_* tools in daemon.ts
+  1. When the AI identifies a capability it needs but does not have, it autonomously creates a new skill file with proper schema, registers it in the registry, and uses it in the same session
+  2. The AI can create hooks (pre-commit, post-completion, file-change triggers) that fire on specified events
+  3. The AI can create agent templates with a system prompt, tool set, and scheduling configuration that appear in the Agents panel
+  4. Auto-created capabilities are tested immediately after creation -- if a test fails, the AI iterates up to 3 times to fix the issue before reporting failure
+**Plans**: TBD
 
-### Phase 25: Autonomous Skill & Tool Creation
-**Goal**: The AI can identify capability gaps and fill them by creating new skills or installing MCP tools without human intervention
-**Depends on**: Phase 24
-**Requirements**: AGI-01, AGI-02
+### Phase 35: Marketplace UI & Auto-Install
+**Goal**: Users see auto-install recommendations when the AI discovers useful capabilities, can build custom system prompts from templates, and can view analytics on tool usage patterns
+**Depends on**: Phase 30, Phase 33, Phase 36
+**Requirements**: UIP-03, UIP-04, UIP-05
 **Success Criteria** (what must be TRUE):
-  1. When the AI determines it needs a capability it does not have, it autonomously creates a new skill file in nexus/skills/ with appropriate schema and logic
-  2. When the AI needs an external tool, it searches the MCP registry via mcp_registry_search and installs the tool via mcp_install without user prompting
-  3. Newly created skills and installed tools are immediately usable in subsequent agent turns
-**Plans**: 1 plan
-Plans:
-- [x] 25-01-PLAN.md — System prompt Self-Improvement section + enhanced skill_generate and mcp_install tool responses
+  1. When the AI recommends a new capability during conversation, an auto-install dialog appears in the chat UI letting the user approve or reject the installation
+  2. A system prompt editor is available with a template library of pre-built prompts and a custom prompt builder for composing new prompts from capabilities
+  3. An analytics view shows tool usage frequency, popular capability combinations, and per-tool success rates over time
+**Plans**: TBD
 
-### Phase 26: Autonomous Schedule & Tier Management
-**Goal**: The AI can manage its own execution patterns -- creating recurring schedules for repetitive tasks and selecting the right model tier for each task's complexity
-**Depends on**: Phase 25
-**Requirements**: AGI-03, AGI-04
+### Phase 36: Learning Loop
+**Goal**: The system continuously learns from tool usage patterns, identifies commonly co-used capabilities, auto-suggests relevant tools, and incorporates user feedback into capability scoring
+**Depends on**: Phase 29, Phase 31
+**Requirements**: LRN-01, LRN-02, LRN-03, LRN-04
 **Success Criteria** (what must be TRUE):
-  1. When the AI identifies a task that should recur (e.g., daily backup check), it autonomously creates a schedule or loop using ScheduleManager/LoopRunner
-  2. The AI selects the appropriate model tier based on task complexity: flash/haiku for simple lookups, sonnet for reasoning, opus for architecture decisions
-  3. Tier selection rules are configurable in nexus/config/tiers.json and the AI's selectTier() function reads them at runtime
-**Plans**: 1 plan
-Plans:
-- [x] 26-01-PLAN.md — Configurable tiers.json + selectTier() refactor + Autonomous Scheduling system prompt section
-
-### Phase 27: Self-Evaluation & Improvement Loop
-**Goal**: The AI evaluates its own performance after tasks and continuously identifies capability gaps to fill -- creating a self-improving feedback loop
-**Depends on**: Phase 25, Phase 26
-**Requirements**: AGI-05, AGI-06
-**Success Criteria** (what must be TRUE):
-  1. After completing a task, the AI evaluates its own performance and identifies areas for improvement (e.g., missing skills, slow patterns, repeated failures)
-  2. Self-evaluation triggers concrete improvement actions: creating new skills, updating existing skills, installing tools, or setting schedules
-  3. A Self-Improvement Agent runs as a meta-agent loop, continuously scanning for and filling capability gaps across the system
-**Plans**: 1 plan
-Plans:
-- [x] 27-01-PLAN.md — Self-Evaluation system prompt section + pre-seeded Self-Improvement Agent with 6-hour loop
-
-### Phase 28: System Prompt Optimization
-**Goal**: The agent system prompt is concise, context-window efficient, and gives the AI clear self-awareness of its capabilities and limits
-**Depends on**: Phase 27
-**Requirements**: SPRT-01, SPRT-02, SPRT-03
-**Success Criteria** (what must be TRUE):
-  1. The system prompt in agent.ts is measurably shorter (fewer tokens) while retaining all essential behavioral instructions
-  2. Tool descriptions are shortened to essential information only -- no redundant explanations or verbose parameter docs
-  3. The AI demonstrates self-awareness: it knows what it can do, what it cannot do, and when to escalate to the user rather than attempting tasks beyond its capabilities
-**Plans**: 1 plan
-Plans:
-- [x] 28-01-PLAN.md — Optimize NATIVE_SYSTEM_PROMPT (remove redundancy, condense sections, add self-awareness) + shorten all 43 tool descriptions in daemon.ts
+  1. Every tool call execution is logged to a Redis stream with the tool name, input parameters, output status, duration, and success/failure outcome
+  2. The system identifies commonly co-used capability combinations (e.g., "users who use tool A usually also need tool B") and surfaces these patterns
+  3. Based on a user's intent history, the system proactively suggests capabilities the user has not yet installed but would likely benefit from
+  4. Users can mark tasks as completed and optionally rate the AI's performance, which feeds back into capability confidence scores
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in priority order: 19 -> 20 -> 21 -> 22 -> 23 -> 24 -> 25 -> 26 -> 27 -> 28
+Phases execute in priority order: 29 -> 30 -> 31 -> 32 -> 33 -> 34 -> 35 -> 36
 
-Note: Phase 23 (Slash Commands) and Phase 24 (Tool Cleanup) can execute in parallel with Phase 21-22 (Agents) as they are independent feature branches. Phase 27 depends on both Phase 25 and Phase 26.
+Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in parallel after Phase 29 as they are independent. Phase 36 (Learning Loop) can begin after Phase 29 + Phase 31 are complete. Phase 35 depends on Phase 30, Phase 33, and Phase 36.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 19. AI Chat Streaming Visibility | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 20. Conversation Persistence & History | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 21. Sidebar Agents Tab | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 22. Agent Interaction & Management | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 23. Slash Command Menu | v21.0 | 2/2 | Complete    | 2026-03-28 |
-| 24. Tool Conditional Registration | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 25. Autonomous Skill & Tool Creation | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 26. Autonomous Schedule & Tier Management | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 27. Self-Evaluation & Improvement Loop | v21.0 | 1/1 | Complete    | 2026-03-28 |
-| 28. System Prompt Optimization | v21.0 | 1/1 | Complete    | 2026-03-28 |
+| 29. Unified Capability Registry | v22.0 | 0/? | Not started | - |
+| 30. Agents Panel Redesign | v22.0 | 0/? | Not started | - |
+| 31. Intent Router v2 | v22.0 | 0/? | Not started | - |
+| 32. Auto-Provisioning Engine | v22.0 | 0/? | Not started | - |
+| 33. Livinity Marketplace MCP | v22.0 | 0/? | Not started | - |
+| 34. AI Self-Modification | v22.0 | 0/? | Not started | - |
+| 35. Marketplace UI & Auto-Install | v22.0 | 0/? | Not started | - |
+| 36. Learning Loop | v22.0 | 0/? | Not started | - |
 
 ---
 
