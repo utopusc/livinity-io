@@ -6,7 +6,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 ## Milestones
 
-- ✅ **v19.0 Custom Domain Management** — Phases 07-10.1 (shipped 2026-03-27)
+- ✅ **v19.0 Custom Domain Management** ��� Phases 07-10.1 (shipped 2026-03-27)
 - ✅ **v20.0 Live Agent UI** — Phases 11-18 (shipped 2026-03-27)
 - ✅ **v21.0 Autonomous Agent Platform** — Phases 19-28 (shipped 2026-03-28)
 - **v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace** — Phases 29-36 (in progress)
@@ -145,7 +145,9 @@ Plans:
   2. The AI can create hooks (pre-commit, post-completion, file-change triggers) that fire on specified events
   3. The AI can create agent templates with a system prompt, tool set, and scheduling configuration that appear in the Agents panel
   4. Auto-created capabilities are tested immediately after creation -- if a test fails, the AI iterates up to 3 times to fix the issue before reporting failure
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 34-01-PLAN.md — create_hook + create_agent_template tools, skill_generate registry integration, hook event dispatcher, self-modification system prompt
 
 ### Phase 35: Marketplace UI & Auto-Install
 **Goal**: Users see auto-install recommendations when the AI discovers useful capabilities, can build custom system prompts from templates, and can view analytics on tool usage patterns
@@ -182,7 +184,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | 31. Intent Router v2 | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 32. Auto-Provisioning Engine | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 33. Livinity Marketplace MCP | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 34. AI Self-Modification | v22.0 | 0/? | Not started | - |
+| 34. AI Self-Modification | v22.0 | 0/1 | Not started | - |
 | 35. Marketplace UI & Auto-Install | v22.0 | 0/? | Not started | - |
 | 36. Learning Loop | v22.0 | 0/? | Not started | - |
 
