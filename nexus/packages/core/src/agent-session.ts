@@ -447,7 +447,12 @@ export class AgentSessionManager {
       // Flush any remaining accumulated content that wasn't flushed by a result message
       flushTurn();
       clearInterval(watchdog);
-      this.cleanup(userId);
+      // Only cleanup if WE are still the active session for this userId.
+      // A new startSession() may have already replaced us — don't kill the new session!
+      const currentSession = this.sessions.get(userId);
+      if (currentSession && currentSession.sessionId === session.sessionId) {
+        this.cleanup(userId);
+      }
     }
   }
 
