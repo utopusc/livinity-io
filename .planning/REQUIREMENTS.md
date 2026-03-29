@@ -1,129 +1,129 @@
-# Requirements: Livinity v21.0 — Autonomous Agent Platform
+# Requirements: Livinity v22.0 — Capability Orchestration & Marketplace
 
 **Defined:** 2026-03-28
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows, ai-config.tsx auth section) MUST NOT be modified.
+**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) MUST NOT be modified. Streaming/block model/typewriter animation MUST NOT be broken.
 
-## v21.0 Requirements
+## v22.0 Requirements
 
-Requirements for v21.0 milestone. Each maps to roadmap phases.
+Requirements for v22.0 milestone. Each maps to roadmap phases.
 
-### AI Chat Visibility
+### Registry — Unified Capability Registry
 
-- [x] **CHAT-01**: User can see partial AI response streaming live below StatusIndicator as markdown while agent is processing
-- [x] **CHAT-02**: User can see tool calls, thinking state, and work steps in real-time during agent processing
-- [x] **CHAT-03**: When processing completes, partial answer is replaced by full response as a proper chat message
-- [x] **CHAT-04**: User can close and reopen the AI Chat tab and see previous messages loaded from Redis
-- [x] **CHAT-05**: User can see a list of past conversations in a sidebar panel
-- [x] **CHAT-06**: User can click a past conversation to load its full message history
+- [ ] **REG-01**: User can view all capabilities (skills, MCPs, tools, hooks, agents) in a single registry
+- [ ] **REG-02**: Each capability has a manifest with semantic tags, triggers, context cost, and dependency info
+- [ ] **REG-03**: Registry auto-syncs from existing ToolRegistry, SkillLoader, and McpClientManager on startup
+- [ ] **REG-04**: User can search capabilities by semantic tags, name, or type via API
 
-### Sidebar Agents
+### Router — Intent Router v2
 
-- [x] **AGNT-01**: User sees "Agents" tab (renamed from "LivHub") in AI Chat sidebar
-- [x] **AGNT-02**: User can see a list of active agents with status (active/paused/stopped), last run time, and run count
-- [x] **AGNT-03**: User can click an agent to view its chat history, last result, and configuration
-- [x] **AGNT-04**: User can send a message to an agent directly from the Agents tab
-- [x] **AGNT-05**: User can see loop agent details: current iteration, last state, and stop/start controls
-- [x] **AGNT-06**: User can create a new agent from the Agents tab (compact form)
+- [ ] **RTR-01**: System classifies user intent and selects relevant capabilities using semantic matching
+- [ ] **RTR-02**: Capability matches include confidence scores with threshold filtering
+- [ ] **RTR-03**: Context window budget management keeps tool definitions under 30% of context
+- [ ] **RTR-04**: Intent-to-capability mapping is cached in Redis for sub-second repeat loading
 
-### Slash Commands
+### Provisioning — Auto-Provisioning Engine
 
-- [x] **SLSH-01**: User sees a dropdown menu above the input field when typing `/`
-- [x] **SLSH-02**: User can see built-in commands (/usage, /new, /help, /agents, /loops, /skills) in the dropdown
-- [x] **SLSH-03**: User can see dynamic commands fetched from backend (tools + skill triggers) via listSlashCommands tRPC query
-- [x] **SLSH-04**: User can filter commands by typing after `/` (e.g., `/us` filters to `/usage`)
-- [x] **SLSH-05**: User can select a command to insert it into input and send
+- [ ] **PRV-01**: Session automatically loads relevant capabilities based on analyzed user intent
+- [ ] **PRV-02**: AI can discover and install missing capabilities mid-conversation
+- [ ] **PRV-03**: System dynamically composes system prompt based on loaded capabilities
+- [ ] **PRV-04**: Dependency resolution installs prerequisites before the capability that needs them
 
-### AGI Mechanism
+### Marketplace — Livinity Marketplace MCP
 
-- [x] **AGI-01**: AI can autonomously create new skills when it determines one is needed, writing to nexus/skills/
-- [x] **AGI-02**: AI can autonomously search and install MCP tools via mcp_registry_search + mcp_install
-- [x] **AGI-03**: AI can autonomously create and manage schedules and loops, analyzing tasks to determine recurrence needs
-- [x] **AGI-04**: AI selects appropriate model tier based on task complexity (flash/haiku for simple, sonnet for reasoning, opus for architecture) via enhanced selectTier() with configurable rules in nexus/config/tiers.json
-- [x] **AGI-05**: AI can evaluate its own performance after completing a task and trigger self-improvement actions (create skills, update skills, install tools, set schedules)
-- [x] **AGI-06**: Self-Improvement Agent runs as a meta-agent loop, continuously identifying and filling capability gaps
+- [ ] **MKT-01**: Single MCP server exposes search, install, uninstall, recommend, and list tools
+- [ ] **MKT-02**: User can install any capability from marketplace with one command
+- [ ] **MKT-03**: Manifest validation and conflict detection before installation
+- [ ] **MKT-04**: GitHub-based registry supports community PR submissions
 
-### Tool Cleanup
+### Self-Mod — AI Self-Modification
 
-- [x] **TOOL-01**: daemon.ts conditionally registers whatsapp_send only when WHATSAPP_ENABLED is true
-- [x] **TOOL-02**: daemon.ts conditionally registers channel_send only when at least one messaging integration (Telegram/Discord/Slack) is connected
-- [x] **TOOL-03**: daemon.ts conditionally registers gmail_* tools only when Gmail OAuth is connected
-- [x] **TOOL-04**: Tool implementations remain unchanged — only registration logic is modified
+- [ ] **MOD-01**: AI autonomously creates new skill files when it identifies a capability gap
+- [ ] **MOD-02**: AI can create hooks (pre-commit, post-completion, file-change triggers)
+- [ ] **MOD-03**: AI can create agent templates with system prompt, tool set, and scheduling config
+- [ ] **MOD-04**: Auto-created capabilities are tested and self-corrected on failure
 
-### System Prompt
+### UI — Agents Panel Redesign
 
-- [x] **SPRT-01**: Agent system prompt in agent.ts is optimized for conciseness and context window efficiency
-- [x] **SPRT-02**: Tool descriptions are shortened to essential information only
-- [x] **SPRT-03**: Agent has self-awareness instructions (capabilities, limits, when to escalate)
+- [ ] **UIP-01**: Unified dashboard shows skills, MCPs, hooks, and agents in a single tabbed view
+- [ ] **UIP-02**: Capability cards display status, tier, provided tools, last used, and success rate
+- [ ] **UIP-03**: Auto-install dialog appears when AI recommends a new capability
+- [ ] **UIP-04**: System prompt editor with template library and custom prompt builder
+- [ ] **UIP-05**: Analytics view shows tool usage stats, popular combinations, and success rates
 
-## v22.0+ Requirements (Future)
+### Learning — Learning Loop
 
-### Advanced Agent Features
+- [ ] **LRN-01**: System logs every tool call execution to Redis stream with outcome data
+- [ ] **LRN-02**: Pattern mining identifies commonly co-used capability combinations
+- [ ] **LRN-03**: System auto-suggests relevant capabilities based on intent history
+- [ ] **LRN-04**: User feedback (task completion + explicit rating) feeds into capability scoring
 
-- **AGNT-F01**: Agent marketplace for sharing custom agents between users
-- **AGNT-F02**: Multi-agent collaboration (agents can delegate to other agents)
-- **AGNT-F03**: Agent templates with pre-configured tool sets
+## Future Requirements
 
-### AI Capabilities
+### Marketplace Advanced
 
-- **AGI-F01**: AI can modify its own system prompt based on user feedback
-- **AGI-F02**: AI can create and manage webhooks for external event triggers
-- **AGI-F03**: Cross-instance agent communication between LivOS servers
+- **MKT-05**: Marketplace analytics dashboard (install counts, ratings, trending)
+- **MKT-06**: Capability versioning with rollback support
+- **MKT-07**: Private marketplace for enterprise/team deployments
+
+### Advanced Learning
+
+- **LRN-05**: A/B testing different capability sets for success rate comparison
+- **LRN-06**: Cross-user pattern aggregation (anonymized) for global recommendations
+- **LRN-07**: Capability deprecation suggestions for unused/low-success tools
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Auth system modifications | Critical constraint — OAuth, JWT, API key, login flows must not change |
-| New AI providers | Claude + Kimi dual provider already working |
-| Mobile app for agent management | Web-first approach |
-| Agent billing/metering | Payment system deferred |
-| Voice interaction with agents | Deferred, complex integration |
-| Visual agent builder (drag-and-drop) | Too complex for v21.0, text-based creation sufficient |
+| Auth system changes | CRITICAL: OAuth, JWT, API key, login flows must NOT be modified |
+| Streaming/block model changes | Working typewriter + block interleave must not break |
+| Multi-provider orchestration | One provider at a time (Claude or Kimi) |
+| Paid marketplace | Monetization deferred to future milestone |
+| Agent-to-agent communication | Complex, not needed for v22.0 orchestration goals |
+| Visual drag-drop agent builder | Complex UI, defer to future — text-based creation sufficient |
+| Embedding model training | Use existing embedding APIs, don't train custom models |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAT-01 | Phase 19 | Complete |
-| CHAT-02 | Phase 19 | Complete |
-| CHAT-03 | Phase 19 | Complete |
-| CHAT-04 | Phase 20 | Complete |
-| CHAT-05 | Phase 20 | Complete |
-| CHAT-06 | Phase 20 | Complete |
-| AGNT-01 | Phase 21 | Complete |
-| AGNT-02 | Phase 21 | Complete |
-| AGNT-03 | Phase 21 | Complete |
-| AGNT-04 | Phase 22 | Complete |
-| AGNT-05 | Phase 22 | Complete |
-| AGNT-06 | Phase 22 | Complete |
-| SLSH-01 | Phase 23 | Complete |
-| SLSH-02 | Phase 23 | Complete |
-| SLSH-03 | Phase 23 | Complete |
-| SLSH-04 | Phase 23 | Complete |
-| SLSH-05 | Phase 23 | Complete |
-| TOOL-01 | Phase 24 | Complete |
-| TOOL-02 | Phase 24 | Complete |
-| TOOL-03 | Phase 24 | Complete |
-| TOOL-04 | Phase 24 | Complete |
-| AGI-01 | Phase 25 | Complete |
-| AGI-02 | Phase 25 | Complete |
-| AGI-03 | Phase 26 | Complete |
-| AGI-04 | Phase 26 | Complete |
-| AGI-05 | Phase 27 | Complete |
-| AGI-06 | Phase 27 | Complete |
-| SPRT-01 | Phase 28 | Complete |
-| SPRT-02 | Phase 28 | Complete |
-| SPRT-03 | Phase 28 | Complete |
+| REG-01 | — | Pending |
+| REG-02 | — | Pending |
+| REG-03 | — | Pending |
+| REG-04 | — | Pending |
+| RTR-01 | — | Pending |
+| RTR-02 | — | Pending |
+| RTR-03 | — | Pending |
+| RTR-04 | — | Pending |
+| PRV-01 | — | Pending |
+| PRV-02 | — | Pending |
+| PRV-03 | — | Pending |
+| PRV-04 | — | Pending |
+| MKT-01 | — | Pending |
+| MKT-02 | — | Pending |
+| MKT-03 | — | Pending |
+| MKT-04 | — | Pending |
+| MOD-01 | — | Pending |
+| MOD-02 | — | Pending |
+| MOD-03 | — | Pending |
+| MOD-04 | — | Pending |
+| UIP-01 | — | Pending |
+| UIP-02 | — | Pending |
+| UIP-03 | — | Pending |
+| UIP-04 | — | Pending |
+| UIP-05 | — | Pending |
+| LRN-01 | — | Pending |
+| LRN-02 | — | Pending |
+| LRN-03 | — | Pending |
+| LRN-04 | — | Pending |
 
 **Coverage:**
-- v21.0 requirements: 30 total
-- Mapped to phases: 30
-- Unmapped: 0
+- v22.0 requirements: 29 total
+- Mapped to phases: 0
+- Unmapped: 29
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after roadmap creation*
+*Last updated: 2026-03-28 after initial definition*
