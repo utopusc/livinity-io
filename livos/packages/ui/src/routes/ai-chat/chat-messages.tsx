@@ -301,19 +301,13 @@ export function UserMessage({message}: {message: ChatMessage}) {
 
 export function AssistantMessage({message}: {message: ChatMessage}) {
 	const blocks = message.blocks && message.blocks.length > 0 ? message.blocks : null
-	const isLastBlockText = blocks && blocks[blocks.length - 1]?.type === 'text'
+	const lastBlock = blocks ? blocks[blocks.length - 1] : null
+	// Show progress shimmer at bottom when: streaming AND (no blocks yet, OR last block is a tool, OR between turns)
+	const showBottomShimmer = message.isStreaming && (!lastBlock || lastBlock.type === 'tool')
 
 	return (
 		<div className='flex justify-start'>
 			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4'>
-				{/* Thinking shimmer — only while streaming with no content/blocks yet */}
-				{message.isStreaming && (!blocks || blocks.length === 0) && (
-					<div className='py-1'>
-						<TextShimmer className='text-sm font-mono' duration={1.5}>
-							Thinking...
-						</TextShimmer>
-					</div>
-				)}
 				{/* Render blocks in order — text and tools interleaved */}
 				{blocks && blocks.map((block, idx) => {
 					if (block.type === 'text') {
@@ -334,6 +328,14 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 				{/* Fallback: if no blocks, render content directly */}
 				{!blocks && message.content && (
 					<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
+				)}
+				{/* Progress shimmer — always at bottom while AI is working */}
+				{showBottomShimmer && (
+					<div className='py-1.5 mt-1'>
+						<TextShimmer className='text-sm font-mono' duration={1.5}>
+							{!blocks ? 'Thinking...' : 'Processing...'}
+						</TextShimmer>
+					</div>
 				)}
 			</div>
 		</div>
