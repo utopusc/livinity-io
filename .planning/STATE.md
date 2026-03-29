@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v22.0
 milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
 status: unknown
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-03-29T06:08:36.289Z"
+stopped_at: Completed 35-02-PLAN.md
+last_updated: "2026-03-29T06:24:54.308Z"
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -50,6 +50,7 @@ Plan: 2 of 2
 | Phase 33 P01 | 4min | 2 tasks | 5 files |
 | Phase 34 P01 | 5min | 2 tasks | 4 files |
 | Phase 35 P01 | 5min | 2 tasks | 2 files |
+| Phase 35 P02 | 14min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,9 @@ Plan: 2 of 2
 - [Phase 34]: capabilityRegistry optional in DaemonConfig for backward compatibility
 - [Phase 35]: Prompt templates stored as JSON file (data/prompt-templates.json) instead of Redis
 - [Phase 35]: CSS-only bar charts for analytics -- no chart library dependency
+- [Phase 35]: installMarketplaceCapability fetches GitHub marketplace index directly (same source as MarketplaceMcp) for simplicity
+- [Phase 35]: Recommendation cards render inside expandable tool call output, not as standalone chat messages
+- [Phase 35]: Card install/dismiss status uses local React state (ephemeral per session)
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-29T06:08:36.286Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-03-29T06:24:54.306Z
+Stopped at: Completed 35-02-PLAN.md
 Resume file: None

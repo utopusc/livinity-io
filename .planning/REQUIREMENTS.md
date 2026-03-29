@@ -48,7 +48,7 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 - [x] **UIP-01**: Unified dashboard shows skills, MCPs, hooks, and agents in a single tabbed view
 - [x] **UIP-02**: Capability cards display status, tier, provided tools, last used, and success rate
-- [ ] **UIP-03**: Auto-install dialog appears when AI recommends a new capability
+- [x] **UIP-03**: Auto-install dialog appears when AI recommends a new capability
 - [x] **UIP-04**: System prompt editor with template library and custom prompt builder
 - [x] **UIP-05**: Analytics view shows tool usage stats, popular combinations, and success rates
 
@@ -111,7 +111,7 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | MOD-04 | Phase 34 | Complete |
 | UIP-01 | Phase 30 | Complete |
 | UIP-02 | Phase 30 | Complete |
-| UIP-03 | Phase 35 | Pending |
+| UIP-03 | Phase 35 | Complete |
 | UIP-04 | Phase 35 | Complete |
 | UIP-05 | Phase 35 | Complete |
 | LRN-01 | Phase 36 | Pending |
