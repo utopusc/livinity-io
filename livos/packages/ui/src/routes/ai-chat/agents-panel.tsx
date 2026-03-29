@@ -1,5 +1,5 @@
 import {useState, useRef, useEffect} from 'react'
-import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay, IconSend, IconPlayerStop, IconPlus, IconSettings, IconChevronDown, IconChevronUp} from '@tabler/icons-react'
+import {IconRobot, IconArrowLeft, IconLoader2, IconClock, IconPlayerPlay, IconSend, IconPlayerStop, IconPlus, IconSettings, IconChevronDown, IconChevronUp, IconTrash, IconEdit, IconCheck, IconX} from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
@@ -239,8 +239,13 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 	const agentQuery = trpcReact.ai.getSubagent.useQuery({id: agentId})
 	const historyQuery = trpcReact.ai.getSubagentHistory.useQuery({id: agentId, limit: 50}, {refetchInterval: 3_000})
 	const [showConfig, setShowConfig] = useState(false)
+	const [editing, setEditing] = useState(false)
+	const [editForm, setEditForm] = useState({description: '', tier: '', schedule: '', systemPrompt: ''})
 	const chatEndRef = useRef<HTMLDivElement>(null)
 	const chatContainerRef = useRef<HTMLDivElement>(null)
+	const updateMutation = trpcReact.ai.updateSubagent.useMutation()
+	const deleteMutation = trpcReact.ai.deleteSubagent.useMutation()
+	const utils = trpcReact.useUtils()
 
 	// Auto-scroll to bottom when history changes or on first load
 	useEffect(() => {
@@ -304,39 +309,117 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 
 			{/* Collapsible Config Panel */}
 			{showConfig && (
-				<div className='flex-shrink-0 border-b border-border-default bg-surface-1/50 p-3 space-y-3'>
+				<div className='flex-shrink-0 border-b border-border-default bg-surface-1/50 p-3 space-y-3 max-h-[50vh] overflow-y-auto'>
 					{/* Loop Controls */}
 					<LoopControls agentId={agentId} hasLoopConfig={!!agent.loop || !!agent.schedule} />
 
-					{/* Quick Config */}
-					<div className='space-y-1.5'>
-						{agent.description && (
-							<div className='flex gap-2'>
-								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Desc</span>
-								<p className='text-caption-sm text-text-secondary'>{agent.description.length > 120 ? agent.description.slice(0, 120) + '...' : agent.description}</p>
+					{/* Edit / View Mode */}
+					{editing ? (
+						<div className='space-y-2'>
+							<div>
+								<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Description</label>
+								<textarea value={editForm.description} onChange={e => setEditForm(f => ({...f, description: e.target.value}))} rows={2} className='w-full resize-none rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none focus:border-brand' />
 							</div>
-						)}
-						<div className='flex gap-2'>
-							<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Tools</span>
-							<p className='text-caption-sm text-text-secondary'>
-								{agent.tools && agent.tools.length > 0 ? agent.tools.join(', ') : 'All tools'}
-							</p>
+							<div className='flex gap-2'>
+								<div className='flex-1'>
+									<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Tier</label>
+									<select value={editForm.tier} onChange={e => setEditForm(f => ({...f, tier: e.target.value}))} className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 text-caption text-text-primary outline-none focus:border-brand'>
+										<option value='flash'>flash</option>
+										<option value='sonnet'>sonnet</option>
+										<option value='opus'>opus</option>
+									</select>
+								</div>
+								<div className='flex-1'>
+									<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Schedule (cron)</label>
+									<input value={editForm.schedule} onChange={e => setEditForm(f => ({...f, schedule: e.target.value}))} placeholder='0 */2 * * *' className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 font-mono text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand' />
+								</div>
+							</div>
+							<div>
+								<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>System Prompt</label>
+								<textarea value={editForm.systemPrompt} onChange={e => setEditForm(f => ({...f, systemPrompt: e.target.value}))} rows={4} className='w-full resize-none rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 font-mono text-caption text-text-primary outline-none focus:border-brand' />
+							</div>
+							<div className='flex gap-2'>
+								<button
+									onClick={async () => {
+										await updateMutation.mutateAsync({id: agentId, ...editForm})
+										utils.ai.getSubagent.invalidate({id: agentId})
+										utils.ai.listSubagents.invalidate()
+										setEditing(false)
+									}}
+									disabled={updateMutation.isPending}
+									className='flex items-center gap-1 rounded-radius-sm bg-brand px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50'
+								>
+									<IconCheck size={14} />
+									{updateMutation.isPending ? 'Saving...' : 'Save'}
+								</button>
+								<button onClick={() => setEditing(false)} className='flex items-center gap-1 rounded-radius-sm bg-surface-2 px-3 py-1.5 text-caption text-text-secondary transition-colors hover:bg-surface-3'>
+									<IconX size={14} />
+									Cancel
+								</button>
+							</div>
 						</div>
-						{agent.schedule && (
+					) : (
+						<div className='space-y-1.5'>
+							{agent.description && (
+								<div className='flex gap-2'>
+									<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Desc</span>
+									<p className='text-caption-sm text-text-secondary'>{agent.description.length > 120 ? agent.description.slice(0, 120) + '...' : agent.description}</p>
+								</div>
+							)}
 							<div className='flex gap-2'>
-								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Cron</span>
-								<p className='font-mono text-caption-sm text-text-secondary'>{agent.schedule}</p>
-							</div>
-						)}
-						{agent.systemPrompt && (
-							<div className='flex gap-2'>
-								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Prompt</span>
+								<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Tools</span>
 								<p className='text-caption-sm text-text-secondary'>
-									{agent.systemPrompt.length > 150 ? agent.systemPrompt.slice(0, 150) + '...' : agent.systemPrompt}
+									{agent.tools && agent.tools.length > 0 ? agent.tools.join(', ') : 'All tools'}
 								</p>
 							</div>
-						)}
-					</div>
+							{agent.schedule && (
+								<div className='flex gap-2'>
+									<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Cron</span>
+									<p className='font-mono text-caption-sm text-text-secondary'>{agent.schedule}</p>
+								</div>
+							)}
+							{agent.systemPrompt && (
+								<div className='flex gap-2'>
+									<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Prompt</span>
+									<p className='text-caption-sm text-text-secondary'>
+										{agent.systemPrompt.length > 150 ? agent.systemPrompt.slice(0, 150) + '...' : agent.systemPrompt}
+									</p>
+								</div>
+							)}
+
+							{/* Edit + Delete buttons */}
+							<div className='flex gap-2 pt-2'>
+								<button
+									onClick={() => {
+										setEditForm({
+											description: agent.description || '',
+											tier: agent.tier || 'sonnet',
+											schedule: agent.schedule || '',
+											systemPrompt: agent.systemPrompt || '',
+										})
+										setEditing(true)
+									}}
+									className='flex items-center gap-1 rounded-radius-sm bg-surface-2 px-3 py-1.5 text-caption text-text-secondary transition-colors hover:bg-surface-3 hover:text-text-primary'
+								>
+									<IconEdit size={13} />
+									Edit
+								</button>
+								<button
+									onClick={async () => {
+										if (!confirm(`Delete agent "${agent.name}"?`)) return
+										await deleteMutation.mutateAsync({id: agentId})
+										utils.ai.listSubagents.invalidate()
+										onBack()
+									}}
+									disabled={deleteMutation.isPending}
+									className='flex items-center gap-1 rounded-radius-sm bg-red-500/10 px-3 py-1.5 text-caption text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50'
+								>
+									<IconTrash size={13} />
+									{deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+								</button>
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 
