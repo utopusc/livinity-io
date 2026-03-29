@@ -239,14 +239,14 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 				<ToolIcon size={13} className={cn(iconColor, 'flex-shrink-0')} />
 				<span className={cn('font-mono font-medium', iconColor)}>{formatToolName(toolCall.name)}</span>
 				{summary && (
-					<span className='truncate font-mono text-text-tertiary'>
+					<span className='truncate font-mono text-text-secondary'>
 						{isShellTool(toolCall.name) ? `$ ${summary}` : summary}
 					</span>
 				)}
 				{toolCall.elapsedSeconds != null && toolCall.status === 'running' && (
-					<span className='ml-auto font-mono text-text-tertiary'>{formatElapsed(toolCall.elapsedSeconds)}</span>
+					<span className='ml-auto font-mono text-text-secondary'>{formatElapsed(toolCall.elapsedSeconds)}</span>
 				)}
-				<IconChevronRight size={12} className={cn('ml-auto flex-shrink-0 text-text-tertiary transition-transform', expanded && 'rotate-90')} />
+				<IconChevronRight size={12} className={cn('ml-auto flex-shrink-0 text-text-secondary transition-transform', expanded && 'rotate-90')} />
 			</button>
 
 			{/* Expandable output */}
@@ -275,7 +275,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 
 							{/* Input details (only if no output yet) */}
 							{toolCall.output == null && toolCall.status === 'running' && (
-								<div className='text-xs text-text-tertiary'>{renderToolInput(toolCall)}</div>
+								<div className='text-xs text-text-secondary'>{renderToolInput(toolCall)}</div>
 							)}
 						</div>
 					</motion.div>
