@@ -277,10 +277,7 @@ export default class TunnelClient {
 		this.logger.log(`[tunnel] Connecting to ${wsUrl}`)
 
 		try {
-			this.ws = new WebSocket(wsUrl, {
-				// Disable per-message compression to reduce latency for small frames (streaming deltas)
-				perMessageDeflate: false,
-			})
+			this.ws = new WebSocket(wsUrl)
 		} catch (err) {
 			this.logger.error('[tunnel] WebSocket creation failed:', err)
 			this.scheduleReconnect()
@@ -586,11 +583,7 @@ export default class TunnelClient {
 
 		let localWs: WebSocket
 		try {
-			localWs = new WebSocket(targetUrl, subprotocols, {
-				headers: forwardHeaders,
-				// Disable compression on local connections to minimize frame latency
-				perMessageDeflate: false,
-			})
+			localWs = new WebSocket(targetUrl, subprotocols, {headers: forwardHeaders})
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err)
 			this.logger.error(`[tunnel] Local WS creation failed for ${targetLabel}: ${errorMsg}`)
