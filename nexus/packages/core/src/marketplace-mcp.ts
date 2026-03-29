@@ -150,21 +150,20 @@ export class MarketplaceMcp {
       ],
       execute: async (params: Record<string, unknown>): Promise<ToolResult> => {
         try {
-          const query = (params.query as string || '').toLowerCase();
+          const query = (params.query as string || '').toLowerCase().trim();
           const typeFilter = params.type as CapabilityType | undefined;
-
-          if (!query) {
-            return { success: false, output: '', error: 'query parameter is required' };
-          }
 
           const entries = await this.fetchIndex();
 
-          let matches = entries.filter((entry) => {
-            const nameMatch = entry.name.toLowerCase().includes(query);
-            const descMatch = entry.description.toLowerCase().includes(query);
-            const tagMatch = entry.tags.some((t) => t.toLowerCase().includes(query));
-            return nameMatch || descMatch || tagMatch;
-          });
+          // '*' or empty query returns all entries
+          let matches = (!query || query === '*')
+            ? entries
+            : entries.filter((entry) => {
+                const nameMatch = entry.name.toLowerCase().includes(query);
+                const descMatch = entry.description.toLowerCase().includes(query);
+                const tagMatch = entry.tags.some((t) => t.toLowerCase().includes(query));
+                return nameMatch || descMatch || tagMatch;
+              });
 
           if (typeFilter) {
             matches = matches.filter((e) => e.type === typeFilter);
