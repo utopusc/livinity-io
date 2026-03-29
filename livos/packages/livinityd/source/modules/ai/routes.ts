@@ -2274,28 +2274,124 @@ export default router({
 
 	// ── Analytics ────────────────────────────────────────────────
 
-	/** Get analytics data from the capability registry */
+	/** Get analytics data from the capability registry + real usage stats from Redis stream */
 	getAnalytics: privateProcedure
-		.query(async () => {
+		.query(async ({ctx}) => {
 			const nexusUrl = getNexusApiUrl()
+
+			// Fetch capability registry data
+			let toolStats: Array<{name: string; type: string; toolCount: number; successRate: number | null; lastUsed: number}> = []
+			let totalCapabilities = 0
+			let activeCapabilities = 0
 			try {
 				const response = await fetch(`${nexusUrl}/api/capabilities`, {
 					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 				})
 				if (!response.ok) throw new Error('Failed to fetch capabilities')
 				const data = await response.json() as {capabilities: Array<{id: string; name: string; type: string; status: string; provides_tools?: string[]; metadata?: {success_rate?: number}; last_used_at?: number}>; total: number}
-				const toolStats = data.capabilities.map(c => ({
+				toolStats = data.capabilities.map(c => ({
 					name: c.name,
 					type: c.type,
 					toolCount: c.provides_tools?.length ?? 0,
 					successRate: c.metadata?.success_rate ?? null,
 					lastUsed: c.last_used_at ?? 0,
 				})).sort((a, b) => b.toolCount - a.toolCount)
-				const totalCapabilities = data.total
-				const activeCapabilities = data.capabilities.filter(c => c.status === 'active').length
-				return {toolStats, totalCapabilities, activeCapabilities}
+				totalCapabilities = data.total
+				activeCapabilities = data.capabilities.filter(c => c.status === 'active').length
 			} catch {
-				return {toolStats: [], totalCapabilities: 0, activeCapabilities: 0}
+				// Keep defaults
+			}
+
+			// Fetch real usage stats from Redis stream nexus:tool_calls
+			let usageStats: Array<{tool: string; totalCalls: number; successRate: number}> = []
+			let coOccurrences: Array<{toolA: string; toolB: string; count: number}> = []
+			try {
+				const redis = ctx.livinityd.ai.redis
+				if (redis) {
+					const entries = await redis.xrange('nexus:tool_calls', '-', '+', 'COUNT', 5000) as Array<[string, string[]]>
+					if (entries.length > 0) {
+						// Aggregate per-tool stats
+						const toolMap = new Map<string, {calls: number; successes: number}>()
+						// Group by session for co-occurrence
+						const sessionTools = new Map<string, Set<string>>()
+
+						for (const [, fields] of entries) {
+							const obj: Record<string, string> = {}
+							for (let i = 0; i < fields.length; i += 2) {
+								obj[fields[i]] = fields[i + 1]
+							}
+							const toolName = obj.tool
+							if (!toolName) continue
+
+							const existing = toolMap.get(toolName) || {calls: 0, successes: 0}
+							existing.calls++
+							if (obj.success === '1' || obj.success === 'true') existing.successes++
+							toolMap.set(toolName, existing)
+
+							// Track per-session tools for co-occurrence
+							const sessionId = obj.session || obj.session_id
+							if (sessionId) {
+								const set = sessionTools.get(sessionId) || new Set<string>()
+								set.add(toolName)
+								sessionTools.set(sessionId, set)
+							}
+						}
+
+						// Build usageStats array
+						usageStats = Array.from(toolMap.entries()).map(([tool, stats]) => ({
+							tool,
+							totalCalls: stats.calls,
+							successRate: stats.calls > 0 ? Math.round((stats.successes / stats.calls) * 100) : 0,
+						})).sort((a, b) => b.totalCalls - a.totalCalls)
+
+						// Build co-occurrence pairs from session groups
+						const pairCounts = new Map<string, number>()
+						for (const [, tools] of sessionTools) {
+							const toolArr = Array.from(tools).sort()
+							for (let i = 0; i < toolArr.length; i++) {
+								for (let j = i + 1; j < toolArr.length; j++) {
+									const key = `${toolArr[i]}||${toolArr[j]}`
+									pairCounts.set(key, (pairCounts.get(key) || 0) + 1)
+								}
+							}
+						}
+						coOccurrences = Array.from(pairCounts.entries())
+							.map(([key, count]) => {
+								const [toolA, toolB] = key.split('||')
+								return {toolA, toolB, count}
+							})
+							.sort((a, b) => b.count - a.count)
+							.slice(0, 10)
+					}
+				}
+			} catch {
+				// Redis unavailable — return empty usage stats
+			}
+
+			return {toolStats, totalCapabilities, activeCapabilities, usageStats, coOccurrences}
+		}),
+
+	// ── User Feedback ────────────────────────────────────────────
+
+	/** Rate a conversation — stores feedback in Redis for capability confidence scoring */
+	rateConversation: privateProcedure
+		.input(z.object({
+			conversationId: z.string(),
+			rating: z.number().min(1).max(5),
+			completed: z.boolean().optional(),
+		}))
+		.mutation(async ({ctx, input}) => {
+			const redis = ctx.livinityd.ai.redis
+			if (!redis) return {success: false}
+			try {
+				await redis.hset(`nexus:feedback:${input.conversationId}`, {
+					rating: String(input.rating),
+					completed: input.completed ? '1' : '0',
+					timestamp: String(Date.now()),
+				})
+				return {success: true}
+			} catch {
+				return {success: false}
 			}
 		}),
 
