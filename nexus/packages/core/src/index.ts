@@ -634,11 +634,7 @@ Conversation:`;
   });
 
   await daemon.start();
-
-  // Re-sync CapabilityRegistry after daemon.start() registers all tools (67+)
-  // Initial sync at line ~439 runs before daemon tools are registered, so re-sync is needed
-  await capabilityRegistry.syncAll();
-  logger.info('CapabilityRegistry re-synced after daemon start', { capabilities: capabilityRegistry.size });
+  // Note: daemon.start() never returns (infinite loop). Re-sync moved inside daemon.start()
 }
 
 main().catch((err) => {
