@@ -1,5 +1,26 @@
 # Milestones
 
+## v22.0 Livinity AGI Platform (Shipped: 2026-03-29)
+
+**Phases completed:** 8 phases, 12 plans, 23 tasks
+
+**Key accomplishments:**
+
+- CapabilityRegistry module with 5-type manifest model, 4-source sync engine, Redis persistence, and in-memory search
+- REST + tRPC API for unified capability registry with startup wiring and wildcard ID routing
+- Unified capabilities panel with 4 sub-tabs (Skills, MCPs, Hooks, Agents), search, status dots, tier badges, tool counts, success rate placeholders, and detail views -- all wired to Phase 29 unified registry via tRPC
+- IntentRouter with TF-IDF keyword/trigger scoring, 30% context budget cap, Redis caching, and LLM fallback wired into AgentSessionManager for intent-based tool selection
+- Dependency resolution with topological expansion, dynamic per-session system prompts from capability metadata, and discover_capability tool for mid-conversation registry search
+- 1. [Rule 3 - Blocking] Fixed pre-existing api.ts build errors
+- Two self-modification tools (create_hook, create_agent_template) + enhanced skill_generate with CapabilityRegistry auto-registration + hook event dispatcher + create-test-fix system prompt
+- Prompt template CRUD (4 built-in + custom) and capability analytics table with CSS bar charts added to 6-tab capabilities panel
+- Inline marketplace capability recommendation cards in chat with Install/Dismiss buttons and tRPC install mutation
+- LearningEngine with Redis stream tool call logging, session-grouped co-occurrence mining, and proactive capability suggestion injection into IntentRouter
+- rateConversation tRPC mutation with Redis feedback storage, and enhanced Analytics tab showing real tool usage stats and co-occurrence patterns from Redis stream data
+- End-to-end feedback-to-scoring pipeline: chat UI thumbs up/down -> Redis feedback storage -> aggregated success_rate PATCH on tool capabilities
+
+---
+
 ## v21.0 Autonomous Agent Platform (Shipped: 2026-03-28)
 
 **Phases completed:** 10 phases, 13 plans, 26 tasks

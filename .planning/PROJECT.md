@@ -113,22 +113,24 @@ Key validated capabilities:
 - ✓ Self-evaluation after-task reflection + pre-seeded Self-Improvement Agent (6-hour loop, flash tier) — v21.0
 - ✓ System prompt optimized: 72% token reduction (3214→899 tokens), self-awareness section added — v21.0
 
-## Current Milestone: v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace
+### Validated (v22.0)
 
-**Goal:** Transform Livinity into an AI Agent Marketplace + Orchestration Platform where the system auto-discovers, installs, and orchestrates capabilities based on user intent.
+- ✓ Unified Capability Registry: 5-type manifest model (tools, skills, MCPs, hooks, agents), Redis persistence, auto-sync from 4 data sources, REST + tRPC search API — v22.0
+- ✓ Unified Capabilities Panel: 6-tab sidebar (Skills, MCPs, Hooks, Agents, Prompts, Analytics) replacing 3 separate panels — v22.0
+- ✓ Intent Router v2: TF-IDF keyword/trigger scoring, 30% context budget cap, 15 capability max, Redis caching, LLM fallback — v22.0
+- ✓ Auto-Provisioning Engine: dependency resolution, dynamic per-session system prompts, discover_capability tool for mid-conversation search — v22.0
+- ✓ Livinity Marketplace MCP: 5 livinity_* tools (search/install/uninstall/recommend/list), GitHub-backed registry — v22.0
+- ✓ AI Self-Modification: create_hook + create_agent_template tools, enhanced skill_generate with auto-registry, hook event dispatcher — v22.0
+- ✓ Auto-Install UI: marketplace recommendation cards in chat with Install/Dismiss, prompt template CRUD, analytics view — v22.0
+- ✓ Learning Loop: Redis stream tool call logging, co-occurrence mining, proactive suggestions, user feedback with success_rate aggregation — v22.0
 
-**Target features:**
-- Unified Capability Registry (tools + skills + MCPs + hooks + agents in single model)
-- Livinity Marketplace MCP (single MCP exposing entire ecosystem)
-- Intent Router v2 (embedding-based semantic matching with confidence scoring)
-- Auto-Provisioning Engine (dynamic session tool/skill/MCP loading)
-- AI Self-Modification (autonomous skill/hook/agent creation + testing)
-- Agents Panel Redesign (unified capability management hub with analytics)
-- Learning Loop (usage pattern mining, auto-suggestion, A/B testing)
+## Current State (post v22.0 — AGI Platform)
+
+Livinity now features a unified capability orchestration platform. All capability types (tools, skills, MCPs, hooks, agents) are discoverable through a single registry with semantic search. Intent-based routing dynamically selects capabilities per conversation with context budget management. The AI can autonomously create skills, hooks, and agent templates, with a learning loop that logs tool usage, mines patterns, and incorporates user feedback. Marketplace tools enable one-command capability installation from GitHub-backed registries.
 
 ### Active
 
-*Defining requirements for v22.0*
+*No active requirements — planning next milestone*
 
 ### Out of Scope
 
@@ -242,4 +244,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after v21.0 milestone complete (Autonomous Agent Platform)*
+*Last updated: 2026-03-29 after v22.0 milestone complete (Livinity AGI Platform — Capability Orchestration & Marketplace)*
