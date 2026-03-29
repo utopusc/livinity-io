@@ -169,7 +169,10 @@ export function createAgentWebSocketHandler(opts: {
 
 	const sessionManager = new AgentSessionManager({
 		toolRegistry: lazyToolRegistry,
-		intentRouter,
+		// IntentRouter disabled — scoped tool selection filters out MCP tools.
+		// Re-enable once CapabilityRegistry properly tracks MCP provides_tools
+		// and IntentRouter preserves all MCP tools in scoped registry.
+		// intentRouter,
 		redis: ai.redis,
 		learningEngine,
 	})
