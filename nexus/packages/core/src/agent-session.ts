@@ -19,7 +19,9 @@ import {
 import { ToolRegistry, type ToolPolicy } from './tool-registry.js';
 import type { NexusConfig } from './config/schema.js';
 import { buildSdkTools, tierToModel, isCdpReachable } from './sdk-agent-runner.js';
+import { composeSystemPrompt, type IntentResult } from './intent-router.js';
 import type { IntentRouter } from './intent-router.js';
+import type { Tool } from './types.js';
 import { logger } from './logger.js';
 
 // ── Wire Protocol Types ──────────────────────────────────────
@@ -117,6 +119,20 @@ export interface ActiveSession {
   startedAt: number;
 }
 
+// ── Base System Prompt ───────────────────────────────────────
+
+/** Base system prompt — extended dynamically per session via composeSystemPrompt() */
+const BASE_SYSTEM_PROMPT =
+  `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.\n\n` +
+  `You have access to MCP tools (prefixed with mcp__nexus-tools__) for shell commands, Docker management, file operations, web browsing, memory, and messaging.\n\n` +
+  `CRITICAL RULES:\n` +
+  `1. ONLY do what the user explicitly asks. Do NOT invent tasks, repeat previous work, or act on conversation history unless the user specifically requests it.\n` +
+  `2. If the user sends a greeting or simple message, respond conversationally -- do NOT run tools.\n` +
+  `3. Conversation history (if provided) is CONTEXT ONLY. Do NOT re-execute tasks from history.\n` +
+  `4. Be concise. For simple questions, respond in 1-2 sentences without using tools.\n` +
+  `5. If a tool fails, try ONE alternative approach, then report the issue.\n` +
+  `6. When the task is complete, provide your final answer immediately -- do not keep exploring.`;
+
 // ── Agent Session Manager ────────────────────────────────────
 
 export class AgentSessionManager {
@@ -211,9 +227,11 @@ export class AgentSessionManager {
 
     // Intent-based tool selection: use IntentRouter to select relevant tools
     let sdkTools: ReturnType<typeof buildSdkTools> = [];
+    let intentResult: IntentResult | null = null;
+
     if (this.intentRouter) {
       try {
-        const intentResult = await this.intentRouter.resolveCapabilities(prompt, tier);
+        intentResult = await this.intentRouter.resolveCapabilities(prompt, tier);
         const intentToolNames = this.intentRouter.getToolNamesFromCapabilities(intentResult.capabilities);
         // Create a scoped registry containing only intent-matched tools
         const scopedRegistry = new ToolRegistry();
@@ -221,7 +239,90 @@ export class AgentSessionManager {
           const tool = this.toolRegistry.get(toolName);
           if (tool) scopedRegistry.register(tool);
         }
-        // Also apply tool policy (deny list etc.) on top of intent selection
+
+        // Register discover_capability tool in scoped registry
+        const intentRouterRef = this.intentRouter;
+        const fullRegistryRef = this.toolRegistry;
+        const discoverCapabilityTool: Tool = {
+          name: 'discover_capability',
+          description:
+            'Search the capability registry for a tool or skill matching a query. Returns matching capability info so you know what is available. Use this when you need a capability that is not currently loaded in this session.',
+          parameters: [
+            {
+              name: 'query',
+              type: 'string',
+              description: 'Natural language description of the capability needed',
+              required: true,
+            },
+          ],
+          execute: async (params) => {
+            const query = String(params.query || '');
+            if (!query) {
+              return { success: false, output: '', error: 'query parameter is required' };
+            }
+
+            try {
+              const allCaps = await intentRouterRef.getCapabilitiesList();
+              const queryLower = query.toLowerCase();
+
+              // Filter: match capabilities by name, description, or semantic_tags (case-insensitive substring)
+              const matches = allCaps.filter((cap) => {
+                if (cap.name.toLowerCase().includes(queryLower)) return true;
+                if (cap.description.toLowerCase().includes(queryLower)) return true;
+                for (const tag of cap.semantic_tags) {
+                  if (tag.toLowerCase().includes(queryLower)) return true;
+                }
+                return false;
+              });
+
+              if (matches.length === 0) {
+                return {
+                  success: true,
+                  output:
+                    'No matching capabilities found in the registry. The capability may need to be installed from the marketplace.',
+                };
+              }
+
+              // Sort matches by name for deterministic ordering, take top 5
+              matches.sort((a, b) => a.name.localeCompare(b.name));
+              const topMatches = matches.slice(0, 5);
+
+              const matchDescriptions = topMatches
+                .map(
+                  (cap) =>
+                    `- **${cap.name}** (${cap.id}): ${cap.description}\n  Tools: [${cap.provides_tools.join(', ')}]`,
+                )
+                .join('\n');
+
+              const topMatch = topMatches[0];
+
+              logger.info('AgentSessionManager: discover_capability found matches', {
+                query,
+                matchCount: matches.length,
+                topMatch: topMatch.id,
+              });
+
+              return {
+                success: true,
+                output:
+                  `Found ${matches.length} matching capability(ies):\n\n${matchDescriptions}\n\n` +
+                  `The top match "${topMatch.name}" provides tools: [${topMatch.provides_tools.join(', ')}]. ` +
+                  `These tools will be auto-loaded in your next message turn based on conversation context. ` +
+                  `You can inform the user about the available capability.`,
+              };
+            } catch (err: any) {
+              logger.error('AgentSessionManager: discover_capability error', { error: err.message });
+              return {
+                success: false,
+                output: '',
+                error: `Failed to search registry: ${err.message}`,
+              };
+            }
+          },
+        };
+        scopedRegistry.register(discoverCapabilityTool);
+
+        // Build SDK tools AFTER registering discover_capability
         sdkTools = buildSdkTools(scopedRegistry, toolPolicy);
         logger.info('AgentSessionManager: intent-based tool selection', {
           userId,
@@ -230,6 +331,7 @@ export class AgentSessionManager {
           fromCache: intentResult.fromCache,
           totalContextCost: intentResult.totalContextCost,
           sdkToolCount: sdkTools.length,
+          hasDiscoverCapability: true,
         });
       } catch (err: any) {
         // Fallback to full tool set if intent routing fails
@@ -254,17 +356,10 @@ export class AgentSessionManager {
       allowedTools.push(...sdkTools.map((t: any) => `mcp__nexus-tools__${t.name}`));
     }
 
-    // Build system prompt
-    const systemPrompt =
-      `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.\n\n` +
-      `You have access to MCP tools (prefixed with mcp__nexus-tools__) for shell commands, Docker management, file operations, web browsing, memory, and messaging.\n\n` +
-      `CRITICAL RULES:\n` +
-      `1. ONLY do what the user explicitly asks. Do NOT invent tasks, repeat previous work, or act on conversation history unless the user specifically requests it.\n` +
-      `2. If the user sends a greeting or simple message, respond conversationally -- do NOT run tools.\n` +
-      `3. Conversation history (if provided) is CONTEXT ONLY. Do NOT re-execute tasks from history.\n` +
-      `4. Be concise. For simple questions, respond in 1-2 sentences without using tools.\n` +
-      `5. If a tool fails, try ONE alternative approach, then report the issue.\n` +
-      `6. When the task is complete, provide your final answer immediately -- do not keep exploring.`;
+    // Build system prompt — dynamic composition from base + loaded capability instructions
+    const systemPrompt = intentResult
+      ? composeSystemPrompt(BASE_SYSTEM_PROMPT, intentResult.capabilities)
+      : BASE_SYSTEM_PROMPT;
     const budgetByTier: Record<string, number> = {
       opus: 10.0,
       sonnet: 5.0,
