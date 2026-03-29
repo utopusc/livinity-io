@@ -29,8 +29,8 @@ interface MarketplaceMcpDeps {
   skillRegistryClient: SkillRegistryClient;
   toolRegistry: ToolRegistry;
   redis: Redis;
-  mcpClientManager?: any; // McpClientManager — installs and starts MCP servers
-  subagentManager?: any;  // SubagentManager — creates agent instances
+  mcpConfigManager?: any; // McpConfigManager — installServer() to add and start MCP servers
+  subagentManager?: any;  // SubagentManager — create() to make agent instances
 }
 
 /** A single entry in the marketplace index.json */
@@ -245,28 +245,9 @@ export class MarketplaceMcp {
 
           switch (entry.type) {
             case 'mcp': {
-              // Real MCP install — register server in McpClientManager
-              if (!this.deps.mcpClientManager) {
-                installResult = 'MCP registered in catalog (McpClientManager not available for live start). Server config saved — restart liv-core to activate.';
-                // Save config to Redis for next restart
-                const mcpConfig = {
-                  name: entry.name.toLowerCase().replace(/\s+/g, '-'),
-                  transport: config.transport || 'stdio',
-                  command: config.command || 'npx',
-                  args: config.args || [],
-                  env: config.env || {},
-                  enabled: true,
-                  description: entry.description,
-                  installedFrom: 'marketplace',
-                  installedAt: Date.now(),
-                };
-                await this.deps.redis.hset('nexus:config:mcp_servers', mcpConfig.name, JSON.stringify(mcpConfig));
-                await this.deps.redis.publish('nexus:config:updated', 'mcp_config');
-                installResult = `MCP server "${mcpConfig.name}" installed and config saved. Command: ${mcpConfig.command} ${(mcpConfig.args || []).join(' ')}. Server will start automatically.`;
-              } else {
-                // Direct install via McpClientManager
-                const serverName = entry.name.toLowerCase().replace(/\s+/g, '-');
-                await this.deps.mcpClientManager.addServer({
+              const serverName = entry.name.toLowerCase().replace(/\s+/g, '-');
+              if (this.deps.mcpConfigManager) {
+                await this.deps.mcpConfigManager.installServer({
                   name: serverName,
                   transport: config.transport || 'stdio',
                   command: config.command || 'npx',
@@ -277,7 +258,23 @@ export class MarketplaceMcp {
                   installedFrom: 'marketplace',
                   installedAt: Date.now(),
                 });
-                installResult = `MCP server "${serverName}" installed and started. Tools are now available.`;
+                installResult = `MCP server "${serverName}" installed and connecting. Command: ${config.command || 'npx'} ${(config.args || []).join(' ')}. Tools will be available shortly.`;
+              } else {
+                // Fallback: save to Redis config directly
+                const mcpConfig = {
+                  name: serverName,
+                  transport: config.transport || 'stdio',
+                  command: config.command || 'npx',
+                  args: config.args || [],
+                  env: config.env || {},
+                  enabled: true,
+                  description: entry.description,
+                  installedFrom: 'marketplace',
+                  installedAt: Date.now(),
+                };
+                await this.deps.redis.hset('nexus:config:mcp_servers', serverName, JSON.stringify(mcpConfig));
+                await this.deps.redis.publish('nexus:config:updated', 'mcp_config');
+                installResult = `MCP server "${serverName}" config saved. Restart liv-core to activate.`;
               }
               break;
             }
