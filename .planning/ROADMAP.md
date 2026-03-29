@@ -178,7 +178,7 @@ Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in par
 | 29. Unified Capability Registry | v22.0 | 2/2 | Complete    | 2026-03-29 |
 | 30. Agents Panel Redesign | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 31. Intent Router v2 | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 32. Auto-Provisioning Engine | v22.0 | 1/1 | Complete   | 2026-03-29 |
+| 32. Auto-Provisioning Engine | v22.0 | 1/1 | Complete    | 2026-03-29 |
 | 33. Livinity Marketplace MCP | v22.0 | 0/? | Not started | - |
 | 34. AI Self-Modification | v22.0 | 0/? | Not started | - |
 | 35. Marketplace UI & Auto-Install | v22.0 | 0/? | Not started | - |
