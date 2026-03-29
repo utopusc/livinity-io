@@ -19,6 +19,7 @@ import type {IncomingMessage} from 'http'
 import {
 	AgentSessionManager,
 	IntentRouter,
+	LearningEngine,
 	type AgentWsMessage,
 	type ClientWsMessage,
 	type TurnData,
@@ -138,6 +139,9 @@ export function createAgentWebSocketHandler(opts: {
 		},
 	})
 
+	// LearningEngine — logs tool calls and mines co-occurrence patterns
+	const learningEngine = new LearningEngine({redis: ai.redis})
+
 	// IntentRouter — fetches capabilities from nexus API, uses livinityd Redis for caching
 	// brain is null in livinityd context (LLM fallback skipped — keyword matching only)
 	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
@@ -159,6 +163,7 @@ export function createAgentWebSocketHandler(opts: {
 				return []
 			}
 		},
+		learningEngine,
 		// No brain in livinityd — LLM fallback is skipped, keyword matching only
 	})
 
@@ -166,6 +171,7 @@ export function createAgentWebSocketHandler(opts: {
 		toolRegistry: lazyToolRegistry,
 		intentRouter,
 		redis: ai.redis,
+		learningEngine,
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {

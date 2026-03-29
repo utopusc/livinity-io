@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import type Redis from 'ioredis';
 import type { CapabilityManifest } from './capability-registry.js';
+import type { LearningEngine } from './learning-engine.js';
 import { logger } from './logger.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ export interface IntentRouterDeps {
   redis: Redis;
   getCapabilities: () => CapabilityManifest[] | Promise<CapabilityManifest[]>;
   brain?: { think(opts: { prompt: string; tier?: string; maxTokens?: number }): Promise<string> };
+  learningEngine?: LearningEngine;
 }
 
 export interface IntentResult {
@@ -206,7 +208,24 @@ export class IntentRouter {
         const coreCap = allCapabilities.find((c) => c.id === coreId);
         if (coreCap) {
           selected.push({ ...coreCap, _score: 0 });
+          selectedIds.add(coreId);
         }
+      }
+    }
+
+    // 9b. Learning engine suggestions — append commonly co-used capabilities not yet selected
+    if (this.deps.learningEngine) {
+      try {
+        const selectedToolNames = this.getToolNamesFromCapabilities(selected);
+        const suggestions = await this.deps.learningEngine.getSuggestions(selectedToolNames, allCapabilities);
+        for (const suggestion of suggestions) {
+          if (!selectedIds.has(suggestion.capability.id)) {
+            selected.push({ ...suggestion.capability, _score: suggestion.confidence });
+            selectedIds.add(suggestion.capability.id);
+          }
+        }
+      } catch (err: any) {
+        logger.warn('IntentRouter: learning engine suggestion failed', { error: err.message });
       }
     }
 
