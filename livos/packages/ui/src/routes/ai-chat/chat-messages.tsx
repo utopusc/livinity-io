@@ -16,6 +16,7 @@ import {
 
 import {cn} from '@/shadcn-lib/utils'
 import type {ChatMessage, ChatToolCall, ContentBlock} from '@/hooks/use-agent-socket'
+import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 
 import {StreamingMessage} from './streaming-message'
 
@@ -305,11 +306,12 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='flex justify-start'>
 			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4'>
-				{/* Thinking indicator — only while streaming with no content/blocks yet */}
+				{/* Thinking shimmer — only while streaming with no content/blocks yet */}
 				{message.isStreaming && (!blocks || blocks.length === 0) && (
-					<div className='flex items-center gap-2 py-1 text-sm text-text-secondary'>
-						<IconLoader2 size={14} className='animate-spin text-violet-400' />
-						<span>Thinking...</span>
+					<div className='py-1'>
+						<TextShimmer className='text-sm font-mono' duration={1.5}>
+							Thinking...
+						</TextShimmer>
 					</div>
 				)}
 				{/* Render blocks in order — text and tools interleaved */}
