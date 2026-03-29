@@ -4,6 +4,36 @@ import {formatDistanceToNow} from 'date-fns'
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
 
+// ── Helpers ──────────────────────────────────────────────────────
+
+function intervalToCron(value: number, unit: string): string {
+	if (unit === 'minutes') return `*/${value} * * * *`
+	if (unit === 'hours') return `0 */${value} * * *`
+	if (unit === 'days') return `0 9 */${value} * *`
+	return `*/${value} * * * *`
+}
+
+function cronToInterval(cron: string): {value: string; unit: string} {
+	if (!cron) return {value: '30', unit: 'minutes'}
+	const parts = cron.split(' ')
+	if (parts[0]?.startsWith('*/')) return {value: parts[0].replace('*/', ''), unit: 'minutes'}
+	if (parts[1]?.startsWith('*/')) return {value: parts[1].replace('*/', ''), unit: 'hours'}
+	if (parts[2]?.startsWith('*/')) return {value: parts[2].replace('*/', ''), unit: 'days'}
+	// Try to guess from common patterns
+	if (parts[1] === '*' && parts[0] !== '*') return {value: '60', unit: 'minutes'}
+	return {value: '30', unit: 'minutes'}
+}
+
+function cronToHuman(cron: string): string {
+	if (!cron) return 'No schedule'
+	const {value, unit} = cronToInterval(cron)
+	const v = parseInt(value)
+	if (unit === 'minutes') return `Every ${v} minute${v !== 1 ? 's' : ''}`
+	if (unit === 'hours') return `Every ${v} hour${v !== 1 ? 's' : ''}`
+	if (unit === 'days') return `Every ${v} day${v !== 1 ? 's' : ''}`
+	return cron
+}
+
 // ── Types ──────────────────────────────────────────────────────
 
 type AgentsView = {mode: 'list'} | {mode: 'detail'; agentId: string} | {mode: 'create'}
@@ -199,7 +229,14 @@ function LoopControls({agentId, hasLoopConfig}: {agentId: string; hasLoopConfig:
 				</div>
 				{loop?.intervalMs && (
 					<p className='text-caption-sm text-text-tertiary'>
-						Every {Math.round((loop.intervalMs || 0) / 1000)}s
+						{(() => {
+							const ms = loop.intervalMs || 0
+							const mins = Math.round(ms / 60000)
+							if (mins < 60) return `Every ${mins} minute${mins !== 1 ? 's' : ''}`
+							const hrs = Math.round(mins / 60)
+							if (hrs < 24) return `Every ${hrs} hour${hrs !== 1 ? 's' : ''}`
+							return `Every ${Math.round(hrs / 24)} day${Math.round(hrs / 24) !== 1 ? 's' : ''}`
+						})()}
 					</p>
 				)}
 				{loop?.state && (
@@ -240,7 +277,7 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 	const historyQuery = trpcReact.ai.getSubagentHistory.useQuery({id: agentId, limit: 50}, {refetchInterval: 3_000})
 	const [showConfig, setShowConfig] = useState(false)
 	const [editing, setEditing] = useState(false)
-	const [editForm, setEditForm] = useState({description: '', tier: '', schedule: '', systemPrompt: ''})
+	const [editForm, setEditForm] = useState({description: '', tier: '', schedule: '', systemPrompt: '', intervalValue: '30', intervalUnit: 'minutes'})
 	const chatEndRef = useRef<HTMLDivElement>(null)
 	const chatContainerRef = useRef<HTMLDivElement>(null)
 	const updateMutation = trpcReact.ai.updateSubagent.useMutation()
@@ -309,7 +346,7 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 
 			{/* Collapsible Config Panel */}
 			{showConfig && (
-				<div className='flex-shrink-0 border-b border-border-default bg-surface-1/50 p-3 space-y-3 max-h-[50vh] overflow-y-auto'>
+				<div className='flex-shrink-0 border-b border-border-default bg-surface-base p-3 space-y-3 max-h-[50vh] overflow-y-auto'>
 					{/* Loop Controls */}
 					<LoopControls agentId={agentId} hasLoopConfig={!!agent.loop || !!agent.schedule} />
 
@@ -330,8 +367,21 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 									</select>
 								</div>
 								<div className='flex-1'>
-									<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Schedule (cron)</label>
-									<input value={editForm.schedule} onChange={e => setEditForm(f => ({...f, schedule: e.target.value}))} placeholder='0 */2 * * *' className='w-full rounded-radius-sm border border-border-default bg-surface-base px-2.5 py-1.5 font-mono text-caption text-text-primary outline-none placeholder:text-text-tertiary focus:border-brand' />
+									<label className='mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-text-tertiary'>Run every</label>
+									<div className='flex gap-1.5'>
+										<input type='number' min='1' max='999' value={editForm.intervalValue} onChange={e => {
+											const v = e.target.value
+											setEditForm(f => ({...f, intervalValue: v, schedule: intervalToCron(parseInt(v) || 1, f.intervalUnit)}))
+										}} className='w-16 rounded-radius-sm border border-border-default bg-surface-base px-2 py-1.5 text-caption text-text-primary outline-none focus:border-brand' />
+										<select value={editForm.intervalUnit} onChange={e => {
+											const u = e.target.value
+											setEditForm(f => ({...f, intervalUnit: u, schedule: intervalToCron(parseInt(f.intervalValue) || 1, u)}))
+										}} className='flex-1 rounded-radius-sm border border-border-default bg-surface-base px-2 py-1.5 text-caption text-text-primary outline-none focus:border-brand'>
+											<option value='minutes'>minutes</option>
+											<option value='hours'>hours</option>
+											<option value='days'>days</option>
+										</select>
+									</div>
 								</div>
 							</div>
 							<div>
@@ -374,8 +424,8 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 							</div>
 							{agent.schedule && (
 								<div className='flex gap-2'>
-									<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Cron</span>
-									<p className='font-mono text-caption-sm text-text-secondary'>{agent.schedule}</p>
+									<span className='text-[10px] font-medium uppercase tracking-wide text-text-tertiary w-16 flex-shrink-0'>Runs</span>
+									<p className='text-caption-sm text-text-secondary'>{cronToHuman(agent.schedule)}</p>
 								</div>
 							)}
 							{agent.systemPrompt && (
@@ -391,11 +441,14 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 							<div className='flex gap-2 pt-2'>
 								<button
 									onClick={() => {
+										const interval = cronToInterval(agent.schedule || '')
 										setEditForm({
 											description: agent.description || '',
 											tier: agent.tier || 'sonnet',
 											schedule: agent.schedule || '',
 											systemPrompt: agent.systemPrompt || '',
+											intervalValue: interval.value,
+											intervalUnit: interval.unit,
 										})
 										setEditing(true)
 									}}
