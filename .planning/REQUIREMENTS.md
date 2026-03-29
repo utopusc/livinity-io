@@ -54,9 +54,9 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 
 ### Learning — Learning Loop
 
-- [ ] **LRN-01**: System logs every tool call execution to Redis stream with outcome data
-- [ ] **LRN-02**: Pattern mining identifies commonly co-used capability combinations
-- [ ] **LRN-03**: System auto-suggests relevant capabilities based on intent history
+- [x] **LRN-01**: System logs every tool call execution to Redis stream with outcome data
+- [x] **LRN-02**: Pattern mining identifies commonly co-used capability combinations
+- [x] **LRN-03**: System auto-suggests relevant capabilities based on intent history
 - [ ] **LRN-04**: User feedback (task completion + explicit rating) feeds into capability scoring
 
 ## Future Requirements
@@ -114,9 +114,9 @@ Requirements for v22.0 milestone. Each maps to roadmap phases.
 | UIP-03 | Phase 35 | Complete |
 | UIP-04 | Phase 35 | Complete |
 | UIP-05 | Phase 35 | Complete |
-| LRN-01 | Phase 36 | Pending |
-| LRN-02 | Phase 36 | Pending |
-| LRN-03 | Phase 36 | Pending |
+| LRN-01 | Phase 36 | Complete |
+| LRN-02 | Phase 36 | Complete |
+| LRN-03 | Phase 36 | Complete |
 | LRN-04 | Phase 36 | Pending |
 
 **Coverage:**

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v22.0
 milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
 status: unknown
-stopped_at: Completed 35-02-PLAN.md
-last_updated: "2026-03-29T06:27:55.738Z"
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-29T06:40:52.392Z"
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v22.0 -- Livinity AGI Platform — Capability Orchestration & Marketplace
-**Current focus:** Phase 35 — Marketplace UI & Auto-Install
+**Current focus:** Phase 36 — Learning Loop
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: 36 (Learning Loop) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: Not started
 | Phase 34 P01 | 5min | 2 tasks | 4 files |
 | Phase 35 P01 | 5min | 2 tasks | 2 files |
 | Phase 35 P02 | 14min | 2 tasks | 2 files |
+| Phase 36 P01 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,10 @@ Plan: Not started
 - [Phase 35]: installMarketplaceCapability fetches GitHub marketplace index directly (same source as MarketplaceMcp) for simplicity
 - [Phase 35]: Recommendation cards render inside expandable tool call output, not as standalone chat messages
 - [Phase 35]: Card install/dismiss status uses local React state (ephemeral per session)
+- [Phase 36]: Fire-and-forget XADD logging to avoid disrupting agent sessions on Redis errors
+- [Phase 36]: Duration logged as 0 from tool_result since SDK handles execution internally
+- [Phase 36]: 5-minute cache TTL for co-occurrence and stats analysis
+- [Phase 36]: Suggestions added with confidence 0.25 (below 0.3 threshold) for low-priority discovery
 
 ### Pending Todos
 
@@ -97,6 +102,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-03-29T06:24:54.306Z
-Stopped at: Completed 35-02-PLAN.md
+Last session: 2026-03-29T06:40:52.390Z
+Stopped at: Completed 36-01-PLAN.md
 Resume file: None
