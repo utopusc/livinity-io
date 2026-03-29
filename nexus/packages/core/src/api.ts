@@ -981,6 +981,23 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     res.json(capability);
   });
 
+  /** Update capability metadata fields */
+  app.patch('/api/capabilities/:id(*)', async (req, res) => {
+    if (!capabilityRegistry) {
+      return res.status(503).json({ error: 'Capability registry not available' });
+    }
+    const id = (req.params as any)['id(*)'] || (req.params as any)[0] || '';
+    const { metadata } = req.body || {};
+    if (!metadata || typeof metadata !== 'object') {
+      return res.status(400).json({ error: 'metadata object required' });
+    }
+    const updated = await capabilityRegistry.updateMetadata(id, metadata);
+    if (!updated) {
+      return res.status(404).json({ error: `Capability "${id}" not found` });
+    }
+    res.json({ success: true, id });
+  });
+
   // ── Nexus Config API ────────────────────────────────────────────
 
   app.get('/api/nexus/config', async (_req, res) => {
