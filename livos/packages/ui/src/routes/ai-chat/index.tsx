@@ -11,6 +11,8 @@ import {
 	IconCode,
 	IconScreenshot,
 	IconDeviceDesktop,
+	IconThumbUp,
+	IconThumbDown,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -131,6 +133,50 @@ function ConversationSidebar({
 			{activeView === 'capabilities' && (
 				<div className='flex-1' />
 			)}
+		</div>
+	)
+}
+
+function FeedbackBar({conversationId, visible}: {conversationId: string; visible: boolean}) {
+	const rateMutation = trpcReact.ai.rateConversation.useMutation()
+	const [submitted, setSubmitted] = useState<'up' | 'down' | null>(null)
+
+	if (!visible || !conversationId) return null
+
+	const handleRate = (rating: 'up' | 'down') => {
+		setSubmitted(rating)
+		rateMutation.mutate({
+			conversationId,
+			rating: rating === 'up' ? 5 : 1,
+			completed: true,
+		})
+	}
+
+	if (submitted) {
+		return (
+			<div className='flex items-center justify-center gap-2 py-2 text-caption text-text-tertiary'>
+				<span>{submitted === 'up' ? 'Thanks for the feedback!' : "Sorry to hear that. We'll improve."}</span>
+			</div>
+		)
+	}
+
+	return (
+		<div className='flex items-center justify-center gap-3 py-2'>
+			<span className='text-caption text-text-tertiary'>Was this helpful?</span>
+			<button
+				onClick={() => handleRate('up')}
+				className='rounded-radius-md p-1.5 text-text-tertiary transition-colors hover:bg-green-500/10 hover:text-green-400'
+				title='Thumbs up'
+			>
+				<IconThumbUp size={16} />
+			</button>
+			<button
+				onClick={() => handleRate('down')}
+				className='rounded-radius-md p-1.5 text-text-tertiary transition-colors hover:bg-red-500/10 hover:text-red-400'
+				title='Thumbs down'
+			>
+				<IconThumbDown size={16} />
+			</button>
 		</div>
 	)
 }
@@ -540,6 +586,12 @@ export default function AiChat() {
 								</div>
 							)}
 						</div>
+
+						{/* Feedback bar -- shown after streaming ends and messages exist */}
+						<FeedbackBar
+							conversationId={activeConversationId || ''}
+							visible={!agent.isStreaming && displayMessages.length > 1}
+						/>
 
 						<ChatInput
 							value={input}
