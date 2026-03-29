@@ -20,6 +20,10 @@ export type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
 export { KimiAgentRunner } from './kimi-agent-runner.js';
 export { SdkAgentRunner } from './sdk-agent-runner.js';
 
+// ── Tool Registry ──────────────────────────────────────────────
+export { ToolRegistry } from './tool-registry.js';
+export type { ToolPolicy } from './tool-registry.js';
+
 // ── Agent Session Manager ──────────────────────────────────────
 export { AgentSessionManager, createInputChannel } from './agent-session.js';
 export type { ActiveSession, AgentWsMessage, ClientWsMessage, TurnData } from './agent-session.js';

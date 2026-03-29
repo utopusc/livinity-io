@@ -89,9 +89,30 @@ export function createAgentWebSocketHandler(opts: {
 }) {
 	const ai = opts.livinityd.ai
 
+	// Create a lazy ToolRegistry proxy that delegates to ai.toolRegistry.
+	// This is needed because ai.toolRegistry is populated asynchronously after startup
+	// (fetched from nexus API), but AgentSessionManager is created synchronously here.
+	const lazyToolRegistry = new Proxy({} as any, {
+		get(_target, prop) {
+			const real = ai.toolRegistry
+			if (!real) {
+				// Registry not yet loaded — return safe defaults
+				if (prop === 'listFiltered') return () => []
+				if (prop === 'list') return () => []
+				if (prop === 'listAll') return () => []
+				if (prop === 'get') return () => undefined
+				if (prop === 'size') return 0
+				if (prop === 'execute') return async () => ({success: false, output: '', error: 'Tool registry not yet loaded'})
+				return undefined
+			}
+			const value = (real as any)[prop]
+			return typeof value === 'function' ? value.bind(real) : value
+		},
+	})
+
 	// Create a single AgentSessionManager instance shared across all connections
 	const sessionManager = new AgentSessionManager({
-		toolRegistry: ai.toolRegistry,
+		toolRegistry: lazyToolRegistry,
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {

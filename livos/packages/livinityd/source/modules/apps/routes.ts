@@ -159,7 +159,7 @@ export const apps = router({
 			const alreadyInstalled = await ctx.apps.isInstalled(input.appId)
 			if (alreadyInstalled && ctx.currentUser?.id) {
 				// Non-admin: create per-user Docker instance
-				if (ctx.currentUser.role && ctx.currentUser.role !== 'admin') {
+				if (ctx.currentUser?.role && ctx.currentUser.role !== 'admin') {
 					const existing = await getUserAppInstance(ctx.currentUser.id, input.appId)
 					if (existing) {
 						// Already has per-user instance, just return
