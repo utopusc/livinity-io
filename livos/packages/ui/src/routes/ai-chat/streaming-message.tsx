@@ -9,21 +9,21 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 	if (!content && !isStreaming) return null
 
 	return (
-		<div className='text-sm leading-relaxed text-gray-900 dark:text-gray-100'>
+		<div style={{color: '#0f172a', fontSize: '14px', lineHeight: '1.6'}}>
 			{content ? (
 				<Markdown
 					components={{
-						p: ({children}) => <p className='mb-2 last:mb-0'>{children}</p>,
-						strong: ({children}) => <strong className='font-bold'>{children}</strong>,
-						em: ({children}) => <em className='italic'>{children}</em>,
-						h1: ({children}) => <h1 className='mb-2 mt-4 text-lg font-bold'>{children}</h1>,
-						h2: ({children}) => <h2 className='mb-2 mt-3 text-base font-bold'>{children}</h2>,
-						h3: ({children}) => <h3 className='mb-1 mt-2 text-sm font-bold'>{children}</h3>,
-						ul: ({children}) => <ul className='mb-2 ml-4 list-disc'>{children}</ul>,
-						ol: ({children}) => <ol className='mb-2 ml-4 list-decimal'>{children}</ol>,
-						li: ({children}) => <li className='mb-0.5'>{children}</li>,
+						p: ({children}) => <p style={{color: '#0f172a', marginBottom: '8px'}}>{children}</p>,
+						strong: ({children}) => <strong style={{color: '#0f172a', fontWeight: 700}}>{children}</strong>,
+						em: ({children}) => <em style={{color: '#1e293b'}}>{children}</em>,
+						h1: ({children}) => <h1 style={{color: '#0f172a', fontSize: '18px', fontWeight: 700, marginTop: '16px', marginBottom: '8px'}}>{children}</h1>,
+						h2: ({children}) => <h2 style={{color: '#0f172a', fontSize: '16px', fontWeight: 700, marginTop: '12px', marginBottom: '8px'}}>{children}</h2>,
+						h3: ({children}) => <h3 style={{color: '#0f172a', fontSize: '14px', fontWeight: 700, marginTop: '8px', marginBottom: '4px'}}>{children}</h3>,
+						ul: ({children}) => <ul style={{color: '#0f172a', marginBottom: '8px', marginLeft: '16px', listStyleType: 'disc'}}>{children}</ul>,
+						ol: ({children}) => <ol style={{color: '#0f172a', marginBottom: '8px', marginLeft: '16px', listStyleType: 'decimal'}}>{children}</ol>,
+						li: ({children}) => <li style={{color: '#0f172a', marginBottom: '2px'}}>{children}</li>,
 						a: ({href, children}) => (
-							<a href={href} className='text-blue-600 underline hover:text-blue-500' target='_blank' rel='noreferrer'>
+							<a href={href} style={{color: '#2563eb', textDecoration: 'underline'}} target='_blank' rel='noreferrer'>
 								{children}
 							</a>
 						),
@@ -31,18 +31,18 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 							const isBlock = className?.includes('language-')
 							if (isBlock) {
 								return (
-									<pre className='my-2 overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800'>
-										<code className='text-xs text-gray-800 dark:text-green-300'>{children}</code>
+									<pre style={{margin: '8px 0', overflow: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', padding: '12px'}}>
+										<code style={{fontSize: '12px', color: '#334155'}}>{children}</code>
 									</pre>
 								)
 							}
-							return <code className='rounded bg-gray-100 px-1 py-0.5 text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200' {...props}>{children}</code>
+							return <code style={{borderRadius: '4px', background: '#f1f5f9', padding: '1px 4px', fontSize: '12px', color: '#334155'}} {...props}>{children}</code>
 						},
 						pre: ({children}) => <>{children}</>,
 						blockquote: ({children}) => (
-							<blockquote className='my-2 border-l-2 border-gray-300 pl-3 text-gray-600 dark:border-gray-600 dark:text-gray-400'>{children}</blockquote>
+							<blockquote style={{margin: '8px 0', borderLeft: '2px solid #cbd5e1', paddingLeft: '12px', color: '#475569'}}>{children}</blockquote>
 						),
-						hr: () => <hr className='my-3 border-gray-200 dark:border-gray-700' />,
+						hr: () => <hr style={{margin: '12px 0', border: 'none', borderTop: '1px solid #e2e8f0'}} />,
 					}}
 				>
 					{content}
