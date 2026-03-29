@@ -51,10 +51,17 @@ async function saveToConversation(
 
 		const now = Date.now()
 
+		// Strip "Previous conversation:" prefix before saving — store only the actual user message
+		let cleanPrompt = turn.userPrompt
+		if (cleanPrompt.startsWith('Previous conversation:')) {
+			const match = cleanPrompt.match(/\nCurrent message: ([\s\S]*)$/)
+			if (match) cleanPrompt = match[1]
+		}
+
 		const userMsg: ChatMessage = {
 			id: `msg_${now}_user`,
 			role: 'user',
-			content: turn.userPrompt,
+			content: cleanPrompt,
 			timestamp: now,
 		}
 		conversation.messages.push(userMsg)
