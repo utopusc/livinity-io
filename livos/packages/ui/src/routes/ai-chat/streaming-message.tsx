@@ -68,7 +68,7 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 	// While streaming: typewriter effect with blinking cursor
 	if (isStreaming) {
 		return (
-			<div style={{...textStyle, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+			<div style={{...textStyle, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'hidden'}}>
 				{content ? (
 					<TypeWriter targetText={content} />
 				) : (
@@ -83,7 +83,7 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 
 	// After streaming: render markdown for proper formatting
 	return (
-		<div style={textStyle}>
+		<div style={{...textStyle, overflow: 'hidden'}}>
 			<Markdown
 				components={{
 					p: ({children}) => <p style={{color: textColor, marginBottom: '8px'}}>{children}</p>,
@@ -104,7 +104,7 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 						const isBlock = className?.includes('language-')
 						if (isBlock) {
 							return (
-								<pre style={{margin: '8px 0', overflow: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', padding: '12px'}}>
+								<pre style={{margin: '8px 0', overflow: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', padding: '12px', maxWidth: '100%'}}>
 									<code style={{fontSize: '12px', color: '#334155'}}>{children}</code>
 								</pre>
 							)
