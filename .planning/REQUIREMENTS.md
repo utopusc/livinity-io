@@ -8,8 +8,8 @@
 ### AI Chat
 
 - [x] **CHAT-01**: Chat sidebar (conversations + agents) works as a drawer on mobile with proper touch targets
-- [ ] **CHAT-02**: Message bubbles don't overflow horizontally, code blocks scroll within container
-- [ ] **CHAT-03**: Tool call cards are compact on mobile with expandable details
+- [x] **CHAT-02**: Message bubbles don't overflow horizontally, code blocks scroll within container
+- [x] **CHAT-03**: Tool call cards are compact on mobile with expandable details
 - [x] **CHAT-04**: Chat input area with file upload is properly sized and positioned on mobile
 
 ### Settings
@@ -59,8 +59,8 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CHAT-01 | Phase 1 | Complete |
-| CHAT-02 | Phase 1 | Pending |
-| CHAT-03 | Phase 1 | Pending |
+| CHAT-02 | Phase 1 | Complete |
+| CHAT-03 | Phase 1 | Complete |
 | CHAT-04 | Phase 1 | Complete |
 | SET-01 | Phase 2 | Pending |
 | SET-02 | Phase 2 | Pending |
