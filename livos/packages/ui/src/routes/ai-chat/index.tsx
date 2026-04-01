@@ -504,7 +504,7 @@ export default function AiChat() {
 						<div
 							ref={scrollContainerRef}
 							onScroll={handleScroll}
-							className='flex-1 overflow-y-auto overscroll-contain p-3 md:p-6'
+							className='flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 md:p-6'
 						>
 							{displayMessages.length === 0 ? (
 								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
