@@ -1,247 +1,436 @@
-# Feature Research: Web-Based Remote Desktop Streaming
+# Feature Landscape: v23.0 Mobile PWA
 
-**Domain:** Browser-based remote desktop streaming for self-hosted servers
-**Researched:** 2026-03-25
-**Confidence:** HIGH (well-established domain with mature solutions; Apache Guacamole, KasmVNC, noVNC, Chrome Remote Desktop all provide reference implementations)
+**Domain:** Progressive Web App for self-hosted AI server OS (phone-like mobile experience)
+**Researched:** 2026-04-01
+**Overall Confidence:** HIGH (MDN docs, Apple developer docs, codebase audit, PWA ecosystem research)
 
-## Feature Landscape
+## Existing Infrastructure (Already Built)
 
-### Table Stakes (Users Expect These)
+Before listing features to build, here is what the codebase already provides:
 
-Features users assume exist in any web-based remote desktop. Missing these = product feels broken or unusable.
+| Existing Capability | Where | Status |
+|---------------------|-------|--------|
+| `useIsMobile()` hook (< 1024px) | `hooks/use-is-mobile.ts` | Used in 30+ files |
+| `useIsSmallMobile()` (< 640px) | `hooks/use-is-mobile.ts` | Available |
+| `WindowsContainer` returns null on mobile | `modules/window/windows-container.tsx:14` | Working |
+| `SheetLayout` for mobile routing | `layouts/sheet.tsx` | Working |
+| Vaul-based drawers for mobile | Settings, Files | Working |
+| `site.webmanifest` with standalone display | `public/site.webmanifest` | Minimal (no start_url, no description) |
+| 192x192 + 512x512 Android Chrome icons | `public/favicon/` | Present |
+| `apple-touch-icon.png` (180x180) | `public/favicon/` | Present |
+| `100dvh` for viewport height | `layouts/sheet.tsx` | Adopted |
+| Responsive Tailwind breakpoints (sm/md/lg/xl) | `utils/tw.ts` | Established |
+| One `env(safe-area-inset-bottom)` usage | `files/rewind/index.tsx:267` | Partial |
+| `theme-color` meta tag | `index.html` | Present (#f8f9fc) |
+| System apps array with routes | `providers/apps.tsx` | 16 system apps defined |
+| DockSpacer for bottom spacing | `modules/desktop/dock.tsx` | Working |
+| Dock has mobile icon size (44px) | `modules/desktop/dock.tsx:37` | Working |
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Real-time screen rendering** | Core purpose of the product. Users expect to see their desktop in the browser with <100ms visible latency | HIGH | Requires efficient screen capture, encoding (JPEG/WebP/PNG), WebSocket transport, and canvas rendering. 30 FPS minimum for usable interaction; 60 FPS for desktop-like feel. KasmVNC achieves 60fps at 1080p with WebP+JPEG mix |
-| **Mouse input (click, move, drag, scroll)** | Cannot interact with desktop without mouse. Every remote desktop solution supports this | MEDIUM | Map browser mouse events to remote coordinates. Must handle coordinate scaling when display is scaled/fit-to-window. Scroll wheel must map correctly |
-| **Keyboard input (typing + shortcuts)** | Cannot interact with desktop without keyboard. Users expect to type naturally including special characters | HIGH | Must capture key events before browser processes them. `event.preventDefault()` on keydown. Handle international keyboards, dead keys, IME. Browser steals some shortcuts (Ctrl+W, Ctrl+T, F5, F11) -- these CANNOT be intercepted in non-fullscreen mode |
-| **Dynamic resolution / fit-to-window** | Users expect the remote desktop to fill their browser viewport, not show a tiny fixed-size box or require scrolling | MEDIUM | Two approaches: (1) scale the rendered image client-side (simpler, blurry), (2) tell the server to resize the virtual display to match browser viewport (crisp, requires xrandr/KasmVNC allow_resize). LivOS should use approach (2) -- server-side resize to match client dimensions |
-| **Connection status indicator** | Users need to know if they're connected, reconnecting, or disconnected. Without this, a frozen screen is ambiguous -- is the remote machine frozen, or is the connection dead? | LOW | Simple status badge: Connected (green), Reconnecting (yellow), Disconnected (red). Show latency in ms. RDP uses 1-4 bars based on RTT + bandwidth |
-| **Automatic reconnection** | Network blips are common. Users should not have to manually refresh the page or re-navigate to resume their session | MEDIUM | Exponential backoff reconnect on WebSocket close. noVNC has `reconnect` and `reconnect_delay` options. The remote desktop session on the server persists -- only the viewer connection drops. LivOS already implements this pattern in the agent relay (heartbeat + exponential backoff) |
-| **Text clipboard sync (copy/paste)** | Users absolutely expect to copy text on their local machine and paste into the remote desktop, and vice versa. Without this, the remote desktop feels like a video stream, not a workspace | HIGH | Browser Clipboard API (navigator.clipboard) requires HTTPS + secure context + user gesture for read. Chromium browsers support it well; Firefox has restrictions. Guacamole uses a sidebar text area as fallback. KasmVNC has seamless clipboard on Chromium. LivOS approach: use Clipboard API with Guacamole-style text area fallback for non-Chromium |
-| **Authentication gate** | The remote desktop must not be publicly accessible. Users expect login before access | LOW | LivOS already has JWT auth + `livinity_token` cookie. Caddy `nativeApps` pattern already does cookie-based gating with login redirect. Zero new work -- just register `pc` subdomain as a native app |
-| **Cursor rendering** | Users need to see where their mouse is on the remote desktop. Dual-cursor (local + remote) is standard but jarring | MEDIUM | Best UX: hide the local cursor over the canvas, render only the remote cursor position. This avoids the "two cursors" problem. On high-latency connections, show local cursor as dot with remote cursor as arrow (Guacamole approach). KasmVNC hides local cursor and renders server cursor in the stream |
-| **Session persistence across reconnects** | When the browser tab is closed or network drops, the remote desktop session should persist on the server. Reopening the URL should reconnect to the same session, not start a new login | MEDIUM | The VNC/RDP session runs independently of the viewer connection. Closing the browser only drops the WebSocket -- the X11 session stays alive. On reconnect, the viewer re-attaches. This is inherent in VNC architecture. Important: set idle timeout (e.g., 30 min) so abandoned sessions eventually clean up |
-| **Fullscreen mode** | Users expect to go fullscreen for an immersive desktop experience. This also enables capturing more keyboard shortcuts | LOW | Use Fullscreen API (`element.requestFullscreen()`). Provide a toolbar button. In fullscreen, most browser shortcuts are suppressed, solving the Ctrl+W/Ctrl+T problem. Escape exits fullscreen (browser-enforced, cannot override). Show a floating toolbar overlay for connection controls |
+**Key gap:** Window-only apps (AI Chat, Server, Agents, Schedules, Terminal) have NO route in the router -- they exist only as window contents. On mobile, clicking dock icons triggers `onOpenWindow` which silently fails since `WindowsContainer` returns null. These apps are completely inaccessible on mobile today.
 
-### Differentiators (Competitive Advantage)
+---
 
-Features that set LivOS remote desktop apart from generic VNC-in-browser. Aligned with LivOS core value: "one-command deployment, accessible anywhere."
+## Table Stakes
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Zero-config install via install.sh** | Competitors (Guacamole, Kasm Workspaces) require multi-step Docker/manual setup. LivOS auto-detects GUI presence at install time and configures everything. User just opens `pc.username.livinity.io` | MEDIUM | install.sh checks for X11/Wayland display server (`systemctl list-units --type=target \| grep graphical` or `loginctl show-session`). If GUI detected: install VNC server, configure systemd service, add Caddy subdomain. If headless: skip entirely. Fits LivOS "one command" ethos |
-| **Integrated JWT auth (no separate login)** | Guacamole has its own auth system. KasmVNC has its own auth. With LivOS, the user is already logged in -- the remote desktop is just another "app" behind the same session cookie. No double-login | LOW | Existing `nativeApps` Caddy pattern handles this. The `livinity_token` cookie is already set by LivOS login. Caddy checks for cookie presence, redirects to `/login` if absent. The streaming backend receives already-authenticated requests |
-| **AI-aware desktop (existing agent integration)** | LivOS already has AI Computer Use (v15.0-v17.0) with screenshot analysis, accessibility tree, mouse/keyboard automation. The remote desktop viewer is the visual companion -- users can watch AI operate their desktop in real-time. No competitor offers this combination | LOW | The remote desktop stream and the AI Computer Use system share the same X11 session. When AI takes actions via robotjs, the user sees them in real-time through the stream. The existing live monitoring UI (screenshot feed + action timeline) could be integrated into the streaming view |
-| **Per-user session isolation** | In multi-user LivOS, each user gets their own desktop session. User A cannot see User B's desktop | HIGH | Requires per-user X11 sessions or per-user VNC instances. For v1, this is out of scope (single display, single user). For future: Xvfb per user, or container-based desktop isolation. Flag this as v2 feature |
-| **Adaptive quality based on connection** | Automatically reduce image quality and frame rate when bandwidth is low, increase when bandwidth is available. Smooth experience regardless of connection quality | MEDIUM | KasmVNC does this natively with dynamic JPEG/WebP quality settings based on screen change rates. If using KasmVNC as the backend, this is built-in. If custom: measure WebSocket send buffer backpressure to estimate bandwidth, adjust JPEG quality (30-90) and frame rate (10-60 fps) accordingly |
-| **Mobile-friendly touch controls** | LivOS is "accessible anywhere" -- that includes phones and tablets. Users should be able to interact with their server desktop from a phone in a pinch | MEDIUM | Touch-to-click, pinch-to-zoom, two-finger scroll, three-finger right-click. Guacamole's touch emulation is the gold standard here: relative pointer mode (drag to move cursor), tap to click, two-finger tap for right-click. Virtual keyboard trigger button for mobile. Important: this is a "works" feature, not a "great" feature -- full productivity on mobile is unrealistic for a desktop environment |
+Features users expect from any installable PWA. Missing = feels broken or unfinished.
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### TS-01: PWA Installability (Manifest + Service Worker)
 
-Features that seem good but create substantial complexity, maintenance burden, or UX problems for limited value.
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | Without proper manifest and service worker, iOS "Add to Home Screen" shows a web bookmark, not an app. Android won't show install prompt. |
+| **Complexity** | Low |
+| **Depends On** | Nothing (foundational) |
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **Audio streaming** | "I want to hear my desktop" -- video playback, system sounds, music | Audio adds massive complexity: PulseAudio/PipeWire capture, Opus encoding, separate WebRTC audio channel, sync with video frames, browser autoplay policies. Doubles bandwidth. Most server desktops have no meaningful audio. PROJECT.md explicitly defers this | Defer to v2+. If needed, use WebRTC audio channel added later as separate concern. For v1, document that audio is not streamed |
-| **File transfer via drag-and-drop** | "I want to drag files from my desktop to the remote" | Requires virtual drive mapping (SFTP/RDPDR), upload progress UI, large file handling, security scanning. Guacamole does this but it is one of their most bug-reported features. LivOS already has a File Manager app | Use the existing LivOS File Manager (`files.username.livinity.io`) for file transfer. It is already built, tested, and accessible via subdomain. Adding a second file transfer mechanism through the desktop stream is redundant |
-| **Multi-monitor support** | "I have two monitors on my server" | Browser tab can only show one viewport. Multi-monitor in web requires opening multiple browser tabs/windows for each display (Citrix approach) -- confusing UX. PROJECT.md explicitly scopes to single display | Single display for v1. If the server has multiple monitors, stream the primary. Add monitor selector in v2 if demand materializes |
-| **Clipboard sync for images/files** | "I want to paste screenshots between local and remote" | Binary clipboard requires Chromium-only `navigator.clipboard.read()` with MIME type negotiation. Does not work in Firefox or Safari. Creates false expectation of full clipboard support | Support text-only clipboard sync in v1. This covers 95% of clipboard use (URLs, code snippets, passwords). Binary clipboard is a v2 Chromium-only enhancement |
-| **Printing redirection** | "I want to print from remote to my local printer" | Requires virtual printer driver on remote, PDF generation, download to browser, then local print dialog. Extremely niche for a server OS. No web-based solution does this well | Not applicable for LivOS use case. Servers do not print |
-| **USB device redirection** | "I want to use my local USB device on the remote" | WebUSB API is Chromium-only and restricted. USB redirection requires kernel-level drivers on both ends. No browser-based solution supports this | Out of scope. Use SSH or agent tools for device access |
-| **Hardware-accelerated video decode (WebRTC)** | "Use WebRTC for lower latency" | WebRTC adds STUN/TURN infrastructure, codec negotiation, ICE candidates, and NAT traversal complexity. For a same-LAN or tunnel-proxied connection, WebSocket + canvas is simpler and sufficient. KasmVNC supports WebRTC but it is optional for high-latency scenarios | Start with WebSocket + canvas (proven, simple). WebRTC can be added later as an optional transport for users with high-latency tunnels. The tunnel relay already solves NAT traversal |
+**What to build:**
+- Enhance `site.webmanifest`: add `start_url: "/"`, `description`, `scope: "/"`, `id: "/"`, proper `theme_color` and `background_color` matching the app
+- Add maskable icon variant (512x512 with safe zone padding) for Android adaptive icons
+- Add `vite-plugin-pwa` to Vite config with `generateSW` strategy for automatic service worker
+- Service worker should precache the app shell (HTML, CSS, JS bundles) for instant loading after first visit
+
+**Existing asset:** `public/site.webmanifest` exists but is minimal. `public/favicon/` has the required icon sizes.
+
+**Confidence:** HIGH (MDN installability requirements well-documented)
+
+---
+
+### TS-02: iOS "Add to Home Screen" Meta Tags
+
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | iOS ignores standard manifest for splash screens and status bar styling. Without Apple-specific meta tags, the PWA looks like a webpage in disguise. |
+| **Complexity** | Low |
+| **Depends On** | TS-01 (manifest) |
+
+**What to build in `index.html`:**
+- `<meta name="apple-mobile-web-app-capable" content="yes">` -- enables standalone mode
+- `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">` -- renders content under the status bar (required for full edge-to-edge display)
+- `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">` -- the `viewport-fit=cover` part is critical for safe area insets to work
+- `<link rel="apple-touch-startup-image" ...>` for iOS splash screens (multiple sizes for device coverage)
+
+**Important detail:** The viewport meta already exists in `index.html` but lacks `viewport-fit=cover`. This single addition unlocks `env(safe-area-inset-*)` CSS functions.
+
+**Confidence:** HIGH (Apple developer docs, widely documented)
+
+---
+
+### TS-03: Safe Area Handling (Notch + Home Indicator)
+
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | Without safe area padding, content renders behind the notch (top) and overlaps the home indicator (bottom) on every iPhone with Face ID and Android gesture-nav devices. |
+| **Complexity** | Low-Medium |
+| **Depends On** | TS-02 (viewport-fit=cover meta tag) |
+
+**What to build:**
+- Global CSS: `padding-top: env(safe-area-inset-top, 0px)` on the root app container
+- Bottom nav/dock: `padding-bottom: env(safe-area-inset-bottom, 0px)` -- the home indicator area is typically 34px on iPhones
+- Left/right insets for landscape mode: `padding-left: env(safe-area-inset-left, 0px)`, `padding-right: env(safe-area-inset-right, 0px)`
+- Fixed/absolute positioned elements (bottom tab bar, FABs, toasts) must account for bottom inset
+- Toast positioning (`sonner`) needs offset adjustment for safe area
+
+**Existing precedent:** `files/rewind/index.tsx` already uses `env(safe-area-inset-bottom)` with calc(). Apply same pattern globally.
+
+**Confidence:** HIGH (CSS env() is well-supported in all modern browsers; the codebase already uses it once)
+
+---
+
+### TS-04: Mobile App Grid (Home Screen with System Apps)
+
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | On mobile, users need a phone-like home screen showing all apps as tappable icons. The desktop dock only shows a few apps; the grid is the primary launcher. |
+| **Complexity** | Low |
+| **Depends On** | TS-05 (full-screen app rendering -- apps must open somewhere when tapped) |
+
+**What to build:**
+- On mobile, the app grid should display ALL system apps that are mobile-accessible: AI Chat, Settings, Files, Server, Agents, Schedules, Terminal, plus user-installed Docker apps
+- Filter out desktop-only apps on mobile (Remote Desktop, Chrome, web app shortcuts like Gmail/Facebook/YouTube/WhatsApp -- these require the KasmVNC streaming window which is desktop-only)
+- App icons should use the existing `AppIcon` component with proper touch targets (already 66px wide on small screens per `useGridDimensions`)
+- Tapping an app icon navigates to a full-screen route (not a window)
+- The existing drag-to-reorder grid works with pointer events and should function on mobile already via `@dnd-kit/core` PointerSensor
+
+**Existing infrastructure:** `AppGrid` component with responsive sizing (66x86px on mobile vs 112x106px on desktop) and `DesktopContent` already renders both system and user apps.
+
+**Confidence:** HIGH (mostly filtering and routing changes to existing components)
+
+---
+
+### TS-05: Full-Screen App Rendering on Mobile
+
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | Floating windows make no sense on a phone. Every app must render full-screen with a way to go back. This is the single most critical mobile feature -- without it, AI Chat, Server, Terminal, and Agents are completely unreachable on mobile. |
+| **Complexity** | Medium |
+| **Depends On** | Nothing (foundational) |
+
+**What to build:**
+- Register mobile routes in `router.tsx` for all window-only apps: `/ai-chat`, `/server-control`, `/subagents`, `/schedules`, `/terminal`, `/my-devices`
+- Create a `MobileAppLayout` wrapper component that renders the app content full-screen with:
+  - A top header bar (app icon, title, back button)
+  - Full-height content area
+  - Safe area padding (top and bottom)
+- On mobile, `DockItem` `onClick` should navigate to the app route instead of calling `windowManager.openWindow()`
+- Desktop behavior unchanged: window-only apps continue to open in floating windows
+
+**Architecture decision:** Use route-based rendering (not state-based). Each app gets a URL (`/ai-chat`, `/terminal`, etc.) which means browser back button works, deep linking works, and the URL is shareable. The existing `SheetLayout` pattern from settings/files already demonstrates this approach.
+
+**Key challenge:** Window-only app components (AI Chat, Server Control, etc.) currently render inside `WindowContent` which wraps them in window chrome. The mobile layout needs to render the same content components but inside `MobileAppLayout` instead. Factor the app content out of the window wrapper so both layouts can use it.
+
+**Confidence:** HIGH (clear pattern from existing SheetLayout; React Router is already in use)
+
+---
+
+### TS-06: Mobile Navigation (Back Button + No Dock)
+
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | iOS PWAs in standalone mode have NO browser back button and NO URL bar. If you don't provide navigation, users are trapped in whatever screen they opened. Android has a system back button but users still expect in-app navigation. |
+| **Complexity** | Medium |
+| **Depends On** | TS-05 (full-screen app rendering) |
+
+**What to build:**
+- **Hide the desktop dock on mobile** -- it takes up space and the magnification/hover effect is a desktop paradigm. Replace with mobile-appropriate navigation.
+- **Back button in MobileAppLayout header** -- uses `useNavigate(-1)` or navigates to home. Must be a visible, tappable (44px+) button.
+- **Bottom tab bar for mobile** -- 4-5 primary actions always visible: Home, AI Chat, Files, Settings, and optionally one more (Server or Agents). This is the iOS/Android standard pattern.
+  - Position: fixed bottom, above `env(safe-area-inset-bottom)`
+  - Icons + labels, active state indicator
+  - 49-50px height (iOS standard) + safe area padding
+- **Home button/gesture** -- tapping the Home tab or the app header logo returns to the app grid
+
+**Why bottom tab bar (not hamburger menu):** Research consistently shows 72% of users prefer visible navigation. Bottom tabs increase engagement by 58% vs hidden menus. With only 5 primary apps, all fit in a tab bar. The hamburger menu is for 10+ navigation items.
+
+**Confidence:** HIGH (well-established mobile UX pattern; bottom tab bar is standard in every major mobile app)
+
+---
+
+### TS-07: Mobile AI Chat Layout
+
+| Attribute | Value |
+|-----------|-------|
+| **Why Expected** | AI Chat is the primary feature of Livinity. If it doesn't work well on mobile, the PWA has no value proposition. The current AI Chat has a fixed 256px sidebar that doesn't work on mobile. |
+| **Complexity** | Medium |
+| **Depends On** | TS-05 (full-screen rendering), TS-06 (navigation) |
+
+**What to build:**
+- Full-screen chat view on mobile: message list fills the viewport, input area at bottom
+- Conversation sidebar hidden by default on mobile; accessible via a hamburger icon in the top bar or swipe-right gesture
+- Chat input area: responsive padding (`p-3` instead of `p-6`), input field stretches full width
+- Message bubbles: max-width responsive, readable on 375px viewport
+- Streaming markdown rendering must work in mobile viewport (existing `streamdown` + Shiki should work but needs viewport testing)
+- Tool call visualization cards: stack vertically, no horizontal overflow
+
+**Existing analysis:** Phase 8 research (v1.1-08) already identified this issue with specific fix patterns (drawer sidebar, mobile chat header).
+
+**Confidence:** HIGH (clear implementation path from Phase 8 research)
+
+---
+
+## Differentiators
+
+Features that set the Livinity mobile PWA apart. Not expected, but significantly improve the experience.
+
+### DF-01: iOS Splash Screens
+
+| Attribute | Value |
+|-----------|-------|
+| **Value Proposition** | Without splash screens, iOS shows a white screen for 1-2 seconds while the PWA loads. With them, users see a branded loading screen identical to native apps. |
+| **Complexity** | Low |
+| **Depends On** | TS-02 (Apple meta tags) |
+
+**What to build:**
+- Generate `apple-touch-startup-image` PNGs for common iPhone sizes:
+  - iPhone SE: 640x1136
+  - iPhone 8: 750x1334
+  - iPhone X/XS/11 Pro: 1125x2436
+  - iPhone XR/11: 828x1792
+  - iPhone 12/13/14: 1170x2532
+  - iPhone 14/15 Pro: 1179x2556
+  - iPhone 14/15 Pro Max: 1290x2796
+  - iPhone 16 Pro: 1206x2622
+  - iPhone 16 Pro Max: 1320x2868
+- Each image: Livinity logo centered on the app's background color
+- Add corresponding `<link rel="apple-touch-startup-image" media="...">` tags in `index.html`
+- Use a build-time script or tool (e.g., `pwa-asset-generator` or Progressier) to generate all sizes
+
+**Why a differentiator:** Most PWAs skip splash screens because of the boilerplate. Adding them signals polish and professionalism.
+
+**Confidence:** HIGH (well-documented Apple feature; automated tools exist)
+
+---
+
+### DF-02: Page Transitions (Slide Animations)
+
+| Attribute | Value |
+|-----------|-------|
+| **Value Proposition** | Native apps have smooth slide transitions between screens. Without them, PWA navigation feels like page loads. Transitions are the #1 difference users perceive between "native" and "web." |
+| **Complexity** | Medium |
+| **Depends On** | TS-05 (route-based app rendering) |
+
+**What to build:**
+- Slide-right animation when navigating into an app (home grid -> app)
+- Slide-left animation when navigating back (app -> home grid)
+- Use Framer Motion's `AnimatePresence` with `mode="wait"` for exit/enter sequencing
+- Shared element transitions for app icons (icon expands into full-screen app) if feasible
+
+**Implementation approach:** Framer Motion is already installed and used throughout. Wrap the mobile route outlet in `AnimatePresence` with slide variants:
+```
+enter: { x: "100%", opacity: 0 } -> { x: 0, opacity: 1 }
+exit:  { x: 0 } -> { x: "-30%", opacity: 0 }
+```
+
+**Alternative (future):** React's experimental `<ViewTransition>` component (React canary channel, April 2025) offers declarative transitions using the browser's native View Transition API. However, it requires `react@experimental` and is not production-stable yet. Use Framer Motion now; migrate to `<ViewTransition>` when it ships in stable React.
+
+**Confidence:** MEDIUM (Framer Motion approach is proven; timing/feel requires iteration)
+
+---
+
+### DF-03: Pull-to-Refresh on Home Screen
+
+| Attribute | Value |
+|-----------|-------|
+| **Value Proposition** | Native phone home screens support pull-to-refresh to update app states. On the Livinity home grid, this could refresh Docker container statuses (running/stopped indicators). |
+| **Complexity** | Low |
+| **Depends On** | TS-04 (mobile app grid) |
+
+**What to build:**
+- On the home screen (app grid), pulling down triggers a data refresh (re-query `apps.list` and container states)
+- Use `overscroll-behavior-y: contain` on the app container to prevent Safari's native page reload
+- Implement a simple pull indicator (spinner or Livinity logo animation) using touch events
+- Libraries: `react-use-pull-to-refresh` or a simple custom 40-line implementation using `touchstart`/`touchmove`/`touchend`
+
+**Important:** Must disable Safari's default pull-to-refresh behavior first via CSS, then implement custom behavior.
+
+**Confidence:** HIGH (well-documented pattern; CSS + touch events)
+
+---
+
+### DF-04: Offline App Shell
+
+| Attribute | Value |
+|-----------|-------|
+| **Value Proposition** | With a cached app shell, the PWA loads instantly (< 1 second) even on slow/no network. Users see the familiar UI immediately, then data populates. This is what makes Starbucks PWA feel native. |
+| **Complexity** | Low (with vite-plugin-pwa) |
+| **Depends On** | TS-01 (service worker) |
+
+**What to build:**
+- Precache the app shell: index.html, JS bundles, CSS, font files, app icons
+- Runtime caching for API responses: network-first with fallback to stale cache for tRPC queries
+- Offline indicator: when network is unavailable, show a subtle banner ("Offline -- showing cached data")
+- Do NOT cache Docker container state or real-time data -- only cache the UI shell and static assets
+
+**Strategy:** `generateSW` from `vite-plugin-pwa` handles precaching automatically. Add runtime caching rules for `/trpc/*` endpoints with `NetworkFirst` strategy and 24-hour cache TTL.
+
+**iOS caveat:** Safari limits cache to 50MB. The Livinity UI bundle (after code splitting) should be well under this. Monitor with build-size reporting.
+
+**Confidence:** HIGH (vite-plugin-pwa automates most of this)
+
+---
+
+### DF-05: Haptic Feedback on Interactions
+
+| Attribute | Value |
+|-----------|-------|
+| **Value Proposition** | Subtle vibration on app launch, long-press, and toggle switches makes the PWA feel tactile and native. Modern browsers support the Vibration API. |
+| **Complexity** | Very Low |
+| **Depends On** | Nothing |
+
+**What to build:**
+- `navigator.vibrate(10)` on app icon tap
+- `navigator.vibrate(5)` on toggle switches and button presses
+- Feature-detect and no-op on unsupported browsers (Safari/iOS does NOT support Vibration API)
+
+**iOS limitation:** The Vibration API is not supported on iOS Safari. This is Android-only. Still worth adding for the Android PWA experience.
+
+**Confidence:** HIGH (trivial implementation; API is simple)
+
+---
+
+### DF-06: PWA Install Prompt (Custom UI)
+
+| Attribute | Value |
+|-----------|-------|
+| **Value Proposition** | Users don't know they can install a PWA. A tasteful install banner guides them. |
+| **Complexity** | Low |
+| **Depends On** | TS-01 (manifest + service worker) |
+
+**What to build:**
+- **Android:** Listen for `beforeinstallprompt` event, show a custom "Install Livinity" banner with the app icon and an Install button. Dismiss permanently after install or 3 dismissals.
+- **iOS:** Detect iOS Safari (no `beforeinstallprompt`), show a manual instruction banner: "Tap Share > Add to Home Screen" with visual guide. Only show on first visit or when not in standalone mode.
+- **Standalone detection:** `window.matchMedia('(display-mode: standalone)').matches` -- hide install prompts when already installed.
+
+**Confidence:** HIGH (standard pattern; well-documented)
+
+---
+
+## Anti-Features
+
+Features to explicitly NOT build for v23.0.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Push notifications** | Requires iOS 16.4+, must be added to home screen first, no background sync means unreliable delivery, EU users get no support. Adds complexity for marginal value in a self-hosted tool. | Defer to future milestone. Focus on the visual/interaction layer first. |
+| **Offline data persistence (IndexedDB)** | iOS aggressively evicts IndexedDB after 7 days of inactivity. Building complex offline-first data sync for a server management tool (which inherently needs a server connection) is wasted effort. | Cache the app shell only. Show "offline" indicator for data-dependent screens. The server is the source of truth. |
+| **Native-like swipe-to-go-back gesture** | iOS PWA standalone mode already provides edge-swipe-to-go-back on some versions. Implementing custom swipe detection conflicts with this system gesture and causes double-navigation bugs (documented Ionic issue #22299). | Provide a visible back button. Let the system gesture work naturally. |
+| **Background sync / periodic updates** | Not supported on iOS at all. On Android, behavior is unreliable. A self-hosted server OS doesn't benefit from background sync -- users check it when they want to. | Poll for updates only when the app is in the foreground. |
+| **Vibration patterns / advanced haptics** | Over-engineering. Complex vibration patterns are annoying, not premium. | Single-pulse vibrate (10ms) on key actions only, Android only. |
+| **Desktop UI changes** | The desktop experience with floating windows, dock magnification, and keyboard shortcuts is mature and working. Any mobile work must leave desktop completely untouched. | Use `useIsMobile()` guards. All mobile-specific code behind conditional rendering. |
+| **Widget support on mobile home screen** | Desktop widgets (clock, system info, app status) are designed for the spacious desktop grid. On a phone-sized grid they would consume too much space and conflict with app icons. | Show widgets only on desktop. Mobile home screen is apps-only. |
+| **Landscape orientation optimization** | Livinity is a portrait-first mobile experience. Landscape adds complexity for every screen (safe areas change, layouts reorganize) with minimal user value for a server management PWA. | Lock to portrait in manifest: `"orientation": "portrait"`. Users can still rotate but we don't optimize for it. |
+
+---
 
 ## Feature Dependencies
 
 ```
-[Authentication (JWT/Cookie)] (EXISTING)
-    |
-    v
-[Caddy Subdomain Routing: pc.{user}.domain] (EXISTING PATTERN)
-    |
-    v
-[VNC Server on Desktop] (NEW - core dependency)
-    |
-    +---> [Screen Capture & Encoding]
-    |         |
-    |         v
-    |     [WebSocket Transport]
-    |         |
-    |         v
-    |     [Browser Canvas Rendering] ----> [Dynamic Resolution]
-    |
-    +---> [Mouse Input Handling] --------> [Cursor Rendering]
-    |
-    +---> [Keyboard Input Handling] -----> [Shortcut Passthrough]
-    |
-    +---> [Clipboard Sync]
-    |
-    +---> [Connection Management]
-              |
-              +---> [Status Indicator]
-              +---> [Auto-Reconnect]
-              +---> [Session Persistence]
+TS-01 (Manifest + SW) ---- required by ---> TS-02 (iOS Meta Tags)
+                      \                      |
+                       \                     v
+                        \---> DF-04 (Offline Shell)    DF-06 (Install Prompt)
+                               
+TS-02 (iOS Meta Tags) ----> TS-03 (Safe Areas) ----> DF-01 (Splash Screens)
 
-[Fullscreen Mode] --enhances--> [Keyboard Input Handling] (captures more shortcuts)
+TS-05 (Full-Screen Apps) ---> TS-06 (Navigation) ---> TS-07 (AI Chat Mobile)
+         |                         |
+         v                         v
+    TS-04 (App Grid)          DF-02 (Transitions)
 
-[Touch Controls] --enhances--> [Mouse Input Handling] (alternative input method)
-
-[Adaptive Quality] --enhances--> [Screen Capture & Encoding] (bandwidth optimization)
-
-[AI Computer Use (v15-17)] --shares-session--> [VNC Server on Desktop] (same X11 session)
-
-[install.sh GUI Detection] --gates--> [VNC Server on Desktop] (skip on headless)
+DF-03 (Pull-to-Refresh) depends on TS-04 (App Grid)
 ```
 
-### Dependency Notes
+**Critical path:** TS-01 -> TS-02 -> TS-03 must come first (foundational PWA setup). Then TS-05 -> TS-06 -> TS-04 (mobile app rendering). Then TS-07 (AI Chat). Differentiators can be layered on after.
 
-- **Authentication requires nothing new:** LivOS JWT + `livinity_token` cookie + Caddy `nativeApps` pattern is already implemented. The remote desktop just needs to be registered as a native app subdomain.
-- **VNC Server is the foundational dependency:** Everything else (rendering, input, clipboard) flows through the VNC protocol or the chosen streaming backend. This must be set up first.
-- **Keyboard Input benefits from Fullscreen:** In normal browser mode, Ctrl+W, Ctrl+T, Ctrl+N, F5, F11, and other browser shortcuts cannot be intercepted. Fullscreen mode suppresses most of these. Users should be encouraged to go fullscreen for best experience.
-- **AI Computer Use shares the X11 session:** The VNC server and robotjs both operate on the same display (`:0` or `:1`). No conflict -- VNC streams what robotjs manipulates. This is a natural integration point.
-- **install.sh GUI detection gates the entire feature:** On headless servers (no X11/Wayland), the remote desktop feature should be silently skipped. Detection: `systemctl list-units --type=target | grep graphical.target` or check for `$DISPLAY` environment variable.
+---
 
-## MVP Definition
+## MVP Recommendation
 
-### Launch With (v1 -- v18.0 milestone)
+### Must-Have (Phase 1 -- PWA Foundation)
+1. **TS-01** PWA manifest + service worker (vite-plugin-pwa)
+2. **TS-02** iOS meta tags (viewport-fit=cover, apple-mobile-web-app-capable)
+3. **TS-03** Safe area handling (CSS env() on root, bottom nav, toasts)
 
-Minimum viable remote desktop streaming. Validates the concept and is genuinely usable for server administration.
+### Must-Have (Phase 2 -- Mobile App Experience)
+4. **TS-05** Full-screen app rendering (mobile routes for window-only apps)
+5. **TS-06** Mobile navigation (hide dock, add bottom tab bar, back button)
+6. **TS-04** Mobile app grid (show system apps, filter desktop-only apps)
+7. **TS-07** AI Chat mobile layout (full-screen, drawer sidebar)
 
-- [ ] **VNC server auto-setup in install.sh** -- detect GUI, install KasmVNC or TigerVNC, configure systemd service, bind to localhost only
-- [ ] **Caddy subdomain registration** -- `pc.{username}.{domain}` using existing `nativeApps` pattern with JWT cookie gating
-- [ ] **WebSocket proxy/bridge** -- either direct WebSocket passthrough (KasmVNC has built-in web client) or a lightweight websockify bridge for TigerVNC
-- [ ] **Real-time screen rendering in browser** -- HTML5 canvas, minimum 30 FPS, server-side resolution matching client viewport
-- [ ] **Mouse input** -- click (left/right/middle), move, drag, scroll wheel, coordinate mapping with display scaling
-- [ ] **Keyboard input** -- full key capture with `event.preventDefault()`, dead keys, modifier keys (Ctrl, Alt, Shift, Super)
-- [ ] **Text clipboard sync** -- bidirectional text copy/paste using Clipboard API with text area fallback
-- [ ] **Connection status indicator** -- green/yellow/red badge with latency display
-- [ ] **Auto-reconnect on disconnect** -- exponential backoff, session persistence on server side
-- [ ] **Fullscreen mode** -- button + Fullscreen API for immersive experience and better keyboard capture
-- [ ] **Cursor rendering** -- hide local cursor over canvas, render remote cursor from stream
+### Should-Have (Phase 3 -- Polish)
+8. **DF-01** iOS splash screens
+9. **DF-02** Page transitions (Framer Motion slide animations)
+10. **DF-04** Offline app shell (runtime caching for API responses)
+11. **DF-06** PWA install prompt (custom banner for iOS + Android)
 
-### Add After Validation (v18.x)
+### Nice-to-Have (Phase 3 or defer)
+12. **DF-03** Pull-to-refresh on home screen
+13. **DF-05** Haptic feedback (Android only, trivial)
 
-Features to add once the core streaming is stable and users are actively using it.
+**Defer:** Push notifications, offline data sync, background sync, landscape optimization.
 
-- [ ] **Adaptive quality** -- dynamic JPEG/WebP quality based on bandwidth estimation (add when users report performance issues over tunnels)
-- [ ] **Mobile touch controls** -- touch-to-click, pinch-to-zoom, virtual keyboard button (add when analytics show mobile usage)
-- [ ] **On-screen keyboard for special keys** -- Ctrl+Alt+Del, Print Screen, Super key, function keys (add when users request specific shortcuts that cannot be captured)
-- [ ] **Connection quality history** -- latency/FPS graph over time for debugging connection issues
-- [ ] **Session timeout configuration** -- admin setting for idle timeout duration (default 30 min, configurable)
+---
 
-### Future Consideration (v2+)
+## Complexity Summary
 
-Features to defer until remote desktop is proven and multi-user demand exists.
+| Feature | Complexity | Estimated Effort | New Dependencies |
+|---------|-----------|------------------|------------------|
+| TS-01 Manifest + SW | Low | 2-3 hours | `vite-plugin-pwa` |
+| TS-02 iOS Meta Tags | Low | 1-2 hours | None |
+| TS-03 Safe Areas | Low-Med | 2-4 hours | None (CSS only) |
+| TS-04 App Grid | Low | 2-3 hours | None |
+| TS-05 Full-Screen Apps | Medium | 4-6 hours | None |
+| TS-06 Navigation | Medium | 4-6 hours | None |
+| TS-07 AI Chat Mobile | Medium | 4-6 hours | None |
+| DF-01 Splash Screens | Low | 2-3 hours | Build tool (optional) |
+| DF-02 Transitions | Medium | 3-4 hours | None (Framer Motion) |
+| DF-03 Pull-to-Refresh | Low | 1-2 hours | None |
+| DF-04 Offline Shell | Low | 1-2 hours | Part of TS-01 |
+| DF-05 Haptic | Very Low | 30 min | None |
+| DF-06 Install Prompt | Low | 2-3 hours | None |
 
-- [ ] **Audio streaming** -- PulseAudio/PipeWire capture + Opus encoding + WebRTC audio channel. Only if users specifically demand it
-- [ ] **Per-user desktop isolation** -- Xvfb per user or container-based desktops for multi-user LivOS. Requires significant architecture work
-- [ ] **Multi-monitor support** -- monitor selector UI, ability to choose which display to stream
-- [ ] **Binary clipboard (images)** -- Chromium-only Clipboard API for image copy/paste
-- [ ] **WebRTC transport** -- optional lower-latency transport for high-latency tunnel connections
-- [ ] **File drag-and-drop** -- drag files from local browser to remote desktop surface
-- [ ] **Recording/playback** -- record desktop sessions for audit or training (Guacamole supports this)
+**Total estimated:** ~30-40 hours for all features.
 
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority | LivOS Dependency |
-|---------|------------|---------------------|----------|------------------|
-| Screen rendering (30+ FPS) | HIGH | HIGH | P1 | None (new) |
-| Mouse input (click/move/drag/scroll) | HIGH | MEDIUM | P1 | None (new) |
-| Keyboard input + shortcuts | HIGH | HIGH | P1 | None (new) |
-| JWT auth gate | HIGH | LOW | P1 | Existing Caddy nativeApps pattern |
-| Auto-reconnect | HIGH | MEDIUM | P1 | Existing pattern from agent relay |
-| Connection status indicator | HIGH | LOW | P1 | None (new) |
-| Text clipboard sync | HIGH | HIGH | P1 | Browser Clipboard API |
-| Dynamic resolution / fit-to-window | HIGH | MEDIUM | P1 | VNC server config (allow_resize) |
-| Fullscreen mode | MEDIUM | LOW | P1 | Browser Fullscreen API |
-| Cursor rendering (single cursor) | MEDIUM | MEDIUM | P1 | VNC server cursor handling |
-| Session persistence | MEDIUM | LOW | P1 | Inherent in VNC architecture |
-| install.sh GUI detection + setup | HIGH | MEDIUM | P1 | Existing install.sh |
-| Adaptive quality | MEDIUM | MEDIUM | P2 | VNC server encoding config |
-| Mobile touch controls | MEDIUM | MEDIUM | P2 | Touch event handlers |
-| On-screen special key keyboard | LOW | LOW | P2 | UI component |
-| Session timeout config | LOW | LOW | P2 | Admin settings UI |
-| Audio streaming | LOW | HIGH | P3 | PulseAudio/PipeWire + WebRTC |
-| Per-user isolation | MEDIUM | HIGH | P3 | Xvfb/container per user |
-| Multi-monitor | LOW | MEDIUM | P3 | xrandr/display enumeration |
-| WebRTC transport | LOW | HIGH | P3 | STUN/TURN infrastructure |
-
-**Priority key:**
-- P1: Must have for v18.0 launch
-- P2: Should have, add in v18.x iterations
-- P3: Nice to have, defer to future milestone
-
-## Competitor Feature Analysis
-
-| Feature | Apache Guacamole | KasmVNC (built-in client) | noVNC + websockify | Chrome Remote Desktop | LivOS v18.0 Approach |
-|---------|-----------------|-------------------------------|--------------------|-----------------------|---------------------|
-| **Browser-only (no client)** | Yes | Yes | Yes | No (extension) | Yes -- pure browser |
-| **Protocol support** | VNC, RDP, SSH, Telnet | VNC only | VNC only | Proprietary | VNC (sufficient for Linux) |
-| **Auth integration** | Own auth + LDAP/SAML/header | Own auth or API key | None (external) | Google account | LivOS JWT cookie (existing) |
-| **Setup complexity** | Docker + Tomcat + guacd + DB | Single binary + web files | Python websockify + HTML | Google-managed | install.sh one-command |
-| **Dynamic resolution** | VNC: sometimes; RDP: initial only | Yes (allow_resize: true) | Depends on VNC server | Yes | Yes (server-side resize) |
-| **Clipboard** | Text via sidebar panel | Seamless text on Chromium; binary | Text only | Full (native client) | Text via Clipboard API + fallback |
-| **Touch support** | Excellent (3 touch modes) | Basic | Basic | Excellent (3 modes) | Basic touch-to-click for v1 |
-| **Reconnect** | Manual | Manual | Configurable auto | Automatic | Automatic with exponential backoff |
-| **Image encoding** | PNG (server-side) | WebP + JPEG + QOI (adaptive) | Raw framebuffer + Tight | H.264/VP8 | Depends on backend choice |
-| **Audio** | RDP only | PulseAudio capture | No | Yes | No (deferred) |
-| **File transfer** | Yes (SFTP/RDPDR drag-drop) | No | No | Yes | No (use existing File Manager) |
-| **Latency (LAN)** | ~50-100ms | ~16-33ms (60fps) | ~50-100ms | ~16-33ms | Target: <50ms LAN, <150ms tunnel |
-| **Self-hosted** | Yes | Yes | Yes | No | Yes |
-| **AI integration** | No | No | No | No | Yes (shares X11 with AI Computer Use) |
-
-### Key Competitor Insight
-
-No existing solution combines remote desktop streaming with AI desktop automation. LivOS uniquely owns this intersection: users can both watch their desktop and have AI operate it, through the same authenticated web interface. This is the primary differentiator.
-
-## Integration Points with Existing LivOS Infrastructure
-
-| LivOS Component | Integration | Effort |
-|-----------------|------------|--------|
-| **Caddy reverse proxy** | Add `pc` subdomain to `nativeApps` array in `generateFullCaddyfile()`. Cookie-based JWT gating already implemented. WebSocket upgrade headers must be configured | LOW |
-| **JWT authentication** | No changes needed. Existing `livinity_token` cookie validates user. Caddy handles redirect-to-login for unauthenticated requests | NONE |
-| **install.sh** | Add GUI detection section. Check for graphical.target or display server. Conditionally install VNC server, configure systemd service, add firewall rule for VNC port (localhost only) | MEDIUM |
-| **Multi-user routing** | In multi-user mode, wildcard Caddy block routes to livinityd (port 8080). App gateway extracts username from subdomain, validates session, routes to per-user VNC port. Pattern matches existing Docker app routing | MEDIUM |
-| **AI Computer Use (v15-17)** | Shares same X11 display. No integration needed -- robotjs and VNC server both operate on the same framebuffer. AI actions visible in real-time naturally | NONE |
-| **Agent relay (Server5)** | Remote desktop streams locally (not through relay). `pc.username.livinity.io` resolves to user's LivOS server directly via Cloudflare Tunnel or direct DNS. Relay is not involved | NONE |
-
-## Behavioral Expectations (User Mental Model)
-
-Users coming from Chrome Remote Desktop, TeamViewer, AnyDesk, or RDP have specific expectations:
-
-| Behavior | What Users Expect | LivOS Approach |
-|----------|-------------------|----------------|
-| **First connection** | Open URL, see desktop immediately (after auth) | JWT cookie auto-validates. If logged in, desktop streams instantly. If not, redirect to login, then back to desktop |
-| **Resize browser window** | Remote desktop resizes to match | Server-side xrandr resize via VNC protocol. 200ms debounce on window resize events |
-| **Close browser tab** | Desktop keeps running, re-opening URL reconnects | VNC session persists. WebSocket reconnect on page load |
-| **Network interruption** | Brief freeze, then auto-recovery | Auto-reconnect with exponential backoff. Show "Reconnecting..." overlay |
-| **Copy text locally, paste remotely** | Ctrl+V works in remote desktop | Clipboard API intercepts paste, sends text to VNC server clipboard |
-| **Ctrl+Alt+Del** | Security screen on remote machine | On-screen button (cannot capture this combo in browser). Or use Ctrl+Alt+End as alternative shortcut |
-| **Latency** | Responsive enough for terminal work, file browsing, basic GUI. Not expected to be "gaming quality" | Target <50ms LAN, <150ms tunnel. 30 FPS minimum. Acceptable for server admin tasks |
-| **Mobile access** | Basic ability to check on server from phone | Touch-to-click, pinch-to-zoom. Not a primary use case but should work |
+---
 
 ## Sources
 
-- [Apache Guacamole Manual v1.6.0 - User Interface](https://guacamole.apache.org/doc/gug/using-guacamole.html)
-- [Apache Guacamole - HTTP Header Authentication](https://guacamole.apache.org/doc/gug/header-auth.html)
-- [Apache Guacamole - Reverse Proxy](https://guacamole.apache.org/doc/gug/reverse-proxy.html)
-- [Apache Guacamole - Configuration](https://guacamole.apache.org/doc/gug/configuring-guacamole.html)
-- [KasmVNC - Features](https://kasm.com/kasmvnc)
-- [KasmVNC - GitHub](https://github.com/kasmtech/KasmVNC)
-- [KasmVNC - Client Side Documentation](https://kasmweb.com/kasmvnc/docs/master/clientside.html)
-- [KasmVNC - Configuration](https://www.kasmweb.com/kasmvnc/docs/latest/configuration.html)
-- [KasmVNC - Video Rendering Options](https://github.com/kasmtech/KasmVNC/wiki/Video-Rendering-Options)
-- [noVNC - Embedding Documentation](https://novnc.com/noVNC/docs/EMBEDDING.html)
-- [MDN - Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API)
-- [web.dev - Unblocking Clipboard Access](https://web.dev/articles/async-clipboard)
-- [Microsoft - RDP Bandwidth Requirements](https://learn.microsoft.com/en-us/azure/virtual-desktop/rdp-bandwidth)
-- [Microsoft - Frame Rate Limited to 30 FPS](https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/frame-rate-limited-to-30-fps)
-- [Microsoft - Graphics Encoding over RDP](https://learn.microsoft.com/en-us/azure/virtual-desktop/graphics-encoding)
-- [Kasm VNC vs Other Linux VNC Tools](https://www.cendio.com/blog/kasm-vnc-alternatives/)
-- [Kasm Workspaces vs Apache Guacamole](https://symalon.com/en/kasm-workspaces-vs-apache-guacamole-a-comparison-of-open-source-remote-desktop-solutions/)
-- [noVNC Auto-reconnect Issue #799](https://github.com/novnc/noVNC/issues/799)
-- [LinuxServer.io - Webtop 2.0](https://www.linuxserver.io/blog/webtop-2-0-the-year-of-the-linux-desktop)
+### HIGH confidence (official documentation)
+- [MDN: Making PWAs installable](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
+- [MDN: CSS env() function](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env)
+- [vite-plugin-pwa documentation](https://vite-pwa-org.netlify.app/)
+- [MDN: display_override manifest member](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/display_override)
+- Codebase audit: `router.tsx`, `windows-container.tsx`, `dock.tsx`, `desktop-content.tsx`, `app-grid.tsx`, `sheet.tsx`, `use-is-mobile.ts`, `site.webmanifest`, `index.html`
+- Phase 8 mobile research: `.planning/milestones/v15.0-phases/v1.1-08-mobile-polish/08-RESEARCH.md`
 
----
-*Feature research for: Web-based remote desktop streaming (v18.0)*
-*Researched: 2026-03-25*
+### MEDIUM confidence (verified with multiple sources)
+- [PWA iOS Limitations 2026](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
+- [PWA on iOS 2025 - Brainhub](https://brainhub.eu/library/pwa-on-ios)
+- [PWA Design Tips - firt.dev](https://firt.dev/pwa-design-tips/)
+- [iOS PWA safe area CSS patterns](https://dev.to/karmasakshi/make-your-pwas-look-handsome-on-ios-1o08)
+- [Notch avoidance with CSS](https://dev.to/marionauta/avoid-notches-in-your-pwa-with-just-css-al7)
+- [Bottom navigation vs hamburger menus](https://acclaim.agency/blog/the-future-of-mobile-navigation-hamburger-menus-vs-tab-bars)
+- [React ViewTransition experimental API](https://react.dev/blog/2025/04/23/react-labs-view-transitions-activity-and-more)
+
+### LOW confidence (needs validation during implementation)
+- iOS 26 "every home screen site opens as web app" behavior -- announced but not yet widely tested
+- EU PWA restrictions may change with DMA enforcement proceedings
+- React `<ViewTransition>` timeline to stable -- currently experimental only

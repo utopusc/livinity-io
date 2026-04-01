@@ -1,236 +1,188 @@
 # Project Research Summary
 
-**Project:** LivOS v17.0 (Precision Computer Use) + v18.0 (Web-Based Remote Desktop Streaming)
-**Domain:** AI desktop automation with DPI-aware screenshot pipeline + browser-based remote desktop streaming
-**Researched:** 2026-03-25
+**Project:** Livinity v23.0 -- Mobile PWA Experience
+**Domain:** Progressive Web App retrofit for desktop-first React SPA (self-hosted AI server OS)
+**Researched:** 2026-04-01
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This research covers two adjacent milestones. v17.0 fixes a critical coordinate mismatch bug in the AI Computer Use system and adds accessibility tree integration for precise element targeting. v18.0 adds a browser-based remote desktop viewer at `pc.username.livinity.io`, letting users see and control their server desktop from any browser. The two milestones share the same X11 display session, creating a natural synergy: v18.0 users can watch the AI (v17.0) operate their desktop in real time through the same authenticated stream.
+Livinity is a desktop-first React 18 SPA that uses a windowed UI metaphor (floating, draggable windows with a macOS-style dock). The v23.0 milestone converts this into an installable, phone-native PWA without touching the desktop experience. Research confirms the existing codebase is well-positioned for this: `useIsMobile()` is already used in 30+ files, `WindowsContainer` already returns null on mobile, `SheetLayout` handles route-based mobile views for Files/Settings/App Store, and icon assets for PWA manifest already exist. The critical gap is that the five most important apps (AI Chat, Server Control, Agents, Schedules, Terminal) are window-only with no mobile rendering path -- they are completely inaccessible on phones today.
 
-For v17.0, the root cause is well-understood: node-screenshots captures physical pixels (e.g., 2560x1440 on a 150% DPI display) but robotjs expects logical pixels (1707x960). The fix requires exactly one new npm dependency — `sharp` for image resizing — and follows Anthropic's own reference implementation. Accessibility tree integration uses platform-native tools via child_process (PowerShell on Windows, a custom Swift CLI on macOS, Python/pyatspi2 on Linux) rather than fragile FFI bindings, producing a unified JSON interface regardless of platform.
+The recommended approach is minimalist: two new runtime dependencies (`vite-plugin-pwa` for service worker generation, `tailwindcss-safe-area` for Tailwind utilities), a new `MobileAppRenderer` component that reuses the existing `WindowAppContent` lazy-loader to render any app full-screen, and a lightweight `MobileAppContext` that is intentionally separate from the desktop `WindowManagerProvider`. No new frameworks, no Capacitor/Ionic wrapping, no React Router changes. The architecture pattern is "shared content, different chrome" -- the same app components render inside either a desktop Window frame or a mobile full-screen overlay, selected by the existing `useIsMobile()` hook.
 
-For v18.0, the domain is mature (Guacamole, KasmVNC, noVNC are reference implementations) but none fit cleanly into LivOS's architecture. The correct approach is a thin integration: x11vnc captures the host X11 display, noVNC renders it in the browser, and a WebSocket-to-TCP proxy inside livinityd (using Node.js's built-in `node:net`) bridges the two. This reuses existing JWT auth, Caddy subdomain routing, NativeApp lifecycle, and WebSocket upgrade infrastructure without introducing parallel auth stacks or heavyweight Java/container dependencies. All critical risks (VNC exposure, Wayland detection failure, Caddy timeout disconnections, port conflicts) are Phase 1 decisions that must be locked in before browser-side work begins.
+The highest-risk area is iOS-specific PWA behavior. iOS standalone mode uses a completely separate storage sandbox from Safari (users must re-login after install), iOS kills WebSocket connections when the app is backgrounded (breaking AI Chat streaming and tRPC subscriptions), and the tRPC split-link architecture routes most traffic through WebSocket which becomes fragile on mobile resume. These are not blockers but require deliberate engineering: `visibilitychange`-based reconnection, possible HTTP-fallback for tRPC on mobile, and clear UX for the re-login flow. Real-device iOS testing is mandatory -- simulators do not replicate backgrounding, storage isolation, or safe area behavior accurately.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing LivOS stack needs only one new npm package: `sharp` (^0.34.5). For remote desktop streaming, no new npm packages are required — the WebSocket proxy uses Node.js's built-in `node:net`, and noVNC is served as static assets via `@novnc/novnc` npm package or the `react-vnc` wrapper. Platform accessibility tree helpers are bundled as assets in Electron's `extraResources`, not npm packages.
+The stack additions are intentionally minimal. The existing Vite 4 + React 18 + Tailwind 3.4 + Framer Motion 10 setup handles everything. Only two dev dependencies are added; everything else is configuration and new components.
 
-**Core technologies:**
-- **sharp ^0.34.5**: Resize physical-pixel screenshots to Anthropic's recommended logical-pixel targets before sending to AI — the only Node.js image library with prebuilt binaries, proper Electron `asarUnpack` support, and acceptable performance for a per-action capture loop. Anthropic's reference implementation (computer.py) does the identical resize step with ImageMagick; sharp is the equivalent for Node.js
-- **x11vnc**: Capture the host X11 display (:0) as a VNC stream on localhost:5900 — simple, battle-tested, designed for real physical displays (not virtual/container displays like KasmVNC)
-- **noVNC / react-vnc**: Browser-side JavaScript VNC renderer using HTML5 canvas — standard reference client for VNC-over-WebSocket, maintained, widely deployed
-- **node:net (built-in)**: WebSocket-to-TCP bridge inside livinityd — same pattern used by existing `/terminal`, `/ws/docker-exec`, and `/ws/voice` routes; no extra dependency
-- **PowerShell + System.Windows.Automation (.NET)**: Windows accessibility tree — zero dependencies, .NET UIAutomation ships with every Windows installation since Vista, returns physical-pixel bounding rectangles
-- **Swift CLI binary (livinity-ax)**: macOS accessibility tree via AXUIElement — only reliable approach since no maintained Node.js binding exists; ~50KB universal binary compiled with `swiftc -O`
-- **python3 + pyatspi2**: Linux accessibility tree via AT-SPI2/D-Bus — standard Python binding pre-installed on GNOME/GTK desktops
+**Core additions:**
+- **vite-plugin-pwa ^1.2.0**: Service worker generation via Workbox `generateSW`, manifest injection, SW registration virtual module. Verified compatible with Vite 4. Replaces manual `site.webmanifest`.
+- **tailwindcss-safe-area@0.8.0**: Tailwind utilities for `env(safe-area-inset-*)`. Version 0.8.0 is the Tailwind v3 release (v1.x targets v4). Provides `pt-safe`, `pb-safe`, `h-screen-safe` composable with responsive variants.
 
-**What NOT to add:** KasmVNC (container-focused, fights physical displays), Apache Guacamole (Java + Tomcat + parallel auth), websockify as a separate process (duplicates auth logic), nut.js (paid subscription), node-ffi-napi (fragile ABI across Node.js versions), Tesseract OCR (accessibility tree gives text labels directly), OpenCV/template matching (over-engineered when accessibility tree gives exact coordinates).
+**Already installed, no changes needed:**
+- **framer-motion 10.16.4**: `AnimatePresence` for slide transitions between mobile views. Used in 35+ files already.
+- **react-router-dom 6.17.0**: Route-based navigation for SheetLayout apps continues as-is.
+- **vaul ^0.9.0**: iOS-style bottom sheets for mobile settings and context menus.
+
+**Explicitly rejected:** Capacitor/Ionic (massive overhead for a web-served app), Tailwind v4 upgrade (scope creep), Vite 5+ upgrade (unnecessary), push notification libraries (defer), React Native/Expo (PWA approach chosen).
+
+See: `.planning/research/STACK.md`
 
 ### Expected Features
 
-**v17.0 Computer Use features (from STACK.md — DPI fix):**
-- Must have: DPI-aware screenshot pipeline (physical pixels resized to Anthropic target resolutions before sending to AI), correct coordinate back-mapping from AI response space to robotjs logical space, accessibility tree tool (`screen_elements`) returning element names/roles/bounding rects/center coordinates
+**Must have (table stakes) -- PWA is broken/useless without these:**
+- TS-01: PWA manifest + service worker (installability)
+- TS-02: iOS Apple meta tags (`viewport-fit=cover`, `apple-mobile-web-app-capable`)
+- TS-03: Safe area handling for notch and home indicator
+- TS-04: Mobile app grid (phone-like home screen showing all system apps)
+- TS-05: Full-screen app rendering (mobile routes for the 5 window-only apps)
+- TS-06: Mobile navigation (hide dock, add back button, provide navigation controls)
+- TS-07: Mobile AI Chat layout (full-screen, drawer sidebar, responsive messages)
 
-**v18.0 Remote Desktop features (from FEATURES.md):**
+**Should have (differentiators):**
+- DF-01: iOS splash screens (branded launch instead of white flash)
+- DF-02: Page transitions via Framer Motion (native-feeling slide animations)
+- DF-04: Offline app shell (instant load after first visit)
+- DF-06: Custom PWA install prompt (guide users to install)
 
-**Must have (table stakes — P1):**
-- Real-time screen rendering at 30+ FPS in browser canvas — core product value
-- Mouse input: click, move, drag, scroll with accurate coordinate scaling
-- Keyboard input with full shortcut capture and `event.preventDefault()`
-- Text clipboard sync (bidirectional) — without this the stream feels like a video, not a workspace
-- Auto-reconnect with exponential backoff — network blips are common; manual refresh is unacceptable
-- Connection status indicator (green/yellow/red + latency) — frozen screen is ambiguous without it
-- Dynamic resolution / fit-to-window (server-side xrandr resize) — fixed box or scrolling is unacceptable
-- Fullscreen mode — required to capture keyboard shortcuts browsers steal (Ctrl+W, F5, etc.)
-- Cursor rendering (hide local, render remote only) — dual cursor is jarring
-- Session persistence across reconnects — closing browser tab should not kill desktop session
-- Zero-config install via install.sh with GUI auto-detection — aligns with LivOS "one command" ethos
-- JWT auth gate via existing `livinity_token` cookie — no double-login; same session as rest of LivOS
+**Defer to future milestones:**
+- Push notifications, offline data persistence (IndexedDB), background sync, landscape optimization, widget support on mobile, native swipe-to-go-back gesture handling
 
-**Should have (differentiators — P2, add after validation):**
-- Adaptive JPEG/WebP quality based on estimated bandwidth
-- Mobile touch controls (touch-to-click, pinch-to-zoom, virtual keyboard)
-- On-screen keyboard for special keys (Ctrl+Alt+Del, Print Screen, Super)
-- Session timeout configuration in admin settings
-
-**Defer (v2+):**
-- Audio streaming (PulseAudio/PipeWire + Opus + WebRTC) — doubles bandwidth, most servers have no meaningful audio
-- Per-user desktop isolation (Xvfb per user) — single display is fine for v18.0
-- Multi-monitor support, binary clipboard (images), WebRTC transport, file drag-and-drop
-
-**Key competitive differentiator:** No existing solution (Guacamole, KasmVNC, noVNC, Chrome Remote Desktop) combines remote desktop streaming with AI desktop automation. LivOS uniquely owns this: users can watch the AI operate their desktop via the same authenticated web interface. This is the primary v18.0 marketing angle.
+See: `.planning/research/FEATURES.md`
 
 ### Architecture Approach
 
-**v17.0:** Three platform-specific accessibility backends (PowerShell script, Swift CLI binary, Python script) behind a unified `ScreenElement` JSON interface. AI receives accessibility tree first (structured data with coordinates), screenshot second (visual context). The screenshot pipeline: capture physical pixels → read `scaleFactor()` → compute logical resolution → find best Anthropic target resolution by aspect ratio → sharp resize → send to AI with correct `display_width`/`display_height` metadata → back-map AI coordinates to logical space for robotjs.
-
-**v18.0:** Strict "thin integration" principle — x11vnc runs as a systemd service managed by the existing NativeApp system, a WebSocket-to-TCP proxy inside livinityd bridges browser connections to x11vnc on localhost:5900, and Caddy routes `pc.{domain}` to livinityd:8080 using the existing nativeApps cookie-gating pattern. No new infrastructure processes, no new auth systems, no parallel stacks. The relay (Server5) requires zero changes.
+The architecture uses a "context-based overlay" pattern rather than extending React Router or SheetLayout. A new `MobileAppRenderer` component renders as a fixed full-screen overlay when an app is open on mobile. It reuses the existing `WindowAppContent` switch statement (which maps appId to lazy-loaded components) so every desktop window app automatically works on mobile with zero per-app effort. A separate `MobileAppContext` manages which single app is open, intentionally decoupled from the multi-window `WindowManagerProvider`. Browser History API integration (`pushState` + `popstate`) makes the hardware back button and iOS swipe-back gesture close the active app.
 
 **Major components:**
-1. **install.sh** — `detect_gui()` gates the entire v18.0 feature; `install_x11vnc()` and `setup_desktop_streaming()` create the systemd service and store VNC credentials
-2. **x11vnc systemd service (livos-x11vnc)** — binds exclusively to localhost:5900 with `-localhost` flag; managed as a NativeApp with 30-minute idle timeout; `User=` directive (not root)
-3. **NativeApp config** — adds `desktop-stream` entry to `NATIVE_APP_CONFIGS` in `native-app.ts`; reuses existing lifecycle, idle timeout, and start/stop patterns
-4. **WebSocket proxy** — `/ws/desktop` route in `server/index.ts` using `node:net` TCP connection to localhost:5900; identical pattern to existing `/ws/voice` and `/ws/docker-exec` handlers; JWT validated on WebSocket upgrade + Origin header check
-5. **Caddy subdomain block** — `pc.{domain}` added to `generateFullCaddyfile()` nativeApps array; must include `stream_close_delay 5m`, `stream_timeout 24h`, and `transport http { read_timeout 0; write_timeout 0 }`
-6. **VncViewer React component** — noVNC wrapper in `ui/src/components/desktop/VncViewer.tsx`; handles canvas rendering, mouse/keyboard input, clipboard sync, auto-reconnect
-7. **Desktop module** — `livinityd/source/modules/desktop/detect.ts` (X11/Wayland/headless detection) and `index.ts` (lifecycle coordination)
+1. **MobileAppRenderer** -- Full-screen overlay that renders any app by appId using `WindowAppContent` (NEW)
+2. **MobileAppContext** -- Lightweight context for open/close state, separate from WindowManager (NEW)
+3. **MobileNavBar** -- Top bar with back button, app title, safe area padding (NEW)
+4. **use-mobile-back hook** -- History API integration for hardware/OS back button (NEW)
+5. **Service Worker** -- Auto-generated by vite-plugin-pwa, precaches shell assets only (NEW, config-only)
+6. **Dock** -- Modified to return null on mobile (MODIFY)
+7. **DesktopContent** -- Modified to show system apps in grid with mobile-app-open handlers (MODIFY)
+
+**Anti-patterns to avoid:**
+- Do NOT register mobile routes in React Router (window-only apps were explicitly designed without URLs)
+- Do NOT extend SheetLayout (it is a dialog/sheet, not a full-screen app container)
+- Do NOT create separate mobile components per app (doubles maintenance)
+- Do NOT add runtime API caching to the service worker (stale server data is harmful)
+- Do NOT modify WindowManager for mobile (it manages drag/resize/z-index -- desktop-only concerns)
+
+See: `.planning/research/ARCHITECTURE.md`
 
 ### Critical Pitfalls
 
-1. **Caddy reload kills active desktop streams** — Every `caddy reload` (triggered by app installs, subdomain changes) terminates all WebSocket connections including live sessions. Add `stream_close_delay 5m`, `stream_timeout 24h`, and disable `read_timeout`/`write_timeout` in the Caddy reverse_proxy block for `pc.*`. Must be in initial Caddyfile generation — not retrofitted.
+1. **iOS storage isolation (Pitfall 1)** -- Safari and standalone PWA have completely separate localStorage. Users MUST re-login after installing. Mitigate with clear messaging in the install flow and a polished mobile login screen.
 
-2. **Wayland detection failure** — Ubuntu 24.04+ defaults to Wayland; x11vnc cannot attach to a Wayland session. Detection must check `$XDG_SESSION_TYPE` (returns `wayland`, `x11`, or `tty`) — NOT `$DISPLAY`. On headless: skip the feature entirely and hide it from the UI.
+2. **Stale service worker cache (Pitfall 2)** -- Service worker can serve old JS bundles indefinitely. Use `registerType: 'prompt'` (not `autoUpdate`) with a visible "Update available" toast. Set `Cache-Control: no-cache` on `service-worker.js` and `index.html` at Caddy.
 
-3. **VNC port exposed to the network** — VNC defaults to listening on 0.0.0.0; port 5900 is actively scanned by attackers (8,000+ exposed servers found in 2024). x11vnc must use `-localhost`. Docker bypasses UFW via iptables nat — explicit iptables DROP rules for 5900-5999 are required, not just UFW rules.
+3. **WebSocket death on iOS background (Pitfall 3)** -- iOS kills WebSockets when the PWA is backgrounded. AI Chat streaming and tRPC subscriptions break silently. Add `visibilitychange` listener to force immediate reconnection on resume, bypassing backoff. Consider HTTP-fallback for tRPC non-subscription traffic on mobile.
 
-4. **WebSocket proxy timeout disconnects idle sessions** — Caddy's default 60-second timeout kills VNC sessions when the screen is static. Disable timeouts in the reverse_proxy block and implement 25-second WebSocket ping/pong heartbeats in the noVNC client.
+4. **Missing viewport-fit=cover (Pitfall 5)** -- Without this single meta tag addition, all `env(safe-area-inset-*)` values resolve to 0px. This must be the first change, before any safe area CSS is written.
 
-5. **Port conflicts with Docker apps** — Hard-coding VNC to port 5900 risks collision. Use `nextAvailablePort()` from the database module, or register a reserved port (e.g., 15900) in the port allocator from day one. This also gates future multi-user support.
+5. **Keyboard pushes content on iOS (Pitfall 10)** -- iOS standalone mode does NOT resize the viewport when the keyboard opens. The `visualViewport` API must be used to detect keyboard presence and adjust the AI Chat input position dynamically.
 
-6. **JWT not validated on WebSocket upgrade** — Caddy's `@notauth` cookie check is a pre-screen, not authentication. Must validate JWT in livinityd's WebSocket upgrade handler (same pattern as existing `/terminal`). Also validate `Origin` header to prevent cross-site WebSocket hijacking.
-
-7. **node-screenshots scaleFactor() semantics unclear** — Documentation does not specify whether `scaleFactor()` returns the OS DPI scale factor or something else. The entire v17.0 DPI pipeline depends on this. Empirical verification on a 150% DPI Windows display is required before implementing the resize math.
+See: `.planning/research/PITFALLS.md`
 
 ## Implications for Roadmap
 
-Research indicates two separate milestone tracks. v17.0 has 4 natural phases; v18.0 has 4 phases. They can proceed sequentially (v17 first, since v18 builds on the stable Computer Use foundation) or in parallel if separate contributors work each.
+Based on combined research, the milestone naturally splits into 4 phases with clear dependencies.
 
-### v17.0 Phase Structure
+### Phase 1: PWA Foundation (Installability + Meta)
+**Rationale:** Everything else depends on the PWA being installable and `viewport-fit=cover` being set. This phase has zero UI changes -- it is purely infrastructure. It can be verified independently: "Can I install Livinity on my phone home screen? Does it launch in standalone mode?"
+**Delivers:** Installable PWA with service worker, correct manifest, Apple meta tags, safe area CSS variables, self-hosted fonts for offline support
+**Addresses:** TS-01 (manifest + SW), TS-02 (iOS meta tags), TS-03 (safe area CSS foundation), DF-04 (offline shell)
+**Avoids:** Pitfall 5 (viewport-fit must come first), Pitfall 8 (manifest gaps), Pitfall 15 (font offline failure)
+**Stack changes:** Install `vite-plugin-pwa`, `tailwindcss-safe-area@0.8.0`. Configure Vite, Tailwind, index.html. Delete `site.webmanifest` (replaced by plugin).
 
-#### Phase 1: DPI Fix + sharp Integration
-**Rationale:** The coordinate mismatch is the foundation — accessibility features are worthless if clicks land in the wrong position. Fix the screenshot pipeline first.
-**Delivers:** sharp integration with Electron asarUnpack, DPI-aware screenshot resize to Anthropic target resolutions, corrected coordinate back-mapping (physical pixels → logical pixels for robotjs), updated `toScreenX`/`toScreenY` functions
-**Avoids:** Building accessibility features on a broken coordinate foundation
-**Research flag:** Must empirically verify node-screenshots `scaleFactor()` behavior on a 150% DPI Windows display before implementing the math. LOW confidence on current documentation.
+### Phase 2: Mobile Navigation Infrastructure
+**Rationale:** Before showing apps on the home screen, the system to open and render them must exist. This phase builds the rendering pipeline. It can be developed in parallel with Phase 1 since it has no dependency on the service worker.
+**Delivers:** MobileAppContext, MobileAppRenderer, MobileNavBar, use-mobile-back hook, WindowAppContent export. After this phase, calling `openApp('ai-chat', ...)` from the console renders AI Chat full-screen on mobile.
+**Addresses:** TS-05 (full-screen app rendering), TS-06 (mobile navigation -- back button, nav bar)
+**Avoids:** Pitfall 4 (window manager on mobile), Pitfall 13 (no back button -- trapped users)
+**Architecture:** Context-based overlay pattern, NOT route-based. History API for back-button support.
 
-#### Phase 2: Windows UIA Accessibility Tree
-**Rationale:** Windows is the primary agent platform (Electron app, Windows users are majority). PowerShell + System.Windows.Automation has zero external dependencies — lowest-risk accessibility implementation.
-**Delivers:** `screen_elements` tool, PowerShell UIA script (`get-elements.ps1`), Electron extraResources bundling, ScreenElement JSON schema, element-first click mode
-**Avoids:** Blocking the release on cross-platform completeness
-**Research flag:** Standard patterns — PowerShell + UIAutomation is well-documented by Microsoft. Skip research-phase.
+### Phase 3: Mobile Home Screen + App Access
+**Rationale:** With the rendering pipeline in place, this phase connects it to the UI. Users can now tap app icons and use the full mobile flow. This is the phase that makes the PWA actually usable.
+**Delivers:** Dock hidden on mobile, system apps visible in app grid, tap-to-open wired to MobileAppContext, DockSpacer/DockBottomPositioner hidden, overscroll prevention, mobile-optimized AI Chat layout
+**Addresses:** TS-04 (mobile app grid), TS-06 (dock hiding), TS-07 (AI Chat mobile layout)
+**Avoids:** Pitfall 6 (100vh issues -- use dvh), Pitfall 7 (overscroll bounce), Pitfall 11 (Framer drag vs scroll conflicts)
+**Dependency:** Phase 2 must be complete (needs MobileAppContext for click handlers).
 
-#### Phase 3: AI Prompt Optimization + Hybrid Mode
-**Rationale:** With correct coordinates (Phase 1) and elements available (Phase 2), optimize how the AI uses both data sources. Accessibility tree first, screenshot as fallback reduces token costs and improves accuracy.
-**Delivers:** Updated AI prompt format, accessibility-first decision logic (use element coordinates when available, screenshot only for visual context or when tree unavailable), element caching with change detection, token usage improvement
-**Research flag:** May need prompt engineering experimentation. Standard AI integration pattern but specific prompt format needs testing.
-
-#### Phase 4: macOS + Linux Accessibility
-**Rationale:** Extends the capability to other platforms after the Windows implementation is proven and the interface is stable.
-**Delivers:** Swift CLI binary (`livinity-ax`) for macOS AXUIElement, Python pyatspi2 script for Linux AT-SPI2, Electron build pipeline for universal Swift binary, graceful degradation when accessibility unavailable
-**Research flag:** macOS Swift binary cross-compilation and distribution in Electron needs investigation. Linux pyatspi2 availability varies by distro.
-
-### v18.0 Phase Structure
-
-#### Phase 1: Server-Side Infrastructure
-**Rationale:** All critical security and stability pitfalls must be locked in before any browser-visible work. This phase can be tested independently with a standard VNC client before the browser UI exists.
-**Delivers:** install.sh GUI detection (`detect_gui()` using `$XDG_SESSION_TYPE`), x11vnc installation, systemd service (localhost-only, dynamic port via `nextAvailablePort()`, `User=` not root), NativeApp registration, Caddy subdomain block with stream timeout configuration
-**Addresses:** Zero-config install, session persistence (VNC runs independently of viewer)
-**Avoids:** Pitfalls 1-6 (Caddy timeouts, Wayland detection, VNC exposure, headless detection, port conflicts, root VNC)
-**Research flag:** Standard patterns — all follow documented LivOS NativeApp and install.sh patterns. Skip research-phase.
-
-#### Phase 2: WebSocket Proxy and Auth Integration
-**Rationale:** The proxy is the security-critical bridge. With the VNC server running (Phase 1), this phase connects browser to desktop and validates that auth, reconnect, and routing all work end-to-end before any browser UI is built.
-**Delivers:** `/ws/desktop` WebSocket-to-TCP bridge in `server/index.ts`, JWT validation on WebSocket upgrade, Origin header check, auto-start of x11vnc on first connection, idle timeout wiring, end-to-end connection test
-**Uses:** `node:net` (built-in), existing `mountWebSocketServer` pattern, existing `verifyToken()` middleware
-**Avoids:** Pitfall 6 (JWT bypass on WebSocket upgrade)
-**Research flag:** Identical to existing `/ws/voice` handler. Skip research-phase.
-
-#### Phase 3: Browser VNC Viewer (Core UX)
-**Rationale:** With a working authenticated backend (Phases 1-2), the browser UI can be built and tested against the real VNC stream. All P1 table-stakes features are implemented here.
-**Delivers:** VncViewer React component (noVNC wrapper), mouse/keyboard input capture, text clipboard sync, connection status indicator, auto-reconnect with exponential backoff, dynamic resolution/fit-to-window, fullscreen mode, cursor rendering, Desktop Viewer entry in LivOS UI
-**Addresses:** All P1 features from FEATURES.md
-**Research flag:** noVNC's `@novnc/novnc` npm programmatic API surface needs verification — confirm WebSocket binary mode (not base64) is default and check the JavaScript API for `connect()`, `sendKey()`, `sendMouseEvent()`, `clipboardPasteFrom()`. Consider whether `react-vnc` reduces integration surface area. Recommend `/gsd:research-phase` before Phase 3 planning.
-
-#### Phase 4: Polish and P2 Features
-**Rationale:** Once the core stream is validated with real users, add the enhancement layer. These are additive and do not gate the core use case.
-**Delivers:** Adaptive quality (dynamic JPEG/WebP based on bandwidth estimation), mobile touch controls, on-screen special-key keyboard, session timeout configuration in admin settings
-**Research flag:** Standard React/event handler patterns. Skip research-phase.
+### Phase 4: Polish + iOS Hardening
+**Rationale:** The core mobile experience works after Phase 3. This phase addresses the iOS-specific pitfalls and adds differentiator features that make the PWA feel native rather than web-like.
+**Delivers:** Page transitions (Framer Motion slide), iOS splash screens, PWA install prompt banner, visibilitychange reconnection for WebSockets, tRPC HTTP fallback on mobile, keyboard handling for AI Chat, real-device testing and fixes
+**Addresses:** DF-01 (splash screens), DF-02 (page transitions), DF-06 (install prompt), DF-03 (pull-to-refresh), DF-05 (haptic feedback)
+**Avoids:** Pitfall 1 (storage isolation -- install flow messaging), Pitfall 3 (WS death -- reconnection), Pitfall 9 (tRPC WS resume), Pitfall 10 (keyboard), Pitfall 12 (OAuth redirect in standalone)
 
 ### Phase Ordering Rationale
 
-- v17.0 DPI fix must precede accessibility because accessibility tree coordinates are useless if robotjs receives coordinates in the wrong pixel space
-- v17.0 Windows before macOS/Linux because it is the primary platform and has zero external dependency requirements
-- v18.0 server infrastructure before browser UI because all security decisions must be locked in before the feature is user-visible
-- v18.0 WebSocket proxy before browser UI to verify the backend security perimeter before building UX on top of it
-- v18.0 P2 features deferred until core stream is validated — audio, multi-user isolation, WebRTC, and binary clipboard are disproportionately complex relative to their v18.0 value
+- **Phase 1 before all others** because `viewport-fit=cover` and service worker registration are prerequisites. Writing safe-area CSS without `viewport-fit=cover` is testing against 0px values. Installing the PWA without a service worker gives a broken experience.
+- **Phase 2 before Phase 3** because the app grid needs `mobileAppContext.openApp()` to wire click handlers. Building the grid without a rendering target is dead code.
+- **Phase 3 before Phase 4** because polish (transitions, splash screens, reconnection logic) should only be applied to a working flow. Tuning animations on a half-built system wastes time.
+- **Phases 1 and 2 can be parallelized** since Phase 1 (config/meta) and Phase 2 (React components) have no code overlap.
 
 ### Research Flags
 
-**Needs `/gsd:research-phase` before planning:**
-- **v17.0 Phase 1:** Empirical verification of node-screenshots `scaleFactor()` semantics on a 150% DPI display. The entire DPI pipeline depends on this and it cannot be resolved from documentation alone.
-- **v18.0 Phase 3 (noVNC API):** Programmatic embedding API for `@novnc/novnc` npm package vs `react-vnc` wrapper. Confirm binary WebSocket mode, event sending API, and connection state management API.
-- **v18.0 Phase 2 (Wayland fallback):** If the target server (mini PC bruce-EQ, Ubuntu 24.04) runs Wayland by default, the WayVNC integration path needs specific research — current research covers detection but not the full Wayland streaming path.
+Phases likely needing deeper research during planning:
+- **Phase 2:** The `WindowAppContent` export and `MobileAppRenderer` integration need careful analysis of the existing `window-content.tsx` component tree. Research-phase recommended to map all app components and their internal mobile handling.
+- **Phase 4 (iOS hardening):** WebSocket reconnection, tRPC transport switching, and keyboard handling are complex iOS-specific behaviors. Research-phase strongly recommended -- simulator testing is insufficient, and the visibilitychange + visualViewport patterns need real-device validation.
 
-**Standard patterns (skip research-phase):**
-- v17.0 Phase 2 (Windows UIA): Microsoft official API, extensively documented, PowerShell approach proven
-- v17.0 Phase 3 (AI prompts): Additive prompt engineering, no new APIs
-- v18.0 Phase 1 (server infrastructure): Follows existing LivOS NativeApp and install.sh patterns exactly
-- v18.0 Phase 2 (WebSocket proxy): Identical to existing `/ws/voice` handler
-- v18.0 Phase 4 (P2 features): Standard React UI patterns
+Phases with standard patterns (skip research-phase):
+- **Phase 1:** PWA manifest, service worker, meta tags, and safe area CSS are thoroughly documented. vite-plugin-pwa docs provide exact configuration. Straightforward implementation.
+- **Phase 3:** Hiding dock, showing apps in grid, and wiring click handlers are standard React conditional rendering. The existing codebase patterns (`useIsMobile()` guards) are well-established.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack (sharp) | HIGH | De facto standard; Anthropic's reference implementation does the identical step with ImageMagick; sharp Electron docs cover asarUnpack explicitly |
-| Stack (x11vnc + noVNC) | HIGH | Established minimal stack for this exact use case; extensively deployed |
-| Stack (accessibility backends) | MEDIUM-HIGH | Windows PowerShell/UIA is HIGH; macOS Swift CLI is MEDIUM (binary distribution complexity); Linux pyatspi2 is MEDIUM (distro fragmentation) |
-| Features | HIGH | Mature domain with 4 reference implementations for comparison; P1/P2/P3 classification verified against competitor feature matrices |
-| Architecture | HIGH | Based on direct analysis of existing livinityd codebase; patterns are copied from verified working code (no guesswork) |
-| Pitfalls | HIGH | All critical pitfalls verified via official docs and issue trackers (Caddy #5471/#6420/#7222, Cyble VNC report 2024, Docker UFW bypass docs) |
+| Stack | HIGH | Both new dependencies verified against exact project versions (Vite 4, Tailwind 3.4). PeerDeps confirmed from GitHub. |
+| Features | HIGH | Feature list derived from codebase audit (30+ files checked) + MDN/Apple docs. Dependency graph is clear. |
+| Architecture | HIGH | Based on direct analysis of router.tsx, window-content.tsx, desktop-content.tsx, dock.tsx. Component boundaries verified against existing code patterns. |
+| Pitfalls | HIGH | iOS-specific pitfalls verified across 3+ independent sources. Codebase-specific pitfalls (viewport meta, tRPC split link, agent socket) confirmed by reading source files. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **node-screenshots scaleFactor() semantics:** Documentation does not specify whether this returns OS DPI scale factor or something else. Must be empirically verified on a 150% DPI Windows display before implementing the v17.0 DPI pipeline. This is the single highest-risk gap.
-
-- **noVNC npm API surface:** The `@novnc/novnc` package's programmatic embedding API (vs. its standalone HTML page) is less documented. During v18.0 Phase 3 planning, verify `connect()`, `sendKey()`, `sendMouseEvent()`, `clipboardPasteFrom()` against the current npm package version. Evaluate whether `react-vnc` reduces integration complexity.
-
-- **Wayland fallback path:** Research covers detection (`$XDG_SESSION_TYPE`) but not the full WayVNC integration path. If the mini PC (bruce-EQ, Ubuntu 24.04) or Server4 runs Wayland, this needs specific research before v18.0 Phase 1.
-
-- **macOS Swift binary build pipeline:** The `livinity-ax` Swift CLI binary needs a cross-compile step in the Electron builder pipeline (universal arm64+x86_64 via `lipo`). How this integrates with `electron-builder` needs design before v17.0 Phase 4.
-
-- **Multi-user VNC port allocation:** Deferred to v2+ per FEATURES.md, but Phase 1 port allocation decision must not foreclose this. Using `nextAvailablePort()` from the database module (not hard-coding 5900) costs nothing at Phase 1 and keeps multi-user viable.
-
-- **Linux pyatspi2 availability:** Standard on GNOME/Ubuntu; not guaranteed on KDE Plasma, XFCE, or minimal WM installs. Acceptable for v17.0 because Linux desktop is a minority use case and screenshot-only fallback exists, but the fallback path must be explicitly implemented.
+- **Maskable icon safe zone**: The existing 512x512 icon may have content too close to edges for Android adaptive icon masking. Needs visual inspection during Phase 1 asset preparation.
+- **iPad behavior at 1024px boundary**: `useIsMobile()` returns false at exactly 1024px. iPad landscape is 1024px. This creates an ambiguous state where the desktop window UI renders on a touch-only device. May need a secondary touch-detection check.
+- **tRPC HTTP fallback on mobile**: The suggestion to route non-subscription tRPC traffic through HTTP on mobile PWA is architecturally sound but untested. The `splitLink` in `trpc.ts` needs modification. Validate during Phase 4 that HTTP fallback does not break any mutation flows.
+- **iOS splash screen device list**: The device media query list for `apple-touch-startup-image` changes with new iPhone releases. Generated assets may be stale by the time of implementation. Use `pwa-asset-generator` at build time rather than committing static media queries.
+- **Service worker update strategy**: Research disagrees on `autoUpdate` vs `prompt`. STACK.md recommends `autoUpdate`; PITFALLS.md recommends `prompt`. **Recommendation: use `prompt`** -- standalone PWA users have no reload button, so a stale cache with no update UI is a trap. The "Update available" toast is essential.
+- **OAuth in standalone mode**: Claude OAuth PKCE redirect flow will break in iOS standalone (redirect opens Safari, token lands in wrong storage). Must use popup-based auth or postMessage pattern. Needs testing during Phase 4.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Anthropic Computer Use Tool Docs](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool) — display_width_px/display_height_px API, scaling recommendations
-- [Anthropic Reference Implementation - computer.py](https://github.com/anthropics/anthropic-quickstarts/blob/main/computer-use-demo/computer_use_demo/tools/computer.py) — MAX_SCALING_TARGETS, scale_coordinates() function
-- [sharp Documentation](https://sharp.pixelplumbing.com/) — v0.34.5, resize API, Electron asarUnpack config for @img/* prebuilds
-- [Microsoft UI Automation Overview](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-uiautomationoverview) — AutomationElement, FindAll, BoundingRectangle, PowerShell integration
-- [Windows DPI Awareness](https://learn.microsoft.com/en-us/windows/win32/hidpi/setting-the-default-dpi-awareness-for-a-process) — PerMonitorAwareV2
-- [Apple AXUIElement Docs](https://developer.apple.com/documentation/applicationservices/axuielement) — macOS accessibility API
-- [AT-SPI2 D-Bus Protocol](https://www.freedesktop.org/wiki/Accessibility/AT-SPI2/) — Linux accessibility standard
-- [noVNC GitHub](https://github.com/novnc/noVNC) — browser VNC client, embedding API
-- [x11vnc GitHub](https://github.com/LibVNC/x11vnc) — VNC server flags reference
-- [Caddy reverse_proxy docs](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) — stream_close_delay, stream_timeout, read_timeout/write_timeout
-- [SecurityWeek: Thousands of VNC Instances Exposed](https://www.securityweek.com/thousands-vnc-instances-exposed-internet-attacks-increase/) — VNC exposure risk (2024)
-- [Docker packet filtering and firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/) — UFW bypass via iptables nat
-- [Apache Guacamole Manual v1.6.0](https://guacamole.apache.org/doc/gug/) — feature comparison, auth patterns
-- [KasmVNC GitHub](https://github.com/kasmtech/KasmVNC) — feature comparison, encoding options, kasmxproxy limitations
+- Direct codebase analysis: `router.tsx`, `window-content.tsx`, `desktop-content.tsx`, `dock.tsx`, `windows-container.tsx`, `use-is-mobile.ts`, `vite.config.ts`, `index.html`, `site.webmanifest`, `trpc.ts`, `use-agent-socket.ts`, `shared.ts`, `sheet.tsx`, `index.css`, `main.tsx`, `providers/apps.tsx` (all inspected directly)
+- [vite-pwa/vite-plugin-pwa - GitHub](https://github.com/vite-pwa/vite-plugin-pwa) -- peerDependencies verified for Vite 4
+- [Vite PWA Official Docs](https://vite-pwa-org.netlify.app/) -- generateSW, workbox config, React integration
+- [tailwindcss-safe-area - GitHub](https://github.com/mvllow/tailwindcss-safe-area) -- v0.8.0 for Tailwind v3
+- [MDN: Making PWAs installable](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
+- [MDN: CSS env() function](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env)
+- [Apple Supported Meta Tags](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html)
 
 ### Secondary (MEDIUM confidence)
-- [precision-desktop MCP](https://github.com/ikoskela/precision-desktop) — validates PowerShell + UIAutomation approach for DPI coordinate fixing
-- [AXorcist Swift Wrapper](https://github.com/steipete/AXorcist) — proves Swift CLI approach for AX tree enumeration on macOS
-- [node-screenshots GitHub](https://github.com/nashaofu/node-screenshots) — scaleFactor() API exists but pixel semantics undocumented (needs empirical verification)
-- [Caddy issue #6420](https://github.com/caddyserver/caddy/issues/6420) — active WebSocket connections closed on config reload
-- [Caddy issue #7222](https://github.com/caddyserver/caddy/issues/7222) — stream_close_delay solution
-- [noVNC issue #658](https://github.com/novnc/noVNC/issues/658) — Nginx reverse proxy timeout pattern
-- [TigerVNC issue #1775](https://github.com/TigerVNC/tigervnc/issues/1775) — websockify disconnects after 1 minute idle
-- [KasmVNC kasmxproxy docs](https://kasmweb.com/kasmvnc/docs/master/man/kasmxproxy.html) — physical display proxy limitations (why KasmVNC rejected)
+- [PWA iOS Limitations 2026 - MagicBell](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
+- [PWA on iOS 2025 - Brainhub](https://brainhub.eu/library/pwa-on-ios)
+- [iOS PWA Compatibility - firt.dev](https://firt.dev/notes/pwa-ios/)
+- [Do Progressive Web Apps Work on iOS - MobiLoud](https://www.mobiloud.com/blog/progressive-web-apps-ios)
+- [Web App Manifest - web.dev](https://web.dev/learn/pwa/web-app-manifest)
+- [Dynamic Viewport Units - web.dev](https://web.dev/blog/viewport-units)
+- [Navigating Safari/iOS PWA Limitations - Vinova](https://vinova.sg/navigating-safari-ios-pwa-limitations/)
 
-### Tertiary (LOW confidence, needs validation)
-- [react-vnc npm](https://www.npmjs.com/package/react-vnc) — React wrapper for noVNC; API surface needs verification before adopting
-- [KasmVNC GPU Acceleration](https://kasmweb.com/kasmvnc/docs/master/gpu_acceleration.html) — future reference if encoding performance becomes a bottleneck
+### Tertiary (LOW confidence -- needs validation)
+- iOS 26 "every home screen site opens as web app" behavior -- announced but not widely tested
+- React `<ViewTransition>` experimental API timeline -- currently canary only
+- EU DMA enforcement impact on PWA support -- proceedings ongoing
 
 ---
-*Research completed: 2026-03-25*
+*Research completed: 2026-04-01*
 *Ready for roadmap: yes*

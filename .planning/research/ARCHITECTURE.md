@@ -1,545 +1,414 @@
-# Architecture Research: Web-Based Remote Desktop Streaming for LivOS
+# Architecture Patterns: Mobile PWA Integration
 
-**Domain:** Web-based remote desktop streaming integration with existing self-hosted server platform
-**Researched:** 2026-03-25
-**Confidence:** HIGH (existing codebase thoroughly analyzed, proven open-source components)
+**Domain:** PWA integration into existing desktop-first React SPA
+**Researched:** 2026-04-01
+**Confidence:** HIGH (based on direct codebase analysis + PWA standards)
 
-## Decision: x11vnc + noVNC + Node.js WebSocket Proxy (Not KasmVNC)
+## Executive Summary
 
-After evaluating the ecosystem, the recommended architecture is:
+Livinity's UI is a desktop-first React 18 SPA with a windowed interface. On desktop, system apps (AI Chat, Settings, Files, Server, Terminal, etc.) open as draggable floating windows via `WindowManagerProvider` / `WindowsContainer`. On mobile (< 1024px), `WindowsContainer` returns `null` and the existing `SheetLayout` renders some apps as bottom-sheet overlays. However, only a subset of apps are registered as routes under `SheetLayout` -- the AI-heavy apps (AI Chat, Server Control, Agents, Schedules, Terminal, My Devices) are **window-only** with no route registration, meaning they are completely inaccessible on mobile today.
 
-- **x11vnc** captures the host's physical X11 display (:0) as a VNC stream
-- **noVNC** (via `@novnc/novnc` npm package or `react-vnc`) renders the desktop in the browser
-- **A Node.js WebSocket proxy** (built into livinityd) bridges noVNC to x11vnc, enforcing JWT auth before any VNC frames flow
+The mobile PWA integration must solve two problems: (1) make the app installable as a PWA, and (2) provide a phone-native rendering path for all system apps that currently only work in windows.
 
-**Why not KasmVNC?** KasmVNC is superior in raw performance (60fps, QOI encoding, built-in web server) but is designed primarily for virtual displays and containerized desktops. Capturing an existing physical display requires `kasmxproxy`, which adds complexity and has documented issues with physical displays. KasmVNC also breaks RFB compatibility, making it harder to debug. For v18.0 scope -- streaming an existing Linux desktop at acceptable latency on a LAN/tunnel -- x11vnc + noVNC is simpler, battle-tested, and integrates cleanly with the existing Node.js middleware stack.
+## Recommended Architecture
 
-**Why not Apache Guacamole?** Guacamole is a Java servlet container (requires Tomcat) with its own auth system. It is architecturally heavy for a single-purpose integration. LivOS already has JWT auth, Express middleware, and Caddy routing. Guacamole would be a parallel auth/proxy stack fighting the existing one.
+**Strategy: MobileAppRenderer -- a new component that renders app content as full-screen overlays on mobile, using the existing `WindowAppContent` component tree.**
 
-## System Overview
+Do NOT extend `SheetLayout`. SheetLayout is a bottom-sheet dialog designed for browsing content (Files, Settings, App Store) with close/back-to-desktop semantics. Mobile apps need full-screen rendering with navigation, status bars, and safe area handling -- a fundamentally different UX pattern.
 
-```
-Browser (pc.{username}.livinity.io)
-    |
-    | HTTPS (WebSocket upgrade)
-    |
-[Caddy] ---- reverse_proxy ---> [livinityd :8080]
-    |                                |
-    |                           [Auth Middleware]
-    |                           JWT cookie check
-    |                                |
-    |                           [WebSocket Proxy]
-    |                           /ws/desktop route
-    |                                |
-    |                           TCP connection
-    |                                |
-                                [x11vnc :5900]
-                                captures :0 display
-                                (host native process)
-```
-
-### For Tunnel Users (livinity.io relay):
+### High-Level Rendering Flow
 
 ```
-Browser (pc.{username}.livinity.io)
-    |
-    | HTTPS
-    |
-[Relay Server5] --- tunnel WebSocket ---> [LivOS client]
-    |                                          |
-    | subdomain: pc.{username}            [livinityd :8080]
-    | parsed as appName="pc"                   |
-    |                                     [Auth + WS Proxy]
-    |                                          |
-                                          [x11vnc :5900]
+Desktop (>= 1024px):
+  Router "/" -> Desktop -> DesktopContent (AppGrid + Dock)
+                        -> WindowsContainer (floating windows)
+                        -> SheetLayout (Files, Settings, App Store sheets)
+
+Mobile (< 1024px):
+  Router "/" -> Desktop -> DesktopContent (MobileAppGrid with system apps, no Dock)
+                        -> MobileAppRenderer (full-screen app overlays)
+                        -> WindowsContainer returns null (unchanged)
+                        -> SheetLayout still works for Files/Settings/App Store
 ```
 
-The relay already supports `*.*.livinity.io` in its Caddyfile and the subdomain parser correctly extracts `appName="pc"` from `pc.{username}.livinity.io`. No relay changes needed.
+### Component Boundaries
 
-## Component Responsibilities
+| Component | Responsibility | Status | Communicates With |
+|-----------|---------------|--------|-------------------|
+| `useIsMobile()` | Viewport detection (< 1024px) | EXISTS -- no changes needed | All mobile-aware components |
+| `site.webmanifest` | PWA installability manifest | EXISTS -- needs enhancement | Browser PWA engine |
+| Service Worker | Cache-first offline shell, update prompts | NEW -- `vite-plugin-pwa` | Vite build pipeline |
+| `MobileAppGrid` | Phone-style app grid with system apps visible | MODIFY `DesktopContent` | `AppsProvider`, `MobileAppRenderer` |
+| `MobileAppRenderer` | Full-screen overlay rendering of any app by ID | NEW | `WindowContent` (reuse), navigation state |
+| `MobileNavBar` | Top status bar with back button, app title | NEW | `MobileAppRenderer` |
+| `Dock` | Hide on mobile | MODIFY -- conditional render | `useIsMobile()` |
+| `DockBottomPositioner` | Hide on mobile | MODIFY -- conditional render | `useIsMobile()` |
+| `WindowContent` | Lazy-loaded app content by appId | EXISTS -- no changes | `MobileAppRenderer`, `Window` |
+| Safe area CSS | `env(safe-area-inset-*)` for notch/home indicator | NEW -- global CSS | `index.html` viewport-fit, Tailwind |
 
-| Component | Responsibility | Status |
-|-----------|----------------|--------|
-| **x11vnc** | Capture host display :0, serve VNC on localhost:5900 | NEW: installed by install.sh |
-| **noVNC client** | Browser-side JavaScript VNC renderer | NEW: served as static assets or embedded in LivOS UI |
-| **WebSocket proxy** (livinityd) | Bridge browser WebSocket to x11vnc TCP:5900, enforce JWT auth | NEW: new route in server/index.ts |
-| **Caddy subdomain block** | Route `pc.{domain}` to livinityd:8080 | MODIFIED: add to generateFullCaddyfile nativeApps |
-| **install.sh** | Detect GUI, install x11vnc, create systemd service | MODIFIED: new detection + install functions |
-| **NativeApp registry** | Manage x11vnc lifecycle (start/stop/idle timeout) | MODIFIED: add desktop-stream config to NATIVE_APP_CONFIGS |
-| **React UI** | Desktop viewer component embedded in LivOS window or standalone page | NEW: VncViewer component |
+## Integration Points: What to Modify vs Create
 
-## Detailed Data Flow
+### Files to MODIFY (minimal, targeted changes)
 
-### 1. Desktop Stream Connection Flow
+**1. `livos/packages/ui/index.html`** -- Add viewport-fit=cover for safe areas + Apple meta tags
 
-```
-1. User navigates to pc.{domain} OR opens Desktop Viewer in LivOS UI
-    |
-2. Caddy matches pc.{domain} block, reverse_proxies to 127.0.0.1:8080
-    |
-3. livinityd receives request:
-   a. If HTTP GET /desktop -> serve noVNC HTML page (standalone mode)
-   b. If WebSocket upgrade to /ws/desktop -> proceed to step 4
-    |
-4. Auth middleware extracts JWT from:
-   - LIVINITY_SESSION cookie (subdomain mode)
-   - ?token= query param (WebSocket mode, like existing WS pattern)
-    |
-5. If valid JWT -> create TCP connection to localhost:5900
-    |
-6. Bidirectional frame relay:
-   Browser WS frames <---> TCP VNC frames to x11vnc
-    |
-7. On disconnect or idle timeout -> close TCP + WS connections
+Current viewport meta:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 ```
 
-### 2. Auto-Start Flow (Lazy Initialization)
-
-```
-1. First connection to /ws/desktop arrives
-    |
-2. Check if x11vnc is running (NativeApp.getStatus())
-    |
-3. If not running:
-   a. Detect display server (X11 vs Wayland vs headless)
-   b. If headless -> return error "No display available"
-   c. Start x11vnc via systemd (NativeApp.start())
-   d. Wait for port 5900 to be available (existing poll loop)
-    |
-4. Reset idle timer (existing NativeApp.resetIdleTimer())
-    |
-5. Proceed with WebSocket proxy connection
+Needed:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Livinity" />
 ```
 
-### 3. Caddy Configuration Generation
+**2. `livos/packages/ui/public/site.webmanifest`** -- Add required PWA fields
 
-The existing `generateFullCaddyfile()` already accepts a `nativeApps` parameter for JWT-gated Caddy blocks. The desktop streaming service fits this pattern exactly:
-
-```typescript
-// In NATIVE_APP_CONFIGS (or dynamically when desktop streaming is enabled)
+Current manifest is minimal (missing `start_url`, `scope`, `orientation`, and maskable icon). Needs:
+```json
 {
-  id: 'desktop-stream',
-  serviceName: 'livos-x11vnc',
-  port: 6080, // noVNC WebSocket proxy port (served by livinityd, not a separate process)
-  idleTimeoutMs: 30 * 60 * 1000 // 30 min idle timeout
+  "name": "Livinity",
+  "short_name": "Livinity",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#f8f9fc",
+  "background_color": "#f8f9fc",
+  "icons": [
+    {"src": "/favicon/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/favicon/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/favicon/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
 }
 ```
 
-However, since the WebSocket proxy is INSIDE livinityd (port 8080), not a separate port, the Caddy block for `pc.{domain}` should route to 8080 just like other subdomain blocks. The nativeApps Caddy pattern with cookie-check redirect already handles auth at the Caddy level:
+**3. `livos/packages/ui/vite.config.ts`** -- Add `vite-plugin-pwa`
 
-```caddy
-pc.{domain} {
-    @notauth {
-        not {
-            header Cookie *livinity_token=*
-        }
-    }
-    handle @notauth {
-        redir https://{domain}/login?redirect={scheme}://{host}{uri}
-    }
-    reverse_proxy 127.0.0.1:8080
+Add `VitePWA` plugin with `generateSW` strategy. No manual service worker file needed. Configuration only.
+
+**4. `livos/packages/ui/src/router.tsx`** -- Wire MobileAppProvider + MobileAppRenderer
+
+Add `MobileAppProvider` inside the existing provider tree (around `Desktop` and siblings). Add `MobileAppRenderer` as a sibling of `WindowsContainer`. No route structure changes.
+
+**5. `livos/packages/ui/src/modules/desktop/dock.tsx`** -- Hide dock on mobile
+
+The `Dock` component already imports `useIsMobile()`. Add early return: `if (isMobile) return null`. Same for `DockBottomPositioner`.
+
+**6. `livos/packages/ui/src/modules/desktop/desktop-content.tsx`** -- Mobile app grid
+
+On mobile, add core system app icons (AI Chat, Settings, Files, Server, Terminal) to the grid items array. Change their `onClick` to call `mobileAppContext.openApp()` instead of `windowManager.openWindow()`. Desktop behavior completely unchanged.
+
+**7. `livos/packages/ui/src/modules/desktop/dock.tsx` (DockSpacer)** -- Return null on mobile
+
+When dock is hidden, the 76px bottom spacer should also be hidden.
+
+### Files to CREATE (new components)
+
+**1. `livos/packages/ui/src/modules/mobile/mobile-app-renderer.tsx`**
+
+Core new component. Full-screen overlay that renders an app by appId. Uses Framer Motion slide-up animation. Imports `WindowAppContent` from `window-content.tsx` to lazy-load the correct app component. Handles safe area insets.
+
+Conceptual structure:
+```typescript
+function MobileAppRenderer() {
+  const {activeApp, closeApp} = useMobileApp()
+  if (!activeApp) return null
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-40 flex flex-col bg-surface-base"
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+        initial={{y: '100%'}}
+        animate={{y: 0}}
+        exit={{y: '100%'}}
+        transition={{type: 'spring', damping: 30, stiffness: 300}}
+      >
+        <MobileNavBar title={activeApp.title} onBack={closeApp} />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <WindowAppContent appId={activeApp.appId} initialRoute={activeApp.route} />
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  )
 }
 ```
 
-This is a Caddy-level pre-check. The real JWT verification happens in livinityd's WebSocket upgrade handler (defense in depth).
+**2. `livos/packages/ui/src/modules/mobile/mobile-nav-bar.tsx`**
 
-## Recommended Architecture Pattern: Integrated WebSocket Proxy
+Top navigation bar with: chevron-left back button, centered app title, optional right action slot. Height ~44px + safe-area-inset-top. Background extends behind status bar for seamless look.
 
-### Pattern: WebSocket-to-TCP Bridge Inside livinityd
+**3. `livos/packages/ui/src/modules/mobile/mobile-app-context.tsx`**
 
-**What:** Instead of running websockify as a separate process (Python or Node.js), build the WebSocket-to-TCP bridge directly into livinityd's existing WebSocket upgrade handler.
-
-**Why this pattern:**
-- livinityd already has a WebSocket upgrade handler with auth verification (server/index.ts line 359)
-- Existing patterns: /terminal, /ws/docker-exec, /ws/voice all use the same `mountWebSocketServer` + auth flow
-- No additional process to manage, no additional port to configure
-- JWT auth is already implemented in the upgrade handler
-
-**Trade-offs:**
-- Pro: Zero new infrastructure, uses proven auth flow, single process
-- Pro: Works with both direct domain and tunnel relay (relay proxies WS natively)
-- Con: VNC binary frames through Node.js add some overhead vs native C proxy
-- Con: Node.js single-thread could bottleneck under heavy frame rates (mitigated: VNC is low bandwidth, typically 1-5 Mbps)
-
-**Implementation sketch:**
+Lightweight React context that tracks which app is open on mobile. Completely separate from the desktop `WindowManagerProvider`.
 
 ```typescript
-// In server/index.ts -- mount alongside existing WS handlers
+type MobileAppState = {
+  appId: string
+  route: string
+  title: string
+  icon: string
+} | null
 
-import { createConnection } from 'node:net'
-
-this.mountWebSocketServer('/ws/desktop', (wss) => {
-    wss.on('connection', (ws, req) => {
-        // Ensure desktop streaming service is running
-        const desktopApp = this.livinityd.apps.getNativeApp('desktop-stream')
-        if (!desktopApp || desktopApp.state !== 'ready') {
-            ws.close(1013, 'Desktop streaming not available')
-            return
-        }
-
-        // Reset idle timer on each connection (heartbeat)
-        desktopApp.resetIdleTimer()
-
-        // Create TCP connection to x11vnc
-        const vnc = createConnection({ host: '127.0.0.1', port: 5900 })
-
-        vnc.on('connect', () => {
-            // Bidirectional relay
-            ws.on('message', (data) => {
-                if (vnc.writable) vnc.write(Buffer.from(data as ArrayBuffer))
-            })
-            vnc.on('data', (data) => {
-                if (ws.readyState === 1) ws.send(data)
-            })
-        })
-
-        // Cleanup
-        ws.on('close', () => vnc.destroy())
-        vnc.on('close', () => ws.close())
-        vnc.on('error', () => ws.close(1011, 'VNC connection error'))
-        ws.on('error', () => vnc.destroy())
-    })
-})
-```
-
-This is the exact same pattern used for the existing voice WebSocket proxy (line 476-539 in server/index.ts) and Docker exec WebSocket handler.
-
-## Alternative Pattern Considered: Standalone websockify Process
-
-**What:** Run websockify (Python or Node.js) as a separate systemd service on port 6080, have Caddy route directly to it.
-
-**Why rejected:**
-- Requires separate auth mechanism (websockify auth plugins are limited)
-- Additional systemd service to manage
-- Additional port (6080) to open in firewall and Caddy
-- Duplicates auth logic that already exists in livinityd
-- Breaks the "everything through livinityd" routing pattern
-
-## New vs Modified Components
-
-### NEW Components
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Desktop WS proxy route | `livinityd/source/modules/server/index.ts` | `/ws/desktop` WebSocket-to-TCP bridge |
-| Desktop detection module | `livinityd/source/modules/desktop/detect.ts` | Detect X11/Wayland/headless, DISPLAY env |
-| Desktop streaming module | `livinityd/source/modules/desktop/index.ts` | Manages x11vnc lifecycle, coordinates start/stop |
-| VncViewer React component | `ui/src/components/desktop/VncViewer.tsx` | noVNC wrapper for browser-side rendering |
-| Desktop viewer page/window | `ui/src/routes/desktop.tsx` or window component | Standalone page or LivOS window for desktop view |
-| x11vnc systemd service | `/etc/systemd/system/livos-x11vnc.service` | Created by install.sh |
-
-### MODIFIED Components
-
-| Component | Location | Change |
-|-----------|----------|--------|
-| `install.sh` | `livos/install.sh` | Add `detect_gui()`, `install_x11vnc()`, `setup_desktop_streaming()` functions |
-| `native-app.ts` | `livinityd/source/modules/apps/native-app.ts` | Add desktop-stream to NATIVE_APP_CONFIGS |
-| `caddy.ts` | `livinityd/source/modules/domain/caddy.ts` | Desktop subdomain included in nativeApps array for Caddy generation |
-| `server/index.ts` | `livinityd/source/modules/server/index.ts` | Add `/ws/desktop` mount + desktop subdomain handling in app gateway |
-| CSP directives | `server/index.ts` helmet config | Add `connect-src` for desktop WebSocket if served on subdomain |
-
-### UNCHANGED Components
-
-| Component | Why Unchanged |
-|-----------|---------------|
-| Relay (platform/relay) | Already handles `*.*.livinity.io` with WS proxying |
-| JWT / auth middleware | Reused as-is for desktop stream auth |
-| Redis | No new keys needed (NativeApp state is in-memory) |
-| PostgreSQL | No schema changes needed |
-| App gateway middleware | Desktop stream handled via subdomain Caddy block, not app gateway |
-
-## install.sh Modifications
-
-### New Functions
-
-```bash
-# 1. GUI Detection
-detect_gui() {
-    # Check for running display server
-    if command -v loginctl &>/dev/null; then
-        SESSION_TYPE=$(loginctl show-session $(loginctl | grep "seat" | head -1 | awk '{print $1}') \
-            -p Type --value 2>/dev/null)
-    fi
-
-    # Fallback: check for X11 socket
-    if [[ -z "$SESSION_TYPE" ]]; then
-        if [[ -e /tmp/.X11-unix/X0 ]]; then
-            SESSION_TYPE="x11"
-        fi
-    fi
-
-    # Fallback: check for Wayland socket
-    if [[ -z "$SESSION_TYPE" ]]; then
-        if [[ -n "$WAYLAND_DISPLAY" ]] || ls /run/user/*/wayland-* &>/dev/null 2>&1; then
-            SESSION_TYPE="wayland"
-        fi
-    fi
-
-    case "$SESSION_TYPE" in
-        x11)
-            HAS_GUI=true
-            GUI_TYPE="x11"
-            ok "Display server detected: X11"
-            ;;
-        wayland)
-            HAS_GUI=true
-            GUI_TYPE="wayland"
-            warn "Wayland detected -- x11vnc requires XWayland or wayvnc"
-            ;;
-        *)
-            HAS_GUI=false
-            GUI_TYPE="none"
-            info "No GUI detected (headless server) -- desktop streaming skipped"
-            ;;
-    esac
-}
-
-# 2. x11vnc Installation
-install_x11vnc() {
-    if ! $HAS_GUI; then
-        info "Skipping x11vnc (no GUI detected)"
-        return 0
-    fi
-
-    if command -v x11vnc &>/dev/null; then
-        ok "x11vnc already installed"
-        return 0
-    fi
-
-    info "Installing x11vnc for desktop streaming..."
-    apt-get install -y -qq x11vnc
-    ok "x11vnc installed"
-}
-
-# 3. Desktop Streaming Service Setup
-setup_desktop_streaming() {
-    if ! $HAS_GUI; then return 0; fi
-
-    local vnc_password
-    vnc_password=$(openssl rand -hex 16)
-
-    # Store VNC password for x11vnc
-    mkdir -p /opt/livos/data/secrets
-    x11vnc -storepasswd "$vnc_password" /opt/livos/data/secrets/vncpasswd
-
-    # Create systemd service
-    cat > /etc/systemd/system/livos-x11vnc.service << UNIT
-[Unit]
-Description=LivOS Desktop Streaming (x11vnc)
-After=display-manager.service
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/bin/x11vnc -display :0 -rfbauth /opt/livos/data/secrets/vncpasswd \
-    -rfbport 5900 -localhost -shared -forever -noxdamage -ncache 10 -threads
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-    systemctl daemon-reload
-    # Do NOT enable by default -- started on-demand by NativeApp
-    ok "Desktop streaming service created (livos-x11vnc)"
-
-    # Store VNC password in Redis for livinityd's WebSocket proxy
-    local redis_pass
-    redis_pass=$(echo "$REDIS_URL" | sed -n 's|redis://:\(.*\)@.*|\1|p')
-    if [[ -n "$redis_pass" ]]; then
-        redis-cli -a "$redis_pass" SET livos:desktop:vnc_password "$vnc_password" 2>/dev/null
-    fi
+type MobileAppContextT = {
+  activeApp: MobileAppState
+  openApp: (appId: string, route: string, title: string, icon: string) => void
+  closeApp: () => void
 }
 ```
 
-### Integration Points in install.sh Main Flow
+**4. `livos/packages/ui/src/modules/mobile/use-mobile-back.ts`**
 
-```bash
-# After detect_os / detect_arch
-detect_gui
+Hook that integrates with the browser History API. When `openApp()` is called, pushes a state entry. When the user presses the browser/OS back button (popstate event), calls `closeApp()`. This makes the hardware back button on Android and the swipe-back gesture on iOS work naturally.
 
-# After install_caddy
-install_x11vnc
+**5. Service worker** -- Auto-generated by `vite-plugin-pwa`
 
-# After create_systemd_service
-setup_desktop_streaming
+The `generateSW` strategy in vite-plugin-pwa produces the service worker at build time via Workbox. No manual `sw.js` file needed. Precaches the SPA shell (HTML, JS, CSS, fonts). No runtime API caching -- LivOS is a real-time server management tool where stale API responses would be harmful.
+
+### Files that need NO changes
+
+| File | Why It Is Fine |
+|------|----------------|
+| `providers/window-manager.tsx` | Desktop-only provider; MobileAppRenderer does not use it |
+| `modules/window/windows-container.tsx` | Already returns null on mobile |
+| `layouts/sheet.tsx` (SheetLayout) | Continues to work for Files/Settings/App Store on both platforms |
+| `modules/desktop/app-icon.tsx` | Generic icon component, works for both grid contexts |
+| `providers/apps.tsx` | System app definitions already complete; no changes needed |
+| `hooks/use-is-mobile.ts` | Already works correctly at < 1024px breakpoint |
+| All app content components (AI Chat, Server, Terminal, etc.) | These render inside any container; already use `useIsMobile()` for internal responsive adjustments |
+| `modules/window/window-content.tsx` | Need to export `WindowAppContent` but no logic changes |
+
+## Data Flow
+
+### Desktop (unchanged)
+```
+User clicks dock icon
+  -> DockItem.onOpenWindow()
+  -> windowManager.openWindow(appId, route, title, icon)
+  -> WindowsContainer renders <Window><WindowContent appId={...} /></Window>
 ```
 
-### x11vnc Flags Rationale
+### Mobile (new)
+```
+User taps app icon in grid
+  -> AppIcon.onClick()
+  -> mobileAppContext.openApp(appId, route, title, icon)
+  -> history.pushState({mobileApp: appId}) for back button support
+  -> MobileAppRenderer renders full-screen overlay with slide-up animation
+  -> <WindowAppContent appId={...} /> (same lazy components as desktop)
 
-| Flag | Purpose |
-|------|---------|
-| `-display :0` | Capture the physical display |
-| `-rfbauth ...` | Password protect VNC (defense in depth behind JWT) |
-| `-rfbport 5900` | Standard VNC port, localhost only |
-| `-localhost` | Only accept connections from 127.0.0.1 (critical security) |
-| `-shared` | Allow multiple viewers |
-| `-forever` | Don't exit after first client disconnects |
-| `-noxdamage` | Avoid X Damage extension issues on some compositors |
-| `-ncache 10` | Client-side pixel caching for better performance |
-| `-threads` | Threaded mode for better responsiveness |
-
-## Caddy Configuration Approach
-
-### Direct Domain Mode
-
-The `generateFullCaddyfile()` function already supports native app subdomains with JWT cookie gating. The desktop stream becomes another entry:
-
-```typescript
-// In apps.ts rebuildCaddy(), nativeAppSubdomains array:
-nativeAppSubdomains.push({
-    subdomain: 'pc',
-    port: 8080  // Routes to livinityd, not x11vnc directly
-})
+User taps back button / swipes back / presses hardware back
+  -> popstate event fires
+  -> use-mobile-back hook detects mobileApp state
+  -> mobileAppContext.closeApp()
+  -> MobileAppRenderer animates out (slide-down)
+  -> Returns to home screen app grid
 ```
 
-This generates:
+### Key Insight: Reuse WindowAppContent
 
-```caddy
-pc.example.com {
-    @notauth {
-        not {
-            header Cookie *livinity_token=*
-        }
-    }
-    handle @notauth {
-        redir https://example.com/login?redirect={scheme}://{host}{uri}
-    }
-    reverse_proxy 127.0.0.1:8080
-}
-```
+The `WindowAppContent` switch statement in `window-content.tsx` (lines 50-99) already maps every appId to its lazy-loaded component. The mobile renderer reuses this exact function. Every app that works in a desktop window automatically works in the mobile full-screen view with zero per-app work.
 
-### Tunnel Mode
+Currently `WindowAppContent` is not exported. The only change needed to `window-content.tsx` is adding the `export` keyword to that function.
 
-No Caddy changes needed. The relay's Caddyfile already handles `*.*.livinity.io`. The subdomain parser correctly parses `pc.{username}.livinity.io` as `appName="pc"`, and the relay forwards both HTTP and WebSocket to the tunnel client.
+### SheetLayout Apps on Mobile
 
-### Cloudflare Tunnel Mode
+Files, Settings, and App Store already render via `SheetLayout` on both desktop and mobile. On mobile, `SheetLayout` renders as a full-height bottom sheet. These apps do NOT need the `MobileAppRenderer` -- they continue working through their existing route-based rendering. The user can still navigate to `/files/Home` or `/settings` via the app grid.
 
-When using Cloudflare Tunnel (not the custom relay), the tunnel configuration in Cloudflare Dashboard must add a route for `pc.{domain}` pointing to `http://localhost:8080`. This is a manual step documented in setup.
+The decision of whether an app uses SheetLayout (route-based) or MobileAppRenderer (context-based overlay):
+- **SheetLayout:** Files, Settings, App Store, Community App Store -- already have routes
+- **MobileAppRenderer:** AI Chat, Server Control, My Devices, Agents, Schedules, Terminal -- window-only apps
 
-## Scaling Considerations
+## Patterns to Follow
 
-| Scale | Approach |
-|-------|----------|
-| 1 user (typical) | Single x11vnc process, single WS connection. Node.js handles easily. |
-| 2-5 concurrent viewers | x11vnc `-shared` flag handles multiple VNC clients. Multiple WS connections in livinityd. No issues. |
-| Heavy usage (AI computer use + human viewing) | x11vnc captures display; both the AI agent's screenshot tool and the VNC stream access :0. No conflict -- x11vnc is read-only on the framebuffer. |
-| Multi-user (future) | Each user would need their own X session + x11vnc instance. Out of scope for v18.0 (single display). |
+### Pattern 1: Mobile-First Conditional Rendering
+**What:** Use `useIsMobile()` at the component level to choose rendering path.
+**When:** Components that need fundamentally different UX on mobile vs desktop.
+**Already used in:** `WindowsContainer` (`if (isMobile) return null`), `Dock` (dimension sizing), `AiChat` (drawer sidebar vs fixed sidebar).
 
-### First Bottleneck: Bandwidth
+### Pattern 2: Shared Content, Different Chrome
+**What:** App content components are platform-agnostic. Only the containing shell differs (Window frame vs MobileAppRenderer vs SheetLayout).
+**When:** Rendering the same app in different contexts.
+**Why:** Prevents maintaining two versions of every app. AI Chat already uses `useIsMobile()` internally for its sidebar (drawer on mobile, fixed panel on desktop) -- this pattern is established.
 
-VNC over WebSocket at 1080p typically uses 2-10 Mbps depending on screen change rate. Through the tunnel relay (Server5 with 8GB RAM), this is the first constraint. Mitigation: x11vnc JPEG encoding (lossy, lower bandwidth) and ncache (client-side caching).
+### Pattern 3: Context-Based Navigation State
+**What:** A lightweight React context (`MobileAppContext`) manages which app is currently open on mobile, separate from the desktop `WindowManagerProvider`.
+**When:** Mobile app open/close state.
+**Why:** The desktop WindowManager manages multiple simultaneous windows with z-index, drag, resize -- none of which apply to mobile's single-app-at-a-time model. A separate, simpler context avoids bloating WindowManager with mobile concerns.
 
-### Second Bottleneck: Node.js Frame Relay
-
-Node.js relaying binary VNC frames adds ~1-3ms latency per frame. For interactive desktop use, total latency should stay under 100ms including network. On LAN this is negligible. Through the relay, it adds up but remains acceptable for most use cases.
+### Pattern 4: History API for Back Navigation
+**What:** Push a history entry when opening a mobile app, listen for popstate to close it.
+**When:** Any full-screen overlay on mobile.
+**Why:** Users expect the browser/OS back button to close the current view. Without this, back navigates away from the entire app. This pattern is critical for PWA "feels native" UX.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Running websockify as a Separate Process
+### Anti-Pattern 1: Route-Based Mobile Apps
+**What:** Registering each system app as a React Router route (e.g., `/m/ai-chat`, `/m/settings`).
+**Why bad:** The window-only apps (AI Chat, Server Control, etc.) were explicitly designed without URL routes. The router.tsx comment says: "AI pages (ai-chat, server-control, subagents, schedules) are window-only. They are NOT registered as routes." Adding routes would require extracting state management, conflict with the desktop no-URL pattern, and create two rendering paths to maintain per app.
+**Instead:** Use context-based overlay with history.pushState for back-button support. No URL changes.
 
-**What people do:** Deploy websockify (Python) on port 6080, configure Caddy to proxy to it, implement separate auth.
-**Why it's wrong for LivOS:** Duplicates auth logic, adds process management complexity, breaks the established "livinityd is the single entry point" pattern. The existing server already handles WebSocket upgrades with JWT verification.
-**Do this instead:** Build the WebSocket-to-TCP bridge inside livinityd, reusing the existing auth and WS infrastructure.
+### Anti-Pattern 2: Extending SheetLayout for All Apps
+**What:** Making window-only system apps render inside the existing bottom-sheet overlay.
+**Why bad:** SheetLayout is a modal dialog with close button, scroll area, sheet-top sticky header, and "zoom-out desktop" animation. It has `h-[calc(100dvh-var(--sheet-top))]` -- it intentionally does NOT fill the screen. Apps like AI Chat need full-screen real estate, their own navigation chrome, and persistent WebSocket connections. Forcing them into SheetLayout creates UX conflicts (sheet close button vs app back button, sheet scroll vs chat scroll, reduced viewport height).
+**Instead:** Create `MobileAppRenderer` as a separate full-screen overlay, purpose-built for app rendering.
 
-### Anti-Pattern 2: Exposing x11vnc Directly to the Network
+### Anti-Pattern 3: Separate Mobile Components for Each App
+**What:** Creating `MobileAiChat.tsx`, `MobileSettings.tsx`, `MobileTerminal.tsx`, etc.
+**Why bad:** Doubles maintenance. Every feature added to the desktop version must be manually replicated. AI Chat already handles mobile responsiveness internally with `useIsMobile()`.
+**Instead:** Reuse `WindowAppContent` which already lazy-loads the right component by appId.
 
-**What people do:** Run x11vnc without `-localhost`, let Caddy proxy directly to port 5900.
-**Why it's wrong:** VNC has weak native auth (DES-based password). Even with Caddy TLS, the VNC port would be accessible from the Docker network or if firewall rules change.
-**Do this instead:** x11vnc with `-localhost` (only accepts 127.0.0.1), accessed exclusively through livinityd's authenticated WebSocket proxy.
+### Anti-Pattern 4: Complex Service Worker with Runtime API Caching
+**What:** Using `injectManifest` with custom runtime caching strategies for tRPC/API calls.
+**Why bad:** LivOS is a real-time server management tool. Caching API responses would show stale Docker container states, stale file listings, stale AI conversations. The offline story for this app is minimal -- the value is the live server connection.
+**Instead:** Use `generateSW` with precache for static assets only. No runtime API caching. The service worker exists for installability and fast shell loading, not offline functionality.
 
-### Anti-Pattern 3: KasmVNC/Guacamole for Simple Display Capture
+### Anti-Pattern 5: Modifying WindowManager for Mobile
+**What:** Adding mobile-specific logic to `WindowManagerProvider` (e.g., "on mobile, openWindow renders full-screen instead of floating").
+**Why bad:** Violates separation of concerns. WindowManager's reducer manages z-index, position, size, minimize/restore -- all desktop-only concepts. Adding mobile branching would complicate the reducer and every consumer.
+**Instead:** Separate `MobileAppContext` with a much simpler API (one app at a time, open/close only).
 
-**What people do:** Deploy full KasmVNC stack or Guacamole with Tomcat for a single-display streaming use case.
-**Why it's wrong for LivOS:** Over-engineering. KasmVNC is designed for containerized desktops with virtual displays. Guacamole requires Java + Tomcat + its own auth + its own DB. Both are heavyweight solutions when the need is "stream display :0 to a browser with JWT auth."
-**Do this instead:** x11vnc (proven, simple, captures real displays) + noVNC (proven, standard) + a thin Node.js bridge.
+## Component Tree (Mobile Path)
 
-### Anti-Pattern 4: Skipping GUI Detection in install.sh
+```
+<TrpcProvider>
+  <WallpaperProviderConnected>
+    <GlobalSystemStateProvider>
+      <GlobalFilesProvider>
+        <RouterProvider>
+          <EnsureLoggedIn>
+            <Wallpaper />
+            <AvailableAppsProvider>
+              <AppsProvider>
+                <WindowManagerProvider>         // still present, WindowsContainer returns null
+                  <MobileAppProvider>            // NEW: lightweight mobile nav state
+                    <CmdkProvider>
+                      <AiQuickProvider>
+                        <Desktop />             // renders app grid; on mobile shows system apps
+                        <Outlet />              // SheetLayout children (Files, Settings, etc.)
+                        <WindowsContainer />    // returns null on mobile (unchanged)
+                        <MobileAppRenderer />   // NEW: full-screen app overlay
+                        <FloatingIslandContainer />
+                        {/* Dock + DockBottomPositioner hidden on mobile */}
+                      </AiQuickProvider>
+                    </CmdkProvider>
+                  </MobileAppProvider>
+                </WindowManagerProvider>
+              </AppsProvider>
+            </AvailableAppsProvider>
+          </EnsureLoggedIn>
+        </RouterProvider>
+      </GlobalFilesProvider>
+    </GlobalSystemStateProvider>
+  </WallpaperProviderConnected>
+</TrpcProvider>
+```
 
-**What people do:** Always install x11vnc and create the systemd service, even on headless VPS servers.
-**Why it's wrong:** Installs unnecessary packages, creates services that will never work, confuses users with broken desktop streaming UI on headless servers.
-**Do this instead:** `detect_gui()` function checks for X11/Wayland before installing. On headless servers, skip entirely and hide the UI option.
+## Safe Area Implementation
 
-## Integration Points
+**Viewport meta:** `viewport-fit=cover` in `index.html` opts into full-screen rendering behind notch/home indicator. Without this, `env(safe-area-inset-*)` values are always 0.
 
-### With Existing LivOS Auth System
+**CSS approach:** Use `env(safe-area-inset-*)` with fallbacks via `max()`.
 
-| Integration | How | Notes |
-|-------------|-----|-------|
-| JWT verification | Reuse `server.verifyToken()` in WS upgrade handler | Same pattern as /terminal, /ws/docker-exec |
-| Cookie check | `LIVINITY_SESSION` cookie from subdomain | Same pattern as app gateway |
-| Caddy pre-check | Cookie presence check in Caddy block | Same pattern as nativeApps in caddy.ts |
-| Multi-user | `ctx.currentUser` from JWT payload | Admin-only for v18.0 (single display) |
+```css
+/* Mobile app renderer safe area handling */
+.mobile-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.mobile-safe-bottom {
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+```
 
-### With Existing NativeApp System
+For Tailwind, use arbitrary values: `pt-[env(safe-area-inset-top)]` or `pb-[max(16px,env(safe-area-inset-bottom))]`.
 
-| Integration | How | Notes |
-|-------------|-----|-------|
-| Lifecycle | `NATIVE_APP_CONFIGS` array + `NativeApp` class | Identical pattern to (previously) Chrome streaming |
-| Idle timeout | `resetIdleTimer()` on each WS heartbeat | 30-min default, same as existing native apps |
-| Start/stop | `systemctl start/stop livos-x11vnc` | Standard NativeApp pattern |
-| Status | `systemctl is-active` check | Used by UI to show streaming status |
+**Key values on iOS in standalone PWA mode:**
+- `safe-area-inset-top`: ~59px (Dynamic Island/iPhone 15+), ~47px (notch/iPhone X-14), ~20px (no notch)
+- `safe-area-inset-bottom`: ~34px (home indicator gesture bar), 0px (home button devices)
+- `safe-area-inset-left/right`: 0px in portrait, varies in landscape
 
-### With Caddy Configuration System
+**The mobile nav bar absorbs the top safe area** (its background color extends behind the status bar using padding-top), and **the app content area absorbs the bottom safe area** (padding-bottom for the home indicator).
 
-| Integration | How | Notes |
-|-------------|-----|-------|
-| Subdomain block | `nativeAppSubdomains` array in `rebuildCaddy()` | Existing pattern, just add entry |
-| HTTPS cert | Caddy auto-obtains cert for `pc.{domain}` | Same Let's Encrypt flow as app subdomains |
-| Tunnel mode | No Caddy change needed | Relay handles subdomain routing |
+**Desktop is unaffected:** `env(safe-area-inset-*)` returns 0px on desktop browsers, so these styles are no-ops outside mobile.
 
-### With AI Computer Use (v15.0/v17.0)
+## PWA Installability Checklist
 
-| Integration | How | Notes |
-|-------------|-----|-------|
-| No conflict | Both access display :0 read-only | x11vnc captures framebuffer; screenshot tool captures framebuffer |
-| Synergy | User watches AI work via desktop stream | Desktop stream + AI computer use = live monitoring |
-| Future | Could trigger AI computer use from desktop viewer | Out of scope for v18.0 |
+### Minimum Requirements
 
-### Internal Boundaries
+1. **Web manifest** with `name`, `icons` (192x192 + 512x512), `start_url`, `display: standalone` -- partially exists, needs `start_url` and `scope`
+2. **Service worker** registered -- needs `vite-plugin-pwa`
+3. **HTTPS** -- already served via Caddy with TLS
+4. **Apple meta tags** -- `apple-mobile-web-app-capable`, `apple-touch-icon`, `apple-mobile-web-app-status-bar-style`
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| Browser <-> livinityd | WebSocket (binary VNC frames) | `/ws/desktop` route |
-| livinityd <-> x11vnc | TCP socket to localhost:5900 | Standard VNC protocol (RFB) |
-| livinityd <-> NativeApp | In-process method calls | `apps.getNativeApp()` |
-| install.sh <-> systemd | `systemctl` commands | Create and manage livos-x11vnc.service |
+### iOS 26+ Note
+As of iOS 26, every site added to the Home Screen defaults to opening as a web app even without a manifest. However, a proper manifest ensures correct icon, name, orientation, and status bar styling. The manifest is still required for Android "Add to Home Screen" prompt.
 
-## Suggested Build Order
+## Suggested Build Order (Dependency-Based)
 
-Based on dependency analysis of existing components:
+### Phase 1: PWA Installability Shell (no UI changes)
+1. Enhance `site.webmanifest` (add `start_url`, `scope`, `orientation`, maskable icon)
+2. Add Apple meta tags to `index.html` (`viewport-fit`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`)
+3. Install + configure `vite-plugin-pwa` in `vite.config.ts` (`generateSW` strategy)
+4. Add SW registration via `virtual:pwa-register/react` in `main.tsx`
 
-1. **install.sh: GUI detection + x11vnc install** (no dependencies, can test independently)
-2. **x11vnc systemd service** (depends on 1, can test with manual VNC client)
-3. **NativeApp config registration** (depends on 2, uses existing NativeApp class)
-4. **WebSocket-to-TCP proxy in livinityd** (depends on 3 for lifecycle management)
-5. **Caddy subdomain generation** (depends on 4 being testable, uses existing caddy.ts pattern)
-6. **noVNC React component + UI** (depends on 4 being the backend it connects to)
-7. **End-to-end testing** (all components integrated)
+**Dependency:** None. **Testable independently:** App becomes installable as PWA. Desktop UI completely unchanged.
 
-### Phase 1 should cover: Steps 1-3 (server-side infrastructure)
-### Phase 2 should cover: Steps 4-5 (proxy + routing)
-### Phase 3 should cover: Steps 6-7 (UI + integration testing)
+### Phase 2: Mobile Navigation Infrastructure
+1. Create `MobileAppContext` (`openApp`, `closeApp`, `activeApp` state)
+2. Create `use-mobile-back` hook (History API integration)
+3. Create `MobileNavBar` (back button, title, safe area top padding)
+4. Create `MobileAppRenderer` (full-screen overlay, imports `WindowAppContent`, Framer Motion slide-up)
+5. Export `WindowAppContent` from `window-content.tsx`
+6. Wire `MobileAppProvider` + `MobileAppRenderer` into `router.tsx`
+
+**Dependency:** None from Phase 1 (can be built in parallel). **Testable:** Can manually call `openApp()` from console.
+
+### Phase 3: Mobile Home Screen (dock hiding + system app grid)
+1. Modify `Dock` -- hide on mobile (`if (isMobile) return null`)
+2. Modify `DockBottomPositioner` -- hide on mobile
+3. Modify `DockSpacer` -- return null on mobile
+4. Modify `DesktopContent` -- on mobile, add system app icons to grid with `onClick -> mobileAppContext.openApp()`
+
+**Dependency:** Phase 2 (needs `MobileAppContext` for click handlers). After this phase, the full mobile flow works: home screen with apps -> tap to open full-screen -> back to close.
+
+### Phase 4: Polish + Safe Areas
+1. Add safe area CSS (global styles or Tailwind utilities)
+2. Tune slide-up animation parameters for iOS-native feel
+3. Handle edge cases: orientation change, keyboard visibility, scroll bounce
+4. Test on real devices (iPhone with Dynamic Island, Android)
+
+**Dependency:** Phase 3 functional. **Nature:** Polish, not structural.
+
+## Scalability Considerations
+
+| Concern | Current State | At PWA Launch | Future |
+|---------|--------------|---------------|--------|
+| Adding new system app | Add to dock + WindowContent switch | Also add to mobile grid items in DesktopContent | Extract to config-driven app registry |
+| App-specific mobile tweaks | AI Chat already uses `useIsMobile()` internally | Same pattern for any app needing mobile-specific layout | Consider container queries per-app |
+| Offline capability | Not needed (live server tool) | Static shell cache only via service worker | Could add read-only cache for Settings/Files listing |
+| Push notifications | Not supported | Service worker enables capability | Add notification subscription + backend integration |
+| Tablet layout | Treated as desktop (>= 1024px) | Same behavior | Could add tablet-specific breakpoint (768-1024px) |
 
 ## Sources
 
-- [Apache Guacamole](https://guacamole.apache.org/) - Evaluated and rejected (too heavyweight)
-- [KasmVNC GitHub](https://github.com/kasmtech/KasmVNC) - Evaluated and rejected (container-focused)
-- [KasmVNC kasmxproxy docs](https://kasmweb.com/kasmvnc/docs/master/man/kasmxproxy.html) - Physical display proxy limitations
-- [noVNC official site](https://novnc.com/noVNC/) - Browser VNC client
-- [noVNC GitHub](https://github.com/novnc/noVNC) - Source + library API docs
-- [@novnc/novnc npm](https://www.npmjs.com/package/@novnc/novnc) - npm package
-- [react-vnc npm](https://www.npmjs.com/package/react-vnc) - React wrapper for noVNC
-- [websockify GitHub](https://github.com/novnc/websockify) - WebSocket-to-TCP proxy reference
-- [websockify-js GitHub](https://github.com/novnc/websockify-js) - Node.js implementation reference
-- [node-websockify](https://github.com/maximegris/node-websockify) - Node.js WebSocket-to-TCP bridge
-- [x11vnc GitHub](https://github.com/LibVNC/x11vnc) - VNC server for real X displays
-- [Caddy reverse_proxy docs](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) - WebSocket proxy config
-- [caddy-websockify plugin](https://github.com/hadi77ir/caddy-websockify) - Evaluated, not needed
-- [Linux display detection](https://www.cyberciti.biz/faq/howto-check-for-wayland-or-x11-with-my-linux-desktop/) - GUI detection approaches
-- [noVNC in Node.js + React](https://medium.com/@deepakmukundpur/how-to-use-vnc-in-a-node-js-react-project-with-novnc-83f5c8fae616) - Integration pattern
+- Direct codebase analysis of `router.tsx`, `desktop-content.tsx`, `dock.tsx`, `windows-container.tsx`, `app-grid.tsx`, `window-content.tsx`, `window-manager.tsx`, `app-icon.tsx`, `use-is-mobile.ts`, `sheet.tsx`, `vite.config.ts`, `index.html`, `site.webmanifest`, `main.tsx`, `providers/apps.tsx`, `use-launch-app.ts`, `ai-chat/index.tsx` (HIGH confidence)
+- [PWA iOS Limitations and Safari Support 2026](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
+- [Making PWAs installable - MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
+- [Do Progressive Web Apps Work on iOS - Complete Guide 2026](https://www.mobiloud.com/blog/progressive-web-apps-ios)
+- [vite-plugin-pwa GitHub](https://github.com/vite-pwa/vite-plugin-pwa)
+- [Vite PWA - React Examples](https://vite-pwa-org.netlify.app/examples/react)
+- [CSS env() function - MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/env)
+- [iOS PWA standalone safe area CSS patterns](https://gist.github.com/cvan/6c022ff9b14cf8840e9d28730f75fc14)
+- [Understanding env() Safe Area Insets in CSS with React and Tailwind](https://medium.com/@developerr.ayush/understanding-env-safe-area-insets-in-css-from-basics-to-react-and-tailwind-a0b65811a8ab)
+- [Make Your PWAs Look Handsome on iOS](https://dev.to/karmasakshi/make-your-pwas-look-handsome-on-ios-1o08)
 
 ---
-*Architecture research for: v18.0 Remote Desktop Streaming integration with LivOS*
-*Researched: 2026-03-25*
+*Architecture research for: v23.0 Mobile PWA integration with LivOS*
+*Researched: 2026-04-01*
