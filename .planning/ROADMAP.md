@@ -118,11 +118,11 @@ Plans:
   2. Every settings section (Users, Domains, AI, About) scrolls vertically without horizontal overflow or content clipping
   3. All interactive controls (inputs, selects, toggles, buttons) have a minimum 44px touch target and adequate spacing
   4. Modal dialogs (invite user, add domain, etc.) render full-width on mobile without clipping or overflowing the viewport
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md -- Mobile single-column drill-down layout + overflow protection (SET-01, SET-02)
+- [ ] 02-02-PLAN.md -- Touch-friendly controls + full-width mobile dialogs (SET-03, SET-04)
 
 ### Phase 3: Server Control Mobile
 **Goal**: Users can monitor and manage Docker containers on mobile with full visibility
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 2. Settings Mobile | v24.0 | 0/0 | Not started | - |
+| 2. Settings Mobile | v24.0 | 0/2 | Not started | - |
 | 3. Server Control Mobile | v24.0 | 0/0 | Not started | - |
 | 4. Files Mobile | v24.0 | 0/0 | Not started | - |
 | 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
