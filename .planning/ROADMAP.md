@@ -86,7 +86,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()` or CSS breakpoints.
 
-- [ ] **Phase 1: AI Chat Mobile** - Responsive sidebar drawer, compact messages, touch-friendly input
+- [x] **Phase 1: AI Chat Mobile** - Responsive sidebar drawer, compact messages, touch-friendly input (completed 2026-04-01)
 - [ ] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls
 - [ ] **Phase 3: Server Control Mobile** - Stackable dashboard cards, mobile-friendly tables and actions
 - [ ] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar
@@ -103,7 +103,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   2. Long messages with code blocks render within the viewport width -- no horizontal scrolling on the chat area
   3. Tool call cards display a compact summary on mobile with a tap target to expand full details
   4. The chat input area including file upload button stays anchored at the bottom, is not occluded by the mobile keyboard, and has touch-friendly sizing
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md -- Mobile sidebar drawer + navigation headers + touch-friendly chat input (CHAT-01, CHAT-04)
@@ -174,7 +174,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. AI Chat Mobile | v24.0 | 0/2 | Planning complete | - |
+| 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 2. Settings Mobile | v24.0 | 0/0 | Not started | - |
 | 3. Server Control Mobile | v24.0 | 0/0 | Not started | - |
 | 4. Files Mobile | v24.0 | 0/0 | Not started | - |
