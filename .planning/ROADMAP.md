@@ -92,11 +92,11 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   3. On a notched device (iPhone with Dynamic Island), content is padded below the notch and above the home indicator -- no overlap
   4. After first visit, the app shell loads instantly from service worker cache on subsequent visits
   5. The desktop UI is completely unchanged -- no visual or behavioral differences on desktop browsers
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 37-01: TBD
-- [ ] 37-02: TBD
+- [ ] 37-01-PLAN.md — PWA installability: vite-plugin-pwa manifest + service worker + Apple meta tags
+- [ ] 37-02-PLAN.md — Safe area CSS foundation: tailwindcss-safe-area plugin + CSS variables + overscroll prevention
 
 ### Phase 38: Mobile Navigation Infrastructure
 **Goal**: Any system app can be opened full-screen on mobile with a back button that returns to the home screen, reusing existing window content components
