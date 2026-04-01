@@ -18,6 +18,7 @@ import {
 
 import {cn} from '@/shadcn-lib/utils'
 import type {ChatMessage, ChatToolCall, ContentBlock} from '@/hooks/use-agent-socket'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 import {trpcReact} from '@/trpc/trpc'
 
@@ -304,11 +305,11 @@ function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
 // --- AgentToolCallDisplay (Claude Code inline style) ---
 
 /** Build a brief one-line input summary for the tool header */
-function toolInputSummary(toolCall: ChatToolCall): string {
+function toolInputSummary(toolCall: ChatToolCall, maxLen = 80): string {
 	const raw = getRawToolName(toolCall.name)
 	if (isShellTool(toolCall.name) && toolCall.input.command) {
 		const cmd = String(toolCall.input.command).trim()
-		return cmd.length > 80 ? cmd.slice(0, 77) + '...' : cmd
+		return cmd.length > maxLen ? cmd.slice(0, maxLen - 3) + '...' : cmd
 	}
 	if (/file|read|write|edit/.test(raw)) {
 		const path = toolCall.input.path || toolCall.input.file_path || toolCall.input.filename
@@ -327,6 +328,7 @@ function toolInputSummary(toolCall: ChatToolCall): string {
 
 export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	const [expanded, setExpanded] = useState(false)
+	const isMobile = useIsMobile()
 
 	// Auto-expand on error
 	useEffect(() => {
@@ -336,7 +338,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	}, [toolCall.status])
 
 	const {icon: ToolIcon, color: iconColor} = getToolIcon(toolCall.name)
-	const summary = toolInputSummary(toolCall)
+	const summary = toolInputSummary(toolCall, isMobile ? 40 : 80)
 
 	const statusDot = (() => {
 		switch (toolCall.status) {
@@ -354,7 +356,10 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 			{/* Compact header — Claude Code style */}
 			<button
 				onClick={() => setExpanded(!expanded)}
-				className='group flex w-full items-center gap-1.5 text-left text-xs hover:bg-surface-1/50 rounded px-1 py-0.5 -mx-1'
+				className={cn(
+					'group flex w-full items-center gap-1.5 text-left text-xs hover:bg-surface-1/50 rounded px-1 -mx-1',
+					isMobile ? 'py-2' : 'py-0.5'
+				)}
 			>
 				{statusDot}
 				<ToolIcon size={13} className={cn(iconColor, 'flex-shrink-0')} />
@@ -381,7 +386,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 						transition={{duration: 0.15, ease: 'easeInOut'}}
 						className='overflow-hidden'
 					>
-						<div className='ml-5 mt-0.5 border-l-2 border-surface-2 pl-3 pb-1'>
+						<div className={cn('mt-0.5 border-l-2 border-surface-2 pb-1', isMobile ? 'ml-2 pl-2' : 'ml-5 pl-3')}>
 							{/* Error */}
 							{toolCall.status === 'error' && (toolCall.errorMessage || toolCall.output) && (
 								<div className='rounded bg-red-500/10 px-2 py-1 text-xs text-red-400'>
