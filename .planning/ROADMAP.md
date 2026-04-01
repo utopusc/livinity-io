@@ -77,7 +77,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 - [x] **Phase 37: PWA Foundation** - Installable PWA with manifest, service worker, Apple meta tags, and safe area CSS (completed 2026-04-01)
 - [x] **Phase 38: Mobile Navigation Infrastructure** - Full-screen app rendering pipeline with MobileAppContext, MobileAppRenderer, and hardware back button support (completed 2026-04-01)
-- [ ] **Phase 39: Mobile Home Screen + App Access** - Phone-like home screen with system apps in grid, bottom tab bar, and dock hidden on mobile
+- [x] **Phase 39: Mobile Home Screen + App Access** - Phone-like home screen with system apps in grid, bottom tab bar, and dock hidden on mobile (completed 2026-04-01)
 - [ ] **Phase 40: Polish + iOS Hardening** - Install prompt, splash screens, WebSocket reconnection on resume, and keyboard layout fixes
 
 ## Phase Details
@@ -125,7 +125,7 @@ Plans:
 
 Plans:
 - [x] 39-01-PLAN.md — Hide dock on mobile + add system apps (AI Chat, Files, Settings, Server, Terminal) to app grid
-- [ ] 39-02-PLAN.md — Bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server)
+- [x] 39-02-PLAN.md — Bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server)
 
 ### Phase 40: Polish + iOS Hardening
 **Goal**: The PWA feels native on iOS with smooth transitions, branded splash screens, guided installation, resilient connectivity, and keyboard-safe input layouts
@@ -151,7 +151,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 |-------|-----------|----------------|--------|-----------|
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 39. Mobile Home Screen + App Access | v23.0 | 1/2 | In Progress|  |
+| 39. Mobile Home Screen + App Access | v23.0 | 2/2 | Complete   | 2026-04-01 |
 | 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
 
 ---

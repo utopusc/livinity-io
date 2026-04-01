@@ -20,7 +20,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **MOB-01**: On mobile, dock is hidden and system apps (AI Chat, Settings, Files, Server, Terminal) appear in the app grid
 - [x] **MOB-02**: Tapping a system app in the grid opens it full-screen with a back button to return home
-- [ ] **MOB-03**: Bottom tab bar provides quick access to 5 primary apps (Home, AI Chat, Files, Settings, Server)
+- [x] **MOB-03**: Bottom tab bar provides quick access to 5 primary apps (Home, AI Chat, Files, Settings, Server)
 - [x] **MOB-04**: Full-screen apps reuse existing window content components (zero per-app rewrite)
 - [x] **MOB-05**: Desktop UI remains completely unchanged — all mobile changes gated on useIsMobile()
 
@@ -64,7 +64,7 @@ Deferred to future release.
 | PWA-06 | Phase 40 | Pending |
 | MOB-01 | Phase 39 | Complete |
 | MOB-02 | Phase 38 | Complete |
-| MOB-03 | Phase 39 | Pending |
+| MOB-03 | Phase 39 | Complete |
 | MOB-04 | Phase 38 | Complete |
 | MOB-05 | Phase 38 | Complete |
 | IOS-01 | Phase 37 | Complete |
