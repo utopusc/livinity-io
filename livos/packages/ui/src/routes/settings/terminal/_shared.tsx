@@ -5,6 +5,7 @@ import {useMeasure} from 'react-use'
 
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {BackLink} from '@/modules/immersive-picker'
+import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
 import '@xterm/xterm/css/xterm.css'
@@ -23,7 +24,7 @@ export const XTermTerminal = ({appId}: {appId?: string}) => {
 
 	const isMobile = useIsMobile()
 
-	const fontSize = isMobile ? 11 : 13
+	const fontSize = isMobile ? 12 : 13
 	// TODO: link this to the theme
 	const fontFamily = 'SF Mono, SFMono-Regular, ui-monospace, DejaVu Sans Mono, Menlo, Consolas, monospace'
 
@@ -103,7 +104,10 @@ export const XTermTerminal = ({appId}: {appId?: string}) => {
 	return (
 		<div
 			ref={parentContainerRef as React.LegacyRef<HTMLDivElement>}
-			className='h-full w-full overflow-hidden overflow-x-auto rounded-xl bg-neutral-900 pb-4 pr-3'
+			className={cn(
+				'h-full w-full overflow-hidden bg-neutral-900',
+				isMobile ? '' : 'overflow-x-auto rounded-xl pb-4 pr-3',
+			)}
 		>
 			{/* Hidden character to calculate correct cols/rows based on its dimensions */}
 			<div
@@ -116,7 +120,10 @@ export const XTermTerminal = ({appId}: {appId?: string}) => {
 			{/* Using `tracking-normal` and `text-rendering: unset` to prevent cursor text selection from not selecting the correct text */}
 			<div
 				ref={containerRef}
-				className='h-full w-full min-w-[980px] px-4 py-3 tracking-normal'
+				className={cn(
+					'h-full w-full tracking-normal',
+					isMobile ? 'px-1 py-1' : 'min-w-[980px] px-4 py-3',
+				)}
 				style={{textRendering: 'unset'}}
 			/>
 		</div>
