@@ -1,6 +1,7 @@
 # custom
 public/generated-tabler-icons
 todo.md
+dev-dist
 
 # Environment files (never commit secrets)
 .env

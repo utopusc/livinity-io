@@ -2,6 +2,7 @@ import path from 'node:path'
 import react from '@vitejs/plugin-react-swc'
 import {defineConfig} from 'vite'
 import {imagetools} from 'vite-imagetools'
+import {VitePWA} from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 
@@ -11,6 +12,63 @@ export default defineConfig({
 		imagetools({
 			// Currently we only convert SVGs in features/files/assets/file-items-thumbnails
 			include: /src\/features\/files\/assets\/file-items-thumbnails\/[^?]+\.svg(\?.*)?$/,
+		}),
+		VitePWA({
+			registerType: 'autoUpdate',
+			includeAssets: ['favicon/favicon.ico', 'favicon/apple-touch-icon.png'],
+			manifest: {
+				name: 'Livinity',
+				short_name: 'Livinity',
+				description: 'Self-hosted AI server platform',
+				id: '/',
+				start_url: '/',
+				scope: '/',
+				theme_color: '#f8f9fc',
+				background_color: '#f8f9fc',
+				display: 'standalone',
+				orientation: 'any',
+				icons: [
+					{
+						src: '/favicon/android-chrome-192x192.png',
+						sizes: '192x192',
+						type: 'image/png',
+					},
+					{
+						src: '/favicon/android-chrome-512x512.png',
+						sizes: '512x512',
+						type: 'image/png',
+					},
+					{
+						src: '/favicon/android-chrome-512x512.png',
+						sizes: '512x512',
+						type: 'image/png',
+						purpose: 'maskable',
+					},
+				],
+			},
+			workbox: {
+				globPatterns: ['**/*.{js,css,html,woff2}'],
+				navigateFallback: '/index.html',
+				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/],
+				runtimeCaching: [
+					{
+						urlPattern: /\/wallpapers\/.*/,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'wallpapers',
+							expiration: {maxEntries: 30, maxAgeSeconds: 30 * 24 * 60 * 60},
+						},
+					},
+					{
+						urlPattern: /\/figma-exports\/.*/,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'app-icons',
+							expiration: {maxEntries: 50, maxAgeSeconds: 30 * 24 * 60 * 60},
+						},
+					},
+				],
+			},
 		}),
 	],
 	define: {
