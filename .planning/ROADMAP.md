@@ -10,7 +10,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v20.0 Live Agent UI** — Phases 11-18 (shipped 2026-03-27)
 - ✅ **v21.0 Autonomous Agent Platform** — Phases 19-28 (shipped 2026-03-28)
 - ✅ **v22.0 Livinity AGI Platform** — Phases 29-36 (shipped 2026-03-29)
-- [ ] **v23.0 Mobile PWA** — Phases 37-40 (in progress)
+- ✅ **v23.0 Mobile PWA** — Phases 37-40 (shipped 2026-04-01)
+- [ ] **v24.0 Mobile Responsive UI** — Phases 1-5 (in progress)
 
 ## Phases
 
@@ -69,95 +70,124 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v23.0 Mobile PWA (In Progress)
+<details>
+<summary>v23.0 Mobile PWA (Phases 37-40) — SHIPPED 2026-04-01</summary>
 
-**Milestone Goal:** Make Livinity installable as a PWA on iOS/Android with a native phone-like experience -- app grid home screen, full-screen apps, no dock on mobile. Desktop UI completely unchanged.
+- [x] Phase 37: PWA Foundation (2/2 plans) — completed 2026-04-01
+- [x] Phase 38: Mobile Navigation Infrastructure (2/2 plans) — completed 2026-04-01
+- [x] Phase 39: Mobile Home Screen + App Access (2/2 plans) — completed 2026-04-01
+- [x] Phase 40: Polish + iOS Hardening (2/2 plans) — completed 2026-04-01
 
-**CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()`. nexus-core runs compiled JS -- MUST rebuild after source changes.
+</details>
 
-- [x] **Phase 37: PWA Foundation** - Installable PWA with manifest, service worker, Apple meta tags, and safe area CSS (completed 2026-04-01)
-- [x] **Phase 38: Mobile Navigation Infrastructure** - Full-screen app rendering pipeline with MobileAppContext, MobileAppRenderer, and hardware back button support (completed 2026-04-01)
-- [x] **Phase 39: Mobile Home Screen + App Access** - Phone-like home screen with system apps in grid, bottom tab bar, and dock hidden on mobile (completed 2026-04-01)
-- [x] **Phase 40: Polish + iOS Hardening** - Install prompt, splash screens, WebSocket reconnection on resume, and keyboard layout fixes (completed 2026-04-01)
+### v24.0 Mobile Responsive UI (In Progress)
+
+**Milestone Goal:** Make every system app (AI Chat, Settings, Server Control, Files, Terminal) fully usable on mobile -- proper responsive layouts, touch-friendly controls, no overflow/scroll issues. Each phase delivers one complete app's mobile experience.
+
+**CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()` or CSS breakpoints.
+
+- [ ] **Phase 1: AI Chat Mobile** - Responsive sidebar drawer, compact messages, touch-friendly input
+- [ ] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls
+- [ ] **Phase 3: Server Control Mobile** - Stackable dashboard cards, mobile-friendly tables and actions
+- [ ] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar
+- [ ] **Phase 5: Terminal Mobile** - Viewport-fitted xterm.js, readable font, landscape support
 
 ## Phase Details
 
-### Phase 37: PWA Foundation
-**Goal**: Livinity is installable as a PWA on iOS and Android, launches in standalone mode, and safe area CSS is active for notch/home indicator devices
-**Depends on**: Nothing (first phase of v23.0)
-**Requirements**: PWA-01, PWA-02, PWA-03, PWA-04, IOS-01
+### Phase 1: AI Chat Mobile
+**Goal**: Users can have full AI conversations on mobile with the same functionality as desktop
+**Depends on**: Nothing (first phase)
+**Requirements**: CHAT-01, CHAT-02, CHAT-03, CHAT-04
 **Success Criteria** (what must be TRUE):
-  1. User can install Livinity from iOS Safari via "Add to Home Screen" and it opens full-screen without browser chrome
-  2. User can install Livinity from Android Chrome via install prompt and it opens as a standalone app
-  3. On a notched device (iPhone with Dynamic Island), content is padded below the notch and above the home indicator -- no overlap
-  4. After first visit, the app shell loads instantly from service worker cache on subsequent visits
-  5. The desktop UI is completely unchanged -- no visual or behavioral differences on desktop browsers
-**Plans**: 2 plans
+  1. User can open and close the conversation/agents sidebar on mobile via a hamburger button, and it renders as an overlay drawer that does not push content off-screen
+  2. Long messages with code blocks render within the viewport width -- no horizontal scrolling on the chat area
+  3. Tool call cards display a compact summary on mobile with a tap target to expand full details
+  4. The chat input area including file upload button stays anchored at the bottom, is not occluded by the mobile keyboard, and has touch-friendly sizing
+**Plans**: TBD
 
 Plans:
-- [x] 37-01-PLAN.md — PWA installability: vite-plugin-pwa manifest + service worker + Apple meta tags
-- [x] 37-02-PLAN.md — Safe area CSS foundation: tailwindcss-safe-area plugin + CSS variables + overscroll prevention
+- [ ] 01-01: TBD
+- [ ] 01-02: TBD
 
-### Phase 38: Mobile Navigation Infrastructure
-**Goal**: Any system app can be opened full-screen on mobile with a back button that returns to the home screen, reusing existing window content components
-**Depends on**: Phase 37
-**Requirements**: MOB-02, MOB-04, MOB-05
+### Phase 2: Settings Mobile
+**Goal**: Users can navigate and modify all settings on mobile without layout issues
+**Depends on**: Nothing (independent)
+**Requirements**: SET-01, SET-02, SET-03, SET-04
 **Success Criteria** (what must be TRUE):
-  1. Tapping a system app on mobile opens it in a full-screen overlay that covers the entire viewport (no floating window chrome)
-  2. A back button in the top navigation bar returns the user to the home screen
-  3. The hardware/OS back button (Android back, iOS swipe-back gesture) closes the active app and returns home
-  4. Every app that works in a desktop window also renders correctly in the mobile full-screen overlay with zero per-app modifications
-**Plans**: 2 plans
+  1. Settings page uses a single-column stacked layout on mobile -- no side navigation panel visible; sections are accessed via a top-level list or back-navigation pattern
+  2. Every settings section (Users, Domains, AI, About) scrolls vertically without horizontal overflow or content clipping
+  3. All interactive controls (inputs, selects, toggles, buttons) have a minimum 44px touch target and adequate spacing
+  4. Modal dialogs (invite user, add domain, etc.) render full-width on mobile without clipping or overflowing the viewport
+**Plans**: TBD
 
 Plans:
-- [x] 38-01-PLAN.md — Core mobile components: MobileAppContext, use-mobile-back hook, MobileNavBar, MobileAppRenderer + export WindowAppContent
-- [x] 38-02-PLAN.md — Integration wiring: MobileAppProvider + MobileAppRenderer into router.tsx, mobile-aware click handlers in desktop-content.tsx
+- [ ] 02-01: TBD
+- [ ] 02-02: TBD
 
-### Phase 39: Mobile Home Screen + App Access
-**Goal**: Mobile users see a phone-like home screen with system apps in a grid and a bottom tab bar for quick navigation -- the desktop dock is hidden
-**Depends on**: Phase 38
-**Requirements**: MOB-01, MOB-03
+### Phase 3: Server Control Mobile
+**Goal**: Users can monitor and manage Docker containers on mobile with full visibility
+**Depends on**: Nothing (independent)
+**Requirements**: SRV-01, SRV-02, SRV-03, SRV-04
 **Success Criteria** (what must be TRUE):
-  1. On mobile, the macOS-style dock is completely hidden and system apps (AI Chat, Settings, Files, Server, Terminal) appear as tappable icons in the app grid
-  2. A bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server) is visible on the home screen and provides one-tap access
-  3. Tapping an app icon in the grid or tab bar opens the app full-screen using the Phase 38 rendering pipeline
-**Plans**: 2 plans
+  1. Dashboard overview cards (CPU, memory, containers, etc.) stack vertically on mobile instead of overflowing horizontally
+  2. The container list renders with compact rows that fit mobile width, with horizontal scroll only inside individual data cells if needed
+  3. Container action buttons (start, stop, restart, remove) are accessible with touch-friendly sizing and not hidden behind unresponsive overflow menus
+  4. Server stats and charts resize to fill mobile viewport width without cropping or overflow
+**Plans**: TBD
 
 Plans:
-- [x] 39-01-PLAN.md — Hide dock on mobile + add system apps (AI Chat, Files, Settings, Server, Terminal) to app grid
-- [x] 39-02-PLAN.md — Bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server)
+- [ ] 03-01: TBD
+- [ ] 03-02: TBD
 
-### Phase 40: Polish + iOS Hardening
-**Goal**: The PWA feels native on iOS with smooth transitions, branded splash screens, guided installation, resilient connectivity, and keyboard-safe input layouts
-**Depends on**: Phase 39
-**Requirements**: PWA-05, PWA-06, IOS-02, IOS-03
+### Phase 4: Files Mobile
+**Goal**: Users can browse, navigate, and manage files on mobile with proper touch controls
+**Depends on**: Nothing (independent)
+**Requirements**: FILE-01, FILE-02, FILE-03, FILE-04
 **Success Criteria** (what must be TRUE):
-  1. First-time mobile visitors see a custom install prompt banner guiding them to "Add to Home Screen"
-  2. On iOS, the app displays a branded splash screen during launch instead of a white flash
-  3. After backgrounding and resuming the PWA on iOS, WebSocket connections (AI Chat streaming, tRPC subscriptions) automatically reconnect without user intervention
-  4. When the iOS keyboard opens in AI Chat, the input field remains visible and the viewport does not break or shift unexpectedly
-**Plans**: 2 plans
+  1. The folder sidebar renders as a slide-in drawer on mobile with a toggle button, not permanently visible alongside the file list
+  2. File list and grid views adapt to mobile width -- items are properly sized and tappable without accidental selection of adjacent items
+  3. Toolbar actions (upload, new folder, delete, etc.) are accessible on mobile via a compact toolbar or overflow menu with touch-friendly targets
+  4. File preview and details panels render within the viewport on mobile without overlapping the file list or causing horizontal overflow
+**Plans**: TBD
 
 Plans:
-- [x] 40-01-PLAN.md — Install prompt banner (PWA-05) + splash screen verification (PWA-06)
-- [x] 40-02-PLAN.md — WebSocket reconnection on iOS resume (IOS-02) + keyboard-safe chat input (IOS-03)
+- [ ] 04-01: TBD
+- [ ] 04-02: TBD
+
+### Phase 5: Terminal Mobile
+**Goal**: Users can use the terminal on mobile for basic server commands
+**Depends on**: Nothing (independent)
+**Requirements**: TERM-01, TERM-02, TERM-03
+**Success Criteria** (what must be TRUE):
+  1. The xterm.js terminal fills the mobile viewport width without horizontal scrollbar -- terminal cols match the available screen width
+  2. Terminal font is at least 12px, rendering readable text on mobile screens without pinch-to-zoom
+  3. Rotating to landscape mode triggers proper terminal resize (cols/rows recalculate) and the terminal remains fully functional
+**Plans**: TBD
+
+Plans:
+- [ ] 05-01: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 37 -> 38 -> 39 -> 40
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 39. Mobile Home Screen + App Access | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 40. Polish + iOS Hardening | v23.0 | 2/2 | Complete    | 2026-04-01 |
+| 1. AI Chat Mobile | v24.0 | 0/0 | Not started | - |
+| 2. Settings Mobile | v24.0 | 0/0 | Not started | - |
+| 3. Server Control Mobile | v24.0 | 0/0 | Not started | - |
+| 4. Files Mobile | v24.0 | 0/0 | Not started | - |
+| 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
 
 ---
 
 ## Previous Milestones
 
+- v23.0 Mobile PWA (Phases 37-40, Shipped 2026-04-01)
+- v22.0 Livinity AGI Platform (Phases 29-36, Shipped 2026-03-29)
+- v21.0 Autonomous Agent Platform (Phases 19-28, Shipped 2026-03-28)
+- v20.0 Live Agent UI (Phases 11-18, Shipped 2026-03-27)
 - v19.0 Custom Domain Management (Phases 07-10.1, Shipped 2026-03-27)
 - v18.0 Remote Desktop Streaming (Phases 04-06, Shipped 2026-03-26)
 - v17.0 Precision Computer Use (Shipped 2026-03-25)
