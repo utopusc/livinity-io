@@ -137,7 +137,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md -- Responsive dashboard cards, scrollable tab bar, mobile overview layout (SRV-01, SRV-04)
-- [ ] 03-02-PLAN.md -- Mobile container list cards, 44px touch actions, responsive detail sheet and create form (SRV-02, SRV-03)
+- [x] 03-02-PLAN.md -- Mobile container list cards, 44px touch actions, responsive detail sheet and create form (SRV-02, SRV-03)
 
 ### Phase 4: Files Mobile
 **Goal**: Users can browse, navigate, and manage files on mobile with proper touch controls
