@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
-stopped_at: Completed 37-02-PLAN.md (safe area CSS foundation)
-last_updated: "2026-04-01T16:40:07.244Z"
+stopped_at: Completed 38-01-PLAN.md (mobile navigation infrastructure)
+last_updated: "2026-04-01T16:55:12.566Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v23.0 -- Mobile PWA
-**Current focus:** Phase 37 — pwa-foundation
+**Current focus:** Phase 38 — mobile-navigation-infrastructure
 
 ## Current Position
 
-Phase: 38
-Plan: Not started
+Phase: 38 (mobile-navigation-infrastructure) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Plan: Not started
 *Updated after each plan completion*
 | Phase 37 P01 | 3min | 2 tasks | 5 files |
 | Phase 37 P02 | 2min | 2 tasks | 3 files |
+| Phase 38-mobile-navigation-infrastructure P01 | 2min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Plan: Not started
 - [Phase 37]: Safe area CSS vars defined both as Tailwind utilities and CSS custom properties for maximum flexibility
 - [Phase 37]: overscroll-behavior: none globally on html,body for native PWA feel
 - [Phase 37]: --sheet-top: 0vh in @media (display-mode: standalone) removes desktop wallpaper gap in PWA mode
+- [Phase 38]: MobileAppContext is separate from desktop WindowManagerProvider -- context-based overlay pattern
+- [Phase 38]: useMobileBack runs on all viewports (hooks cannot be conditional) -- harmless on desktop
+- [Phase 38]: iOS-style 250ms tween with ease [0.32,0.72,0,1] for mobile slide transitions
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-01T16:37:06.383Z
-Stopped at: Completed 37-02-PLAN.md (safe area CSS foundation)
+Last session: 2026-04-01T16:55:12.563Z
+Stopped at: Completed 38-01-PLAN.md (mobile navigation infrastructure)
 Resume file: None

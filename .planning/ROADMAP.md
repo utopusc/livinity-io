@@ -110,7 +110,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 38-01-PLAN.md — Core mobile components: MobileAppContext, use-mobile-back hook, MobileNavBar, MobileAppRenderer + export WindowAppContent
+- [x] 38-01-PLAN.md — Core mobile components: MobileAppContext, use-mobile-back hook, MobileNavBar, MobileAppRenderer + export WindowAppContent
 - [ ] 38-02-PLAN.md — Integration wiring: MobileAppProvider + MobileAppRenderer into router.tsx, mobile-aware click handlers in desktop-content.tsx
 
 ### Phase 39: Mobile Home Screen + App Access
@@ -149,7 +149,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 38. Mobile Navigation Infrastructure | v23.0 | 0/2 | Not started | - |
+| 38. Mobile Navigation Infrastructure | v23.0 | 1/2 | In Progress|  |
 | 39. Mobile Home Screen + App Access | v23.0 | 0/1 | Not started | - |
 | 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
 
