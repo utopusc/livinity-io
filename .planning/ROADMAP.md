@@ -151,7 +151,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- Sidebar 44px touch targets, mobile drawer polish, responsive icons grid (FILE-01, FILE-02)
+- [x] 04-01-PLAN.md -- Sidebar 44px touch targets, mobile drawer polish, responsive icons grid (FILE-01, FILE-02)
 - [ ] 04-02-PLAN.md -- Toolbar 44px touch targets, mobile-safe file viewer overlays (FILE-03, FILE-04)
 
 ### Phase 5: Terminal Mobile

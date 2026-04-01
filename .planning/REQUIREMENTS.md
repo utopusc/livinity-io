@@ -28,8 +28,8 @@
 
 ### Files
 
-- [ ] **FILE-01**: File browser sidebar (folders) works as a drawer on mobile
-- [ ] **FILE-02**: File list/grid adapts to mobile width with proper item sizing
+- [x] **FILE-01**: File browser sidebar (folders) works as a drawer on mobile
+- [x] **FILE-02**: File list/grid adapts to mobile width with proper item sizing
 - [ ] **FILE-03**: File toolbar actions are accessible on mobile (compact toolbar or overflow menu)
 - [ ] **FILE-04**: File preview/details panel doesn't overlap or overflow on mobile
 
@@ -70,8 +70,8 @@
 | SRV-02 | Phase 3 | Complete |
 | SRV-03 | Phase 3 | Complete |
 | SRV-04 | Phase 3 | Complete |
-| FILE-01 | Phase 4 | Pending |
-| FILE-02 | Phase 4 | Pending |
+| FILE-01 | Phase 4 | Complete |
+| FILE-02 | Phase 4 | Complete |
 | FILE-03 | Phase 4 | Pending |
 | FILE-04 | Phase 4 | Pending |
 | TERM-01 | Phase 5 | Pending |
