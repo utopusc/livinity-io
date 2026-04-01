@@ -198,7 +198,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 			>
 				{/* Attachment previews */}
 				{attachments.length > 0 && (
-					<div className='mb-2 flex flex-wrap gap-2'>
+					<div className='mb-2 flex flex-wrap gap-2 overflow-x-hidden'>
 						{attachments.map((att, i) => (
 							<div key={i} className='flex items-center gap-1.5 rounded-md border border-border-default bg-surface-1 px-2 py-1 text-xs text-text-secondary'>
 								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-blue-400' /> : <IconFile size={14} className='text-orange-400' />}
@@ -238,7 +238,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 					<button
 						onClick={() => fileInputRef.current?.click()}
 						disabled={isDisabled}
-						className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-border-default bg-surface-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:opacity-40'
+						className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-border-default bg-surface-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:opacity-40'
 						title='Attach file'
 					>
 						<IconPaperclip size={18} />
@@ -254,7 +254,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						disabled={isDisabled}
 						rows={1}
 						className={cn(
-							'w-full resize-none rounded-lg border border-border-default bg-surface-1 px-4 py-3 text-sm text-text-primary',
+							'w-full min-h-[44px] resize-none rounded-lg border border-border-default bg-surface-1 px-4 py-3 text-sm text-text-primary',
 							'placeholder:text-text-tertiary outline-none transition-colors',
 							'focus:border-brand/50 focus:ring-1 focus:ring-brand/20',
 							'disabled:opacity-50',
@@ -266,14 +266,14 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 							<button
 								onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
 								disabled={!value.trim() && attachments.length === 0}
-								className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600/80 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600/80 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
 								title='Send follow-up'
 							>
 								<IconSend size={18} />
 							</button>
 							<button
 								onClick={onStop}
-								className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
+								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
 								title='Stop'
 							>
 								<IconPlayerStop size={18} />
@@ -283,7 +283,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						<button
 							onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
 							disabled={(!value.trim() && attachments.length === 0) || !isConnected}
-							className='flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+							className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
 							title='Send'
 						>
 							<IconSend size={18} />
