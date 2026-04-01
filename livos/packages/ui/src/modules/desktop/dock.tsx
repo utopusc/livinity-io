@@ -309,11 +309,15 @@ export function DockPreview() {
 }
 
 export function DockSpacer({className}: {className?: string}) {
+	const isMobile = useIsMobile()
 	const {dockHeight} = useDockDimensions()
+	if (isMobile) return <div className={cn('w-full shrink-0', className)} style={{height: 72}} />
 	return <div className={cn('w-full shrink-0', className)} style={{height: dockHeight + DOCK_BOTTOM_PADDING_PX}} />
 }
 
 export function DockBottomPositioner({children}: {children: React.ReactNode}) {
+	const isMobile = useIsMobile()
+	if (isMobile) return null
 	return (
 		<div className='fixed bottom-0 left-1/2 z-50 -translate-x-1/2' style={{paddingBottom: DOCK_BOTTOM_PADDING_PX}}>
 			{children}
