@@ -14,6 +14,7 @@ import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-siz
 import {isDirectoryANetworkDevice} from '@/features/files/utils/is-directory-a-network-device-or-share'
 import {isDirectoryAnExternalDrivePartition} from '@/features/files/utils/is-directory-an-external-drive-partition'
 import {isDirectoryALivinityBackup} from '@/features/files/utils/is-directory-a-livinity-backup'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
@@ -42,6 +43,8 @@ export const IconsViewFileItem = ({
 	const isUploading = 'isUploading' in item && item.isUploading
 	const uploadingProgress = isUploading && 'progress' in item ? item.progress : 0
 	const isTouchDevice = useIsTouchDevice()
+	const isMobile = useIsMobile()
+	const iconSize = isMobile ? 'h-[52px] w-[52px]' : 'h-[68px] w-[68px]'
 
 	const [isHovered, setIsHovered] = useState(false)
 
@@ -52,7 +55,7 @@ export const IconsViewFileItem = ({
 	const cardContent = (
 		<div
 			className={cn(
-				'relative flex h-full w-32 flex-col items-center gap-1.5 overflow-hidden text-ellipsis break-all rounded-[20px] p-3 text-center transition-all duration-200',
+				'relative flex h-full w-full max-w-32 flex-col items-center gap-1.5 overflow-hidden text-ellipsis break-all rounded-[20px] p-3 text-center transition-all duration-200',
 				isKnownFolder
 					? cn(folderStyle.bg, 'border border-transparent', isHovered && 'border-black/[0.04] shadow-sm')
 					: isGenericFolder
@@ -77,22 +80,22 @@ export const IconsViewFileItem = ({
 			)}
 
 			{isKnownFolder ? (
-				<div className='flex h-[68px] w-[68px] items-center justify-center'>
+				<div className={cn('flex items-center justify-center', iconSize)}>
 					<folderStyle.icon
 						className={cn('h-11 w-11 transition-transform duration-300 ease-out', folderStyle.iconColor, isHovered && 'scale-110')}
 						strokeWidth={1.5}
 					/>
 				</div>
 			) : isGenericFolder ? (
-				<div className='flex h-[68px] w-[68px] items-center justify-center'>
+				<div className={cn('flex items-center justify-center', iconSize)}>
 					<TbFolder
 						className={cn('h-11 w-11 transition-transform duration-300 ease-out text-neutral-400', isHovered && 'scale-110 text-neutral-500')}
 						strokeWidth={1.5}
 					/>
 				</div>
 			) : (
-				<div className='flex h-[68px] w-[68px] items-center justify-center'>
-					<FileItemIcon item={item} className='h-[68px] w-[68px]' useAnimatedIcon={!isTouchDevice} isHovered={isHovered} />
+				<div className={cn('flex items-center justify-center', iconSize)}>
+					<FileItemIcon item={item} className={iconSize} useAnimatedIcon={!isTouchDevice} isHovered={isHovered} />
 				</div>
 			)}
 			<div className={cn('relative w-full flex-col items-center', fadedContent && 'opacity-50')}>
