@@ -1,137 +1,107 @@
-# Phase 11 Research: Platform Auth & Registration
+# Phase 11 Research: Agent SDK Backend Integration
 
 ## Domain
-Build the livinity.io web application with user registration, email verification, login, sessions, and password reset. This is a Next.js app running on Server5 alongside the relay.
+Replace the Nexus agent loop with Claude Agent SDK `query()` running server-side in livinityd. The SDK subprocess handles the agent loop, tool execution, retries, and context management.
 
 ## Requirements
 | ID | Requirement |
 |----|-------------|
-| AUTH-01 | Register with email + password |
-| AUTH-02 | Email verification via Resend |
-| AUTH-03 | Unverified users cannot generate API keys |
-| AUTH-04 | Login with session (30d httpOnly secure cookie) |
-| AUTH-05 | Password reset via email link |
-| AUTH-06 | Username validation (3-30, alphanumeric + hyphens, no reserved words) |
+| SDK-01 | Agent SDK Backend Integration — Replace Nexus agent loop with Claude Agent SDK `query()` running server-side |
+| SDK-NF-03 | Provider Layer Preserved — Keep ProviderManager and provider abstractions intact alongside the new SDK path |
 
-## Tech Stack Decision
+## Existing Codebase Analysis
 
-### Next.js App Router
-- **Location**: `platform/web/` (alongside `platform/relay/`)
-- **Framework**: Next.js 15 with App Router
-- **Styling**: Tailwind CSS + shadcn/ui (consistent with LivOS)
-- **Auth**: Custom (bcrypt + sessions in PostgreSQL — no external auth libraries needed for this scope)
-- **Email**: Resend SDK (`resend` npm package)
-- **Database**: Same PostgreSQL `platform` DB, new tables
+### SdkAgentRunner (Already Exists)
+**File:** `nexus/packages/core/src/sdk-agent-runner.ts`
+- Imports `query`, `tool`, `createSdkMcpServer` from `@anthropic-ai/claude-agent-sdk` (^0.2.84)
+- Converts ToolRegistry to SDK MCP tools via `buildSdkTools()`
+- Uses `query()` async generator to stream messages
+- Handles assistant/result message types, emits AgentEvents
+- Already uses `permissionMode: 'dontAsk'` and `allowedTools` whitelist
+- Enforces turn limits and token budgets
+- Auto-enables Chrome DevTools MCP if CDP is reachable
 
-### Why custom auth (not NextAuth/Lucia)
-- Simple email/password flow only (no OAuth providers)
-- Full control over session table schema
-- Reuses existing platform PostgreSQL with bcrypt (same pattern as relay API keys)
-- Fewer dependencies, easier to understand
-
-## Database Schema Additions
-
-The relay's `platform` DB already has `users` and `api_keys` tables. Need to add:
-
-```sql
--- Add columns to existing users table
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-
--- Sessions table
-CREATE TABLE IF NOT EXISTS sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token VARCHAR(255) UNIQUE NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  ip_address VARCHAR(45),
-  user_agent TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+### Current Agent Selection Logic
+**File:** `nexus/packages/core/src/api.ts` (line ~2060)
+```typescript
+const agent = authMethod === 'sdk-subscription'
+  ? new SdkAgentRunner(agentConfig)
+  : new AgentLoop(agentConfig);
 ```
+Only used when auth is `sdk-subscription`. We need to make SDK the default.
 
-## Authentication Flow
+### Current Streaming: SSE via POST /api/agent/stream
+- Express SSE endpoint with `text/event-stream`
+- 15s heartbeat, `X-Accel-Buffering: no`, `setNoDelay(true)`
+- Events: thinking, chunk, tool_call, observation, final_answer, error, done
+- Client polls `getChatStatus` for status updates (not true streaming)
 
-### Registration (AUTH-01, AUTH-02, AUTH-06)
-1. User submits: email, password, username
-2. Server validates: username rules, email format, password min 8 chars
-3. Hash password with bcrypt
-4. Insert into users table (email_verified = false)
-5. Generate verification token (nanoid), store with 24h expiry
-6. Send verification email via Resend
-7. Return success
+### Current Chat UI
+**File:** `livos/packages/ui/src/routes/ai-chat/index.tsx`
+- Uses tRPC mutations (`send`) + polling (`getChatStatus`) — NOT true streaming
+- Status indicator shows steps, commands, tool approvals
+- Conversation sidebar with tabs (Chat/MCP/Skills)
+- Canvas panel, computer use panel, voice button
 
-### Email Verification (AUTH-02, AUTH-03)
-1. User clicks link: `/verify?token=xxx`
-2. Server finds user by token, checks expiry
-3. Set email_verified = true, clear token
-4. Redirect to login
+### Nexus AI Settings (to be removed later in Phase 18)
+**File:** `livos/packages/ui/src/routes/settings/nexus-config.tsx`
+- Response tab: style, show steps, show reasoning, language, max length
+- Agent tab: max turns, max tokens, timeout, model tier, max depth, stream enabled
+- Retry, Heartbeat, Session, Advanced tabs
 
-### Login (AUTH-04)
-1. User submits: email + password
-2. Server finds user by email, bcrypt.compare
-3. If verified: create session (nanoid token, 30d expiry)
-4. Set httpOnly secure cookie: `session=token; path=/; max-age=2592000; secure; httpOnly; sameSite=lax`
-5. Return user info
+### Provider Architecture (to be preserved per SDK-NF-03)
+- `ProviderManager` in `nexus/packages/core/src/providers/manager.ts`
+- `AIProvider` interface in `types.ts` — `chat()`, `chatStream()`, `think()`, `isAvailable()`
+- `ClaudeProvider` and `KimiProvider` implementations
+- ~700 lines total, provides fallback resilience
 
-### Password Reset (AUTH-05)
-1. User submits email on `/forgot-password`
-2. Generate reset token (nanoid), store with 1h expiry
-3. Send reset email via Resend
-4. User clicks link → `/reset-password?token=xxx`
-5. User submits new password
-6. Verify token, hash new password, update, clear token
-7. Redirect to login
+## Architecture Decisions for Phase 11
 
-### Reserved Usernames (AUTH-06)
-```
-admin, www, api, app, relay, status, help, support, billing,
-dashboard, login, register, signup, signin, auth, account,
-settings, profile, mail, ftp, ssh, root, test, demo
-```
+### Decision 1: SDK Runs in livinityd (not separate Nexus process)
+- SdkAgentRunner already runs in nexus-core which livinityd starts
+- SDK needs filesystem access for MCP tools
+- WebSocket endpoint in livinityd keeps auth consistent
 
-## Implementation Plan
+### Decision 2: Make SDK the Default Agent Runner
+- Remove the `authMethod === 'sdk-subscription'` gate
+- SDK becomes the primary path for all agent requests
+- Keep AgentLoop as fallback (can be removed later)
 
-### Plan 1: Next.js Project Scaffold + Database Schema
-- Create `platform/web/` with Next.js 15, Tailwind, shadcn/ui
-- Add auth schema migration to relay's schema.sql
-- Configure for Server5 deployment
+### Decision 3: Keep Provider Abstractions (SDK-NF-03)
+- Keep AIProvider interface, ProviderManager, ClaudeProvider
+- SDK is a new runner alongside, not a replacement of providers
+- Providers still useful for non-agent chat, future multi-provider support
 
-### Plan 2: Auth API Routes + Session Management
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/logout
-- GET /api/auth/me (session check)
-- POST /api/auth/verify-email
-- POST /api/auth/forgot-password
-- POST /api/auth/reset-password
-- Session middleware
+### Decision 4: Relay SDK Messages Directly
+- Forward SDKMessage to client with minimal transformation
+- Client handles type-switching: stream_event, assistant, result, system
+- Reduces server-side complexity and maintenance burden
 
-### Plan 3: Auth UI Pages
-- /register page
-- /login page
-- /verify page
-- /forgot-password page
-- /reset-password page
-- Redirect logic (authenticated → dashboard, unauthenticated → login)
+## Key Pitfalls (from v20-PITFALLS.md)
 
-### Plan 4: Deploy to Server5
-- Build Next.js
-- PM2 config
-- Caddy routing (livinity.io → Next.js, *.livinity.io → relay)
-- Resend API key setup
-- E2E test
+1. **12s query() startup overhead** — SDK spawns fresh subprocess per call. For Phase 11, accept this as a known limitation. Future phases may implement process pooling.
+2. **Subprocess memory leaks** — SDK doesn't clean up subprocesses on error/abort. Need process lifecycle management.
+3. **Tool execution security** — `permissionMode: 'dontAsk'` auto-approves all tools as root. Accept for Phase 11 (single user), address in later phases.
+4. **Environment variable leakage** — SDK subprocess inherits all env vars. Use `options.env` for minimal env.
 
-## Key Decisions
-- **Resend**: Need API key (user must provide or we use a test key)
-- **Cookie domain**: `.livinity.io` (shared across subdomains)
-- **Session storage**: PostgreSQL (not Redis — sessions are long-lived, need persistence)
-- **Caddy routing**: bare `livinity.io` → Next.js :3000, `*.livinity.io` → relay :4000
+## Implementation Approach
+
+### What Phase 11 Does
+1. Refactor SdkAgentRunner to be the default agent runner (not gated behind auth method)
+2. Wire it into the existing `/api/agent/stream` SSE endpoint
+3. Ensure basic message flow: user sends message → SDK processes → response streams back
+4. Add process cleanup on completion/error
+5. Keep all existing providers intact
+
+### What Phase 11 Does NOT Do
+- No WebSocket transport (Phase 13)
+- No new UI (Phase 14)
+- No MCP tool bridge changes (Phase 12)
+- No cost tracking changes (Phase 18)
+- No settings removal (Phase 18)
+
+## Sources
+- v20-ARCHITECTURE.md — Component boundaries, relay pattern, session management
+- v20-STACK.md — Technology decisions, SDK API surface, what to remove/keep
+- v20-PITFALLS.md — 15 pitfalls with prevention strategies
+- Existing codebase: sdk-agent-runner.ts, api.ts, agent.ts, providers/

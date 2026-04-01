@@ -68,7 +68,7 @@ Each task was committed atomically:
 1. **Task 1: Enable ChatInput during streaming with dual send+stop buttons** - `09a2308` (feat)
 2. **Task 2: Wire dual-path sending in AI Chat view** - `71c063a` (feat)
 
-**Plan metadata:** (pending) (docs: complete plan)
+**Plan metadata:** `cafaae6` (docs: complete plan)
 
 ## Files Created/Modified
 - `livos/packages/ui/src/routes/ai-chat/chat-input.tsx` - Removed streaming disable, updated placeholder, added dual button layout

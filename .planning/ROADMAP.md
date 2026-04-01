@@ -9,7 +9,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v19.0 Custom Domain Management** — Phases 07-10.1 (shipped 2026-03-27)
 - ✅ **v20.0 Live Agent UI** — Phases 11-18 (shipped 2026-03-27)
 - ✅ **v21.0 Autonomous Agent Platform** — Phases 19-28 (shipped 2026-03-28)
-- **v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace** — Phases 29-36 (in progress)
+- ✅ **v22.0 Livinity AGI Platform** — Phases 29-36 (shipped 2026-03-29)
+- [ ] **v23.0 Mobile PWA** — Phases 37-40 (in progress)
 
 ## Phases
 
@@ -54,146 +55,103 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v22.0 Livinity AGI Platform — Capability Orchestration & Marketplace (In Progress)
+<details>
+<summary>v22.0 Livinity AGI Platform (Phases 29-36) — SHIPPED 2026-03-29</summary>
 
-**Milestone Goal:** Transform Livinity into an AI Agent Marketplace + Orchestration Platform where the system auto-discovers, installs, and orchestrates capabilities based on user intent.
+- [x] Phase 29: Unified Capability Registry (2/2 plans) — completed 2026-03-29
+- [x] Phase 30: Agents Panel Redesign (1/1 plans) — completed 2026-03-29
+- [x] Phase 31: Intent Router v2 (1/1 plans) — completed 2026-03-29
+- [x] Phase 32: Auto-Provisioning Engine (1/1 plans) — completed 2026-03-29
+- [x] Phase 33: Livinity Marketplace MCP (1/1 plans) — completed 2026-03-29
+- [x] Phase 34: AI Self-Modification (1/1 plans) — completed 2026-03-29
+- [x] Phase 35: Marketplace UI & Auto-Install (2/2 plans) — completed 2026-03-29
+- [x] Phase 36: Learning Loop (3/3 plans) — completed 2026-03-29
 
-**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) must NOT be modified. Streaming/block model/typewriter animation must NOT be broken. nexus-core runs compiled JS — MUST rebuild after source changes.
+</details>
 
-- [x] **Phase 29: Unified Capability Registry** - Single registry model for all capability types (skills, MCPs, tools, hooks, agents) with manifests and semantic search (completed 2026-03-29)
-- [x] **Phase 30: Agents Panel Redesign** - Unified dashboard with tabbed capability views and detailed status cards (completed 2026-03-29)
-- [x] **Phase 31: Intent Router v2** - Semantic intent classification with confidence-scored capability matching and context budget management (completed 2026-03-29)
-- [x] **Phase 32: Auto-Provisioning Engine** - Dynamic session capability loading based on intent with dependency resolution and system prompt composition (completed 2026-03-29)
-- [x] **Phase 33: Livinity Marketplace MCP** - Single MCP server exposing marketplace search, install, and management with GitHub-backed registry (completed 2026-03-29)
-- [x] **Phase 34: AI Self-Modification** - Autonomous creation of skills, hooks, and agent templates with self-testing and auto-correction (completed 2026-03-29)
-- [x] **Phase 35: Marketplace UI & Auto-Install** - Auto-install dialog, system prompt editor with template library, and analytics dashboard (completed 2026-03-29)
-- [x] **Phase 36: Learning Loop** - Tool call logging, pattern mining, auto-suggestions, and user feedback scoring (gap closure in progress) (completed 2026-03-29)
+### v23.0 Mobile PWA (In Progress)
+
+**Milestone Goal:** Make Livinity installable as a PWA on iOS/Android with a native phone-like experience -- app grid home screen, full-screen apps, no dock on mobile. Desktop UI completely unchanged.
+
+**CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()`. nexus-core runs compiled JS -- MUST rebuild after source changes.
+
+- [ ] **Phase 37: PWA Foundation** - Installable PWA with manifest, service worker, Apple meta tags, and safe area CSS
+- [ ] **Phase 38: Mobile Navigation Infrastructure** - Full-screen app rendering pipeline with MobileAppContext, MobileAppRenderer, and hardware back button support
+- [ ] **Phase 39: Mobile Home Screen + App Access** - Phone-like home screen with system apps in grid, bottom tab bar, and dock hidden on mobile
+- [ ] **Phase 40: Polish + iOS Hardening** - Install prompt, splash screens, WebSocket reconnection on resume, and keyboard layout fixes
 
 ## Phase Details
 
-### Phase 29: Unified Capability Registry
-**Goal**: All capability types (skills, MCPs, tools, hooks, agents) are discoverable through a single unified registry with rich metadata and semantic search
-**Depends on**: Phase 28 (v21.0 complete)
-**Requirements**: REG-01, REG-02, REG-03, REG-04
+### Phase 37: PWA Foundation
+**Goal**: Livinity is installable as a PWA on iOS and Android, launches in standalone mode, and safe area CSS is active for notch/home indicator devices
+**Depends on**: Nothing (first phase of v23.0)
+**Requirements**: PWA-01, PWA-02, PWA-03, PWA-04, IOS-01
 **Success Criteria** (what must be TRUE):
-  1. User can query a single API endpoint and get back a list containing skills, MCPs, tools, hooks, and agents in a uniform format
-  2. Each capability entry includes a manifest with semantic tags, trigger conditions, estimated context cost, and dependency information
-  3. On Nexus startup, the registry auto-populates by syncing from the existing ToolRegistry, SkillLoader, and McpClientManager without manual registration
-  4. User can search capabilities by semantic tag, name substring, or type filter and get relevant results
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 29-01-PLAN.md — CapabilityManifest types + CapabilityRegistry class with sync engine
-- [x] 29-02-PLAN.md — REST API endpoints + tRPC proxy + startup wiring
+  1. User can install Livinity from iOS Safari via "Add to Home Screen" and it opens full-screen without browser chrome
+  2. User can install Livinity from Android Chrome via install prompt and it opens as a standalone app
+  3. On a notched device (iPhone with Dynamic Island), content is padded below the notch and above the home indicator -- no overlap
+  4. After first visit, the app shell loads instantly from service worker cache on subsequent visits
+  5. The desktop UI is completely unchanged -- no visual or behavioral differences on desktop browsers
+**Plans**: TBD
 
-### Phase 30: Agents Panel Redesign
-**Goal**: Users manage all capabilities from a unified dashboard that replaces the current agents-only panel with a tabbed view spanning skills, MCPs, hooks, and agents
-**Depends on**: Phase 29
-**Requirements**: UIP-01, UIP-02
-**Success Criteria** (what must be TRUE):
-  1. The sidebar panel shows tabs for Skills, MCPs, Hooks, and Agents -- all populated from the unified registry
-  2. Each capability card displays its status (active/inactive), tier, provided tools, last used timestamp, and success rate
-  3. Clicking a capability shows its full manifest details including dependencies, tags, and configuration
-**Plans:** 1/1 plans complete
 Plans:
-- [x] 30-01-PLAN.md — Unified capabilities panel with tabbed views + sidebar wiring
+- [ ] 37-01: TBD
+- [ ] 37-02: TBD
 
-### Phase 31: Intent Router v2
-**Goal**: The system automatically selects the right capabilities for a user's message using semantic matching with confidence scoring, keeping context window usage efficient
-**Depends on**: Phase 29
-**Requirements**: RTR-01, RTR-02, RTR-03, RTR-04
+### Phase 38: Mobile Navigation Infrastructure
+**Goal**: Any system app can be opened full-screen on mobile with a back button that returns to the home screen, reusing existing window content components
+**Depends on**: Phase 37
+**Requirements**: MOB-02, MOB-04, MOB-05
 **Success Criteria** (what must be TRUE):
-  1. When a user sends a message, the system classifies intent and returns a ranked list of matching capabilities with confidence scores
-  2. Only capabilities above a configurable confidence threshold are selected -- low-confidence matches are filtered out
-  3. Tool definitions loaded into the agent's context never exceed 30% of the context window budget
-  4. Repeated intents hit a Redis cache and resolve in under 100ms without re-computing matches
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 31-01-PLAN.md — IntentRouter class with scoring/caching/budget + agent-session wiring
+  1. Tapping a system app on mobile opens it in a full-screen overlay that covers the entire viewport (no floating window chrome)
+  2. A back button in the top navigation bar returns the user to the home screen
+  3. The hardware/OS back button (Android back, iOS swipe-back gesture) closes the active app and returns home
+  4. Every app that works in a desktop window also renders correctly in the mobile full-screen overlay with zero per-app modifications
+**Plans**: TBD
 
-### Phase 32: Auto-Provisioning Engine
-**Goal**: Agent sessions dynamically load only the capabilities relevant to the user's intent, with the AI able to discover and install missing capabilities mid-conversation
-**Depends on**: Phase 29, Phase 31
-**Requirements**: PRV-01, PRV-02, PRV-03, PRV-04
-**Success Criteria** (what must be TRUE):
-  1. When a user starts a conversation, only capabilities matching the analyzed intent are loaded into the session -- not the entire tool set
-  2. If the AI needs a capability not currently loaded, it can discover and install it mid-conversation without the user restarting
-  3. The system prompt is dynamically composed based on the loaded capabilities -- different conversations get different system prompts
-  4. When a capability has prerequisites (e.g., an MCP depends on a skill), the system installs prerequisites first automatically
-**Plans:** 1/1 plans complete
 Plans:
-- [x] 32-01-PLAN.md — Dependency resolution + dynamic system prompt + discover_capability tool
+- [ ] 38-01: TBD
+- [ ] 38-02: TBD
 
-### Phase 33: Livinity Marketplace MCP
-**Goal**: A single MCP server exposes the entire Livinity capability ecosystem with search, install, uninstall, and recommendation tools backed by a GitHub registry
-**Depends on**: Phase 29
-**Requirements**: MKT-01, MKT-02, MKT-03, MKT-04
+### Phase 39: Mobile Home Screen + App Access
+**Goal**: Mobile users see a phone-like home screen with system apps in a grid and a bottom tab bar for quick navigation -- the desktop dock is hidden
+**Depends on**: Phase 38
+**Requirements**: MOB-01, MOB-03
 **Success Criteria** (what must be TRUE):
-  1. A single MCP server is running that exposes search, install, uninstall, recommend, and list as callable tools
-  2. User (or AI) can install any marketplace capability with a single tool call and it becomes immediately available in the registry
-  3. Before installation, the system validates the manifest and checks for conflicts with existing capabilities
-  4. The marketplace registry is backed by a GitHub repository that accepts community contributions via pull requests
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 33-01-PLAN.md — MarketplaceMcp class with 5 livinity_* tools + CapabilityRegistry register/unregister + startup wiring
+  1. On mobile, the macOS-style dock is completely hidden and system apps (AI Chat, Settings, Files, Server, Terminal) appear as tappable icons in the app grid
+  2. A bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server) is visible on the home screen and provides one-tap access
+  3. Tapping an app icon in the grid or tab bar opens the app full-screen using the Phase 38 rendering pipeline
+**Plans**: TBD
 
-### Phase 34: AI Self-Modification
-**Goal**: The AI autonomously creates new skills, hooks, and agent templates when it identifies capability gaps, with automatic testing and self-correction on failure
-**Depends on**: Phase 29, Phase 32, Phase 33
-**Requirements**: MOD-01, MOD-02, MOD-03, MOD-04
-**Success Criteria** (what must be TRUE):
-  1. When the AI identifies a capability it needs but does not have, it autonomously creates a new skill file with proper schema, registers it in the registry, and uses it in the same session
-  2. The AI can create hooks (pre-commit, post-completion, file-change triggers) that fire on specified events
-  3. The AI can create agent templates with a system prompt, tool set, and scheduling configuration that appear in the Agents panel
-  4. Auto-created capabilities are tested immediately after creation -- if a test fails, the AI iterates up to 3 times to fix the issue before reporting failure
-**Plans:** 1/1 plans complete
 Plans:
-- [x] 34-01-PLAN.md — create_hook + create_agent_template tools, skill_generate registry integration, hook event dispatcher, self-modification system prompt
+- [ ] 39-01: TBD
 
-### Phase 35: Marketplace UI & Auto-Install
-**Goal**: Users see auto-install recommendations when the AI discovers useful capabilities, can build custom system prompts from templates, and can view analytics on tool usage patterns
-**Depends on**: Phase 30, Phase 33, Phase 36
-**Requirements**: UIP-03, UIP-04, UIP-05
+### Phase 40: Polish + iOS Hardening
+**Goal**: The PWA feels native on iOS with smooth transitions, branded splash screens, guided installation, resilient connectivity, and keyboard-safe input layouts
+**Depends on**: Phase 39
+**Requirements**: PWA-05, PWA-06, IOS-02, IOS-03
 **Success Criteria** (what must be TRUE):
-  1. When the AI recommends a new capability during conversation, an auto-install dialog appears in the chat UI letting the user approve or reject the installation
-  2. A system prompt editor is available with a template library of pre-built prompts and a custom prompt builder for composing new prompts from capabilities
-  3. An analytics view shows tool usage frequency, popular capability combinations, and per-tool success rates over time
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 35-01-PLAN.md — Prompts tab + Analytics tab in capabilities panel with tRPC routes
-- [x] 35-02-PLAN.md — Auto-install recommendation cards inline in chat messages
+  1. First-time mobile visitors see a custom install prompt banner guiding them to "Add to Home Screen"
+  2. On iOS, the app displays a branded splash screen during launch instead of a white flash
+  3. After backgrounding and resuming the PWA on iOS, WebSocket connections (AI Chat streaming, tRPC subscriptions) automatically reconnect without user intervention
+  4. When the iOS keyboard opens in AI Chat, the input field remains visible and the viewport does not break or shift unexpectedly
+**Plans**: TBD
 
-### Phase 36: Learning Loop
-**Goal**: The system continuously learns from tool usage patterns, identifies commonly co-used capabilities, auto-suggests relevant tools, and incorporates user feedback into capability scoring
-**Depends on**: Phase 29, Phase 31
-**Requirements**: LRN-01, LRN-02, LRN-03, LRN-04
-**Success Criteria** (what must be TRUE):
-  1. Every tool call execution is logged to a Redis stream with the tool name, input parameters, output status, duration, and success/failure outcome
-  2. The system identifies commonly co-used capability combinations (e.g., "users who use tool A usually also need tool B") and surfaces these patterns
-  3. Based on a user's intent history, the system proactively suggests capabilities the user has not yet installed but would likely benefit from
-  4. Users can mark tasks as completed and optionally rate the AI's performance, which feeds back into capability confidence scores
-**Plans:** 3/3 plans complete
 Plans:
-- [x] 36-01-PLAN.md — LearningEngine class + tool call logging + suggestion injection in IntentRouter
-- [x] 36-02-PLAN.md — rateConversation tRPC route + enhanced analytics with real stream data
-- [x] 36-03-PLAN.md — Gap closure: feedback aggregation into capability success_rate + chat UI feedback widget
+- [ ] 40-01: TBD
+- [ ] 40-02: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in priority order: 29 -> 30 -> 31 -> 32 -> 33 -> 34 -> 35 -> 36
-
-Note: Phase 31 (Intent Router) and Phase 33 (Marketplace MCP) can execute in parallel after Phase 29 as they are independent. Phase 36 (Learning Loop) can begin after Phase 29 + Phase 31 are complete. Phase 35 depends on Phase 30, Phase 33, and Phase 36.
+Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 29. Unified Capability Registry | v22.0 | 2/2 | Complete    | 2026-03-29 |
-| 30. Agents Panel Redesign | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 31. Intent Router v2 | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 32. Auto-Provisioning Engine | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 33. Livinity Marketplace MCP | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 34. AI Self-Modification | v22.0 | 1/1 | Complete    | 2026-03-29 |
-| 35. Marketplace UI & Auto-Install | v22.0 | 2/2 | Complete    | 2026-03-29 |
-| 36. Learning Loop | v22.0 | 3/3 | Complete    | 2026-03-29 |
+| 37. PWA Foundation | v23.0 | 0/2 | Not started | - |
+| 38. Mobile Navigation Infrastructure | v23.0 | 0/2 | Not started | - |
+| 39. Mobile Home Screen + App Access | v23.0 | 0/1 | Not started | - |
+| 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
 
 ---
 

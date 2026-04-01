@@ -56,26 +56,26 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PWA-01 | — | Pending |
-| PWA-02 | — | Pending |
-| PWA-03 | — | Pending |
-| PWA-04 | — | Pending |
-| PWA-05 | — | Pending |
-| PWA-06 | — | Pending |
-| MOB-01 | — | Pending |
-| MOB-02 | — | Pending |
-| MOB-03 | — | Pending |
-| MOB-04 | — | Pending |
-| MOB-05 | — | Pending |
-| IOS-01 | — | Pending |
-| IOS-02 | — | Pending |
-| IOS-03 | — | Pending |
+| PWA-01 | Phase 37 | Pending |
+| PWA-02 | Phase 37 | Pending |
+| PWA-03 | Phase 37 | Pending |
+| PWA-04 | Phase 37 | Pending |
+| PWA-05 | Phase 40 | Pending |
+| PWA-06 | Phase 40 | Pending |
+| MOB-01 | Phase 39 | Pending |
+| MOB-02 | Phase 38 | Pending |
+| MOB-03 | Phase 39 | Pending |
+| MOB-04 | Phase 38 | Pending |
+| MOB-05 | Phase 38 | Pending |
+| IOS-01 | Phase 37 | Pending |
+| IOS-02 | Phase 40 | Pending |
+| IOS-03 | Phase 40 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-01*
-*Last updated: 2026-04-01 after initial definition*
+*Last updated: 2026-04-01 after roadmap creation*
