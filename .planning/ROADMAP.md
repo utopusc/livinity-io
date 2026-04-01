@@ -121,7 +121,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Mobile single-column drill-down layout + overflow protection (SET-01, SET-02)
+- [x] 02-01-PLAN.md -- Mobile single-column drill-down layout + overflow protection (SET-01, SET-02)
 - [ ] 02-02-PLAN.md -- Touch-friendly controls + full-width mobile dialogs (SET-03, SET-04)
 
 ### Phase 3: Server Control Mobile
