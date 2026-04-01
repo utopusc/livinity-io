@@ -4,7 +4,7 @@ milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
 stopped_at: Completed 40-02-PLAN.md (iOS WS reconnection + keyboard-safe input)
-last_updated: "2026-04-01T18:22:24.475Z"
+last_updated: "2026-04-01T18:25:34.604Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 
 ## Current Position
 
-Phase: 40 (polish-ios-hardening) — EXECUTING
-Plan: 2 of 2
+Phase: 40
+Plan: Not started
 
 ## Performance Metrics
 
