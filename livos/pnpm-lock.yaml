@@ -674,6 +674,9 @@ importers:
       tailwindcss-radix:
         specifier: ^4.0.2
         version: 4.0.2(tailwindcss@3.4.1)
+      tailwindcss-safe-area:
+        specifier: 0.8.0
+        version: 0.8.0(tailwindcss@3.4.1)
       ts-plugin-sort-import-suggestions:
         specifier: ^1.0.4
         version: 1.0.4
@@ -9046,6 +9049,12 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       tailwindcss: ^3.0 || ^4.0
+
+  tailwindcss-safe-area@0.8.0:
+    resolution: {integrity: sha512-OIKZfSvinI9kZ3hduoSxqP8EfW2rXoKvHnNyTDY2zwem06IIRtLcKdMe0nF98o+Xluk5Fy7mmesr1rSXg/wkhA==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      tailwindcss: ^2.0.0 || >=3.0.0
 
   tailwindcss@3.4.1:
     resolution: {integrity: sha512-qAYmXRfk3ENzuPBakNK0SRrUDipP8NQnEY6772uDhflcQz5EhRdD7JNZxyrFHVQNCwULPBn6FNPp9brpO7ctcA==}
@@ -19094,6 +19103,10 @@ snapshots:
       tailwindcss: 3.4.1
 
   tailwindcss-radix@4.0.2(tailwindcss@3.4.1):
+    dependencies:
+      tailwindcss: 3.4.1
+
+  tailwindcss-safe-area@0.8.0(tailwindcss@3.4.1):
     dependencies:
       tailwindcss: 3.4.1
 

@@ -3,6 +3,7 @@ import tailwindTypography from '@tailwindcss/typography'
 import {mapValues} from 'remeda'
 import tailwindCssAnimate from 'tailwindcss-animate'
 import tailwindRadix from 'tailwindcss-radix'
+import tailwindSafeArea from 'tailwindcss-safe-area'
 import defaultTheme from 'tailwindcss/defaultTheme'
 import {PluginAPI} from 'tailwindcss/types/config'
 
@@ -275,6 +276,7 @@ export default {
 		tailwindTypography,
 		utilPlugin,
 		tailwindRadix({variantPrefix: 'radix'}),
+		tailwindSafeArea,
 	],
 }
 
