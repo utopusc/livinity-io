@@ -2,6 +2,8 @@ import {motion, Variant} from 'framer-motion'
 import {useLocation} from 'react-router-dom'
 import {useState, useEffect, useCallback, useMemo, useRef} from 'react'
 
+import {useIsMobile} from '@/hooks/use-is-mobile'
+import {useMobileApp} from '@/modules/mobile/mobile-app-context'
 import {useApps, systemAppsKeyed} from '@/providers/apps'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {trpcReact} from '@/trpc/trpc'
@@ -200,6 +202,9 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	const {widgets, update: updateWidgets} = useDesktopWidgets()
 	const {layout, updateLayout} = useDesktopLayout()
 
+	const isMobile = useIsMobile()
+	const {openApp} = useMobileApp()
+
 	const handleWidgetConfigUpdate = useCallback((widgetId: string, config: Record<string, unknown>) => {
 		updateWidgets((prev) => prev.map((w) => w.id === widgetId ? {...w, config} : w))
 	}, [updateWidgets])
@@ -218,6 +223,10 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	// Stream apps share a single window — close previous before opening new
 	const streamAppIds = useMemo(() => new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail', 'LIVINITY_facebook', 'LIVINITY_whatsapp', 'LIVINITY_youtube']), [])
 	const openStreamApp = useCallback((appId: string, route: string, title: string, icon: string) => {
+		if (isMobile) {
+			openApp(appId, route, title, icon)
+			return
+		}
 		if (!windowManager) return
 		// Close ALL other stream app windows
 		for (const win of windowManager.windows) {
@@ -227,7 +236,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}
 		// Small delay to ensure close happens before open
 		setTimeout(() => windowManager.openWindow(appId, route, title, icon), 50)
-	}, [windowManager, streamAppIds])
+	}, [isMobile, openApp, windowManager, streamAppIds])
 
 	const gridItems: AppGridItem[] = useMemo(() => {
 		const appItems: AppGridItem[] = userApps.map((app) => ({
