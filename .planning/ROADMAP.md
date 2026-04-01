@@ -162,10 +162,10 @@ Plans:
   1. The xterm.js terminal fills the mobile viewport width without horizontal scrollbar -- terminal cols match the available screen width
   2. Terminal font is at least 12px, rendering readable text on mobile screens without pinch-to-zoom
   3. Rotating to landscape mode triggers proper terminal resize (cols/rows recalculate) and the terminal remains fully functional
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md -- Mobile-fitted xterm.js, 12px font, landscape resize, touch-friendly tab header (TERM-01, TERM-02, TERM-03)
 
 ## Progress
 
@@ -178,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 3. Server Control Mobile | v24.0 | 1/2 | Complete    | 2026-04-01 |
 | 4. Files Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
+| 5. Terminal Mobile | v24.0 | 0/1 | Not started | - |
 
 ---
 
