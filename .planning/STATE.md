@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v23.0
-milestone_name: Mobile PWA
-status: unknown
-stopped_at: Completed 40-02-PLAN.md (iOS WS reconnection + keyboard-safe input)
-last_updated: "2026-04-01T18:25:34.604Z"
+milestone: v24.0
+milestone_name: Mobile Responsive UI
+status: planning
+stopped_at: Defining requirements
+last_updated: "2026-04-01T20:00:00.000Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
@@ -19,13 +19,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v23.0 -- Mobile PWA
-**Current focus:** Phase 40 — polish-ios-hardening
+**Current milestone:** v24.0 -- Mobile Responsive UI
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Phase: 40
-Plan: Not started
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-01 — Milestone v24.0 started
 
 ## Performance Metrics
 

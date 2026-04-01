@@ -128,24 +128,32 @@ Key validated capabilities:
 
 Livinity now features a unified capability orchestration platform. All capability types (tools, skills, MCPs, hooks, agents) are discoverable through a single registry with semantic search. Intent-based routing dynamically selects capabilities per conversation with context budget management. The AI can autonomously create skills, hooks, and agent templates, with a learning loop that logs tool usage, mines patterns, and incorporates user feedback. Marketplace tools enable one-command capability installation from GitHub-backed registries.
 
-## Current Milestone: v23.0 Mobile PWA
+### Validated (v23.0)
 
-**Goal:** Make Livinity installable as a PWA on iOS/Android with a native phone-like experience — app grid home screen, full-screen apps, no dock on mobile.
+- ✓ PWA installability: vite-plugin-pwa, manifest, service worker, Apple meta tags — v23.0
+- ✓ Mobile: dock hidden, system apps in app grid, bottom tab bar — v23.0
+- ✓ Mobile: full-screen app rendering via MobileAppRenderer + MobileAppContext — v23.0
+- ✓ Mobile: safe area CSS (tailwindcss-safe-area, viewport-fit=cover) — v23.0
+- ✓ Mobile: install prompt banner, WS reconnect on resume, keyboard-safe input — v23.0
+
+## Current Milestone: v24.0 Mobile Responsive UI
+
+**Goal:** Make every system app (AI Chat, Settings, Server Control, Files, Terminal) fully usable on mobile — proper responsive layouts, touch-friendly controls, no overflow/scroll issues.
 
 **Target features:**
-- PWA installability (manifest, service worker, Apple meta tags)
-- Mobile app grid with system apps (AI Chat, Settings, Files, Server, Terminal)
-- Full-screen app rendering on mobile (no floating windows)
-- Safe area handling for notch/home indicator
-- Desktop UI completely unchanged
+- AI Chat: mobile-optimized sidebar, input area, message layout
+- Settings: single-column layout, touch-friendly controls
+- Server Control: responsive dashboard cards, mobile-friendly tables
+- Files: mobile file browser, touch-friendly toolbar
+- Terminal: mobile-friendly xterm.js, landscape mode support
 
 ### Active
 
-- [ ] PWA manifest + service worker for iOS/Android installability
-- [ ] Mobile: hide dock, show system apps in app grid
-- [ ] Mobile: full-screen app rendering via route navigation
-- [ ] Mobile: safe area CSS for notch/home indicator
-- [ ] Mobile: native-feeling navigation (back button, slide transitions)
+- [ ] AI Chat fully responsive on mobile (sidebar drawer, compact messages, touch-friendly input)
+- [ ] Settings single-column layout with proper scrolling and touch targets
+- [ ] Server Control responsive dashboard with stackable cards and mobile tables
+- [ ] Files mobile browser with proper navigation, toolbar, and file actions
+- [ ] Terminal mobile-optimized with proper sizing and keyboard handling
 
 ### Out of Scope
 
@@ -259,4 +267,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-01 after v23.0 milestone started (Mobile PWA)*
+*Last updated: 2026-04-01 after v24.0 milestone started (Mobile Responsive UI)*
