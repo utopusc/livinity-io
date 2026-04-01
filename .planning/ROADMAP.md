@@ -87,7 +87,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()` or CSS breakpoints.
 
 - [x] **Phase 1: AI Chat Mobile** - Responsive sidebar drawer, compact messages, touch-friendly input (completed 2026-04-01)
-- [ ] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls
+- [x] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls (completed 2026-04-01)
 - [ ] **Phase 3: Server Control Mobile** - Stackable dashboard cards, mobile-friendly tables and actions
 - [ ] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar
 - [ ] **Phase 5: Terminal Mobile** - Viewport-fitted xterm.js, readable font, landscape support
@@ -118,7 +118,7 @@ Plans:
   2. Every settings section (Users, Domains, AI, About) scrolls vertically without horizontal overflow or content clipping
   3. All interactive controls (inputs, selects, toggles, buttons) have a minimum 44px touch target and adequate spacing
   4. Modal dialogs (invite user, add domain, etc.) render full-width on mobile without clipping or overflowing the viewport
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 02-01-PLAN.md -- Mobile single-column drill-down layout + overflow protection (SET-01, SET-02)
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 2. Settings Mobile | v24.0 | 0/2 | Not started | - |
+| 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 3. Server Control Mobile | v24.0 | 0/0 | Not started | - |
 | 4. Files Mobile | v24.0 | 0/0 | Not started | - |
 | 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
