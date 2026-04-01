@@ -27,8 +27,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### iOS Hardening
 
 - [x] **IOS-01**: Safe area insets properly applied (notch top padding, home indicator bottom padding)
-- [ ] **IOS-02**: WebSocket reconnects automatically after iOS background/resume cycle via visibilitychange
-- [ ] **IOS-03**: iOS keyboard opening doesn't break viewport layout (100dvh, visual viewport API)
+- [x] **IOS-02**: WebSocket reconnects automatically after iOS background/resume cycle via visibilitychange
+- [x] **IOS-03**: iOS keyboard opening doesn't break viewport layout (100dvh, visual viewport API)
 
 ## v2 Requirements
 
@@ -68,8 +68,8 @@ Deferred to future release.
 | MOB-04 | Phase 38 | Complete |
 | MOB-05 | Phase 38 | Complete |
 | IOS-01 | Phase 37 | Complete |
-| IOS-02 | Phase 40 | Pending |
-| IOS-03 | Phase 40 | Pending |
+| IOS-02 | Phase 40 | Complete |
+| IOS-03 | Phase 40 | Complete |
 
 **Coverage:**
 - v1 requirements: 14 total

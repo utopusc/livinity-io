@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
-stopped_at: Completed 40-01-PLAN.md (install prompt banner + splash screen)
-last_updated: "2026-04-01T18:17:21.968Z"
+stopped_at: Completed 40-02-PLAN.md (iOS WS reconnection + keyboard-safe input)
+last_updated: "2026-04-01T18:22:24.475Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -63,6 +63,7 @@ Plan: 2 of 2
 | Phase 39-mobile-home-screen-app-access P01 | 3min | 2 tasks | 2 files |
 | Phase 39-mobile-home-screen-app-access P02 | 3min | 2 tasks | 3 files |
 | Phase 40 P01 | 4min | 2 tasks | 3 files |
+| Phase 40 P02 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Plan: 2 of 2
 - [Phase 40]: Spring animation (stiffness 300, damping 30) for install banner entrance/exit
 - [Phase 40]: PWA-06 splash screen satisfied by existing Phase 37 manifest configuration (theme_color #f8f9fc aligned across manifest, meta tag, body background)
 - [Phase 40]: z-[70] for install banner above MobileTabBar z-[60] ensures banner visibility
+- [Phase 40]: 500ms delay after visibilitychange before WS reconnect (lets iOS networking stack resume)
+- [Phase 40]: 100px threshold for keyboard detection avoids false positives from toolbar/address bar changes
+- [Phase 40]: paddingBottom offset approach for keyboard avoidance (works with existing flex layout, no transform hacks)
 
 ### Pending Todos
 
@@ -105,6 +109,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-01T18:17:21.966Z
-Stopped at: Completed 40-01-PLAN.md (install prompt banner + splash screen)
+Last session: 2026-04-01T18:22:24.472Z
+Stopped at: Completed 40-02-PLAN.md (iOS WS reconnection + keyboard-safe input)
 Resume file: None

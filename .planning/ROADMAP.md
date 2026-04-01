@@ -78,7 +78,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 37: PWA Foundation** - Installable PWA with manifest, service worker, Apple meta tags, and safe area CSS (completed 2026-04-01)
 - [x] **Phase 38: Mobile Navigation Infrastructure** - Full-screen app rendering pipeline with MobileAppContext, MobileAppRenderer, and hardware back button support (completed 2026-04-01)
 - [x] **Phase 39: Mobile Home Screen + App Access** - Phone-like home screen with system apps in grid, bottom tab bar, and dock hidden on mobile (completed 2026-04-01)
-- [ ] **Phase 40: Polish + iOS Hardening** - Install prompt, splash screens, WebSocket reconnection on resume, and keyboard layout fixes
+- [x] **Phase 40: Polish + iOS Hardening** - Install prompt, splash screens, WebSocket reconnection on resume, and keyboard layout fixes (completed 2026-04-01)
 
 ## Phase Details
 
@@ -140,7 +140,7 @@ Plans:
 
 Plans:
 - [x] 40-01-PLAN.md — Install prompt banner (PWA-05) + splash screen verification (PWA-06)
-- [ ] 40-02-PLAN.md — WebSocket reconnection on iOS resume (IOS-02) + keyboard-safe chat input (IOS-03)
+- [x] 40-02-PLAN.md — WebSocket reconnection on iOS resume (IOS-02) + keyboard-safe chat input (IOS-03)
 
 ## Progress
 
@@ -152,7 +152,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 39. Mobile Home Screen + App Access | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 40. Polish + iOS Hardening | v23.0 | 1/2 | In Progress|  |
+| 40. Polish + iOS Hardening | v23.0 | 2/2 | Complete   | 2026-04-01 |
 
 ---
 
