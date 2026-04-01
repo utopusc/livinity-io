@@ -133,11 +133,11 @@ Plans:
   2. The container list renders with compact rows that fit mobile width, with horizontal scroll only inside individual data cells if needed
   3. Container action buttons (start, stop, restart, remove) are accessible with touch-friendly sizing and not hidden behind unresponsive overflow menus
   4. Server stats and charts resize to fill mobile viewport width without cropping or overflow
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Responsive dashboard cards, scrollable tab bar, mobile overview layout (SRV-01, SRV-04)
+- [ ] 03-02-PLAN.md -- Mobile container list cards, 44px touch actions, responsive detail sheet and create form (SRV-02, SRV-03)
 
 ### Phase 4: Files Mobile
 **Goal**: Users can browse, navigate, and manage files on mobile with proper touch controls
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|-----------|----------------|--------|-----------|
 | 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 3. Server Control Mobile | v24.0 | 0/0 | Not started | - |
+| 3. Server Control Mobile | v24.0 | 0/2 | Not started | - |
 | 4. Files Mobile | v24.0 | 0/0 | Not started | - |
 | 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
 
