@@ -107,11 +107,11 @@ Plans:
   2. A back button in the top navigation bar returns the user to the home screen
   3. The hardware/OS back button (Android back, iOS swipe-back gesture) closes the active app and returns home
   4. Every app that works in a desktop window also renders correctly in the mobile full-screen overlay with zero per-app modifications
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 38-01: TBD
-- [ ] 38-02: TBD
+- [ ] 38-01-PLAN.md — Core mobile components: MobileAppContext, use-mobile-back hook, MobileNavBar, MobileAppRenderer + export WindowAppContent
+- [ ] 38-02-PLAN.md — Integration wiring: MobileAppProvider + MobileAppRenderer into router.tsx, mobile-aware click handlers in desktop-content.tsx
 
 ### Phase 39: Mobile Home Screen + App Access
 **Goal**: Mobile users see a phone-like home screen with system apps in a grid and a bottom tab bar for quick navigation -- the desktop dock is hidden
