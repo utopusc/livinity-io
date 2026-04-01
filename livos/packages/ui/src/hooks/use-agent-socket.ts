@@ -408,6 +408,29 @@ export function useAgentSocket() {
 		}
 	}, [connect])
 
+	// --- Visibility-based reconnection (iOS background/resume) ---
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (document.hidden) return
+			// Page became visible -- check if WebSocket needs reconnection
+			setTimeout(() => {
+				const ws = wsRef.current
+				if (!ws || ws.readyState !== WebSocket.OPEN) {
+					// Reset backoff for immediate reconnection
+					backoffRef.current = 1000
+					// Clear any pending reconnect timer to avoid double-connect
+					if (reconnectTimerRef.current) {
+						clearTimeout(reconnectTimerRef.current)
+						reconnectTimerRef.current = null
+					}
+					connect()
+				}
+			}, 500)
+		}
+		document.addEventListener('visibilitychange', handleVisibilityChange)
+		return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+	}, [connect])
+
 	// --- Actions ---
 
 	const sendMessage = useCallback(
