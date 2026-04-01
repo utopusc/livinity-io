@@ -47,7 +47,7 @@ export function WindowContent({route, appId}: WindowContentProps) {
 	)
 }
 
-function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: string}) {
+export function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: string}) {
 	switch (appId) {
 		case 'LIVINITY_app-store':
 			return <AppStoreWindowContent />
