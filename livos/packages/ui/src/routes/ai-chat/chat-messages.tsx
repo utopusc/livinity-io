@@ -99,7 +99,7 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 
 	// Default: prettified JSON
 	return (
-		<pre className='overflow-x-auto whitespace-pre-wrap text-xs text-text-secondary'>
+		<pre className='max-w-full overflow-x-auto whitespace-pre-wrap text-xs text-text-secondary'>
 			{JSON.stringify(toolCall.input, null, 2)}
 		</pre>
 	)
@@ -118,7 +118,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	if (isShellTool(toolCall.name)) {
 		return (
 			<div>
-				<pre className='max-h-60 overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
+				<pre className='max-h-60 max-w-full overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 					{displayOutput}
 				</pre>
 				{isLong && (
@@ -144,7 +144,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 				{filePath && (
 					<div className='mb-1 font-mono text-xs text-text-tertiary'>{filePath}</div>
 				)}
-				<pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
+				<pre className='max-h-80 max-w-full overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 					{displayOutput}
 				</pre>
 				{isLong && (
@@ -165,7 +165,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	// Default: scrollable output
 	return (
 		<div>
-			<pre className='max-h-60 overflow-auto whitespace-pre-wrap text-xs text-text-secondary'>
+			<pre className='max-h-60 max-w-full overflow-auto whitespace-pre-wrap text-xs text-text-secondary'>
 				{displayOutput}
 			</pre>
 			{isLong && (
@@ -417,7 +417,7 @@ export function UserMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='flex justify-end'>
 			<div className='max-w-[85%] rounded-2xl rounded-br-md bg-blue-600/90 px-4 py-2.5 text-white'>
-				<p className='whitespace-pre-wrap text-sm'>{message.content}</p>
+				<p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
 			</div>
 		</div>
 	)
@@ -433,7 +433,7 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 
 	return (
 		<div className='flex justify-start'>
-			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4'>
+			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
 				{/* Render blocks in order — text and tools interleaved */}
 				{blocks && blocks.map((block, idx) => {
 					if (block.type === 'text') {
