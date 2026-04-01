@@ -89,7 +89,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 1: AI Chat Mobile** - Responsive sidebar drawer, compact messages, touch-friendly input (completed 2026-04-01)
 - [x] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls (completed 2026-04-01)
 - [x] **Phase 3: Server Control Mobile** - Stackable dashboard cards, mobile-friendly tables and actions (completed 2026-04-01)
-- [ ] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar
+- [x] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar (completed 2026-04-01)
 - [ ] **Phase 5: Terminal Mobile** - Viewport-fitted xterm.js, readable font, landscape support
 
 ## Phase Details
@@ -148,7 +148,7 @@ Plans:
   2. File list and grid views adapt to mobile width -- items are properly sized and tappable without accidental selection of adjacent items
   3. Toolbar actions (upload, new folder, delete, etc.) are accessible on mobile via a compact toolbar or overflow menu with touch-friendly targets
   4. File preview and details panels render within the viewport on mobile without overlapping the file list or causing horizontal overflow
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 04-01-PLAN.md -- Sidebar 44px touch targets, mobile drawer polish, responsive icons grid (FILE-01, FILE-02)
@@ -177,7 +177,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 3. Server Control Mobile | v24.0 | 1/2 | Complete    | 2026-04-01 |
-| 4. Files Mobile | v24.0 | 0/2 | In progress | - |
+| 4. Files Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
 
 ---
