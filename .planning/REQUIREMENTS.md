@@ -26,7 +26,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### iOS Hardening
 
-- [ ] **IOS-01**: Safe area insets properly applied (notch top padding, home indicator bottom padding)
+- [x] **IOS-01**: Safe area insets properly applied (notch top padding, home indicator bottom padding)
 - [ ] **IOS-02**: WebSocket reconnects automatically after iOS background/resume cycle via visibilitychange
 - [ ] **IOS-03**: iOS keyboard opening doesn't break viewport layout (100dvh, visual viewport API)
 
@@ -67,7 +67,7 @@ Deferred to future release.
 | MOB-03 | Phase 39 | Pending |
 | MOB-04 | Phase 38 | Pending |
 | MOB-05 | Phase 38 | Pending |
-| IOS-01 | Phase 37 | Pending |
+| IOS-01 | Phase 37 | Complete |
 | IOS-02 | Phase 40 | Pending |
 | IOS-03 | Phase 40 | Pending |
 

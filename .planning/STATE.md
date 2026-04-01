@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
-stopped_at: Completed 37-01-PLAN.md (PWA manifest + service worker + Apple meta tags)
-last_updated: "2026-04-01T16:32:11.772Z"
+stopped_at: Completed 37-02-PLAN.md (safe area CSS foundation)
+last_updated: "2026-04-01T16:37:06.385Z"
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -57,6 +57,7 @@ Plan: 2 of 2
 
 *Updated after each plan completion*
 | Phase 37 P01 | 3min | 2 tasks | 5 files |
+| Phase 37 P02 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,10 @@ Plan: 2 of 2
 - [Phase 37]: registerType autoUpdate for seamless PWA updates (dashboard app)
 - [Phase 37]: navigateFallbackDenylist for /trpc, /api, /ws prevents SW from intercepting API routes
 - [Phase 37]: black-translucent iOS status bar style blends with app background
+- [Phase 37]: tailwindcss-safe-area v0.8.0 for Tailwind v3 compatibility (not v1.x for Tailwind v4)
+- [Phase 37]: Safe area CSS vars defined both as Tailwind utilities and CSS custom properties for maximum flexibility
+- [Phase 37]: overscroll-behavior: none globally on html,body for native PWA feel
+- [Phase 37]: --sheet-top: 0vh in @media (display-mode: standalone) removes desktop wallpaper gap in PWA mode
 
 ### Pending Todos
 
@@ -84,6 +89,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-01T16:32:11.769Z
-Stopped at: Completed 37-01-PLAN.md (PWA manifest + service worker + Apple meta tags)
+Last session: 2026-04-01T16:37:06.383Z
+Stopped at: Completed 37-02-PLAN.md (safe area CSS foundation)
 Resume file: None
