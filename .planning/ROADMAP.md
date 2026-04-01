@@ -106,7 +106,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Mobile sidebar drawer + navigation headers + touch-friendly chat input (CHAT-01, CHAT-04)
+- [x] 01-01-PLAN.md -- Mobile sidebar drawer + navigation headers + touch-friendly chat input (CHAT-01, CHAT-04)
 - [ ] 01-02-PLAN.md -- Message width constraints + compact tool cards (CHAT-02, CHAT-03)
 
 ### Phase 2: Settings Mobile
