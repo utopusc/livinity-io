@@ -95,7 +95,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 37-01-PLAN.md — PWA installability: vite-plugin-pwa manifest + service worker + Apple meta tags
+- [x] 37-01-PLAN.md — PWA installability: vite-plugin-pwa manifest + service worker + Apple meta tags
 - [ ] 37-02-PLAN.md — Safe area CSS foundation: tailwindcss-safe-area plugin + CSS variables + overscroll prevention
 
 ### Phase 38: Mobile Navigation Infrastructure
@@ -148,7 +148,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 37. PWA Foundation | v23.0 | 0/2 | Not started | - |
+| 37. PWA Foundation | v23.0 | 1/2 | In Progress|  |
 | 38. Mobile Navigation Infrastructure | v23.0 | 0/2 | Not started | - |
 | 39. Mobile Home Screen + App Access | v23.0 | 0/1 | Not started | - |
 | 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |

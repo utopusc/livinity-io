@@ -9,10 +9,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### PWA Foundation
 
-- [ ] **PWA-01**: User can install Livinity from iOS Safari via "Add to Home Screen" and it opens in standalone mode
-- [ ] **PWA-02**: App has a valid web manifest with start_url, scope, icons (192/512 + maskable), theme color matching UI
-- [ ] **PWA-03**: Service worker caches app shell and serves network-first for API/tRPC routes
-- [ ] **PWA-04**: Apple-specific meta tags enable standalone mode, status bar styling, and touch icon on iOS
+- [x] **PWA-01**: User can install Livinity from iOS Safari via "Add to Home Screen" and it opens in standalone mode
+- [x] **PWA-02**: App has a valid web manifest with start_url, scope, icons (192/512 + maskable), theme color matching UI
+- [x] **PWA-03**: Service worker caches app shell and serves network-first for API/tRPC routes
+- [x] **PWA-04**: Apple-specific meta tags enable standalone mode, status bar styling, and touch icon on iOS
 - [ ] **PWA-05**: User sees a custom install prompt banner suggesting "Add to Home Screen" on first visit
 - [ ] **PWA-06**: iOS splash screens display correctly during app launch (key device sizes)
 
@@ -56,10 +56,10 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PWA-01 | Phase 37 | Pending |
-| PWA-02 | Phase 37 | Pending |
-| PWA-03 | Phase 37 | Pending |
-| PWA-04 | Phase 37 | Pending |
+| PWA-01 | Phase 37 | Complete |
+| PWA-02 | Phase 37 | Complete |
+| PWA-03 | Phase 37 | Complete |
+| PWA-04 | Phase 37 | Complete |
 | PWA-05 | Phase 40 | Pending |
 | PWA-06 | Phase 40 | Pending |
 | MOB-01 | Phase 39 | Pending |
