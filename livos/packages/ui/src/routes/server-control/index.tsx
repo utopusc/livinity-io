@@ -324,7 +324,7 @@ function EngineInfoSection() {
 				{expanded ? <IconChevronDown size={14} className='text-text-tertiary' /> : <IconChevronRight size={14} className='text-text-tertiary' />}
 			</button>
 			{expanded && (
-				<div className='grid grid-cols-2 gap-x-6 gap-y-2 border-t border-border-default px-4 pb-4 pt-3 sm:grid-cols-3 lg:grid-cols-4'>
+				<div className='grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border-default px-4 pb-4 pt-3 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-4'>
 					{fields.map((field) => (
 						<div key={field.label}>
 							<div className='text-[10px] font-bold uppercase tracking-wider text-text-tertiary'>{field.label}</div>
@@ -369,11 +369,11 @@ function EventsTab() {
 	return (
 		<div className='space-y-4 p-4'>
 			{/* Filter Row */}
-			<div className='flex items-center gap-3'>
+			<div className='flex flex-wrap items-center gap-2 sm:gap-3'>
 				<div className='flex items-center gap-2'>
 					<Label className='text-xs text-text-secondary'>Type</Label>
 					<Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as EventTypeFilter)}>
-						<SelectTrigger className='h-8 w-[140px] text-xs'>
+						<SelectTrigger className='h-8 w-[120px] sm:w-[140px] text-xs'>
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -388,7 +388,7 @@ function EventsTab() {
 				<div className='flex items-center gap-2'>
 					<Label className='text-xs text-text-secondary'>Range</Label>
 					<Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRangeKey)}>
-						<SelectTrigger className='h-8 w-[120px] text-xs'>
+						<SelectTrigger className='h-8 w-[100px] sm:w-[120px] text-xs'>
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -512,11 +512,11 @@ function OverviewTab() {
 	const tempColor = tempWarning ? 'text-red-500' : (temperature ?? 0) > 70 ? 'text-amber-500' : 'text-text-primary'
 
 	return (
-		<div className='space-y-4 p-4'>
+		<div className='space-y-3 p-3 sm:space-y-4 sm:p-4'>
 			{/* Row 1: System Health Cards */}
-			<div className='grid grid-cols-2 gap-4 lg:grid-cols-4'>
+			<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4'>
 				{/* CPU Card */}
-				<div className='relative overflow-hidden rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='relative overflow-hidden rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					{/* Background sparkline */}
 					<div className='absolute inset-0 z-0'>
 						<ResponsiveContainer width='100%' height='100%'>
@@ -555,7 +555,7 @@ function OverviewTab() {
 				</div>
 
 				{/* RAM Card */}
-				<div className='relative overflow-hidden rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='relative overflow-hidden rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					<div className='absolute inset-0 z-0'>
 						<ResponsiveContainer width='100%' height='100%'>
 							<AreaChart data={memoryChartData} margin={{bottom: 0}}>
@@ -596,7 +596,7 @@ function OverviewTab() {
 				</div>
 
 				{/* Disk Card */}
-				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					<div className='mb-2 flex items-center gap-2'>
 						<IconDatabase size={14} className='text-text-secondary' />
 						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Disk</span>
@@ -612,7 +612,7 @@ function OverviewTab() {
 				</div>
 
 				{/* Temperature Card */}
-				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					<div className='mb-2 flex items-center gap-2'>
 						<IconTemperature size={14} className='text-text-secondary' />
 						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Temp</span>
@@ -627,9 +627,9 @@ function OverviewTab() {
 			</div>
 
 			{/* Row 2: Summary Cards */}
-			<div className='grid grid-cols-1 gap-4 sm:grid-cols-3'>
+			<div className='grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4'>
 				{/* Docker Containers */}
-				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					<div className='mb-3 flex items-center gap-2'>
 						<IconBrandDocker size={16} className='text-text-secondary' />
 						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Docker Containers</span>
@@ -650,7 +650,7 @@ function OverviewTab() {
 				</div>
 
 				{/* PM2 Processes */}
-				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					<div className='mb-3 flex items-center gap-2'>
 						<IconActivity size={16} className='text-text-secondary' />
 						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>PM2 Processes</span>
@@ -671,7 +671,7 @@ function OverviewTab() {
 				</div>
 
 				{/* Network Throughput */}
-				<div className='rounded-xl border border-border-default bg-surface-base p-4'>
+				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
 					<div className='mb-3 flex items-center gap-2'>
 						<IconNetwork size={16} className='text-text-secondary' />
 						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>Network</span>
@@ -718,9 +718,9 @@ function MonitoringTab() {
 	const latestDisk = diskHistory.length > 0 ? diskHistory[diskHistory.length - 1] : null
 
 	return (
-		<div className='space-y-6 p-4'>
+		<div className='space-y-4 p-3 sm:space-y-6 sm:p-4'>
 			{/* Section 1: Network I/O */}
-			<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+			<div className='rounded-xl border border-border-default bg-surface-base/50 p-3 sm:p-4'>
 				<div className='mb-3 flex items-center justify-between'>
 					<div>
 						<h3 className='text-sm font-semibold text-text-primary'>Network Traffic</h3>
@@ -781,7 +781,7 @@ function MonitoringTab() {
 			</div>
 
 			{/* Section 2: Disk I/O */}
-			<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+			<div className='rounded-xl border border-border-default bg-surface-base/50 p-3 sm:p-4'>
 				<div className='mb-3 flex items-center justify-between'>
 					<div>
 						<h3 className='text-sm font-semibold text-text-primary'>Disk I/O</h3>
@@ -842,7 +842,7 @@ function MonitoringTab() {
 			</div>
 
 			{/* Section 3: Process List */}
-			<div className='rounded-xl border border-border-default bg-surface-base/50 p-4'>
+			<div className='rounded-xl border border-border-default bg-surface-base/50 p-3 sm:p-4'>
 				<div className='mb-3 flex items-center justify-between'>
 					<h3 className='text-sm font-semibold text-text-primary'>Top Processes</h3>
 					<div className='flex items-center gap-1'>
@@ -873,28 +873,30 @@ function MonitoringTab() {
 						<p className='text-xs text-text-tertiary'>No processes found</p>
 					</div>
 				) : (
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead className='w-16 text-xs'>PID</TableHead>
-								<TableHead className='text-xs'>Name</TableHead>
-								<TableHead className='w-20 text-right text-xs'>CPU%</TableHead>
-								<TableHead className='w-20 text-right text-xs'>Mem%</TableHead>
-								<TableHead className='w-24 text-xs'>State</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{processes.map((proc) => (
-								<TableRow key={proc.pid}>
-									<TableCell className='font-mono text-xs text-text-secondary'>{proc.pid}</TableCell>
-									<TableCell className='max-w-[200px] truncate text-xs font-medium'>{proc.name}</TableCell>
-									<TableCell className='text-right font-mono text-xs'>{proc.cpu.toFixed(1)}%</TableCell>
-									<TableCell className='text-right font-mono text-xs'>{proc.memory.toFixed(1)}%</TableCell>
-									<TableCell><ProcessStateBadge state={proc.state} /></TableCell>
+					<div className='overflow-x-auto'>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead className='w-16 text-xs'>PID</TableHead>
+									<TableHead className='text-xs'>Name</TableHead>
+									<TableHead className='w-20 text-right text-xs'>CPU%</TableHead>
+									<TableHead className='w-20 text-right text-xs'>Mem%</TableHead>
+									<TableHead className='w-24 text-xs'>State</TableHead>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
+							</TableHeader>
+							<TableBody>
+								{processes.map((proc) => (
+									<TableRow key={proc.pid}>
+										<TableCell className='font-mono text-xs text-text-secondary'>{proc.pid}</TableCell>
+										<TableCell className='max-w-[200px] truncate text-xs font-medium'>{proc.name}</TableCell>
+										<TableCell className='text-right font-mono text-xs'>{proc.cpu.toFixed(1)}%</TableCell>
+										<TableCell className='text-right font-mono text-xs'>{proc.memory.toFixed(1)}%</TableCell>
+										<TableCell><ProcessStateBadge state={proc.state} /></TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
 				)}
 			</div>
 		</div>
