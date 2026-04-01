@@ -38,7 +38,7 @@ export function MobileActions({DropdownItems = null}: {DropdownItems?: React.Rea
 			{/* Select toggle button */}
 			<Button
 				className={cn(
-					'h-[1.9rem] rounded-full px-3 text-body-sm',
+					'h-11 rounded-full px-3 text-body-sm',
 					'focus:ring-0 focus:ring-offset-0 focus-visible:ring-0',
 					'focus:outline-none focus-visible:outline-none',
 				)}
@@ -51,7 +51,7 @@ export function MobileActions({DropdownItems = null}: {DropdownItems?: React.Rea
 			</Button>
 
 			<DropdownMenu>
-				<DropdownMenuTrigger className='focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0'>
+				<DropdownMenuTrigger className='flex h-11 w-11 items-center justify-center rounded-full focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0'>
 					<TbDots className='h-5 w-5' />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent className='w-44' align='start'>
