@@ -1,81 +1,88 @@
-# Requirements: Livinity v23.0 Mobile PWA
+# Requirements: Livinity v24.0 Mobile Responsive UI
 
 **Defined:** 2026-04-01
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
 ## v1 Requirements
 
-Requirements for this milestone. Each maps to roadmap phases.
+### AI Chat
 
-### PWA Foundation
+- [ ] **CHAT-01**: Chat sidebar (conversations + agents) works as a drawer on mobile with proper touch targets
+- [ ] **CHAT-02**: Message bubbles don't overflow horizontally, code blocks scroll within container
+- [ ] **CHAT-03**: Tool call cards are compact on mobile with expandable details
+- [ ] **CHAT-04**: Chat input area with file upload is properly sized and positioned on mobile
 
-- [x] **PWA-01**: User can install Livinity from iOS Safari via "Add to Home Screen" and it opens in standalone mode
-- [x] **PWA-02**: App has a valid web manifest with start_url, scope, icons (192/512 + maskable), theme color matching UI
-- [x] **PWA-03**: Service worker caches app shell and serves network-first for API/tRPC routes
-- [x] **PWA-04**: Apple-specific meta tags enable standalone mode, status bar styling, and touch icon on iOS
-- [x] **PWA-05**: User sees a custom install prompt banner suggesting "Add to Home Screen" on first visit
-- [x] **PWA-06**: iOS splash screens display correctly during app launch (key device sizes)
+### Settings
 
-### Mobile App Experience
+- [ ] **SET-01**: Settings navigation uses single-column layout on mobile (no side nav + content split)
+- [ ] **SET-02**: All settings sections (Users, Domains, AI, About) scroll properly without overflow
+- [ ] **SET-03**: Form controls (inputs, selects, toggles) have proper touch target size (min 44px)
+- [ ] **SET-04**: Modal dialogs are full-width on mobile, not clipped or overflowing
 
-- [x] **MOB-01**: On mobile, dock is hidden and system apps (AI Chat, Settings, Files, Server, Terminal) appear in the app grid
-- [x] **MOB-02**: Tapping a system app in the grid opens it full-screen with a back button to return home
-- [x] **MOB-03**: Bottom tab bar provides quick access to 5 primary apps (Home, AI Chat, Files, Settings, Server)
-- [x] **MOB-04**: Full-screen apps reuse existing window content components (zero per-app rewrite)
-- [x] **MOB-05**: Desktop UI remains completely unchanged — all mobile changes gated on useIsMobile()
+### Server Control
 
-### iOS Hardening
+- [ ] **SRV-01**: Dashboard cards stack vertically on mobile (not side-by-side overflow)
+- [ ] **SRV-02**: Docker container list is scrollable with compact rows on mobile
+- [ ] **SRV-03**: Container actions (start/stop/restart) are accessible via touch-friendly buttons
+- [ ] **SRV-04**: Server stats/charts resize properly to mobile width
 
-- [x] **IOS-01**: Safe area insets properly applied (notch top padding, home indicator bottom padding)
-- [x] **IOS-02**: WebSocket reconnects automatically after iOS background/resume cycle via visibilitychange
-- [x] **IOS-03**: iOS keyboard opening doesn't break viewport layout (100dvh, visual viewport API)
+### Files
+
+- [ ] **FILE-01**: File browser sidebar (folders) works as a drawer on mobile
+- [ ] **FILE-02**: File list/grid adapts to mobile width with proper item sizing
+- [ ] **FILE-03**: File toolbar actions are accessible on mobile (compact toolbar or overflow menu)
+- [ ] **FILE-04**: File preview/details panel doesn't overlap or overflow on mobile
+
+### Terminal
+
+- [ ] **TERM-01**: Terminal (xterm.js) fits mobile viewport width without horizontal scroll
+- [ ] **TERM-02**: Terminal font size is readable on mobile (min 12px)
+- [ ] **TERM-03**: Terminal works in landscape mode with proper resizing
 
 ## v2 Requirements
 
-Deferred to future release.
-
-### Mobile Enhancements
-
-- **MOB-V2-01**: Tablet layout (768-1024px) with hybrid window/fullscreen experience
-- **MOB-V2-02**: Push notifications via Web Push API
-- **MOB-V2-03**: Offline mode with cached conversation history
-- **MOB-V2-04**: Haptic feedback on interactions (Vibration API)
-- **MOB-V2-05**: Share target API (share files/URLs to Livinity)
+- **CHAT-V2-01**: Swipe to dismiss sidebar on mobile
+- **SET-V2-01**: Search within settings on mobile
+- **SRV-V2-01**: Pull-to-refresh for container status
+- **FILE-V2-01**: Swipe actions on file items (delete, share, rename)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Native mobile app (Swift/Kotlin) | PWA approach covers requirements without app store distribution |
-| Android TWA (Trusted Web Activity) | Not needed — PWA installable directly from browser |
-| Electron/Capacitor wrapper | Adds complexity without benefit over PWA |
-| Background sync / periodic sync | iOS doesn't support these APIs in standalone PWA |
-| Per-app mobile layouts | Existing responsive components are sufficient |
+| Complete UI rewrite | Fix existing responsive issues, don't rebuild |
+| New mobile-specific features | Focus on making existing features work on mobile |
+| Tablet-specific layout | Binary mobile/desktop for now |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PWA-01 | Phase 37 | Complete |
-| PWA-02 | Phase 37 | Complete |
-| PWA-03 | Phase 37 | Complete |
-| PWA-04 | Phase 37 | Complete |
-| PWA-05 | Phase 40 | Complete |
-| PWA-06 | Phase 40 | Complete |
-| MOB-01 | Phase 39 | Complete |
-| MOB-02 | Phase 38 | Complete |
-| MOB-03 | Phase 39 | Complete |
-| MOB-04 | Phase 38 | Complete |
-| MOB-05 | Phase 38 | Complete |
-| IOS-01 | Phase 37 | Complete |
-| IOS-02 | Phase 40 | Complete |
-| IOS-03 | Phase 40 | Complete |
+| CHAT-01 | — | Pending |
+| CHAT-02 | — | Pending |
+| CHAT-03 | — | Pending |
+| CHAT-04 | — | Pending |
+| SET-01 | — | Pending |
+| SET-02 | — | Pending |
+| SET-03 | — | Pending |
+| SET-04 | — | Pending |
+| SRV-01 | — | Pending |
+| SRV-02 | — | Pending |
+| SRV-03 | — | Pending |
+| SRV-04 | — | Pending |
+| FILE-01 | — | Pending |
+| FILE-02 | — | Pending |
+| FILE-03 | — | Pending |
+| FILE-04 | — | Pending |
+| TERM-01 | — | Pending |
+| TERM-02 | — | Pending |
+| TERM-03 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0
+- v1 requirements: 19 total
+- Mapped to phases: 0
+- Unmapped: 19
 
 ---
 *Requirements defined: 2026-04-01*
-*Last updated: 2026-04-01 after roadmap creation*
+*Last updated: 2026-04-01 after initial definition*
