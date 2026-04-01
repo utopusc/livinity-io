@@ -14,6 +14,8 @@ body {
 	/* To match Figma weight */
 	text-rendering: geometricPrecision;
 	@apply -tracking-3 text-text-primary;
+	overscroll-behavior: none;
+	-webkit-touch-callout: none;
 }
 
 html {
@@ -22,6 +24,18 @@ html {
 	/* Space above the sheet. Putting here because it's used in multiple places for calculations */
 	--sheet-top: 2vh;
 	--wallpaper-blur: 12px;
+	/* Safe area insets for notched devices (viewport-fit=cover required in index.html) */
+	--safe-area-top: env(safe-area-inset-top, 0px);
+	--safe-area-right: env(safe-area-inset-right, 0px);
+	--safe-area-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-area-left: env(safe-area-inset-left, 0px);
+}
+
+/* PWA standalone mode adjustments */
+@media (display-mode: standalone) {
+	html {
+		--sheet-top: 0vh;
+	}
 }
 
 /* Global scrollbar styling */
@@ -65,6 +79,7 @@ input,
 button {
 	font-size: inherit;
 	text-rendering: inherit;
+	touch-action: manipulation;
 }
 
 /* https://stackoverflow.com/a/45050338 */
