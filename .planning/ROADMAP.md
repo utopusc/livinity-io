@@ -139,7 +139,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 40-01-PLAN.md — Install prompt banner (PWA-05) + splash screen verification (PWA-06)
+- [x] 40-01-PLAN.md — Install prompt banner (PWA-05) + splash screen verification (PWA-06)
 - [ ] 40-02-PLAN.md — WebSocket reconnection on iOS resume (IOS-02) + keyboard-safe chat input (IOS-03)
 
 ## Progress
@@ -152,7 +152,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 39. Mobile Home Screen + App Access | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
+| 40. Polish + iOS Hardening | v23.0 | 1/2 | In Progress|  |
 
 ---
 

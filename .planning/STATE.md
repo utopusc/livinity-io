@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
-stopped_at: Completed 39-02-PLAN.md (mobile tab bar)
-last_updated: "2026-04-01T17:50:41.941Z"
+stopped_at: Completed 40-01-PLAN.md (install prompt banner + splash screen)
+last_updated: "2026-04-01T18:17:21.968Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v23.0 -- Mobile PWA
-**Current focus:** Phase 39 — mobile-home-screen-app-access
+**Current focus:** Phase 40 — polish-ios-hardening
 
 ## Current Position
 
-Phase: 40
-Plan: Not started
+Phase: 40 (polish-ios-hardening) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Plan: Not started
 | Phase 38-mobile-navigation-infrastructure P02 | 2min | 2 tasks | 2 files |
 | Phase 39-mobile-home-screen-app-access P01 | 3min | 2 tasks | 2 files |
 | Phase 39-mobile-home-screen-app-access P02 | 3min | 2 tasks | 3 files |
+| Phase 40 P01 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Plan: Not started
 - [Phase 39-mobile-home-screen-app-access]: 72px mobile DockSpacer height (56px tab bar + 16px safe area) for upcoming tab bar
 - [Phase 39-mobile-home-screen-app-access]: 5 system apps for mobile grid: AI Chat, Files, Settings, Server, Terminal (utility apps omitted for simplicity)
 - [Phase 39-mobile-home-screen-app-access]: Tabler Icons for tab bar (consistent with project icon library), z-[60] above z-50 overlay, pb-[72px] replaces pb-safe in app renderer
+- [Phase 40]: Spring animation (stiffness 300, damping 30) for install banner entrance/exit
+- [Phase 40]: PWA-06 splash screen satisfied by existing Phase 37 manifest configuration (theme_color #f8f9fc aligned across manifest, meta tag, body background)
+- [Phase 40]: z-[70] for install banner above MobileTabBar z-[60] ensures banner visibility
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-01T17:48:02.335Z
-Stopped at: Completed 39-02-PLAN.md (mobile tab bar)
+Last session: 2026-04-01T18:17:21.966Z
+Stopped at: Completed 40-01-PLAN.md (install prompt banner + splash screen)
 Resume file: None

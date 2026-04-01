@@ -13,8 +13,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **PWA-02**: App has a valid web manifest with start_url, scope, icons (192/512 + maskable), theme color matching UI
 - [x] **PWA-03**: Service worker caches app shell and serves network-first for API/tRPC routes
 - [x] **PWA-04**: Apple-specific meta tags enable standalone mode, status bar styling, and touch icon on iOS
-- [ ] **PWA-05**: User sees a custom install prompt banner suggesting "Add to Home Screen" on first visit
-- [ ] **PWA-06**: iOS splash screens display correctly during app launch (key device sizes)
+- [x] **PWA-05**: User sees a custom install prompt banner suggesting "Add to Home Screen" on first visit
+- [x] **PWA-06**: iOS splash screens display correctly during app launch (key device sizes)
 
 ### Mobile App Experience
 
@@ -60,8 +60,8 @@ Deferred to future release.
 | PWA-02 | Phase 37 | Complete |
 | PWA-03 | Phase 37 | Complete |
 | PWA-04 | Phase 37 | Complete |
-| PWA-05 | Phase 40 | Pending |
-| PWA-06 | Phase 40 | Pending |
+| PWA-05 | Phase 40 | Complete |
+| PWA-06 | Phase 40 | Complete |
 | MOB-01 | Phase 39 | Complete |
 | MOB-02 | Phase 38 | Complete |
 | MOB-03 | Phase 39 | Complete |
