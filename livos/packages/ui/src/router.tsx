@@ -7,6 +7,8 @@ import {AiQuickProvider, AiQuickDialog} from '@/components/ai-quick'
 import {ErrorBoundaryComponentFallback} from '@/components/ui/error-boundary-component-fallback'
 import {filesRoutes} from '@/features/files/routes'
 import {DesktopContextMenu} from '@/modules/desktop/desktop-context-menu'
+import {MobileAppProvider} from '@/modules/mobile/mobile-app-context'
+import {MobileAppRenderer} from '@/modules/mobile/mobile-app-renderer'
 import {WindowsContainer} from '@/modules/window'
 
 import {ErrorBoundaryPageFallback} from './components/ui/error-boundary-page-fallback'
@@ -56,23 +58,26 @@ export const router = createBrowserRouter([
 				<AvailableAppsProvider>
 					<AppsProvider>
 						<WindowManagerProvider>
-							<CmdkProvider>
-							<AiQuickProvider>
-								<DesktopContextMenu>
-									<Desktop />
-								</DesktopContextMenu>
-								<SpotlightConnected />
-								<AiQuickDialog />
-							</AiQuickProvider>
-							</CmdkProvider>
-							<Suspense>
-								<Outlet />
-							</Suspense>
-							<WindowsContainer />
-							<FloatingIslandContainer />
-							<DockBottomPositioner>
-								<Dock />
-							</DockBottomPositioner>
+							<MobileAppProvider>
+								<CmdkProvider>
+								<AiQuickProvider>
+									<DesktopContextMenu>
+										<Desktop />
+									</DesktopContextMenu>
+									<SpotlightConnected />
+									<AiQuickDialog />
+								</AiQuickProvider>
+								</CmdkProvider>
+								<Suspense>
+									<Outlet />
+								</Suspense>
+								<WindowsContainer />
+								<MobileAppRenderer />
+								<FloatingIslandContainer />
+								<DockBottomPositioner>
+									<Dock />
+								</DockBottomPositioner>
+							</MobileAppProvider>
 						</WindowManagerProvider>
 					</AppsProvider>
 				</AvailableAppsProvider>
