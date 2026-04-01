@@ -3,6 +3,8 @@ import {useEffect, useRef, useState, useCallback} from 'react'
 import {IconPlayerStop, IconSend, IconPaperclip, IconX, IconFile, IconPhoto} from '@tabler/icons-react'
 
 import {cn} from '@/shadcn-lib/utils'
+import {useKeyboardHeight} from '@/hooks/use-keyboard-height'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 
 import {SlashCommandMenu, type SlashCommand} from './slash-command-menu'
 
@@ -35,6 +37,19 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 	const filteredCommandsRef = useRef<SlashCommand[]>([])
 	const [attachments, setAttachments] = useState<FileAttachment[]>([])
 	const [isDragging, setIsDragging] = useState(false)
+	const keyboardHeight = useKeyboardHeight()
+	const isMobile = useIsMobile()
+
+	// Scroll input into view when iOS keyboard opens
+	useEffect(() => {
+		if (isMobile && keyboardHeight > 0 && textareaRef.current) {
+			// Small delay to let the viewport settle
+			const timer = setTimeout(() => {
+				textareaRef.current?.scrollIntoView({behavior: 'smooth', block: 'end'})
+			}, 100)
+			return () => clearTimeout(timer)
+		}
+	}, [keyboardHeight, isMobile])
 
 	const processFiles = useCallback((files: FileList | File[]) => {
 		for (const file of Array.from(files)) {
@@ -171,7 +186,10 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 	const formatSize = (bytes: number) => bytes < 1024 ? `${bytes}B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)}KB` : `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 
 	return (
-		<div className='border-t border-border-default bg-surface-base p-3 md:p-4'>
+		<div
+			className='border-t border-border-default bg-surface-base p-3 md:p-4'
+			style={isMobile && keyboardHeight > 0 ? {paddingBottom: `${keyboardHeight + 12}px`} : undefined}
+		>
 			<div
 				className={cn('relative mx-auto max-w-3xl', isDragging && 'rounded-lg ring-2 ring-brand/50 ring-offset-2 ring-offset-surface-base')}
 				onDrop={handleDrop}
