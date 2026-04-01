@@ -13,6 +13,7 @@ import {
 	IconScreenshot,
 	IconDeviceDesktop,
 	IconRobot,
+	IconArrowLeft,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -434,7 +435,7 @@ export default function AiChat() {
 
 			{isMobile && (
 				<Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
-					<DrawerContent fullHeight withScroll>
+					<DrawerContent fullHeight withScroll className='!bg-surface-base !p-0'>
 						<ConversationSidebar {...sidebarProps} className='w-full border-r-0 bg-transparent' />
 					</DrawerContent>
 				</Drawer>
@@ -682,21 +683,60 @@ export default function AiChat() {
 			)}
 
 			{activeView === 'mcp' && (
-				<div className='flex-1 overflow-hidden'>
+				<div className='flex flex-1 flex-col overflow-hidden'>
+					{isMobile && (
+						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex items-center justify-between'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconArrowLeft size={20} />
+								</button>
+								<span className='text-body font-semibold text-text-primary'>MCP Servers</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconMenu2 size={20} />
+								</button>
+							</div>
+						</div>
+					)}
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<McpPanel />
 					</Suspense>
 				</div>
 			)}
 			{activeView === 'skills' && (
-				<div className='flex-1 overflow-hidden'>
+				<div className='flex flex-1 flex-col overflow-hidden'>
+					{isMobile && (
+						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex items-center justify-between'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconArrowLeft size={20} />
+								</button>
+								<span className='text-body font-semibold text-text-primary'>Skills</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconMenu2 size={20} />
+								</button>
+							</div>
+						</div>
+					)}
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<SkillsPanel />
 					</Suspense>
 				</div>
 			)}
 			{activeView === 'agents' && (
-				<div className='flex-1 overflow-hidden'>
+				<div className='flex flex-1 flex-col overflow-hidden'>
+					{isMobile && (
+						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex items-center justify-between'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconArrowLeft size={20} />
+								</button>
+								<span className='text-body font-semibold text-text-primary'>Agents</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconMenu2 size={20} />
+								</button>
+							</div>
+						</div>
+					)}
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<AgentsPanel />
 					</Suspense>
