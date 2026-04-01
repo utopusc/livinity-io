@@ -90,7 +90,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls (completed 2026-04-01)
 - [x] **Phase 3: Server Control Mobile** - Stackable dashboard cards, mobile-friendly tables and actions (completed 2026-04-01)
 - [x] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar (completed 2026-04-01)
-- [ ] **Phase 5: Terminal Mobile** - Viewport-fitted xterm.js, readable font, landscape support
+- [x] **Phase 5: Terminal Mobile** - Viewport-fitted xterm.js, readable font, landscape support (completed 2026-04-01)
 
 ## Phase Details
 
@@ -162,7 +162,7 @@ Plans:
   1. The xterm.js terminal fills the mobile viewport width without horizontal scrollbar -- terminal cols match the available screen width
   2. Terminal font is at least 12px, rendering readable text on mobile screens without pinch-to-zoom
   3. Rotating to landscape mode triggers proper terminal resize (cols/rows recalculate) and the terminal remains fully functional
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [x] 05-01-PLAN.md -- Mobile-fitted xterm.js, 12px font, landscape resize, touch-friendly tab header (TERM-01, TERM-02, TERM-03)
@@ -178,7 +178,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 3. Server Control Mobile | v24.0 | 1/2 | Complete    | 2026-04-01 |
 | 4. Files Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 5. Terminal Mobile | v24.0 | 0/1 | Not started | - |
+| 5. Terminal Mobile | v24.0 | 0/1 | Complete    | 2026-04-01 |
 
 ---
 
