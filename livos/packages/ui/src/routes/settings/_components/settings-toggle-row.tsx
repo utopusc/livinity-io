@@ -12,12 +12,14 @@ interface SettingsToggleRowProps {
 
 export function SettingsToggleRow({title, description, checked, onCheckedChange, disabled, className}: SettingsToggleRowProps) {
 	return (
-		<div className={cn('flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4', className)}>
+		<div className={cn('flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4 min-h-[52px]', className)}>
 			<div className='mr-3 flex-1'>
 				<div className='text-body font-medium'>{title}</div>
 				{description && <div className='mt-1 text-caption text-text-secondary'>{description}</div>}
 			</div>
-			<Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+			<div className='flex items-center justify-center min-h-[44px] min-w-[44px]'>
+				<Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+			</div>
 		</div>
 	)
 }

@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<
 				dialogContentClass,
 				dialogContentAnimationClass,
 				slide && dialogContentAnimationSlideClass,
-				'w-full max-w-[calc(100%-40px)] sm:max-w-[480px]',
+				'w-full max-w-[calc(100%-24px)] sm:max-w-[480px]',
 				className,
 			)}
 			{...props}
