@@ -116,17 +116,18 @@ function FilesWindowRouter() {
 							{showBackButton && (
 								<button
 									onClick={goBack}
-									className='flex h-8 w-8 items-center justify-center rounded-full hover:bg-surface-1 transition-colors'
+									className='flex h-11 w-11 items-center justify-center rounded-full hover:bg-surface-1 transition-colors -ml-2'
 								>
 									<TbArrowLeft className='h-5 w-5' />
 								</button>
 							)}
 							{isMobile && (
-								<HiMenuAlt2
-									role='button'
-									className='h-5 w-5 cursor-pointer text-text-primary'
+								<button
 									onClick={() => setIsMobileSidebarOpen(true)}
-								/>
+									className='flex h-11 w-11 items-center justify-center -ml-2'
+								>
+									<HiMenuAlt2 className='h-5 w-5 text-text-primary' />
+								</button>
 							)}
 							<h1 className='text-15 font-semibold'>{t('files')}</h1>
 						</div>
