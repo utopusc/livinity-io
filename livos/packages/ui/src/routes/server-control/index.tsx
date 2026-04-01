@@ -1,4 +1,5 @@
 import {useState, useEffect, useRef, useCallback, Fragment} from 'react'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {motion, AnimatePresence} from 'framer-motion'
 import {
 	IconServer,
@@ -195,7 +196,7 @@ function ActionButton({
 			disabled={disabled}
 			title={title}
 			className={cn(
-				'rounded-lg p-1.5 text-text-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
+				'rounded-lg p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
 				colorClasses[color],
 			)}
 		>
@@ -1725,14 +1726,14 @@ function ImagesTab() {
 	return (
 		<>
 			{/* Summary Row */}
-			<div className='mb-4 flex items-center justify-between'>
+			<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 				<div className='text-sm text-text-secondary'>
 					<span className='font-medium text-text-primary'>{totalCount}</span>
 					<span className='ml-1'>images,</span>
 					<span className='ml-1 font-medium text-text-primary'>{formatBytes(totalSize)}</span>
 					<span className='ml-1'>total</span>
 				</div>
-				<div className='flex items-center gap-2'>
+				<div className='flex flex-wrap items-center gap-2'>
 					<Button
 						variant='default'
 						size='sm'
@@ -1798,6 +1799,7 @@ function ImagesTab() {
 					<p className='text-sm text-text-tertiary'>No Docker images found</p>
 				</div>
 			) : (
+				<div className='overflow-x-auto'>
 				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
 					<Table>
 						<TableHeader>
@@ -1864,6 +1866,7 @@ function ImagesTab() {
 							})}
 						</TableBody>
 					</Table>
+				</div>
 				</div>
 			)}
 
@@ -1947,12 +1950,12 @@ function VolumesTab() {
 	return (
 		<>
 			{/* Summary Row */}
-			<div className='mb-4 flex items-center justify-between'>
+			<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 				<div className='text-sm text-text-secondary'>
 					<span className='font-medium text-text-primary'>{totalCount}</span>
 					<span className='ml-1'>volumes</span>
 				</div>
-				<div className='flex items-center gap-2'>
+				<div className='flex flex-wrap items-center gap-2'>
 					<Button variant='default' size='sm' onClick={() => setShowCreateDialog(true)} disabled={isCreatingVolume}>
 						<IconPlus size={14} className='mr-1.5' />
 						{isCreatingVolume ? 'Creating...' : 'Create Volume'}
@@ -2005,6 +2008,7 @@ function VolumesTab() {
 					<p className='text-sm text-text-tertiary'>No Docker volumes found</p>
 				</div>
 			) : (
+				<div className='overflow-x-auto'>
 				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
 					<Table>
 						<TableHeader>
@@ -2066,6 +2070,7 @@ function VolumesTab() {
 						</TableBody>
 					</Table>
 				</div>
+				</div>
 			)}
 
 			{/* Remove Volume Dialog */}
@@ -2124,12 +2129,12 @@ function NetworksTab() {
 	return (
 		<>
 			{/* Summary Row */}
-			<div className='mb-4 flex items-center justify-between'>
+			<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 				<div className='text-sm text-text-secondary'>
 					<span className='font-medium text-text-primary'>{totalCount}</span>
 					<span className='ml-1'>networks</span>
 				</div>
-				<div className='flex items-center gap-2'>
+				<div className='flex flex-wrap items-center gap-2'>
 					<Button variant='default' size='sm' onClick={() => setShowCreateDialog(true)} disabled={isCreatingNetwork}>
 						<IconPlus size={14} className='mr-1.5' />
 						{isCreatingNetwork ? 'Creating...' : 'Create Network'}
@@ -2182,6 +2187,7 @@ function NetworksTab() {
 					<p className='text-sm text-text-tertiary'>No Docker networks found</p>
 				</div>
 			) : (
+				<div className='overflow-x-auto'>
 				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
 					<Table>
 						<TableHeader>
@@ -2232,6 +2238,7 @@ function NetworksTab() {
 							))}
 						</TableBody>
 					</Table>
+				</div>
 				</div>
 			)}
 
@@ -2646,12 +2653,12 @@ function StacksTab() {
 	return (
 		<>
 			{/* Summary Row */}
-			<div className='mb-4 flex items-center justify-between'>
+			<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 				<div className='text-sm text-text-secondary'>
 					<span className='font-medium text-text-primary'>{stacks.length}</span>
 					<span className='ml-1'>stack(s)</span>
 				</div>
-				<div className='flex items-center gap-2'>
+				<div className='flex flex-wrap items-center gap-2'>
 					<Button variant='default' size='sm' onClick={() => setDeployFormOpen(true)}>
 						<IconPlus size={14} className='mr-1.5' />
 						Deploy Stack
@@ -2704,6 +2711,7 @@ function StacksTab() {
 					<p className='text-sm text-text-tertiary'>No stacks found. Deploy your first stack.</p>
 				</div>
 			) : (
+				<div className='overflow-x-auto'>
 				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
 					<Table>
 						<TableHeader>
@@ -2855,6 +2863,7 @@ function StacksTab() {
 						</TableBody>
 					</Table>
 				</div>
+				</div>
 			)}
 
 			{/* Deploy/Edit Stack Form */}
@@ -2936,9 +2945,9 @@ function PM2DetailPanel({name}: {name: string}) {
 	const detail = describeQuery.data
 
 	return (
-		<div className='flex gap-4 p-4'>
+		<div className='flex flex-col gap-4 p-3 sm:flex-row sm:p-4'>
 			{/* Info Section */}
-			<div className='w-[280px] shrink-0 space-y-2'>
+			<div className='w-full sm:w-[280px] sm:shrink-0 space-y-2'>
 				<h4 className='text-xs font-semibold uppercase tracking-wider text-text-secondary mb-3'>Process Info</h4>
 				{describeQuery.isLoading ? (
 					<div className='space-y-2'>
@@ -3025,7 +3034,7 @@ function PM2Tab() {
 	return (
 		<>
 			{/* Summary Row */}
-			<div className='mb-4 flex items-center justify-between'>
+			<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 				<div className='text-sm text-text-secondary'>
 					<span className='font-medium text-emerald-500'>{onlineCount}</span>
 					<span className='mx-1'>/</span>
@@ -3079,6 +3088,7 @@ function PM2Tab() {
 					<p className='text-sm text-text-tertiary'>No PM2 processes found</p>
 				</div>
 			) : (
+				<div className='overflow-x-auto'>
 				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
 					<Table>
 						<TableHeader>
@@ -3177,12 +3187,14 @@ function PM2Tab() {
 						</TableBody>
 					</Table>
 				</div>
+				</div>
 			)}
 		</>
 	)
 }
 
 export default function ServerControl() {
+	const isMobile = useIsMobile()
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
 	const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
 	const [showCreateForm, setShowCreateForm] = useState(false)
@@ -3357,14 +3369,14 @@ export default function ServerControl() {
 				{/* Containers Tab */}
 				<TabsContent value='containers' className='flex-1 overflow-auto'>
 					{/* Summary Row */}
-					<div className='mb-4 flex items-center justify-between'>
+					<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 						<div className='text-sm text-text-secondary'>
 							<span className='font-medium text-emerald-500'>{runningCount}</span>
 							<span className='mx-1'>/</span>
 							<span>{totalCount}</span>
 							<span className='ml-1'>running</span>
 						</div>
-						<div className='flex items-center gap-2'>
+						<div className='flex flex-wrap items-center gap-2'>
 							<button
 								onClick={() => setShowCreateForm(true)}
 								className='flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/90'
@@ -3420,7 +3432,68 @@ export default function ServerControl() {
 							<p className='text-sm text-text-tertiary'>No Docker containers found</p>
 							<p className='mt-1 text-xs text-text-tertiary'>Install an app from the App Store to get started</p>
 						</div>
+					) : isMobile ? (
+						/* Mobile card layout */
+						<div className='space-y-2'>
+							{containers.map((container) => {
+								const isRunning = container.state === 'running'
+								const isPaused = container.state === 'paused'
+								return (
+									<div
+										key={container.id}
+										onClick={() => setSelectedContainer(container.name)}
+										className={cn(
+											'rounded-xl border border-border-default bg-surface-base p-3 transition-colors active:bg-surface-1',
+											selectedContainers.has(container.name) && 'border-brand/30 bg-brand/5'
+										)}
+									>
+										{/* Row 1: Checkbox + Name + State badge */}
+										<div className='flex items-center gap-2'>
+											<span onClick={(e) => e.stopPropagation()}>
+												<Checkbox
+													checked={selectedContainers.has(container.name)}
+													onCheckedChange={() => toggleSelect(container.name)}
+												/>
+											</span>
+											{container.isProtected && <IconLock size={14} className='shrink-0 text-amber-500' />}
+											<span className='min-w-0 flex-1 truncate text-sm font-medium text-text-primary'>{container.name}</span>
+											<StateBadge state={container.state} />
+										</div>
+										{/* Row 2: Image */}
+										<div className='mt-1.5 pl-7 text-xs text-text-secondary truncate'>{container.image.split('@')[0]}</div>
+										{/* Row 3: Ports (if any) */}
+										{container.ports.length > 0 && (
+											<div className='mt-1 pl-7 text-xs text-text-tertiary font-mono truncate'>{formatPorts(container.ports)}</div>
+										)}
+										{/* Row 4: Actions */}
+										<div className='mt-2 flex flex-wrap items-center gap-1 pl-7' onClick={(e) => e.stopPropagation()}>
+											<ActionButton icon={IconPencil} onClick={() => { setSelectedContainer(null); setEditTarget(container.name) }} disabled={isManaging || container.isProtected} color='blue' title='Edit' />
+											<ActionButton icon={IconCopy} onClick={() => { setSelectedContainer(null); setDuplicateTarget(container.name) }} disabled={isManaging} color='blue' title='Duplicate' />
+											<ActionButton icon={IconTag} onClick={() => { setSelectedContainer(null); setRenameTarget(container.name) }} disabled={isManaging || container.isProtected} color='blue' title='Rename' />
+											{!isRunning && !isPaused && (
+												<ActionButton icon={IconPlayerPlay} onClick={() => manage(container.name, 'start')} disabled={isManaging} color='emerald' title='Start' />
+											)}
+											{isRunning && (
+												<ActionButton icon={IconPlayerStop} onClick={() => manage(container.name, 'stop')} disabled={isManaging || container.isProtected} color='amber' title='Stop' />
+											)}
+											{isRunning && (
+												<ActionButton icon={IconPlayerPause} onClick={() => manage(container.name, 'pause')} disabled={isManaging || container.isProtected} color='amber' title='Pause' />
+											)}
+											{isPaused && (
+												<ActionButton icon={IconPlayerPlay} onClick={() => manage(container.name, 'unpause')} disabled={isManaging} color='emerald' title='Resume' />
+											)}
+											{(isRunning || isPaused) && (
+												<ActionButton icon={IconHandStop} onClick={() => manage(container.name, 'kill')} disabled={isManaging} color='red' title='Kill' />
+											)}
+											<ActionButton icon={IconRotateClockwise} onClick={() => manage(container.name, 'restart')} disabled={isManaging} color='blue' title='Restart' />
+											<ActionButton icon={IconTrash} onClick={() => setRemoveTarget(container.name)} disabled={isManaging || container.isProtected} color='red' title='Remove' />
+										</div>
+									</div>
+								)
+							})}
+						</div>
 					) : (
+						/* Desktop table layout */
 						<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
 							<Table>
 								<TableHeader>
