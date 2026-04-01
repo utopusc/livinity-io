@@ -3296,13 +3296,13 @@ export default function ServerControl() {
 	return (
 		<div className='flex h-full flex-col'>
 			{/* Header */}
-			<div className='shrink-0 px-6 pt-5 pb-4'>
-				<h1 className='text-2xl font-bold text-text-primary'>Server Management</h1>
+			<div className='shrink-0 px-4 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-4'>
+				<h1 className='text-xl sm:text-2xl font-bold text-text-primary'>Server Management</h1>
 				<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
 			</div>
 
 			{/* Resource Cards */}
-			<div className='shrink-0 grid grid-cols-1 gap-4 px-6 pb-4 sm:grid-cols-3'>
+			<div className='shrink-0 grid grid-cols-1 gap-3 px-4 pb-3 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:pb-4'>
 				<ResourceCard
 					title='CPU'
 					icon={IconCpu}
@@ -3331,19 +3331,21 @@ export default function ServerControl() {
 			</div>
 
 			{/* Tabbed Interface */}
-			<Tabs defaultValue='overview' className='flex min-h-0 flex-1 flex-col px-6 pb-4'>
-				<TabsList className='shrink-0 w-full justify-start gap-1 bg-transparent p-0'>
-					<TabsTrigger value='overview'>Overview</TabsTrigger>
-					<TabsTrigger value='containers'>Containers</TabsTrigger>
-					<TabsTrigger value='images'>Images</TabsTrigger>
-					<TabsTrigger value='volumes'>Volumes</TabsTrigger>
-					<TabsTrigger value='networks'>Networks</TabsTrigger>
-					<TabsTrigger value='stacks'>Stacks</TabsTrigger>
-					<TabsTrigger value='events'>Events</TabsTrigger>
-					<TabsTrigger value='pm2'>PM2</TabsTrigger>
-					<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
-					<TabsTrigger value='domains'>Domains</TabsTrigger>
-				</TabsList>
+			<Tabs defaultValue='overview' className='flex min-h-0 flex-1 flex-col px-4 pb-3 sm:px-6 sm:pb-4'>
+				<div className='shrink-0 overflow-x-auto -mx-4 px-4 sm:-mx-0 sm:px-0' style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+					<TabsList className='shrink-0 w-max justify-start gap-1 bg-transparent p-0 sm:w-full'>
+						<TabsTrigger value='overview'>Overview</TabsTrigger>
+						<TabsTrigger value='containers'>Containers</TabsTrigger>
+						<TabsTrigger value='images'>Images</TabsTrigger>
+						<TabsTrigger value='volumes'>Volumes</TabsTrigger>
+						<TabsTrigger value='networks'>Networks</TabsTrigger>
+						<TabsTrigger value='stacks'>Stacks</TabsTrigger>
+						<TabsTrigger value='events'>Events</TabsTrigger>
+						<TabsTrigger value='pm2'>PM2</TabsTrigger>
+						<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
+						<TabsTrigger value='domains'>Domains</TabsTrigger>
+					</TabsList>
+				</div>
 
 				{/* Overview Tab */}
 				<TabsContent value='overview' className='flex-1 overflow-auto'>
@@ -3601,9 +3603,9 @@ export default function ServerControl() {
 								animate={{opacity: 1, y: 0}}
 								exit={{opacity: 0, y: 20}}
 								transition={{duration: 0.2}}
-								className='fixed bottom-6 left-1/2 z-50 -translate-x-1/2'
+								className='fixed bottom-4 left-3 right-3 z-50 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:bottom-6'
 							>
-								<div className='flex items-center gap-3 rounded-xl border border-border-default bg-surface-base px-4 py-2.5 shadow-lg'>
+								<div className='flex flex-wrap items-center gap-2 rounded-xl border border-border-default bg-surface-base px-3 py-2 shadow-lg sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-2.5'>
 									<span className='text-sm font-medium text-text-primary'>
 										{selectedContainers.size} selected
 									</span>
@@ -3612,7 +3614,7 @@ export default function ServerControl() {
 										<button
 											onClick={() => handleBulkAction('start')}
 											disabled={isBulkManaging}
-											className='flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/30 disabled:opacity-50'
+											className='flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/30 disabled:opacity-50'
 										>
 											<IconPlayerPlay size={14} />
 											Start
@@ -3620,7 +3622,7 @@ export default function ServerControl() {
 										<button
 											onClick={() => handleBulkAction('stop')}
 											disabled={isBulkManaging}
-											className='flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-500/30 disabled:opacity-50'
+											className='flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-amber-600 transition-colors hover:bg-amber-500/30 disabled:opacity-50'
 										>
 											<IconPlayerStop size={14} />
 											Stop
@@ -3628,7 +3630,7 @@ export default function ServerControl() {
 										<button
 											onClick={() => handleBulkAction('restart')}
 											disabled={isBulkManaging}
-											className='flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-500/30 disabled:opacity-50'
+											className='flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-blue-600 transition-colors hover:bg-blue-500/30 disabled:opacity-50'
 										>
 											<IconRotateClockwise size={14} />
 											Restart
@@ -3636,7 +3638,7 @@ export default function ServerControl() {
 										<button
 											onClick={() => handleBulkAction('kill')}
 											disabled={isBulkManaging}
-											className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
+											className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
 										>
 											<IconHandStop size={14} />
 											Kill
@@ -3644,7 +3646,7 @@ export default function ServerControl() {
 										<button
 											onClick={() => handleBulkAction('remove')}
 											disabled={isBulkManaging}
-											className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
+											className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
 										>
 											<IconTrash size={14} />
 											Remove
