@@ -35,9 +35,9 @@
 
 ### Terminal
 
-- [ ] **TERM-01**: Terminal (xterm.js) fits mobile viewport width without horizontal scroll
-- [ ] **TERM-02**: Terminal font size is readable on mobile (min 12px)
-- [ ] **TERM-03**: Terminal works in landscape mode with proper resizing
+- [x] **TERM-01**: Terminal (xterm.js) fits mobile viewport width without horizontal scroll
+- [x] **TERM-02**: Terminal font size is readable on mobile (min 12px)
+- [x] **TERM-03**: Terminal works in landscape mode with proper resizing
 
 ## v2 Requirements
 
@@ -74,9 +74,9 @@
 | FILE-02 | Phase 4 | Complete |
 | FILE-03 | Phase 4 | Complete |
 | FILE-04 | Phase 4 | Complete |
-| TERM-01 | Phase 5 | Pending |
-| TERM-02 | Phase 5 | Pending |
-| TERM-03 | Phase 5 | Pending |
+| TERM-01 | Phase 5 | Complete |
+| TERM-02 | Phase 5 | Complete |
+| TERM-03 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 19 total

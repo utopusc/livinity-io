@@ -165,7 +165,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 05-01-PLAN.md -- Mobile-fitted xterm.js, 12px font, landscape resize, touch-friendly tab header (TERM-01, TERM-02, TERM-03)
+- [x] 05-01-PLAN.md -- Mobile-fitted xterm.js, 12px font, landscape resize, touch-friendly tab header (TERM-01, TERM-02, TERM-03)
 
 ## Progress
 
