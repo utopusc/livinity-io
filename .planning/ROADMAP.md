@@ -122,7 +122,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md -- Mobile single-column drill-down layout + overflow protection (SET-01, SET-02)
-- [ ] 02-02-PLAN.md -- Touch-friendly controls + full-width mobile dialogs (SET-03, SET-04)
+- [x] 02-02-PLAN.md -- Touch-friendly controls + full-width mobile dialogs (SET-03, SET-04)
 
 ### Phase 3: Server Control Mobile
 **Goal**: Users can monitor and manage Docker containers on mobile with full visibility

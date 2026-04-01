@@ -16,8 +16,8 @@
 
 - [x] **SET-01**: Settings navigation uses single-column layout on mobile (no side nav + content split)
 - [x] **SET-02**: All settings sections (Users, Domains, AI, About) scroll properly without overflow
-- [ ] **SET-03**: Form controls (inputs, selects, toggles) have proper touch target size (min 44px)
-- [ ] **SET-04**: Modal dialogs are full-width on mobile, not clipped or overflowing
+- [x] **SET-03**: Form controls (inputs, selects, toggles) have proper touch target size (min 44px)
+- [x] **SET-04**: Modal dialogs are full-width on mobile, not clipped or overflowing
 
 ### Server Control
 
@@ -64,8 +64,8 @@
 | CHAT-04 | Phase 1 | Complete |
 | SET-01 | Phase 2 | Complete |
 | SET-02 | Phase 2 | Complete |
-| SET-03 | Phase 2 | Pending |
-| SET-04 | Phase 2 | Pending |
+| SET-03 | Phase 2 | Complete |
+| SET-04 | Phase 2 | Complete |
 | SRV-01 | Phase 3 | Pending |
 | SRV-02 | Phase 3 | Pending |
 | SRV-03 | Phase 3 | Pending |
