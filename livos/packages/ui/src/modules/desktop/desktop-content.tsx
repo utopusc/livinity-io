@@ -252,6 +252,35 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 			),
 		}))
 
+		// System apps shown in grid on mobile (dock is hidden)
+		if (isMobile) {
+			const mobileSystemApps = [
+				{id: 'LIVINITY_ai-chat', label: 'AI Chat', icon: systemAppsKeyed['LIVINITY_ai-chat'].icon, route: '/ai-chat'},
+				{id: 'LIVINITY_files', label: 'Files', icon: systemAppsKeyed['LIVINITY_files'].icon, route: '/files/Home'},
+				{id: 'LIVINITY_settings', label: 'Settings', icon: systemAppsKeyed['LIVINITY_settings'].icon, route: '/settings'},
+				{id: 'LIVINITY_server-control', label: 'Server', icon: systemAppsKeyed['LIVINITY_server-control'].icon, route: '/server-control'},
+				{id: 'LIVINITY_terminal', label: 'Terminal', icon: systemAppsKeyed['LIVINITY_terminal'].icon, route: '/terminal'},
+			]
+			for (const sysApp of mobileSystemApps) {
+				appItems.unshift({
+					id: sysApp.id,
+					node: (
+						<motion.div
+							initial={{opacity: 0, scale: 0}}
+							animate={{opacity: 1, scale: 1}}
+							transition={{type: 'spring', stiffness: 400, damping: 25}}
+						>
+							<AppIcon
+								label={sysApp.label}
+								src={sysApp.icon}
+								onClick={() => openApp(sysApp.id, sysApp.route, sysApp.label, sysApp.icon)}
+							/>
+						</motion.div>
+					),
+				})
+			}
+		}
+
 		// Hardcoded system apps on desktop
 		const remoteDesktopItem: AppGridItem = {
 			id: 'LIVINITY_remote-desktop',
@@ -358,7 +387,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, folders, widgets, openStreamApp])
+	}, [userApps, folders, widgets, openStreamApp, isMobile, openApp])
 
 	return (
 		<motion.div className='flex h-full w-full select-none flex-col' variants={variants} animate={variant} initial={{opacity: 1}} transition={{duration: 0.15, ease: 'easeOut'}}>
