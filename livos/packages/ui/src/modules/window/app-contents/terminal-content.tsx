@@ -5,6 +5,7 @@ import {TbServer, TbApps, TbTerminal2} from 'react-icons/tb'
 import {AnimatedGroup} from '@/components/motion-primitives/animated-group'
 import {ErrorBoundaryCardFallback} from '@/components/ui/error-boundary-card-fallback'
 import {Loading} from '@/components/ui/loading'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useApps} from '@/providers/apps'
 import {cn} from '@/shadcn-lib/utils'
 
@@ -21,18 +22,25 @@ export default function TerminalWindowContent() {
 	const [mode, setMode] = useState<TerminalMode>('livos')
 	const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
 	const {userApps, isLoading} = useApps()
+	const isMobile = useIsMobile()
 
 	return (
 		<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
 			<div className='flex h-full flex-col bg-neutral-900'>
 				{/* Tab Header */}
-				<div className='flex items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-4 py-2.5'>
+				<div
+					className={cn(
+						'flex items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-4 py-2.5',
+						isMobile && 'flex-wrap px-3 py-2',
+					)}
+				>
 					{/* Mode Tabs */}
 					<div className='flex gap-0.5 rounded-lg bg-neutral-800/80 p-0.5'>
 						<button
 							onClick={() => setMode('livos')}
 							className={cn(
-								'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
+								'flex items-center gap-1.5 rounded-md font-medium transition-colors',
+								isMobile ? 'px-4 py-2.5 text-[13px]' : 'px-3 py-1.5 text-[12px]',
 								mode === 'livos'
 									? 'bg-neutral-700 text-neutral-100 shadow-sm'
 									: 'text-neutral-400 hover:text-neutral-200',
@@ -44,7 +52,8 @@ export default function TerminalWindowContent() {
 						<button
 							onClick={() => setMode('app')}
 							className={cn(
-								'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
+								'flex items-center gap-1.5 rounded-md font-medium transition-colors',
+								isMobile ? 'px-4 py-2.5 text-[13px]' : 'px-3 py-1.5 text-[12px]',
 								mode === 'app'
 									? 'bg-neutral-700 text-neutral-100 shadow-sm'
 									: 'text-neutral-400 hover:text-neutral-200',
@@ -57,12 +66,20 @@ export default function TerminalWindowContent() {
 
 					{/* App Selector (only show when app mode is selected) */}
 					{mode === 'app' && (
-						<div className='ml-auto flex items-center gap-2'>
+						<div
+							className={cn(
+								'flex items-center gap-2',
+								isMobile ? 'w-full mt-2' : 'ml-auto',
+							)}
+						>
 							<span className='text-[12px] font-medium text-neutral-500'>Run in:</span>
 							<select
 								value={selectedAppId || ''}
 								onChange={(e) => setSelectedAppId(e.target.value || null)}
-								className='rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-[12px] font-medium text-neutral-200 outline-none transition-colors focus:border-neutral-600'
+								className={cn(
+									'rounded-lg border border-neutral-700 bg-neutral-800 font-medium text-neutral-200 outline-none transition-colors focus:border-neutral-600',
+									isMobile ? 'flex-1 px-4 py-2.5 text-[14px]' : 'px-3 py-1.5 text-[12px]',
+								)}
 								disabled={isLoading}
 							>
 								<option value=''>Select an app...</option>
