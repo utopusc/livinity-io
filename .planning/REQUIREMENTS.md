@@ -21,10 +21,10 @@
 
 ### Server Control
 
-- [ ] **SRV-01**: Dashboard cards stack vertically on mobile (not side-by-side overflow)
+- [x] **SRV-01**: Dashboard cards stack vertically on mobile (not side-by-side overflow)
 - [ ] **SRV-02**: Docker container list is scrollable with compact rows on mobile
 - [ ] **SRV-03**: Container actions (start/stop/restart) are accessible via touch-friendly buttons
-- [ ] **SRV-04**: Server stats/charts resize properly to mobile width
+- [x] **SRV-04**: Server stats/charts resize properly to mobile width
 
 ### Files
 
@@ -66,10 +66,10 @@
 | SET-02 | Phase 2 | Complete |
 | SET-03 | Phase 2 | Complete |
 | SET-04 | Phase 2 | Complete |
-| SRV-01 | Phase 3 | Pending |
+| SRV-01 | Phase 3 | Complete |
 | SRV-02 | Phase 3 | Pending |
 | SRV-03 | Phase 3 | Pending |
-| SRV-04 | Phase 3 | Pending |
+| SRV-04 | Phase 3 | Complete |
 | FILE-01 | Phase 4 | Pending |
 | FILE-02 | Phase 4 | Pending |
 | FILE-03 | Phase 4 | Pending |
