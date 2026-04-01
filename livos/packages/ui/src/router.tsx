@@ -2,6 +2,7 @@ import React, {Suspense} from 'react'
 import {createBrowserRouter, Outlet} from 'react-router-dom'
 
 import {AppleSpotlight} from '@/components/apple-spotlight'
+import {InstallPromptBanner} from '@/components/install-prompt-banner'
 import {CmdkProvider, useCmdkOpen} from '@/components/cmdk'
 import {AiQuickProvider, AiQuickDialog} from '@/components/ai-quick'
 import {ErrorBoundaryComponentFallback} from '@/components/ui/error-boundary-component-fallback'
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
 									<Dock />
 								</DockBottomPositioner>
 								<MobileTabBar />
+								<InstallPromptBanner />
 							</MobileAppProvider>
 						</WindowManagerProvider>
 					</AppsProvider>
