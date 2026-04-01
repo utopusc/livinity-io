@@ -1,31 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v22.0
-milestone_name: Livinity AGI Platform — Capability Orchestration & Marketplace
-status: unknown
-stopped_at: Completed 36-03-PLAN.md (gap closure)
-last_updated: "2026-03-29T07:17:16.499Z"
+milestone: v23.0
+milestone_name: Mobile PWA
+status: planning
+stopped_at: Defining requirements
+last_updated: "2026-04-01T00:00:00.000Z"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 12
-  completed_plans: 12
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-28)
+See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v22.0 -- Livinity AGI Platform — Capability Orchestration & Marketplace
-**Current focus:** Phase 36 — Learning Loop
+**Current milestone:** v23.0 -- Mobile PWA
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-01 — Milestone v23.0 started
 
 ## Performance Metrics
 

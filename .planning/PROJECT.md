@@ -128,13 +128,28 @@ Key validated capabilities:
 
 Livinity now features a unified capability orchestration platform. All capability types (tools, skills, MCPs, hooks, agents) are discoverable through a single registry with semantic search. Intent-based routing dynamically selects capabilities per conversation with context budget management. The AI can autonomously create skills, hooks, and agent templates, with a learning loop that logs tool usage, mines patterns, and incorporates user feedback. Marketplace tools enable one-command capability installation from GitHub-backed registries.
 
+## Current Milestone: v23.0 Mobile PWA
+
+**Goal:** Make Livinity installable as a PWA on iOS/Android with a native phone-like experience — app grid home screen, full-screen apps, no dock on mobile.
+
+**Target features:**
+- PWA installability (manifest, service worker, Apple meta tags)
+- Mobile app grid with system apps (AI Chat, Settings, Files, Server, Terminal)
+- Full-screen app rendering on mobile (no floating windows)
+- Safe area handling for notch/home indicator
+- Desktop UI completely unchanged
+
 ### Active
 
-*No active requirements — planning next milestone*
+- [ ] PWA manifest + service worker for iOS/Android installability
+- [ ] Mobile: hide dock, show system apps in app grid
+- [ ] Mobile: full-screen app rendering via route navigation
+- [ ] Mobile: safe area CSS for notch/home indicator
+- [ ] Mobile: native-feeling navigation (back button, slide transitions)
 
 ### Out of Scope
 
-- Mobile app — web-first approach, mobile later
+- Native mobile app (Swift/Kotlin) — PWA approach instead
 - Payment/billing system — deferred (Stripe/Lemonsqueezy TBD)
 - Dark theme for livinity.io — light/premium theme only
 - Multi-region tunnel relay — single relay (Server5) for now
@@ -244,4 +259,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after v22.0 milestone complete (Livinity AGI Platform — Capability Orchestration & Marketplace)*
+*Last updated: 2026-04-01 after v23.0 milestone started (Mobile PWA)*
