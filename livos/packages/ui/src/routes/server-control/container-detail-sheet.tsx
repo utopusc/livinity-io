@@ -138,7 +138,7 @@ function InfoTab({containerName}: {containerName: string}) {
 			{/* General */}
 			<section>
 				<SectionTitle>General</SectionTitle>
-				<div className='grid grid-cols-2 gap-x-6 gap-y-3'>
+				<div className='grid grid-cols-1 gap-y-2 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3'>
 					<KeyValue label='State'>
 						<StateBadgeInline state={detail.state} />
 					</KeyValue>
@@ -158,6 +158,7 @@ function InfoTab({containerName}: {containerName: string}) {
 				{detail.ports.length === 0 ? (
 					<p className='text-xs text-text-tertiary'>No port mappings</p>
 				) : (
+					<div className='overflow-x-auto'>
 					<div className='overflow-hidden rounded-lg border border-border-default'>
 						<table className='w-full text-xs'>
 							<thead>
@@ -180,6 +181,7 @@ function InfoTab({containerName}: {containerName: string}) {
 							</tbody>
 						</table>
 					</div>
+					</div>
 				)}
 			</section>
 
@@ -189,6 +191,7 @@ function InfoTab({containerName}: {containerName: string}) {
 				{detail.mounts.length === 0 ? (
 					<p className='text-xs text-text-tertiary'>No mounts</p>
 				) : (
+					<div className='overflow-x-auto'>
 					<div className='overflow-hidden rounded-lg border border-border-default'>
 						<table className='w-full text-xs'>
 							<thead>
@@ -217,6 +220,7 @@ function InfoTab({containerName}: {containerName: string}) {
 								))}
 							</tbody>
 						</table>
+					</div>
 					</div>
 				)}
 			</section>
@@ -367,7 +371,7 @@ function LogsTab({containerName}: {containerName: string}) {
 	return (
 		<div className='flex h-full flex-col gap-3'>
 			{/* Row 1: Search + toggles */}
-			<div className='flex shrink-0 items-center gap-3'>
+			<div className='flex shrink-0 flex-wrap items-center gap-3'>
 				<div className='relative flex items-center'>
 					<IconSearch size={12} className='absolute left-2 text-text-tertiary' />
 					<input
@@ -421,7 +425,7 @@ function LogsTab({containerName}: {containerName: string}) {
 			</div>
 
 			{/* Row 2: Tail slider, refresh, download */}
-			<div className='flex shrink-0 items-center gap-4'>
+			<div className='flex shrink-0 flex-wrap items-center gap-4'>
 				<div className='flex items-center gap-2'>
 					<span className='text-xs font-medium text-text-secondary'>Tail:</span>
 					<input
@@ -824,7 +828,7 @@ export function ContainerDetailSheet({
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent
 				side='right'
-				className='!w-[600px] !max-w-[600px] !sm:max-w-[600px] overflow-hidden'
+				className='!w-full !max-w-full sm:!w-[600px] sm:!max-w-[600px] overflow-hidden'
 				closeButton={false}
 			>
 				<div className='relative z-10 flex h-full flex-col'>
@@ -837,7 +841,7 @@ export function ContainerDetailSheet({
 							{onEdit && containerName && (
 								<button
 									onClick={() => { onEdit(containerName); onOpenChange(false) }}
-									className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
 									title='Edit'
 								>
 									<IconPencil size={16} />
@@ -846,7 +850,7 @@ export function ContainerDetailSheet({
 							{onDuplicate && containerName && (
 								<button
 									onClick={() => { onDuplicate(containerName); onOpenChange(false) }}
-									className='rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
 									title='Duplicate'
 								>
 									<IconCopy size={16} />
@@ -854,7 +858,7 @@ export function ContainerDetailSheet({
 							)}
 							<button
 								onClick={() => onOpenChange(false)}
-								className='ml-3 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary'
+								className='ml-3 rounded-lg p-2 sm:p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary'
 							>
 								<IconX size={18} />
 							</button>

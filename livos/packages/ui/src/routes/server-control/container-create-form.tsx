@@ -360,7 +360,7 @@ export function ContainerCreateForm({
 	return (
 		<div className='absolute inset-0 z-50 flex flex-col bg-surface-base'>
 			{/* Header */}
-			<div className='flex shrink-0 items-center justify-between border-b border-border-default px-6 py-4'>
+			<div className='flex shrink-0 items-center justify-between border-b border-border-default px-4 py-3 sm:px-6 sm:py-4'>
 				<div>
 					<h2 className='text-lg font-semibold text-text-primary'>{headerText}</h2>
 					{mode === 'edit' && editContainerName && (
@@ -377,15 +377,16 @@ export function ContainerCreateForm({
 
 			{/* Warning banner in edit mode */}
 			{mode === 'edit' && (
-				<div className='mx-6 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600'>
+				<div className='mx-4 sm:mx-6 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600'>
 					<strong>Warning:</strong> This will stop and remove the existing container, then create a new one with the updated configuration.
 				</div>
 			)}
 
 			{/* Tabbed form */}
 			<Tabs defaultValue='general' className='flex min-h-0 flex-1 flex-col'>
-				<div className='shrink-0 border-b border-border-default px-6 pt-2'>
-					<TabsList className='bg-transparent'>
+				<div className='shrink-0 border-b border-border-default px-4 pt-2 sm:px-6'>
+					<div className='overflow-x-auto' style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+					<TabsList className='bg-transparent w-max sm:w-full'>
 						<TabsTrigger value='general'>General</TabsTrigger>
 						<TabsTrigger value='network'>Network</TabsTrigger>
 						<TabsTrigger value='volumes'>Volumes</TabsTrigger>
@@ -393,14 +394,15 @@ export function ContainerCreateForm({
 						<TabsTrigger value='resources'>Resources</TabsTrigger>
 						<TabsTrigger value='healthcheck'>Health Check</TabsTrigger>
 					</TabsList>
+					</div>
 				</div>
 
-				<div className='min-h-0 flex-1 overflow-auto px-6 py-4'>
+				<div className='min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-6 sm:py-4'>
 					{/* ==================== General Tab ==================== */}
 					<TabsContent value='general' className='mt-0'>
 						<div className='space-y-5'>
 							{/* Name + Image */}
-							<div className='grid grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>
 										Name <span className='text-red-400'>*</span>
@@ -443,7 +445,7 @@ export function ContainerCreateForm({
 							</div>
 
 							{/* Command + Entrypoint */}
-							<div className='grid grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>Command</Label>
 									<Input
@@ -465,7 +467,7 @@ export function ContainerCreateForm({
 							</div>
 
 							{/* Working dir + User */}
-							<div className='grid grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>Working Directory</Label>
 									<Input
@@ -595,7 +597,7 @@ export function ContainerCreateForm({
 								<Label className='mb-2 block text-text-secondary'>Port Mappings</Label>
 								<div className='space-y-2'>
 									{form.ports.map((port, i) => (
-										<div key={i} className='flex items-center gap-2'>
+										<div key={i} className='flex flex-wrap items-center gap-2'>
 											<Input
 												sizeVariant='short-square'
 												type='number'
@@ -652,7 +654,7 @@ export function ContainerCreateForm({
 								<Label className='mb-2 block text-text-secondary'>Volume Mounts</Label>
 								<div className='space-y-2'>
 									{form.volumes.map((vol, i) => (
-										<div key={i} className='flex items-center gap-2'>
+										<div key={i} className='flex flex-wrap items-center gap-2'>
 											<Select
 												value={vol.type}
 												onValueChange={(v) => updateVolume(i, 'type', v)}
@@ -727,7 +729,7 @@ export function ContainerCreateForm({
 								<Label className='mb-2 block text-text-secondary'>Environment Variables</Label>
 								<div className='space-y-2'>
 									{form.env.map((e, i) => (
-										<div key={i} className='flex items-center gap-2'>
+										<div key={i} className='flex flex-wrap items-center gap-2'>
 											<Input
 												sizeVariant='short-square'
 												className='w-48'
@@ -768,7 +770,7 @@ export function ContainerCreateForm({
 								<Label className='mb-2 block text-text-secondary'>Labels</Label>
 								<div className='space-y-2'>
 									{form.labels.map((l, i) => (
-										<div key={i} className='flex items-center gap-2'>
+										<div key={i} className='flex flex-wrap items-center gap-2'>
 											<Input
 												sizeVariant='short-square'
 												className='w-48'
@@ -861,7 +863,7 @@ export function ContainerCreateForm({
 								<p className='mt-1 text-xs text-text-tertiary'>Wrapped in CMD-SHELL automatically</p>
 							</div>
 
-							<div className='grid grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>Interval</Label>
 									<div className='flex items-center gap-2'>
@@ -890,7 +892,7 @@ export function ContainerCreateForm({
 								</div>
 							</div>
 
-							<div className='grid grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>Retries</Label>
 									<Input
@@ -921,7 +923,7 @@ export function ContainerCreateForm({
 			</Tabs>
 
 			{/* Footer */}
-			<div className='shrink-0 border-t border-border-default px-6 py-4'>
+			<div className='shrink-0 border-t border-border-default px-4 py-3 sm:px-6 sm:py-4'>
 				{activeMutation.error && (
 					<div className='mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400'>
 						{activeMutation.error.message}
