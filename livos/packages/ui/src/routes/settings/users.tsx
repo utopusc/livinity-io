@@ -13,6 +13,7 @@ import {
 } from 'react-icons/tb'
 import {toast} from 'sonner'
 
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -29,6 +30,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/shadcn-components/ui/select'
+import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
@@ -83,26 +85,28 @@ export function UsersSection() {
 						Enable per-user app instances and subdomain routing. Caddy will use a wildcard certificate for all subdomains.
 					</div>
 				</div>
-				<button
-					onClick={() => multiUserMut.mutate(!multiUserQ.data)}
-					disabled={multiUserMut.isPending}
-					className={`relative flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-						multiUserQ.data ? 'bg-green-500' : 'bg-white/20'
-					}`}
-				>
-					<div
-						className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${
-							multiUserQ.data ? 'translate-x-5' : 'translate-x-0'
+				<div className='flex items-center justify-center min-h-[44px] min-w-[44px]'>
+					<button
+						onClick={() => multiUserMut.mutate(!multiUserQ.data)}
+						disabled={multiUserMut.isPending}
+						className={`relative flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+							multiUserQ.data ? 'bg-green-500' : 'bg-white/20'
 						}`}
-					/>
-				</button>
+					>
+						<div
+							className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${
+								multiUserQ.data ? 'translate-x-5' : 'translate-x-0'
+							}`}
+						/>
+					</button>
+				</div>
 			</div>
 
-			<div className='flex items-center justify-between'>
+			<div className='flex flex-wrap items-center justify-between gap-2'>
 				<p className='text-body-sm text-text-secondary'>
 					Manage users who can access your Livinity device. Invite new users or change existing user roles.
 				</p>
-				<Button variant='primary' size='sm' onClick={() => setShowInviteDialog(true)}>
+				<Button variant='primary' size='sm' className='h-11' onClick={() => setShowInviteDialog(true)}>
 					<TbUserPlus className='h-4 w-4' />
 					Invite User
 				</Button>
@@ -136,6 +140,7 @@ export function UsersSection() {
 }
 
 function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: boolean}) {
+	const isMobile = useIsMobile()
 	const utils = trpcReact.useUtils()
 
 	const roleMut = trpcReact.user.updateUserRole.useMutation({
@@ -184,69 +189,134 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 
 	return (
 		<div
-			className={`flex items-center gap-4 rounded-radius-md border p-4 transition-colors ${
+			className={cn(
+				'rounded-radius-md border p-4 transition-colors',
 				user.is_active ? 'border-border-default bg-surface-base' : 'border-border-default/50 bg-surface-base/50 opacity-60'
-			}`}
+			)}
 		>
-			{/* Avatar */}
-			<div
-				className='flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body-sm font-semibold text-white'
-				style={{backgroundColor: user.avatar_color}}
-			>
-				{getInitials(user.display_name)}
-			</div>
-
-			{/* Info */}
-			<div className='min-w-0 flex-1'>
-				<div className='flex items-center gap-2'>
-					<span className='truncate text-body-sm font-medium text-text-primary'>{user.display_name}</span>
-					{isCurrentUser && (
-						<span className='shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-caption text-brand'>You</span>
-					)}
-					{!user.is_active && (
-						<span className='shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-caption text-red-600'>Disabled</span>
-					)}
+			{/* Top row: Avatar + Info */}
+			<div className='flex items-center gap-3'>
+				{/* Avatar */}
+				<div
+					className='flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body-sm font-semibold text-white'
+					style={{backgroundColor: user.avatar_color}}
+				>
+					{getInitials(user.display_name)}
 				</div>
-				<div className='text-caption text-text-tertiary'>@{user.username}</div>
+
+				{/* Info */}
+				<div className='min-w-0 flex-1'>
+					<div className='flex items-center gap-2'>
+						<span className='truncate text-body-sm font-medium text-text-primary'>{user.display_name}</span>
+						{isCurrentUser && (
+							<span className='shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-caption text-brand'>You</span>
+						)}
+						{!user.is_active && (
+							<span className='shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-caption text-red-600'>Disabled</span>
+						)}
+					</div>
+					<div className='text-caption text-text-tertiary'>@{user.username}</div>
+				</div>
+
+				{/* Desktop-only: role select + actions inline */}
+				{!isMobile && (
+					<>
+						<Select
+							value={user.role}
+							onValueChange={handleRoleChange}
+							disabled={isCurrentUser || roleMut.isPending}
+						>
+							<SelectTrigger className='w-[120px]'>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value='admin'>
+									<div className='flex items-center gap-1.5'>
+										<TbShieldCheck className='h-3.5 w-3.5' />
+										Admin
+									</div>
+								</SelectItem>
+								<SelectItem value='member'>
+									<div className='flex items-center gap-1.5'>
+										<TbUser className='h-3.5 w-3.5' />
+										Member
+									</div>
+								</SelectItem>
+								<SelectItem value='guest'>
+									<div className='flex items-center gap-1.5'>
+										<TbUserOff className='h-3.5 w-3.5' />
+										Guest
+									</div>
+								</SelectItem>
+							</SelectContent>
+						</Select>
+
+						{!isCurrentUser && (
+							<div className='flex items-center gap-1.5'>
+								<Button
+									variant={user.is_active ? 'default' : 'primary'}
+									size='sm'
+									onClick={handleToggleActive}
+									disabled={toggleActiveMut.isPending}
+								>
+									{toggleActiveMut.isPending ? (
+										<TbLoader2 className='h-4 w-4 animate-spin' />
+									) : user.is_active ? (
+										'Disable'
+									) : (
+										'Enable'
+									)}
+								</Button>
+								<Button
+									variant='destructive'
+									size='sm'
+									onClick={handleDelete}
+									disabled={deleteMut.isPending}
+								>
+									{deleteMut.isPending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : <TbTrash className='h-4 w-4' />}
+								</Button>
+							</div>
+						)}
+					</>
+				)}
 			</div>
 
-			{/* Role selector */}
-			<Select
-				value={user.role}
-				onValueChange={handleRoleChange}
-				disabled={isCurrentUser || roleMut.isPending}
-			>
-				<SelectTrigger className='w-[120px]'>
-					<SelectValue />
-				</SelectTrigger>
-				<SelectContent>
-					<SelectItem value='admin'>
-						<div className='flex items-center gap-1.5'>
-							<TbShieldCheck className='h-3.5 w-3.5' />
-							Admin
-						</div>
-					</SelectItem>
-					<SelectItem value='member'>
-						<div className='flex items-center gap-1.5'>
-							<TbUser className='h-3.5 w-3.5' />
-							Member
-						</div>
-					</SelectItem>
-					<SelectItem value='guest'>
-						<div className='flex items-center gap-1.5'>
-							<TbUserOff className='h-3.5 w-3.5' />
-							Guest
-						</div>
-					</SelectItem>
-				</SelectContent>
-			</Select>
-
-			{/* Actions */}
-			{!isCurrentUser && (
-				<div className='flex items-center gap-1.5'>
+			{/* Mobile: role select + actions on second row */}
+			{isMobile && !isCurrentUser && (
+				<div className='mt-3 flex items-center gap-2 pl-[52px]'>
+					<Select
+						value={user.role}
+						onValueChange={handleRoleChange}
+						disabled={isCurrentUser || roleMut.isPending}
+					>
+						<SelectTrigger className='h-11 flex-1'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value='admin'>
+								<div className='flex items-center gap-1.5'>
+									<TbShieldCheck className='h-3.5 w-3.5' />
+									Admin
+								</div>
+							</SelectItem>
+							<SelectItem value='member'>
+								<div className='flex items-center gap-1.5'>
+									<TbUser className='h-3.5 w-3.5' />
+									Member
+								</div>
+							</SelectItem>
+							<SelectItem value='guest'>
+								<div className='flex items-center gap-1.5'>
+									<TbUserOff className='h-3.5 w-3.5' />
+									Guest
+								</div>
+							</SelectItem>
+						</SelectContent>
+					</Select>
 					<Button
 						variant={user.is_active ? 'default' : 'primary'}
 						size='sm'
+						className='h-11'
 						onClick={handleToggleActive}
 						disabled={toggleActiveMut.isPending}
 					>
@@ -261,11 +331,19 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 					<Button
 						variant='destructive'
 						size='sm'
+						className='h-11'
 						onClick={handleDelete}
 						disabled={deleteMut.isPending}
 					>
 						{deleteMut.isPending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : <TbTrash className='h-4 w-4' />}
 					</Button>
+				</div>
+			)}
+
+			{/* Mobile: read-only role badge for current user */}
+			{isMobile && isCurrentUser && (
+				<div className='mt-2 pl-[52px]'>
+					<span className='text-caption text-text-tertiary capitalize'>{user.role}</span>
 				</div>
 			)}
 		</div>
