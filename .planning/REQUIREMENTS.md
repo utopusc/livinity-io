@@ -1,129 +1,81 @@
-# Requirements: Livinity v22.0 — Capability Orchestration & Marketplace
+# Requirements: Livinity v23.0 Mobile PWA
 
-**Defined:** 2026-03-28
+**Defined:** 2026-04-01
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-**CRITICAL CONSTRAINT:** Auth system (OAuth, JWT, API key, login flows) MUST NOT be modified. Streaming/block model/typewriter animation MUST NOT be broken.
+## v1 Requirements
 
-## v22.0 Requirements
+Requirements for this milestone. Each maps to roadmap phases.
 
-Requirements for v22.0 milestone. Each maps to roadmap phases.
+### PWA Foundation
 
-### Registry — Unified Capability Registry
+- [ ] **PWA-01**: User can install Livinity from iOS Safari via "Add to Home Screen" and it opens in standalone mode
+- [ ] **PWA-02**: App has a valid web manifest with start_url, scope, icons (192/512 + maskable), theme color matching UI
+- [ ] **PWA-03**: Service worker caches app shell and serves network-first for API/tRPC routes
+- [ ] **PWA-04**: Apple-specific meta tags enable standalone mode, status bar styling, and touch icon on iOS
+- [ ] **PWA-05**: User sees a custom install prompt banner suggesting "Add to Home Screen" on first visit
+- [ ] **PWA-06**: iOS splash screens display correctly during app launch (key device sizes)
 
-- [x] **REG-01**: User can view all capabilities (skills, MCPs, tools, hooks, agents) in a single registry
-- [x] **REG-02**: Each capability has a manifest with semantic tags, triggers, context cost, and dependency info
-- [x] **REG-03**: Registry auto-syncs from existing ToolRegistry, SkillLoader, and McpClientManager on startup
-- [x] **REG-04**: User can search capabilities by semantic tags, name, or type via API
+### Mobile App Experience
 
-### Router — Intent Router v2
+- [ ] **MOB-01**: On mobile, dock is hidden and system apps (AI Chat, Settings, Files, Server, Terminal) appear in the app grid
+- [ ] **MOB-02**: Tapping a system app in the grid opens it full-screen with a back button to return home
+- [ ] **MOB-03**: Bottom tab bar provides quick access to 5 primary apps (Home, AI Chat, Files, Settings, Server)
+- [ ] **MOB-04**: Full-screen apps reuse existing window content components (zero per-app rewrite)
+- [ ] **MOB-05**: Desktop UI remains completely unchanged — all mobile changes gated on useIsMobile()
 
-- [x] **RTR-01**: System classifies user intent and selects relevant capabilities using semantic matching
-- [x] **RTR-02**: Capability matches include confidence scores with threshold filtering
-- [x] **RTR-03**: Context window budget management keeps tool definitions under 30% of context
-- [x] **RTR-04**: Intent-to-capability mapping is cached in Redis for sub-second repeat loading
+### iOS Hardening
 
-### Provisioning — Auto-Provisioning Engine
+- [ ] **IOS-01**: Safe area insets properly applied (notch top padding, home indicator bottom padding)
+- [ ] **IOS-02**: WebSocket reconnects automatically after iOS background/resume cycle via visibilitychange
+- [ ] **IOS-03**: iOS keyboard opening doesn't break viewport layout (100dvh, visual viewport API)
 
-- [x] **PRV-01**: Session automatically loads relevant capabilities based on analyzed user intent
-- [x] **PRV-02**: AI can discover and install missing capabilities mid-conversation
-- [x] **PRV-03**: System dynamically composes system prompt based on loaded capabilities
-- [x] **PRV-04**: Dependency resolution installs prerequisites before the capability that needs them
+## v2 Requirements
 
-### Marketplace — Livinity Marketplace MCP
+Deferred to future release.
 
-- [x] **MKT-01**: Single MCP server exposes search, install, uninstall, recommend, and list tools
-- [x] **MKT-02**: User can install any capability from marketplace with one command
-- [x] **MKT-03**: Manifest validation and conflict detection before installation
-- [x] **MKT-04**: GitHub-based registry supports community PR submissions
+### Mobile Enhancements
 
-### Self-Mod — AI Self-Modification
-
-- [x] **MOD-01**: AI autonomously creates new skill files when it identifies a capability gap
-- [x] **MOD-02**: AI can create hooks (pre-commit, post-completion, file-change triggers)
-- [x] **MOD-03**: AI can create agent templates with system prompt, tool set, and scheduling config
-- [x] **MOD-04**: Auto-created capabilities are tested and self-corrected on failure
-
-### UI — Agents Panel Redesign
-
-- [x] **UIP-01**: Unified dashboard shows skills, MCPs, hooks, and agents in a single tabbed view
-- [x] **UIP-02**: Capability cards display status, tier, provided tools, last used, and success rate
-- [x] **UIP-03**: Auto-install dialog appears when AI recommends a new capability
-- [x] **UIP-04**: System prompt editor with template library and custom prompt builder
-- [x] **UIP-05**: Analytics view shows tool usage stats, popular combinations, and success rates
-
-### Learning — Learning Loop
-
-- [x] **LRN-01**: System logs every tool call execution to Redis stream with outcome data
-- [x] **LRN-02**: Pattern mining identifies commonly co-used capability combinations
-- [x] **LRN-03**: System auto-suggests relevant capabilities based on intent history
-- [x] **LRN-04**: User feedback (task completion + explicit rating) feeds into capability scoring
-
-## Future Requirements
-
-### Marketplace Advanced
-
-- **MKT-05**: Marketplace analytics dashboard (install counts, ratings, trending)
-- **MKT-06**: Capability versioning with rollback support
-- **MKT-07**: Private marketplace for enterprise/team deployments
-
-### Advanced Learning
-
-- **LRN-05**: A/B testing different capability sets for success rate comparison
-- **LRN-06**: Cross-user pattern aggregation (anonymized) for global recommendations
-- **LRN-07**: Capability deprecation suggestions for unused/low-success tools
+- **MOB-V2-01**: Tablet layout (768-1024px) with hybrid window/fullscreen experience
+- **MOB-V2-02**: Push notifications via Web Push API
+- **MOB-V2-03**: Offline mode with cached conversation history
+- **MOB-V2-04**: Haptic feedback on interactions (Vibration API)
+- **MOB-V2-05**: Share target API (share files/URLs to Livinity)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Auth system changes | CRITICAL: OAuth, JWT, API key, login flows must NOT be modified |
-| Streaming/block model changes | Working typewriter + block interleave must not break |
-| Multi-provider orchestration | One provider at a time (Claude or Kimi) |
-| Paid marketplace | Monetization deferred to future milestone |
-| Agent-to-agent communication | Complex, not needed for v22.0 orchestration goals |
-| Visual drag-drop agent builder | Complex UI, defer to future — text-based creation sufficient |
-| Embedding model training | Use existing embedding APIs, don't train custom models |
+| Native mobile app (Swift/Kotlin) | PWA approach covers requirements without app store distribution |
+| Android TWA (Trusted Web Activity) | Not needed — PWA installable directly from browser |
+| Electron/Capacitor wrapper | Adds complexity without benefit over PWA |
+| Background sync / periodic sync | iOS doesn't support these APIs in standalone PWA |
+| Per-app mobile layouts | Existing responsive components are sufficient |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REG-01 | Phase 29 | Complete |
-| REG-02 | Phase 29 | Complete |
-| REG-03 | Phase 29 | Complete |
-| REG-04 | Phase 29 | Complete |
-| RTR-01 | Phase 31 | Complete |
-| RTR-02 | Phase 31 | Complete |
-| RTR-03 | Phase 31 | Complete |
-| RTR-04 | Phase 31 | Complete |
-| PRV-01 | Phase 32 | Complete |
-| PRV-02 | Phase 32 | Complete |
-| PRV-03 | Phase 32 | Complete |
-| PRV-04 | Phase 32 | Complete |
-| MKT-01 | Phase 33 | Complete |
-| MKT-02 | Phase 33 | Complete |
-| MKT-03 | Phase 33 | Complete |
-| MKT-04 | Phase 33 | Complete |
-| MOD-01 | Phase 34 | Complete |
-| MOD-02 | Phase 34 | Complete |
-| MOD-03 | Phase 34 | Complete |
-| MOD-04 | Phase 34 | Complete |
-| UIP-01 | Phase 30 | Complete |
-| UIP-02 | Phase 30 | Complete |
-| UIP-03 | Phase 35 | Complete |
-| UIP-04 | Phase 35 | Complete |
-| UIP-05 | Phase 35 | Complete |
-| LRN-01 | Phase 36 | Complete |
-| LRN-02 | Phase 36 | Complete |
-| LRN-03 | Phase 36 | Complete |
-| LRN-04 | Phase 36 | Complete |
+| PWA-01 | — | Pending |
+| PWA-02 | — | Pending |
+| PWA-03 | — | Pending |
+| PWA-04 | — | Pending |
+| PWA-05 | — | Pending |
+| PWA-06 | — | Pending |
+| MOB-01 | — | Pending |
+| MOB-02 | — | Pending |
+| MOB-03 | — | Pending |
+| MOB-04 | — | Pending |
+| MOB-05 | — | Pending |
+| IOS-01 | — | Pending |
+| IOS-02 | — | Pending |
+| IOS-03 | — | Pending |
 
 **Coverage:**
-- v22.0 requirements: 29 total
-- Mapped to phases: 29
-- Unmapped: 0
+- v1 requirements: 14 total
+- Mapped to phases: 0
+- Unmapped: 14
 
 ---
-*Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after roadmap creation (all 29 requirements mapped to phases 29-36)*
+*Requirements defined: 2026-04-01*
+*Last updated: 2026-04-01 after initial definition*
