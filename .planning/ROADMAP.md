@@ -136,11 +136,11 @@ Plans:
   2. On iOS, the app displays a branded splash screen during launch instead of a white flash
   3. After backgrounding and resuming the PWA on iOS, WebSocket connections (AI Chat streaming, tRPC subscriptions) automatically reconnect without user intervention
   4. When the iOS keyboard opens in AI Chat, the input field remains visible and the viewport does not break or shift unexpectedly
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 40-01: TBD
-- [ ] 40-02: TBD
+- [ ] 40-01-PLAN.md — Install prompt banner (PWA-05) + splash screen verification (PWA-06)
+- [ ] 40-02-PLAN.md — WebSocket reconnection on iOS resume (IOS-02) + keyboard-safe chat input (IOS-03)
 
 ## Progress
 
