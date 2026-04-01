@@ -75,6 +75,7 @@ import {
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 import {cn} from '@/shadcn-lib/utils'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 
 import {ChangePasswordWarning, ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
@@ -173,8 +174,79 @@ function useVisibleMenuItems(): MenuItem[] {
 export function SettingsContent() {
 	const [activeSection, setActiveSection] = useState<SettingsSection>('home')
 	const visibleItems = useVisibleMenuItems()
+	const isMobile = useIsMobile()
 
-	// If a section is selected, show master-detail view
+	// Mobile: drill-down detail view (no sidebar)
+	if (isMobile && activeSection !== 'home') {
+		const menuItem = visibleItems.find((m) => m.id === activeSection)
+		return (
+			<div className='animate-in fade-in'>
+				{/* Mobile detail header */}
+				<div className='flex items-center gap-3 px-1 pb-4'>
+					<button
+						onClick={() => setActiveSection('home')}
+						className='flex h-11 w-11 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
+					>
+						<TbArrowLeft className='h-5 w-5' />
+					</button>
+					<div className='min-w-0'>
+						<h1 className='text-heading font-semibold -tracking-2 truncate'>{menuItem?.label}</h1>
+						<p className='text-body-sm text-text-secondary truncate'>{menuItem?.description}</p>
+					</div>
+				</div>
+				{/* Section content with overflow protection */}
+				<div className='overflow-x-hidden'>
+					<AnimatePresence mode='wait'>
+						<motion.div
+							key={activeSection}
+							initial={{opacity: 0, x: 20}}
+							animate={{opacity: 1, x: 0}}
+							exit={{opacity: 0, x: -20}}
+							transition={{duration: 0.2, ease: 'easeOut'}}
+						>
+							<SectionContent section={activeSection} onBack={() => setActiveSection('home')} />
+						</motion.div>
+					</AnimatePresence>
+				</div>
+			</div>
+		)
+	}
+
+	// Mobile: home view - menu list only (no right-side placeholder)
+	if (isMobile) {
+		return (
+			<div className='animate-in fade-in'>
+				<Card className='!p-2'>
+					<div className='space-y-0.5'>
+						{visibleItems.map((item, i) => (
+							<motion.button
+								key={item.id}
+								onClick={() => setActiveSection(item.id)}
+								className='flex w-full items-center gap-3 rounded-radius-sm px-3 py-3 text-left transition-colors hover:bg-surface-2'
+								initial={{opacity: 0, x: -10}}
+								animate={{opacity: 1, x: 0}}
+								transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
+							>
+								<div className='flex h-9 w-9 items-center justify-center rounded-radius-sm bg-surface-2'>
+									<item.icon className='h-4.5 w-4.5 text-text-secondary' />
+								</div>
+								<div className='flex-1 min-w-0'>
+									<div className='text-body-sm font-medium truncate'>{item.label}</div>
+									<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
+								</div>
+								<TbChevronRight className='h-4 w-4 shrink-0 text-text-tertiary' />
+							</motion.button>
+						))}
+					</div>
+				</Card>
+				<div className='mt-3'>
+					<ContactSupportLink />
+				</div>
+			</div>
+		)
+	}
+
+	// If a section is selected, show master-detail view (desktop)
 	if (activeSection !== 'home') {
 		return (
 			<div className='animate-in fade-in'>
@@ -188,7 +260,7 @@ export function SettingsContent() {
 		)
 	}
 
-	// Home view with sidebar menu
+	// Desktop: home view with sidebar menu + placeholder card
 	return (
 		<div className='animate-in fade-in'>
 			<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
@@ -219,7 +291,7 @@ export function SettingsContent() {
 						</div>
 					</Card>
 
-					<ContactSupportLink className='max-lg:hidden' />
+					<ContactSupportLink />
 				</div>
 
 				{/* Right Side */}
@@ -232,8 +304,6 @@ export function SettingsContent() {
 						</div>
 					</Card>
 				</div>
-
-				<ContactSupportLink className='lg:hidden' />
 			</div>
 		</div>
 	)
@@ -255,60 +325,68 @@ function SettingsDetailView({
 	visibleItems: MenuItem[]
 }) {
 	const menuItem = visibleItems.find((m) => m.id === section)
+	const isMobile = useIsMobile()
 
 	return (
-		<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
-			{/* Left Sidebar - Menu with active highlight */}
-			<div className='flex flex-col gap-3'>
-				<Card className='!p-2'>
-					<div className='space-y-0.5'>
-						{visibleItems.map((item) => (
-							<button
-								key={item.id}
-								onClick={() => onNavigate(item.id)}
-								className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
-							>
-								{item.id === section && (
-									<motion.div
-										layoutId='settings-sidebar-active'
-										className='absolute inset-0 rounded-radius-sm bg-surface-3'
-										transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
-									/>
-								)}
-								<div className={cn(
-									'relative z-10 flex h-8 w-8 items-center justify-center rounded-radius-sm',
-									item.id === section ? 'bg-surface-3' : 'bg-surface-2'
-								)}>
-									<item.icon className={cn(
-										'h-4 w-4',
-										item.id === section ? 'text-text-primary' : 'text-text-secondary'
-									)} />
-								</div>
-								<div className='relative z-10 flex-1 min-w-0'>
-									<div className='text-body-sm font-medium truncate'>{item.label}</div>
-								</div>
-								{item.id === section && <TbChevronRight className='relative z-10 h-4 w-4 text-text-secondary' />}
-							</button>
-						))}
-					</div>
-				</Card>
-			</div>
+		<div className={cn(
+			'w-full',
+			!isMobile && 'grid gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'
+		)}>
+			{/* Left Sidebar - hidden on mobile (mobile uses SettingsContent's own back header) */}
+			{!isMobile && (
+				<div className='flex flex-col gap-3'>
+					<Card className='!p-2'>
+						<div className='space-y-0.5'>
+							{visibleItems.map((item) => (
+								<button
+									key={item.id}
+									onClick={() => onNavigate(item.id)}
+									className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
+								>
+									{item.id === section && (
+										<motion.div
+											layoutId='settings-sidebar-active'
+											className='absolute inset-0 rounded-radius-sm bg-surface-3'
+											transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
+										/>
+									)}
+									<div className={cn(
+										'relative z-10 flex h-8 w-8 items-center justify-center rounded-radius-sm',
+										item.id === section ? 'bg-surface-3' : 'bg-surface-2'
+									)}>
+										<item.icon className={cn(
+											'h-4 w-4',
+											item.id === section ? 'text-text-primary' : 'text-text-secondary'
+										)} />
+									</div>
+									<div className='relative z-10 flex-1 min-w-0'>
+										<div className='text-body-sm font-medium truncate'>{item.label}</div>
+									</div>
+									{item.id === section && <TbChevronRight className='relative z-10 h-4 w-4 text-text-secondary' />}
+								</button>
+							))}
+						</div>
+					</Card>
+				</div>
+			)}
 
 			{/* Right Side - Content */}
-			<Card className='min-h-[500px]'>
-				{/* Header with back button */}
-				<div className='flex items-center gap-4 border-b border-border-default pb-4 mb-6'>
-					<button
-						onClick={onBack}
-						className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
-					>
-						<TbArrowLeft className='h-5 w-5' />
-					</button>
-					<div>
-						<h1 className='text-heading font-semibold -tracking-2'>{menuItem?.label}</h1>
-						<p className='text-body-sm text-text-secondary'>{menuItem?.description}</p>
+			<Card className={cn('min-h-[500px]', isMobile && 'min-h-0')}>
+				{/* Header with back button - hidden on mobile (SettingsContent handles it) */}
+				{!isMobile && (
+					<div className='flex items-center gap-4 border-b border-border-default pb-4 mb-6'>
+						<button
+							onClick={onBack}
+							className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
+						>
+							<TbArrowLeft className='h-5 w-5' />
+						</button>
+						<div>
+							<h1 className='text-heading font-semibold -tracking-2'>{menuItem?.label}</h1>
+							<p className='text-body-sm text-text-secondary'>{menuItem?.description}</p>
+						</div>
 					</div>
-				</div>
+				)}
 
 				{/* Content based on section — animated transition */}
 				<AnimatePresence mode='wait'>
@@ -811,7 +889,7 @@ function AiConfigSection() {
 	}, [pollQ.data?.status, isConnected, loginSession, utils.ai.getKimiStatus])
 
 	return (
-		<div className='max-w-lg space-y-4'>
+		<div className='max-w-full space-y-4'>
 			<h3 className='text-body font-medium text-text-primary'>Kimi AI</h3>
 			<p className='text-body-sm text-text-secondary'>
 				Sign in with your Kimi account to enable AI features.
@@ -1510,7 +1588,7 @@ function TroubleshootSection() {
 			{/* Full Logs Dialog */}
 			{showFullLogs && (
 				<div className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/20' onClick={() => setShowFullLogs(false)}>
-					<div className='max-h-[80vh] w-[90vw] max-w-4xl overflow-hidden rounded-20 border border-border-default bg-surface-base' onClick={(e) => e.stopPropagation()}>
+					<div className='max-h-[80vh] w-[95vw] max-w-4xl overflow-hidden rounded-20 border border-border-default bg-surface-base' onClick={(e) => e.stopPropagation()}>
 						<div className='flex items-center justify-between border-b border-border-default px-6 py-4'>
 							<h2 className='text-18 font-semibold'>{logType === 'system' ? 'System Logs' : 'App Logs'}</h2>
 							<button
