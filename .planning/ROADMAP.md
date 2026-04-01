@@ -121,10 +121,11 @@ Plans:
   1. On mobile, the macOS-style dock is completely hidden and system apps (AI Chat, Settings, Files, Server, Terminal) appear as tappable icons in the app grid
   2. A bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server) is visible on the home screen and provides one-tap access
   3. Tapping an app icon in the grid or tab bar opens the app full-screen using the Phase 38 rendering pipeline
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 39-01: TBD
+- [ ] 39-01-PLAN.md — Hide dock on mobile + add system apps (AI Chat, Files, Settings, Server, Terminal) to app grid
+- [ ] 39-02-PLAN.md — Bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server)
 
 ### Phase 40: Polish + iOS Hardening
 **Goal**: The PWA feels native on iOS with smooth transitions, branded splash screens, guided installation, resilient connectivity, and keyboard-safe input layouts
@@ -150,7 +151,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 |-------|-----------|----------------|--------|-----------|
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 39. Mobile Home Screen + App Access | v23.0 | 0/1 | Not started | - |
+| 39. Mobile Home Screen + App Access | v23.0 | 0/2 | Not started | - |
 | 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
 
 ---
