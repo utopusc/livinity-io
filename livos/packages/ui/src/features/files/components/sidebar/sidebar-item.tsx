@@ -4,6 +4,7 @@ import {Droppable} from '@/features/files/components/shared/drag-and-drop'
 import {FileItemIcon} from '@/features/files/components/shared/file-item-icon'
 import {RECENTS_PATH} from '@/features/files/constants'
 import {formatItemName} from '@/features/files/utils/format-filesystem-name'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {cn} from '@/shadcn-lib/utils'
 
 type SidebarItem = {
@@ -23,6 +24,7 @@ export interface SidebarItemProps {
 }
 
 export function SidebarItem({item, isActive, onClick, disabled = false, icon: Icon, iconBg, iconColor}: SidebarItemProps) {
+	const isMobile = useIsMobile()
 	return (
 		<Droppable
 			id={`sidebar-${item.path}`}
@@ -47,7 +49,7 @@ export function SidebarItem({item, isActive, onClick, disabled = false, icon: Ic
 				}}
 				aria-disabled={disabled}
 				disabled={disabled}
-				className={cn('flex w-full items-center gap-2.5 px-2 py-[7px]', disabled && 'cursor-default')}
+				className={cn('flex w-full items-center gap-2.5 px-2', isMobile ? 'py-2.5' : 'py-[7px]', disabled && 'cursor-default')}
 			>
 				{Icon ? (
 					<div className={cn(

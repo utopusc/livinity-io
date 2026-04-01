@@ -59,7 +59,7 @@ function ListingContent({
 }) {
 	const selectedItems = useFilesStore((s) => s.selectedItems)
 	return (
-		<Card className='h-[calc(100svh-214px)] !border-transparent !p-0 !pt-4 !shadow-none bg-white/40 lg:h-[calc(100vh-300px)]'>
+		<Card className='h-[calc(100svh-180px)] !border-transparent !p-0 !pt-4 !shadow-none bg-white/40 lg:h-[calc(100vh-300px)]'>
 			{(() => {
 				if (isLoading) return <LoadingView />
 				if (error) return <ErrorView error={error} />
