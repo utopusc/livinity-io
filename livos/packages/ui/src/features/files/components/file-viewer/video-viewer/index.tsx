@@ -36,7 +36,7 @@ export default function VideoViewer({item}: VideoViewerProps) {
 
 	return (
 		<ViewerWrapper dontCloseOnSpacebar>
-			<div className='bg-black' ref={wrapperRef}>
+			<div className='w-[calc(100vw-24px)] max-w-4xl bg-black md:w-auto md:max-w-none' ref={wrapperRef}>
 				<VideoPlayer title={item.name} src={previewUrl} autoPlay={true} />
 			</div>
 		</ViewerWrapper>
