@@ -210,7 +210,7 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 	// Calculate grid dimensions based on container width
 	// We cannot use simple flexbox css because we are using react-window for virtualization
 	const getGridDimensions = useCallback((width: number) => {
-		const itemWidth = 128 // Fixed item width of 128px
+		const itemWidth = isMobile ? 100 : 128 // Smaller items on mobile for 3-column layout
 		const minGap = 8 // Prevents borders overlapping at certain screen sizes
 		const borderAllowance = 2 // Extra space on each side for selection borders
 		const fixedVerticalGap = 16 // Prevents multi-line file name items from overlapping
@@ -242,7 +242,7 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 		const verticalGap = fixedVerticalGap
 
 		// Set item height and row height separately - row height includes the gap
-		const itemHeight = 140 // Height of each item itself
+		const itemHeight = isMobile ? 120 : 140 // Shorter items on mobile to fit more
 		const rowHeight = itemHeight + verticalGap // Row height includes vertical gap
 
 		return {
@@ -256,7 +256,7 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 			totalWidth: width,
 			borderAllowance,
 		}
-	}, [])
+	}, [isMobile])
 
 	// Render cell for grid view
 	const renderGridCell = useCallback(
@@ -326,7 +326,7 @@ export const VirtualizedList: React.FC<VirtualizedListProps> = ({
 				overscanStopIndex: Math.min(itemCount - 1, (visibleRowStopIndex + GRID_OVERSCAN_AMOUNT + 1) * columnCount - 1),
 			}
 		},
-		[getGridDimensions, itemCount],
+		[getGridDimensions, itemCount, isMobile],
 	)
 
 	if (isLoading) return null
