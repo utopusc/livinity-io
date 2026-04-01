@@ -104,7 +104,7 @@ export function StreamingMessage({content, isStreaming = false}: StreamingMessag
 						const isBlock = className?.includes('language-')
 						if (isBlock) {
 							return (
-								<pre style={{margin: '8px 0', overflow: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', padding: '12px', maxWidth: '100%'}}>
+								<pre style={{margin: '8px 0', overflow: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', padding: '12px', maxWidth: 'calc(100vw - 3rem)'}}>
 									<code style={{fontSize: '12px', color: '#334155'}}>{children}</code>
 								</pre>
 							)
