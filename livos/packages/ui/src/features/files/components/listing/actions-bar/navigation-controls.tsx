@@ -108,7 +108,7 @@ export function NavigationControls() {
 					onClick={handleBack}
 					disabled={!canGoBack}
 					className={cn(
-						'flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200',
+						'flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200',
 						'focus:ring-0 focus-visible:ring-0',
 						canGoBack
 							? 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 hover:shadow-sm'
@@ -125,7 +125,7 @@ export function NavigationControls() {
 					onClick={handleForward}
 					disabled={!canGoForward}
 					className={cn(
-						'flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200',
+						'flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200',
 						'focus:ring-0 focus-visible:ring-0',
 						canGoForward
 							? 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 hover:shadow-sm'
