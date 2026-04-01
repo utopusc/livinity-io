@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
-stopped_at: Completed 38-01-PLAN.md (mobile navigation infrastructure)
-last_updated: "2026-04-01T16:55:12.566Z"
+stopped_at: Completed 38-02-PLAN.md (mobile navigation infrastructure wiring)
+last_updated: "2026-04-01T16:59:20.036Z"
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -59,6 +59,7 @@ Plan: 2 of 2
 | Phase 37 P01 | 3min | 2 tasks | 5 files |
 | Phase 37 P02 | 2min | 2 tasks | 3 files |
 | Phase 38-mobile-navigation-infrastructure P01 | 2min | 2 tasks | 5 files |
+| Phase 38-mobile-navigation-infrastructure P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,8 @@ Plan: 2 of 2
 - [Phase 38]: MobileAppContext is separate from desktop WindowManagerProvider -- context-based overlay pattern
 - [Phase 38]: useMobileBack runs on all viewports (hooks cannot be conditional) -- harmless on desktop
 - [Phase 38]: iOS-style 250ms tween with ease [0.32,0.72,0,1] for mobile slide transitions
+- [Phase 38-mobile-navigation-infrastructure]: MobileAppProvider wraps inside WindowManagerProvider outside CmdkProvider -- matches ARCHITECTURE.md component tree
+- [Phase 38-mobile-navigation-infrastructure]: Single isMobile guard in openStreamApp covers all 6 stream apps with zero per-app changes (MOB-04)
 
 ### Pending Todos
 
@@ -93,6 +96,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-01T16:55:12.563Z
-Stopped at: Completed 38-01-PLAN.md (mobile navigation infrastructure)
+Last session: 2026-04-01T16:59:20.033Z
+Stopped at: Completed 38-02-PLAN.md (mobile navigation infrastructure wiring)
 Resume file: None

@@ -76,7 +76,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()`. nexus-core runs compiled JS -- MUST rebuild after source changes.
 
 - [x] **Phase 37: PWA Foundation** - Installable PWA with manifest, service worker, Apple meta tags, and safe area CSS (completed 2026-04-01)
-- [ ] **Phase 38: Mobile Navigation Infrastructure** - Full-screen app rendering pipeline with MobileAppContext, MobileAppRenderer, and hardware back button support
+- [x] **Phase 38: Mobile Navigation Infrastructure** - Full-screen app rendering pipeline with MobileAppContext, MobileAppRenderer, and hardware back button support (completed 2026-04-01)
 - [ ] **Phase 39: Mobile Home Screen + App Access** - Phone-like home screen with system apps in grid, bottom tab bar, and dock hidden on mobile
 - [ ] **Phase 40: Polish + iOS Hardening** - Install prompt, splash screens, WebSocket reconnection on resume, and keyboard layout fixes
 
@@ -111,7 +111,7 @@ Plans:
 
 Plans:
 - [x] 38-01-PLAN.md — Core mobile components: MobileAppContext, use-mobile-back hook, MobileNavBar, MobileAppRenderer + export WindowAppContent
-- [ ] 38-02-PLAN.md — Integration wiring: MobileAppProvider + MobileAppRenderer into router.tsx, mobile-aware click handlers in desktop-content.tsx
+- [x] 38-02-PLAN.md — Integration wiring: MobileAppProvider + MobileAppRenderer into router.tsx, mobile-aware click handlers in desktop-content.tsx
 
 ### Phase 39: Mobile Home Screen + App Access
 **Goal**: Mobile users see a phone-like home screen with system apps in a grid and a bottom tab bar for quick navigation -- the desktop dock is hidden
@@ -149,7 +149,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 38. Mobile Navigation Infrastructure | v23.0 | 1/2 | In Progress|  |
+| 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete   | 2026-04-01 |
 | 39. Mobile Home Screen + App Access | v23.0 | 0/1 | Not started | - |
 | 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
 
