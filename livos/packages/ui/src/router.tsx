@@ -9,6 +9,7 @@ import {filesRoutes} from '@/features/files/routes'
 import {DesktopContextMenu} from '@/modules/desktop/desktop-context-menu'
 import {MobileAppProvider} from '@/modules/mobile/mobile-app-context'
 import {MobileAppRenderer} from '@/modules/mobile/mobile-app-renderer'
+import {MobileTabBar} from '@/modules/mobile/mobile-tab-bar'
 import {WindowsContainer} from '@/modules/window'
 
 import {ErrorBoundaryPageFallback} from './components/ui/error-boundary-page-fallback'
@@ -77,6 +78,7 @@ export const router = createBrowserRouter([
 								<DockBottomPositioner>
 									<Dock />
 								</DockBottomPositioner>
+								<MobileTabBar />
 							</MobileAppProvider>
 						</WindowManagerProvider>
 					</AppsProvider>
