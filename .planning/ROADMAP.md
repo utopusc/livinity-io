@@ -124,7 +124,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 39-01-PLAN.md — Hide dock on mobile + add system apps (AI Chat, Files, Settings, Server, Terminal) to app grid
+- [x] 39-01-PLAN.md — Hide dock on mobile + add system apps (AI Chat, Files, Settings, Server, Terminal) to app grid
 - [ ] 39-02-PLAN.md — Bottom tab bar with 5 primary app icons (Home, AI Chat, Files, Settings, Server)
 
 ### Phase 40: Polish + iOS Hardening
@@ -151,7 +151,7 @@ Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 |-------|-----------|----------------|--------|-----------|
 | 37. PWA Foundation | v23.0 | 2/2 | Complete    | 2026-04-01 |
 | 38. Mobile Navigation Infrastructure | v23.0 | 2/2 | Complete    | 2026-04-01 |
-| 39. Mobile Home Screen + App Access | v23.0 | 0/2 | Not started | - |
+| 39. Mobile Home Screen + App Access | v23.0 | 1/2 | In Progress|  |
 | 40. Polish + iOS Hardening | v23.0 | 0/2 | Not started | - |
 
 ---

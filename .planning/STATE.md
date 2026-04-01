@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v23.0
 milestone_name: Mobile PWA
 status: unknown
-stopped_at: Completed 38-02-PLAN.md (mobile navigation infrastructure wiring)
-last_updated: "2026-04-01T17:02:33.473Z"
+stopped_at: Completed 39-01-PLAN.md (mobile home screen app access)
+last_updated: "2026-04-01T17:43:44.114Z"
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v23.0 -- Mobile PWA
-**Current focus:** Phase 38 — mobile-navigation-infrastructure
+**Current focus:** Phase 39 — mobile-home-screen-app-access
 
 ## Current Position
 
-Phase: 39
-Plan: Not started
+Phase: 39 (mobile-home-screen-app-access) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Plan: Not started
 | Phase 37 P02 | 2min | 2 tasks | 3 files |
 | Phase 38-mobile-navigation-infrastructure P01 | 2min | 2 tasks | 5 files |
 | Phase 38-mobile-navigation-infrastructure P02 | 2min | 2 tasks | 2 files |
+| Phase 39-mobile-home-screen-app-access P01 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Plan: Not started
 - [Phase 38]: iOS-style 250ms tween with ease [0.32,0.72,0,1] for mobile slide transitions
 - [Phase 38-mobile-navigation-infrastructure]: MobileAppProvider wraps inside WindowManagerProvider outside CmdkProvider -- matches ARCHITECTURE.md component tree
 - [Phase 38-mobile-navigation-infrastructure]: Single isMobile guard in openStreamApp covers all 6 stream apps with zero per-app changes (MOB-04)
+- [Phase 39-mobile-home-screen-app-access]: 72px mobile DockSpacer height (56px tab bar + 16px safe area) for upcoming tab bar
+- [Phase 39-mobile-home-screen-app-access]: 5 system apps for mobile grid: AI Chat, Files, Settings, Server, Terminal (utility apps omitted for simplicity)
 
 ### Pending Todos
 
@@ -96,6 +99,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-01T16:59:20.033Z
-Stopped at: Completed 38-02-PLAN.md (mobile navigation infrastructure wiring)
+Last session: 2026-04-01T17:43:44.111Z
+Stopped at: Completed 39-01-PLAN.md (mobile home screen app access)
 Resume file: None
