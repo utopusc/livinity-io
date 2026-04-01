@@ -103,11 +103,11 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   2. Long messages with code blocks render within the viewport width -- no horizontal scrolling on the chat area
   3. Tool call cards display a compact summary on mobile with a tap target to expand full details
   4. The chat input area including file upload button stays anchored at the bottom, is not occluded by the mobile keyboard, and has touch-friendly sizing
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- Mobile sidebar drawer + navigation headers + touch-friendly chat input (CHAT-01, CHAT-04)
+- [ ] 01-02-PLAN.md -- Message width constraints + compact tool cards (CHAT-02, CHAT-03)
 
 ### Phase 2: Settings Mobile
 **Goal**: Users can navigate and modify all settings on mobile without layout issues
@@ -174,7 +174,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. AI Chat Mobile | v24.0 | 0/0 | Not started | - |
+| 1. AI Chat Mobile | v24.0 | 0/2 | Planning complete | - |
 | 2. Settings Mobile | v24.0 | 0/0 | Not started | - |
 | 3. Server Control Mobile | v24.0 | 0/0 | Not started | - |
 | 4. Files Mobile | v24.0 | 0/0 | Not started | - |
