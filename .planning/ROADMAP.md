@@ -148,11 +148,11 @@ Plans:
   2. File list and grid views adapt to mobile width -- items are properly sized and tappable without accidental selection of adjacent items
   3. Toolbar actions (upload, new folder, delete, etc.) are accessible on mobile via a compact toolbar or overflow menu with touch-friendly targets
   4. File preview and details panels render within the viewport on mobile without overlapping the file list or causing horizontal overflow
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- Sidebar 44px touch targets, mobile drawer polish, responsive icons grid (FILE-01, FILE-02)
+- [ ] 04-02-PLAN.md -- Toolbar 44px touch targets, mobile-safe file viewer overlays (FILE-03, FILE-04)
 
 ### Phase 5: Terminal Mobile
 **Goal**: Users can use the terminal on mobile for basic server commands
@@ -177,7 +177,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
 | 3. Server Control Mobile | v24.0 | 1/2 | Complete    | 2026-04-01 |
-| 4. Files Mobile | v24.0 | 0/0 | Not started | - |
+| 4. Files Mobile | v24.0 | 0/2 | In progress | - |
 | 5. Terminal Mobile | v24.0 | 0/0 | Not started | - |
 
 ---
