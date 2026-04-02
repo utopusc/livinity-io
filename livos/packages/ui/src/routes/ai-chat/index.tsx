@@ -435,8 +435,8 @@ export default function AiChat() {
 
 			{isMobile && (
 				<Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
-					<DrawerContent fullHeight withScroll className='!bg-surface-base !p-0'>
-						<ConversationSidebar {...sidebarProps} className='w-full border-r-0 bg-transparent' />
+					<DrawerContent fullHeight withScroll className='!bg-white !p-0'>
+						<ConversationSidebar {...sidebarProps} className='w-full border-r-0' />
 					</DrawerContent>
 				</Drawer>
 			)}

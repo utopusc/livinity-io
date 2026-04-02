@@ -28,7 +28,7 @@ export function MobileAppRenderer() {
 					transition={{type: 'tween', duration: 0.25, ease: [0.32, 0.72, 0, 1]}}
 				>
 					<MobileNavBar title={activeApp.title} onBack={closeApp} />
-					<div className='flex-1 min-h-0 flex flex-col overflow-x-hidden overflow-y-auto' style={{paddingBottom: '60px'}}>
+					<div className='flex-1 min-h-0 overflow-x-hidden overflow-y-auto' style={{paddingBottom: '60px'}}>
 						<Suspense fallback={<Loading />}>
 							<WindowAppContent appId={activeApp.appId} initialRoute={activeApp.route} />
 						</Suspense>

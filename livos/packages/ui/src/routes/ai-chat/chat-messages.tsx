@@ -100,7 +100,7 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 
 	// Default: prettified JSON
 	return (
-		<pre className='max-w-[calc(100vw-3rem)] sm:max-w-full overflow-x-auto whitespace-pre-wrap text-xs text-text-secondary'>
+		<pre className='max-w-full overflow-x-auto whitespace-pre-wrap text-xs text-text-secondary'>
 			{JSON.stringify(toolCall.input, null, 2)}
 		</pre>
 	)
@@ -119,7 +119,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 	if (isShellTool(toolCall.name)) {
 		return (
 			<div>
-				<pre className='max-h-60 max-w-[calc(100vw-3rem)] sm:max-w-full overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
+				<pre className='max-h-60 max-w-full overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 					{displayOutput}
 				</pre>
 				{isLong && (
@@ -145,7 +145,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 				{filePath && (
 					<div className='mb-1 font-mono text-xs text-text-tertiary'>{filePath}</div>
 				)}
-				<pre className='max-h-80 max-w-[calc(100vw-3rem)] sm:max-w-full overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
+				<pre className='max-h-80 max-w-full overflow-auto whitespace-pre-wrap rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 					{displayOutput}
 				</pre>
 				{isLong && (
@@ -438,7 +438,7 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 
 	return (
 		<div className='flex justify-start'>
-			<div className='max-w-[90%] border-l-2 border-violet-500/30 pl-4' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
+			<div className='min-w-0 max-w-[90%] border-l-2 border-violet-500/30 pl-4' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
 				{/* Render blocks in order — text and tools interleaved */}
 				{blocks && blocks.map((block, idx) => {
 					if (block.type === 'text') {
