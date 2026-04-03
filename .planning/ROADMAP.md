@@ -176,7 +176,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md -- Identity mapping table, memory service REST endpoints, tRPC proxy routes, daemon identity resolution
+- [x] 10-01-PLAN.md -- Identity mapping table, memory service REST endpoints, tRPC proxy routes, daemon identity resolution
 - [ ] 10-02-PLAN.md -- Settings > Memory UI with Memories/Conversations tabs, search, delete, channel icons
 
 ## Progress
@@ -191,7 +191,7 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 | 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete   | 2026-04-03 |
 | 8. WhatsApp Message Routing & Safety | v25.0 | 0/2 | Not started | - |
 | 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/2 | Not started | - |
-| 10. Unified Identity & Memory Management UI | v25.0 | 0/2 | Not started | - |
+| 10. Unified Identity & Memory Management UI | v25.0 | 1/2 | In Progress|  |
 
 ---
 

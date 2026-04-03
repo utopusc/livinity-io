@@ -23,13 +23,13 @@
 
 ### Memory Management UI
 
-- [ ] **UI-01**: Settings > Memory page showing stored memories with search
-- [ ] **UI-02**: User can delete individual memories
-- [ ] **UI-03**: User can view conversation history from all channels
+- [x] **UI-01**: Settings > Memory page showing stored memories with search
+- [x] **UI-02**: User can delete individual memories
+- [x] **UI-03**: User can view conversation history from all channels
 
 ### Identity
 
-- [ ] **ID-01**: Unified userId mapping across channels (Telegram, WhatsApp, Web UI, Discord)
+- [x] **ID-01**: Unified userId mapping across channels (Telegram, WhatsApp, Web UI, Discord)
 
 ## v26.0 Requirements (Deferred)
 
@@ -68,10 +68,10 @@
 | MEM-02 | Phase 9 | Complete |
 | MEM-03 | Phase 9 | Complete |
 | MEM-04 | Phase 8 | Complete |
-| UI-01 | Phase 10 | Pending |
-| UI-02 | Phase 10 | Pending |
-| UI-03 | Phase 10 | Pending |
-| ID-01 | Phase 10 | Pending |
+| UI-01 | Phase 10 | Complete |
+| UI-02 | Phase 10 | Complete |
+| UI-03 | Phase 10 | Complete |
+| ID-01 | Phase 10 | Complete |
 
 **Coverage:**
 - v25.0 requirements: 14 total

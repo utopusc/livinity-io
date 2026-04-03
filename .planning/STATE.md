@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-04-03T03:52:53.785Z"
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-04-03T04:04:11.323Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v25.0 -- Memory & WhatsApp Integration
-**Current focus:** Phase 09 — cross-session-conversation-persistence-search
+**Current focus:** Phase 10 — unified-identity-memory-management-ui
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
+Phase: 10 (unified-identity-memory-management-ui) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -74,6 +74,9 @@ Plan: Not started
 - [Phase 09]: Channel messages use chatId as userId (unified identity deferred)
 - [Phase 09]: conversation_search added to messaging and coding TOOL_PROFILES for broad availability
 - [Phase 09]: Tool formats results with date, channel label, speaker role, and 300-char content snippet
+- [Phase 10]: Redis identity cache in daemon (not direct PostgreSQL) since nexus-core cannot import livinityd database module
+- [Phase 10]: FTS5 trigger handles conversation turn deletion automatically (no manual FTS cleanup needed)
+- [Phase 10]: Auto-create identity mapping on first encounter (channelUserId becomes canonical until admin links)
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T03:49:35.503Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-04-03T04:04:11.320Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None
