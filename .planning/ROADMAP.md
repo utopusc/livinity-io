@@ -158,11 +158,11 @@ Plans:
   2. User asks AI "what did we discuss about Docker last week?" and receives a relevant answer synthesized from past conversation history
   3. The conversation_search tool appears in ToolRegistry and the AI autonomously invokes it when questions reference past interactions
   4. FTS5 full-text search returns results in under 50ms for typical keyword queries at self-hosted scale (thousands of conversations)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 09-01-PLAN.md -- FTS5 conversation_turns table, /archive + /conversation-search endpoints, archival hooks in daemon + livinityd
+- [ ] 09-02-PLAN.md -- conversation_search tool in ToolRegistry, agent guidance update, nexus-core build
 
 ### Phase 10: Unified Identity & Memory Management UI
 **Goal**: Same user is recognized across all channels, and users can browse, search, and delete their stored conversation memories
@@ -190,7 +190,7 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 | 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | - |
 | 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete   | 2026-04-03 |
 | 8. WhatsApp Message Routing & Safety | v25.0 | 0/2 | Not started | - |
-| 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/TBD | Not started | - |
+| 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/2 | Not started | - |
 | 10. Unified Identity & Memory Management UI | v25.0 | 0/TBD | Not started | - |
 
 ---
