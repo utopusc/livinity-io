@@ -131,7 +131,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Nexus REST endpoints + tRPC routes for WhatsApp QR, status, connect, disconnect
+- [x] 07-01-PLAN.md -- Nexus REST endpoints + tRPC routes for WhatsApp QR, status, connect, disconnect
 - [ ] 07-02-PLAN.md -- WhatsApp tab and QR panel in Settings > Integrations UI
 
 ### Phase 8: WhatsApp Message Routing & Safety

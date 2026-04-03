@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-04-03T02:45:36.162Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-04-03T03:06:44.671Z"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v25.0 -- Memory & WhatsApp Integration
-**Current focus:** Phase 06 — whatsapp-channel-foundation
+**Current focus:** Phase 07 — whatsapp-qr-code-settings-ui
 
 ## Current Position
 
-Phase: 7
-Plan: Not started
+Phase: 07 (whatsapp-qr-code-settings-ui) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -61,6 +61,8 @@ Plan: Not started
 - [Phase 06]: Pino logger bridge (not installing pino) to keep dependency count minimal
 - [Phase 06]: qrcode named import (toDataURL) instead of default for TypeScript compatibility
 - [Phase 06]: getMessage returns undefined in Phase 6 (deferred to future phase for full message store)
+- [Phase 07]: WhatsApp-specific REST routes placed before generic :id route in Express
+- [Phase 07]: whatsappGetStatus reads Redis directly (avoids extra Nexus network hop)
 
 ### Pending Todos
 
@@ -74,6 +76,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T02:42:24.831Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-04-03T03:06:44.669Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
