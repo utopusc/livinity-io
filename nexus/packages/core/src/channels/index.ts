@@ -6,6 +6,7 @@ import { DiscordProvider } from './discord.js';
 import { SlackProvider } from './slack.js';
 import { MatrixProvider } from './matrix.js';
 import { GmailProvider } from './gmail.js';
+import { WhatsAppProvider } from './whatsapp.js';
 
 export * from './types.js';
 
@@ -26,6 +27,7 @@ export class ChannelManager {
     this.providers.set('slack', new SlackProvider());
     this.providers.set('matrix', new MatrixProvider());
     this.providers.set('gmail', new GmailProvider());
+    this.providers.set('whatsapp', new WhatsAppProvider());
   }
 
   /**

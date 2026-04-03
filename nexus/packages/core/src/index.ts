@@ -178,6 +178,8 @@ async function main() {
   if (telegramProvider?.setDmPairing) telegramProvider.setDmPairing(dmPairingManager);
   const discordProvider = channelManager.getProvider('discord') as any;
   if (discordProvider?.setDmPairing) discordProvider.setDmPairing(dmPairingManager);
+  const whatsappProvider = channelManager.getProvider('whatsapp') as any;
+  if (whatsappProvider?.setDmPairing) whatsappProvider.setDmPairing(dmPairingManager);
   logger.info('DmPairingManager initialized');
 
   // Usage tracker for per-session and cumulative token usage
@@ -207,12 +209,12 @@ async function main() {
     workspaceDir,
     onDeliver: async (message: string, target: string) => {
       // Determine delivery method based on target
-      if (['telegram', 'discord', 'slack', 'matrix'].includes(target)) {
-        // Use ChannelManager for Telegram/Discord/Slack/Matrix
+      if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(target)) {
+        // Use ChannelManager for Telegram/Discord/Slack/Matrix/WhatsApp
         // Get the last chat ID from Redis for the target channel
         const lastChatId = await redis.get(`nexus:${target}:last_chat_id`);
         if (lastChatId) {
-          const success = await channelManager.sendMessage(target as 'telegram' | 'discord' | 'slack' | 'matrix', lastChatId, message);
+          const success = await channelManager.sendMessage(target as 'telegram' | 'discord' | 'slack' | 'matrix' | 'whatsapp', lastChatId, message);
           if (success) {
             logger.info('HeartbeatRunner: delivered via channel', { target, chatId: lastChatId, messageLength: message.length });
           } else {
@@ -223,7 +225,7 @@ async function main() {
         }
       } else if (target === 'all') {
         // Deliver to all connected channels
-        for (const channelId of ['telegram', 'discord', 'slack', 'matrix'] as const) {
+        for (const channelId of ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'] as const) {
           const lastChatId = await redis.get(`nexus:${channelId}:last_chat_id`);
           if (lastChatId) {
             await channelManager.sendMessage(channelId, lastChatId, message);
@@ -381,6 +383,7 @@ Conversation:`;
   const approvalManager = new ApprovalManager(redis);
   // Wire approval manager into Telegram for inline button approve/reject
   if (telegramProvider?.setApprovalManager) telegramProvider.setApprovalManager(approvalManager);
+  if (whatsappProvider?.setApprovalManager) whatsappProvider.setApprovalManager(approvalManager);
   logger.info('ApprovalManager initialized');
 
   // TaskManager for parallel agent task execution (BullMQ-based)
@@ -619,7 +622,7 @@ Conversation:`;
     });
 
     // Save last chat ID for heartbeat delivery
-    if (['telegram', 'discord', 'slack', 'matrix'].includes(msg.channel)) {
+    if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(msg.channel)) {
       await redis.set(`nexus:${msg.channel}:last_chat_id`, msg.chatId);
     }
 

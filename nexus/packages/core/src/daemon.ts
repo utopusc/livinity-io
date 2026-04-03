@@ -552,7 +552,7 @@ export class Daemon {
     const item: InboxItem = { message, source, requestId, params, from };
 
     // Real-time messaging sources - process immediately (event-driven)
-    const realtimeSources = ['telegram', 'discord', 'slack', 'matrix', 'voice'];
+    const realtimeSources = ['telegram', 'discord', 'slack', 'matrix', 'voice', 'whatsapp'];
     if (realtimeSources.includes(source)) {
       // Process immediately without waiting for polling loop
       this.processInboxItem(item).catch((err) => {
