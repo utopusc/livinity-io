@@ -84,6 +84,22 @@ export class WhatsAppAuthStore {
   }
 
   /**
+   * Check if a previous session exists (creds were saved after QR scan).
+   * Returns false if no creds in Redis — means user never scanned QR.
+   */
+  async hasExistingSession(): Promise<boolean> {
+    const creds = await this.redis.get(`${this.prefix}:creds`);
+    if (!creds) return false;
+    try {
+      const parsed = JSON.parse(creds, BufferJSON.reviver);
+      // If registered is true, QR was scanned successfully before
+      return !!parsed.registered;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Delete all WhatsApp auth keys from Redis.
    * Used during logout/disconnect to force QR re-scan on next connect.
    */
