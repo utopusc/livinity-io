@@ -1393,6 +1393,56 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  /** Get WhatsApp QR code data URL from Redis */
+  app.get('/api/channels/whatsapp/qr', async (_req, res) => {
+    try {
+      const qr = await redis.get('nexus:whatsapp:qr');
+      res.json({ qr: qr || null });
+    } catch (err) {
+      logger.error('Get WhatsApp QR error', { error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Trigger WhatsApp connection (enable + connect) */
+  app.post('/api/channels/whatsapp/connect', async (_req, res) => {
+    try {
+      if (!channelManager) {
+        res.status(503).json({ error: 'Channel manager not initialized' });
+        return;
+      }
+      await channelManager.updateProviderConfig('whatsapp', { enabled: true });
+      const provider = channelManager.getProvider('whatsapp');
+      if (provider) {
+        await provider.connect();
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error('WhatsApp connect error', { error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Full disconnect WhatsApp (close socket + clear auth state) */
+  app.post('/api/channels/whatsapp/disconnect', async (_req, res) => {
+    try {
+      if (!channelManager) {
+        res.status(503).json({ error: 'Channel manager not initialized' });
+        return;
+      }
+      const provider = channelManager.getProvider('whatsapp');
+      if (!provider) {
+        res.status(404).json({ error: 'WhatsApp provider not found' });
+        return;
+      }
+      await (provider as any).fullDisconnect();
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error('WhatsApp disconnect error', { error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
   /** Get specific channel status */
   app.get('/api/channels/:id', async (req, res) => {
     try {
