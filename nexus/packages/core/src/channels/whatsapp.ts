@@ -5,6 +5,7 @@ import type Redis from 'ioredis';
 import { toDataURL as qrToDataURL } from 'qrcode';
 import { logger } from '../logger.js';
 import { WhatsAppAuthStore } from './whatsapp-auth.js';
+import { WhatsAppRateLimiter } from './whatsapp-rate-limiter.js';
 import { baileysLogger } from './whatsapp-logger.js';
 import type { DmPairingManager } from '../dm-pairing.js';
 import type { ApprovalManager } from '../approval-manager.js';
@@ -30,6 +31,7 @@ export class WhatsAppProvider implements ChannelProvider {
   private redis: Redis | null = null;
   private sock: WASocket | null = null;
   private authStore: WhatsAppAuthStore | null = null;
+  private rateLimiter: WhatsAppRateLimiter | null = null;
   private config: ChannelConfig = { enabled: false };
   private status: ChannelStatus = { enabled: false, connected: false };
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
@@ -52,6 +54,7 @@ export class WhatsAppProvider implements ChannelProvider {
   async init(redis: Redis): Promise<void> {
     this.redis = redis;
     this.authStore = new WhatsAppAuthStore(redis);
+    this.rateLimiter = new WhatsAppRateLimiter(redis);
     await this.loadConfig();
   }
 
@@ -169,10 +172,15 @@ export class WhatsAppProvider implements ChannelProvider {
       const chunks = chunkText(text, CHANNEL_META.whatsapp.textLimit);
 
       for (const chunk of chunks) {
-        await this.sock.sendMessage(chatId, { text: chunk });
-        // Small delay between chunks
-        if (chunks.length > 1) {
-          await new Promise((r) => setTimeout(r, 200));
+        if (this.rateLimiter) {
+          // Route through rate limiter -- enforces 10/min with randomized delays
+          await this.rateLimiter.enqueue(async () => {
+            await this.sock!.sendMessage(chatId, { text: chunk });
+            return true;
+          });
+        } else {
+          // Defensive fallback: send directly if rate limiter not initialized
+          await this.sock.sendMessage(chatId, { text: chunk });
         }
       }
 
