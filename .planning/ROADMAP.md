@@ -147,7 +147,7 @@ Plans:
 
 Plans:
 - [x] 08-01-PLAN.md -- WhatsApp rate limiter with Redis sliding window and randomized delays
-- [ ] 08-02-PLAN.md -- Consolidate all WhatsApp routing through ChannelManager, remove legacy daemon.ts code
+- [x] 08-02-PLAN.md -- Consolidate all WhatsApp routing through ChannelManager, remove legacy daemon.ts code
 
 ### Phase 9: Cross-Session Conversation Persistence & Search
 **Goal**: AI can recall and search all previous conversations across every channel using full-text search

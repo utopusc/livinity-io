@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-04-03T03:25:20.062Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-04-03T03:31:53.247Z"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -67,6 +67,8 @@ Plan: 2 of 2
 - [Phase 07]: ChannelStatus type cast for whatsappGetStatus data matching existing Telegram/Discord pattern
 - [Phase 08-01]: Redis sorted set sliding window for rate limiting (not simple counter) -- accurate across restarts
 - [Phase 08-01]: In-memory queue for overflow (not Redis list) -- sendFn closures cannot be serialized
+- [Phase 08]: Merged WhatsApp into existing channel arrays rather than special-casing -- unified routing through ChannelManager
+- [Phase 08]: buildActionCallback drops messages silently when ChannelManager unavailable (same behavior as non-WhatsApp channels)
 
 ### Pending Todos
 
@@ -80,6 +82,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T03:25:20.059Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-04-03T03:31:53.244Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
