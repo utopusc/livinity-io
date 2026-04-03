@@ -63,7 +63,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_ai-chat',
 		name: 'AI Chat',
-		icon: '/figma-exports/dock-home.png',
+		icon: '/figma-exports/dock-ai-chat.svg',
 		systemApp: true,
 		systemAppTo: '/ai-chat',
 	},
