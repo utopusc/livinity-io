@@ -97,7 +97,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Milestone Goal:** Enable persistent cross-session AI memory across all channels, add WhatsApp as a messaging channel with QR code authentication, unify conversation storage, and provide a memory management UI.
 
 - [ ] **Phase 6: WhatsApp Channel Foundation** - Baileys ChannelProvider with Redis-backed auth state and echo-loop guard
-- [ ] **Phase 7: WhatsApp QR Code & Settings UI** - QR code display, connection status, and disconnect in Settings > Integrations
+- [x] **Phase 7: WhatsApp QR Code & Settings UI** - QR code display, connection status, and disconnect in Settings > Integrations (completed 2026-04-03)
 - [ ] **Phase 8: WhatsApp Message Routing & Safety** - End-to-end messaging, rate limiting, legacy daemon.ts cleanup
 - [ ] **Phase 9: Cross-Session Conversation Persistence & Search** - FTS5 conversation store, archiver pipeline, AI search tool
 - [ ] **Phase 10: Unified Identity & Memory Management UI** - Cross-channel userId mapping, memory settings page with search/delete
@@ -132,7 +132,7 @@ Plans:
 
 Plans:
 - [x] 07-01-PLAN.md -- Nexus REST endpoints + tRPC routes for WhatsApp QR, status, connect, disconnect
-- [ ] 07-02-PLAN.md -- WhatsApp tab and QR panel in Settings > Integrations UI
+- [x] 07-02-PLAN.md -- WhatsApp tab and QR panel in Settings > Integrations UI
 
 ### Phase 8: WhatsApp Message Routing & Safety
 **Goal**: Users can message the AI via WhatsApp and receive responses, with rate limiting to prevent account bans
@@ -188,7 +188,7 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | - |
-| 7. WhatsApp QR Code & Settings UI | v25.0 | 0/2 | In progress | - |
+| 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete   | 2026-04-03 |
 | 8. WhatsApp Message Routing & Safety | v25.0 | 0/TBD | Not started | - |
 | 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/TBD | Not started | - |
 | 10. Unified Identity & Memory Management UI | v25.0 | 0/TBD | Not started | - |
