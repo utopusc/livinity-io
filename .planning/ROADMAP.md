@@ -161,7 +161,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- FTS5 conversation_turns table, /archive + /conversation-search endpoints, archival hooks in daemon + livinityd
+- [x] 09-01-PLAN.md -- FTS5 conversation_turns table, /archive + /conversation-search endpoints, archival hooks in daemon + livinityd
 - [ ] 09-02-PLAN.md -- conversation_search tool in ToolRegistry, agent guidance update, nexus-core build
 
 ### Phase 10: Unified Identity & Memory Management UI

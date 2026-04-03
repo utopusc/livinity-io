@@ -16,8 +16,8 @@
 
 ### Cross-Session Memory
 
-- [ ] **MEM-01**: AI can search past conversations semantically ("what did we discuss about Docker?")
-- [ ] **MEM-02**: Conversation turns persisted to SQLite FTS5 for full-text search
+- [x] **MEM-01**: AI can search past conversations semantically ("what did we discuss about Docker?")
+- [x] **MEM-02**: Conversation turns persisted to SQLite FTS5 for full-text search
 - [ ] **MEM-03**: conversation_search tool registered in ToolRegistry for AI use
 - [x] **MEM-04**: Legacy daemon.ts WhatsApp ad-hoc code consolidated into ChannelManager
 
@@ -64,8 +64,8 @@
 | WA-04 | Phase 6 | Complete |
 | WA-05 | Phase 8 | Complete |
 | WA-06 | Phase 7 | Complete |
-| MEM-01 | Phase 9 | Pending |
-| MEM-02 | Phase 9 | Pending |
+| MEM-01 | Phase 9 | Complete |
+| MEM-02 | Phase 9 | Complete |
 | MEM-03 | Phase 9 | Pending |
 | MEM-04 | Phase 8 | Complete |
 | UI-01 | Phase 10 | Pending |

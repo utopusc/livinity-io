@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-04-03T03:35:53.384Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-04-03T03:45:55.727Z"
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v25.0 -- Memory & WhatsApp Integration
-**Current focus:** Phase 08 — whatsapp-message-routing-safety
+**Current focus:** Phase 09 — cross-session-conversation-persistence-search
 
 ## Current Position
 
-Phase: 9
-Plan: Not started
+Phase: 09 (cross-session-conversation-persistence-search) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -69,6 +69,9 @@ Plan: Not started
 - [Phase 08-01]: In-memory queue for overflow (not Redis list) -- sendFn closures cannot be serialized
 - [Phase 08]: Merged WhatsApp into existing channel arrays rather than special-casing -- unified routing through ChannelManager
 - [Phase 08]: buildActionCallback drops messages silently when ChannelManager unavailable (same behavior as non-WhatsApp channels)
+- [Phase 09]: FTS5 query sanitization via double-quote wrapping prevents injection
+- [Phase 09]: Fire-and-forget archival pattern (.catch) to never block chat responses
+- [Phase 09]: Channel messages use chatId as userId (unified identity deferred)
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T03:31:53.244Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-04-03T03:45:55.724Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
