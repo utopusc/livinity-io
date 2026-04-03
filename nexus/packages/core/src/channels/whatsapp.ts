@@ -287,11 +287,19 @@ export class WhatsAppProvider implements ChannelProvider {
   }
 
   private async handleMessage(msg: any): Promise<void> {
-    // Skip own messages (echo loop prevention)
-    if (msg.fromMe) return;
-
     // Skip non-chat messages (status updates, etc)
     if (!msg.body || msg.isStatus) return;
+
+    // ONLY respond to messages from the account owner (fromMe=true)
+    // This prevents AI from responding to other people's messages
+    if (!msg.fromMe) return;
+
+    // Only respond to messages starting with "!" prefix
+    if (!msg.body.startsWith('!')) return;
+
+    // Strip the "!" prefix before passing to AI
+    const text = msg.body.slice(1).trim();
+    if (!text) return;
 
     // Dedup
     if (this.messageDedup.has(msg.id._serialized)) return;
@@ -309,7 +317,7 @@ export class WhatsAppProvider implements ChannelProvider {
       chatId: msg.from,
       userId: msg.from,
       userName: contact?.pushname || contact?.name || msg.from.replace('@c.us', ''),
-      text: msg.body,
+      text,
       timestamp: msg.timestamp * 1000,
       replyToMessageId: msg.hasQuotedMsg ? msg._data?.quotedStanzaID : undefined,
       isGroup: chat.isGroup,
