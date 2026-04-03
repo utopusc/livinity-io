@@ -79,7 +79,7 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 	// Shell commands: show just the command string
 	if (isShellTool(toolCall.name) && toolCall.input.command) {
 		return (
-			<div className='rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
+			<div className='overflow-x-auto rounded bg-surface-2 p-2 font-mono text-xs text-text-primary'>
 				<span className='text-text-tertiary'>$ </span>
 				{String(toolCall.input.command)}
 			</div>
@@ -91,7 +91,7 @@ function renderToolInput(toolCall: ChatToolCall): React.ReactNode {
 		const path = toolCall.input.path || toolCall.input.file_path || toolCall.input.filename
 		if (path) {
 			return (
-				<div className='rounded bg-surface-2 px-2 py-1.5 font-mono text-xs text-text-primary'>
+				<div className='overflow-x-auto rounded bg-surface-2 px-2 py-1.5 font-mono text-xs text-text-primary'>
 					{String(path)}
 				</div>
 			)
@@ -357,15 +357,15 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 			<button
 				onClick={() => setExpanded(!expanded)}
 				className={cn(
-					'group flex w-full items-center gap-1.5 text-left text-xs hover:bg-surface-1/50 rounded px-1 -mx-1',
+					'group flex w-full items-center gap-1.5 overflow-hidden text-left text-xs hover:bg-surface-1/50 rounded px-1 -mx-1',
 					isMobile ? 'py-2' : 'py-0.5'
 				)}
 			>
 				{statusDot}
 				<ToolIcon size={13} className={cn(iconColor, 'flex-shrink-0')} />
-				<span className={cn('font-mono font-medium', iconColor)}>{formatToolName(toolCall.name)}</span>
+				<span className={cn('flex-shrink-0 font-mono font-medium', iconColor)}>{formatToolName(toolCall.name)}</span>
 				{summary && (
-					<span className='truncate font-mono text-text-secondary'>
+					<span className='min-w-0 truncate font-mono text-text-secondary'>
 						{isShellTool(toolCall.name) ? `$ ${summary}` : summary}
 					</span>
 				)}
