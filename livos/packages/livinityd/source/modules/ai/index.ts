@@ -421,6 +421,9 @@ export default class AiModule {
 		conversation.messages.push(userMsg)
 		await this.saveConversation(conversation, userId)
 
+		// Archive user turn to persistent SQLite store
+		this.archiveToMemory(userId || 'default', 'web', conversationId, 'user', userMessage).catch(() => {})
+
 		// Build context from recent history
 		const recentHistory = conversation.messages
 			.slice(-10)
@@ -491,6 +494,8 @@ export default class AiModule {
 					}
 					conversation.messages.push(assistantMsg)
 					await this.saveConversation(conversation, userId)
+					// Archive assistant turn to persistent SQLite store
+					this.archiveToMemory(userId || 'default', 'web', conversationId, 'assistant', finalAnswer).catch(() => {})
 					return assistantMsg
 				}
 				// JSON response but not a command — treat as an error
@@ -703,9 +708,28 @@ export default class AiModule {
 		conversation.messages.push(assistantMsg)
 		conversation.updatedAt = Date.now()
 		await this.saveConversation(conversation, userId)
+		// Archive assistant turn to persistent SQLite store
+		this.archiveToMemory(userId || 'default', 'web', conversationId, 'assistant', assistantMsg.content).catch(() => {})
 		this.chatStatus.delete(conversationId)
 
 		return assistantMsg
+	}
+
+	/** Archive a conversation turn to the memory service for persistent FTS5-backed search */
+	private async archiveToMemory(userId: string, channel: string, chatId: string, role: 'user' | 'assistant', content: string): Promise<void> {
+		try {
+			const apiKey = process.env.LIV_API_KEY || ''
+			await fetch('http://localhost:3300/archive', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-API-Key': apiKey,
+				},
+				body: JSON.stringify({ userId: userId || 'default', channel, chatId, role, content }),
+			})
+		} catch {
+			// Silent fail — archival is best-effort, don't block chat
+		}
 	}
 
 	async saveConversation(conversation: Conversation, userId?: string): Promise<void> {
