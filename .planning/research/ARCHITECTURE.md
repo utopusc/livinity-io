@@ -1,414 +1,666 @@
-# Architecture Patterns: Mobile PWA Integration
+# Architecture Patterns: v25.0 WhatsApp + Cross-Session Memory
 
-**Domain:** PWA integration into existing desktop-first React SPA
-**Researched:** 2026-04-01
-**Confidence:** HIGH (based on direct codebase analysis + PWA standards)
-
-## Executive Summary
-
-Livinity's UI is a desktop-first React 18 SPA with a windowed interface. On desktop, system apps (AI Chat, Settings, Files, Server, Terminal, etc.) open as draggable floating windows via `WindowManagerProvider` / `WindowsContainer`. On mobile (< 1024px), `WindowsContainer` returns `null` and the existing `SheetLayout` renders some apps as bottom-sheet overlays. However, only a subset of apps are registered as routes under `SheetLayout` -- the AI-heavy apps (AI Chat, Server Control, Agents, Schedules, Terminal, My Devices) are **window-only** with no route registration, meaning they are completely inaccessible on mobile today.
-
-The mobile PWA integration must solve two problems: (1) make the app installable as a PWA, and (2) provide a phone-native rendering path for all system apps that currently only work in windows.
+**Domain:** WhatsApp channel integration + cross-session AI memory for LivOS
+**Researched:** 2026-04-02
+**Confidence:** HIGH (based on direct codebase analysis of existing channel + memory systems, Baileys documentation, SQLite FTS5 docs)
 
 ## Recommended Architecture
 
-**Strategy: MobileAppRenderer -- a new component that renders app content as full-screen overlays on mobile, using the existing `WindowAppContent` component tree.**
-
-Do NOT extend `SheetLayout`. SheetLayout is a bottom-sheet dialog designed for browsing content (Files, Settings, App Store) with close/back-to-desktop semantics. Mobile apps need full-screen rendering with navigation, status bars, and safe area handling -- a fundamentally different UX pattern.
-
-### High-Level Rendering Flow
+Two independent tracks that converge at the message processing layer:
 
 ```
-Desktop (>= 1024px):
-  Router "/" -> Desktop -> DesktopContent (AppGrid + Dock)
-                        -> WindowsContainer (floating windows)
-                        -> SheetLayout (Files, Settings, App Store sheets)
+Track A: WhatsApp Channel                Track B: Cross-Session Memory
+========================                ===========================
 
-Mobile (< 1024px):
-  Router "/" -> Desktop -> DesktopContent (MobileAppGrid with system apps, no Dock)
-                        -> MobileAppRenderer (full-screen app overlays)
-                        -> WindowsContainer returns null (unchanged)
-                        -> SheetLayout still works for Files/Settings/App Store
+[WhatsApp Phone]                        [Any Channel Message]
+     |                                       |
+     v                                       v
+[Baileys WebSocket]                     [ChannelManager.onMessage()]
+     |                                       |
+     v                                       v
+[WhatsAppProvider]                      [Daemon message handler]
+  implements ChannelProvider                 |
+     |                                       +---> [Redis hot cache (24h TTL)]
+     +---> [ChannelManager]                  +---> [Memory service: conversations_archive (SQLite)]
+     |          |                            +---> [Memory service: FTS5 index (SQLite)]
+     |          v                            +---> [BullMQ: memory extraction job]
+     |     [Daemon message handler]
+     |                                  [AI Tool: conversation_search]
+     +---> [Redis: QR code, auth, status]        |
+                                             v
+                                        [Memory service: POST /conversations/search]
+                                             |
+                                             v
+                                        [FTS5 MATCH + BM25 + optional semantic rerank]
 ```
 
-### Component Boundaries
+### Architecture Decision: Baileys over whatsapp-web.js
 
-| Component | Responsibility | Status | Communicates With |
-|-----------|---------------|--------|-------------------|
-| `useIsMobile()` | Viewport detection (< 1024px) | EXISTS -- no changes needed | All mobile-aware components |
-| `site.webmanifest` | PWA installability manifest | EXISTS -- needs enhancement | Browser PWA engine |
-| Service Worker | Cache-first offline shell, update prompts | NEW -- `vite-plugin-pwa` | Vite build pipeline |
-| `MobileAppGrid` | Phone-style app grid with system apps visible | MODIFY `DesktopContent` | `AppsProvider`, `MobileAppRenderer` |
-| `MobileAppRenderer` | Full-screen overlay rendering of any app by ID | NEW | `WindowContent` (reuse), navigation state |
-| `MobileNavBar` | Top status bar with back button, app title | NEW | `MobileAppRenderer` |
-| `Dock` | Hide on mobile | MODIFY -- conditional render | `useIsMobile()` |
-| `DockBottomPositioner` | Hide on mobile | MODIFY -- conditional render | `useIsMobile()` |
-| `WindowContent` | Lazy-loaded app content by appId | EXISTS -- no changes | `MobileAppRenderer`, `Window` |
-| Safe area CSS | `env(safe-area-inset-*)` for notch/home indicator | NEW -- global CSS | `index.html` viewport-fit, Tailwind |
+**Use `@whiskeysockets/baileys` v7.x** (not whatsapp-web.js).
 
-## Integration Points: What to Modify vs Create
+| Criterion | Baileys | whatsapp-web.js |
+|-----------|---------|-----------------|
+| Memory usage | ~50MB | 300-600MB (Puppeteer) |
+| Startup time | <1s | 5-10s |
+| Browser dependency | None (pure WebSocket) | Chromium required |
+| TypeScript | Native TS types | JS with @types |
+| Multi-device | Native MD support | MD support |
+| Server fit | Headless, lightweight | Heavy, browser process |
+| Ban risk | Higher recently | Slightly lower per reports |
 
-### Files to MODIFY (minimal, targeted changes)
+Baileys is the right choice for a self-hosted server OS because it runs headless with minimal resources. The server environment has no display, making Puppeteer-based whatsapp-web.js wasteful and complex.
 
-**1. `livos/packages/ui/index.html`** -- Add viewport-fit=cover for safe areas + Apple meta tags
+**Confidence: HIGH** - Baileys is the dominant choice for Node.js headless WhatsApp integration. The pure WebSocket approach aligns with how LivOS already handles Telegram (grammy) and Discord (discord.js).
 
-Current viewport meta:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-```
+### Architecture Decision: Redis Auth State (not SQLite, not file-based)
 
-Needed:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Livinity" />
-```
+**Use Redis-backed auth state** for Baileys session persistence.
 
-**2. `livos/packages/ui/public/site.webmanifest`** -- Add required PWA fields
+Rationale: The codebase already uses Redis for ALL Baileys-adjacent data (wa_outbox, wa_history, wa_contacts, wa_pending, channel configs, channel statuses). Baileys auth keys are small (~100 keys) and need atomic reads/writes. Redis pipeline operations make this fast. Using SQLite would introduce a second persistence layer for WhatsApp when Redis already handles everything else.
 
-Current manifest is minimal (missing `start_url`, `scope`, `orientation`, and maskable icon). Needs:
-```json
-{
-  "name": "Livinity",
-  "short_name": "Livinity",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "portrait",
-  "theme_color": "#f8f9fc",
-  "background_color": "#f8f9fc",
-  "icons": [
-    {"src": "/favicon/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "/favicon/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png"},
-    {"src": "/favicon/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
-  ]
-}
-```
+**Confidence: HIGH** - Validated by existing `baileys-redis-auth` npm package and community patterns. Baileys documentation explicitly warns against file-based auth.
 
-**3. `livos/packages/ui/vite.config.ts`** -- Add `vite-plugin-pwa`
+### Architecture Decision: FTS5 Primary + Embedding Rerank for Conversation Search
 
-Add `VitePWA` plugin with `generateSW` strategy. No manual service worker file needed. Configuration only.
+**Use SQLite FTS5 as primary search, with optional Kimi embedding reranking on top results.**
 
-**4. `livos/packages/ui/src/router.tsx`** -- Wire MobileAppProvider + MobileAppRenderer
+Rationale: The memory service already uses `better-sqlite3` (FTS5 compiled in by default). FTS5 with BM25 ranking handles "what did we talk about Docker" queries in <5ms for typical self-hosted volumes. Embedding every message is wasteful (Kimi API rate limits, "ok" and "thanks" don't need embeddings). Instead: FTS5 for keyword search, embed only conversation summaries for optional semantic reranking on top-N FTS results.
 
-Add `MobileAppProvider` inside the existing provider tree (around `Desktop` and siblings). Add `MobileAppRenderer` as a sibling of `WindowsContainer`. No route structure changes.
+**Confidence: MEDIUM** - FTS5 pattern is proven in SQLite ecosystem. The hybrid approach (FTS5 primary + embedding rerank) is well-documented but the specific Kimi embedding performance at scale is untested.
 
-**5. `livos/packages/ui/src/modules/desktop/dock.tsx`** -- Hide dock on mobile
+---
 
-The `Dock` component already imports `useIsMobile()`. Add early return: `if (isMobile) return null`. Same for `DockBottomPositioner`.
+## Component Boundaries
 
-**6. `livos/packages/ui/src/modules/desktop/desktop-content.tsx`** -- Mobile app grid
+### New Components
 
-On mobile, add core system app icons (AI Chat, Settings, Files, Server, Terminal) to the grid items array. Change their `onClick` to call `mobileAppContext.openApp()` instead of `windowManager.openWindow()`. Desktop behavior completely unchanged.
+| Component | Location | Responsibility | Communicates With |
+|-----------|----------|---------------|-------------------|
+| `WhatsAppProvider` | `nexus/packages/core/src/channels/whatsapp.ts` | Baileys socket lifecycle, QR code emission, message send/receive | ChannelManager, Redis, Daemon inbox |
+| `WhatsAppAuthStore` | `nexus/packages/core/src/channels/whatsapp-auth.ts` | Redis-backed auth state for Baileys (replaces useMultiFileAuthState) | Redis |
+| `ConversationArchiver` | `nexus/packages/memory/src/archiver.ts` | Archives channel conversation turns to SQLite + FTS5 | Redis, SQLite memory.db, Kimi API (summaries) |
+| `ConversationSearchEndpoint` | `nexus/packages/memory/src/index.ts` (new routes) | `/conversations/search` + `/conversations/messages` APIs | SQLite memory.db |
+| WhatsApp Settings Panel | `livos/packages/ui/src/routes/settings/integrations.tsx` (extend) | QR code display, connection status, reconnect/disconnect | tRPC routes |
+| Memory Management Panel | `livos/packages/ui/src/routes/settings/memory.tsx` (new) | View, search, delete stored memories + conversation history | tRPC routes, memory service |
+| `conversation_search` tool | `nexus/packages/core/src/daemon.ts` (registerTools) | AI tool to search past conversations | Memory service /conversations/search |
+| `UserIdentityMapper` | `nexus/packages/core/src/user-identity.ts` (new) | Maps channel-specific IDs (Telegram userId, WA JID) to canonical LivOS userId | Redis, PostgreSQL |
 
-**7. `livos/packages/ui/src/modules/desktop/dock.tsx` (DockSpacer)** -- Return null on mobile
+### Modified Components
 
-When dock is hidden, the 76px bottom spacer should also be hidden.
+| Component | File | Change | Impact |
+|-----------|------|--------|--------|
+| `ChannelId` type | `channels/types.ts` | Add `'whatsapp'` to union type | Type system, all channel switches |
+| `CHANNEL_META` | `channels/types.ts` | Add WhatsApp entry `{ name: 'WhatsApp', color: '#25D366', textLimit: 65536 }` | Channel metadata registry |
+| `ChannelManager` constructor | `channels/index.ts` | `this.providers.set('whatsapp', new WhatsAppProvider())` | Auto-init on startup |
+| `ChannelManager.subscribeToConfigUpdates` | `channels/index.ts` | Handle WhatsApp-specific config actions (pair, disconnect) | QR re-pairing flow |
+| `Daemon.processInboxItem` | `daemon.ts` | Add 'whatsapp' to `realtimeSources` array (line 555) | Real-time processing (not queued) |
+| `Daemon.sendWhatsAppResponse` | `daemon.ts` | Route through `sendChannelResponse` instead of wa_outbox | Consolidate dual routing |
+| `Daemon.registerTools` | `daemon.ts` | Add `conversation_search` tool registration | AI can search past conversations |
+| `Daemon.cycle` | `daemon.ts` | Remove separate WhatsApp inbox polling | Clean up legacy code |
+| Memory extraction worker | `index.ts` | Also call conversation archiver after extraction | Cross-session persistence |
+| Settings Integrations UI | `settings/integrations.tsx` | Add WhatsApp tab (5th tab in grid) | User-facing config |
+| tRPC routes | `ai/routes.ts` | Add WhatsApp QR polling + memory management endpoints | API layer |
+| `Intent.source` | `router.ts` | Already includes 'whatsapp' | **No change needed** |
+| nexus-core `package.json` | `packages/core/package.json` | Add @whiskeysockets/baileys, qrcode, @types/qrcode | Dependencies |
 
-### Files to CREATE (new components)
+### Unchanged Components
 
-**1. `livos/packages/ui/src/modules/mobile/mobile-app-renderer.tsx`**
+| Component | Why Unchanged |
+|-----------|---------------|
+| `TelegramProvider` | Already correct ChannelProvider implementation |
+| `DiscordProvider` | Already correct ChannelProvider implementation |
+| `AgentSessionManager` | Web UI sessions are independent path |
+| `ws-agent.ts` | WebSocket agent handler for browser only |
+| `Brain` / `ProviderManager` | AI provider layer unchanged |
+| `DmPairingManager` | Already supports any channel string, works with 'whatsapp' |
 
-Core new component. Full-screen overlay that renders an app by appId. Uses Framer Motion slide-up animation. Imports `WindowAppContent` from `window-content.tsx` to lazy-load the correct app component. Handles safe area insets.
-
-Conceptual structure:
-```typescript
-function MobileAppRenderer() {
-  const {activeApp, closeApp} = useMobileApp()
-  if (!activeApp) return null
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 z-40 flex flex-col bg-surface-base"
-        style={{
-          paddingTop: 'env(safe-area-inset-top)',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-        initial={{y: '100%'}}
-        animate={{y: 0}}
-        exit={{y: '100%'}}
-        transition={{type: 'spring', damping: 30, stiffness: 300}}
-      >
-        <MobileNavBar title={activeApp.title} onBack={closeApp} />
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <WindowAppContent appId={activeApp.appId} initialRoute={activeApp.route} />
-        </div>
-      </motion.div>
-    </AnimatePresence>
-  )
-}
-```
-
-**2. `livos/packages/ui/src/modules/mobile/mobile-nav-bar.tsx`**
-
-Top navigation bar with: chevron-left back button, centered app title, optional right action slot. Height ~44px + safe-area-inset-top. Background extends behind status bar for seamless look.
-
-**3. `livos/packages/ui/src/modules/mobile/mobile-app-context.tsx`**
-
-Lightweight React context that tracks which app is open on mobile. Completely separate from the desktop `WindowManagerProvider`.
-
-```typescript
-type MobileAppState = {
-  appId: string
-  route: string
-  title: string
-  icon: string
-} | null
-
-type MobileAppContextT = {
-  activeApp: MobileAppState
-  openApp: (appId: string, route: string, title: string, icon: string) => void
-  closeApp: () => void
-}
-```
-
-**4. `livos/packages/ui/src/modules/mobile/use-mobile-back.ts`**
-
-Hook that integrates with the browser History API. When `openApp()` is called, pushes a state entry. When the user presses the browser/OS back button (popstate event), calls `closeApp()`. This makes the hardware back button on Android and the swipe-back gesture on iOS work naturally.
-
-**5. Service worker** -- Auto-generated by `vite-plugin-pwa`
-
-The `generateSW` strategy in vite-plugin-pwa produces the service worker at build time via Workbox. No manual `sw.js` file needed. Precaches the SPA shell (HTML, JS, CSS, fonts). No runtime API caching -- LivOS is a real-time server management tool where stale API responses would be harmful.
-
-### Files that need NO changes
-
-| File | Why It Is Fine |
-|------|----------------|
-| `providers/window-manager.tsx` | Desktop-only provider; MobileAppRenderer does not use it |
-| `modules/window/windows-container.tsx` | Already returns null on mobile |
-| `layouts/sheet.tsx` (SheetLayout) | Continues to work for Files/Settings/App Store on both platforms |
-| `modules/desktop/app-icon.tsx` | Generic icon component, works for both grid contexts |
-| `providers/apps.tsx` | System app definitions already complete; no changes needed |
-| `hooks/use-is-mobile.ts` | Already works correctly at < 1024px breakpoint |
-| All app content components (AI Chat, Server, Terminal, etc.) | These render inside any container; already use `useIsMobile()` for internal responsive adjustments |
-| `modules/window/window-content.tsx` | Need to export `WindowAppContent` but no logic changes |
+---
 
 ## Data Flow
 
-### Desktop (unchanged)
+### WhatsApp Message Flow (Inbound)
+
 ```
-User clicks dock icon
-  -> DockItem.onOpenWindow()
-  -> windowManager.openWindow(appId, route, title, icon)
-  -> WindowsContainer renders <Window><WindowContent appId={...} /></Window>
+WhatsApp Cloud (WebSocket)
+    |
+    v
+Baileys Socket (in WhatsAppProvider)
+    |
+    v ev.on('messages.upsert', { type: 'notify' })
+WhatsAppProvider.handleMessages()
+    |
+    +--> Skip own messages (msg.key.fromMe)
+    +--> Dedup via Redis (nexus:whatsapp:dedup:{msgId})
+    +--> DmPairingManager.checkAndInitiatePairing('whatsapp', jid, name, chatId)
+    |
+    +--> Construct IncomingMessage {
+    |      channel: 'whatsapp',
+    |      chatId: jid,
+    |      userId: jid (or normalized phone),
+    |      userName: pushName,
+    |      text: msg.message.conversation || extendedTextMessage.text,
+    |      timestamp: msg.messageTimestamp * 1000,
+    |      isGroup: jid.endsWith('@g.us'),
+    |      groupName: from group metadata cache,
+    |    }
+    |
+    v messageHandler callback (set by ChannelManager.onMessage)
+Daemon.enqueueMessage({ source: 'whatsapp', from: jid, ... })
+    |
+    v processInboxItem (real-time path, line 558)
+    |
+    +--> getChannelHistory('whatsapp', jid) -> Redis hot cache
+    +--> classify + execute agent
+    +--> sendChannelResponse (through ChannelManager)
+    +--> saveChannelTurn('whatsapp', jid, userMsg, response)
+    +--> BullMQ: nexus-memory-extraction job (async)
 ```
 
-### Mobile (new)
+### WhatsApp QR Code Flow
+
 ```
-User taps app icon in grid
-  -> AppIcon.onClick()
-  -> mobileAppContext.openApp(appId, route, title, icon)
-  -> history.pushState({mobileApp: appId}) for back button support
-  -> MobileAppRenderer renders full-screen overlay with slide-up animation
-  -> <WindowAppContent appId={...} /> (same lazy components as desktop)
-
-User taps back button / swipes back / presses hardware back
-  -> popstate event fires
-  -> use-mobile-back hook detects mobileApp state
-  -> mobileAppContext.closeApp()
-  -> MobileAppRenderer animates out (slide-down)
-  -> Returns to home screen app grid
+User opens Settings > Integrations > WhatsApp tab
+    |
+    v tRPC mutation: ai.saveIntegrationConfig({ channel: 'whatsapp', config: { enabled: true } })
+    |
+    v Redis publish: 'nexus:channel:updated' { channel: 'whatsapp' }
+    |
+    v ChannelManager receives pub/sub
+    |
+    v WhatsAppProvider.disconnect() then .connect()
+    |
+    v Baileys: makeWASocket({ auth: state, ... })
+    |
+    v connection.update event fires with { qr: 'data...' }
+    |
+    v WhatsAppProvider:
+         await redis.set('nexus:whatsapp:qr', qrDataUrl, 'EX', 60)
+         await redis.publish('nexus:whatsapp:qr_update', qrDataUrl)
+    |
+    v UI polls tRPC query: ai.getWhatsAppQR() every 2s
+    |    -> reads from redis.get('nexus:whatsapp:qr')
+    |    -> returns QR data URL or null (connected)
+    |
+    v UI renders <img src={qrDataUrl} /> or QR component
+    |
+    v User scans QR with WhatsApp phone
+    |
+    v connection.update { connection: 'open' }
+    |
+    v WhatsAppProvider:
+         redis.del('nexus:whatsapp:qr')
+         status = { enabled: true, connected: true, lastConnect: now }
+         saveStatus()
+    |
+    v UI poll returns null QR + status.connected = true -> show "Connected" state
 ```
 
-### Key Insight: Reuse WindowAppContent
+### WhatsApp Auth State Persistence (Redis)
 
-The `WindowAppContent` switch statement in `window-content.tsx` (lines 50-99) already maps every appId to its lazy-loaded component. The mobile renderer reuses this exact function. Every app that works in a desktop window automatically works in the mobile full-screen view with zero per-app work.
+```
+Baileys events:
+  creds.update -> WhatsAppAuthStore.saveCreds(creds)
+  keys.set     -> WhatsAppAuthStore.setKeys(data) via Redis pipeline
+  keys.get     -> WhatsAppAuthStore.getKeys(type, ids) via Redis mget
 
-Currently `WindowAppContent` is not exported. The only change needed to `window-content.tsx` is adding the `export` keyword to that function.
+Redis key structure:
+  nexus:wa:auth:creds                    -> JSON (credentials blob)
+  nexus:wa:auth:keys:{type}:{id}         -> JSON (individual signal keys)
+  TTL: none (persistent until logout)
 
-### SheetLayout Apps on Mobile
+On restart:
+  WhatsAppAuthStore.loadState()
+    -> redis.get('nexus:wa:auth:creds')
+    -> If creds exist: reconnect silently (no QR needed)
+    -> If no creds: set status to 'disconnected', wait for user to enable
+```
 
-Files, Settings, and App Store already render via `SheetLayout` on both desktop and mobile. On mobile, `SheetLayout` renders as a full-height bottom sheet. These apps do NOT need the `MobileAppRenderer` -- they continue working through their existing route-based rendering. The user can still navigate to `/files/Home` or `/settings` via the app grid.
+### Cross-Session Memory Flow
 
-The decision of whether an app uses SheetLayout (route-based) or MobileAppRenderer (context-based overlay):
-- **SheetLayout:** Files, Settings, App Store, Community App Store -- already have routes
-- **MobileAppRenderer:** AI Chat, Server Control, My Devices, Agents, Schedules, Terminal -- window-only apps
+```
+Conversation turn completes (any channel)
+    |
+    +--> (EXISTING) BullMQ: nexus-memory-extraction queue
+    |    Worker extracts facts -> POST /add to memory service
+    |
+    +--> (NEW) POST http://localhost:3300/conversations/messages
+    |    {
+    |      conversationId: 'conv_xxx',
+    |      userId: 'admin' or livosUserId,
+    |      channel: 'whatsapp' | 'telegram' | 'web' | ...,
+    |      role: 'user' | 'assistant',
+    |      content: 'message text',
+    |      timestamp: Date.now()
+    |    }
+    |
+    v Memory service inserts into conversation_messages + FTS5 index
+    |
+    v (Periodic background job, every 15 min)
+    |  ConversationArchiver:
+    |    - Scan conversations with >5 messages and no summary
+    |    - Brain.think(haiku): generate 2-sentence summary
+    |    - Embed summary via Kimi embeddings API
+    |    - INSERT into conversations_archive { id, summary, embedding, ... }
+
+AI search flow:
+    User: "What did we discuss about Docker last week?"
+    |
+    v Agent calls conversation_search tool
+    |  params: { query: "Docker last week", limit: 5 }
+    |
+    v POST http://localhost:3300/conversations/search
+    |  { userId, query: "Docker", limit: 5, days: 7 }
+    |
+    v Memory service:
+    |  1. FTS5 MATCH 'docker' on conversation_messages_fts
+    |  2. Filter: user_id = ? AND timestamp > (now - 7 days)
+    |  3. Rank by BM25 score
+    |  4. Group by conversation, return top conversations with preview snippets
+    |  5. (Optional) If semantic rerank enabled: embed query, cosine-sim on conversation summaries
+    |
+    v Returns: [{ conversationId, summary, channel, date, score, snippets }]
+```
+
+### Unified User Identity Flow
+
+```
+Message arrives from any channel
+    |
+    v UserIdentityMapper.resolve(channel, channelUserId)
+    |
+    +--> Redis cache: GET nexus:identity:whatsapp:905551234567@s.whatsapp.net
+    |    If found: return cached livosUserId
+    |
+    +--> PostgreSQL: SELECT user_id FROM user_channel_identities
+    |    WHERE channel = 'whatsapp' AND channel_user_id = '905551234567@s.whatsapp.net'
+    |    If found: cache in Redis (24h TTL), return livosUserId
+    |
+    +--> If DmPairing approved:
+    |    INSERT INTO user_channel_identities (user_id, channel, channel_user_id, display_name)
+    |    Cache in Redis
+    |
+    v livosUserId used for:
+       - Memory service userId parameter (memories + conversation_messages)
+       - Conversation storage prefix: liv:ui:u:{userId}:conv:...
+       - Per-user preferences
+       - App access control
+```
+
+---
 
 ## Patterns to Follow
 
-### Pattern 1: Mobile-First Conditional Rendering
-**What:** Use `useIsMobile()` at the component level to choose rendering path.
-**When:** Components that need fundamentally different UX on mobile vs desktop.
-**Already used in:** `WindowsContainer` (`if (isMobile) return null`), `Dock` (dimension sizing), `AiChat` (drawer sidebar vs fixed sidebar).
+### Pattern 1: ChannelProvider Implementation (Proven Pattern)
 
-### Pattern 2: Shared Content, Different Chrome
-**What:** App content components are platform-agnostic. Only the containing shell differs (Window frame vs MobileAppRenderer vs SheetLayout).
-**When:** Rendering the same app in different contexts.
-**Why:** Prevents maintaining two versions of every app. AI Chat already uses `useIsMobile()` internally for its sidebar (drawer on mobile, fixed panel on desktop) -- this pattern is established.
+**What:** Every messaging channel implements the same `ChannelProvider` interface. WhatsApp follows the exact same pattern as Telegram.
+**When:** Adding any new messaging channel.
+**Why:** The existing 5 providers (telegram, discord, slack, matrix, gmail) prove this interface works.
 
-### Pattern 3: Context-Based Navigation State
-**What:** A lightweight React context (`MobileAppContext`) manages which app is currently open on mobile, separate from the desktop `WindowManagerProvider`.
-**When:** Mobile app open/close state.
-**Why:** The desktop WindowManager manages multiple simultaneous windows with z-index, drag, resize -- none of which apply to mobile's single-app-at-a-time model. A separate, simpler context avoids bloating WindowManager with mobile concerns.
+The `TelegramProvider` is the closest analog to WhatsApp:
+- Both use long-lived connections (Telegram polling vs WhatsApp WebSocket)
+- Both need message deduplication (Telegram update_id vs WhatsApp message key)
+- Both support groups
+- Both need reconnection with exponential backoff
+- Both have DmPairing integration
 
-### Pattern 4: History API for Back Navigation
-**What:** Push a history entry when opening a mobile app, listen for popstate to close it.
-**When:** Any full-screen overlay on mobile.
-**Why:** Users expect the browser/OS back button to close the current view. Without this, back navigates away from the entire app. This pattern is critical for PWA "feels native" UX.
+```typescript
+export class WhatsAppProvider implements ChannelProvider {
+  readonly id = 'whatsapp' as const;
+  readonly name = 'WhatsApp';
+
+  private sock: ReturnType<typeof makeWASocket> | null = null;
+  private authStore: WhatsAppAuthStore | null = null;
+  private redis: Redis | null = null;
+  private config: ChannelConfig = { enabled: false };
+  private status: ChannelStatus = { enabled: false, connected: false };
+  private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
+
+  async init(redis: Redis): Promise<void> {
+    this.redis = redis;
+    this.authStore = new WhatsAppAuthStore(redis);
+    await this.loadConfig();
+  }
+
+  async connect(): Promise<void> {
+    if (!this.config.enabled) {
+      this.status = { enabled: false, connected: false };
+      return;
+    }
+
+    const { state, saveCreds } = await this.authStore!.loadState();
+
+    this.sock = makeWASocket({
+      auth: state,
+      logger: pino({ level: 'silent' }),
+      browser: ['LivOS', 'Desktop', '1.0.0'],
+      markOnlineOnConnect: false,
+    });
+
+    this.sock.ev.on('creds.update', saveCreds);
+    this.sock.ev.on('connection.update', (u) => this.handleConnectionUpdate(u));
+    this.sock.ev.on('messages.upsert', (m) => this.handleMessages(m));
+  }
+  // ... sendMessage, disconnect, getStatus, etc.
+}
+```
+
+### Pattern 2: Write-Through Cache for Conversations
+
+**What:** Redis remains the hot cache for active conversation context. SQLite is the durable store for historical search. Every message is written to both.
+**When:** Persisting any conversation message from any channel.
+**Why:** Redis gives sub-millisecond context injection into agent prompts. SQLite gives unbounded history for FTS5 search. Neither alone is sufficient.
+
+```typescript
+// In daemon message handler:
+// 1. Read from Redis (fast, current session context)
+const recentHistory = await this.getChannelHistory('whatsapp', jid);
+
+// 2. Process with agent
+const response = await this.processWithAgent(msg, recentHistory);
+
+// 3. Write-through: Redis (hot, 24h TTL) + SQLite (durable)
+await this.saveChannelTurn('whatsapp', jid, msg, response);     // Redis
+await this.archiveConversationTurn(userId, 'whatsapp', msg, response); // SQLite (async)
+```
+
+### Pattern 3: Redis-Backed Baileys Auth State
+
+**What:** Custom auth state backed by Redis instead of Baileys' default multi-file JSON.
+**When:** Production WhatsApp deployment.
+**Why:** Baileys docs say "DONT EVER USE useMultiFileAuthState IN PROD." Redis is already the state store for all Baileys data in this codebase.
+
+```typescript
+export class WhatsAppAuthStore {
+  private redis: Redis;
+  private readonly prefix = 'nexus:wa:auth';
+
+  async loadState(): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
+    const credsStr = await this.redis.get(`${this.prefix}:creds`);
+    const creds = credsStr
+      ? JSON.parse(credsStr, BufferJSON.reviver)
+      : initAuthCreds();
+
+    const state: AuthenticationState = {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const pipeline = this.redis.pipeline();
+          for (const id of ids) pipeline.get(`${this.prefix}:keys:${type}:${id}`);
+          const results = await pipeline.exec();
+          const mapped: Record<string, any> = {};
+          ids.forEach((id, i) => {
+            const val = results?.[i]?.[1];
+            if (val) mapped[id] = JSON.parse(val as string, BufferJSON.reviver);
+          });
+          return mapped;
+        },
+        set: async (data) => {
+          const pipeline = this.redis.pipeline();
+          for (const [type, entries] of Object.entries(data)) {
+            for (const [id, value] of Object.entries(entries)) {
+              const key = `${this.prefix}:keys:${type}:${id}`;
+              if (value) pipeline.set(key, JSON.stringify(value, BufferJSON.replacer));
+              else pipeline.del(key);
+            }
+          }
+          await pipeline.exec();
+        },
+      },
+    };
+
+    const saveCreds = async () => {
+      await this.redis.set(
+        `${this.prefix}:creds`,
+        JSON.stringify(state.creds, BufferJSON.replacer)
+      );
+    };
+
+    return { state, saveCreds };
+  }
+
+  async clearAll(): Promise<void> {
+    const keys = await this.redis.keys(`${this.prefix}:*`);
+    if (keys.length > 0) await this.redis.del(...keys);
+  }
+}
+```
+
+### Pattern 4: FTS5 with Content Table for Conversation Search
+
+**What:** Use SQLite FTS5 with an external content table for flexible conversation searching.
+**When:** Cross-session conversation search ("what did we discuss about X?").
+**Why:** FTS5 is built into better-sqlite3. BM25 ranking is excellent for keyword queries. External content tables allow filtering by user_id, channel, timestamp while keeping the FTS index lean. No API calls required (unlike pure embedding search).
+
+```sql
+-- Content table stores everything
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'web',
+  role TEXT NOT NULL,  -- 'user' or 'assistant'
+  content TEXT NOT NULL,
+  timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cm_user ON conversation_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_cm_channel ON conversation_messages(channel);
+CREATE INDEX IF NOT EXISTS idx_cm_timestamp ON conversation_messages(timestamp);
+CREATE INDEX IF NOT EXISTS idx_cm_conv ON conversation_messages(conversation_id);
+
+-- FTS5 indexes only the searchable text
+CREATE VIRTUAL TABLE IF NOT EXISTS conversation_messages_fts USING fts5(
+  content,
+  content=conversation_messages,
+  content_rowid=id,
+  tokenize='porter unicode61'
+);
+
+-- Conversation summaries for semantic search (optional enhancement)
+CREATE TABLE IF NOT EXISTS conversations_archive (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'web',
+  title TEXT,
+  summary TEXT,
+  summary_embedding TEXT,
+  message_count INTEGER DEFAULT 0,
+  first_message_at INTEGER,
+  last_message_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_ca_user ON conversations_archive(user_id);
+```
+
+### Pattern 5: QR Code Polling via Redis (not WebSocket)
+
+**What:** WhatsApp QR data is stored in Redis with TTL. UI polls a tRPC query every 2 seconds.
+**When:** During WhatsApp QR code authentication.
+**Why:** Baileys QR events are async (depends on WhatsApp server WebSocket). A blocking HTTP endpoint would timeout. Polling is simpler than adding a new WebSocket subscription for a one-time setup flow. The existing integrations panel uses tRPC queries, not subscriptions.
+
+```typescript
+// tRPC route in livinityd (ai/routes.ts):
+getWhatsAppQR: privateProcedure.query(async ({ ctx }) => {
+  const redis = ctx.livinityd!.ai.redis;
+  const qr = await redis.get('nexus:whatsapp:qr');
+  const statusStr = await redis.get('nexus:whatsapp:status');
+  const status = statusStr ? JSON.parse(statusStr) : null;
+  return {
+    qr: qr || null,  // data URL or null
+    connected: status?.connected ?? false,
+    botName: status?.botName,
+  };
+}),
+
+// UI component polls every 2s while QR is shown
+const { data } = trpcReact.ai.getWhatsAppQR.useQuery(undefined, {
+  refetchInterval: showQR ? 2000 : false,
+});
+```
+
+---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Route-Based Mobile Apps
-**What:** Registering each system app as a React Router route (e.g., `/m/ai-chat`, `/m/settings`).
-**Why bad:** The window-only apps (AI Chat, Server Control, etc.) were explicitly designed without URL routes. The router.tsx comment says: "AI pages (ai-chat, server-control, subagents, schedules) are window-only. They are NOT registered as routes." Adding routes would require extracting state management, conflict with the desktop no-URL pattern, and create two rendering paths to maintain per app.
-**Instead:** Use context-based overlay with history.pushState for back-button support. No URL changes.
+### Anti-Pattern 1: Keeping Separate WhatsApp Processing Path
 
-### Anti-Pattern 2: Extending SheetLayout for All Apps
-**What:** Making window-only system apps render inside the existing bottom-sheet overlay.
-**Why bad:** SheetLayout is a modal dialog with close button, scroll area, sheet-top sticky header, and "zoom-out desktop" animation. It has `h-[calc(100dvh-var(--sheet-top))]` -- it intentionally does NOT fill the screen. Apps like AI Chat need full-screen real estate, their own navigation chrome, and persistent WebSocket connections. Forcing them into SheetLayout creates UX conflicts (sheet close button vs app back button, sheet scroll vs chat scroll, reduced viewport height).
-**Instead:** Create `MobileAppRenderer` as a separate full-screen overlay, purpose-built for app rendering.
+**What:** Maintaining the current ad-hoc WhatsApp handling in daemon.ts (`sendWhatsAppResponse`, `getWhatsAppHistory`, `saveWhatsAppTurn`, `wa_outbox` Redis queues) alongside the ChannelProvider system.
+**Why bad:** Two code paths for the same thing. The daemon.ts WhatsApp code bypasses ChannelProvider lifecycle, has no config update handling via pub/sub, and uses a different history storage pattern than other channels.
+**Instead:** Migrate all WhatsApp logic into `WhatsAppProvider` implementing `ChannelProvider`. Remove ad-hoc daemon.ts code. Single message path for all channels via `sendChannelResponse`.
 
-### Anti-Pattern 3: Separate Mobile Components for Each App
-**What:** Creating `MobileAiChat.tsx`, `MobileSettings.tsx`, `MobileTerminal.tsx`, etc.
-**Why bad:** Doubles maintenance. Every feature added to the desktop version must be manually replicated. AI Chat already handles mobile responsiveness internally with `useIsMobile()`.
-**Instead:** Reuse `WindowAppContent` which already lazy-loads the right component by appId.
+### Anti-Pattern 2: Storing Full Conversations in Redis Long-Term
 
-### Anti-Pattern 4: Complex Service Worker with Runtime API Caching
-**What:** Using `injectManifest` with custom runtime caching strategies for tRPC/API calls.
-**Why bad:** LivOS is a real-time server management tool. Caching API responses would show stale Docker container states, stale file listings, stale AI conversations. The offline story for this app is minimal -- the value is the live server connection.
-**Instead:** Use `generateSW` with precache for static assets only. No runtime API caching. The service worker exists for installability and fast shell loading, not offline functionality.
+**What:** Using Redis as the primary conversation store with long or no TTL.
+**Why bad:** Redis is RAM. A year of conversations across 6 channels could be gigabytes. Self-hosted servers have 8-32GB RAM total. The current pattern (`nexus:wa_history:{jid}` with 24h TTL, 40 entry cap) is correctly ephemeral.
+**Instead:** Redis with 24h TTL as hot cache (current behavior). SQLite as durable store for historical search. Query SQLite for "what did we talk about last month?"
 
-### Anti-Pattern 5: Modifying WindowManager for Mobile
-**What:** Adding mobile-specific logic to `WindowManagerProvider` (e.g., "on mobile, openWindow renders full-screen instead of floating").
-**Why bad:** Violates separation of concerns. WindowManager's reducer manages z-index, position, size, minimize/restore -- all desktop-only concepts. Adding mobile branching would complicate the reducer and every consumer.
-**Instead:** Separate `MobileAppContext` with a much simpler API (one app at a time, open/close only).
+### Anti-Pattern 3: Embedding Every Conversation Message
 
-## Component Tree (Mobile Path)
+**What:** Calling Kimi embeddings API for every single message to enable semantic search.
+**Why bad:** Kimi API rate limits. Embedding "ok" and "thanks" wastes tokens and degrades search quality. At 100 messages/day, that is 36,500 embedding calls/year.
+**Instead:** FTS5 for keyword search (free, instant, zero API calls). Embed only conversation summaries (generated by haiku tier LLM). Use FTS5 as primary search, semantic reranking as optional enhancement on top-N results.
 
-```
-<TrpcProvider>
-  <WallpaperProviderConnected>
-    <GlobalSystemStateProvider>
-      <GlobalFilesProvider>
-        <RouterProvider>
-          <EnsureLoggedIn>
-            <Wallpaper />
-            <AvailableAppsProvider>
-              <AppsProvider>
-                <WindowManagerProvider>         // still present, WindowsContainer returns null
-                  <MobileAppProvider>            // NEW: lightweight mobile nav state
-                    <CmdkProvider>
-                      <AiQuickProvider>
-                        <Desktop />             // renders app grid; on mobile shows system apps
-                        <Outlet />              // SheetLayout children (Files, Settings, etc.)
-                        <WindowsContainer />    // returns null on mobile (unchanged)
-                        <MobileAppRenderer />   // NEW: full-screen app overlay
-                        <FloatingIslandContainer />
-                        {/* Dock + DockBottomPositioner hidden on mobile */}
-                      </AiQuickProvider>
-                    </CmdkProvider>
-                  </MobileAppProvider>
-                </WindowManagerProvider>
-              </AppsProvider>
-            </AvailableAppsProvider>
-          </EnsureLoggedIn>
-        </RouterProvider>
-      </GlobalFilesProvider>
-    </GlobalSystemStateProvider>
-  </WallpaperProviderConnected>
-</TrpcProvider>
-```
+### Anti-Pattern 4: useMultiFileAuthState in Production
 
-## Safe Area Implementation
+**What:** Using Baileys' built-in file-based auth persistence.
+**Why bad:** Baileys maintainers explicitly say "NEVER use in production." Creates hundreds of JSON files. Corrupts on crash. I/O bottleneck.
+**Instead:** Redis-backed auth state. Atomic pipeline writes. No filesystem dependency. Survives process restarts cleanly.
 
-**Viewport meta:** `viewport-fit=cover` in `index.html` opts into full-screen rendering behind notch/home indicator. Without this, `env(safe-area-inset-*)` values are always 0.
+### Anti-Pattern 5: Single JID Assumption
 
-**CSS approach:** Use `env(safe-area-inset-*)` with fallbacks via `max()`.
+**What:** Assuming incoming and outgoing messages use the same JID format.
+**Why bad:** Baileys v7 uses dual JID formats: `@s.whatsapp.net` for phone-based addressing and `@lid` for linked device identifiers. The existing `getWhatsAppHistory` in daemon.ts already handles this by merging all history keys.
+**Instead:** Normalize JIDs by stripping suffixes for identity mapping. Use the full JID for message routing (Baileys requires it).
 
-```css
-/* Mobile app renderer safe area handling */
-.mobile-safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-.mobile-safe-bottom {
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
-}
-```
+### Anti-Pattern 6: Blocking Message Response on Memory Write
 
-For Tailwind, use arbitrary values: `pt-[env(safe-area-inset-top)]` or `pb-[max(16px,env(safe-area-inset-bottom))]`.
+**What:** Awaiting SQLite write before sending response back to channel.
+**Why bad:** Adds 50-200ms latency to every response. Users expect instant replies.
+**Instead:** Fire-and-forget the SQLite write (or use BullMQ queue). Response goes to channel immediately. Persistence happens async.
 
-**Key values on iOS in standalone PWA mode:**
-- `safe-area-inset-top`: ~59px (Dynamic Island/iPhone 15+), ~47px (notch/iPhone X-14), ~20px (no notch)
-- `safe-area-inset-bottom`: ~34px (home indicator gesture bar), 0px (home button devices)
-- `safe-area-inset-left/right`: 0px in portrait, varies in landscape
-
-**The mobile nav bar absorbs the top safe area** (its background color extends behind the status bar using padding-top), and **the app content area absorbs the bottom safe area** (padding-bottom for the home indicator).
-
-**Desktop is unaffected:** `env(safe-area-inset-*)` returns 0px on desktop browsers, so these styles are no-ops outside mobile.
-
-## PWA Installability Checklist
-
-### Minimum Requirements
-
-1. **Web manifest** with `name`, `icons` (192x192 + 512x512), `start_url`, `display: standalone` -- partially exists, needs `start_url` and `scope`
-2. **Service worker** registered -- needs `vite-plugin-pwa`
-3. **HTTPS** -- already served via Caddy with TLS
-4. **Apple meta tags** -- `apple-mobile-web-app-capable`, `apple-touch-icon`, `apple-mobile-web-app-status-bar-style`
-
-### iOS 26+ Note
-As of iOS 26, every site added to the Home Screen defaults to opening as a web app even without a manifest. However, a proper manifest ensures correct icon, name, orientation, and status bar styling. The manifest is still required for Android "Add to Home Screen" prompt.
-
-## Suggested Build Order (Dependency-Based)
-
-### Phase 1: PWA Installability Shell (no UI changes)
-1. Enhance `site.webmanifest` (add `start_url`, `scope`, `orientation`, maskable icon)
-2. Add Apple meta tags to `index.html` (`viewport-fit`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`)
-3. Install + configure `vite-plugin-pwa` in `vite.config.ts` (`generateSW` strategy)
-4. Add SW registration via `virtual:pwa-register/react` in `main.tsx`
-
-**Dependency:** None. **Testable independently:** App becomes installable as PWA. Desktop UI completely unchanged.
-
-### Phase 2: Mobile Navigation Infrastructure
-1. Create `MobileAppContext` (`openApp`, `closeApp`, `activeApp` state)
-2. Create `use-mobile-back` hook (History API integration)
-3. Create `MobileNavBar` (back button, title, safe area top padding)
-4. Create `MobileAppRenderer` (full-screen overlay, imports `WindowAppContent`, Framer Motion slide-up)
-5. Export `WindowAppContent` from `window-content.tsx`
-6. Wire `MobileAppProvider` + `MobileAppRenderer` into `router.tsx`
-
-**Dependency:** None from Phase 1 (can be built in parallel). **Testable:** Can manually call `openApp()` from console.
-
-### Phase 3: Mobile Home Screen (dock hiding + system app grid)
-1. Modify `Dock` -- hide on mobile (`if (isMobile) return null`)
-2. Modify `DockBottomPositioner` -- hide on mobile
-3. Modify `DockSpacer` -- return null on mobile
-4. Modify `DesktopContent` -- on mobile, add system app icons to grid with `onClick -> mobileAppContext.openApp()`
-
-**Dependency:** Phase 2 (needs `MobileAppContext` for click handlers). After this phase, the full mobile flow works: home screen with apps -> tap to open full-screen -> back to close.
-
-### Phase 4: Polish + Safe Areas
-1. Add safe area CSS (global styles or Tailwind utilities)
-2. Tune slide-up animation parameters for iOS-native feel
-3. Handle edge cases: orientation change, keyboard visibility, scroll bounce
-4. Test on real devices (iPhone with Dynamic Island, Android)
-
-**Dependency:** Phase 3 functional. **Nature:** Polish, not structural.
+---
 
 ## Scalability Considerations
 
-| Concern | Current State | At PWA Launch | Future |
-|---------|--------------|---------------|--------|
-| Adding new system app | Add to dock + WindowContent switch | Also add to mobile grid items in DesktopContent | Extract to config-driven app registry |
-| App-specific mobile tweaks | AI Chat already uses `useIsMobile()` internally | Same pattern for any app needing mobile-specific layout | Consider container queries per-app |
-| Offline capability | Not needed (live server tool) | Static shell cache only via service worker | Could add read-only cache for Settings/Files listing |
-| Push notifications | Not supported | Service worker enables capability | Add notification subscription + backend integration |
-| Tablet layout | Treated as desktop (>= 1024px) | Same behavior | Could add tablet-specific breakpoint (768-1024px) |
+| Concern | At 100 msgs/day | At 1K msgs/day | At 10K msgs/day |
+|---------|-----------------|-----------------|------------------|
+| SQLite conversation store | ~50MB/year | ~500MB/year | ~5GB/year, add VACUUM |
+| FTS5 search speed | <5ms | <20ms | <100ms (add pagination) |
+| Kimi embedding calls | Skip (FTS5 sufficient) | Summaries only (~10/day) | Batch + rate limit |
+| Redis hot cache | <10MB | <50MB | <200MB (reduce TTL) |
+| Baileys memory | ~50MB fixed | ~50MB fixed | ~50MB fixed |
+| WhatsApp rate limits | No concern | Watch for send limits | May hit anti-spam |
+
+**Key insight:** WhatsApp is inherently single-account (one phone number per Baileys instance). Multi-user LivOS instances share the server's WhatsApp connection, routed via DmPairing to their respective LivOS accounts. This is the same model as Telegram (one bot token, DmPairing maps DM users).
+
+**Self-hosted context:** Most LivOS instances will see 10-100 messages/day across all channels. The architecture is deliberately simple for this scale. SQLite + FTS5 + Redis cache handles this trivially.
+
+---
+
+## Integration Points Summary
+
+### New Files to Create
+
+| # | File | Purpose |
+|---|------|---------|
+| 1 | `nexus/packages/core/src/channels/whatsapp.ts` | WhatsAppProvider (ChannelProvider implementation with Baileys) |
+| 2 | `nexus/packages/core/src/channels/whatsapp-auth.ts` | Redis-backed auth state for Baileys |
+| 3 | `nexus/packages/core/src/user-identity.ts` | Unified cross-channel user identity mapper |
+| 4 | `nexus/packages/memory/src/archiver.ts` | Conversation archival pipeline (Redis -> SQLite + FTS5) |
+| 5 | `livos/packages/ui/src/routes/settings/memory.tsx` | Memory management Settings panel (view, search, delete) |
+
+### Files to Modify
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `nexus/packages/core/src/channels/types.ts` | Add 'whatsapp' to ChannelId, add to CHANNEL_META |
+| 2 | `nexus/packages/core/src/channels/index.ts` | Register WhatsAppProvider in constructor, import |
+| 3 | `nexus/packages/core/src/daemon.ts` | Add conversation_search tool, add 'whatsapp' to realtimeSources, consolidate WA routing |
+| 4 | `nexus/packages/core/src/index.ts` | Wire WhatsAppProvider with DmPairing + ApprovalManager (same pattern as Telegram) |
+| 5 | `nexus/packages/memory/src/index.ts` | Add conversation_messages + FTS5 tables, /conversations/search + /conversations/messages endpoints |
+| 6 | `livos/packages/ui/src/routes/settings/integrations.tsx` | Add WhatsApp tab (5th channel, grid-cols-5) |
+| 7 | `livos/packages/livinityd/source/modules/ai/routes.ts` | Add getWhatsAppQR tRPC query, memory management endpoints |
+| 8 | `nexus/packages/core/package.json` | Add @whiskeysockets/baileys, qrcode, @types/qrcode |
+
+### Redis Key Map (New)
+
+| Key | Type | Purpose | TTL |
+|-----|------|---------|-----|
+| `nexus:whatsapp:config` | string (JSON) | WhatsApp channel config | none |
+| `nexus:whatsapp:status` | string (JSON) | Connection status | none |
+| `nexus:whatsapp:qr` | string | Current QR code data URL | 60s |
+| `nexus:wa:auth:creds` | string (JSON) | Baileys credentials | none |
+| `nexus:wa:auth:keys:{type}:{id}` | string (JSON) | Signal protocol keys | none |
+| `nexus:whatsapp:dedup:{msgId}` | string | Message deduplication | 24h |
+| `nexus:identity:{channel}:{channelUserId}` | string | Mapped LivOS userId | 24h |
+
+### NPM Dependencies to Add
+
+| Package | Version | Where | Purpose |
+|---------|---------|-------|---------|
+| `@whiskeysockets/baileys` | `^7.0.0` | nexus/packages/core | WhatsApp Web API |
+| `qrcode` | `^1.5.x` | nexus/packages/core | QR code to data URL |
+| `@types/qrcode` | `^1.5.x` | nexus/packages/core (dev) | TypeScript types |
+| `pino` | already present | nexus/packages/core | Baileys logger requirement |
+
+### Suggested Build Order
+
+Dependencies flow: types -> auth store -> provider -> ChannelManager registration -> daemon consolidation -> UI -> memory.
+
+**Phase 1: WhatsApp Channel Foundation** (depends on nothing new)
+- Extend `ChannelId` type and `CHANNEL_META` in types.ts
+- Create `WhatsAppAuthStore` (Redis-backed auth state)
+- Create `WhatsAppProvider` implementing `ChannelProvider`
+- Register in `ChannelManager` constructor
+- Wire DmPairing + ApprovalManager in index.ts (copy Telegram pattern)
+- Add 'whatsapp' to realtimeSources in daemon.ts
+
+**Phase 2: QR Code + Settings UI** (depends on Phase 1)
+- Add `getWhatsAppQR` tRPC query route
+- Add WhatsApp tab in Settings Integrations UI
+- QR code rendering with 2s polling auto-refresh
+- Connection status display + disconnect button
+
+**Phase 3: Message Routing Consolidation** (depends on Phase 1)
+- Consolidate `sendWhatsAppResponse` to use `sendChannelResponse` path
+- Remove wa_outbox Redis queue pattern from daemon.ts
+- Unify WhatsApp history with `saveChannelTurn` / `getChannelHistory` pattern
+- Remove legacy WhatsApp inbox polling from daemon cycle
+
+**Phase 4: Cross-Session Memory** (independent of WhatsApp, can parallel Phase 1-3)
+- Add `conversation_messages` + FTS5 + `conversations_archive` tables to memory.db
+- Add `/conversations/messages` POST endpoint (write)
+- Add `/conversations/search` POST endpoint (FTS5 search)
+- Create `ConversationArchiver` (periodic summarization)
+- Register `conversation_search` tool in daemon
+- Wire conversation persistence into daemon message handler
+
+**Phase 5: Unified Identity + Memory UI** (depends on Phase 3 + 4)
+- Create `UserIdentityMapper` for cross-channel userId resolution
+- Add `user_channel_identities` table to PostgreSQL
+- Wire identity mapping into daemon inbox processing
+- Create Memory Management Settings panel
+
+---
 
 ## Sources
 
-- Direct codebase analysis of `router.tsx`, `desktop-content.tsx`, `dock.tsx`, `windows-container.tsx`, `app-grid.tsx`, `window-content.tsx`, `window-manager.tsx`, `app-icon.tsx`, `use-is-mobile.ts`, `sheet.tsx`, `vite.config.ts`, `index.html`, `site.webmanifest`, `main.tsx`, `providers/apps.tsx`, `use-launch-app.ts`, `ai-chat/index.tsx` (HIGH confidence)
-- [PWA iOS Limitations and Safari Support 2026](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
-- [Making PWAs installable - MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
-- [Do Progressive Web Apps Work on iOS - Complete Guide 2026](https://www.mobiloud.com/blog/progressive-web-apps-ios)
-- [vite-plugin-pwa GitHub](https://github.com/vite-pwa/vite-plugin-pwa)
-- [Vite PWA - React Examples](https://vite-pwa-org.netlify.app/examples/react)
-- [CSS env() function - MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/env)
-- [iOS PWA standalone safe area CSS patterns](https://gist.github.com/cvan/6c022ff9b14cf8840e9d28730f75fc14)
-- [Understanding env() Safe Area Insets in CSS with React and Tailwind](https://medium.com/@developerr.ayush/understanding-env-safe-area-insets-in-css-from-basics-to-react-and-tailwind-a0b65811a8ab)
-- [Make Your PWAs Look Handsome on iOS](https://dev.to/karmasakshi/make-your-pwas-look-handsome-on-ios-1o08)
-
----
-*Architecture research for: v23.0 Mobile PWA integration with LivOS*
-*Researched: 2026-04-01*
+- [Baileys Documentation](https://baileys.wiki/docs/intro/) -- connection lifecycle, auth state
+- [Baileys GitHub (WhiskeySockets/Baileys)](https://github.com/WhiskeySockets/Baileys) -- v7.0.0-rc.9
+- [Baileys npm](https://www.npmjs.com/package/@whiskeysockets/baileys) -- version info, Node 20+ requirement
+- [Baileys Redis Auth (hbinduni/baileys-redis-auth)](https://github.com/hbinduni/baileys-redis-auth) -- Redis auth state pattern
+- [Baileys Connection Config](https://baileys.wiki/docs/socket/configuration/) -- makeWASocket options
+- [Baileys Connection Events](https://baileys.wiki/docs/socket/connecting/) -- QR, reconnect patterns
+- [WhatsApp Ban Risks](https://github.com/WhiskeySockets/Baileys/issues/1869) -- account safety
+- [SQLite FTS5 Documentation](https://www.sqlite.org/fts5.html) -- query syntax, BM25
+- [sqlite-vec](https://github.com/asg017/sqlite-vec) -- optional vector search extension
+- Existing codebase analysis:
+  - `nexus/packages/core/src/channels/index.ts` -- ChannelManager pattern
+  - `nexus/packages/core/src/channels/types.ts` -- ChannelProvider interface
+  - `nexus/packages/core/src/channels/telegram.ts` -- reference implementation (470 lines)
+  - `nexus/packages/core/src/daemon.ts` -- existing WhatsApp scaffolding (wa_outbox, JID handling)
+  - `nexus/packages/core/src/router.ts` -- Intent.source already includes 'whatsapp'
+  - `nexus/packages/memory/src/index.ts` -- memory service (SQLite + embeddings)
+  - `nexus/packages/core/src/dm-pairing.ts` -- DmPairingManager (channel-agnostic)
+  - `livos/packages/livinityd/source/modules/ai/index.ts` -- conversation storage (Redis)
+  - `livos/packages/ui/src/routes/settings/integrations.tsx` -- channel settings UI

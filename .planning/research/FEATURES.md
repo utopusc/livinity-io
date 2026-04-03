@@ -1,8 +1,8 @@
-# Feature Landscape: v23.0 Mobile PWA
+# Feature Landscape: v25.0 WhatsApp Integration & Cross-Session Memory
 
-**Domain:** Progressive Web App for self-hosted AI server OS (phone-like mobile experience)
-**Researched:** 2026-04-01
-**Overall Confidence:** HIGH (MDN docs, Apple developer docs, codebase audit, PWA ecosystem research)
+**Domain:** WhatsApp messaging channel + persistent cross-session AI memory for self-hosted AI server OS
+**Researched:** 2026-04-02
+**Overall Confidence:** MEDIUM (Baileys docs + existing codebase audit + WebSearch on memory patterns; WhatsApp unofficial library risk lowers confidence)
 
 ## Existing Infrastructure (Already Built)
 
@@ -10,427 +10,368 @@ Before listing features to build, here is what the codebase already provides:
 
 | Existing Capability | Where | Status |
 |---------------------|-------|--------|
-| `useIsMobile()` hook (< 1024px) | `hooks/use-is-mobile.ts` | Used in 30+ files |
-| `useIsSmallMobile()` (< 640px) | `hooks/use-is-mobile.ts` | Available |
-| `WindowsContainer` returns null on mobile | `modules/window/windows-container.tsx:14` | Working |
-| `SheetLayout` for mobile routing | `layouts/sheet.tsx` | Working |
-| Vaul-based drawers for mobile | Settings, Files | Working |
-| `site.webmanifest` with standalone display | `public/site.webmanifest` | Minimal (no start_url, no description) |
-| 192x192 + 512x512 Android Chrome icons | `public/favicon/` | Present |
-| `apple-touch-icon.png` (180x180) | `public/favicon/` | Present |
-| `100dvh` for viewport height | `layouts/sheet.tsx` | Adopted |
-| Responsive Tailwind breakpoints (sm/md/lg/xl) | `utils/tw.ts` | Established |
-| One `env(safe-area-inset-bottom)` usage | `files/rewind/index.tsx:267` | Partial |
-| `theme-color` meta tag | `index.html` | Present (#f8f9fc) |
-| System apps array with routes | `providers/apps.tsx` | 16 system apps defined |
-| DockSpacer for bottom spacing | `modules/desktop/dock.tsx` | Working |
-| Dock has mobile icon size (44px) | `modules/desktop/dock.tsx:37` | Working |
+| ChannelManager with 5 providers (Telegram, Discord, Slack, Matrix, Gmail) | `nexus/packages/core/src/channels/index.ts` | Working, well-abstracted |
+| ChannelProvider interface (init, connect, disconnect, getStatus, sendMessage, onMessage, updateConfig, testConnection) | `nexus/packages/core/src/channels/types.ts` | Clean contract |
+| Redis pub/sub config update subscription (`nexus:channel:updated`) | `channels/index.ts:54-97` | Auto-reconnect on config change |
+| WhatsApp inbox processing in Daemon (`source === 'whatsapp'`) | `nexus/packages/core/src/daemon.ts:372-510` | Working but NOT using ChannelProvider pattern |
+| WhatsApp conversation history (Redis lists, 24h TTL, 40 entries) | `daemon.ts:3323-3386` (getWhatsAppHistory, saveWhatsAppTurn) | Working but ephemeral |
+| WhatsApp response delivery (outbox + polling channel pattern) | `daemon.ts:3231-3282` (sendWhatsAppResponse) | Working with chunking |
+| WhatsApp send tool (`whatsapp_send`, conditional registration) | `daemon.ts:1658-1708` | Gated behind `channels.whatsapp.enabled` |
+| Channel history for Telegram/Discord/etc (Redis, 24h TTL, 20 entries) | `daemon.ts:3388-3429` (getChannelHistory, saveChannelTurn) | Working but ephemeral |
+| Memory service (SQLite + Kimi embeddings, semantic search, dedup, time-decay scoring) | `nexus/packages/memory/src/index.ts` (port 3300) | Working, v2.1.0 |
+| Memory: conversations table (id, user_id, summary, message_count) | memory service schema | Schema exists, not fully utilized |
+| Memory: memory_sessions table (links memories to sessions) | memory service schema | Schema exists |
+| Memory: /add, /search, /context, /memories/:userId, /reset, /stats endpoints | memory service REST API | All working |
+| Conversation persistence in Web UI (Redis + localStorage) | `agent-session.ts`, `ai-chat/index.tsx` | Tab close/reopen restore |
+| Conversation sidebar with listing | `ai-chat/index.tsx:169` (listConversations) | Working for Web UI only |
+| Settings > Integrations page (4-tab layout: Telegram, Discord, Slack, Matrix) | `livos/packages/ui/src/routes/settings/integrations.tsx` | Working, extensible |
+| Baileys v6.7+ in package-lock.json | `nexus/package-lock.json` | Installed but no `packages/whatsapp/` directory exists |
+| IncomingMessage type with channel, chatId, userId, userName, text, timestamp | `channels/types.ts:36-46` | Standard message contract |
+| ChannelId type: `'telegram' \| 'discord' \| 'slack' \| 'matrix' \| 'gmail'` | `channels/types.ts:7` | Needs 'whatsapp' addition |
+| CHANNEL_META with name, color, textLimit per channel | `channels/types.ts:88-94` | Needs WhatsApp entry |
+| Intent Router with channel context injection (`__history` param) | `daemon.ts:473-474, 1059-1061` | Injects chat history into task prefix |
+| DM Pairing Manager (Telegram-specific) | `channels/telegram.ts:4` | Pattern for user identity linking |
+| Agent system prompt mentions WhatsApp | `agent-session.ts:136`, `agent.ts:167,208,227` | Already expects WhatsApp as a channel |
 
-**Key gap:** Window-only apps (AI Chat, Server, Agents, Schedules, Terminal) have NO route in the router -- they exist only as window contents. On mobile, clicking dock icons triggers `onOpenWindow` which silently fails since `WindowsContainer` returns null. These apps are completely inaccessible on mobile today.
+**Key architectural gap:** WhatsApp currently operates through a separate, ad-hoc pattern in daemon.ts (Redis inbox/outbox with JID-based routing) rather than through the ChannelManager/ChannelProvider abstraction that all other channels use. The `packages/whatsapp/` directory referenced in scripts does not exist. This means WhatsApp lacks the standardized init/connect/disconnect/getStatus/updateConfig lifecycle, QR code auth via UI, and consistent message routing that other channels enjoy.
+
+**Key memory gap:** Conversation history is ephemeral (Redis with 24h TTL) across all channels. The Memory service stores extracted facts/knowledge but not raw conversation turns. There is no way for the AI to search past conversations across sessions or channels -- it can only recall manually-extracted "memories" from the current SQLite store. The `conversations` table in the memory DB schema exists but is not actively populated.
 
 ---
 
 ## Table Stakes
 
-Features users expect from any installable PWA. Missing = feels broken or unfinished.
+Features users expect when adding WhatsApp as a channel and claiming "cross-session memory." Missing these = product feels incomplete.
 
-### TS-01: PWA Installability (Manifest + Service Worker)
+### TS-01: WhatsApp ChannelProvider (Unified Architecture)
 
 | Attribute | Value |
 |-----------|-------|
-| **Why Expected** | Without proper manifest and service worker, iOS "Add to Home Screen" shows a web bookmark, not an app. Android won't show install prompt. |
-| **Complexity** | Low |
+| **Why Expected** | Every other channel (Telegram, Discord, Slack, Matrix, Gmail) follows the ChannelProvider pattern. WhatsApp operating through ad-hoc daemon.ts code is a maintenance liability and prevents consistent behavior (status reporting, config updates, test connection). Users expect "add WhatsApp" to work exactly like "add Telegram." |
+| **Complexity** | MEDIUM |
 | **Depends On** | Nothing (foundational) |
+| **Depends On (existing)** | ChannelProvider interface, ChannelManager, Baileys library |
 
 **What to build:**
-- Enhance `site.webmanifest`: add `start_url: "/"`, `description`, `scope: "/"`, `id: "/"`, proper `theme_color` and `background_color` matching the app
-- Add maskable icon variant (512x512 with safe zone padding) for Android adaptive icons
-- Add `vite-plugin-pwa` to Vite config with `generateSW` strategy for automatic service worker
-- Service worker should precache the app shell (HTML, CSS, JS bundles) for instant loading after first visit
+- Create `nexus/packages/core/src/channels/whatsapp.ts` implementing `ChannelProvider`
+- Add `'whatsapp'` to `ChannelId` union type in `types.ts`
+- Add WhatsApp to `CHANNEL_META` (name: 'WhatsApp', color: '#25D366', textLimit: 65536)
+- Register WhatsApp provider in `ChannelManager` constructor
+- Move Baileys `makeWASocket` initialization into `connect()` method
+- Use `useMultiFileAuthState` for credential persistence at `/opt/nexus/data/whatsapp-auth/`
+- Implement `getStatus()` returning connection state, phone number, QR code pending status
+- Implement `updateConfig()` with disconnect/reconnect cycle
+- Implement `disconnect()` that cleanly closes WebSocket
+- Implement `testConnection()` that verifies socket is open and authenticated
+- Route incoming messages through `onMessage()` handler (same as other channels)
+- Remove ad-hoc WhatsApp code from daemon.ts, replacing with ChannelManager calls
 
-**Existing asset:** `public/site.webmanifest` exists but is minimal. `public/favicon/` has the required icon sizes.
+**Confidence:** HIGH -- the ChannelProvider interface is well-defined and the pattern is proven across 5 existing channels.
 
-**Confidence:** HIGH (MDN installability requirements well-documented)
-
----
-
-### TS-02: iOS "Add to Home Screen" Meta Tags
+### TS-02: QR Code Authentication via Web UI
 
 | Attribute | Value |
 |-----------|-------|
-| **Why Expected** | iOS ignores standard manifest for splash screens and status bar styling. Without Apple-specific meta tags, the PWA looks like a webpage in disguise. |
-| **Complexity** | Low |
-| **Depends On** | TS-01 (manifest) |
+| **Why Expected** | WhatsApp Web requires QR code scanning. Baileys currently prints QR to terminal. For a web-based server OS, users expect to see and scan the QR code in the Settings UI, not SSH into the server. Every WhatsApp web gateway (WAHA, go-whatsapp-web-multidevice) exposes QR via web UI. |
+| **Complexity** | MEDIUM |
+| **Depends On** | TS-01 (WhatsApp ChannelProvider) |
 
-**What to build in `index.html`:**
-- `<meta name="apple-mobile-web-app-capable" content="yes">` -- enables standalone mode
-- `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">` -- renders content under the status bar (required for full edge-to-edge display)
-- `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">` -- the `viewport-fit=cover` part is critical for safe area insets to work
-- `<link rel="apple-touch-startup-image" ...>` for iOS splash screens (multiple sizes for device coverage)
+**What to build:**
+- WhatsApp provider emits QR code string via Redis pub/sub (`nexus:whatsapp:qr`) when Baileys fires `connection.update` with `qr` field
+- New tRPC subscription `channels.whatsappQr` that streams QR code updates to the UI
+- React component in Settings > Integrations > WhatsApp tab displaying QR code using `qrcode.react` (SVG rendering, well-maintained library, 3M+ weekly npm downloads)
+- QR code auto-refreshes on Baileys timeout (every ~20 seconds until scanned)
+- Visual states: "Scan QR Code" -> "Connecting..." -> "Connected as +XX XXX" with phone number display
+- After successful scan, show connection status card (phone number, last seen, connected since)
+- "Disconnect" button to log out the WhatsApp session (clears auth state)
 
-**Important detail:** The viewport meta already exists in `index.html` but lacks `viewport-fit=cover`. This single addition unlocks `env(safe-area-inset-*)` CSS functions.
+**Confidence:** HIGH -- Baileys emits QR as string in `connection.update` event; `qrcode.react` is the standard React QR renderer.
 
-**Confidence:** HIGH (Apple developer docs, widely documented)
-
----
-
-### TS-03: Safe Area Handling (Notch + Home Indicator)
+### TS-03: WhatsApp Connection Status & Reconnection
 
 | Attribute | Value |
 |-----------|-------|
-| **Why Expected** | Without safe area padding, content renders behind the notch (top) and overlaps the home indicator (bottom) on every iPhone with Face ID and Android gesture-nav devices. |
-| **Complexity** | Low-Medium |
-| **Depends On** | TS-02 (viewport-fit=cover meta tag) |
+| **Why Expected** | WhatsApp connections drop frequently (phone goes offline, WhatsApp updates, network issues). Users need to see the connection state at a glance and trust that reconnection happens automatically. |
+| **Complexity** | LOW |
+| **Depends On** | TS-01, TS-02 |
 
 **What to build:**
-- Global CSS: `padding-top: env(safe-area-inset-top, 0px)` on the root app container
-- Bottom nav/dock: `padding-bottom: env(safe-area-inset-bottom, 0px)` -- the home indicator area is typically 34px on iPhones
-- Left/right insets for landscape mode: `padding-left: env(safe-area-inset-left, 0px)`, `padding-right: env(safe-area-inset-right, 0px)`
-- Fixed/absolute positioned elements (bottom tab bar, FABs, toasts) must account for bottom inset
-- Toast positioning (`sonner`) needs offset adjustment for safe area
+- Baileys `connection.update` events mapped to ChannelStatus: `open` -> connected, `close` with `lastDisconnect.error` -> check `DisconnectReason` for reconnectability
+- Auto-reconnect on recoverable disconnects (exponential backoff, max 5 retries)
+- On `DisconnectReason.loggedOut` (status code 401): clear auth state, show "QR scan needed" in UI
+- Status badge in Settings > Integrations showing green/yellow/red connection state
+- Redis key `nexus:whatsapp:status` with JSON status for cross-process visibility
+- Optional: WhatsApp status in the sidebar/header of AI Chat when channel is active
 
-**Existing precedent:** `files/rewind/index.tsx` already uses `env(safe-area-inset-bottom)` with calc(). Apply same pattern globally.
+**Confidence:** HIGH -- Baileys disconnect/reconnect patterns are well-documented. Existing Telegram provider handles identical lifecycle.
 
-**Confidence:** HIGH (CSS env() is well-supported in all modern browsers; the codebase already uses it once)
-
----
-
-### TS-04: Mobile App Grid (Home Screen with System Apps)
+### TS-04: Cross-Session Conversation Persistence
 
 | Attribute | Value |
 |-----------|-------|
-| **Why Expected** | On mobile, users need a phone-like home screen showing all apps as tappable icons. The desktop dock only shows a few apps; the grid is the primary launcher. |
-| **Complexity** | Low |
-| **Depends On** | TS-05 (full-screen app rendering -- apps must open somewhere when tapped) |
+| **Why Expected** | Current conversation history has a 24h TTL in Redis and is limited to 20-40 entries. Users expect their AI assistant to remember conversations from last week, not just the current session. "What did we discuss about the server migration?" should work days later. Every modern AI assistant (ChatGPT, Claude, Gemini) maintains conversation history across sessions. |
+| **Complexity** | HIGH |
+| **Depends On** | Existing Memory service, existing conversation tables |
 
 **What to build:**
-- On mobile, the app grid should display ALL system apps that are mobile-accessible: AI Chat, Settings, Files, Server, Agents, Schedules, Terminal, plus user-installed Docker apps
-- Filter out desktop-only apps on mobile (Remote Desktop, Chrome, web app shortcuts like Gmail/Facebook/YouTube/WhatsApp -- these require the KasmVNC streaming window which is desktop-only)
-- App icons should use the existing `AppIcon` component with proper touch targets (already 66px wide on small screens per `useGridDimensions`)
-- Tapping an app icon navigates to a full-screen route (not a window)
-- The existing drag-to-reorder grid works with pointer events and should function on mobile already via `@dnd-kit/core` PointerSensor
+- **Conversation store table** in the Memory service SQLite DB: expand existing `conversations` table or create `conversation_messages` table with columns: `id`, `conversation_id`, `user_id`, `channel` (web/telegram/whatsapp/discord/slack/matrix), `channel_chat_id`, `role` (user/assistant/system), `content`, `metadata` (JSON -- tool calls, attachments, etc.), `created_at`
+- **Conversation save hook**: After each agent turn (both Web UI and channel messages), persist the user message + assistant response to SQLite via Memory service REST API
+- New endpoint `POST /conversations/save` that stores a full turn (user msg + response + metadata)
+- New endpoint `GET /conversations/:userId` returning paginated conversation list with summaries
+- New endpoint `POST /conversations/search` with semantic search across all stored conversations
+- **Embeddings for conversation turns**: Generate embeddings for each conversation turn and store in a `conversation_embeddings` column for semantic search
+- Keep Redis as hot cache for current-session context (fast reads for active conversations) but write-through to SQLite for persistence
+- TTL on Redis conversation cache can remain 24h; SQLite is the source of truth for historical queries
 
-**Existing infrastructure:** `AppGrid` component with responsive sizing (66x86px on mobile vs 112x106px on desktop) and `DesktopContent` already renders both system and user apps.
+**Confidence:** MEDIUM -- Architecture pattern is sound (write-through cache + persistent store). Complexity is in the migration of existing Redis-only flows and ensuring no regression in real-time performance.
 
-**Confidence:** HIGH (mostly filtering and routing changes to existing components)
-
----
-
-### TS-05: Full-Screen App Rendering on Mobile
+### TS-05: AI Conversation Search Tool
 
 | Attribute | Value |
 |-----------|-------|
-| **Why Expected** | Floating windows make no sense on a phone. Every app must render full-screen with a way to go back. This is the single most critical mobile feature -- without it, AI Chat, Server, Terminal, and Agents are completely unreachable on mobile. |
-| **Complexity** | Medium |
-| **Depends On** | Nothing (foundational) |
+| **Why Expected** | The whole point of cross-session memory is that the AI can recall past conversations. Users will say "what did I ask you about Docker last Tuesday?" and expect a meaningful answer. This requires a tool the AI can invoke to search conversation history. |
+| **Complexity** | MEDIUM |
+| **Depends On** | TS-04 (conversation persistence) |
 
 **What to build:**
-- Register mobile routes in `router.tsx` for all window-only apps: `/ai-chat`, `/server-control`, `/subagents`, `/schedules`, `/terminal`, `/my-devices`
-- Create a `MobileAppLayout` wrapper component that renders the app content full-screen with:
-  - A top header bar (app icon, title, back button)
-  - Full-height content area
-  - Safe area padding (top and bottom)
-- On mobile, `DockItem` `onClick` should navigate to the app route instead of calling `windowManager.openWindow()`
-- Desktop behavior unchanged: window-only apps continue to open in floating windows
+- New tool `conversation_search` registered in ToolRegistry
+- Parameters: `query` (string, the search query), `channel` (optional filter: 'web'/'telegram'/'whatsapp'/etc.), `days_back` (optional, default 30), `limit` (optional, default 10)
+- Implementation: Call Memory service `POST /conversations/search` with semantic query
+- Return format: list of matching conversation snippets with date, channel, and relevance score
+- AI system prompt enhancement: add instruction that the AI can search past conversations using this tool when the user asks about previous discussions
+- Distinct from existing `memory` tools: memories are extracted facts; conversation search returns actual dialogue history
 
-**Architecture decision:** Use route-based rendering (not state-based). Each app gets a URL (`/ai-chat`, `/terminal`, etc.) which means browser back button works, deep linking works, and the URL is shareable. The existing `SheetLayout` pattern from settings/files already demonstrates this approach.
+**Confidence:** HIGH -- follows existing ToolRegistry pattern exactly. The Memory service search infrastructure (embeddings + cosine similarity + time-decay) already works.
 
-**Key challenge:** Window-only app components (AI Chat, Server Control, etc.) currently render inside `WindowContent` which wraps them in window chrome. The mobile layout needs to render the same content components but inside `MobileAppLayout` instead. Factor the app content out of the window wrapper so both layouts can use it.
-
-**Confidence:** HIGH (clear pattern from existing SheetLayout; React Router is already in use)
-
----
-
-### TS-06: Mobile Navigation (Back Button + No Dock)
+### TS-06: Unified Channel userId Mapping
 
 | Attribute | Value |
 |-----------|-------|
-| **Why Expected** | iOS PWAs in standalone mode have NO browser back button and NO URL bar. If you don't provide navigation, users are trapped in whatever screen they opened. Android has a system back button but users still expect in-app navigation. |
-| **Complexity** | Medium |
-| **Depends On** | TS-05 (full-screen app rendering) |
+| **Why Expected** | The same person messaging from WhatsApp and the Web UI appears as two different users. The AI should recognize that phone number +1234567890 on WhatsApp is the same user logged in via the Web UI. Without this, cross-session memory is fragmented per channel. |
+| **Complexity** | MEDIUM |
+| **Depends On** | TS-04 (conversation persistence) |
 
 **What to build:**
-- **Hide the desktop dock on mobile** -- it takes up space and the magnification/hover effect is a desktop paradigm. Replace with mobile-appropriate navigation.
-- **Back button in MobileAppLayout header** -- uses `useNavigate(-1)` or navigates to home. Must be a visible, tappable (44px+) button.
-- **Bottom tab bar for mobile** -- 4-5 primary actions always visible: Home, AI Chat, Files, Settings, and optionally one more (Server or Agents). This is the iOS/Android standard pattern.
-  - Position: fixed bottom, above `env(safe-area-inset-bottom)`
-  - Icons + labels, active state indicator
-  - 49-50px height (iOS standard) + safe area padding
-- **Home button/gesture** -- tapping the Home tab or the app header logo returns to the app grid
+- **User identity mapping table** in PostgreSQL (not SQLite -- this is part of the user system): `channel_identities` with columns `id`, `livos_user_id` (FK to users table), `channel` (whatsapp/telegram/discord/etc.), `channel_user_id` (JID, Telegram ID, Discord ID), `display_name`, `linked_at`
+- **Auto-linking**: When a user sends a message from WhatsApp for the first time, create an unlinked identity record. Admin can link it to a LivOS user via Settings UI.
+- **DM Pairing enhancement**: Extend the existing DmPairingManager (currently Telegram-only) to work across all channels. User sends a pairing code from LivOS Web UI, enters it in WhatsApp/Telegram, identities get linked.
+- **Conversation routing**: When persisting conversations, resolve channel_user_id to livos_user_id if linked. Unlinked identities still get their own conversation history but can be merged later.
+- Memory service and conversation search use `livos_user_id` when available, falling back to `channel:channel_user_id` composite key
 
-**Why bottom tab bar (not hamburger menu):** Research consistently shows 72% of users prefer visible navigation. Bottom tabs increase engagement by 58% vs hidden menus. With only 5 primary apps, all fit in a tab bar. The hamburger menu is for 10+ navigation items.
-
-**Confidence:** HIGH (well-established mobile UX pattern; bottom tab bar is standard in every major mobile app)
-
----
-
-### TS-07: Mobile AI Chat Layout
-
-| Attribute | Value |
-|-----------|-------|
-| **Why Expected** | AI Chat is the primary feature of Livinity. If it doesn't work well on mobile, the PWA has no value proposition. The current AI Chat has a fixed 256px sidebar that doesn't work on mobile. |
-| **Complexity** | Medium |
-| **Depends On** | TS-05 (full-screen rendering), TS-06 (navigation) |
-
-**What to build:**
-- Full-screen chat view on mobile: message list fills the viewport, input area at bottom
-- Conversation sidebar hidden by default on mobile; accessible via a hamburger icon in the top bar or swipe-right gesture
-- Chat input area: responsive padding (`p-3` instead of `p-6`), input field stretches full width
-- Message bubbles: max-width responsive, readable on 375px viewport
-- Streaming markdown rendering must work in mobile viewport (existing `streamdown` + Shiki should work but needs viewport testing)
-- Tool call visualization cards: stack vertically, no horizontal overflow
-
-**Existing analysis:** Phase 8 research (v1.1-08) already identified this issue with specific fix patterns (drawer sidebar, mobile chat header).
-
-**Confidence:** HIGH (clear implementation path from Phase 8 research)
+**Confidence:** MEDIUM -- the concept is straightforward but the migration path and edge cases (what happens to existing unlinked conversations when linking occurs) require careful design.
 
 ---
 
 ## Differentiators
 
-Features that set the Livinity mobile PWA apart. Not expected, but significantly improve the experience.
+Features that set Livinity apart. Not required for functional completeness, but create significant user value.
 
-### DF-01: iOS Splash Screens
-
-| Attribute | Value |
-|-----------|-------|
-| **Value Proposition** | Without splash screens, iOS shows a white screen for 1-2 seconds while the PWA loads. With them, users see a branded loading screen identical to native apps. |
-| **Complexity** | Low |
-| **Depends On** | TS-02 (Apple meta tags) |
-
-**What to build:**
-- Generate `apple-touch-startup-image` PNGs for common iPhone sizes:
-  - iPhone SE: 640x1136
-  - iPhone 8: 750x1334
-  - iPhone X/XS/11 Pro: 1125x2436
-  - iPhone XR/11: 828x1792
-  - iPhone 12/13/14: 1170x2532
-  - iPhone 14/15 Pro: 1179x2556
-  - iPhone 14/15 Pro Max: 1290x2796
-  - iPhone 16 Pro: 1206x2622
-  - iPhone 16 Pro Max: 1320x2868
-- Each image: Livinity logo centered on the app's background color
-- Add corresponding `<link rel="apple-touch-startup-image" media="...">` tags in `index.html`
-- Use a build-time script or tool (e.g., `pwa-asset-generator` or Progressier) to generate all sizes
-
-**Why a differentiator:** Most PWAs skip splash screens because of the boilerplate. Adding them signals polish and professionalism.
-
-**Confidence:** HIGH (well-documented Apple feature; automated tools exist)
-
----
-
-### DF-02: Page Transitions (Slide Animations)
+### DF-01: Memory Management UI in Settings
 
 | Attribute | Value |
 |-----------|-------|
-| **Value Proposition** | Native apps have smooth slide transitions between screens. Without them, PWA navigation feels like page loads. Transitions are the #1 difference users perceive between "native" and "web." |
-| **Complexity** | Medium |
-| **Depends On** | TS-05 (route-based app rendering) |
+| **Value Proposition** | Users want visibility into what their AI remembers. This is a trust-building feature -- "what does it know about me?" Privacy control is becoming a market differentiator (Claude's memory management UI, ChatGPT's "Manage Memory" panel). For a self-hosted product, full control over stored data is a core selling point. |
+| **Complexity** | MEDIUM |
+| **Depends On** | TS-04 (conversation persistence), existing Memory service |
 
 **What to build:**
-- Slide-right animation when navigating into an app (home grid -> app)
-- Slide-left animation when navigating back (app -> home grid)
-- Use Framer Motion's `AnimatePresence` with `mode="wait"` for exit/enter sequencing
-- Shared element transitions for app icons (icon expands into full-screen app) if feasible
+- New Settings page: **Settings > Memory** (or Settings > AI Memory)
+- **Memories tab**: List all extracted memories with search, pagination. Each memory shows content, creation date, source session. Delete individual memories. "Clear All" button.
+- **Conversations tab**: List all persisted conversations with date, channel icon, message count, summary preview. Click to expand and view full conversation. Delete individual conversations.
+- **Search tab**: Full-text and semantic search across both memories and conversations. Results grouped by type (memory vs conversation).
+- **Stats panel**: Total memories, total conversations, database size, oldest/newest entries
+- Uses existing Memory service REST endpoints (/memories/:userId, /search, /reset)
+- Needs new endpoint for listing conversations with summaries
 
-**Implementation approach:** Framer Motion is already installed and used throughout. Wrap the mobile route outlet in `AnimatePresence` with slide variants:
-```
-enter: { x: "100%", opacity: 0 } -> { x: 0, opacity: 1 }
-exit:  { x: 0 } -> { x: "-30%", opacity: 0 }
-```
+**Confidence:** HIGH -- straightforward CRUD UI against existing REST API. Similar to the Capabilities panel pattern.
 
-**Alternative (future):** React's experimental `<ViewTransition>` component (React canary channel, April 2025) offers declarative transitions using the browser's native View Transition API. However, it requires `react@experimental` and is not production-stable yet. Use Framer Motion now; migrate to `<ViewTransition>` when it ships in stable React.
-
-**Confidence:** MEDIUM (Framer Motion approach is proven; timing/feel requires iteration)
-
----
-
-### DF-03: Pull-to-Refresh on Home Screen
+### DF-02: Automatic Memory Extraction from All Channels
 
 | Attribute | Value |
 |-----------|-------|
-| **Value Proposition** | Native phone home screens support pull-to-refresh to update app states. On the Livinity home grid, this could refresh Docker container statuses (running/stopped indicators). |
-| **Complexity** | Low |
-| **Depends On** | TS-04 (mobile app grid) |
+| **Value Proposition** | Currently memory extraction only happens during Web UI agent sessions. WhatsApp/Telegram conversations generate valuable information (user preferences, decisions, project context) that should be automatically captured. "I told the AI on WhatsApp that I prefer Python over JavaScript" should be remembered even when chatting on the Web UI later. |
+| **Complexity** | LOW |
+| **Depends On** | TS-01 (WhatsApp ChannelProvider), TS-04 (conversation persistence) |
 
 **What to build:**
-- On the home screen (app grid), pulling down triggers a data refresh (re-query `apps.list` and container states)
-- Use `overscroll-behavior-y: contain` on the app container to prevent Safari's native page reload
-- Implement a simple pull indicator (spinner or Livinity logo animation) using touch events
-- Libraries: `react-use-pull-to-refresh` or a simple custom 40-line implementation using `touchstart`/`touchmove`/`touchend`
+- After each channel message turn (WhatsApp, Telegram, Discord, etc.), submit the conversation turn to the existing BullMQ memory extraction pipeline
+- Reuse existing memory extraction logic (LLM summarizes key facts from the conversation)
+- Tag extracted memories with source channel for provenance tracking
+- Memory extraction should be async (BullMQ job) to not block message response delivery
+- Rate-limit extraction: not every "hi" or "ok" needs memory processing; apply minimum message length or content significance filter
 
-**Important:** Must disable Safari's default pull-to-refresh behavior first via CSS, then implement custom behavior.
+**Confidence:** HIGH -- BullMQ memory extraction pipeline already exists. This is wiring, not new architecture.
 
-**Confidence:** HIGH (well-documented pattern; CSS + touch events)
-
----
-
-### DF-04: Offline App Shell
+### DF-03: WhatsApp Group Support
 
 | Attribute | Value |
 |-----------|-------|
-| **Value Proposition** | With a cached app shell, the PWA loads instantly (< 1 second) even on slow/no network. Users see the familiar UI immediately, then data populates. This is what makes Starbucks PWA feel native. |
-| **Complexity** | Low (with vite-plugin-pwa) |
-| **Depends On** | TS-01 (service worker) |
+| **Value Proposition** | The AI can participate in WhatsApp group chats when mentioned or triggered. Family/team groups can interact with the AI collectively. This extends the AI from a 1:1 assistant to a group resource. |
+| **Complexity** | MEDIUM |
+| **Depends On** | TS-01 (WhatsApp ChannelProvider) |
 
 **What to build:**
-- Precache the app shell: index.html, JS bundles, CSS, font files, app icons
-- Runtime caching for API responses: network-first with fallback to stale cache for tRPC queries
-- Offline indicator: when network is unavailable, show a subtle banner ("Offline -- showing cached data")
-- Do NOT cache Docker container state or real-time data -- only cache the UI shell and static assets
+- Baileys handles group messages via same `messages.upsert` event with `key.remoteJid` ending in `@g.us`
+- Trigger modes: mention-based (AI responds when @mentioned or name mentioned), prefix-based (`!ai` or `/nexus`), or always-respond (configurable per group)
+- Group context: include sender name in conversation context so AI knows who said what
+- Rate limiting: max responses per minute per group to prevent spam
+- Admin-configurable: which groups the AI participates in (allowlist in Settings)
+- Group discovery: list available groups in Settings panel for easy selection
 
-**Strategy:** `generateSW` from `vite-plugin-pwa` handles precaching automatically. Add runtime caching rules for `/trpc/*` endpoints with `NetworkFirst` strategy and 24-hour cache TTL.
+**Confidence:** MEDIUM -- Baileys group message handling works but there are known issues with v7 RC (group message content not being passed). Verify with current Baileys version.
 
-**iOS caveat:** Safari limits cache to 50MB. The Livinity UI bundle (after code splitting) should be well under this. Monitor with build-size reporting.
-
-**Confidence:** HIGH (vite-plugin-pwa automates most of this)
-
----
-
-### DF-05: Haptic Feedback on Interactions
+### DF-04: Conversation Context Continuity Across Channels
 
 | Attribute | Value |
 |-----------|-------|
-| **Value Proposition** | Subtle vibration on app launch, long-press, and toggle switches makes the PWA feel tactile and native. Modern browsers support the Vibration API. |
-| **Complexity** | Very Low |
-| **Depends On** | Nothing |
+| **Value Proposition** | User starts a conversation on the Web UI, then continues it on WhatsApp from their phone. The AI seamlessly picks up where they left off. This "omnichannel" experience is what enterprise systems aspire to and what self-hosted AI can deliver without privacy trade-offs. |
+| **Complexity** | HIGH |
+| **Depends On** | TS-04 (conversation persistence), TS-06 (unified userId) |
 
 **What to build:**
-- `navigator.vibrate(10)` on app icon tap
-- `navigator.vibrate(5)` on toggle switches and button presses
-- Feature-detect and no-op on unsupported browsers (Safari/iOS does NOT support Vibration API)
+- When the AI receives a message from a linked user on any channel, fetch recent conversation context from ALL channels (not just the current one)
+- Context budget: limit total injected context to ~2000 tokens (existing Memory service /context endpoint already supports token budgets)
+- Context priority: most recent messages first, regardless of channel
+- Optional: explicit channel switch detection -- "I was just talking to you on the Web UI about..." triggers cross-channel context lookup
 
-**iOS limitation:** The Vibration API is not supported on iOS Safari. This is Android-only. Still worth adding for the Android PWA experience.
-
-**Confidence:** HIGH (trivial implementation; API is simple)
-
----
-
-### DF-06: PWA Install Prompt (Custom UI)
-
-| Attribute | Value |
-|-----------|-------|
-| **Value Proposition** | Users don't know they can install a PWA. A tasteful install banner guides them. |
-| **Complexity** | Low |
-| **Depends On** | TS-01 (manifest + service worker) |
-
-**What to build:**
-- **Android:** Listen for `beforeinstallprompt` event, show a custom "Install Livinity" banner with the app icon and an Install button. Dismiss permanently after install or 3 dismissals.
-- **iOS:** Detect iOS Safari (no `beforeinstallprompt`), show a manual instruction banner: "Tap Share > Add to Home Screen" with visual guide. Only show on first visit or when not in standalone mode.
-- **Standalone detection:** `window.matchMedia('(display-mode: standalone)').matches` -- hide install prompts when already installed.
-
-**Confidence:** HIGH (standard pattern; well-documented)
+**Confidence:** MEDIUM -- requires unified userId to be solved first (TS-06). The context assembly is straightforward once user identity is resolved.
 
 ---
 
 ## Anti-Features
 
-Features to explicitly NOT build for v23.0.
+Features that seem appealing but create problems. Explicitly NOT building these.
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Push notifications** | Requires iOS 16.4+, must be added to home screen first, no background sync means unreliable delivery, EU users get no support. Adds complexity for marginal value in a self-hosted tool. | Defer to future milestone. Focus on the visual/interaction layer first. |
-| **Offline data persistence (IndexedDB)** | iOS aggressively evicts IndexedDB after 7 days of inactivity. Building complex offline-first data sync for a server management tool (which inherently needs a server connection) is wasted effort. | Cache the app shell only. Show "offline" indicator for data-dependent screens. The server is the source of truth. |
-| **Native-like swipe-to-go-back gesture** | iOS PWA standalone mode already provides edge-swipe-to-go-back on some versions. Implementing custom swipe detection conflicts with this system gesture and causes double-navigation bugs (documented Ionic issue #22299). | Provide a visible back button. Let the system gesture work naturally. |
-| **Background sync / periodic updates** | Not supported on iOS at all. On Android, behavior is unreliable. A self-hosted server OS doesn't benefit from background sync -- users check it when they want to. | Poll for updates only when the app is in the foreground. |
-| **Vibration patterns / advanced haptics** | Over-engineering. Complex vibration patterns are annoying, not premium. | Single-pulse vibrate (10ms) on key actions only, Android only. |
-| **Desktop UI changes** | The desktop experience with floating windows, dock magnification, and keyboard shortcuts is mature and working. Any mobile work must leave desktop completely untouched. | Use `useIsMobile()` guards. All mobile-specific code behind conditional rendering. |
-| **Widget support on mobile home screen** | Desktop widgets (clock, system info, app status) are designed for the spacious desktop grid. On a phone-sized grid they would consume too much space and conflict with app icons. | Show widgets only on desktop. Mobile home screen is apps-only. |
-| **Landscape orientation optimization** | Livinity is a portrait-first mobile experience. Landscape adds complexity for every screen (safe areas change, layouts reorganize) with minimal user value for a server management PWA. | Lock to portrait in manifest: `"orientation": "portrait"`. Users can still rotate but we don't optimize for it. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **WhatsApp Business API integration** | "Official API, no ban risk" | Requires Meta Business verification, BSP partnership, per-message costs, no self-hosting. Defeats the entire value proposition of Livinity as a self-hosted, privacy-first platform. | Use Baileys (unofficial but self-hosted). Accept ban risk for personal use. Document risk clearly in Settings UI. |
+| **Multi-account WhatsApp** | "Connect multiple WhatsApp numbers" | Massively increases complexity (multi-socket, multi-auth state, routing ambiguity). Single account is the standard personal use case. | Support one WhatsApp account per LivOS instance. Additional accounts can be added in future versions if demand exists. |
+| **WhatsApp media message AI analysis** | "AI should understand photos/videos sent via WhatsApp" | Baileys media handling requires downloading encrypted media, decrypting, converting formats. Adds significant complexity and storage requirements. Vision models add cost per message. | Phase 1: text-only. Phase 2: image support can be added later by downloading media and passing to multimodal provider. Document as future enhancement. |
+| **Real-time conversation sync to external services** | "Sync conversations to Notion/Google Docs" | Scope creep. Export is a separate feature set. Adds third-party API dependencies. | Provide conversation export (JSON/CSV) from Memory Management UI. External sync can be a community skill. |
+| **Full message history import from WhatsApp** | "Import all my WhatsApp chat history" | WhatsApp chat exports are complex (multi-format, media references, different phone formats). Low value vs effort. | Start fresh from connection point. Users can manually share important context with the AI. |
+| **Automatic memory for every single message** | "Remember everything I ever said" | Creates massive storage bloat, low signal-to-noise ratio. Embedding every "ok" and "lol" wastes resources and degrades search quality. | Use significance filtering: minimum message length (>20 chars), exclude pure acknowledgments, rate-limit to max N extractions per hour. |
+| **Graph-based memory (like mem0 v2)** | "Graph memory captures relationships better" | Significantly more complex than vector search. Requires a graph database (Neo4j or similar). The current SQLite + embeddings approach is adequate for personal AI use. | Vector-based semantic search with SQLite. Revisit graph memory when user base and data volume justify the complexity. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-TS-01 (Manifest + SW) ---- required by ---> TS-02 (iOS Meta Tags)
-                      \                      |
-                       \                     v
-                        \---> DF-04 (Offline Shell)    DF-06 (Install Prompt)
-                               
-TS-02 (iOS Meta Tags) ----> TS-03 (Safe Areas) ----> DF-01 (Splash Screens)
+TS-01: WhatsApp ChannelProvider
+    +-- TS-02: QR Code Auth UI (needs provider to emit QR events)
+    |     +-- TS-03: Connection Status & Reconnect (needs QR flow complete)
+    +-- DF-02: Auto Memory Extraction (needs standardized message flow)
+    +-- DF-03: Group Support (needs provider message handling)
 
-TS-05 (Full-Screen Apps) ---> TS-06 (Navigation) ---> TS-07 (AI Chat Mobile)
-         |                         |
-         v                         v
-    TS-04 (App Grid)          DF-02 (Transitions)
+TS-04: Cross-Session Persistence
+    +-- TS-05: AI Conversation Search Tool (needs persistent store to search)
+    +-- TS-06: Unified userId Mapping (informs how conversations are stored)
+    |     +-- DF-04: Cross-Channel Continuity (needs unified identity)
+    +-- DF-01: Memory Management UI (needs persistent data to display)
 
-DF-03 (Pull-to-Refresh) depends on TS-04 (App Grid)
+TS-01 ──independent──> TS-04 (no dependency between WhatsApp and memory tracks)
+DF-02 ──requires──> TS-01 + TS-04 (needs both WhatsApp messages and persistent store)
 ```
 
-**Critical path:** TS-01 -> TS-02 -> TS-03 must come first (foundational PWA setup). Then TS-05 -> TS-06 -> TS-04 (mobile app rendering). Then TS-07 (AI Chat). Differentiators can be layered on after.
+### Dependency Notes
+
+- **TS-01 and TS-04 are independent tracks**: WhatsApp channel integration and cross-session memory can be built in parallel. This is a significant advantage for phase planning.
+- **TS-02 requires TS-01**: QR code display needs the WhatsApp provider to be emitting QR events.
+- **TS-05 requires TS-04**: Cannot search conversations that are not persistently stored.
+- **TS-06 enhances TS-04**: userId mapping improves conversation search but is not strictly required for basic persistence (conversations can be stored with channel-specific IDs initially).
+- **DF-04 requires TS-06**: Cross-channel continuity is meaningless without unified user identity.
+- **DF-02 bridges both tracks**: Automatic memory extraction from WhatsApp needs both the standardized message flow (TS-01) and the persistent store (TS-04).
 
 ---
 
-## MVP Recommendation
+## MVP Definition
 
-### Must-Have (Phase 1 -- PWA Foundation)
-1. **TS-01** PWA manifest + service worker (vite-plugin-pwa)
-2. **TS-02** iOS meta tags (viewport-fit=cover, apple-mobile-web-app-capable)
-3. **TS-03** Safe area handling (CSS env() on root, bottom nav, toasts)
+### Launch With (v25.0 Core)
 
-### Must-Have (Phase 2 -- Mobile App Experience)
-4. **TS-05** Full-screen app rendering (mobile routes for window-only apps)
-5. **TS-06** Mobile navigation (hide dock, add bottom tab bar, back button)
-6. **TS-04** Mobile app grid (show system apps, filter desktop-only apps)
-7. **TS-07** AI Chat mobile layout (full-screen, drawer sidebar)
+Minimum viable: WhatsApp works as a proper channel, conversations persist across sessions.
 
-### Should-Have (Phase 3 -- Polish)
-8. **DF-01** iOS splash screens
-9. **DF-02** Page transitions (Framer Motion slide animations)
-10. **DF-04** Offline app shell (runtime caching for API responses)
-11. **DF-06** PWA install prompt (custom banner for iOS + Android)
+- [x] **TS-01: WhatsApp ChannelProvider** -- foundational, unblocks everything WhatsApp
+- [x] **TS-02: QR Code Auth UI** -- users cannot use WhatsApp without this
+- [x] **TS-03: Connection Status** -- essential UX for a flaky-connection channel
+- [x] **TS-04: Cross-Session Persistence** -- foundational, unblocks search and UI
+- [x] **TS-05: AI Conversation Search Tool** -- the user-facing payoff of persistence
+- [x] **DF-01: Memory Management UI** -- needed for trust and debugging (Settings page)
 
-### Nice-to-Have (Phase 3 or defer)
-12. **DF-03** Pull-to-refresh on home screen
-13. **DF-05** Haptic feedback (Android only, trivial)
+### Add After Validation (v25.x)
 
-**Defer:** Push notifications, offline data sync, background sync, landscape optimization.
+Features to add once core WhatsApp and memory work reliably.
+
+- [ ] **TS-06: Unified userId Mapping** -- add when multiple users actively use multiple channels
+- [ ] **DF-02: Auto Memory Extraction** -- add after confirming persistence works correctly
+- [ ] **DF-03: WhatsApp Group Support** -- add after solo WhatsApp is stable
+- [ ] **DF-04: Cross-Channel Continuity** -- add after userId mapping is in place
+
+### Future Consideration (v26+)
+
+- [ ] **WhatsApp media analysis** -- when multimodal channel support is prioritized
+- [ ] **Graph-based memory** -- when data volume justifies complexity
+- [ ] **Conversation export/import** -- when users request data portability
+- [ ] **WhatsApp voice message transcription** -- would require audio-to-text pipeline
 
 ---
 
-## Complexity Summary
+## Feature Prioritization Matrix
 
-| Feature | Complexity | Estimated Effort | New Dependencies |
-|---------|-----------|------------------|------------------|
-| TS-01 Manifest + SW | Low | 2-3 hours | `vite-plugin-pwa` |
-| TS-02 iOS Meta Tags | Low | 1-2 hours | None |
-| TS-03 Safe Areas | Low-Med | 2-4 hours | None (CSS only) |
-| TS-04 App Grid | Low | 2-3 hours | None |
-| TS-05 Full-Screen Apps | Medium | 4-6 hours | None |
-| TS-06 Navigation | Medium | 4-6 hours | None |
-| TS-07 AI Chat Mobile | Medium | 4-6 hours | None |
-| DF-01 Splash Screens | Low | 2-3 hours | Build tool (optional) |
-| DF-02 Transitions | Medium | 3-4 hours | None (Framer Motion) |
-| DF-03 Pull-to-Refresh | Low | 1-2 hours | None |
-| DF-04 Offline Shell | Low | 1-2 hours | Part of TS-01 |
-| DF-05 Haptic | Very Low | 30 min | None |
-| DF-06 Install Prompt | Low | 2-3 hours | None |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| TS-01: WhatsApp ChannelProvider | HIGH | MEDIUM | P1 |
+| TS-02: QR Code Auth UI | HIGH | MEDIUM | P1 |
+| TS-03: Connection Status | MEDIUM | LOW | P1 |
+| TS-04: Cross-Session Persistence | HIGH | HIGH | P1 |
+| TS-05: AI Conversation Search | HIGH | MEDIUM | P1 |
+| TS-06: Unified userId Mapping | MEDIUM | MEDIUM | P2 |
+| DF-01: Memory Management UI | MEDIUM | MEDIUM | P1 |
+| DF-02: Auto Memory Extraction | MEDIUM | LOW | P2 |
+| DF-03: WhatsApp Group Support | LOW | MEDIUM | P2 |
+| DF-04: Cross-Channel Continuity | MEDIUM | HIGH | P3 |
 
-**Total estimated:** ~30-40 hours for all features.
+**Priority key:**
+- P1: Must have for v25.0 launch -- core WhatsApp + memory features
+- P2: Should have, add in v25.x after core is stable
+- P3: Nice to have, future consideration
+
+---
+
+## Competitor Feature Analysis
+
+| Feature | ChatGPT | Claude | Home Assistant | OpenClaw | Our Approach (Livinity) |
+|---------|---------|--------|----------------|----------|------------------------|
+| WhatsApp integration | No (cloud only) | No (cloud only) | Yes (via notify) | Yes (Baileys) | Yes (Baileys, ChannelProvider pattern) |
+| QR auth in web UI | N/A | N/A | N/A | Terminal QR only | Web UI QR code in Settings |
+| Cross-session memory | Yes (auto) | Yes (user-controlled) | No | Partial (cognee) | Yes (SQLite + embeddings, user-controllable) |
+| Conversation search | No explicit search tool | No explicit search tool | N/A | No | AI tool for semantic conversation search |
+| Memory management UI | Basic "Manage Memory" | Memory panel (view/delete) | N/A | No | Full Settings page (search, view, delete, stats) |
+| Cross-channel identity | N/A (single channel) | N/A (single channel) | User-based | No | userId mapping across channels |
+| Self-hosted | No | No | Yes | Yes | Yes (privacy advantage) |
+| Unified conversation store | Cloud-hosted | Cloud-hosted | No | Partial | SQLite per-instance, full ownership |
+
+**Key competitive advantages:**
+1. Self-hosted conversation data (privacy) -- ChatGPT/Claude store on their servers
+2. Multi-channel with unified identity -- no competitor offers this in self-hosted
+3. AI can actively search past conversations (tool-based, not just passive recall)
+4. Full memory management with delete/search/export (GDPR-ready by design)
 
 ---
 
 ## Sources
 
-### HIGH confidence (official documentation)
-- [MDN: Making PWAs installable](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
-- [MDN: CSS env() function](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env)
-- [vite-plugin-pwa documentation](https://vite-pwa-org.netlify.app/)
-- [MDN: display_override manifest member](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/display_override)
-- Codebase audit: `router.tsx`, `windows-container.tsx`, `dock.tsx`, `desktop-content.tsx`, `app-grid.tsx`, `sheet.tsx`, `use-is-mobile.ts`, `site.webmanifest`, `index.html`
-- Phase 8 mobile research: `.planning/milestones/v15.0-phases/v1.1-08-mobile-polish/08-RESEARCH.md`
+- [Baileys GitHub (WhiskeySockets)](https://github.com/WhiskeySockets/Baileys) -- library docs, migration guide
+- [Baileys Documentation Wiki](https://baileys.wiki/docs/intro/) -- v7 documentation
+- [Baileys v7 Migration Guide](https://baileys.wiki/docs/migration/to-v7.0.0/) -- breaking changes
+- [whatsapp-web.js vs Baileys comparison (LibHunt)](https://www.libhunt.com/compare-Baileys-vs-whatsapp-web.js) -- protocol vs browser approach
+- [qrcode.react npm](https://www.npmjs.com/package/qrcode.react) -- React QR code component
+- [Mem0 Architecture](https://mem0.ai/) -- memory layer patterns, semantic search
+- [State of AI Agent Memory 2026](https://mem0.ai/blog/state-of-ai-agent-memory-2026) -- graph vs vector memory, industry trends
+- [Meta Blocks Third-Party AI Chatbots 2026](https://chatboq.com/blogs/third-party-ai-chatbots-ban) -- WhatsApp ban risk for unofficial bots
+- [WhatsApp Business API vs Unofficial](https://wisemelon.ai/blog/whatsapp-business-api-vs-unofficial-whatsapp-tools) -- risk assessment
+- [Oracle: Agent Memory Architecture](https://blogs.oracle.com/developers/agent-memory-why-your-ai-has-amnesia-and-how-to-fix-it) -- memory types and patterns
+- Codebase audit: `nexus/packages/core/src/channels/`, `nexus/packages/memory/src/index.ts`, `nexus/packages/core/src/daemon.ts`
 
-### MEDIUM confidence (verified with multiple sources)
-- [PWA iOS Limitations 2026](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
-- [PWA on iOS 2025 - Brainhub](https://brainhub.eu/library/pwa-on-ios)
-- [PWA Design Tips - firt.dev](https://firt.dev/pwa-design-tips/)
-- [iOS PWA safe area CSS patterns](https://dev.to/karmasakshi/make-your-pwas-look-handsome-on-ios-1o08)
-- [Notch avoidance with CSS](https://dev.to/marionauta/avoid-notches-in-your-pwa-with-just-css-al7)
-- [Bottom navigation vs hamburger menus](https://acclaim.agency/blog/the-future-of-mobile-navigation-hamburger-menus-vs-tab-bars)
-- [React ViewTransition experimental API](https://react.dev/blog/2025/04/23/react-labs-view-transitions-activity-and-more)
-
-### LOW confidence (needs validation during implementation)
-- iOS 26 "every home screen site opens as web app" behavior -- announced but not yet widely tested
-- EU PWA restrictions may change with DMA enforcement proceedings
-- React `<ViewTransition>` timeline to stable -- currently experimental only
+---
+*Feature research for: v25.0 WhatsApp Integration & Cross-Session Memory*
+*Researched: 2026-04-02*

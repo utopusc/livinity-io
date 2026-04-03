@@ -1,450 +1,364 @@
-# Technology Stack: v23.0 Mobile PWA
+# Technology Stack: v25.0 Memory & WhatsApp Integration
 
-**Project:** Livinity v23.0 -- Mobile PWA Experience
-**Researched:** 2026-04-01
-**Overall confidence:** HIGH (verified against package.json, Vite config, and official docs)
-
-## Executive Summary
-
-Livinity already has most of the foundation needed for PWA. The existing `site.webmanifest` declares `display: standalone` and Android Chrome icons. The `useIsMobile()` hook, `SheetLayout`, and `WindowsContainer` (returns null on mobile) provide branching points. What is MISSING: a service worker, proper Apple meta tags, iOS splash screens, safe-area CSS handling, and the `viewport-fit=cover` meta tag that enables edge-to-edge rendering on notched devices.
-
-The approach is minimalist: add only what is needed for installability and native feel. No new frameworks, no heavy abstractions. The existing Vite 4 + React 18 + Tailwind 3.4 + framer-motion stack handles everything with targeted additions.
-
----
+**Project:** Livinity v25.0 - WhatsApp Channel + Cross-Session Memory Search
+**Researched:** 2026-04-02
+**Scope:** NEW dependencies only. Existing stack (Express, tRPC, Redis, better-sqlite3, Kimi embeddings, grammy, discord.js, etc.) is validated and not re-evaluated.
 
 ## Recommended Stack Additions
 
-### PWA Core: vite-plugin-pwa
+### WhatsApp Channel Integration
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| `vite-plugin-pwa` | `^1.2.0` | Service worker generation, manifest injection, install prompt handling | Zero-config PWA plugin for Vite. v1.2.0 peerDep explicitly supports `vite ^3.1.0 \|\| ^4.0.0 \|\| ^5.0.0 \|\| ^6.0.0 \|\| ^7.0.0`. Uses Workbox 7.4+ internally via `generateSW` strategy. Eliminates hand-writing service worker boilerplate. |
+| `baileys` | `^6.7.21` (stable) | WhatsApp Web API via WebSocket | Native TypeScript, no browser/Puppeteer dependency, ~50MB RAM vs 300-600MB for whatsapp-web.js. Direct WebSocket connection to WhatsApp servers. Same package published as both `baileys` and `@whiskeysockets/baileys`. |
+| `qrcode` | `^1.5.4` | Server-side QR code generation | Generates QR data URL from Baileys QR string. Lightweight (3 deps). Server renders to base64 PNG, sends to UI via tRPC/WebSocket. |
+| `@types/qrcode` | `^1.5.6` | TypeScript types for qrcode | Type safety for QR generation API. |
 
-**Why vite-plugin-pwa over manual service worker:**
-- Generates Workbox-based service worker at build time with precache manifest
-- Handles manifest.webmanifest generation from vite config (replaces manual `site.webmanifest`)
-- Provides `registerSW` virtual module for React integration (update prompts, offline detection)
-- The `generateSW` strategy is correct for Livinity because the app is a SPA with API calls -- we want to cache the shell, not intercept API routes
+**Version rationale: Use `6.7.21` (latest stable), NOT `7.0.0-rc.9`.**
+The v7.0 line is still release-candidate (rc.9 published Nov 2025, no stable release as of Apr 2026). The 6.x line is production-tested. The `baileys` and `@whiskeysockets/baileys` packages are identical (same maintainer, same versions, same content). Use the unscoped `baileys` package name -- it is shorter and the maintainers publish to both.
 
-**Why NOT injectManifest strategy:**
-Livinity does not need custom service worker logic. No offline-first data, no background sync, no push notifications (yet). `generateSW` produces the correct cache-first-for-assets + network-first-for-API behavior out of the box.
+**Why Baileys over whatsapp-web.js:**
 
-**Confidence:** HIGH -- peerDependencies verified from GitHub main branch package.json (Vite 4 explicitly listed)
+| Criterion | Baileys | whatsapp-web.js |
+|-----------|---------|-----------------|
+| Browser dependency | None (WebSocket direct) | Puppeteer/Chrome required |
+| RAM usage | ~50MB | 300-600MB |
+| Startup time | <1s | 5-10s |
+| TypeScript | Native TS | JS with community types |
+| Auth persistence | Pluggable auth state | Pluggable auth strategy |
+| Headless server | Works natively | Requires headless Chrome config |
+| Active maintenance | WhiskeySockets community | Single maintainer |
 
-### Safe Area CSS: tailwindcss-safe-area
+For a self-hosted home server (8-32GB RAM), the 250-550MB RAM savings from Baileys is significant -- that is RAM available for Docker containers and AI inference.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `tailwindcss-safe-area` | `0.8.0` | Tailwind utilities for `env(safe-area-inset-*)` | Provides `pt-safe`, `pb-safe`, `px-safe`, `h-screen-safe`, `inset-safe`, etc. Version 0.8.0 is the Tailwind CSS v3-compatible release (v1.3.0 is for Tailwind v4 only). 91k+ weekly downloads, actively maintained. |
-
-**Why a plugin over manual CSS:**
-- Provides composable Tailwind utilities (`pb-safe`, `pt-safe-offset-4`) that work with responsive variants (`md:pb-0`)
-- Handles the fallback math (`max(env(safe-area-inset-bottom), 1rem)` via `-or-` variants)
-- Keeps safe area logic in markup rather than scattered CSS files
-- Already the ecosystem standard (see: Capacitor/Ionic projects, NativeWind)
-
-**Why NOT manual `env()` in index.css:**
-Manual CSS variables work but create a parallel styling system outside Tailwind. When you need `pb-safe` only on mobile but `pb-4` on desktop, plugin utilities compose with breakpoint variants naturally: `pb-safe lg:pb-4`.
-
-**Confidence:** HIGH -- verified v0.8.0 targets Tailwind v3 explicitly, v1.3.0 for v4
-
-### PWA Asset Generation: pwa-asset-generator (dev/build tool)
+### Cross-Session Conversation Search
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| `pwa-asset-generator` | `^6.3.2` | One-command generation of iOS splash screens, maskable icons, favicon variants | Puppeteer-based tool that scrapes Apple HIG specs for correct device dimensions. Generates all ~25 iOS splash screen variants (portrait/landscape per device), maskable icons, and the `<link>` tags needed in HTML. Run once during setup, not a runtime dependency. |
+| SQLite FTS5 | (built-in) | Full-text search on conversation history | Already compiled into better-sqlite3 by default (`SQLITE_ENABLE_FTS5` flag). Zero new dependencies. BM25 ranking built in. Substring, phrase, boolean queries. |
 
-**Why this over @vite-pwa/assets-generator:**
-- `pwa-asset-generator` generates iOS-specific `apple-touch-startup-image` link tags with correct `media` queries (device-width/height/pixel-ratio combinations). The `@vite-pwa/assets-generator` focuses more on icons than iOS splash screens.
-- Produces the exact HTML to paste into `index.html` -- no guessing at media queries
-- Can be run as a one-shot script during asset preparation, no ongoing dependency
+**No new packages needed for conversation search.** The existing `better-sqlite3` (already in `@nexus/memory`) has FTS5 compiled in. The memory service already uses SQLite with `better-sqlite3` and already has a `conversations` table. The work is adding an FTS5 virtual table and writing conversation messages to it -- pure application code, not a new library.
 
-**Alternative considered:** `@vite-pwa/assets-generator` (^0.2.6) -- better integration with vite-plugin-pwa but less iOS splash screen coverage. Use it if splash screens are deprioritized.
+### WhatsApp Auth State Persistence (SQLite-backed)
 
-**Confidence:** MEDIUM -- pwa-asset-generator maintained but Puppeteer-dependent; may need manual verification of generated media queries against current iOS device list
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| (reuse `better-sqlite3`) | `^11.0.0` | Persist Baileys auth state | Baileys docs explicitly say "DO NOT use `useMultiFileAuthState` in production." Custom SQLite-backed auth state is recommended. The memory service already has better-sqlite3 -- reuse it. Store auth keys in a `whatsapp_auth` table in the same SQLite DB or a dedicated one. |
 
----
+**No new dependency.** Write a custom `useSqliteAuthState()` function modeled after the built-in `useMultiFileAuthState` but backed by SQLite instead of JSON files on disk. This prevents the I/O corruption and performance issues that plague the file-based approach.
 
-## No New Dependencies Needed (Use What Exists)
+## What NOT to Add
 
-### Page Transitions: framer-motion (already installed)
+| Anti-Dependency | Why Avoid |
+|-----------------|-----------|
+| `whatsapp-web.js` | Requires Puppeteer/Chrome. 6x more RAM. Overkill for headless server. |
+| `puppeteer` / `chrome-headless-shell` | Only needed if using whatsapp-web.js. Baileys does not need a browser. |
+| `@whiskeysockets/baileys` | Identical to `baileys` (same package). Use the shorter name. |
+| `baileys@7.0.0-rc.x` | Still RC, not stable. Breaking changes from 6.x. Wait for stable release. |
+| Any vector DB (Milvus, Pinecone, Chroma) | Overkill. Memory service already does cosine similarity on Kimi embeddings in SQLite. FTS5 handles keyword search. The combination is sufficient for conversation search at self-hosted scale (<100k messages). |
+| `elasticsearch` / `meilisearch` / `typesense` | External search engine is unnecessary. FTS5 handles full-text search within SQLite. No new infrastructure to manage. |
+| `pino` | Baileys uses pino internally, but nexus-core uses winston. Pass a silent pino logger to Baileys and bridge to winston -- do NOT add pino as a project dependency. |
+| `qrcode-terminal` | Only for CLI rendering. The QR code goes to the web UI, not terminal. Use `qrcode` (server lib) to generate data URL. |
 
-| Technology | Installed Version | Purpose | Notes |
-|------------|-------------------|---------|-------|
-| `framer-motion` | `10.16.4` | Slide/fade transitions between mobile app views | `AnimatePresence` already used in 35+ files. Route transitions use `AnimatePresence` + `motion.div` with `initial`/`animate`/`exit` variants. No upgrade needed -- v10 has full AnimatePresence support. |
+## Integration Points
 
-**Pattern for mobile page transitions:**
-```tsx
-// Wrap route outlet with AnimatePresence
-<AnimatePresence mode="wait" initial={false}>
-  <motion.div
-    key={location.pathname}
-    initial={{ x: '100%', opacity: 0 }}
-    animate={{ x: 0, opacity: 1 }}
-    exit={{ x: '-30%', opacity: 0 }}
-    transition={{ type: 'tween', duration: 0.25 }}
-  >
-    <Outlet />
-  </motion.div>
-</AnimatePresence>
-```
+### 1. WhatsApp Channel Provider
 
-**Why NOT react-transition-group, react-spring, or motion (v12):**
-- framer-motion is already deeply embedded (52 import sites)
-- AnimatePresence handles mount/unmount animations which is exactly what route transitions need
-- No benefit to adding a second animation library
-- The `motion` v12 package in package.json appears unused (0 imports from `"motion"`)
+Follows the exact same `ChannelProvider` interface as Telegram, Discord, Slack, Matrix, Gmail:
 
-### Mobile Detection: useIsMobile() (already exists)
-
-| Technology | Location | Purpose | Notes |
-|------------|----------|---------|-------|
-| `useIsMobile()` | `src/hooks/use-is-mobile.ts` | Viewport-based mobile detection | Uses `react-use` `createBreakpoint` with `< 1024px` threshold. Already used in 30+ components including WindowsContainer, Dock, and various layouts. |
-
-**Enhancement needed (not a new dep):**
-Add a `useIsStandalone()` hook to detect PWA standalone mode:
-```tsx
-export function useIsStandalone(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (navigator as any).standalone === true  // Safari iOS
-}
-```
-This distinguishes "mobile browser" from "installed PWA" for cases where behavior should differ (e.g., showing install prompt in browser but not in standalone).
-
-### Route-Based Navigation: react-router-dom (already installed)
-
-| Technology | Installed Version | Purpose | Notes |
-|------------|-------------------|---------|-------|
-| `react-router-dom` | `6.17.0` | Mobile navigation via URL routes | SheetLayout already uses route-based navigation. Mobile full-screen apps will use the same router with different layout wrapping. No upgrade needed. |
-
-### Bottom Sheet / Drawer: vaul (already installed)
-
-| Technology | Installed Version | Purpose | Notes |
-|------------|-------------------|---------|-------|
-| `vaul` | `^0.9.0` | Mobile bottom sheet interactions (settings panels, context menus) | Already in the dependency tree. Provides iOS-style drag-to-dismiss sheet behavior. Use for mobile settings, share sheets, context actions. |
-
----
-
-## HTML Meta Tags Required (No Dependencies)
-
-These go directly into `index.html`. Not libraries -- just markup.
-
-### Viewport (MODIFY existing)
-
-```html
-<!-- CURRENT -->
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-
-<!-- CHANGE TO -->
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-```
-
-`viewport-fit=cover` is CRITICAL. Without it, iOS will not extend the app behind the notch/home indicator, and `env(safe-area-inset-*)` values will all return 0. This single addition unlocks safe area handling.
-
-### Apple PWA Meta Tags (ADD)
-
-```html
-<!-- Declare as standalone web app (iOS) -->
-<meta name="apple-mobile-web-app-capable" content="yes" />
-
-<!-- Status bar: black-translucent renders behind the status bar, allowing edge-to-edge -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
-<!-- App title on home screen -->
-<meta name="apple-mobile-web-app-title" content="Livinity" />
-
-<!-- iOS does NOT read manifest icons -- must use this link tag -->
-<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
-```
-
-**Why `black-translucent` and not `default`:**
-- `default` = white status bar with black text. Creates a visible white bar at top.
-- `black-translucent` = transparent status bar with white text. App content extends behind it. This is what native iOS apps do. Combined with `viewport-fit=cover` + `padding-top: env(safe-area-inset-top)`, the app renders edge-to-edge like a native app.
-
-### Theme Color (KEEP existing)
-
-```html
-<!-- CURRENT (keep as-is) -->
-<meta name="theme-color" content="#f8f9fc" />
-```
-
-The existing `#f8f9fc` is correct -- it matches the app's light theme background. This controls Android Chrome address bar color and iOS status bar tint.
-
-**Confidence:** HIGH -- Apple's meta tag documentation is stable and well-documented
-
----
-
-## Manifest Configuration (via vite-plugin-pwa)
-
-The existing `public/site.webmanifest` will be REPLACED by vite-plugin-pwa's generated manifest. Configure in `vite.config.ts`:
-
-```ts
-import { VitePWA } from 'vite-plugin-pwa'
-
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon/favicon.ico', 'favicon/apple-touch-icon.png'],
-      manifest: {
-        name: 'Livinity',
-        short_name: 'Livinity',
-        description: 'Self-hosted AI server platform',
-        theme_color: '#f8f9fc',
-        background_color: '#f8f9fc',
-        display: 'standalone',
-        orientation: 'any',
-        start_url: '/',
-        scope: '/',
-        icons: [
-          {
-            src: '/favicon/android-chrome-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: '/favicon/android-chrome-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: '/favicon/android-chrome-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/trpc/, /^\/api/],
-        runtimeCaching: [
-          {
-            urlPattern: /\/wallpapers\/.*/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'wallpapers',
-              expiration: { maxEntries: 30, maxAgeSeconds: 30 * 24 * 60 * 60 },
-            },
-          },
-          {
-            urlPattern: /\/figma-exports\/.*/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'app-icons',
-              expiration: { maxEntries: 50, maxAgeSeconds: 30 * 24 * 60 * 60 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-})
-```
-
-**Key decisions:**
-- `registerType: 'autoUpdate'` -- no "update available" toast needed. When a new SW activates, it takes over immediately. Livinity is a dashboard, not a content app; stale cached shells are fine to auto-replace.
-- `navigateFallbackDenylist` excludes `/trpc` and `/api` from SW interception -- tRPC calls MUST hit the network, never serve cached HTML.
-- `globPatterns` includes `woff2` for fonts but NOT `jpg/png` (wallpapers are large; use runtime caching instead).
-- Maskable icon reuses the 512x512 Android Chrome icon. A proper maskable icon (with safe zone padding) should be generated if the source icon has content near edges.
-
-**Confidence:** HIGH -- vite-plugin-pwa docs explicitly cover this pattern for React SPA
-
----
-
-## CSS Additions (No Dependencies)
-
-### Safe Area CSS Variables
-
-Add to `src/index.css`:
-
-```css
-/* Safe area insets -- applied globally when viewport-fit=cover is set */
-:root {
-  --safe-area-top: env(safe-area-inset-top, 0px);
-  --safe-area-right: env(safe-area-inset-right, 0px);
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-area-left: env(safe-area-inset-left, 0px);
+```typescript
+// channels/whatsapp.ts
+export class WhatsAppProvider implements ChannelProvider {
+  readonly id = 'whatsapp' as const;
+  readonly name = 'WhatsApp';
+  
+  // Baileys socket instance
+  private sock: ReturnType<typeof makeWASocket> | null = null;
+  
+  // Auth state backed by SQLite (NOT useMultiFileAuthState)
+  private authState: { state: AuthenticationState; saveCreds: () => Promise<void> } | null = null;
+  
+  async init(redis: Redis): Promise<void> { /* load config from redis */ }
+  async connect(): Promise<void> { /* create socket, emit QR events */ }
+  async disconnect(): Promise<void> { /* close socket */ }
+  async getStatus(): Promise<ChannelStatus> { /* return connection state */ }
+  async sendMessage(chatId: string, text: string): Promise<boolean> { /* sock.sendMessage() */ }
+  onMessage(handler: (msg: IncomingMessage) => Promise<void>): void { /* bind messages.upsert */ }
 }
 ```
 
-These CSS variables provide a fallback layer. The `tailwindcss-safe-area` plugin utilities are preferred in markup, but raw CSS variables are useful for one-off calculations in component styles.
+**ChannelId type must be extended:** `'telegram' | 'discord' | 'slack' | 'matrix' | 'gmail' | 'whatsapp'`
 
-### Standalone Detection CSS
+**ChannelManager registration:** Add `this.providers.set('whatsapp', new WhatsAppProvider())` in constructor.
 
-```css
-/* Apply only when running as installed PWA */
-@media (display-mode: standalone) {
-  html {
-    --sheet-top: 0vh;
+**CHANNEL_META addition:**
+```typescript
+whatsapp: { name: 'WhatsApp', color: '#25D366', textLimit: 65536 },
+```
+
+### 2. QR Code Flow (Server to UI)
+
+Baileys emits QR string via `connection.update` event. Flow:
+
+1. `WhatsAppProvider.connect()` creates socket, listens for `connection.update`
+2. When `update.qr` is present, generate data URL via `qrcode.toDataURL(qrString)`
+3. Publish QR data URL to Redis: `nexus:whatsapp:qr`
+4. Expose via tRPC query (poll) or Redis pub/sub (push) to UI
+5. UI renders `<img src={qrDataUrl} />` in WhatsApp Settings panel
+6. QR regenerates every ~30s until scanned
+7. After scan, WhatsApp disconnects once (normal behavior), then reconnects with stored creds
+
+### 3. Auth State Persistence (SQLite)
+
+```sql
+-- In a dedicated whatsapp_auth.db (separate from memory.db for isolation)
+CREATE TABLE IF NOT EXISTS whatsapp_auth (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+```
+
+Custom `useSqliteAuthState(db: Database)` returns `{ state, saveCreds }` compatible with Baileys config. On every `creds.update` event, write to SQLite. On startup, load from SQLite -- no re-scan needed.
+
+### 4. Cross-Session Conversation Search (FTS5)
+
+Add to the existing memory service SQLite schema:
+
+```sql
+-- Backing content table for conversation messages
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  metadata TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_msg_user ON conversation_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_msg_conv ON conversation_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_conv_msg_ts ON conversation_messages(timestamp);
+
+-- FTS5 virtual table for full-text search
+CREATE VIRTUAL TABLE IF NOT EXISTS conversation_messages_fts USING fts5(
+  content,
+  content_rowid='rowid',
+  tokenize='porter unicode61'
+);
+```
+
+Use triggers or manual inserts to keep the FTS5 table in sync. Query with:
+
+```sql
+SELECT cm.*, bm25(conversation_messages_fts) AS rank
+FROM conversation_messages_fts
+JOIN conversation_messages cm ON cm.rowid = conversation_messages_fts.rowid
+WHERE conversation_messages_fts MATCH ?
+  AND cm.user_id = ?
+ORDER BY rank
+LIMIT ?;
+```
+
+### 5. Conversation Persistence Hook
+
+Every channel message handler (including new WhatsApp) writes to the conversation store:
+
+```typescript
+// In ChannelManager or daemon message processing
+async function persistConversationMessage(
+  userId: string,
+  channel: string,
+  conversationId: string,
+  role: 'user' | 'assistant',
+  content: string
+) {
+  await memoryApi.post('/conversations/messages', {
+    userId,
+    channel,
+    conversationId,
+    role,
+    content,
+    timestamp: Date.now(),
+  });
+}
+```
+
+### 6. AI Tool for Conversation Search
+
+Register a `search_conversations` tool in the ToolRegistry:
+
+```typescript
+{
+  name: 'search_conversations',
+  description: 'Search past conversations across all channels (web, telegram, whatsapp, discord, etc.)',
+  parameters: {
+    query: { type: 'string', description: 'What to search for' },
+    channel: { type: 'string', optional: true, description: 'Filter to specific channel' },
+    days: { type: 'number', optional: true, description: 'Limit to last N days' },
   }
 }
 ```
 
----
+This lets the AI respond to "what did we discuss last week about backups?" by querying the FTS5 index + optional semantic reranking via Kimi embeddings.
 
-## Tailwind Config Addition
+## Baileys Technical Notes
 
-Add `tailwindcss-safe-area` plugin to `tailwind.config.ts`:
+### Logger Bridge (No pino Installation)
 
-```ts
-import tailwindSafeArea from 'tailwindcss-safe-area'
+Baileys requires a `pino`-compatible logger. Create a thin adapter instead of installing pino:
 
-export default {
-  // ... existing config
-  plugins: [
-    tailwindCssAnimate,
-    tailwindContainerQueries,
-    tailwindTypography,
-    utilPlugin,
-    tailwindRadix({variantPrefix: 'radix'}),
-    tailwindSafeArea,  // ADD
-  ],
+```typescript
+import { logger as winstonLogger } from '../logger.js';
+
+export const baileysLogger = {
+  level: 'warn',
+  child: () => baileysLogger,
+  trace: () => {},
+  debug: (msg: any) => winstonLogger.debug(typeof msg === 'string' ? msg : JSON.stringify(msg)),
+  info: (msg: any) => winstonLogger.info(typeof msg === 'string' ? msg : JSON.stringify(msg)),
+  warn: (msg: any) => winstonLogger.warn(typeof msg === 'string' ? msg : JSON.stringify(msg)),
+  error: (msg: any) => winstonLogger.error(typeof msg === 'string' ? msg : JSON.stringify(msg)),
+  fatal: (msg: any) => winstonLogger.error(typeof msg === 'string' ? msg : JSON.stringify(msg)),
+};
+```
+
+### Connection Lifecycle
+
+WhatsApp deliberately disconnects after first QR scan to provide auth credentials. This is NOT an error. Handle it:
+
+```typescript
+sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+  if (qr) {
+    // Generate data URL and publish to Redis for UI
+  }
+  if (connection === 'close') {
+    const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+    if (shouldReconnect) {
+      // Reconnect with fresh socket (current socket is dead after close)
+    }
+  }
+  if (connection === 'open') {
+    // Connected and authenticated -- save status
+  }
+});
+```
+
+### getMessage Callback (Required)
+
+Baileys requires a `getMessage` function for resending failed messages and decrypting polls. Store messages and return them:
+
+```typescript
+getMessage: async (key) => {
+  const msg = db.prepare(
+    'SELECT content FROM conversation_messages WHERE id = ?'
+  ).get(key.id);
+  return msg ? { conversation: msg.content } : undefined;
 }
 ```
 
-This enables utilities like:
-- `pt-safe` -- padding-top equal to safe-area-inset-top
-- `pb-safe` -- padding-bottom equal to safe-area-inset-bottom
-- `h-screen-safe` -- 100vh minus top and bottom safe areas
-- `pb-safe-offset-2` -- safe-area-inset-bottom + 0.5rem
+### markOnlineOnConnect
 
----
+Set to `false` to prevent suppressing phone notifications:
 
-## What NOT to Add
+```typescript
+const sock = makeWASocket({
+  auth: state,
+  logger: baileysLogger,
+  markOnlineOnConnect: false,
+  getMessage,
+});
+```
 
-| Technology | Why Not |
-|------------|---------|
-| **Capacitor / Ionic** | Massive overhead for a web app that only needs PWA installability. Capacitor wraps in native WebView -- Livinity serves from its own server via HTTPS, so PWA is the right approach. |
-| **next-pwa** | Not applicable -- Livinity UI is Vite/React, not Next.js. |
-| **workbox-cli / workbox-build (standalone)** | vite-plugin-pwa wraps Workbox internally. Adding standalone Workbox creates duplicate tooling. |
-| **@pwabuilder/pwaupdate** | Web component for PWA update UI. Unnecessary with `registerType: 'autoUpdate'`. |
-| **tailwindcss v4** | Major migration. The existing v3.4 setup works. `tailwindcss-safe-area@0.8.0` targets v3 explicitly. |
-| **Vite 5+ upgrade** | Not needed. vite-plugin-pwa v1.2.0 supports Vite 4. Avoid scope creep. |
-| **Push notification libraries** | Out of scope for v23.0. Service worker foundation enables future push support without additional libraries now. |
-| **motion v12 (separate package)** | Already in package.json but unused (0 imports). framer-motion v10 handles all animation needs. Consider removing `motion` as dead weight. |
-| **React Native / Expo** | PWA approach explicitly chosen over native. See PROJECT.md Out of Scope. |
+### Message Reception Pattern
 
----
+```typescript
+sock.ev.on('messages.upsert', ({ messages, type }) => {
+  if (type !== 'notify') return; // Skip history sync messages
+  
+  for (const msg of messages) {
+    if (!msg.message || msg.key.fromMe) continue; // Skip own messages
+    
+    const text = msg.message.conversation 
+      || msg.message.extendedTextMessage?.text 
+      || '';
+    
+    if (!text) continue;
+    
+    const incomingMsg: IncomingMessage = {
+      channel: 'whatsapp',
+      chatId: msg.key.remoteJid!,
+      userId: msg.key.participant || msg.key.remoteJid!,
+      userName: msg.pushName || 'Unknown',
+      text,
+      timestamp: (msg.messageTimestamp as number) * 1000,
+      isGroup: msg.key.remoteJid?.endsWith('@g.us') || false,
+    };
+    
+    messageHandler?.(incomingMsg);
+  }
+});
+```
 
 ## Installation
 
 ```bash
-# In livos/packages/ui/
+# In nexus/packages/core/
+npm install baileys@^6.7.21 qrcode@^1.5.4
 
-# Dev dependencies (both are build-time only)
-pnpm add -D vite-plugin-pwa
-pnpm add -D tailwindcss-safe-area@0.8.0
-
-# One-time asset generation (optional, run manually, not a project dependency)
-# npx pwa-asset-generator ./public/favicon/android-chrome-512x512.png ./public/pwa-assets --splash-only --portrait-only
+# Dev dependencies  
+npm install -D @types/qrcode@^1.5.6
 ```
 
-**Note:** `vite-plugin-pwa` will pull in `workbox-build` and `workbox-window` as transitive dependencies automatically. No need to install them separately.
+**No changes needed in `@nexus/memory`** -- it already has `better-sqlite3` which includes FTS5.
 
----
+## Dependency Impact
 
-## Integration Points
+| Package | Size (install) | New runtime deps | Production risk |
+|---------|---------------|------------------|-----------------|
+| `baileys@6.7.21` | ~15MB | 10 (ws, protobufjs, libsignal, etc.) | MEDIUM -- unofficial WhatsApp API, can break on WA updates |
+| `qrcode@1.5.4` | ~0.5MB | 3 (pngjs, dijkstrajs, yargs) | LOW -- stable, well-maintained |
+| `@types/qrcode` | ~50KB | 0 (dev only) | NONE |
 
-### Files to Modify
+**Total new production dependencies: 2 packages (~15.5MB installed)**
 
-| File | Change | Purpose |
-|------|--------|---------|
-| `vite.config.ts` | Add VitePWA plugin | Service worker + manifest generation |
-| `index.html` | Add Apple meta tags, modify viewport, add splash screen links | iOS installability + edge-to-edge |
-| `tailwind.config.ts` | Add tailwindcss-safe-area plugin | Safe area utility classes |
-| `src/index.css` | Add safe area CSS variables, standalone media query | Global safe area fallbacks |
-| `public/site.webmanifest` | DELETE (replaced by vite-plugin-pwa) | Avoid duplicate manifests |
-
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/hooks/use-is-standalone.ts` | Detect PWA standalone mode |
-| `src/hooks/use-pwa-install.ts` | Handle `beforeinstallprompt` event for install banners |
-
-### Existing Files to Leverage (No Changes Needed for Stack)
-
-| File | How It Helps |
-|------|-------------|
-| `src/hooks/use-is-mobile.ts` | Mobile detection already works; combine with `useIsStandalone()` |
-| `src/modules/window/windows-container.tsx` | Already returns null on mobile |
-| `src/layouts/sheet.tsx` | SheetLayout handles route-based navigation for settings/app-store |
-| `src/utils/tw.ts` | Breakpoints already correct for responsive branching |
-| `public/favicon/apple-touch-icon.png` | 180x180 icon already exists for iOS |
-| `public/favicon/android-chrome-192x192.png` | Manifest icon already exists |
-| `public/favicon/android-chrome-512x512.png` | Manifest icon already exists |
-
----
-
-## Existing Icon Assets Audit
-
-| Asset | Exists | Status |
-|-------|--------|--------|
-| `favicon/android-chrome-192x192.png` | YES | Used in current manifest |
-| `favicon/android-chrome-512x512.png` | YES | Used in current manifest |
-| `favicon/apple-touch-icon.png` | YES | 180x180, already linked in HTML |
-| `favicon/favicon-32x32.png` | YES | Standard favicon |
-| `favicon/favicon-16x16.png` | YES | Standard favicon |
-| `favicon/favicon.ico` | YES | ICO fallback |
-| Maskable icon (safe zone) | NO | Need to verify 512x512 has safe zone padding for maskable purpose |
-| iOS splash screens | NO | Need to generate (~20 portrait variants) |
-
----
-
-## iOS Splash Screens (Deferred Recommendation)
-
-iOS requires `apple-touch-startup-image` link tags with device-specific `media` queries for splash screens. Without them, users see a white screen during PWA launch. This requires generating 20+ image variants and adding 20+ link tags to `index.html`.
-
-**Recommendation:** Defer to a follow-up task within the milestone. The PWA will be installable and functional without splash screens -- users just see a brief white flash on launch. Use `pwa-asset-generator` when ready:
-
-```bash
-npx pwa-asset-generator ./src/assets/logo.svg ./public/splash \
-  --splash-only --portrait-only --background "#f8f9fc"
-```
-
-This generates the images and prints the `<link>` tags to add to `index.html`.
-
----
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| PWA plugin | vite-plugin-pwa ^1.2.0 | Manual SW + Workbox CLI | More boilerplate, no manifest injection, harder to maintain |
-| Safe areas | tailwindcss-safe-area@0.8.0 | Manual CSS env() vars | No Tailwind utility composition, harder responsive patterns |
-| Page transitions | framer-motion (existing) | react-transition-group | Already have framer-motion everywhere, no reason to add another |
-| Manifest | vite-plugin-pwa generated | Manual public/site.webmanifest | Plugin auto-hashes, validates, keeps in sync with config |
-| Install prompt | Custom useBeforeInstallPrompt hook | @niclas-niclas/react-pwa-prompt | Tiny amount of code, no need for a dependency |
-| Icons | Existing + maskable variant | @vite-pwa/assets-generator | Existing icons cover requirements; only maskable needs attention |
-
----
+Note: `baileys` brings `ws@^8.13.0` which is already in nexus-core's dependencies (`ws@^8.18.0`). npm will deduplicate. `protobufjs` and `libsignal` are new transitive dependencies unique to Baileys.
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| vite-plugin-pwa compatibility | HIGH | Verified peerDep `^4.0.0` in package.json on GitHub main |
-| tailwindcss-safe-area v0.8.0 | HIGH | Explicitly targets Tailwind v3, separate from v1.x (Tailwind v4) |
-| Apple meta tags | HIGH | Stable API, well-documented, verified across multiple sources |
-| framer-motion transitions | HIGH | AnimatePresence used in 35+ existing files, v10 fully supports this |
-| Workbox service worker config | MEDIUM | Config patterns well-documented but navigateFallbackDenylist for tRPC needs testing |
-| iOS splash screens | LOW | Device media queries change with new devices; pwa-asset-generator scrapes Apple HIG but may lag |
+| Decision | Confidence | Source |
+|----------|------------|--------|
+| Baileys over whatsapp-web.js | HIGH | Multiple sources, clear technical advantages, community consensus |
+| Baileys v6.7.21 (not v7 RC) | HIGH | npm registry: v7 still RC since Nov 2025, no stable release |
+| SQLite FTS5 for conversation search | HIGH | Verified: better-sqlite3 compiles with SQLITE_ENABLE_FTS5 by default (GitHub issue #1253) |
+| Custom SQLite auth state for Baileys | HIGH | Baileys docs explicitly warn against useMultiFileAuthState in production |
+| qrcode package for QR rendering | HIGH | Standard approach, Baileys docs reference sending QR string to frontend |
+| Winston-to-pino logger bridge | MEDIUM | Baileys accepts pino-compatible logger; bridge pattern works but may miss some pino-specific child logger features |
+| baileys 6.x overall stability | MEDIUM | 6.7.21 published Nov 2025. WhatsApp can break unofficial APIs at any time. |
 
----
+## Risk: WhatsApp API Instability
+
+Baileys is an unofficial reverse-engineered API. WhatsApp can and does make changes that break it. Mitigations:
+
+1. **Treat WhatsApp as degradable** -- it is one of 6+ channels, not the only one
+2. **Version pin** -- do not auto-update Baileys
+3. **Connection status UI** -- show clear connected/disconnected state to user
+4. **Graceful degradation** -- if WhatsApp disconnects, other channels keep working
+5. **Re-auth flow** -- make QR re-scan easy (one click in Settings panel)
 
 ## Sources
 
-- [vite-pwa/vite-plugin-pwa - GitHub](https://github.com/vite-pwa/vite-plugin-pwa) -- peerDependencies verified
-- [Vite PWA Official Docs](https://vite-pwa-org.netlify.app/) -- generateSW, workbox config
-- [tailwindcss-safe-area - GitHub](https://github.com/mvllow/tailwindcss-safe-area) -- v0.8.0 for Tailwind v3
-- [Apple Supported Meta Tags](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html)
-- [PWA iOS Limitations 2026 - MagicBell](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
-- [iOS PWA Compatibility - firt.dev](https://firt.dev/notes/pwa-ios/)
-- [CSS env() - MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/env)
-- [Web App Manifest - web.dev](https://web.dev/learn/pwa/web-app-manifest)
-- [Workbox Precaching - Chrome Developers](https://developer.chrome.com/docs/workbox/modules/workbox-precaching)
-- [pwa-asset-generator - GitHub](https://github.com/elegantapp/pwa-asset-generator)
-- [PWA on iOS 2025 - Brainhub](https://brainhub.eu/library/pwa-on-ios)
+- [Baileys GitHub - WhiskeySockets](https://github.com/WhiskeySockets/Baileys) -- official repository
+- [Baileys Documentation](https://baileys.wiki/docs/intro/) -- setup and configuration
+- [Baileys Connecting Guide](https://baileys.wiki/docs/socket/connecting/) -- QR code flow, auth state
+- [Baileys Configuration](https://baileys.wiki/docs/socket/configuration/) -- makeWASocket options
+- [DeepWiki Baileys Getting Started](https://deepwiki.com/WhiskeySockets/Baileys/2-getting-started) -- code patterns
+- [better-sqlite3 FTS5 Issue #1253](https://github.com/WiseLibs/better-sqlite3/issues/1253) -- confirms FTS5 compiled by default
+- [SQLite FTS5 Extension Docs](https://www.sqlite.org/fts5.html) -- query syntax, BM25 ranking
+- [npm: baileys](https://www.npmjs.com/package/baileys) -- version history, v6.7.21 latest stable
+- [npm: qrcode](https://www.npmjs.com/package/qrcode) -- QR code generation
+- [LibHunt: Baileys vs whatsapp-web.js](https://www.libhunt.com/compare-Baileys-vs-whatsapp-web.js) -- comparison
+- [Baileys Auth State Production Guidance](https://deepwiki.com/WhiskeySockets/Baileys/4-connection-and-authentication) -- auth state patterns
