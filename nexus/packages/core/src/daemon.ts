@@ -1214,7 +1214,7 @@ export class Daemon {
       if (complexity >= 4) {
         agentTask = `## Task Complexity: ${complexity}/5 (Complex)
 You should approach this methodically:
-1. First check memory for any relevant past knowledge (memory_search)
+1. First check memory for any relevant past knowledge (memory_search) and past conversations (conversation_search)
 2. If needed, research the topic (web_search, scrape)
 3. Plan your approach before executing
 4. Verify results after each major step
@@ -1819,6 +1819,56 @@ ${task}`;
         }
       },
     });
+
+    // ── Conversation Search tool (search past conversations via memory service) ──
+
+    toolRegistry.register({
+      name: 'conversation_search',
+      description: 'Search past conversation history across all channels (Web, Telegram, Discord, WhatsApp, Slack). Use this when the user asks about previous discussions, past conversations, or what was said before.',
+      parameters: [
+        { name: 'query', type: 'string', description: 'Search keywords (e.g. "Docker setup", "backup strategy")', required: true },
+        { name: 'channel', type: 'string', description: 'Filter by channel: web, telegram, discord, whatsapp, slack', required: false },
+        { name: 'limit', type: 'number', description: 'Max results to return', required: false, default: 10 },
+        { name: 'since', type: 'number', description: 'Only return results after this Unix timestamp (ms). Use for "last week", "yesterday" etc.', required: false },
+      ],
+      execute: async (params) => {
+        const { query, channel, limit, since } = params as { query: string; channel?: string; limit?: number; since?: number };
+        if (!query) return { success: false, output: '', error: 'Query is required.' };
+        try {
+          const body: Record<string, unknown> = { query, limit: limit || 10 };
+          if (channel) body.channel = channel;
+          if (since) body.since = since;
+
+          const res = await fetch('http://localhost:3300/conversation-search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': process.env.LIV_API_KEY || '',
+            },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            return { success: false, output: '', error: `Conversation search failed (${res.status}): ${errText}` };
+          }
+          const data = await res.json() as { results: Array<{ role: string; content: string; channel: string; createdAt: number }> };
+          const results = data.results || [];
+          if (results.length === 0) {
+            return { success: true, output: 'No past conversations found matching this query.' };
+          }
+          const formatted = results.map((r: any, i: number) => {
+            const date = new Date(r.createdAt).toISOString().slice(0, 10);
+            const ch = r.channel ? ` [${r.channel}]` : '';
+            const speaker = r.role === 'user' ? 'User' : 'Assistant';
+            return `[${i + 1}] ${date}${ch} ${speaker}: ${r.content.slice(0, 300)}`;
+          }).join('\n\n');
+          return { success: true, output: formatted, data: results };
+        } catch (err) {
+          return { success: false, output: '', error: `Conversation search error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+    logger.info('Tool registered: conversation_search');
 
     // ── Web Search tool (Google via Firecrawl scraping) ───────────────
 
@@ -3386,7 +3436,7 @@ Types:
     }
 
     // Ensure basic tools are always available
-    for (const basicTool of ['memory_search', 'memory_add', 'progress_report']) {
+    for (const basicTool of ['memory_search', 'memory_add', 'conversation_search', 'progress_report']) {
       if (!scopedRegistry.get(basicTool)) {
         const tool = this.config.toolRegistry.get(basicTool);
         if (tool) scopedRegistry.register(tool);
