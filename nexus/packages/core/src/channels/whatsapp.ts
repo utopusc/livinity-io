@@ -1,4 +1,4 @@
-import makeWASocket, { DisconnectReason } from 'baileys';
+import makeWASocket, { DisconnectReason, Browsers } from 'baileys';
 import type { WASocket } from 'baileys';
 import { Boom } from '@hapi/boom';
 import type Redis from 'ioredis';
@@ -113,7 +113,7 @@ export class WhatsAppProvider implements ChannelProvider {
       this.sock = makeWASocket({
         auth: state,
         logger: baileysLogger as any,
-        browser: ['LivOS', 'Desktop', '1.0.0'],
+        browser: Browsers.ubuntu('Chrome'),
         markOnlineOnConnect: false,
         getMessage: async (_key) => undefined,
       });
@@ -324,13 +324,25 @@ export class WhatsAppProvider implements ChannelProvider {
           });
         }, 5000);
       } else {
-        // Logged out — clear auth state so next connect triggers QR
-        logger.warn('WhatsAppProvider: logged out, clearing auth state');
-        if (this.authStore) {
-          await this.authStore.clearAll();
+        const inPairingMode = Date.now() < this.pairingModeUntil;
+        if (inPairingMode) {
+          // During pairing, WhatsApp may send "logged out" before code is entered — retry
+          logger.info('WhatsAppProvider: got loggedOut during pairing, retrying in 5s');
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.connect(true).catch((err: any) => {
+              logger.error('WhatsAppProvider: pairing reconnect failed', { error: err.message });
+            });
+          }, 5000);
+        } else {
+          // Real logged out — clear auth state so next connect triggers fresh pairing
+          logger.warn('WhatsAppProvider: logged out, clearing auth state');
+          if (this.authStore) {
+            await this.authStore.clearAll();
+          }
+          this.status = { enabled: this.config.enabled, connected: false, error: 'Logged out' };
+          await this.saveStatus();
         }
-        this.status = { enabled: this.config.enabled, connected: false, error: 'Logged out' };
-        await this.saveStatus();
       }
     }
 
