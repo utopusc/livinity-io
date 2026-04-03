@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-04-03T03:45:55.727Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-04-03T03:49:35.506Z"
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -72,6 +72,8 @@ Plan: 2 of 2
 - [Phase 09]: FTS5 query sanitization via double-quote wrapping prevents injection
 - [Phase 09]: Fire-and-forget archival pattern (.catch) to never block chat responses
 - [Phase 09]: Channel messages use chatId as userId (unified identity deferred)
+- [Phase 09]: conversation_search added to messaging and coding TOOL_PROFILES for broad availability
+- [Phase 09]: Tool formats results with date, channel label, speaker role, and 300-char content snippet
 
 ### Pending Todos
 
@@ -85,6 +87,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T03:45:55.724Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-04-03T03:49:35.503Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
