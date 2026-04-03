@@ -199,7 +199,7 @@ export class ProviderManager {
 
   private isFallbackableError(err: any): boolean {
     const status = err.status || err.statusCode;
-    if (status === 429 || status === 503 || status === 502 || status === 529) return true;
+    if (status === 401 || status === 403 || status === 429 || status === 503 || status === 502 || status === 529) return true;
 
     const message = err.message?.toLowerCase() || '';
     if (message.includes('timeout') || message.includes('econnreset') || message.includes('socket hang up') ||
