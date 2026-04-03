@@ -58,26 +58,26 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WA-01 | — | Pending |
-| WA-02 | — | Pending |
-| WA-03 | — | Pending |
-| WA-04 | — | Pending |
-| WA-05 | — | Pending |
-| WA-06 | — | Pending |
-| MEM-01 | — | Pending |
-| MEM-02 | — | Pending |
-| MEM-03 | — | Pending |
-| MEM-04 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| ID-01 | — | Pending |
+| WA-01 | Phase 7 | Pending |
+| WA-02 | Phase 6 | Pending |
+| WA-03 | Phase 8 | Pending |
+| WA-04 | Phase 6 | Pending |
+| WA-05 | Phase 8 | Pending |
+| WA-06 | Phase 7 | Pending |
+| MEM-01 | Phase 9 | Pending |
+| MEM-02 | Phase 9 | Pending |
+| MEM-03 | Phase 9 | Pending |
+| MEM-04 | Phase 8 | Pending |
+| UI-01 | Phase 10 | Pending |
+| UI-02 | Phase 10 | Pending |
+| UI-03 | Phase 10 | Pending |
+| ID-01 | Phase 10 | Pending |
 
 **Coverage:**
 - v25.0 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after initial definition*
+*Last updated: 2026-04-02 after roadmap creation (all 14 requirements mapped to phases 6-10)*

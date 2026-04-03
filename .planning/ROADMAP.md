@@ -11,7 +11,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v21.0 Autonomous Agent Platform** — Phases 19-28 (shipped 2026-03-28)
 - ✅ **v22.0 Livinity AGI Platform** — Phases 29-36 (shipped 2026-03-29)
 - ✅ **v23.0 Mobile PWA** — Phases 37-40 (shipped 2026-04-01)
-- [ ] **v24.0 Mobile Responsive UI** — Phases 1-5 (in progress)
+- ✅ **v24.0 Mobile Responsive UI** — Phases 1-5 (shipped 2026-04-01)
+- [ ] **v25.0 Memory & WhatsApp Integration** — Phases 6-10 (in progress)
 
 ## Phases
 
@@ -80,110 +81,123 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v24.0 Mobile Responsive UI (In Progress)
+<details>
+<summary>v24.0 Mobile Responsive UI (Phases 1-5) — SHIPPED 2026-04-01</summary>
 
-**Milestone Goal:** Make every system app (AI Chat, Settings, Server Control, Files, Terminal) fully usable on mobile -- proper responsive layouts, touch-friendly controls, no overflow/scroll issues. Each phase delivers one complete app's mobile experience.
+- [x] Phase 1: AI Chat Mobile (2/2 plans) — completed 2026-04-01
+- [x] Phase 2: Settings Mobile (2/2 plans) — completed 2026-04-01
+- [x] Phase 3: Server Control Mobile (2/2 plans) — completed 2026-04-01
+- [x] Phase 4: Files Mobile (2/2 plans) — completed 2026-04-01
+- [x] Phase 5: Terminal Mobile (1/1 plans) — completed 2026-04-01
 
-**CRITICAL CONSTRAINT:** Desktop UI must NOT be modified -- all mobile changes gated on `useIsMobile()` or CSS breakpoints.
+</details>
 
-- [x] **Phase 1: AI Chat Mobile** - Responsive sidebar drawer, compact messages, touch-friendly input (completed 2026-04-01)
-- [x] **Phase 2: Settings Mobile** - Single-column layout, proper scrolling, touch-sized controls (completed 2026-04-01)
-- [x] **Phase 3: Server Control Mobile** - Stackable dashboard cards, mobile-friendly tables and actions (completed 2026-04-01)
-- [x] **Phase 4: Files Mobile** - Drawer-based folder navigation, adaptive file grid, compact toolbar (completed 2026-04-01)
-- [x] **Phase 5: Terminal Mobile** - Viewport-fitted xterm.js, readable font, landscape support (completed 2026-04-01)
+### v25.0 Memory & WhatsApp Integration (In Progress)
+
+**Milestone Goal:** Enable persistent cross-session AI memory across all channels, add WhatsApp as a messaging channel with QR code authentication, unify conversation storage, and provide a memory management UI.
+
+- [ ] **Phase 6: WhatsApp Channel Foundation** - Baileys ChannelProvider with Redis-backed auth state and echo-loop guard
+- [ ] **Phase 7: WhatsApp QR Code & Settings UI** - QR code display, connection status, and disconnect in Settings > Integrations
+- [ ] **Phase 8: WhatsApp Message Routing & Safety** - End-to-end messaging, rate limiting, legacy daemon.ts cleanup
+- [ ] **Phase 9: Cross-Session Conversation Persistence & Search** - FTS5 conversation store, archiver pipeline, AI search tool
+- [ ] **Phase 10: Unified Identity & Memory Management UI** - Cross-channel userId mapping, memory settings page with search/delete
 
 ## Phase Details
 
-### Phase 1: AI Chat Mobile
-**Goal**: Users can have full AI conversations on mobile with the same functionality as desktop
-**Depends on**: Nothing (first phase)
-**Requirements**: CHAT-01, CHAT-02, CHAT-03, CHAT-04
+### Phase 6: WhatsApp Channel Foundation
+**Goal**: WhatsApp exists as a proper ChannelProvider with persistent authentication that survives server restarts
+**Depends on**: Nothing (first phase of v25.0)
+**Requirements**: WA-02, WA-04
 **Success Criteria** (what must be TRUE):
-  1. User can open and close the conversation/agents sidebar on mobile via a hamburger button, and it renders as an overlay drawer that does not push content off-screen
-  2. Long messages with code blocks render within the viewport width -- no horizontal scrolling on the chat area
-  3. Tool call cards display a compact summary on mobile with a tap target to expand full details
-  4. The chat input area including file upload button stays anchored at the bottom, is not occluded by the mobile keyboard, and has touch-friendly sizing
-**Plans:** 2/2 plans complete
+  1. WhatsAppProvider implements the ChannelProvider interface and is registered in ChannelManager alongside Telegram/Discord/Slack/Matrix
+  2. Baileys WebSocket connects to WhatsApp servers and emits connection lifecycle events (connecting, open, close, QR)
+  3. Auth state (Signal protocol keys, session data) is persisted to Redis so that restarting livinityd does not require re-scanning the QR code
+  4. Messages sent by the bot itself are filtered out (fromMe guard) preventing echo loops
+**Plans**: TBD
 
 Plans:
-- [x] 01-01-PLAN.md -- Mobile sidebar drawer + navigation headers + touch-friendly chat input (CHAT-01, CHAT-04)
-- [x] 01-02-PLAN.md -- Message width constraints + compact tool cards (CHAT-02, CHAT-03)
+- [ ] 06-01: TBD
+- [ ] 06-02: TBD
 
-### Phase 2: Settings Mobile
-**Goal**: Users can navigate and modify all settings on mobile without layout issues
-**Depends on**: Nothing (independent)
-**Requirements**: SET-01, SET-02, SET-03, SET-04
+### Phase 7: WhatsApp QR Code & Settings UI
+**Goal**: Users can connect their WhatsApp account by scanning a QR code in Settings and see live connection status
+**Depends on**: Phase 6
+**Requirements**: WA-01, WA-06
 **Success Criteria** (what must be TRUE):
-  1. Settings page uses a single-column stacked layout on mobile -- no side navigation panel visible; sections are accessed via a top-level list or back-navigation pattern
-  2. Every settings section (Users, Domains, AI, About) scrolls vertically without horizontal overflow or content clipping
-  3. All interactive controls (inputs, selects, toggles, buttons) have a minimum 44px touch target and adequate spacing
-  4. Modal dialogs (invite user, add domain, etc.) render full-width on mobile without clipping or overflowing the viewport
-**Plans:** 2/2 plans complete
+  1. User navigates to Settings > Integrations and sees a WhatsApp section with a "Connect" button
+  2. Clicking Connect displays a QR code that auto-refreshes when it expires, and scanning it with WhatsApp links the account within seconds
+  3. After successful connection, the UI shows "Connected" status with the linked phone number and a Disconnect button
+  4. Clicking Disconnect terminates the Baileys session and clears auth state, returning the UI to the Connect state
+**Plans**: TBD
 
 Plans:
-- [x] 02-01-PLAN.md -- Mobile single-column drill-down layout + overflow protection (SET-01, SET-02)
-- [x] 02-02-PLAN.md -- Touch-friendly controls + full-width mobile dialogs (SET-03, SET-04)
+- [ ] 07-01: TBD
+- [ ] 07-02: TBD
 
-### Phase 3: Server Control Mobile
-**Goal**: Users can monitor and manage Docker containers on mobile with full visibility
-**Depends on**: Nothing (independent)
-**Requirements**: SRV-01, SRV-02, SRV-03, SRV-04
+### Phase 8: WhatsApp Message Routing & Safety
+**Goal**: Users can message the AI via WhatsApp and receive responses, with rate limiting to prevent account bans
+**Depends on**: Phase 7
+**Requirements**: WA-03, WA-05, MEM-04
 **Success Criteria** (what must be TRUE):
-  1. Dashboard overview cards (CPU, memory, containers, etc.) stack vertically on mobile instead of overflowing horizontally
-  2. The container list renders with compact rows that fit mobile width, with horizontal scroll only inside individual data cells if needed
-  3. Container action buttons (start, stop, restart, remove) are accessible with touch-friendly sizing and not hidden behind unresponsive overflow menus
-  4. Server stats and charts resize to fill mobile viewport width without cropping or overflow
-**Plans:** 2/2 plans complete
+  1. User sends a WhatsApp message to the connected number and receives an AI-generated response within the same WhatsApp conversation
+  2. Outbound messages are rate-limited to a maximum of 10 per minute with randomized delays between sends
+  3. The legacy ad-hoc WhatsApp code in daemon.ts (wa_outbox polling, getWhatsAppHistory, sendWhatsAppResponse) is removed and all WhatsApp routing goes through the ChannelManager
+  4. If rate limit is exceeded, the AI queues responses rather than dropping them, and the user receives them with slight delay
+**Plans**: TBD
 
 Plans:
-- [x] 03-01-PLAN.md -- Responsive dashboard cards, scrollable tab bar, mobile overview layout (SRV-01, SRV-04)
-- [x] 03-02-PLAN.md -- Mobile container list cards, 44px touch actions, responsive detail sheet and create form (SRV-02, SRV-03)
+- [ ] 08-01: TBD
+- [ ] 08-02: TBD
 
-### Phase 4: Files Mobile
-**Goal**: Users can browse, navigate, and manage files on mobile with proper touch controls
-**Depends on**: Nothing (independent)
-**Requirements**: FILE-01, FILE-02, FILE-03, FILE-04
+### Phase 9: Cross-Session Conversation Persistence & Search
+**Goal**: AI can recall and search all previous conversations across every channel using full-text search
+**Depends on**: Nothing (independent of WhatsApp track -- can execute in parallel with Phases 6-8)
+**Requirements**: MEM-01, MEM-02, MEM-03
 **Success Criteria** (what must be TRUE):
-  1. The folder sidebar renders as a slide-in drawer on mobile with a toggle button, not permanently visible alongside the file list
-  2. File list and grid views adapt to mobile width -- items are properly sized and tappable without accidental selection of adjacent items
-  3. Toolbar actions (upload, new folder, delete, etc.) are accessible on mobile via a compact toolbar or overflow menu with touch-friendly targets
-  4. File preview and details panels render within the viewport on mobile without overlapping the file list or causing horizontal overflow
-**Plans:** 2/2 plans complete
+  1. Every conversation turn (user message + AI response) from Web UI, Telegram, Discord, WhatsApp, and Slack is persisted to SQLite with channel and user metadata
+  2. User asks AI "what did we discuss about Docker last week?" and receives a relevant answer synthesized from past conversation history
+  3. The conversation_search tool appears in ToolRegistry and the AI autonomously invokes it when questions reference past interactions
+  4. FTS5 full-text search returns results in under 50ms for typical keyword queries at self-hosted scale (thousands of conversations)
+**Plans**: TBD
 
 Plans:
-- [x] 04-01-PLAN.md -- Sidebar 44px touch targets, mobile drawer polish, responsive icons grid (FILE-01, FILE-02)
-- [x] 04-02-PLAN.md -- Toolbar 44px touch targets, mobile-safe file viewer overlays (FILE-03, FILE-04)
+- [ ] 09-01: TBD
+- [ ] 09-02: TBD
 
-### Phase 5: Terminal Mobile
-**Goal**: Users can use the terminal on mobile for basic server commands
-**Depends on**: Nothing (independent)
-**Requirements**: TERM-01, TERM-02, TERM-03
+### Phase 10: Unified Identity & Memory Management UI
+**Goal**: Same user is recognized across all channels, and users can browse, search, and delete their stored conversation memories
+**Depends on**: Phase 8, Phase 9
+**Requirements**: ID-01, UI-01, UI-02, UI-03
 **Success Criteria** (what must be TRUE):
-  1. The xterm.js terminal fills the mobile viewport width without horizontal scrollbar -- terminal cols match the available screen width
-  2. Terminal font is at least 12px, rendering readable text on mobile screens without pinch-to-zoom
-  3. Rotating to landscape mode triggers proper terminal resize (cols/rows recalculate) and the terminal remains fully functional
-**Plans:** 1/1 plans complete
+  1. A single userId maps across Telegram, WhatsApp, Web UI, and Discord so the AI knows "user X on Telegram" and "user X on WhatsApp" are the same person
+  2. Settings > Memory page displays stored conversation history with a search bar that filters across all channels in real time
+  3. User can select and delete individual conversation entries from the Memory page
+  4. Conversation history view shows channel origin (Telegram/WhatsApp/Web/Discord icon or label) for each entry
+**Plans**: TBD
 
 Plans:
-- [x] 05-01-PLAN.md -- Mobile-fitted xterm.js, 12px font, landscape resize, touch-friendly tab header (TERM-01, TERM-02, TERM-03)
+- [ ] 10-01: TBD
+- [ ] 10-02: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 6 -> 7 -> 8 -> 9 -> 10
+Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. AI Chat Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 2. Settings Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 3. Server Control Mobile | v24.0 | 1/2 | Complete    | 2026-04-01 |
-| 4. Files Mobile | v24.0 | 0/2 | Complete    | 2026-04-01 |
-| 5. Terminal Mobile | v24.0 | 0/1 | Complete    | 2026-04-01 |
+| 6. WhatsApp Channel Foundation | v25.0 | 0/TBD | Not started | - |
+| 7. WhatsApp QR Code & Settings UI | v25.0 | 0/TBD | Not started | - |
+| 8. WhatsApp Message Routing & Safety | v25.0 | 0/TBD | Not started | - |
+| 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/TBD | Not started | - |
+| 10. Unified Identity & Memory Management UI | v25.0 | 0/TBD | Not started | - |
 
 ---
 
 ## Previous Milestones
 
+- v24.0 Mobile Responsive UI (Phases 1-5, Shipped 2026-04-01)
 - v23.0 Mobile PWA (Phases 37-40, Shipped 2026-04-01)
 - v22.0 Livinity AGI Platform (Phases 29-36, Shipped 2026-03-29)
 - v21.0 Autonomous Agent Platform (Phases 19-28, Shipped 2026-03-28)

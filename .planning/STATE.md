@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
-status: defining_requirements
-stopped_at: Milestone initialized
-last_updated: "2026-04-02T23:00:00.000Z"
+status: ready_to_plan
+stopped_at: Roadmap created with 5 phases (6-10)
+last_updated: "2026-04-02T23:30:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,16 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v25.0 -- Memory & WhatsApp Integration
-**Current focus:** Defining requirements
+**Current focus:** Phase 6 -- WhatsApp Channel Foundation (ready to plan)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-02 — Milestone v25.0 started
+Phase: 6 of 10 (WhatsApp Channel Foundation) -- first phase of v25.0
+Plan: -- (not yet planned)
+Status: Ready to plan
+Last activity: 2026-04-02 -- Roadmap created for v25.0 (5 phases, 14 requirements)
+
+Progress: [..........] 0%
 
 ## Performance Metrics
 
@@ -52,12 +54,13 @@ Last activity: 2026-04-02 — Milestone v25.0 started
 
 ### Decisions
 
-- v25.0 continues phase numbering from v24.0
+- Baileys v6.7.21 chosen over whatsapp-web.js (50MB vs 300-600MB, no Chromium)
+- Redis-backed auth state (not file-based) for Baileys Signal protocol keys
+- SQLite FTS5 for conversation search (zero new deps, built into better-sqlite3)
+- WhatsApp and Memory tracks are independent -- can build in parallel
+- Legacy daemon.ts WhatsApp code must be consolidated into ChannelManager (Phase 8)
+- Only 2 new npm dependencies: baileys + qrcode
 - PostgreSQL conversation backup explicitly OUT OF SCOPE (user decision)
-- WhatsApp via whatsapp-web.js or Baileys (QR code auth, headless capable)
-- Existing memory service (SQLite + Kimi embeddings) is the foundation — extend, don't replace
-- Existing channel architecture (ChannelManager pattern) used for WhatsApp
-- userId unification needed across Web UI, Telegram, WhatsApp, Discord
 
 ### Pending Todos
 
@@ -65,12 +68,12 @@ None
 
 ### Blockers/Concerns
 
-- WhatsApp Web API is unofficial — may break with updates
-- QR code auth requires initial scan from user's phone
-- Headless mode needs careful session persistence to avoid re-auth
+- WhatsApp Web API is unofficial -- Meta may enforce bans on automated messaging
+- Baileys auth state corruption risk if Signal protocol keys lose sync on crash
+- Kimi embedding rate limits untested at scale -- FTS5 is primary search, embeddings secondary
 
 ## Session Continuity
 
-Last session: 2026-04-02T23:00:00.000Z
-Stopped at: Milestone initialized
+Last session: 2026-04-02
+Stopped at: Roadmap created for v25.0 with 5 phases (6-10), 14 requirements mapped
 Resume file: None
