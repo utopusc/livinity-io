@@ -162,8 +162,9 @@ export class WhatsAppProvider implements ChannelProvider {
         await this.saveStatus();
       });
 
-      // Messages
-      this.client.on('message', async (msg: any) => {
+      // Messages — use 'message_create' to capture own messages (fromMe)
+      // 'message' event only fires for incoming messages from others
+      this.client.on('message_create', async (msg: any) => {
         try {
           await this.handleMessage(msg);
         } catch (err: any) {
