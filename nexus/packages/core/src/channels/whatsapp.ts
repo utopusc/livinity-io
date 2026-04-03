@@ -105,6 +105,13 @@ export class WhatsAppProvider implements ChannelProvider {
     // Store phone number for pairing code request after socket connects
     if (phoneNumber) {
       this.pendingPhoneNumber = phoneNumber;
+      if (this.redis) {
+        await this.redis.set('nexus:whatsapp:pending_phone', phoneNumber, 'EX', 120);
+      }
+    } else if (force && !this.pendingPhoneNumber && this.redis) {
+      // Reconnect in pairing mode — restore phone from Redis
+      const stored = await this.redis.get('nexus:whatsapp:pending_phone');
+      if (stored) this.pendingPhoneNumber = stored;
     }
 
     try {
@@ -136,28 +143,32 @@ export class WhatsAppProvider implements ChannelProvider {
       });
 
       // Request pairing code if phone number provided (first-time connection)
+      // Must happen IMMEDIATELY — WhatsApp closes connection within ~2s
       if (this.pendingPhoneNumber && this.sock) {
         const phone = this.pendingPhoneNumber.replace(/[^0-9]/g, '');
         this.pendingPhoneNumber = null;
-        // Small delay to let the socket connect before requesting pairing
-        setTimeout(async () => {
-          try {
-            if (!this.sock) return;
-            const code = await this.sock.requestPairingCode(phone);
-            logger.info('WhatsAppProvider: pairing code generated', { code });
-            // Keep reconnecting with force for 2 minutes while user enters code
-            this.pairingModeUntil = Date.now() + 120_000;
-            // Store pairing code in Redis for UI to display
-            if (this.redis) {
-              await this.redis.set('nexus:whatsapp:pairing_code', code, 'EX', 120);
-            }
-          } catch (err: any) {
-            logger.error('WhatsAppProvider: pairing code request failed', { error: err.message });
-            if (this.redis) {
-              await this.redis.set('nexus:whatsapp:pairing_error', err.message, 'EX', 60);
+        const sock = this.sock;
+        // Use event listener to request pairing as soon as WA handshake completes
+        sock.ev.on('connection.update', async (upd: any) => {
+          if (upd.connection === 'connecting' || upd.receivedPendingNotifications === false) {
+            try {
+              const code = await sock.requestPairingCode(phone);
+              logger.info('WhatsAppProvider: pairing code generated', { code });
+              this.pairingModeUntil = Date.now() + 120_000;
+              if (this.redis) {
+                await this.redis.set('nexus:whatsapp:pairing_code', code, 'EX', 120);
+              }
+            } catch (err: any) {
+              // May fail if called too early — will retry on reconnect
+              if (!String(err.message).includes('Connection Closed')) {
+                logger.error('WhatsAppProvider: pairing code request failed', { error: err.message });
+                if (this.redis) {
+                  await this.redis.set('nexus:whatsapp:pairing_error', err.message, 'EX', 60);
+                }
+              }
             }
           }
-        }, 2000);
+        });
       }
 
       logger.info('WhatsAppProvider: socket created, awaiting connection');
