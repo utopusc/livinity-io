@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-04-03T04:04:11.323Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-04-03T04:08:39.415Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -77,6 +77,9 @@ Plan: 2 of 2
 - [Phase 10]: Redis identity cache in daemon (not direct PostgreSQL) since nexus-core cannot import livinityd database module
 - [Phase 10]: FTS5 trigger handles conversation turn deletion automatically (no manual FTS cleanup needed)
 - [Phase 10]: Auto-create identity mapping on first encounter (channelUserId becomes canonical until admin links)
+- [Phase 10]: conversationTurnsSearch is query not mutation -- matched backend implementation
+- [Phase 10]: Client-side search for memories, server-side FTS5 for conversations
+- [Phase 10]: Channel filter pills (not dropdown) for quick visual scanning
 
 ### Pending Todos
 
@@ -90,6 +93,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T04:04:11.320Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-04-03T04:08:39.412Z
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None
