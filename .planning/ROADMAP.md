@@ -173,11 +173,11 @@ Plans:
   2. Settings > Memory page displays stored conversation history with a search bar that filters across all channels in real time
   3. User can select and delete individual conversation entries from the Memory page
   4. Conversation history view shows channel origin (Telegram/WhatsApp/Web/Discord icon or label) for each entry
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md -- Identity mapping table, memory service REST endpoints, tRPC proxy routes, daemon identity resolution
+- [ ] 10-02-PLAN.md -- Settings > Memory UI with Memories/Conversations tabs, search, delete, channel icons
 
 ## Progress
 
@@ -191,7 +191,7 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 | 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete   | 2026-04-03 |
 | 8. WhatsApp Message Routing & Safety | v25.0 | 0/2 | Not started | - |
 | 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/2 | Not started | - |
-| 10. Unified Identity & Memory Management UI | v25.0 | 0/TBD | Not started | - |
+| 10. Unified Identity & Memory Management UI | v25.0 | 0/2 | Not started | - |
 
 ---
 
