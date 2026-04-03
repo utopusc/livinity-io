@@ -66,7 +66,47 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_memory_sessions_session ON memory_sessions(session_id);
   CREATE INDEX IF NOT EXISTS idx_memory_sessions_memory ON memory_sessions(memory_id);
+
+  CREATE TABLE IF NOT EXISTS conversation_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT 'web',
+    chat_id TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    metadata TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ct_user ON conversation_turns(user_id);
+  CREATE INDEX IF NOT EXISTS idx_ct_channel ON conversation_turns(channel);
+  CREATE INDEX IF NOT EXISTS idx_ct_created ON conversation_turns(created_at);
 `);
+
+// FTS5 virtual table and sync triggers (created separately as they use different syntax)
+db.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS conversation_turns_fts USING fts5(
+    content,
+    content='conversation_turns',
+    content_rowid='id'
+  );
+`);
+
+// Triggers to keep FTS5 in sync with conversation_turns
+try {
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS ct_ai AFTER INSERT ON conversation_turns BEGIN
+      INSERT INTO conversation_turns_fts(rowid, content) VALUES (new.id, new.content);
+    END;
+  `);
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS ct_ad AFTER DELETE ON conversation_turns BEGIN
+      INSERT INTO conversation_turns_fts(conversation_turns_fts, rowid, content) VALUES('delete', old.id, old.content);
+    END;
+  `);
+} catch {
+  // Triggers may already exist — safe to ignore
+}
 
 // Redis connection
 let redis: Redis | null = null;
@@ -148,7 +188,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health check (public - no auth required)
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.1.0', db: DB_PATH });
+  res.json({ status: 'ok', version: '2.2.0', db: DB_PATH });
 });
 
 // Auth middleware - all routes below this require X-API-Key header
@@ -238,6 +278,114 @@ app.post('/add', async (req, res) => {
     res.json({ success: true, id });
   } catch (err: any) {
     console.error('[Memory] Add error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Archive a conversation turn to persistent SQLite store
+app.post('/archive', (req, res) => {
+  try {
+    const { userId, channel, chatId, role, content, metadata } = req.body;
+
+    if (!userId || !content) {
+      return res.status(400).json({ error: 'userId and content are required' });
+    }
+
+    if (role && role !== 'user' && role !== 'assistant') {
+      return res.status(400).json({ error: 'role must be "user" or "assistant"' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO conversation_turns (user_id, channel, chat_id, role, content, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      userId,
+      channel || 'web',
+      chatId || '',
+      role || 'user',
+      content,
+      metadata ? JSON.stringify(metadata) : null,
+      Date.now()
+    );
+
+    console.log(`[Memory] Archived ${role || 'user'} turn for ${userId} on ${channel || 'web'}`);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err: any) {
+    console.error('[Memory] Archive error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Search conversation history via FTS5 full-text search
+app.post('/conversation-search', (req, res) => {
+  try {
+    const { query, userId, channel, limit = 20, since } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ error: 'query is required' });
+    }
+
+    // Sanitize FTS5 query: wrap each word in double quotes for safety
+    const sanitizedQuery = query
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w: string) => '"' + w.replace(/"/g, '') + '"')
+      .join(' ');
+
+    if (!sanitizedQuery) {
+      return res.json({ results: [] });
+    }
+
+    // Build dynamic query with optional filters
+    let sql = `
+      SELECT ct.id, ct.user_id, ct.channel, ct.chat_id, ct.role, ct.content, ct.metadata, ct.created_at
+      FROM conversation_turns ct
+      JOIN conversation_turns_fts fts ON ct.id = fts.rowid
+      WHERE conversation_turns_fts MATCH ?
+    `;
+    const params: any[] = [sanitizedQuery];
+
+    if (userId) {
+      sql += ' AND ct.user_id = ?';
+      params.push(userId);
+    }
+    if (channel) {
+      sql += ' AND ct.channel = ?';
+      params.push(channel);
+    }
+    if (since) {
+      sql += ' AND ct.created_at > ?';
+      params.push(since);
+    }
+
+    sql += ' ORDER BY rank LIMIT ?';
+    params.push(limit);
+
+    const rows = db.prepare(sql).all(...params) as Array<{
+      id: number;
+      user_id: string;
+      channel: string;
+      chat_id: string;
+      role: string;
+      content: string;
+      metadata: string | null;
+      created_at: number;
+    }>;
+
+    const results = rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      channel: row.channel,
+      chatId: row.chat_id,
+      role: row.role,
+      content: row.content,
+      metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      createdAt: row.created_at,
+    }));
+
+    res.json({ results });
+  } catch (err: any) {
+    console.error('[Memory] Conversation search error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -510,7 +658,7 @@ app.get('/stats', (req, res) => {
 // Start server
 const HOST = process.env.MEMORY_HOST || '127.0.0.1';
 app.listen(PORT, HOST, () => {
-  console.log(`[Memory] SQLite memory service v2.1.0 running on http://${HOST}:${PORT}`);
+  console.log(`[Memory] SQLite memory service v2.2.0 running on http://${HOST}:${PORT}`);
   console.log(`[Memory] Database: ${DB_PATH}`);
   console.log(`[Memory] Ready.`);
 });
