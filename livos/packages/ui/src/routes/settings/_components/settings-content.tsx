@@ -1195,14 +1195,13 @@ function DiscordPanel() {
 
 function WhatsAppPanel() {
 	const [isConnecting, setIsConnecting] = useState(false)
-	const [phoneNumber, setPhoneNumber] = useState('')
 
 	const statusQ = trpcReact.ai.whatsappGetStatus.useQuery(undefined, {
 		refetchInterval: isConnecting ? 3000 : 10000,
 	})
-	const pairingQ = trpcReact.ai.whatsappGetPairingCode.useQuery(undefined, {
+	const qrQ = trpcReact.ai.whatsappGetQr.useQuery(undefined, {
 		enabled: isConnecting && !statusQ.data?.connected,
-		refetchInterval: 3000,
+		refetchInterval: 5000,
 	})
 	const connectMutation = trpcReact.ai.whatsappConnect.useMutation()
 	const disconnectMutation = trpcReact.ai.whatsappDisconnect.useMutation()
@@ -1216,11 +1215,9 @@ function WhatsAppPanel() {
 	}, [statusQ.data?.connected])
 
 	const handleConnect = async () => {
-		const cleaned = phoneNumber.replace(/[^0-9]/g, '')
-		if (cleaned.length < 10) return
 		setIsConnecting(true)
 		try {
-			await connectMutation.mutateAsync({phoneNumber: cleaned})
+			await connectMutation.mutateAsync()
 		} catch {
 			setIsConnecting(false)
 		}
@@ -1229,13 +1226,11 @@ function WhatsAppPanel() {
 	const handleDisconnect = async () => {
 		await disconnectMutation.mutateAsync()
 		setIsConnecting(false)
-		setPhoneNumber('')
 		utils.ai.whatsappGetStatus.invalidate()
 	}
 
 	const status = statusQ.data as ChannelStatus | undefined
 	const isConnected = status?.connected ?? false
-	const pairingCode = pairingQ.data?.code
 
 	return (
 		<div className='space-y-4'>
@@ -1247,7 +1242,7 @@ function WhatsAppPanel() {
 					</div>
 					<div className='flex-1'>
 						<div className='text-body-lg font-semibold'>WhatsApp</div>
-						<div className='text-caption text-text-secondary'>Connect with phone number pairing code</div>
+						<div className='text-caption text-text-secondary'>Scan QR code to connect</div>
 					</div>
 					{isConnected ? (
 						<div className='flex items-center gap-2 text-caption text-green-400'>
@@ -1267,54 +1262,46 @@ function WhatsAppPanel() {
 				)}
 			</div>
 
-			{/* Pairing Code Display — shown while connecting */}
+			{/* QR Code Display — shown while connecting */}
 			{isConnecting && !isConnected && (
 				<div className='flex flex-col items-center gap-4 rounded-radius-md border border-border-default bg-surface-1 p-6'>
-					{pairingCode ? (
+					{qrQ.data?.qr ? (
 						<>
-							<div className='text-3xl font-bold tracking-[0.3em] text-text-primary'>{pairingCode}</div>
+							<img
+								src={qrQ.data.qr}
+								alt='WhatsApp QR Code'
+								className='h-[256px] w-[256px] rounded-radius-sm'
+							/>
 							<div className='space-y-1 text-center'>
-								<p className='text-body-sm font-medium text-text-primary'>Enter this code on your phone</p>
+								<p className='text-body-sm font-medium text-text-primary'>Scan with your phone</p>
 								<p className='text-caption text-text-secondary'>
-									WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device &gt; Link with phone number
+									WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device
 								</p>
 							</div>
 						</>
 					) : (
 						<div className='flex flex-col items-center gap-2'>
 							<Loader2 className='h-8 w-8 animate-spin text-text-tertiary' />
-							<p className='text-caption text-text-secondary'>Generating pairing code...</p>
+							<p className='text-caption text-text-secondary'>Starting WhatsApp... QR code will appear shortly</p>
 						</div>
 					)}
 				</div>
 			)}
 
-			{/* Phone Number Input + Action Buttons */}
+			{/* Action Buttons */}
 			<div className='space-y-2'>
 				{!isConnected && !isConnecting && (
-					<>
-						<div className='flex gap-2'>
-							<input
-								type='tel'
-								value={phoneNumber}
-								onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+\s()-]/g, ''))}
-								placeholder='+1 555 123 4567'
-								className='flex-1 rounded-radius-md border border-border-default bg-surface-1 px-3 py-2.5 text-body-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-green-500/50'
-							/>
-						</div>
-						<p className='text-caption text-text-tertiary'>Enter with country code (e.g. +1 for US, +44 for UK)</p>
-						<Button
-							variant='primary'
-							className='w-full'
-							onClick={handleConnect}
-							disabled={connectMutation.isPending || phoneNumber.replace(/[^0-9]/g, '').length < 10}
-						>
-							{connectMutation.isPending ? (
-								<Loader2 className='mr-2 h-4 w-4 animate-spin' />
-							) : null}
-							Connect WhatsApp
-						</Button>
-					</>
+					<Button
+						variant='primary'
+						className='w-full'
+						onClick={handleConnect}
+						disabled={connectMutation.isPending}
+					>
+						{connectMutation.isPending ? (
+							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
+						) : null}
+						Connect WhatsApp
+					</Button>
 				)}
 				{isConnecting && !isConnected && (
 					<Button

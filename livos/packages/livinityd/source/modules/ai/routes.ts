@@ -1405,10 +1405,8 @@ export default router({
 		}
 	}),
 
-	/** Trigger WhatsApp connection with phone number for pairing code */
-	whatsappConnect: privateProcedure
-		.input(z.object({phoneNumber: z.string().min(10).max(15)}))
-		.mutation(async ({ctx, input}) => {
+	/** Trigger WhatsApp connection — starts Chrome + QR code generation */
+	whatsappConnect: privateProcedure.mutation(async ({ctx}) => {
 		try {
 			const nexusUrl = getNexusApiUrl()
 			const response = await fetch(`${nexusUrl}/api/channels/whatsapp/connect`, {
@@ -1417,7 +1415,6 @@ export default router({
 					'Content-Type': 'application/json',
 					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
 				},
-				body: JSON.stringify({phoneNumber: input.phoneNumber}),
 			})
 			if (!response.ok) {
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
