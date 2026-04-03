@@ -36,6 +36,7 @@ export class WhatsAppProvider implements ChannelProvider {
   private status: ChannelStatus = { enabled: false, connected: false };
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPhoneNumber: string | null = null;
   private dmPairing: DmPairingManager | null = null;
   private approvalManager: ApprovalManager | null = null;
 
@@ -70,7 +71,12 @@ export class WhatsAppProvider implements ChannelProvider {
     }
   }
 
-  async connect(force = false): Promise<void> {
+  /**
+   * Connect to WhatsApp. If phoneNumber is provided (first-time pairing),
+   * requests a pairing code instead of QR. On reconnect (existing session),
+   * connects directly without pairing.
+   */
+  async connect(force = false, phoneNumber?: string): Promise<void> {
     if (!this.config.enabled) {
       this.status = { enabled: false, connected: false };
       await this.saveStatus();
@@ -83,7 +89,7 @@ export class WhatsAppProvider implements ChannelProvider {
       return;
     }
 
-    // Don't auto-connect on startup if no QR code was ever scanned.
+    // Don't auto-connect on startup if no session exists.
     // User must click "Connect" in Settings to initiate first connection (force=true).
     if (!force) {
       const hasSession = await this.authStore.hasExistingSession();
@@ -93,6 +99,11 @@ export class WhatsAppProvider implements ChannelProvider {
         await this.saveStatus();
         return;
       }
+    }
+
+    // Store phone number for pairing code request after socket connects
+    if (phoneNumber) {
+      this.pendingPhoneNumber = phoneNumber;
     }
 
     try {
@@ -122,6 +133,29 @@ export class WhatsAppProvider implements ChannelProvider {
           logger.error('WhatsAppProvider: messages.upsert error', { error: err.message });
         });
       });
+
+      // Request pairing code if phone number provided (first-time connection)
+      if (this.pendingPhoneNumber && this.sock) {
+        const phone = this.pendingPhoneNumber.replace(/[^0-9]/g, '');
+        this.pendingPhoneNumber = null;
+        // Small delay to let the socket connect before requesting pairing
+        setTimeout(async () => {
+          try {
+            if (!this.sock) return;
+            const code = await this.sock.requestPairingCode(phone);
+            logger.info('WhatsAppProvider: pairing code generated', { code });
+            // Store pairing code in Redis for UI to display
+            if (this.redis) {
+              await this.redis.set('nexus:whatsapp:pairing_code', code, 'EX', 120);
+            }
+          } catch (err: any) {
+            logger.error('WhatsAppProvider: pairing code request failed', { error: err.message });
+            if (this.redis) {
+              await this.redis.set('nexus:whatsapp:pairing_error', err.message, 'EX', 60);
+            }
+          }
+        }, 2000);
+      }
 
       logger.info('WhatsAppProvider: socket created, awaiting connection');
     } catch (err: any) {

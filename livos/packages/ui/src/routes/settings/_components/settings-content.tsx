@@ -1195,13 +1195,14 @@ function DiscordPanel() {
 
 function WhatsAppPanel() {
 	const [isConnecting, setIsConnecting] = useState(false)
+	const [phoneNumber, setPhoneNumber] = useState('')
 
 	const statusQ = trpcReact.ai.whatsappGetStatus.useQuery(undefined, {
 		refetchInterval: isConnecting ? 3000 : 10000,
 	})
-	const qrQ = trpcReact.ai.whatsappGetQr.useQuery(undefined, {
+	const pairingQ = trpcReact.ai.whatsappGetPairingCode.useQuery(undefined, {
 		enabled: isConnecting && !statusQ.data?.connected,
-		refetchInterval: 5000,
+		refetchInterval: 3000,
 	})
 	const connectMutation = trpcReact.ai.whatsappConnect.useMutation()
 	const disconnectMutation = trpcReact.ai.whatsappDisconnect.useMutation()
@@ -1215,9 +1216,11 @@ function WhatsAppPanel() {
 	}, [statusQ.data?.connected])
 
 	const handleConnect = async () => {
+		const cleaned = phoneNumber.replace(/[^0-9]/g, '')
+		if (cleaned.length < 10) return
 		setIsConnecting(true)
 		try {
-			await connectMutation.mutateAsync()
+			await connectMutation.mutateAsync({phoneNumber: cleaned})
 		} catch {
 			setIsConnecting(false)
 		}
@@ -1226,12 +1229,13 @@ function WhatsAppPanel() {
 	const handleDisconnect = async () => {
 		await disconnectMutation.mutateAsync()
 		setIsConnecting(false)
+		setPhoneNumber('')
 		utils.ai.whatsappGetStatus.invalidate()
-		utils.ai.whatsappGetQr.invalidate()
 	}
 
 	const status = statusQ.data as ChannelStatus | undefined
 	const isConnected = status?.connected ?? false
+	const pairingCode = pairingQ.data?.code
 
 	return (
 		<div className='space-y-4'>
@@ -1243,7 +1247,7 @@ function WhatsAppPanel() {
 					</div>
 					<div className='flex-1'>
 						<div className='text-body-lg font-semibold'>WhatsApp</div>
-						<div className='text-caption text-text-secondary'>Connect by scanning QR code</div>
+						<div className='text-caption text-text-secondary'>Connect with phone number pairing code</div>
 					</div>
 					{isConnected ? (
 						<div className='flex items-center gap-2 text-caption text-green-400'>
@@ -1258,52 +1262,61 @@ function WhatsAppPanel() {
 				{status?.botName && (
 					<div className='mt-2 text-caption text-text-secondary'>Phone: {status.botName}</div>
 				)}
-				{status?.error && !isConnected && (
+				{status?.error && !isConnected && !isConnecting && (
 					<div className='mt-2 text-caption text-red-400'>{status.error}</div>
 				)}
 			</div>
 
-			{/* QR Code Display — shown while connecting and not yet connected */}
+			{/* Pairing Code Display — shown while connecting */}
 			{isConnecting && !isConnected && (
-				<div className='flex flex-col items-center gap-3 rounded-radius-md border border-border bg-surface-1 p-6'>
-					{qrQ.data?.qr ? (
+				<div className='flex flex-col items-center gap-4 rounded-radius-md border border-border-default bg-surface-1 p-6'>
+					{pairingCode ? (
 						<>
-							<img
-								src={qrQ.data.qr}
-								alt='WhatsApp QR Code'
-								className='h-[256px] w-[256px] rounded-radius-sm'
-							/>
-							<p className='text-caption text-text-secondary'>
-								Scan with WhatsApp &gt; Linked Devices &gt; Link a Device
-							</p>
+							<div className='text-3xl font-bold tracking-[0.3em] text-text-primary'>{pairingCode}</div>
+							<div className='space-y-1 text-center'>
+								<p className='text-body-sm font-medium text-text-primary'>Enter this code on your phone</p>
+								<p className='text-caption text-text-secondary'>
+									WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device &gt; Link with phone number
+								</p>
+							</div>
 						</>
 					) : (
-						<div className='flex h-[256px] w-[256px] items-center justify-center'>
+						<div className='flex flex-col items-center gap-2'>
 							<Loader2 className='h-8 w-8 animate-spin text-text-tertiary' />
+							<p className='text-caption text-text-secondary'>Generating pairing code...</p>
 						</div>
 					)}
 				</div>
 			)}
 
-			{/* Action Buttons */}
-			<div className='flex gap-2'>
+			{/* Phone Number Input + Action Buttons */}
+			<div className='space-y-2'>
 				{!isConnected && !isConnecting && (
-					<Button
-						variant='primary'
-						className='flex-1'
-						onClick={handleConnect}
-						disabled={connectMutation.isPending}
-					>
-						{connectMutation.isPending ? (
-							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
-						) : null}
-						Connect WhatsApp
-					</Button>
+					<>
+						<input
+							type='tel'
+							value={phoneNumber}
+							onChange={(e) => setPhoneNumber(e.target.value)}
+							placeholder='Phone number (e.g. 905551234567)'
+							className='w-full rounded-radius-md border border-border-default bg-surface-1 px-3 py-2.5 text-body-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-green-500/50'
+						/>
+						<Button
+							variant='primary'
+							className='w-full'
+							onClick={handleConnect}
+							disabled={connectMutation.isPending || phoneNumber.replace(/[^0-9]/g, '').length < 10}
+						>
+							{connectMutation.isPending ? (
+								<Loader2 className='mr-2 h-4 w-4 animate-spin' />
+							) : null}
+							Connect WhatsApp
+						</Button>
+					</>
 				)}
 				{isConnecting && !isConnected && (
 					<Button
 						variant='secondary'
-						className='flex-1'
+						className='w-full'
 						onClick={() => setIsConnecting(false)}
 					>
 						Cancel
@@ -1312,7 +1325,7 @@ function WhatsAppPanel() {
 				{isConnected && (
 					<Button
 						variant='destructive'
-						className='flex-1'
+						className='w-full'
 						onClick={handleDisconnect}
 						disabled={disconnectMutation.isPending}
 					>

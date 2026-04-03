@@ -1405,20 +1405,36 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   });
 
   /** Trigger WhatsApp connection (enable + connect) */
-  app.post('/api/channels/whatsapp/connect', async (_req, res) => {
+  app.post('/api/channels/whatsapp/connect', async (req, res) => {
     try {
       if (!channelManager) {
         res.status(503).json({ error: 'Channel manager not initialized' });
         return;
       }
+      const { phoneNumber } = req.body || {};
+      if (!phoneNumber) {
+        res.status(400).json({ error: 'phoneNumber is required (e.g. 905551234567)' });
+        return;
+      }
       await channelManager.updateProviderConfig('whatsapp', { enabled: true });
       const provider = channelManager.getProvider('whatsapp') as any;
       if (provider?.connect) {
-        await provider.connect(true); // force=true bypasses session check for first-time QR
+        await provider.connect(true, phoneNumber);
       }
-      res.json({ ok: true });
+      res.json({ ok: true, message: 'Pairing code will be generated. Check /api/channels/whatsapp/pairing-code' });
     } catch (err) {
       logger.error('WhatsApp connect error', { error: formatErrorMessage(err) });
+      res.status(500).json({ error: formatErrorMessage(err) });
+    }
+  });
+
+  /** Get WhatsApp pairing code (generated after connect with phone number) */
+  app.get('/api/channels/whatsapp/pairing-code', async (_req, res) => {
+    try {
+      const code = await redis.get('nexus:whatsapp:pairing_code');
+      const error = await redis.get('nexus:whatsapp:pairing_error');
+      res.json({ code: code || null, error: error || null });
+    } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
     }
   });

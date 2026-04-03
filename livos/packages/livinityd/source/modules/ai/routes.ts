@@ -1405,13 +1405,19 @@ export default router({
 		}
 	}),
 
-	/** Trigger WhatsApp connection (enable + connect via Nexus) */
-	whatsappConnect: privateProcedure.mutation(async ({ctx}) => {
+	/** Trigger WhatsApp connection with phone number for pairing code */
+	whatsappConnect: privateProcedure
+		.input(z.object({phoneNumber: z.string().min(10).max(15)}))
+		.mutation(async ({ctx, input}) => {
 		try {
 			const nexusUrl = getNexusApiUrl()
 			const response = await fetch(`${nexusUrl}/api/channels/whatsapp/connect`, {
 				method: 'POST',
-				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				headers: {
+					'Content-Type': 'application/json',
+					...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+				},
+				body: JSON.stringify({phoneNumber: input.phoneNumber}),
 			})
 			if (!response.ok) {
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
@@ -1428,6 +1434,22 @@ export default router({
 				code: 'INTERNAL_SERVER_ERROR',
 				message: getErrorMessage(error) || 'Failed to connect WhatsApp',
 			})
+		}
+	}),
+
+	/** Get WhatsApp pairing code (generated after connect with phone number) */
+	whatsappGetPairingCode: privateProcedure.query(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/channels/whatsapp/pairing-code`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) return {code: null, error: null}
+			const data = (await response.json()) as {code: string | null; error: string | null}
+			return {code: data.code ?? null, error: data.error ?? null}
+		} catch (error) {
+			ctx.livinityd!.logger.error('Failed to get pairing code', error)
+			return {code: null, error: 'Failed to get pairing code'}
 		}
 	}),
 
