@@ -36,9 +36,11 @@ export class Router {
     const ruleResult = this.ruleBasedClassify(rawInput, source);
     if (ruleResult) return ruleResult;
 
-    // Use cheap AI for classification
-    const response = await this.brain.think({
-      prompt: `Classify this user command into an action. Extract parameters.
+    // Use cheap AI for classification — fallback to 'ask' if all providers fail
+    let response: string;
+    try {
+      response = await this.brain.think({
+        prompt: `Classify this user command into an action. Extract parameters.
 Input: "${rawInput}"
 
 ACTION GUIDE (pick the most specific match):
@@ -67,6 +69,10 @@ Respond in JSON only:
       tier: 'haiku',
       maxTokens: 200,
     });
+    } catch (classifyErr: any) {
+      logger.warn('Router: AI classify failed, falling back to ask', { error: classifyErr.message });
+      return { type: 'conversation', action: 'ask', params: { query: rawInput }, source, raw: rawInput };
+    }
 
     try {
       const parsed = JSON.parse(response.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
