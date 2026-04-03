@@ -1366,6 +1366,97 @@ export default router({
 			}
 		}),
 
+	// ── WhatsApp Management ──────────────────────────────────
+
+	/** Get WhatsApp QR code data URL for pairing */
+	whatsappGetQr: privateProcedure.query(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/channels/whatsapp/qr`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				return {qr: null}
+			}
+			const data = (await response.json()) as {qr: string | null}
+			return {qr: data.qr ?? null}
+		} catch (error) {
+			ctx.livinityd!.logger.error('Failed to get WhatsApp QR', error)
+			return {qr: null}
+		}
+	}),
+
+	/** Get WhatsApp connection status (reads directly from Redis) */
+	whatsappGetStatus: privateProcedure.query(async ({ctx}) => {
+		try {
+			const redis = ctx.livinityd!.ai.redis
+			const statusStr = await redis.get('nexus:whatsapp:status')
+			const status = statusStr ? JSON.parse(statusStr) : null
+			return {
+				enabled: status?.enabled ?? false,
+				connected: status?.connected ?? false,
+				error: status?.error,
+				lastConnect: status?.lastConnect,
+				botName: status?.botName,
+			}
+		} catch (error) {
+			ctx.livinityd!.logger.error('Failed to get WhatsApp status', error)
+			return {enabled: false, connected: false, error: 'Failed to read status'}
+		}
+	}),
+
+	/** Trigger WhatsApp connection (enable + connect via Nexus) */
+	whatsappConnect: privateProcedure.mutation(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/channels/whatsapp/connect`, {
+				method: 'POST',
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: errorData.error || `Connect failed: ${response.status}`,
+				})
+			}
+			return {success: true}
+		} catch (error) {
+			if (error instanceof TRPCError) throw error
+			ctx.livinityd!.logger.error('Failed to connect WhatsApp', error)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(error) || 'Failed to connect WhatsApp',
+			})
+		}
+	}),
+
+	/** Full disconnect WhatsApp (close socket + clear auth state via Nexus) */
+	whatsappDisconnect: privateProcedure.mutation(async ({ctx}) => {
+		try {
+			const nexusUrl = getNexusApiUrl()
+			const response = await fetch(`${nexusUrl}/api/channels/whatsapp/disconnect`, {
+				method: 'POST',
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: errorData.error || `Disconnect failed: ${response.status}`,
+				})
+			}
+			return {success: true}
+		} catch (error) {
+			if (error instanceof TRPCError) throw error
+			ctx.livinityd!.logger.error('Failed to disconnect WhatsApp', error)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(error) || 'Failed to disconnect WhatsApp',
+			})
+		}
+	}),
+
 	// ── Docker (Direct) ─────────────────────────────────────
 
 	/** List all Docker containers directly via Dockerode */
