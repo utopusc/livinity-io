@@ -291,11 +291,8 @@ export class WhatsAppProvider implements ChannelProvider {
     // Skip non-chat messages (status updates, etc)
     if (!msg.body || msg.isStatus) return;
 
-    // ONLY respond to messages from the account owner (fromMe=true)
-    // This prevents AI from responding to other people's messages
-    if (!msg.fromMe) return;
-
     // Only respond to messages starting with "!" prefix
+    // Works for both own messages (fromMe) and messages from others
     if (!msg.body.startsWith('!')) return;
 
     // Strip the "!" prefix before passing to AI
