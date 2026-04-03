@@ -42,6 +42,7 @@ import {
 	TbMicrophone,
 	TbLogin,
 	TbUsers,
+	TbBrain,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -101,6 +102,9 @@ const VoiceContentLazy = React.lazy(() =>
 const UsersSectionLazy = React.lazy(() =>
 	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
 )
+const MemorySectionLazy = React.lazy(() =>
+	import('@/routes/settings/memory').then((m) => ({default: m.MemorySection})),
+)
 const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
 import {SoftwareUpdateListRow} from './software-update-list-row'
 
@@ -127,6 +131,7 @@ type SettingsSection =
 	| 'language'
 	| 'troubleshoot'
 	| 'advanced'
+	| 'memory'
 	| 'software-update'
 
 interface MenuItem {
@@ -149,6 +154,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets'},
 	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
+	{id: 'memory', icon: TbBrain, label: 'Memory', description: 'AI memory & conversations'},
 	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
@@ -446,6 +452,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <TroubleshootSection />
 		case 'advanced':
 			return <AdvancedSection />
+		case 'memory':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MemorySectionLazy /></Suspense>
 		case 'software-update':
 			return <SoftwareUpdateSection />
 		default:
