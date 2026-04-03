@@ -32,12 +32,14 @@ const TOOL_PROFILES: Record<string, string[]> = {
     'shell', 'files',
     'docker_list', 'docker_manage', 'docker_exec', 'pm2',
     'web_search', 'scrape',
+    'conversation_search',
   ],
 
   // Messaging: WhatsApp, channels, memory
   messaging: [
     'whatsapp_send', 'channel_send',
     'memory_search', 'memory_add',
+    'conversation_search',
   ],
 
   // Full: all tools (no filtering except deny list)
