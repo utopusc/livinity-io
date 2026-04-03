@@ -37,6 +37,7 @@ export class WhatsAppProvider implements ChannelProvider {
   private messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingPhoneNumber: string | null = null;
+  private pairingModeUntil: number = 0; // timestamp — keep reconnecting with force during pairing window
   private dmPairing: DmPairingManager | null = null;
   private approvalManager: ApprovalManager | null = null;
 
@@ -144,6 +145,8 @@ export class WhatsAppProvider implements ChannelProvider {
             if (!this.sock) return;
             const code = await this.sock.requestPairingCode(phone);
             logger.info('WhatsAppProvider: pairing code generated', { code });
+            // Keep reconnecting with force for 2 minutes while user enters code
+            this.pairingModeUntil = Date.now() + 120_000;
             // Store pairing code in Redis for UI to display
             if (this.redis) {
               await this.redis.set('nexus:whatsapp:pairing_code', code, 'EX', 120);
@@ -305,18 +308,21 @@ export class WhatsAppProvider implements ChannelProvider {
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
       if (shouldReconnect) {
-        logger.info('WhatsAppProvider: connection closed, reconnecting in 3s', { statusCode });
+        const inPairingMode = Date.now() < this.pairingModeUntil;
+        logger.info('WhatsAppProvider: connection closed, reconnecting in 5s', { statusCode, inPairingMode });
         this.status.connected = false;
-        this.status.error = `Disconnected (code ${statusCode})`;
+        if (!inPairingMode) {
+          this.status.error = `Disconnected (code ${statusCode})`;
+        }
         await this.saveStatus();
 
-        // Schedule reconnect — create a fresh socket
+        // Schedule reconnect — use force=true during pairing window so we don't give up
         this.reconnectTimer = setTimeout(() => {
           this.reconnectTimer = null;
-          this.connect().catch((err: any) => {
+          this.connect(inPairingMode).catch((err: any) => {
             logger.error('WhatsAppProvider: reconnect failed', { error: err.message });
           });
-        }, 3000);
+        }, 5000);
       } else {
         // Logged out — clear auth state so next connect triggers QR
         logger.warn('WhatsAppProvider: logged out, clearing auth state');
