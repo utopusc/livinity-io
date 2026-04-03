@@ -113,11 +113,11 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   2. Baileys WebSocket connects to WhatsApp servers and emits connection lifecycle events (connecting, open, close, QR)
   3. Auth state (Signal protocol keys, session data) is persisted to Redis so that restarting livinityd does not require re-scanning the QR code
   4. Messages sent by the bot itself are filtered out (fromMe guard) preventing echo loops
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md -- Install Baileys+QRCode deps, extend ChannelId types, create Redis auth store + logger bridge
+- [ ] 06-02-PLAN.md -- Create WhatsAppProvider, register in ChannelManager, wire DmPairing+daemon
 
 ### Phase 7: WhatsApp QR Code & Settings UI
 **Goal**: Users can connect their WhatsApp account by scanning a QR code in Settings and see live connection status
@@ -187,7 +187,7 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. WhatsApp Channel Foundation | v25.0 | 0/TBD | Not started | - |
+| 6. WhatsApp Channel Foundation | v25.0 | 0/2 | In progress | - |
 | 7. WhatsApp QR Code & Settings UI | v25.0 | 0/TBD | Not started | - |
 | 8. WhatsApp Message Routing & Safety | v25.0 | 0/TBD | Not started | - |
 | 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/TBD | Not started | - |
