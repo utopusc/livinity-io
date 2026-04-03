@@ -3270,8 +3270,28 @@ Types:
       // Keep only last 20 entries (10 turns) and set TTL of 24h
       await this.config.redis.ltrim(key, 0, 19);
       await this.config.redis.expire(key, 86400);
+
+      // Archive to persistent SQLite store for cross-session search
+      await this.archiveToMemory(chatId, channel, chatId, 'user', userMsg);
+      await this.archiveToMemory(chatId, channel, chatId, 'assistant', response);
     } catch (err) {
       logger.error('Failed to save channel turn', { channel, error: formatErrorMessage(err) });
+    }
+  }
+
+  /** Archive a conversation turn to the memory service for persistent FTS5-backed search */
+  private async archiveToMemory(userId: string, channel: string, chatId: string, role: 'user' | 'assistant', content: string): Promise<void> {
+    try {
+      await fetch('http://localhost:3300/archive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.LIV_API_KEY || '',
+        },
+        body: JSON.stringify({ userId, channel, chatId, role, content }),
+      });
+    } catch (err) {
+      logger.error('Failed to archive conversation turn', { channel, error: formatErrorMessage(err) });
     }
   }
 
