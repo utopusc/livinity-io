@@ -1293,13 +1293,16 @@ function WhatsAppPanel() {
 			<div className='space-y-2'>
 				{!isConnected && !isConnecting && (
 					<>
-						<input
-							type='tel'
-							value={phoneNumber}
-							onChange={(e) => setPhoneNumber(e.target.value)}
-							placeholder='Phone number (e.g. 905551234567)'
-							className='w-full rounded-radius-md border border-border-default bg-surface-1 px-3 py-2.5 text-body-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-green-500/50'
-						/>
+						<div className='flex gap-2'>
+							<input
+								type='tel'
+								value={phoneNumber}
+								onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+\s()-]/g, ''))}
+								placeholder='+1 555 123 4567'
+								className='flex-1 rounded-radius-md border border-border-default bg-surface-1 px-3 py-2.5 text-body-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-green-500/50'
+							/>
+						</div>
+						<p className='text-caption text-text-tertiary'>Enter with country code (e.g. +1 for US, +44 for UK)</p>
 						<Button
 							variant='primary'
 							className='w-full'
