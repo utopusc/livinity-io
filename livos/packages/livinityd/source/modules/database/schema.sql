@@ -85,3 +85,18 @@ CREATE TABLE IF NOT EXISTS custom_domains (
 );
 
 CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
+
+-- =========================================================================
+-- Channel Identity Map (unified cross-channel userId, v25.0 Phase 10)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS channel_identity_map (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     TEXT NOT NULL,
+  channel     TEXT NOT NULL,
+  channel_user_id TEXT NOT NULL,
+  linked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(channel, channel_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cim_user ON channel_identity_map(user_id);
+CREATE INDEX IF NOT EXISTS idx_cim_channel_user ON channel_identity_map(channel, channel_user_id);

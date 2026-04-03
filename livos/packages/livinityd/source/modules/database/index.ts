@@ -583,6 +583,57 @@ export async function deleteUserPreference(userId: string, key: string): Promise
 	)
 }
 
+// ── Channel Identity Map (unified cross-channel userId) ────────────────
+
+/**
+ * Resolve the canonical userId for a given channel + channel-specific user ID.
+ * If no mapping exists, auto-creates one using channelUserId as both canonical and channel user ID.
+ * Falls back to returning channelUserId unchanged if PostgreSQL is not available.
+ */
+export async function resolveCanonicalUserId(channel: string, channelUserId: string): Promise<string> {
+	if (!pool) return channelUserId
+
+	try {
+		// Look up existing mapping
+		const {rows} = await pool.query(
+			`SELECT user_id FROM channel_identity_map WHERE channel = $1 AND channel_user_id = $2`,
+			[channel, channelUserId],
+		)
+
+		if (rows.length > 0) {
+			return rows[0].user_id
+		}
+
+		// No mapping exists — auto-create one using channelUserId as the canonical ID
+		await pool.query(
+			`INSERT INTO channel_identity_map (user_id, channel, channel_user_id)
+			 VALUES ($1, $2, $3)
+			 ON CONFLICT (channel, channel_user_id) DO NOTHING`,
+			[channelUserId, channel, channelUserId],
+		)
+
+		return channelUserId
+	} catch {
+		// On any error, fall back to channelUserId
+		return channelUserId
+	}
+}
+
+/**
+ * Link a channel-specific user ID to a canonical userId.
+ * Upserts the mapping (ON CONFLICT updates user_id for admin manual linking).
+ */
+export async function linkChannelIdentity(userId: string, channel: string, channelUserId: string): Promise<void> {
+	if (!pool) return
+
+	await pool.query(
+		`INSERT INTO channel_identity_map (user_id, channel, channel_user_id)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (channel, channel_user_id) DO UPDATE SET user_id = $1, linked_at = NOW()`,
+		[userId, channel, channelUserId],
+	)
+}
+
 /**
  * Gracefully close the database pool.
  */
