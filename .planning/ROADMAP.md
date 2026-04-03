@@ -128,11 +128,11 @@ Plans:
   2. Clicking Connect displays a QR code that auto-refreshes when it expires, and scanning it with WhatsApp links the account within seconds
   3. After successful connection, the UI shows "Connected" status with the linked phone number and a Disconnect button
   4. Clicking Disconnect terminates the Baileys session and clears auth state, returning the UI to the Connect state
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md -- Nexus REST endpoints + tRPC routes for WhatsApp QR, status, connect, disconnect
+- [ ] 07-02-PLAN.md -- WhatsApp tab and QR panel in Settings > Integrations UI
 
 ### Phase 8: WhatsApp Message Routing & Safety
 **Goal**: Users can message the AI via WhatsApp and receive responses, with rate limiting to prevent account bans
@@ -187,8 +187,8 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. WhatsApp Channel Foundation | v25.0 | 0/2 | In progress | - |
-| 7. WhatsApp QR Code & Settings UI | v25.0 | 0/TBD | Not started | - |
+| 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | - |
+| 7. WhatsApp QR Code & Settings UI | v25.0 | 0/2 | In progress | - |
 | 8. WhatsApp Message Routing & Safety | v25.0 | 0/TBD | Not started | - |
 | 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/TBD | Not started | - |
 | 10. Unified Identity & Memory Management UI | v25.0 | 0/TBD | Not started | - |
