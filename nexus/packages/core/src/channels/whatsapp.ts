@@ -70,7 +70,7 @@ export class WhatsAppProvider implements ChannelProvider {
     }
   }
 
-  async connect(): Promise<void> {
+  async connect(force = false): Promise<void> {
     if (!this.config.enabled) {
       this.status = { enabled: false, connected: false };
       await this.saveStatus();
@@ -84,13 +84,15 @@ export class WhatsAppProvider implements ChannelProvider {
     }
 
     // Don't auto-connect on startup if no QR code was ever scanned.
-    // User must click "Connect" in Settings to initiate first connection.
-    const hasSession = await this.authStore.hasExistingSession();
-    if (!hasSession) {
-      logger.info('WhatsAppProvider: no existing session, waiting for user to connect via Settings');
-      this.status = { enabled: true, connected: false };
-      await this.saveStatus();
-      return;
+    // User must click "Connect" in Settings to initiate first connection (force=true).
+    if (!force) {
+      const hasSession = await this.authStore.hasExistingSession();
+      if (!hasSession) {
+        logger.info('WhatsAppProvider: no existing session, waiting for user to connect via Settings');
+        this.status = { enabled: true, connected: false };
+        await this.saveStatus();
+        return;
+      }
     }
 
     try {

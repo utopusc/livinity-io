@@ -1412,9 +1412,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         return;
       }
       await channelManager.updateProviderConfig('whatsapp', { enabled: true });
-      const provider = channelManager.getProvider('whatsapp');
-      if (provider) {
-        await provider.connect();
+      const provider = channelManager.getProvider('whatsapp') as any;
+      if (provider?.connect) {
+        await provider.connect(true); // force=true bypasses session check for first-time QR
       }
       res.json({ ok: true });
     } catch (err) {
