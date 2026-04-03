@@ -137,6 +137,24 @@ export class WhatsAppProvider implements ChannelProvider {
     logger.info('WhatsAppProvider: disconnected');
   }
 
+  /**
+   * Full disconnect: close socket, clear auth state (forces QR re-scan on next connect).
+   * Used by Settings UI "Disconnect" button.
+   */
+  async fullDisconnect(): Promise<void> {
+    await this.disconnect();
+    if (this.authStore) {
+      await this.authStore.clearAll();
+    }
+    // Also delete any lingering QR from Redis
+    if (this.redis) {
+      await this.redis.del('nexus:whatsapp:qr');
+    }
+    this.status = { enabled: false, connected: false };
+    await this.saveStatus();
+    logger.info('WhatsAppProvider: full disconnect — auth state cleared');
+  }
+
   async getStatus(): Promise<ChannelStatus> {
     return { ...this.status };
   }
