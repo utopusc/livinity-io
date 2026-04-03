@@ -445,7 +445,7 @@ export default function AiChat() {
 				<div className='relative flex min-h-0 min-w-0 flex-1'>
 					{/* Chat area */}
 					<div className={cn(
-						'flex min-h-0 flex-col',
+						'flex min-h-0 min-w-0 flex-col',
 						(isComputerUseActive && !computerUseMinimized && !isMobile) || (canvasArtifact && !canvasMinimized && !isMobile)
 							? 'w-1/2 min-w-[360px]' : 'flex-1',
 					)}>
