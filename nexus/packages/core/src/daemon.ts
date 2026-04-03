@@ -387,11 +387,9 @@ export class Daemon {
           await this.config.heartbeatRunner.setLastRecipient(item.from);
         }
 
-        // Fetch conversation history for WhatsApp and channel messages
+        // Fetch conversation history for channel messages (including WhatsApp)
         if (item.from) {
-          if (item.source === 'whatsapp') {
-            item.conversationHistory = await this.getWhatsAppHistory(item.from);
-          } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+          if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
             item.conversationHistory = await this.getChannelHistory(item.source, item.from);
           }
         }
@@ -413,7 +411,6 @@ export class Daemon {
           });
 
           if (cmdResult?.handled && cmdResult.response) {
-            await this.sendWhatsAppResponse(item, cmdResult.response);
             await this.sendChannelResponse(item, cmdResult.response);
             logger.info('Command handled', { jid: item.from, message: item.message.slice(0, 50) });
             continue;
@@ -445,16 +442,11 @@ export class Daemon {
           }
 
           // Send result back to the appropriate channel
-          await this.sendWhatsAppResponse(item, skillResult.message);
           await this.sendChannelResponse(item, skillResult.message);
 
           // Save conversation turn for history
-          if (item.from) {
-            if (item.source === 'whatsapp') {
-              await this.saveWhatsAppTurn(item.from, item.message, skillResult.message);
-            } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
-              await this.saveChannelTurn(item.source, item.from, item.message, skillResult.message);
-            }
+          if (item.from && ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
+            await this.saveChannelTurn(item.source, item.from, item.message, skillResult.message);
           }
 
           logger.info('Inbox processed (skill)', { skill: matchedSkill.meta.name, success: skillResult.success });
@@ -490,16 +482,11 @@ export class Daemon {
         }
 
         // Send result back to the appropriate channel
-        await this.sendWhatsAppResponse(item, responseText);
         await this.sendChannelResponse(item, responseText);
 
         // Save conversation turn for history
-        if (item.from) {
-          if (item.source === 'whatsapp') {
-            await this.saveWhatsAppTurn(item.from, item.message, responseText);
-          } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
-            await this.saveChannelTurn(item.source, item.from, item.message, responseText);
-          }
+        if (item.from && ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
+          await this.saveChannelTurn(item.source, item.from, item.message, responseText);
         }
       } catch (err) {
         // Per-item error handling — ALWAYS send a response to the user
@@ -507,7 +494,6 @@ export class Daemon {
         logger.error('Inbox item error', { message: item.message.slice(0, 80), error: formatErrorMessage(err), source: item.source });
 
         // Send error response so user isn't left waiting
-        await this.sendWhatsAppResponse(item, errorMsg).catch(() => {});
         await this.sendChannelResponse(item, errorMsg).catch(() => {});
 
         // Also store error for MCP polling
@@ -592,11 +578,9 @@ export class Daemon {
         await this.config.heartbeatRunner.setLastRecipient(item.from);
       }
 
-      // Fetch conversation history for WhatsApp and channel messages
+      // Fetch conversation history for channel messages (including WhatsApp)
       if (item.from) {
-        if (item.source === 'whatsapp') {
-          item.conversationHistory = await this.getWhatsAppHistory(item.from);
-        } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
+        if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
           item.conversationHistory = await this.getChannelHistory(item.source, item.from);
         }
       }
@@ -618,7 +602,6 @@ export class Daemon {
         });
 
         if (cmdResult?.handled && cmdResult.response) {
-          await this.sendWhatsAppResponse(item, cmdResult.response);
           await this.sendChannelResponse(item, cmdResult.response);
           logger.info('Command handled', { jid: item.from, message: item.message.slice(0, 50) });
           return;
@@ -636,7 +619,7 @@ export class Daemon {
           item.message,
           item.source,
           item.params || {},
-          { from: item.from, redis: this.config.redis, brain: this.config.brain, onAction: this.buildActionCallback(item.from) },
+          { from: item.from, redis: this.config.redis, brain: this.config.brain, onAction: this.buildActionCallback(item.from, item.source) },
         );
 
         // Store result for MCP polling
@@ -650,16 +633,11 @@ export class Daemon {
         }
 
         // Send result back to the appropriate channel
-        await this.sendWhatsAppResponse(item, skillResult.message);
         await this.sendChannelResponse(item, skillResult.message);
 
         // Save conversation turn for history
-        if (item.from) {
-          if (item.source === 'whatsapp') {
-            await this.saveWhatsAppTurn(item.from, item.message, skillResult.message);
-          } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
-            await this.saveChannelTurn(item.source, item.from, item.message, skillResult.message);
-          }
+        if (item.from && ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
+          await this.saveChannelTurn(item.source, item.from, item.message, skillResult.message);
         }
 
         logger.info('Inbox processed (skill)', { skill: matchedSkill.meta.name, success: skillResult.success });
@@ -695,16 +673,11 @@ export class Daemon {
       }
 
       // Send result back to the appropriate channel
-      await this.sendWhatsAppResponse(item, responseText);
       await this.sendChannelResponse(item, responseText);
 
       // Save conversation turn for history
-      if (item.from) {
-        if (item.source === 'whatsapp') {
-          await this.saveWhatsAppTurn(item.from, item.message, responseText);
-        } else if (['telegram', 'discord', 'slack', 'matrix'].includes(item.source)) {
-          await this.saveChannelTurn(item.source, item.from, item.message, responseText);
-        }
+      if (item.from && ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(item.source)) {
+        await this.saveChannelTurn(item.source, item.from, item.message, responseText);
       }
     } catch (err) {
       // Per-item error handling — ALWAYS send a response to the user
@@ -712,7 +685,6 @@ export class Daemon {
       logger.error('Inbox item error', { message: item.message.slice(0, 80), error: formatErrorMessage(err), source: item.source });
 
       // Send error response so user isn't left waiting
-      await this.sendWhatsAppResponse(item, errorMsg).catch(() => {});
       await this.sendChannelResponse(item, errorMsg).catch(() => {});
 
       // Also store error for MCP polling
@@ -3228,60 +3200,7 @@ Types:
     }
   }
 
-  /** Write response to WhatsApp — uses pending channel if available, otherwise pushes to outbox.
-   *  Long messages are automatically chunked for WhatsApp's message size limits.
-   *  When action feed messages were sent during execution, routes the main response
-   *  through the outbox too (preserving FIFO order) and signals the polling channel. */
-  private async sendWhatsAppResponse(item: InboxItem, text: string) {
-    if (item.source !== 'whatsapp' || !item.from) return;
-    try {
-      const channel = await this.config.redis.get(`nexus:wa_pending:${item.from}`);
-      const chunks = chunkForWhatsApp(text);
-
-      if (channel && this.actionMessageCount > 0) {
-        // Action feed messages were sent via outbox during execution.
-        // Route main response through outbox too so it arrives AFTER action messages.
-        // (lpush + rpop = FIFO: older action messages get rpop'd first, then this response)
-        for (let i = 0; i < chunks.length; i++) {
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid: item.from,
-            text: chunks[i],
-            timestamp: Date.now() + i,
-          }));
-        }
-        // Signal the polling channel to stop waiting (bot recognizes this marker)
-        await this.config.redis.set(channel, '__OUTBOX_DELIVERY__', 'EX', 30);
-        logger.info('WhatsApp response sent (outbox, after action feed)', {
-          from: item.from, chunks: chunks.length, actionMessages: this.actionMessageCount,
-        });
-      } else if (channel) {
-        // No action messages — use fast polling channel for immediate delivery
-        await this.config.redis.set(channel, chunks[0], 'EX', 660);
-        for (let i = 1; i < chunks.length; i++) {
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid: item.from,
-            text: chunks[i],
-            timestamp: Date.now() + i,
-          }));
-        }
-        logger.info('WhatsApp response sent (channel)', { from: item.from, chunks: chunks.length });
-      } else {
-        // No polling channel — push to outbox (for scheduled/cron tasks)
-        for (let i = 0; i < chunks.length; i++) {
-          await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-            jid: item.from,
-            text: chunks[i],
-            timestamp: Date.now() + i,
-          }));
-        }
-        logger.info('WhatsApp response sent (outbox)', { from: item.from, chunks: chunks.length });
-      }
-    } catch (err) {
-      logger.error('WhatsApp response error', { error: formatErrorMessage(err) });
-    }
-  }
-
-  /** Send response via channel (Telegram, Discord, Slack, Matrix).
+  /** Send response via channel (Telegram, Discord, Slack, Matrix, WhatsApp).
    *  Uses the ChannelManager to route messages to the appropriate platform.
    *
    *  CHAN-05: Response routing uses per-request context (source, chatId from InboxItem)
@@ -3289,7 +3208,7 @@ Types:
    *  Do NOT replace item.source/item.from with instance state (this.currentChannelContext, etc.). */
   private async sendChannelResponse(item: InboxItem, text: string) {
     // Skip if not a channel source or no chatId
-    const channelSources = ['telegram', 'discord', 'slack', 'matrix'] as const;
+    const channelSources = ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'] as const;
     if (!channelSources.includes(item.source as any) || !item.from) return;
 
     try {
@@ -3304,7 +3223,7 @@ Types:
 
       // Send via the appropriate channel
       const success = await channelManager.sendMessage(
-        item.source as 'telegram' | 'discord' | 'slack' | 'matrix',
+        item.source as 'telegram' | 'discord' | 'slack' | 'matrix' | 'whatsapp',
         item.from,
         text,
         replyTo
@@ -3320,72 +3239,7 @@ Types:
     }
   }
 
-  /** Fetch recent WhatsApp conversation history for context.
-   *  Merges messages from ALL chats because Baileys v7 uses different JIDs
-   *  (@lid vs @s.whatsapp.net) for incoming vs outgoing in the same chat.
-   */
-  private async getWhatsAppHistory(jid: string): Promise<string> {
-    try {
-      // Fetch from ALL history keys and merge by timestamp
-      const keys = await this.config.redis.keys('nexus:wa_history:*');
-      if (keys.length === 0) return '';
-
-      const allEntries: Array<{ role: string; text: string; sender?: string; ts: number; chat: string }> = [];
-
-      for (const key of keys) {
-        const chatId = key.replace('nexus:wa_history:', '');
-        const items = await this.config.redis.lrange(key, 0, 29);
-        for (const item of items) {
-          try {
-            const parsed = JSON.parse(item);
-            allEntries.push({ ...parsed, chat: chatId });
-          } catch { /* skip malformed */ }
-        }
-      }
-
-      if (allEntries.length === 0) return '';
-
-      // Sort by timestamp, oldest first
-      allEntries.sort((a, b) => (a.ts || 0) - (b.ts || 0));
-
-      // Take last 30 messages
-      const recent = allEntries.slice(-30);
-
-      return recent
-        .map((e) => {
-          if (e.role === 'contact') {
-            const name = e.sender || 'Contact';
-            return `${name}: ${e.text}`;
-          }
-          if (e.role === 'assistant') return `Nexus: ${e.text}`;
-          return `User: ${e.text}`;
-        })
-        .filter(Boolean)
-        .join('\n');
-    } catch (err) {
-      logger.error('Failed to fetch WhatsApp history', { error: formatErrorMessage(err) });
-      return '';
-    }
-  }
-
-  /** Save a conversation turn to WhatsApp history */
-  private async saveWhatsAppTurn(jid: string, userMsg: string, response: string) {
-    try {
-      const key = `nexus:wa_history:${jid}`;
-      // Push user message and response (newest first via lpush)
-      await this.config.redis.lpush(key,
-        JSON.stringify({ role: 'assistant', text: response.slice(0, 2000), ts: Date.now() }),
-        JSON.stringify({ role: 'user', text: userMsg.slice(0, 500), ts: Date.now() }),
-      );
-      // Keep only last 40 entries (20 turns) and set TTL of 24h
-      await this.config.redis.ltrim(key, 0, 39);
-      await this.config.redis.expire(key, 86400);
-    } catch (err) {
-      logger.error('Failed to save WhatsApp turn', { error: formatErrorMessage(err) });
-    }
-  }
-
-  /** Fetch recent channel conversation history (Telegram, Discord, etc.) */
+  /** Fetch recent channel conversation history (Telegram, Discord, WhatsApp, etc.) */
   private async getChannelHistory(channel: string, chatId: string): Promise<string> {
     try {
       const key = `nexus:${channel}_history:${chatId}`;
