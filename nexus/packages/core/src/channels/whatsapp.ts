@@ -83,6 +83,16 @@ export class WhatsAppProvider implements ChannelProvider {
       return;
     }
 
+    // Don't auto-connect on startup if no QR code was ever scanned.
+    // User must click "Connect" in Settings to initiate first connection.
+    const hasSession = await this.authStore.hasExistingSession();
+    if (!hasSession) {
+      logger.info('WhatsAppProvider: no existing session, waiting for user to connect via Settings');
+      this.status = { enabled: true, connected: false };
+      await this.saveStatus();
+      return;
+    }
+
     try {
       const { state, saveCreds } = await this.authStore.loadState();
 

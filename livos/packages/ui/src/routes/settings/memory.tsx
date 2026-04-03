@@ -85,11 +85,11 @@ export function MemorySection() {
 
 	return (
 		<div className='space-y-4'>
-			<p className='text-sm text-white/50'>
+			<p className='text-sm text-text-secondary'>
 				View and manage what the AI remembers about you. Search through conversation history from all channels.
 			</p>
 			<Tabs defaultValue='memories' className='w-full'>
-				<TabsList className={cn('bg-white/5', isMobile && 'w-full')}>
+				<TabsList className={cn('bg-surface-1', isMobile && 'w-full')}>
 					<TabsTrigger value='memories' className='flex items-center gap-1.5'>
 						<TbBrain className='size-4' />
 						Memories
@@ -133,7 +133,7 @@ function MemoriesTab() {
 	if (memoriesQ.isLoading) {
 		return (
 			<div className='flex items-center justify-center py-12'>
-				<Loader2 className='size-5 animate-spin text-white/40' />
+				<Loader2 className='size-5 animate-spin text-text-tertiary' />
 			</div>
 		)
 	}
@@ -142,18 +142,18 @@ function MemoriesTab() {
 		<div className='space-y-3 pt-3'>
 			{/* Search */}
 			<div className='relative'>
-				<TbSearch className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/40' />
+				<TbSearch className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary' />
 				<Input
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
 					placeholder='Search memories...'
-					className='pl-9 bg-white/5 border-white/10'
+					className='pl-9 bg-surface-1 border-border-default'
 				/>
 			</div>
 
 			{/* Memory List */}
 			{filtered.length === 0 ? (
-				<div className='flex flex-col items-center justify-center py-12 text-white/40'>
+				<div className='flex flex-col items-center justify-center py-12 text-text-tertiary'>
 					<TbBrain className='size-8 mb-2' />
 					<p className='text-sm'>
 						{search ? 'No memories match your search.' : 'No memories stored yet. Chat with the AI to build memory.'}
@@ -164,15 +164,15 @@ function MemoriesTab() {
 					{filtered.map((memory: any) => (
 						<div
 							key={memory.id}
-							className='group flex items-start gap-3 rounded-lg bg-white/5 p-3 hover:bg-white/[0.08] transition-colors'
+							className='group flex items-start gap-3 rounded-lg bg-surface-1 p-3 hover:bg-surface-2 transition-colors'
 						>
 							<div className='flex-1 min-w-0'>
-								<p className='text-sm text-white/80 break-words'>
+								<p className='text-sm text-text-primary/80 break-words'>
 									{memory.content?.length > 200
 										? `${memory.content.slice(0, 200)}...`
 										: memory.content}
 								</p>
-								<p className='mt-1 text-xs text-white/40'>
+								<p className='mt-1 text-xs text-text-tertiary'>
 									{memory.createdAt ? formatDateTime(memory.createdAt) : 'Unknown date'}
 								</p>
 							</div>
@@ -181,7 +181,7 @@ function MemoriesTab() {
 								disabled={deleteMut.isPending}
 								className={cn(
 									'shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
-									'rounded-md text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors',
+									'rounded-md text-text-tertiary hover:text-red-400 hover:bg-surface-2 transition-colors',
 									'opacity-0 group-hover:opacity-100 focus:opacity-100',
 									deleteMut.isPending && 'opacity-50 pointer-events-none',
 								)}
@@ -276,13 +276,13 @@ function ConversationsTab() {
 			{/* Search */}
 			<div className='flex gap-2'>
 				<div className='relative flex-1'>
-					<TbSearch className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/40' />
+					<TbSearch className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary' />
 					<Input
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
 						onKeyDown={handleKeyDown}
 						placeholder='Search conversations...'
-						className='pl-9 bg-white/5 border-white/10'
+						className='pl-9 bg-surface-1 border-border-default'
 					/>
 				</div>
 				{activeSearch ? (
@@ -305,8 +305,8 @@ function ConversationsTab() {
 						className={cn(
 							'flex items-center gap-1 px-3 py-1 rounded-full text-xs transition-colors',
 							channelFilter === ch.id
-								? 'bg-white/20 text-white'
-								: 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70',
+								? 'bg-surface-3 text-text-primary'
+								: 'bg-surface-1 text-text-secondary hover:bg-surface-2 hover:text-text-primary',
 						)}
 					>
 						{'icon' in ch && ch.icon && React.createElement(ch.icon, {className: 'size-3'})}
@@ -318,13 +318,13 @@ function ConversationsTab() {
 			{/* Loading */}
 			{isLoading && (
 				<div className='flex items-center justify-center py-12'>
-					<Loader2 className='size-5 animate-spin text-white/40' />
+					<Loader2 className='size-5 animate-spin text-text-tertiary' />
 				</div>
 			)}
 
 			{/* Turns List */}
 			{!isLoading && turns.length === 0 && (
-				<div className='flex flex-col items-center justify-center py-12 text-white/40'>
+				<div className='flex flex-col items-center justify-center py-12 text-text-tertiary'>
 					<TbHistory className='size-8 mb-2' />
 					<p className='text-sm'>
 						{activeSearch
@@ -345,17 +345,17 @@ function ConversationsTab() {
 						return (
 							<div
 								key={turn.id}
-								className='group flex items-start gap-3 rounded-lg bg-white/5 p-3 hover:bg-white/[0.08] transition-colors'
+								className='group flex items-start gap-3 rounded-lg bg-surface-1 p-3 hover:bg-surface-2 transition-colors'
 							>
 								{/* Channel Icon */}
 								<div className='shrink-0 mt-0.5'>
-									<ChannelIcon className='size-4 text-white/40' />
+									<ChannelIcon className='size-4 text-text-tertiary' />
 								</div>
 
 								{/* Content */}
 								<div className='flex-1 min-w-0'>
 									<div className='flex items-center gap-2 mb-1'>
-										<span className='text-xs text-white/50 capitalize'>
+										<span className='text-xs text-text-secondary capitalize'>
 											{turn.channel || 'unknown'}
 										</span>
 										<span
@@ -368,13 +368,13 @@ function ConversationsTab() {
 										>
 											{isUser ? 'User' : 'AI'}
 										</span>
-										<span className='text-[10px] text-white/30'>
+										<span className='text-[10px] text-text-primary/30'>
 											{turn.created_at || turn.createdAt
 												? formatRelativeTime(turn.created_at || turn.createdAt)
 												: ''}
 										</span>
 									</div>
-									<p className='text-sm text-white/70 break-words'>{preview}</p>
+									<p className='text-sm text-text-primary break-words'>{preview}</p>
 								</div>
 
 								{/* Delete */}
@@ -383,7 +383,7 @@ function ConversationsTab() {
 									disabled={deleteMut.isPending}
 									className={cn(
 										'shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
-										'rounded-md text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors',
+										'rounded-md text-text-tertiary hover:text-red-400 hover:bg-surface-2 transition-colors',
 										'opacity-0 group-hover:opacity-100 focus:opacity-100',
 										deleteMut.isPending && 'opacity-50 pointer-events-none',
 									)}
@@ -416,7 +416,7 @@ function ConversationsTab() {
 
 			{/* Search result count */}
 			{isSearching && !isLoading && turns.length > 0 && (
-				<p className='text-xs text-white/40 text-center'>
+				<p className='text-xs text-text-tertiary text-center'>
 					Found {turns.length} result{turns.length !== 1 ? 's' : ''}
 				</p>
 			)}
