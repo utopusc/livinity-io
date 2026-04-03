@@ -4,7 +4,7 @@ import type Redis from 'ioredis';
 // Channel Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ChannelId = 'telegram' | 'discord' | 'slack' | 'matrix' | 'gmail';
+export type ChannelId = 'telegram' | 'discord' | 'slack' | 'matrix' | 'gmail' | 'whatsapp';
 
 export interface ChannelConfig {
   enabled: boolean;
@@ -91,6 +91,7 @@ export const CHANNEL_META: Record<ChannelId, { name: string; color: string; text
   slack: { name: 'Slack', color: '#4A154B', textLimit: 4000 },
   matrix: { name: 'Matrix', color: '#0DBD8B', textLimit: 65536 },
   gmail: { name: 'Gmail', color: '#EA4335', textLimit: 50000 },
+  whatsapp: { name: 'WhatsApp', color: '#25D366', textLimit: 65536 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
