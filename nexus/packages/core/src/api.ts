@@ -1405,30 +1405,28 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   });
 
   /** Trigger WhatsApp connection (enable + connect) */
-  app.post('/api/channels/whatsapp/connect', async (req, res) => {
+  app.post('/api/channels/whatsapp/connect', async (_req, res) => {
     try {
       if (!channelManager) {
         res.status(503).json({ error: 'Channel manager not initialized' });
         return;
       }
-      const { phoneNumber } = req.body || {};
-      if (!phoneNumber) {
-        res.status(400).json({ error: 'phoneNumber is required (e.g. 905551234567)' });
-        return;
-      }
       await channelManager.updateProviderConfig('whatsapp', { enabled: true });
       const provider = channelManager.getProvider('whatsapp') as any;
       if (provider?.connect) {
-        await provider.connect(true, phoneNumber);
+        // Don't await — Chrome init takes time, QR will appear via polling
+        provider.connect(true).catch((err: any) => {
+          logger.error('WhatsApp connect background error', { error: formatErrorMessage(err) });
+        });
       }
-      res.json({ ok: true, message: 'Pairing code will be generated. Check /api/channels/whatsapp/pairing-code' });
+      res.json({ ok: true, message: 'Connecting... QR code will appear shortly.' });
     } catch (err) {
       logger.error('WhatsApp connect error', { error: formatErrorMessage(err) });
       res.status(500).json({ error: formatErrorMessage(err) });
     }
   });
 
-  /** Get WhatsApp pairing code (generated after connect with phone number) */
+  /** Placeholder for pairing code — now unused, QR flow used instead */
   app.get('/api/channels/whatsapp/pairing-code', async (_req, res) => {
     try {
       const code = await redis.get('nexus:whatsapp:pairing_code');
