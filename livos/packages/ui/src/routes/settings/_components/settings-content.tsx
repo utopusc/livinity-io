@@ -23,6 +23,7 @@ import {
 	TbCheck,
 	TbBrandTelegram,
 	TbBrandDiscord,
+	TbBrandWhatsapp,
 	TbPlugConnected,
 	TbPlugConnectedX,
 	TbExternalLink,
@@ -992,12 +993,12 @@ interface ChannelStatus {
 }
 
 function IntegrationsSection() {
-	const [activeTab, setActiveTab] = useState<'telegram' | 'discord'>('telegram')
+	const [activeTab, setActiveTab] = useState<'telegram' | 'discord' | 'whatsapp'>('telegram')
 
 	return (
 		<div>
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'telegram' | 'discord')}>
-				<TabsList className='grid w-full grid-cols-2 mb-4'>
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'telegram' | 'discord' | 'whatsapp')}>
+				<TabsList className='grid w-full grid-cols-3 mb-4'>
 					<TabsTrigger value='telegram' className='flex items-center gap-1.5'>
 						<TbBrandTelegram className='h-4 w-4 text-sky-400' />
 						Telegram
@@ -1006,10 +1007,15 @@ function IntegrationsSection() {
 						<TbBrandDiscord className='h-4 w-4 text-indigo-400' />
 						Discord
 					</TabsTrigger>
+					<TabsTrigger value='whatsapp' className='flex items-center gap-1.5'>
+						<TbBrandWhatsapp className='h-4 w-4 text-green-400' />
+						WhatsApp
+					</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value='telegram'><TelegramPanel /></TabsContent>
 				<TabsContent value='discord'><DiscordPanel /></TabsContent>
+				<TabsContent value='whatsapp'><WhatsAppPanel /></TabsContent>
 			</Tabs>
 		</div>
 	)
@@ -1172,6 +1178,140 @@ function DiscordPanel() {
 						utils.ai.getIntegrationStatus.invalidate()
 					})}>
 						Disable
+					</Button>
+				)}
+			</div>
+		</div>
+	)
+}
+
+function WhatsAppPanel() {
+	const [isConnecting, setIsConnecting] = useState(false)
+
+	const statusQ = trpcReact.ai.whatsappGetStatus.useQuery(undefined, {
+		refetchInterval: isConnecting ? 3000 : 10000,
+	})
+	const qrQ = trpcReact.ai.whatsappGetQr.useQuery(undefined, {
+		enabled: isConnecting && !statusQ.data?.connected,
+		refetchInterval: 5000,
+	})
+	const connectMutation = trpcReact.ai.whatsappConnect.useMutation()
+	const disconnectMutation = trpcReact.ai.whatsappDisconnect.useMutation()
+	const utils = trpcReact.useUtils()
+
+	// Stop connecting mode once connected
+	useEffect(() => {
+		if (statusQ.data?.connected) {
+			setIsConnecting(false)
+		}
+	}, [statusQ.data?.connected])
+
+	const handleConnect = async () => {
+		setIsConnecting(true)
+		try {
+			await connectMutation.mutateAsync()
+		} catch {
+			setIsConnecting(false)
+		}
+	}
+
+	const handleDisconnect = async () => {
+		await disconnectMutation.mutateAsync()
+		setIsConnecting(false)
+		utils.ai.whatsappGetStatus.invalidate()
+		utils.ai.whatsappGetQr.invalidate()
+	}
+
+	const status = statusQ.data as ChannelStatus | undefined
+	const isConnected = status?.connected ?? false
+
+	return (
+		<div className='space-y-4'>
+			{/* Status Card */}
+			<div className='rounded-radius-md border border-green-500/30 bg-green-500/10 p-4'>
+				<div className='flex items-center gap-3'>
+					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
+						<TbBrandWhatsapp className='h-6 w-6 text-green-400' />
+					</div>
+					<div className='flex-1'>
+						<div className='text-body-lg font-semibold'>WhatsApp</div>
+						<div className='text-caption text-text-secondary'>Connect by scanning QR code</div>
+					</div>
+					{isConnected ? (
+						<div className='flex items-center gap-2 text-caption text-green-400'>
+							<TbPlugConnected className='h-4 w-4' /> Connected
+						</div>
+					) : (
+						<div className='flex items-center gap-2 text-caption text-red-400'>
+							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
+						</div>
+					)}
+				</div>
+				{status?.botName && (
+					<div className='mt-2 text-caption text-text-secondary'>Phone: {status.botName}</div>
+				)}
+				{status?.error && !isConnected && (
+					<div className='mt-2 text-caption text-red-400'>{status.error}</div>
+				)}
+			</div>
+
+			{/* QR Code Display — shown while connecting and not yet connected */}
+			{isConnecting && !isConnected && (
+				<div className='flex flex-col items-center gap-3 rounded-radius-md border border-border bg-surface-1 p-6'>
+					{qrQ.data?.qr ? (
+						<>
+							<img
+								src={qrQ.data.qr}
+								alt='WhatsApp QR Code'
+								className='h-[256px] w-[256px] rounded-radius-sm'
+							/>
+							<p className='text-caption text-text-secondary'>
+								Scan with WhatsApp &gt; Linked Devices &gt; Link a Device
+							</p>
+						</>
+					) : (
+						<div className='flex h-[256px] w-[256px] items-center justify-center'>
+							<Loader2 className='h-8 w-8 animate-spin text-text-tertiary' />
+						</div>
+					)}
+				</div>
+			)}
+
+			{/* Action Buttons */}
+			<div className='flex gap-2'>
+				{!isConnected && !isConnecting && (
+					<Button
+						variant='primary'
+						className='flex-1'
+						onClick={handleConnect}
+						disabled={connectMutation.isPending}
+					>
+						{connectMutation.isPending ? (
+							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
+						) : null}
+						Connect WhatsApp
+					</Button>
+				)}
+				{isConnecting && !isConnected && (
+					<Button
+						variant='secondary'
+						className='flex-1'
+						onClick={() => setIsConnecting(false)}
+					>
+						Cancel
+					</Button>
+				)}
+				{isConnected && (
+					<Button
+						variant='destructive'
+						className='flex-1'
+						onClick={handleDisconnect}
+						disabled={disconnectMutation.isPending}
+					>
+						{disconnectMutation.isPending ? (
+							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
+						) : null}
+						Disconnect
 					</Button>
 				)}
 			</div>
