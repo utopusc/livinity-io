@@ -162,14 +162,18 @@ export class WhatsAppProvider implements ChannelProvider {
         await this.saveStatus();
       });
 
-      // Messages — use 'message_create' to capture own messages (fromMe)
-      // 'message' event only fires for incoming messages from others
+      // Listen to ALL message events for debugging
       this.client.on('message_create', async (msg: any) => {
+        logger.info('WhatsAppProvider: message_create event', { from: msg.from, fromMe: msg.fromMe, body: msg.body?.slice(0, 50), type: msg.type });
         try {
           await this.handleMessage(msg);
         } catch (err: any) {
           logger.error('WhatsAppProvider: message handler error', { error: err.message });
         }
+      });
+
+      this.client.on('message', async (msg: any) => {
+        logger.info('WhatsAppProvider: message event', { from: msg.from, fromMe: msg.fromMe, body: msg.body?.slice(0, 50), type: msg.type });
       });
 
       logger.info('WhatsAppProvider: initializing Chrome client...');
