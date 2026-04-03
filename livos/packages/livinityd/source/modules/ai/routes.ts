@@ -1457,6 +1457,150 @@ export default router({
 		}
 	}),
 
+	// ── Memory Management ──────────────────────────────────
+
+	/** List stored memories for the current user */
+	memoryList: privateProcedure.query(async ({ctx}) => {
+		try {
+			const userId = ctx.currentUser?.id || 'admin'
+			const memoryUrl = 'http://localhost:3300'
+			const response = await fetch(`${memoryUrl}/memories/${userId}?limit=100`, {
+				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+			})
+			if (!response.ok) {
+				return {memories: []}
+			}
+			const data = (await response.json()) as {memories: Array<{id: string; content: string; metadata: any; createdAt: number}>}
+			return data
+		} catch (error) {
+			ctx.livinityd!.logger.error('Failed to list memories', error)
+			return {memories: []}
+		}
+	}),
+
+	/** Delete a stored memory by ID */
+	memoryDelete: privateProcedure
+		.input(z.object({id: z.string()}))
+		.mutation(async ({input, ctx}) => {
+			try {
+				const memoryUrl = 'http://localhost:3300'
+				const response = await fetch(`${memoryUrl}/memories/${input.id}`, {
+					method: 'DELETE',
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: `Delete failed: ${response.status}`,
+					})
+				}
+				return {success: true}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd!.logger.error('Failed to delete memory', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to delete memory',
+				})
+			}
+		}),
+
+	/** List conversation turns for the current user with pagination */
+	conversationTurnsList: privateProcedure
+		.input(
+			z.object({
+				limit: z.number().int().min(1).max(200).optional(),
+				offset: z.number().int().min(0).optional(),
+				channel: z.string().optional(),
+			}).optional(),
+		)
+		.query(async ({input, ctx}) => {
+			try {
+				const userId = ctx.currentUser?.id || 'admin'
+				const memoryUrl = 'http://localhost:3300'
+				const params = new URLSearchParams()
+				if (input?.limit) params.set('limit', String(input.limit))
+				if (input?.offset) params.set('offset', String(input.offset))
+				if (input?.channel) params.set('channel', input.channel)
+				const qs = params.toString() ? `?${params.toString()}` : ''
+				const response = await fetch(`${memoryUrl}/conversation-turns/${userId}${qs}`, {
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) {
+					return {turns: [], total: 0}
+				}
+				const data = (await response.json()) as {turns: any[]; total: number}
+				return data
+			} catch (error) {
+				ctx.livinityd!.logger.error('Failed to list conversation turns', error)
+				return {turns: [], total: 0}
+			}
+		}),
+
+	/** Delete a single conversation turn by ID */
+	conversationTurnsDelete: privateProcedure
+		.input(z.object({id: z.number()}))
+		.mutation(async ({input, ctx}) => {
+			try {
+				const memoryUrl = 'http://localhost:3300'
+				const response = await fetch(`${memoryUrl}/conversation-turns/${input.id}`, {
+					method: 'DELETE',
+					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
+				})
+				if (!response.ok) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: `Delete failed: ${response.status}`,
+					})
+				}
+				return {success: true}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error
+				ctx.livinityd!.logger.error('Failed to delete conversation turn', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: getErrorMessage(error) || 'Failed to delete conversation turn',
+				})
+			}
+		}),
+
+	/** Search conversation turns via FTS5 full-text search */
+	conversationTurnsSearch: privateProcedure
+		.input(
+			z.object({
+				query: z.string().min(1),
+				channel: z.string().optional(),
+				limit: z.number().int().min(1).max(100).optional(),
+			}),
+		)
+		.query(async ({input, ctx}) => {
+			try {
+				const userId = ctx.currentUser?.id || 'admin'
+				const memoryUrl = 'http://localhost:3300'
+				const response = await fetch(`${memoryUrl}/conversation-search`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+					},
+					body: JSON.stringify({
+						query: input.query,
+						userId,
+						channel: input.channel,
+						limit: input.limit,
+					}),
+				})
+				if (!response.ok) {
+					return {results: []}
+				}
+				const data = (await response.json()) as {results: any[]}
+				return data
+			} catch (error) {
+				ctx.livinityd!.logger.error('Failed to search conversation turns', error)
+				return {results: []}
+			}
+		}),
+
 	// ── Docker (Direct) ─────────────────────────────────────
 
 	/** List all Docker containers directly via Dockerode */

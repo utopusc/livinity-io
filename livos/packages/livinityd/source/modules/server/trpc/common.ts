@@ -110,6 +110,9 @@ export const httpOnlyPaths = [
 	// WhatsApp management -- use HTTP to proxy to Nexus REST endpoints
 	'ai.whatsappConnect',
 	'ai.whatsappDisconnect',
+	// Memory management -- use HTTP for mutation reliability
+	'ai.memoryDelete',
+	'ai.conversationTurnsDelete',
 	// Preferences -- use HTTP so they work with legacy single-user tokens
 	'preferences.getAll',
 	'preferences.get',
