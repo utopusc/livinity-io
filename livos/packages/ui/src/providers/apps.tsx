@@ -32,14 +32,14 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_files',
 		name: 'Files',
-		icon: '/figma-exports/dock-files.png',
+		icon: '/figma-exports/dock-files-new.svg',
 		systemApp: true,
 		systemAppTo: '/files/Home',
 	},
 	{
 		id: 'LIVINITY_settings',
 		name: 'Settings',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/dock-settings-new.svg',
 		systemApp: true,
 		systemAppTo: '/settings',
 	},
