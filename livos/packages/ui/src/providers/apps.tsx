@@ -70,7 +70,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_server-control',
 		name: 'Server',
-		icon: '/figma-exports/dock-live-usage.png',
+		icon: '/figma-exports/dock-server.svg',
 		systemApp: true,
 		systemAppTo: '/server-control',
 	},
@@ -98,7 +98,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_terminal',
 		name: 'Terminal',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/dock-terminal.svg',
 		systemApp: true,
 		systemAppTo: '/terminal',
 	},
@@ -112,7 +112,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_chrome',
 		name: 'Chrome',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/dock-chrome.png',
 		systemApp: true,
 		systemAppTo: '/chrome',
 	},
@@ -120,21 +120,21 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_facebook',
 		name: 'Facebook',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/app-facebook.png',
 		systemApp: true,
 		systemAppTo: 'https://www.facebook.com',
 	},
 	{
 		id: 'LIVINITY_gmail',
 		name: 'Gmail',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/app-gmail.png',
 		systemApp: true,
 		systemAppTo: 'https://mail.google.com',
 	},
 	{
 		id: 'LIVINITY_youtube',
 		name: 'YouTube',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/app-youtube.png',
 		systemApp: true,
 		systemAppTo: 'https://www.youtube.com',
 	},
