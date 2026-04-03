@@ -136,24 +136,26 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - ✓ Mobile: safe area CSS (tailwindcss-safe-area, viewport-fit=cover) — v23.0
 - ✓ Mobile: install prompt banner, WS reconnect on resume, keyboard-safe input — v23.0
 
-## Current Milestone: v24.0 Mobile Responsive UI
+## Current Milestone: v25.0 Memory & WhatsApp Integration
 
-**Goal:** Make every system app (AI Chat, Settings, Server Control, Files, Terminal) fully usable on mobile — proper responsive layouts, touch-friendly controls, no overflow/scroll issues.
+**Goal:** Enable persistent cross-session AI memory across all channels, add WhatsApp as a messaging channel with QR code authentication, unify conversation storage across all platforms, and provide a memory management UI.
 
 **Target features:**
-- AI Chat: mobile-optimized sidebar, input area, message layout
-- Settings: single-column layout, touch-friendly controls
-- Server Control: responsive dashboard cards, mobile-friendly tables
-- Files: mobile file browser, touch-friendly toolbar
-- Terminal: mobile-friendly xterm.js, landscape mode support
+- Cross-session memory: AI can recall and search all previous conversations
+- WhatsApp channel: QR code auth, headless/browser mode, AI trigger from WhatsApp
+- Unified conversation store: Telegram + Web UI + WhatsApp + Discord in single store
+- Memory management UI: Settings page to view, search, delete memories
+- Channel-unified userId: Same user recognized across channels
 
 ### Active
 
-- [ ] AI Chat fully responsive on mobile (sidebar drawer, compact messages, touch-friendly input)
-- [ ] Settings single-column layout with proper scrolling and touch targets
-- [ ] Server Control responsive dashboard with stackable cards and mobile tables
-- [ ] Files mobile browser with proper navigation, toolbar, and file actions
-- [ ] Terminal mobile-optimized with proper sizing and keyboard handling
+- [ ] WhatsApp integration with QR code authentication (whatsapp-web.js or Baileys)
+- [ ] WhatsApp message routing to Nexus agent handler with userId mapping
+- [ ] Cross-session conversation search (AI can query "what did we discuss last week?")
+- [ ] Unified userId mapping across channels (Telegram, WhatsApp, Web UI, Discord)
+- [ ] Memory management UI in Settings (view, search, delete stored memories)
+- [ ] Conversation history tool for AI to search past conversations semantically
+- [ ] WhatsApp Settings panel in Integrations (QR code display, connection status)
 
 ### Out of Scope
 
@@ -267,4 +269,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-01 after v24.0 milestone started (Mobile Responsive UI)*
+*Last updated: 2026-04-02 after v25.0 milestone started (Memory & WhatsApp Integration)*
