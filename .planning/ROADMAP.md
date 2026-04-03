@@ -143,11 +143,11 @@ Plans:
   2. Outbound messages are rate-limited to a maximum of 10 per minute with randomized delays between sends
   3. The legacy ad-hoc WhatsApp code in daemon.ts (wa_outbox polling, getWhatsAppHistory, sendWhatsAppResponse) is removed and all WhatsApp routing goes through the ChannelManager
   4. If rate limit is exceeded, the AI queues responses rather than dropping them, and the user receives them with slight delay
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md -- WhatsApp rate limiter with Redis sliding window and randomized delays
+- [ ] 08-02-PLAN.md -- Consolidate all WhatsApp routing through ChannelManager, remove legacy daemon.ts code
 
 ### Phase 9: Cross-Session Conversation Persistence & Search
 **Goal**: AI can recall and search all previous conversations across every channel using full-text search
@@ -189,7 +189,7 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 |-------|-----------|----------------|--------|-----------|
 | 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | - |
 | 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete   | 2026-04-03 |
-| 8. WhatsApp Message Routing & Safety | v25.0 | 0/TBD | Not started | - |
+| 8. WhatsApp Message Routing & Safety | v25.0 | 0/2 | Not started | - |
 | 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/TBD | Not started | - |
 | 10. Unified Identity & Memory Management UI | v25.0 | 0/TBD | Not started | - |
 
