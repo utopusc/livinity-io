@@ -15,7 +15,6 @@ import { ScheduleManager } from './schedule-manager.js';
 import { SkillGenerator } from './skill-generator.js';
 import { LoopRunner } from './loop-runner.js';
 import { COMPLEXITY_PROMPT, SELF_REFLECTION_PROMPT, subagentPrompt } from './prompts.js';
-import { chunkForWhatsApp } from './utils.js';
 import type { Tool, ToolResult } from './types.js';
 import { logger } from './logger.js';
 import { formatErrorMessage } from './infra/errors.js';
@@ -1643,6 +1642,9 @@ ${task}`;
           if (!contact || !message) return { success: false, output: '', error: 'Contact name and message are required.' };
 
           try {
+            const channelMgr = this.config.channelManager;
+            if (!channelMgr) return { success: false, output: '', error: 'ChannelManager not available' };
+
             // Look up contact JID from name mapping
             const jid = await this.config.redis.hget('nexus:wa_contacts', contact.toLowerCase());
             if (!jid) {
@@ -1655,20 +1657,14 @@ ${task}`;
                 const available = Object.keys(allContacts).join(', ') || 'none';
                 return { success: false, output: '', error: `Contact "${contact}" not found. Known contacts: ${available}` };
               }
-              // Found partial match
-              await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-                jid: match[1],
-                text: message,
-                timestamp: Date.now(),
-              }));
+              // Found partial match — send via ChannelManager
+              const sent = await channelMgr.sendMessage('whatsapp', match[1], message);
+              if (!sent) return { success: false, output: '', error: 'WhatsApp send failed (not connected?)' };
               return { success: true, output: `Message sent to ${match[0]} (${match[1]}): "${message.slice(0, 80)}"` };
             }
 
-            await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-              jid,
-              text: message,
-              timestamp: Date.now(),
-            }));
+            const sent = await channelMgr.sendMessage('whatsapp', jid, message);
+            if (!sent) return { success: false, output: '', error: 'WhatsApp send failed (not connected?)' };
             return { success: true, output: `Message sent to ${contact} (${jid}): "${message.slice(0, 80)}"` };
           } catch (err) {
             return { success: false, output: '', error: `WhatsApp send error: ${formatErrorMessage(err)}` };
@@ -1930,21 +1926,18 @@ ${task}`;
         try {
           const ctx = this.currentChannelContext;
 
-          // Route to the correct channel based on context
-          if (ctx && ['telegram', 'discord', 'slack', 'matrix'].includes(ctx.source) && this.config.channelManager) {
+          // Route to the correct channel based on context (including WhatsApp)
+          if (ctx && ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(ctx.source) && this.config.channelManager) {
             await this.config.channelManager.sendMessage(ctx.source as any, ctx.chatId, message);
             return { success: true, output: `Progress sent via ${ctx.source}: ${message.slice(0, 100)}` };
           }
 
-          // WhatsApp: use JID param or auto-detected JID
+          // WhatsApp: use JID param or auto-detected JID (fallback for non-channel context)
           const targetJid = jid || this.currentWhatsAppJid;
-          if (targetJid) {
-            await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-              jid: targetJid,
-              text: message,
-              timestamp: Date.now(),
-            }));
-            return { success: true, output: `Progress sent via WhatsApp: ${message.slice(0, 100)}` };
+          if (targetJid && this.config.channelManager) {
+            const sent = await this.config.channelManager.sendMessage('whatsapp', targetJid, message);
+            if (sent) return { success: true, output: `Progress sent via WhatsApp: ${message.slice(0, 100)}` };
+            return { success: false, output: '', error: 'WhatsApp send failed' };
           }
 
           // Web/MCP: publish to Redis for WebSocket gateway
@@ -3321,20 +3314,14 @@ Types:
       const line = `💭 ${text}`;
       this.actionMessageCount++;
 
-      // Route to appropriate channel
-      const channelSources = ['telegram', 'discord', 'slack', 'matrix'] as const;
+      // Route to appropriate channel (including WhatsApp via ChannelManager)
+      const channelSources = ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'] as const;
       if (source && channelSources.includes(source as any) && this.config.channelManager) {
         this.config.channelManager.sendMessage(
-          source as 'telegram' | 'discord' | 'slack' | 'matrix',
+          source as 'telegram' | 'discord' | 'slack' | 'matrix' | 'whatsapp',
           chatId,
           line
         ).catch(() => {});
-      } else {
-        this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-          jid: chatId,
-          text: line,
-          timestamp: Date.now(),
-        })).catch(() => {});
       }
     };
   }
@@ -3344,16 +3331,7 @@ Types:
     const via = config.createdVia || 'whatsapp';
     const chatId = config.createdChatId || config.createdBy;
 
-    if (via === 'whatsapp' && chatId) {
-      const chunks = chunkForWhatsApp(text);
-      for (const chunk of chunks) {
-        await this.config.redis.lpush('nexus:wa_outbox', JSON.stringify({
-          jid: chatId,
-          text: chunk,
-          timestamp: Date.now(),
-        }));
-      }
-    } else if (['telegram', 'discord', 'slack', 'matrix'].includes(via) && this.config.channelManager && chatId) {
+    if (['whatsapp', 'telegram', 'discord', 'slack', 'matrix'].includes(via) && this.config.channelManager && chatId) {
       await this.config.channelManager.sendMessage(via as any, chatId, text).catch((err) => {
         logger.error('routeSubagentResult: channel send failed', { via, chatId, error: formatErrorMessage(err) });
       });
