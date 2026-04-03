@@ -594,6 +594,79 @@ app.get('/sessions/:sessionId/memories', (req, res) => {
   }
 });
 
+// List conversation turns for a user (with pagination and optional channel filter)
+app.get('/conversation-turns/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit as string || '50', 10), 200);
+    const offset = parseInt(req.query.offset as string || '0', 10);
+    const channel = req.query.channel as string | undefined;
+
+    // Build query with optional channel filter
+    let sql = `SELECT id, user_id, channel, chat_id, role, content, metadata, created_at FROM conversation_turns WHERE user_id = ?`;
+    let countSql = `SELECT COUNT(*) as total FROM conversation_turns WHERE user_id = ?`;
+    const params: any[] = [userId];
+    const countParams: any[] = [userId];
+
+    if (channel) {
+      sql += ' AND channel = ?';
+      countSql += ' AND channel = ?';
+      params.push(channel);
+      countParams.push(channel);
+    }
+
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const rows = db.prepare(sql).all(...params) as Array<{
+      id: number;
+      user_id: string;
+      channel: string;
+      chat_id: string;
+      role: string;
+      content: string;
+      metadata: string | null;
+      created_at: number;
+    }>;
+
+    const totalResult = db.prepare(countSql).get(...countParams) as { total: number };
+
+    const turns = rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      channel: row.channel,
+      chatId: row.chat_id,
+      role: row.role,
+      content: row.content,
+      metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      createdAt: row.created_at,
+    }));
+
+    res.json({ turns, total: totalResult.total });
+  } catch (err: any) {
+    console.error('[Memory] Get conversation turns error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a single conversation turn by id
+app.delete('/conversation-turns/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+
+    // The ct_ad trigger automatically removes from FTS5 on DELETE
+    db.prepare('DELETE FROM conversation_turns WHERE id = ?').run(id);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[Memory] Delete conversation turn error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Delete memory
 app.delete('/memories/:id', (req, res) => {
   try {

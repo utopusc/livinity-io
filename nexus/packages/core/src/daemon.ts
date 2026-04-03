@@ -3309,6 +3309,27 @@ Types:
     }
   }
 
+  /** Resolve the canonical userId for a channel user via Redis identity cache.
+   *  Falls back to the raw chatId if no mapping is cached (lazy creation by livinityd). */
+  private async resolveCanonicalUserId(channel: string, chatId: string): Promise<string> {
+    try {
+      const cached = await this.config.redis.get(`nexus:identity:${channel}:${chatId}`);
+      if (cached) return cached;
+    } catch {
+      // Redis unavailable — fall back to chatId
+    }
+    return chatId;
+  }
+
+  /** Cache a channel identity mapping in Redis for fast daemon-side lookups. */
+  async linkIdentity(channel: string, channelUserId: string, canonicalUserId: string): Promise<void> {
+    try {
+      await this.config.redis.set(`nexus:identity:${channel}:${channelUserId}`, canonicalUserId);
+    } catch {
+      // Best-effort — identity will be resolved lazily
+    }
+  }
+
   /** Save a conversation turn to channel history */
   private async saveChannelTurn(channel: string, chatId: string, userMsg: string, response: string) {
     try {
@@ -3321,9 +3342,12 @@ Types:
       await this.config.redis.ltrim(key, 0, 19);
       await this.config.redis.expire(key, 86400);
 
+      // Resolve canonical userId before archiving for unified identity
+      const canonicalId = await this.resolveCanonicalUserId(channel, chatId);
+
       // Archive to persistent SQLite store for cross-session search
-      await this.archiveToMemory(chatId, channel, chatId, 'user', userMsg);
-      await this.archiveToMemory(chatId, channel, chatId, 'assistant', response);
+      await this.archiveToMemory(canonicalId, channel, chatId, 'user', userMsg);
+      await this.archiveToMemory(canonicalId, channel, chatId, 'assistant', response);
     } catch (err) {
       logger.error('Failed to save channel turn', { channel, error: formatErrorMessage(err) });
     }
