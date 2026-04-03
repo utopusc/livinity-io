@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v25.0
 milestone_name: Memory & WhatsApp Integration
 status: unknown
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-04-03T03:15:27.858Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-03T03:25:20.062Z"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v25.0 -- Memory & WhatsApp Integration
-**Current focus:** Phase 07 — whatsapp-qr-code-settings-ui
+**Current focus:** Phase 08 — whatsapp-message-routing-safety
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
+Phase: 08 (whatsapp-message-routing-safety) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -65,6 +65,8 @@ Plan: Not started
 - [Phase 07]: whatsappGetStatus reads Redis directly (avoids extra Nexus network hop)
 - [Phase 07]: Button variant=secondary for Cancel (outline unavailable in project Button component)
 - [Phase 07]: ChannelStatus type cast for whatsappGetStatus data matching existing Telegram/Discord pattern
+- [Phase 08-01]: Redis sorted set sliding window for rate limiting (not simple counter) -- accurate across restarts
+- [Phase 08-01]: In-memory queue for overflow (not Redis list) -- sendFn closures cannot be serialized
 
 ### Pending Todos
 
@@ -78,6 +80,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-03T03:12:01.392Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-04-03T03:25:20.059Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
