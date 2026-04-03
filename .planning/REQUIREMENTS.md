@@ -8,9 +8,9 @@
 ### WhatsApp Channel
 
 - [ ] **WA-01**: User can connect WhatsApp by scanning QR code in Settings > Integrations
-- [ ] **WA-02**: WhatsApp connection persists across server restarts (Redis auth state)
+- [x] **WA-02**: WhatsApp connection persists across server restarts (Redis auth state)
 - [ ] **WA-03**: User can send messages to AI via WhatsApp and receive responses
-- [ ] **WA-04**: WhatsApp channel uses ChannelProvider pattern (like Telegram/Discord)
+- [x] **WA-04**: WhatsApp channel uses ChannelProvider pattern (like Telegram/Discord)
 - [ ] **WA-05**: Rate limiting prevents WhatsApp account ban (10 msg/min, randomized delays)
 - [ ] **WA-06**: Settings UI shows WhatsApp connection status and disconnect button
 
@@ -59,9 +59,9 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | WA-01 | Phase 7 | Pending |
-| WA-02 | Phase 6 | Pending |
+| WA-02 | Phase 6 | Complete |
 | WA-03 | Phase 8 | Pending |
-| WA-04 | Phase 6 | Pending |
+| WA-04 | Phase 6 | Complete |
 | WA-05 | Phase 8 | Pending |
 | WA-06 | Phase 7 | Pending |
 | MEM-01 | Phase 9 | Pending |

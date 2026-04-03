@@ -116,7 +116,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md -- Install Baileys+QRCode deps, extend ChannelId types, create Redis auth store + logger bridge
+- [x] 06-01-PLAN.md -- Install Baileys+QRCode deps, extend ChannelId types, create Redis auth store + logger bridge
 - [ ] 06-02-PLAN.md -- Create WhatsAppProvider, register in ChannelManager, wire DmPairing+daemon
 
 ### Phase 7: WhatsApp QR Code & Settings UI
