@@ -3308,7 +3308,7 @@ export default function ServerControl() {
 	}, [selectedContainers, bulkManage, clearSelection])
 
 	return (
-		<div className='flex h-full flex-col'>
+		<div className={cn('flex flex-col', !isMobile && 'h-full')}>
 			{/* Header */}
 			<div className='shrink-0 px-4 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-4'>
 				<h1 className='text-xl sm:text-2xl font-bold text-text-primary'>Server Management</h1>
@@ -3345,7 +3345,7 @@ export default function ServerControl() {
 			</div>
 
 			{/* Tabbed Interface */}
-			<Tabs defaultValue='overview' className='flex min-h-0 flex-1 flex-col px-4 pb-3 sm:px-6 sm:pb-4'>
+			<Tabs defaultValue='overview' className={cn('flex flex-col px-4 pb-3 sm:px-6 sm:pb-4', !isMobile && 'min-h-0 flex-1')}>
 				<div className='shrink-0 overflow-x-auto -mx-4 px-4 sm:-mx-0 sm:px-0' style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
 					<TabsList className='shrink-0 w-max justify-start gap-1 bg-transparent p-0 sm:w-full'>
 						<TabsTrigger value='overview'>Overview</TabsTrigger>
@@ -3362,12 +3362,12 @@ export default function ServerControl() {
 				</div>
 
 				{/* Overview Tab */}
-				<TabsContent value='overview' className='flex-1 overflow-auto'>
+				<TabsContent value='overview' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<OverviewTab />
 				</TabsContent>
 
 				{/* Containers Tab */}
-				<TabsContent value='containers' className='flex-1 overflow-auto'>
+				<TabsContent value='containers' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					{/* Summary Row */}
 					<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
 						<div className='text-sm text-text-secondary'>
@@ -3771,28 +3771,28 @@ export default function ServerControl() {
 				/>
 
 				{/* Images Tab */}
-				<TabsContent value='images' className='flex-1 overflow-auto'>
+				<TabsContent value='images' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<ImagesTab />
 				</TabsContent>
-				<TabsContent value='volumes' className='flex-1 overflow-auto'>
+				<TabsContent value='volumes' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<VolumesTab />
 				</TabsContent>
-				<TabsContent value='networks' className='flex-1 overflow-auto'>
+				<TabsContent value='networks' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<NetworksTab />
 				</TabsContent>
-				<TabsContent value='stacks' className='flex-1 overflow-auto'>
+				<TabsContent value='stacks' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<StacksTab />
 				</TabsContent>
-				<TabsContent value='events' className='flex-1 overflow-auto'>
+				<TabsContent value='events' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<EventsTab />
 				</TabsContent>
-				<TabsContent value='pm2' className='flex-1 overflow-auto'>
+				<TabsContent value='pm2' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<PM2Tab />
 				</TabsContent>
-				<TabsContent value='monitoring' className='flex-1 overflow-auto'>
+				<TabsContent value='monitoring' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<MonitoringTab />
 				</TabsContent>
-				<TabsContent value='domains' className='flex-1 overflow-auto'>
+				<TabsContent value='domains' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<DomainsTab />
 				</TabsContent>
 			</Tabs>
