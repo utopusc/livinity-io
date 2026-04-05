@@ -96,10 +96,10 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Milestone Goal:** Enable persistent cross-session AI memory across all channels, add WhatsApp as a messaging channel with QR code authentication, unify conversation storage, and provide a memory management UI.
 
-- [ ] **Phase 6: WhatsApp Channel Foundation** - Baileys ChannelProvider with Redis-backed auth state and echo-loop guard
+- [x] **Phase 6: WhatsApp Channel Foundation** - Baileys ChannelProvider with Redis-backed auth state and echo-loop guard (completed 2026-04-03)
 - [x] **Phase 7: WhatsApp QR Code & Settings UI** - QR code display, connection status, and disconnect in Settings > Integrations (completed 2026-04-03)
-- [ ] **Phase 8: WhatsApp Message Routing & Safety** - End-to-end messaging, rate limiting, legacy daemon.ts cleanup
-- [ ] **Phase 9: Cross-Session Conversation Persistence & Search** - FTS5 conversation store, archiver pipeline, AI search tool
+- [x] **Phase 8: WhatsApp Message Routing & Safety** - End-to-end messaging, rate limiting, legacy daemon.ts cleanup (completed 2026-04-03)
+- [x] **Phase 9: Cross-Session Conversation Persistence & Search** - FTS5 conversation store, archiver pipeline, AI search tool (completed 2026-04-03)
 - [x] **Phase 10: Unified Identity & Memory Management UI** - Cross-channel userId mapping, memory settings page with search/delete (completed 2026-04-03)
 
 ## Phase Details
@@ -187,11 +187,11 @@ Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | - |
-| 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete   | 2026-04-03 |
-| 8. WhatsApp Message Routing & Safety | v25.0 | 0/2 | Not started | - |
-| 9. Cross-Session Conversation Persistence & Search | v25.0 | 0/2 | Not started | - |
-| 10. Unified Identity & Memory Management UI | v25.0 | 2/2 | Complete    | 2026-04-03 |
+| 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | 2026-04-03 |
+| 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete | 2026-04-03 |
+| 8. WhatsApp Message Routing & Safety | v25.0 | 2/2 | Complete | 2026-04-03 |
+| 9. Cross-Session Conversation Persistence & Search | v25.0 | 2/2 | Complete | 2026-04-03 |
+| 10. Unified Identity & Memory Management UI | v25.0 | 2/2 | Complete | 2026-04-03 |
 
 ---
 
