@@ -1144,11 +1144,9 @@ export class Daemon {
         sessionId: randomUUID(),
       };
 
-      // Use SdkAgentRunner when Claude subscription (OAuth) auth is active
-      const authMethod = (await this.config.redis.get('nexus:config:claude_auth_method')) || 'api-key';
-      const agent = authMethod === 'sdk-subscription'
-        ? new SdkAgentRunner(agentConfig)
-        : new AgentLoop(agentConfig);
+      // Always use SdkAgentRunner — it uses Claude CLI OAuth (no API key needed)
+      // AgentLoop requires ProviderManager API keys which may not be configured
+      const agent = new SdkAgentRunner(agentConfig);
 
       // Voice TTS streaming: buffer agent text at sentence boundaries and publish to Redis
       const voiceSessionId = intent.params?.voiceSessionId as string | undefined;
@@ -3513,8 +3511,6 @@ Types:
     const subNexusConfig = this.getNexusConfig();
     const subApprovalPolicy = subNexusConfig?.approval?.policy ?? 'destructive';
 
-    const subAuthMethod = (await this.config.redis.get('nexus:config:claude_auth_method')) || 'api-key';
-
     const agentConfig = {
       brain: this.config.brain,
       toolRegistry: scopedRegistry,
@@ -3530,10 +3526,8 @@ Types:
       sessionId: randomUUID(),
     };
 
-    // Use SdkAgentRunner when Claude subscription (OAuth) auth is active
-    const agent = subAuthMethod === 'sdk-subscription'
-      ? new SdkAgentRunner(agentConfig)
-      : new AgentLoop(agentConfig);
+    // Always use SdkAgentRunner — uses Claude CLI OAuth (no API key needed)
+    const agent = new SdkAgentRunner(agentConfig);
 
     // Record the user message in history
     await this.config.subagentManager.addMessage(subagentId, {

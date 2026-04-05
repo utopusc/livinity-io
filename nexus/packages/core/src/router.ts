@@ -36,6 +36,13 @@ export class Router {
     const ruleResult = this.ruleBasedClassify(rawInput, source);
     if (ruleResult) return ruleResult;
 
+    // Channel messages: skip AI classify entirely — route to agent (SdkAgentRunner handles it)
+    const channelSources = ['telegram', 'discord', 'slack', 'matrix', 'whatsapp', 'signal', 'line', 'gmail'];
+    if (channelSources.includes(source)) {
+      logger.info('Router: channel message, skipping AI classify → agent', { source });
+      return { type: 'conversation', action: 'ask', params: { query: rawInput }, source, raw: rawInput };
+    }
+
     // Use cheap AI for classification — fallback to 'ask' if all providers fail
     let response: string;
     try {
