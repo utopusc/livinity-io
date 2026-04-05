@@ -226,9 +226,11 @@ export default class TunnelClient {
 	private sessionId: string | null = null
 	private assignedUrl: string | null = null
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+	private pingTimeout: ReturnType<typeof setTimeout> | null = null
 	private reconnection = new ReconnectionManager()
 	private status: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' = 'idle'
 	private localWsSockets = new Map<string, WebSocket>()
+	private static readonly PING_TIMEOUT_MS = 90_000 // 90s without relay ping = dead
 
 	private redis: Redis
 	private relayUrl: string
@@ -319,6 +321,8 @@ export default class TunnelClient {
 	}
 
 	async disconnect(): Promise<void> {
+		this.clearPingTimeout()
+
 		if (this.reconnectTimer) {
 			clearTimeout(this.reconnectTimer)
 			this.reconnectTimer = null
@@ -371,6 +375,7 @@ export default class TunnelClient {
 				break
 			case 'ping':
 				this.sendMessage({type: 'pong', ts: msg.ts})
+				this.resetPingTimeout()
 				break
 			case 'relay_shutdown':
 				this.logger.log('[tunnel] Relay is shutting down, expecting reconnect')
@@ -424,6 +429,7 @@ export default class TunnelClient {
 		this.assignedUrl = msg.assignedUrl
 		this.status = 'connected'
 		this.reconnection.reset()
+		this.resetPingTimeout()
 
 		await this.redis.set(`${REDIS_PREFIX}session_id`, msg.sessionId)
 		await this.redis.set(`${REDIS_PREFIX}url`, msg.assignedUrl)
@@ -635,7 +641,12 @@ export default class TunnelClient {
 	private handleWsClose(msg: TunnelWsClose): void {
 		const localWs = this.localWsSockets.get(msg.id)
 		if (localWs) {
-			localWs.close(msg.code ?? 1000, msg.reason ?? '')
+			const code = typeof msg.code === 'number' && msg.code >= 1000 && msg.code <= 4999 ? msg.code : 1000
+			try {
+				localWs.close(code, msg.reason ?? '')
+			} catch {
+				// Already closed or invalid state
+			}
 		}
 		this.localWsSockets.delete(msg.id)
 	}
@@ -771,6 +782,30 @@ export default class TunnelClient {
 	}
 
 	// ─── Reconnection ─────────────────────────────────────────────
+
+	private resetPingTimeout(): void {
+		if (this.pingTimeout) clearTimeout(this.pingTimeout)
+		this.pingTimeout = setTimeout(() => {
+			this.logger.error('[tunnel] No ping from relay in 90s — connection presumed dead, forcing reconnect')
+			this.clearPingTimeout()
+			if (this.ws) {
+				this.ws.removeAllListeners()
+				try { this.ws.terminate() } catch {}
+				this.ws = null
+			}
+			this.closeAllLocalWsSockets()
+			this.status = 'disconnected'
+			this.updateRedisStatus()
+			this.scheduleReconnect()
+		}, TunnelClient.PING_TIMEOUT_MS)
+	}
+
+	private clearPingTimeout(): void {
+		if (this.pingTimeout) {
+			clearTimeout(this.pingTimeout)
+			this.pingTimeout = null
+		}
+	}
 
 	private scheduleReconnect(): void {
 		// Do not reconnect if the API key was bad
