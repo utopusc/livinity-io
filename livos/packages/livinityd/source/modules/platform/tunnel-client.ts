@@ -297,6 +297,7 @@ export default class TunnelClient {
 		})
 
 		this.ws.on('message', (data) => {
+			this.resetPingTimeout() // Any message = connection alive
 			try {
 				const msg = JSON.parse(data.toString()) as IncomingMessage
 				this.handleMessage(msg)
@@ -305,7 +306,13 @@ export default class TunnelClient {
 			}
 		})
 
+		// WebSocket-level pong (relay sends ws.ping() every 30s, ws lib auto-replies)
+		this.ws.on('pong', () => {
+			this.resetPingTimeout()
+		})
+
 		this.ws.on('close', () => {
+			this.clearPingTimeout()
 			this.logger.log(`[tunnel] Connection closed (was ${this.status})`)
 			if (this.status === 'connected' || this.status === 'connecting') {
 				this.status = 'disconnected'
