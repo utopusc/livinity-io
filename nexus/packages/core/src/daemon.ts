@@ -1699,9 +1699,9 @@ ${task}`;
     if (hasConnectedChannel) {
       toolRegistry.register({
         name: 'channel_send',
-        description: 'Send a message to a Telegram, Discord, Slack, or Matrix channel',
+        description: 'Send a message to a Telegram, Discord, Slack, Matrix, or WhatsApp channel',
         parameters: [
-          { name: 'channel', type: 'string', description: 'Channel ID', required: true },
+          { name: 'channel', type: 'string', description: 'Channel ID (telegram, discord, slack, matrix, whatsapp)', required: true },
           { name: 'text', type: 'string', description: 'Message text', required: true },
           { name: 'chatId', type: 'string', description: 'Chat/channel ID (defaults to last active)', required: false },
         ],
@@ -1709,7 +1709,7 @@ ${task}`;
           const { channel, text, chatId: explicitChatId } = params as { channel: string; text: string; chatId?: string };
           if (!channel || !text) return { success: false, output: '', error: 'Channel and text are required.' };
 
-          const validChannels = ['telegram', 'discord', 'slack', 'matrix'];
+          const validChannels = ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'];
           if (!validChannels.includes(channel)) {
             return { success: false, output: '', error: `Invalid channel "${channel}". Use: ${validChannels.join(', ')}` };
           }
@@ -1721,7 +1721,7 @@ ${task}`;
             }
 
             const success = await this.config.channelManager!.sendMessage(
-              channel as 'telegram' | 'discord' | 'slack' | 'matrix',
+              channel as 'telegram' | 'discord' | 'slack' | 'matrix' | 'whatsapp',
               targetChatId,
               text,
             );
