@@ -154,7 +154,9 @@ Plans:
   2. When the shell tool is called without a device_id parameter, it executes on the user's local livinityd container/session and never falls back to, or picks up, another user's device — even if that other user's device is the only one currently connected
   3. The shell tool's device ID validation is tested end-to-end: a member-role user attempting to pass an admin-owned device_id receives an authorization error, and the admin's device receives no shell command over the tunnel
   4. The shell tool's device_id parameter description in its schema documents the ownership constraint so the AI will not hallucinate cross-user IDs into its tool calls
-**Plans**: TBD
+**Plans:** 0/1 plans complete
+Plans:
+- [ ] 13-01-PLAN.md — Freeze local shell parameter contract + RESERVED_TOOL_NAMES guard on /api/tools/register + document ownership in device shell proxy schema
 
 ### Phase 14: Device Session Binding
 **Goal**: Every DeviceBridge WebSocket connection is cryptographically bound to a specific user's JWT session, tokens expire and force refresh, and logout tears down all associated bridges.
@@ -199,7 +201,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 |-------|-----------|----------------|--------|-----------|
 | 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 12. Device Access Authorization | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 13. Shell Tool Isolation | v26.0 | 0/? | Not started | — |
+| 13. Shell Tool Isolation | v26.0 | 0/1 | Not started | — |
 | 14. Device Session Binding | v26.0 | 0/? | Not started | — |
 | 15. Device Audit Log | v26.0 | 0/? | Not started | — |
 | 16. Admin Override & Emergency Disconnect | v26.0 | 0/? | Not started | — |
