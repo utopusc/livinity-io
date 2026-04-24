@@ -140,9 +140,9 @@ Plans:
   2. A reusable authorizeDeviceAccess(userId, deviceId) helper is the single source of truth and is invoked by the DeviceBridge tool dispatcher, the tRPC devices router, and every Nexus REST /api/devices/* handler (defense in depth — bypassing tRPC via direct REST still enforces ownership)
   3. Authorization failures return a consistent error shape ({ error: "device_not_owned", deviceId, tool }) and append a row to the device_audit_log with success=false and error="device_not_owned"
   4. An admin user calling a device-routed tool for a device they do not personally own is still rejected by the standard authorization check — admin bypass only exists through the explicit Phase 16 admin endpoints
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 12-01-PLAN.md — Extract authorizeDeviceAccess helper + stub audit log to nexus:device:audit:failures Redis list
+- [x] 12-01-PLAN.md — Extract authorizeDeviceAccess helper + stub audit log to nexus:device:audit:failures Redis list
 - [ ] 12-02-PLAN.md — Apply helper to DeviceBridge.executeOnDevice, tRPC rename/remove/auditLog, and /internal/device-tool-execute callback
 
 ### Phase 13: Shell Tool Isolation
@@ -198,7 +198,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 12. Device Access Authorization | v26.0 | 0/2 | Not started | — |
+| 12. Device Access Authorization | v26.0 | 1/2 | In Progress|  |
 | 13. Shell Tool Isolation | v26.0 | 0/? | Not started | — |
 | 14. Device Session Binding | v26.0 | 0/? | Not started | — |
 | 15. Device Audit Log | v26.0 | 0/? | Not started | — |

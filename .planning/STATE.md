@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: completed
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-04-24T16:46:58.458Z"
-last_activity: 2026-04-24 — 11-02-PLAN.md executed (4/4 tasks, 5 modified + 1 created, OWN-02 + OWN-03 satisfied)
+status: in_progress
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-04-24T17:05:00.000Z"
+last_activity: 2026-04-24 — 12-01-PLAN.md executed (3/3 tasks, 3 created, AUTHZ-01 + AUTHZ-02 partial — full coverage in 12-02)
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v26.0 -- Device Security & User Isolation
-**Current focus:** Phase 11 -- Device Ownership Foundation
+**Current focus:** Phase 12 -- Device Access Authorization
 
 ## Current Position
 
-Phase: 11 -- Device Ownership Foundation (complete)
-Plan: 12-01 (next phase)
-Status: 11-02 complete — relay protocol carries userId, LivOS Redis cache + tRPC routes filter by owner, new GET /api/devices REST endpoint 401s on missing session and filters by session.userId. OWN-02 and OWN-03 satisfied; Phase 11 done.
-Last activity: 2026-04-24 — 11-02-PLAN.md executed (4/4 tasks, 5 modified + 1 created, OWN-02 + OWN-03 satisfied)
+Phase: 12 -- Device Access Authorization (in progress)
+Plan: 12-02 (next)
+Status: 12-01 complete — authorizeDeviceAccess helper + recordAuthFailure stub audit writer + devices/index.ts barrel created. 4-branch AuthResult contract (authorized / device_not_found / device_not_owned / missing_user). Zero callsites touched — 12-02 wires them in. TypeScript compiles clean; barrel smoke test resolves 5 runtime exports. AUTHZ-01 and AUTHZ-02 partial (full satisfaction in 12-02).
+Last activity: 2026-04-24 — 12-01-PLAN.md executed (3/3 tasks, 3 created, AUTHZ-01 + AUTHZ-02 partial)
 
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 75%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 |--------------|----------|-------|-------|
 | 11-device-ownership-foundation P01 | 2min | 3 | 4 |
 | 11-device-ownership-foundation P02 | 3min | 4 | 6 |
+| 12-device-access-authorization P01 | 2min | 3 | 3 |
 
 ## Accumulated Context
 
@@ -100,6 +101,15 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **FORBIDDEN code `device_not_owned` standardized**: Phase 12's authorizeDeviceAccess helper will consume the same code string for consistency
 - **devices.list downgraded from adminProcedure to privateProcedure**: Phase 16 will add a separate admin endpoint for cross-user listing — today's list should work for every authenticated user seeing their own devices
 
+### Phase 12-01 Execution Decisions
+
+- **authorize.ts is a leaf node in the import graph**: duplicates `DEVICE_REDIS_PREFIX='livos:devices:'` rather than importing from device-bridge.ts so Plan 12-02 can safely make device-bridge import authorize without a cycle
+- **missing_user reason returns BEFORE Redis GET**: guards against v7.0 sessions where ctx.currentUser arrives empty — the Phase 11 legacy "return all" fallback must not leak into authorization checks
+- **Malformed JSON -> device_not_found (not a throw)**: mirrors device-bridge.ts:440-442 pattern; authorize helper is non-throwing by contract
+- **audit-stub.ts uses LPUSH + LTRIM(0, 999) newest-at-HEAD**: distinct from device-bridge.ts onAuditEvent (RPUSH + LTRIM(-1000, -1) newest-at-tail); chosen so Phase 15's admin-UI reads failures newest-first via plain LRANGE without .reverse()
+- **Barrel export at devices/index.ts is the Phase 15 swap point**: Plan 12-02 callsites will import from '../devices' (barrel), letting Phase 15 replace audit-stub.ts with PostgreSQL device_audit_log without touching any callsite
+- **Barrel does NOT re-export router from routes.ts**: server/trpc/index.ts:22 imports it by deep path; rewiring tRPC assembly is out of scope for this plan. source/index.ts:22 deep import of DeviceBridge also preserved — no churn to main entry point
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -120,6 +130,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T16:46:58.454Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-04-24T17:04:34.215Z
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
