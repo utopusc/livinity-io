@@ -185,6 +185,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. User configures a backup job picking a volume, destination type (S3/SFTP/local), destination config, and schedule; backup runs on schedule and produces a tar.gz at destination
   5. Volume backup uses an ephemeral `alpine:latest` helper container to tar the volume contents and stream to the destination without mounting the volume on the host
 **Plans**: 2 plans
+**Plan files**:
+- [ ] 20-01-PLAN.md — Scheduler module + built-in maintenance tasks (SCH-01, SCH-02): scheduled_jobs PG table + node-cron runner + image-prune/container-update-check/git-stack-sync handlers
+- [ ] 20-02-PLAN.md — Backup module + destinations + Settings UI (SCH-03, SCH-04, SCH-05): alpine-tar streaming + S3/SFTP/local uploaders + AES-256-GCM creds vault + Settings > Scheduler section
 
 ### Phase 21: GitOps Stack Deployment
 **Goal**: Deploy and auto-sync compose stacks from git repositories with HMAC-verified webhooks for instant CI/CD on push — Livinity's self-hosted GitOps moat.
