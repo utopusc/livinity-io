@@ -694,6 +694,7 @@ export default router({
 						z.object({
 							key: z.string().min(1),
 							value: z.string(),
+							secret: z.boolean().optional().default(false),
 						}),
 					)
 					.optional(),
@@ -732,6 +733,7 @@ export default router({
 						z.object({
 							key: z.string().min(1),
 							value: z.string(),
+							secret: z.boolean().optional().default(false),
 						}),
 					)
 					.optional(),
