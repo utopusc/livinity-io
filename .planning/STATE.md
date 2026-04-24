@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: in-progress
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-04-24T18:33:33Z"
-last_activity: 2026-04-24 — 16-01-PLAN.md executed (3/3 tasks, 7 files, 237s duration)
+status: completed
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-04-24T18:40:54Z"
+last_activity: 2026-04-24 — 16-02-PLAN.md executed (2/2 tasks, 2 files, 660s duration) — Phase 16 and v26.0 complete
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 12
+  completed_phases: 6
+  total_plans: 11
   completed_plans: 11
-  percent: 92
+  percent: 100
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 16 -- Admin Override & Emergency Disconnect (Plan 01 complete, Plan 02 pending)
-Plan: 16-01 complete — admin backend delivered; ADMIN-01 + ADMIN-02 satisfied at tRPC + REST + relay layers
-Status: 16-01 complete — (1) Task 1: new `admin_force_disconnect` tunnel verb. protocol.ts adds TunnelAdminForceDisconnect (targetUserId+deviceId) into ClientToRelayMessage + MessageTypeMap; relay index.ts new switch case that crosses user boundaries (deviceRegistry.getDevice(adminMsg.targetUserId, adminMsg.deviceId)) and closes target.ws with 4403 'admin_disconnect' via try/catch. DeviceBridge.forceDisconnect(targetUserId, deviceId): void wraps sendTunnelMessage; deliberately does NOT mutate connectedDevices or Redis (normal onDeviceDisconnected pathway handles cleanup). Distinct from removeDevice's device_disconnect (owner-initiated) pathway. (2) Task 2: new admin-routes.ts (118 lines) with two adminProcedure endpoints. adminListAll queries getAllDevicesFromRedis + batch-joins usernames (SELECT ... WHERE id = ANY($1::uuid[]) with empty-set shortcut for PG compatibility), shapes to AdminDeviceRow[], writes recordDeviceEvent tool_name='admin.list_all' attributed to admin.userId. adminForceDisconnect resolves owner via bridge.getDeviceFromRedis → bridge.forceDisconnect(device.userId, deviceId); audits both success (params includes targetUserId) and miss path (success=false error='device_not_connected' + TRPCError NOT_FOUND). Router mounted as 'devicesAdmin' on appRouter; httpOnlyPaths entries added for both endpoints. (3) Task 3: new platform/web /api/admin/devices/route.ts (82 lines). Admin detection via SELECT id FROM users ORDER BY created_at ASC LIMIT 1 (matches migration 0007 oldest-admin convention — platform/web has no role column); 401/403/200 path. Cross-user JOIN devices d ON u.id = d.user_id, online = last_seen within 60s. Zero new TS errors across platform/relay, platform/web, and livinityd-scoped files (pre-existing 365 baseline errors in ai/skills/tunnel-client untouched). ADMIN-01 + ADMIN-02 satisfied end-to-end.
-Last activity: 2026-04-24 — 16-01-PLAN.md executed (3/3 tasks, 7 files, 237s duration)
+Phase: 16 -- Admin Override & Emergency Disconnect (Plan 01 + Plan 02 complete — PHASE COMPLETE)
+Plan: 16-02 complete — admin UI delivered; ADMIN-01 + ADMIN-02 now satisfied end-to-end with UI evidence. v26.0 milestone complete.
+Status: 16-02 complete — (1) Task 1: new AdminDevicesSection (253 lines) at livos/packages/ui/src/routes/settings/_components/admin-devices-section.tsx. Consumes trpcReact.devicesAdmin.adminListAll.useQuery with refetchInterval: 10_000 (auto-refresh satisfies ≤10s offline-reflection must_have). Mutation trpcReact.devicesAdmin.adminForceDisconnect with onSuccess→toast+utils.invalidate, onError→toast(err.message) (surfaces FORBIDDEN for non-admin callers). Table columns: User/Device/Platform/Status/Last Seen/Action. Online rows: red variant='destructive' Force Disconnect button with TbX; offline rows: em-dash. Destructive action gated by confirmation Dialog. Loading/Error/Empty states handled. Inline formatRelativeTime + PLATFORM_LABEL helpers. (2) Task 2: registered admin-devices entry in settings-content.tsx (+8 lines): TbServer2 added to react-icons/tb imports; 'admin-devices' added to SettingsSection union; MENU_ITEMS entry {id:'admin-devices', icon:TbServer2, label:'Devices', description:'All devices across all users', adminOnly:true}; AdminDevicesSectionLazy named-export lazy import matching UsersSectionLazy pattern; case 'admin-devices' in SectionContent switch with Suspense+Loader2 fallback. useVisibleMenuItems filter unchanged (already handles adminOnly via role). Zero new TS errors in modified files (one pre-existing error at L181 verified via git show HEAD~1 — out of scope). All verification grep invariants pass. v26.0 DONE: 15/15 requirements satisfied across Phases 11–16.
+Last activity: 2026-04-24 — 16-02-PLAN.md executed (2/2 tasks, 2 files, 660s duration) — Phase 16 and v26.0 complete
 
-**Progress:** [█████████-] 92%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | Phase 15 P01 | 108 | 3 tasks | 3 files |
 | Phase 15 P02 | 153 | 3 tasks | 5 files |
 | Phase 16 P01 | 237 | 3 tasks | 7 files |
+| Phase 16 P02 | 660 | 2 tasks | 2 files |
 
 ### v26.0 Execution Metrics
 
@@ -73,6 +74,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | 12-device-access-authorization P02 | 3min | 4 | 3 |
 | 13-shell-tool-isolation P01 | 3min | 4 | 3 |
 | 16-admin-override P01 | 4min | 3 | 7 |
+| 16-admin-override P02 | 11min | 2 | 2 |
 
 ## Accumulated Context
 
