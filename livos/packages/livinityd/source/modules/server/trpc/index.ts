@@ -17,6 +17,7 @@ import backups from '../../backups/routes.js'
 import ai from '../../ai/routes.js'
 import domain from '../../domain/routes.js'
 import docker from '../../docker/routes.js'
+import scheduler from '../../scheduler/routes.js'
 import monitoring from '../../monitoring/routes.js'
 import pm2 from '../../pm2/routes.js'
 import devices from '../../devices/routes.js'
@@ -42,6 +43,7 @@ const appRouter = router({
 	ai,
 	domain,
 	docker,
+	scheduler,
 	monitoring,
 	pm2,
 	devices,
