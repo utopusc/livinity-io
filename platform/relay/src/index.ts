@@ -52,6 +52,7 @@ import type {
 } from './protocol.js';
 import { DeviceConnection, DeviceRegistry } from './device-registry.js';
 import { verifyDeviceToken } from './device-auth.js';
+import { startSessionRevocationSubscriber } from './session-revocation.js';
 import type {
   DeviceAuth,
   DeviceAuditEvent,
@@ -68,6 +69,11 @@ import type {
 
 const pool = new pg.Pool({ connectionString: config.DATABASE_URL });
 const redis = new Redis(config.REDIS_URL);
+
+// Phase 14 SESS-03: dedicated Redis client for session-revocation pub/sub.
+// ioredis subscribe mode is connection-exclusive — cannot share with `redis`
+// (which is used for bandwidth, custom-domain cache, etc.)
+const sessionRevocationSubscriber = new Redis(config.REDIS_URL);
 
 // Apply schema idempotently
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,6 +101,9 @@ const registry = new TunnelRegistry();
 const deviceRegistry = new DeviceRegistry();
 const handleRequest = createRequestHandler(registry, redis, pool, deviceRegistry);
 const server = http.createServer(handleRequest);
+
+// Phase 14 SESS-03: start the subscriber so logout events at platform/web can close active device bridges
+startSessionRevocationSubscriber(sessionRevocationSubscriber, deviceRegistry);
 
 // ---------------------------------------------------------------------------
 // WebSocket server (noServer mode)
@@ -715,6 +724,13 @@ function shutdown(signal: string): void {
 
   // Phase 14 SESS-02: stop expiry watchdog
   clearInterval(sessionExpiryInterval);
+
+  // Phase 14 SESS-03: disconnect the revocation subscriber
+  try {
+    sessionRevocationSubscriber.disconnect();
+  } catch {
+    // Already disconnected
+  }
 
   stopBandwidthFlush(bandwidthInterval);
 
