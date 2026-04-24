@@ -141,6 +141,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   3. Stack detail has a "Redeploy (pull latest)" button that pulls all images first then recreates containers; works with both YAML and (future) git stacks
   4. AI calling docker_manage with operation="stack-deploy" or "stack-remove" or "image-pull" succeeds end-to-end with the same output shape as existing tRPC routes
 **Plans**: 2 plans
+**Plan files**:
+- [ ] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
+- [ ] 17-02-PLAN.md — Redeploy-with-pull button + extended AI docker_manage tool (QW-03, QW-04)
 
 ### Phase 18: Container File Browser
 **Goal**: Full file manager for container filesystems — list, navigate, download, upload, edit, delete — built on Docker exec + tar without requiring host volume mounts.
