@@ -26,7 +26,7 @@
 
 - [x] **SESS-01**: Each DeviceBridge WebSocket connection is bound to a specific user session JWT at handshake
 - [x] **SESS-02**: Device session tokens expire and require refresh; expired tokens terminate the bridge connection
-- [ ] **SESS-03**: When a user logs out or their session is revoked, all their active device bridges disconnect
+- [x] **SESS-03**: When a user logs out or their session is revoked, all their active device bridges disconnect
 
 ### Audit Log (AUDIT)
 
@@ -87,7 +87,7 @@
 | SHELL-02 | Phase 13 | Complete |
 | SESS-01 | Phase 14 | Complete |
 | SESS-02 | Phase 14 | Complete |
-| SESS-03 | Phase 14 | Pending |
+| SESS-03 | Phase 14 | Complete |
 | AUDIT-01 | Phase 15 | Pending |
 | AUDIT-02 | Phase 15 | Pending |
 | ADMIN-01 | Phase 16 | Pending |

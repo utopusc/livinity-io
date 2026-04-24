@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: verifying
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-04-24T17:48:19.002Z"
-last_activity: 2026-04-24 — 14-01-PLAN.md executed (3/3 tasks, 9 files modified, SESS-01/02 complete)
+status: completed
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-04-24T17:55:18.378Z"
+last_activity: 2026-04-24 — 14-02-PLAN.md executed (3/3 tasks, 7 files, SESS-03 complete)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 14 -- Device Session Binding (in progress)
-Plan: 14-02 (next — revocation pub/sub for logout-driven bridge disconnect, closes SESS-03)
-Status: 14-01 complete — device session JWT binding hardened at three layers: (1) migration 0008 adds device_grants.session_id (nullable UUID); /api/device/approve resolves sessions.id from cookie and passes to approveGrant; /api/device/token rejects grants with null session_id and embeds sessionId claim in signed JWT, (2) relay verifyDeviceToken requires sessionId claim; onDeviceConnect handshake queries sessions table (exists / unexpired / user_id matches tokenPayload.userId) + devices table (exists / unrevoked / user_id matches tokenPayload.userId) with five distinct 1008 close reasons (session_invalid, session_expired, session_user_mismatch, device_not_found, device_ownership_mismatch); DeviceConnection gains immutable tokenExpiresAt (from JWT exp * 1000) and now uses the JWT sessionId claim (not a relay-generated nanoid), (3) SESSION_EXPIRY_CHECK_INTERVAL_MS config (60s default) + startSessionExpiryWatchdog iterates deviceRegistry.allConnections() and closes expired bridges with ws.close(4401, 'token_expired'); watchdog cleared on shutdown. onTunnelConnect nanoid usage preserved (regression guard for Phase 10). SESS-01 + SESS-02 satisfied. Zero new TS errors.
-Last activity: 2026-04-24 — 14-01-PLAN.md executed (3/3 tasks, 9 files modified, SESS-01/02 complete)
+Phase: 14 -- Device Session Binding (complete — all 3 requirements SESS-01/02/03 satisfied)
+Plan: 14-02 complete — next milestone phase is 15 (Device Audit Log)
+Status: 14-02 complete — session-revocation pub/sub wired end-to-end. (1) platform/web adds ioredis dep; new `src/lib/session-revocation.ts` exports lazy-singleton ioredis publisher + publishSessionRevoked(sessionId) on channel 'livos:sessions:revoked' with maxRetriesPerRequest:1 + enableOfflineQueue:false + try/catch soft-fail (logout never blocked by Redis outage). (2) /api/auth/logout SELECTs sessions.id BEFORE deleteSession then publishes the UUID. (3) platform/relay gains new `src/session-revocation.ts` with startSessionRevocationSubscriber(subscriber, deviceRegistry) that subscribes to the channel and, on each message, iterates DeviceRegistry.allConnections() closing every match with ws.close(4403, 'session_revoked'). (4) platform/relay/src/index.ts creates a DEDICATED ioredis client (subscribe mode is connection-exclusive — cannot share with the command client used by bandwidth/custom-domains), wires the subscriber at boot, and disconnects it in shutdown(). Plan 14-01 invariants (watchdog, handshake validation) untouched. All 14 required A-N invariants PASS; optional O integration probe skipped (no local Redis). Zero new TS errors. SESS-03 satisfied — Phase 14 now fully complete.
+Last activity: 2026-04-24 — 14-02-PLAN.md executed (3/3 tasks, 7 files, SESS-03 complete)
 
-**Progress:** [█████████░] 86%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Last activity: 2026-04-24 — 14-01-PLAN.md executed (3/3 tasks, 9 files modifie
 
 Coverage: 15/15 v26.0 requirements mapped ✓
 | Phase 14-device-session-binding P01 | 237 | 3 tasks | 9 files |
+| Phase 14 P02 | 149 | 3 tasks | 7 files |
 
 ### v26.0 Execution Metrics
 
@@ -142,6 +143,16 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **ws.on('message') handler converted from sync to async**: two `await pool.query(...)` inserts for session/devices validation require async context. All paths still `return` after ws.close() so no dangling promises.
 - **Post-approve session-id lookup does a second query rather than modifying getSession**: getSession is widely used; adding sessions.id to its return would ripple into every callsite. Localized query in the approve route keeps the change surface minimal.
 
+### Phase 14-02 Execution Decisions
+
+- **Lazy-singleton ioredis publisher on platform/web**: non-logout request paths never pay the Redis connection cost; the publisher is instantiated on first use and kept warm by ioredis. First Redis dependency on the web side (relay already used ioredis).
+- **Dedicated ioredis subscriber client on the relay (second `new Redis(config.REDIS_URL)`)**: ioredis subscribe mode is connection-exclusive — the existing `redis` command client is used by request-proxy bandwidth counters and custom-domain cache warming and CANNOT be reused for subscribe without breaking those paths.
+- **Soft-fail publish (maxRetriesPerRequest:1 + enableOfflineQueue:false + try/catch around publish)**: logout's primary contract is cookie invalidation + sessions row delete. A dead Redis must not stall the logout HTTP response; bridges fall back to Plan 14-01's 60s token-expiry watchdog (max stall = 60s, not indefinite).
+- **Plain-string message payload (sessionId UUID as-is, not JSON.stringify)**: single-field message, minimal parsing cost. Phase 16 admin-disconnect may upgrade to JSON when a cause-code field is needed, but SESS-03 does not.
+- **SELECT id BEFORE DELETE in the logout route**: DeviceConnection.sessionId at the relay holds sessions.id (Plan 14-01 binding), not the token. The UUID must be captured before the row is gone; the race of two concurrent logout requests is handled idempotently (subscriber closes the same bridge twice harmlessly).
+- **Close code 4403 'session_revoked' (not 4401)**: 4401 = "refresh the token and reconnect" (14-01 expiry); 4403 = "stop reconnecting, the session is gone". Client device agents distinguish at the close event and choose the right recovery strategy (refresh token vs abandon-and-re-pair).
+- **Subscriber startup BEFORE server.listen**: revocations arriving before the HTTP server is accepting connections are harmless — no bridges exist yet to close. Subscriber shutdown happens INSIDE shutdown() after the watchdog clearInterval, BEFORE stopBandwidthFlush, so no new revocation messages are processed during the relay's final broadcast loop.
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -162,6 +173,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T17:47:13.059Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-04-24T17:54:39.991Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
