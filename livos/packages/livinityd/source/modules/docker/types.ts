@@ -223,6 +223,34 @@ export interface DockerEvent {
 }
 
 // -----------------------------------------------------------------------
+// Vulnerability scanning (Phase 19 — CGV-02/03/04)
+// -----------------------------------------------------------------------
+
+export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+
+export interface CveEntry {
+	id: string // CVE-2024-XXXXX or VulnerabilityID
+	severity: Severity
+	packageName: string // PkgName
+	installedVersion: string // InstalledVersion
+	fixedVersion: string | null // FixedVersion (null when unfixed)
+	cvss: number | null // best CVSS score across vendors (V3 nvd > redhat > ghsa)
+	title: string // short title from Trivy (or VulnerabilityID fallback)
+	description: string // first 500 chars of Trivy Description
+	primaryUrl: string | null // PrimaryURL link
+}
+
+export interface VulnScanResult {
+	imageRef: string // e.g. "nginx:latest"
+	imageDigest: string // sha256:abcdef...
+	scannedAt: number // unix ms
+	counts: Record<Severity, number> // {CRITICAL, HIGH, MEDIUM, LOW}
+	cves: CveEntry[] // full list, sorted by severity desc then cvss desc
+	trivyVersion: string // from "SchemaVersion" or top-level
+	cached: boolean // true if served from Redis
+}
+
+// -----------------------------------------------------------------------
 // Docker Engine Info (Phase 46)
 // -----------------------------------------------------------------------
 

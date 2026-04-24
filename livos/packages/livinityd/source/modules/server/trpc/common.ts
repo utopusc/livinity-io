@@ -68,6 +68,8 @@ export const httpOnlyPaths = [
 	'docker.pruneImages',
 	'docker.pullImage',
 	'docker.tagImage',
+	// Phase 19 vuln scan -- mutation can take 30-90s; HTTP avoids WS-hang on disconnect
+	'docker.scanImage',
 	'docker.removeVolume',
 	'docker.createVolume',
 	// Network management -- use HTTP for reliability
