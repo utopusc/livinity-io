@@ -85,6 +85,12 @@ export const httpOnlyPaths = [
 	// otherwise mutations silently hang on disconnected WS.
 	'docker.containerWriteFile',
 	'docker.containerDeleteFile',
+	// Phase 20 — Scheduler mutations -- use HTTP for reliability
+	// (queries like scheduler.listJobs stay on WS — no need for HTTP)
+	'scheduler.upsertJob',
+	'scheduler.deleteJob',
+	'scheduler.runNow',
+	'scheduler.testBackupDestination',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
 	// Device management -- use HTTP for reliability through relay tunnel
