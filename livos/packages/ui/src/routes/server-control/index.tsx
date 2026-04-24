@@ -2350,7 +2350,12 @@ function DeployStackForm({
 }) {
 	const [stackName, setStackName] = useState('')
 	const [composeYaml, setComposeYaml] = useState('')
-	const [envVars, setEnvVars] = useState<Array<{key: string; value: string}>>([])
+	// `hasValue` is client-side only — signals "this is a pre-loaded stored secret;
+	// leaving `value` blank means KEEP existing". `secret` flags a value that must
+	// never touch disk (sent to server, server encrypts to Redis).
+	const [envVars, setEnvVars] = useState<
+		Array<{key: string; value: string; secret?: boolean; hasValue?: boolean}>
+	>([])
 	const [nameError, setNameError] = useState('')
 
 	const isEditMode = !!editStackName
@@ -2378,7 +2383,19 @@ function DeployStackForm({
 
 	useEffect(() => {
 		if (isEditMode && envData) {
-			setEnvVars(envData.envVars.length > 0 ? envData.envVars : [])
+			// Server returns {key, value, secret, hasValue}. Secret rows come
+			// back with value='' (redacted) — the form treats blank + hasValue
+			// as "keep existing" on submit.
+			setEnvVars(
+				envData.envVars.length > 0
+					? envData.envVars.map((e: any) => ({
+							key: e.key,
+							value: e.value ?? '',
+							secret: Boolean(e.secret),
+							hasValue: Boolean(e.hasValue),
+						}))
+					: [],
+			)
 		}
 	}, [envData, isEditMode])
 
@@ -2404,12 +2421,10 @@ function DeployStackForm({
 		)
 	}
 
-	const addEnvVar = () => setEnvVars([...envVars, {key: '', value: ''}])
+	const addEnvVar = () => setEnvVars([...envVars, {key: '', value: '', secret: false}])
 	const removeEnvVar = (i: number) => setEnvVars(envVars.filter((_, idx) => idx !== i))
-	const updateEnvVar = (i: number, field: 'key' | 'value', value: string) => {
-		const next = [...envVars]
-		next[i] = {...next[i], [field]: value}
-		setEnvVars(next)
+	const updateEnvVar = (i: number, field: 'key' | 'value' | 'secret', val: string | boolean) => {
+		setEnvVars((prev) => prev.map((e, idx) => (idx === i ? {...e, [field]: val} : e)))
 	}
 
 	const handleSubmit = () => {
@@ -2427,7 +2442,12 @@ function DeployStackForm({
 		if (!composeYaml.trim()) return
 		setNameError('')
 
-		const filteredEnv = envVars.filter((e) => e.key.trim())
+		// Strip UI-only `hasValue`; keep {key, value, secret} for tRPC.
+		// Blank-value secret rows with hasValue=true are kept as-is so the backend
+		// `editStack` can recognise them as "keep existing stored secret".
+		const filteredEnv = envVars
+			.filter((e) => e.key.trim())
+			.map((e) => ({key: e.key, value: e.value, secret: Boolean(e.secret)}))
 		const input = {
 			name: isEditMode ? editStackName : stackName.trim(),
 			composeYaml: composeYaml,
@@ -2521,7 +2541,13 @@ function DeployStackForm({
 					) : (
 						<div className='space-y-2'>
 							{envVars.map((env, i) => (
-								<div key={i} className='flex items-center gap-2'>
+								<div
+									key={i}
+									className={cn(
+										'flex items-center gap-2',
+										env.secret && 'border-l-2 border-amber-500/40 pl-2',
+									)}
+								>
 									<Input
 										value={env.key}
 										onChange={(e) => updateEnvVar(i, 'key', e.target.value)}
@@ -2530,11 +2556,29 @@ function DeployStackForm({
 									/>
 									<span className='text-text-tertiary'>=</span>
 									<Input
+										type={env.secret ? 'password' : 'text'}
 										value={env.value}
 										onChange={(e) => updateEnvVar(i, 'value', e.target.value)}
-										placeholder='value'
+										placeholder={
+											env.secret && env.hasValue && !env.value
+												? '•••••••• (stored, re-enter to change)'
+												: 'value'
+										}
 										className='flex-1 font-mono text-sm'
 									/>
+									<label
+										className='flex shrink-0 cursor-pointer items-center gap-1 px-1 text-xs text-text-secondary'
+										title='Stored encrypted in Redis; never written to .env on disk'
+									>
+										<input
+											type='checkbox'
+											checked={!!env.secret}
+											onChange={(e) => updateEnvVar(i, 'secret', e.target.checked)}
+											className='accent-brand'
+										/>
+										<IconLock size={12} />
+										secret
+									</label>
 									<button
 										type='button'
 										onClick={() => removeEnvVar(i)}

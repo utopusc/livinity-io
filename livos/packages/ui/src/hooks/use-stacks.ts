@@ -58,12 +58,20 @@ export function useStacks() {
 		},
 	})
 
-	const deployStack = (input: {name: string; composeYaml: string; envVars?: Array<{key: string; value: string}>}) => {
+	const deployStack = (input: {
+		name: string
+		composeYaml: string
+		envVars?: Array<{key: string; value: string; secret?: boolean}>
+	}) => {
 		setActionResult(null)
 		deployStackMutation.mutate(input)
 	}
 
-	const editStack = (input: {name: string; composeYaml: string; envVars?: Array<{key: string; value: string}>}) => {
+	const editStack = (input: {
+		name: string
+		composeYaml: string
+		envVars?: Array<{key: string; value: string; secret?: boolean}>
+	}) => {
 		setActionResult(null)
 		editStackMutation.mutate(input)
 	}
