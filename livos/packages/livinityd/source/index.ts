@@ -17,6 +17,7 @@ import Notifications from './modules/notifications/notifications.js'
 import EventBus from './modules/event-bus/event-bus.js'
 import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
+import Scheduler from './modules/scheduler/index.js'
 import AiModule from './modules/ai/index.js'
 import TunnelClient from './modules/platform/tunnel-client.js'
 import {DeviceBridge} from './modules/devices/device-bridge.js'
@@ -109,6 +110,7 @@ export default class Livinityd {
 	eventBus: EventBus
 	dbus: Dbus
 	backups: Backups
+	scheduler: Scheduler
 	ai: AiModule
 	tunnelClient: TunnelClient
 	deviceBridge!: DeviceBridge
@@ -136,6 +138,7 @@ export default class Livinityd {
 		this.eventBus = new EventBus(this)
 		this.dbus = new Dbus(this)
 		this.backups = new Backups(this)
+		this.scheduler = new Scheduler({logger: this.logger})
 		this.ai = new AiModule({livinityd: this})
 		// TunnelClient is initialized in start() after ai.start() creates the Redis connection
 		this.tunnelClient = null as unknown as TunnelClient
@@ -223,6 +226,13 @@ export default class Livinityd {
 		})
 		this.tunnelClient.setDeviceBridge(this.deviceBridge)
 
+		// Start scheduler (non-fatal — falls back to disabled mode if DB unavailable)
+		try {
+			await this.scheduler.start()
+		} catch (error) {
+			this.logger.error('Failed to start scheduler', error)
+		}
+
 		// Start backups last because it depends on files
 		this.backups.start()
 	}
@@ -246,7 +256,7 @@ export default class Livinityd {
 			await this.backups.stop()
 
 			// Stop modules
-			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop()])
+			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop(), this.scheduler.stop()])
 
 			// Close database connection pool
 			await closeDatabase()
