@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: in_progress
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-04-24T17:05:00.000Z"
-last_activity: 2026-04-24 — 12-01-PLAN.md executed (3/3 tasks, 3 created, AUTHZ-01 + AUTHZ-02 partial — full coverage in 12-02)
+status: completed
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-04-24T17:08:52.000Z"
+last_activity: 2026-04-24 — 12-02-PLAN.md executed (4/4 tasks, 3 files modified, AUTHZ-01/02/03 complete)
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 12 -- Device Access Authorization (in progress)
-Plan: 12-02 (next)
-Status: 12-01 complete — authorizeDeviceAccess helper + recordAuthFailure stub audit writer + devices/index.ts barrel created. 4-branch AuthResult contract (authorized / device_not_found / device_not_owned / missing_user). Zero callsites touched — 12-02 wires them in. TypeScript compiles clean; barrel smoke test resolves 5 runtime exports. AUTHZ-01 and AUTHZ-02 partial (full satisfaction in 12-02).
-Last activity: 2026-04-24 — 12-01-PLAN.md executed (3/3 tasks, 3 created, AUTHZ-01 + AUTHZ-02 partial)
+Phase: 12 -- Device Access Authorization (complete)
+Plan: 13-01 (next — Phase 13 Shell Tool Isolation)
+Status: 12-02 complete — authorizeDeviceAccess + recordAuthFailure helpers wired into all three device-routed paths (DeviceBridge.executeOnDevice 3-arity, tRPC ensureOwnership, /internal/device-tool-execute). userId propagation via callbackUrl query string keeps Nexus unmodified. HTTP 403 for device_not_owned/missing_user, 404 for device_not_found. DeviceBridge.redis made public readonly. Phase 11 legacy fallback preserved, Phase 11 OWN-03 markers preserved. AUTHZ-01 + AUTHZ-02 + AUTHZ-03 all satisfied with load-bearing callsites. Zero new TS errors.
+Last activity: 2026-04-24 — 12-02-PLAN.md executed (4/4 tasks, 3 files modified, AUTHZ-01/02/03 complete)
 
-**Progress:** [████████░░] 75%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | 11-device-ownership-foundation P01 | 2min | 3 | 4 |
 | 11-device-ownership-foundation P02 | 3min | 4 | 6 |
 | 12-device-access-authorization P01 | 2min | 3 | 3 |
+| 12-device-access-authorization P02 | 3min | 4 | 3 |
 
 ## Accumulated Context
 
@@ -110,6 +111,16 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **Barrel export at devices/index.ts is the Phase 15 swap point**: Plan 12-02 callsites will import from '../devices' (barrel), letting Phase 15 replace audit-stub.ts with PostgreSQL device_audit_log without touching any callsite
 - **Barrel does NOT re-export router from routes.ts**: server/trpc/index.ts:22 imports it by deep path; rewiring tRPC assembly is out of scope for this plan. source/index.ts:22 deep import of DeviceBridge also preserved — no churn to main entry point
 
+### Phase 12-02 Execution Decisions
+
+- **userId-in-callbackUrl (query string, not POST body)**: Nexus's registered Tool.execute hardcodes the POST body as `{tool, params}` and cannot be extended without modifying Nexus. The callbackUrl is set per-tool-registration by livinityd and fully under our control — appending `?expectedUserId=<userId>` achieves end-to-end userId propagation with zero Nexus changes
+- **DeviceBridge.redis visibility: private -> public readonly**: routes.ts ensureOwnership needs direct access for `authorizeDeviceAccess(bridge.redis, ...)`. `readonly` preserves write encapsulation while exposing the instance pointer for shared cache reads
+- **Gate at executeOnDevice, not at HTTP handler**: single authorization checkpoint inside the bridge means every caller (HTTP /internal endpoint + any future internal invoker) is automatically gated. HTTP handler only maps AuthResult reasons to status codes (403 / 404 / 200)
+- **/internal handler does NOT call recordAuthFailure**: executeOnDevice already audits. Keeping audit-on-gate (not audit-on-HTTP) avoids duplicate rows per rejection
+- **/internal expectedUserId missing = 403 missing_user**: closed-by-default at HTTP boundary; the legacy tRPC fallback for ctx.currentUser=undefined does NOT exist at the REST layer
+- **Ownership runs BEFORE confirmName on devices.remove**: an unauthorized caller never learns the actual device name via error responses (confirmName is a safety-UX gate for the rightful owner)
+- **AUTHZ-03 reconciliation**: requirement literal says "Nexus REST /api/devices/*" but no such endpoints exist in nexus/api.ts. Actual defense-in-depth target is livinityd's /internal/device-tool-execute (the only HTTP endpoint Nexus calls into for device tool execution). AUTHZ-03 enforced there.
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -130,6 +141,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T17:04:34.215Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-04-24T17:08:52.000Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None

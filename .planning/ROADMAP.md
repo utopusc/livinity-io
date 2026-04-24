@@ -109,7 +109,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Milestone Goal:** Prevent unauthorized cross-user device access — a user's terminal/shell session must not be able to reach another user's connected devices, while preserving AI agent auto-approval UX.
 
 - [x] **Phase 11: Device Ownership Foundation** - PostgreSQL user_id column on devices + registration binding + owner-filtered list (completed 2026-04-24)
-- [ ] **Phase 12: Device Access Authorization** - Per-tool ownership middleware across tRPC and Nexus REST with audit-logged failures
+- [x] **Phase 12: Device Access Authorization** - Per-tool ownership middleware across tRPC and Nexus REST with audit-logged failures (completed 2026-04-24)
 - [ ] **Phase 13: Shell Tool Isolation** - Cross-user device ID rejection and safe local-session default in the shell tool
 - [ ] **Phase 14: Device Session Binding** - DeviceBridge WebSocket tied to user JWT with token expiry and logout-triggered disconnect
 - [ ] **Phase 15: Device Audit Log** - Immutable PostgreSQL device_audit_log with append-only DB-level enforcement
@@ -140,10 +140,10 @@ Plans:
   2. A reusable authorizeDeviceAccess(userId, deviceId) helper is the single source of truth and is invoked by the DeviceBridge tool dispatcher, the tRPC devices router, and every Nexus REST /api/devices/* handler (defense in depth — bypassing tRPC via direct REST still enforces ownership)
   3. Authorization failures return a consistent error shape ({ error: "device_not_owned", deviceId, tool }) and append a row to the device_audit_log with success=false and error="device_not_owned"
   4. An admin user calling a device-routed tool for a device they do not personally own is still rejected by the standard authorization check — admin bypass only exists through the explicit Phase 16 admin endpoints
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 12-01-PLAN.md — Extract authorizeDeviceAccess helper + stub audit log to nexus:device:audit:failures Redis list
-- [ ] 12-02-PLAN.md — Apply helper to DeviceBridge.executeOnDevice, tRPC rename/remove/auditLog, and /internal/device-tool-execute callback
+- [x] 12-02-PLAN.md — Apply helper to DeviceBridge.executeOnDevice, tRPC rename/remove/auditLog, and /internal/device-tool-execute callback
 
 ### Phase 13: Shell Tool Isolation
 **Goal**: A user's terminal/shell invocations can never reach another user's device — unknown device IDs are rejected, and omitting a device ID routes safely to the user's local session.
@@ -198,7 +198,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 12. Device Access Authorization | v26.0 | 1/2 | In Progress|  |
+| 12. Device Access Authorization | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 13. Shell Tool Isolation | v26.0 | 0/? | Not started | — |
 | 14. Device Session Binding | v26.0 | 0/? | Not started | — |
 | 15. Device Audit Log | v26.0 | 0/? | Not started | — |

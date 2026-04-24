@@ -13,9 +13,9 @@
 
 ### Device Access Authorization (AUTHZ)
 
-- [ ] **AUTHZ-01**: All device-routed tools (shell, files, screenshot, processes, etc.) verify the caller owns the target device before invoking it
-- [ ] **AUTHZ-02**: Device authorization failures return a clear error and are written to the audit log
-- [ ] **AUTHZ-03**: The Nexus REST /api/devices/* endpoints enforce per-request ownership checks (defense in depth, not only tRPC)
+- [x] **AUTHZ-01**: All device-routed tools (shell, files, screenshot, processes, etc.) verify the caller owns the target device before invoking it
+- [x] **AUTHZ-02**: Device authorization failures return a clear error and are written to the audit log
+- [x] **AUTHZ-03**: The Nexus REST /api/devices/* endpoints enforce per-request ownership checks (defense in depth, not only tRPC)
 
 ### Shell Tool Isolation (SHELL)
 
@@ -80,9 +80,9 @@
 | OWN-01 | Phase 11 | Complete |
 | OWN-02 | Phase 11 | Complete |
 | OWN-03 | Phase 11 | Complete |
-| AUTHZ-01 | Phase 12 | Pending |
-| AUTHZ-02 | Phase 12 | Pending |
-| AUTHZ-03 | Phase 12 | Pending |
+| AUTHZ-01 | Phase 12 | Complete |
+| AUTHZ-02 | Phase 12 | Complete |
+| AUTHZ-03 | Phase 12 | Complete |
 | SHELL-01 | Phase 13 | Pending |
 | SHELL-02 | Phase 13 | Pending |
 | SESS-01 | Phase 14 | Pending |
