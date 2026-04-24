@@ -80,6 +80,8 @@ export interface TunnelQuotaExceeded {
 /** Sent to LivOS when a device agent connects to the relay */
 export interface TunnelDeviceConnected {
   type: 'device_connected';
+  /** Owner user ID (from device JWT) — Phase 11 OWN-03 */
+  userId: string;
   deviceId: string;
   deviceName: string;
   platform: string;
