@@ -9,6 +9,9 @@
 import {randomUUID} from 'node:crypto'
 import type {Redis} from 'ioredis'
 
+import {authorizeDeviceAccess} from './authorize.js'
+import {recordAuthFailure} from './audit-stub.js'
+
 // Tool parameter definitions for each device tool (matches agent/src/tools.ts TOOL_NAMES)
 const DEVICE_TOOL_SCHEMAS: Record<
 	string,
@@ -160,7 +163,9 @@ const AUDIT_MAX_ENTRIES = 1000
 const REQUEST_TIMEOUT_MS = 30_000
 
 export class DeviceBridge {
-	private redis: Redis
+	// Phase 12 AUTHZ-01: `redis` is public readonly so routes.ts ensureOwnership()
+	// can call authorizeDeviceAccess(bridge.redis, ...) without a type escape hatch.
+	public readonly redis: Redis
 	private sendTunnelMessage: (msg: Record<string, unknown>) => void
 	private nexusApiUrl: string
 	private nexusApiKey: string
@@ -230,7 +235,14 @@ export class DeviceBridge {
 						name: proxyName,
 						description,
 						parameters: schema.parameters,
-						callbackUrl: `${this.callbackBaseUrl}/internal/device-tool-execute`,
+						// Phase 12 AUTHZ-01: embed device-owner userId in the callbackUrl
+						// so every proxy-tool invocation from Nexus carries the userId
+						// end-to-end to /internal/device-tool-execute, which forwards it
+						// to executeOnDevice(...) for the authorizeDeviceAccess gate.
+						// Query-string (not POST body) because Nexus's Tool.execute hardcodes
+						// the POST body as `{tool, params}` and cannot be extended without
+						// modifying Nexus.
+						callbackUrl: `${this.callbackBaseUrl}/internal/device-tool-execute?expectedUserId=${encodeURIComponent(userId)}`,
 					}),
 				})
 
@@ -287,6 +299,7 @@ export class DeviceBridge {
 	async executeOnDevice(
 		proxyToolName: string,
 		params: Record<string, unknown>,
+		expectedUserId: string | undefined | null,
 	): Promise<{success: boolean; output: string; error?: string; data?: unknown; images?: Array<{base64: string; mimeType: string}>}> {
 		// Parse device_<deviceId>_<toolName> from the proxy tool name
 		const match = proxyToolName.match(/^device_(.+?)_([a-z_]+)$/)
@@ -295,6 +308,27 @@ export class DeviceBridge {
 		}
 
 		const [, deviceId, toolName] = match
+
+		// Phase 12 AUTHZ-01: verify caller owns the target device BEFORE touching
+		// the tunnel. Redis cache is authoritative (also catches cross-instance
+		// leakage), and this check runs BEFORE the in-memory connectedDevices
+		// lookup so an unauthorized caller never causes a sendTunnelMessage.
+		const auth = await authorizeDeviceAccess(this.redis, expectedUserId, deviceId)
+		if (!auth.authorized) {
+			// Phase 12 AUTHZ-02: record failure (fire-and-forget; never blocks response)
+			void recordAuthFailure(
+				this.redis,
+				{
+					userId: expectedUserId || '',
+					deviceId,
+					action: `device_tool_call:${toolName}`,
+					error: auth.reason || 'unknown',
+				},
+				this.logger,
+			)
+			return {success: false, output: '', error: auth.reason || 'device_not_owned'}
+		}
+
 		const device = this.connectedDevices.get(deviceId)
 		if (!device) {
 			return {success: false, output: '', error: `Device '${deviceId}' is not connected`}
