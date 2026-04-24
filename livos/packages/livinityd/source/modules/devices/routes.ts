@@ -2,7 +2,7 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
-import {authorizeDeviceAccess, recordAuthFailure} from './index.js'
+import {authorizeDeviceAccess, recordDeviceEvent} from './index.js'
 import type {DeviceBridge} from './device-bridge.js'
 
 /**
@@ -28,11 +28,15 @@ async function ensureOwnership(
 	const auth = await authorizeDeviceAccess(bridge.redis, ctx.currentUser.id, deviceId)
 	if (auth.authorized) return
 
-	// Phase 12 AUTHZ-02: record the failure (fire-and-forget).
-	void recordAuthFailure(bridge.redis, {
+	// Phase 15 AUDIT-01/02: PG-backed audit. The `action` string becomes the
+	// toolName ('devices.rename', 'devices.auditLog', etc.). params is empty
+	// because tRPC auth failures happen before we process the mutation body.
+	void recordDeviceEvent(bridge.redis, {
 		userId: ctx.currentUser.id,
 		deviceId,
-		action,
+		toolName: action,
+		params: {},
+		success: false,
 		error: auth.reason || 'unknown',
 	})
 
