@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 02 of 02 (Phase 20 complete; ready for Phase 21 — GitOps Stack Deployment)
-status: completed
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-04-24T23:36:00.137Z"
-last_activity: 2026-04-24 — Plan 20-02 executed in ~12 minutes, 3 atomic commits (33ccb147, 1e3ba887, 1d5439ee); 0 deviations
+current_plan: 01 of 02 (Phase 21 — GitOps Stack Deployment in progress; Plan 21-01 backend complete)
+status: in_progress
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-04-24T23:57:53.015Z"
+last_activity: 2026-04-24 — Plan 21-01 executed in ~6 minutes, 4 atomic commits (fa38cc71, 67db624b, 4f11adf7, 49ea6fdb); 0 deviations
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 10
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -23,16 +23,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v27.0 — Docker Management Upgrade
-**Current focus:** Phase 20 complete (Scheduled Tasks + Backup); Phase 21 (GitOps Stack Deployment) next
+**Current focus:** Phase 21 (GitOps Stack Deployment) — Plan 21-01 backend complete (schema + git module + deployStack + webhook); Plan 21-02 (UI + git_stack_sync handler) next
 
 ## Current Position
 
-Phase: 20 — Scheduled Tasks + Backup (COMPLETE — 2 of 2 plans complete; SCH-01/02/03/04/05 all satisfied)
-Current Plan: 02 of 02 (Phase 20 complete; ready for Phase 21 — GitOps Stack Deployment)
-Status: 20-02 complete (volume backup with S3/SFTP/local destinations shipped — alpine:latest tar streaming via dockerode demuxStream + AutoRemove; @aws-sdk/lib-storage Upload for multipart S3, ssh2-sftp-client put-stream for SFTP; AES-256-GCM credential vault keyed off JWT secret at nexus:scheduler:backup-creds:{jobId} — config_json never stores secrets; 5 admin-only tRPC routes — listJobs query + upsertJob/deleteJob/runNow/testBackupDestination mutations all wired through httpOnlyPaths; Settings > Scheduler UI section with job list, Status badges, 10s live-poll Last Run, Add Backup dialog — volume picker + cron input + destination form with conditional s3/sftp/local sub-fields, Test Destination dry-run probe + Save sharing single buildPayload).
-Last activity: 2026-04-24 — Plan 20-02 executed in ~12 minutes, 3 atomic commits (33ccb147, 1e3ba887, 1d5439ee); 0 deviations
+Phase: 21 — GitOps Stack Deployment (IN PROGRESS — 1 of 2 plans complete; GIT-01/02/03 satisfied)
+Current Plan: 01 of 02 (Phase 21 — GitOps Stack Deployment in progress; Plan 21-01 backend complete)
+Status: 21-01 complete (PostgreSQL git_credentials + stacks tables — git-backed only, YAML stacks remain filesystem-only; AES-256-GCM-with-JWT-key reused from 17-01 for encrypted credential storage; simple-git@^3.27.0 blobless clone --filter=blob:none --depth=1 --single-branch with ephemeral GIT_ASKPASS shell script for HTTPS auth + GIT_SSH_COMMAND temp keyfile for SSH auth, both cleaned up in finally{}; deployStack extended with optional git input mutually exclusive with composeYaml — git path generates 64-hex webhook_secret, persists stacks PG row, copies compose, runs existing compose-up code; new helpers getGitStack/listGitStacks/updateGitStackSyncSha; removeStack cleans up /opt/livos/data/git/<name> + DELETE FROM stacks; 3 admin-only tRPC routes for git_credentials CRUD — all wired through httpOnlyPaths; POST /api/webhooks/git/:stackName HMAC-SHA256-verified via crypto.timingSafeEqual length-checked-first, responds 202 then redeploys in background to stay under GitHub's 10s webhook timeout — registered before /trpc handler and catch-all routes).
+Last activity: 2026-04-24 — Plan 21-01 executed in ~6 minutes, 4 atomic commits (fa38cc71, 67db624b, 4f11adf7, 49ea6fdb); 0 deviations
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 90%
 
 ## v27.0 Phase Structure
 
@@ -65,6 +65,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 | Phase 20 P02 | 12min | 3 tasks | 10 files |
+| Phase 21-gitops-stack-deployment P01 | 6min | 4 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,19 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 21-01 Decisions (2026-04-24)
+
+- PG row only for git-backed stacks. YAML-only stacks stay filesystem-only at `/opt/livos/data/stacks/<name>/docker-compose.yml` — zero migration risk on upgrade, zero DB load for users who never use GitOps. The new `stacks` table is additive metadata; YAML deploy path is byte-for-byte unchanged.
+- Webhook is unauthenticated at the cookie/JWT layer — security model IS the per-stack 32-byte (64-hex) HMAC secret returned in `deployStack` response. Verification: `crypto.createHmac('sha256', stack.webhookSecret).update(rawBody).digest('hex')` then length-check + `crypto.timingSafeEqual` (length-check first to avoid different-length crash).
+- Webhook responds 202 immediately and runs the redeploy in a fire-and-forget background Promise — image pulls + compose up can take 10-60s and would exceed GitHub's 10s webhook timeout, triggering retries. Background errors logged-only (never thrown back to GitHub).
+- Blobless clone (`--filter=blob:none --depth=1 --single-branch --branch <X>`) over isomorphic-git's full clone. simple-git wraps the system git binary which supports partial clone cleanly; isomorphic-git is already in deps but doesn't handle the partial-clone protocol well. Minimal disk + bandwidth for sample stacks; objects fetched on-demand if rev-parse needs older commits.
+- Auth credentials live in tmpdir() temp files cleaned up in `finally{}`. HTTPS uses a `GIT_ASKPASS` shell script (mode 0o700) that echos username/PAT keyed on the prompt arg `$1`; SSH uses a temp keyfile (mode 0o600) referenced via `GIT_SSH_COMMAND="ssh -i <path> -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes"`. No plaintext credential persists to disk after the operation completes.
+- AES-256-GCM crypto for `git_credentials.encrypted_data` is identical to `stack-secrets.ts` (Phase 17): SHA-256 of `/opt/livos/data/secrets/jwt` -> 32-byte key, output is `base64(iv12 || tag16 || ciphertext)`. `decryptCredentialData` is internal-only — `encrypted_data` NEVER returned by list/get/CRUD APIs.
+- `git_credentials.user_id` is `UUID REFERENCES users(id) ON DELETE SET NULL` — admin user deletion shouldn't orphan-cascade away credentials that other admins might still need. `UNIQUE(user_id, name)` prevents duplicate names per user (and per global scope when user_id is NULL).
+- 3 new tRPC routes (`docker.listGitCredentials`, `docker.createGitCredential`, `docker.deleteGitCredential`) added to `httpOnlyPaths` to avoid the documented WS-mutation hang issue. Pattern: every new admin-only credential/stack mutation goes through HTTP, never WebSocket.
+- Pre-existing typecheck noise in `ai/routes.ts` (`ctx.livinityd is possibly undefined`) and `server/index.ts` (lines 66/167/634/772/1570 — asyncHandler / Apps types — pre-date this plan) noted as out-of-scope per scope-boundary rule. None of the Phase 21 touched files (git-credentials.ts, git-deploy.ts, the new code in stacks.ts/routes.ts/server index.ts) introduce new errors. livinityd runs via tsx so build is not gated on tsc.
+- Pattern carried forward to Plan 21-02: `listGitStacks()` + `syncRepo()` + `copyComposeToStackDir()` + `controlStack('pull-and-up')` is the exact 4-step recipe Plan 20's `git_stack_sync` placeholder needs to become real. Plan 21-02 wires this into `BUILT_IN_HANDLERS['git-stack-sync']`.
 
 ### Plan 20-02 Decisions (2026-04-24)
 
@@ -190,6 +204,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T23:35:22.463Z
-Stopped at: Completed 20-02-PLAN.md
+Last session: 2026-04-24T23:57:53.010Z
+Stopped at: Completed 21-01-PLAN.md
 Resume with: `/gsd:execute-plan 20-02` to ship the backup module (volumeBackupHandler + S3/SFTP/local destinations + admin tRPC routes + Settings UI). Plan 20-01 satisfied SCH-01/02; Plan 20-02 will satisfy SCH-03/04/05 by registering the volume-backup handler into the existing BUILT_IN_HANDLERS map.

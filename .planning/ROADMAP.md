@@ -205,7 +205,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. Git stacks auto-sync every N minutes via the Phase 20 scheduler (`git-stack-sync` job iterates configured git stacks and calls `git pull` + redeploy if HEAD changed)
 **Plans**: 2 plans
 **Plan files**:
-- [ ] 21-01-PLAN.md — Backend: schema (stacks + git_credentials) + git-credentials AES-256-GCM module + git-deploy simple-git clone/pull + deployStack git path + HMAC webhook (GIT-01, GIT-02, GIT-03)
+- [x] 21-01-PLAN.md — Backend: schema (stacks + git_credentials) + git-credentials AES-256-GCM module + git-deploy simple-git clone/pull + deployStack git path + HMAC webhook (GIT-01, GIT-02, GIT-03)
 - [ ] 21-02-PLAN.md — UI: Deploy from Git tab + credential picker + webhook URL display + scheduler git-stack-sync handler implementation (GIT-04, GIT-05)
 
 ### Phase 22: Multi-host Docker Management
@@ -244,7 +244,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 20. Scheduled Tasks + Backup | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |
+| 21. GitOps Stack Deployment | v27.0 | 1/2 | In Progress|  |
 | 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
 
