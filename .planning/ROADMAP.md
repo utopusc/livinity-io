@@ -197,8 +197,8 @@ Plans:
   4. Every admin list-all query and every force-disconnect mutation writes a row to device_audit_log with tool_name="admin.list_all" or "admin.force_disconnect", attributing the action to the admin's user_id and naming the affected device_id
 **Plans:** 0/2 plans complete
 Plans:
-- [ ] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
-- [ ] 14-02-PLAN.md — Logout pub/sub channel closes bridges with code 4403 (SESS-03)
+- [ ] 16-01-PLAN.md — Admin backend: devicesAdmin tRPC (adminListAll + adminForceDisconnect) + admin_force_disconnect tunnel verb + platform/web /api/admin/devices REST (ADMIN-01, ADMIN-02)
+- [ ] 16-02-PLAN.md — Admin UI: Settings > Devices cross-user table + Force Disconnect button (ADMIN-01, ADMIN-02)
 
 ## Progress
 
