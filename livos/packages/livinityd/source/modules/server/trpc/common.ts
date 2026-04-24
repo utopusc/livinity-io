@@ -86,6 +86,9 @@ export const httpOnlyPaths = [
 	'devices.remove',
 	// Device audit log (Phase 15 AUDIT-02) -- admin-only query; HTTP so failures surface immediately
 	'audit.listDeviceEvents',
+	// Device admin overrides (Phase 16 ADMIN-01/02) -- admin-only; HTTP so failures surface immediately
+	'devicesAdmin.adminListAll',
+	'devicesAdmin.adminForceDisconnect',
 	// Computer use session control -- use HTTP for reliability
 	'ai.pauseComputerUse',
 	'ai.resumeComputerUse',
