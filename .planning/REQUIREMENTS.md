@@ -1,44 +1,62 @@
-# Requirements: Livinity v25.0 — Memory & WhatsApp Integration
+# Requirements: Livinity v26.0 — Device Security & User Isolation
 
-**Defined:** 2026-04-02
+**Defined:** 2026-04-24
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v25.0 Requirements
+## v26.0 Requirements
 
-### WhatsApp Channel
+### Device Ownership (OWN)
 
-- [x] **WA-01**: User can connect WhatsApp by scanning QR code in Settings > Integrations
-- [x] **WA-02**: WhatsApp connection persists across server restarts (Redis auth state)
-- [x] **WA-03**: User can send messages to AI via WhatsApp and receive responses
-- [x] **WA-04**: WhatsApp channel uses ChannelProvider pattern (like Telegram/Discord)
-- [x] **WA-05**: Rate limiting prevents WhatsApp account ban (10 msg/min, randomized delays)
-- [x] **WA-06**: Settings UI shows WhatsApp connection status and disconnect button
+- [ ] **OWN-01**: Every device record in PostgreSQL has a non-null user_id linking it to its owner
+- [ ] **OWN-02**: Device registration binds the new device to the authenticated user creating it (no orphan devices)
+- [ ] **OWN-03**: Device list endpoint returns only devices owned by the calling user (no cross-user device visibility)
 
-### Cross-Session Memory
+### Device Access Authorization (AUTHZ)
 
-- [x] **MEM-01**: AI can search past conversations semantically ("what did we discuss about Docker?")
-- [x] **MEM-02**: Conversation turns persisted to SQLite FTS5 for full-text search
-- [x] **MEM-03**: conversation_search tool registered in ToolRegistry for AI use
-- [x] **MEM-04**: Legacy daemon.ts WhatsApp ad-hoc code consolidated into ChannelManager
+- [ ] **AUTHZ-01**: All device-routed tools (shell, files, screenshot, processes, etc.) verify the caller owns the target device before invoking it
+- [ ] **AUTHZ-02**: Device authorization failures return a clear error and are written to the audit log
+- [ ] **AUTHZ-03**: The Nexus REST /api/devices/* endpoints enforce per-request ownership checks (defense in depth, not only tRPC)
 
-### Memory Management UI
+### Shell Tool Isolation (SHELL)
 
-- [x] **UI-01**: Settings > Memory page showing stored memories with search
-- [x] **UI-02**: User can delete individual memories
-- [x] **UI-03**: User can view conversation history from all channels
+- [ ] **SHELL-01**: User's terminal shell tool cannot specify a device ID outside the user's owned set — cross-user device IDs are rejected
+- [ ] **SHELL-02**: When no device is specified, the shell tool defaults to the user's local session (never accidentally routes to another user's device)
 
-### Identity
+### Device Session Binding (SESS)
 
-- [x] **ID-01**: Unified userId mapping across channels (Telegram, WhatsApp, Web UI, Discord)
+- [ ] **SESS-01**: Each DeviceBridge WebSocket connection is bound to a specific user session JWT at handshake
+- [ ] **SESS-02**: Device session tokens expire and require refresh; expired tokens terminate the bridge connection
+- [ ] **SESS-03**: When a user logs out or their session is revoked, all their active device bridges disconnect
 
-## v26.0 Requirements (Deferred)
+### Audit Log (AUDIT)
 
-### Advanced Memory
+- [ ] **AUDIT-01**: Every device tool invocation (shell, files, etc.) appends an immutable row to the device_audit_log PostgreSQL table with user_id, device_id, tool, params digest, timestamp, and success/error
+- [ ] **AUDIT-02**: Audit log entries cannot be modified or deleted through any application API (append-only enforcement at DB level)
+
+### Admin Override (ADMIN)
+
+- [ ] **ADMIN-01**: Admin users can list all devices across all users in the Admin panel (normal users cannot)
+- [ ] **ADMIN-02**: Admin users can emergency-disconnect any active device bridge, forcing the bridge to terminate
+
+## v27.0 Requirements (Deferred)
+
+### Smart Approval
+
+- **APPROVE-01**: LLM pre-assessment of dangerous commands (APPROVE / DENY / ESCALATE) before escalating to human
+- **APPROVE-02**: Session-level approved-command cache to avoid re-asking for the same command
+
+### Per-Tool Fine-Grained Permissions
+
+- **PERM-01**: Per-device permission matrix (screenshot / files / shell as separate toggles)
+- **PERM-02**: Per-tool permission request UI in Settings
+- **PERM-03**: Device sharing between users (user A grants user B access to a specific device)
+
+### Advanced Memory (from v25.0)
 
 - **MEM-05**: AI can generate conversation summaries and store as high-level memories
 - **MEM-06**: Memory importance scoring with user feedback (thumbs up/down)
 
-### WhatsApp Advanced
+### WhatsApp Advanced (from v25.0)
 
 - **WA-07**: WhatsApp group message support with mention activation
 - **WA-08**: Pairing code fallback (alternative to QR code)
@@ -48,36 +66,37 @@
 
 | Feature | Reason |
 |---------|--------|
-| PostgreSQL conversation backup | User explicitly excluded — Redis-only for now |
-| WhatsApp Business API | Defeats self-hosting philosophy, requires Meta approval |
-| Vector database (Qdrant/Pinecone) | SQLite FTS5 + existing Kimi embeddings sufficient |
-| End-to-end encryption for memory | Self-hosted, local SQLite is trusted storage |
-| Multi-account WhatsApp | Single account per LivOS instance |
+| Smart approval / LLM pre-assessment | Explicitly deferred to v27.0 — current auto-approve UX must be preserved |
+| Per-tool permission granularity | Deferred to v27.0 — milestone focus is cross-user isolation, not in-user tool gating |
+| Device sharing / collaboration | Deferred to v28.0 — requires v26.0 isolation first |
+| Change to AI agent auto-approval behavior | User explicitly opted out — auto-approve stays as-is |
+| PostgreSQL conversation backup | User explicitly excluded — Redis-only for now (carried from v25.0) |
+| WhatsApp Business API | Defeats self-hosting philosophy, requires Meta approval (carried) |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WA-01 | Phase 7 | Complete |
-| WA-02 | Phase 6 | Complete |
-| WA-03 | Phase 8 | Complete |
-| WA-04 | Phase 6 | Complete |
-| WA-05 | Phase 8 | Complete |
-| WA-06 | Phase 7 | Complete |
-| MEM-01 | Phase 9 | Complete |
-| MEM-02 | Phase 9 | Complete |
-| MEM-03 | Phase 9 | Complete |
-| MEM-04 | Phase 8 | Complete |
-| UI-01 | Phase 10 | Complete |
-| UI-02 | Phase 10 | Complete |
-| UI-03 | Phase 10 | Complete |
-| ID-01 | Phase 10 | Complete |
+| OWN-01 | TBD | Pending |
+| OWN-02 | TBD | Pending |
+| OWN-03 | TBD | Pending |
+| AUTHZ-01 | TBD | Pending |
+| AUTHZ-02 | TBD | Pending |
+| AUTHZ-03 | TBD | Pending |
+| SHELL-01 | TBD | Pending |
+| SHELL-02 | TBD | Pending |
+| SESS-01 | TBD | Pending |
+| SESS-02 | TBD | Pending |
+| SESS-03 | TBD | Pending |
+| AUDIT-01 | TBD | Pending |
+| AUDIT-02 | TBD | Pending |
+| ADMIN-01 | TBD | Pending |
+| ADMIN-02 | TBD | Pending |
 
 **Coverage:**
-- v25.0 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0
+- v26.0 requirements: 15 total
+- Mapped to phases: 0 (pending roadmap)
+- Unmapped: 15
 
 ---
-*Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after roadmap creation (all 14 requirements mapped to phases 6-10)*
+*Requirements defined: 2026-04-24*
