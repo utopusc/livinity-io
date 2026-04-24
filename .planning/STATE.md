@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: "02 of 02 (Phase 19 complete)"
-status: completed
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-04-24T22:57:19.392Z"
-last_activity: 2026-04-24 — Plan 19-02 executed in 7 minutes; vuln-scan.ts + Trivy + Redis cache + ScanResultPanel UI; 2 atomic commits (9aed1992, 8b667d60); 0 deviations; CGV-02/03/04 satisfied
+current_plan: "01 of 02 (Phase 20 in progress)"
+status: in_progress
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-04-24T23:19:00.984Z"
+last_activity: 2026-04-24 — Plan 20-01 executed in 5 minutes; scheduler module (types/store/jobs/index) + scheduled_jobs PG table + node-cron@3 wired into Livinityd boot; 3 atomic commits (0ac62751, d54b9e3c, 9f3301ad); 0 deviations; SCH-01/02 satisfied
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_plans: 8
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 19 — Compose Graph + Vuln Scan (COMPLETE — 2 of 2 plans complete; CGV-01/02/03/04 all satisfied)
-Current Plan: 02 of 02 (Phase 19 complete)
-Status: 19-02 complete (vuln-scan.ts + scanImage/getCachedScan tRPC routes + Redis-cached Trivy backend; ScanResultPanel UI with severity badges + CVE table; Tabs(Layer history / Vulnerabilities) on expanded image row; httpOnlyPaths updated; CGV-02/03/04 satisfied; pnpm --filter ui build passes).
-Last activity: 2026-04-24 — Plan 19-02 executed in 7 minutes, 2 atomic commits (9aed1992, 8b667d60); 0 deviations
+Phase: 20 — Scheduled Tasks + Backup (IN PROGRESS — 1 of 2 plans complete; SCH-01/02 satisfied; SCH-03/04/05 remain for Plan 20-02)
+Current Plan: 01 of 02 (Phase 20 in progress)
+Status: 20-01 complete (scheduler module shipped — types/store/jobs/index; scheduled_jobs PG table with 13 cols + 2 indexes; node-cron@3.0.3 + @types/node-cron@3.0.11 added; 3 default jobs seeded on first boot — image-prune Sun 3am ENABLED, container-update-check daily 6am ENABLED, git-stack-sync hourly DISABLED placeholder; Scheduler class with in-flight Set mutex, cron.validate guard, fresh-row re-fetch in runJob; wired into Livinityd lifecycle non-fatally; image-prune wraps existing pruneImages(); container-update-check uses docker buildx imagetools inspect with manifest-inspect fallback for digest comparison).
+Last activity: 2026-04-24 — Plan 20-01 executed in 5 minutes, 3 atomic commits (0ac62751, d54b9e3c, 9f3301ad); 0 deviations
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 88%
 
 ## v27.0 Phase Structure
 
@@ -58,6 +58,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | 18-02 | 6 min | 2 (+1 deviation) | 3 | 2026-04-24 |
 | 19-01 | 5 min | 2 | 4 | 2026-04-24 |
 | 19-02 | 7 min | 2 | 6 | 2026-04-24 |
+| 20-01 | 5 min | 3 | 8 | 2026-04-24 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
@@ -108,6 +109,18 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 20-01 Decisions (2026-04-24)
+
+- Picked node-cron 3.x over 4.x — 3.x is the long-stable line shipping ESM-compatible CommonJS for our `"type": "module"` package; 4.x has breaking API changes around schedule() options. Single dep choice — no Bull/Agenda — node-cron is sufficient for the 3-handler maintenance workload and adds zero infra (no Redis queue).
+- Mutex via in-flight `Set<jobId>` — concurrent firings of the same job are dropped+logged rather than queued. Matches the "idempotent maintenance" nature of these jobs (a 2nd image-prune mid-run is wasted work, not lost work). Logged-and-dropped is the simpler, more predictable contract than a queue.
+- container-update-check shells out to `docker buildx imagetools inspect <ref> --format '{{json .Manifest}}'` (preferred — multi-arch index aware, no hand-rolled registry HTTP auth) with `docker manifest inspect --verbose` fallback for environments without buildx (older Docker). Per-container failures degrade gracefully: the entry gets `updateAvailable: null` + `error` string, the job overall stays `'success'`. One unreachable registry must not blank-out the whole report. 15s timeout per registry call. Digest-pinned refs (`sha256:…`) and `<none>` tags get `pinned: true` and skip remote lookup.
+- git-stack-sync ships as a `status: 'skipped'` placeholder so Phase 21 can simply replace `BUILT_IN_HANDLERS['git-stack-sync']` without DB migration. Default row is `enabled=false` so it doesn't spam logs hourly until Phase 21 turns it on. Pattern: handler registry decoupled from runner — Plan 20-02 backup handler plugs into `BUILT_IN_HANDLERS['volume-backup']` without touching `scheduler/index.ts`.
+- BUILT_IN_HANDLERS['volume-backup'] throws explicitly — a user who creates a volume-backup job in the UI before Plan 20-02 ships gets a clear error instead of a silent no-op.
+- Scheduler.start() failures are caught and logged (non-fatal). Livinityd boots with scheduler-disabled behavior rather than crashing if PG is down — matches the existing `initDatabase()` fallback pattern. `registerTask()` validates cron expressions via `cron.validate()` before scheduling — invalid schedules log + skip rather than throw.
+- Re-fetch fresh row inside `runJob()` before invoking handler — config or enabled flag may have changed since cron registration; if `!enabled` at fire time, the run is silently dropped.
+- Idempotent default seed via `INSERT … ON CONFLICT (name) DO NOTHING` — manually-disabled defaults survive restarts. Pattern: PG row is source of truth; node-cron tasks are stateless registrations rebuilt on every `Scheduler.start()`. `Scheduler.runNow()` and `Scheduler.reload()` are already public for Plan 20-02 admin tRPC routes.
+- Pre-existing pnpm UI postinstall fail on Windows (mkdir -p / cp -r in cmd) is documented in STATE; pnpm install still resolved node-cron correctly. Pre-existing 324 livinityd typecheck errors are unrelated to scheduler files (zero new errors from this plan); per scope-boundary rule, livinityd runs via tsx and gates on UI build, not livinityd tsc.
 
 ### Plan 19-01 Decisions (2026-04-24)
 
@@ -161,6 +174,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T22:57:19.388Z
-Stopped at: Completed 19-02-PLAN.md
-Resume with: `/gsd:plan-phase 20` to plan Phase 20 (Scheduled Tasks + Backup) — Phase 19 fully complete (CGV-01/02/03/04 all satisfied)
+Last session: 2026-04-24T23:18:48.729Z
+Stopped at: Completed 20-01-PLAN.md
+Resume with: `/gsd:execute-plan 20-02` to ship the backup module (volumeBackupHandler + S3/SFTP/local destinations + admin tRPC routes + Settings UI). Plan 20-01 satisfied SCH-01/02; Plan 20-02 will satisfy SCH-03/04/05 by registering the volume-backup handler into the existing BUILT_IN_HANDLERS map.

@@ -29,8 +29,8 @@
 
 ### Scheduled Tasks & Backup (SCH) — Phase 20
 
-- [ ] **SCH-01**: Scheduler module uses node-cron with persistent job definitions in PostgreSQL
-- [ ] **SCH-02**: Built-in scheduled tasks: image prune (weekly), container update check (daily), git stack sync (hourly)
+- [x] **SCH-01**: Scheduler module uses node-cron with persistent job definitions in PostgreSQL
+- [x] **SCH-02**: Built-in scheduled tasks: image prune (weekly), container update check (daily), git stack sync (hourly)
 - [ ] **SCH-03**: Container/volume backup scheduler with destinations: S3-compatible, SFTP, local filesystem
 - [ ] **SCH-04**: Backups of volumes use ephemeral `alpine tar czf - /data` helper container piped to destination
 - [ ] **SCH-05**: Settings UI has a Scheduler section for enabling/disabling tasks and configuring destinations
@@ -101,8 +101,8 @@
 | CGV-02 | Phase 19 | Complete |
 | CGV-03 | Phase 19 | Complete |
 | CGV-04 | Phase 19 | Complete |
-| SCH-01 | Phase 20 | Pending |
-| SCH-02 | Phase 20 | Pending |
+| SCH-01 | Phase 20 | Complete |
+| SCH-02 | Phase 20 | Complete |
 | SCH-03 | Phase 20 | Pending |
 | SCH-04 | Phase 20 | Pending |
 | SCH-05 | Phase 20 | Pending |

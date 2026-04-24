@@ -186,7 +186,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. Volume backup uses an ephemeral `alpine:latest` helper container to tar the volume contents and stream to the destination without mounting the volume on the host
 **Plans**: 2 plans
 **Plan files**:
-- [ ] 20-01-PLAN.md — Scheduler module + built-in maintenance tasks (SCH-01, SCH-02): scheduled_jobs PG table + node-cron runner + image-prune/container-update-check/git-stack-sync handlers
+- [x] 20-01-PLAN.md — Scheduler module + built-in maintenance tasks (SCH-01, SCH-02): scheduled_jobs PG table + node-cron runner + image-prune/container-update-check/git-stack-sync handlers
 - [ ] 20-02-PLAN.md — Backup module + destinations + Settings UI (SCH-03, SCH-04, SCH-05): alpine-tar streaming + S3/SFTP/local uploaders + AES-256-GCM creds vault + Settings > Scheduler section
 
 ### Phase 21: GitOps Stack Deployment
@@ -236,7 +236,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |
+| 20. Scheduled Tasks + Backup | v27.0 | 1/2 | In Progress|  |
 | 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |
 | 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
