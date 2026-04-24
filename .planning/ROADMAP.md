@@ -121,10 +121,14 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Milestone Goal:** Elevate Livinity's Docker management to best-in-class self-hosted Docker platform with Dockhand-inspired features (file browser, GitOps stacks, vulnerability scanning, compose graph viewer, multi-host) plus AI-powered diagnostics as Livinity's unique moat.
 
-- [x] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools (completed 2026-04-24)
-- [x] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming (completed 2026-04-24)
-- [x] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache (completed 2026-04-24)
-- [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local (completed 2026-04-24)
+- [x] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools
+ (completed 2026-04-24)
+- [x] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming
+ (completed 2026-04-24)
+- [x] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache
+ (completed 2026-04-24)
+- [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
+ (completed 2026-04-24)
 - [ ] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
 - [ ] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
 - [ ] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
@@ -200,6 +204,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. Stack create/edit UI has a "Deploy from Git" tab with fields: git URL, branch, credential selector, compose-path (default `docker-compose.yml`), webhook secret (auto-generated, copyable)
   5. Git stacks auto-sync every N minutes via the Phase 20 scheduler (`git-stack-sync` job iterates configured git stacks and calls `git pull` + redeploy if HEAD changed)
 **Plans**: 2 plans
+**Plan files**:
+- [ ] 21-01-PLAN.md — Backend: schema (stacks + git_credentials) + git-credentials AES-256-GCM module + git-deploy simple-git clone/pull + deployStack git path + HMAC webhook (GIT-01, GIT-02, GIT-03)
+- [ ] 21-02-PLAN.md — UI: Deploy from Git tab + credential picker + webhook URL display + scheduler git-stack-sync handler implementation (GIT-04, GIT-05)
 
 ### Phase 22: Multi-host Docker Management
 **Goal**: Manage multiple Docker hosts from one Livinity instance — local socket, remote TCP/TLS, or outbound agent for NAT-traversal — with environment selector in UI.
