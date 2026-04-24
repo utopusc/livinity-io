@@ -136,10 +136,33 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - ✓ Mobile: safe area CSS (tailwindcss-safe-area, viewport-fit=cover) — v23.0
 - ✓ Mobile: install prompt banner, WS reconnect on resume, keyboard-safe input — v23.0
 
-## Current Milestone: None (v26.0 shipped 2026-04-24)
+## Current Milestone: v27.0 Docker Management Upgrade
 
-v26.0 Device Security & User Isolation complete. See `Validated (v26.0)` below.
-Ready for next milestone — invoke `/gsd-new-milestone` to start v27.0.
+**Goal:** Elevate Livinity's Docker management from "Portainer-level" to best-in-class self-hosted Docker platform — add Dockhand-inspired features (container file browser, GitOps stacks, vulnerability scanning, compose graph viewer, multi-host) while leveraging Livinity's unique AI-native advantage to build capabilities no other Docker manager can replicate.
+
+**Target features:**
+- Real-time container log streaming + stack secrets + redeploy button + extended AI docker tools (Phase 17 quick wins)
+- Container file browser via Docker exec + tar streaming (Phase 18)
+- Compose graph viewer (React Flow) + Trivy image vulnerability scanning (Phase 19)
+- Scheduled maintenance tasks (image prune, update check) + container/volume backup scheduler (Phase 20)
+- GitOps stack deployment (git URL, webhooks, auto-sync) — Livinity hard moat (Phase 21)
+- Multi-host Docker management (environments + Hawser-style outbound agent) (Phase 22)
+- AI-powered Docker diagnostics (Kimi log analyzer, compose generator, OOM predictor) — Livinity-only capability (Phase 23)
+
+### Active
+
+- [ ] Real-time container log streaming (WebSocket replaces 5s snapshot polling)
+- [ ] Stack secrets as shell env vars (never written to .env disk)
+- [ ] Redeploy-with-pull UI action for stacks
+- [ ] Extended AI docker tools covering stacks, image operations, create
+- [ ] Container file browser (list/upload/download/edit/delete/chmod)
+- [ ] Compose graph viewer showing service dependencies
+- [ ] Image vulnerability scanning (Trivy) with SHA256-cached results
+- [ ] Scheduled maintenance tasks (image prune, update check, git sync)
+- [ ] Container/volume backup scheduler with S3/SFTP destinations
+- [ ] GitOps stack deployment with webhooks and auto-sync
+- [ ] Multi-host Docker management with outbound agent for NAT-traversal
+- [ ] AI-powered Docker diagnostics leveraging Kimi for logs, compose, OOM
 
 ### Validated (v26.0 — Device Security & User Isolation)
 
@@ -263,4 +286,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 after v26.0 milestone started (Device Security & User Isolation)*
+*Last updated: 2026-04-24 after v27.0 milestone started (Docker Management Upgrade)*

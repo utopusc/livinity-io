@@ -1,110 +1,140 @@
-# Requirements: Livinity v26.0 — Device Security & User Isolation
+# Requirements: Livinity v27.0 — Docker Management Upgrade
 
 **Defined:** 2026-04-24
 **Core Value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 
-## v26.0 Requirements
+## v27.0 Requirements
 
-### Device Ownership (OWN)
+### Quick Wins (QW) — Phase 17
 
-- [x] **OWN-01**: Every device record in PostgreSQL has a non-null user_id linking it to its owner
-- [x] **OWN-02**: Device registration binds the new device to the authenticated user creating it (no orphan devices)
-- [x] **OWN-03**: Device list endpoint returns only devices owned by the calling user (no cross-user device visibility)
+- [ ] **QW-01**: Container logs stream in real time via WebSocket with ANSI color support (replaces 5s snapshot polling)
+- [ ] **QW-02**: Stack secrets flagged `secret: true` in UI are injected as shell env vars at `docker compose up`, never written to `.env` disk
+- [ ] **QW-03**: Stack detail UI has a "Redeploy (pull latest)" action that runs `docker compose pull` + `docker compose up -d`
+- [ ] **QW-04**: AI `docker_manage` tool supports stack operations (deploy, control, remove), image pull, and container create beyond the current start/stop/restart/inspect/logs
 
-### Device Access Authorization (AUTHZ)
+### Container File Browser (CFB) — Phase 18
 
-- [x] **AUTHZ-01**: All device-routed tools (shell, files, screenshot, processes, etc.) verify the caller owns the target device before invoking it
-- [x] **AUTHZ-02**: Device authorization failures return a clear error and are written to the audit log
-- [x] **AUTHZ-03**: The Nexus REST /api/devices/* endpoints enforce per-request ownership checks (defense in depth, not only tRPC)
+- [ ] **CFB-01**: User can browse a container's filesystem (list directories, navigate with breadcrumbs) via Docker exec + `ls` over dockerode
+- [ ] **CFB-02**: User can download a file from a container to their browser using `container.getArchive({path})` (tar stream)
+- [ ] **CFB-03**: User can upload a file to a container using `container.putArchive(tarStream, {path})`
+- [ ] **CFB-04**: User can edit small text files (< 1MB) inline in the browser and save back to the container
+- [ ] **CFB-05**: User can delete files and directories from the container
 
-### Shell Tool Isolation (SHELL)
+### Compose Graph & Vulnerability Scanning (CGV) — Phase 19
 
-- [x] **SHELL-01**: User's terminal shell tool cannot specify a device ID outside the user's owned set — cross-user device IDs are rejected
-- [x] **SHELL-02**: When no device is specified, the shell tool defaults to the user's local session (never accidentally routes to another user's device)
+- [ ] **CGV-01**: Stack detail panel has a "View Graph" tab that renders services with React Flow, showing `depends_on`, `networks`, and port mappings
+- [ ] **CGV-02**: Image list has a "Scan" action that runs Trivy inside a Docker container and shows CVE severity badges (CRITICAL/HIGH/MEDIUM/LOW)
+- [ ] **CGV-03**: Scan results cached in Redis keyed by image SHA256 (tags are mutable; SHA256 is not)
+- [ ] **CGV-04**: Vulnerability scan on-demand (not automatic) — user clicks Scan button per image
 
-### Device Session Binding (SESS)
+### Scheduled Tasks & Backup (SCH) — Phase 20
 
-- [x] **SESS-01**: Each DeviceBridge WebSocket connection is bound to a specific user session JWT at handshake
-- [x] **SESS-02**: Device session tokens expire and require refresh; expired tokens terminate the bridge connection
-- [x] **SESS-03**: When a user logs out or their session is revoked, all their active device bridges disconnect
+- [ ] **SCH-01**: Scheduler module uses node-cron with persistent job definitions in PostgreSQL
+- [ ] **SCH-02**: Built-in scheduled tasks: image prune (weekly), container update check (daily), git stack sync (hourly)
+- [ ] **SCH-03**: Container/volume backup scheduler with destinations: S3-compatible, SFTP, local filesystem
+- [ ] **SCH-04**: Backups of volumes use ephemeral `alpine tar czf - /data` helper container piped to destination
+- [ ] **SCH-05**: Settings UI has a Scheduler section for enabling/disabling tasks and configuring destinations
 
-### Audit Log (AUDIT)
+### GitOps Stack Deployment (GIT) — Phase 21
 
-- [x] **AUDIT-01**: Every device tool invocation (shell, files, etc.) appends an immutable row to the device_audit_log PostgreSQL table with user_id, device_id, tool, params digest, timestamp, and success/error
-- [x] **AUDIT-02**: Audit log entries cannot be modified or deleted through any application API (append-only enforcement at DB level)
+- [ ] **GIT-01**: Stack schema extended with `git_url`, `git_branch`, `git_credential_id` (encrypted at rest using JWT_SECRET as AES-256 key)
+- [ ] **GIT-02**: `deployStack` with git URL clones with `--filter=blob:none` (blobless), copies compose to stacks dir, deploys
+- [ ] **GIT-03**: Webhook endpoint `POST /api/webhooks/git/:stackName` verifies HMAC signature and triggers redeploy
+- [ ] **GIT-04**: Stack UI has "Deploy from Git" tab alongside "Deploy from YAML"
+- [ ] **GIT-05**: Configured git stacks auto-sync on scheduled interval (from Phase 20 scheduler)
 
-### Admin Override (ADMIN)
+### Multi-Host Docker Management (MH) — Phase 22
 
-- [x] **ADMIN-01**: Admin users can list all devices across all users in the Admin panel (normal users cannot)
-- [x] **ADMIN-02**: Admin users can emergency-disconnect any active device bridge, forcing the bridge to terminate
+- [ ] **MH-01**: `environments` PostgreSQL table (id, name, socket_path | tcp_host+tls_cert | agent_id) per Docker host
+- [ ] **MH-02**: All `docker.*` tRPC routes accept optional `environmentId`; Dockerode client is factory-created per environment
+- [ ] **MH-03**: Server Control header has an environment selector dropdown
+- [ ] **MH-04**: Outbound agent (Node or Go) opens a WebSocket to Livinity from remote host and proxies Docker API calls — no open TCP port on remote host required
+- [ ] **MH-05**: Agent authentication via per-agent token; tokens revocable from Settings
 
-## v27.0 Requirements (Deferred)
+### AI-Powered Docker Diagnostics (AID) — Phase 23
 
-### Smart Approval
+- [ ] **AID-01**: AI can analyze container logs using Kimi and surface plain-English diagnostics ("postgres is OOM-killing — increase memory limit")
+- [ ] **AID-02**: AI proactively flags containers approaching resource limits (OOM risk, disk full) using docker stats + engine info
+- [ ] **AID-03**: AI can generate compose files from natural language prompts ("Nextcloud with Redis and MariaDB on port 8080")
+- [ ] **AID-04**: AI explains vulnerability scan results contextually ("CVE-2024-XXXX in nginx:1.24 — upgrade to nginx:1.27")
+- [ ] **AID-05**: Diagnostics surface as chat messages in AI Chat sidebar when user asks "why is my X container slow/failing"
 
-- **APPROVE-01**: LLM pre-assessment of dangerous commands (APPROVE / DENY / ESCALATE) before escalating to human
-- **APPROVE-02**: Session-level approved-command cache to avoid re-asking for the same command
+## v28.0 Requirements (Deferred)
 
-### Per-Tool Fine-Grained Permissions
+### Kubernetes / Swarm
 
-- **PERM-01**: Per-device permission matrix (screenshot / files / shell as separate toggles)
-- **PERM-02**: Per-tool permission request UI in Settings
-- **PERM-03**: Device sharing between users (user A grants user B access to a specific device)
+- **K8S-01**: Kubernetes cluster management (kubeconfig upload, pod/deployment views)
+- **SW-01**: Docker Swarm service management
 
-### Advanced Memory (from v25.0)
+### Advanced Docker
 
-- **MEM-05**: AI can generate conversation summaries and store as high-level memories
-- **MEM-06**: Memory importance scoring with user feedback (thumbs up/down)
-
-### WhatsApp Advanced (from v25.0)
-
-- **WA-07**: WhatsApp group message support with mention activation
-- **WA-08**: Pairing code fallback (alternative to QR code)
-- **WA-09**: Media message support (images, voice notes)
+- **ADV-01**: Docker Desktop integration (local dev mount)
+- **ADV-02**: BuildKit integration for remote builds
+- **ADV-03**: Registry management with auth config (v27.0 has pull only, v28.0 adds registry CRUD)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Smart approval / LLM pre-assessment | Explicitly deferred to v27.0 — current auto-approve UX must be preserved |
-| Per-tool permission granularity | Deferred to v27.0 — milestone focus is cross-user isolation, not in-user tool gating |
-| Device sharing / collaboration | Deferred to v28.0 — requires v26.0 isolation first |
-| Change to AI agent auto-approval behavior | User explicitly opted out — auto-approve stays as-is |
-| PostgreSQL conversation backup | User explicitly excluded — Redis-only for now (carried from v25.0) |
-| WhatsApp Business API | Defeats self-hosting philosophy, requires Meta approval (carried) |
+| Kubernetes cluster management | Different primitives — deferred to v28.0 |
+| Docker Swarm services | Declining adoption, not home-server priority |
+| Windows containers | Linux-only home server focus |
+| Docker Desktop GUI replacement | Livinity is self-hosted, not developer desktop |
+| Cloud container orchestration (ACI/ECS/GKE) | Self-hosting philosophy — managed cloud is orthogonal |
+| Registry hosting (replace Harbor) | Out of scope — users run their own registry |
+| Per-image license/compliance scanning beyond Trivy CVEs | v27.0 focuses on CVEs; SBOMs deferred |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OWN-01 | Phase 11 | Complete |
-| OWN-02 | Phase 11 | Complete |
-| OWN-03 | Phase 11 | Complete |
-| AUTHZ-01 | Phase 12 | Complete |
-| AUTHZ-02 | Phase 12 | Complete |
-| AUTHZ-03 | Phase 12 | Complete |
-| SHELL-01 | Phase 13 | Complete |
-| SHELL-02 | Phase 13 | Complete |
-| SESS-01 | Phase 14 | Complete |
-| SESS-02 | Phase 14 | Complete |
-| SESS-03 | Phase 14 | Complete |
-| AUDIT-01 | Phase 15 | Complete |
-| AUDIT-02 | Phase 15 | Complete |
-| ADMIN-01 | Phase 16 | Complete |
-| ADMIN-02 | Phase 16 | Complete |
+| QW-01 | Phase 17 | Pending |
+| QW-02 | Phase 17 | Pending |
+| QW-03 | Phase 17 | Pending |
+| QW-04 | Phase 17 | Pending |
+| CFB-01 | Phase 18 | Pending |
+| CFB-02 | Phase 18 | Pending |
+| CFB-03 | Phase 18 | Pending |
+| CFB-04 | Phase 18 | Pending |
+| CFB-05 | Phase 18 | Pending |
+| CGV-01 | Phase 19 | Pending |
+| CGV-02 | Phase 19 | Pending |
+| CGV-03 | Phase 19 | Pending |
+| CGV-04 | Phase 19 | Pending |
+| SCH-01 | Phase 20 | Pending |
+| SCH-02 | Phase 20 | Pending |
+| SCH-03 | Phase 20 | Pending |
+| SCH-04 | Phase 20 | Pending |
+| SCH-05 | Phase 20 | Pending |
+| GIT-01 | Phase 21 | Pending |
+| GIT-02 | Phase 21 | Pending |
+| GIT-03 | Phase 21 | Pending |
+| GIT-04 | Phase 21 | Pending |
+| GIT-05 | Phase 21 | Pending |
+| MH-01 | Phase 22 | Pending |
+| MH-02 | Phase 22 | Pending |
+| MH-03 | Phase 22 | Pending |
+| MH-04 | Phase 22 | Pending |
+| MH-05 | Phase 22 | Pending |
+| AID-01 | Phase 23 | Pending |
+| AID-02 | Phase 23 | Pending |
+| AID-03 | Phase 23 | Pending |
+| AID-04 | Phase 23 | Pending |
+| AID-05 | Phase 23 | Pending |
 
 **Coverage:**
-- v26.0 requirements: 15 total
-- Mapped to phases: 15 (100%)
+- v27.0 requirements: 33 total
+- Mapped to phases: 33 (100%)
 - Unmapped: 0
 
 **Phase Distribution:**
-- Phase 11 (Device Ownership Foundation): 3 requirements (OWN-01, OWN-02, OWN-03)
-- Phase 12 (Device Access Authorization): 3 requirements (AUTHZ-01, AUTHZ-02, AUTHZ-03)
-- Phase 13 (Shell Tool Isolation): 2 requirements (SHELL-01, SHELL-02)
-- Phase 14 (Device Session Binding): 3 requirements (SESS-01, SESS-02, SESS-03)
-- Phase 15 (Device Audit Log): 2 requirements (AUDIT-01, AUDIT-02)
-- Phase 16 (Admin Override & Emergency Disconnect): 2 requirements (ADMIN-01, ADMIN-02)
+- Phase 17 (Docker Quick Wins): 4 requirements
+- Phase 18 (Container File Browser): 5 requirements
+- Phase 19 (Compose Graph + Vuln Scan): 4 requirements
+- Phase 20 (Scheduled Tasks + Backup): 5 requirements
+- Phase 21 (GitOps Stack Deploy): 5 requirements
+- Phase 22 (Multi-host Docker): 5 requirements
+- Phase 23 (AI-Powered Diagnostics): 5 requirements
 
 ---
 *Requirements defined: 2026-04-24*

@@ -1,17 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v26.0
-milestone_name: Device Security & User Isolation
-status: shipped
-stopped_at: Milestone v26.0 shipped 2026-04-24
-last_updated: "2026-04-24T18:50:00Z"
-last_activity: 2026-04-24 — v26.0 shipped (6/6 phases, 15/15 requirements, milestone audit passed)
+milestone: v27.0
+milestone_name: Docker Management Upgrade
+status: defining_requirements
+stopped_at: Milestone v27.0 started — roadmap complete, ready for Phase 17
+last_updated: "2026-04-24T19:15:00Z"
+last_activity: 2026-04-24 — v27.0 milestone started, 33 requirements mapped to 7 phases (17-23)
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+current_phase: 17
+current_phase_name: Docker Quick Wins
 ---
 
 # Project State
@@ -21,53 +23,54 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** None (v26.0 shipped; ready for v27.0)
-**Current focus:** Awaiting next milestone definition
+**Current milestone:** v27.0 — Docker Management Upgrade
+**Current focus:** Phase 17 — Docker Quick Wins (not yet planned)
 
 ## Current Position
 
-Phase: None (milestone shipped)
-Status: v26.0 Device Security & User Isolation — shipped 2026-04-24
-Last activity: 2026-04-24 — All 6 phases verified, milestone audit passed 42/42
+Phase: 17 — Docker Quick Wins (not yet planned)
+Plan: —
+Status: Roadmap complete, awaiting `/gsd-plan-phase 17`
+Last activity: 2026-04-24 — v27.0 roadmap created (7 phases, 33/33 requirements mapped)
 
-**Progress:** `[████████████████]` 6/6 phases (100%)
+**Progress:** `[░░░░░░░░░░░░░░░░]` 0/7 phases (0%)
 
-## v26.0 Completion Summary
+## v27.0 Phase Structure
 
-| Phase | Name | Status | Score | Requirements |
-|-------|------|--------|-------|--------------|
-| 11 | Device Ownership Foundation | shipped | 7/7 | OWN-01/02/03 |
-| 12 | Device Access Authorization | shipped | 8/8 | AUTHZ-01/02/03 |
-| 13 | Shell Tool Isolation | shipped | 5/5 | SHELL-01/02 |
-| 14 | Device Session Binding | shipped | 4/4 | SESS-01/02/03 |
-| 15 | Device Audit Log | shipped | 11/11 | AUDIT-01/02 |
-| 16 | Admin Override & Emergency Disconnect | shipped | 7/7 | ADMIN-01/02 |
+| Phase | Name | Requirements | Depends On |
+|-------|------|--------------|------------|
+| 17 | Docker Quick Wins | QW-01/02/03/04 | — (foundation) |
+| 18 | Container File Browser | CFB-01/02/03/04/05 | Phase 17 |
+| 19 | Compose Graph + Vuln Scan | CGV-01/02/03/04 | Phase 17 |
+| 20 | Scheduled Tasks + Backup | SCH-01/02/03/04/05 | Phase 17 |
+| 21 | GitOps Stack Deployment | GIT-01/02/03/04/05 | Phase 17, Phase 20 |
+| 22 | Multi-host Docker | MH-01/02/03/04/05 | Phase 17 |
+| 23 | AI-Powered Diagnostics | AID-01/02/03/04/05 | Phase 17, Phase 19 |
 
-**Milestone audit:** passed (42/42 must-haves verified, 4 attack vectors blocked end-to-end, AI agent auto-approve constraint preserved)
+Coverage: 33/33 v27.0 requirements mapped ✓
+
+## Performance Metrics
+
+**Prior milestone (v26.0 — Device Security & User Isolation):**
+| Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
+| Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 
 ## Accumulated Context
 
-### v26.0 Key Decisions
+### v27.0 Roadmap Decisions
 
-- **Phase 11**: devices table lives in platform/web (not livinityd); added FK constraint + backfill migration 0007
-- **Phase 12**: Single `authorizeDeviceAccess` helper reused across DeviceBridge, tRPC, and /internal/device-tool-execute — userId embedded in per-device proxy tool callbackUrl (zero Nexus code changes)
-- **Phase 13**: RESERVED_TOOL_NAMES prevents rogue tool registration from clobbering local shell
-- **Phase 14**: JWT carries sessionId; relay validates session + ownership at handshake; dedicated ioredis subscriber for session revocation
-- **Phase 15**: Immutability via BEFORE UPDATE/DELETE trigger (not role grants); SHA-256 params_digest (no plaintext); executor is single audit sink
-- **Phase 16**: Admin force-disconnect uses new tunnel verb `admin_force_disconnect`; platform/web "oldest user" = admin convention
+- Phase 17 is foundation (real-time logs, secret env, redeploy button, AI tool expansion) — unblocks UI polish downstream
+- Phases 18/19/20/22 parallelizable (only depend on Phase 17)
+- Phase 21 (GitOps) depends on Phase 20's scheduler for auto-sync
+- Phase 23 (AI diagnostics) depends on Phase 19's vulnerability scanning for AID-04
+- Dockhand-inspired features: file browser, graph viewer, vuln scan, GitOps stacks, multi-host — all catching up to competitor parity
+- AI-powered diagnostics (Phase 23) = Livinity's unique moat, no competing Docker manager has this
 
-### Carried Forward Tech Debt
+### Carried from v26.0
 
-From v25.0:
-- wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts
-- chunkForWhatsApp unused exports
-- Integrations menu label reads "Telegram & Discord"
-- Phase 10 linkIdentity() never called
-
-New (v26.0):
 - Deployment warning: REDIS_URL must be set on platform/web for SESS-03 instant teardown
 - Stale comment at server/index.ts:984 refers to old recordAuthFailure name
-- AUTHZ-03 ROADMAP text misnames "Nexus REST /api/devices/*"
+- v25.0 tech debt: wa_outbox dead code, chunkForWhatsApp unused, Integrations menu label, linkIdentity() never called
 
 ### Pending Todos
 
@@ -75,11 +78,11 @@ None
 
 ### Blockers/Concerns
 
-- SESS-03 production timing depends on REDIS_URL env var on platform/web
-- Human verification needed: Force Disconnect E2E with live device, audit log row visibility, logout teardown < 5s, admin UI role visibility
+- Mini PC SSH direct IP (10.69.31.68) currently unreachable — deploys to bruce will need tunnel-based access or network reconnection
+- Phase 22 (multi-host agent) is the largest in scope (3 plans); may split further during plan-phase
 
 ## Session Continuity
 
-Last session: 2026-04-24T18:50:00Z
-Stopped at: v26.0 shipped — phases archived, MILESTONES.md + ROADMAP.md updated
-Resume: `/gsd-new-milestone` to start v27.0
+Last session: 2026-04-24T19:15:00Z
+Stopped at: v27.0 milestone started — ready for Phase 17 planning
+Resume with: `/gsd-plan-phase 17` or `/gsd-autonomous` for full pipeline

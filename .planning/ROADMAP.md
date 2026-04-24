@@ -14,6 +14,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v24.0 Mobile Responsive UI** — Phases 1-5 (shipped 2026-04-01)
 - ✅ **v25.0 Memory & WhatsApp Integration** — Phases 6-10 (shipped 2026-04-03)
 - ✅ **v26.0 Device Security & User Isolation** — Phases 11-16 (shipped 2026-04-24)
+- [ ] **v27.0 Docker Management Upgrade** — Phases 17-23 (in progress)
 
 ## Phases
 
@@ -104,116 +105,129 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v26.0 Device Security & User Isolation (In Progress)
+<details>
+<summary>v26.0 Device Security & User Isolation (Phases 11-16) — SHIPPED 2026-04-24</summary>
 
-**Milestone Goal:** Prevent unauthorized cross-user device access — a user's terminal/shell session must not be able to reach another user's connected devices, while preserving AI agent auto-approval UX.
+- [x] Phase 11: Device Ownership Foundation (2/2 plans) — completed 2026-04-24
+- [x] Phase 12: Device Access Authorization (2/2 plans) — completed 2026-04-24
+- [x] Phase 13: Shell Tool Isolation (1/1 plans) — completed 2026-04-24
+- [x] Phase 14: Device Session Binding (2/2 plans) — completed 2026-04-24
+- [x] Phase 15: Device Audit Log (2/2 plans) — completed 2026-04-24
+- [x] Phase 16: Admin Override & Emergency Disconnect (2/2 plans) — completed 2026-04-24
 
-- [x] **Phase 11: Device Ownership Foundation** - PostgreSQL user_id column on devices + registration binding + owner-filtered list (completed 2026-04-24)
-- [x] **Phase 12: Device Access Authorization** - Per-tool ownership middleware across tRPC and Nexus REST with audit-logged failures (completed 2026-04-24)
-- [x] **Phase 13: Shell Tool Isolation** - Cross-user device ID rejection and safe local-session default in the shell tool (completed 2026-04-24)
-- [x] **Phase 14: Device Session Binding** - DeviceBridge WebSocket tied to user JWT with token expiry and logout-triggered disconnect (completed 2026-04-24)
-- [x] **Phase 15: Device Audit Log** - Immutable PostgreSQL device_audit_log with append-only DB-level enforcement (completed 2026-04-24)
-- [x] **Phase 16: Admin Override & Emergency Disconnect** - Admin panel lists all devices and can force-terminate any active bridge (completed 2026-04-24)
+</details>
+
+### v27.0 Docker Management Upgrade (In Progress)
+
+**Milestone Goal:** Elevate Livinity's Docker management to best-in-class self-hosted Docker platform with Dockhand-inspired features (file browser, GitOps stacks, vulnerability scanning, compose graph viewer, multi-host) plus AI-powered diagnostics as Livinity's unique moat.
+
+- [ ] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools
+- [ ] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming
+- [ ] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache
+- [ ] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
+- [ ] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
+- [ ] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
+- [ ] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
 
 ## Phase Details
 
-### Phase 11: Device Ownership Foundation
-**Goal**: Every device in PostgreSQL is owned by exactly one user, registration binds new devices to their creator, and users only see their own devices.
-**Depends on**: Nothing (foundation phase of v26.0 — unblocks all downstream phases)
-**Requirements**: OWN-01, OWN-02, OWN-03
+### Phase 17: Docker Quick Wins
+**Goal**: Four tightly-scoped, high-value upgrades to existing Docker infrastructure — real-time logs, secret-safe stacks, one-click redeploy, and AI tool breadth.
+**Depends on**: Nothing (foundation phase of v27.0)
+**Requirements**: QW-01, QW-02, QW-03, QW-04
 **Success Criteria** (what must be TRUE):
-  1. Every row in the devices table has a non-null user_id foreign key to users.id, and a migration backfills user_id for any pre-existing device records (assigned to the admin user as the legacy owner)
-  2. When a user pairs a new device via the OAuth Device Grant flow, the resulting device record is written with user_id equal to the authenticated user's id — attempting to register a device with no authenticated user is rejected with 401
-  3. GET /api/devices (Nexus REST) and devices.list (tRPC) return only rows WHERE user_id = ctx.currentUser.id — admin users calling the normal list endpoint still see only their own devices (admin-wide list is a separate Phase 16 endpoint)
-  4. DeviceRegistry in-memory state (Redis userId->deviceId mapping) is kept in sync with the database user_id column on connect/disconnect so cached lookups cannot leak stale ownership
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 11-01-PLAN.md — Add FK constraint devices.user_id -> users(id) + backfill + harden createDeviceRecord
-- [x] 11-02-PLAN.md — Forward userId in tunnel event + cache in Redis + filter tRPC/REST listings by owner
+  1. User opens container detail panel and sees log output stream in real time with ANSI colors; new log lines appear within 1s; no 5s polling gap
+  2. Stack create/edit UI has a `secret` checkbox per env var; secrets are never written to stacks/{name}/.env on disk; shell env injection succeeds
+  3. Stack detail has a "Redeploy (pull latest)" button that pulls all images first then recreates containers; works with both YAML and (future) git stacks
+  4. AI calling docker_manage with operation="stack-deploy" or "stack-remove" or "image-pull" succeeds end-to-end with the same output shape as existing tRPC routes
+**Plans**: 2 plans
 
-### Phase 12: Device Access Authorization
-**Goal**: Every device-routed tool call — whether through tRPC, Nexus REST, or the agent tool loop — verifies the caller owns the target device before executing, with failures surfaced clearly and recorded.
-**Depends on**: Phase 11
-**Requirements**: AUTHZ-01, AUTHZ-02, AUTHZ-03
+### Phase 18: Container File Browser
+**Goal**: Full file manager for container filesystems — list, navigate, download, upload, edit, delete — built on Docker exec + tar without requiring host volume mounts.
+**Depends on**: Phase 17 (uses WebSocket infrastructure patterns)
+**Requirements**: CFB-01, CFB-02, CFB-03, CFB-04, CFB-05
 **Success Criteria** (what must be TRUE):
-  1. When the AI agent invokes any device-routed tool (shell, files.list/read/write/delete/rename, screenshot, processes, system_info, screen_elements, mouse_*, keyboard_*, computer_use) with a device_id the caller does not own, the tool returns a structured authorization error without forwarding the request over the tunnel
-  2. A reusable authorizeDeviceAccess(userId, deviceId) helper is the single source of truth and is invoked by the DeviceBridge tool dispatcher, the tRPC devices router, and every Nexus REST /api/devices/* handler (defense in depth — bypassing tRPC via direct REST still enforces ownership)
-  3. Authorization failures return a consistent error shape ({ error: "device_not_owned", deviceId, tool }) and append a row to the device_audit_log with success=false and error="device_not_owned"
-  4. An admin user calling a device-routed tool for a device they do not personally own is still rejected by the standard authorization check — admin bypass only exists through the explicit Phase 16 admin endpoints
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 12-01-PLAN.md — Extract authorizeDeviceAccess helper + stub audit log to nexus:device:audit:failures Redis list
-- [x] 12-02-PLAN.md — Apply helper to DeviceBridge.executeOnDevice, tRPC rename/remove/auditLog, and /internal/device-tool-execute callback
+  1. Container detail panel has a "Files" tab; clicking lists the root filesystem of the container with breadcrumb navigation
+  2. User downloads a file by clicking a download icon; browser receives a tar stream unpacked to the original filename; round-trip works for text and binary files under 100MB
+  3. User uploads a file by drag-drop into any directory in the file browser; file appears in the container's filesystem within seconds
+  4. User clicks "Edit" on a text file under 1MB, edits inline in a Monaco/CodeMirror editor, and saves; changes persist in the container
+  5. User can delete files and empty directories; non-empty directories require explicit "Delete recursively" confirmation
+**Plans**: 2 plans
 
-### Phase 13: Shell Tool Isolation
-**Goal**: A user's terminal/shell invocations can never reach another user's device — unknown device IDs are rejected, and omitting a device ID routes safely to the user's local session.
-**Depends on**: Phase 12
-**Requirements**: SHELL-01, SHELL-02
+### Phase 19: Compose Graph Viewer + Vulnerability Scanning
+**Goal**: Visual compose graph for understanding multi-service topologies + on-demand Trivy image scanning with persistent SHA256-keyed cache.
+**Depends on**: Phase 17
+**Requirements**: CGV-01, CGV-02, CGV-03, CGV-04
 **Success Criteria** (what must be TRUE):
-  1. When the shell tool is called with an explicit device_id parameter that does not belong to the calling user, execution is blocked before any tunnel message is sent and the caller receives a clear "device_not_owned" error (enforced through Phase 12's authorizeDeviceAccess)
-  2. When the shell tool is called without a device_id parameter, it executes on the user's local livinityd container/session and never falls back to, or picks up, another user's device — even if that other user's device is the only one currently connected
-  3. The shell tool's device ID validation is tested end-to-end: a member-role user attempting to pass an admin-owned device_id receives an authorization error, and the admin's device receives no shell command over the tunnel
-  4. The shell tool's device_id parameter description in its schema documents the ownership constraint so the AI will not hallucinate cross-user IDs into its tool calls
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 13-01-PLAN.md — Freeze local shell parameter contract + RESERVED_TOOL_NAMES guard on /api/tools/register + document ownership in device shell proxy schema
+  1. Stack detail panel has a "Graph" tab; compose YAML is parsed and rendered as a React Flow graph showing services as nodes with `depends_on` arrows, networks as groups, and port mappings as badges
+  2. Image list has a "Scan" column/action; clicking Scan runs `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image <tag> --format json` inside a Trivy container
+  3. Scan results stored in Redis at `nexus:vuln:<sha256>` and reused on subsequent Scan clicks for the same image (even if the tag moved)
+  4. UI shows severity badges (CRITICAL/HIGH/MEDIUM/LOW) with counts; clicking a badge expands to show CVE list with CVSS scores and fix availability
+**Plans**: 2 plans
 
-### Phase 14: Device Session Binding
-**Goal**: Every DeviceBridge WebSocket connection is cryptographically bound to a specific user's JWT session, tokens expire and force refresh, and logout tears down all associated bridges.
-**Depends on**: Phase 11
-**Requirements**: SESS-01, SESS-02, SESS-03
+### Phase 20: Scheduled Tasks + Container Backup
+**Goal**: node-cron-based scheduler for routine Docker maintenance (image prune, update check, git sync) + volume backup to S3/SFTP/local with encryption at rest.
+**Depends on**: Phase 17
+**Requirements**: SCH-01, SCH-02, SCH-03, SCH-04, SCH-05
 **Success Criteria** (what must be TRUE):
-  1. The /device/connect WebSocket handshake validates the device-auth JWT and records the { userId, deviceId, sessionId, tokenExpiresAt } tuple on the DeviceBridge connection — a device JWT whose embedded userId does not match the device's owner in PostgreSQL is rejected with 1008 policy violation at handshake time
-  2. Each active device bridge has a server-side expiry timer; when tokenExpiresAt is reached and the agent has not refreshed via the device-auth token endpoint, the bridge is closed with code 4401 and the device must re-authenticate before reconnecting
-  3. When a user logs out (session revoked via /api/auth/logout or sessions table delete) every DeviceBridge connection whose recorded sessionId matches the revoked session is closed within 5 seconds with a "session_revoked" reason, and the user's devices show as offline in the My Devices UI
-  4. Reconnection attempts after logout require a fresh user login + device token pair — the agent cannot re-attach to the previous sessionId
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
-- [x] 14-02-PLAN.md — Logout pub/sub channel closes bridges with code 4403 (SESS-03)
+  1. PostgreSQL `scheduled_jobs` table stores job definitions; livinityd loads them on startup and schedules with node-cron; jobs survive restart
+  2. Three built-in scheduled tasks ship enabled by default with sensible defaults: image-prune (weekly Sunday 3am), container-update-check (daily 6am), git-stack-sync (hourly)
+  3. Settings > Scheduler UI lists all jobs with last-run timestamp, next-run, status (success/failure), and enable/disable toggle
+  4. User configures a backup job picking a volume, destination type (S3/SFTP/local), destination config, and schedule; backup runs on schedule and produces a tar.gz at destination
+  5. Volume backup uses an ephemeral `alpine:latest` helper container to tar the volume contents and stream to the destination without mounting the volume on the host
+**Plans**: 2 plans
 
-### Phase 15: Device Audit Log
-**Goal**: Every device tool invocation is recorded to an append-only PostgreSQL audit log that cannot be altered or deleted through any application API.
-**Depends on**: Phase 12
-**Requirements**: AUDIT-01, AUDIT-02
+### Phase 21: GitOps Stack Deployment
+**Goal**: Deploy and auto-sync compose stacks from git repositories with HMAC-verified webhooks for instant CI/CD on push — Livinity's self-hosted GitOps moat.
+**Depends on**: Phase 17, Phase 20
+**Requirements**: GIT-01, GIT-02, GIT-03, GIT-04, GIT-05
 **Success Criteria** (what must be TRUE):
-  1. A new device_audit_log PostgreSQL table exists with columns (id, user_id, device_id, tool_name, params_digest, success, error, timestamp) and every device-routed tool invocation — both authorized and authorization-failure — appends exactly one row on completion
-  2. params_digest stores a SHA-256 hash of the tool arguments (so free-form shell commands or file contents are not leaked as plaintext) while preserving the ability to correlate identical operations
-  3. The table is protected at the database level: a dedicated PostgreSQL role with INSERT/SELECT-only grants is used by the application, and UPDATE/DELETE are revoked — attempting to modify or delete a row through the application API returns a permission-denied error from PostgreSQL
-  4. An admin-only tRPC query (audit.listDeviceEvents) returns the log filtered by user_id and/or device_id with pagination, proving the log is queryable for incident review
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 15-01-PLAN.md — PG schema + immutability trigger + recordDeviceEvent writer (AUDIT-01, AUDIT-02)
-- [x] 15-02-PLAN.md — Wire callsites + admin audit.listDeviceEvents tRPC query (AUDIT-01, AUDIT-02)
+  1. Stack schema (PostgreSQL) has git_url, git_branch (default "main"), git_credential_id columns; credentials stored in `git_credentials` table encrypted with AES-256 using JWT_SECRET-derived key
+  2. `deployStack` with a git config does a blobless clone (`git clone --filter=blob:none --depth=1 --branch=<branch> <url>`), copies the compose file to stacks/{name}/, deploys with `docker compose up -d`
+  3. Webhook endpoint `POST /api/webhooks/git/:stackName` verifies HMAC-SHA256 signature against a per-stack webhook secret; on valid signature, triggers redeploy (git pull + compose up)
+  4. Stack create/edit UI has a "Deploy from Git" tab with fields: git URL, branch, credential selector, compose-path (default `docker-compose.yml`), webhook secret (auto-generated, copyable)
+  5. Git stacks auto-sync every N minutes via the Phase 20 scheduler (`git-stack-sync` job iterates configured git stacks and calls `git pull` + redeploy if HEAD changed)
+**Plans**: 2 plans
 
-### Phase 16: Admin Override & Emergency Disconnect
-**Goal**: Admin users can see every device on the system and can forcibly terminate any active device bridge for incident response — with each override action itself written to the audit log.
-**Depends on**: Phase 11, Phase 12, Phase 15
-**Requirements**: ADMIN-01, ADMIN-02
+### Phase 22: Multi-host Docker Management
+**Goal**: Manage multiple Docker hosts from one Livinity instance — local socket, remote TCP/TLS, or outbound agent for NAT-traversal — with environment selector in UI.
+**Depends on**: Phase 17
+**Requirements**: MH-01, MH-02, MH-03, MH-04, MH-05
 **Success Criteria** (what must be TRUE):
-  1. An admin-only endpoint (tRPC devices.adminListAll + Nexus REST GET /api/admin/devices) returns every device across every user with owner username, online/offline status, and last-seen timestamp — a member-role user calling the endpoint receives 403 forbidden
-  2. The Admin panel in Settings > Users (or a new Settings > Devices admin tab) renders the cross-user device table with a red "Force Disconnect" button on each online row
-  3. Clicking Force Disconnect calls an admin-only mutation that closes the matching DeviceBridge WebSocket with code 4403 and reason "admin_disconnect", and the target device transitions to offline within 3 seconds in both the admin view and the owner's My Devices UI
-  4. Every admin list-all query and every force-disconnect mutation writes a row to device_audit_log with tool_name="admin.list_all" or "admin.force_disconnect", attributing the action to the admin's user_id and naming the affected device_id
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 16-01-PLAN.md — Admin backend: devicesAdmin tRPC (adminListAll + adminForceDisconnect) + admin_force_disconnect tunnel verb + platform/web /api/admin/devices REST (ADMIN-01, ADMIN-02)
-- [x] 16-02-PLAN.md — Admin UI: Settings > Devices cross-user table + Force Disconnect button (ADMIN-01, ADMIN-02)
+  1. `environments` PostgreSQL table stores host configs (id, name, type enum: 'socket'|'tcp-tls'|'agent', socket_path or tcp_host+tls_cert or agent_id)
+  2. Dockerode client is factory-created per environmentId; all `docker.*` tRPC routes accept optional environmentId param (defaults to "local" socket)
+  3. Server Control UI has an environment selector dropdown in the header; switching selector refreshes all Docker views for the chosen environment
+  4. Outbound agent binary (Node) can be installed on a remote host with a registration token; agent opens WebSocket to `wss://{domain}/agent/connect`, authenticates with token, and proxies Docker API calls with < 100ms added latency
+  5. Agent tokens manageable from Settings > Environments > Agents — generate, revoke, view last-seen; revoking terminates the active WebSocket within 5 seconds
+**Plans**: 3 plans (environments + tRPC factory + agent binary and UI)
+
+### Phase 23: AI-Powered Docker Diagnostics
+**Goal**: Leverage Kimi AI to turn Docker management from manual-reading-of-logs into proactive plain-English guidance — the capability no competing Docker manager can replicate.
+**Depends on**: Phase 17, Phase 19 (vulnerability scanning)
+**Requirements**: AID-01, AID-02, AID-03, AID-04, AID-05
+**Success Criteria** (what must be TRUE):
+  1. Container detail has an "AI Diagnose" button; clicking sends last 200 log lines + resource stats + image info to Kimi and returns a plain-English summary: likely cause, suggested action, confidence
+  2. Backend scheduler polls `docker stats` + `getEngineInfo` every 5 minutes; when a container's memory usage exceeds 80% of its limit OR CPU throttling is active, AI surfaces a proactive notification ("your postgres container will OOM in ~10 minutes")
+  3. Stack create UI has a "Generate from prompt" button; user types "Nextcloud with Redis and MariaDB, expose on 8080"; AI returns a valid compose YAML user can review and deploy
+  4. After a vulnerability scan, AI can explain the most critical CVEs in plain language and suggest concrete upgrade paths ("CVE-2024-XXXX in nginx:1.24 → upgrade to nginx:1.27-alpine")
+  5. AI Chat sidebar recognizes queries like "why is my X container slow/failing" and automatically pulls container diagnostics without the user manually specifying logs
+**Plans**: 2 plans
 
 ## Progress
 
 **Execution Order:**
-v26.0 phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15 -> 16
-Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in parallel with Phases 12-13/15.
+v27.0 phases execute in numeric order: 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23
+Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21 depends on Phase 20's scheduler. Phase 23 depends on Phase 19's vulnerability scan results.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 12. Device Access Authorization | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 13. Shell Tool Isolation | v26.0 | 1/1 | Complete   | 2026-04-24 |
-| 14. Device Session Binding | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 15. Device Audit Log | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 16. Admin Override & Emergency Disconnect | v26.0 | 2/2 | Complete   | 2026-04-24 |
+| 17. Docker Quick Wins | v27.0 | 0/2 | Not started | - |
+| 18. Container File Browser | v27.0 | 0/2 | Not started | - |
+| 19. Compose Graph + Vuln Scan | v27.0 | 0/2 | Not started | - |
+| 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |
+| 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |
+| 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
+| 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
 
 ---
 
