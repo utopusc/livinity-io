@@ -82,7 +82,7 @@ async function execCapture(
 		stream.on('error', (err: Error) => reject(err))
 	})
 
-	const buffer = Buffer.concat(chunks)
+	const buffer = Buffer.concat(chunks as unknown as Uint8Array[])
 	const {stdout, stderr} = demuxDockerStream(buffer)
 
 	const info = await exec.inspect()
@@ -278,7 +278,7 @@ export async function writeFile(
 	const tarChunks: Buffer[] = []
 	const collector = new PassThrough()
 	collector.on('data', (chunk: Buffer) => tarChunks.push(chunk))
-	archive.pipe(collector)
+	archive.pipe(collector as unknown as NodeJS.WritableStream)
 	archive.append(body, {name: base, mode: 0o644})
 	await archive.finalize()
 	// Ensure any remaining data has flushed.
@@ -287,7 +287,7 @@ export async function writeFile(
 		else collector.on('end', () => resolve())
 	})
 
-	const tarBuffer = Buffer.concat(tarChunks)
+	const tarBuffer = Buffer.concat(tarChunks as unknown as Uint8Array[])
 
 	try {
 		await container.putArchive(tarBuffer, {path: dir})
