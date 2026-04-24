@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
 status: completed
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-04-24T18:09:36.879Z"
-last_activity: 2026-04-24 — 14-02-PLAN.md executed (3/3 tasks, 7 files, SESS-03 complete)
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-04-24T18:16:27.458Z"
+last_activity: 2026-04-24 — 15-02-PLAN.md executed (3/3 tasks, 5 files, 153s duration)
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 15 -- Device Audit Log (in progress — Plan 15-01 complete, Plan 15-02 pending)
-Plan: 15-01 complete — PG schema + immutability trigger + recordDeviceEvent writer delivered
-Status: 15-01 complete — (1) schema.sql appends device_audit_log table (8 cols: id UUID PK, user_id UUID NOT NULL no-FK, device_id TEXT, tool_name TEXT, params_digest TEXT, success BOOL, error TEXT, timestamp TIMESTAMPTZ) + 3 non-unique indexes (user_id, device_id, timestamp DESC) + audit_log_immutable() PL/pgSQL function raising 'device_audit_log is append-only' + device_audit_log_no_modify BEFORE UPDATE OR DELETE trigger guarded by DO-block existence check. All DDL idempotent. (2) devices/audit-pg.ts new — recordDeviceEvent(redis, event, logger?) fire-and-forget writer: getPool() INSERT with computeParamsDigest (node:crypto SHA-256 hex, empty-string for null/undefined, '[unserializable]' fallback for circular), nil-UUID sentinel '00000000-0000-0000-0000-000000000000' for missing_user rows, catch-branch delegates to Phase 12 recordAuthFailure on PG outage (audit never silently dropped). Imports getPool from ../database, recordAuthFailure from ./audit-stub (no circular deps via barrel). (3) devices/index.ts barrel extended to surface recordDeviceEvent + computeParamsDigest + DeviceAuditEvent type as primary Phase 15 exports; retains recordAuthFailure/AUTH_FAILURES_REDIS_KEY/MAX_ENTRIES/AuthFailureEntry for audit-pg internal fallback + to avoid 15-02 flag-day migration. All 9 schema.sql regex invariants PASS, 7 barrel runtime exports resolve, zero new tsc errors in touched files. AUDIT-02 satisfied (DB-level enforcement). AUDIT-01 partial — writer ready, callsites pending Plan 15-02.
-Last activity: 2026-04-24 — 15-01-PLAN.md executed (3/3 tasks, 3 files, 108s duration)
+Phase: 15 -- Device Audit Log (COMPLETE — both plans shipped)
+Plan: 15-02 complete — callsites migrated + admin audit query exposed; AUDIT-01 + AUDIT-02 fully satisfied
+Status: 15-02 complete — (1) DeviceBridge.executeOnDevice migrated from recordAuthFailure to recordDeviceEvent: auth-denial branch writes one PG row (success=false) + new auditedResolve closure wraps resolve so timeout path AND tunnel-result path (onToolResult → pending.resolve) BOTH audit via the same wrapper, producing exactly one row per invocation. Explicit Promise<ToolResult> generic fixed TS2339 from PromiseLike<T> widening. (2) routes.ts ensureOwnership migrated from recordAuthFailure to recordDeviceEvent via barrel; action->toolName mapping with params={} since auth fails pre-body; TRPCError throws (NOT_FOUND/FORBIDDEN) and legacy !ctx.currentUser fallback preserved. (3) NEW devices/audit-routes.ts: admin-only tRPC router listDeviceEvents with zod input (userId UUID optional, deviceId string optional, limit 1-200 default 50, offset >=0), parameterized $N WHERE clause (no interpolation), two SELECTs (COUNT(*) + page ordered timestamp DESC), returns {total, limit, offset, events: DeviceAuditRow[]}, SERVICE_UNAVAILABLE if pool null. (4) trpc/index.ts mounts audit submodule; trpc/common.ts httpOnlyPaths entry for audit.listDeviceEvents. /internal/device-tool-execute handler UNCHANGED — executeOnDevice is sole audit sink (no duplicate rows). Zero new tsc errors across 5 touched files (pre-existing baseline in ai/routes.ts + skills/ + trpc/index.ts lines 54/68 unchanged). AUDIT-01 + AUDIT-02 satisfied end-to-end.
+Last activity: 2026-04-24 — 15-02-PLAN.md executed (3/3 tasks, 5 files, 153s duration)
 
-**Progress:** [█████████░] 89%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | Phase 14-device-session-binding P01 | 237 | 3 tasks | 9 files |
 | Phase 14 P02 | 149 | 3 tasks | 7 files |
 | Phase 15 P01 | 108 | 3 tasks | 3 files |
+| Phase 15 P02 | 153 | 3 tasks | 5 files |
 
 ### v26.0 Execution Metrics
 
@@ -154,6 +155,16 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **Close code 4403 'session_revoked' (not 4401)**: 4401 = "refresh the token and reconnect" (14-01 expiry); 4403 = "stop reconnecting, the session is gone". Client device agents distinguish at the close event and choose the right recovery strategy (refresh token vs abandon-and-re-pair).
 - **Subscriber startup BEFORE server.listen**: revocations arriving before the HTTP server is accepting connections are harmless — no bridges exist yet to close. Subscriber shutdown happens INSIDE shutdown() after the watchdog clearInterval, BEFORE stopBandwidthFlush, so no new revocation messages are processed during the relay's final broadcast loop.
 
+### Phase 15-02 Execution Decisions
+
+- **Single audit sink — executeOnDevice is sole source of truth for Nexus-driven tool calls**: /internal/device-tool-execute deliberately untouched; it delegates to executeOnDevice which now audits via recordDeviceEvent. Auditing in the HTTP handler would produce duplicate rows per invocation. Phase 12 made the same choice for recordAuthFailure; Phase 15 preserves it.
+- **auditedResolve closure pattern**: captures deviceId/toolName/params/deviceAuditedUserId at promise creation. Storing auditedResolve in pendingRequests.set(requestId, {resolve: auditedResolve, ...}) means onToolResult's `pending.resolve(event.result)` also goes through the wrapper → both timeout path AND tunnel-result path emit exactly one recordDeviceEvent row per invocation. result.success === true distinguishes success from tunnel-reported failure.
+- **audit-routes.ts as sibling of routes.ts (not merged)**: keeps the audit domain cleanly isolated. Phase 16 (admin.listAllDevices, admin.forceDisconnect) will grow the audit router naturally without bloating device CRUD routes. Separate file also means audit-only imports (getPool directly) don't pull in DeviceBridge.
+- **Parameterized SQL ($N placeholders from values.length)**: builds WHERE user_id = $1 AND device_id = $2 from values[] + conditions[] arrays — zero user-input interpolation. Zod validates userId as UUID and deviceId as min(1) at the input boundary; parameterization is defense-in-depth.
+- **Explicit Promise<ToolResult> generic in executeOnDevice**: default resolve type is (value: T | PromiseLike<T>) => void, which caused TS2339 when reading result.success/.error in auditedResolve. Narrowing to Promise<ToolResult> eliminates PromiseLike widening without branch-checking shape at runtime.
+- **httpOnlyPaths entry for audit.listDeviceEvents**: matches Phase 12 devices.rename/remove pattern — admin audit queries surface "livinityd unavailable" as HTTP errors rather than hanging on disconnected WS. The entry string must match the router path exactly (audit submodule + listDeviceEvents query name).
+- **adminProcedure, not privateProcedure**: enforces requireRole('admin') gate before the query handler runs. Member-role users receive FORBIDDEN at the procedure middleware, not from an in-handler role check — less code, less chance of a bypass via early-return bugs.
+
 ### Phase 15-01 Execution Decisions
 
 - **Nil-UUID sentinel (`00000000-0000-0000-0000-000000000000`) for missing_user rows**: `user_id UUID NOT NULL` cannot accept `''`; pre-auth failures (where no JWT was resolved) use the all-zero UUID. No FK to users(id), so this synthetic value doesn't need to match any row. Admin queries can filter missing-user entries via `WHERE user_id = '00000000-...'::uuid`.
@@ -185,6 +196,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T18:09:36.875Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-04-24T18:16:15.798Z
+Stopped at: Completed 15-02-PLAN.md
 Resume file: None

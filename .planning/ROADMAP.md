@@ -112,7 +112,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 12: Device Access Authorization** - Per-tool ownership middleware across tRPC and Nexus REST with audit-logged failures (completed 2026-04-24)
 - [x] **Phase 13: Shell Tool Isolation** - Cross-user device ID rejection and safe local-session default in the shell tool (completed 2026-04-24)
 - [x] **Phase 14: Device Session Binding** - DeviceBridge WebSocket tied to user JWT with token expiry and logout-triggered disconnect (completed 2026-04-24)
-- [ ] **Phase 15: Device Audit Log** - Immutable PostgreSQL device_audit_log with append-only DB-level enforcement
+- [x] **Phase 15: Device Audit Log** - Immutable PostgreSQL device_audit_log with append-only DB-level enforcement (completed 2026-04-24)
 - [ ] **Phase 16: Admin Override & Emergency Disconnect** - Admin panel lists all devices and can force-terminate any active bridge
 
 ## Phase Details
@@ -181,10 +181,10 @@ Plans:
   2. params_digest stores a SHA-256 hash of the tool arguments (so free-form shell commands or file contents are not leaked as plaintext) while preserving the ability to correlate identical operations
   3. The table is protected at the database level: a dedicated PostgreSQL role with INSERT/SELECT-only grants is used by the application, and UPDATE/DELETE are revoked — attempting to modify or delete a row through the application API returns a permission-denied error from PostgreSQL
   4. An admin-only tRPC query (audit.listDeviceEvents) returns the log filtered by user_id and/or device_id with pagination, proving the log is queryable for incident review
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 15-01-PLAN.md — PG schema + immutability trigger + recordDeviceEvent writer (AUDIT-01, AUDIT-02)
-- [ ] 15-02-PLAN.md — Wire callsites + admin audit.listDeviceEvents tRPC query (AUDIT-01, AUDIT-02)
+- [x] 15-02-PLAN.md — Wire callsites + admin audit.listDeviceEvents tRPC query (AUDIT-01, AUDIT-02)
 
 ### Phase 16: Admin Override & Emergency Disconnect
 **Goal**: Admin users can see every device on the system and can forcibly terminate any active device bridge for incident response — with each override action itself written to the audit log.
@@ -212,7 +212,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 | 12. Device Access Authorization | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 13. Shell Tool Isolation | v26.0 | 1/1 | Complete   | 2026-04-24 |
 | 14. Device Session Binding | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 15. Device Audit Log | v26.0 | 1/2 | In Progress|  |
+| 15. Device Audit Log | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 16. Admin Override & Emergency Disconnect | v26.0 | 0/? | Not started | — |
 
 ---
