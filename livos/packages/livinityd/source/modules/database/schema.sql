@@ -100,3 +100,43 @@ CREATE TABLE IF NOT EXISTS channel_identity_map (
 
 CREATE INDEX IF NOT EXISTS idx_cim_user ON channel_identity_map(user_id);
 CREATE INDEX IF NOT EXISTS idx_cim_channel_user ON channel_identity_map(channel, channel_user_id);
+
+-- =========================================================================
+-- Device Audit Log (Phase 15 AUDIT-01 / AUDIT-02)
+-- Immutable append-only log of every device tool invocation (success + auth
+-- failure). UPDATE/DELETE are blocked at the DB level by a trigger.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS device_audit_log (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL,
+  device_id     TEXT NOT NULL,
+  tool_name     TEXT NOT NULL,
+  params_digest TEXT NOT NULL,  -- SHA-256 hex of JSON.stringify(params); 64 chars
+  success       BOOLEAN NOT NULL,
+  error         TEXT,
+  timestamp     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_audit_log_user_id   ON device_audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_device_audit_log_device_id ON device_audit_log(device_id);
+CREATE INDEX IF NOT EXISTS idx_device_audit_log_timestamp ON device_audit_log(timestamp DESC);
+
+-- Append-only enforcement (AUDIT-02). CREATE OR REPLACE is idempotent across startups.
+CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'device_audit_log is append-only' USING ERRCODE = 'insufficient_privilege';
+END;
+$$ LANGUAGE plpgsql;
+
+-- CREATE TRIGGER has no IF NOT EXISTS on older PG versions; wrap in DO-block to skip
+-- if already present. This keeps schema.sql idempotent on repeated startups.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'device_audit_log_no_modify'
+  ) THEN
+    CREATE TRIGGER device_audit_log_no_modify
+      BEFORE UPDATE OR DELETE ON device_audit_log
+      FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
+  END IF;
+END$$;
