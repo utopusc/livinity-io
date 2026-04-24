@@ -16,6 +16,7 @@ export interface DeviceConnectionOptions {
   tools: string[];
   ws: WebSocket;
   sessionId: string;
+  tokenExpiresAt: number;  // Phase 14 SESS-02: epoch ms when the device JWT expires (exp * 1000)
 }
 
 export class DeviceConnection {
@@ -25,6 +26,7 @@ export class DeviceConnection {
   public readonly platform: string;
   public readonly tools: string[];
   public readonly sessionId: string;
+  public readonly tokenExpiresAt: number;  // Phase 14 SESS-02: watchdog checks this against Date.now()
   public readonly connectedAt: number;
   public lastSeen: number;
 
@@ -44,6 +46,7 @@ export class DeviceConnection {
     this.tools = opts.tools;
     this._ws = opts.ws;
     this.sessionId = opts.sessionId;
+    this.tokenExpiresAt = opts.tokenExpiresAt;
     this.connectedAt = Date.now();
     this.lastSeen = Date.now();
 
