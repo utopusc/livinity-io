@@ -37,6 +37,32 @@ import { isCommand, handleCommand, listCommands } from './commands.js';
 import type { ClaudeProvider } from './providers/claude.js';
 import type { CapabilityRegistry } from './capability-registry.js';
 
+// Phase 13 SHELL-01: built-in local tool names that MUST NOT be overwritten
+// by external /api/tools/register callers. Device proxy tools always use
+// the `device_<deviceId>_<toolName>` naming convention so they never
+// collide; this set exists to defend against rogue or misconfigured
+// external registrations (e.g., a malicious agent POSTing {name: 'shell'}
+// directly to /api/tools/register, which would silently overwrite the
+// local shell via ToolRegistry.register's set() semantics).
+const RESERVED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  // Core system tools
+  'status', 'logs', 'sysinfo',
+  // Shell (the reason this guard exists — SHELL-01 / SHELL-02)
+  'shell',
+  // Docker controls
+  'docker_list', 'docker_manage', 'docker_exec',
+  // Process manager
+  'pm2',
+  // File operations
+  'files', 'files_list', 'files_read', 'files_write', 'files_delete', 'files_rename',
+  // Web tools
+  'web_search', 'scrape',
+  // Messaging
+  'whatsapp_send', 'channel_send',
+  // Memory + search
+  'memory_search', 'memory_add', 'conversation_search',
+]);
+
 interface ApiDeps {
   daemon: Daemon;
   redis: Redis;
@@ -902,6 +928,17 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       const { name, description, parameters, callbackUrl } = req.body;
       if (!name || !description || !callbackUrl) {
         return res.status(400).json({ error: 'name, description, and callbackUrl are required' });
+      }
+      // Phase 13 SHELL-01: reject attempts to overwrite built-in local tools.
+      // Device proxy tools use the `device_<deviceId>_<toolName>` convention
+      // and will never collide; any other collision is a misconfiguration or
+      // adversarial registration and MUST be rejected at the HTTP boundary.
+      if (RESERVED_TOOL_NAMES.has(name)) {
+        return res.status(409).json({
+          error: 'tool_name_reserved',
+          name,
+          message: `Tool name '${name}' is reserved for the built-in local tool set and cannot be registered via /api/tools/register. Device proxy tools must use the 'device_<deviceId>_<toolName>' naming convention.`,
+        });
       }
       // Create a tool whose execute function POSTs to callbackUrl
       const tool: Tool = {
