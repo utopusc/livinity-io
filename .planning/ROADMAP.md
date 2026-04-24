@@ -156,6 +156,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. User clicks "Edit" on a text file under 1MB, edits inline in a Monaco/CodeMirror editor, and saves; changes persist in the container
   5. User can delete files and empty directories; non-empty directories require explicit "Delete recursively" confirmation
 **Plans**: 2 plans
+**Plan files**:
+- [ ] 18-01-PLAN.md — Backend: list/read/write/download/delete helpers + tRPC routes + REST endpoints (CFB-01, CFB-02, CFB-03, CFB-05)
+- [ ] 18-02-PLAN.md — UI: Files tab with breadcrumb, dropzone, edit modal, recursive-delete confirmation (CFB-01, CFB-02, CFB-03, CFB-04, CFB-05)
 
 ### Phase 19: Compose Graph Viewer + Vulnerability Scanning
 **Goal**: Visual compose graph for understanding multi-service topologies + on-demand Trivy image scanning with persistent SHA256-keyed cache.
