@@ -45,6 +45,7 @@ import {
 	writeFile as writeContainerFile,
 	deleteFile as deleteContainerFile,
 } from './container-files.js'
+import {scanImage, getCachedScan} from './vuln-scan.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -633,6 +634,57 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to get history for image ${input.id}`,
+				})
+			}
+		}),
+
+	// Phase 19 — Vulnerability scanning (CGV-02/03/04)
+	scanImage: adminProcedure
+		.input(
+			z.object({
+				imageRef: z.string().min(1).max(500),
+				force: z.boolean().optional().default(false),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await scanImage(input.imageRef, input.force)
+			} catch (err: any) {
+				if (err.message?.includes('[image-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[image-not-found] ', '')})
+				}
+				if (err.message?.includes('[trivy-timeout]')) {
+					throw new TRPCError({code: 'TIMEOUT', message: err.message.replace('[trivy-timeout] ', '')})
+				}
+				if (
+					err.message?.includes('[trivy-failed]') ||
+					err.message?.includes('[trivy-parse]') ||
+					err.message?.includes('[trivy-unavailable]')
+				) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message.replace(/^\[[^\]]+\] /, ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to scan image ${input.imageRef}`,
+				})
+			}
+		}),
+
+	getCachedScan: adminProcedure
+		.input(z.object({imageRef: z.string().min(1).max(500)}))
+		.query(async ({input}) => {
+			try {
+				return await getCachedScan(input.imageRef)
+			} catch (err: any) {
+				if (err.message?.includes('[image-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[image-not-found] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to get cached scan for ${input.imageRef}`,
 				})
 			}
 		}),
