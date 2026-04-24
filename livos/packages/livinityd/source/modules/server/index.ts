@@ -11,6 +11,7 @@ import {$} from 'execa'
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
+import Busboy from 'busboy'
 
 import {WebSocketServer, WebSocket} from 'ws'
 import {createProxyMiddleware} from 'http-proxy-middleware'
@@ -25,6 +26,10 @@ import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
 import createDockerLogsHandler from '../docker/docker-logs-socket.js'
+import {
+	downloadArchive as downloadContainerArchive,
+	writeFile as writeContainerFile,
+} from '../docker/container-files.js'
 import {createAgentWebSocketHandler} from './ws-agent.js'
 
 import fileApi from '../files/api.js'
@@ -1191,6 +1196,140 @@ class Server {
 			} catch (err: any) {
 				this.logger.error('Desktop resize error:', err)
 				return response.status(500).json({error: err.message})
+			}
+		})
+
+		// ── Container File Download (CFB-02) ─────────────────────────────────
+		// GET /api/docker/container/:name/file?path=/abs/path
+		// Returns a raw tar stream (application/x-tar) produced by
+		// docker.getArchive — binary-safe, streamed directly to the response
+		// without buffering in memory. Auth: LIVINITY_SESSION cookie.
+		this.app.get('/api/docker/container/:name/file', async (request, response) => {
+			try {
+				const sessionToken = request?.cookies?.LIVINITY_SESSION
+				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
+				const isValid = await this.verifyToken(sessionToken).catch(() => false)
+				if (!isValid) return response.status(401).json({error: 'unauthorized'})
+
+				const name = request.params.name
+				const path = typeof request.query.path === 'string' ? request.query.path : ''
+				if (!name || !path.startsWith('/')) {
+					return response.status(400).json({error: 'name required and path must be absolute'})
+				}
+
+				let stream: NodeJS.ReadableStream
+				try {
+					stream = await downloadContainerArchive(name, path)
+				} catch (err: any) {
+					if (err.message?.includes('[not-found]')) {
+						return response.status(404).json({error: err.message.replace('[not-found] ', '')})
+					}
+					if (err.message?.includes('[bad-path]')) {
+						return response.status(400).json({error: err.message.replace('[bad-path] ', '')})
+					}
+					throw err
+				}
+
+				// Filename hint for the browser's "Save As" dialog (container basename + .tar).
+				const pathBase = path.split('/').filter(Boolean).pop() || 'archive'
+				response.setHeader('Content-Type', 'application/x-tar')
+				response.setHeader('Content-Disposition', `attachment; filename="${pathBase}.tar"`)
+				;(stream as unknown as NodeJS.ReadableStream).pipe(response as any)
+				stream.on('error', (err: Error) => {
+					this.logger.error(`Container download stream error for ${name}:${path}`, err)
+					if (!response.headersSent) response.status(500).end()
+					else response.end()
+				})
+			} catch (err: any) {
+				this.logger.error(`Container download error`, err)
+				if (!response.headersSent) response.status(500).json({error: err.message})
+			}
+		})
+
+		// ── Container File Upload (CFB-03) ───────────────────────────────────
+		// POST /api/docker/container/:name/file?path=/abs/dir
+		// multipart/form-data body with a single "file" field; 110MB cap.
+		// Auth: LIVINITY_SESSION cookie.
+		this.app.post('/api/docker/container/:name/file', async (request, response) => {
+			try {
+				const sessionToken = request?.cookies?.LIVINITY_SESSION
+				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
+				const isValid = await this.verifyToken(sessionToken).catch(() => false)
+				if (!isValid) return response.status(401).json({error: 'unauthorized'})
+
+				const name = request.params.name
+				const dirPath = typeof request.query.path === 'string' ? request.query.path : ''
+				if (!name || !dirPath.startsWith('/')) {
+					return response.status(400).json({error: 'name required and path must be absolute directory'})
+				}
+
+				const contentType = request.headers['content-type'] || ''
+				if (!contentType.startsWith('multipart/form-data')) {
+					return response.status(400).json({error: 'Content-Type must be multipart/form-data'})
+				}
+
+				const MAX_UPLOAD_BYTES = 110 * 1024 * 1024
+				const bb = Busboy({headers: request.headers, limits: {files: 1, fileSize: MAX_UPLOAD_BYTES}})
+				let fileBuffer: Buffer | null = null
+				let fileName: string | null = null
+				let truncated = false
+
+				const finished = new Promise<void>((resolve, reject) => {
+					bb.on('file', (_fieldName, stream, info) => {
+						fileName = info.filename
+						const chunks: Buffer[] = []
+						stream.on('data', (c: Buffer) => chunks.push(c))
+						stream.on('limit', () => {
+							truncated = true
+						})
+						stream.on('end', () => {
+							fileBuffer = Buffer.concat(chunks as unknown as Uint8Array[])
+						})
+						stream.on('error', reject)
+					})
+					bb.on('finish', () => resolve())
+					bb.on('error', reject)
+				})
+
+				request.pipe(bb as unknown as NodeJS.WritableStream)
+				await finished
+
+				if (truncated) {
+					return response.status(413).json({error: `file exceeds ${MAX_UPLOAD_BYTES} bytes`})
+				}
+				if (!fileBuffer || !fileName) {
+					return response.status(400).json({error: 'no file in upload'})
+				}
+
+				// Sanitize filename — prevent path traversal (../../etc/passwd).
+				const safeName = (fileName as string).replace(/[\\/]/g, '_')
+				const targetPath = dirPath.endsWith('/')
+					? `${dirPath}${safeName}`
+					: `${dirPath}/${safeName}`
+
+				try {
+					await writeContainerFile(name, targetPath, fileBuffer)
+				} catch (err: any) {
+					if (err.message?.includes('[not-found]')) {
+						return response.status(404).json({error: err.message.replace('[not-found] ', '')})
+					}
+					if (err.message?.includes('[dir-not-found]')) {
+						return response.status(404).json({error: err.message.replace('[dir-not-found] ', '')})
+					}
+					if (err.message?.includes('[bad-path]')) {
+						return response.status(400).json({error: err.message.replace('[bad-path] ', '')})
+					}
+					throw err
+				}
+
+				return response.json({
+					success: true,
+					path: targetPath,
+					bytes: (fileBuffer as Buffer).length,
+				})
+			} catch (err: any) {
+				this.logger.error(`Container upload error`, err)
+				if (!response.headersSent) response.status(500).json({error: err.message})
 			}
 		})
 
