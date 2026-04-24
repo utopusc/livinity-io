@@ -1346,11 +1346,19 @@ ${task}`;
       },
     });
 
+    // Phase 13 SHELL-02: The local `shell` tool is LOCAL-ONLY. It executes on the
+    // livinityd host via child_process.exec (see shell.ts#ShellExecutor) and has
+    // no tunnel routing path. The parameter list is intentionally frozen to
+    // {cmd, timeout} — adding a device_id parameter here would bypass Phase 12's
+    // authorizeDeviceAccess gate. For remote execution on an owned device, the
+    // agent must invoke the per-device proxy tool `device_<deviceId>_shell`
+    // (registered dynamically by livinityd DeviceBridge, ownership-gated).
     toolRegistry.register({
       name: 'shell',
-      description: 'Execute a shell command on the server',
+      description:
+        'Execute a shell command LOCALLY on this LivOS host. For remote execution on one of your owned devices, use the device-specific proxy tool named `device_<deviceId>_shell` instead — server-side ownership checks apply to device tools and cross-user device IDs are rejected.',
       parameters: [
-        { name: 'cmd', type: 'string', description: 'Shell command', required: true },
+        { name: 'cmd', type: 'string', description: 'Shell command (executes locally; no device_id parameter exists on this tool)', required: true },
         { name: 'timeout', type: 'number', description: 'Timeout (ms)', required: false, default: 30000 },
       ],
       execute: async (params) => {
