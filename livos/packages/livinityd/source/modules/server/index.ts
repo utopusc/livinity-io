@@ -1,5 +1,6 @@
 import http from 'node:http'
 import process from 'node:process'
+import crypto from 'node:crypto'
 import {promisify} from 'node:util'
 import {fileURLToPath} from 'node:url'
 import {dirname, join} from 'node:path'
@@ -31,6 +32,13 @@ import {
 	writeFile as writeContainerFile,
 } from '../docker/container-files.js'
 import {createAgentWebSocketHandler} from './ws-agent.js'
+import {
+	getGitStack,
+	updateGitStackSyncSha,
+	controlStack,
+	type GitStackRow,
+} from '../docker/stacks.js'
+import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 
 import fileApi from '../files/api.js'
 
@@ -1000,6 +1008,102 @@ class Server {
 				res.json({success: false, output: '', error: err.message})
 			}
 		})
+
+		// ── GitOps Webhook (Phase 21 GIT-03) ───────────────────────────────
+		// POST /api/webhooks/git/:stackName
+		// GitHub-style HMAC-SHA256 signature in X-Hub-Signature-256: sha256=<hex>.
+		// Body MUST be raw bytes (express.raw) so the signature matches what the
+		// sender computed. Verification uses crypto.timingSafeEqual.
+		// Security model IS the HMAC — no cookie/JWT auth applied to this route.
+		// On valid signature: respond 202 immediately, redeploy in background to
+		// stay under GitHub's 10s webhook timeout.
+		this.app.post(
+			'/api/webhooks/git/:stackName',
+			express.raw({type: '*/*', limit: '5mb'}),
+			async (request, response) => {
+				const stackName = request.params.stackName
+				const sigHeader = request.header('x-hub-signature-256') || ''
+
+				// Validate stack name shape (defense in depth)
+				if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(stackName)) {
+					return response.status(400).json({error: 'invalid stack name'})
+				}
+
+				// Look up stack
+				let stack: GitStackRow | null
+				try {
+					stack = await getGitStack(stackName)
+				} catch (err: any) {
+					this.logger.error(`webhook: db error looking up stack ${stackName}`, err)
+					return response.status(500).json({error: 'internal'})
+				}
+				if (!stack) return response.status(404).json({error: 'stack not found'})
+
+				// Verify HMAC-SHA256
+				if (!sigHeader.startsWith('sha256=')) {
+					return response.status(401).json({error: 'missing signature'})
+				}
+				const provided = sigHeader.slice('sha256='.length)
+				const body = request.body as Buffer // express.raw produces a Buffer
+				if (!Buffer.isBuffer(body)) {
+					return response.status(400).json({error: 'body must be raw bytes'})
+				}
+				const expected = crypto
+					.createHmac('sha256', stack.webhookSecret)
+					.update(body)
+					.digest('hex')
+
+				let providedBuf: Buffer
+				let expectedBuf: Buffer
+				try {
+					providedBuf = Buffer.from(provided, 'hex')
+					expectedBuf = Buffer.from(expected, 'hex')
+				} catch {
+					return response.status(401).json({error: 'invalid signature encoding'})
+				}
+				// Length-check first: timingSafeEqual throws on different-length buffers
+				if (
+					providedBuf.length !== expectedBuf.length ||
+					!crypto.timingSafeEqual(providedBuf, expectedBuf)
+				) {
+					return response.status(401).json({error: 'invalid signature'})
+				}
+
+				// Valid — respond 202 and redeploy in background.
+				response.status(202).json({ok: true, message: 'redeploy queued'})
+
+				// Fire-and-forget redeploy. Errors only logged, never thrown to GitHub.
+				;(async () => {
+					try {
+						const sync = await syncRepo(
+							stackName,
+							{
+								url: stack!.gitUrl,
+								branch: stack!.gitBranch,
+								credentialId: stack!.gitCredentialId,
+								composePath: stack!.composePath,
+							},
+							stack!.lastSyncedSha,
+						)
+						if (!sync.changed) {
+							this.logger.log(
+								`[webhook/${stackName}] HEAD unchanged (${sync.newSha.slice(0, 8)}), skipping redeploy`,
+							)
+							await updateGitStackSyncSha(stackName, sync.newSha)
+							return
+						}
+						await copyComposeToStackDir(stackName, stack!.composePath)
+						await controlStack(stackName, 'pull-and-up')
+						await updateGitStackSyncSha(stackName, sync.newSha)
+						this.logger.log(
+							`[webhook/${stackName}] redeployed ${sync.oldSha?.slice(0, 8) || 'init'} -> ${sync.newSha.slice(0, 8)}`,
+						)
+					} catch (err: any) {
+						this.logger.error(`[webhook/${stackName}] redeploy failed`, err)
+					}
+				})()
+			},
+		)
 
 		// Handle tRPC routes
 		this.app.use('/trpc', trpcExpressHandler)
