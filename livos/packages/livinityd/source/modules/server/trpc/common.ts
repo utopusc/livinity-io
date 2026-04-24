@@ -81,6 +81,10 @@ export const httpOnlyPaths = [
 	'docker.editStack',
 	'docker.controlStack',
 	'docker.removeStack',
+	// Phase 21 — Git credentials CRUD -- use HTTP for reliability
+	'docker.listGitCredentials',
+	'docker.createGitCredential',
+	'docker.deleteGitCredential',
 	// Container file browser mutations (Phase 18) -- use HTTP for reliability;
 	// otherwise mutations silently hang on disconnected WS.
 	'docker.containerWriteFile',
