@@ -140,3 +140,27 @@ BEGIN
       FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
   END IF;
 END$$;
+
+-- =========================================================================
+-- Scheduled Jobs (Phase 20 SCH-01)
+-- node-cron-driven persistent job definitions. Loaded on boot by the
+-- scheduler module. Idempotent — defaults seeded ON CONFLICT (name) DO NOTHING.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS scheduled_jobs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            TEXT NOT NULL UNIQUE,
+  schedule        TEXT NOT NULL,                  -- cron expression, e.g. "0 3 * * 0"
+  type            TEXT NOT NULL,                  -- 'image-prune' | 'container-update-check' | 'git-stack-sync' | 'volume-backup'
+  config_json     JSONB NOT NULL DEFAULT '{}',    -- type-specific config (destination for backups, etc.)
+  enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+  last_run        TIMESTAMPTZ,
+  last_run_status TEXT,                           -- 'success' | 'failure' | 'skipped' | 'running'
+  last_run_error  TEXT,
+  last_run_output JSONB,                          -- handler-specific result, e.g. {spaceReclaimed: ..., deletedCount: ...}
+  next_run        TIMESTAMPTZ,                    -- best-effort, computed on schedule load
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled);
+CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_type    ON scheduled_jobs(type);
