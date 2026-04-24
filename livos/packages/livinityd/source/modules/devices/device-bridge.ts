@@ -10,7 +10,7 @@ import {randomUUID} from 'node:crypto'
 import type {Redis} from 'ioredis'
 
 import {authorizeDeviceAccess} from './authorize.js'
-import {recordAuthFailure} from './audit-stub.js'
+import {recordDeviceEvent} from './audit-pg.js'
 
 // Tool parameter definitions for each device tool (matches agent/src/tools.ts TOOL_NAMES)
 const DEVICE_TOOL_SCHEMAS: Record<
@@ -321,13 +321,16 @@ export class DeviceBridge {
 		// lookup so an unauthorized caller never causes a sendTunnelMessage.
 		const auth = await authorizeDeviceAccess(this.redis, expectedUserId, deviceId)
 		if (!auth.authorized) {
-			// Phase 12 AUTHZ-02: record failure (fire-and-forget; never blocks response)
-			void recordAuthFailure(
+			// Phase 15 AUDIT-01/02: PG-backed audit (with Redis-stub fallback inside
+			// recordDeviceEvent). Fire-and-forget; never blocks the 403 response.
+			void recordDeviceEvent(
 				this.redis,
 				{
 					userId: expectedUserId || '',
 					deviceId,
-					action: `device_tool_call:${toolName}`,
+					toolName: `device_tool_call:${toolName}`,
+					params,
+					success: false,
 					error: auth.reason || 'unknown',
 				},
 				this.logger,
@@ -354,13 +357,34 @@ export class DeviceBridge {
 		this.sendTunnelMessage(toolCallMsg)
 
 		// Wait for result with timeout
-		return new Promise((resolve, _reject) => {
+		type ToolResult = {success: boolean; output: string; error?: string; data?: unknown; images?: Array<{base64: string; mimeType: string}>}
+		return new Promise<ToolResult>((resolve, _reject) => {
+			const deviceAuditedUserId = expectedUserId || ''
+			const auditedResolve = (result: ToolResult) => {
+				// Phase 15 AUDIT-01: record the tool-call outcome (success OR tunnel
+				// error OR timeout) with the same deviceId/toolName the proxy name
+				// carried. Fire-and-forget; never blocks the Nexus callback response.
+				void recordDeviceEvent(
+					this.redis,
+					{
+						userId: deviceAuditedUserId,
+						deviceId,
+						toolName: `device_tool_call:${toolName}`,
+						params,
+						success: result.success === true,
+						error: result.error ?? null,
+					},
+					this.logger,
+				)
+				resolve(result)
+			}
+
 			const timeout = setTimeout(() => {
 				this.pendingRequests.delete(requestId)
-				resolve({success: false, output: '', error: `Tool execution timed out after ${REQUEST_TIMEOUT_MS}ms`})
+				auditedResolve({success: false, output: '', error: `Tool execution timed out after ${REQUEST_TIMEOUT_MS}ms`})
 			}, REQUEST_TIMEOUT_MS)
 
-			this.pendingRequests.set(requestId, {resolve, reject: _reject, timeout, deviceId})
+			this.pendingRequests.set(requestId, {resolve: auditedResolve, reject: _reject, timeout, deviceId})
 		})
 	}
 
