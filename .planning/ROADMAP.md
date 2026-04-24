@@ -157,7 +157,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. User can delete files and empty directories; non-empty directories require explicit "Delete recursively" confirmation
 **Plans**: 2 plans
 **Plan files**:
-- [ ] 18-01-PLAN.md — Backend: list/read/write/download/delete helpers + tRPC routes + REST endpoints (CFB-01, CFB-02, CFB-03, CFB-05)
+- [x] 18-01-PLAN.md — Backend: list/read/write/download/delete helpers + tRPC routes + REST endpoints (CFB-01, CFB-02, CFB-03, CFB-05)
 - [ ] 18-02-PLAN.md — UI: Files tab with breadcrumb, dropzone, edit modal, recursive-delete confirmation (CFB-01, CFB-02, CFB-03, CFB-04, CFB-05)
 
 ### Phase 19: Compose Graph Viewer + Vulnerability Scanning
@@ -228,7 +228,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 18. Container File Browser | v27.0 | 0/2 | Not started | - |
+| 18. Container File Browser | v27.0 | 1/2 | In Progress|  |
 | 19. Compose Graph + Vuln Scan | v27.0 | 0/2 | Not started | - |
 | 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |
 | 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |

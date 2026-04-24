@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
+current_plan: 02 of 02
 status: completed
-stopped_at: Completed 17-02-PLAN.md — Phase 17 complete (all QW requirements)
-last_updated: "2026-04-24T21:58:34.541Z"
-last_activity: 2026-04-24 — Plan 17-01 executed in 7 minutes, 4 tasks committed atomically
+stopped_at: Completed 18-01-PLAN.md — Container File Browser backend (helpers + 4 tRPC procedures + 2 REST endpoints + busboy dep)
+last_updated: "2026-04-24T22:20:21.169Z"
+last_activity: 2026-04-24 — Plan 18-01 executed in ~6 minutes, 3 tasks + 1 Rule-1 fixup committed atomically
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -26,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 17 — Docker Quick Wins (COMPLETE)
-Plan: 02 complete — Redeploy-with-pull button + extended AI docker_manage tool
-Status: 17-01 + 17-02 complete; QW-01/02/03/04 all satisfied. Phase 17 fully closed.
-Last activity: 2026-04-24 — Plan 17-02 executed in 8 minutes, 4 tasks committed atomically
+Phase: 18 — Container File Browser (IN PROGRESS)
+Current Plan: 02 of 02
+Status: 18-01 complete (backend: helpers + 4 tRPC procedures + 2 REST endpoints); 18-02 pending (UI Files tab).
+Last activity: 2026-04-24 — Plan 18-01 executed in ~6 minutes, 3 tasks + 1 Rule-1 fixup committed atomically
 
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 75%
 
 ## v27.0 Phase Structure
 
@@ -52,11 +53,13 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | Phase-Plan | Duration | Tasks | Files | Completed |
 |------------|----------|-------|-------|-----------|
 | 17-01 | 7 min | 4 | 9 | 2026-04-24 |
+| 18-01 | 6 min | 3 (+1 fixup) | 4 | 2026-04-24 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 | Phase 17 P02 | 8min | 4 tasks | 7 files |
+| Phase 18 P01 | 6 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -88,6 +91,17 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Redeploy ActionButton reuses `color='blue'` (no new `'violet'` variant) per plan explicit guidance; distinguishes via title "Redeploy (pull latest images)".
 - AI `stack-deploy` does NOT expose `secret: true` flag on envVars — the secret store is a livinityd-owned concern. Deferred to v28: either route AI stack-deploy through livinityd tRPC with an internal JWT, or grant nexus DockerManager read access to the same Redis key.
 
+### Plan 18-01 Decisions (2026-04-24)
+
+- Module-local Dockerode in `container-files.ts` — mirrors docker-exec-socket / docker-logs-socket; the connection is just `/var/run/docker.sock` so per-module instantiation is essentially free.
+- Custom `demuxDockerStream` (vs reusing `stripDockerStreamHeaders`) so non-TTY exec can separate stdout from stderr — needed to surface accurate context on `[ls-failed]` / `[read-failed]` / `[delete-failed]`.
+- `writeFile` uses `archiver` tar + `container.putArchive` (binary/multiline-safe). No `echo > file` shell-out.
+- REST endpoints (not tRPC) for download + upload because tRPC is JSON-only — `/api/docker/container/:name/file` GET (tar stream) and POST (multipart). Both gated by `LIVINITY_SESSION` cookie via `verifyToken`, mirroring `/api/desktop/resize`.
+- `busboy@1.6.0` chosen over `multer` — smaller dep, streaming parse, no tmp files. 110MB cap with explicit truncation→HTTP 413.
+- Filename slashes stripped server-side (`replace(/[\\/]/g, '_')`) — defense against path-traversal even though the path is interpreted inside the container.
+- Buffer/Stream casts (`as unknown as Uint8Array[]` / `NodeJS.WritableStream`) accepted as a one-line concession to stricter `@types/node` 22+ — Buffer extends Uint8Array, Busboy/PassThrough are Writables; runtime unchanged.
+- Pattern carried forward to Plan 18-02: tRPC for JSON paths + REST for binary/multipart, all session-cookie-gated. `ContainerFileEntry` type drives both backend and UI.
+
 ### Carried from v26.0
 
 - Deployment warning: REDIS_URL must be set on platform/web for SESS-03 instant teardown
@@ -105,6 +119,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T21:58:34.537Z
-Stopped at: Completed 17-02-PLAN.md — Phase 17 complete (all QW requirements)
-Resume with: `/gsd-plan-phase 18` to begin Container File Browser phase (next in v27.0 sequence)
+Last session: 2026-04-24T22:18:00.000Z
+Stopped at: Completed 18-01-PLAN.md — Container File Browser backend (helpers + 4 tRPC procedures + 2 REST endpoints + busboy dep)
+Resume with: `/gsd:execute-phase 18` to run Plan 18-02 (UI Files tab — consumes the 18-01 backend)
