@@ -23,9 +23,9 @@
 ### Compose Graph & Vulnerability Scanning (CGV) — Phase 19
 
 - [x] **CGV-01**: Stack detail panel has a "View Graph" tab that renders services with React Flow, showing `depends_on`, `networks`, and port mappings
-- [ ] **CGV-02**: Image list has a "Scan" action that runs Trivy inside a Docker container and shows CVE severity badges (CRITICAL/HIGH/MEDIUM/LOW)
-- [ ] **CGV-03**: Scan results cached in Redis keyed by image SHA256 (tags are mutable; SHA256 is not)
-- [ ] **CGV-04**: Vulnerability scan on-demand (not automatic) — user clicks Scan button per image
+- [x] **CGV-02**: Image list has a "Scan" action that runs Trivy inside a Docker container and shows CVE severity badges (CRITICAL/HIGH/MEDIUM/LOW)
+- [x] **CGV-03**: Scan results cached in Redis keyed by image SHA256 (tags are mutable; SHA256 is not)
+- [x] **CGV-04**: Vulnerability scan on-demand (not automatic) — user clicks Scan button per image
 
 ### Scheduled Tasks & Backup (SCH) — Phase 20
 
@@ -98,9 +98,9 @@
 | CFB-04 | Phase 18 | Complete |
 | CFB-05 | Phase 18 | Complete |
 | CGV-01 | Phase 19 | Complete |
-| CGV-02 | Phase 19 | Pending |
-| CGV-03 | Phase 19 | Pending |
-| CGV-04 | Phase 19 | Pending |
+| CGV-02 | Phase 19 | Complete |
+| CGV-03 | Phase 19 | Complete |
+| CGV-04 | Phase 19 | Complete |
 | SCH-01 | Phase 20 | Pending |
 | SCH-02 | Phase 20 | Pending |
 | SCH-03 | Phase 20 | Pending |

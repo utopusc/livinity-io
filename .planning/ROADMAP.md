@@ -123,7 +123,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 - [x] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools (completed 2026-04-24)
 - [x] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming (completed 2026-04-24)
-- [ ] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache
+- [x] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache (completed 2026-04-24)
 - [ ] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
 - [ ] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
 - [ ] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
@@ -143,7 +143,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans
 **Plan files**:
 - [x] 19-01-PLAN.md — Compose Graph Viewer (CGV-01): reactflow + js-yaml UI parsing service deps
-- [ ] 19-02-PLAN.md — Image Vulnerability Scanning (CGV-02, CGV-03, CGV-04): Trivy backend + Redis SHA256 cache + severity badges UI
+- [x] 19-02-PLAN.md — Image Vulnerability Scanning (CGV-02, CGV-03, CGV-04): Trivy backend + Redis SHA256 cache + severity badges UI
 **Plan files**:
 - [x] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
 - [x] 17-02-PLAN.md — Redeploy-with-pull button + extended AI docker_manage tool (QW-03, QW-04)
@@ -232,7 +232,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 |-------|-----------|----------------|--------|-----------|
 | 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 19. Compose Graph + Vuln Scan | v27.0 | 1/2 | In Progress|  |
+| 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |
 | 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |
 | 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
