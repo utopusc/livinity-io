@@ -353,7 +353,7 @@ function onDeviceConnect(ws: WebSocket): void {
     }
   }, config.AUTH_TIMEOUT_MS);
 
-  ws.on('message', (data) => {
+  ws.on('message', async (data) => {
     let msg: DeviceToRelayMessage;
     try {
       msg = JSON.parse(data.toString());
@@ -399,8 +399,60 @@ function onDeviceConnect(ws: WebSocket): void {
       deviceUserId = tokenPayload.userId;
       deviceDeviceId = tokenPayload.deviceId;
 
-      const sessionId = nanoid();
+      // Phase 14 SESS-01: validate the session UUID carried in the JWT against the sessions table.
+      // Three failure modes all close with 1008 (policy violation):
+      //   (a) session row does not exist (logout raced the device handshake, or the UUID is forged)
+      //   (b) session is expired (user hasn't logged in for > SESSION_MAX_AGE — 30 days)
+      //   (c) session.user_id does not match tokenPayload.userId (token replay across users)
+      const sessionRow = await pool.query<{ id: string; user_id: string; expires_at: Date }>(
+        'SELECT id, user_id, expires_at FROM sessions WHERE id = $1 LIMIT 1',
+        [tokenPayload.sessionId]
+      );
+      if (sessionRow.rows.length === 0) {
+        const errorMsg: DeviceAuthError = { type: 'device_auth_error', error: 'Session not found' };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(1008, 'session_invalid');
+        return;
+      }
+      const sessRow = sessionRow.rows[0];
+      if (new Date() > new Date(sessRow.expires_at)) {
+        const errorMsg: DeviceAuthError = { type: 'device_auth_error', error: 'Session expired' };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(1008, 'session_expired');
+        return;
+      }
+      if (sessRow.user_id !== tokenPayload.userId) {
+        const errorMsg: DeviceAuthError = { type: 'device_auth_error', error: 'Session user mismatch' };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(1008, 'session_user_mismatch');
+        return;
+      }
 
+      // Phase 14 SESS-01: cross-check tokenPayload.userId against devices.user_id.
+      // Defense in depth: even a validly signed token whose userId claim is wrong (e.g., rewritten at the signing service) must be rejected.
+      const deviceRow = await pool.query<{ user_id: string }>(
+        'SELECT user_id FROM devices WHERE device_id = $1 AND revoked = false LIMIT 1',
+        [tokenPayload.deviceId]
+      );
+      if (deviceRow.rows.length === 0) {
+        const errorMsg: DeviceAuthError = { type: 'device_auth_error', error: 'Device not found or revoked' };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(1008, 'device_not_found');
+        return;
+      }
+      if (deviceRow.rows[0].user_id !== tokenPayload.userId) {
+        const errorMsg: DeviceAuthError = { type: 'device_auth_error', error: 'Device ownership mismatch' };
+        ws.send(JSON.stringify(errorMsg));
+        ws.close(1008, 'device_ownership_mismatch');
+        return;
+      }
+
+      // Phase 14 SESS-02: compute tokenExpiresAt from JWT exp claim (seconds -> ms).
+      // The watchdog interval will close this bridge with 4401 when tokenExpiresAt <= Date.now().
+      const tokenExpiresAt = tokenPayload.exp * 1000;
+
+      // Phase 14 SESS-01: use the JWT's sessionId claim as the DeviceConnection's sessionId
+      // (no longer a relay-generated id). Plan 14-02 uses this for revocation pub/sub matching.
       device = new DeviceConnection({
         userId: tokenPayload.userId,
         deviceId: tokenPayload.deviceId,
@@ -408,18 +460,19 @@ function onDeviceConnect(ws: WebSocket): void {
         platform: authMsg.platform,
         tools: authMsg.tools,
         ws,
-        sessionId,
+        sessionId: tokenPayload.sessionId,
+        tokenExpiresAt,
       });
 
       deviceRegistry.register(tokenPayload.userId, tokenPayload.deviceId, device);
 
       const connectedMsg: DeviceConnected = {
         type: 'device_connected',
-        sessionId,
+        sessionId: tokenPayload.sessionId,
       };
       ws.send(JSON.stringify(connectedMsg));
 
-      console.log(`[relay] Device connected: ${authMsg.deviceName} (${authMsg.platform}) user=${tokenPayload.userId} device=${tokenPayload.deviceId}`);
+      console.log(`[relay] Device connected: ${authMsg.deviceName} (${authMsg.platform}) user=${tokenPayload.userId} device=${tokenPayload.deviceId} session=${tokenPayload.sessionId} tokenExpiresAt=${new Date(tokenExpiresAt).toISOString()}`);
 
       // Notify LivOS tunnel that a device connected
       const userTunnel = registry.getByUserId(tokenPayload.userId);

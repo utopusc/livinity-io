@@ -2,7 +2,7 @@
  * Device JWT Authentication
  *
  * Verifies device tokens issued by livinity.io /api/device/token.
- * Tokens are HS256 JWTs with userId, deviceId, deviceName, platform claims.
+ * Tokens are HS256 JWTs with userId, deviceId, deviceName, platform, sessionId claims.
  */
 
 import jwt from 'jsonwebtoken';
@@ -13,6 +13,7 @@ export interface DeviceTokenPayload {
   deviceId: string;
   deviceName: string;
   platform: string;
+  sessionId: string;  // Phase 14 SESS-01: approving user's sessions.id UUID
   iat: number;
   exp: number;
 }
@@ -23,8 +24,8 @@ export function verifyDeviceToken(token: string): DeviceTokenPayload | null {
       algorithms: ['HS256'],
     }) as DeviceTokenPayload;
 
-    // Validate required claims
-    if (!payload.userId || !payload.deviceId || !payload.deviceName || !payload.platform) {
+    // Phase 14 SESS-01: sessionId is now a required claim — legacy tokens without it are rejected
+    if (!payload.userId || !payload.deviceId || !payload.deviceName || !payload.platform || !payload.sessionId) {
       return null;
     }
 
