@@ -215,6 +215,20 @@ export interface TunnelDeviceToolCall {
   timeout?: number;
 }
 
+/**
+ * Phase 16 ADMIN-02: livinityd admin forces a device bridge to disconnect.
+ * Relay closes the matching DeviceConnection's WebSocket with code 4403
+ * reason 'admin_disconnect'. Crosses user boundaries — the targetUserId
+ * does NOT have to equal the tunnel's userId; the admin-side tRPC
+ * adminProcedure gate is the authoritative permission check.
+ */
+export interface TunnelAdminForceDisconnect {
+  type: 'admin_force_disconnect';
+  /** Owner of the target device — required for DeviceRegistry.getDevice(userId, deviceId) */
+  targetUserId: string;
+  deviceId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Bidirectional messages (2 types)
 // ---------------------------------------------------------------------------
@@ -270,6 +284,7 @@ export type ClientToRelayMessage =
   | TunnelWsError
   | TunnelPong
   | TunnelDeviceToolCall
+  | TunnelAdminForceDisconnect
   | TunnelDomainSyncAck;
 
 /** Messages that can flow in either direction */
@@ -309,6 +324,7 @@ export type MessageTypeMap = {
   'device_connected': TunnelDeviceConnected;
   'device_disconnected': TunnelDeviceDisconnected;
   'device_tool_call': TunnelDeviceToolCall;
+  'admin_force_disconnect': TunnelAdminForceDisconnect;
   'device_tool_result': TunnelDeviceToolResult;
   'device_audit_event': TunnelDeviceAuditEvent;
   'device_emergency_stop': TunnelDeviceEmergencyStop;

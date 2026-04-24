@@ -591,4 +591,21 @@ export class DeviceBridge {
 
 		return true
 	}
+
+	/**
+	 * Phase 16 ADMIN-02: admin-initiated force disconnect. Sends an
+	 * admin_force_disconnect tunnel message to the relay, which closes the
+	 * device WebSocket with code 4403 'admin_disconnect'. Distinct from
+	 * removeDevice (user-initiated, revokes token and cleans up state):
+	 * forceDisconnect ONLY tears down the live bridge; the device JWT + DB
+	 * row remain intact so the device can legitimately re-pair if the admin
+	 * only wanted to interrupt the current session.
+	 *
+	 * Does NOT mutate local state (connectedDevices / Redis) — the normal
+	 * onDeviceDisconnected pathway will clean up once the relay's ws.close
+	 * propagates back through the tunnel as a device_disconnected event.
+	 */
+	forceDisconnect(targetUserId: string, deviceId: string): void {
+		this.sendTunnelMessage({type: 'admin_force_disconnect', targetUserId, deviceId})
+	}
 }

@@ -47,6 +47,7 @@ import type {
   TunnelDeviceToolResult,
   TunnelDeviceAuditEvent,
   TunnelDeviceEmergencyStop,
+  TunnelAdminForceDisconnect,
   ClientToRelayMessage,
   BidirectionalMessage,
 } from './protocol.js';
@@ -299,6 +300,26 @@ function onTunnelConnect(ws: WebSocket): void {
         };
         targetDevice.ws.send(JSON.stringify(deviceMsg));
         console.log(`[relay] Forwarded tool_call to device=${toolCallMsg.deviceId} tool=${toolCallMsg.tool} request=${toolCallMsg.requestId}`);
+        break;
+      }
+
+      case 'admin_force_disconnect': {
+        // Phase 16 ADMIN-02: livinityd admin has authorized a cross-user disconnect.
+        // The admin-routes handler in livinityd already passed adminProcedure; we trust
+        // the tunnel message. Iterate DeviceRegistry by (targetUserId, deviceId) rather
+        // than the tunnel's userId — this is a legitimate cross-user operation.
+        const adminMsg = msg as TunnelAdminForceDisconnect;
+        const target = deviceRegistry.getDevice(adminMsg.targetUserId, adminMsg.deviceId);
+        if (!target) {
+          console.log(`[relay] admin_force_disconnect: no active bridge for user=${adminMsg.targetUserId} device=${adminMsg.deviceId} — noop`);
+          break;
+        }
+        try {
+          target.ws.close(4403, 'admin_disconnect');
+        } catch (err) {
+          console.error(`[relay] admin_force_disconnect: ws.close threw for device=${adminMsg.deviceId}`, err);
+        }
+        console.log(`[relay] admin_force_disconnect: closed bridge for user=${adminMsg.targetUserId} device=${adminMsg.deviceId} with 4403`);
         break;
       }
 
