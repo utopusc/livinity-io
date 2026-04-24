@@ -9,8 +9,8 @@
 
 - [x] **QW-01**: Container logs stream in real time via WebSocket with ANSI color support (replaces 5s snapshot polling)
 - [x] **QW-02**: Stack secrets flagged `secret: true` in UI are injected as shell env vars at `docker compose up`, never written to `.env` disk
-- [ ] **QW-03**: Stack detail UI has a "Redeploy (pull latest)" action that runs `docker compose pull` + `docker compose up -d`
-- [ ] **QW-04**: AI `docker_manage` tool supports stack operations (deploy, control, remove), image pull, and container create beyond the current start/stop/restart/inspect/logs
+- [x] **QW-03**: Stack detail UI has a "Redeploy (pull latest)" action that runs `docker compose pull` + `docker compose up -d`
+- [x] **QW-04**: AI `docker_manage` tool supports stack operations (deploy, control, remove), image pull, and container create beyond the current start/stop/restart/inspect/logs
 
 ### Container File Browser (CFB) — Phase 18
 
@@ -90,8 +90,8 @@
 |-------------|-------|--------|
 | QW-01 | Phase 17 | Complete |
 | QW-02 | Phase 17 | Complete |
-| QW-03 | Phase 17 | Pending |
-| QW-04 | Phase 17 | Pending |
+| QW-03 | Phase 17 | Complete |
+| QW-04 | Phase 17 | Complete |
 | CFB-01 | Phase 18 | Pending |
 | CFB-02 | Phase 18 | Pending |
 | CFB-03 | Phase 18 | Pending |

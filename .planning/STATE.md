@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-status: executing
-stopped_at: Completed 17-01-PLAN.md (QW-01, QW-02 satisfied)
-last_updated: "2026-04-24T21:46:42Z"
-last_activity: 2026-04-24 — Plan 17-01 executed (real-time logs WS + encrypted stack secrets)
+status: completed
+stopped_at: Completed 17-02-PLAN.md — Phase 17 complete (all QW requirements)
+last_updated: "2026-04-24T21:58:34.541Z"
+last_activity: 2026-04-24 — Plan 17-01 executed in 7 minutes, 4 tasks committed atomically
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 50
-current_phase: 17
-current_phase_name: Docker Quick Wins
-current_plan: 02
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v27.0 — Docker Management Upgrade
-**Current focus:** Phase 17 — Docker Quick Wins (not yet planned)
+**Current focus:** Phase 17 complete; Phase 18 (Container File Browser) next
 
 ## Current Position
 
-Phase: 17 — Docker Quick Wins
-Plan: 02 (next) — Redeploy-with-pull button + extended AI docker_manage tool
-Status: 17-01 complete (QW-01, QW-02 satisfied); awaiting 17-02 execution
-Last activity: 2026-04-24 — Plan 17-01 executed in 7 minutes, 4 tasks committed atomically
+Phase: 17 — Docker Quick Wins (COMPLETE)
+Plan: 02 complete — Redeploy-with-pull button + extended AI docker_manage tool
+Status: 17-01 + 17-02 complete; QW-01/02/03/04 all satisfied. Phase 17 fully closed.
+Last activity: 2026-04-24 — Plan 17-02 executed in 8 minutes, 4 tasks committed atomically
 
-**Progress:** [█████░░░░░] 50% (1/2 plans in Phase 17)
+**Progress:** [██████████] 100%
 
 ## v27.0 Phase Structure
 
@@ -59,6 +56,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
+| Phase 17 P02 | 8min | 4 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -81,6 +79,15 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - `JWT_SECRET_PATH` hardcoded to `/opt/livos/data/secrets/jwt` — lift to env var only if dev environment needs a different location
 - Pattern establishment: WebSocket streaming handler factory is the reference for Phase 18 (file browser) and Phase 20 (scheduler tail); AES-256-GCM-with-JWT-key is the reference for Phase 21 GIT-01 (git credential encryption)
 
+### Plan 17-02 Decisions (2026-04-24)
+
+- AI `docker_manage` stays on local Docker socket + host `docker compose` CLI (via `child_process.exec`) — NOT livinityd tRPC. Matches existing start/stop/restart/inspect/logs ops; no JWT plumbing needed. Compose files under `/opt/livos/data/stacks/<name>/` are shared with livinityd so AI-created stacks appear in the UI immediately.
+- `PROTECTED_STACK_PREFIXES = ['livos', 'nexus-infrastructure', 'caddy']` guards `DockerManager.removeStack` — mirrors livinityd's container-level protection at stack level since `isProtectedContainer` isn't cross-process reachable.
+- `controlStack('pull-and-up')` re-injects secret env overrides (same path as `'up'`) — upgrading a secret-bearing stack via the Redeploy button keeps its encrypted env vars intact.
+- Renamed inner `exec` local to `execInstance` in `DockerManager.exec()` to avoid shadowing the module-scoped `promisify(cpExec)` — zero behavioral change, required by TypeScript.
+- Redeploy ActionButton reuses `color='blue'` (no new `'violet'` variant) per plan explicit guidance; distinguishes via title "Redeploy (pull latest images)".
+- AI `stack-deploy` does NOT expose `secret: true` flag on envVars — the secret store is a livinityd-owned concern. Deferred to v28: either route AI stack-deploy through livinityd tRPC with an internal JWT, or grant nexus DockerManager read access to the same Redis key.
+
 ### Carried from v26.0
 
 - Deployment warning: REDIS_URL must be set on platform/web for SESS-03 instant teardown
@@ -98,6 +105,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T21:46:42Z
-Stopped at: Completed 17-01-PLAN.md (QW-01, QW-02 satisfied); 4 task commits + SUMMARY
-Resume with: `/gsd-execute-phase 17` to continue with Plan 17-02 (redeploy-with-pull + AI docker_manage expansion)
+Last session: 2026-04-24T21:58:34.537Z
+Stopped at: Completed 17-02-PLAN.md — Phase 17 complete (all QW requirements)
+Resume with: `/gsd-plan-phase 18` to begin Container File Browser phase (next in v27.0 sequence)
