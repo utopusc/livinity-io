@@ -1,12 +1,15 @@
 import {mkdir, writeFile, readFile, rm} from 'node:fs/promises'
 import {existsSync} from 'node:fs'
 import {join} from 'node:path'
+import {randomBytes} from 'node:crypto'
 
 import {$} from 'execa'
 import Dockerode from 'dockerode'
 import {Redis} from 'ioredis'
 
 import {createStackSecretStore, type StackSecretStore} from './stack-secrets.js'
+import {cloneOrPull, copyComposeToStackDir} from './git-deploy.js'
+import {getPool} from '../database/index.js'
 import type {StackInfo, StackContainer, StackControlOperation} from './types.js'
 
 const docker = new Dockerode({socketPath: '/var/run/docker.sock'})
@@ -89,11 +92,21 @@ export async function listStacks(): Promise<StackInfo[]> {
 // via execa's `env` option at `docker compose up` time only.
 export type StackEnvVarInput = {key: string; value: string; secret?: boolean}
 
+// Phase 21 GIT-01: optional git config for git-backed stacks.
+// Mutually exclusive with composeYaml on deployStack input.
+export type StackGitInput = {
+	url: string
+	branch?: string // default 'main'
+	credentialId?: string | null
+	composePath?: string // default 'docker-compose.yml'
+}
+
 export async function deployStack(input: {
 	name: string
-	composeYaml: string
+	composeYaml?: string
+	git?: StackGitInput
 	envVars?: StackEnvVarInput[]
-}): Promise<{success: boolean; message: string}> {
+}): Promise<{success: boolean; message: string; webhookSecret?: string}> {
 	// Validate stack name
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(input.name)) {
 		throw new Error(
@@ -101,11 +114,54 @@ export async function deployStack(input: {
 		)
 	}
 
+	// Mutually exclusive — either composeYaml (existing path) or git (new path)
+	if (!input.composeYaml && !input.git) {
+		throw new Error('[validation-error] Either composeYaml or git must be provided')
+	}
+	if (input.composeYaml && input.git) {
+		throw new Error('[validation-error] composeYaml and git are mutually exclusive')
+	}
+
 	const stackDir = await ensureStacksDir(input.name)
 	const composePath = join(stackDir, 'docker-compose.yml')
+	let webhookSecret: string | undefined
 
-	// Write compose file
-	await writeFile(composePath, input.composeYaml, 'utf-8')
+	if (input.git) {
+		// Git path (Phase 21 GIT-02): clone, copy compose, persist row
+		const branch = input.git.branch || 'main'
+		const repoComposePath = input.git.composePath || 'docker-compose.yml'
+		await cloneOrPull(input.name, {
+			url: input.git.url,
+			branch,
+			credentialId: input.git.credentialId ?? null,
+			composePath: repoComposePath,
+		})
+		await copyComposeToStackDir(input.name, repoComposePath)
+
+		// Generate webhook secret + persist stack row
+		webhookSecret = randomBytes(32).toString('hex')
+		const pool = getPool()
+		if (!pool) throw new Error('[db-error] Database not initialized')
+		await pool.query(
+			`INSERT INTO stacks (name, git_url, git_branch, git_credential_id, compose_path, webhook_secret, last_synced_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			 ON CONFLICT (name) DO UPDATE SET
+				git_url = EXCLUDED.git_url, git_branch = EXCLUDED.git_branch,
+				git_credential_id = EXCLUDED.git_credential_id, compose_path = EXCLUDED.compose_path,
+				webhook_secret = EXCLUDED.webhook_secret, last_synced_at = NOW(), updated_at = NOW()`,
+			[
+				input.name,
+				input.git.url,
+				branch,
+				input.git.credentialId ?? null,
+				repoComposePath,
+				webhookSecret,
+			],
+		)
+	} else {
+		// YAML path — UNCHANGED, write compose to disk as before
+		await writeFile(composePath, input.composeYaml!, 'utf-8')
+	}
 
 	// Split into secret vs plain entries (QW-02)
 	const allEnv = input.envVars ?? []
@@ -142,7 +198,67 @@ export async function deployStack(input: {
 		throw new Error(`[compose-error] Failed to deploy stack '${input.name}': ${err.stderr || err.message}`)
 	}
 
-	return {success: true, message: `Stack '${input.name}' deployed`}
+	return {success: true, message: `Stack '${input.name}' deployed`, webhookSecret}
+}
+
+// Phase 21 GIT-03 helpers — only git-backed stacks have rows in the `stacks` PG table.
+export type GitStackRow = {
+	name: string
+	gitUrl: string
+	gitBranch: string
+	gitCredentialId: string | null
+	composePath: string
+	webhookSecret: string
+	lastSyncedSha: string | null
+}
+
+export async function getGitStack(name: string): Promise<GitStackRow | null> {
+	const pool = getPool()
+	if (!pool) return null
+	const {rows} = await pool.query(
+		`SELECT name, git_url, git_branch, git_credential_id, compose_path,
+				webhook_secret, last_synced_sha
+		 FROM stacks WHERE name = $1`,
+		[name],
+	)
+	if (rows.length === 0) return null
+	const r = rows[0]
+	return {
+		name: r.name,
+		gitUrl: r.git_url,
+		gitBranch: r.git_branch,
+		gitCredentialId: r.git_credential_id,
+		composePath: r.compose_path,
+		webhookSecret: r.webhook_secret,
+		lastSyncedSha: r.last_synced_sha,
+	}
+}
+
+export async function listGitStacks(): Promise<GitStackRow[]> {
+	const pool = getPool()
+	if (!pool) return []
+	const {rows} = await pool.query(
+		`SELECT name, git_url, git_branch, git_credential_id, compose_path,
+				webhook_secret, last_synced_sha FROM stacks ORDER BY name ASC`,
+	)
+	return rows.map((r: any) => ({
+		name: r.name,
+		gitUrl: r.git_url,
+		gitBranch: r.git_branch,
+		gitCredentialId: r.git_credential_id,
+		composePath: r.compose_path,
+		webhookSecret: r.webhook_secret,
+		lastSyncedSha: r.last_synced_sha,
+	}))
+}
+
+export async function updateGitStackSyncSha(name: string, sha: string): Promise<void> {
+	const pool = getPool()
+	if (!pool) return
+	await pool.query(
+		`UPDATE stacks SET last_synced_sha = $1, last_synced_at = NOW(), updated_at = NOW() WHERE name = $2`,
+		[sha, name],
+	)
 }
 
 export async function editStack(input: {
@@ -276,6 +392,12 @@ export async function removeStack(
 		.deleteAll(name)
 		.catch(() => {})
 	await rm(stackDir, {recursive: true, force: true})
+
+	// Phase 21 — also clean up git working tree + PG row for git-backed stacks.
+	// Both are no-ops for YAML-only stacks (best-effort, never fail removeStack).
+	await rm(join('/opt/livos/data/git', name), {recursive: true, force: true}).catch(() => {})
+	const pool = getPool()
+	if (pool) await pool.query(`DELETE FROM stacks WHERE name = $1`, [name]).catch(() => {})
 
 	return {success: true, message: `Stack '${name}' removed`}
 }

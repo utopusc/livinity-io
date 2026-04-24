@@ -873,7 +873,15 @@ export default router({
 		.input(
 			z.object({
 				name: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
-				composeYaml: z.string().min(1).max(1_000_000),
+				composeYaml: z.string().min(1).max(1_000_000).optional(),
+				git: z
+					.object({
+						url: z.string().min(1).max(1000),
+						branch: z.string().max(255).optional().default('main'),
+						credentialId: z.string().uuid().nullable().optional(),
+						composePath: z.string().max(500).optional().default('docker-compose.yml'),
+					})
+					.optional(),
 				envVars: z
 					.array(
 						z.object({
@@ -893,6 +901,30 @@ export default router({
 					throw new TRPCError({
 						code: 'BAD_REQUEST',
 						message: err.message.replace('[validation-error] ', ''),
+					})
+				}
+				if (err.message?.includes('[credential-not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[credential-not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[compose-not-found]')) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: err.message.replace('[compose-not-found] ', ''),
+					})
+				}
+				if (err.message?.includes('[bad-compose-path]')) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: err.message.replace('[bad-compose-path] ', ''),
+					})
+				}
+				if (err.message?.includes('[db-error]')) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message.replace('[db-error] ', ''),
 					})
 				}
 				if (err.message?.includes('[compose-error]')) {
