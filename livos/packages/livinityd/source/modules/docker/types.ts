@@ -142,7 +142,7 @@ export interface StackContainer {
 	status: string
 }
 
-export type StackControlOperation = 'up' | 'down' | 'stop' | 'start' | 'restart'
+export type StackControlOperation = 'up' | 'down' | 'stop' | 'start' | 'restart' | 'pull-and-up'
 
 export interface ContainerCreateInput {
 	// General (CREATE-01)
