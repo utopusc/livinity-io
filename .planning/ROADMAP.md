@@ -142,7 +142,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. AI calling docker_manage with operation="stack-deploy" or "stack-remove" or "image-pull" succeeds end-to-end with the same output shape as existing tRPC routes
 **Plans**: 2 plans
 **Plan files**:
-- [ ] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
+- [x] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
 - [ ] 17-02-PLAN.md — Redeploy-with-pull button + extended AI docker_manage tool (QW-03, QW-04)
 
 ### Phase 18: Container File Browser
@@ -224,7 +224,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 17. Docker Quick Wins | v27.0 | 0/2 | Not started | - |
+| 17. Docker Quick Wins | v27.0 | 1/2 | In Progress|  |
 | 18. Container File Browser | v27.0 | 0/2 | Not started | - |
 | 19. Compose Graph + Vuln Scan | v27.0 | 0/2 | Not started | - |
 | 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |

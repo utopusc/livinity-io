@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-status: defining_requirements
-stopped_at: Milestone v27.0 started — roadmap complete, ready for Phase 17
-last_updated: "2026-04-24T19:15:00Z"
-last_activity: 2026-04-24 — v27.0 milestone started, 33 requirements mapped to 7 phases (17-23)
+status: executing
+stopped_at: Completed 17-01-PLAN.md (QW-01, QW-02 satisfied)
+last_updated: "2026-04-24T21:46:42Z"
+last_activity: 2026-04-24 — Plan 17-01 executed (real-time logs WS + encrypted stack secrets)
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 current_phase: 17
 current_phase_name: Docker Quick Wins
+current_plan: 02
 ---
 
 # Project State
@@ -28,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 17 — Docker Quick Wins (not yet planned)
-Plan: —
-Status: Roadmap complete, awaiting `/gsd-plan-phase 17`
-Last activity: 2026-04-24 — v27.0 roadmap created (7 phases, 33/33 requirements mapped)
+Phase: 17 — Docker Quick Wins
+Plan: 02 (next) — Redeploy-with-pull button + extended AI docker_manage tool
+Status: 17-01 complete (QW-01, QW-02 satisfied); awaiting 17-02 execution
+Last activity: 2026-04-24 — Plan 17-01 executed in 7 minutes, 4 tasks committed atomically
 
-**Progress:** `[░░░░░░░░░░░░░░░░]` 0/7 phases (0%)
+**Progress:** [█████░░░░░] 50% (1/2 plans in Phase 17)
 
 ## v27.0 Phase Structure
 
@@ -51,6 +52,10 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 
 ## Performance Metrics
 
+| Phase-Plan | Duration | Tasks | Files | Completed |
+|------------|----------|-------|-------|-----------|
+| 17-01 | 7 min | 4 | 9 | 2026-04-24 |
+
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
@@ -65,6 +70,16 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Phase 23 (AI diagnostics) depends on Phase 19's vulnerability scanning for AID-04
 - Dockhand-inspired features: file browser, graph viewer, vuln scan, GitOps stacks, multi-host — all catching up to competitor parity
 - AI-powered diagnostics (Phase 23) = Livinity's unique moat, no competing Docker manager has this
+
+### Plan 17-01 Decisions (2026-04-24)
+
+- Reused `stripDockerStreamHeaders` by exporting it unchanged from `docker.ts` (single source of truth for Docker frame parsing)
+- `editStack` uses incremental delete-missing + set-non-empty (NOT `deleteAll`) — allows UI to submit blank-value secret rows to preserve stored values on edit
+- `controlStack('up')` also injects secret envOverrides (otherwise stop→up cycles would lose secret env)
+- `removeStack` purges Redis secret hash best-effort (`.catch(() => {})`) — a Redis outage cannot block stack teardown
+- LogsTab search input is visible v1 placeholder; xterm search addon deferred to v28 per plan guidance
+- `JWT_SECRET_PATH` hardcoded to `/opt/livos/data/secrets/jwt` — lift to env var only if dev environment needs a different location
+- Pattern establishment: WebSocket streaming handler factory is the reference for Phase 18 (file browser) and Phase 20 (scheduler tail); AES-256-GCM-with-JWT-key is the reference for Phase 21 GIT-01 (git credential encryption)
 
 ### Carried from v26.0
 
@@ -83,6 +98,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T19:15:00Z
-Stopped at: v27.0 milestone started — ready for Phase 17 planning
-Resume with: `/gsd-plan-phase 17` or `/gsd-autonomous` for full pipeline
+Last session: 2026-04-24T21:46:42Z
+Stopped at: Completed 17-01-PLAN.md (QW-01, QW-02 satisfied); 4 task commits + SUMMARY
+Resume with: `/gsd-execute-phase 17` to continue with Plan 17-02 (redeploy-with-pull + AI docker_manage expansion)
