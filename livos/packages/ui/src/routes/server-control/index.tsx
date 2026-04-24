@@ -55,6 +55,7 @@ import {useEngineInfo} from '@/hooks/use-engine-info'
 import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {DomainsTab} from './domains-tab'
+import {ComposeGraphViewer} from './compose-graph-viewer'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {Table, TableHeader, TableBody, TableHead, TableRow, TableCell} from '@/shadcn-components/ui/table'
@@ -2903,49 +2904,59 @@ function StacksTab() {
 												</div>
 											</TableCell>
 										</TableRow>
-										{/* Expanded row: constituent containers */}
+										{/* Expanded row: constituent containers + compose graph */}
 										{isExpanded && (
 											<TableRow>
 												<TableCell colSpan={4} className='p-0 border-t border-border-default bg-surface-1/30'>
 													<div className='px-4 py-3'>
-														<h4 className='mb-2 text-xs font-semibold uppercase tracking-wider text-text-secondary'>
-															Containers ({stack.containers.length})
-														</h4>
-														{stack.containers.length === 0 ? (
-															<p className='text-xs text-text-tertiary'>No containers running for this stack.</p>
-														) : (
-															<Table>
-																<TableHeader>
-																	<TableRow>
-																		<TableHead className='text-xs'>Name</TableHead>
-																		<TableHead className='text-xs'>Image</TableHead>
-																		<TableHead className='text-xs'>State</TableHead>
-																	</TableRow>
-																</TableHeader>
-																<TableBody>
-																	{stack.containers.map((container) => (
-																		<TableRow key={container.id}>
-																			<TableCell className='py-1.5'>
-																				<span className='font-mono text-xs font-medium'>{container.name}</span>
-																			</TableCell>
-																			<TableCell className='py-1.5'>
-																				<span className='text-xs text-text-secondary'>{container.image}</span>
-																			</TableCell>
-																			<TableCell className='py-1.5'>
-																				<span className={cn(
-																					'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
-																					container.state === 'running' ? 'bg-emerald-500/20 text-emerald-600' :
-																					container.state === 'exited' ? 'bg-red-500/20 text-red-600' :
-																					'bg-neutral-500/20 text-neutral-500',
-																				)}>
-																					{container.state}
-																				</span>
-																			</TableCell>
-																		</TableRow>
-																	))}
-																</TableBody>
-															</Table>
-														)}
+														<Tabs defaultValue='containers'>
+															<TabsList className='mb-3'>
+																<TabsTrigger value='containers'>
+																	Containers ({stack.containers.length})
+																</TabsTrigger>
+																<TabsTrigger value='graph'>Graph</TabsTrigger>
+															</TabsList>
+															<TabsContent value='containers'>
+																{stack.containers.length === 0 ? (
+																	<p className='text-xs text-text-tertiary'>No containers running for this stack.</p>
+																) : (
+																	<Table>
+																		<TableHeader>
+																			<TableRow>
+																				<TableHead className='text-xs'>Name</TableHead>
+																				<TableHead className='text-xs'>Image</TableHead>
+																				<TableHead className='text-xs'>State</TableHead>
+																			</TableRow>
+																		</TableHeader>
+																		<TableBody>
+																			{stack.containers.map((container) => (
+																				<TableRow key={container.id}>
+																					<TableCell className='py-1.5'>
+																						<span className='font-mono text-xs font-medium'>{container.name}</span>
+																					</TableCell>
+																					<TableCell className='py-1.5'>
+																						<span className='text-xs text-text-secondary'>{container.image}</span>
+																					</TableCell>
+																					<TableCell className='py-1.5'>
+																						<span className={cn(
+																							'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+																							container.state === 'running' ? 'bg-emerald-500/20 text-emerald-600' :
+																							container.state === 'exited' ? 'bg-red-500/20 text-red-600' :
+																							'bg-neutral-500/20 text-neutral-500',
+																						)}>
+																							{container.state}
+																						</span>
+																					</TableCell>
+																				</TableRow>
+																			))}
+																		</TableBody>
+																	</Table>
+																)}
+															</TabsContent>
+															<TabsContent value='graph'>
+																<ComposeGraphViewer stackName={stack.name} />
+															</TabsContent>
+														</Tabs>
 													</div>
 												</TableCell>
 											</TableRow>
