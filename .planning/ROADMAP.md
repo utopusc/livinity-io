@@ -142,6 +142,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. AI calling docker_manage with operation="stack-deploy" or "stack-remove" or "image-pull" succeeds end-to-end with the same output shape as existing tRPC routes
 **Plans**: 2 plans
 **Plan files**:
+- [ ] 19-01-PLAN.md — Compose Graph Viewer (CGV-01): reactflow + js-yaml UI parsing service deps
+- [ ] 19-02-PLAN.md — Image Vulnerability Scanning (CGV-02, CGV-03, CGV-04): Trivy backend + Redis SHA256 cache + severity badges UI
+**Plan files**:
 - [x] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
 - [x] 17-02-PLAN.md — Redeploy-with-pull button + extended AI docker_manage tool (QW-03, QW-04)
 
