@@ -4,15 +4,15 @@ milestone: v27.0
 milestone_name: Docker Management Upgrade
 current_plan: 02 of 02
 status: completed
-stopped_at: Completed 18-01-PLAN.md — Container File Browser backend (helpers + 4 tRPC procedures + 2 REST endpoints + busboy dep)
-last_updated: "2026-04-24T22:20:21.169Z"
-last_activity: 2026-04-24 — Plan 18-01 executed in ~6 minutes, 3 tasks + 1 Rule-1 fixup committed atomically
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-04-24T22:28:23.781Z"
+last_activity: 2026-04-24 — Plan 18-02 executed in ~6 minutes, 2 tasks + 1 Rule-3 deviation fix committed atomically; Phase 18 complete (CFB-01..05 satisfied)
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 18 — Container File Browser (IN PROGRESS)
+Phase: 18 — Container File Browser (COMPLETE)
 Current Plan: 02 of 02
-Status: 18-01 complete (backend: helpers + 4 tRPC procedures + 2 REST endpoints); 18-02 pending (UI Files tab).
-Last activity: 2026-04-24 — Plan 18-01 executed in ~6 minutes, 3 tasks + 1 Rule-1 fixup committed atomically
+Status: 18-01 complete (backend: helpers + 4 tRPC procedures + 2 REST endpoints); 18-02 complete (UI Files tab + httpOnlyPaths fix). All five CFB requirements (CFB-01..05) satisfied.
+Last activity: 2026-04-24 — Plan 18-02 executed in ~6 minutes, 2 tasks + 1 Rule-3 deviation fix committed atomically
 
-**Progress:** [████████░░] 75%
+**Progress:** [██████████] 100%
 
 ## v27.0 Phase Structure
 
@@ -53,13 +53,13 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | Phase-Plan | Duration | Tasks | Files | Completed |
 |------------|----------|-------|-------|-----------|
 | 17-01 | 7 min | 4 | 9 | 2026-04-24 |
+| 17-02 | 8 min | 4 | 7 | 2026-04-24 |
 | 18-01 | 6 min | 3 (+1 fixup) | 4 | 2026-04-24 |
+| 18-02 | 6 min | 2 (+1 deviation) | 3 | 2026-04-24 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
-| Phase 17 P02 | 8min | 4 tasks | 7 files |
-| Phase 18 P01 | 6 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -91,6 +91,19 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Redeploy ActionButton reuses `color='blue'` (no new `'violet'` variant) per plan explicit guidance; distinguishes via title "Redeploy (pull latest images)".
 - AI `stack-deploy` does NOT expose `secret: true` flag on envVars — the secret store is a livinityd-owned concern. Deferred to v28: either route AI stack-deploy through livinityd tRPC with an internal JWT, or grant nexus DockerManager read access to the same Redis key.
 
+### Plan 18-02 Decisions (2026-04-24)
+
+- Inferred `ContainerFileEntry` from `RouterOutput['docker']['containerListDir']` rather than duplicating the interface client-side — single source of truth in `container-files.ts`.
+- Plain styled `<textarea>` for the edit modal (not Monaco — Monaco is NOT installed; verified by grepping package.json). Styling matches the existing compose YAML editor at `server-control/index.tsx` line 2509 — keeps bundle flat.
+- Imperative `utils.docker.containerReadFile.fetch()` for read-on-edit-open instead of conditional `useQuery` — modal data is one-shot, doesn't need React-Query caching.
+- POSIX path helpers (`posixJoin`, `posixDirname`, `segmentsOf`) are private-module-local — never use `node:path` because it resolves to win32 on Windows hosts and container paths are POSIX.
+- Edit button is rendered DISABLED (not hidden) for non-text or large files so the affordance is discoverable; click on disabled writes inline error rather than opening modal.
+- Recursive-delete checkbox is the ONLY enabler for the directory delete button — file deletes get a single confirm button with no checkbox, mirroring `removeContainer` UX.
+- Drop zone uses `useDropzone` with `noClick: false` so users can drag-drop AND click-to-browse; uploads are sequential to avoid hammering the multipart endpoint.
+- Download is a same-origin `<a download>` anchor (not fetch+blob) — auth cookie rides automatically; tRPC can't carry tar streams anyway.
+- **Rule 3 deviation:** `docker.containerWriteFile` and `docker.containerDeleteFile` were missing from `httpOnlyPaths` in Plan 18-01 — added in this plan. Without it, mutations would silently hang on disconnected WS clients per CLAUDE.md known-pitfall.
+- Pattern carried forward to future v28 expansions (file preview, chmod UI, chunked upload): the component's `currentPath` is the single source of truth for both display and uploads — adding modes is pure addition, no restructuring.
+
 ### Plan 18-01 Decisions (2026-04-24)
 
 - Module-local Dockerode in `container-files.ts` — mirrors docker-exec-socket / docker-logs-socket; the connection is just `/var/run/docker.sock` so per-module instantiation is essentially free.
@@ -119,6 +132,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T22:18:00.000Z
-Stopped at: Completed 18-01-PLAN.md — Container File Browser backend (helpers + 4 tRPC procedures + 2 REST endpoints + busboy dep)
+Last session: 2026-04-24T22:28:23.778Z
+Stopped at: Completed 18-02-PLAN.md
 Resume with: `/gsd:execute-phase 18` to run Plan 18-02 (UI Files tab — consumes the 18-01 backend)

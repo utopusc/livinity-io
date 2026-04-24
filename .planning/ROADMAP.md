@@ -122,7 +122,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Milestone Goal:** Elevate Livinity's Docker management to best-in-class self-hosted Docker platform with Dockhand-inspired features (file browser, GitOps stacks, vulnerability scanning, compose graph viewer, multi-host) plus AI-powered diagnostics as Livinity's unique moat.
 
 - [x] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools (completed 2026-04-24)
-- [ ] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming
+- [x] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming (completed 2026-04-24)
 - [ ] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache
 - [ ] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
 - [ ] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
@@ -158,7 +158,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans
 **Plan files**:
 - [x] 18-01-PLAN.md — Backend: list/read/write/download/delete helpers + tRPC routes + REST endpoints (CFB-01, CFB-02, CFB-03, CFB-05)
-- [ ] 18-02-PLAN.md — UI: Files tab with breadcrumb, dropzone, edit modal, recursive-delete confirmation (CFB-01, CFB-02, CFB-03, CFB-04, CFB-05)
+- [x] 18-02-PLAN.md — UI: Files tab with breadcrumb, dropzone, edit modal, recursive-delete confirmation (CFB-01, CFB-02, CFB-03, CFB-04, CFB-05)
 
 ### Phase 19: Compose Graph Viewer + Vulnerability Scanning
 **Goal**: Visual compose graph for understanding multi-service topologies + on-demand Trivy image scanning with persistent SHA256-keyed cache.
@@ -228,7 +228,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 18. Container File Browser | v27.0 | 1/2 | In Progress|  |
+| 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 19. Compose Graph + Vuln Scan | v27.0 | 0/2 | Not started | - |
 | 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |
 | 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |

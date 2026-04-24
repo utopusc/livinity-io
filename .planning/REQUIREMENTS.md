@@ -17,7 +17,7 @@
 - [x] **CFB-01**: User can browse a container's filesystem (list directories, navigate with breadcrumbs) via Docker exec + `ls` over dockerode
 - [x] **CFB-02**: User can download a file from a container to their browser using `container.getArchive({path})` (tar stream)
 - [x] **CFB-03**: User can upload a file to a container using `container.putArchive(tarStream, {path})`
-- [ ] **CFB-04**: User can edit small text files (< 1MB) inline in the browser and save back to the container
+- [x] **CFB-04**: User can edit small text files (< 1MB) inline in the browser and save back to the container
 - [x] **CFB-05**: User can delete files and directories from the container
 
 ### Compose Graph & Vulnerability Scanning (CGV) — Phase 19
@@ -95,7 +95,7 @@
 | CFB-01 | Phase 18 | Complete |
 | CFB-02 | Phase 18 | Complete |
 | CFB-03 | Phase 18 | Complete |
-| CFB-04 | Phase 18 | Pending |
+| CFB-04 | Phase 18 | Complete |
 | CFB-05 | Phase 18 | Complete |
 | CGV-01 | Phase 19 | Pending |
 | CGV-02 | Phase 19 | Pending |
