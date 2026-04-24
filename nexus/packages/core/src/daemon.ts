@@ -1387,15 +1387,33 @@ ${task}`;
 
     toolRegistry.register({
       name: 'docker_manage',
-      description: 'Start, stop, restart, inspect, or get logs for a Docker container',
+      description: 'Manage Docker: containers (start/stop/restart/inspect/logs), stacks (stack-deploy/stack-control/stack-remove), images (image-pull), and container creation (container-create).',
       parameters: [
-        { name: 'operation', type: 'string', description: 'Operation to perform', required: true, enum: ['start', 'stop', 'restart', 'inspect', 'logs'] },
-        { name: 'name', type: 'string', description: 'Container name', required: true },
-        { name: 'tail', type: 'number', description: 'Log lines to return', required: false, default: 100 },
+        { name: 'operation', type: 'string', description: 'Operation to perform', required: true,
+          enum: ['start', 'stop', 'restart', 'inspect', 'logs',
+                 'stack-deploy', 'stack-control', 'stack-remove',
+                 'image-pull', 'container-create'] },
+        { name: 'name', type: 'string', required: true,
+          description: 'Container name (start/stop/restart/inspect/logs/container-create), stack name (stack-*), or image name (image-pull)' },
+        { name: 'tail', type: 'number', required: false, default: 100,
+          description: 'Log tail lines (logs op only)' },
+        { name: 'composeYaml', type: 'string', required: false,
+          description: 'Docker Compose YAML (stack-deploy op)' },
+        { name: 'envVars', type: 'object', required: false,
+          description: 'Env vars as {key:value} map (stack-deploy, container-create)' },
+        { name: 'stackOperation', type: 'string', required: false,
+          enum: ['up', 'down', 'stop', 'start', 'restart', 'pull-and-up'],
+          description: 'Sub-op for stack-control' },
+        { name: 'removeVolumes', type: 'boolean', required: false, default: false,
+          description: 'stack-remove only: also drop named volumes' },
+        { name: 'image', type: 'string', required: false,
+          description: 'Image ref for container-create; for image-pull use `name` instead' },
+        { name: 'ports', type: 'object', required: false,
+          description: 'Array of {hostPort, containerPort, protocol?} for container-create' },
       ],
       execute: async (params) => {
         const { operation, name } = params as { operation: string; name: string };
-        if (!name) return { success: false, output: '', error: 'Container name required.' };
+        if (!name) return { success: false, output: '', error: 'Name required (container / stack / image).' };
         try {
           switch (operation) {
             case 'start': return { success: true, output: await dockerManager.startContainer(name) };
@@ -1408,6 +1426,38 @@ ${task}`;
             case 'logs': {
               const logs = await dockerManager.containerLogs(name, (params.tail as number) || 100);
               return { success: true, output: logs || '(no logs)' };
+            }
+            case 'stack-deploy': {
+              const composeYaml = params.composeYaml as string | undefined;
+              if (!composeYaml) return { success: false, output: '', error: 'composeYaml required for stack-deploy' };
+              const envMap = (params.envVars as Record<string, string> | undefined) ?? {};
+              const envVars = Object.entries(envMap).map(([key, value]) => ({ key, value: String(value) }));
+              const result = await dockerManager.deployStack({ name, composeYaml, envVars });
+              return { success: true, output: `Stack deployed: ${result.name}\n\n${result.message}`, data: result };
+            }
+            case 'stack-control': {
+              const op = (params.stackOperation as string) || 'restart';
+              const allowed = ['up', 'down', 'stop', 'start', 'restart', 'pull-and-up'];
+              if (!allowed.includes(op)) return { success: false, output: '', error: `Invalid stackOperation: ${op}` };
+              const output = await dockerManager.controlStack(name, op as any);
+              return { success: true, output };
+            }
+            case 'stack-remove': {
+              const removeVolumes = params.removeVolumes === true;
+              const output = await dockerManager.removeStack(name, removeVolumes);
+              return { success: true, output };
+            }
+            case 'image-pull': {
+              const output = await dockerManager.pullImage(name);
+              return { success: true, output };
+            }
+            case 'container-create': {
+              const image = (params.image as string) || name;
+              const envMap = (params.envVars as Record<string, string> | undefined) ?? {};
+              const env = Object.entries(envMap).map(([key, value]) => ({ key, value: String(value) }));
+              const ports = (params.ports as Array<{ hostPort: number; containerPort: number; protocol?: 'tcp' | 'udp' }> | undefined) ?? [];
+              const result = await dockerManager.createContainer({ image, name, ports, env });
+              return { success: true, output: `Container created: ${result.name} (${result.id})`, data: result };
             }
             default:
               return { success: false, output: '', error: `Unknown operation: ${operation}` };
