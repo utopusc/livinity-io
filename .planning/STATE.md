@@ -1,85 +1,62 @@
 ---
 gsd_state_version: 1.0
-milestone: v25.0
-milestone_name: Memory & WhatsApp Integration
-status: unknown
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-04-03T04:12:06.975Z"
+milestone: v26.0
+milestone_name: Device Security & User Isolation
+status: defining_requirements
+stopped_at: Milestone started — defining requirements
+last_updated: "2026-04-24T00:00:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-02)
+See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v25.0 -- Memory & WhatsApp Integration
-**Current focus:** Phase 10 — unified-identity-memory-management-ui
+**Current milestone:** v26.0 -- Device Security & User Isolation
+**Current focus:** Defining requirements
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-24 — Milestone v26.0 started
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (v25.0)
+- Total plans completed: 0 (v26.0)
 - Average duration: --
 - Total execution time: 0 hours
 
-**Prior milestone (v24.0):**
-| Phase 01-ai-chat-mobile P01 | 4min | 2 tasks | 2 files |
-| Phase 01-ai-chat-mobile P02 | 4min | 2 tasks | 2 files |
-| Phase 02-settings-mobile P01 | 4min | 2 tasks | 2 files |
-| Phase 02-settings-mobile P02 | 5min | 2 tasks | 4 files |
-| Phase 03-server-control-mobile P01 | 9min | 2 tasks | 1 files |
-| Phase 03-server-control-mobile P02 | 10min | 2 tasks | 3 files |
-| Phase 04-files-mobile P01 | 5min | 2 tasks | 6 files |
-| Phase 04-files-mobile P02 | 3min | 2 tasks | 5 files |
-| Phase 05-terminal-mobile P01 | 4min | 2 tasks | 2 files |
+**Prior milestone (v25.0 — Memory & WhatsApp Integration):**
+| Phase 06-10 | 5 phases | 10 plans | 14/14 requirements satisfied |
+| Audit status: tech_debt (14/14 req met, wa_outbox dead code, UI menu label) |
 
 ## Accumulated Context
 
-### Decisions
+### Decisions (carried from v25.0)
 
-- Baileys v6.7.21 chosen over whatsapp-web.js (50MB vs 300-600MB, no Chromium)
-- Redis-backed auth state (not file-based) for Baileys Signal protocol keys
-- SQLite FTS5 for conversation search (zero new deps, built into better-sqlite3)
-- WhatsApp and Memory tracks are independent -- can build in parallel
-- Legacy daemon.ts WhatsApp code must be consolidated into ChannelManager (Phase 8)
-- Only 2 new npm dependencies: baileys + qrcode
-- PostgreSQL conversation backup explicitly OUT OF SCOPE (user decision)
-- [Phase 06]: Redis-backed auth state (not SQLite) for Baileys Signal protocol keys
-- [Phase 06]: Pino logger bridge (not installing pino) to keep dependency count minimal
-- [Phase 06]: qrcode named import (toDataURL) instead of default for TypeScript compatibility
-- [Phase 06]: getMessage returns undefined in Phase 6 (deferred to future phase for full message store)
-- [Phase 07]: WhatsApp-specific REST routes placed before generic :id route in Express
-- [Phase 07]: whatsappGetStatus reads Redis directly (avoids extra Nexus network hop)
-- [Phase 07]: Button variant=secondary for Cancel (outline unavailable in project Button component)
-- [Phase 07]: ChannelStatus type cast for whatsappGetStatus data matching existing Telegram/Discord pattern
-- [Phase 08-01]: Redis sorted set sliding window for rate limiting (not simple counter) -- accurate across restarts
-- [Phase 08-01]: In-memory queue for overflow (not Redis list) -- sendFn closures cannot be serialized
-- [Phase 08]: Merged WhatsApp into existing channel arrays rather than special-casing -- unified routing through ChannelManager
-- [Phase 08]: buildActionCallback drops messages silently when ChannelManager unavailable (same behavior as non-WhatsApp channels)
-- [Phase 09]: FTS5 query sanitization via double-quote wrapping prevents injection
-- [Phase 09]: Fire-and-forget archival pattern (.catch) to never block chat responses
-- [Phase 09]: Channel messages use chatId as userId (unified identity deferred)
-- [Phase 09]: conversation_search added to messaging and coding TOOL_PROFILES for broad availability
-- [Phase 09]: Tool formats results with date, channel label, speaker role, and 300-char content snippet
-- [Phase 10]: Redis identity cache in daemon (not direct PostgreSQL) since nexus-core cannot import livinityd database module
-- [Phase 10]: FTS5 trigger handles conversation turn deletion automatically (no manual FTS cleanup needed)
-- [Phase 10]: Auto-create identity mapping on first encounter (channelUserId becomes canonical until admin links)
-- [Phase 10]: conversationTurnsSearch is query not mutation -- matched backend implementation
-- [Phase 10]: Client-side search for memories, server-side FTS5 for conversations
-- [Phase 10]: Channel filter pills (not dropdown) for quick visual scanning
+- SdkAgentRunner is default for all channels (no API key needed, uses Claude CLI OAuth)
+- Router skips AI classify for channel sources (whatsapp, telegram, etc) — direct to ask/agent
+- Tunnel client uses WS-level pong for liveness detection (90s ping timeout watchdog)
+- channel_send tool supports whatsapp (added to validChannels)
+- WhatsApp via whatsapp-web.js on mini PC (Baileys code exists but not wired in actual deployment)
+
+### v25.0 Tech Debt Carried Forward
+
+- Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
+- Phase 8: chunkForWhatsApp unused exports in lib.ts / utils.ts
+- Phase 7: Integrations menu description still reads "Telegram & Discord"
+- Phase 10 (from integration checker): linkIdentity() defined but never called — cross-channel identity writes canonical user ID only via Redis cache, never syncs to PostgreSQL channel_identity_map
 
 ### Pending Todos
 
@@ -87,12 +64,11 @@ None
 
 ### Blockers/Concerns
 
-- WhatsApp Web API is unofficial -- Meta may enforce bans on automated messaging
-- Baileys auth state corruption risk if Signal protocol keys lose sync on crash
-- Kimi embedding rate limits untested at scale -- FTS5 is primary search, embeddings secondary
+- Multi-user on LivOS is validated but device-level isolation has never been security-tested
+- Devices feature (v14.0) was built when LivOS was single-user — authorization added post-hoc
 
 ## Session Continuity
 
-Last session: 2026-04-03T04:08:39.412Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-04-24T00:00:00.000Z
+Stopped at: Milestone v26.0 started — defining requirements
 Resume file: None

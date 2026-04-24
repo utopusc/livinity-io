@@ -136,26 +136,26 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - ✓ Mobile: safe area CSS (tailwindcss-safe-area, viewport-fit=cover) — v23.0
 - ✓ Mobile: install prompt banner, WS reconnect on resume, keyboard-safe input — v23.0
 
-## Current Milestone: v25.0 Memory & WhatsApp Integration
+## Current Milestone: v26.0 Device Security & User Isolation
 
-**Goal:** Enable persistent cross-session AI memory across all channels, add WhatsApp as a messaging channel with QR code authentication, unify conversation storage across all platforms, and provide a memory management UI.
+**Goal:** Prevent unauthorized cross-user device access — a user's terminal/shell session must not be able to reach another user's connected devices, while preserving AI agent auto-approval UX.
 
 **Target features:**
-- Cross-session memory: AI can recall and search all previous conversations
-- WhatsApp channel: QR code auth, headless/browser mode, AI trigger from WhatsApp
-- Unified conversation store: Telegram + Web UI + WhatsApp + Discord in single store
-- Memory management UI: Settings page to view, search, delete memories
-- Channel-unified userId: Same user recognized across channels
+- Per-user device ownership enforcement (database user_id on every device, JWT-resolved)
+- Device access authorization middleware (every device tool call verifies caller owns device)
+- Shell tool isolation (cross-user device ID usage blocked)
+- Device session binding (device bridge connections tied to user JWT with token expiry)
+- Audit log for device operations (immutable PostgreSQL log)
+- Admin override & emergency disconnect
 
 ### Active
 
-- [ ] WhatsApp integration with QR code authentication (whatsapp-web.js or Baileys)
-- [ ] WhatsApp message routing to Nexus agent handler with userId mapping
-- [ ] Cross-session conversation search (AI can query "what did we discuss last week?")
-- [ ] Unified userId mapping across channels (Telegram, WhatsApp, Web UI, Discord)
-- [ ] Memory management UI in Settings (view, search, delete stored memories)
-- [ ] Conversation history tool for AI to search past conversations semantically
-- [ ] WhatsApp Settings panel in Integrations (QR code display, connection status)
+- [ ] Per-user device ownership enforcement across Nexus + livinityd
+- [ ] Device access authorization middleware for all device-routed tools
+- [ ] Shell tool isolation preventing cross-user device ID reuse
+- [ ] Device session binding with user JWT and expiry handling
+- [ ] Device operation audit log (PostgreSQL, immutable)
+- [ ] Admin override / emergency disconnect endpoint + UI
 
 ### Out of Scope
 
@@ -269,4 +269,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after v25.0 milestone started (Memory & WhatsApp Integration)*
+*Last updated: 2026-04-24 after v26.0 milestone started (Device Security & User Isolation)*
