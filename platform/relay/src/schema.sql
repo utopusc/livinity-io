@@ -128,6 +128,30 @@ CREATE INDEX IF NOT EXISTS idx_device_grants_device_code ON device_grants(device
 CREATE INDEX IF NOT EXISTS idx_device_grants_user_code ON device_grants(user_code);
 
 -- =========================================================================
+-- Phase 11 OWN-01: FK constraint devices.user_id -> users(id)
+-- Added idempotently so the relay container can restart safely.
+-- =========================================================================
+
+-- Defensive backfill for pre-v26.0 deployments that may have NULL user_ids.
+UPDATE devices
+SET user_id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)
+WHERE user_id IS NULL;
+
+ALTER TABLE devices ALTER COLUMN user_id SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'devices_user_id_fkey' AND conrelid = 'devices'::regclass
+  ) THEN
+    ALTER TABLE devices
+      ADD CONSTRAINT devices_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+
+-- =========================================================================
 -- Custom Domains (Phase 08 - custom domain routing)
 -- =========================================================================
 CREATE TABLE IF NOT EXISTS custom_domains (
