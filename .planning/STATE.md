@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
 current_plan: 02 of 02
-status: completed
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-04-24T22:28:23.781Z"
-last_activity: 2026-04-24 — Plan 18-02 executed in ~6 minutes, 2 tasks + 1 Rule-3 deviation fix committed atomically; Phase 18 complete (CFB-01..05 satisfied)
+status: in_progress
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-04-24T22:46:07.376Z"
+last_activity: 2026-04-24 — Plan 19-01 executed in ~5 minutes; ComposeGraphViewer + Tabs(Containers + Graph) wired into StacksTab. Two atomic commits (f2a725c0, 4a094607). Build passes, CGV-01 satisfied.
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_plans: 6
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 18 — Container File Browser (COMPLETE)
-Current Plan: 02 of 02
-Status: 18-01 complete (backend: helpers + 4 tRPC procedures + 2 REST endpoints); 18-02 complete (UI Files tab + httpOnlyPaths fix). All five CFB requirements (CFB-01..05) satisfied.
-Last activity: 2026-04-24 — Plan 18-02 executed in ~6 minutes, 2 tasks + 1 Rule-3 deviation fix committed atomically
+Phase: 19 — Compose Graph + Vuln Scan (IN PROGRESS — 1 of 2 plans complete)
+Current Plan: 02 of 02 (next: 19-02 Vulnerability Scan)
+Status: 19-01 complete (ComposeGraphViewer + Tabs(Containers + Graph) inside StacksTab; reactflow + js-yaml installed; CGV-01 satisfied; pnpm --filter ui build passes). 19-02 not yet started.
+Last activity: 2026-04-24 — Plan 19-01 executed in ~5 minutes, 2 atomic commits (f2a725c0, 4a094607); 0 deviations
 
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 83%
 
 ## v27.0 Phase Structure
 
@@ -56,6 +56,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | 17-02 | 8 min | 4 | 7 | 2026-04-24 |
 | 18-01 | 6 min | 3 (+1 fixup) | 4 | 2026-04-24 |
 | 18-02 | 6 min | 2 (+1 deviation) | 3 | 2026-04-24 |
+| 19-01 | 5 min | 2 | 4 | 2026-04-24 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
@@ -90,6 +91,17 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Renamed inner `exec` local to `execInstance` in `DockerManager.exec()` to avoid shadowing the module-scoped `promisify(cpExec)` — zero behavioral change, required by TypeScript.
 - Redeploy ActionButton reuses `color='blue'` (no new `'violet'` variant) per plan explicit guidance; distinguishes via title "Redeploy (pull latest images)".
 - AI `stack-deploy` does NOT expose `secret: true` flag on envVars — the secret store is a livinityd-owned concern. Deferred to v28: either route AI stack-deploy through livinityd tRPC with an internal JWT, or grant nexus DockerManager read access to the same Redis key.
+
+### Plan 19-01 Decisions (2026-04-24)
+
+- Picked `reactflow@^11.11.4` over `@xyflow/react@^12` — v12 mandates React 19; @livos/ui pins React 18.2, so 11.x is the highest stable line we can adopt without a React major.
+- Topological grid layout (Kahn's algorithm + per-column row counter) instead of dagre/elkjs — adds zero KB; sufficient for ≤ 10-service home-server stacks. Future large-stack support can layer dagre behind a flag.
+- `nodeTypes` registered at module scope (NOT inside the component) per documented React Flow gotcha — avoids per-render remount and the "It looks like you've created a new nodeTypes object" warning.
+- Compose-spec parsing fallbacks: services with no `networks:` key get `['default']` to match docker compose's actual behaviour; both array and object forms supported for `depends_on`/`networks`/`ports`.
+- Lazy mount via Radix Tabs default (inactive `<TabsContent>` panes unmount) — `getStackCompose` query fires only when the user clicks the Graph tab; zero extra API load for users who never click.
+- `pnpm --filter ui add ... --ignore-scripts` is required on Windows because the existing `postinstall: copy-tabler-icons` uses Unix `mkdir -p` / `cp -r .` which fails under cmd. Pre-existing repo quirk; safe to skip when adding deps because the icon copy already ran on a prior successful install.
+- Pattern established for future stack-detail tabs (Resource Usage, Logs, Vuln overlay): `Tabs(...)` block lives directly inside the existing `<TableRow><TableCell>` expanded-row container.
+- Tile rendering combines Plan-spec basics (image, port pills) with per-service network pills inside each node — gives users two simultaneous reads (legend below + per-node colours), no extra data fetch.
 
 ### Plan 18-02 Decisions (2026-04-24)
 
@@ -132,6 +144,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T22:28:23.778Z
-Stopped at: Completed 18-02-PLAN.md
-Resume with: `/gsd:execute-phase 18` to run Plan 18-02 (UI Files tab — consumes the 18-01 backend)
+Last session: 2026-04-24T22:46:07.376Z
+Stopped at: Completed 19-01-PLAN.md
+Resume with: `/gsd:execute-phase 19` to run Plan 19-02 (Vulnerability Scanning — Trivy SBOM + per-image CVE counts)

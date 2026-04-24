@@ -142,7 +142,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. AI calling docker_manage with operation="stack-deploy" or "stack-remove" or "image-pull" succeeds end-to-end with the same output shape as existing tRPC routes
 **Plans**: 2 plans
 **Plan files**:
-- [ ] 19-01-PLAN.md — Compose Graph Viewer (CGV-01): reactflow + js-yaml UI parsing service deps
+- [x] 19-01-PLAN.md — Compose Graph Viewer (CGV-01): reactflow + js-yaml UI parsing service deps
 - [ ] 19-02-PLAN.md — Image Vulnerability Scanning (CGV-02, CGV-03, CGV-04): Trivy backend + Redis SHA256 cache + severity badges UI
 **Plan files**:
 - [x] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
@@ -232,7 +232,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 |-------|-----------|----------------|--------|-----------|
 | 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 19. Compose Graph + Vuln Scan | v27.0 | 0/2 | Not started | - |
+| 19. Compose Graph + Vuln Scan | v27.0 | 1/2 | In Progress|  |
 | 20. Scheduled Tasks + Backup | v27.0 | 0/2 | Not started | - |
 | 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |
 | 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
