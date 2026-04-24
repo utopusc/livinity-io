@@ -39,6 +39,12 @@ import {
 	getStackCompose,
 	getStackEnv,
 } from './stacks.js'
+import {
+	listDir,
+	readFile as readContainerFile,
+	writeFile as writeContainerFile,
+	deleteFile as deleteContainerFile,
+} from './container-files.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -402,6 +408,128 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to get stats for container ${input.name}`,
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Container file browser (Phase 18 — CFB-01/04/05)
+	// tRPC handles JSON paths only; binary download + multipart upload live
+	// at REST endpoints in server/index.ts (CFB-02/03).
+	// -----------------------------------------------------------------------
+
+	containerListDir: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				path: z.string().min(1).max(4096).startsWith('/'),
+			}),
+		)
+		.query(async ({input}) => {
+			try {
+				return {entries: await listDir(input.name, input.path)}
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[bad-path]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[bad-path] ', '')})
+				}
+				if (err.message?.includes('[ls-failed]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[ls-failed] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to list ${input.path}`,
+				})
+			}
+		}),
+
+	containerReadFile: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				path: z.string().min(1).max(4096).startsWith('/'),
+				maxBytes: z.number().int().min(1).max(1_000_000).optional().default(1_000_000),
+			}),
+		)
+		.query(async ({input}) => {
+			try {
+				return await readContainerFile(input.name, input.path, input.maxBytes)
+			} catch (err: any) {
+				if (err.message?.includes('[file-too-large]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[file-too-large] ', '')})
+				}
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[bad-path]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[bad-path] ', '')})
+				}
+				if (err.message?.includes('[read-failed]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[read-failed] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to read ${input.path}`,
+				})
+			}
+		}),
+
+	containerWriteFile: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				path: z.string().min(1).max(4096).startsWith('/'),
+				content: z.string().max(1_000_000),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				await writeContainerFile(input.name, input.path, input.content)
+				return {success: true, message: `Wrote ${input.path}`}
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[dir-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[dir-not-found] ', '')})
+				}
+				if (err.message?.includes('[bad-path]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[bad-path] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to write ${input.path}`,
+				})
+			}
+		}),
+
+	containerDeleteFile: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				path: z.string().min(1).max(4096).startsWith('/'),
+				recursive: z.boolean().optional().default(false),
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				await deleteContainerFile(input.name, input.path, input.recursive)
+				return {success: true, message: `Deleted ${input.path}`}
+			} catch (err: any) {
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[bad-path]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[bad-path] ', '')})
+				}
+				if (err.message?.includes('[delete-failed]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[delete-failed] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || `Failed to delete ${input.path}`,
 				})
 			}
 		}),
