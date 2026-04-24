@@ -79,6 +79,10 @@ export const httpOnlyPaths = [
 	'docker.editStack',
 	'docker.controlStack',
 	'docker.removeStack',
+	// Container file browser mutations (Phase 18) -- use HTTP for reliability;
+	// otherwise mutations silently hang on disconnected WS.
+	'docker.containerWriteFile',
+	'docker.containerDeleteFile',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
 	// Device management -- use HTTP for reliability through relay tunnel
