@@ -126,9 +126,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   2. When a user pairs a new device via the OAuth Device Grant flow, the resulting device record is written with user_id equal to the authenticated user's id — attempting to register a device with no authenticated user is rejected with 401
   3. GET /api/devices (Nexus REST) and devices.list (tRPC) return only rows WHERE user_id = ctx.currentUser.id — admin users calling the normal list endpoint still see only their own devices (admin-wide list is a separate Phase 16 endpoint)
   4. DeviceRegistry in-memory state (Redis userId->deviceId mapping) is kept in sync with the database user_id column on connect/disconnect so cached lookups cannot leak stale ownership
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 11-01-PLAN.md — Add FK constraint devices.user_id -> users(id) + backfill + harden createDeviceRecord
+- [x] 11-01-PLAN.md — Add FK constraint devices.user_id -> users(id) + backfill + harden createDeviceRecord
 - [ ] 11-02-PLAN.md — Forward userId in tunnel event + cache in Redis + filter tRPC/REST listings by owner
 
 ### Phase 12: Device Access Authorization
@@ -194,7 +194,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 11. Device Ownership Foundation | v26.0 | 0/2 | Not started | — |
+| 11. Device Ownership Foundation | v26.0 | 1/2 | In Progress|  |
 | 12. Device Access Authorization | v26.0 | 0/? | Not started | — |
 | 13. Shell Tool Isolation | v26.0 | 0/? | Not started | — |
 | 14. Device Session Binding | v26.0 | 0/? | Not started | — |

@@ -7,7 +7,7 @@
 
 ### Device Ownership (OWN)
 
-- [ ] **OWN-01**: Every device record in PostgreSQL has a non-null user_id linking it to its owner
+- [x] **OWN-01**: Every device record in PostgreSQL has a non-null user_id linking it to its owner
 - [ ] **OWN-02**: Device registration binds the new device to the authenticated user creating it (no orphan devices)
 - [ ] **OWN-03**: Device list endpoint returns only devices owned by the calling user (no cross-user device visibility)
 
@@ -77,7 +77,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OWN-01 | Phase 11 | Pending |
+| OWN-01 | Phase 11 | Complete |
 | OWN-02 | Phase 11 | Pending |
 | OWN-03 | Phase 11 | Pending |
 | AUTHZ-01 | Phase 12 | Pending |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: roadmap_complete
-stopped_at: Roadmap created — ready to plan Phase 11
-last_updated: "2026-04-24T00:00:00.000Z"
+status: completed
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-04-24T16:39:01.981Z"
+last_activity: 2026-04-24 — Roadmap for v26.0 created (6 phases, 15/15 requirements mapped)
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-current_phase: 11
-current_phase_name: Device Ownership Foundation
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 11 -- Device Ownership Foundation (not yet planned)
-Plan: —
-Status: Roadmap complete, awaiting `/gsd:plan-phase 11`
-Last activity: 2026-04-24 — Roadmap for v26.0 created (6 phases, 15/15 requirements mapped)
+Phase: 11 -- Device Ownership Foundation (in progress)
+Plan: 11-02 (next)
+Status: 11-01 complete — devices.user_id FK constraint landed in both platform/web (migration 0007) and platform/relay (schema.sql); createDeviceRecord hardened
+Last activity: 2026-04-24 — 11-01-PLAN.md executed (3/3 tasks, 4 files modified, OWN-01 satisfied)
 
-**Progress:** `[----------------]` 0/6 phases (0%)
+**Progress:** [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -58,6 +58,12 @@ Last activity: 2026-04-24 — Roadmap for v26.0 created (6 phases, 15/15 require
 
 Coverage: 15/15 v26.0 requirements mapped ✓
 
+### v26.0 Execution Metrics
+
+| Phase / Plan | Duration | Tasks | Files |
+|--------------|----------|-------|-------|
+| 11-device-ownership-foundation P01 | 2min | 3 | 4 |
+
 ## Accumulated Context
 
 ### Decisions (carried from v25.0)
@@ -76,6 +82,13 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - Phase 14 (session binding) is modeled as only dependent on Phase 11 so it can execute in parallel with 12/13/15 if desired
 - Admin override (Phase 16) deliberately does NOT bypass per-tool authorization (Phase 12); admin bypass exists only via explicit admin endpoints
 - Audit log (Phase 15) uses PostgreSQL role-based grants (INSERT/SELECT only) to enforce append-only at DB level, not just app layer
+
+### Phase 11-01 Execution Decisions
+
+- **ON DELETE RESTRICT (not CASCADE)** on `devices.user_id` FK: preserves audit history; deleting a user with active devices fails loudly, forcing explicit revoke-first workflow
+- **Drizzle schema.ts documents FK via JSDoc comment, not `.references()`**: the `users` table is managed by `platform/relay/src/schema.sql`, not Drizzle; adding a Drizzle users entity would fragment the users schema
+- **Backfill targets oldest user by `created_at`**: relay's users table has no `role` column, so no literal admin query is possible; oldest user is the deployment's de facto owner
+- **Application-layer guard in `createDeviceRecord`** duplicates the DB FK intentionally: clearer error message (cites OWN-02 for traceability) and earlier rejection at the JS boundary
 
 ### v25.0 Tech Debt Carried Forward
 
@@ -97,6 +110,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T00:00:00.000Z
-Stopped at: Roadmap for v26.0 created — 6 phases, 15/15 requirements mapped, ready for Phase 11 planning
-Resume file: None (invoke `/gsd:plan-phase 11` to continue)
+Last session: 2026-04-24T16:39:01.977Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None
