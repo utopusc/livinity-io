@@ -76,7 +76,10 @@ export function useStacks() {
 		editStackMutation.mutate(input)
 	}
 
-	const controlStack = (name: string, operation: 'up' | 'down' | 'stop' | 'start' | 'restart') => {
+	const controlStack = (
+		name: string,
+		operation: 'up' | 'down' | 'stop' | 'start' | 'restart' | 'pull-and-up',
+	) => {
 		setActionResult(null)
 		controlStackMutation.mutate({name, operation})
 	}

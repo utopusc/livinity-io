@@ -766,7 +766,7 @@ export default router({
 		.input(
 			z.object({
 				name: z.string().min(1).max(255),
-				operation: z.enum(['up', 'down', 'stop', 'start', 'restart']),
+				operation: z.enum(['up', 'down', 'stop', 'start', 'restart', 'pull-and-up']),
 			}),
 		)
 		.mutation(async ({input}) => {

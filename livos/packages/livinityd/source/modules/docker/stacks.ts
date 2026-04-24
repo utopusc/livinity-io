@@ -215,12 +215,22 @@ export async function controlStack(
 
 	const composePath = join(stackDir, 'docker-compose.yml')
 
-	// If this is a `up`, we also need to supply secret overrides so containers
-	// that reference them still get them. Other operations don't need them.
-	const envOverrides = operation === 'up' ? await getStore().getSecrets(name) : {}
+	// If this is a `up` (or `pull-and-up`), we also need to supply secret
+	// overrides so containers that reference them still get them. Other
+	// operations don't need them.
+	const needsSecrets = operation === 'up' || operation === 'pull-and-up'
+	const envOverrides = needsSecrets ? await getStore().getSecrets(name) : {}
 
 	try {
-		if (operation === 'up') {
+		if (operation === 'pull-and-up') {
+			// QW-03: pull latest images first, then recreate containers on new digest.
+			// Pull is a network op (can be slow) — execa streams stderr to caller.
+			await $({cwd: stackDir})`docker compose -p ${name} -f ${composePath} pull`
+			await $({
+				cwd: stackDir,
+				env: {...process.env, ...envOverrides},
+			})`docker compose -p ${name} -f ${composePath} up -d`
+		} else if (operation === 'up') {
 			await $({
 				cwd: stackDir,
 				env: {...process.env, ...envOverrides},
