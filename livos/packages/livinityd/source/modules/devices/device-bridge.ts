@@ -18,7 +18,13 @@ const DEVICE_TOOL_SCHEMAS: Record<
 	{description: string; parameters: Array<{name: string; type: string; description: string; required: boolean}>}
 > = {
 	shell: {
-		description: 'Execute a shell command',
+		// Phase 13 SHELL-01: this description is surfaced to the AI at proxy-tool
+		// registration (see onDeviceConnected). Describing the ownership constraint
+		// here prevents the agent from passing spurious device_id params or
+		// targeting unowned devices — cross-user device IDs are rejected
+		// server-side by authorizeDeviceAccess before any tunnel message is sent.
+		description:
+			'Execute a shell command on a specific owned device. This tool is bound at registration to ONE device you own; cross-user targeting is impossible (the server verifies ownership on every call and rejects unauthorized invocations with device_not_owned). Do not pass a device_id parameter — the device is implicit in the tool name.',
 		parameters: [
 			{name: 'command', type: 'string', description: 'Shell command to execute', required: true},
 			{name: 'cwd', type: 'string', description: 'Working directory (optional)', required: false},
