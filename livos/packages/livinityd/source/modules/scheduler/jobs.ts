@@ -8,6 +8,7 @@
 import {execa} from 'execa'
 
 import {listContainers, pruneImages, isProtectedContainer} from '../docker/docker.js'
+import {volumeBackupHandler} from './backup.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
 // =========================================================================
@@ -174,15 +175,13 @@ export const gitStackSyncHandler: BuiltInJobHandler = async (job, ctx) => {
 
 // =========================================================================
 // Registry: jobType -> handler mapping.
-// volume-backup is intentionally a stub here — Plan 20-02 wires the real one.
+// volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // =========================================================================
 export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'image-prune': imagePruneHandler,
 	'container-update-check': containerUpdateCheckHandler,
 	'git-stack-sync': gitStackSyncHandler,
-	'volume-backup': async () => {
-		throw new Error('volume-backup handler not registered — Plan 20-02 wires it')
-	},
+	'volume-backup': volumeBackupHandler,
 }
 
 // =========================================================================
