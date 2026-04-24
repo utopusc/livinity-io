@@ -19,8 +19,8 @@
 
 ### Shell Tool Isolation (SHELL)
 
-- [ ] **SHELL-01**: User's terminal shell tool cannot specify a device ID outside the user's owned set — cross-user device IDs are rejected
-- [ ] **SHELL-02**: When no device is specified, the shell tool defaults to the user's local session (never accidentally routes to another user's device)
+- [x] **SHELL-01**: User's terminal shell tool cannot specify a device ID outside the user's owned set — cross-user device IDs are rejected
+- [x] **SHELL-02**: When no device is specified, the shell tool defaults to the user's local session (never accidentally routes to another user's device)
 
 ### Device Session Binding (SESS)
 
@@ -83,8 +83,8 @@
 | AUTHZ-01 | Phase 12 | Complete |
 | AUTHZ-02 | Phase 12 | Complete |
 | AUTHZ-03 | Phase 12 | Complete |
-| SHELL-01 | Phase 13 | Pending |
-| SHELL-02 | Phase 13 | Pending |
+| SHELL-01 | Phase 13 | Complete |
+| SHELL-02 | Phase 13 | Complete |
 | SESS-01 | Phase 14 | Pending |
 | SESS-02 | Phase 14 | Pending |
 | SESS-03 | Phase 14 | Pending |

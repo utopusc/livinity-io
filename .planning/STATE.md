@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
 status: completed
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-04-24T17:08:52.000Z"
+stopped_at: Completed 13-01-PLAN.md (shell tool isolation hardening)
+last_updated: "2026-04-24T17:26:19.381Z"
 last_activity: 2026-04-24 — 12-02-PLAN.md executed (4/4 tasks, 3 files modified, AUTHZ-01/02/03 complete)
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 12 -- Device Access Authorization (complete)
-Plan: 13-01 (next — Phase 13 Shell Tool Isolation)
-Status: 12-02 complete — authorizeDeviceAccess + recordAuthFailure helpers wired into all three device-routed paths (DeviceBridge.executeOnDevice 3-arity, tRPC ensureOwnership, /internal/device-tool-execute). userId propagation via callbackUrl query string keeps Nexus unmodified. HTTP 403 for device_not_owned/missing_user, 404 for device_not_found. DeviceBridge.redis made public readonly. Phase 11 legacy fallback preserved, Phase 11 OWN-03 markers preserved. AUTHZ-01 + AUTHZ-02 + AUTHZ-03 all satisfied with load-bearing callsites. Zero new TS errors.
-Last activity: 2026-04-24 — 12-02-PLAN.md executed (4/4 tasks, 3 files modified, AUTHZ-01/02/03 complete)
+Phase: 13 -- Shell Tool Isolation (complete)
+Plan: 14-01 (next — Phase 14 Device Session Binding)
+Status: 13-01 complete — shell tool isolation hardened across three layers: (1) local shell tool description in daemon.ts directs agents to `device_<deviceId>_shell` proxies for remote execution with frozen `{cmd, timeout}` parameter list, (2) RESERVED_TOOL_NAMES guard on /api/tools/register returns 409 tool_name_reserved on collision with built-ins, (3) device shell proxy schema description forbids `device_id` param and cites server-side ownership enforcement. Phase 12's authorizeDeviceAccess gate remains the actual runtime enforcer — Phase 13 adds schema + registration defenses around it. SHELL-01 + SHELL-02 satisfied. Zero new TS errors.
+Last activity: 2026-04-24 — 13-01-PLAN.md executed (4/4 tasks, 3 files modified, SHELL-01/02 complete)
 
 **Progress:** [██████████] 100%
 
@@ -66,6 +66,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | 11-device-ownership-foundation P02 | 3min | 4 | 6 |
 | 12-device-access-authorization P01 | 2min | 3 | 3 |
 | 12-device-access-authorization P02 | 3min | 4 | 3 |
+| 13-shell-tool-isolation P01 | 3min | 4 | 3 |
 
 ## Accumulated Context
 
@@ -121,6 +122,14 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **Ownership runs BEFORE confirmName on devices.remove**: an unauthorized caller never learns the actual device name via error responses (confirmName is a safety-UX gate for the rightful owner)
 - **AUTHZ-03 reconciliation**: requirement literal says "Nexus REST /api/devices/*" but no such endpoints exist in nexus/api.ts. Actual defense-in-depth target is livinityd's /internal/device-tool-execute (the only HTTP endpoint Nexus calls into for device tool execution). AUTHZ-03 enforced there.
 
+### Phase 13-01 Execution Decisions
+
+- **Hardcoded RESERVED_TOOL_NAMES set in api.ts (not imported from tool-registry.ts TOOL_PROFILES)**: cleaner blast radius and a more explicit security contract. tool-registry's TOOL_PROFILES is a policy mechanism (profile-based filtering); RESERVED_TOOL_NAMES is a registration-time security invariant. Keeping them separate prevents accidental coupling.
+- **Schema layer hardens descriptions; Phase 12 remains the runtime enforcer**: Phase 13 does NOT duplicate authorizeDeviceAccess anywhere. The AI-readable description strings in daemon.ts (local shell) and device-bridge.ts (DEVICE_TOOL_SCHEMAS.shell) exist to prevent hallucinated cross-user calls at the agent-reasoning layer; actual authorization continues to run in DeviceBridge.executeOnDevice as established in Phase 12.
+- **HTTP 409 (Conflict) chosen for tool_name_reserved**: the name is reserved at the namespace level, not missing (400) or unauthorized (401/403). 409 accurately communicates "the request conflicts with the current state of the target resource."
+- **Parameter list on local shell frozen to `{cmd, timeout}`; inline `Phase 13 SHELL-02` comment enforces it**: the literal word `device_id` appears in descriptive strings (telling the AI what NOT to do), but zero parameter entries named `device_id` or `deviceId` exist. Future editors adding a device routing parameter would have to bypass the comment intentionally.
+- **Device shell description is load-bearing for AI reasoning**: the device-bridge description string flows through to Nexus's ToolRegistry at device-bridge.ts:225 where platform label is concatenated. Adding "Do not pass a device_id parameter" instructs the agent at registration time, not enforcement time — complements Phase 12's runtime gate.
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -141,6 +150,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T17:08:52.000Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-04-24T17:26:19.377Z
+Stopped at: Completed 13-01-PLAN.md (shell tool isolation hardening)
 Resume file: None
