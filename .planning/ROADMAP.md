@@ -13,7 +13,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v23.0 Mobile PWA** — Phases 37-40 (shipped 2026-04-01)
 - ✅ **v24.0 Mobile Responsive UI** — Phases 1-5 (shipped 2026-04-01)
 - ✅ **v25.0 Memory & WhatsApp Integration** — Phases 6-10 (shipped 2026-04-03)
-- [ ] **v26.0 Device Security & User Isolation** — Phases 11-16 (in progress)
+- ✅ **v26.0 Device Security & User Isolation** — Phases 11-16 (shipped 2026-04-24)
 
 ## Phases
 

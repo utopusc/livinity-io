@@ -1,5 +1,25 @@
 # Milestones
 
+## v26.0 Device Security & User Isolation (Shipped: 2026-04-24)
+
+**Phases completed:** 6 phases (11-16), 11 plans, ~60 tasks
+**Requirements satisfied:** 15/15 (OWN-01/02/03, AUTHZ-01/02/03, SHELL-01/02, SESS-01/02/03, AUDIT-01/02, ADMIN-01/02)
+**Milestone audit:** passed (42/42 must-haves, 4 attack vectors blocked end-to-end)
+
+**Key accomplishments:**
+
+- Device ownership enforced at DB + application + Redis cache layers (Phase 11: FK constraint `devices.user_id -> users(id) ON DELETE RESTRICT`, userId propagated through tunnel protocol, per-user filtered listing)
+- Single reusable `authorizeDeviceAccess` middleware across DeviceBridge, tRPC, Nexus REST, and /internal/device-tool-execute HTTP (Phase 12)
+- Shell tool boundary hardened: local shell has no device_id escape, RESERVED_TOOL_NAMES blocks rogue tool registration, device proxy shell schema documents ownership (Phase 13)
+- DeviceBridge WebSocket bound to user session JWT at handshake, 60s token-expiry watchdog closes with code 4401, Redis pub/sub session revocation closes bridges with code 4403 on logout (Phase 14)
+- Immutable PostgreSQL `device_audit_log` with trigger-enforced append-only, SHA-256 params digest, admin-only `audit.listDeviceEvents` tRPC query (Phase 15)
+- Admin cross-user device listing + force-disconnect via tRPC + platform REST, new `admin_force_disconnect` tunnel verb, audit rows attributing admin actions (Phase 16)
+- AI agent auto-approval behavior preserved (user constraint honored — no approval friction added)
+
+**Deployment warning:** `REDIS_URL` env var must be set on platform/web (Server4) for SESS-03 instant teardown; otherwise degrades to 60s watchdog fallback (still safe, just slower).
+
+---
+
 ## v22.0 Livinity AGI Platform (Shipped: 2026-03-29)
 
 **Phases completed:** 8 phases, 12 plans, 23 tasks

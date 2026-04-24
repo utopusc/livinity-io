@@ -136,26 +136,20 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - ✓ Mobile: safe area CSS (tailwindcss-safe-area, viewport-fit=cover) — v23.0
 - ✓ Mobile: install prompt banner, WS reconnect on resume, keyboard-safe input — v23.0
 
-## Current Milestone: v26.0 Device Security & User Isolation
+## Current Milestone: None (v26.0 shipped 2026-04-24)
 
-**Goal:** Prevent unauthorized cross-user device access — a user's terminal/shell session must not be able to reach another user's connected devices, while preserving AI agent auto-approval UX.
+v26.0 Device Security & User Isolation complete. See `Validated (v26.0)` below.
+Ready for next milestone — invoke `/gsd-new-milestone` to start v27.0.
 
-**Target features:**
-- Per-user device ownership enforcement (database user_id on every device, JWT-resolved)
-- Device access authorization middleware (every device tool call verifies caller owns device)
-- Shell tool isolation (cross-user device ID usage blocked)
-- Device session binding (device bridge connections tied to user JWT with token expiry)
-- Audit log for device operations (immutable PostgreSQL log)
-- Admin override & emergency disconnect
+### Validated (v26.0 — Device Security & User Isolation)
 
-### Active
-
-- [ ] Per-user device ownership enforcement across Nexus + livinityd
-- [ ] Device access authorization middleware for all device-routed tools
-- [ ] Shell tool isolation preventing cross-user device ID reuse
-- [ ] Device session binding with user JWT and expiry handling
-- [ ] Device operation audit log (PostgreSQL, immutable)
-- [ ] Admin override / emergency disconnect endpoint + UI
+- ✓ Per-user device ownership enforcement — devices.user_id FK to users(id) ON DELETE RESTRICT, backfill migration, Redis cache owner-keyed, tunnel protocol carries userId end-to-end (Phase 11)
+- ✓ Single authorizeDeviceAccess middleware used at DeviceBridge, tRPC, and /internal/device-tool-execute HTTP with audit-logged failures (Phase 12)
+- ✓ Shell tool boundary hardened: local shell has no device_id param, RESERVED_TOOL_NAMES blocks rogue tool overrides, device proxy shell schema documents ownership constraint (Phase 13)
+- ✓ DeviceBridge WS handshake bound to user session JWT (sessionId claim), 60s expiry watchdog closes with code 4401, Redis pub/sub session revocation closes bridges with code 4403 on logout (Phase 14)
+- ✓ Immutable device_audit_log PG table with BEFORE UPDATE/DELETE trigger enforcement, SHA-256 params digest, admin-only audit.listDeviceEvents tRPC query (Phase 15)
+- ✓ Admin cross-user device listing (tRPC + platform REST) and force-disconnect via new admin_force_disconnect tunnel verb, audit-attributed to admin user_id (Phase 16)
+- ✓ AI agent auto-approval behavior preserved (user constraint honored — no approval friction added)
 
 ### Out of Scope
 
