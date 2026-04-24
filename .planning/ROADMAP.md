@@ -12,7 +12,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v22.0 Livinity AGI Platform** — Phases 29-36 (shipped 2026-03-29)
 - ✅ **v23.0 Mobile PWA** — Phases 37-40 (shipped 2026-04-01)
 - ✅ **v24.0 Mobile Responsive UI** — Phases 1-5 (shipped 2026-04-01)
-- [ ] **v25.0 Memory & WhatsApp Integration** — Phases 6-10 (in progress)
+- ✅ **v25.0 Memory & WhatsApp Integration** — Phases 6-10 (shipped 2026-04-03)
+- [ ] **v26.0 Device Security & User Isolation** — Phases 11-16 (in progress)
 
 ## Phases
 
@@ -92,15 +93,27 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v25.0 Memory & WhatsApp Integration (In Progress)
+<details>
+<summary>v25.0 Memory & WhatsApp Integration (Phases 6-10) — SHIPPED 2026-04-03</summary>
 
-**Milestone Goal:** Enable persistent cross-session AI memory across all channels, add WhatsApp as a messaging channel with QR code authentication, unify conversation storage, and provide a memory management UI.
+- [x] Phase 6: WhatsApp Channel Foundation (2/2 plans) — completed 2026-04-03
+- [x] Phase 7: WhatsApp QR Code & Settings UI (2/2 plans) — completed 2026-04-03
+- [x] Phase 8: WhatsApp Message Routing & Safety (2/2 plans) — completed 2026-04-03
+- [x] Phase 9: Cross-Session Conversation Persistence & Search (2/2 plans) — completed 2026-04-03
+- [x] Phase 10: Unified Identity & Memory Management UI (2/2 plans) — completed 2026-04-03
 
-- [x] **Phase 6: WhatsApp Channel Foundation** - Baileys ChannelProvider with Redis-backed auth state and echo-loop guard (completed 2026-04-03)
-- [x] **Phase 7: WhatsApp QR Code & Settings UI** - QR code display, connection status, and disconnect in Settings > Integrations (completed 2026-04-03)
-- [x] **Phase 8: WhatsApp Message Routing & Safety** - End-to-end messaging, rate limiting, legacy daemon.ts cleanup (completed 2026-04-03)
-- [x] **Phase 9: Cross-Session Conversation Persistence & Search** - FTS5 conversation store, archiver pipeline, AI search tool (completed 2026-04-03)
-- [x] **Phase 10: Unified Identity & Memory Management UI** - Cross-channel userId mapping, memory settings page with search/delete (completed 2026-04-03)
+</details>
+
+### v26.0 Device Security & User Isolation (In Progress)
+
+**Milestone Goal:** Prevent unauthorized cross-user device access — a user's terminal/shell session must not be able to reach another user's connected devices, while preserving AI agent auto-approval UX.
+
+- [ ] **Phase 11: Device Ownership Foundation** - PostgreSQL user_id column on devices + registration binding + owner-filtered list
+- [ ] **Phase 12: Device Access Authorization** - Per-tool ownership middleware across tRPC and Nexus REST with audit-logged failures
+- [ ] **Phase 13: Shell Tool Isolation** - Cross-user device ID rejection and safe local-session default in the shell tool
+- [ ] **Phase 14: Device Session Binding** - DeviceBridge WebSocket tied to user JWT with token expiry and logout-triggered disconnect
+- [ ] **Phase 15: Device Audit Log** - Immutable PostgreSQL device_audit_log with append-only DB-level enforcement
+- [ ] **Phase 16: Admin Override & Emergency Disconnect** - Admin panel lists all devices and can force-terminate any active bridge
 
 ## Phase Details
 
@@ -179,24 +192,92 @@ Plans:
 - [x] 10-01-PLAN.md -- Identity mapping table, memory service REST endpoints, tRPC proxy routes, daemon identity resolution
 - [x] 10-02-PLAN.md -- Settings > Memory UI with Memories/Conversations tabs, search, delete, channel icons
 
+### Phase 11: Device Ownership Foundation
+**Goal**: Every device in PostgreSQL is owned by exactly one user, registration binds new devices to their creator, and users only see their own devices.
+**Depends on**: Nothing (foundation phase of v26.0 — unblocks all downstream phases)
+**Requirements**: OWN-01, OWN-02, OWN-03
+**Success Criteria** (what must be TRUE):
+  1. Every row in the devices table has a non-null user_id foreign key to users.id, and a migration backfills user_id for any pre-existing device records (assigned to the admin user as the legacy owner)
+  2. When a user pairs a new device via the OAuth Device Grant flow, the resulting device record is written with user_id equal to the authenticated user's id — attempting to register a device with no authenticated user is rejected with 401
+  3. GET /api/devices (Nexus REST) and devices.list (tRPC) return only rows WHERE user_id = ctx.currentUser.id — admin users calling the normal list endpoint still see only their own devices (admin-wide list is a separate Phase 16 endpoint)
+  4. DeviceRegistry in-memory state (Redis userId->deviceId mapping) is kept in sync with the database user_id column on connect/disconnect so cached lookups cannot leak stale ownership
+**Plans**: TBD
+
+### Phase 12: Device Access Authorization
+**Goal**: Every device-routed tool call — whether through tRPC, Nexus REST, or the agent tool loop — verifies the caller owns the target device before executing, with failures surfaced clearly and recorded.
+**Depends on**: Phase 11
+**Requirements**: AUTHZ-01, AUTHZ-02, AUTHZ-03
+**Success Criteria** (what must be TRUE):
+  1. When the AI agent invokes any device-routed tool (shell, files.list/read/write/delete/rename, screenshot, processes, system_info, screen_elements, mouse_*, keyboard_*, computer_use) with a device_id the caller does not own, the tool returns a structured authorization error without forwarding the request over the tunnel
+  2. A reusable authorizeDeviceAccess(userId, deviceId) helper is the single source of truth and is invoked by the DeviceBridge tool dispatcher, the tRPC devices router, and every Nexus REST /api/devices/* handler (defense in depth — bypassing tRPC via direct REST still enforces ownership)
+  3. Authorization failures return a consistent error shape ({ error: "device_not_owned", deviceId, tool }) and append a row to the device_audit_log with success=false and error="device_not_owned"
+  4. An admin user calling a device-routed tool for a device they do not personally own is still rejected by the standard authorization check — admin bypass only exists through the explicit Phase 16 admin endpoints
+**Plans**: TBD
+
+### Phase 13: Shell Tool Isolation
+**Goal**: A user's terminal/shell invocations can never reach another user's device — unknown device IDs are rejected, and omitting a device ID routes safely to the user's local session.
+**Depends on**: Phase 12
+**Requirements**: SHELL-01, SHELL-02
+**Success Criteria** (what must be TRUE):
+  1. When the shell tool is called with an explicit device_id parameter that does not belong to the calling user, execution is blocked before any tunnel message is sent and the caller receives a clear "device_not_owned" error (enforced through Phase 12's authorizeDeviceAccess)
+  2. When the shell tool is called without a device_id parameter, it executes on the user's local livinityd container/session and never falls back to, or picks up, another user's device — even if that other user's device is the only one currently connected
+  3. The shell tool's device ID validation is tested end-to-end: a member-role user attempting to pass an admin-owned device_id receives an authorization error, and the admin's device receives no shell command over the tunnel
+  4. The shell tool's device_id parameter description in its schema documents the ownership constraint so the AI will not hallucinate cross-user IDs into its tool calls
+**Plans**: TBD
+
+### Phase 14: Device Session Binding
+**Goal**: Every DeviceBridge WebSocket connection is cryptographically bound to a specific user's JWT session, tokens expire and force refresh, and logout tears down all associated bridges.
+**Depends on**: Phase 11
+**Requirements**: SESS-01, SESS-02, SESS-03
+**Success Criteria** (what must be TRUE):
+  1. The /device/connect WebSocket handshake validates the device-auth JWT and records the { userId, deviceId, sessionId, tokenExpiresAt } tuple on the DeviceBridge connection — a device JWT whose embedded userId does not match the device's owner in PostgreSQL is rejected with 1008 policy violation at handshake time
+  2. Each active device bridge has a server-side expiry timer; when tokenExpiresAt is reached and the agent has not refreshed via the device-auth token endpoint, the bridge is closed with code 4401 and the device must re-authenticate before reconnecting
+  3. When a user logs out (session revoked via /api/auth/logout or sessions table delete) every DeviceBridge connection whose recorded sessionId matches the revoked session is closed within 5 seconds with a "session_revoked" reason, and the user's devices show as offline in the My Devices UI
+  4. Reconnection attempts after logout require a fresh user login + device token pair — the agent cannot re-attach to the previous sessionId
+**Plans**: TBD
+
+### Phase 15: Device Audit Log
+**Goal**: Every device tool invocation is recorded to an append-only PostgreSQL audit log that cannot be altered or deleted through any application API.
+**Depends on**: Phase 12
+**Requirements**: AUDIT-01, AUDIT-02
+**Success Criteria** (what must be TRUE):
+  1. A new device_audit_log PostgreSQL table exists with columns (id, user_id, device_id, tool_name, params_digest, success, error, timestamp) and every device-routed tool invocation — both authorized and authorization-failure — appends exactly one row on completion
+  2. params_digest stores a SHA-256 hash of the tool arguments (so free-form shell commands or file contents are not leaked as plaintext) while preserving the ability to correlate identical operations
+  3. The table is protected at the database level: a dedicated PostgreSQL role with INSERT/SELECT-only grants is used by the application, and UPDATE/DELETE are revoked — attempting to modify or delete a row through the application API returns a permission-denied error from PostgreSQL
+  4. An admin-only tRPC query (audit.listDeviceEvents) returns the log filtered by user_id and/or device_id with pagination, proving the log is queryable for incident review
+**Plans**: TBD
+
+### Phase 16: Admin Override & Emergency Disconnect
+**Goal**: Admin users can see every device on the system and can forcibly terminate any active device bridge for incident response — with each override action itself written to the audit log.
+**Depends on**: Phase 11, Phase 12, Phase 15
+**Requirements**: ADMIN-01, ADMIN-02
+**Success Criteria** (what must be TRUE):
+  1. An admin-only endpoint (tRPC devices.adminListAll + Nexus REST GET /api/admin/devices) returns every device across every user with owner username, online/offline status, and last-seen timestamp — a member-role user calling the endpoint receives 403 forbidden
+  2. The Admin panel in Settings > Users (or a new Settings > Devices admin tab) renders the cross-user device table with a red "Force Disconnect" button on each online row
+  3. Clicking Force Disconnect calls an admin-only mutation that closes the matching DeviceBridge WebSocket with code 4403 and reason "admin_disconnect", and the target device transitions to offline within 3 seconds in both the admin view and the owner's My Devices UI
+  4. Every admin list-all query and every force-disconnect mutation writes a row to device_audit_log with tool_name="admin.list_all" or "admin.force_disconnect", attributing the action to the admin's user_id and naming the affected device_id
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 6 -> 7 -> 8 -> 9 -> 10
-Note: Phase 9 is independent of Phases 6-8 and could execute in parallel.
+v26.0 phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15 -> 16
+Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in parallel with Phases 12-13/15.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. WhatsApp Channel Foundation | v25.0 | 2/2 | Complete | 2026-04-03 |
-| 7. WhatsApp QR Code & Settings UI | v25.0 | 2/2 | Complete | 2026-04-03 |
-| 8. WhatsApp Message Routing & Safety | v25.0 | 2/2 | Complete | 2026-04-03 |
-| 9. Cross-Session Conversation Persistence & Search | v25.0 | 2/2 | Complete | 2026-04-03 |
-| 10. Unified Identity & Memory Management UI | v25.0 | 2/2 | Complete | 2026-04-03 |
+| 11. Device Ownership Foundation | v26.0 | 0/? | Not started | — |
+| 12. Device Access Authorization | v26.0 | 0/? | Not started | — |
+| 13. Shell Tool Isolation | v26.0 | 0/? | Not started | — |
+| 14. Device Session Binding | v26.0 | 0/? | Not started | — |
+| 15. Device Audit Log | v26.0 | 0/? | Not started | — |
+| 16. Admin Override & Emergency Disconnect | v26.0 | 0/? | Not started | — |
 
 ---
 
 ## Previous Milestones
 
+- v25.0 Memory & WhatsApp Integration (Phases 6-10, Shipped 2026-04-03)
 - v24.0 Mobile Responsive UI (Phases 1-5, Shipped 2026-04-01)
 - v23.0 Mobile PWA (Phases 37-40, Shipped 2026-04-01)
 - v22.0 Livinity AGI Platform (Phases 29-36, Shipped 2026-03-29)

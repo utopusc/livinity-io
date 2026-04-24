@@ -77,26 +77,35 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OWN-01 | TBD | Pending |
-| OWN-02 | TBD | Pending |
-| OWN-03 | TBD | Pending |
-| AUTHZ-01 | TBD | Pending |
-| AUTHZ-02 | TBD | Pending |
-| AUTHZ-03 | TBD | Pending |
-| SHELL-01 | TBD | Pending |
-| SHELL-02 | TBD | Pending |
-| SESS-01 | TBD | Pending |
-| SESS-02 | TBD | Pending |
-| SESS-03 | TBD | Pending |
-| AUDIT-01 | TBD | Pending |
-| AUDIT-02 | TBD | Pending |
-| ADMIN-01 | TBD | Pending |
-| ADMIN-02 | TBD | Pending |
+| OWN-01 | Phase 11 | Pending |
+| OWN-02 | Phase 11 | Pending |
+| OWN-03 | Phase 11 | Pending |
+| AUTHZ-01 | Phase 12 | Pending |
+| AUTHZ-02 | Phase 12 | Pending |
+| AUTHZ-03 | Phase 12 | Pending |
+| SHELL-01 | Phase 13 | Pending |
+| SHELL-02 | Phase 13 | Pending |
+| SESS-01 | Phase 14 | Pending |
+| SESS-02 | Phase 14 | Pending |
+| SESS-03 | Phase 14 | Pending |
+| AUDIT-01 | Phase 15 | Pending |
+| AUDIT-02 | Phase 15 | Pending |
+| ADMIN-01 | Phase 16 | Pending |
+| ADMIN-02 | Phase 16 | Pending |
 
 **Coverage:**
 - v26.0 requirements: 15 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 15
+- Mapped to phases: 15 (100%)
+- Unmapped: 0
+
+**Phase Distribution:**
+- Phase 11 (Device Ownership Foundation): 3 requirements (OWN-01, OWN-02, OWN-03)
+- Phase 12 (Device Access Authorization): 3 requirements (AUTHZ-01, AUTHZ-02, AUTHZ-03)
+- Phase 13 (Shell Tool Isolation): 2 requirements (SHELL-01, SHELL-02)
+- Phase 14 (Device Session Binding): 3 requirements (SESS-01, SESS-02, SESS-03)
+- Phase 15 (Device Audit Log): 2 requirements (AUDIT-01, AUDIT-02)
+- Phase 16 (Admin Override & Emergency Disconnect): 2 requirements (ADMIN-01, ADMIN-02)
 
 ---
 *Requirements defined: 2026-04-24*
+*Roadmap mapped: 2026-04-24*
