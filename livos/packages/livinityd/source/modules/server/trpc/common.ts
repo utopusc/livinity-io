@@ -84,6 +84,8 @@ export const httpOnlyPaths = [
 	// Device management -- use HTTP for reliability through relay tunnel
 	'devices.rename',
 	'devices.remove',
+	// Device audit log (Phase 15 AUDIT-02) -- admin-only query; HTTP so failures surface immediately
+	'audit.listDeviceEvents',
 	// Computer use session control -- use HTTP for reliability
 	'ai.pauseComputerUse',
 	'ai.resumeComputerUse',
