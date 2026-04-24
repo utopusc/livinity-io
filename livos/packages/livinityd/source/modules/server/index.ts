@@ -956,7 +956,12 @@ class Server {
 			}),
 		}))
 
-		// Internal endpoint for Nexus proxy tool callbacks (device tool execution)
+		// Internal endpoint for Nexus proxy tool callbacks (device tool execution).
+		// Phase 12 AUTHZ-01/03: expectedUserId is passed via query string (set by
+		// DeviceBridge.onDeviceConnected at proxy tool registration time) and is
+		// forwarded to executeOnDevice which calls authorizeDeviceAccess before any
+		// tunnel activity. Defense-in-depth: even if a rogue Nexus build or internal
+		// caller POSTs directly, the ownership check still fires.
 		this.app.post('/internal/device-tool-execute', express.json(), async (req, res) => {
 			try {
 				const {tool, params} = req.body
@@ -967,7 +972,23 @@ class Server {
 				if (!bridge) {
 					return res.status(503).json({success: false, output: '', error: 'DeviceBridge not initialized'})
 				}
-				const result = await bridge.executeOnDevice(tool, params)
+
+				// Phase 12 AUTHZ-03: expectedUserId MUST be supplied by the proxy-tool
+				// callback URL (set in onDeviceConnected). Missing userId is a hard fail —
+				// never silently accept anonymous device tool execution in v26.0.
+				const expectedUserId = typeof req.query.expectedUserId === 'string' ? req.query.expectedUserId : ''
+
+				const result = await bridge.executeOnDevice(tool, params, expectedUserId)
+
+				// Map executeOnDevice error codes to HTTP statuses for defense-in-depth.
+				// `executeOnDevice` already called recordAuthFailure for auth errors, so we
+				// only need to set the HTTP status here (no duplicate audit write).
+				if (result.error === 'device_not_owned' || result.error === 'missing_user') {
+					return res.status(403).json({...result, code: result.error})
+				}
+				if (result.error === 'device_not_found') {
+					return res.status(404).json({...result, code: 'device_not_found'})
+				}
 				res.json(result)
 			} catch (err: any) {
 				res.json({success: false, output: '', error: err.message})
