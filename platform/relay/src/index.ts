@@ -640,6 +640,41 @@ server.on('upgrade', async (req, socket, head) => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 14 SESS-02: token expiry watchdog
+// ---------------------------------------------------------------------------
+//
+// Every SESSION_EXPIRY_CHECK_INTERVAL_MS we scan all DeviceConnection instances and
+// force-close any whose tokenExpiresAt has passed. Close code 4401 "token_expired"
+// signals the device agent that its JWT is stale and must refresh via /api/device/token.
+//
+// We do NOT rely on jsonwebtoken's initial verify alone: that runs once at handshake;
+// without this watchdog, a connection that authenticated with a valid 24h token would
+// remain open after the 24h mark for as long as the WebSocket stays up.
+function startSessionExpiryWatchdog(): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    const now = Date.now();
+    let closed = 0;
+    for (const connection of deviceRegistry.allConnections()) {
+      if (connection.tokenExpiresAt <= now) {
+        try {
+          connection.ws.close(4401, 'token_expired');
+        } catch {
+          // Already closed — destroy() will clean up on the close event
+        }
+        closed++;
+        console.log(`[relay] Closed bridge for token_expired: device=${connection.deviceId} user=${connection.userId} session=${connection.sessionId} expired=${new Date(connection.tokenExpiresAt).toISOString()}`);
+      }
+    }
+    if (closed > 0) {
+      console.log(`[relay] Session expiry watchdog: closed ${closed} expired bridge(s)`);
+    }
+  }, config.SESSION_EXPIRY_CHECK_INTERVAL_MS);
+}
+
+const sessionExpiryInterval = startSessionExpiryWatchdog();
+console.log(`[relay] Session expiry watchdog running every ${config.SESSION_EXPIRY_CHECK_INTERVAL_MS}ms`);
+
+// ---------------------------------------------------------------------------
 // Start listening
 // ---------------------------------------------------------------------------
 
@@ -677,6 +712,9 @@ function shutdown(signal: string): void {
     connection.destroy('relay shutdown');
   }
   console.log(`[relay] Disconnected ${deviceRegistry.totalDevices} device(s)`);
+
+  // Phase 14 SESS-02: stop expiry watchdog
+  clearInterval(sessionExpiryInterval);
 
   stopBandwidthFlush(bandwidthInterval);
 

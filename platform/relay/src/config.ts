@@ -63,6 +63,9 @@ export const config = {
   /** TTL for cached API key auth results (avoids DB lookup on every message) */
   AUTH_CACHE_TTL_S: envInt('AUTH_CACHE_TTL_S', 300), // 5 min
 
+  /** Phase 14 SESS-02: interval for checking device token expiries (watchdog that closes expired bridges) */
+  SESSION_EXPIRY_CHECK_INTERVAL_MS: envInt('SESSION_EXPIRY_CHECK_INTERVAL_MS', 60_000), // 60s
+
   /** Shared secret for verifying device JWT tokens (must match platform/web) */
   DEVICE_JWT_SECRET: envStr('DEVICE_JWT_SECRET', 'dev-device-jwt-secret-change-me'),
 } as const;
