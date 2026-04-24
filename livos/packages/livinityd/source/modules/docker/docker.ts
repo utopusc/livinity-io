@@ -370,7 +370,7 @@ export async function inspectContainer(name: string): Promise<ContainerDetail> {
  * Strip Docker multiplexed stream 8-byte headers from each frame.
  * Format: [stream_type(1), 0, 0, 0, size(4)] per frame.
  */
-function stripDockerStreamHeaders(buffer: Buffer): string {
+export function stripDockerStreamHeaders(buffer: Buffer): string {
 	const chunks: string[] = []
 	let offset = 0
 
