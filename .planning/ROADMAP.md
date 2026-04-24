@@ -108,7 +108,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Milestone Goal:** Prevent unauthorized cross-user device access — a user's terminal/shell session must not be able to reach another user's connected devices, while preserving AI agent auto-approval UX.
 
-- [ ] **Phase 11: Device Ownership Foundation** - PostgreSQL user_id column on devices + registration binding + owner-filtered list
+- [x] **Phase 11: Device Ownership Foundation** - PostgreSQL user_id column on devices + registration binding + owner-filtered list (completed 2026-04-24)
 - [ ] **Phase 12: Device Access Authorization** - Per-tool ownership middleware across tRPC and Nexus REST with audit-logged failures
 - [ ] **Phase 13: Shell Tool Isolation** - Cross-user device ID rejection and safe local-session default in the shell tool
 - [ ] **Phase 14: Device Session Binding** - DeviceBridge WebSocket tied to user JWT with token expiry and logout-triggered disconnect
@@ -126,10 +126,10 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   2. When a user pairs a new device via the OAuth Device Grant flow, the resulting device record is written with user_id equal to the authenticated user's id — attempting to register a device with no authenticated user is rejected with 401
   3. GET /api/devices (Nexus REST) and devices.list (tRPC) return only rows WHERE user_id = ctx.currentUser.id — admin users calling the normal list endpoint still see only their own devices (admin-wide list is a separate Phase 16 endpoint)
   4. DeviceRegistry in-memory state (Redis userId->deviceId mapping) is kept in sync with the database user_id column on connect/disconnect so cached lookups cannot leak stale ownership
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 11-01-PLAN.md — Add FK constraint devices.user_id -> users(id) + backfill + harden createDeviceRecord
-- [ ] 11-02-PLAN.md — Forward userId in tunnel event + cache in Redis + filter tRPC/REST listings by owner
+- [x] 11-02-PLAN.md — Forward userId in tunnel event + cache in Redis + filter tRPC/REST listings by owner
 
 ### Phase 12: Device Access Authorization
 **Goal**: Every device-routed tool call — whether through tRPC, Nexus REST, or the agent tool loop — verifies the caller owns the target device before executing, with failures surfaced clearly and recorded.
@@ -194,7 +194,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 11. Device Ownership Foundation | v26.0 | 1/2 | In Progress|  |
+| 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 12. Device Access Authorization | v26.0 | 0/? | Not started | — |
 | 13. Shell Tool Isolation | v26.0 | 0/? | Not started | — |
 | 14. Device Session Binding | v26.0 | 0/? | Not started | — |

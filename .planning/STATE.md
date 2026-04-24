@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
 status: completed
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-04-24T16:39:01.981Z"
-last_activity: 2026-04-24 — Roadmap for v26.0 created (6 phases, 15/15 requirements mapped)
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-04-24T16:46:58.458Z"
+last_activity: 2026-04-24 — 11-02-PLAN.md executed (4/4 tasks, 5 modified + 1 created, OWN-02 + OWN-03 satisfied)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 50
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 ## Current Position
 
-Phase: 11 -- Device Ownership Foundation (in progress)
-Plan: 11-02 (next)
-Status: 11-01 complete — devices.user_id FK constraint landed in both platform/web (migration 0007) and platform/relay (schema.sql); createDeviceRecord hardened
-Last activity: 2026-04-24 — 11-01-PLAN.md executed (3/3 tasks, 4 files modified, OWN-01 satisfied)
+Phase: 11 -- Device Ownership Foundation (complete)
+Plan: 12-01 (next phase)
+Status: 11-02 complete — relay protocol carries userId, LivOS Redis cache + tRPC routes filter by owner, new GET /api/devices REST endpoint 401s on missing session and filters by session.userId. OWN-02 and OWN-03 satisfied; Phase 11 done.
+Last activity: 2026-04-24 — 11-02-PLAN.md executed (4/4 tasks, 5 modified + 1 created, OWN-02 + OWN-03 satisfied)
 
-**Progress:** [█████░░░░░] 50%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | Phase / Plan | Duration | Tasks | Files |
 |--------------|----------|-------|-------|
 | 11-device-ownership-foundation P01 | 2min | 3 | 4 |
+| 11-device-ownership-foundation P02 | 3min | 4 | 6 |
 
 ## Accumulated Context
 
@@ -90,6 +91,15 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **Backfill targets oldest user by `created_at`**: relay's users table has no `role` column, so no literal admin query is possible; oldest user is the deployment's de facto owner
 - **Application-layer guard in `createDeviceRecord`** duplicates the DB FK intentionally: clearer error message (cites OWN-02 for traceability) and earlier rejection at the JS boundary
 
+### Phase 11-02 Execution Decisions
+
+- **Hard-reject missing userId in onDeviceConnected**: drops the event with an error log rather than soft-fallback. Prevents cross-user leakage if a stale relay forwards legacy messages
+- **tRPC devices.list uses privateProcedure + legacy fallback**: ctx.currentUser undefined -> return all devices (matches requireRole's same fallback for single-user deployments that haven't migrated to v7.0 multi-user)
+- **remove enforces both confirmName AND ownership**: safety UX is orthogonal to authorization — admin removing their OWN device must still confirm the name to avoid fat-fingered deletes
+- **Response wrapper `{devices: [...]}`, not bare array**: backwards-compatible with future pagination/metadata fields (nextCursor, total)
+- **FORBIDDEN code `device_not_owned` standardized**: Phase 12's authorizeDeviceAccess helper will consume the same code string for consistency
+- **devices.list downgraded from adminProcedure to privateProcedure**: Phase 16 will add a separate admin endpoint for cross-user listing — today's list should work for every authenticated user seeing their own devices
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -110,6 +120,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T16:39:01.977Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-04-24T16:46:58.454Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
