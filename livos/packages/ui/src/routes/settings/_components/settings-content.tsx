@@ -43,6 +43,7 @@ import {
 	TbLogin,
 	TbUsers,
 	TbBrain,
+	TbServer2,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -102,6 +103,9 @@ const VoiceContentLazy = React.lazy(() =>
 const UsersSectionLazy = React.lazy(() =>
 	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
 )
+const AdminDevicesSectionLazy = React.lazy(() =>
+	import('./admin-devices-section').then((m) => ({default: m.AdminDevicesSection})),
+)
 const MemorySectionLazy = React.lazy(() =>
 	import('@/routes/settings/memory').then((m) => ({default: m.MemorySection})),
 )
@@ -116,6 +120,7 @@ type SettingsSection =
 	| 'home'
 	| 'account'
 	| 'users'
+	| 'admin-devices'
 	| 'wallpaper'
 	| '2fa'
 	| 'ai-config'
@@ -157,6 +162,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'memory', icon: TbBrain, label: 'Memory', description: 'AI memory & conversations'},
 	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
+	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
 	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
@@ -422,6 +428,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <AccountSection />
 		case 'users':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><UsersSectionLazy /></Suspense>
+		case 'admin-devices':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AdminDevicesSectionLazy /></Suspense>
 		case 'wallpaper':
 			return <WallpaperSection />
 		case '2fa':
