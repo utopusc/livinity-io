@@ -34,6 +34,7 @@ import {
 	IconPlayerPause,
 	IconUnlink,
 	IconStack2,
+	IconCloudDownload,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -2660,6 +2661,43 @@ function RemoveStackDialog({
 	)
 }
 
+// Redeploy (pull latest) Stack Dialog — QW-03
+function RedeployStackDialog({
+	stackName,
+	open,
+	onOpenChange,
+	onConfirm,
+	isBusy,
+}: {
+	stackName: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: () => void
+	isBusy: boolean
+}) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Redeploy Stack: {stackName}</DialogTitle>
+					<DialogDescription>
+						This will pull the latest version of every image in this stack and recreate
+						containers on the new digest. Existing volumes are preserved.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button variant='outline' onClick={() => onOpenChange(false)} disabled={isBusy}>
+						Cancel
+					</Button>
+					<Button onClick={onConfirm} disabled={isBusy}>
+						{isBusy ? 'Redeploying...' : 'Pull & Redeploy'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
 // Stacks Tab Component
 function StacksTab() {
 	const {
@@ -2680,6 +2718,7 @@ function StacksTab() {
 	const [deployFormOpen, setDeployFormOpen] = useState(false)
 	const [editTarget, setEditTarget] = useState<string | null>(null)
 	const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+	const [redeployTarget, setRedeployTarget] = useState<string | null>(null)
 
 	const statusBadge = (status: 'running' | 'stopped' | 'partial') => {
 		const classes: Record<string, string> = {
@@ -2831,6 +2870,16 @@ function StacksTab() {
 															title='Restart'
 														/>
 													</span>
+													{/* Redeploy (pull latest images) — QW-03 */}
+													<span onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconCloudDownload}
+															onClick={() => setRedeployTarget(stack.name)}
+															disabled={isControlling}
+															color='blue'
+															title='Redeploy (pull latest images)'
+														/>
+													</span>
 													{/* Edit */}
 													<span onClick={(e) => e.stopPropagation()}>
 														<ActionButton
@@ -2934,6 +2983,22 @@ function StacksTab() {
 						setRemoveTarget(null)
 					}}
 					isRemoving={isRemoving}
+				/>
+			)}
+
+			{/* Redeploy (pull latest) Stack Dialog — QW-03 */}
+			{redeployTarget && (
+				<RedeployStackDialog
+					stackName={redeployTarget}
+					open={!!redeployTarget}
+					onOpenChange={(open) => {
+						if (!open) setRedeployTarget(null)
+					}}
+					onConfirm={() => {
+						controlStack(redeployTarget, 'pull-and-up')
+						setRedeployTarget(null)
+					}}
+					isBusy={isControlling}
 				/>
 			)}
 		</>
