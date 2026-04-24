@@ -164,3 +164,43 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled);
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_type    ON scheduled_jobs(type);
+
+-- =========================================================================
+-- Git Credentials (Phase 21 GIT-01)
+-- AES-256-GCM-encrypted at rest using SHA-256 of JWT secret as key.
+-- encrypted_data shape depends on type:
+--   type='https' -> encrypted JSON {"username":"...","password":"..."} (PAT goes in password)
+--   type='ssh'   -> encrypted SSH private key (single-line PEM)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS git_credentials (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID REFERENCES users(id) ON DELETE SET NULL,
+  name           TEXT NOT NULL,
+  type           TEXT NOT NULL CHECK (type IN ('ssh', 'https')),
+  encrypted_data TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_git_credentials_user ON git_credentials(user_id);
+
+-- =========================================================================
+-- Stacks (Phase 21 GIT-01)
+-- ONLY git-backed stacks live here. YAML-only stacks remain filesystem-only at
+-- /opt/livos/data/stacks/<name>/docker-compose.yml — no PG row required for them.
+-- This keeps the existing YAML deploy path 100% backwards compatible.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS stacks (
+  name              TEXT PRIMARY KEY,
+  git_url           TEXT NOT NULL,
+  git_branch        TEXT NOT NULL DEFAULT 'main',
+  git_credential_id UUID REFERENCES git_credentials(id) ON DELETE SET NULL,
+  compose_path      TEXT NOT NULL DEFAULT 'docker-compose.yml',
+  webhook_secret    TEXT NOT NULL,                           -- 64-char hex (32 random bytes)
+  last_synced_sha   TEXT,                                    -- HEAD sha after last successful sync
+  last_synced_at    TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stacks_git_url ON stacks(git_url);
