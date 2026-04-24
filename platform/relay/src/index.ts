@@ -426,6 +426,7 @@ function onDeviceConnect(ws: WebSocket): void {
       if (userTunnel && userTunnel.ws.readyState === 1) {
         const event: TunnelDeviceConnected = {
           type: 'device_connected',
+          userId: tokenPayload.userId,  // Phase 11 OWN-03: forward owner to LivOS for per-user filtering
           deviceId: tokenPayload.deviceId,
           deviceName: authMsg.deviceName,
           platform: authMsg.platform,
