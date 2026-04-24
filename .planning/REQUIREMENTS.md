@@ -31,7 +31,7 @@
 ### Audit Log (AUDIT)
 
 - [ ] **AUDIT-01**: Every device tool invocation (shell, files, etc.) appends an immutable row to the device_audit_log PostgreSQL table with user_id, device_id, tool, params digest, timestamp, and success/error
-- [ ] **AUDIT-02**: Audit log entries cannot be modified or deleted through any application API (append-only enforcement at DB level)
+- [x] **AUDIT-02**: Audit log entries cannot be modified or deleted through any application API (append-only enforcement at DB level)
 
 ### Admin Override (ADMIN)
 
@@ -89,7 +89,7 @@
 | SESS-02 | Phase 14 | Complete |
 | SESS-03 | Phase 14 | Complete |
 | AUDIT-01 | Phase 15 | Pending |
-| AUDIT-02 | Phase 15 | Pending |
+| AUDIT-02 | Phase 15 | Complete |
 | ADMIN-01 | Phase 16 | Pending |
 | ADMIN-02 | Phase 16 | Pending |
 

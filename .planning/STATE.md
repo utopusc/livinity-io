@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
 status: completed
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-04-24T17:55:18.378Z"
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-04-24T18:09:36.879Z"
 last_activity: 2026-04-24 — 14-02-PLAN.md executed (3/3 tasks, 7 files, SESS-03 complete)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_plans: 9
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v26.0 -- Device Security & User Isolation
-**Current focus:** Phase 14 -- Device Session Binding
+**Current focus:** Phase 15 -- Device Audit Log
 
 ## Current Position
 
-Phase: 14 -- Device Session Binding (complete — all 3 requirements SESS-01/02/03 satisfied)
-Plan: 14-02 complete — next milestone phase is 15 (Device Audit Log)
-Status: 14-02 complete — session-revocation pub/sub wired end-to-end. (1) platform/web adds ioredis dep; new `src/lib/session-revocation.ts` exports lazy-singleton ioredis publisher + publishSessionRevoked(sessionId) on channel 'livos:sessions:revoked' with maxRetriesPerRequest:1 + enableOfflineQueue:false + try/catch soft-fail (logout never blocked by Redis outage). (2) /api/auth/logout SELECTs sessions.id BEFORE deleteSession then publishes the UUID. (3) platform/relay gains new `src/session-revocation.ts` with startSessionRevocationSubscriber(subscriber, deviceRegistry) that subscribes to the channel and, on each message, iterates DeviceRegistry.allConnections() closing every match with ws.close(4403, 'session_revoked'). (4) platform/relay/src/index.ts creates a DEDICATED ioredis client (subscribe mode is connection-exclusive — cannot share with the command client used by bandwidth/custom-domains), wires the subscriber at boot, and disconnects it in shutdown(). Plan 14-01 invariants (watchdog, handshake validation) untouched. All 14 required A-N invariants PASS; optional O integration probe skipped (no local Redis). Zero new TS errors. SESS-03 satisfied — Phase 14 now fully complete.
-Last activity: 2026-04-24 — 14-02-PLAN.md executed (3/3 tasks, 7 files, SESS-03 complete)
+Phase: 15 -- Device Audit Log (in progress — Plan 15-01 complete, Plan 15-02 pending)
+Plan: 15-01 complete — PG schema + immutability trigger + recordDeviceEvent writer delivered
+Status: 15-01 complete — (1) schema.sql appends device_audit_log table (8 cols: id UUID PK, user_id UUID NOT NULL no-FK, device_id TEXT, tool_name TEXT, params_digest TEXT, success BOOL, error TEXT, timestamp TIMESTAMPTZ) + 3 non-unique indexes (user_id, device_id, timestamp DESC) + audit_log_immutable() PL/pgSQL function raising 'device_audit_log is append-only' + device_audit_log_no_modify BEFORE UPDATE OR DELETE trigger guarded by DO-block existence check. All DDL idempotent. (2) devices/audit-pg.ts new — recordDeviceEvent(redis, event, logger?) fire-and-forget writer: getPool() INSERT with computeParamsDigest (node:crypto SHA-256 hex, empty-string for null/undefined, '[unserializable]' fallback for circular), nil-UUID sentinel '00000000-0000-0000-0000-000000000000' for missing_user rows, catch-branch delegates to Phase 12 recordAuthFailure on PG outage (audit never silently dropped). Imports getPool from ../database, recordAuthFailure from ./audit-stub (no circular deps via barrel). (3) devices/index.ts barrel extended to surface recordDeviceEvent + computeParamsDigest + DeviceAuditEvent type as primary Phase 15 exports; retains recordAuthFailure/AUTH_FAILURES_REDIS_KEY/MAX_ENTRIES/AuthFailureEntry for audit-pg internal fallback + to avoid 15-02 flag-day migration. All 9 schema.sql regex invariants PASS, 7 barrel runtime exports resolve, zero new tsc errors in touched files. AUDIT-02 satisfied (DB-level enforcement). AUDIT-01 partial — writer ready, callsites pending Plan 15-02.
+Last activity: 2026-04-24 — 15-01-PLAN.md executed (3/3 tasks, 3 files, 108s duration)
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 89%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Last activity: 2026-04-24 — 14-02-PLAN.md executed (3/3 tasks, 7 files, SESS-0
 Coverage: 15/15 v26.0 requirements mapped ✓
 | Phase 14-device-session-binding P01 | 237 | 3 tasks | 9 files |
 | Phase 14 P02 | 149 | 3 tasks | 7 files |
+| Phase 15 P01 | 108 | 3 tasks | 3 files |
 
 ### v26.0 Execution Metrics
 
@@ -153,6 +154,17 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **Close code 4403 'session_revoked' (not 4401)**: 4401 = "refresh the token and reconnect" (14-01 expiry); 4403 = "stop reconnecting, the session is gone". Client device agents distinguish at the close event and choose the right recovery strategy (refresh token vs abandon-and-re-pair).
 - **Subscriber startup BEFORE server.listen**: revocations arriving before the HTTP server is accepting connections are harmless — no bridges exist yet to close. Subscriber shutdown happens INSIDE shutdown() after the watchdog clearInterval, BEFORE stopBandwidthFlush, so no new revocation messages are processed during the relay's final broadcast loop.
 
+### Phase 15-01 Execution Decisions
+
+- **Nil-UUID sentinel (`00000000-0000-0000-0000-000000000000`) for missing_user rows**: `user_id UUID NOT NULL` cannot accept `''`; pre-auth failures (where no JWT was resolved) use the all-zero UUID. No FK to users(id), so this synthetic value doesn't need to match any row. Admin queries can filter missing-user entries via `WHERE user_id = '00000000-...'::uuid`.
+- **NO FK from device_audit_log.user_id to users(id)**: CONTEXT.md explicitly requires historical audit rows to survive user deletion for incident review. `REFERENCES users(id) ON DELETE CASCADE` would erase forensic history on user removal — violates AUDIT-01's "every invocation recorded" promise.
+- **Redis-stub fallback on PG failure**: `recordDeviceEvent` catches all INSERT errors and delegates to the Phase 12 `recordAuthFailure` (capped Redis list). PG restart / connection blip must not cause audit data loss.
+- **Trigger-based append-only (CONTEXT.md decision)**: `audit_log_immutable()` raising on BEFORE UPDATE OR DELETE chosen over separate PG role grants. Simpler to ship for single-DB LivOS deployment; same security effect (even `psql` as `livos` superuser gets blocked by the trigger).
+- **params_digest stored as TEXT (hex) not BYTEA**: 64-char hex strings render directly in admin UIs without encoding conversion; storage cost negligible at audit-log scale.
+- **Barrel retains recordAuthFailure export**: audit-pg.ts imports it directly from `./audit-stub.js` (not via barrel — avoids circular deps), but Plan 15-02 callsites may temporarily route through the barrel during migration. Keeping the export avoids flag-day swap.
+- **DO-block trigger guard (not CREATE TRIGGER IF NOT EXISTS)**: older PG versions lack `IF NOT EXISTS` for triggers; the `DO` block checks `pg_trigger` before creating. Keeps `schema.sql` idempotent across startups without raising PG version floor.
+- **computeParamsDigest is exported (not just internal)**: tests and Plan 15-02's admin query can assert digest shape without re-implementing SHA-256 logic.
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -173,6 +185,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T17:54:39.991Z
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-04-24T18:09:36.875Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None
