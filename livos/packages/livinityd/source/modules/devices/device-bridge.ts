@@ -137,6 +137,7 @@ interface PendingRequest {
 }
 
 interface ConnectedDevice {
+	userId: string  // Phase 11 OWN-03: device owner
 	deviceId: string
 	deviceName: string
 	platform: string
@@ -182,18 +183,26 @@ export class DeviceBridge {
 
 	// -- Device Event Handlers (called by TunnelClient) --
 
-	async onDeviceConnected(event: {deviceId: string; deviceName: string; platform: string; tools: string[]}): Promise<void> {
-		const {deviceId, deviceName, platform, tools} = event
-		this.logger.log(`[device-bridge] Device connected: ${deviceName} (${deviceId}) platform=${platform} tools=[${tools.join(',')}]`)
+	async onDeviceConnected(event: {userId: string; deviceId: string; deviceName: string; platform: string; tools: string[]}): Promise<void> {
+		const {userId, deviceId, deviceName, platform, tools} = event
+
+		// Phase 11 OWN-03: relay MUST supply userId. If missing (stale relay version), log
+		// and drop — we refuse to cache an unowned device to prevent cross-user leakage.
+		if (!userId || typeof userId !== 'string' || userId.length === 0) {
+			this.logger.error(`[device-bridge] Refusing device_connected without userId: deviceId=${deviceId}`)
+			return
+		}
+
+		this.logger.log(`[device-bridge] Device connected: ${deviceName} (${deviceId}) user=${userId} platform=${platform} tools=[${tools.join(',')}]`)
 
 		// Store in local state
-		this.connectedDevices.set(deviceId, {deviceId, deviceName, platform, tools})
+		this.connectedDevices.set(deviceId, {userId, deviceId, deviceName, platform, tools})
 
 		// Store in Redis for UI queries (TTL 25h -- slightly longer than device token expiry)
 		const redisKey = `${DEVICE_REDIS_PREFIX}${deviceId}`
 		await this.redis.set(
 			redisKey,
-			JSON.stringify({deviceId, deviceName, platform, tools, connectedAt: Date.now()}),
+			JSON.stringify({userId, deviceId, deviceName, platform, tools, connectedAt: Date.now()}),
 			'EX',
 			90000,
 		)
@@ -423,7 +432,7 @@ export class DeviceBridge {
 
 	async getDeviceFromRedis(
 		deviceId: string,
-	): Promise<{deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number} | null> {
+	): Promise<{userId: string; deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number} | null> {
 		const raw = await this.redis.get(`${DEVICE_REDIS_PREFIX}${deviceId}`)
 		if (!raw) return null
 		try {
@@ -434,7 +443,7 @@ export class DeviceBridge {
 	}
 
 	async getAllDevicesFromRedis(): Promise<
-		Array<{deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number; online: boolean}>
+		Array<{userId: string; deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number; online: boolean}>
 	> {
 		const keys = await this.redis.keys(`${DEVICE_REDIS_PREFIX}*`)
 		if (keys.length === 0) return []
@@ -445,6 +454,7 @@ export class DeviceBridge {
 		if (!results) return []
 
 		const devices: Array<{
+			userId: string
 			deviceId: string
 			deviceName: string
 			platform: string
@@ -467,6 +477,19 @@ export class DeviceBridge {
 		}
 
 		return devices
+	}
+
+	/**
+	 * Phase 11 OWN-03: Return only the devices owned by a given user.
+	 * Filters the Redis cache by userId — the authoritative source remains
+	 * the platform `devices` table, but livinityd only receives data for
+	 * devices whose tunnel this LivOS instance is bound to anyway.
+	 */
+	async getDevicesForUser(userId: string): Promise<
+		Array<{userId: string; deviceId: string; deviceName: string; platform: string; tools: string[]; connectedAt: number; online: boolean}>
+	> {
+		const all = await this.getAllDevicesFromRedis()
+		return all.filter((d) => d.userId === userId)
 	}
 
 	async renameDevice(deviceId: string, newName: string): Promise<boolean> {

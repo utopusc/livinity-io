@@ -95,6 +95,7 @@ interface TunnelWsClose {
 // Device event messages (relay -> client)
 interface TunnelDeviceConnected {
 	type: 'device_connected'
+	userId: string  // Phase 11 OWN-03: device owner forwarded from relay
 	deviceId: string
 	deviceName: string
 	platform: string
