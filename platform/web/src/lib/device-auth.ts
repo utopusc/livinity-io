@@ -58,6 +58,7 @@ export async function createDeviceGrant(deviceInfo: {
 export interface GrantStatus {
   status: 'pending' | 'approved' | 'expired';
   userId?: string;
+  sessionId?: string;  // Phase 14 SESS-01: populated when grant is approved
   deviceInfo?: { deviceName: string; platform: string; agentVersion: string };
 }
 
@@ -65,10 +66,12 @@ export async function getGrantByDeviceCode(deviceCode: string): Promise<GrantSta
   const result = await pool.query<{
     status: string;
     user_id: string | null;
+    session_id: string | null;
     device_info: any;
     expires_at: Date;
   }>(
-    'SELECT status, user_id, device_info, expires_at FROM device_grants WHERE device_code = $1 LIMIT 1',
+    // Phase 14 SESS-01: select session_id alongside user_id so the token endpoint can embed it
+    'SELECT status, user_id, session_id, device_info, expires_at FROM device_grants WHERE device_code = $1 LIMIT 1',
     [deviceCode]
   );
   if (result.rows.length === 0) return null;
@@ -83,11 +86,12 @@ export async function getGrantByDeviceCode(deviceCode: string): Promise<GrantSta
   return {
     status: row.status as GrantStatus['status'],
     userId: row.user_id ?? undefined,
+    sessionId: row.session_id ?? undefined,
     deviceInfo: row.device_info,
   };
 }
 
-export async function approveGrant(userCode: string, userId: string): Promise<{
+export async function approveGrant(userCode: string, userId: string, sessionId: string): Promise<{
   success: boolean;
   error?: string;
   deviceInfo?: { deviceName: string; platform: string; agentVersion: string };
@@ -118,10 +122,11 @@ export async function approveGrant(userCode: string, userId: string): Promise<{
     return { success: false, error: 'This code has expired. Please generate a new one from the agent.' };
   }
 
-  // Approve the grant
+  // Phase 14 SESS-01: persist the approving user's session UUID alongside user_id.
+  // The /api/device/token endpoint will later embed this into the signed JWT.
   await pool.query(
-    "UPDATE device_grants SET status = 'approved', user_id = $1 WHERE id = $2",
-    [userId, grant.id]
+    "UPDATE device_grants SET status = 'approved', user_id = $1, session_id = $2 WHERE id = $3",
+    [userId, sessionId, grant.id]
   );
 
   return { success: true, deviceInfo: grant.device_info };
@@ -132,6 +137,7 @@ export interface DeviceTokenPayload {
   deviceId: string;
   deviceName: string;
   platform: string;
+  sessionId: string;  // Phase 14 SESS-01: approving user's sessions.id UUID (not the opaque session token)
 }
 
 export function signDeviceToken(payload: DeviceTokenPayload): string {

@@ -30,6 +30,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
+    // Phase 14 SESS-01: every approved grant MUST have been bound to a session.
+    // Missing sessionId means a pre-migration grant or a data integrity bug — reject the token exchange.
+    if (!grant.sessionId) {
+      console.error('[device] Approved grant missing session_id — rejecting token exchange');
+      return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
+    }
+
     // Create device record and issue JWT
     const deviceId = await createDeviceRecord(grant.userId, {
       deviceName: grant.deviceInfo.deviceName,
@@ -41,6 +48,7 @@ export async function POST(req: NextRequest) {
       deviceId,
       deviceName: grant.deviceInfo.deviceName,
       platform: grant.deviceInfo.platform,
+      sessionId: grant.sessionId,  // Phase 14 SESS-01: bind this JWT to the approving user session
     });
 
     // Mark grant as consumed (delete it so device_code can't be reused)
