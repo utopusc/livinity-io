@@ -29,9 +29,14 @@ export const installHistory = pgTable('install_history', {
 // =========================================================================
 // Devices (registered remote agents)
 // =========================================================================
+// NOTE: user_id has a FK constraint to users(id) ON DELETE RESTRICT enforced
+// at the DB level (migration 0007_device_user_id_fk.sql + relay/src/schema.sql).
+// Not expressed via Drizzle .references() because the `users` table is managed
+// by platform/relay/src/schema.sql, not Drizzle — keeping a single source of
+// truth for the users schema.
 export const devices = pgTable('devices', {
   id: uuid('id').defaultRandom().primaryKey(),
-  user_id: uuid('user_id').notNull(),
+  user_id: uuid('user_id').notNull(),  // FK -> users(id) ON DELETE RESTRICT (see migration 0007)
   device_id: uuid('device_id').notNull().unique(),
   device_name: text('device_name').notNull(),
   platform: text('platform').notNull(),  // 'win32' | 'darwin' | 'linux'

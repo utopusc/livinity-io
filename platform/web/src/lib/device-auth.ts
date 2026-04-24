@@ -145,6 +145,13 @@ export async function createDeviceRecord(userId: string, deviceInfo: {
   deviceName: string;
   platform: string;
 }): Promise<string> {
+  // OWN-01 hard invariant: device records MUST be bound to a user at insert time.
+  // The FK constraint (migration 0007) enforces this at the DB level; we also
+  // guard in application code for a clearer error message and early rejection.
+  if (!userId || typeof userId !== 'string' || userId.length === 0) {
+    throw new Error('createDeviceRecord called with missing userId — device registration requires an authenticated user (OWN-02)');
+  }
+
   const result = await pool.query<{ device_id: string }>(
     `INSERT INTO devices (user_id, device_id, device_name, platform)
      VALUES ($1, gen_random_uuid(), $2, $3)
