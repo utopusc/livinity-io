@@ -1,4 +1,4 @@
-import {useState, useEffect, useRef, useCallback, useMemo} from 'react'
+import {useState, useEffect, useRef, useCallback} from 'react'
 import {
 	IconInfoCircle,
 	IconFileText,
@@ -6,17 +6,13 @@ import {
 	IconTerminal2,
 	IconX,
 	IconRefresh,
-	IconArrowDown,
 	IconLoader2,
 	IconAlertTriangle,
 	IconPencil,
 	IconCopy,
 	IconSearch,
 	IconDownload,
-	IconChevronUp,
-	IconChevronDown,
-	IconClock,
-	IconTextWrap,
+	IconTrash,
 } from '@tabler/icons-react'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
@@ -26,7 +22,6 @@ import {useContainerDetail} from '@/hooks/use-container-detail'
 import {trpcReact} from '@/trpc/trpc'
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
-import {Progress} from '@/shadcn-components/ui/progress'
 import {cn} from '@/shadcn-lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -54,6 +49,33 @@ function progressColor(percent: number): string {
 	if (percent > 80) return 'bg-red-500'
 	if (percent > 50) return 'bg-amber-500'
 	return 'bg-emerald-500'
+}
+
+// ---------------------------------------------------------------------------
+// xterm theme (shared by ConsoleTab and LogsTab — hoisted to module scope)
+// ---------------------------------------------------------------------------
+
+const XTERM_THEME = {
+	background: '#171717',
+	foreground: '#e5e5e5',
+	cursor: '#a3a3a3',
+	selectionBackground: '#404040',
+	black: '#171717',
+	red: '#f87171',
+	green: '#4ade80',
+	yellow: '#facc15',
+	blue: '#60a5fa',
+	magenta: '#c084fc',
+	cyan: '#22d3ee',
+	white: '#e5e5e5',
+	brightBlack: '#525252',
+	brightRed: '#fca5a5',
+	brightGreen: '#86efac',
+	brightYellow: '#fde68a',
+	brightBlue: '#93c5fd',
+	brightMagenta: '#d8b4fe',
+	brightCyan: '#67e8f9',
+	brightWhite: '#fafafa',
 }
 
 // ---------------------------------------------------------------------------
@@ -251,180 +273,202 @@ function InfoTab({containerName}: {containerName: string}) {
 }
 
 // ---------------------------------------------------------------------------
-// Logs Tab
+// Logs Tab — live WebSocket stream via /ws/docker/logs (QW-01)
 // ---------------------------------------------------------------------------
 
 function LogsTab({containerName}: {containerName: string}) {
 	const [tailLines, setTailLines] = useState(500)
-	const [autoScroll, setAutoScroll] = useState(true)
+	const [connected, setConnected] = useState(false)
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	const [_autoScroll, _setAutoScroll] = useState(true) // reserved for future scroll lock
 	const [searchTerm, setSearchTerm] = useState('')
-	const [matchIndex, setMatchIndex] = useState(0)
-	const [showTimestamps, setShowTimestamps] = useState(true)
-	const [lineWrap, setLineWrap] = useState(true)
-	const preRef = useRef<HTMLPreElement>(null)
 
-	const {logs, logsLoading, logsError, refetchLogs} = useContainerDetail(containerName, {
-		tail: tailLines,
-		timestamps: showTimestamps,
-	})
+	const terminalRef = useRef<Terminal | null>(null)
+	const wsRef = useRef<WebSocket | null>(null)
+	const containerRef = useRef<HTMLDivElement>(null)
+	const fitAddonRef = useRef<FitAddon | null>(null)
+	const resizeObserverRef = useRef<ResizeObserver | null>(null)
+	// Bounded log buffer for the Download button. Trim front to cap memory.
+	const logBufferRef = useRef<string[]>([])
 
-	// Auto-scroll to bottom when logs change
-	useEffect(() => {
-		if (autoScroll && preRef.current) {
-			preRef.current.scrollTo(0, preRef.current.scrollHeight)
+	const disconnect = useCallback(() => {
+		if (wsRef.current) {
+			wsRef.current.close()
+			wsRef.current = null
 		}
-	}, [logs, autoScroll])
-
-	const handleScroll = useCallback(() => {
-		const el = preRef.current
-		if (!el) return
-		const isAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20
-		setAutoScroll(isAtBottom)
+		if (terminalRef.current) {
+			terminalRef.current.dispose()
+			terminalRef.current = null
+		}
+		fitAddonRef.current = null
+		setConnected(false)
 	}, [])
 
-	const jumpToBottom = useCallback(() => {
-		if (preRef.current) {
-			preRef.current.scrollTo(0, preRef.current.scrollHeight)
-			setAutoScroll(true)
-		}
-	}, [])
+	const connect = useCallback(() => {
+		disconnect()
+		if (!containerRef.current) return
 
-	// Search: compute match positions
-	const matches = useMemo(() => {
-		if (!searchTerm || !logs) return []
-		const indices: number[] = []
-		const lower = logs.toLowerCase()
-		const term = searchTerm.toLowerCase()
-		let pos = 0
-		while ((pos = lower.indexOf(term, pos)) !== -1) {
-			indices.push(pos)
-			pos += term.length
-		}
-		return indices
-	}, [logs, searchTerm])
-
-	// Reset match index when search term changes
-	useEffect(() => {
-		setMatchIndex(0)
-	}, [searchTerm])
-
-	// Highlighted log content with <mark> elements
-	const highlightedContent = useMemo(() => {
-		if (!logs) return null
-		if (!searchTerm || matches.length === 0) return logs
-
-		const parts: React.ReactNode[] = []
-		let lastEnd = 0
-		matches.forEach((start, i) => {
-			if (start > lastEnd) {
-				parts.push(logs.slice(lastEnd, start))
-			}
-			parts.push(
-				<mark
-					key={i}
-					className={cn(
-						'bg-amber-500/30 text-amber-200',
-						i === matchIndex && 'bg-amber-500/60 ring-1 ring-amber-400',
-					)}
-					data-match-index={i}
-				>
-					{logs.slice(start, start + searchTerm.length)}
-				</mark>,
-			)
-			lastEnd = start + searchTerm.length
+		// Create new xterm terminal — same theme/font as ConsoleTab for consistency
+		const terminal = new Terminal({
+			fontSize: 13,
+			fontFamily: 'SF Mono, SFMono-Regular, ui-monospace, DejaVu Sans Mono, Menlo, Consolas, monospace',
+			theme: XTERM_THEME,
+			disableStdin: true,
+			scrollback: 10000,
+			convertEol: true,
 		})
-		if (lastEnd < logs.length) {
-			parts.push(logs.slice(lastEnd))
-		}
-		return parts
-	}, [logs, searchTerm, matches, matchIndex])
+		terminalRef.current = terminal
 
-	// Scroll active match into view
+		const fitAddon = new FitAddon()
+		fitAddonRef.current = fitAddon
+		terminal.loadAddon(fitAddon)
+		terminal.open(containerRef.current)
+		try {
+			fitAddon.fit()
+		} catch {
+			// Ignore fit errors during initial mount
+		}
+
+		// Build WebSocket URL — same token pattern as ConsoleTab
+		const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+		const port = window.location.port ? `:${window.location.port}` : ''
+		const token = localStorage.getItem('jwt') || ''
+		const params = new URLSearchParams({
+			container: containerName,
+			tail: String(tailLines),
+			token,
+		})
+		const wsUrl = `${wsProtocol}//${window.location.hostname}${port}/ws/docker/logs?${params}`
+
+		const ws = new WebSocket(wsUrl)
+		ws.binaryType = 'arraybuffer' // consistency with ConsoleTab
+		wsRef.current = ws
+
+		ws.onopen = () => {
+			setConnected(true)
+			terminal.writeln('\x1b[90m[Connected to logs stream]\x1b[0m')
+		}
+
+		ws.onmessage = (event) => {
+			const chunk =
+				typeof event.data === 'string'
+					? event.data
+					: new TextDecoder().decode(new Uint8Array(event.data as ArrayBuffer))
+			terminal.write(chunk)
+			logBufferRef.current.push(chunk)
+			// Bound memory — drop oldest 500 once we exceed 2000 chunks
+			if (logBufferRef.current.length > 2000) {
+				logBufferRef.current.splice(0, 500)
+			}
+		}
+
+		ws.onclose = () => {
+			setConnected(false)
+			if (terminalRef.current) {
+				terminalRef.current.writeln('\r\n\x1b[31m[Stream closed]\x1b[0m')
+			}
+		}
+
+		ws.onerror = () => {
+			setConnected(false)
+		}
+	}, [containerName, tailLines, disconnect])
+
+	// Auto-connect on mount / when containerName or tail changes
 	useEffect(() => {
-		if (matches.length > 0 && preRef.current) {
-			const el = preRef.current.querySelector(`[data-match-index="${matchIndex}"]`)
-			el?.scrollIntoView({block: 'center'})
+		if (!containerName) return
+		connect()
+		return () => {
+			disconnect()
 		}
-	}, [matchIndex, matches.length])
+		// We intentionally don't include `connect` (stable via useCallback deps) to avoid
+		// reconnect loops; changing tailLines triggers reconnect via its own button.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [containerName])
 
-	const goToPrevMatch = useCallback(() => {
-		if (matches.length === 0) return
-		setMatchIndex((prev) => (prev - 1 + matches.length) % matches.length)
-	}, [matches.length])
+	// ResizeObserver to refit terminal when sheet dimensions change
+	useEffect(() => {
+		const el = containerRef.current
+		if (!el) return
+		const observer = new ResizeObserver(() => {
+			if (fitAddonRef.current && terminalRef.current) {
+				try {
+					fitAddonRef.current.fit()
+				} catch {
+					// Ignore fit errors during cleanup
+				}
+			}
+		})
+		observer.observe(el)
+		resizeObserverRef.current = observer
+		return () => {
+			observer.disconnect()
+			resizeObserverRef.current = null
+		}
+	}, [])
 
-	const goToNextMatch = useCallback(() => {
-		if (matches.length === 0) return
-		setMatchIndex((prev) => (prev + 1) % matches.length)
-	}, [matches.length])
+	const handleSearch = useCallback((term: string) => {
+		setSearchTerm(term)
+		// TODO(QW-01/search): wire xterm search addon in v28
+		terminalRef.current?.focus()
+	}, [])
+
+	const handleReconnect = useCallback(() => {
+		connect()
+	}, [connect])
+
+	const handleTailChange = useCallback(
+		(next: number) => {
+			setTailLines(next)
+			// Reconnect with new tail seed on next tick (state update is async)
+			setTimeout(() => connect(), 0)
+		},
+		[connect],
+	)
 
 	const handleDownload = useCallback(() => {
-		if (!logs) return
-		const blob = new Blob([logs], {type: 'text/plain'})
+		const blob = new Blob([logBufferRef.current.join('')], {type: 'text/plain'})
 		const url = URL.createObjectURL(blob)
 		const a = document.createElement('a')
 		a.href = url
 		a.download = `${containerName}-logs-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.log`
 		a.click()
 		URL.revokeObjectURL(url)
-	}, [logs, containerName])
+	}, [containerName])
+
+	const handleClear = useCallback(() => {
+		terminalRef.current?.clear()
+		logBufferRef.current.length = 0
+	}, [])
 
 	return (
 		<div className='flex h-full flex-col gap-3'>
-			{/* Row 1: Search + toggles */}
+			{/* Row 1: Search (v1 placeholder) + connection indicator */}
 			<div className='flex shrink-0 flex-wrap items-center gap-3'>
 				<div className='relative flex items-center'>
 					<IconSearch size={12} className='absolute left-2 text-text-tertiary' />
 					<input
 						type='text'
 						value={searchTerm}
-						onChange={(e) => setSearchTerm(e.target.value)}
-						placeholder='Search logs...'
+						onChange={(e) => handleSearch(e.target.value)}
+						placeholder='Search logs (v28)...'
 						className='w-48 rounded-lg border border-border-default bg-surface-1 py-1 pl-7 pr-2 text-xs text-text-primary placeholder:text-text-tertiary'
 					/>
 				</div>
-				{matches.length > 0 && (
-					<span className='text-xs tabular-nums text-text-tertiary'>
-						{matchIndex + 1}/{matches.length}
-					</span>
-				)}
-				<button
-					onClick={goToPrevMatch}
-					disabled={matches.length === 0}
-					className='rounded-lg bg-surface-1 p-1 text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-30'
-				>
-					<IconChevronUp size={14} />
-				</button>
-				<button
-					onClick={goToNextMatch}
-					disabled={matches.length === 0}
-					className='rounded-lg bg-surface-1 p-1 text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-30'
-				>
-					<IconChevronDown size={14} />
-				</button>
 				<div className='flex-1' />
-				<label className='flex cursor-pointer items-center gap-1.5 text-xs text-text-secondary'>
-					<input
-						type='checkbox'
-						checked={showTimestamps}
-						onChange={(e) => setShowTimestamps(e.target.checked)}
-						className='accent-brand'
+				<div className='flex items-center gap-1.5 text-xs text-text-secondary'>
+					<span
+						className={cn(
+							'inline-block h-2 w-2 rounded-full',
+							connected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-red-500',
+						)}
+						aria-label={connected ? 'connected' : 'disconnected'}
 					/>
-					<IconClock size={12} />
-					Timestamps
-				</label>
-				<label className='flex cursor-pointer items-center gap-1.5 text-xs text-text-secondary'>
-					<input
-						type='checkbox'
-						checked={lineWrap}
-						onChange={(e) => setLineWrap(e.target.checked)}
-						className='accent-brand'
-					/>
-					<IconTextWrap size={12} />
-					Wrap
-				</label>
+					<span className='tabular-nums'>{connected ? 'live' : 'disconnected'}</span>
+				</div>
 			</div>
 
-			{/* Row 2: Tail slider, refresh, download */}
+			{/* Row 2: Tail slider + reconnect + download + clear */}
 			<div className='flex shrink-0 flex-wrap items-center gap-4'>
 				<div className='flex items-center gap-2'>
 					<span className='text-xs font-medium text-text-secondary'>Tail:</span>
@@ -434,64 +478,36 @@ function LogsTab({containerName}: {containerName: string}) {
 						max={1000}
 						step={100}
 						value={tailLines}
-						onChange={(e) => setTailLines(Number(e.target.value))}
+						onChange={(e) => handleTailChange(Number(e.target.value))}
 						className='h-1.5 w-28 cursor-pointer appearance-none rounded-full bg-surface-2 accent-brand [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand'
 					/>
 					<span className='w-10 text-xs tabular-nums text-text-tertiary'>{tailLines}</span>
 				</div>
 				<button
-					onClick={() => refetchLogs()}
+					onClick={handleReconnect}
 					className='flex items-center gap-1.5 rounded-lg bg-surface-1 px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2'
 				>
 					<IconRefresh size={12} />
-					Refresh
+					Reconnect
 				</button>
 				<button
 					onClick={handleDownload}
-					disabled={!logs}
-					className='flex items-center gap-1.5 rounded-lg bg-surface-1 px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-30'
+					className='flex items-center gap-1.5 rounded-lg bg-surface-1 px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2'
 				>
 					<IconDownload size={12} />
 					Download
 				</button>
+				<button
+					onClick={handleClear}
+					className='flex items-center gap-1.5 rounded-lg bg-surface-1 px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2'
+				>
+					<IconTrash size={12} />
+					Clear
+				</button>
 			</div>
 
-			{/* Log output */}
-			<div className='relative min-h-0 flex-1'>
-				{logsLoading ? (
-					<div className='flex items-center justify-center py-16'>
-						<IconLoader2 size={24} className='animate-spin text-text-tertiary' />
-						<span className='ml-2 text-sm text-text-tertiary'>Loading logs...</span>
-					</div>
-				) : logsError ? (
-					<div className='flex flex-col items-center justify-center py-16'>
-						<IconAlertTriangle size={24} className='mb-2 text-red-400' />
-						<p className='text-sm text-red-400'>{logsError.message}</p>
-					</div>
-				) : (
-					<>
-						<pre
-							ref={preRef}
-							onScroll={handleScroll}
-							className={cn(
-								'h-full overflow-auto rounded-lg bg-neutral-950 p-4 font-mono text-xs leading-relaxed text-neutral-200',
-								lineWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
-							)}
-						>
-							{highlightedContent || 'No logs available'}
-						</pre>
-						{!autoScroll && (
-							<button
-								onClick={jumpToBottom}
-								className='absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-brand/90 px-2.5 py-1 text-xs font-medium text-white shadow-lg transition-colors hover:bg-brand'
-							>
-								<IconArrowDown size={12} />
-								Jump to bottom
-							</button>
-						)}
-					</>
-				)}
-			</div>
+			{/* Terminal area — xterm renders ANSI colors natively */}
+			<div ref={containerRef} className='h-full min-h-0 w-full flex-1 rounded-lg bg-neutral-950 p-1' />
 		</div>
 	)
 }
@@ -589,29 +605,6 @@ function StatsTab({containerName}: {containerName: string}) {
 // ---------------------------------------------------------------------------
 // Console Tab
 // ---------------------------------------------------------------------------
-
-const XTERM_THEME = {
-	background: '#171717',
-	foreground: '#e5e5e5',
-	cursor: '#a3a3a3',
-	selectionBackground: '#404040',
-	black: '#171717',
-	red: '#f87171',
-	green: '#4ade80',
-	yellow: '#facc15',
-	blue: '#60a5fa',
-	magenta: '#c084fc',
-	cyan: '#22d3ee',
-	white: '#e5e5e5',
-	brightBlack: '#525252',
-	brightRed: '#fca5a5',
-	brightGreen: '#86efac',
-	brightYellow: '#fde68a',
-	brightBlue: '#93c5fd',
-	brightMagenta: '#d8b4fe',
-	brightCyan: '#67e8f9',
-	brightWhite: '#fafafa',
-}
 
 function ConsoleTab({containerName}: {containerName: string}) {
 	const [shell, setShell] = useState<'bash' | 'sh' | 'ash'>('bash')
