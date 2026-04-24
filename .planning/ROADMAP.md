@@ -195,9 +195,9 @@ Plans:
   2. The Admin panel in Settings > Users (or a new Settings > Devices admin tab) renders the cross-user device table with a red "Force Disconnect" button on each online row
   3. Clicking Force Disconnect calls an admin-only mutation that closes the matching DeviceBridge WebSocket with code 4403 and reason "admin_disconnect", and the target device transitions to offline within 3 seconds in both the admin view and the owner's My Devices UI
   4. Every admin list-all query and every force-disconnect mutation writes a row to device_audit_log with tool_name="admin.list_all" or "admin.force_disconnect", attributing the action to the admin's user_id and naming the affected device_id
-**Plans:** 0/2 plans complete
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 16-01-PLAN.md — Admin backend: devicesAdmin tRPC (adminListAll + adminForceDisconnect) + admin_force_disconnect tunnel verb + platform/web /api/admin/devices REST (ADMIN-01, ADMIN-02)
+- [x] 16-01-PLAN.md — Admin backend: devicesAdmin tRPC (adminListAll + adminForceDisconnect) + admin_force_disconnect tunnel verb + platform/web /api/admin/devices REST (ADMIN-01, ADMIN-02)
 - [ ] 16-02-PLAN.md — Admin UI: Settings > Devices cross-user table + Force Disconnect button (ADMIN-01, ADMIN-02)
 
 ## Progress
@@ -213,7 +213,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 | 13. Shell Tool Isolation | v26.0 | 1/1 | Complete   | 2026-04-24 |
 | 14. Device Session Binding | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 15. Device Audit Log | v26.0 | 2/2 | Complete   | 2026-04-24 |
-| 16. Admin Override & Emergency Disconnect | v26.0 | 0/? | Not started | — |
+| 16. Admin Override & Emergency Disconnect | v26.0 | 1/2 | In Progress|  |
 
 ---
 

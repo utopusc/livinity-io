@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: completed
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-04-24T18:16:27.458Z"
-last_activity: 2026-04-24 — 15-02-PLAN.md executed (3/3 tasks, 5 files, 153s duration)
+status: in-progress
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-04-24T18:33:33Z"
+last_activity: 2026-04-24 — 16-01-PLAN.md executed (3/3 tasks, 7 files, 237s duration)
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_plans: 12
+  completed_plans: 11
+  percent: 92
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v26.0 -- Device Security & User Isolation
-**Current focus:** Phase 15 -- Device Audit Log
+**Current focus:** Phase 16 -- Admin Override & Emergency Disconnect
 
 ## Current Position
 
-Phase: 15 -- Device Audit Log (COMPLETE — both plans shipped)
-Plan: 15-02 complete — callsites migrated + admin audit query exposed; AUDIT-01 + AUDIT-02 fully satisfied
-Status: 15-02 complete — (1) DeviceBridge.executeOnDevice migrated from recordAuthFailure to recordDeviceEvent: auth-denial branch writes one PG row (success=false) + new auditedResolve closure wraps resolve so timeout path AND tunnel-result path (onToolResult → pending.resolve) BOTH audit via the same wrapper, producing exactly one row per invocation. Explicit Promise<ToolResult> generic fixed TS2339 from PromiseLike<T> widening. (2) routes.ts ensureOwnership migrated from recordAuthFailure to recordDeviceEvent via barrel; action->toolName mapping with params={} since auth fails pre-body; TRPCError throws (NOT_FOUND/FORBIDDEN) and legacy !ctx.currentUser fallback preserved. (3) NEW devices/audit-routes.ts: admin-only tRPC router listDeviceEvents with zod input (userId UUID optional, deviceId string optional, limit 1-200 default 50, offset >=0), parameterized $N WHERE clause (no interpolation), two SELECTs (COUNT(*) + page ordered timestamp DESC), returns {total, limit, offset, events: DeviceAuditRow[]}, SERVICE_UNAVAILABLE if pool null. (4) trpc/index.ts mounts audit submodule; trpc/common.ts httpOnlyPaths entry for audit.listDeviceEvents. /internal/device-tool-execute handler UNCHANGED — executeOnDevice is sole audit sink (no duplicate rows). Zero new tsc errors across 5 touched files (pre-existing baseline in ai/routes.ts + skills/ + trpc/index.ts lines 54/68 unchanged). AUDIT-01 + AUDIT-02 satisfied end-to-end.
-Last activity: 2026-04-24 — 15-02-PLAN.md executed (3/3 tasks, 5 files, 153s duration)
+Phase: 16 -- Admin Override & Emergency Disconnect (Plan 01 complete, Plan 02 pending)
+Plan: 16-01 complete — admin backend delivered; ADMIN-01 + ADMIN-02 satisfied at tRPC + REST + relay layers
+Status: 16-01 complete — (1) Task 1: new `admin_force_disconnect` tunnel verb. protocol.ts adds TunnelAdminForceDisconnect (targetUserId+deviceId) into ClientToRelayMessage + MessageTypeMap; relay index.ts new switch case that crosses user boundaries (deviceRegistry.getDevice(adminMsg.targetUserId, adminMsg.deviceId)) and closes target.ws with 4403 'admin_disconnect' via try/catch. DeviceBridge.forceDisconnect(targetUserId, deviceId): void wraps sendTunnelMessage; deliberately does NOT mutate connectedDevices or Redis (normal onDeviceDisconnected pathway handles cleanup). Distinct from removeDevice's device_disconnect (owner-initiated) pathway. (2) Task 2: new admin-routes.ts (118 lines) with two adminProcedure endpoints. adminListAll queries getAllDevicesFromRedis + batch-joins usernames (SELECT ... WHERE id = ANY($1::uuid[]) with empty-set shortcut for PG compatibility), shapes to AdminDeviceRow[], writes recordDeviceEvent tool_name='admin.list_all' attributed to admin.userId. adminForceDisconnect resolves owner via bridge.getDeviceFromRedis → bridge.forceDisconnect(device.userId, deviceId); audits both success (params includes targetUserId) and miss path (success=false error='device_not_connected' + TRPCError NOT_FOUND). Router mounted as 'devicesAdmin' on appRouter; httpOnlyPaths entries added for both endpoints. (3) Task 3: new platform/web /api/admin/devices/route.ts (82 lines). Admin detection via SELECT id FROM users ORDER BY created_at ASC LIMIT 1 (matches migration 0007 oldest-admin convention — platform/web has no role column); 401/403/200 path. Cross-user JOIN devices d ON u.id = d.user_id, online = last_seen within 60s. Zero new TS errors across platform/relay, platform/web, and livinityd-scoped files (pre-existing 365 baseline errors in ai/skills/tunnel-client untouched). ADMIN-01 + ADMIN-02 satisfied end-to-end.
+Last activity: 2026-04-24 — 16-01-PLAN.md executed (3/3 tasks, 7 files, 237s duration)
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████-] 92%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | Phase 14 P02 | 149 | 3 tasks | 7 files |
 | Phase 15 P01 | 108 | 3 tasks | 3 files |
 | Phase 15 P02 | 153 | 3 tasks | 5 files |
+| Phase 16 P01 | 237 | 3 tasks | 7 files |
 
 ### v26.0 Execution Metrics
 
@@ -71,6 +72,7 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 | 12-device-access-authorization P01 | 2min | 3 | 3 |
 | 12-device-access-authorization P02 | 3min | 4 | 3 |
 | 13-shell-tool-isolation P01 | 3min | 4 | 3 |
+| 16-admin-override P01 | 4min | 3 | 7 |
 
 ## Accumulated Context
 
@@ -165,6 +167,17 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **httpOnlyPaths entry for audit.listDeviceEvents**: matches Phase 12 devices.rename/remove pattern — admin audit queries surface "livinityd unavailable" as HTTP errors rather than hanging on disconnected WS. The entry string must match the router path exactly (audit submodule + listDeviceEvents query name).
 - **adminProcedure, not privateProcedure**: enforces requireRole('admin') gate before the query handler runs. Member-role users receive FORBIDDEN at the procedure middleware, not from an in-handler role check — less code, less chance of a bypass via early-return bugs.
 
+### Phase 16-01 Execution Decisions
+
+- **Separate tunnel verb from device_disconnect**: admin_force_disconnect is a NEW message type rather than reusing device_disconnect, so relay-side auditing + permission distinction stays clean. device_disconnect remains the owner-initiated removeDevice pathway; admin_force_disconnect is the cross-user override.
+- **Cross-user scope on the relay side**: the admin_force_disconnect handler looks up DeviceRegistry.getDevice(targetUserId, deviceId), NOT (tunnel.userId, deviceId). The adminProcedure gate on livinityd is the authoritative permission check; once the signed tunnel delivers the message, relay trusts it. This is the entire point of the verb.
+- **forceDisconnect does NOT mutate local state**: distinct from removeDevice which deletes Redis + local cache. Admin force-disconnect only tears down the live WS; the device JWT + DB row remain intact so the device can legitimately re-pair. Cleanup follows the normal onDeviceDisconnected echo pathway (relay's ws.close → device_disconnected tunnel event → bridge's onDeviceDisconnected).
+- **Router name `devicesAdmin` (not `admin`)**: avoids colliding with any future generic admin router and keeps domain visibility. Callers use trpc.devicesAdmin.adminListAll / trpc.devicesAdmin.adminForceDisconnect.
+- **Audit miss path writes tool_name='admin.force_disconnect' with success=false error='device_not_connected'**: gives the admin proof-of-attempt in device_audit_log even when the target is already offline. Follows Phase 15's two-path audit pattern (success + failure both emit exactly one row).
+- **Platform-admin detection = oldest-user-by-created_at**: platform/web has no role column, so migration 0007's fallback convention is adopted at the REST layer for defense-in-depth. Primary enforcement of ADMIN-01 still lives on the livinityd side via adminProcedure. SELECT id FROM users ORDER BY created_at ASC LIMIT 1 is a 3-line check with zero false positives given deliberate-first-admin bootstrap.
+- **Empty-set shortcut on username batch query**: if getAllDevicesFromRedis returns zero devices, skip the WHERE id = ANY($1::uuid[]) query entirely (PG rejects WHERE id IN () syntax; ANY($1::uuid[]) with empty array works but the shortcut saves the round-trip).
+- **Both admin endpoints in httpOnlyPaths**: matches Phase 15 audit.listDeviceEvents pattern — admin queries/mutations route via HTTP so failures surface immediately rather than hanging on a dropped WS.
+
 ### Phase 15-01 Execution Decisions
 
 - **Nil-UUID sentinel (`00000000-0000-0000-0000-000000000000`) for missing_user rows**: `user_id UUID NOT NULL` cannot accept `''`; pre-auth failures (where no JWT was resolved) use the all-zero UUID. No FK to users(id), so this synthetic value doesn't need to match any row. Admin queries can filter missing-user entries via `WHERE user_id = '00000000-...'::uuid`.
@@ -196,6 +209,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T18:16:15.798Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-04-24T18:33:33Z
+Stopped at: Completed 16-01-PLAN.md
 Resume file: None

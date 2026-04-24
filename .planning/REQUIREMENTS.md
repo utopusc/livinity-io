@@ -35,8 +35,8 @@
 
 ### Admin Override (ADMIN)
 
-- [ ] **ADMIN-01**: Admin users can list all devices across all users in the Admin panel (normal users cannot)
-- [ ] **ADMIN-02**: Admin users can emergency-disconnect any active device bridge, forcing the bridge to terminate
+- [x] **ADMIN-01**: Admin users can list all devices across all users in the Admin panel (normal users cannot)
+- [x] **ADMIN-02**: Admin users can emergency-disconnect any active device bridge, forcing the bridge to terminate
 
 ## v27.0 Requirements (Deferred)
 
@@ -90,8 +90,8 @@
 | SESS-03 | Phase 14 | Complete |
 | AUDIT-01 | Phase 15 | Complete |
 | AUDIT-02 | Phase 15 | Complete |
-| ADMIN-01 | Phase 16 | Pending |
-| ADMIN-02 | Phase 16 | Pending |
+| ADMIN-01 | Phase 16 | Complete |
+| ADMIN-02 | Phase 16 | Complete |
 
 **Coverage:**
 - v26.0 requirements: 15 total
