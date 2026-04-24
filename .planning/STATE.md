@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v26.0
 milestone_name: Device Security & User Isolation
-status: completed
-stopped_at: Completed 13-01-PLAN.md (shell tool isolation hardening)
-last_updated: "2026-04-24T17:26:19.381Z"
-last_activity: 2026-04-24 — 12-02-PLAN.md executed (4/4 tasks, 3 files modified, AUTHZ-01/02/03 complete)
+status: verifying
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-04-24T17:48:19.002Z"
+last_activity: 2026-04-24 — 14-01-PLAN.md executed (3/3 tasks, 9 files modified, SESS-01/02 complete)
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_plans: 7
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v26.0 -- Device Security & User Isolation
-**Current focus:** Phase 12 -- Device Access Authorization
+**Current focus:** Phase 14 -- Device Session Binding
 
 ## Current Position
 
-Phase: 13 -- Shell Tool Isolation (complete)
-Plan: 14-01 (next — Phase 14 Device Session Binding)
-Status: 13-01 complete — shell tool isolation hardened across three layers: (1) local shell tool description in daemon.ts directs agents to `device_<deviceId>_shell` proxies for remote execution with frozen `{cmd, timeout}` parameter list, (2) RESERVED_TOOL_NAMES guard on /api/tools/register returns 409 tool_name_reserved on collision with built-ins, (3) device shell proxy schema description forbids `device_id` param and cites server-side ownership enforcement. Phase 12's authorizeDeviceAccess gate remains the actual runtime enforcer — Phase 13 adds schema + registration defenses around it. SHELL-01 + SHELL-02 satisfied. Zero new TS errors.
-Last activity: 2026-04-24 — 13-01-PLAN.md executed (4/4 tasks, 3 files modified, SHELL-01/02 complete)
+Phase: 14 -- Device Session Binding (in progress)
+Plan: 14-02 (next — revocation pub/sub for logout-driven bridge disconnect, closes SESS-03)
+Status: 14-01 complete — device session JWT binding hardened at three layers: (1) migration 0008 adds device_grants.session_id (nullable UUID); /api/device/approve resolves sessions.id from cookie and passes to approveGrant; /api/device/token rejects grants with null session_id and embeds sessionId claim in signed JWT, (2) relay verifyDeviceToken requires sessionId claim; onDeviceConnect handshake queries sessions table (exists / unexpired / user_id matches tokenPayload.userId) + devices table (exists / unrevoked / user_id matches tokenPayload.userId) with five distinct 1008 close reasons (session_invalid, session_expired, session_user_mismatch, device_not_found, device_ownership_mismatch); DeviceConnection gains immutable tokenExpiresAt (from JWT exp * 1000) and now uses the JWT sessionId claim (not a relay-generated nanoid), (3) SESSION_EXPIRY_CHECK_INTERVAL_MS config (60s default) + startSessionExpiryWatchdog iterates deviceRegistry.allConnections() and closes expired bridges with ws.close(4401, 'token_expired'); watchdog cleared on shutdown. onTunnelConnect nanoid usage preserved (regression guard for Phase 10). SESS-01 + SESS-02 satisfied. Zero new TS errors.
+Last activity: 2026-04-24 — 14-01-PLAN.md executed (3/3 tasks, 9 files modified, SESS-01/02 complete)
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 86%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Last activity: 2026-04-24 — 13-01-PLAN.md executed (4/4 tasks, 3 files modifie
 | 16 | Admin Override & Emergency Disconnect | ADMIN-01, ADMIN-02 | Phases 11, 12, 15 |
 
 Coverage: 15/15 v26.0 requirements mapped ✓
+| Phase 14-device-session-binding P01 | 237 | 3 tasks | 9 files |
 
 ### v26.0 Execution Metrics
 
@@ -130,6 +131,17 @@ Coverage: 15/15 v26.0 requirements mapped ✓
 - **Parameter list on local shell frozen to `{cmd, timeout}`; inline `Phase 13 SHELL-02` comment enforces it**: the literal word `device_id` appears in descriptive strings (telling the AI what NOT to do), but zero parameter entries named `device_id` or `deviceId` exist. Future editors adding a device routing parameter would have to bypass the comment intentionally.
 - **Device shell description is load-bearing for AI reasoning**: the device-bridge description string flows through to Nexus's ToolRegistry at device-bridge.ts:225 where platform label is concatenated. Adding "Do not pass a device_id parameter" instructs the agent at registration time, not enforcement time — complements Phase 12's runtime gate.
 
+### Phase 14-01 Execution Decisions
+
+- **JWT sessionId claim carries sessions.id UUID, not sessions.token (opaque cookie value)**: JWT payload is base64-decodable by anyone holding the token; embedding the cookie's session secret would leak it into device logs and memory. Relay looks up by indexed PK (sessions.id) anyway.
+- **device_grants.session_id is nullable with no FK to sessions(id)**: grant lifecycle INSERT happens before user auth (session unknown); adding ON DELETE CASCADE would couple logout with grant cleanup for no extra benefit over the 15-min grant expiry mechanism.
+- **60s setInterval watchdog iterates allConnections() (not per-connection setTimeout)**: 24h token lifetime means 60s slack = 0.07% acceptable. Per-connection timers would leak if a cleanup path is missed. O(n) scan negligible at <10^4 devices/relay.
+- **Five distinct 1008 close reasons (session_invalid/expired/user_mismatch, device_not_found/ownership_mismatch)**: indistinguishable reasons would force log-grep on the relay's pre-close message. Per-reason strings make forensics O(1).
+- **Close code 4401 for token_expired (not 4403)**: semantic distinction from Plan 14-02's session_revoked. 4401 = "refresh and reconnect" (401-like); 4403 reserved = "stop reconnecting without re-auth" (403-like). Client agent distinguishes at the close event.
+- **onDeviceConnect nanoid removed; onTunnelConnect nanoid preserved**: tunnel session IDs stay relay-generated (Phase 10 contract); only device bridge sessionId semantics changed to be JWT-sourced for revocation matching in Plan 14-02.
+- **ws.on('message') handler converted from sync to async**: two `await pool.query(...)` inserts for session/devices validation require async context. All paths still `return` after ws.close() so no dangling promises.
+- **Post-approve session-id lookup does a second query rather than modifying getSession**: getSession is widely used; adding sessions.id to its return would ripple into every callsite. Localized query in the approve route keeps the change surface minimal.
+
 ### v25.0 Tech Debt Carried Forward
 
 - Phase 8: wa_outbox lpush dead code in index.ts HeartbeatRunner + skill-loader.ts sendProgress
@@ -150,6 +162,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T17:26:19.377Z
-Stopped at: Completed 13-01-PLAN.md (shell tool isolation hardening)
+Last session: 2026-04-24T17:47:13.059Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None

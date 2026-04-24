@@ -167,9 +167,9 @@ Plans:
   2. Each active device bridge has a server-side expiry timer; when tokenExpiresAt is reached and the agent has not refreshed via the device-auth token endpoint, the bridge is closed with code 4401 and the device must re-authenticate before reconnecting
   3. When a user logs out (session revoked via /api/auth/logout or sessions table delete) every DeviceBridge connection whose recorded sessionId matches the revoked session is closed within 5 seconds with a "session_revoked" reason, and the user's devices show as offline in the My Devices UI
   4. Reconnection attempts after logout require a fresh user login + device token pair — the agent cannot re-attach to the previous sessionId
-**Plans:** 0/2 plans complete
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
+- [x] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
 - [ ] 14-02-PLAN.md — Logout pub/sub channel closes bridges with code 4403 (SESS-03)
 
 ### Phase 15: Device Audit Log
@@ -211,7 +211,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 | 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 12. Device Access Authorization | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 13. Shell Tool Isolation | v26.0 | 1/1 | Complete   | 2026-04-24 |
-| 14. Device Session Binding | v26.0 | 0/2 | Planned     | — |
+| 14. Device Session Binding | v26.0 | 1/2 | In Progress|  |
 | 15. Device Audit Log | v26.0 | 0/? | Not started | — |
 | 16. Admin Override & Emergency Disconnect | v26.0 | 0/? | Not started | — |
 

@@ -24,8 +24,8 @@
 
 ### Device Session Binding (SESS)
 
-- [ ] **SESS-01**: Each DeviceBridge WebSocket connection is bound to a specific user session JWT at handshake
-- [ ] **SESS-02**: Device session tokens expire and require refresh; expired tokens terminate the bridge connection
+- [x] **SESS-01**: Each DeviceBridge WebSocket connection is bound to a specific user session JWT at handshake
+- [x] **SESS-02**: Device session tokens expire and require refresh; expired tokens terminate the bridge connection
 - [ ] **SESS-03**: When a user logs out or their session is revoked, all their active device bridges disconnect
 
 ### Audit Log (AUDIT)
@@ -85,8 +85,8 @@
 | AUTHZ-03 | Phase 12 | Complete |
 | SHELL-01 | Phase 13 | Complete |
 | SHELL-02 | Phase 13 | Complete |
-| SESS-01 | Phase 14 | Pending |
-| SESS-02 | Phase 14 | Pending |
+| SESS-01 | Phase 14 | Complete |
+| SESS-02 | Phase 14 | Complete |
 | SESS-03 | Phase 14 | Pending |
 | AUDIT-01 | Phase 15 | Pending |
 | AUDIT-02 | Phase 15 | Pending |
