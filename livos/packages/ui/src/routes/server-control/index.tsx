@@ -35,6 +35,8 @@ import {
 	IconUnlink,
 	IconStack2,
 	IconCloudDownload,
+	IconShieldCheck,
+	IconExternalLink,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -1263,58 +1265,71 @@ function TagImageDialog({
 	)
 }
 
-// Expandable image layer history
-function ImageHistoryRow({imageId}: {imageId: string}) {
+// Expandable image layer history (Phase 19: rendered inside a Tabs panel)
+function ImageHistoryPanel({imageId}: {imageId: string}) {
 	const historyQuery = trpcReact.docker.imageHistory.useQuery({id: imageId})
 
 	if (historyQuery.isLoading) {
 		return (
-			<TableRow>
-				<TableCell colSpan={4} className='px-4 py-3'>
-					<div className='flex items-center gap-2 text-sm text-text-tertiary'>
-						<IconRefresh size={14} className='animate-spin' />
-						Loading layer history...
-					</div>
-				</TableCell>
-			</TableRow>
+			<div className='flex items-center gap-2 px-4 py-3 text-sm text-text-tertiary'>
+				<IconRefresh size={14} className='animate-spin' />
+				Loading layer history...
+			</div>
 		)
 	}
 
 	if (historyQuery.isError || !historyQuery.data) {
 		return (
-			<TableRow>
-				<TableCell colSpan={4} className='px-4 py-3'>
-					<p className='text-sm text-red-400'>Failed to load layer history</p>
-				</TableCell>
-			</TableRow>
+			<div className='px-4 py-3'>
+				<p className='text-sm text-red-400'>Failed to load layer history</p>
+			</div>
+		)
+	}
+
+	if (historyQuery.data.length === 0) {
+		return (
+			<div className='px-4 py-3'>
+				<p className='text-sm text-text-tertiary'>No layer history available.</p>
+			</div>
 		)
 	}
 
 	return (
-		<>
-			{historyQuery.data.map((layer, idx) => (
-				<TableRow key={`${imageId}-layer-${idx}`} className='bg-surface-1/50'>
-					<TableCell className='pl-8 pr-4' colSpan={2}>
-						<span
-							className='block truncate max-w-[500px] font-mono text-xs text-text-secondary'
-							title={layer.createdBy}
-						>
-							{layer.createdBy || '(empty)'}
-						</span>
-					</TableCell>
-					<TableCell>
-						<span className='text-xs text-text-tertiary'>
-							{layer.size > 0 ? formatBytes(layer.size) : '0 B'}
-						</span>
-					</TableCell>
-					<TableCell className='text-right pr-4'>
-						<span className='text-xs text-text-tertiary'>
-							{formatRelativeDate(layer.created)}
-						</span>
-					</TableCell>
-				</TableRow>
-			))}
-		</>
+		<div className='overflow-x-auto'>
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableHead colSpan={2} className='pl-4'>Layer command</TableHead>
+						<TableHead>Size</TableHead>
+						<TableHead className='text-right pr-4'>Created</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{historyQuery.data.map((layer, idx) => (
+						<TableRow key={`${imageId}-layer-${idx}`} className='bg-surface-1/50'>
+							<TableCell className='pl-4 pr-4' colSpan={2}>
+								<span
+									className='block truncate max-w-[500px] font-mono text-xs text-text-secondary'
+									title={layer.createdBy}
+								>
+									{layer.createdBy || '(empty)'}
+								</span>
+							</TableCell>
+							<TableCell>
+								<span className='text-xs text-text-tertiary'>
+									{layer.size > 0 ? formatBytes(layer.size) : '0 B'}
+								</span>
+							</TableCell>
+							<TableCell className='text-right pr-4'>
+								<span className='text-xs text-text-tertiary'>
+									{formatRelativeDate(layer.created)}
+								</span>
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+		</div>
 	)
 }
 
@@ -1697,6 +1712,193 @@ function VolumeUsagePanel({volumeName}: {volumeName: string}) {
 	)
 }
 
+// Phase 19 — Vulnerability scan result panel (CGV-02/03)
+type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+
+const SEVERITY_LIST: readonly Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const
+
+function severityBadgeClasses(sev: Severity, active: boolean): string {
+	const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer'
+	const palette = {
+		CRITICAL: 'bg-red-500/20 text-red-700 hover:bg-red-500/30',
+		HIGH: 'bg-orange-500/20 text-orange-700 hover:bg-orange-500/30',
+		MEDIUM: 'bg-yellow-500/20 text-yellow-800 hover:bg-yellow-500/30',
+		LOW: 'bg-neutral-500/20 text-neutral-600 hover:bg-neutral-500/30',
+	}
+	return cn(base, palette[sev], active && 'ring-2 ring-current ring-offset-1')
+}
+
+function ScanResultPanel({imageRef}: {imageRef: string}) {
+	const cachedQuery = trpcReact.docker.getCachedScan.useQuery(
+		{imageRef},
+		{retry: false, refetchOnWindowFocus: false},
+	)
+	const {scanImage, isScanning, scanResult, scanError} = useImages()
+	const [expandedSeverity, setExpandedSeverity] = useState<Severity | null>(null)
+
+	// Show fresh scan result if mutation just ran for this image, else cached, else "not scanned yet"
+	const result = scanResult && scanResult.imageRef === imageRef ? scanResult : (cachedQuery.data ?? null)
+
+	if (isScanning) {
+		return (
+			<div className='flex items-center gap-3 px-4 py-6 text-sm text-text-secondary'>
+				<IconRefresh size={16} className='animate-spin text-text-tertiary' />
+				<span>Running Trivy — first scan may take 60-90s while pulling aquasec/trivy:latest...</span>
+			</div>
+		)
+	}
+
+	if (scanError && (!scanResult || scanResult.imageRef !== imageRef)) {
+		return (
+			<div className='px-4 py-4'>
+				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+					{scanError.message}
+				</div>
+				<Button
+					size='sm'
+					variant='default'
+					className='mt-3'
+					onClick={() => scanImage(imageRef)}
+				>
+					Retry scan
+				</Button>
+			</div>
+		)
+	}
+
+	if (!result) {
+		return (
+			<div className='flex flex-col items-center gap-3 py-8 text-center text-sm text-text-secondary'>
+				<IconShieldCheck size={28} className='text-text-tertiary' />
+				<p>No scan run yet for this image.</p>
+				<Button size='sm' onClick={() => scanImage(imageRef)}>
+					Run vulnerability scan
+				</Button>
+			</div>
+		)
+	}
+
+	const totalCves = result.counts.CRITICAL + result.counts.HIGH + result.counts.MEDIUM + result.counts.LOW
+	const filteredCves =
+		expandedSeverity !== null ? result.cves.filter((c) => c.severity === expandedSeverity) : []
+
+	return (
+		<div className='space-y-3 px-4 py-3'>
+			<div className='flex flex-wrap items-center gap-2 text-xs text-text-tertiary'>
+				<span>Scanned {formatRelativeDate(Math.floor(result.scannedAt / 1000))}</span>
+				{result.cached && (
+					<span className='inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-700'>
+						cached
+					</span>
+				)}
+				<span className='text-text-tertiary/70'>· {totalCves} CVE{totalCves === 1 ? '' : 's'}</span>
+				<span className='text-text-tertiary/70'>· digest <span className='font-mono'>{result.imageDigest.slice(0, 19)}…</span></span>
+				<div className='ml-auto'>
+					<Button
+						size='sm'
+						variant='default'
+						onClick={() => scanImage(imageRef, true)}
+						disabled={isScanning}
+					>
+						<IconRefresh size={12} className='mr-1' />
+						Rescan
+					</Button>
+				</div>
+			</div>
+
+			<div className='flex flex-wrap gap-2'>
+				{SEVERITY_LIST.map((sev) => (
+					<button
+						key={sev}
+						type='button'
+						onClick={() => setExpandedSeverity(expandedSeverity === sev ? null : sev)}
+						className={severityBadgeClasses(sev, expandedSeverity === sev)}
+						disabled={result.counts[sev] === 0}
+					>
+						<span>{sev}</span>
+						<span className='font-mono'>{result.counts[sev]}</span>
+					</button>
+				))}
+			</div>
+
+			{expandedSeverity !== null && (
+				<div className='overflow-x-auto rounded-lg border border-border-default bg-surface-base'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='pl-3'>CVE</TableHead>
+								<TableHead>Package</TableHead>
+								<TableHead>Installed</TableHead>
+								<TableHead>Fixed</TableHead>
+								<TableHead>CVSS</TableHead>
+								<TableHead>Title</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{filteredCves.length === 0 ? (
+								<TableRow>
+									<TableCell colSpan={6} className='px-3 py-3 text-center text-xs text-text-tertiary'>
+										No {expandedSeverity} CVEs.
+									</TableCell>
+								</TableRow>
+							) : (
+								filteredCves.map((cve) => (
+									<TableRow key={`${cve.id}-${cve.packageName}-${cve.installedVersion}`}>
+										<TableCell className='pl-3 align-top'>
+											{cve.primaryUrl ? (
+												<a
+													href={cve.primaryUrl}
+													target='_blank'
+													rel='noopener noreferrer'
+													className='inline-flex items-center gap-1 font-mono text-xs text-blue-600 hover:underline'
+													title={cve.primaryUrl}
+												>
+													{cve.id}
+													<IconExternalLink size={10} />
+												</a>
+											) : (
+												<span className='font-mono text-xs text-text-secondary'>{cve.id}</span>
+											)}
+										</TableCell>
+										<TableCell className='align-top'>
+											<span className='font-mono text-xs text-text-secondary'>{cve.packageName || '-'}</span>
+										</TableCell>
+										<TableCell className='align-top'>
+											<span className='font-mono text-xs text-text-secondary'>{cve.installedVersion || '-'}</span>
+										</TableCell>
+										<TableCell className='align-top'>
+											<span className='font-mono text-xs'>
+												{cve.fixedVersion ? (
+													<span className='text-emerald-600'>{cve.fixedVersion}</span>
+												) : (
+													<span className='text-text-tertiary italic'>unfixed</span>
+												)}
+											</span>
+										</TableCell>
+										<TableCell className='align-top'>
+											<span className='font-mono text-xs text-text-secondary'>
+												{cve.cvss !== null ? cve.cvss.toFixed(1) : '-'}
+											</span>
+										</TableCell>
+										<TableCell className='align-top'>
+											<span
+												className='block max-w-[420px] truncate text-xs text-text-secondary'
+												title={cve.description || cve.title}
+											>
+												{cve.title || '-'}
+											</span>
+										</TableCell>
+									</TableRow>
+								))
+							)}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+		</div>
+	)
+}
+
 // Images Tab Component
 function ImagesTab() {
 	const {
@@ -1714,6 +1916,8 @@ function ImagesTab() {
 		isTagging,
 		pruneImages,
 		isPruning,
+		scanImage,
+		isScanning,
 		actionResult,
 		totalSize,
 		totalCount,
@@ -1722,6 +1926,11 @@ function ImagesTab() {
 	const [removeTarget, setRemoveTarget] = useState<{id: string; tag: string} | null>(null)
 	const [showPruneDialog, setShowPruneDialog] = useState(false)
 	const [showPullDialog, setShowPullDialog] = useState(false)
+	// Per-image active tab (defaults to 'history'; flips to 'scan' when user clicks Scan)
+	const [imageTabState, setImageTabState] = useState<Record<string, 'history' | 'scan'>>({})
+	const getActiveImageTab = (id: string): 'history' | 'scan' => imageTabState[id] ?? 'history'
+	const setActiveImageTab = (id: string, value: 'history' | 'scan') =>
+		setImageTabState((prev) => ({...prev, [id]: value}))
 	const [tagTarget, setTagTarget] = useState<{id: string; tag: string} | null>(null)
 	const [expandedImage, setExpandedImage] = useState<string | null>(null)
 
@@ -1846,6 +2055,17 @@ function ImagesTab() {
 											<TableCell className='text-right pr-4'>
 												<div className='flex items-center justify-end gap-0.5' onClick={(e) => e.stopPropagation()}>
 													<ActionButton
+														icon={IconShieldCheck}
+														onClick={() => {
+															setExpandedImage(image.id)
+															setActiveImageTab(image.id, 'scan')
+															scanImage(isNone ? image.id : primaryTag)
+														}}
+														disabled={isScanning || isNone}
+														color='amber'
+														title={isNone ? 'Cannot scan untagged image' : 'Scan for vulnerabilities'}
+													/>
+													<ActionButton
 														icon={IconTag}
 														onClick={() => setTagTarget({id: image.id, tag: primaryTag})}
 														disabled={isTagging}
@@ -1862,7 +2082,28 @@ function ImagesTab() {
 												</div>
 											</TableCell>
 										</TableRow>
-										{isExpanded && <ImageHistoryRow imageId={image.id} />}
+										{isExpanded && (
+											<TableRow>
+												<TableCell colSpan={4} className='p-0 border-t border-border-default bg-surface-1/30'>
+													<Tabs
+														value={getActiveImageTab(image.id)}
+														onValueChange={(v) => setActiveImageTab(image.id, v as 'history' | 'scan')}
+														className='px-4 py-3'
+													>
+														<TabsList className='mb-3'>
+															<TabsTrigger value='history'>Layer history</TabsTrigger>
+															<TabsTrigger value='scan'>Vulnerabilities</TabsTrigger>
+														</TabsList>
+														<TabsContent value='history'>
+															<ImageHistoryPanel imageId={image.id} />
+														</TabsContent>
+														<TabsContent value='scan'>
+															<ScanResultPanel imageRef={isNone ? image.id : primaryTag} />
+														</TabsContent>
+													</Tabs>
+												</TableCell>
+											</TableRow>
+										)}
 									</Fragment>
 								)
 							})}

@@ -68,6 +68,24 @@ export function useImages() {
 		},
 	})
 
+	// Phase 19 — Vulnerability scan (CGV-02/03/04)
+	const scanMutation = trpcReact.docker.scanImage.useMutation({
+		onSuccess: (data) => {
+			const total = data.counts.CRITICAL + data.counts.HIGH + data.counts.MEDIUM + data.counts.LOW
+			setActionResult({
+				type: 'success',
+				message: data.cached
+					? `Cached scan for ${data.imageRef}: ${total} CVEs`
+					: `Scanned ${data.imageRef}: ${total} CVEs found`,
+			})
+			setTimeout(() => setActionResult(null), 4000)
+		},
+		onError: (error) => {
+			setActionResult({type: 'error', message: error.message})
+			setTimeout(() => setActionResult(null), 6000)
+		},
+	})
+
 	const removeImage = (id: string, force?: boolean) => {
 		setActionResult(null)
 		removeMutation.mutate({id, force: force ?? false})
@@ -86,6 +104,11 @@ export function useImages() {
 	const pruneImages = () => {
 		setActionResult(null)
 		pruneMutation.mutate()
+	}
+
+	const scanImage = (imageRef: string, force?: boolean) => {
+		setActionResult(null)
+		scanMutation.mutate({imageRef, force: force ?? false})
 	}
 
 	const images = imagesQuery.data ?? []
@@ -107,6 +130,10 @@ export function useImages() {
 		isTagging: tagMutation.isPending,
 		pruneImages,
 		isPruning: pruneMutation.isPending,
+		scanImage,
+		isScanning: scanMutation.isPending,
+		scanResult: scanMutation.data ?? null,
+		scanError: scanMutation.error,
 		actionResult,
 		totalSize,
 		totalCount,
