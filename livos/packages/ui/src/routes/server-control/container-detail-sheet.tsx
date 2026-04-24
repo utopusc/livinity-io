@@ -4,6 +4,7 @@ import {
 	IconFileText,
 	IconChartBar,
 	IconTerminal2,
+	IconFolder,
 	IconX,
 	IconRefresh,
 	IconLoader2,
@@ -23,6 +24,8 @@ import {trpcReact} from '@/trpc/trpc'
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {cn} from '@/shadcn-lib/utils'
+
+import {FilesTab} from './container-files-tab'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -874,6 +877,10 @@ export function ContainerDetailSheet({
 									<IconChartBar size={14} />
 									Stats
 								</TabsTrigger>
+								<TabsTrigger value='files' className='flex items-center gap-1.5'>
+									<IconFolder size={14} />
+									Files
+								</TabsTrigger>
 								<TabsTrigger value='console' className='flex items-center gap-1.5'>
 									<IconTerminal2 size={14} />
 									Console
@@ -888,6 +895,9 @@ export function ContainerDetailSheet({
 							</TabsContent>
 							<TabsContent value='stats' className='flex-1 overflow-auto p-4'>
 								<StatsTab containerName={containerName} />
+							</TabsContent>
+							<TabsContent value='files' className='flex min-h-0 flex-1 flex-col p-4'>
+								<FilesTab containerName={containerName} />
 							</TabsContent>
 							<TabsContent value='console' className='flex min-h-0 flex-1 flex-col p-4'>
 								<ConsoleTab containerName={containerName} />
