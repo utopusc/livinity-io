@@ -46,6 +46,11 @@ import {
 	deleteFile as deleteContainerFile,
 } from './container-files.js'
 import {scanImage, getCachedScan} from './vuln-scan.js'
+import {
+	listCredentials,
+	createCredential,
+	deleteCredential,
+} from './git-credentials.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -1040,6 +1045,57 @@ export default router({
 					message: err.message || `Failed to get env for stack ${input.name}`,
 				})
 			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Git Credentials (Phase 21 GIT-01) — admin-only
+	// AES-256-GCM-encrypted-at-rest credentials for cloning private git repos.
+	// encrypted_data is NEVER exposed via these routes; only metadata returned.
+	// -----------------------------------------------------------------------
+
+	listGitCredentials: adminProcedure.query(async ({ctx}) => {
+		return await listCredentials(ctx.currentUser?.id ?? null)
+	}),
+
+	createGitCredential: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(100),
+				type: z.enum(['ssh', 'https']),
+				data: z.union([
+					z.object({username: z.string().min(1), password: z.string().min(1)}),
+					z.object({privateKey: z.string().min(50)}), // SSH PEM is always > 50 chars
+				]),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			try {
+				return await createCredential({
+					userId: ctx.currentUser?.id ?? null,
+					name: input.name,
+					type: input.type,
+					data: input.data,
+				})
+			} catch (err: any) {
+				if (err.message?.includes('duplicate key')) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: `Credential '${input.name}' already exists`,
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to create credential',
+				})
+			}
+		}),
+
+	deleteGitCredential: adminProcedure
+		.input(z.object({id: z.string().uuid()}))
+		.mutation(async ({input}) => {
+			const ok = await deleteCredential(input.id)
+			if (!ok) throw new TRPCError({code: 'NOT_FOUND', message: 'Credential not found'})
+			return {success: true, message: 'Credential deleted'}
 		}),
 
 	// -----------------------------------------------------------------------
