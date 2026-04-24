@@ -167,7 +167,10 @@ Plans:
   2. Each active device bridge has a server-side expiry timer; when tokenExpiresAt is reached and the agent has not refreshed via the device-auth token endpoint, the bridge is closed with code 4401 and the device must re-authenticate before reconnecting
   3. When a user logs out (session revoked via /api/auth/logout or sessions table delete) every DeviceBridge connection whose recorded sessionId matches the revoked session is closed within 5 seconds with a "session_revoked" reason, and the user's devices show as offline in the My Devices UI
   4. Reconnection attempts after logout require a fresh user login + device token pair — the agent cannot re-attach to the previous sessionId
-**Plans**: TBD
+**Plans:** 0/2 plans complete
+Plans:
+- [ ] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
+- [ ] 14-02-PLAN.md — Logout pub/sub channel closes bridges with code 4403 (SESS-03)
 
 ### Phase 15: Device Audit Log
 **Goal**: Every device tool invocation is recorded to an append-only PostgreSQL audit log that cannot be altered or deleted through any application API.
@@ -178,7 +181,10 @@ Plans:
   2. params_digest stores a SHA-256 hash of the tool arguments (so free-form shell commands or file contents are not leaked as plaintext) while preserving the ability to correlate identical operations
   3. The table is protected at the database level: a dedicated PostgreSQL role with INSERT/SELECT-only grants is used by the application, and UPDATE/DELETE are revoked — attempting to modify or delete a row through the application API returns a permission-denied error from PostgreSQL
   4. An admin-only tRPC query (audit.listDeviceEvents) returns the log filtered by user_id and/or device_id with pagination, proving the log is queryable for incident review
-**Plans**: TBD
+**Plans:** 0/2 plans complete
+Plans:
+- [ ] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
+- [ ] 14-02-PLAN.md — Logout pub/sub channel closes bridges with code 4403 (SESS-03)
 
 ### Phase 16: Admin Override & Emergency Disconnect
 **Goal**: Admin users can see every device on the system and can forcibly terminate any active device bridge for incident response — with each override action itself written to the audit log.
@@ -189,7 +195,10 @@ Plans:
   2. The Admin panel in Settings > Users (or a new Settings > Devices admin tab) renders the cross-user device table with a red "Force Disconnect" button on each online row
   3. Clicking Force Disconnect calls an admin-only mutation that closes the matching DeviceBridge WebSocket with code 4403 and reason "admin_disconnect", and the target device transitions to offline within 3 seconds in both the admin view and the owner's My Devices UI
   4. Every admin list-all query and every force-disconnect mutation writes a row to device_audit_log with tool_name="admin.list_all" or "admin.force_disconnect", attributing the action to the admin's user_id and naming the affected device_id
-**Plans**: TBD
+**Plans:** 0/2 plans complete
+Plans:
+- [ ] 14-01-PLAN.md — Session JWT binding at handshake + token-expiry watchdog (SESS-01, SESS-02)
+- [ ] 14-02-PLAN.md — Logout pub/sub channel closes bridges with code 4403 (SESS-03)
 
 ## Progress
 
@@ -202,7 +211,7 @@ Note: Phase 14 (Session Binding) only depends on Phase 11 and could execute in p
 | 11. Device Ownership Foundation | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 12. Device Access Authorization | v26.0 | 2/2 | Complete   | 2026-04-24 |
 | 13. Shell Tool Isolation | v26.0 | 1/1 | Complete   | 2026-04-24 |
-| 14. Device Session Binding | v26.0 | 0/? | Not started | — |
+| 14. Device Session Binding | v26.0 | 0/2 | Planned     | — |
 | 15. Device Audit Log | v26.0 | 0/? | Not started | — |
 | 16. Admin Override & Emergency Disconnect | v26.0 | 0/? | Not started | — |
 
