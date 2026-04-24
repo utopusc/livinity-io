@@ -31,9 +31,9 @@
 
 - [x] **SCH-01**: Scheduler module uses node-cron with persistent job definitions in PostgreSQL
 - [x] **SCH-02**: Built-in scheduled tasks: image prune (weekly), container update check (daily), git stack sync (hourly)
-- [ ] **SCH-03**: Container/volume backup scheduler with destinations: S3-compatible, SFTP, local filesystem
-- [ ] **SCH-04**: Backups of volumes use ephemeral `alpine tar czf - /data` helper container piped to destination
-- [ ] **SCH-05**: Settings UI has a Scheduler section for enabling/disabling tasks and configuring destinations
+- [x] **SCH-03**: Container/volume backup scheduler with destinations: S3-compatible, SFTP, local filesystem
+- [x] **SCH-04**: Backups of volumes use ephemeral `alpine tar czf - /data` helper container piped to destination
+- [x] **SCH-05**: Settings UI has a Scheduler section for enabling/disabling tasks and configuring destinations
 
 ### GitOps Stack Deployment (GIT) — Phase 21
 
@@ -103,9 +103,9 @@
 | CGV-04 | Phase 19 | Complete |
 | SCH-01 | Phase 20 | Complete |
 | SCH-02 | Phase 20 | Complete |
-| SCH-03 | Phase 20 | Pending |
-| SCH-04 | Phase 20 | Pending |
-| SCH-05 | Phase 20 | Pending |
+| SCH-03 | Phase 20 | Complete |
+| SCH-04 | Phase 20 | Complete |
+| SCH-05 | Phase 20 | Complete |
 | GIT-01 | Phase 21 | Pending |
 | GIT-02 | Phase 21 | Pending |
 | GIT-03 | Phase 21 | Pending |

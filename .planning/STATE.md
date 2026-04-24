@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: "01 of 02 (Phase 20 in progress)"
-status: in_progress
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-04-24T23:19:00.984Z"
-last_activity: 2026-04-24 — Plan 20-01 executed in 5 minutes; scheduler module (types/store/jobs/index) + scheduled_jobs PG table + node-cron@3 wired into Livinityd boot; 3 atomic commits (0ac62751, d54b9e3c, 9f3301ad); 0 deviations; SCH-01/02 satisfied
+current_plan: 02 of 02 (Phase 20 complete; ready for Phase 21 — GitOps Stack Deployment)
+status: completed
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-04-24T23:36:00.137Z"
+last_activity: 2026-04-24 — Plan 20-02 executed in ~12 minutes, 3 atomic commits (33ccb147, 1e3ba887, 1d5439ee); 0 deviations
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -23,16 +23,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v27.0 — Docker Management Upgrade
-**Current focus:** Phase 17 complete; Phase 18 (Container File Browser) next
+**Current focus:** Phase 20 complete (Scheduled Tasks + Backup); Phase 21 (GitOps Stack Deployment) next
 
 ## Current Position
 
-Phase: 20 — Scheduled Tasks + Backup (IN PROGRESS — 1 of 2 plans complete; SCH-01/02 satisfied; SCH-03/04/05 remain for Plan 20-02)
-Current Plan: 01 of 02 (Phase 20 in progress)
-Status: 20-01 complete (scheduler module shipped — types/store/jobs/index; scheduled_jobs PG table with 13 cols + 2 indexes; node-cron@3.0.3 + @types/node-cron@3.0.11 added; 3 default jobs seeded on first boot — image-prune Sun 3am ENABLED, container-update-check daily 6am ENABLED, git-stack-sync hourly DISABLED placeholder; Scheduler class with in-flight Set mutex, cron.validate guard, fresh-row re-fetch in runJob; wired into Livinityd lifecycle non-fatally; image-prune wraps existing pruneImages(); container-update-check uses docker buildx imagetools inspect with manifest-inspect fallback for digest comparison).
-Last activity: 2026-04-24 — Plan 20-01 executed in 5 minutes, 3 atomic commits (0ac62751, d54b9e3c, 9f3301ad); 0 deviations
+Phase: 20 — Scheduled Tasks + Backup (COMPLETE — 2 of 2 plans complete; SCH-01/02/03/04/05 all satisfied)
+Current Plan: 02 of 02 (Phase 20 complete; ready for Phase 21 — GitOps Stack Deployment)
+Status: 20-02 complete (volume backup with S3/SFTP/local destinations shipped — alpine:latest tar streaming via dockerode demuxStream + AutoRemove; @aws-sdk/lib-storage Upload for multipart S3, ssh2-sftp-client put-stream for SFTP; AES-256-GCM credential vault keyed off JWT secret at nexus:scheduler:backup-creds:{jobId} — config_json never stores secrets; 5 admin-only tRPC routes — listJobs query + upsertJob/deleteJob/runNow/testBackupDestination mutations all wired through httpOnlyPaths; Settings > Scheduler UI section with job list, Status badges, 10s live-poll Last Run, Add Backup dialog — volume picker + cron input + destination form with conditional s3/sftp/local sub-fields, Test Destination dry-run probe + Save sharing single buildPayload).
+Last activity: 2026-04-24 — Plan 20-02 executed in ~12 minutes, 3 atomic commits (33ccb147, 1e3ba887, 1d5439ee); 0 deviations
 
-**Progress:** [█████████░] 88%
+**Progress:** [██████████] 100%
 
 ## v27.0 Phase Structure
 
@@ -59,10 +59,12 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | 19-01 | 5 min | 2 | 4 | 2026-04-24 |
 | 19-02 | 7 min | 2 | 6 | 2026-04-24 |
 | 20-01 | 5 min | 3 | 8 | 2026-04-24 |
+| 20-02 | 12 min | 3 | 10 | 2026-04-24 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
+| Phase 20 P02 | 12min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -109,6 +111,20 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 20-02 Decisions (2026-04-24)
+
+- AES-256-GCM credential vault keyed off the JWT secret (mirrors Phase 17 stack-secrets) — Redis hash at `nexus:scheduler:backup-creds:{jobId}` with `{field -> base64(iv(12)||tag(16)||ciphertext)}`. No second master-key to manage; rotating JWT forces re-entry of backup creds (acceptable). config_json (PG) NEVER stores secrets — strict accessKeyId-public / secretAccessKey-vault split.
+- Streaming tar via ephemeral `alpine:latest` container with `Cmd ['tar','czf','-','-C','/','data']` + `Binds:['<vol>:/data:ro']` + `AutoRemove:true`. Dockerode `attach({hijack:true})` + `modem.demuxStream(mux, stdout, stderr)` splits the 8-byte multiplexed frames; `container.wait()` promise destroys stdout PassThrough on non-zero exit so the upload reject-propagates with captured stderr (truncated to 500 chars). O(1) host-disk usage regardless of volume size.
+- `@aws-sdk/lib-storage` `Upload` over manual `PutObjectCommand` — auto-multipart for >5MB streams (we don't know volume size in advance) + correct backpressure between tar producer and S3 consumer. Endpoint override + forcePathStyle support R2/B2/MinIO.
+- `ssh2-sftp-client` `connect → put(stream, remoteFile) → end` wrapped in try/finally so the SFTP socket is always cleaned up even on tar failure mid-upload. Password OR privateKey+passphrase via `authMethod` discriminator.
+- Discriminated-union Zod schema (`z.discriminatedUnion('type', [s3, sftp, local])`) — strong runtime validation + correct TS narrowing in handler. PG unique-violation (`code: '23505'`) maps to `CONFLICT` TRPCError; missing id → `NOT_FOUND`.
+- `upsertJob` mutation splits creds from config: writes encrypted blob to Redis vault (`getBackupSecretStore.setCreds`), persists only non-sensitive config to `scheduled_jobs.config_json`, then calls `ctx.livinityd.scheduler.reload()` so cron picks up new/edited rows without restart. `deleteJob` cascades cred deletion via `deleteAll(jobId)`.
+- 5 tRPC routes (`listJobs` query + `upsertJob`/`deleteJob`/`runNow`/`testBackupDestination` mutations); all 4 mutations registered in `httpOnlyPaths` (queries stay on WS). `testDestination` uploads a 22-byte probe + best-effort delete, returning `{success, latencyMs, bytesUploaded}` for the UI Test Destination button.
+- Settings > Scheduler section: 10s poll on `listJobs` surfaces Last Run flips live; AddBackupDialog `Test Destination` and `Save` share the same `buildPayload()` to eliminate "test passed, save failed" surprises from drifted serialization. Built-in jobs (image-prune, container-update-check, git-stack-sync) cannot be deleted from UI — they're seeded by 20-01's `seedDefaults` and would respawn on next boot anyway.
+- No default `volume-backup` row in `DEFAULT_JOB_DEFINITIONS` — backups are always user-configured (no sensible default volume + destination). The `BUILT_IN_HANDLERS['volume-backup']` slot now points to `volumeBackupHandler` (replaces 20-01's throwing stub).
+- Pattern established for Phase 21 GIT-01 git-credentials encryption: lift-and-shift `backup-secrets.ts` (rename Redis prefix to `nexus:git:credentials:{stackId}` + field names to `username/password/token/sshPrivateKey`); identical AES-256-GCM crypto + Redis-hash layout. Streaming-source-through-ephemeral-container pattern reusable for `alpine/git:latest git pull` runs in Phase 21.
+- Pre-existing typecheck noise: `'ctx.livinityd' is possibly 'undefined'` matches the identical pattern across `ai/routes.ts` (10+) and `widgets/routes.ts` (3+) — Context-merge produces optional `livinityd` field but every existing route assumes it's present at runtime (always true — set by Express/WS context creators). Out-of-scope per scope-boundary rule; livinityd runs via tsx with no compilation gate.
 
 ### Plan 20-01 Decisions (2026-04-24)
 
@@ -174,6 +190,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T23:18:48.729Z
-Stopped at: Completed 20-01-PLAN.md
+Last session: 2026-04-24T23:35:22.463Z
+Stopped at: Completed 20-02-PLAN.md
 Resume with: `/gsd:execute-plan 20-02` to ship the backup module (volumeBackupHandler + S3/SFTP/local destinations + admin tRPC routes + Settings UI). Plan 20-01 satisfied SCH-01/02; Plan 20-02 will satisfy SCH-03/04/05 by registering the volume-backup handler into the existing BUILT_IN_HANDLERS map.

@@ -124,7 +124,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools (completed 2026-04-24)
 - [x] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming (completed 2026-04-24)
 - [x] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache (completed 2026-04-24)
-- [ ] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
+- [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local (completed 2026-04-24)
 - [ ] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
 - [ ] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
 - [ ] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
@@ -187,7 +187,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans
 **Plan files**:
 - [x] 20-01-PLAN.md — Scheduler module + built-in maintenance tasks (SCH-01, SCH-02): scheduled_jobs PG table + node-cron runner + image-prune/container-update-check/git-stack-sync handlers
-- [ ] 20-02-PLAN.md — Backup module + destinations + Settings UI (SCH-03, SCH-04, SCH-05): alpine-tar streaming + S3/SFTP/local uploaders + AES-256-GCM creds vault + Settings > Scheduler section
+- [x] 20-02-PLAN.md — Backup module + destinations + Settings UI (SCH-03, SCH-04, SCH-05): alpine-tar streaming + S3/SFTP/local uploaders + AES-256-GCM creds vault + Settings > Scheduler section
 
 ### Phase 21: GitOps Stack Deployment
 **Goal**: Deploy and auto-sync compose stacks from git repositories with HMAC-verified webhooks for instant CI/CD on push — Livinity's self-hosted GitOps moat.
@@ -236,7 +236,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 20. Scheduled Tasks + Backup | v27.0 | 1/2 | In Progress|  |
+| 20. Scheduled Tasks + Backup | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 21. GitOps Stack Deployment | v27.0 | 0/2 | Not started | - |
 | 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
