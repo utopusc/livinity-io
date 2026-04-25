@@ -136,33 +136,33 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - ✓ Mobile: safe area CSS (tailwindcss-safe-area, viewport-fit=cover) — v23.0
 - ✓ Mobile: install prompt banner, WS reconnect on resume, keyboard-safe input — v23.0
 
-## Current Milestone: v27.0 Docker Management Upgrade
+## Current State: v27.0 Shipped (Docker Management Upgrade)
 
-**Goal:** Elevate Livinity's Docker management from "Portainer-level" to best-in-class self-hosted Docker platform — add Dockhand-inspired features (container file browser, GitOps stacks, vulnerability scanning, compose graph viewer, multi-host) while leveraging Livinity's unique AI-native advantage to build capabilities no other Docker manager can replicate.
+**Shipped 2026-04-25.** Livinity's Docker management is now best-in-class self-hosted: Dockhand-parity feature set (file browser, GitOps stacks, vulnerability scanning, compose graph, multi-host) plus AI-powered diagnostics — the unique moat no competing Docker manager replicates. 33/33 requirements satisfied across 7 phases.
 
-**Target features:**
-- Real-time container log streaming + stack secrets + redeploy button + extended AI docker tools (Phase 17 quick wins)
-- Container file browser via Docker exec + tar streaming (Phase 18)
-- Compose graph viewer (React Flow) + Trivy image vulnerability scanning (Phase 19)
-- Scheduled maintenance tasks (image prune, update check) + container/volume backup scheduler (Phase 20)
-- GitOps stack deployment (git URL, webhooks, auto-sync) — Livinity hard moat (Phase 21)
-- Multi-host Docker management (environments + Hawser-style outbound agent) (Phase 22)
-- AI-powered Docker diagnostics (Kimi log analyzer, compose generator, OOM predictor) — Livinity-only capability (Phase 23)
+**11 deployment-time UAT items deferred** (live-LLM round-trips + remote-host infrastructure tests) — code paths fully wired, see `.planning/STATE.md` Deferred Items section.
 
-### Active
+### Active (next milestone TBD)
 
-- [ ] Real-time container log streaming (WebSocket replaces 5s snapshot polling)
-- [ ] Stack secrets as shell env vars (never written to .env disk)
-- [ ] Redeploy-with-pull UI action for stacks
-- [ ] Extended AI docker tools covering stacks, image operations, create
-- [ ] Container file browser (list/upload/download/edit/delete/chmod)
-- [ ] Compose graph viewer showing service dependencies
-- [ ] Image vulnerability scanning (Trivy) with SHA256-cached results
-- [ ] Scheduled maintenance tasks (image prune, update check, git sync)
-- [ ] Container/volume backup scheduler with S3/SFTP destinations
-- [ ] GitOps stack deployment with webhooks and auto-sync
-- [ ] Multi-host Docker management with outbound agent for NAT-traversal
-- [ ] AI-powered Docker diagnostics leveraging Kimi for logs, compose, OOM
+- [ ] (No active items — define next milestone via /gsd-new-milestone)
+
+### Validated (v27.0 — Docker Management Upgrade)
+
+- ✓ Real-time container log streaming via WebSocket (xterm + ANSI colors, no polling) (Phase 17)
+- ✓ AES-256-GCM-encrypted stack secrets injected via execa env at compose-up (never written to .env disk) (Phase 17)
+- ✓ Redeploy-with-pull `controlStack('pull-and-up')` action + extended AI `docker_manage` tool (5 new ops) (Phase 17)
+- ✓ Container file browser via dockerode exec + tar streaming — 4 tRPC procs + 2 binary REST endpoints, no host-volume mounts (Phase 18)
+- ✓ Compose YAML → React Flow service-dependency graph (js-yaml client-side parsing, topological grid layout) (Phase 19)
+- ✓ On-demand Trivy image vuln scanning with SHA256-keyed 7-day Redis cache + severity-badge UI (Phase 19)
+- ✓ node-cron-driven scheduler with PG-backed `scheduled_jobs` table, in-flight Set mutex, 3 built-in handlers (Phase 20)
+- ✓ Volume backup with S3/SFTP/local destinations, alpine-tar streaming, AES-256-GCM credential vault (Phase 20)
+- ✓ GitOps stack deployment: schema for git-backed stacks, AES-256-GCM credentials, simple-git blobless clone, HMAC-SHA256 webhook redeploy (Phase 21)
+- ✓ Hourly auto-sync scheduler handler closes the GitOps loop (Phase 21)
+- ✓ Multi-host Docker: `environments` PG table (socket / tcp-tls / agent), `getDockerClient(envId)` factory, env-aware tRPC routes (Phase 22)
+- ✓ Outbound docker-agent: `@livos/docker-agent` Node binary, `/agent/connect` token-authed WS, Redis pub/sub revocation with 5s SLA (Phase 22)
+- ✓ Reactive AI diagnostics: container log/stats analyzer + natural-language compose generator + CVE plain-English explainer via `/api/kimi/chat` one-shot bridge, Redis-cached (Phase 23)
+- ✓ Proactive AI resource-pressure alerts: default-disabled `ai-resource-watch` cron handler with threshold priority + 60-min dedupe (Phase 23)
+- ✓ Autonomous AI Chat container diagnostics: `docker_diagnostics` MCP tool registered in nexus tool registry, LLM-router-driven invocation (Phase 23)
 
 ### Validated (v26.0 — Device Security & User Isolation)
 
@@ -286,4 +286,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 after v27.0 milestone started (Docker Management Upgrade)*
+*Last updated: 2026-04-25 after v27.0 milestone shipped (Docker Management Upgrade)*

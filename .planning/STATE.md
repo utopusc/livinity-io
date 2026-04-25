@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 2
-status: milestone_complete
+current_plan: Not started
+status: completed
 stopped_at: Completed 23-02-PLAN.md — Phase 23 complete, v27.0 ready for milestone audit
-last_updated: "2026-04-25T03:57:22.816Z"
+last_updated: "2026-04-25T04:17:47.890Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 7
-  completed_phases: 8
+  completed_phases: 7
   total_plans: 15
   completed_plans: 15
-  percent: 114
+  percent: 100
 ---
 
 # Project State
@@ -283,7 +283,27 @@ None
 ### Blockers/Concerns
 
 - Mini PC SSH direct IP (10.69.31.68) currently unreachable — deploys to bruce will need tunnel-based access or network reconnection
-- Phase 22 (multi-host agent) is the largest in scope (3 plans); may split further during plan-phase
+
+## Deferred Items
+
+Items acknowledged and deferred at v27.0 milestone close on 2026-04-25:
+
+| Category | Phase | Item | Status |
+|----------|-------|------|--------|
+| uat | 22-multi-host-docker | Remote TCP/TLS daemon connectivity | partial |
+| uat | 22-multi-host-docker | Agent end-to-end connection + handshake | partial |
+| uat | 22-multi-host-docker | Token revocation 5s SLA | partial |
+| uat | 22-multi-host-docker | Agent round-trip latency < 100ms | partial |
+| uat | 23-ai-powered-docker-diagnostics | AI Diagnose end-to-end (AID-01) | partial |
+| uat | 23-ai-powered-docker-diagnostics | Generate from prompt end-to-end (AID-03) | partial |
+| uat | 23-ai-powered-docker-diagnostics | Explain CVEs end-to-end (AID-04) | partial |
+| uat | 23-ai-powered-docker-diagnostics | Proactive resource-watch alert generation (AID-02) | partial |
+| uat | 23-ai-powered-docker-diagnostics | Resource-watch dedupe regression (AID-02) | partial |
+| uat | 23-ai-powered-docker-diagnostics | AI Chat autonomous tool invocation (AID-05) | partial |
+| uat | 23-ai-powered-docker-diagnostics | httpOnlyPaths runtime check (cross-cutting) | partial |
+| verification | 22-multi-host-docker | 22-VERIFICATION.md status | human_needed |
+
+All UAT items are deployment-time runtime tests — code paths are fully wired, only live-LLM round-trips and remote-host infrastructure tests remain. See `.planning/phases/22-multi-host-docker/22-HUMAN-UAT.md` and `.planning/phases/23-ai-powered-docker-diagnostics/23-HUMAN-UAT.md` for reproduction steps.
 
 ## Session Continuity
 

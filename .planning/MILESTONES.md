@@ -1,5 +1,32 @@
 # Milestones
 
+## v27.0 Docker Management Upgrade (Shipped: 2026-04-25)
+
+**Phases completed:** 7 phases (17-23), 15 plans, 40 tasks
+**Requirements satisfied:** 33/33 (QW-01..04, CFB-01..05, CGV-01..04, SCH-01..05, GIT-01..05, MH-01..05, AID-01..05)
+**Milestone audit:** passed (90 must-haves verified, 8/8 cross-phase integrations confirmed, 3/3 E2E flows complete)
+**Known deferred items at close:** 11 (live-infra UAT — see `.planning/STATE.md` Deferred Items section + `.planning/phases/22-multi-host-docker/22-HUMAN-UAT.md` + `.planning/phases/23-ai-powered-docker-diagnostics/23-HUMAN-UAT.md`)
+
+**Key accomplishments:**
+
+- Live container log streaming via /ws/docker/logs (xterm + ANSI colors, no 5s polling) and AES-256-GCM-encrypted stack secrets injected via execa env at compose up time (never written to /opt/livos/data/stacks/<name>/.env on disk)
+- One-click stack upgrade via a new `pull-and-up` controlStack operation (UI button pulls latest images and recreates containers with the same volumes) plus a broader AI `docker_manage` tool that gains 5 new operations (stack-deploy / stack-control / stack-remove / image-pull / container-create) backed by new DockerManager methods using the local socket + host `docker compose` CLI.
+- dockerode-backed list/read/write/download/upload/delete for any Docker container — four tRPC admin procedures + two binary-safe REST endpoints, no host volume mounts required.
+- Container Detail Sheet gains a 5th "Files" tab — breadcrumb-driven file table with per-row download/edit/delete, drag-drop upload zone, monospace inline edit modal (1MB guard), and recursive-confirm deletion for directories. Zero new dependencies.
+- Compose YAML → React Flow service-dependency graph rendered inside a new Graph tab on every deployed-stack detail row, using js-yaml client-side parsing with topological grid layout.
+- On-demand Trivy vuln scan with SHA256-keyed 7-day Redis cache, severity-badge UI, and click-to-expand CVE table embedded in tabbed expanded-image row
+- node-cron-driven persistent scheduler with PG-backed `scheduled_jobs` table, in-flight Set mutex, and three built-in handlers (image-prune, container-update-check, git-stack-sync placeholder) wired into Livinityd lifecycle.
+- Volume backup with S3/SFTP/local destinations — alpine-tar streaming, AES-256-GCM credential vault keyed off the JWT secret, 5 admin-only tRPC routes, and a Settings > Scheduler UI section that polls live for Last Run updates and ships a Test Destination dry-run probe.
+- Backend infrastructure for git-pinned compose stacks: PG schema for git-backed stacks, AES-256-GCM credentials, simple-git blobless clone/pull, deployStack git path, and HMAC-SHA256-verified webhook endpoint that responds 202 and redeploys in background.
+- User-visible GitOps surface area: a 'Deploy from Git' tab in the stack create dialog with credential picker + post-deploy webhook URL display, plus the real hourly auto-sync scheduler handler that closes the GIT-04 + GIT-05 loop and ships v27.0's GitOps milestone.
+- Multi-host Docker management foundation: PostgreSQL `environments` table (socket / tcp-tls / agent transports), `getDockerClient(envId)` factory with in-memory cache + invalidation, every `docker.*` tRPC route accepts optional `environmentId`, alias-resolves to a sentinel local-env UUID for backwards-compatible callers.
+- Multi-host UI surface: zustand-persisted env selector dropdown in Server Control header, React Query queryKey-driven auto-refetch on env switch across 7 docker hooks, Settings > Environments management section with Add/Edit/Remove dialogs and one-time agent-token generation flow.
+- Outbound docker-agent: `@livos/docker-agent` Node binary with WebSocket client + Dockerode dispatch table, `/agent/connect` token-authenticated WS handler, `docker_agents` table with SHA-256 token hashes + Redis pub/sub revocation channel that closes the live agent within 5 seconds — NAT-traversal Docker management without opening any inbound TCP port on the remote host.
+- Reactive AI diagnostics shipped via one-shot Kimi-completion bridge: container log/stats analyzer, natural-language compose generator, and CVE plain-English explainer — all routed through a new POST /api/kimi/chat endpoint and cached in Redis.
+- Proactive Kimi resource-pressure alerts via a default-disabled `ai-resource-watch` scheduler handler (5-min tick, threshold-priority + 60-min dedupe, module-scoped throttle delta cache) + autonomous AI Chat container diagnostics via a new `docker_diagnostics` tool registered in the nexus tool registry — Phase 23 closes, v27.0 ready for milestone audit.
+
+---
+
 ## v26.0 Device Security & User Isolation (Shipped: 2026-04-24)
 
 **Phases completed:** 6 phases (11-16), 11 plans, ~60 tasks
