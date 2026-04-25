@@ -9,7 +9,10 @@
 // that throws a friendly "agent transport not yet enabled" message so the UI
 // can ship 22-02 without 22-03.
 
-import {trpcReact} from '@/trpc/trpc'
+import {trpcReact, type RouterOutput} from '@/trpc/trpc'
+
+/** Inferred from the tRPC route shape — single source of truth via RouterOutput. */
+export type Environment = RouterOutput['docker']['listEnvironments'][number]
 
 export function useEnvironments() {
 	return trpcReact.docker.listEnvironments.useQuery(undefined, {
@@ -17,6 +20,21 @@ export function useEnvironments() {
 		refetchInterval: 10_000,
 		staleTime: 5_000,
 	})
+}
+
+/**
+ * Phase 25 Plan 25-01 — derives a single environment row from the existing
+ * useEnvironments() cache. Zero extra requests: it just runs `find` on the
+ * data array React Query already populated. Returns undefined while the list
+ * query is loading or when the id is not in the list (e.g. the env was
+ * deleted in another tab and the local store still points at it).
+ *
+ * Used by EnvCard to look up its own metadata when the parent component only
+ * passes the env id (e.g. inside a list mapper that doesn't carry the row).
+ */
+export function useEnvironment(envId: string): Environment | undefined {
+	const {data} = useEnvironments()
+	return data?.find((e) => e.id === envId)
 }
 
 export function useCreateEnvironment() {
