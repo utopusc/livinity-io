@@ -16,6 +16,8 @@
 
 import {useRef} from 'react'
 
+import {CommandPalette} from './palette/command-palette'
+import {useCmdK} from './palette/use-cmd-k'
 import {Activity} from './sections/activity'
 import {Containers} from './sections/containers'
 import {Dashboard} from './sections/dashboard'
@@ -37,6 +39,9 @@ export function DockerApp() {
 	const rootRef = useRef<HTMLDivElement>(null)
 	// Mounts the dark/light class on rootRef when theme.resolved changes.
 	useDockerTheme(rootRef)
+	// Plan 29-01 — install global cmd+k / ctrl+k listener for the entire
+	// DockerApp lifetime (DOC-18).
+	useCmdK()
 	const section = useDockerSection()
 
 	return (
@@ -52,6 +57,10 @@ export function DockerApp() {
 					<SectionView section={section} />
 				</div>
 			</main>
+			{/* Plan 29-01 — single instance of the cmd+k palette. Radix Dialog uses a
+			    portal so the DOM position is non-essential; mounting at the root
+			    keeps it alive whenever the DockerApp tree is mounted. */}
+			<CommandPalette />
 		</div>
 	)
 }
