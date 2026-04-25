@@ -55,6 +55,9 @@ import {useNetworks} from '@/hooks/use-networks'
 import {useStacks} from '@/hooks/use-stacks'
 import {useDockerEvents, type EventTypeFilter, type TimeRangeKey} from '@/hooks/use-docker-events'
 import {useEngineInfo} from '@/hooks/use-engine-info'
+import {useEnvironments} from '@/hooks/use-environments'
+import {useEnvironmentStore} from '@/stores/environment-store'
+import {EnvironmentSelector} from './environment-selector'
 import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {DomainsTab} from './domains-tab'
@@ -76,6 +79,21 @@ import {Label} from '@/shadcn-components/ui/label'
 import {Checkbox} from '@/shadcn-components/ui/checkbox'
 import {Select, SelectTrigger, SelectValue, SelectContent, SelectItem} from '@/shadcn-components/ui/select'
 import {cn} from '@/shadcn-lib/utils'
+
+// Phase 22 MH-03 — yellow warning when the selected environment is an agent
+// type whose websocket is currently offline. Plan 22-03 will set agentStatus
+// to 'online' once the agent connects.
+function OfflineAgentBanner() {
+	const {data: environments} = useEnvironments()
+	const {selectedEnvironmentId} = useEnvironmentStore()
+	const current = environments?.find((e) => e.id === selectedEnvironmentId)
+	if (!current || current.type !== 'agent' || current.agentStatus === 'online') return null
+	return (
+		<div className='shrink-0 mx-4 sm:mx-6 mb-3 rounded-radius-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300'>
+			Agent for <strong>{current.name}</strong> is offline — Docker calls will fail until it reconnects.
+		</div>
+	)
+}
 
 // Resource Card Component - matches Live Usage style
 function ResourceCard({
@@ -4039,9 +4057,16 @@ export default function ServerControl() {
 		<div className={cn('flex flex-col', !isMobile && 'h-full')}>
 			{/* Header */}
 			<div className='shrink-0 px-4 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-4'>
-				<h1 className='text-xl sm:text-2xl font-bold text-text-primary'>Server Management</h1>
-				<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
+				<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+					<div className='min-w-0'>
+						<h1 className='text-xl sm:text-2xl font-bold text-text-primary'>Server Management</h1>
+						<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
+					</div>
+					<EnvironmentSelector />
+				</div>
 			</div>
+
+			<OfflineAgentBanner />
 
 			{/* Resource Cards */}
 			<div className='shrink-0 grid grid-cols-1 gap-3 px-4 pb-3 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:pb-4'>
