@@ -32,6 +32,7 @@ import {
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
 
+import {useSidebarDensity} from './sidebar-density'
 import {
 	SECTION_IDS,
 	type SectionId,
@@ -68,6 +69,7 @@ export function Sidebar() {
 	const setSection = useSetDockerSection()
 	const collapsed = useSidebarCollapsed()
 	const toggle = useToggleSidebar()
+	const density = useSidebarDensity((s) => s.density)
 
 	return (
 		<aside
@@ -102,7 +104,8 @@ export function Sidebar() {
 								onClick={() => setSection(id)}
 								aria-current={active ? 'page' : undefined}
 								className={cn(
-									'flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors',
+									'flex w-full items-center gap-3 px-3 text-sm transition-colors',
+									density === 'compact' ? 'py-1' : 'py-2',
 									active
 										? 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
 										: 'text-zinc-700 hover:bg-zinc-200/60 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
