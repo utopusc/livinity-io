@@ -8,8 +8,11 @@ dev-dist
 .env.*
 !.env.example
 
-# Logs
+# Logs (runtime log dirs only — DO NOT exclude src/routes/docker/logs/ which is
+# the Phase 28 cross-container log viewer source dir, DOC-13)
 logs
+!src/routes/docker/logs
+!src/routes/docker/logs/**
 *.log
 npm-debug.log*
 yarn-debug.log*
