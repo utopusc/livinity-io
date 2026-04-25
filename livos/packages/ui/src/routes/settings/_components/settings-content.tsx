@@ -44,7 +44,6 @@ import {
 	TbUsers,
 	TbBrain,
 	TbServer2,
-	TbServerCog,
 	TbBrandDocker,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
@@ -139,7 +138,6 @@ type SettingsSection =
 	| 'troubleshoot'
 	| 'advanced'
 	| 'memory'
-	| 'scheduler'
 	| 'environments'
 	| 'software-update'
 
@@ -169,7 +167,6 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
 	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
-	{id: 'scheduler', icon: TbServerCog, label: 'Scheduler', description: 'Maintenance + backup tasks', adminOnly: true},
 	{id: 'environments', icon: TbBrandDocker, label: 'Environments', description: 'Multi-host Docker connections', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
 	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi', adminOnly: true},
@@ -456,8 +453,6 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <VoiceSection />
 		case 'my-domains':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MyDomainsSectionLazy /></Suspense>
-		case 'scheduler':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><SchedulerSectionLazy /></Suspense>
 		case 'environments':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><EnvironmentsSectionLazy /></Suspense>
 		case 'backups':
@@ -1405,10 +1400,6 @@ function VoiceSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MyDomainsSectionLazy = React.lazy(() => import('./my-domains-section'))
-
-const SchedulerSectionLazy = React.lazy(() =>
-	import('./scheduler-section').then((m) => ({default: m.SchedulerSection})),
-)
 
 const EnvironmentsSectionLazy = React.lazy(() =>
 	import('./environments-section').then((m) => ({default: m.EnvironmentsSection})),
