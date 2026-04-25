@@ -36,9 +36,11 @@ describe('classifySeverity', () => {
 	test("D: DEBUG / TRACE keywords — narrow surface", () => {
 		expect(classifySeverity('DEBUG cache miss')).toBe('DEBUG')
 		expect(classifySeverity('trace: 0xDEADBEEF')).toBe('DEBUG')
-		// 'verbose' is NOT a recognized keyword (only DEBUG/TRACE).
-		expect(classifySeverity('verbose trace 0xDEAD')).toBe('DEBUG') // 'trace' matches
-		expect(classifySeverity('verbose only no debug keyword')).toBe(null)
+		// 'verbose' is NOT a recognized keyword (only DEBUG/TRACE) — the line
+		// classifies as DEBUG because of the 'trace' keyword, NOT 'verbose'.
+		expect(classifySeverity('verbose trace 0xDEAD')).toBe('DEBUG')
+		// 'verbose' alone is NOT recognized — yields null.
+		expect(classifySeverity('verbose only message here')).toBe(null)
 	})
 
 	test("E: normal output yields null (no match)", () => {
@@ -51,12 +53,13 @@ describe('classifySeverity', () => {
 		// upper / lower / mixed
 		expect(classifySeverity('Error: oops')).toBe('ERROR')
 		expect(classifySeverity('error: oops')).toBe('ERROR')
-		// word-boundary: 'errors_count=0' should NOT classify as ERROR
-		// (note: '_' is a word character, so 'errors' is its own word — but the
-		// identifier 'errors_count' as a whole DOES contain 'errors' bounded by
-		// non-word chars. We test specifically that an identifier-LIKE token
-		// where the keyword is a SUBSTRING does NOT match).
-		expect(classifySeverity('serror: not a real error keyword')).toBe(null)
+		// Word boundaries: '_' is a word char, so a keyword embedded between
+		// non-word chars (':', '=') still counts as a word boundary on each side.
+		// Strings where the keyword is part of a longer alphanumeric token
+		// (e.g. 'serror', 'erroring', 'errored_at') should NOT match because
+		// the keyword is glued to a word char on at least one side.
+		expect(classifySeverity('serror is not error')).toBe('ERROR') // 'error' bounded by spaces
+		expect(classifySeverity('this is serror only')).toBe(null) // 'error' is glued inside 'serror'
 		// 'erroring' is NOT a recognized variant — strict word boundary.
 		expect(classifySeverity('erroring out')).toBe(null)
 	})
