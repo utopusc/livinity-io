@@ -4,15 +4,15 @@ milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: Not started
 status: verifying
-stopped_at: Completed 28-01-PLAN.md — Cross-container Logs section live (DOC-13). Multiplexed WS + grep + severity + live-tail; WS handler env-aware via getDockerClient. Plan 28-02 unblocked.
-last_updated: "2026-04-25T22:32:39.839Z"
+stopped_at: Completed 28-02-PLAN.md — Activity Timeline section live (DOC-14). Phase 28 complete. 3 tasks, 4 commits, 8 files created. 29 unit tests passing. UI build green.
+last_updated: "2026-04-25T22:51:23.147Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 9
-  percent: 90
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 28-01 COMPLETE — Cross-container Logs section live (DOC-13). Multiplexed WS pattern (one socket per checked container) against env-aware /ws/docker/logs handler. Deterministic per-container color stripes + [name] prefixes + regex grep + ERROR/WARN/INFO/DEBUG severity filter + live-tail toggle. Bare-bones virtualizer (no react-window dep). 4 pure helpers + 26 unit tests. Plan 28-02 (Activity Timeline) consumes patterns established here.
+**Current focus:** Phase 28 COMPLETE (DOC-13 + DOC-14). Plan 28-01 (Cross-container Logs): multiplexed WS aggregator + env-aware /ws/docker/logs handler + deterministic per-container color/severity stripes + regex grep + live-tail. Plan 28-02 (Activity Timeline): unified docker events + scheduler last-runs + AI alerts feed via 3-poll useActivityFeed orchestrator + source/severity filter chips + click-through routing into ContainerDetailSheet/SchedulesSection/matching detail panels + AnimatePresence fade-in-from-top. Cross-env client-filter on AI alerts (T-28-09 mitigation pending Phase 30 server-side scoping). 8 files + 29 new unit tests. Phase 29 (DOC-15..DOC-20) unblocked.
 
 ## Current Position
 
@@ -33,7 +33,7 @@ Current Plan: Not started
 Status: Phase complete — ready for verification
 Last activity: 2026-04-25
 
-**Progress:** [█████████░] 90%
+**Progress:** [██████████] 100%
 
 ## v28.0 Phase Structure
 
@@ -83,6 +83,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 27 P01 | 6 | 2 tasks | 8 files |
 | Phase 27 P02 | 10 | 4 tasks | 10 files |
 | Phase 28 P01 | 14 | 3 tasks | 16 files |
+| Phase 28 P02 | 11 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -154,6 +155,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - gitignore Rule 3 auto-fix: added `!livos/packages/ui/src/routes/docker/logs/` negation in all three gitignore files (root, livos/, livos/packages/ui/). The original `logs/` rule meant for runtime log directories was matching the new SOURCE dir, blocking the entire Phase 28 surface from being committed. Inline comments document the reason in each file.
 - TDD execution: Tasks 1+2 split into RED (test commits 7647e2fb, e392730b) + GREEN (feat commits 69fd6226, 76c023a1). Task 3 (React glue files) ships as a single feat commit b1cbd722 per Plan 28-01 Task 3 having no `tdd="true"` flag — testable logic lives in Tasks 1+2 extracted modules. 5 task commits total + metadata commit.
 - Pattern established for Phase 28-02: `colorForContainer` deterministic hash usable for activity-row source colors; `pushBounded` ring-buffer for activity event list; multiplex WS lifecycle pattern (deps-driven reconcile + empty-deps unmount cleanup) carries forward to dockerEvents WS subscription. Pattern established for Phase 29: WS handler envId extension is also available for `docker-exec-socket.ts` (DOC-15 cross-container shell will likely need the same `getDockerClient(envId)` refactor).
+
+### Plan 28-02 Decisions (2026-04-25)
+
+- Severity collapse mapping in `mapAiAlert`: AiAlert `'critical'` → ActivityEvent `'error'`, `'warning'` → `'warn'`, `'info'` → `'info'`. Single severity vocabulary across docker + scheduler + ai sources keeps the filter-chip set simple. Implemented as a small private helper in event-mappers.ts.
+- Scheduler honest representation: scheduler has NO separate run-history table per scheduler/types.ts. ScheduledJob.lastRun is the LATEST run only (overwritten each run). `mapScheduledJob` surfaces ONE event per job from its last_run column. lastRun=null → null (no event for never-run jobs). lastRunStatus='running' → null (running is not a "completed event"; wait until it finishes). This is the honest representation, not a degradation.
+- Cross-env AI alert client filter (T-28-09 mitigation): listAiAlerts is NOT env-scoped server-side (Phase 23 returns ALL alerts to admin). `useActivityFeed` filters client-side: keep alerts where `environmentId === selectedEnvId || environmentId === null`. Server-side env scoping is a Phase 30+ enhancement; client filter is documented inline + in 28-02-SUMMARY threat-mitigations table. Carry-forward note for Phase 30 planner: extend `listAiAlerts` input with optional `environmentId` filter so this client filter can retire.
+- 5s poll cadence + 2.5s staleTime (half-interval) across all three queries — matches Plan 25-01 D-01 precedent. dockerEvents (≤200 events/req) is the heaviest call; alerts (≤200) and scheduler (≤50 jobs typical) are smaller. <1MB total per tick over a single env. Same pattern reusable for any 3-poll surface in Phase 29 palette.
+- AnimatePresence + motion.li for fade-in-from-top: deterministic mapper ids (id format documented in each mapper) provide stable React keys so the diff inserts only the new top row when poll data changes. AnimatePresence handles 500 children fine (TopCpuPanel precedent in Plan 25-02). No virtualization needed at the 500-row cap.
+- `formatRelativeDate` expects UNIX SECONDS (verbatim port from legacy server-control), NOT ms — the plan's note that the helper expects ms was wrong. Verified against `routes/docker/resources/format-relative-date.ts`. `ActivityRow` converts via `Math.floor(event.timestamp / 1000)`. Inline comment in activity-row.tsx documents the gotcha.
+- `ScheduledJobInput.lastRun` typed as `Date | string | null` — tRPC serializes `Date` → ISO string over the wire but unit tests pass `Date` directly. `mapScheduledJob` normalizes either form via `instanceof Date` check. Inline JSDoc explains the duality.
+- Click-through routing centralized in `ActivitySection.handleClick`: docker container/ai-alert sourceId → `setSelectedContainer + 'containers'`; scheduler → `'schedules'`; image/volume/network → matching section + select; daemon → `'dashboard'`. One if-block per branch, no router-table indirection.
+- Const-array drives chip render order: `ACTIVITY_SOURCES = ['docker', 'scheduler', 'ai']` and `ACTIVITY_SEVERITIES = ['info', 'warn', 'error']`. Order matters; documented in activity-types.ts that reordering requires coordination with chip render code in activity-filters.tsx.
+- Tabler `Icon` type for `Record<source, Icon>` (not `React.ComponentType<{size?, className?}>`) — Tabler exports `ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>` which is incompatible with the generic ComponentType signature. Precedent: `routes/docker/theme-toggle.tsx:10` uses the same `import {type Icon, ...}` pattern.
+- TDD execution: Task 1 split into RED (test commit b84025b6) + GREEN (feat commit f96f6173). Tasks 2 + 3 ship as single feat commits (a2278a86 + a0a07860) per the plan having no `tdd="true"` flag on those tasks — testable mapping logic lives in Task 1 extracted modules. Same waiver pattern as Plan 24-02 D-12 / 25-01 / 28-01. 4 task commits total + metadata commit.
+- Phase 28 close-out: DOC-13 (Plan 28-01) + DOC-14 (Plan 28-02) both satisfied. v28.0 milestone is now 10/10 plans complete (90% → 100%). Phase 29 (DOC-15..DOC-20) is unblocked. Patterns ready for reuse: 3-query orchestration hook, click-through via store setters, cross-env client-filter as defensive layer, const-array + chip-row pattern, AnimatePresence + deterministic mapper ids.
 
 ### Plan 26-02 Decisions (2026-04-25)
 
@@ -412,6 +428,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T22:32:26.110Z
-Stopped at: Completed 28-01-PLAN.md — Cross-container Logs section live (DOC-13). Multiplexed WS + grep + severity + live-tail; WS handler env-aware via getDockerClient. Plan 28-02 unblocked.
+Last session: 2026-04-25T22:51:23.138Z
+Stopped at: Completed 28-02-PLAN.md — Activity Timeline section live (DOC-14). Phase 28 complete. 3 tasks, 4 commits, 8 files created. 29 unit tests passing. UI build green.
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.

@@ -127,7 +127,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 25: Multi-Environment Dashboard** — env card grid, Top containers by CPU panel, env tag filter chips, recent events per env (DOC-04, DOC-05, DOC-06) (completed 2026-04-25)
 - [x] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial) (completed 2026-04-25)
 - [x] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12) (completed 2026-04-25)
-- [ ] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14)
+- [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14) (completed 2026-04-25)
 - [ ] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final)
 
 ## Phase Details
@@ -197,9 +197,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   3. `/docker/activity` route — global event timeline aggregating Docker events + scheduler run history + AI alerts. Filter by source (docker / scheduler / ai). Filter by severity. Sorted descending.
   4. Live updates: new events appear at top with smooth insertion animation
   5. Clicking an event navigates to its source resource (e.g., container event → container detail)
-**Plans**: 2 plans
-- [ ] 28-01-PLAN.md — Cross-container Logs section (DOC-13) — multiplexed WS aggregator with grep, severity, live-tail; extends /ws/docker/logs handler with optional envId param
-- [ ] 28-02-PLAN.md — Activity Timeline section (DOC-14) — unified docker events + scheduler last-runs + AI alerts feed with source/severity filter chips and click-through routing
+**Plans**: 2 plans (2/2 complete)
+- [x] 28-01-PLAN.md — Cross-container Logs section (DOC-13) — multiplexed WS aggregator with grep, severity, live-tail; extends /ws/docker/logs handler with optional envId param (completed 2026-04-25)
+- [x] 28-02-PLAN.md — Activity Timeline section (DOC-14) — unified docker events + scheduler last-runs + AI alerts feed with source/severity filter chips and click-through routing (completed 2026-04-25)
 
 ### Phase 29: Shell + Registry + Palette + Docker Settings
 **Goal**: The remaining surfaces — cross-container shell, Docker Hub/private registry credentials, cmd+k command palette, and Docker-app Settings page.
