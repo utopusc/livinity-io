@@ -185,6 +185,26 @@ CREATE TABLE IF NOT EXISTS git_credentials (
 CREATE INDEX IF NOT EXISTS idx_git_credentials_user ON git_credentials(user_id);
 
 -- =========================================================================
+-- Registry Credentials (Phase 29 DOC-16)
+-- AES-256-GCM-encrypted-at-rest credentials for Docker Hub + private
+-- registries. Mirrors git_credentials shape — same JWT-derived key, same
+-- {iv12 || tag16 || ciphertext} blob. Payload (decrypted JSON):
+--   {"password": "..."}    (username + registry_url are non-secret columns)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS registry_credentials (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID REFERENCES users(id) ON DELETE SET NULL,
+  name           TEXT NOT NULL,
+  registry_url   TEXT NOT NULL,
+  username       TEXT NOT NULL,
+  encrypted_data TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_registry_credentials_user ON registry_credentials(user_id);
+
+-- =========================================================================
 -- Stacks (Phase 21 GIT-01)
 -- ONLY git-backed stacks live here. YAML-only stacks remain filesystem-only at
 -- /opt/livos/data/stacks/<name>/docker-compose.yml — no PG row required for them.

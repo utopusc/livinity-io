@@ -565,11 +565,27 @@ export async function pruneImages(
 export async function pullImage(
 	imageName: string,
 	environmentId?: string | null,
+	registryId?: string | null,
 ): Promise<{success: boolean; message: string}> {
 	const docker = await getDockerClient(environmentId ?? null)
+	// Phase 29 DOC-16 — optional private-registry auth via decrypted credential.
+	// When registryId is null/undefined, behaviour is unchanged (anonymous pull).
+	let pullOpts: any = undefined
+	if (registryId) {
+		const {decryptCredentialData} = await import('./registry-credentials.js')
+		const cred = await decryptCredentialData(registryId)
+		if (!cred) throw new Error(`[credential-not-found] Registry credential ${registryId} not found`)
+		pullOpts = {
+			authconfig: {
+				username: cred.username,
+				password: cred.password,
+				serveraddress: cred.registryUrl,
+			},
+		}
+	}
 	try {
 		await new Promise<void>((resolve, reject) => {
-			docker.pull(imageName, (err: any, stream: any) => {
+			docker.pull(imageName, pullOpts, (err: any, stream: any) => {
 				if (err) {
 					if (err.statusCode === 404) {
 						return reject(new Error(`[image-not-found] Image not found: ${imageName}`))
@@ -590,6 +606,9 @@ export async function pullImage(
 		return {success: true, message: `Image '${imageName}' pulled successfully`}
 	} catch (err: any) {
 		if (err.message?.includes('[image-not-found]')) {
+			throw err
+		}
+		if (err.message?.includes('[credential-not-found]')) {
 			throw err
 		}
 		if (err.statusCode === 404 || err.message?.includes('not found')) {

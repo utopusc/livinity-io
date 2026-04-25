@@ -85,6 +85,13 @@ export const httpOnlyPaths = [
 	'docker.listGitCredentials',
 	'docker.createGitCredential',
 	'docker.deleteGitCredential',
+	// Phase 29 DOC-16 — Registry credentials CRUD + image search -- use HTTP
+	// for reliability. searchImages is a query but routes via HTTP because the
+	// underlying fetch to Docker Hub / private registry can take 5-30s and
+	// disconnected WS would silently hang.
+	'docker.createRegistryCredential',
+	'docker.deleteRegistryCredential',
+	'docker.searchImages',
 	// Phase 22 MH-01 — Environments CRUD (mutations only; listEnvironments stays WS)
 	'docker.createEnvironment',
 	'docker.updateEnvironment',
