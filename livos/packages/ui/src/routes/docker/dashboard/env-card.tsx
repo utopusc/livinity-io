@@ -94,12 +94,34 @@ function deriveHealth(isError: boolean, summary: CountSummary): HealthState {
 	return 'unhealthy'
 }
 
-function HealthBanner({state, summary}: {state: HealthState; summary: CountSummary}) {
+function HealthBanner({
+	state,
+	summary,
+	onRetry,
+}: {
+	state: HealthState
+	summary: CountSummary
+	onRetry?: () => void
+}) {
 	if (state === 'unreachable') {
 		return (
 			<div className='flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'>
 				<IconAlertCircle size={14} className='shrink-0' />
-				<span>Unreachable</span>
+				<span className='flex-1'>Unreachable</span>
+				{onRetry ? (
+					<button
+						type='button'
+						onClick={(e) => {
+							// Stop propagation: clicking Retry must NOT also fire the
+							// card's outer onClick (which would scope+jump sections).
+							e.stopPropagation()
+							onRetry()
+						}}
+						className='shrink-0 rounded border border-red-400 bg-white px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/40 dark:text-red-200 dark:hover:bg-red-900/70'
+					>
+						Retry
+					</button>
+				) : null}
 			</div>
 		)
 	}
@@ -200,8 +222,9 @@ export function EnvCard({env}: {env: Environment}) {
 				</div>
 			) : null}
 
-			{/* Health banner */}
-			<HealthBanner state={health} summary={summary} />
+			{/* Health banner — Retry button on Unreachable refetches THIS card's
+			    queries only (Plan 25-02 DOC-04 polish). */}
+			<HealthBanner state={health} summary={summary} onRetry={data.refetch} />
 
 			{/* Container counts row */}
 			<div className='flex items-center gap-3'>

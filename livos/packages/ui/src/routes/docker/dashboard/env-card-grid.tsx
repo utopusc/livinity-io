@@ -1,15 +1,19 @@
 // Phase 25 Plan 25-01 — Env card grid wrapper.
+// Plan 25-02 — extended to filter via useTagFilter() before mapping.
 //
 // Maps useEnvironments() → one <EnvCard /> per row. Tailwind responsive grid
 // matches the Dockhand reference (1 col mobile → 2 col sm → 3 col xl → 4 col
 // 2xl). Loading state shows 3 skeleton cards (animate-pulse).
 //
-// Plan 25-02 will inject filter chips ABOVE this component and a Top-CPU
-// panel BELOW it; the grid stays a thin map and ships no filtering itself.
+// Filter chips live in <TagFilterChips /> (Plan 25-02) — that component owns
+// localStorage persistence and the chip UI, while this component reads the
+// active selection via useTagFilter() and applies it via filterEnvs() before
+// the .map(). Filtering is purely client-side: zero new tRPC requests.
 
 import {useEnvironments} from '@/hooks/use-environments'
 
 import {EnvCard} from './env-card'
+import {filterEnvs, useTagFilter} from './use-tag-filter'
 
 function GridSkeleton({count}: {count: number}) {
 	return (
@@ -26,6 +30,7 @@ function GridSkeleton({count}: {count: number}) {
 
 export function EnvCardGrid() {
 	const {data: envs, isLoading, isError, error} = useEnvironments()
+	const {selected} = useTagFilter()
 
 	if (isLoading) return <GridSkeleton count={3} />
 
@@ -45,9 +50,19 @@ export function EnvCardGrid() {
 		)
 	}
 
+	const visibleEnvs = filterEnvs(envs, selected)
+
+	if (visibleEnvs.length === 0) {
+		return (
+			<div className='m-4 rounded-md border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'>
+				No environments match the selected tag.
+			</div>
+		)
+	}
+
 	return (
 		<div className='grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>
-			{envs.map((env) => (
+			{visibleEnvs.map((env) => (
 				<EnvCard key={env.id} env={env} />
 			))}
 		</div>
