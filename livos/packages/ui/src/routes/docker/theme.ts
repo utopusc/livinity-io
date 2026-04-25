@@ -57,10 +57,22 @@ function safeMatchMedia(): MediaQueryList | null {
 
 /**
  * Subscribes to localStorage + system-preference changes and applies a
- * `dark` / `light` class to the supplied root element.
+ * `dark` / `light` class to the supplied root element when `rootRef` is
+ * provided. When `rootRef` is omitted the hook is "read-only" — it returns
+ * `{mode, resolved, setMode}` without mutating the DOM, intended for
+ * sub-components like ThemeToggle that only need to display the active
+ * mode and write `setMode(next)`.
  *
- * @param rootRef Optional ref to scope the dark class. Defaults to
- * `document.documentElement` when omitted.
+ * Cross-instance sync: Plan 24-02 mounts ThemeToggle inside the StatusBar
+ * which calls `useDockerTheme()` without a ref. When that toggle writes
+ * localStorage via setMode, the DockerApp shell's `useDockerTheme(rootRef)`
+ * instance must pick up the change so the dark class flips on the docker-app
+ * root. We do this with a `storage` event listener PLUS a custom
+ * `livos:docker:theme-changed` window event for same-tab updates (the
+ * `storage` event only fires in OTHER tabs).
+ *
+ * @param rootRef Optional ref to scope the dark class. Omit for read-only
+ * mode (sub-component access to mode + setMode).
  */
 export function useDockerTheme(rootRef?: RefObject<HTMLElement>) {
 	const [mode, setModeState] = useState<ThemeMode>(() => readStoredMode())
@@ -81,11 +93,31 @@ export function useDockerTheme(rootRef?: RefObject<HTMLElement>) {
 		return () => mql.removeListener(handler)
 	}, [])
 
+	// Cross-instance sync: when one useDockerTheme caller writes setMode,
+	// every other caller (different tab OR different sub-component in the
+	// same tab) re-reads the persisted value.
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const sync = () => setModeState(readStoredMode())
+		const onStorage = (e: StorageEvent) => {
+			if (e.key === STORAGE_KEY) sync()
+		}
+		window.addEventListener('storage', onStorage) // other tabs
+		window.addEventListener(THEME_EVENT, sync) // same tab
+		return () => {
+			window.removeEventListener('storage', onStorage)
+			window.removeEventListener(THEME_EVENT, sync)
+		}
+	}, [])
+
 	const resolved = resolveTheme(mode, prefersDark)
 
-	// Apply dark/light class to root.
+	// Apply dark/light class to root — ONLY when a rootRef is supplied.
+	// Read-only callers (ThemeToggle) skip this branch so the DOM is mutated
+	// exactly once per Docker window mount.
 	useEffect(() => {
-		const root = rootRef?.current ?? (typeof document !== 'undefined' ? document.documentElement : null)
+		if (!rootRef) return
+		const root = rootRef.current
 		if (!root) return
 		if (resolved === 'dark') root.classList.add('dark')
 		else root.classList.remove('dark')
@@ -101,7 +133,19 @@ export function useDockerTheme(rootRef?: RefObject<HTMLElement>) {
 		} catch {
 			// localStorage write can fail (quota, private mode); state still updates in-memory.
 		}
+		// Notify other useDockerTheme instances in this same tab
+		// (the `storage` event fires in OTHER tabs only).
+		try {
+			if (typeof window !== 'undefined') {
+				window.dispatchEvent(new Event(THEME_EVENT))
+			}
+		} catch {
+			// CustomEvent dispatch can fail in exotic environments; non-fatal.
+		}
 	}
 
 	return {mode, resolved, setMode}
 }
+
+/** Same-tab notification channel for cross-instance theme sync. */
+const THEME_EVENT = 'livos:docker:theme-changed'
