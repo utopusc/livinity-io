@@ -35,6 +35,13 @@ export interface EnvCardData {
 	events: DockerEvent[] | undefined
 	isError: boolean
 	isLoading: boolean
+	/**
+	 * Refetches all 6 underlying queries in parallel. Called by EnvCard's
+	 * Unreachable banner Retry button (Plan 25-02 DOC-04 polish) — scoped to
+	 * a single env's queries, NOT the entire grid, so other envs keep
+	 * polling normally during the retry.
+	 */
+	refetch: () => void
 }
 
 export function useEnvCardData(envId: string): EnvCardData {
@@ -78,6 +85,18 @@ export function useEnvCardData(envId: string): EnvCardData {
 		staleTime: 5_000,
 	})
 
+	const refetch = () => {
+		// Fire all 6 in parallel — fire-and-forget; React Query manages the
+		// resulting state on each query independently. Errors on one query
+		// don't block the others.
+		void containersQ.refetch()
+		void imagesQ.refetch()
+		void stacksQ.refetch()
+		void volumesQ.refetch()
+		void networksQ.refetch()
+		void eventsQ.refetch()
+	}
+
 	return {
 		containers: containersQ.data,
 		imageCount: imagesQ.data?.length,
@@ -89,5 +108,6 @@ export function useEnvCardData(envId: string): EnvCardData {
 		// legitimately empty out without indicating an error condition.
 		isError: containersQ.isError,
 		isLoading: containersQ.isLoading,
+		refetch,
 	}
 }
