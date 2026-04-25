@@ -4,15 +4,15 @@ milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: Not started
 status: executing
-stopped_at: Completed 24-01-PLAN.md — Docker app skeleton + sidebar + theme + 12 placeholders + LIVINITY_docker registry
-last_updated: "2026-04-25T06:23:14.715Z"
+stopped_at: Completed 24-02-PLAN.md — Docker app StatusBar + theme toggle + search placeholder + legacy deprecation banner. Phase 24 closed (DOC-01 + DOC-02 + DOC-03 satisfied).
+last_updated: "2026-04-25T06:40:31.485Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 50
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 24 — Docker app skeleton (route, sidebar layout, top status bar, theme toggle). Foundation for all v28.0 phases. Reference design: Dockhand (dockhand.dev / dockhand.bor6.pl).
+**Current focus:** Phase 24 COMPLETE (Docker app skeleton + persistent top status bar). Phase 25 next — Multi-Environment Dashboard (DOC-04, DOC-05, DOC-06).
 
 ## Current Position
 
-Phase: 24 (not started)
-Plan: 1 of 2
-Current Plan: Not started
-Status: Ready to execute
+Phase: 24 (complete)
+Plan: 2 of 2 (complete)
+Current Plan: Phase 24 closed — ready to start Phase 25
+Status: Phase 24 complete (DOC-01 + DOC-02 + DOC-03 satisfied)
 Last activity: 2026-04-25
 
-**Progress:** [█████░░░░░] 50%
+**Progress:** [██████████] 100%
 
 ## v28.0 Phase Structure
 
@@ -70,6 +70,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | 23-01 | 10 min | 5 (+1 TDD) | 8 | 2026-04-25 |
 | 23-02 | 11 min | 4 (+1 TDD) | 12 | 2026-04-25 |
 | 24-01 | 11 min | 3 (+1 TDD) | 22 created + 10 modified | 2026-04-25 |
+| 24-02 | 10 min | 4 (+1 TDD) | 8 created + 3 modified | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
@@ -89,6 +90,18 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - Cross-check grep uncovered 4 additional pre-existing LIVINITY_server-control references beyond the plan's listed 6 files: window-manager.tsx (DEFAULT_WINDOW_SIZES key — affects window size), dock-item.tsx (DOCK_LABELS + DOCK_ICONS map — affects dock tooltip+icon), apple-spotlight.tsx (Spotlight 'Server' launcher — would crash openWindow on click). All renamed to LIVINITY_docker per Rule 3 auto-fix.
 - darkMode: 'class' triggers TS2352 message change in stories/tailwind.tsx. The `as Config` cast error was pre-existing (without darkMode); adding the field changes the message wording only. Out of scope per scope-boundary rule (livos/packages/ui stories tree not in production bundle).
 - Plan 24-02 integration surface: (1) StatusBar mounts as FIRST child of <main> in DockerApp (above the SectionView wrapper); (2) useDockerTheme exposes setMode for the StatusBar's light/dark/system cycle button; (3) Sidebar header height h-12 (48px) — StatusBar should match for visual alignment.
+
+### Plan 24-02 Decisions (2026-04-25)
+
+- WS connection state: 1s polling of `wsClient.getConnection()?.readyState` over `addEventListener('open'/'close')`. tRPC v11's TRPCWebSocketClient recreates the underlying WebSocket on reconnect, so addEventListener references registered against the initial WS go stale after the first reconnect. Polling readyState always reads the current instance and is the simpler correct approach for v1; Phase 29 polish task can swap for a proper observable once tRPC v12 ships `.getConnection()` on the public type. `(wsClient as unknown as {getConnection?: () => WebSocket | undefined})` cast required because tRPC v11 keeps the method off the public type — JSDoc documents removal on v12 upgrade.
+- Refactored `useDockerTheme(rootRef?)` so the no-arg path is read-only (no DOM mutation) AND added cross-instance sync via `storage` event (cross-tab) + custom `livos:docker:theme-changed` window event (same-tab). Plan 24-01 always-mutated `document.documentElement` when no rootRef was supplied, but Plan 24-02's ThemeToggle calls useDockerTheme() to read mode + write setMode WITHOUT mutating the DOM (DockerApp's own rootRef-bound hook owns DOM mutation). `setMode` writes localStorage AND dispatches the custom event so ALL hook instances re-read. Reconciliation per Plan 24-02 Task 2 NOTE ("If Plan 24-01 implemented it differently, the executor reconciles by editing theme.ts here AND noting in commit body").
+- Free disk + uptime sourced from existing `system.systemDiskUsage` + `system.uptime` tRPC routes — zero `docker.engineInfo` extension needed. Routes existed at `livinityd/source/modules/system/routes.ts:47, 107`. Status bar refetch interval: 30s for both (uptime/disk are slow-moving), 1s for time/Live indicator (clock + WS state).
+- EnvironmentSelector + AlertsBell cross-imported VERBATIM from `routes/server-control/` into the new Docker StatusBar. Cross-route imports during the v28.0 transition are correct — Plan 27 will relocate both files into `routes/docker/` once the legacy server-control directory is fully decommissioned. Same-tree alternative (duplicate-and-rename) would cause divergence; cross-import is the lower-risk choice.
+- IconHardDrive doesn't exist in `@tabler/icons-react@3.36.1`; substituted IconDeviceSdCard for the free-disk pill (storage-themed). Pill icon prop typed as `Icon` (the tabler ForwardRefExoticComponent alias) instead of bare `React.ComponentType<{size?, className?}>` — same fix Plan 24-01 sidebar.tsx applied.
+- Time pill via dedicated `useNow()` hook so 1s re-renders are scoped to the StatusBar — Sidebar / SectionView don't import this hook so they don't re-render on every tick. `useTrpcConnection()` follows the same scoping principle.
+- StatusBar layout: sticky `top-0 z-10 h-12` (matches Sidebar header `h-12` for visual alignment with the sidebar/main divide). Inner pill row uses `flex min-w-0 flex-1 overflow-x-auto` so pills overflow horizontally on narrow screens; the right-side controls (Search/AlertsBell/ThemeToggle) stay visible thanks to `shrink-0`.
+- Smoke chain test for layout files: when render-level testing requires heavy mocking (tRPC + WS + zustand), instead lock down the strings the layout file consumes via formatter-chain assertions. The behavioural module's own tests guard against regressions. Pattern reusable for future Phase 25-29 chrome additions.
+- DOC-01 + DOC-02 + DOC-03 fully closed at end of Phase 24. Legacy Server Control file kept on disk for piecemeal content migration in Phases 25-29; in-component header replaced with deprecation banner; full file delete deferred to Plan 27 once Stacks migration consumes the last reusable code chunks (ContainerCreateForm, ContainerDetailSheet, ComposeGraphViewer, DomainsTab still imported lazily). Phase 25 (Multi-Environment Dashboard) is unblocked.
 
 ### v27.0 Roadmap Decisions
 
@@ -321,6 +334,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T06:23:14.710Z
-Stopped at: Completed 24-01-PLAN.md — Docker app skeleton + sidebar + theme + 12 placeholders + LIVINITY_docker registry
-Resume with: `/gsd:audit-milestone v27.0` to validate all 33 v27.0 must-haves end-to-end on server4. Phase 23 is complete (Plan 23-02 shipped AID-02 proactive resource watch + AID-05 autonomous AI Chat container diagnostics; all 5 AID requirements satisfied). After audit passes, run `/gsd:plan-milestone v28.0` to scope the next milestone. v28.0 candidates surfaced during v27.0 execution: (1) multi-host watching for ai-resource-watch (currently local-only per Plan 22-01 D-06 — needs per-env throttle delta caches + per-env Kimi spend); (2) editStack git mode + webhook secret rotation UI + git-backed stack visual badge in Stacks tab; (3) multi-host stack deploy via compose-file replication; (4) multi-host Trivy scan; (5) real-time WS exec/logs over remote envs; (6) docker_diagnostics widening to expose health status + exit code (dockerManager.inspectContainer return shape currently strips them); (7) prompt-tuning analytics view from ai_alerts.payload_json kimi token counts.
+Last session: 2026-04-25T06:40:31.480Z
+Stopped at: Completed 24-02-PLAN.md — Docker app StatusBar + theme toggle + search placeholder + legacy deprecation banner. Phase 24 closed (DOC-01 + DOC-02 + DOC-03 satisfied).
+Resume with: `/gsd:verify-phase 24` to run the Phase 24 verifier (DOC-01 + DOC-02 + DOC-03 audit on the new Docker app — sidebar collapsibility, status bar pills wiring, theme toggle persistence, deprecation banner reachability). After verifier passes, advance to Phase 25 — Multi-Environment Dashboard (DOC-04, DOC-05, DOC-06). Phase 24 shipped 5 task commits (92e94c04 RED + 9778917a + 0087de2f + 1de5747b + fe569282) plus the metadata commit; the new Docker app is reachable from the dock with a 56/224px collapsible sidebar (12 entries) and a 48px sticky StatusBar (env selector + 8 stat pills + Search ⌘K + AlertsBell + light/dark/system theme toggle). The legacy `routes/server-control/index.tsx` file remains on disk for piecemeal content migration in Phases 25-29; full delete is Plan 27 SUMMARY.

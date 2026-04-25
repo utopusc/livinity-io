@@ -122,7 +122,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Milestone Goal:** Restructure v27.0's tab-based Server Management page into a standalone Dockhand-style Docker management application. v27.0 shipped the data plumbing (env transport, AI diagnostics, vuln-scan, scheduler, git stacks, file browser, real-time logs); v28.0 surfaces it through a left-sidebar layout with top status bar, multi-environment Dashboard, and dedicated routes per resource type. Adds 4 new surfaces (Logs / Activity / Shell / Registry) that v27.0 didn't ship. Reference: Dockhand (dockhand.dev).
 
-- [ ] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar, theme toggle, route table (DOC-01, DOC-02, DOC-03)
+- [x] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar, theme toggle, route table (DOC-01, DOC-02, DOC-03) (completed 2026-04-25)
 - [ ] **Phase 25: Multi-Environment Dashboard** — env card grid, Top containers by CPU panel, env tag filter chips, recent events per env (DOC-04, DOC-05, DOC-06)
 - [ ] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial)
 - [ ] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12)
