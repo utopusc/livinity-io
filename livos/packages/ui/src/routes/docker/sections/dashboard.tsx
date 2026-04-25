@@ -1,9 +1,16 @@
-// Phase 24-01 placeholder — replaced in Phase 25 (DOC-04/05/06).
+// Phase 25 Plan 25-01 — Dashboard section (DOC-04).
+//
+// Replaces the Phase 24 'Coming in Phase 25' placeholder with a multi-env
+// health card grid. Plan 25-02 will layer filter chips ABOVE the grid and a
+// Top-CPU panel BELOW it — keeping this file as a thin wrapper means 25-02
+// can drop additions in without restructuring.
+
+import {EnvCardGrid} from '../dashboard/env-card-grid'
+
 export function Dashboard() {
 	return (
-		<div className='flex h-full flex-col items-center justify-center gap-2 p-8 text-center'>
-			<h2 className='text-lg font-semibold text-zinc-800 dark:text-zinc-100'>Dashboard</h2>
-			<p className='text-sm text-zinc-500 dark:text-zinc-400'>Coming in Phase 25 — Multi-environment dashboard</p>
+		<div className='flex h-full flex-col overflow-y-auto'>
+			<EnvCardGrid />
 		</div>
 	)
 }
