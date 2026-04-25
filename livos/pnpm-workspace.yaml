@@ -3,6 +3,7 @@ packages:
   - packages/ui-next
   - packages/livinityd
   - packages/config
+  - packages/docker-agent
 
 ignoredBuiltDependencies:
   - '@parcel/watcher'
