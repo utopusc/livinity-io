@@ -218,7 +218,11 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   3. Server Control UI has an environment selector dropdown in the header; switching selector refreshes all Docker views for the chosen environment
   4. Outbound agent binary (Node) can be installed on a remote host with a registration token; agent opens WebSocket to `wss://{domain}/agent/connect`, authenticates with token, and proxies Docker API calls with < 100ms added latency
   5. Agent tokens manageable from Settings > Environments > Agents — generate, revoke, view last-seen; revoking terminates the active WebSocket within 5 seconds
-**Plans**: 3 plans (environments + tRPC factory + agent binary and UI)
+**Plans**: 3 plans
+**Plan files**:
+- [ ] 22-01-PLAN.md — environments PG table + Dockerode factory + tRPC envId param (MH-01, MH-02)
+- [ ] 22-02-PLAN.md — UI environment selector + Settings > Environments management (MH-03)
+- [ ] 22-03-PLAN.md — Outbound docker-agent package + WebSocket transport + token CRUD with 5s-revoke SLA (MH-04, MH-05)
 
 ### Phase 23: AI-Powered Docker Diagnostics
 **Goal**: Leverage Kimi AI to turn Docker management from manual-reading-of-logs into proactive plain-English guidance — the capability no competing Docker manager can replicate.
