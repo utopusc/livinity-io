@@ -52,6 +52,12 @@ import {
 	deleteFile as deleteContainerFile,
 } from './container-files.js'
 import {scanImage, getCachedScan} from './vuln-scan.js'
+// Phase 23 — AI diagnostics drivers (AID-01/03/04)
+import {
+	diagnoseContainer,
+	generateComposeFromPrompt,
+	explainVulnerabilities,
+} from './ai-diagnostics.js'
 import {
 	listCredentials,
 	createCredential,
@@ -857,6 +863,119 @@ export default router({
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to get cached scan for ${input.imageRef}`,
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Phase 23 — AI diagnostics (AID-01/03/04). All three are long-running
+	// (Kimi can take 30-60s) and registered in httpOnlyPaths to avoid the
+	// documented WS-mutation hang on disconnected clients.
+	// -----------------------------------------------------------------------
+
+	diagnoseContainer: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(255),
+				environmentId: envIdField,
+			}),
+		)
+		.mutation(async ({input}) => {
+			try {
+				return await diagnoseContainer(input.name, input.environmentId)
+			} catch (err: any) {
+				const msg = err?.message ?? ''
+				if (msg.includes('[ai-timeout]')) {
+					throw new TRPCError({code: 'TIMEOUT', message: msg.replace('[ai-timeout] ', '')})
+				}
+				if (
+					msg.includes('[ai-unavailable]') ||
+					msg.includes('[ai-error]') ||
+					msg.includes('[ai-bad-response]')
+				) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: msg.replace(/^\[[^\]]+\] /, ''),
+					})
+				}
+				if (msg.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: msg.replace('[not-found] ', '')})
+				}
+				if (msg.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: msg.replace('[env-not-found] ', '')})
+				}
+				if (msg.includes('[agent-not-implemented]')) {
+					throw new TRPCError({
+						code: 'NOT_IMPLEMENTED',
+						message: msg.replace('[agent-not-implemented] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: msg || `Failed to diagnose ${input.name}`,
+				})
+			}
+		}),
+
+	generateComposeFromPrompt: adminProcedure
+		.input(z.object({prompt: z.string().min(10).max(2000)}))
+		.mutation(async ({input}) => {
+			try {
+				return await generateComposeFromPrompt(input.prompt)
+			} catch (err: any) {
+				const msg = err?.message ?? ''
+				if (msg.includes('[ai-timeout]')) {
+					throw new TRPCError({code: 'TIMEOUT', message: msg.replace('[ai-timeout] ', '')})
+				}
+				if (
+					msg.includes('[ai-unavailable]') ||
+					msg.includes('[ai-error]') ||
+					msg.includes('[ai-bad-response]')
+				) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: msg.replace(/^\[[^\]]+\] /, ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: msg || 'Failed to generate compose YAML',
+				})
+			}
+		}),
+
+	explainVulnerabilities: adminProcedure
+		.input(z.object({imageRef: z.string().min(1).max(500)}))
+		.mutation(async ({input}) => {
+			try {
+				return await explainVulnerabilities(input.imageRef)
+			} catch (err: any) {
+				const msg = err?.message ?? ''
+				if (msg.includes('[no-scan-result]')) {
+					throw new TRPCError({
+						code: 'PRECONDITION_FAILED',
+						message: 'No scan result for this image. Run a Trivy scan first.',
+					})
+				}
+				if (msg.includes('[ai-timeout]')) {
+					throw new TRPCError({code: 'TIMEOUT', message: msg.replace('[ai-timeout] ', '')})
+				}
+				if (
+					msg.includes('[ai-unavailable]') ||
+					msg.includes('[ai-error]') ||
+					msg.includes('[ai-bad-response]')
+				) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: msg.replace(/^\[[^\]]+\] /, ''),
+					})
+				}
+				if (msg.includes('[image-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: msg.replace('[image-not-found] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: msg || `Failed to explain vulnerabilities for ${input.imageRef}`,
 				})
 			}
 		}),
