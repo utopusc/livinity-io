@@ -8,6 +8,8 @@
 import {execa} from 'execa'
 
 import {listContainers, pruneImages, isProtectedContainer} from '../docker/docker.js'
+import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stacks.js'
+import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 import {volumeBackupHandler} from './backup.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
@@ -163,14 +165,94 @@ export const containerUpdateCheckHandler: BuiltInJobHandler = async (job, ctx) =
 }
 
 // =========================================================================
-// git-stack-sync — placeholder until Phase 21 ships GitOps stacks.
-// Returns 'skipped' so the run is recorded but no work happens.
+// git-stack-sync — Phase 21 GIT-05.
+// Iterates every git-backed stack in PG, runs syncRepo, redeploys on HEAD
+// change. Per-stack failures are isolated (logged + recorded) so one bad
+// repo can't fail the whole hourly run. Catastrophic (DB down) failures
+// bubble up as status='failure'.
 // =========================================================================
+
+interface GitSyncEntry {
+	name: string
+	oldSha: string | null
+	newSha: string | null
+	action: 'redeployed' | 'no-op' | 'failed'
+	error?: string
+}
+
 export const gitStackSyncHandler: BuiltInJobHandler = async (job, ctx) => {
+	ctx.logger.log(`[scheduler/git-stack-sync] running job ${job.name}`)
+
+	let stacks: Awaited<ReturnType<typeof listGitStacks>>
+	try {
+		stacks = await listGitStacks()
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err)
+		ctx.logger.error(`[scheduler/git-stack-sync] DB error listing stacks: ${msg}`)
+		return {status: 'failure', error: `listGitStacks failed: ${msg}`}
+	}
+
+	if (stacks.length === 0) {
+		ctx.logger.log(`[scheduler/git-stack-sync] no git-backed stacks; nothing to do`)
+		return {status: 'success', output: {checked: 0, redeployed: 0, results: []}}
+	}
+
+	const results: GitSyncEntry[] = []
+	for (const stack of stacks) {
+		try {
+			const sync = await syncRepo(
+				stack.name,
+				{
+					url: stack.gitUrl,
+					branch: stack.gitBranch,
+					credentialId: stack.gitCredentialId,
+					composePath: stack.composePath,
+				},
+				stack.lastSyncedSha,
+			)
+			if (!sync.changed) {
+				results.push({
+					name: stack.name,
+					oldSha: sync.oldSha,
+					newSha: sync.newSha,
+					action: 'no-op',
+				})
+				await updateGitStackSyncSha(stack.name, sync.newSha)
+				continue
+			}
+			await copyComposeToStackDir(stack.name, stack.composePath)
+			await controlStack(stack.name, 'pull-and-up')
+			await updateGitStackSyncSha(stack.name, sync.newSha)
+			results.push({
+				name: stack.name,
+				oldSha: sync.oldSha,
+				newSha: sync.newSha,
+				action: 'redeployed',
+			})
+			ctx.logger.log(
+				`[scheduler/git-stack-sync] ${stack.name}: redeployed ${sync.oldSha?.slice(0, 8) || 'init'} -> ${sync.newSha.slice(0, 8)}`,
+			)
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err)
+			ctx.logger.error(`[scheduler/git-stack-sync] ${stack.name}: ${msg}`)
+			results.push({
+				name: stack.name,
+				oldSha: stack.lastSyncedSha,
+				newSha: null,
+				action: 'failed',
+				error: msg,
+			})
+		}
+	}
+
+	const redeployed = results.filter((r) => r.action === 'redeployed').length
 	ctx.logger.log(
-		`[scheduler/git-stack-sync] placeholder — Phase 21 will iterate git-backed stacks and run git pull + redeploy if HEAD changed (job: ${job.name})`,
+		`[scheduler/git-stack-sync] checked ${stacks.length} stack(s); ${redeployed} redeployed`,
 	)
-	return {status: 'skipped', output: {reason: 'pending-phase-21'}}
+	return {
+		status: 'success',
+		output: {checked: stacks.length, redeployed, results},
+	}
 }
 
 // =========================================================================
@@ -197,5 +279,5 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 }> = [
 	{name: 'image-prune', schedule: '0 3 * * 0', type: 'image-prune', enabled: true},
 	{name: 'container-update-check', schedule: '0 6 * * *', type: 'container-update-check', enabled: true},
-	{name: 'git-stack-sync', schedule: '0 * * * *', type: 'git-stack-sync', enabled: false},
+	{name: 'git-stack-sync', schedule: '0 * * * *', type: 'git-stack-sync', enabled: true},
 ]
