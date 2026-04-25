@@ -53,10 +53,10 @@
 
 ### AI-Powered Docker Diagnostics (AID) — Phase 23
 
-- [ ] **AID-01**: AI can analyze container logs using Kimi and surface plain-English diagnostics ("postgres is OOM-killing — increase memory limit")
+- [x] **AID-01**: AI can analyze container logs using Kimi and surface plain-English diagnostics ("postgres is OOM-killing — increase memory limit")
 - [ ] **AID-02**: AI proactively flags containers approaching resource limits (OOM risk, disk full) using docker stats + engine info
-- [ ] **AID-03**: AI can generate compose files from natural language prompts ("Nextcloud with Redis and MariaDB on port 8080")
-- [ ] **AID-04**: AI explains vulnerability scan results contextually ("CVE-2024-XXXX in nginx:1.24 — upgrade to nginx:1.27")
+- [x] **AID-03**: AI can generate compose files from natural language prompts ("Nextcloud with Redis and MariaDB on port 8080")
+- [x] **AID-04**: AI explains vulnerability scan results contextually ("CVE-2024-XXXX in nginx:1.24 — upgrade to nginx:1.27")
 - [ ] **AID-05**: Diagnostics surface as chat messages in AI Chat sidebar when user asks "why is my X container slow/failing"
 
 ## v28.0 Requirements (Deferred)
@@ -116,10 +116,10 @@
 | MH-03 | Phase 22 | Complete |
 | MH-04 | Phase 22 | Complete |
 | MH-05 | Phase 22 | Complete |
-| AID-01 | Phase 23 | Pending |
+| AID-01 | Phase 23 | Complete |
 | AID-02 | Phase 23 | Pending |
-| AID-03 | Phase 23 | Pending |
-| AID-04 | Phase 23 | Pending |
+| AID-03 | Phase 23 | Complete |
+| AID-04 | Phase 23 | Complete |
 | AID-05 | Phase 23 | Pending |
 
 **Coverage:**

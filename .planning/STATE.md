@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
 current_plan: 1
-status: ready_to_plan
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-04-25T02:51:17.206Z"
-last_activity: 2026-04-25 -- Phase 22 execution started
+status: executing
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-04-25T03:40:02.018Z"
+last_activity: 2026-04-25
 progress:
   total_phases: 7
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  completed_phases: 6
+  total_plans: 15
+  completed_plans: 14
+  percent: 93
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v27.0 — Docker Management Upgrade (Phase 22 in progress — multi-host Docker)
-**Current focus:** Phase 22 — multi-host-docker
+**Current focus:** Phase 23 — ai-powered-docker-diagnostics
 
 ## Current Position
 
-Phase: 23
-Plan: 1 of 3
-Current Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-25
+Phase: 23 (ai-powered-docker-diagnostics) — EXECUTING
+Plan: 2 of 2
+Current Plan: 2
+Status: Ready to execute Plan 23-02
+Last activity: 2026-04-25 — Plan 23-01 complete
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 93%
 
 ## v27.0 Phase Structure
 
@@ -66,10 +66,12 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | 22-01 | 16 min | 3 | 11 | 2026-04-25 |
 | 22-02 | 14 min | 3 | 13 | 2026-04-25 |
 
+| 22-03 | 20 min | 3 | 25 | 2026-04-25 |
+| 23-01 | 10 min | 5 (+1 TDD) | 8 | 2026-04-25 |
+
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
-| Phase 22 P03 | 20 | 3 tasks | 25 files |
 
 ## Accumulated Context
 
@@ -116,6 +118,21 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 23-01 Decisions (2026-04-25)
+
+- One-shot `POST /api/kimi/chat` endpoint on nexus wraps `brain.chat()` directly with no tools / no streaming / no agent loop. 60s wall-clock via Promise.race against `setTimeout` so a stuck Kimi call cannot pin the express handler. Inherits LIV_API_KEY auth from `app.use('/api', requireApiKey)` middleware applied earlier in api.ts (line 229).
+- callKimi() in livinityd ai-diagnostics.ts uses `fetch` with `X-API-Key: process.env.LIV_API_KEY` and `AbortSignal.timeout(90_000)` — pattern identical to ai/routes.ts:getKimiStatus. Bracketed errors `[ai-unavailable]/[ai-bad-response]/[ai-error]/[ai-timeout]` propagate up through the 3 driver functions.
+- Two-regex secret redaction: env-style `KEY=value` (`/(^|\s|^["'])([A-Z][A-Z0-9_]*)=([^\r\n]*)/g`) + JSON-shaped `"key":"value"` (`/"([A-Za-z_][A-Za-z0-9_]*)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g`), both gated by shared `SECRET_KEY_PATTERN` (PASSWORD/SECRET/TOKEN/API_KEY/CREDENTIAL/PRIVATE_KEY/PWD/PASSWD/KEY/ACCESS_KEY). Idempotent because [REDACTED] contains no chars that re-trigger either regex. 9 redaction tests + 5 parser tests + 1 idempotence test all pass.
+- Cache keys: diagnose uses `nexus:ai:diag:<containerId>:<sha256(redactedLogs.slice(-2000)).slice(0,16)>` — invalidates on any new log lines accumulated since last call. CVE-explain uses `nexus:ai:diag:cve:<sha256(imageRef|sortedTop5Ids).slice(0,16)>` — keyed on the actual CVE set, not just digest, so different fix data invalidates separately. Compose-from-prompt has NO cache (every prompt is unique by intent — caching would store-and-never-hit). All cache writes use 300s TTL via `redis.set(key, json, 'EX', 300)`.
+- `explainVulnerabilities` short-circuits when no CRITICAL/HIGH CVEs exist — synthetic `{explanation: 'No critical or high…', upgradeSuggestion: 'No upgrade required.'}` returned without hitting Kimi. The UI also gates the `Explain CVEs` button on `CRITICAL + HIGH > 0` so users never even see it for clean scans (zero-token waste guarantee).
+- All 3 mutations registered in httpOnlyPaths under `// Phase 23 — AI diagnostics mutations (long-running, can take 30-60s)` comment block. Documented Phase 18 gotcha: WS-routed mutations silently hang on disconnected clients during 30-60s Kimi turns.
+- Bracketed-error → TRPCError mapping: `[ai-timeout]` → TIMEOUT, `[ai-unavailable]/[ai-error]/[ai-bad-response]` → INTERNAL_SERVER_ERROR, `[no-scan-result]` → PRECONDITION_FAILED (more semantic than NOT_FOUND for "must scan first"), `[not-found]/[env-not-found]/[image-not-found]` → NOT_FOUND, `[agent-not-implemented]` → NOT_IMPLEMENTED.
+- AI compose tab extends existing Tabs primitive (yaml | git | ai) — same source-of-stack pattern Plan 21-02 established. AiComposeTab + DiagnosticPanel sub-components co-located in parent files alongside existing ScanResultPanel/RedeployStackDialog precedent. tab state union widened from `'yaml'|'git'` to `'yaml'|'git'|'ai'`; aiPrompt local state initialized to '' and reset on form close.
+- Hook uses `trpcReact.useUtils()` idiom (tRPC v11 + React Query v5) — codebase consensus across hooks/use-environments.ts, use-language.ts, use-notifications.ts. Plan spec mentioned `useContext` (deprecated alias); the hook actually doesn't need utils for these 3 stateless mutations so the import is omitted entirely. Behavioural impact: zero.
+- Re-run/Re-try buttons reset mutation state via `resetDiagnosis()` / `resetExplanation()` / `resetCompose()` before firing again — required because React Query v5 mutations cache the last result; without reset, the panel would briefly show stale data while the new request flies.
+- TDD execution: Task 2 split into RED (test commit `2d96d1df`) + GREEN (feat commit `34fbf563`) per execute-plan TDD protocol; other 4 tasks were single-commit feat tasks. Total 6 commits for the plan.
+- Pattern carried forward to Plan 23-02 (AID-02 + AID-05): `callKimi()` and `redactSecrets()` are exported and reusable for proactive resource-watch handler in scheduler/ + AI Chat container-diagnostics tool. `diagnoseContainer()` itself is reusable as the autonomous "why is my X container slow/failing" tool — needs only an MCP/tool wrapper that the existing chat agent can invoke. Cache prefix `nexus:ai:diag:` is shared across plans for cross-feature dedupe.
 
 ### Plan 22-02 Decisions (2026-04-25)
 
@@ -251,6 +268,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-25T01:30:00.000Z
-Stopped at: Completed 22-02-PLAN.md
-Resume with: `/gsd:execute-phase 22 03` to implement Plan 22-03 (agent transport: docker_agents PG table, AgentDockerClient that proxies Dockerode calls over outbound WebSocket, replace [agent-not-implemented] branch in docker-clients.ts buildClient, real docker.generateAgentToken mutation, agent registration endpoint, agent binary scaffold). After 22-03 completes Phase 22, run `/gsd:audit-milestone v27.0` to validate all 33 must-haves end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (focuses: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab; multi-host stack deploy via compose-file replication; multi-host Trivy scan; real-time WS exec/logs over remote envs).
+Last session: 2026-04-25T03:39:44.275Z
+Stopped at: Completed 23-01-PLAN.md
+Resume with: `/gsd:execute-phase 23 02` to implement Plan 23-02 (AID-02 proactive resource watch via scheduler `BUILT_IN_HANDLERS['ai-resource-watch']` + AID-05 AI Chat sidebar autonomous container diagnostics tool). Plan 23-01 already shipped the reactive surface — `callKimi()`, `redactSecrets()`, `diagnoseContainer()` are exported and reusable. After 23-02 completes Phase 23, run `/gsd:audit-milestone v27.0` to validate all 33 must-haves end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (focuses: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab; multi-host stack deploy via compose-file replication; multi-host Trivy scan; real-time WS exec/logs over remote envs).
