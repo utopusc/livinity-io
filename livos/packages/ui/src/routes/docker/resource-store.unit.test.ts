@@ -17,6 +17,7 @@ import {
 	useSelectedContainer,
 	useSelectedImage,
 	useSelectedNetwork,
+	useSelectedStack,
 	useSelectedVolume,
 } from './resource-store'
 
@@ -25,12 +26,13 @@ describe('useDockerResource — default state', () => {
 		useDockerResource.getState().clearAllSelections()
 	})
 
-	test('A: all four selections start as null', () => {
+	test('A: all five selections start as null', () => {
 		const s = useDockerResource.getState()
 		expect(s.selectedContainer).toBeNull()
 		expect(s.selectedImage).toBeNull()
 		expect(s.selectedVolume).toBeNull()
 		expect(s.selectedNetwork).toBeNull()
+		expect(s.selectedStack).toBeNull()
 	})
 })
 
@@ -72,19 +74,27 @@ describe('useDockerResource — setters set their slot only', () => {
 })
 
 describe('useDockerResource — clearAllSelections', () => {
-	test('E: clearAllSelections resets all four slots even when all four set', () => {
-		const {setSelectedContainer, setSelectedImage, setSelectedVolume, setSelectedNetwork, clearAllSelections} =
-			useDockerResource.getState()
+	test('E: clearAllSelections resets all five slots even when all five set', () => {
+		const {
+			setSelectedContainer,
+			setSelectedImage,
+			setSelectedVolume,
+			setSelectedNetwork,
+			setSelectedStack,
+			clearAllSelections,
+		} = useDockerResource.getState()
 		setSelectedContainer('c')
 		setSelectedImage('i')
 		setSelectedVolume('v')
 		setSelectedNetwork('n')
+		setSelectedStack('s')
 
-		// Sanity: all four set.
+		// Sanity: all five set.
 		expect(useDockerResource.getState().selectedContainer).toBe('c')
 		expect(useDockerResource.getState().selectedImage).toBe('i')
 		expect(useDockerResource.getState().selectedVolume).toBe('v')
 		expect(useDockerResource.getState().selectedNetwork).toBe('n')
+		expect(useDockerResource.getState().selectedStack).toBe('s')
 
 		clearAllSelections()
 		const s = useDockerResource.getState()
@@ -92,6 +102,7 @@ describe('useDockerResource — clearAllSelections', () => {
 		expect(s.selectedImage).toBeNull()
 		expect(s.selectedVolume).toBeNull()
 		expect(s.selectedNetwork).toBeNull()
+		expect(s.selectedStack).toBeNull()
 	})
 })
 
@@ -100,7 +111,7 @@ describe('useDockerResource — selector hooks', () => {
 		useDockerResource.getState().clearAllSelections()
 	})
 
-	test('F: useSelectedContainer / Image / Volume / Network return the current slice value', () => {
+	test('F: useSelectedContainer / Image / Volume / Network / Stack return the current slice value', () => {
 		// Selector hooks are zustand-flavoured `useStore(selector)` thin wrappers.
 		// Calling them outside React — they're functions that consult the
 		// current store; we invoke their underlying selector directly.
@@ -114,6 +125,40 @@ describe('useDockerResource — selector hooks', () => {
 		expect(typeof useSelectedImage).toBe('function')
 		expect(typeof useSelectedVolume).toBe('function')
 		expect(typeof useSelectedNetwork).toBe('function')
+		expect(typeof useSelectedStack).toBe('function')
+	})
+})
+
+describe('useDockerResource — selectedStack slot (Plan 27-01 / DOC-11)', () => {
+	beforeEach(() => {
+		useDockerResource.getState().clearAllSelections()
+	})
+
+	test("H: setSelectedStack('mystack') writes the slot only", () => {
+		useDockerResource.getState().setSelectedStack('mystack')
+		const s = useDockerResource.getState()
+		expect(s.selectedStack).toBe('mystack')
+		expect(s.selectedContainer).toBeNull()
+		expect(s.selectedImage).toBeNull()
+		expect(s.selectedVolume).toBeNull()
+		expect(s.selectedNetwork).toBeNull()
+	})
+
+	test('I: setSelectedStack does not clobber other slots', () => {
+		useDockerResource.getState().setSelectedContainer('alpha')
+		useDockerResource.getState().setSelectedStack('mystack')
+		const s = useDockerResource.getState()
+		expect(s.selectedContainer).toBe('alpha')
+		expect(s.selectedStack).toBe('mystack')
+	})
+
+	test('J: setSelectedStack(null) clears just the stack slot', () => {
+		useDockerResource.getState().setSelectedStack('mystack')
+		useDockerResource.getState().setSelectedContainer('alpha')
+		useDockerResource.getState().setSelectedStack(null)
+		const s = useDockerResource.getState()
+		expect(s.selectedStack).toBeNull()
+		expect(s.selectedContainer).toBe('alpha')
 	})
 })
 
