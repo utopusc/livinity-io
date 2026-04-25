@@ -257,3 +257,30 @@ CREATE TABLE IF NOT EXISTS docker_agents (
 
 CREATE INDEX IF NOT EXISTS idx_docker_agents_env_id     ON docker_agents(env_id);
 CREATE INDEX IF NOT EXISTS idx_docker_agents_token_hash ON docker_agents(token_hash);
+
+-- =========================================================================
+-- AI Alerts (Phase 23 AID-02) — proactive Kimi-generated resource alerts.
+-- One row per stress event detected by the ai-resource-watch scheduler job.
+-- Dedupe is enforced at insert-time by findRecentAlertByKind (60-min window).
+-- environment_id is nullable — multi-host watching defers to v28; current
+-- handler runs on the local socket only (per Plan 22-01 D-06 constraint).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS ai_alerts (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  container_name  TEXT NOT NULL,
+  environment_id  UUID REFERENCES environments(id) ON DELETE SET NULL,
+  severity        TEXT NOT NULL CHECK (severity IN ('info','warning','critical')),
+  kind            TEXT NOT NULL CHECK (kind IN ('memory-pressure','cpu-throttle','restart-loop','disk-pressure','other')),
+  message         TEXT NOT NULL,
+  payload_json    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  dismissed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_alerts_undismissed
+  ON ai_alerts(dismissed_at, created_at DESC)
+  WHERE dismissed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_ai_alerts_dedupe
+  ON ai_alerts(container_name, kind, created_at DESC)
+  WHERE dismissed_at IS NULL;
