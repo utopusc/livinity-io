@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: Not started
-status: ready_to_plan
-stopped_at: Completed 27-02-PLAN.md — Schedules section live with volume pre-fill seam closed; routes/server-control/ entirely deleted (DOC-12 + DOC-03 closed). Phase 27 ready for verifier.
-last_updated: "2026-04-25T22:02:12.587Z"
+status: verifying
+stopped_at: Completed 28-01-PLAN.md — Cross-container Logs section live (DOC-13). Multiplexed WS + grep + severity + live-tail; WS handler env-aware via getDockerClient. Plan 28-02 unblocked.
+last_updated: "2026-04-25T22:32:39.839Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 5
-  total_plans: 8
-  completed_plans: 8
-  percent: 38
+  completed_phases: 4
+  total_plans: 10
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 26 COMPLETE — All 4 resource routes (Containers/Images/Volumes/Networks) live with search, four-slot deep-link store, Schedule-backup cross-section navigation seam, network inspect bridge useEffect, DOC-20 programmatic half closed for ALL 4 resource types (DOC-07 + DOC-08 + DOC-09 + DOC-10 closed). URL-bar deep-link form remains Phase 29 (DOC-20 final). Phase 26 verifier runs next, then Phase 27 (Stacks + Schedules).
+**Current focus:** Phase 28-01 COMPLETE — Cross-container Logs section live (DOC-13). Multiplexed WS pattern (one socket per checked container) against env-aware /ws/docker/logs handler. Deterministic per-container color stripes + [name] prefixes + regex grep + ERROR/WARN/INFO/DEBUG severity filter + live-tail toggle. Bare-bones virtualizer (no react-window dep). 4 pure helpers + 26 unit tests. Plan 28-02 (Activity Timeline) consumes patterns established here.
 
 ## Current Position
 
 Phase: 28
 Plan: 2 of 2 complete
 Current Plan: Not started
-Status: Ready to plan
+Status: Phase complete — ready for verification
 Last activity: 2026-04-25
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 90%
 
 ## v28.0 Phase Structure
 
@@ -82,6 +82,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 26 P02 | 8min | 4 (4 commits) tasks | 6 created + 2 modified files |
 | Phase 27 P01 | 6 | 2 tasks | 8 files |
 | Phase 27 P02 | 10 | 4 tasks | 10 files |
+| Phase 28 P01 | 14 | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -138,6 +139,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - formatBytes canonical Docker-app location at resources/format-bytes.ts; back-compat re-export from hooks/use-images.ts retained — existing legacy + Plan 25 dashboard imports keep working. Plan 27 may collapse the duplicate after server-control deletion when no consumer imports from hooks/ anymore.
 - DOC-20 programmatic deep-link half closed for containers + images via useDockerResource.getState().setSelectedContainer(name) / setSelectedImage(id). URL-bar form deferred to Phase 29 (DOC-20 final). Plan 28 cross-container logs deep-link will use this same store API. Volumes + Networks slots already exposed for Plan 26-02 + future Phase 28/29 consumers.
 - TDD execution: Task 1 split into RED (test commit 4750bf70 — 17 failing-import tests) + GREEN (feat commit 3bc81521 — 4 source files). Tasks 2-4 single commits per Plan 26-01 task `<action>` blocks (verbatim ports + section composition; testable logic lives in Task 1's helpers). 5 task commits total.
+
+### Plan 28-01 Decisions (2026-04-25)
+
+- WS handler envId extension via per-request `getDockerClient(envId)` instead of module-scope `new Dockerode()`. Empty/missing envId → local socket fallback. Phase 17 ContainerDetailSheet LogsTab back-compat preserved without code changes (it doesn't pass envId, parseLogsParams returns null, `getDockerClient(null)` returns local). Agent envs return `1011 'Agent envs not yet supported for logs'` close — honest failure mode beats silent fallback. `[env-not-found]` → 1008 close. Other infrastructural errors propagate as generic 1011, NOT a silent fallback to local (would hide the misconfiguration).
+- Multiplex cap = 25 sockets in `useMultiplexedLogs` (T-28-02 mitigation). `includedNames.slice(0, 25)` + `truncated: boolean` returned from the hook + amber banner in LogsViewer when truncated. Hard cap chosen over soft warning per the threat register entry.
+- Bare-bones virtualizer (~80 lines) instead of adding `react-window`. ResizeObserver-driven `viewportHeight` + `requestAnimationFrame` live-tail snap-to-bottom + 4px scroll-up tolerance for Dockhand UX parity (manual scroll up auto-disables live-tail). Reusable pattern for any future large-list surface where adding a dep feels heavy.
+- NO ANSI parsing in cross-container LogsViewer. Plain-text rendering only. The xterm-based per-container LogsTab in ContainerDetailSheet (Phase 17 QW-01) stays the canonical drilldown for ANSI-colored single-container logs. ANSI escape codes here render as visible garbage — acceptable v1 trade-off, documented in `logs-viewer.tsx` header comment AND in 28-CONTEXT.md decisions. Phase 28-02 + Phase 29 inherit the same plain-text-aggregator-vs-xterm-drilldown split.
+- 100ms `setLines` throttle window in `useMultiplexedLogs` — coalesces all chunks within the window into one `setState` call. `setTimeout` (NOT `requestAnimationFrame`) so background tabs still flush. Critical for streams >20 lines/sec (without throttling, every chunk would re-render the React tree). Pattern reusable for any high-frequency WS-driven setState in Phase 28-02 (dockerEvents subscription) or Phase 29 (multi-container exec).
+- Severity classifier uses single regex per level anchored to `\b` word boundaries; ERROR-first precedence so multi-keyword lines classify as the more severe one. Returns null for unrecognized lines (intentional — false positives are worse than false negatives in a UI filter user can toggle off). Patterns: `\b(error|err|fatal|panic|exception|failed|critical|crit)\b/i` etc.
+- `pushBounded(buf, item, cap)` returns a NEW array (immutable shape so React detects setState via reference equality). At-or-over capacity drops oldest enough to fit. Defensive: handles upstream callers handing an over-cap buffer without growing the leak.
+- `selectedNames` is local component state in `LogsSection` (NOT zustand). Conversational, like the resource-store pattern. Reset on env change (so checkboxes don't reference containers from previous env). Drops stale selections when a checked container stops running (mirrors container-section.tsx pattern).
+- `useMultiplexedLogs` uses TWO separate effects: a deps-driven reconcile effect (open new sockets, close removed sockets, preserve still-included buffers — the diff loop) + an empty-deps unmount-only cleanup effect (closes ALL sockets at true unmount). Without this split, React StrictMode dev double-invocation would tear down sockets the diff loop just opened. Pattern reusable for any WS lifecycle hook in Phase 28-02 / Phase 29.
+- gitignore Rule 3 auto-fix: added `!livos/packages/ui/src/routes/docker/logs/` negation in all three gitignore files (root, livos/, livos/packages/ui/). The original `logs/` rule meant for runtime log directories was matching the new SOURCE dir, blocking the entire Phase 28 surface from being committed. Inline comments document the reason in each file.
+- TDD execution: Tasks 1+2 split into RED (test commits 7647e2fb, e392730b) + GREEN (feat commits 69fd6226, 76c023a1). Task 3 (React glue files) ships as a single feat commit b1cbd722 per Plan 28-01 Task 3 having no `tdd="true"` flag — testable logic lives in Tasks 1+2 extracted modules. 5 task commits total + metadata commit.
+- Pattern established for Phase 28-02: `colorForContainer` deterministic hash usable for activity-row source colors; `pushBounded` ring-buffer for activity event list; multiplex WS lifecycle pattern (deps-driven reconcile + empty-deps unmount cleanup) carries forward to dockerEvents WS subscription. Pattern established for Phase 29: WS handler envId extension is also available for `docker-exec-socket.ts` (DOC-15 cross-container shell will likely need the same `getDockerClient(envId)` refactor).
 
 ### Plan 26-02 Decisions (2026-04-25)
 
@@ -396,6 +412,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T22:02:12.580Z
-Stopped at: Completed 27-02-PLAN.md — Schedules section live with volume pre-fill seam closed; routes/server-control/ entirely deleted (DOC-12 + DOC-03 closed). Phase 27 ready for verifier.
+Last session: 2026-04-25T22:32:26.110Z
+Stopped at: Completed 28-01-PLAN.md — Cross-container Logs section live (DOC-13). Multiplexed WS + grep + severity + live-tail; WS handler env-aware via getDockerClient. Plan 28-02 unblocked.
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.

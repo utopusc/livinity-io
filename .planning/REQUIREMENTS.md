@@ -35,7 +35,8 @@
 **: `/docker/schedules` — current Settings > Scheduler section as own route (job list + Run Now + Test Destination + AddJob dialog).
 
 ### New Surfaces
-- [ ] **DOC-13**: `/docker/logs` — cross-container log aggregator. Multi-select containers, free-text grep filter, timestamp range, severity filter, live-tail toggle. Re-uses `/ws/docker/logs` per-container with multiplexed UI.
+- [x] **DOC-13
+**: `/docker/logs` — cross-container log aggregator. Multi-select containers, free-text grep filter, timestamp range, severity filter, live-tail toggle. Re-uses `/ws/docker/logs` per-container with multiplexed UI.
 - [ ] **DOC-14**: `/docker/activity` — global event timeline (current Events tab content + scheduler run history + AI alert history) sorted descending. Filter by source (docker / scheduler / ai).
 - [ ] **DOC-15**: `/docker/shell` — cross-container exec terminal with sidebar listing all running containers; click container → opens exec session in main pane. Tabs for multiple concurrent sessions. Uses existing `/ws/docker/exec` per container.
 - [ ] **DOC-16**: `/docker/registry` — Docker Hub + private registry credentials CRUD (encrypted with AES-256-GCM mirroring git-credentials). Image search across configured registries → "Pull" button creates new image entry. Credentials surface in stack-create env vars where needed.
@@ -66,7 +67,7 @@
 | DOC-10 | Phase 26 | Complete (26-02) | NetworkSection — full Networks tab body with search (filters by name + driver) + inspect card with Disconnect mutations + bridge useEffect connecting useDockerResource.selectedNetwork to inspectNetwork(id) for programmatic deep-link |
 | DOC-11 | Phase 27 | Complete | Stacks route |
 | DOC-12 | Phase 27 | Complete | Schedules route |
-| DOC-13 | Phase 28 | Pending | Cross-container Logs |
+| DOC-13 | Phase 28 | Complete (28-01) | Cross-container Logs — multi-select sidebar (running containers in selected env), multiplexed WS (one socket per checked container against env-aware `/ws/docker/logs?envId=`), deterministic per-container color stripes + `[name]` line prefixes, regex grep with invalid-regex badge, ERROR/WARN/INFO/DEBUG severity heuristic, live-tail toggle with Dockhand-style auto-disable on manual scroll-up, bare-bones virtualizer (no react-window dep), 25-socket cap + truncation banner |
 | DOC-14 | Phase 28 | Pending | Activity timeline |
 | DOC-15 | Phase 29 | Pending | Cross-container Shell |
 | DOC-16 | Phase 29 | Pending | Registry credentials + search |
