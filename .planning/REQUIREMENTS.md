@@ -31,7 +31,8 @@
 **: `/docker/networks` — full network list as own route.
 - [x] **DOC-11
 **: `/docker/stacks` — full stack list as own route. Create dialog preserves YAML / Git / AI tabs from v27.0. Stack detail keeps Graph + Logs + Files tabs.
-- [ ] **DOC-12**: `/docker/schedules` — current Settings > Scheduler section as own route (job list + Run Now + Test Destination + AddJob dialog).
+- [x] **DOC-12
+**: `/docker/schedules` — current Settings > Scheduler section as own route (job list + Run Now + Test Destination + AddJob dialog).
 
 ### New Surfaces
 - [ ] **DOC-13**: `/docker/logs` — cross-container log aggregator. Multi-select containers, free-text grep filter, timestamp range, severity filter, live-tail toggle. Re-uses `/ws/docker/logs` per-container with multiplexed UI.
