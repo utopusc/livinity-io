@@ -8,6 +8,9 @@ dist/
 .env
 *.log
 logs/
+# Phase 28: cross-container log viewer source dir (DOC-13) — NOT runtime logs.
+!packages/ui/src/routes/docker/logs/
+!packages/ui/src/routes/docker/logs/**
 data/
 .cache/
 temp/

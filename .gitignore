@@ -28,6 +28,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+# Phase 28: cross-container log viewer source dir (DOC-13) — NOT runtime logs.
+!livos/packages/ui/src/routes/docker/logs/
+!livos/packages/ui/src/routes/docker/logs/**
 
 # Archives (local cleanup storage)
 _archive/
