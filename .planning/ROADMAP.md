@@ -130,7 +130,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
  (completed 2026-04-24)
 - [x] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat (completed 2026-04-25)
-- [ ] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
+- [x] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host (completed 2026-04-25)
 - [ ] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
 
 ## Phase Details
@@ -222,7 +222,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plan files**:
 - [x] 22-01-PLAN.md — environments PG table + Dockerode factory + tRPC envId param (MH-01, MH-02)
 - [x] 22-02-PLAN.md — UI environment selector + Settings > Environments management (MH-03)
-- [ ] 22-03-PLAN.md — Outbound docker-agent package + WebSocket transport + token CRUD with 5s-revoke SLA (MH-04, MH-05)
+- [x] 22-03-PLAN.md — Outbound docker-agent package + WebSocket transport + token CRUD with 5s-revoke SLA (MH-04, MH-05)
 
 ### Phase 23: AI-Powered Docker Diagnostics
 **Goal**: Leverage Kimi AI to turn Docker management from manual-reading-of-logs into proactive plain-English guidance — the capability no competing Docker manager can replicate.
@@ -249,7 +249,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 20. Scheduled Tasks + Backup | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 21. GitOps Stack Deployment | v27.0 | 2/2 | Complete   | 2026-04-25 |
-| 22. Multi-host Docker | v27.0 | 2/3 | In Progress|  |
+| 22. Multi-host Docker | v27.0 | 3/3 | Complete    | 2026-04-25 |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
 
 ---

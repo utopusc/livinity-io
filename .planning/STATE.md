@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 02 of 03 (Phase 22 — Plan 22-02 complete; ready for 22-03 agent transport + AgentDockerClient)
-status: in-progress
+current_plan: 1
+status: ready_to_plan
 stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-04-25T01:30:00.000Z"
-last_activity: 2026-04-25 — Plan 22-02 executed in ~14 minutes, 3 atomic commits (7f58c022, e048cf43, d643e0c2); 4 deviations (all minor); MH-03 satisfied
+last_updated: "2026-04-25T02:51:17.206Z"
+last_activity: 2026-04-25 -- Phase 22 execution started
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 7
   total_plans: 13
-  completed_plans: 12
-  percent: 92
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -23,16 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v27.0 — Docker Management Upgrade (Phase 22 in progress — multi-host Docker)
-**Current focus:** Phase 22 — Multi-host Docker. Plans 22-01 (backend foundation) + 22-02 (UI selector + env management) complete; Plan 22-03 (agent transport + AgentDockerClient) is next.
+**Current focus:** Phase 22 — multi-host-docker
 
 ## Current Position
 
-Phase: 22 — Multi-host Docker (IN PROGRESS — 2 of 3 plans done; MH-01 + MH-02 + MH-03 satisfied)
-Current Plan: 02 of 03 (Phase 22 — Plan 22-02 complete; ready for 22-03 agent transport)
-Status: 22-02 complete (zustand env store at livos/packages/ui/src/stores/environment-store.ts persisted to localStorage 'livos:selectedEnvironmentId' with LOCAL_ENV_ID default + fallback; useEnvironments React Query hook with 10s refetch + CRUD mutations + useGenerateAgentToken stub; environmentId threaded through 7 docker data hooks — useContainers/useImages/useVolumes/useNetworks/useStacks/useEngineInfo/useDockerEvents — every query and applicable mutation passes selectedEnvironmentId as part of input so React Query queryKey-driven re-fetch happens automatically on env change; scanImage / controlStack / editStack / removeStack / deployStack stay envId-less per Plan 22-01 D-06/D-07 host-local CLI/Trivy decision; EnvironmentSelector dropdown in Server Control header with type label/agent-online-offline badges + 'Manage Environments…' link; OfflineAgentBanner amber warning when selected agent env is offline; defensive useEffect resets to LOCAL_ENV_ID if persisted id missing from list; Settings > Environments section with list table (Name | Type | Connection | Status | Created | Edit/Remove), Add dialog with conditional fields per type — socket/tcp-tls/agent — Edit dialog with type immutable + 'leave blank to keep existing' PEM placeholders + partial-only payload, Remove with typed-name confirmation, GenerateAgentTokenDialog auto-fires mutation on open + shows 64-char token + Copy + curl install snippet + 'will not be shown again' warning per Plan 21-02 webhook-secret pattern, useGenerateAgentToken stub returns friendly error if Plan 22-03 route missing — env row IS still created so user can return; 'local' Edit/Remove disabled with Tooltip; 3 atomic commits with UI build passing after each task; deviations: Task 3 was checkpoint:human-verify but auto-approved per user preference, Manage link routes to /settings not /settings/environments because settings sections aren't URL-addressable, Add dialog defaults to tcp-tls instead of socket as a UX nudge, useGenerateAgentToken stub returns isPending instead of isLoading to match tRPC v11+ React Query v5 naming).
-Last activity: 2026-04-25 — Plan 22-02 executed in ~14 minutes, 3 atomic commits (7f58c022, e048cf43, d643e0c2); 4 minor deviations documented; MH-03 satisfied
+Phase: 23
+Plan: 1 of 3
+Current Plan: Not started
+Status: Ready to plan
+Last activity: 2026-04-25
 
-**Progress:** [█████████░] 92%
+**Progress:** [██████████] 100%
 
 ## v27.0 Phase Structure
 
@@ -68,6 +69,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
+| Phase 22 P03 | 20 | 3 tasks | 25 files |
 
 ## Accumulated Context
 
