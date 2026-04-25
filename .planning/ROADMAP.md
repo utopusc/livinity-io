@@ -126,7 +126,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
  (completed 2026-04-25)
 - [x] **Phase 25: Multi-Environment Dashboard** — env card grid, Top containers by CPU panel, env tag filter chips, recent events per env (DOC-04, DOC-05, DOC-06) (completed 2026-04-25)
 - [x] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial) (completed 2026-04-25)
-- [x] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12) (completed 2026-04-25)
+- [x] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12)
+ (completed 2026-04-25)
 - [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14) (completed 2026-04-25)
 - [ ] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final)
 
@@ -212,6 +213,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. cmd+k palette searches containers, stacks, images, env names, recent events, settings sections. Result click navigates to exact resource.
   5. All resource routes support full deep-linking — bookmarkable URLs.
 **Plans**: 2 plans
+- [ ] 29-01-PLAN.md — Shell section (DOC-15) + cmd+k command palette (DOC-18) — env-aware /ws/docker-exec extension + multi-tab xterm sessions + categorized palette across containers/stacks/images/volumes/networks/envs/sections
+- [ ] 29-02-PLAN.md — Registry credentials + image search (DOC-16) + Docker Settings (DOC-17) + DOC-19 verify + DOC-20 final closure — AES-256-GCM registry vault + Docker Hub search + sidebar density + Copy Deep Link buttons across 5 detail panels
 
 <details>
 <summary>v27.0 Docker Management Upgrade (Phases 17-23) — archived per-phase details</summary>
