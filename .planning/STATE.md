@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
-current_plan: 26-02
-status: ready_to_plan
-stopped_at: Completed 26-02-PLAN.md — Volumes + Networks sections live with search, deep-link store, Schedule-backup cross-section navigation seam, inspect bridge useEffect, four-slot DOC-20 contract pinned (DOC-09 + DOC-10 closed; DOC-20 programmatic half closed for ALL 4 resource types across 26-01 + 26-02; URL-bar form remains Phase 29). Phase 26 verifier runs next.
-last_updated: "2026-04-25T21:18:03.016Z"
+current_plan: Not started
+status: verifying
+stopped_at: Completed 27-01-PLAN.md — Stacks section live with search + selectedStack store + 3 deploy modes + ContainerDetailSheet click-through. Plan 27-02 next (Schedules + final server-control delete).
+last_updated: "2026-04-25T21:47:18.885Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
-  percent: 31
+  completed_phases: 3
+  total_plans: 8
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 Phase: 27
 Plan: 2 of 2 complete
 Current Plan: Not started
-Status: Ready to plan
+Status: Phase complete — ready for verification
 Last activity: 2026-04-25
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 88%
 
 ## v28.0 Phase Structure
 
@@ -80,6 +80,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 | Phase 26 P01 | 10min | 4 tasks | 16 created + 2 modified files |
 | Phase 26 P02 | 8min | 4 (4 commits) tasks | 6 created + 2 modified files |
+| Phase 27 P01 | 6 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -394,6 +395,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T21:18:03.008Z
-Stopped at: Completed 26-02-PLAN.md — Volumes + Networks sections live with search, deep-link store, Schedule-backup cross-section navigation seam, inspect bridge useEffect, four-slot DOC-20 contract pinned (DOC-09 + DOC-10 closed; DOC-20 programmatic half closed for ALL 4 resource types across 26-01 + 26-02; URL-bar form remains Phase 29). Phase 26 verifier runs next.
+Last session: 2026-04-25T21:46:44.524Z
+Stopped at: Completed 27-01-PLAN.md — Stacks section live with search + selectedStack store + 3 deploy modes + ContainerDetailSheet click-through. Plan 27-02 next (Schedules + final server-control delete).
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.

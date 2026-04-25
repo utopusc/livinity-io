@@ -29,7 +29,8 @@
 **: `/docker/volumes` — full volume list as own route. Volume backup config link to Schedules route.
 - [x] **DOC-10
 **: `/docker/networks` — full network list as own route.
-- [ ] **DOC-11**: `/docker/stacks` — full stack list as own route. Create dialog preserves YAML / Git / AI tabs from v27.0. Stack detail keeps Graph + Logs + Files tabs.
+- [x] **DOC-11
+**: `/docker/stacks` — full stack list as own route. Create dialog preserves YAML / Git / AI tabs from v27.0. Stack detail keeps Graph + Logs + Files tabs.
 - [ ] **DOC-12**: `/docker/schedules` — current Settings > Scheduler section as own route (job list + Run Now + Test Destination + AddJob dialog).
 
 ### New Surfaces
