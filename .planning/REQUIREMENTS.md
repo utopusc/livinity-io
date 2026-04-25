@@ -44,7 +44,7 @@
 ### UX Quality
 - [ ] **DOC-18**: cmd+k command palette searches across containers, stacks, images, env names, recent events, settings sections. Result click navigates to the exact resource.
 - [ ] **DOC-19**: Theme toggle (light / dark / system) persists per-user. Existing LivOS theme system reused (no new theme infra).
-- [ ] **DOC-20**: All resource routes support deep-linking — `/docker/containers/n8n` opens with n8n container detail panel pre-expanded; `/docker/stacks/myproject` opens stack detail. URLs are bookmarkable and shareable. _(Programmatic half closed across Plan 26-01 + 26-02 for all 4 resource types via useDockerResource.getState().setSelectedX(value); URL-bar form remains Phase 29 final closure.)_
+- [x] **DOC-20**: All resource routes support deep-linking — `/docker/containers/n8n` opens with n8n container detail panel pre-expanded; `/docker/stacks/myproject` opens stack detail. URLs are bookmarkable and shareable. _(Programmatic half closed across Plan 26-01 + 26-02 for all 4 resource types via useDockerResource.getState().setSelectedX(value); URL-bar form remains Phase 29 final closure.)_
 
 ---
 
@@ -71,7 +71,7 @@
 | DOC-17 | Phase 29 | Pending | Docker-app Settings (envs + theme + palette) |
 | DOC-18 | Phase 29 | Pending | cmd+k palette |
 | DOC-19 | Phase 29 | Pending | Theme toggle |
-| DOC-20 | Phase 29 | Pending | Deep-linking on all resource routes |
+| DOC-20 | Phase 29 | Complete | Deep-linking on all resource routes |
 
 **Coverage**: 20 requirements across 6 phases (24-29).
 
