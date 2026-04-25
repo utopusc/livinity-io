@@ -174,7 +174,7 @@ export function Dock() {
 						)
 					}
 				/>
-				{/* Phase 24-01 — replaces LIVINITY_server-control. */}
+				{/* Phase 24-01 — replaces the legacy server-control app. */}
 				<DockItem
 					appId='LIVINITY_docker'
 					iconSize={iconSize}

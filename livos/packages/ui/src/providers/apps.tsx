@@ -67,9 +67,8 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/ai-chat',
 	},
-	// Phase 24-01 — replaced legacy LIVINITY_server-control with LIVINITY_docker.
-	// The /routes/server-control file stays on disk for one phase so 25-29 can
-	// migrate content piecemeal; final delete is Plan 27's SUMMARY action.
+	// Phase 24-01 — replaced the legacy server-control app id with LIVINITY_docker.
+	// Final routes/server-control directory delete completed in Phase 27-02.
 	{
 		id: 'LIVINITY_docker',
 		name: 'Docker',

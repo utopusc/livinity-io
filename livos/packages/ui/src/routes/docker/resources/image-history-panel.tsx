@@ -1,9 +1,9 @@
 // Phase 26 Plan 26-01 — Image layer history panel.
 //
-// Ported verbatim from routes/server-control/index.tsx:1294-1359. Renders
-// its own <Table> (Phase 19 D-08 fix — when the panel was inside a parent
-// Tabs > TabsContent, nesting Tables broke the row striping; rendering its
-// own Table here keeps the fix intact).
+// Verbatim port of legacy routes/server-control/index.tsx:1294-1359 (deleted
+// Phase 27-02). Renders its own <Table> (Phase 19 D-08 fix — when the panel
+// was inside a parent Tabs > TabsContent, nesting Tables broke the row
+// striping; rendering its own Table here keeps the fix intact).
 //
 // Imports adjusted to the new resources/ paths for formatBytes +
 // formatRelativeDate.

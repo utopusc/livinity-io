@@ -1,4 +1,4 @@
-// Phase 27-01 — ported verbatim from routes/server-control/index.tsx.
+// Phase 27-01 — verbatim port of legacy routes/server-control/index.tsx (deleted Phase 27-02).
 //
 // RemoveStackDialog (legacy lines 3451-3502): confirm-removal dialog with
 //   "also remove volumes" checkbox. Calls onConfirm(removeVolumes: boolean).

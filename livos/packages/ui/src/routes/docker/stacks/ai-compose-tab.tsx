@@ -1,5 +1,6 @@
-// Phase 27-01 — ported verbatim from routes/server-control/index.tsx:2680-2796
-// (Phase 23 AID-03 — Kimi natural-language compose generator).
+// Phase 27-01 — verbatim port of legacy routes/server-control/index.tsx:2680-2796
+// (Phase 23 AID-03 — Kimi natural-language compose generator). Legacy file
+// deleted Phase 27-02.
 //
 // Consumed by DeployStackForm's third Tab. Component renders a textarea
 // for the user's natural-language prompt, generates compose YAML via the

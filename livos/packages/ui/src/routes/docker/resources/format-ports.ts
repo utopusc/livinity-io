@@ -1,6 +1,6 @@
 // Phase 26 Plan 26-01 — Container port-mapping formatter.
 //
-// Ported verbatim from routes/server-control/index.tsx:237-243.
+// Verbatim port of legacy routes/server-control/index.tsx:237-243 (deleted in Phase 27-02).
 
 export function formatPorts(ports: Array<{hostPort: number | null; containerPort: number; protocol: string}>) {
 	if (!ports.length) return '-'

@@ -1,9 +1,8 @@
 // Phase 26 Plan 26-01 — Resource action button.
 //
-// Ported verbatim from routes/server-control/index.tsx:202-235. The legacy
-// file still has its copy because ImagesTab + <TabsContent value='containers'>
-// still use it locally; both copies remain until Plan 27 deletes the legacy
-// file wholesale.
+// Verbatim port of legacy routes/server-control/index.tsx:202-235 (deleted in
+// Phase 27-02). Action button used by container/image rows for start/stop/
+// restart/remove iconography.
 
 import {cn} from '@/shadcn-lib/utils'
 

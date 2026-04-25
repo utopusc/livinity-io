@@ -1,5 +1,5 @@
-// Phase 27-01 (DOC-11) — ported from routes/server-control/index.tsx
-// StacksTab() (lines 3542-3856) with these structural changes:
+// Phase 27-01 (DOC-11) — port of legacy routes/server-control/index.tsx
+// StacksTab() (lines 3542-3856, deleted Phase 27-02) with these structural changes:
 //   1. Search input (NEW — maxLength=200, T-27-01 mitigation; legacy lacked
 //      search). filterByQuery is the same primitive used by ContainerSection
 //      / ImageSection — empty-query path returns same array reference.
@@ -14,10 +14,11 @@
 //      routes/docker/resources/*-section.tsx shape from Plan 26-01.
 //   5. noFilterResults empty-state branch (Plan 26-02 D-05 precedent).
 //
-// Cross-imports retained from routes/server-control/* (Plan 27-02 will
-// relocate them post-server-control delete):
-//   - ComposeGraphViewer (Phase 19 — Graph tab inside expanded row).
-//   - ContainerDetailSheet (Phase 17/18/19 — opened on constituent click).
+// Sub-components imported from sibling docker/* paths:
+//   - ComposeGraphViewer (Phase 19 — Graph tab inside expanded row, lives in
+//     ../_components/ post-Phase-27-02 relocation).
+//   - ContainerDetailSheet (Phase 17/18/19 — opened on constituent click,
+//     lives in ../resources/ post-Phase-27-02 relocation).
 
 import {Fragment, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'

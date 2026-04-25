@@ -1,6 +1,6 @@
 // Phase 26 Plan 26-01 — Container state colour badge.
 //
-// Ported verbatim from routes/server-control/index.tsx:246-258.
+// Verbatim port of legacy routes/server-control/index.tsx:246-258 (deleted Phase 27-02).
 
 import {cn} from '@/shadcn-lib/utils'
 

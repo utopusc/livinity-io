@@ -1,9 +1,7 @@
 // Phase 26 Plan 26-02 — VolumeUsagePanel.
 //
-// Ported verbatim from routes/server-control/index.tsx:1687-1738. The legacy
-// file still has its copy because the legacy <TabsContent value='volumes'>
-// still uses it locally; both copies remain until Plan 27 deletes the legacy
-// file wholesale.
+// Verbatim port of legacy routes/server-control/index.tsx:1687-1738 (deleted
+// Phase 27-02).
 
 import {trpcReact} from '@/trpc/trpc'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/shadcn-components/ui/table'

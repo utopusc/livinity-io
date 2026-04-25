@@ -1,11 +1,9 @@
 // Phase 26 Plan 26-01 — Image-related dialogs.
 //
-// Ported verbatim from routes/server-control/index.tsx:1073-1291. The four
-// dialogs (Remove / Prune / Pull / Tag) were file-local in the legacy file
-// (not exported), so importing them across modules was impossible. The port
-// here makes them reusable AND becomes their canonical location after Plan 27
-// deletes the legacy file. Until then both copies exist (the legacy ImagesTab
-// still uses its local copies).
+// Verbatim port of legacy routes/server-control/index.tsx:1073-1291 (deleted
+// Phase 27-02). The four dialogs (Remove / Prune / Pull / Tag) were
+// file-local in the legacy file (not exported), so importing them across
+// modules was impossible. The port here makes them reusable.
 
 import {useEffect, useState} from 'react'
 

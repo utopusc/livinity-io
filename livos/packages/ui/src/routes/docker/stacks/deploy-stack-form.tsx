@@ -1,4 +1,5 @@
-// Phase 27-01 — ported verbatim from routes/server-control/index.tsx:2799-3307.
+// Phase 27-01 — verbatim port of legacy routes/server-control/index.tsx:2799-3307
+// (deleted Phase 27-02).
 //
 // Full-page overlay (absolute inset-0 z-50) that handles BOTH new-stack
 // deploy and edit-stack flows. Three tabs in deploy mode:
