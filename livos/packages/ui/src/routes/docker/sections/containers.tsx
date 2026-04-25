@@ -1,9 +1,6 @@
-// Phase 24-01 placeholder — replaced in Phase 26 (DOC-07).
-export function Containers() {
-	return (
-		<div className='flex h-full flex-col items-center justify-center gap-2 p-8 text-center'>
-			<h2 className='text-lg font-semibold text-zinc-800 dark:text-zinc-100'>Containers</h2>
-			<p className='text-sm text-zinc-500 dark:text-zinc-400'>Coming in Phase 26 — Container list + detail panel</p>
-		</div>
-	)
-}
+// Phase 26 Plan 26-01 — replaces the Phase 24 placeholder.
+//
+// The full Containers section lives in routes/docker/resources/container-section.tsx
+// (DOC-07 + DOC-20 partial). Re-exported as `Containers` so docker-app.tsx's
+// SectionView switch case keeps working — zero changes to docker-app.tsx.
+export {ContainerSection as Containers} from '../resources/container-section'
