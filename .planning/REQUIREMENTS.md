@@ -45,8 +45,8 @@
 
 ### Multi-Host Docker Management (MH) — Phase 22
 
-- [ ] **MH-01**: `environments` PostgreSQL table (id, name, socket_path | tcp_host+tls_cert | agent_id) per Docker host
-- [ ] **MH-02**: All `docker.*` tRPC routes accept optional `environmentId`; Dockerode client is factory-created per environment
+- [x] **MH-01**: `environments` PostgreSQL table (id, name, socket_path | tcp_host+tls_cert | agent_id) per Docker host
+- [x] **MH-02**: All `docker.*` tRPC routes accept optional `environmentId`; Dockerode client is factory-created per environment
 - [ ] **MH-03**: Server Control header has an environment selector dropdown
 - [ ] **MH-04**: Outbound agent (Node or Go) opens a WebSocket to Livinity from remote host and proxies Docker API calls — no open TCP port on remote host required
 - [ ] **MH-05**: Agent authentication via per-agent token; tokens revocable from Settings
@@ -111,8 +111,8 @@
 | GIT-03 | Phase 21 | Complete |
 | GIT-04 | Phase 21 | Complete |
 | GIT-05 | Phase 21 | Complete |
-| MH-01 | Phase 22 | Pending |
-| MH-02 | Phase 22 | Pending |
+| MH-01 | Phase 22 | Complete |
+| MH-02 | Phase 22 | Complete |
 | MH-03 | Phase 22 | Pending |
 | MH-04 | Phase 22 | Pending |
 | MH-05 | Phase 22 | Pending |

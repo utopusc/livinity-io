@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 02 of 02 (Phase 21 — GitOps Stack Deployment complete; v27.0 milestone closed)
-status: verifying
-stopped_at: Completed 21-02-PLAN.md
-last_updated: "2026-04-25T00:05:47.727Z"
-last_activity: 2026-04-25 — Plan 21-02 executed in ~4 minutes, 2 atomic commits (9110e4ab, f0902cfb); 0 deviations; v27.0 milestone closed (33/33 requirements satisfied)
+current_plan: 01 of 03 (Phase 22 — Multi-host Docker — Plan 22-01 complete; 22-02 next)
+status: in-progress
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-04-25T00:43:20.568Z"
+last_activity: 2026-04-25 — Plan 22-01 executed in ~16 minutes, 3 atomic commits (9a27543c, 28d8a00f, 95be5388); 0 deviations; MH-01 + MH-02 satisfied
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_plans: 13
+  completed_plans: 11
+  percent: 85
 ---
 
 # Project State
@@ -22,17 +22,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v27.0 — Docker Management Upgrade (CLOSED — 33/33 requirements satisfied)
-**Current focus:** Phase 21 complete — v27.0 milestone closed; ready for milestone audit / v28.0 planning.
+**Current milestone:** v27.0 — Docker Management Upgrade (Phase 22 in progress — multi-host Docker)
+**Current focus:** Phase 22 — Multi-host Docker. Plan 22-01 (foundation) complete; Plan 22-02 (UI selector + env management) is next.
 
 ## Current Position
 
-Phase: 21 — GitOps Stack Deployment (COMPLETE — 2 of 2 plans done; GIT-01/02/03/04/05 satisfied)
-Current Plan: 02 of 02 (Phase 21 — GitOps Stack Deployment complete; v27.0 milestone closed)
-Status: 21-02 complete (real gitStackSyncHandler iterating listGitStacks() with per-stack syncRepo + redeploy on HEAD change — per-stack failures isolated as action='failed' so one bad repo can't tank the hourly run; catastrophic failures bubble up as status='failure'; DEFAULT_JOB_DEFINITIONS git-stack-sync flipped enabled=true at the seed level only — existing PG installs keep their previously-disabled row via ON CONFLICT DO NOTHING; DeployStackForm wraps compose YAML in Tabs primitive — 'Deploy from YAML' default and new 'Deploy from Git' tab with URL/branch/compose-path/credential picker; AddGitCredentialDialog nested dialog for inline HTTPS-PAT or SSH-key creation auto-selecting in picker on success; post-deploy webhook URL panel with copyable URL + secret + Done button — form deliberately stays open until Done since secret is never retrievable later; useStacks hook widened DeployStackInput type with optional composeYaml + optional git discriminator + lastDeployResult/clearLastDeployResult state slot; edit mode stays YAML-only in v1 — v28.0 follow-up to support switching modes on edit).
-Last activity: 2026-04-25 — Plan 21-02 executed in ~4 minutes, 2 atomic commits (9110e4ab, f0902cfb); 0 deviations; v27.0 milestone closed (33/33 requirements satisfied)
+Phase: 22 — Multi-host Docker (IN PROGRESS — 1 of 3 plans done; MH-01 + MH-02 satisfied)
+Current Plan: 01 of 03 (Phase 22 — Plan 22-01 complete; ready for 22-02 UI environment selector)
+Status: 22-01 complete (environments PG table with auto-seeded local row at fixed UUID 00000000-0000-0000-0000-000000000000; getDockerClient(envId) factory in docker-clients.ts with per-env Map<envId,Dockerode> cache + invalidateClient hook; null/undefined/'local' alias-resolve to LOCAL_ENV_ID; module-level Dockerode singleton removed from docker.ts/stacks.ts/container-files.ts — every helper now accepts optional environmentId as last argument; 30+ existing docker.* tRPC routes extended with envIdField = z.string().uuid().nullable().optional(); new docker.environments.* CRUD router with listEnvironments query + create/update/delete mutations; updateEnvironment + deleteEnvironment call invalidateClient(id) so next factory call rebuilds; mutations added to httpOnlyPaths; agent type throws [agent-not-implemented] until 22-03 wires AgentDockerClient; 27 unit tests passing — 19 environments + 8 docker-clients; UI build passes; zero new typecheck errors in docker/ module; gaps documented for v28: multi-host stack deploy, multi-host Trivy scan, real-time WS exec/logs streaming over remote envs).
+Last activity: 2026-04-25 — Plan 22-01 executed in ~16 minutes, 3 atomic commits (9a27543c, 28d8a00f, 95be5388); 0 deviations; MH-01 + MH-02 satisfied
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 85%
 
 ## v27.0 Phase Structure
 
@@ -69,6 +69,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | Phase 20 P02 | 12min | 3 tasks | 10 files |
 | Phase 21-gitops-stack-deployment P01 | 6min | 4 tasks | 9 files |
 | Phase 21-gitops-stack-deployment P02 | 4min | 2 tasks | 3 files |
+| Phase 22 P01 | 16 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,22 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 22-01 Decisions (2026-04-25)
+
+- environments table shape: id (UUID PK gen_random_uuid), name (UNIQUE), type ('socket'|'tcp-tls'|'agent') CHECK, transport-specific cols (socket_path / tcp_host+port / tls_*_pem / agent_id), agent_status ('online'|'offline') default 'offline', last_seen, created_by (FK users ON DELETE SET NULL), created_at. Index on type. Mirrors the Phase 21 stacks/git_credentials pattern.
+- LOCAL_ENV_ID = '00000000-0000-0000-0000-000000000000' fixed sentinel UUID for the auto-seeded built-in 'local' row. Idempotent INSERT … ON CONFLICT (name) DO NOTHING runs on every boot after migrateFromYaml. Alias resolution (null / undefined / 'local' → LOCAL_ENV_ID) lives in `getEnvironment(idOrAlias)` so the factory and every route's error handling sees a single canonical id.
+- agent_id has NO foreign-key constraint yet (deferred to Plan 22-03). Adding the FK now would force a circular dependency since docker_agents doesn't exist until 22-03. The 22-03 planner decides between adding `ALTER TABLE … FOREIGN KEY (agent_id) REFERENCES docker_agents(id) ON DELETE SET NULL` or leaving it unenforced.
+- `getDockerClient(envId)` factory pattern: `Map<envId, Dockerode>` in-memory cache; `invalidateClient(envId)` evicts after env-row update/delete so next call rebuilds with new connection fields; `clearAllClients()` for tests only. Cache key is canonicalised env.id (alias resolution happens before cache lookup).
+- buildClient routes by env.type: 'socket' → new Dockerode({socketPath}); 'tcp-tls' → new Dockerode({host, port, protocol:'https', ca, cert, key}); 'agent' → throws [agent-not-implemented] until Plan 22-03 wires `new AgentDockerClient(env.agentId, …)`. The throw is intentional — half-built agent client must surface as a clear error.
+- Module-level Dockerode singletons removed from docker.ts, stacks.ts, container-files.ts. Every helper accepts `environmentId?: string | null` as its LAST argument and resolves the client via `await getDockerClient(envId ?? null)` as its first statement. Backwards compatible — existing callers without envId resolve to the auto-seeded 'local' env (byte-for-byte identical to the pre-Phase-22 behaviour).
+- docker compose CLI calls in stacks.ts (deployStack/editStack/controlStack/removeStack) stay host-local for v27.0. They shell out to the host docker CLI which always talks to the local daemon. Multi-host compose deploy requires either compose-file replication or rewriting against Dockerode — both deferred to v28. listStacks does accept envId since it uses Dockerode.listContainers.
+- Trivy / vuln-scan.ts stays host-only (`scanImage` and `getCachedScan` skipped when adding envIdField). Trivy needs the host docker daemon + image cache mount. Routing to remote envs requires either pulling images into the remote env or proxying Trivy stdout — out of scope for v27.0.
+- docker-exec-socket.ts / docker-logs-socket.ts stay local-only — real-time WS streaming over remote tcp-tls or agent envs deferred to v28. The one-shot `docker.containerLogs` (non-streaming) does accept envId.
+- Every existing docker.* route Zod input gains `environmentId: z.string().uuid().nullable().optional()` via shared `envIdField` const at top of routes.ts. 30+ routes updated. Per-route error mappings extended: `[env-not-found]` → NOT_FOUND, `[agent-not-implemented]` → NOT_IMPLEMENTED, `[env-misconfigured]` → INTERNAL_SERVER_ERROR.
+- New `docker.environments.*` CRUD router: listEnvironments stays on WebSocket (query); createEnvironment / updateEnvironment / deleteEnvironment go through HTTP per the documented WS-mutation hang issue (added to httpOnlyPaths). updateEnvironment + deleteEnvironment also call `invalidateClient(id)` so the cache reflects the change immediately.
+- Test convention: existing repo uses `*.unit.test.ts` (per system.unit.test.ts); new test files follow that suffix (environments.unit.test.ts, docker-clients.unit.test.ts). 27 tests total — 19 + 8.
+- Pattern carried forward to Plan 22-02: UI environment selector binds to `docker.listEnvironments` query + filters all docker.* calls by `environmentId`. The selector lives in Server Control header. Plan 22-03: replace the `[agent-not-implemented]` branch in buildClient with `new AgentDockerClient(env.agentId, /* WS proxy */)`. Cache + invalidation hook work unchanged because AgentDockerClient is Dockerode-shaped.
 
 ### Plan 21-02 Decisions (2026-04-25)
 
@@ -218,6 +235,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-25T00:03:58Z
-Stopped at: Completed 21-02-PLAN.md (v27.0 milestone closed — 33/33 requirements satisfied across Phases 17-21)
+Last session: 2026-04-25T00:43:11.758Z
+Stopped at: Completed 22-01-PLAN.md
 Resume with: `/gsd:audit-milestone v27.0` to run the milestone audit and verify all 33 must-haves still hold end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (likely focuses: Phase 22 multi-host agent, Phase 23 AI-powered diagnostics, plus v28.0 follow-up items captured in 21-02 SUMMARY: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab).
