@@ -11,6 +11,11 @@ import {screens} from './src/utils/tw'
 
 /** @type {import('tailwindcss').Config} */
 export default {
+	// Phase 24-01 — class-based dark mode for the Docker app (`/routes/docker`).
+	// Adding `dark` class to the docker-app root (via useDockerTheme) turns on
+	// `dark:*` variants beneath. No other LivOS surface uses dark variants today,
+	// so existing components render unchanged.
+	darkMode: 'class',
 	content: [
 		'./index.html',
 		'./src/**/*.{js,ts,jsx,tsx}',
