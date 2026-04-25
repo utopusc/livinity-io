@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
 milestone: v28.0
-milestone_name: Docker Management UI (Dockhand-Style)
+milestone_name: Docker Management UI
 current_plan: Not started
-status: planning
-stopped_at: v28.0 milestone defined (Phases 24-29) — ready for first phase
-last_updated: "2026-04-25T05:50:00.000Z"
-last_activity: 2026-04-25 — v28.0 milestone created with 6 phases / 20 requirements (DOC-01..DOC-20). v27.0 deployed to Mini PC (bruce.livinity.io) successfully.
+status: executing
+stopped_at: Completed 24-01-PLAN.md — Docker app skeleton + sidebar + theme + 12 placeholders + LIVINITY_docker registry
+last_updated: "2026-04-25T06:23:14.715Z"
+last_activity: 2026-04-25
 progress:
-  total_phases: 6
+  total_phases: 13
   completed_phases: 0
-  total_plans: 12
-  completed_plans: 0
-  percent: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 ## Current Position
 
 Phase: 24 (not started)
-Plan: 0 of 2
+Plan: 1 of 2
 Current Plan: Not started
-Status: v28.0 ready to begin
-Last activity: 2026-04-25 — v28 milestone defined; v27.0 deployed to bruce.livinity.io (Mini PC)
+Status: Ready to execute
+Last activity: 2026-04-25
 
-**Progress:** [░░░░░░░░░░] 0%
+**Progress:** [█████░░░░░] 50%
 
 ## v28.0 Phase Structure
 
@@ -69,12 +69,26 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | 22-03 | 20 min | 3 | 25 | 2026-04-25 |
 | 23-01 | 10 min | 5 (+1 TDD) | 8 | 2026-04-25 |
 | 23-02 | 11 min | 4 (+1 TDD) | 12 | 2026-04-25 |
+| 24-01 | 11 min | 3 (+1 TDD) | 22 created + 10 modified | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 
 ## Accumulated Context
+
+### Plan 24-01 Decisions (2026-04-25)
+
+- Theme scoped to /routes/docker via useDockerTheme(rootRef) — NOT promoted to document.documentElement. Other LivOS components keep rendering in light mode unchanged. Promote when v29.0 rolls dark mode app-wide. Hook signature: `useDockerTheme(rootRef?: RefObject<HTMLElement>)` — applies dark/light class to rootRef.current OR document.documentElement when ref omitted; useEffect cleanup REMOVES the class on unmount.
+- Section navigation = zustand store (NOT URL routing). Deep-linking is the explicit deliverable of Plan 26-01 (DOC-20). The `'/docker'` string passed to openWindow is just an `initialRoute` prop — never consumed by react-router. window-app pattern (router.tsx line 47-48: "AI pages... are window-only").
+- vitest@2.1.2 + jsdom@25 added to UI devDeps. UI had no test runner; livinityd uses vitest for *.unit.test.ts files. Carries the convention forward. `--ignore-scripts` flag required on Windows due to pre-existing postinstall using Unix mkdir -p / cp -r (Plan 19-01 documented the same quirk).
+- SectionId union + SECTION_IDS array + SECTION_META record + exhaustive SectionView switch in DockerApp — adding/removing a section is a 4-place compile-enforced change (union, array, meta, switch). Pattern reusable for any future window-app with sidebar navigation.
+- ServerControlWindowContent import retained behind eslint-disable-next-line for one-phase rollback safety. Routes/server-control directory stays on disk for content migration in Phases 25-29. Final delete is Plan 27 SUMMARY action (DOC-03 partial closure here, full closure in 27).
+- Persistence keys: `livos:docker:theme` (theme mode) + `livos:docker:sidebar-collapsed` (zustand partialize persists BOTH section and sidebarCollapsed in one entry). Naming follows Phase 22-02 D-01 precedent (`livos:selectedEnvironmentId`).
+- Custom Sidebar primitive (Tailwind + Radix Tooltip), NOT shadcn Sidebar — verified shadcn-components/ui has no sidebar.tsx. Building one would be larger scope than required for Phase 24 skeleton.
+- Cross-check grep uncovered 4 additional pre-existing LIVINITY_server-control references beyond the plan's listed 6 files: window-manager.tsx (DEFAULT_WINDOW_SIZES key — affects window size), dock-item.tsx (DOCK_LABELS + DOCK_ICONS map — affects dock tooltip+icon), apple-spotlight.tsx (Spotlight 'Server' launcher — would crash openWindow on click). All renamed to LIVINITY_docker per Rule 3 auto-fix.
+- darkMode: 'class' triggers TS2352 message change in stories/tailwind.tsx. The `as Config` cast error was pre-existing (without darkMode); adding the field changes the message wording only. Out of scope per scope-boundary rule (livos/packages/ui stories tree not in production bundle).
+- Plan 24-02 integration surface: (1) StatusBar mounts as FIRST child of <main> in DockerApp (above the SectionView wrapper); (2) useDockerTheme exposes setMode for the StatusBar's light/dark/system cycle button; (3) Sidebar header height h-12 (48px) — StatusBar should match for visual alignment.
 
 ### v27.0 Roadmap Decisions
 
@@ -307,6 +321,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T03:57:22.811Z
-Stopped at: Completed 23-02-PLAN.md — Phase 23 complete, v27.0 ready for milestone audit
+Last session: 2026-04-25T06:23:14.710Z
+Stopped at: Completed 24-01-PLAN.md — Docker app skeleton + sidebar + theme + 12 placeholders + LIVINITY_docker registry
 Resume with: `/gsd:audit-milestone v27.0` to validate all 33 v27.0 must-haves end-to-end on server4. Phase 23 is complete (Plan 23-02 shipped AID-02 proactive resource watch + AID-05 autonomous AI Chat container diagnostics; all 5 AID requirements satisfied). After audit passes, run `/gsd:plan-milestone v28.0` to scope the next milestone. v28.0 candidates surfaced during v27.0 execution: (1) multi-host watching for ai-resource-watch (currently local-only per Plan 22-01 D-06 — needs per-env throttle delta caches + per-env Kimi spend); (2) editStack git mode + webhook secret rotation UI + git-backed stack visual badge in Stacks tab; (3) multi-host stack deploy via compose-file replication; (4) multi-host Trivy scan; (5) real-time WS exec/logs over remote envs; (6) docker_diagnostics widening to expose health status + exit code (dockerManager.inspectContainer return shape currently strips them); (7) prompt-tuning analytics view from ai_alerts.payload_json kimi token counts.

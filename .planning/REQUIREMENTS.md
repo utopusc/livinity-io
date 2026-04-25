@@ -11,9 +11,9 @@
 ## Requirements
 
 ### Layout & Navigation
-- [ ] **DOC-01**: Standalone Docker app at route `/docker` (or top-level `/server` rebranded) with persistent left sidebar navigation. Sidebar entries: Dashboard, Containers, Logs, Shell, Stacks, Images, Volumes, Networks, Registry, Activity, Schedules, Settings. Active route highlighted. Collapsible to icon-only.
+- [ ] **DOC-01**: Standalone Docker app at route `/docker` (or top-level `/server` rebranded) with persistent left sidebar navigation. Sidebar entries: Dashboard, Containers, Logs, Shell, Stacks, Images, Volumes, Networks, Registry, Activity, Schedules, Settings. Active route highlighted. Collapsible to icon-only. _(Plan 24-01: sidebar + 12 entries + collapse + active highlight done; full closure with status bar pending Plan 24-02)_
 - [ ] **DOC-02**: Top status bar (full-width header, persistent across routes) shows: env selector dropdown (with type badge), Docker version, Socket/TCP/Agent type, cores, RAM total, free disk, uptime, current time, Live/Offline indicator (WS connection state), Search button (cmd+k palette), theme toggle.
-- [ ] **DOC-03**: Existing `/server` (Server Management page) is deprecated — redirected to new Docker app. Old tab-based UI removed entirely (no parallel implementations to maintain).
+- [ ] **DOC-03**: Existing `/server` (Server Management page) is deprecated — redirected to new Docker app. Old tab-based UI removed entirely (no parallel implementations to maintain). _(Plan 24-01: legacy LIVINITY_server-control unreachable from dock + desktop + mobile + spotlight; file delete pending Plan 27)_
 
 ### Dashboard
 - [ ] **DOC-04**: Dashboard route shows multi-environment grid. Each card displays: env name + type icon + connection target (socket path or host:port), env tags (prod/dev/staging — user-editable), aggregate health (all-healthy / N-unhealthy banner), running/stopped/paused/restarting counts, total container count, image/stack/volume/network counts, recent events (last 8 with timestamp + name + verb icon), CPU/memory utilization for selected env (live polling).
@@ -48,9 +48,9 @@
 
 | ID | Phase | Status | Notes |
 |----|-------|--------|-------|
-| DOC-01 | Phase 24 | Pending | Sidebar layout + route skeleton |
-| DOC-02 | Phase 24 | Pending | Top status bar component |
-| DOC-03 | Phase 24 | Pending | Old `/server` deprecation |
+| DOC-01 | Phase 24 | Partial (24-01) | Sidebar + 12 entries + collapse done; full closure (with status bar) in Plan 24-02 |
+| DOC-02 | Phase 24 | Pending | Top status bar component (Plan 24-02) |
+| DOC-03 | Phase 24 | Partial (24-01) | Legacy server-control unreachable from dock/desktop/mobile/spotlight; file delete in Plan 27 SUMMARY |
 | DOC-04 | Phase 25 | Pending | Dashboard env-card grid |
 | DOC-05 | Phase 25 | Pending | Top-CPU panel |
 | DOC-06 | Phase 25 | Pending | Env tag filter chips |
