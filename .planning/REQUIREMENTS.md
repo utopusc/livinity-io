@@ -64,8 +64,8 @@
 | DOC-08 | Phase 26 | Complete (26-01) | ImageSection — full Images tab body with search + expandable rows (Layer history + Vulnerabilities tabs) + Phase 19 Trivy scan + Phase 23 Explain CVEs preserved end-to-end |
 | DOC-09 | Phase 26 | Complete (26-02) | VolumeSection — full Volumes tab body with search + chevron-expand to VolumeUsagePanel + per-row "Schedule backup" link (IconCalendarTime) that sets selectedVolume + setSection('schedules') so Phase 27 Schedules section can pre-fill the backup-job-create form |
 | DOC-10 | Phase 26 | Complete (26-02) | NetworkSection — full Networks tab body with search (filters by name + driver) + inspect card with Disconnect mutations + bridge useEffect connecting useDockerResource.selectedNetwork to inspectNetwork(id) for programmatic deep-link |
-| DOC-11 | Phase 27 | Pending | Stacks route |
-| DOC-12 | Phase 27 | Pending | Schedules route |
+| DOC-11 | Phase 27 | Complete | Stacks route |
+| DOC-12 | Phase 27 | Complete | Schedules route |
 | DOC-13 | Phase 28 | Pending | Cross-container Logs |
 | DOC-14 | Phase 28 | Pending | Activity timeline |
 | DOC-15 | Phase 29 | Pending | Cross-container Shell |
