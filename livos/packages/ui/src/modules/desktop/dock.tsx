@@ -174,18 +174,19 @@ export function Dock() {
 						)
 					}
 				/>
+				{/* Phase 24-01 — replaces LIVINITY_server-control. */}
 				<DockItem
-					appId='LIVINITY_server-control'
+					appId='LIVINITY_docker'
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}
 					open={false}
 					mouseX={mouseX}
 					onOpenWindow={(originRect) =>
 						handleOpenWindow(
-							'LIVINITY_server-control',
-							'/server-control',
-							'Server',
-							systemAppsKeyed['LIVINITY_server-control'].icon,
+							'LIVINITY_docker',
+							'/docker',
+							'Docker',
+							systemAppsKeyed['LIVINITY_docker'].icon,
 							originRect,
 						)
 					}

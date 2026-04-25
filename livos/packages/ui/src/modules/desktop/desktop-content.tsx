@@ -258,7 +258,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 				{id: 'LIVINITY_ai-chat', label: 'AI Chat', icon: systemAppsKeyed['LIVINITY_ai-chat'].icon, route: '/ai-chat'},
 				{id: 'LIVINITY_files', label: 'Files', icon: systemAppsKeyed['LIVINITY_files'].icon, route: '/files/Home'},
 				{id: 'LIVINITY_settings', label: 'Settings', icon: systemAppsKeyed['LIVINITY_settings'].icon, route: '/settings'},
-				{id: 'LIVINITY_server-control', label: 'Server', icon: systemAppsKeyed['LIVINITY_server-control'].icon, route: '/server-control'},
+				{id: 'LIVINITY_docker', label: 'Docker', icon: systemAppsKeyed['LIVINITY_docker'].icon, route: '/docker'},
 				{id: 'LIVINITY_terminal', label: 'Terminal', icon: systemAppsKeyed['LIVINITY_terminal'].icon, route: '/terminal'},
 			]
 			for (const sysApp of mobileSystemApps) {

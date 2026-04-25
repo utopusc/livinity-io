@@ -71,7 +71,7 @@ const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_settings': {width: 800, height: 900},
 	'LIVINITY_live-usage': {width: 650, height: 500},
 	'LIVINITY_ai-chat': {width: 1300, height: 850},
-	'LIVINITY_server-control': {width: 1400, height: 900},
+	'LIVINITY_docker': {width: 1400, height: 900},
 	'LIVINITY_my-devices': {width: 900, height: 650},
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},

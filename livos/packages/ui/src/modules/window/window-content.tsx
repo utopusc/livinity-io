@@ -8,7 +8,12 @@ const AppStoreWindowContent = React.lazy(() => import('./app-contents/app-store-
 const FilesWindowContent = React.lazy(() => import('./app-contents/files-content'))
 const SettingsWindowContent = React.lazy(() => import('./app-contents/settings-content'))
 const AiChatWindowContent = React.lazy(() => import('./app-contents/ai-chat-content'))
+// Phase 24-01 — LIVINITY_docker replaces LIVINITY_server-control in the dock.
+// We keep the ServerControlWindowContent import for one phase so a hot rollback
+// only flips a switch case; remove in Plan 27 SUMMARY action.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ServerControlWindowContent = React.lazy(() => import('./app-contents/server-control-content'))
+const DockerWindowContent = React.lazy(() => import('./app-contents/docker-content'))
 const SubagentsWindowContent = React.lazy(() => import('./app-contents/subagents-content'))
 const SchedulesWindowContent = React.lazy(() => import('./app-contents/schedules-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
@@ -22,7 +27,7 @@ type WindowContentProps = {
 }
 
 // Apps that manage their own scroll and layout (no wrapper padding/scroll)
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
 	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_whatsapp', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
@@ -61,8 +66,8 @@ export function WindowAppContent({appId, initialRoute}: {appId: string; initialR
 		case 'LIVINITY_ai-chat':
 			return <AiChatWindowContent />
 
-		case 'LIVINITY_server-control':
-			return <ServerControlWindowContent />
+		case 'LIVINITY_docker':
+			return <DockerWindowContent />
 
 		case 'LIVINITY_my-devices':
 			return <MyDevicesWindowContent />

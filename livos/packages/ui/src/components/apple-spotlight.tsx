@@ -330,18 +330,19 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				},
 			},
 			{
-				label: 'Server',
+				// Phase 24-01 — replaces 'Server' / LIVINITY_server-control.
+				label: 'Docker',
 				icon: <TbServer className='text-neutral-600' />,
 				onSelect: () => {
 					if (windowManager) {
 						windowManager.openWindow(
-							'LIVINITY_server-control',
-							'/server-control',
-							'Server',
-							systemAppsKeyed['LIVINITY_server-control'].icon,
+							'LIVINITY_docker',
+							'/docker',
+							'Docker',
+							systemAppsKeyed['LIVINITY_docker'].icon,
 						)
 					} else {
-						navigate(systemAppsKeyed['LIVINITY_server-control'].systemAppTo)
+						navigate(systemAppsKeyed['LIVINITY_docker'].systemAppTo)
 					}
 					onClose()
 				},
