@@ -1,6 +1,11 @@
 // Phase 20 — Scheduler module shared types
 
-export type JobType = 'image-prune' | 'container-update-check' | 'git-stack-sync' | 'volume-backup'
+export type JobType =
+	| 'image-prune'
+	| 'container-update-check'
+	| 'git-stack-sync'
+	| 'volume-backup'
+	| 'ai-resource-watch' // Phase 23 AID-02 — proactive Kimi-generated resource alerts
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
