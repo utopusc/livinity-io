@@ -1310,7 +1310,7 @@ ${task}`;
   }
 
   private async registerTools(): Promise<void> {
-    const { toolRegistry, dockerManager, shell } = this.config;
+    const { toolRegistry, dockerManager, shell, brain } = this.config;
 
     toolRegistry.register({
       name: 'status',
@@ -1464,6 +1464,118 @@ ${task}`;
           }
         } catch (err) {
           return { success: false, output: '', error: `Docker error: ${formatErrorMessage(err)}` };
+        }
+      },
+    });
+
+    // Phase 23 AID-05 — autonomous container diagnostics in the AI Chat sidebar.
+    // Pulls last 200 log lines (secrets redacted), live resource stats (CPU%,
+    // memory%, restart count, health), and container metadata; asks Kimi for
+    // a plain-English diagnosis. The agent loop autonomously decides when to
+    // invoke this — the description below is the LLM-router-facing prompt.
+    //
+    // Note: this duplicates the redaction regex + DIAGNOSE_SYSTEM_PROMPT from
+    // livinityd's ai-diagnostics.ts. The duplication is intentional per the
+    // Plan 17-02 precedent: nexus DockerManager does NOT cross-call into
+    // livinityd; both processes own their own copies of the same logic. ~30
+    // lines of duplication is the price of avoiding a shared package. When/if
+    // the prompt drifts between the two surfaces it's a feature — the proactive
+    // and reactive surfaces can tune independently.
+    const DOCKER_DIAGNOSTICS_SECRET_RE = /\b(KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|API_KEY|ACCESS_KEY|PRIVATE_KEY|CREDENTIAL)\w*\s*[=:]\s*\S+/gi;
+    const DOCKER_DIAGNOSTICS_SYSTEM_PROMPT = "You are a Docker diagnostic assistant. The user will give you JSON containing recent logs (last 200 lines, secrets redacted), container resource stats (CPU%, memory%, memory MB), and container metadata (state, restart count, health status, exit code, image). Diagnose the container's health in three labelled sections — keep each under 80 words. Use this exact format:\n\nLikely cause: <one paragraph>\nSuggested action: <one or two concrete commands or config changes>\nConfidence: <low|medium|high>\n\nBe specific and reference exact log lines when possible. If logs show no errors and stats look healthy, say so plainly with confidence high.";
+
+    toolRegistry.register({
+      name: 'docker_diagnostics',
+      description: "Diagnose a Docker container's health: pulls recent logs (last 200 lines, secrets redacted) and live resource stats (CPU%, memory%, restart count, health), then returns a plain-English summary identifying the likely cause, a suggested action, and a confidence level. Use this tool whenever the user asks why a specific container is slow, failing, OOMing, restarting, crashing, or otherwise misbehaving — even if the user does not explicitly mention logs or stats. Prefer this over docker_manage operation='logs' for diagnostic questions because the output is interpreted, not raw.",
+      parameters: [
+        { name: 'containerName', type: 'string', required: true, description: 'Name of the container to diagnose' },
+      ],
+      execute: async (params) => {
+        const containerName = params.containerName as string;
+        if (!containerName) {
+          return { success: false, output: '', error: 'containerName required' };
+        }
+        try {
+          // Step 1: gather diagnostic payload locally — nexus owns its own
+          // docker socket via dockerManager, no HTTP roundtrip to livinityd.
+          const logsRaw = await dockerManager.containerLogs(containerName, 200);
+          const inspectInfo = await dockerManager.inspectContainer(containerName);
+
+          // Step 2: raw stats via dockerode (dockerManager doesn't expose
+          // stats directly; minimal local invocation, no caching).
+          const Dockerode = (await import('dockerode')).default;
+          const docker = new Dockerode();
+          const rawStats = (await docker.getContainer(containerName).stats({ stream: false })) as any;
+
+          // Step 3: build the diagnostic payload (mirrors Plan 23-01's
+          // buildContainerDiagnosticPayload shape — inlined here so nexus-core
+          // stays decoupled from livinityd).
+          const memUsageRaw = (rawStats?.memory_stats?.usage ?? 0);
+          const memCache = (rawStats?.memory_stats?.stats?.cache ?? 0);
+          const memUsage = Math.max(0, memUsageRaw - memCache);
+          const memLimit = rawStats?.memory_stats?.limit ?? 0;
+          const memPct = memLimit > 0 ? Math.round((memUsage / memLimit) * 1000) / 10 : 0;
+
+          // CPU% delta calculation matches getContainerStats() in livinityd
+          const cpuDelta =
+            (rawStats?.cpu_stats?.cpu_usage?.total_usage ?? 0) -
+            (rawStats?.precpu_stats?.cpu_usage?.total_usage ?? 0);
+          const systemDelta =
+            (rawStats?.cpu_stats?.system_cpu_usage ?? 0) -
+            (rawStats?.precpu_stats?.system_cpu_usage ?? 0);
+          const numCpus = rawStats?.cpu_stats?.online_cpus || 1;
+          const cpuPct = systemDelta > 0
+            ? Math.round(((cpuDelta / systemDelta) * numCpus * 100) * 100) / 100
+            : 0;
+
+          // Step 4: redact secrets from logs before they hit the model.
+          const logsRedacted = logsRaw.replace(DOCKER_DIAGNOSTICS_SECRET_RE, (m: string) =>
+            m.replace(/[=:]\s*\S+$/, (sep) => `${sep[0]}[REDACTED]`),
+          );
+
+          // dockerManager.inspectContainer returns a custom shape (name, state,
+          // image, created, ports, mounts, restartCount). It does NOT expose
+          // health status / exit code. We surface what we have.
+          const payload = {
+            logsTrimmed: logsRedacted.split('\n').slice(-200).join('\n'),
+            stats: {
+              cpuPercent: cpuPct,
+              memoryPercent: memPct,
+              memoryUsageMb: Math.round((memUsage / 1024 / 1024) * 10) / 10,
+              memoryLimitMb: Math.round((memLimit / 1024 / 1024) * 10) / 10,
+              pids: rawStats?.pids_stats?.current || 0,
+            },
+            container: {
+              state: inspectInfo?.state ?? null,
+              restartCount: inspectInfo?.restartCount ?? 0,
+              image: inspectInfo?.image ?? null,
+            },
+          };
+
+          // Step 5: call brain.chat directly (same-process — no HTTP roundtrip
+          // to /api/kimi/chat needed; the brain is the same instance).
+          const result = await brain.chat({
+            systemPrompt: DOCKER_DIAGNOSTICS_SYSTEM_PROMPT,
+            messages: [{ role: 'user', text: JSON.stringify(payload) }],
+            tier: 'sonnet',
+            maxTokens: 4096,
+          });
+
+          return {
+            success: true,
+            output: result.text,
+            data: {
+              containerName,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+            },
+          };
+        } catch (err) {
+          return {
+            success: false,
+            output: '',
+            error: `Docker diagnostics error: ${formatErrorMessage(err)}`,
+          };
         }
       },
     });
