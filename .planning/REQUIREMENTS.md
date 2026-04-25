@@ -40,8 +40,8 @@
 - [x] **GIT-01**: Stack schema extended with `git_url`, `git_branch`, `git_credential_id` (encrypted at rest using JWT_SECRET as AES-256 key)
 - [x] **GIT-02**: `deployStack` with git URL clones with `--filter=blob:none` (blobless), copies compose to stacks dir, deploys
 - [x] **GIT-03**: Webhook endpoint `POST /api/webhooks/git/:stackName` verifies HMAC signature and triggers redeploy
-- [ ] **GIT-04**: Stack UI has "Deploy from Git" tab alongside "Deploy from YAML"
-- [ ] **GIT-05**: Configured git stacks auto-sync on scheduled interval (from Phase 20 scheduler)
+- [x] **GIT-04**: Stack UI has "Deploy from Git" tab alongside "Deploy from YAML"
+- [x] **GIT-05**: Configured git stacks auto-sync on scheduled interval (from Phase 20 scheduler)
 
 ### Multi-Host Docker Management (MH) — Phase 22
 
@@ -109,8 +109,8 @@
 | GIT-01 | Phase 21 | Complete |
 | GIT-02 | Phase 21 | Complete |
 | GIT-03 | Phase 21 | Complete |
-| GIT-04 | Phase 21 | Pending |
-| GIT-05 | Phase 21 | Pending |
+| GIT-04 | Phase 21 | Complete |
+| GIT-05 | Phase 21 | Complete |
 | MH-01 | Phase 22 | Pending |
 | MH-02 | Phase 22 | Pending |
 | MH-03 | Phase 22 | Pending |

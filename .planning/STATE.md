@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 01 of 02 (Phase 21 — GitOps Stack Deployment in progress; Plan 21-01 backend complete)
-status: in_progress
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-04-24T23:57:53.015Z"
-last_activity: 2026-04-24 — Plan 21-01 executed in ~6 minutes, 4 atomic commits (fa38cc71, 67db624b, 4f11adf7, 49ea6fdb); 0 deviations
+current_plan: 02 of 02 (Phase 21 — GitOps Stack Deployment complete; v27.0 milestone closed)
+status: verifying
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-04-25T00:05:47.727Z"
+last_activity: 2026-04-25 — Plan 21-02 executed in ~4 minutes, 2 atomic commits (9110e4ab, f0902cfb); 0 deviations; v27.0 milestone closed (33/33 requirements satisfied)
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 9
-  percent: 90
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -22,17 +22,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v27.0 — Docker Management Upgrade
-**Current focus:** Phase 21 (GitOps Stack Deployment) — Plan 21-01 backend complete (schema + git module + deployStack + webhook); Plan 21-02 (UI + git_stack_sync handler) next
+**Current milestone:** v27.0 — Docker Management Upgrade (CLOSED — 33/33 requirements satisfied)
+**Current focus:** Phase 21 complete — v27.0 milestone closed; ready for milestone audit / v28.0 planning.
 
 ## Current Position
 
-Phase: 21 — GitOps Stack Deployment (IN PROGRESS — 1 of 2 plans complete; GIT-01/02/03 satisfied)
-Current Plan: 01 of 02 (Phase 21 — GitOps Stack Deployment in progress; Plan 21-01 backend complete)
-Status: 21-01 complete (PostgreSQL git_credentials + stacks tables — git-backed only, YAML stacks remain filesystem-only; AES-256-GCM-with-JWT-key reused from 17-01 for encrypted credential storage; simple-git@^3.27.0 blobless clone --filter=blob:none --depth=1 --single-branch with ephemeral GIT_ASKPASS shell script for HTTPS auth + GIT_SSH_COMMAND temp keyfile for SSH auth, both cleaned up in finally{}; deployStack extended with optional git input mutually exclusive with composeYaml — git path generates 64-hex webhook_secret, persists stacks PG row, copies compose, runs existing compose-up code; new helpers getGitStack/listGitStacks/updateGitStackSyncSha; removeStack cleans up /opt/livos/data/git/<name> + DELETE FROM stacks; 3 admin-only tRPC routes for git_credentials CRUD — all wired through httpOnlyPaths; POST /api/webhooks/git/:stackName HMAC-SHA256-verified via crypto.timingSafeEqual length-checked-first, responds 202 then redeploys in background to stay under GitHub's 10s webhook timeout — registered before /trpc handler and catch-all routes).
-Last activity: 2026-04-24 — Plan 21-01 executed in ~6 minutes, 4 atomic commits (fa38cc71, 67db624b, 4f11adf7, 49ea6fdb); 0 deviations
+Phase: 21 — GitOps Stack Deployment (COMPLETE — 2 of 2 plans done; GIT-01/02/03/04/05 satisfied)
+Current Plan: 02 of 02 (Phase 21 — GitOps Stack Deployment complete; v27.0 milestone closed)
+Status: 21-02 complete (real gitStackSyncHandler iterating listGitStacks() with per-stack syncRepo + redeploy on HEAD change — per-stack failures isolated as action='failed' so one bad repo can't tank the hourly run; catastrophic failures bubble up as status='failure'; DEFAULT_JOB_DEFINITIONS git-stack-sync flipped enabled=true at the seed level only — existing PG installs keep their previously-disabled row via ON CONFLICT DO NOTHING; DeployStackForm wraps compose YAML in Tabs primitive — 'Deploy from YAML' default and new 'Deploy from Git' tab with URL/branch/compose-path/credential picker; AddGitCredentialDialog nested dialog for inline HTTPS-PAT or SSH-key creation auto-selecting in picker on success; post-deploy webhook URL panel with copyable URL + secret + Done button — form deliberately stays open until Done since secret is never retrievable later; useStacks hook widened DeployStackInput type with optional composeYaml + optional git discriminator + lastDeployResult/clearLastDeployResult state slot; edit mode stays YAML-only in v1 — v28.0 follow-up to support switching modes on edit).
+Last activity: 2026-04-25 — Plan 21-02 executed in ~4 minutes, 2 atomic commits (9110e4ab, f0902cfb); 0 deviations; v27.0 milestone closed (33/33 requirements satisfied)
 
-**Progress:** [█████████░] 90%
+**Progress:** [██████████] 100%
 
 ## v27.0 Phase Structure
 
@@ -60,12 +60,15 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | 19-02 | 7 min | 2 | 6 | 2026-04-24 |
 | 20-01 | 5 min | 3 | 8 | 2026-04-24 |
 | 20-02 | 12 min | 3 | 10 | 2026-04-24 |
+| 21-01 | 6 min | 4 | 9 | 2026-04-24 |
+| 21-02 | 4 min | 2 | 3 | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 | Phase 20 P02 | 12min | 3 tasks | 10 files |
 | Phase 21-gitops-stack-deployment P01 | 6min | 4 tasks | 9 files |
+| Phase 21-gitops-stack-deployment P02 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -112,6 +115,17 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 21-02 Decisions (2026-04-25)
+
+- `git-stack-sync` default flip is seed-only. `DEFAULT_JOB_DEFINITIONS` change from `enabled: false` to `enabled: true` only affects fresh PG installs because `seedDefaults` uses `INSERT … ON CONFLICT (name) DO NOTHING`. Existing v27.0 installs (server4 already booted Phase 20) keep their previous disabled row — operators must run `UPDATE scheduled_jobs SET enabled=true WHERE name='git-stack-sync';` or flip via the Settings > Scheduler UI shipped in Plan 20-02.
+- Form stays open after a successful git deploy until the user clicks Done — webhook secret is shown only once at deploy time and is never retrievable via list/get APIs (encrypted_data isn't exposed). Auto-closing would lose it. The Done button is the explicit "I've copied it" handoff.
+- Edit mode stays YAML-only in v1. Plan 21-01's `editStack` was not extended for git. The Tabs structure is conditionally rendered only when `!isEditMode` — edit mode shows the original single-textarea layout. v28.0 follow-up: extend `editStack` to accept either `composeYaml` or `git` (or allow toggling) so users can switch a stack between modes without remove+redeploy.
+- Per-stack failures isolated in scheduler. A single repo with a stale credential or transient network error must not stop the hourly cron from processing the other 9 stacks. Per-stack `try/catch` + `action: 'failed'` + continue to next is the right shape; catastrophic failures (DB down) bubble up as `status: 'failure'` so operators distinguish infrastructure problems from per-target issues in the run-history UI.
+- Plain `<select>` for credential picker, not Combobox. Credential lists are short (most users will have 1-2). The inline "Add credential" button next to the select handles the creation flow without a separate command-palette pattern. Switch to Combobox once average user credential count exceeds 5 (v28.0 instrumentation TBD).
+- `DeployStackInput.composeYaml` made optional in the hook. Required for the git path (where `composeYaml` is undefined and `git` is provided). Runtime check is at handleSubmit (`!gitUrl.trim()` for git, `!composeYaml.trim()` for YAML); the type system reflects "exactly one of composeYaml / git is required" via the discriminator at the call site.
+- Hook-level `lastDeployResult` state slot — useStacks stores the response so a follow-on UI panel can render the webhook URL/secret asynchronously without forcing the form to use the mutation directly. Generalizable pattern for any post-mutation success-display UX.
+- Tabs primitive wrapping divergent input modes (YAML vs git) inside a shared form is the new pattern for "multiple ways to specify the same resource" — stack name + env vars stay outside the tabs since they apply to both paths. Reusable for future container-create-from-image vs container-build-from-Dockerfile.
 
 ### Plan 21-01 Decisions (2026-04-24)
 
@@ -204,6 +218,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-24T23:57:53.010Z
-Stopped at: Completed 21-01-PLAN.md
-Resume with: `/gsd:execute-plan 20-02` to ship the backup module (volumeBackupHandler + S3/SFTP/local destinations + admin tRPC routes + Settings UI). Plan 20-01 satisfied SCH-01/02; Plan 20-02 will satisfy SCH-03/04/05 by registering the volume-backup handler into the existing BUILT_IN_HANDLERS map.
+Last session: 2026-04-25T00:03:58Z
+Stopped at: Completed 21-02-PLAN.md (v27.0 milestone closed — 33/33 requirements satisfied across Phases 17-21)
+Resume with: `/gsd:audit-milestone v27.0` to run the milestone audit and verify all 33 must-haves still hold end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (likely focuses: Phase 22 multi-host agent, Phase 23 AI-powered diagnostics, plus v28.0 follow-up items captured in 21-02 SUMMARY: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab).

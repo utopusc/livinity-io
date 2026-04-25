@@ -129,7 +129,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
  (completed 2026-04-24)
 - [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
  (completed 2026-04-24)
-- [ ] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
+- [x] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat (completed 2026-04-25)
 - [ ] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
 - [ ] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
 
@@ -206,7 +206,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans
 **Plan files**:
 - [x] 21-01-PLAN.md — Backend: schema (stacks + git_credentials) + git-credentials AES-256-GCM module + git-deploy simple-git clone/pull + deployStack git path + HMAC webhook (GIT-01, GIT-02, GIT-03)
-- [ ] 21-02-PLAN.md — UI: Deploy from Git tab + credential picker + webhook URL display + scheduler git-stack-sync handler implementation (GIT-04, GIT-05)
+- [x] 21-02-PLAN.md — UI: Deploy from Git tab + credential picker + webhook URL display + scheduler git-stack-sync handler implementation (GIT-04, GIT-05)
 
 ### Phase 22: Multi-host Docker Management
 **Goal**: Manage multiple Docker hosts from one Livinity instance — local socket, remote TCP/TLS, or outbound agent for NAT-traversal — with environment selector in UI.
@@ -244,7 +244,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 20. Scheduled Tasks + Backup | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 21. GitOps Stack Deployment | v27.0 | 1/2 | In Progress|  |
+| 21. GitOps Stack Deployment | v27.0 | 2/2 | Complete   | 2026-04-25 |
 | 22. Multi-host Docker | v27.0 | 0/3 | Not started | - |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
 
