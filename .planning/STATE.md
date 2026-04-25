@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
-current_plan: Not started
-status: ready_to_plan
-stopped_at: Completed 24-02-PLAN.md — Docker app StatusBar + theme toggle + search placeholder + legacy deprecation banner. Phase 24 closed (DOC-01 + DOC-02 + DOC-03 satisfied).
-last_updated: "2026-04-25T06:40:31.485Z"
+current_plan: 25-02
+status: in_progress
+stopped_at: Completed 25-01-PLAN.md — Multi-Environment Dashboard backend tags column + EnvCard grid (DOC-04 partial, DOC-06 partial). Plan 25-02 next — filter chips + Top-CPU panel.
+last_updated: "2026-04-25T20:12:50.507Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 15
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 24 COMPLETE (Docker app skeleton + persistent top status bar). Phase 25 next — Multi-Environment Dashboard (DOC-04, DOC-05, DOC-06).
+**Current focus:** Phase 25 IN PROGRESS — Plan 25-01 complete (Dashboard backend tags + EnvCard grid). Plan 25-02 next — filter chips + Top-CPU panel.
 
 ## Current Position
 
 Phase: 25
-Plan: 2 of 2 (complete)
-Current Plan: Not started
-Status: Ready to plan
+Plan: 1 of 2 complete
+Current Plan: 25-02
+Status: In progress
 Last activity: 2026-04-25
 
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 75%
 
 ## v28.0 Phase Structure
 
@@ -71,6 +71,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | 23-02 | 11 min | 4 (+1 TDD) | 12 | 2026-04-25 |
 | 24-01 | 11 min | 3 (+1 TDD) | 22 created + 10 modified | 2026-04-25 |
 | 24-02 | 10 min | 4 (+1 TDD) | 8 created + 3 modified | 2026-04-25 |
+| 25-01 | 7 min | 3 (5 commits, 2× TDD) | 5 created + 6 modified | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
@@ -102,6 +103,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - StatusBar layout: sticky `top-0 z-10 h-12` (matches Sidebar header `h-12` for visual alignment with the sidebar/main divide). Inner pill row uses `flex min-w-0 flex-1 overflow-x-auto` so pills overflow horizontally on narrow screens; the right-side controls (Search/AlertsBell/ThemeToggle) stay visible thanks to `shrink-0`.
 - Smoke chain test for layout files: when render-level testing requires heavy mocking (tRPC + WS + zustand), instead lock down the strings the layout file consumes via formatter-chain assertions. The behavioural module's own tests guard against regressions. Pattern reusable for future Phase 25-29 chrome additions.
 - DOC-01 + DOC-02 + DOC-03 fully closed at end of Phase 24. Legacy Server Control file kept on disk for piecemeal content migration in Phases 25-29; in-component header replaced with deprecation banner; full file delete deferred to Plan 27 once Stacks migration consumes the last reusable code chunks (ContainerCreateForm, ContainerDetailSheet, ComposeGraphViewer, DomainsTab still imported lazily). Phase 25 (Multi-Environment Dashboard) is unblocked.
+
+### Plan 25-01 Decisions (2026-04-25)
+
+- Polling cadence per Plan 25-01 constraints, NOT a flat 5s: containers 5s (most dynamic), events 10s (recent activity), images/stacks/volumes/networks 30s (static counts). listImages on a 357-image env is too expensive at 5s (Plan 22-01 D-06 / Dockhand precedent). staleTime is half each interval so React Query doesn't fire dup-fetches on focus.
+- No new tRPC route — UI composes 6 per-env tRPC hooks client-side via useEnvCardData(envId). CONTEXT.md `decisions` permitted a single docker.dashboardSnapshot route if multi-env fanout (5+ envs × 6 polls each) showed strain; for v1 (typical 1-3 envs) per-resource queries are sufficient AND the existing v22.x routes are already env-aware. T-25-04 register entry tracks the re-eval threshold.
+- CPU/memory aggregate pill DEFERRED to Plan 25-02 (or later). Requires per-container stats fanout (docker stats stream) which the polling loop doesn't yet do. CONTEXT.md `specifics` blesses text-only metrics for Phase 25. EnvCard's 2x2 stats grid contains only Images/Stacks/Volumes/Networks — Plan 25-02 may add a 3-column row above OR extend to 2x3, both pure-addition layouts.
+- Event verb mapping: 22 docker actions in EVENT_VERB_MAP, unmapped actions echo verbatim via `formatEventVerb`. Defensive against future Docker minor releases that might emit new actions ('oom_kill', 'attach', etc.) — better to show raw than crash the card.
+- Card click writes BOTH useEnvironmentStore AND useDockerStore in a single handler tick (imperative .getState().setX()) — scopes the rest of the app to the clicked env AND auto-jumps to the containers section. Single store write would leave user staring at same card highlighted; double write matches Dockhand UX where clicking a card "enters" that env.
+- Tags column DEFAULT '{}' (empty PG array literal) NOT NULL — Environment.tags type is `string[]` (never undefined post-bootstrap). rowToEnvironment maps `row.tags ?? []` defensively even though PG guarantees an array (mirrors 22-01 D-04 alias-resolution defensiveness).
+- Tags Zod schema: `z.array(z.string().min(1).max(50)).max(20).optional()` — bounds total tag count to 20 and per-tag length to 50 chars. T-25-01 mitigation: prevents DoS via 10k-element arrays AND bounds row size.
+- Health derivation: 'paused' + 'restarting' count toward 'unhealthy' banner; 'exited'/'dead'/'created' do NOT (operators routinely keep stopped containers around — flagging them red would create false alarms). 'isError' (containers query failed) → red 'Unreachable' banner. Empty container list → neutral zinc 'No containers' banner.
+- Type inference for Environment in UI: derived via `RouterOutput['docker']['listEnvironments'][number]` (added Environment type export to use-environments.ts). Single source of truth — avoids duplicating the Environment shape between UI and livinityd. Pattern carried forward from features/backups types.
+- Schema migration via wrapped DO block: `DO $$ BEGIN ALTER TABLE … ADD COLUMN IF NOT EXISTS … END$$;` — matches the existing device_audit_log_no_modify trigger pattern. No separate migration runner needed (livinityd reads schema.sql at boot and pool.query() executes the entire file). Pattern reusable for any future column addition.
+- TDD execution: Tasks 1+2 split into RED (test commits 4f5b7027, a0ffb73b) + GREEN (feat commits ee16d187, 07a2d5d6); Task 3 (layout files) ships as a single feat commit 9c210d26 per Plan 25-01 Task 3 `<behavior>` waiver (matches Plan 24-02 D-12 'smoke chain test for layout files' precedent — heavy mocking required for render tests; behaviour lives in extracted modules covered by Tasks 1+2). 5 task commits total + metadata commit.
+- Pattern carried forward to Plan 25-02 + Phase 26: per-env query composition (useEnvCardData(envId)) accepts an explicit envId override; reusable for any panel that should display ITS OWN env's metrics regardless of the global selection (Phase 26 detail pages, Phase 28 cross-env logs aggregator, Plan 25-02 Top-CPU panel union across all envs).
 
 ### v27.0 Roadmap Decisions
 
@@ -334,6 +350,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T06:40:31.480Z
-Stopped at: Completed 24-02-PLAN.md — Docker app StatusBar + theme toggle + search placeholder + legacy deprecation banner. Phase 24 closed (DOC-01 + DOC-02 + DOC-03 satisfied).
-Resume with: `/gsd:verify-phase 24` to run the Phase 24 verifier (DOC-01 + DOC-02 + DOC-03 audit on the new Docker app — sidebar collapsibility, status bar pills wiring, theme toggle persistence, deprecation banner reachability). After verifier passes, advance to Phase 25 — Multi-Environment Dashboard (DOC-04, DOC-05, DOC-06). Phase 24 shipped 5 task commits (92e94c04 RED + 9778917a + 0087de2f + 1de5747b + fe569282) plus the metadata commit; the new Docker app is reachable from the dock with a 56/224px collapsible sidebar (12 entries) and a 48px sticky StatusBar (env selector + 8 stat pills + Search ⌘K + AlertsBell + light/dark/system theme toggle). The legacy `routes/server-control/index.tsx` file remains on disk for piecemeal content migration in Phases 25-29; full delete is Plan 27 SUMMARY.
+Last session: 2026-04-25T20:09:46Z
+Stopped at: Completed 25-01-PLAN.md — Multi-Environment Dashboard backend tags column + EnvCard grid (DOC-04 partial / DOC-06 partial). 25-02 next.
+Resume with: `/gsd:execute-phase 25` to spawn 25-02 executor (filter chips ABOVE EnvCardGrid + Top-CPU panel BELOW + optional CPU/memory pill). Plan 25-01 shipped 5 task commits (4f5b7027 RED tags + ee16d187 GREEN tags + a0ffb73b RED format-events + 07a2d5d6 GREEN format-events + 9c210d26 Dashboard wiring) — environments.tags TEXT[] column lives idempotently in PG; Dashboard section renders `<EnvCardGrid />` mapping useEnvironments() → one EnvCard per env (header + tags chips + health banner + container counts row + 2x2 stats + last-8 events list). Card click writes both useEnvironmentStore (env scope) + useDockerStore (section='containers') in one handler tick. Polling cadence: containers 5s / events 10s / images-stacks-volumes-networks 30s per Plan 25-01 constraints. CPU/memory aggregate pill DEFERRED to Plan 25-02 (requires per-container stats fanout). 25/25 livinityd env tests pass + 44/44 UI docker route tests pass + UI build green.

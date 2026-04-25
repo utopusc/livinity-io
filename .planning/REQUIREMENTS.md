@@ -51,9 +51,9 @@
 | DOC-01 | Phase 24 | Partial (24-01) | Sidebar + 12 entries + collapse done; full closure (with status bar) in Plan 24-02 |
 | DOC-02 | Phase 24 | Complete | Top status bar component (Plan 24-02) |
 | DOC-03 | Phase 24 | Partial (24-01) | Legacy server-control unreachable from dock/desktop/mobile/spotlight; file delete in Plan 27 SUMMARY |
-| DOC-04 | Phase 25 | Pending | Dashboard env-card grid |
+| DOC-04 | Phase 25 | Partial (25-01) | EnvCardGrid + EnvCard + per-env polling (5s containers / 10s events / 30s static counts); CPU/memory pill deferred to 25-02 |
 | DOC-05 | Phase 25 | Pending | Top-CPU panel |
-| DOC-06 | Phase 25 | Pending | Env tag filter chips |
+| DOC-06 | Phase 25 | Partial (25-01) | environments.tags TEXT[] column + read/write CRUD + tRPC schemas; filter chips UI ships in 25-02 |
 | DOC-07 | Phase 26 | Pending | Containers route |
 | DOC-08 | Phase 26 | Pending | Images route |
 | DOC-09 | Phase 26 | Pending | Volumes route |

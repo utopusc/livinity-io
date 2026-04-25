@@ -154,6 +154,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. Live polling (5s) updates stats; visual transition smooth, no full re-render flicker
   5. Clicking an env card scopes the rest of the app to that env (sets selectedEnvironmentId in zustand store)
 **Plans**: 2 plans
+- [x] 25-01-PLAN.md — Backend tags column + EnvCard grid (DOC-04 partial, DOC-06 partial) (completed 2026-04-25)
+- [ ] 25-02-PLAN.md — Filter chips + Top-CPU panel (DOC-04 final, DOC-05, DOC-06 final)
 
 ### Phase 26: Resource Routes (Containers / Images / Volumes / Networks)
 **Goal**: Migrate the four most-used resource lists from horizontal tabs to dedicated routes with deep-linking.
@@ -341,6 +343,8 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 21. GitOps Stack Deployment | v27.0 | 2/2 | Complete   | 2026-04-25 |
 | 22. Multi-host Docker | v27.0 | 3/3 | Complete    | 2026-04-25 |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 2/2 | Complete    | 2026-04-25 |
+| 24. Docker App Skeleton | v28.0 | 2/2 | Complete    | 2026-04-25 |
+| 25. Multi-Environment Dashboard | v28.0 | 1/2 | In Progress | — |
 
 ---
 
