@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: Not started
-status: executing
+status: ready_to_plan
 stopped_at: Completed 24-02-PLAN.md — Docker app StatusBar + theme toggle + search placeholder + legacy deprecation banner. Phase 24 closed (DOC-01 + DOC-02 + DOC-03 satisfied).
 last_updated: "2026-04-25T06:40:31.485Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 2
   completed_plans: 2
-  percent: 100
+  percent: 15
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 ## Current Position
 
-Phase: 24 (complete)
+Phase: 25
 Plan: 2 of 2 (complete)
-Current Plan: Phase 24 closed — ready to start Phase 25
-Status: Phase 24 complete (DOC-01 + DOC-02 + DOC-03 satisfied)
+Current Plan: Not started
+Status: Ready to plan
 Last activity: 2026-04-25
 
 **Progress:** [██████████] 100%
