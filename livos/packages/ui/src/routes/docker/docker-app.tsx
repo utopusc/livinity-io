@@ -29,6 +29,7 @@ import {Shell} from './sections/shell'
 import {Stacks} from './sections/stacks'
 import {Volumes} from './sections/volumes'
 import {Sidebar} from './sidebar'
+import {StatusBar} from './status-bar'
 import {useDockerSection, type SectionId} from './store'
 import {useDockerTheme} from './theme'
 
@@ -45,7 +46,8 @@ export function DockerApp() {
 		>
 			<Sidebar />
 			<main className='flex min-w-0 flex-1 flex-col overflow-hidden'>
-				{/* Plan 24-02 mounts <StatusBar /> here as the first child of <main>. */}
+				{/* Plan 24-02: persistent top StatusBar (sticky 48px, matches Sidebar header h-12). */}
+				<StatusBar />
 				<div className='min-h-0 flex-1 overflow-auto'>
 					<SectionView section={section} />
 				</div>
