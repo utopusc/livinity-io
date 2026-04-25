@@ -28,6 +28,34 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/docker-agent:
+    dependencies:
+      dockerode:
+        specifier: ^4.0.2
+        version: 4.0.9
+      ws:
+        specifier: ^8.16.0
+        version: 8.19.0
+    devDependencies:
+      '@types/dockerode':
+        specifier: ^3.3.26
+        version: 3.3.47
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.7
+      '@types/ws':
+        specifier: ^8.5.10
+        version: 8.18.1
+      tsx:
+        specifier: ^4.7.1
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@22.19.7)(lightningcss@1.31.1)(terser@5.46.1)
+
   packages/livinityd:
     dependencies:
       '@aws-sdk/client-s3':
