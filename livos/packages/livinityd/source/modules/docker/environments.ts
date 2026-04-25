@@ -32,11 +32,13 @@ export interface Environment {
 	lastSeen: Date | null
 	createdBy: string | null
 	createdAt: Date
+	/** Phase 25 DOC-06 — operator-assigned labels (e.g. 'prod', 'us-east'). Filter chips UI ships in Plan 25-02. Defaults to [] for existing rows via PG DEFAULT '{}'. */
+	tags: string[]
 }
 
 const SELECT_COLS = `id, name, type, socket_path, tcp_host, tcp_port,
 	tls_ca_pem, tls_cert_pem, tls_key_pem, agent_id, agent_status,
-	last_seen, created_by, created_at`
+	last_seen, created_by, created_at, tags`
 
 function rowToEnvironment(row: any): Environment {
 	return {
@@ -54,6 +56,10 @@ function rowToEnvironment(row: any): Environment {
 		lastSeen: row.last_seen,
 		createdBy: row.created_by,
 		createdAt: row.created_at,
+		// Defensive: PG DEFAULT '{}' guarantees an array post-bootstrap, but the
+		// alias-resolution mirror in 22-01 D-04 hardens against any pg client
+		// quirk where TEXT[] returns null for an empty literal.
+		tags: row.tags ?? [],
 	}
 }
 
@@ -120,6 +126,8 @@ export type CreateEnvironmentInput = {
 	tlsCertPem?: string
 	tlsKeyPem?: string
 	agentId?: string
+	/** Phase 25 DOC-06 — optional tag list. Undefined defaults to [] (PG TEXT[] default '{}'). Length-bounded by Zod at the route layer (max 20 tags × 50 chars). */
+	tags?: string[]
 }
 
 /**
@@ -156,8 +164,8 @@ export async function createEnvironment(
 	const {rows} = await pool.query(
 		`INSERT INTO environments
 			(name, type, socket_path, tcp_host, tcp_port,
-			 tls_ca_pem, tls_cert_pem, tls_key_pem, agent_id, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			 tls_ca_pem, tls_cert_pem, tls_key_pem, agent_id, created_by, tags)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 RETURNING ${SELECT_COLS}`,
 		[
 			input.name,
@@ -170,6 +178,8 @@ export async function createEnvironment(
 			input.tlsKeyPem ?? null,
 			input.agentId ?? null,
 			createdBy,
+			// Phase 25 DOC-06: undefined → [] (matches PG DEFAULT '{}')
+			input.tags ?? [],
 		],
 	)
 	return rowToEnvironment(rows[0])
@@ -183,6 +193,8 @@ export type UpdateEnvironmentInput = {
 	tlsCaPem?: string
 	tlsCertPem?: string
 	tlsKeyPem?: string
+	/** Phase 25 DOC-06 — pass [] to clear; undefined leaves tags untouched. */
+	tags?: string[]
 }
 
 /**
@@ -236,6 +248,13 @@ export async function updateEnvironment(
 	if (input.tlsKeyPem !== undefined) {
 		sets.push(`tls_key_pem = $${i++}`)
 		values.push(input.tlsKeyPem)
+	}
+	if (input.tags !== undefined) {
+		// Phase 25 DOC-06 — passing [] clears tags; passing a non-empty array
+		// replaces them. Tag length and per-tag char limits are enforced by the
+		// Zod schema at the route layer (T-25-01 mitigation).
+		sets.push(`tags = $${i++}`)
+		values.push(input.tags)
 	}
 
 	if (sets.length === 0) {

@@ -1663,6 +1663,8 @@ export default router({
 				tlsCertPem: z.string().max(20000).optional(),
 				tlsKeyPem: z.string().max(20000).optional(),
 				agentId: z.string().uuid().optional(),
+				// Phase 25 DOC-06: T-25-01 mitigation — bound array length AND per-tag length.
+				tags: z.array(z.string().min(1).max(50)).max(20).optional(),
 			}),
 		)
 		.mutation(async ({input, ctx}) => {
@@ -1693,6 +1695,8 @@ export default router({
 				tlsCaPem: z.string().max(20000).optional(),
 				tlsCertPem: z.string().max(20000).optional(),
 				tlsKeyPem: z.string().max(20000).optional(),
+				// Phase 25 DOC-06: T-25-01 mitigation — same bounds as createEnvironment.
+				tags: z.array(z.string().min(1).max(50)).max(20).optional(),
 			}),
 		)
 		.mutation(async ({input, ctx}) => {

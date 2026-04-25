@@ -235,6 +235,14 @@ CREATE TABLE IF NOT EXISTS environments (
 
 CREATE INDEX IF NOT EXISTS idx_environments_type ON environments(type);
 
+-- Phase 25 DOC-06 — environment tags for filter chips. Idempotent ADD COLUMN
+-- IF NOT EXISTS wrapped in DO-block (matches the audit_log_no_modify trigger
+-- pattern above). DEFAULT '{}' ensures NOT NULL is satisfied for existing rows.
+DO $$
+BEGIN
+  ALTER TABLE environments ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+END$$;
+
 -- =========================================================================
 -- Docker Agents (Phase 22 MH-04, MH-05) — outbound-WS Docker proxies.
 -- One row per agent token. token_hash is SHA-256(cleartext_token) so the
