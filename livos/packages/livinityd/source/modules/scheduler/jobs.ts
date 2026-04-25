@@ -10,6 +10,7 @@ import {execa} from 'execa'
 import {listContainers, pruneImages, isProtectedContainer} from '../docker/docker.js'
 import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stacks.js'
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
+import {aiResourceWatchHandler} from '../docker/ai-resource-watch.js'
 import {volumeBackupHandler} from './backup.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
@@ -258,12 +259,14 @@ export const gitStackSyncHandler: BuiltInJobHandler = async (job, ctx) => {
 // =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
+// ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
 // =========================================================================
 export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'image-prune': imagePruneHandler,
 	'container-update-check': containerUpdateCheckHandler,
 	'git-stack-sync': gitStackSyncHandler,
 	'volume-backup': volumeBackupHandler,
+	'ai-resource-watch': aiResourceWatchHandler,
 }
 
 // =========================================================================
@@ -280,4 +283,14 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	{name: 'image-prune', schedule: '0 3 * * 0', type: 'image-prune', enabled: true},
 	{name: 'container-update-check', schedule: '0 6 * * *', type: 'container-update-check', enabled: true},
 	{name: 'git-stack-sync', schedule: '0 * * * *', type: 'git-stack-sync', enabled: true},
+	// Phase 23 AID-02 — proactive Kimi resource-pressure alerts.
+	// Default enabled=false because the handler generates persistent Kimi
+	// spend even when nothing is wrong (one call per 5min per stressed
+	// container). Operators flip enabled=true via Settings > Scheduler
+	// once Kimi projections have been validated in their environment.
+	// seedDefaults() uses ON CONFLICT (name) DO NOTHING so existing PG
+	// installs that already booted Plan 23-01 keep whatever they had —
+	// this default only takes effect on fresh installs (same default-flip
+	// pattern as Plan 21-02 git-stack-sync).
+	{name: 'ai-resource-watch', schedule: '*/5 * * * *', type: 'ai-resource-watch', enabled: false},
 ]
