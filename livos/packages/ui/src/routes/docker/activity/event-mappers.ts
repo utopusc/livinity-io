@@ -28,6 +28,12 @@ export interface DockerEventInput {
 	attributes: Record<string, string>
 }
 
+/**
+ * NOTE: lastRun / nextRun / createdAt / updatedAt are typed as `Date | string`
+ * because tRPC serializes Date → ISO string over the wire. The hook receives
+ * strings; unit tests pass Date objects directly. mapScheduledJob accepts
+ * either via a small inline normalizer.
+ */
 export interface ScheduledJobInput {
 	id: string
 	name: string
@@ -35,13 +41,13 @@ export interface ScheduledJobInput {
 	type: string // JobType union — but we accept any string; the mapper doesn't branch on it
 	config: Record<string, unknown>
 	enabled: boolean
-	lastRun: Date | null
+	lastRun: Date | string | null
 	lastRunStatus: 'success' | 'failure' | 'skipped' | 'running' | null
 	lastRunError: string | null
-	lastRunOutput: unknown | null
-	nextRun: Date | null
-	createdAt: Date
-	updatedAt: Date
+	lastRunOutput?: unknown | null
+	nextRun: Date | string | null
+	createdAt: Date | string
+	updatedAt: Date | string
 }
 
 export interface AiAlertInput {
@@ -136,7 +142,9 @@ export function mapScheduledJob(job: ScheduledJobInput): ActivityEvent | null {
 	if (!job.lastRun || !job.lastRunStatus) return null
 	if (job.lastRunStatus === 'running') return null
 
-	const ts = job.lastRun.getTime()
+	// tRPC serializes Date → ISO string over the wire; unit tests pass Date.
+	// Normalize either form to a ms epoch.
+	const ts = job.lastRun instanceof Date ? job.lastRun.getTime() : Date.parse(job.lastRun)
 	const id = `scheduler:${job.id}:${ts}`
 
 	const base = {
