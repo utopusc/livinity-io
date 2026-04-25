@@ -37,8 +37,8 @@ import {
 } from '@tabler/icons-react'
 
 import {useStacks} from '@/hooks/use-stacks'
-import {ComposeGraphViewer} from '@/routes/server-control/compose-graph-viewer'
-import {ContainerDetailSheet} from '@/routes/server-control/container-detail-sheet'
+import {ComposeGraphViewer} from '../_components/compose-graph-viewer'
+import {ContainerDetailSheet} from '../resources/container-detail-sheet'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/shadcn-components/ui/table'

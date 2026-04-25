@@ -40,8 +40,8 @@ import {
 
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useContainers} from '@/hooks/use-containers'
-import {ContainerCreateForm} from '@/routes/server-control/container-create-form'
-import {ContainerDetailSheet} from '@/routes/server-control/container-detail-sheet'
+import {ContainerCreateForm} from './container-create-form'
+import {ContainerDetailSheet} from './container-detail-sheet'
 import {Button} from '@/shadcn-components/ui/button'
 import {Checkbox} from '@/shadcn-components/ui/checkbox'
 import {
