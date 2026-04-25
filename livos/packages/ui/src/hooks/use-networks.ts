@@ -1,18 +1,23 @@
 import {useState} from 'react'
 
+import {useSelectedEnvironmentId} from '@/stores/environment-store'
 import {trpcReact} from '@/trpc/trpc'
 
 export function useNetworks() {
+	const environmentId = useSelectedEnvironmentId()
 	const [inspectedNetwork, setInspectedNetwork] = useState<string | null>(null)
 	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
 
-	const networksQuery = trpcReact.docker.listNetworks.useQuery(undefined, {
-		retry: false,
-		refetchInterval: 15000,
-	})
+	const networksQuery = trpcReact.docker.listNetworks.useQuery(
+		{environmentId},
+		{
+			retry: false,
+			refetchInterval: 15000,
+		},
+	)
 
 	const inspectQuery = trpcReact.docker.inspectNetwork.useQuery(
-		{id: inspectedNetwork!},
+		{id: inspectedNetwork!, environmentId},
 		{enabled: !!inspectedNetwork, retry: false},
 	)
 
@@ -63,17 +68,17 @@ export function useNetworks() {
 
 	const createNetwork = (input: {name: string; driver: string; subnet?: string; gateway?: string; internal?: boolean}) => {
 		setActionResult(null)
-		createNetworkMutation.mutate(input)
+		createNetworkMutation.mutate({...input, environmentId})
 	}
 
 	const removeNetwork = (id: string) => {
 		setActionResult(null)
-		removeNetworkMutation.mutate({id})
+		removeNetworkMutation.mutate({id, environmentId})
 	}
 
 	const disconnectNetwork = (networkId: string, containerId: string) => {
 		setActionResult(null)
-		disconnectNetworkMutation.mutate({networkId, containerId})
+		disconnectNetworkMutation.mutate({networkId, containerId, environmentId})
 	}
 
 	const networks = networksQuery.data ?? []

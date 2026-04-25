@@ -1,14 +1,19 @@
 import {useState} from 'react'
 
+import {useSelectedEnvironmentId} from '@/stores/environment-store'
 import {trpcReact} from '@/trpc/trpc'
 
 export function useContainers() {
+	const environmentId = useSelectedEnvironmentId()
 	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
 
-	const containersQuery = trpcReact.docker.listContainers.useQuery(undefined, {
-		retry: false,
-		refetchInterval: 5000, // 5s polling per CONTEXT.md decision
-	})
+	const containersQuery = trpcReact.docker.listContainers.useQuery(
+		{environmentId},
+		{
+			retry: false,
+			refetchInterval: 5000, // 5s polling per CONTEXT.md decision
+		},
+	)
 
 	const manageMutation = trpcReact.docker.manageContainer.useMutation({
 		onSuccess: (data) => {
@@ -45,7 +50,7 @@ export function useContainers() {
 		opts?: {force?: boolean; confirmName?: string},
 	) => {
 		setActionResult(null)
-		manageMutation.mutate({name, operation, force: opts?.force, confirmName: opts?.confirmName})
+		manageMutation.mutate({name, operation, force: opts?.force, confirmName: opts?.confirmName, environmentId})
 	}
 
 	const bulkManage = (
@@ -54,7 +59,7 @@ export function useContainers() {
 		opts?: {force?: boolean},
 	) => {
 		setActionResult(null)
-		bulkManageMutation.mutate({names, operation, force: opts?.force})
+		bulkManageMutation.mutate({names, operation, force: opts?.force, environmentId})
 	}
 
 	const containers = containersQuery.data ?? []

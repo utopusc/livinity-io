@@ -1,5 +1,6 @@
 import {useState} from 'react'
 
+import {useSelectedEnvironmentId} from '@/stores/environment-store'
 import {trpcReact} from '@/trpc/trpc'
 
 export type DeployStackGitInput = {
@@ -17,6 +18,7 @@ export type DeployStackInput = {
 }
 
 export function useStacks() {
+	const environmentId = useSelectedEnvironmentId()
 	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
 	// Plan 21-02: capture webhookSecret from a successful deployStack so the form
 	// can render the auto-generated webhook URL + copy buttons. YAML deploys leave
@@ -26,10 +28,16 @@ export function useStacks() {
 		webhookSecret?: string
 	} | null>(null)
 
-	const stacksQuery = trpcReact.docker.listStacks.useQuery(undefined, {
-		retry: false,
-		refetchInterval: 15000,
-	})
+	// listStacks accepts envId — uses Dockerode under the hood (Plan 22-01 D-06).
+	// deploy/edit/control/remove still shell out to host `docker compose` CLI so
+	// they DO NOT take envId; multi-host stack deploy is v28.0.
+	const stacksQuery = trpcReact.docker.listStacks.useQuery(
+		{environmentId},
+		{
+			retry: false,
+			refetchInterval: 15000,
+		},
+	)
 
 	const deployStackMutation = trpcReact.docker.deployStack.useMutation({
 		onSuccess: (data, variables) => {

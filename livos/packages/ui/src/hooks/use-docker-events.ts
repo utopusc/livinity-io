@@ -1,5 +1,6 @@
 import {useState, useMemo} from 'react'
 
+import {useSelectedEnvironmentId} from '@/stores/environment-store'
 import {trpcReact} from '@/trpc/trpc'
 
 // Time range presets in seconds
@@ -14,6 +15,7 @@ export type TimeRangeKey = keyof typeof TIME_RANGES
 export type EventTypeFilter = 'all' | 'container' | 'image' | 'network' | 'volume'
 
 export function useDockerEvents() {
+	const environmentId = useSelectedEnvironmentId()
 	const [typeFilter, setTypeFilter] = useState<EventTypeFilter>('all')
 	const [timeRange, setTimeRange] = useState<TimeRangeKey>('1h')
 
@@ -24,8 +26,9 @@ export function useDockerEvents() {
 			since,
 			until: now,
 			filters: typeFilter !== 'all' ? {type: [typeFilter]} : undefined,
+			environmentId,
 		}
-	}, [typeFilter, timeRange])
+	}, [typeFilter, timeRange, environmentId])
 
 	const eventsQuery = trpcReact.docker.dockerEvents.useQuery(queryInput, {
 		retry: false,
