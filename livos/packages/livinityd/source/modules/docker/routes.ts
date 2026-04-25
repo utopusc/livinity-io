@@ -70,6 +70,13 @@ import {
 	createCredential,
 	deleteCredential,
 } from './git-credentials.js'
+// Phase 29 DOC-16 — registry credentials + image search
+import {
+	listCredentials as listRegistryCreds,
+	createCredential as createRegistryCred,
+	deleteCredential as deleteRegistryCred,
+} from './registry-credentials.js'
+import {searchImages} from './registry-search.js'
 import {
 	listEnvironments,
 	createEnvironment,
@@ -753,13 +760,19 @@ export default router({
 		.input(z.object({
 			image: z.string().min(1).max(500),
 			environmentId: envIdField,
+			// Phase 29 DOC-16 — optional registry credential for authenticated pulls.
+			// null/undefined → anonymous pull (existing behaviour preserved).
+			registryId: z.string().uuid().nullable().optional(),
 		}))
 		.mutation(async ({input}) => {
 			try {
-				return await pullImage(input.image, input.environmentId)
+				return await pullImage(input.image, input.environmentId, input.registryId)
 			} catch (err: any) {
 				if (err.message?.includes('[image-not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[image-not-found] ', '')})
+				}
+				if (err.message?.includes('[credential-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[credential-not-found] ', '')})
 				}
 				if (err.message?.includes('[env-not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
@@ -1572,6 +1585,87 @@ export default router({
 			const ok = await deleteCredential(input.id)
 			if (!ok) throw new TRPCError({code: 'NOT_FOUND', message: 'Credential not found'})
 			return {success: true, message: 'Credential deleted'}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Registry Credentials + Image Search (Phase 29 DOC-16) — admin-only
+	// AES-256-GCM-encrypted-at-rest credentials for Docker Hub / private registries.
+	// Mirrors the git-credentials shape; payload is always {username, password}.
+	// encrypted_data is NEVER exposed via these routes; only metadata returned.
+	// -----------------------------------------------------------------------
+
+	listRegistryCredentials: adminProcedure.query(async ({ctx}) => {
+		return await listRegistryCreds(ctx.currentUser?.id ?? null)
+	}),
+
+	createRegistryCredential: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(100),
+				registryUrl: z.string().url(),
+				username: z.string().min(1),
+				password: z.string().min(1),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			try {
+				return await createRegistryCred({
+					userId: ctx.currentUser?.id ?? null,
+					name: input.name,
+					registryUrl: input.registryUrl,
+					username: input.username,
+					password: input.password,
+				})
+			} catch (err: any) {
+				if (err.message?.includes('duplicate key')) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: `Credential '${input.name}' already exists`,
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to create credential',
+				})
+			}
+		}),
+
+	deleteRegistryCredential: adminProcedure
+		.input(z.object({id: z.string().uuid()}))
+		.mutation(async ({input}) => {
+			const ok = await deleteRegistryCred(input.id)
+			if (!ok) throw new TRPCError({code: 'NOT_FOUND', message: 'Credential not found'})
+			return {success: true, message: 'Credential deleted'}
+		}),
+
+	searchImages: adminProcedure
+		.input(
+			z.object({
+				query: z.string().min(1).max(200),
+				registryId: z.string().uuid().nullable().optional(),
+			}),
+		)
+		.query(async ({input}) => {
+			try {
+				return await searchImages({query: input.query, registryId: input.registryId})
+			} catch (err: any) {
+				if (err.message?.includes('[auth-failed]')) {
+					throw new TRPCError({
+						code: 'UNAUTHORIZED',
+						message: err.message.replace('[auth-failed] ', ''),
+					})
+				}
+				if (err.message?.includes('[credential-not-found]')) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: err.message.replace('[credential-not-found] ', ''),
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message?.replace('[search-failed] ', '') ?? 'Image search failed',
+				})
+			}
 		}),
 
 	// -----------------------------------------------------------------------
