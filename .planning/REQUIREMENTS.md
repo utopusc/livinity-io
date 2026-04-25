@@ -16,9 +16,9 @@
 - [x] **DOC-03**: Existing `/server` (Server Management page) is deprecated — redirected to new Docker app. Old tab-based UI removed entirely (no parallel implementations to maintain). _(Plan 24-01: legacy LIVINITY_server-control unreachable from dock + desktop + mobile + spotlight; file delete pending Plan 27)_
 
 ### Dashboard
-- [ ] **DOC-04**: Dashboard route shows multi-environment grid. Each card displays: env name + type icon + connection target (socket path or host:port), env tags (prod/dev/staging — user-editable), aggregate health (all-healthy / N-unhealthy banner), running/stopped/paused/restarting counts, total container count, image/stack/volume/network counts, recent events (last 8 with timestamp + name + verb icon), CPU/memory utilization for selected env (live polling).
-- [ ] **DOC-05**: Dashboard "Top containers by CPU" panel shows top-N containers across all envs sorted by CPU percent, with quick-action chips (logs / shell / restart). Updates every 5s.
-- [ ] **DOC-06**: Dashboard env filter chips (All / dev / prod / staging) filter card grid client-side without re-fetching.
+- [x] **DOC-04**: Dashboard route shows multi-environment grid. Each card displays: env name + type icon + connection target (socket path or host:port), env tags (prod/dev/staging — user-editable), aggregate health (all-healthy / N-unhealthy banner), running/stopped/paused/restarting counts, total container count, image/stack/volume/network counts, recent events (last 8 with timestamp + name + verb icon), CPU/memory utilization for selected env (live polling). _(Per-card Retry button on Unreachable banner shipped in 25-02; per-env CPU/memory aggregate pill deferred — cross-env Top-CPU panel ships under DOC-05.)_
+- [x] **DOC-05**: Dashboard "Top containers by CPU" panel shows top-N containers across all envs sorted by CPU percent, with quick-action chips (logs / shell / restart). Updates every 5s. _(Plan 25-02: bounded per-env candidate fanout; Logs/Shell set env scope only — Phase 28/29 own deep-link by container name.)_
+- [x] **DOC-06**: Dashboard env filter chips (All / dev / prod / staging) filter card grid client-side without re-fetching. _(Plan 25-02: localStorage-persisted single-select with auto-fallback when persisted tag no longer exists.)_
 
 ### Resource Routes
 - [ ] **DOC-07**: `/docker/containers` — full container list (current Containers tab content) as own route. Detail panel slides over from right (current sheet pattern preserved).
@@ -51,9 +51,9 @@
 | DOC-01 | Phase 24 | Partial (24-01) | Sidebar + 12 entries + collapse done; full closure (with status bar) in Plan 24-02 |
 | DOC-02 | Phase 24 | Complete | Top status bar component (Plan 24-02) |
 | DOC-03 | Phase 24 | Partial (24-01) | Legacy server-control unreachable from dock/desktop/mobile/spotlight; file delete in Plan 27 SUMMARY |
-| DOC-04 | Phase 25 | Partial (25-01) | EnvCardGrid + EnvCard + per-env polling (5s containers / 10s events / 30s static counts); CPU/memory pill deferred to 25-02 |
-| DOC-05 | Phase 25 | Pending | Top-CPU panel |
-| DOC-06 | Phase 25 | Partial (25-01) | environments.tags TEXT[] column + read/write CRUD + tRPC schemas; filter chips UI ships in 25-02 |
+| DOC-04 | Phase 25 | Complete (25-01 + 25-02) | EnvCardGrid + EnvCard + per-env polling (5s containers / 10s events / 30s static counts) shipped in 25-01; per-card Retry button on Unreachable banner shipped in 25-02 |
+| DOC-05 | Phase 25 | Complete (25-02) | TopCpuPanel — top-10 cross-env containers by CPU% via bounded per-env candidate fanout (PER_ENV_CANDIDATES=5); Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers |
+| DOC-06 | Phase 25 | Complete (25-01 + 25-02) | environments.tags TEXT[] column + read/write CRUD + tRPC schemas shipped in 25-01; TagFilterChips above grid + useTagFilter localStorage hook + filterEnvs client-side filter shipped in 25-02 |
 | DOC-07 | Phase 26 | Pending | Containers route |
 | DOC-08 | Phase 26 | Pending | Images route |
 | DOC-09 | Phase 26 | Pending | Volumes route |

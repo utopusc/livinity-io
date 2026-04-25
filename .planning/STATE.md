@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
-current_plan: 25-02
+current_plan: 26-01
 status: in_progress
-stopped_at: Completed 25-01-PLAN.md — Multi-Environment Dashboard backend tags column + EnvCard grid (DOC-04 partial, DOC-06 partial). Plan 25-02 next — filter chips + Top-CPU panel.
-last_updated: "2026-04-25T20:12:50.507Z"
+stopped_at: Completed 25-02-PLAN.md — Multi-Environment Dashboard filter chips + Top-CPU panel + per-card retry (DOC-04 + DOC-05 + DOC-06 fully closed). Phase 25 complete. Phase 26 (Resource Routes) next.
+last_updated: "2026-04-25T20:27:18Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 25 IN PROGRESS — Plan 25-01 complete (Dashboard backend tags + EnvCard grid). Plan 25-02 next — filter chips + Top-CPU panel.
+**Current focus:** Phase 25 COMPLETE — Plan 25-02 shipped (filter chips above grid + Top-CPU panel below + per-card Retry on Unreachable banner). DOC-04 + DOC-05 + DOC-06 fully delivered. Phase 26 (Resource Routes — DOC-07/08/09/10) next.
 
 ## Current Position
 
-Phase: 25
-Plan: 1 of 2 complete
-Current Plan: 25-02
-Status: In progress
+Phase: 25 (complete)
+Plan: 2 of 2 complete
+Current Plan: 26-01 (next)
+Status: In progress (Phase 26 awaiting plan)
 Last activity: 2026-04-25
 
-**Progress:** [████████░░] 75%
+**Progress:** [██████████] 100% (Phase 25)
 
 ## v28.0 Phase Structure
 
@@ -72,6 +72,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | 24-01 | 11 min | 3 (+1 TDD) | 22 created + 10 modified | 2026-04-25 |
 | 24-02 | 10 min | 4 (+1 TDD) | 8 created + 3 modified | 2026-04-25 |
 | 25-01 | 7 min | 3 (5 commits, 2× TDD) | 5 created + 6 modified | 2026-04-25 |
+| 25-02 | 9 min | 3 (5 commits, 2× TDD) | 7 created + 4 modified | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
@@ -118,6 +119,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - Schema migration via wrapped DO block: `DO $$ BEGIN ALTER TABLE … ADD COLUMN IF NOT EXISTS … END$$;` — matches the existing device_audit_log_no_modify trigger pattern. No separate migration runner needed (livinityd reads schema.sql at boot and pool.query() executes the entire file). Pattern reusable for any future column addition.
 - TDD execution: Tasks 1+2 split into RED (test commits 4f5b7027, a0ffb73b) + GREEN (feat commits ee16d187, 07a2d5d6); Task 3 (layout files) ships as a single feat commit 9c210d26 per Plan 25-01 Task 3 `<behavior>` waiver (matches Plan 24-02 D-12 'smoke chain test for layout files' precedent — heavy mocking required for render tests; behaviour lives in extracted modules covered by Tasks 1+2). 5 task commits total + metadata commit.
 - Pattern carried forward to Plan 25-02 + Phase 26: per-env query composition (useEnvCardData(envId)) accepts an explicit envId override; reusable for any panel that should display ITS OWN env's metrics regardless of the global selection (Phase 26 detail pages, Phase 28 cross-env logs aggregator, Plan 25-02 Top-CPU panel union across all envs).
+
+### Plan 25-02 Decisions (2026-04-25)
+
+- localStorage + plain useState for tag filter (NOT zustand): selection scope is a single-component-tree concern (only the dashboard chip row + EnvCardGrid consume it). Adding a third zustand store for one chip-row would be disproportionate vs. existing useDockerStore (cross-route section nav) and useEnvironmentStore (cross-route env scope). Persistence key 'livos:docker:dashboard:selected-tag' follows Plan 24-01 D-01 + Plan 24-02 D-03 prefix convention.
+- Bounded per-env candidate fanout in useTopCpu (PER_ENV_CANDIDATES=5): for each env, take only the top 5 running containers by `created` desc (recency proxy for 'likely-busy'), then fan out containerStats only on those candidates. Caps stats calls at envCount × 5 per 5s — with 5 envs that's 5/sec, well within Docker daemon load. True global Top-10-by-CPU would scale linearly with cluster size (could be hundreds). v29 polish task may add a docker.allEnvCpuTop tRPC aggregator (single round-trip per tick) when env+container counts grow.
+- Logs/Shell quick-action chips set env scope only — no deep-link by container name. Phase 28 (DOC-13 cross-container logs) and Phase 29 (DOC-15 shell route) own the container-name deep-link. Inline code comments document the intentional seam so Phase 28/29 planners know exactly what to extend.
+- Restart chip disables proactively on protected containers: backend `manageContainer` ALSO enforces the check via `isProtectedContainer()` (Plan 22-01 SEC-02 — defense in depth), but disabling avoids the round-trip + error toast. Tooltip 'Protected container' makes the affordance discoverable.
+- Hooks-in-loops gating pattern: useTopCpu maps env list into N useQuery calls + maps candidates into M useQuery calls. React's hooks rule forbids hooks in CONDITIONAL branches, NOT loops over a STABLE array. We early-return-equivalent (envList = envs ?? []) so the hook count is 0 while envs is loading; once hydrated the count is stable across renders (envs only mutates on discrete admin CRUD which itself triggers a full remount via the React Query identity-stable refetch in the env list query).
+- Pure helpers at module scope (deriveAllTags + filterEnvs + readPersistedTag + writePersistedTag + sortTopCpu) for unit testing without React rendering: avoids pulling in @testing-library/react (not in deps). The hooks become thin shells over these helpers. Plan 24-02 D-12 documented this pattern; Plan 25-02 carries it forward for both useTagFilter and the sort-top-cpu/use-top-cpu split.
+- Stats queryKey includes BOTH name AND environmentId: cross-env containers with same name (e.g. 'redis' running on prod and staging) don't collide in the React Query cache. Plan 22-02 D-02 documented for env-scoped queries; Plan 25-02 carries it forward for the multi-candidate fanout.
+- Per-card Retry on Unreachable banner refetches the SINGLE card's 6 queries (containers + images + stacks + volumes + networks + events). Calling all 6 in parallel via React Query's refetch() is fire-and-forget — errors on one query don't block others, and the banner state derives from containers.isError specifically. Other envs keep polling normally during the retry. e.stopPropagation prevents firing the card's outer onClick (which would scope+jump sections).
+- Skeleton loaders only show on first paint (isLoading && entries.length === 0). React Query keeps isLoading=false on background refetches once data is hydrated, so the 5s polling tick does NOT swap to skeleton — preserves visual stability per Plan 25-02 success criteria 'no render flicker on poll'.
+- TopCpuPanel uses sonner for restart toasts (matches the existing UI convention in container-files-tab, scheduler-section, use-app-install). Phase 25 doesn't introduce a new toast library or wrapper.
+- TDD execution: Tasks 1+2 split into RED (test commits 4cfebf7b, be661a0e) + GREEN (feat commits e5d33252, 128206f6); Task 3 (panel + dashboard wiring) ships as a single feat commit dad89657 per Plan 25-02 Task 3 having no `tdd="true"` flag (testable logic lives in Tasks 1+2 extracted modules; same waiver Plan 25-01 Task 3 used). 5 task commits total.
+- Patterns established for Phase 26+: bounded cross-env fanout pattern (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates) reusable for memory-pressure / network-throughput aggregator panels in v29; localStorage-backed UI selection with auto-fallback reusable for any 'remember the user's last X' UX where X is derived from a query result that can mutate.
 
 ### v27.0 Roadmap Decisions
 
@@ -350,6 +366,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T20:09:46Z
-Stopped at: Completed 25-01-PLAN.md — Multi-Environment Dashboard backend tags column + EnvCard grid (DOC-04 partial / DOC-06 partial). 25-02 next.
-Resume with: `/gsd:execute-phase 25` to spawn 25-02 executor (filter chips ABOVE EnvCardGrid + Top-CPU panel BELOW + optional CPU/memory pill). Plan 25-01 shipped 5 task commits (4f5b7027 RED tags + ee16d187 GREEN tags + a0ffb73b RED format-events + 07a2d5d6 GREEN format-events + 9c210d26 Dashboard wiring) — environments.tags TEXT[] column lives idempotently in PG; Dashboard section renders `<EnvCardGrid />` mapping useEnvironments() → one EnvCard per env (header + tags chips + health banner + container counts row + 2x2 stats + last-8 events list). Card click writes both useEnvironmentStore (env scope) + useDockerStore (section='containers') in one handler tick. Polling cadence: containers 5s / events 10s / images-stacks-volumes-networks 30s per Plan 25-01 constraints. CPU/memory aggregate pill DEFERRED to Plan 25-02 (requires per-container stats fanout). 25/25 livinityd env tests pass + 44/44 UI docker route tests pass + UI build green.
+Last session: 2026-04-25T20:27:18Z
+Stopped at: Completed 25-02-PLAN.md — Multi-Environment Dashboard filter chips + Top-CPU panel + per-card Retry (DOC-04 polish + DOC-05 + DOC-06 fully closed). Phase 25 complete. Phase 26 (Resource Routes — DOC-07/08/09/10 + DOC-20 partial) next.
+Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.
