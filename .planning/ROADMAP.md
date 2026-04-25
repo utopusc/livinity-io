@@ -122,7 +122,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Milestone Goal:** Restructure v27.0's tab-based Server Management page into a standalone Dockhand-style Docker management application. v27.0 shipped the data plumbing (env transport, AI diagnostics, vuln-scan, scheduler, git stacks, file browser, real-time logs); v28.0 surfaces it through a left-sidebar layout with top status bar, multi-environment Dashboard, and dedicated routes per resource type. Adds 4 new surfaces (Logs / Activity / Shell / Registry) that v27.0 didn't ship. Reference: Dockhand (dockhand.dev).
 
-- [x] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar, theme toggle, route table (DOC-01, DOC-02, DOC-03) (completed 2026-04-25)
+- [x] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar, theme toggle, route table (DOC-01, DOC-02, DOC-03)
+ (completed 2026-04-25)
 - [x] **Phase 25: Multi-Environment Dashboard** — env card grid, Top containers by CPU panel, env tag filter chips, recent events per env (DOC-04, DOC-05, DOC-06) (completed 2026-04-25)
 - [ ] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial)
 - [ ] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12)
@@ -169,6 +170,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. Deep-linking works: `/docker/containers/n8n_server_1` opens with that container's detail panel pre-expanded
   6. Search input filters list client-side; clicking a row updates URL to deep-link
 **Plans**: 2 plans
+- [ ] 26-01-PLAN.md — Containers + Images sections (DOC-07, DOC-08, DOC-20 partial)
+- [ ] 26-02-PLAN.md — Volumes + Networks sections (DOC-09, DOC-10, DOC-20 partial)
 
 ### Phase 27: Stacks + Schedules Routes
 **Goal**: Migrate Stacks and Scheduled Jobs to dedicated routes, preserving all v27.0 tabs and dialogs.
@@ -221,9 +224,12 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
  (completed 2026-04-24)
 - [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
  (completed 2026-04-24)
-- [x] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat (completed 2026-04-25)
-- [x] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host (completed 2026-04-25)
-- [x] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer (completed 2026-04-25)
+- [x] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
+ (completed 2026-04-25)
+- [x] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
+ (completed 2026-04-25)
+- [x] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
+ (completed 2026-04-25)
 
 ## Phase Details
 
