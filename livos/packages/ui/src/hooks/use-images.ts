@@ -1,5 +1,6 @@
 import {useState} from 'react'
 
+import {useSelectedEnvironmentId} from '@/stores/environment-store'
 import {trpcReact} from '@/trpc/trpc'
 
 function formatBytes(bytes: number): string {
@@ -11,12 +12,16 @@ function formatBytes(bytes: number): string {
 }
 
 export function useImages() {
+	const environmentId = useSelectedEnvironmentId()
 	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
 
-	const imagesQuery = trpcReact.docker.listImages.useQuery(undefined, {
-		retry: false,
-		refetchInterval: 10000,
-	})
+	const imagesQuery = trpcReact.docker.listImages.useQuery(
+		{environmentId},
+		{
+			retry: false,
+			refetchInterval: 10000,
+		},
+	)
 
 	const removeMutation = trpcReact.docker.removeImage.useMutation({
 		onSuccess: (data) => {
@@ -69,6 +74,8 @@ export function useImages() {
 	})
 
 	// Phase 19 — Vulnerability scan (CGV-02/03/04)
+	// Note: scanImage stays host-local (Plan 22-01 D-07: Trivy needs host docker
+	// daemon + image cache). Does NOT accept environmentId.
 	const scanMutation = trpcReact.docker.scanImage.useMutation({
 		onSuccess: (data) => {
 			const total = data.counts.CRITICAL + data.counts.HIGH + data.counts.MEDIUM + data.counts.LOW
@@ -88,22 +95,22 @@ export function useImages() {
 
 	const removeImage = (id: string, force?: boolean) => {
 		setActionResult(null)
-		removeMutation.mutate({id, force: force ?? false})
+		removeMutation.mutate({id, force: force ?? false, environmentId})
 	}
 
 	const pullImage = (image: string) => {
 		setActionResult(null)
-		pullMutation.mutate({image})
+		pullMutation.mutate({image, environmentId})
 	}
 
 	const tagImage = (id: string, repo: string, tag: string) => {
 		setActionResult(null)
-		tagMutation.mutate({id, repo, tag})
+		tagMutation.mutate({id, repo, tag, environmentId})
 	}
 
 	const pruneImages = () => {
 		setActionResult(null)
-		pruneMutation.mutate()
+		pruneMutation.mutate({environmentId})
 	}
 
 	const scanImage = (imageRef: string, force?: boolean) => {

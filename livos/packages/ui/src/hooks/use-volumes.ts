@@ -1,14 +1,19 @@
 import {useState} from 'react'
 
+import {useSelectedEnvironmentId} from '@/stores/environment-store'
 import {trpcReact} from '@/trpc/trpc'
 
 export function useVolumes() {
+	const environmentId = useSelectedEnvironmentId()
 	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
 
-	const volumesQuery = trpcReact.docker.listVolumes.useQuery(undefined, {
-		retry: false,
-		refetchInterval: 10000,
-	})
+	const volumesQuery = trpcReact.docker.listVolumes.useQuery(
+		{environmentId},
+		{
+			retry: false,
+			refetchInterval: 10000,
+		},
+	)
 
 	const removeMutation = trpcReact.docker.removeVolume.useMutation({
 		onSuccess: (data) => {
@@ -36,12 +41,12 @@ export function useVolumes() {
 
 	const removeVolume = (name: string, confirmName: string) => {
 		setActionResult(null)
-		removeMutation.mutate({name, confirmName})
+		removeMutation.mutate({name, confirmName, environmentId})
 	}
 
 	const createVolume = (input: {name: string; driver?: string; driverOpts?: Record<string, string>}) => {
 		setActionResult(null)
-		createVolumeMutation.mutate(input)
+		createVolumeMutation.mutate({...input, driver: input.driver ?? 'local', environmentId})
 	}
 
 	const volumes = volumesQuery.data ?? []
