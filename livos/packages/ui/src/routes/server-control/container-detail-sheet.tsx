@@ -14,15 +14,18 @@ import {
 	IconSearch,
 	IconDownload,
 	IconTrash,
+	IconBrain,
 } from '@tabler/icons-react'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 import {useContainerDetail} from '@/hooks/use-container-detail'
+import {useAiDiagnostics} from '@/hooks/use-ai-diagnostics'
 import {trpcReact} from '@/trpc/trpc'
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
+import {Button} from '@/shadcn-components/ui/button'
 import {cn} from '@/shadcn-lib/utils'
 
 import {FilesTab} from './container-files-tab'
@@ -271,6 +274,138 @@ function InfoTab({containerName}: {containerName: string}) {
 				<SectionTitle>Networks</SectionTitle>
 				<p className='text-sm text-text-primary'>{detail.networks.length > 0 ? detail.networks.join(', ') : 'none'}</p>
 			</section>
+
+			{/* Plan 23-01 (AID-01) — AI Diagnostics. Click button → Kimi
+			    bundles last 200 log lines + stats + image info, returns
+			    plain-English {likely cause / suggested action / confidence}. */}
+			<section>
+				<SectionTitle>AI Diagnostics</SectionTitle>
+				<DiagnosticPanel containerName={containerName} />
+			</section>
+		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// AI Diagnostics panel — AID-01
+// ---------------------------------------------------------------------------
+
+function DiagnosticPanel({containerName}: {containerName: string}) {
+	const {
+		diagnoseContainer,
+		diagnosticResult,
+		diagnosticError,
+		isDiagnosing,
+		resetDiagnosis,
+	} = useAiDiagnostics()
+
+	const confidenceClass = (
+		conf: 'low' | 'medium' | 'high' | 'unknown' | undefined,
+	): string => {
+		switch (conf) {
+			case 'high':
+				return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
+			case 'medium':
+				return 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+			case 'low':
+				return 'bg-red-500/15 text-red-600 border-red-500/30'
+			default:
+				return 'bg-neutral-500/15 text-neutral-600 border-neutral-500/30'
+		}
+	}
+
+	if (!diagnosticResult && !isDiagnosing && !diagnosticError) {
+		return (
+			<div className='flex items-center gap-3'>
+				<Button
+					size='sm'
+					onClick={() => diagnoseContainer({name: containerName})}
+					disabled={isDiagnosing}
+				>
+					<IconBrain size={14} className='mr-1.5' />
+					AI Diagnose
+				</Button>
+				<span className='text-xs text-text-tertiary'>
+					Sends last 200 log lines + stats to Kimi (secrets redacted)
+				</span>
+			</div>
+		)
+	}
+
+	if (isDiagnosing) {
+		return (
+			<div className='flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-700'>
+				<IconLoader2 size={16} className='animate-spin' />
+				<span>Analyzing logs and stats — this can take up to 30s on first call...</span>
+			</div>
+		)
+	}
+
+	if (diagnosticError) {
+		return (
+			<div className='space-y-2'>
+				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+					{diagnosticError.message}
+				</div>
+				<Button
+					size='sm'
+					onClick={() => {
+						resetDiagnosis()
+						diagnoseContainer({name: containerName})
+					}}
+				>
+					<IconRefresh size={14} className='mr-1.5' />
+					Retry
+				</Button>
+			</div>
+		)
+	}
+
+	if (!diagnosticResult) return null
+
+	return (
+		<div className='space-y-3'>
+			<div className='flex items-center justify-between'>
+				<div className='flex items-center gap-2 text-xs text-text-tertiary'>
+					<span>Generated {new Date(diagnosticResult.generatedAt).toLocaleTimeString()}</span>
+					{diagnosticResult.cached && (
+						<span className='inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-700'>
+							cached
+						</span>
+					)}
+					<span
+						className={cn(
+							'inline-flex items-center rounded border px-2 py-0.5 font-medium',
+							confidenceClass(diagnosticResult.confidence),
+						)}
+					>
+						confidence: {diagnosticResult.confidence}
+					</span>
+				</div>
+				<Button
+					size='sm'
+					variant='outline'
+					onClick={() => {
+						resetDiagnosis()
+						diagnoseContainer({name: containerName})
+					}}
+				>
+					<IconRefresh size={14} className='mr-1.5' />
+					Re-run
+				</Button>
+			</div>
+			{diagnosticResult.likelyCause && (
+				<div className='rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700'>
+					<div className='mb-1 font-medium text-amber-600'>Likely Cause</div>
+					<p className='whitespace-pre-wrap leading-relaxed'>{diagnosticResult.likelyCause}</p>
+				</div>
+			)}
+			{diagnosticResult.suggestedAction && (
+				<div className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700'>
+					<div className='mb-1 font-medium text-emerald-600'>Suggested Action</div>
+					<p className='whitespace-pre-wrap leading-relaxed'>{diagnosticResult.suggestedAction}</p>
+				</div>
+			)}
 		</div>
 	)
 }

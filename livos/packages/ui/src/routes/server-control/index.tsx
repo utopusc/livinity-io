@@ -38,6 +38,9 @@ import {
 	IconCloudDownload,
 	IconShieldCheck,
 	IconExternalLink,
+	IconBrain,
+	IconLoader2,
+	IconSparkles,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -48,6 +51,7 @@ import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {trpcReact} from '@/trpc/trpc'
 import {useContainers} from '@/hooks/use-containers'
 import {useImages, formatBytes} from '@/hooks/use-images'
+import {useAiDiagnostics} from '@/hooks/use-ai-diagnostics'
 import {useNetworkStats, useDiskIO, useProcesses} from '@/hooks/use-monitoring'
 import {usePM2} from '@/hooks/use-pm2'
 import {useVolumes} from '@/hooks/use-volumes'
@@ -1754,6 +1758,14 @@ function ScanResultPanel({imageRef}: {imageRef: string}) {
 	)
 	const {scanImage, isScanning, scanResult, scanError} = useImages()
 	const [expandedSeverity, setExpandedSeverity] = useState<Severity | null>(null)
+	// Plan 23-01 (AID-04): plain-English CVE explainer
+	const {
+		explainVulnerabilities,
+		explanationResult,
+		explanationError,
+		isExplaining,
+		resetExplanation,
+	} = useAiDiagnostics()
 
 	// Show fresh scan result if mutation just ran for this image, else cached, else "not scanned yet"
 	const result = scanResult && scanResult.imageRef === imageRef ? scanResult : (cachedQuery.data ?? null)
@@ -1838,7 +1850,66 @@ function ScanResultPanel({imageRef}: {imageRef: string}) {
 						<span className='font-mono'>{result.counts[sev]}</span>
 					</button>
 				))}
+				{/* Plan 23-01 (AID-04): plain-English CVE explainer.
+				    Hidden when there are no CRITICAL/HIGH CVEs to avoid wasting
+				    Kimi tokens on clean scans. */}
+				{result.counts.CRITICAL + result.counts.HIGH > 0 && (
+					<Button
+						size='sm'
+						variant='default'
+						className='ml-auto'
+						onClick={() => {
+							resetExplanation()
+							explainVulnerabilities({imageRef})
+						}}
+						disabled={isExplaining}
+					>
+						{isExplaining ? (
+							<>
+								<IconLoader2 size={12} className='mr-1 animate-spin' />
+								Explaining...
+							</>
+						) : (
+							<>
+								<IconBrain size={12} className='mr-1' />
+								Explain CVEs
+							</>
+						)}
+					</Button>
+				)}
 			</div>
+
+			{isExplaining && (
+				<div className='flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-700'>
+					<IconLoader2 size={14} className='animate-spin' />
+					<span>Asking Kimi to explain the most critical CVEs...</span>
+				</div>
+			)}
+			{explanationError && (
+				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+					{explanationError.message}
+				</div>
+			)}
+			{explanationResult && !isExplaining && (
+				<div className='space-y-2'>
+					{explanationResult.explanation && (
+						<div className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700'>
+							<div className='mb-1 font-medium text-emerald-600'>Explanation</div>
+							<p className='whitespace-pre-wrap leading-relaxed'>
+								{explanationResult.explanation}
+							</p>
+						</div>
+					)}
+					{explanationResult.upgradeSuggestion && (
+						<div className='rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-700'>
+							<div className='mb-1 font-medium text-blue-600'>Upgrade path</div>
+							<p className='whitespace-pre-wrap leading-relaxed'>
+								{explanationResult.upgradeSuggestion}
+							</p>
+						</div>
+					)}
+				</div>
+			)}
 
 			{expandedSeverity !== null && (
 				<div className='overflow-x-auto rounded-lg border border-border-default bg-surface-base'>
@@ -2598,6 +2669,130 @@ function NetworksTab() {
 	)
 }
 
+// Plan 23-01 (AID-03) — natural-language compose generator. Lives inside the
+// DeployStackForm Tabs primitive next to YAML / Git. Uses useAiDiagnostics
+// to call docker.generateComposeFromPrompt; on success renders a read-only
+// preview with a "Use this YAML" button that writes the YAML into the
+// outer composeYaml state and switches the tab back to 'yaml' so the user
+// can review/edit before clicking Deploy.
+function AiComposeTab({
+	prompt,
+	setPrompt,
+	onUseYaml,
+}: {
+	prompt: string
+	setPrompt: (v: string) => void
+	onUseYaml: (yaml: string) => void
+}) {
+	const {generateCompose, composeResult, composeError, isGeneratingCompose, resetCompose} =
+		useAiDiagnostics()
+	const promptValid = prompt.trim().length >= 10 && prompt.trim().length <= 2000
+
+	return (
+		<div className='space-y-3'>
+			<div className='space-y-1.5'>
+				<Label htmlFor='ai-compose-prompt'>Describe your stack</Label>
+				<textarea
+					id='ai-compose-prompt'
+					value={prompt}
+					onChange={(e) => setPrompt(e.target.value)}
+					placeholder={`e.g. "Nextcloud with Redis and MariaDB, expose on 8080. Use latest stable images."`}
+					className='w-full rounded-lg border border-border-default bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/50'
+					style={{
+						fontSize: '13px',
+						minHeight: '100px',
+						lineHeight: '1.5',
+						resize: 'vertical',
+					}}
+					maxLength={2000}
+					spellCheck={false}
+				/>
+				<div className='flex items-center justify-between text-xs text-text-tertiary'>
+					<span>{prompt.trim().length}/2000 characters (min 10)</span>
+					<Button
+						type='button'
+						size='sm'
+						disabled={!promptValid || isGeneratingCompose}
+						onClick={() => {
+							resetCompose()
+							generateCompose({prompt: prompt.trim()})
+						}}
+					>
+						{isGeneratingCompose ? (
+							<>
+								<IconLoader2 size={14} className='mr-1 animate-spin' />
+								Generating...
+							</>
+						) : (
+							<>
+								<IconSparkles size={14} className='mr-1' />
+								Generate
+							</>
+						)}
+					</Button>
+				</div>
+			</div>
+
+			{isGeneratingCompose && (
+				<div className='flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-700'>
+					<IconLoader2 size={14} className='animate-spin' />
+					<span>Asking Kimi to generate compose YAML — this can take up to 30s...</span>
+				</div>
+			)}
+
+			{composeError && (
+				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+					{composeError.message}
+				</div>
+			)}
+
+			{composeResult && composeResult.yaml && (
+				<div className='space-y-2'>
+					<div className='flex items-center justify-between'>
+						<Label>Generated YAML preview</Label>
+						<Button
+							type='button'
+							size='sm'
+							variant='default'
+							onClick={() => onUseYaml(composeResult.yaml)}
+						>
+							<IconCheck size={14} className='mr-1' />
+							Use this YAML
+						</Button>
+					</div>
+					<textarea
+						readOnly
+						value={composeResult.yaml}
+						className='w-full rounded-lg border border-border-default bg-neutral-950 px-4 py-3 text-white focus:outline-none'
+						style={{
+							fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+							fontSize: '12px',
+							minHeight: '300px',
+							lineHeight: '1.5',
+							resize: 'vertical',
+							tabSize: 2,
+						}}
+					/>
+					{composeResult.warnings && composeResult.warnings.length > 0 && (
+						<div className='rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 space-y-0.5'>
+							{composeResult.warnings.map((w, i) => (
+								<div key={i}>· {w}</div>
+							))}
+						</div>
+					)}
+				</div>
+			)}
+
+			{composeResult && !composeResult.yaml && (
+				<div className='rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-600'>
+					Kimi did not return a compose YAML. Try rephrasing the prompt with more specific
+					service names and ports.
+				</div>
+			)}
+		</div>
+	)
+}
+
 // Deploy/Edit Stack Form (full-page overlay like ContainerCreateForm)
 function DeployStackForm({
 	open,
@@ -2621,7 +2816,9 @@ function DeployStackForm({
 	const [nameError, setNameError] = useState('')
 
 	// Plan 21-02: Source-of-stack tab state ('yaml' = paste compose, 'git' = clone repo).
-	const [tab, setTab] = useState<'yaml' | 'git'>('yaml')
+	// Plan 23-01 (AID-03): adds 'ai' = generate from natural-language prompt.
+	const [tab, setTab] = useState<'yaml' | 'git' | 'ai'>('yaml')
+	const [aiPrompt, setAiPrompt] = useState('')
 	const [gitUrl, setGitUrl] = useState('')
 	const [gitBranch, setGitBranch] = useState('main')
 	const [gitComposePath, setGitComposePath] = useState('docker-compose.yml')
@@ -2691,6 +2888,7 @@ function DeployStackForm({
 			setNameError('')
 			// Plan 21-02: also reset git tab state + clear any lingering deploy result.
 			setTab('yaml')
+			setAiPrompt('')
 			setGitUrl('')
 			setGitBranch('main')
 			setGitComposePath('docker-compose.yml')
@@ -2814,10 +3012,11 @@ function DeployStackForm({
 				{/* Compose source — Plan 21-02 wraps Compose YAML in a Tabs primitive
 				    with a new "Deploy from Git" tab. Edit mode is YAML-only (v1). */}
 				{showGitTab ? (
-					<Tabs value={tab} onValueChange={(v) => setTab(v as 'yaml' | 'git')}>
+					<Tabs value={tab} onValueChange={(v) => setTab(v as 'yaml' | 'git' | 'ai')}>
 						<TabsList className='mb-3'>
 							<TabsTrigger value='yaml'>Deploy from YAML</TabsTrigger>
 							<TabsTrigger value='git'>Deploy from Git</TabsTrigger>
+							<TabsTrigger value='ai'>Generate from prompt</TabsTrigger>
 						</TabsList>
 
 						<TabsContent value='yaml'>
@@ -2967,6 +3166,18 @@ function DeployStackForm({
 									</div>
 								)}
 							</div>
+						</TabsContent>
+
+						{/* Plan 23-01 (AID-03): natural-language compose generator via Kimi. */}
+						<TabsContent value='ai'>
+							<AiComposeTab
+								prompt={aiPrompt}
+								setPrompt={setAiPrompt}
+								onUseYaml={(yaml) => {
+									setComposeYaml(yaml)
+									setTab('yaml')
+								}}
+							/>
 						</TabsContent>
 					</Tabs>
 				) : (
