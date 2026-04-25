@@ -42,6 +42,7 @@ const localRow = {
 	last_seen: null,
 	created_by: null,
 	created_at: new Date('2026-04-24T00:00:00Z'),
+	tags: [] as string[],
 }
 
 const tcpRow = {
@@ -59,6 +60,7 @@ const tcpRow = {
 	last_seen: null,
 	created_by: null,
 	created_at: new Date('2026-04-25T00:00:00Z'),
+	tags: [] as string[],
 }
 
 beforeEach(() => {
@@ -265,5 +267,112 @@ describe('updateEnvironment', () => {
 		await expect(
 			updateEnvironment('11111111-2222-3333-4444-555555555555', {tcpHost: 'x'}, null),
 		).rejects.toThrow(/\[not-found\]/)
+	})
+})
+
+// =========================================================================
+// Phase 25 Plan 25-01 — environment tags column (DOC-06 read/write CRUD).
+// Filter chips UI ships in Plan 25-02; this plan adds the storage column +
+// type plumbing + tRPC inputs.
+// =========================================================================
+describe('environments.tags (Phase 25 DOC-06)', () => {
+	test('Test A: listEnvironments returns the local row with tags: []', async () => {
+		fakePool.query.mockResolvedValue({rows: [localRow]})
+
+		const result = await listEnvironments()
+
+		expect(result.length).toBe(1)
+		expect(result[0].tags).toEqual([])
+		// SELECT_COLS must include the tags column
+		const sql = fakePool.query.mock.calls[0][0] as string
+		expect(sql).toContain('tags')
+	})
+
+	test('Test B: createEnvironment writes tags array and returns it on the env', async () => {
+		const taggedRow = {
+			...tcpRow,
+			tags: ['prod', 'us-east'],
+		}
+		fakePool.query.mockResolvedValue({rows: [taggedRow]})
+
+		const result = await createEnvironment(
+			{
+				name: 'prod-east',
+				type: 'tcp-tls',
+				tcpHost: '10.0.0.1',
+				tcpPort: 2376,
+				tlsCaPem: tcpRow.tls_ca_pem,
+				tlsCertPem: tcpRow.tls_cert_pem,
+				tlsKeyPem: tcpRow.tls_key_pem,
+				tags: ['prod', 'us-east'],
+			},
+			'admin-id',
+		)
+
+		expect(result.tags).toEqual(['prod', 'us-east'])
+		// INSERT statement must include tags in column list and SELECT_COLS RETURNING
+		const sql = fakePool.query.mock.calls[0][0] as string
+		expect(sql).toContain('INSERT INTO environments')
+		expect(sql).toContain('tags')
+		// tags param should be present in the parameter array (positional)
+		const params = fakePool.query.mock.calls[0][1] as any[]
+		expect(params).toContainEqual(['prod', 'us-east'])
+	})
+
+	test('Test C: createEnvironment with tags=undefined defaults to empty array', async () => {
+		const taggedRow = {...tcpRow, tags: []}
+		fakePool.query.mockResolvedValue({rows: [taggedRow]})
+
+		const result = await createEnvironment(
+			{
+				name: 'remote-untagged',
+				type: 'tcp-tls',
+				tcpHost: '10.0.0.5',
+				tcpPort: 2376,
+				tlsCaPem: tcpRow.tls_ca_pem,
+				tlsCertPem: tcpRow.tls_cert_pem,
+				tlsKeyPem: tcpRow.tls_key_pem,
+				// tags omitted → defaults to []
+			},
+			null,
+		)
+
+		expect(result.tags).toEqual([])
+		// The tags param passed to INSERT must be [] (empty array), NOT null/undefined
+		const params = fakePool.query.mock.calls[0][1] as any[]
+		expect(params).toContainEqual([])
+	})
+
+	test('Test D: updateEnvironment with only tags writes ONLY the tags column', async () => {
+		fakePool.query.mockResolvedValue({rows: [{...tcpRow, tags: ['staging']}]})
+
+		const result = await updateEnvironment(tcpRow.id, {tags: ['staging']}, null)
+
+		expect(result.tags).toEqual(['staging'])
+		const sql = fakePool.query.mock.calls[0][0] as string
+		// SET clause should include tags
+		expect(sql).toMatch(/SET .*tags = \$\d+/)
+		// SET clause should NOT include other columns we didn't update
+		expect(sql).not.toMatch(/SET .*name = /)
+		expect(sql).not.toMatch(/SET .*tcp_host = /)
+	})
+
+	test('Test E: updateEnvironment with tags=[] writes empty array (clears tags)', async () => {
+		fakePool.query.mockResolvedValue({rows: [{...tcpRow, tags: []}]})
+
+		const result = await updateEnvironment(tcpRow.id, {tags: []}, null)
+
+		expect(result.tags).toEqual([])
+		// Empty array param must be present (NOT null)
+		const params = fakePool.query.mock.calls[0][1] as any[]
+		expect(params[0]).toEqual([])
+	})
+
+	test('Test F: updateEnvironment(LOCAL_ENV_ID, {tags}) STILL throws [cannot-modify-local]', async () => {
+		await expect(
+			updateEnvironment(LOCAL_ENV_ID, {tags: ['anything']}, null),
+		).rejects.toThrow(/\[cannot-modify-local\]/)
+		// No DB query should fire — the local-protection check runs before SQL is built
+		expect(fakePool.query).not.toHaveBeenCalled()
 	})
 })
