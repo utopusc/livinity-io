@@ -184,6 +184,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. Volume-backup job creation flow accessible from `/docker/volumes` link (cross-route navigation)
   5. Deep-linking: `/docker/stacks/myproject` opens stack detail
 **Plans**: 2 plans
+- [ ] 27-01-PLAN.md — Stacks section (DOC-11) — list + 3-tab Deploy dialog (YAML/Git/AI) + ComposeGraphViewer; constituent containers click through to existing ContainerDetailSheet preserving Phase 17 logs + Phase 18 files + Phase 19 vuln-scan
+- [ ] 27-02-PLAN.md — Schedules section + final server-control delete (DOC-12, DOC-03 final) — port SchedulerSection from Settings; volume pre-fill from useSelectedVolume() (Phase 26-02 contract); relocate 7 cross-imported components; delete routes/server-control/ directory
 
 ### Phase 28: Cross-Container Logs + Activity Timeline
 **Goal**: Two new surfaces v27.0 didn't ship — cross-container log aggregator and global event timeline.
