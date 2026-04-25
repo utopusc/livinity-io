@@ -22,6 +22,7 @@ import AiModule from './modules/ai/index.js'
 import TunnelClient from './modules/platform/tunnel-client.js'
 import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
+import {seedLocalEnvironment} from './modules/docker/environments.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
@@ -197,6 +198,15 @@ export default class Livinityd {
 		if (dbReady) {
 			// Migrate YAML user data to PostgreSQL if this is the first run with DB
 			await migrateFromYaml(this.store, dbLogger)
+
+			// Phase 22 MH-01 — seed the built-in 'local' environment row so single-host
+			// installs are byte-for-byte backwards compatible. Idempotent — safe on every boot.
+			try {
+				await seedLocalEnvironment()
+				dbLogger.log("Seeded 'local' environment row")
+			} catch (err) {
+				dbLogger.error('Failed to seed local environment', err)
+			}
 		} else {
 			dbLogger.log('PostgreSQL not available, continuing with YAML-only mode')
 		}
