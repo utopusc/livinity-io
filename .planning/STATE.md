@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 01 of 03 (Phase 22 — Multi-host Docker — Plan 22-01 complete; 22-02 next)
+current_plan: 02 of 03 (Phase 22 — Plan 22-02 complete; ready for 22-03 agent transport + AgentDockerClient)
 status: in-progress
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-04-25T00:43:20.568Z"
-last_activity: 2026-04-25 — Plan 22-01 executed in ~16 minutes, 3 atomic commits (9a27543c, 28d8a00f, 95be5388); 0 deviations; MH-01 + MH-02 satisfied
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-04-25T01:30:00.000Z"
+last_activity: 2026-04-25 — Plan 22-02 executed in ~14 minutes, 3 atomic commits (7f58c022, e048cf43, d643e0c2); 4 deviations (all minor); MH-03 satisfied
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 13
-  completed_plans: 11
-  percent: 85
+  completed_plans: 12
+  percent: 92
 ---
 
 # Project State
@@ -23,16 +23,16 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v27.0 — Docker Management Upgrade (Phase 22 in progress — multi-host Docker)
-**Current focus:** Phase 22 — Multi-host Docker. Plan 22-01 (foundation) complete; Plan 22-02 (UI selector + env management) is next.
+**Current focus:** Phase 22 — Multi-host Docker. Plans 22-01 (backend foundation) + 22-02 (UI selector + env management) complete; Plan 22-03 (agent transport + AgentDockerClient) is next.
 
 ## Current Position
 
-Phase: 22 — Multi-host Docker (IN PROGRESS — 1 of 3 plans done; MH-01 + MH-02 satisfied)
-Current Plan: 01 of 03 (Phase 22 — Plan 22-01 complete; ready for 22-02 UI environment selector)
-Status: 22-01 complete (environments PG table with auto-seeded local row at fixed UUID 00000000-0000-0000-0000-000000000000; getDockerClient(envId) factory in docker-clients.ts with per-env Map<envId,Dockerode> cache + invalidateClient hook; null/undefined/'local' alias-resolve to LOCAL_ENV_ID; module-level Dockerode singleton removed from docker.ts/stacks.ts/container-files.ts — every helper now accepts optional environmentId as last argument; 30+ existing docker.* tRPC routes extended with envIdField = z.string().uuid().nullable().optional(); new docker.environments.* CRUD router with listEnvironments query + create/update/delete mutations; updateEnvironment + deleteEnvironment call invalidateClient(id) so next factory call rebuilds; mutations added to httpOnlyPaths; agent type throws [agent-not-implemented] until 22-03 wires AgentDockerClient; 27 unit tests passing — 19 environments + 8 docker-clients; UI build passes; zero new typecheck errors in docker/ module; gaps documented for v28: multi-host stack deploy, multi-host Trivy scan, real-time WS exec/logs streaming over remote envs).
-Last activity: 2026-04-25 — Plan 22-01 executed in ~16 minutes, 3 atomic commits (9a27543c, 28d8a00f, 95be5388); 0 deviations; MH-01 + MH-02 satisfied
+Phase: 22 — Multi-host Docker (IN PROGRESS — 2 of 3 plans done; MH-01 + MH-02 + MH-03 satisfied)
+Current Plan: 02 of 03 (Phase 22 — Plan 22-02 complete; ready for 22-03 agent transport)
+Status: 22-02 complete (zustand env store at livos/packages/ui/src/stores/environment-store.ts persisted to localStorage 'livos:selectedEnvironmentId' with LOCAL_ENV_ID default + fallback; useEnvironments React Query hook with 10s refetch + CRUD mutations + useGenerateAgentToken stub; environmentId threaded through 7 docker data hooks — useContainers/useImages/useVolumes/useNetworks/useStacks/useEngineInfo/useDockerEvents — every query and applicable mutation passes selectedEnvironmentId as part of input so React Query queryKey-driven re-fetch happens automatically on env change; scanImage / controlStack / editStack / removeStack / deployStack stay envId-less per Plan 22-01 D-06/D-07 host-local CLI/Trivy decision; EnvironmentSelector dropdown in Server Control header with type label/agent-online-offline badges + 'Manage Environments…' link; OfflineAgentBanner amber warning when selected agent env is offline; defensive useEffect resets to LOCAL_ENV_ID if persisted id missing from list; Settings > Environments section with list table (Name | Type | Connection | Status | Created | Edit/Remove), Add dialog with conditional fields per type — socket/tcp-tls/agent — Edit dialog with type immutable + 'leave blank to keep existing' PEM placeholders + partial-only payload, Remove with typed-name confirmation, GenerateAgentTokenDialog auto-fires mutation on open + shows 64-char token + Copy + curl install snippet + 'will not be shown again' warning per Plan 21-02 webhook-secret pattern, useGenerateAgentToken stub returns friendly error if Plan 22-03 route missing — env row IS still created so user can return; 'local' Edit/Remove disabled with Tooltip; 3 atomic commits with UI build passing after each task; deviations: Task 3 was checkpoint:human-verify but auto-approved per user preference, Manage link routes to /settings not /settings/environments because settings sections aren't URL-addressable, Add dialog defaults to tcp-tls instead of socket as a UX nudge, useGenerateAgentToken stub returns isPending instead of isLoading to match tRPC v11+ React Query v5 naming).
+Last activity: 2026-04-25 — Plan 22-02 executed in ~14 minutes, 3 atomic commits (7f58c022, e048cf43, d643e0c2); 4 minor deviations documented; MH-03 satisfied
 
-**Progress:** [█████████░] 85%
+**Progress:** [█████████░] 92%
 
 ## v27.0 Phase Structure
 
@@ -62,14 +62,12 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 | 20-02 | 12 min | 3 | 10 | 2026-04-24 |
 | 21-01 | 6 min | 4 | 9 | 2026-04-24 |
 | 21-02 | 4 min | 2 | 3 | 2026-04-25 |
+| 22-01 | 16 min | 3 | 11 | 2026-04-25 |
+| 22-02 | 14 min | 3 | 13 | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
-| Phase 20 P02 | 12min | 3 tasks | 10 files |
-| Phase 21-gitops-stack-deployment P01 | 6min | 4 tasks | 9 files |
-| Phase 21-gitops-stack-deployment P02 | 4min | 2 tasks | 3 files |
-| Phase 22 P01 | 16 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -116,6 +114,22 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Bracketed-error-code mapping: `[image-not-found]` → NOT_FOUND, `[trivy-timeout]` → TIMEOUT, `[trivy-failed]` / `[trivy-parse]` / `[trivy-unavailable]` → INTERNAL_SERVER_ERROR. Frontend toast shows the unprefixed message.
 - Pre-existing typecheck noise (~338 errors in livinityd unrelated modules + ~38 ActionButton-icon type errors in server-control across pre-existing usages) logged to `.planning/phases/19-compose-graph-vuln-scan/deferred-items.md` per scope-boundary rule. Build is the gating signal (livinityd runs via tsx; UI build passed).
 - Pattern established for v28 SBOM/license/grype: ephemeral-container CLI tool wrapped in execa with bracketed-error mapping + digest-keyed Redis cache. CGV-04 explicitly forbids any auto-scheduling (`docker.scanImage` is mutation-only, no cron, no event listener, no auto-trigger on `pullImage`).
+
+### Plan 22-02 Decisions (2026-04-25)
+
+- D-01: zustand persist (not URL param) — selection survives navigation across all routes; localStorage key 'livos:selectedEnvironmentId'; URL-shareable env links is a v28.0 follow-up. Each tab has its own React state but localStorage is shared, so a new tab adopts the last-set selection.
+- D-02: React Query queryKey IS the env-change refetch mechanism — every docker hook reads useSelectedEnvironmentId() and passes the id into the trpc input; changing environmentId produces a new queryKey and triggers automatic refetch. No manual `utils.docker.*.invalidate()` on env switch — old key is abandoned and gc'd. Significantly simpler than the alternative (subscribe + manual invalidate everywhere).
+- D-03: Selected id is always a string (never null) at the consumer layer — useSelectedEnvironmentId() returns string with LOCAL_ENV_ID fallback; docker hooks pass `{environmentId}` directly into trpc inputs without nullable handling at every site. Backend's getEnvironment() resolves LOCAL_ENV_ID and null/'local' to the same row, so passing the UUID is byte-for-byte equivalent to passing null.
+- D-04: scanImage / controlStack / editStack / removeStack / deployStack stay envId-less — Plan 22-01 D-06/D-07 documented the host-local CLI / Trivy constraint; the UI hooks omit environmentId from these specific mutations even when a remote env is selected. Affected views display data scoped to selected env BUT mutations target the host. Documented in code comments (use-stacks.ts line 33-35). v28.0 will rework with compose-file replication and remote/proxied Trivy.
+- D-05: 'Manage Environments…' dropdown link routes to /settings, NOT /settings/environments — settings sections live in component state, not the router. apple-spotlight.tsx style /settings/wallpaper navigates to dialogs, not section content. Out of scope to add `?section=environments` query-param routing this plan; user clicks Environments from sidebar after landing on /settings.
+- D-06: GenerateAgentTokenDialog auto-fires mutation on open — the mutation is the only thing the dialog does (no form, no confirm); auto-firing matches the Plan 21-02 webhook-secret panel shape. Closing drops token from React state forever.
+- D-07: Edit dialog type is immutable — switching type would require deleting all transport-specific fields then re-validating against new type's required-set + handling Dockerode cache invalidation; cleaner UX is delete-and-recreate via Remove + Add. The plan's spec ("type cannot change") matched.
+- D-08: useGenerateAgentToken stub baked into hook seam (not UI) — defensive `route?.useMutation` check at hook time returns either the real useMutation result OR a stub object with same shape. Dialog component is unaware of whether 22-03 has shipped. When 22-03 lands, stub branch is never taken — no UI changes required. Pattern reusable for any "future tRPC route" the UI wants to ship behind a flag.
+- Defensive selector: useEffect watches environments + selectedEnvironmentId — if persisted id is missing from the env list (deleted in another tab), reset to LOCAL_ENV_ID. Prevents stranded users.
+- 'local' Edit/Remove protection lives in EnvironmentCard via Tooltip-wrapped disabled buttons — backend already throws [cannot-modify-local] / [cannot-delete-local], the UI affordance just makes that visible upfront.
+- Add dialog defaults to type='tcp-tls' (not 'socket') — most common case for non-local envs; socket on a remote host requires NFS-mounted /var/run/docker.sock which is uncommon.
+- useGenerateAgentToken stub returns `isPending` not `isLoading` — matches tRPC v11+ React Query v5 mutation API. Dialog uses isPending throughout.
+- Pattern carried forward to Plan 22-03: replace useGenerateAgentToken stub with real `trpc.docker.generateAgentToken` mutation route. The route should accept `{environmentId}` and return `{token: string, agentId: string}`. The agent installer at `/install-agent.sh` (referenced in install snippet) needs to be served by livinityd or Caddy. The Add dialog's `type='agent'` flow needs the backend to accept agent-type creation without an agentId (or generate one server-side as part of createEnvironment).
 
 ### Plan 22-01 Decisions (2026-04-25)
 
@@ -235,6 +249,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-25T00:43:11.758Z
-Stopped at: Completed 22-01-PLAN.md
-Resume with: `/gsd:audit-milestone v27.0` to run the milestone audit and verify all 33 must-haves still hold end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (likely focuses: Phase 22 multi-host agent, Phase 23 AI-powered diagnostics, plus v28.0 follow-up items captured in 21-02 SUMMARY: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab).
+Last session: 2026-04-25T01:30:00.000Z
+Stopped at: Completed 22-02-PLAN.md
+Resume with: `/gsd:execute-phase 22 03` to implement Plan 22-03 (agent transport: docker_agents PG table, AgentDockerClient that proxies Dockerode calls over outbound WebSocket, replace [agent-not-implemented] branch in docker-clients.ts buildClient, real docker.generateAgentToken mutation, agent registration endpoint, agent binary scaffold). After 22-03 completes Phase 22, run `/gsd:audit-milestone v27.0` to validate all 33 must-haves end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (focuses: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab; multi-host stack deploy via compose-file replication; multi-host Trivy scan; real-time WS exec/logs over remote envs).

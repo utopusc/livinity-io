@@ -221,7 +221,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 3 plans
 **Plan files**:
 - [x] 22-01-PLAN.md — environments PG table + Dockerode factory + tRPC envId param (MH-01, MH-02)
-- [ ] 22-02-PLAN.md — UI environment selector + Settings > Environments management (MH-03)
+- [x] 22-02-PLAN.md — UI environment selector + Settings > Environments management (MH-03)
 - [ ] 22-03-PLAN.md — Outbound docker-agent package + WebSocket transport + token CRUD with 5s-revoke SLA (MH-04, MH-05)
 
 ### Phase 23: AI-Powered Docker Diagnostics
@@ -249,7 +249,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 20. Scheduled Tasks + Backup | v27.0 | 2/2 | Complete   | 2026-04-24 |
 | 21. GitOps Stack Deployment | v27.0 | 2/2 | Complete   | 2026-04-25 |
-| 22. Multi-host Docker | v27.0 | 1/3 | In Progress|  |
+| 22. Multi-host Docker | v27.0 | 2/3 | In Progress|  |
 | 23. AI-Powered Docker Diagnostics | v27.0 | 0/2 | Not started | - |
 
 ---
