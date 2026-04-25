@@ -105,6 +105,10 @@ export const httpOnlyPaths = [
 	'scheduler.deleteJob',
 	'scheduler.runNow',
 	'scheduler.testBackupDestination',
+	// Phase 23 — AI diagnostics mutations (long-running, can take 30-60s)
+	'docker.diagnoseContainer',
+	'docker.generateComposeFromPrompt',
+	'docker.explainVulnerabilities',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
 	// Device management -- use HTTP for reliability through relay tunnel
