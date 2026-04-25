@@ -1,9 +1,6 @@
-// Phase 24-01 placeholder — replaced in Phase 26 (DOC-09).
-export function Volumes() {
-	return (
-		<div className='flex h-full flex-col items-center justify-center gap-2 p-8 text-center'>
-			<h2 className='text-lg font-semibold text-zinc-800 dark:text-zinc-100'>Volumes</h2>
-			<p className='text-sm text-zinc-500 dark:text-zinc-400'>Coming in Phase 26 — Volume list + backup config</p>
-		</div>
-	)
-}
+// Phase 26 Plan 26-02 — replaces the Phase 24 placeholder.
+//
+// The full Volumes section lives in routes/docker/resources/volume-section.tsx
+// (DOC-09 + DOC-20 partial). Re-exported as `Volumes` so docker-app.tsx's
+// SectionView switch case keeps working — zero changes to docker-app.tsx.
+export {VolumeSection as Volumes} from '../resources/volume-section'
