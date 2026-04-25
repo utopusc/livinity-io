@@ -155,7 +155,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. Clicking an env card scopes the rest of the app to that env (sets selectedEnvironmentId in zustand store)
 **Plans**: 2 plans
 - [x] 25-01-PLAN.md — Backend tags column + EnvCard grid (DOC-04 partial, DOC-06 partial) (completed 2026-04-25)
-- [ ] 25-02-PLAN.md — Filter chips + Top-CPU panel (DOC-04 final, DOC-05, DOC-06 final)
+- [x] 25-02-PLAN.md — Filter chips + Top-CPU panel (DOC-04 final, DOC-05, DOC-06 final)
 
 ### Phase 26: Resource Routes (Containers / Images / Volumes / Networks)
 **Goal**: Migrate the four most-used resource lists from horizontal tabs to dedicated routes with deep-linking.
