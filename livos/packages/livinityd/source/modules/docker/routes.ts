@@ -58,6 +58,13 @@ import {
 	generateComposeFromPrompt,
 	explainVulnerabilities,
 } from './ai-diagnostics.js'
+// Phase 23 AID-02 — AI Alerts CRUD (used by listAiAlerts query + dismiss mutations).
+// Inserts happen inside the ai-resource-watch scheduler handler — no insert tRPC route.
+import {
+	listAiAlerts,
+	dismissAiAlert,
+	dismissAllAiAlerts,
+} from './ai-alerts.js'
 import {
 	listCredentials,
 	createCredential,
@@ -979,6 +986,69 @@ export default router({
 				})
 			}
 		}),
+
+	// -----------------------------------------------------------------------
+	// Phase 23 AID-02 — AI Alerts (proactive resource-pressure alerts).
+	// listAiAlerts is a polled query (30s refetch from the AlertsBell hook)
+	// and stays on WebSocket. dismiss / dismissAll are mutations registered
+	// in httpOnlyPaths so they don't silently hang on disconnected WS clients.
+	// -----------------------------------------------------------------------
+
+	listAiAlerts: adminProcedure
+		.input(
+			z
+				.object({
+					includeDismissed: z.boolean().optional(),
+					limit: z.number().int().min(1).max(200).optional(),
+				})
+				.optional(),
+		)
+		.query(async ({input}) => {
+			try {
+				return await listAiAlerts({
+					includeDismissed: input?.includeDismissed,
+					limit: input?.limit,
+				})
+			} catch (err: any) {
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err?.message ?? 'Failed to list AI alerts',
+				})
+			}
+		}),
+
+	dismissAiAlert: adminProcedure
+		.input(z.object({id: z.string().uuid()}))
+		.mutation(async ({input}) => {
+			try {
+				const ok = await dismissAiAlert(input.id)
+				if (!ok) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Alert not found or already dismissed',
+					})
+				}
+				return {dismissed: true}
+			} catch (err: any) {
+				if (err instanceof TRPCError) throw err
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err?.message ?? 'Failed to dismiss alert',
+				})
+			}
+		}),
+
+	dismissAllAiAlerts: adminProcedure.mutation(async () => {
+		try {
+			const count = await dismissAllAiAlerts()
+			return {dismissed: count}
+		} catch (err: any) {
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: err?.message ?? 'Failed to dismiss alerts',
+			})
+		}
+	}),
 
 	// -----------------------------------------------------------------------
 	// Volume management
