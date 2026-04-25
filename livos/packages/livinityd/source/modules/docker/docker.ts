@@ -2,6 +2,7 @@ import Dockerode from 'dockerode'
 
 import stripAnsi from 'strip-ansi'
 
+import {getDockerClient} from './docker-clients.js'
 import {
 	PROTECTED_CONTAINER_PATTERNS,
 	type ContainerInfo,
@@ -22,15 +23,20 @@ import {
 	type EngineInfo,
 } from './types.js'
 
-// Singleton Dockerode instance -- reused across all calls (not per-call like ai/routes.ts)
-const docker = new Dockerode()
+// Phase 22 MH-02: replaced the module-level Dockerode singleton with the
+// `getDockerClient(envId)` factory. Every helper accepts an optional
+// `environmentId` parameter; missing/null/'local' resolves to the local socket
+// via the auto-seeded `local` environment row. Existing callers that don't
+// pass envId continue to hit the local socket — byte-for-byte backwards
+// compatible with the pre-Phase-22 single-host behaviour.
 
 export function isProtectedContainer(name: string): boolean {
 	const lower = name.toLowerCase()
 	return PROTECTED_CONTAINER_PATTERNS.some((pattern) => lower.includes(pattern))
 }
 
-export async function listContainers(): Promise<ContainerInfo[]> {
+export async function listContainers(environmentId?: string | null): Promise<ContainerInfo[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const containers = await docker.listContainers({all: true})
 	return containers.map((c) => ({
 		id: c.Id.slice(0, 12),
@@ -54,6 +60,7 @@ export async function manageContainer(
 	name: string,
 	operation: ContainerOperation,
 	force?: boolean,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
 	// Server-side protected container enforcement (SEC-02)
 	// Protected containers cannot be stopped, removed, or paused (must stay running)
@@ -61,6 +68,7 @@ export async function manageContainer(
 		throw new Error(`[protected-container] Cannot ${operation} protected container: ${name}`)
 	}
 
+	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(name)
 
 	const pastTense: Record<ContainerOperation, string> = {
@@ -104,9 +112,10 @@ export async function bulkManageContainers(
 	names: string[],
 	operation: ContainerOperation,
 	force?: boolean,
+	environmentId?: string | null,
 ): Promise<Array<{name: string; success: boolean; message: string}>> {
 	const results = await Promise.allSettled(
-		names.map((name) => manageContainer(name, operation, force)),
+		names.map((name) => manageContainer(name, operation, force, environmentId)),
 	)
 
 	return results.map((result, index) => {
@@ -123,7 +132,10 @@ export async function bulkManageContainers(
 
 export async function createContainer(
 	input: ContainerCreateInput,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string; containerId: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
+
 	// Optionally pull image first (default: true)
 	if (input.pullImage !== false) {
 		await new Promise<void>((resolve, reject) => {
@@ -244,10 +256,13 @@ export async function createContainer(
 export async function recreateContainer(
 	name: string,
 	input: ContainerCreateInput,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string; containerId: string}> {
 	if (isProtectedContainer(name)) {
 		throw new Error(`[protected-container] Cannot recreate protected container: ${name}`)
 	}
+
+	const docker = await getDockerClient(environmentId ?? null)
 
 	try {
 		const container = docker.getContainer(name)
@@ -263,7 +278,7 @@ export async function recreateContainer(
 		input.name = name
 
 		// Create and start the new container with updated config
-		return await createContainer(input)
+		return await createContainer(input, environmentId)
 	} catch (err: any) {
 		if (err.statusCode === 404 || err.reason === 'no such container') {
 			throw new Error(`[not-found] Container not found: ${name}`)
@@ -275,6 +290,7 @@ export async function recreateContainer(
 export async function renameContainer(
 	name: string,
 	newName: string,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
 	if (isProtectedContainer(name)) {
 		throw new Error(`[protected-container] Cannot rename protected container: ${name}`)
@@ -283,6 +299,8 @@ export async function renameContainer(
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(newName)) {
 		throw new Error(`Invalid container name '${newName}'. Must start with alphanumeric and contain only [a-zA-Z0-9_.-]`)
 	}
+
+	const docker = await getDockerClient(environmentId ?? null)
 
 	try {
 		const container = docker.getContainer(name)
@@ -299,7 +317,12 @@ export async function renameContainer(
 	}
 }
 
-export async function inspectContainer(name: string): Promise<ContainerDetail> {
+export async function inspectContainer(
+	name: string,
+	environmentId?: string | null,
+): Promise<ContainerDetail> {
+	const docker = await getDockerClient(environmentId ?? null)
+
 	try {
 		const container = docker.getContainer(name)
 		const info = await container.inspect()
@@ -401,7 +424,10 @@ export async function getContainerLogs(
 	name: string,
 	tail: number = 500,
 	timestamps: boolean = true,
+	environmentId?: string | null,
 ): Promise<string> {
+	const docker = await getDockerClient(environmentId ?? null)
+
 	try {
 		const container = docker.getContainer(name)
 		const logBuffer = (await container.logs({
@@ -426,7 +452,12 @@ export async function getContainerLogs(
 	}
 }
 
-export async function getContainerStats(name: string): Promise<ContainerStats> {
+export async function getContainerStats(
+	name: string,
+	environmentId?: string | null,
+): Promise<ContainerStats> {
+	const docker = await getDockerClient(environmentId ?? null)
+
 	try {
 		const container = docker.getContainer(name)
 		const stats: any = await container.stats({stream: false})
@@ -487,7 +518,8 @@ export async function getContainerStats(name: string): Promise<ContainerStats> {
 // Image management
 // ---------------------------------------------------------------------------
 
-export async function listImages(): Promise<ImageInfo[]> {
+export async function listImages(environmentId?: string | null): Promise<ImageInfo[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const images = await docker.listImages()
 	return images
 		.map((img): ImageInfo => ({
@@ -502,7 +534,9 @@ export async function listImages(): Promise<ImageInfo[]> {
 export async function removeImage(
 	id: string,
 	force: boolean,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await docker.getImage(id).remove({force})
 		return {success: true, message: 'Image removed successfully'}
@@ -517,7 +551,10 @@ export async function removeImage(
 	}
 }
 
-export async function pruneImages(): Promise<{spaceReclaimed: number; deletedCount: number}> {
+export async function pruneImages(
+	environmentId?: string | null,
+): Promise<{spaceReclaimed: number; deletedCount: number}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const result = await docker.pruneImages()
 	return {
 		spaceReclaimed: result.SpaceReclaimed || 0,
@@ -527,7 +564,9 @@ export async function pruneImages(): Promise<{spaceReclaimed: number; deletedCou
 
 export async function pullImage(
 	imageName: string,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await new Promise<void>((resolve, reject) => {
 			docker.pull(imageName, (err: any, stream: any) => {
@@ -564,7 +603,9 @@ export async function tagImage(
 	id: string,
 	repo: string,
 	tag: string,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await docker.getImage(id).tag({repo, tag})
 		return {success: true, message: `Image tagged as ${repo}:${tag}`}
@@ -578,7 +619,9 @@ export async function tagImage(
 
 export async function imageHistory(
 	id: string,
+	environmentId?: string | null,
 ): Promise<ImageHistoryEntry[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		const history = await docker.getImage(id).history()
 		return history.map((entry: any): ImageHistoryEntry => ({
@@ -600,7 +643,8 @@ export async function imageHistory(
 // Volume management
 // ---------------------------------------------------------------------------
 
-export async function listVolumes(): Promise<VolumeInfo[]> {
+export async function listVolumes(environmentId?: string | null): Promise<VolumeInfo[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const result = await docker.listVolumes()
 	const volumes = result.Volumes || []
 	return volumes
@@ -615,7 +659,9 @@ export async function listVolumes(): Promise<VolumeInfo[]> {
 
 export async function removeVolume(
 	name: string,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await docker.getVolume(name).remove()
 		return {success: true, message: `Volume '${name}' removed successfully`}
@@ -634,7 +680,8 @@ export async function removeVolume(
 // Network management
 // ---------------------------------------------------------------------------
 
-export async function listNetworks(): Promise<NetworkInfo[]> {
+export async function listNetworks(environmentId?: string | null): Promise<NetworkInfo[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const networks = await docker.listNetworks()
 	return networks
 		.map((net): NetworkInfo => ({
@@ -647,7 +694,11 @@ export async function listNetworks(): Promise<NetworkInfo[]> {
 		.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export async function inspectNetwork(id: string): Promise<NetworkDetail> {
+export async function inspectNetwork(
+	id: string,
+	environmentId?: string | null,
+): Promise<NetworkDetail> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		const info = await docker.getNetwork(id).inspect()
 		const containers = Object.entries(info.Containers || {}).map(
@@ -672,14 +723,18 @@ export async function inspectNetwork(id: string): Promise<NetworkDetail> {
 	}
 }
 
-export async function createNetwork(input: {
-	name: string
-	driver: string
-	subnet?: string
-	gateway?: string
-	internal?: boolean
-	labels?: Record<string, string>
-}): Promise<{success: boolean; message: string; id: string}> {
+export async function createNetwork(
+	input: {
+		name: string
+		driver: string
+		subnet?: string
+		gateway?: string
+		internal?: boolean
+		labels?: Record<string, string>
+	},
+	environmentId?: string | null,
+): Promise<{success: boolean; message: string; id: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		const ipamConfig = input.subnet
 			? [
@@ -709,7 +764,9 @@ export async function createNetwork(input: {
 
 export async function removeNetwork(
 	id: string,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await docker.getNetwork(id).remove()
 		return {success: true, message: 'Network removed successfully'}
@@ -730,7 +787,9 @@ export async function removeNetwork(
 export async function disconnectNetwork(
 	networkId: string,
 	containerId: string,
+	environmentId?: string | null,
 ): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await docker.getNetwork(networkId).disconnect({Container: containerId})
 		return {success: true, message: `Container disconnected from network`}
@@ -745,11 +804,15 @@ export async function disconnectNetwork(
 	}
 }
 
-export async function createVolume(input: {
-	name: string
-	driver?: string
-	driverOpts?: Record<string, string>
-}): Promise<{success: boolean; message: string}> {
+export async function createVolume(
+	input: {
+		name: string
+		driver?: string
+		driverOpts?: Record<string, string>
+	},
+	environmentId?: string | null,
+): Promise<{success: boolean; message: string}> {
+	const docker = await getDockerClient(environmentId ?? null)
 	try {
 		await docker.createVolume({
 			Name: input.name,
@@ -767,7 +830,9 @@ export async function createVolume(input: {
 
 export async function volumeUsage(
 	volumeName: string,
+	environmentId?: string | null,
 ): Promise<VolumeUsageInfo[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const containers = await docker.listContainers({all: true})
 	const usage: VolumeUsageInfo[] = []
 
@@ -790,11 +855,15 @@ export async function volumeUsage(
 // Docker Events (Phase 46)
 // ---------------------------------------------------------------------------
 
-export async function getDockerEvents(options: {
-	since?: number
-	until?: number
-	filters?: {type?: string[]}
-}): Promise<DockerEvent[]> {
+export async function getDockerEvents(
+	options: {
+		since?: number
+		until?: number
+		filters?: {type?: string[]}
+	},
+	environmentId?: string | null,
+): Promise<DockerEvent[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const now = Math.floor(Date.now() / 1000)
 	const sinceTs = options.since ?? now - 3600
 	const untilTs = options.until ?? now
@@ -867,7 +936,8 @@ function parseEventChunks(chunks: Buffer[]): DockerEvent[] {
 // Docker Engine Info (Phase 46)
 // ---------------------------------------------------------------------------
 
-export async function getEngineInfo(): Promise<EngineInfo> {
+export async function getEngineInfo(environmentId?: string | null): Promise<EngineInfo> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const [info, version] = await Promise.all([docker.info(), docker.version()])
 
 	return {

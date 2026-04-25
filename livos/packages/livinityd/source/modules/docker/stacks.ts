@@ -4,15 +4,18 @@ import {join} from 'node:path'
 import {randomBytes} from 'node:crypto'
 
 import {$} from 'execa'
-import Dockerode from 'dockerode'
 import {Redis} from 'ioredis'
 
 import {createStackSecretStore, type StackSecretStore} from './stack-secrets.js'
 import {cloneOrPull, copyComposeToStackDir} from './git-deploy.js'
+import {getDockerClient} from './docker-clients.js'
 import {getPool} from '../database/index.js'
 import type {StackInfo, StackContainer, StackControlOperation} from './types.js'
 
-const docker = new Dockerode({socketPath: '/var/run/docker.sock'})
+// Phase 22 MH-02 — Dockerode access goes through `getDockerClient(envId)` so
+// listStacks can target a remote env. NOTE: `docker compose` CLI calls operate
+// on the local filesystem at `/opt/livos/data/stacks` and stay host-local —
+// multi-host stack deploy/control is deferred to v28.0.
 
 const STACKS_DIR = '/opt/livos/data/stacks'
 
@@ -35,7 +38,8 @@ async function ensureStacksDir(name: string): Promise<string> {
 	return stackDir
 }
 
-export async function listStacks(): Promise<StackInfo[]> {
+export async function listStacks(environmentId?: string | null): Promise<StackInfo[]> {
+	const docker = await getDockerClient(environmentId ?? null)
 	const containers = await docker.listContainers({all: true})
 
 	// Group containers by compose project label

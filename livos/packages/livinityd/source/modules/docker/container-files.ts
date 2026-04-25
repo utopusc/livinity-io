@@ -4,10 +4,12 @@ import {PassThrough} from 'node:stream'
 import Dockerode from 'dockerode'
 import archiver from 'archiver'
 
-// Module-local Dockerode instance — mirrors docker-exec-socket.ts / docker-logs-socket.ts.
-// The underlying connection is the shared /var/run/docker.sock, so creating a new
-// constructor per module is essentially free.
-const docker = new Dockerode()
+import {getDockerClient} from './docker-clients.js'
+
+// Phase 22 MH-02 — every public helper accepts an optional `environmentId`
+// and resolves the Dockerode instance via the shared factory. Existing callers
+// that don't pass envId continue hitting the local socket via the auto-seeded
+// 'local' environment row.
 
 export interface ContainerFileEntry {
 	/** Basename only — never a path. */
@@ -119,9 +121,11 @@ function wrap404<T>(containerName: string, err: any): never {
 export async function listDir(
 	containerName: string,
 	dirPath: string,
+	environmentId?: string | null,
 ): Promise<ContainerFileEntry[]> {
 	assertAbsolute(dirPath)
 
+	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(containerName)
 
 	let result: {stdout: string; stderr: string; exitCode: number}
@@ -206,9 +210,11 @@ export async function readFile(
 	containerName: string,
 	filePath: string,
 	maxBytes: number = 1_000_000,
+	environmentId?: string | null,
 ): Promise<{content: string; size: number}> {
 	assertAbsolute(filePath)
 
+	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(containerName)
 
 	// Step 1 — stat for size
@@ -260,9 +266,11 @@ export async function writeFile(
 	containerName: string,
 	filePath: string,
 	content: string | Buffer,
+	environmentId?: string | null,
 ): Promise<void> {
 	assertAbsolute(filePath)
 
+	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(containerName)
 
 	const dir = posixPath.dirname(filePath)
@@ -318,9 +326,11 @@ export async function writeFile(
 export async function downloadArchive(
 	containerName: string,
 	path: string,
+	environmentId?: string | null,
 ): Promise<NodeJS.ReadableStream> {
 	assertAbsolute(path)
 
+	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(containerName)
 
 	try {
@@ -345,6 +355,7 @@ export async function deleteFile(
 	containerName: string,
 	path: string,
 	recursive: boolean,
+	environmentId?: string | null,
 ): Promise<void> {
 	assertAbsolute(path)
 
@@ -353,6 +364,7 @@ export async function deleteFile(
 		throw new Error('[bad-path] refuses to delete root')
 	}
 
+	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(containerName)
 
 	let result: {stdout: string; stderr: string; exitCode: number}
