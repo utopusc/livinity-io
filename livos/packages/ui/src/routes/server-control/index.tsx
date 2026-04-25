@@ -62,6 +62,7 @@ import {useEngineInfo} from '@/hooks/use-engine-info'
 import {useEnvironments} from '@/hooks/use-environments'
 import {useEnvironmentStore} from '@/stores/environment-store'
 import {EnvironmentSelector} from './environment-selector'
+import {AlertsBell} from './ai-alerts-bell'
 import {ContainerCreateForm} from './container-create-form'
 import {ContainerDetailSheet} from './container-detail-sheet'
 import {DomainsTab} from './domains-tab'
@@ -4273,7 +4274,10 @@ export default function ServerControl() {
 						<h1 className='text-xl sm:text-2xl font-bold text-text-primary'>Server Management</h1>
 						<p className='mt-1 text-sm text-text-secondary'>Monitor and manage your server infrastructure</p>
 					</div>
-					<EnvironmentSelector />
+					<div className='flex items-center gap-2'>
+						<AlertsBell />
+						<EnvironmentSelector />
+					</div>
 				</div>
 			</div>
 

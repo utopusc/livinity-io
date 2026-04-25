@@ -109,6 +109,9 @@ export const httpOnlyPaths = [
 	'docker.diagnoseContainer',
 	'docker.generateComposeFromPrompt',
 	'docker.explainVulnerabilities',
+	// Phase 23 AID-02 — AI Alerts dismissal mutations (listAiAlerts query stays on WS)
+	'docker.dismissAiAlert',
+	'docker.dismissAllAiAlerts',
 	// PM2 management -- use HTTP for reliability through relay tunnel
 	'pm2.manage',
 	// Device management -- use HTTP for reliability through relay tunnel
