@@ -2,6 +2,12 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {adminProcedure, router} from '../server/trpc/trpc.js'
+
+// Phase 22 MH-02 — every existing docker.* route accepts an optional
+// `environmentId` UUID. Missing/null/'local' resolves to the auto-seeded
+// 'local' environment row (i.e. the local Unix socket), preserving the
+// pre-Phase-22 single-host behaviour byte-for-byte.
+const envIdField = z.string().uuid().nullable().optional()
 import {
 	listContainers,
 	manageContainer,
@@ -51,12 +57,39 @@ import {
 	createCredential,
 	deleteCredential,
 } from './git-credentials.js'
+import {
+	listEnvironments,
+	createEnvironment,
+	updateEnvironment,
+	deleteEnvironment,
+} from './environments.js'
+import {invalidateClient} from './docker-clients.js'
 
 export default router({
 	listContainers: adminProcedure
-		.input(z.object({all: z.boolean().optional().default(true)}).optional())
+		.input(
+			z
+				.object({
+					all: z.boolean().optional().default(true),
+					environmentId: envIdField,
+				})
+				.optional(),
+		)
 		.query(async ({input}) => {
-			return listContainers()
+			try {
+				return await listContainers(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				if (err.message?.includes('[env-misconfigured]')) {
+					throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message.replace('[env-misconfigured] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to list containers'})
+			}
 		}),
 
 	manageContainer: adminProcedure
@@ -66,6 +99,7 @@ export default router({
 				operation: z.enum(['start', 'stop', 'restart', 'remove', 'kill', 'pause', 'unpause']),
 				force: z.boolean().optional().default(false),
 				confirmName: z.string().optional(),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
@@ -80,13 +114,19 @@ export default router({
 			}
 
 			try {
-				return await manageContainer(input.name, input.operation, input.force)
+				return await manageContainer(input.name, input.operation, input.force, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[protected-container]')) {
 					throw new TRPCError({
 						code: 'FORBIDDEN',
 						message: err.message.replace('[protected-container] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -101,12 +141,19 @@ export default router({
 				names: z.array(z.string().min(1).max(255)).min(1).max(50),
 				operation: z.enum(['start', 'stop', 'restart', 'remove', 'kill', 'pause', 'unpause']),
 				force: z.boolean().optional().default(false),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await bulkManageContainers(input.names, input.operation, input.force)
+				return await bulkManageContainers(input.names, input.operation, input.force, input.environmentId)
 			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to bulk ${input.operation} containers`,
@@ -190,17 +237,25 @@ export default router({
 				extraHosts: z.array(z.string()).optional(),
 				pullImage: z.boolean().optional(),
 				autoStart: z.boolean().optional(),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await createContainer(input)
+				const {environmentId, ...containerInput} = input
+				return await createContainer(containerInput, environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[image-not-found]')) {
 					throw new TRPCError({
 						code: 'NOT_FOUND',
 						message: err.message.replace('[image-not-found] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -288,11 +343,12 @@ export default router({
 					pullImage: z.boolean().optional(),
 					autoStart: z.boolean().optional(),
 				}),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await recreateContainer(input.name, input.config)
+				return await recreateContainer(input.name, input.config, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[protected-container]')) {
 					throw new TRPCError({
@@ -312,6 +368,12 @@ export default router({
 						message: err.message.replace('[image-not-found] ', ''),
 					})
 				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to recreate container ${input.name}`,
@@ -324,11 +386,12 @@ export default router({
 			z.object({
 				name: z.string().min(1).max(255),
 				newName: z.string().min(1).max(255).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await renameContainer(input.name, input.newName)
+				return await renameContainer(input.name, input.newName, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[protected-container]')) {
 					throw new TRPCError({
@@ -348,6 +411,12 @@ export default router({
 						message: err.message.replace('[conflict] ', ''),
 					})
 				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to rename container ${input.name}`,
@@ -356,16 +425,22 @@ export default router({
 		}),
 
 	inspectContainer: adminProcedure
-		.input(z.object({name: z.string().min(1).max(255)}))
+		.input(z.object({name: z.string().min(1).max(255), environmentId: envIdField}))
 		.query(async ({input}) => {
 			try {
-				return await inspectContainer(input.name)
+				return await inspectContainer(input.name, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({
 						code: 'NOT_FOUND',
 						message: err.message.replace('[not-found] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -380,17 +455,24 @@ export default router({
 				name: z.string().min(1).max(255),
 				tail: z.number().min(10).max(5000).optional().default(500),
 				timestamps: z.boolean().optional().default(true),
+				environmentId: envIdField,
 			}),
 		)
 		.query(async ({input}) => {
 			try {
-				return await getContainerLogs(input.name, input.tail, input.timestamps)
+				return await getContainerLogs(input.name, input.tail, input.timestamps, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({
 						code: 'NOT_FOUND',
 						message: err.message.replace('[not-found] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -400,16 +482,22 @@ export default router({
 		}),
 
 	containerStats: adminProcedure
-		.input(z.object({name: z.string().min(1).max(255)}))
+		.input(z.object({name: z.string().min(1).max(255), environmentId: envIdField}))
 		.query(async ({input}) => {
 			try {
-				return await getContainerStats(input.name)
+				return await getContainerStats(input.name, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({
 						code: 'NOT_FOUND',
 						message: err.message.replace('[not-found] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -429,11 +517,12 @@ export default router({
 			z.object({
 				name: z.string().min(1).max(255),
 				path: z.string().min(1).max(4096).startsWith('/'),
+				environmentId: envIdField,
 			}),
 		)
 		.query(async ({input}) => {
 			try {
-				return {entries: await listDir(input.name, input.path)}
+				return {entries: await listDir(input.name, input.path, input.environmentId)}
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
@@ -443,6 +532,12 @@ export default router({
 				}
 				if (err.message?.includes('[ls-failed]')) {
 					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[ls-failed] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -457,11 +552,12 @@ export default router({
 				name: z.string().min(1).max(255),
 				path: z.string().min(1).max(4096).startsWith('/'),
 				maxBytes: z.number().int().min(1).max(1_000_000).optional().default(1_000_000),
+				environmentId: envIdField,
 			}),
 		)
 		.query(async ({input}) => {
 			try {
-				return await readContainerFile(input.name, input.path, input.maxBytes)
+				return await readContainerFile(input.name, input.path, input.maxBytes, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[file-too-large]')) {
 					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[file-too-large] ', '')})
@@ -474,6 +570,12 @@ export default router({
 				}
 				if (err.message?.includes('[read-failed]')) {
 					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[read-failed] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -488,11 +590,12 @@ export default router({
 				name: z.string().min(1).max(255),
 				path: z.string().min(1).max(4096).startsWith('/'),
 				content: z.string().max(1_000_000),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				await writeContainerFile(input.name, input.path, input.content)
+				await writeContainerFile(input.name, input.path, input.content, input.environmentId)
 				return {success: true, message: `Wrote ${input.path}`}
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
@@ -503,6 +606,12 @@ export default router({
 				}
 				if (err.message?.includes('[bad-path]')) {
 					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[bad-path] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -517,11 +626,12 @@ export default router({
 				name: z.string().min(1).max(255),
 				path: z.string().min(1).max(4096).startsWith('/'),
 				recursive: z.boolean().optional().default(false),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				await deleteContainerFile(input.name, input.path, input.recursive)
+				await deleteContainerFile(input.name, input.path, input.recursive, input.environmentId)
 				return {success: true, message: `Deleted ${input.path}`}
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
@@ -532,6 +642,12 @@ export default router({
 				}
 				if (err.message?.includes('[delete-failed]')) {
 					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[delete-failed] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -544,20 +660,33 @@ export default router({
 	// Image management
 	// -----------------------------------------------------------------------
 
-	listImages: adminProcedure.query(async () => {
-		return listImages()
-	}),
+	listImages: adminProcedure
+		.input(z.object({environmentId: envIdField}).optional())
+		.query(async ({input}) => {
+			try {
+				return await listImages(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to list images'})
+			}
+		}),
 
 	removeImage: adminProcedure
 		.input(
 			z.object({
 				id: z.string().min(1),
 				force: z.boolean().optional().default(false),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await removeImage(input.id, input.force)
+				return await removeImage(input.id, input.force, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({
@@ -571,6 +700,12 @@ export default router({
 						message: err.message.replace('[in-use] ', ''),
 					})
 				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || `Failed to remove image ${input.id}`,
@@ -578,27 +713,42 @@ export default router({
 			}
 		}),
 
-	pruneImages: adminProcedure.mutation(async () => {
-		try {
-			return await pruneImages()
-		} catch (err: any) {
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: err.message || 'Failed to prune images',
-			})
-		}
-	}),
+	pruneImages: adminProcedure
+		.input(z.object({environmentId: envIdField}).optional())
+		.mutation(async ({input}) => {
+			try {
+				return await pruneImages(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to prune images',
+				})
+			}
+		}),
 
 	pullImage: adminProcedure
 		.input(z.object({
 			image: z.string().min(1).max(500),
+			environmentId: envIdField,
 		}))
 		.mutation(async ({input}) => {
 			try {
-				return await pullImage(input.image)
+				return await pullImage(input.image, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[image-not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[image-not-found] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -612,13 +762,20 @@ export default router({
 			id: z.string().min(1),
 			repo: z.string().min(1).max(500),
 			tag: z.string().min(1).max(200),
+			environmentId: envIdField,
 		}))
 		.mutation(async ({input}) => {
 			try {
-				return await tagImage(input.id, input.repo, input.tag)
+				return await tagImage(input.id, input.repo, input.tag, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -628,13 +785,19 @@ export default router({
 		}),
 
 	imageHistory: adminProcedure
-		.input(z.object({id: z.string().min(1)}))
+		.input(z.object({id: z.string().min(1), environmentId: envIdField}))
 		.query(async ({input}) => {
 			try {
-				return await imageHistory(input.id)
+				return await imageHistory(input.id, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -698,15 +861,28 @@ export default router({
 	// Volume management
 	// -----------------------------------------------------------------------
 
-	listVolumes: adminProcedure.query(async () => {
-		return listVolumes()
-	}),
+	listVolumes: adminProcedure
+		.input(z.object({environmentId: envIdField}).optional())
+		.query(async ({input}) => {
+			try {
+				return await listVolumes(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to list volumes'})
+			}
+		}),
 
 	removeVolume: adminProcedure
 		.input(
 			z.object({
 				name: z.string().min(1),
 				confirmName: z.string(),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
@@ -718,7 +894,7 @@ export default router({
 			}
 
 			try {
-				return await removeVolume(input.name)
+				return await removeVolume(input.name, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({
@@ -731,6 +907,12 @@ export default router({
 						code: 'CONFLICT',
 						message: err.message.replace('[in-use] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -745,14 +927,22 @@ export default router({
 				name: z.string().min(1).max(255),
 				driver: z.string().default('local'),
 				driverOpts: z.record(z.string()).optional(),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await createVolume(input)
+				const {environmentId, ...volumeInput} = input
+				return await createVolume(volumeInput, environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[conflict]')) {
 					throw new TRPCError({code: 'CONFLICT', message: err.message.replace('[conflict] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -762,30 +952,58 @@ export default router({
 		}),
 
 	volumeUsage: adminProcedure
-		.input(z.object({name: z.string().min(1)}))
+		.input(z.object({name: z.string().min(1), environmentId: envIdField}))
 		.query(async ({input}) => {
-			return await volumeUsage(input.name)
+			try {
+				return await volumeUsage(input.name, input.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || `Failed to get volume usage for ${input.name}`})
+			}
 		}),
 
 	// -----------------------------------------------------------------------
 	// Network management
 	// -----------------------------------------------------------------------
 
-	listNetworks: adminProcedure.query(async () => {
-		return listNetworks()
-	}),
-
-	inspectNetwork: adminProcedure
-		.input(z.object({id: z.string().min(1)}))
+	listNetworks: adminProcedure
+		.input(z.object({environmentId: envIdField}).optional())
 		.query(async ({input}) => {
 			try {
-				return await inspectNetwork(input.id)
+				return await listNetworks(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to list networks'})
+			}
+		}),
+
+	inspectNetwork: adminProcedure
+		.input(z.object({id: z.string().min(1), environmentId: envIdField}))
+		.query(async ({input}) => {
+			try {
+				return await inspectNetwork(input.id, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({
 						code: 'NOT_FOUND',
 						message: err.message.replace('[not-found] ', ''),
 					})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -802,14 +1020,22 @@ export default router({
 				subnet: z.string().max(50).optional(),
 				gateway: z.string().max(50).optional(),
 				internal: z.boolean().optional(),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await createNetwork(input)
+				const {environmentId, ...networkInput} = input
+				return await createNetwork(networkInput, environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[conflict]')) {
 					throw new TRPCError({code: 'CONFLICT', message: err.message.replace('[conflict] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -819,10 +1045,10 @@ export default router({
 		}),
 
 	removeNetwork: adminProcedure
-		.input(z.object({id: z.string().min(1)}))
+		.input(z.object({id: z.string().min(1), environmentId: envIdField}))
 		.mutation(async ({input}) => {
 			try {
-				return await removeNetwork(input.id)
+				return await removeNetwork(input.id, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
@@ -832,6 +1058,12 @@ export default router({
 				}
 				if (err.message?.includes('[in-use]')) {
 					throw new TRPCError({code: 'CONFLICT', message: err.message.replace('[in-use] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -845,14 +1077,21 @@ export default router({
 			z.object({
 				networkId: z.string().min(1),
 				containerId: z.string().min(1),
+				environmentId: envIdField,
 			}),
 		)
 		.mutation(async ({input}) => {
 			try {
-				return await disconnectNetwork(input.networkId, input.containerId)
+				return await disconnectNetwork(input.networkId, input.containerId, input.environmentId)
 			} catch (err: any) {
 				if (err.message?.includes('[not-found]')) {
 					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
 				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -865,9 +1104,21 @@ export default router({
 	// Stack management
 	// -----------------------------------------------------------------------
 
-	listStacks: adminProcedure.query(async () => {
-		return listStacks()
-	}),
+	listStacks: adminProcedure
+		.input(z.object({environmentId: envIdField}).optional())
+		.query(async ({input}) => {
+			try {
+				return await listStacks(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to list stacks'})
+			}
+		}),
 
 	deployStack: adminProcedure
 		.input(
@@ -1145,17 +1396,27 @@ export default router({
 							type: z.array(z.string()).optional(),
 						})
 						.optional(),
+					environmentId: envIdField,
 				})
 				.optional(),
 		)
 		.query(async ({input}) => {
 			try {
-				return await getDockerEvents({
-					since: input?.since,
-					until: input?.until,
-					filters: input?.filters,
-				})
+				return await getDockerEvents(
+					{
+						since: input?.since,
+						until: input?.until,
+						filters: input?.filters,
+					},
+					input?.environmentId,
+				)
 			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: err.message || 'Failed to get Docker events',
@@ -1167,14 +1428,114 @@ export default router({
 	// Docker Engine Info (Phase 46)
 	// -----------------------------------------------------------------------
 
-	engineInfo: adminProcedure.query(async () => {
-		try {
-			return await getEngineInfo()
-		} catch (err: any) {
-			throw new TRPCError({
-				code: 'INTERNAL_SERVER_ERROR',
-				message: err.message || 'Failed to get Docker engine info',
-			})
-		}
+	engineInfo: adminProcedure
+		.input(z.object({environmentId: envIdField}).optional())
+		.query(async ({input}) => {
+			try {
+				return await getEngineInfo(input?.environmentId)
+			} catch (err: any) {
+				if (err.message?.includes('[env-not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[env-not-found] ', '')})
+				}
+				if (err.message?.includes('[agent-not-implemented]')) {
+					throw new TRPCError({code: 'NOT_IMPLEMENTED', message: err.message.replace('[agent-not-implemented] ', '')})
+				}
+				if (err.message?.includes('[env-misconfigured]')) {
+					throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message.replace('[env-misconfigured] ', '')})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to get Docker engine info',
+				})
+			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Environments (Phase 22 MH-01) — multi-host Docker management
+	// -----------------------------------------------------------------------
+
+	listEnvironments: adminProcedure.query(async () => {
+		return listEnvironments()
 	}),
+
+	createEnvironment: adminProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+				type: z.enum(['socket', 'tcp-tls', 'agent']),
+				socketPath: z.string().max(500).optional(),
+				tcpHost: z.string().max(255).optional(),
+				tcpPort: z.number().int().min(1).max(65535).optional(),
+				tlsCaPem: z.string().max(20000).optional(),
+				tlsCertPem: z.string().max(20000).optional(),
+				tlsKeyPem: z.string().max(20000).optional(),
+				agentId: z.string().uuid().optional(),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			try {
+				return await createEnvironment(input, ctx.currentUser?.id ?? null)
+			} catch (err: any) {
+				if (err.message?.includes('[validation-error]')) {
+					throw new TRPCError({code: 'BAD_REQUEST', message: err.message.replace('[validation-error] ', '')})
+				}
+				if (err.message?.includes('duplicate key')) {
+					throw new TRPCError({code: 'CONFLICT', message: `Environment '${input.name}' already exists`})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to create environment',
+				})
+			}
+		}),
+
+	updateEnvironment: adminProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				name: z.string().min(1).max(100).optional(),
+				socketPath: z.string().max(500).optional(),
+				tcpHost: z.string().max(255).optional(),
+				tcpPort: z.number().int().min(1).max(65535).optional(),
+				tlsCaPem: z.string().max(20000).optional(),
+				tlsCertPem: z.string().max(20000).optional(),
+				tlsKeyPem: z.string().max(20000).optional(),
+			}),
+		)
+		.mutation(async ({input, ctx}) => {
+			try {
+				const {id, ...partial} = input
+				const result = await updateEnvironment(id, partial, ctx.currentUser?.id ?? null)
+				// Invalidate cached Dockerode for this env so the next call rebuilds
+				// with the new connection fields.
+				invalidateClient(id)
+				return result
+			} catch (err: any) {
+				if (err.message?.includes('[cannot-modify-local]')) {
+					throw new TRPCError({code: 'FORBIDDEN', message: err.message.replace('[cannot-modify-local] ', '')})
+				}
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to update environment'})
+			}
+		}),
+
+	deleteEnvironment: adminProcedure
+		.input(z.object({id: z.string().uuid()}))
+		.mutation(async ({input}) => {
+			try {
+				await deleteEnvironment(input.id)
+				invalidateClient(input.id)
+				return {success: true, message: 'Environment deleted'}
+			} catch (err: any) {
+				if (err.message?.includes('[cannot-delete-local]')) {
+					throw new TRPCError({code: 'FORBIDDEN', message: err.message.replace('[cannot-delete-local] ', '')})
+				}
+				if (err.message?.includes('[not-found]')) {
+					throw new TRPCError({code: 'NOT_FOUND', message: err.message.replace('[not-found] ', '')})
+				}
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to delete environment'})
+			}
+		}),
 })
