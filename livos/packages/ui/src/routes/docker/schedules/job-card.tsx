@@ -1,5 +1,7 @@
-// Phase 27-02 (DOC-12) — ported verbatim from routes/settings/_components/scheduler-section.tsx (lines 87-148, 299-384).
-// Sub-components extracted to a sibling file for SchedulerSection clarity.
+// Phase 27-02 (DOC-12) — verbatim port of legacy
+// routes/settings/_components/scheduler-section.tsx (lines 87-148, 299-384,
+// deleted Phase 27-02). Sub-components extracted to a sibling file for
+// SchedulerSection clarity.
 
 import {TbLoader2, TbPlayerPlay, TbTrash} from 'react-icons/tb'
 

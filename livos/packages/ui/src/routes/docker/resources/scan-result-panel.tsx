@@ -1,6 +1,6 @@
 // Phase 26 Plan 26-01 — Image vulnerability scan result panel.
 //
-// Ported verbatim from routes/server-control/index.tsx:1741-1992. Wires:
+// Verbatim port of legacy routes/server-control/index.tsx:1741-1992 (deleted Phase 27-02). Wires:
 //   - Trivy scan via useImages().scanImage (Phase 19 carry-over).
 //   - Cached scan lookup via trpcReact.docker.getCachedScan (Phase 19).
 //   - Plain-English explanation via useAiDiagnostics().explainVulnerabilities

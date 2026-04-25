@@ -1,9 +1,7 @@
 // Phase 26 Plan 26-01 — Container rename dialog.
 //
-// Ported verbatim from routes/server-control/index.tsx:999-1059. Used by
-// ContainerSection's Rename action button; not in Task 2's port list since
-// only Containers consumes it. Plan 27 will collapse the legacy copy after
-// server-control deletion.
+// Verbatim port of legacy routes/server-control/index.tsx:999-1059 (deleted
+// Phase 27-02). Used by ContainerSection's Rename action button.
 
 import {useEffect, useState} from 'react'
 

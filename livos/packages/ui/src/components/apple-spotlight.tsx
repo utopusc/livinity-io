@@ -330,7 +330,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				},
 			},
 			{
-				// Phase 24-01 — replaces 'Server' / LIVINITY_server-control.
+				// Phase 24-01 — replaces the legacy 'Server' app entry.
 				label: 'Docker',
 				icon: <TbServer className='text-neutral-600' />,
 				onSelect: () => {

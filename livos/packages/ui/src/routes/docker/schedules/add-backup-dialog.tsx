@@ -1,6 +1,8 @@
-// Phase 27-02 (DOC-12) — ported from routes/settings/_components/scheduler-section.tsx AddBackupDialog (lines 390-792).
-// NEW: initialVolumeName prop pre-fills the volume picker when SchedulerSection
-// opens it via the Phase 26-02 useSelectedVolume() seam.
+// Phase 27-02 (DOC-12) — port of legacy
+// routes/settings/_components/scheduler-section.tsx AddBackupDialog (lines
+// 390-792, deleted Phase 27-02). NEW: initialVolumeName prop pre-fills the
+// volume picker when SchedulerSection opens it via the Phase 26-02
+// useSelectedVolume() seam.
 
 import {useEffect, useMemo, useState} from 'react'
 import {TbLoader2} from 'react-icons/tb'

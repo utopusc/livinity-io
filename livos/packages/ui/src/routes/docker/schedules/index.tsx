@@ -1,7 +1,8 @@
-// Phase 27-02 (DOC-12) — ported from routes/settings/_components/scheduler-section.tsx (lines 185-293).
-// NEW: useSelectedVolume() seam — when arriving from Volumes section's
-// "Schedule backup" link, AddBackupDialog auto-opens with volume pre-filled
-// (Phase 26-02 contract).
+// Phase 27-02 (DOC-12) — port of legacy
+// routes/settings/_components/scheduler-section.tsx (lines 185-293, deleted
+// Phase 27-02). NEW: useSelectedVolume() seam — when arriving from Volumes
+// section's "Schedule backup" link, AddBackupDialog auto-opens with volume
+// pre-filled (Phase 26-02 contract).
 //
 // Renders:
 //   (a) Job list — Name, Type, Schedule, Last Run, Next Run, Status, per-row

@@ -6,7 +6,7 @@ const TABS = [
 	{id: 'ai-chat', label: 'AI Chat', icon: IconMessageCircle, appId: 'LIVINITY_ai-chat', route: '/ai-chat', title: 'AI Chat', appIcon: '/figma-exports/dock-home.png'},
 	{id: 'files', label: 'Files', icon: IconFolder, appId: 'LIVINITY_files', route: '/files/Home', title: 'Files', appIcon: '/figma-exports/dock-files.png'},
 	{id: 'settings', label: 'Settings', icon: IconSettings, appId: 'LIVINITY_settings', route: '/settings', title: 'Settings', appIcon: '/figma-exports/dock-settings.png'},
-	// Phase 24-01 — replaces 'server'/LIVINITY_server-control with the new Docker app.
+	// Phase 24-01 — replaces the legacy 'server' app with the new Docker app.
 	{id: 'docker', label: 'Docker', icon: IconBrandDocker, appId: 'LIVINITY_docker', route: '/docker', title: 'Docker', appIcon: '/figma-exports/dock-server.svg'},
 ] as const
 

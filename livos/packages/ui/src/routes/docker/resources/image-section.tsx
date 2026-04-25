@@ -1,6 +1,7 @@
 // Phase 26 Plan 26-01 (DOC-08 + DOC-20 partial) — Docker Images section.
-// Replaces the Phase 24 placeholder. Body extracted from
-// routes/server-control/index.tsx ImagesTab() (lines 1995-2262) with:
+// Replaces the Phase 24 placeholder. Body extracted from the legacy
+// routes/server-control/index.tsx ImagesTab() (lines 1995-2262, deleted
+// Phase 27-02) with:
 //   1. Search input (NEW — phase success criterion 6, filters by joined
 //      repoTags).
 //   2. expandedImage state migrated to useDockerResource.selectedImage
@@ -12,7 +13,7 @@
 //
 // The four legacy file-local dialogs (RemoveImage / PruneImages /
 // PullImage / TagImage) were ported into resources/image-dialogs.tsx
-// since they were never exported from server-control/index.tsx.
+// since they were never exported by the legacy server-control/index.tsx.
 
 import {Fragment, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'

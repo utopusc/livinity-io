@@ -1,6 +1,6 @@
 // Phase 26 Plan 26-01 — Relative date formatter.
 //
-// Ported verbatim from routes/server-control/index.tsx:1062-1070.
+// Verbatim port of legacy routes/server-control/index.tsx:1062-1070 (deleted in Phase 27-02).
 // Drives ImageHistoryPanel + ScanResultPanel timestamp displays.
 //
 // Input is a UNIX seconds timestamp (NOT milliseconds). Output is a short

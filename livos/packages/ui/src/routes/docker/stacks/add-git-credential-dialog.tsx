@@ -1,4 +1,5 @@
-// Phase 27-01 — ported verbatim from routes/server-control/index.tsx:3314-3448.
+// Phase 27-01 — verbatim port of legacy routes/server-control/index.tsx:3314-3448
+// (deleted Phase 27-02).
 //
 // Nested credential creation dialog opened from DeployStackForm's Git tab.
 // Stores HTTPS PAT (username + password) or SSH PEM private key — all

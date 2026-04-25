@@ -4,8 +4,9 @@
 // living inside hooks/use-images.ts. Tests assert behaviour parity with the
 // existing function (preserved during the move).
 //
-// formatRelativeDate is ported verbatim from server-control/index.tsx and
-// drives ImageHistoryPanel + ScanResultPanel timestamp displays.
+// formatRelativeDate is a verbatim port of legacy server-control/index.tsx
+// (deleted Phase 27-02) and drives ImageHistoryPanel + ScanResultPanel
+// timestamp displays.
 
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
 
