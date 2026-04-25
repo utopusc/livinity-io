@@ -32,6 +32,7 @@ import {
 	writeFile as writeContainerFile,
 } from '../docker/container-files.js'
 import {createAgentWebSocketHandler} from './ws-agent.js'
+import {createAgentWsHandler, startAgentRevocationSubscriber} from './agent-socket.js'
 import {
 	getGitStack,
 	updateGitStackSyncSha,
@@ -683,6 +684,22 @@ class Server {
 					}
 				}
 
+				// ── Outbound Docker Agent WebSocket (Phase 22 MH-04) ───────
+				// /agent/connect accepts the docker-agent's per-token auth via
+				// the FIRST `register` message (NOT a query-string JWT — agents
+				// don't have JWTs). We branch BEFORE the generic webSocketRouter
+				// lookup so the agent token gate is the only auth on this path.
+				if (pathname === '/agent/connect') {
+					const agentWss = new WebSocketServer({noServer: true})
+					agentWss.handleUpgrade(request, socket, head, (ws) => {
+						agentWss.close() // single-use; the connection is now owned by the handler
+						const agentLogger = this.logger.createChildLogger('agent-socket')
+						const handler = createAgentWsHandler({logger: agentLogger})
+						handler(ws, request).catch((err) => agentLogger.error('handler failed', err))
+					})
+					return
+				}
+
 				// ── Voice WebSocket Proxy ──────────────────────────────────
 				// /ws/voice lives on nexus-core (port 3200), not livinityd.
 				// We proxy the upgrade directly to nexus-core, forwarding the
@@ -1134,6 +1151,14 @@ class Server {
 			const logger = this.logger.createChildLogger('ws-agent')
 			const handler = createAgentWebSocketHandler({livinityd: this.livinityd, logger})
 			wss.on('connection', handler)
+		})
+
+		// Phase 22 MH-05 — Subscribe to docker-agent token revocations on Redis.
+		// Any livinityd instance receiving the message disconnects the live agent
+		// WS within 5s (publish→subscribe is sub-second; close + cleanup adds <1s).
+		startAgentRevocationSubscriber({
+			redis: this.livinityd.ai.redis,
+			logger: this.logger.createChildLogger('agent-revocation'),
 		})
 
 		// Handle API routes

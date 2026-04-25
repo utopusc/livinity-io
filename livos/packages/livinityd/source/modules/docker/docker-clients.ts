@@ -10,12 +10,13 @@
 // Connection strategies:
 //   type='socket'  → new Dockerode({socketPath})
 //   type='tcp-tls' → new Dockerode({host, port:..., protocol:'https', ca, cert, key})
-//   type='agent'   → THROWS [agent-not-implemented] until Plan 22-03 lands
-//                    AgentDockerClient (a Dockerode-shaped wrapper that proxies
-//                    Docker API calls over an outbound WebSocket).
+//   type='agent'   → new AgentDockerClient(env.agentId) — Dockerode-shaped wrapper
+//                    that proxies Docker API calls over an outbound WebSocket
+//                    (Plan 22-03; replaces the [agent-not-implemented] placeholder).
 
 import Dockerode from 'dockerode'
 
+import {AgentDockerClient} from './agent-docker-client.js'
 import {getEnvironment, type Environment} from './environments.js'
 
 // Cache by env.id (UUID string). Alias 'local' is canonicalised to LOCAL_ENV_ID
@@ -49,12 +50,16 @@ function buildClient(env: Environment): Dockerode {
 			})
 
 		case 'agent':
-			// Plan 22-03 will replace this with `new AgentDockerClient(env.agentId, ...)`.
-			// Until then, agent envs cannot be used as targets — surface a clear error
-			// rather than silently falling back to the local socket.
-			throw new Error(
-				`[agent-not-implemented] env '${env.name}' is an agent env — agent transport ships in Plan 22-03`,
-			)
+			if (!env.agentId) {
+				throw new Error(
+					`[env-misconfigured] agent env '${env.name}' has no agent_id — generate a token via Settings > Environments`,
+				)
+			}
+			// AgentDockerClient implements the subset of Dockerode methods that
+			// docker.ts uses. Cast through `unknown` because TypeScript can't
+			// statically verify the structural match (we control every callsite
+			// of the cast — only docker.ts uses the returned client).
+			return new AgentDockerClient(env.agentId) as unknown as Dockerode
 	}
 }
 

@@ -89,6 +89,12 @@ export const httpOnlyPaths = [
 	'docker.createEnvironment',
 	'docker.updateEnvironment',
 	'docker.deleteEnvironment',
+	// Phase 22 MH-04, MH-05 — docker_agents token CRUD (mutations only;
+	// listAgents stays on WS — it's a query). generateAgentToken returns
+	// the cleartext token ONCE, so HTTP delivery (no WS reconnect retry
+	// surface) is preferred for reliability.
+	'docker.generateAgentToken',
+	'docker.revokeAgentToken',
 	// Container file browser mutations (Phase 18) -- use HTTP for reliability;
 	// otherwise mutations silently hang on disconnected WS.
 	'docker.containerWriteFile',

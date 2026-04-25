@@ -234,3 +234,26 @@ CREATE TABLE IF NOT EXISTS environments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_environments_type ON environments(type);
+
+-- =========================================================================
+-- Docker Agents (Phase 22 MH-04, MH-05) — outbound-WS Docker proxies.
+-- One row per agent token. token_hash is SHA-256(cleartext_token) so the
+-- cleartext is unrecoverable (verifies via constant-time hash comparison).
+-- revoked_at NOT NULL means the token is dead; subscribed livinityd instances
+-- disconnect the live WS within 5s on revocation (Redis pub/sub).
+--
+-- env_id has ON DELETE CASCADE — deleting an environment scrubs every
+-- agent token that ever pointed at it (no orphans).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS docker_agents (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  env_id       UUID NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
+  token_hash   TEXT NOT NULL UNIQUE,
+  created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen    TIMESTAMPTZ,
+  revoked_at   TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_docker_agents_env_id     ON docker_agents(env_id);
+CREATE INDEX IF NOT EXISTS idx_docker_agents_token_hash ON docker_agents(token_hash);

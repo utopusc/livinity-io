@@ -62,8 +62,12 @@ import {
 	createEnvironment,
 	updateEnvironment,
 	deleteEnvironment,
+	getEnvironment,
 } from './environments.js'
 import {invalidateClient} from './docker-clients.js'
+// Phase 22 MH-04, MH-05 — docker_agents CRUD + revocation
+import {createAgent, listAgents, revokeAgent} from './agents.js'
+import {agentRegistry} from './agent-registry.js'
 
 export default router({
 	listContainers: adminProcedure
@@ -1537,5 +1541,80 @@ export default router({
 				}
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.message || 'Failed to delete environment'})
 			}
+		}),
+
+	// -----------------------------------------------------------------------
+	// Docker Agents (Phase 22 MH-04, MH-05) — outbound-WS proxies
+	// -----------------------------------------------------------------------
+
+	listAgents: adminProcedure
+		.input(z.object({environmentId: z.string().uuid().optional()}).optional())
+		.query(async ({input}) => {
+			const rows = await listAgents(input?.environmentId)
+			// Strip token_hash from the response — never expose, even to admins.
+			// `online` is computed at query time from the in-process registry.
+			return rows.map((r) => ({
+				id: r.id,
+				envId: r.envId,
+				createdBy: r.createdBy,
+				createdAt: r.createdAt,
+				lastSeen: r.lastSeen,
+				revokedAt: r.revokedAt,
+				online: agentRegistry.isAgentOnline(r.id),
+			}))
+		}),
+
+	generateAgentToken: adminProcedure
+		.input(z.object({environmentId: z.string().uuid()}))
+		.mutation(async ({input, ctx}) => {
+			const env = await getEnvironment(input.environmentId)
+			if (!env) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'Environment not found'})
+			}
+			if (env.type !== 'agent') {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `Environment '${env.name}' is type '${env.type}', not 'agent' — generateAgentToken is only valid for agent envs`,
+				})
+			}
+			const {agent, token} = await createAgent({
+				envId: input.environmentId,
+				createdBy: ctx.currentUser?.id ?? null,
+			})
+			// Token returned ONCE — client (UI) MUST surface it to the user before
+			// closing the dialog; we never persist or return the cleartext again.
+			return {
+				agentId: agent.id,
+				token,
+				agentInstallSnippet: `curl -fsSL https://livinity.cloud/install-agent.sh | bash -s -- --token ${token} --server wss://livinity.cloud/agent/connect`,
+			}
+		}),
+
+	revokeAgentToken: adminProcedure
+		.input(z.object({agentId: z.string().uuid()}))
+		.mutation(async ({input, ctx}) => {
+			await revokeAgent(input.agentId)
+			// Publish on Redis so the livinityd instance currently holding the
+			// live WS for this agent disconnects within ~5s. (In single-instance
+			// deployments the same process subscribes to its own publish — ioredis
+			// supports this via the duplicate connection used by the subscriber.)
+			const redis = ctx.livinityd?.ai?.redis
+			if (redis) {
+				try {
+					await redis.publish(
+						'livos:agent:revoked',
+						JSON.stringify({agentId: input.agentId}),
+					)
+				} catch (err: any) {
+					ctx.livinityd?.logger?.error?.(
+						`Failed to publish revocation for agent ${input.agentId}`,
+						err,
+					)
+					// Non-fatal: even without pub/sub, the next reconnect attempt
+					// will fail (token is now revoked in PG), and the existing WS
+					// will eventually time out. The 5s SLA assumes Redis is up.
+				}
+			}
+			return {success: true}
 		}),
 })
