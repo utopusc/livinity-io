@@ -20,11 +20,13 @@ import {
 	IconChevronDown,
 	IconChevronRight,
 	IconFolder,
+	IconLink,
 	IconPlus,
 	IconRefresh,
 	IconSearch,
 	IconTrash,
 } from '@tabler/icons-react'
+import {toast} from 'sonner'
 
 import {useVolumes} from '@/hooks/use-volumes'
 import {Button} from '@/shadcn-components/ui/button'
@@ -32,6 +34,7 @@ import {Input} from '@/shadcn-components/ui/input'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/shadcn-components/ui/table'
 import {cn} from '@/shadcn-lib/utils'
 
+import {copyDeepLinkToClipboard} from '../deep-link'
 import {useDockerResource, useSelectedVolume} from '../resource-store'
 import {useSetDockerSection} from '../store'
 import {ActionButton} from './action-button'
@@ -195,6 +198,17 @@ export function VolumeSection() {
 												</TableCell>
 												<TableCell className='text-right pr-4'>
 													<div className='flex items-center justify-end gap-0.5'>
+														<ActionButton
+															icon={IconLink}
+															onClick={() =>
+																copyDeepLinkToClipboard({section: 'volumes', id: volume.name}).then(
+																	() => toast.success('Deep link copied'),
+																	() => toast.error('Could not copy to clipboard'),
+																)
+															}
+															color='blue'
+															title='Copy deep link to this volume'
+														/>
 														<ActionButton
 															icon={IconCalendarTime}
 															onClick={() => onScheduleBackup(volume.name)}
