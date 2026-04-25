@@ -125,7 +125,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar, theme toggle, route table (DOC-01, DOC-02, DOC-03)
  (completed 2026-04-25)
 - [x] **Phase 25: Multi-Environment Dashboard** — env card grid, Top containers by CPU panel, env tag filter chips, recent events per env (DOC-04, DOC-05, DOC-06) (completed 2026-04-25)
-- [ ] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial)
+- [x] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial) (completed 2026-04-25)
 - [ ] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12)
 - [ ] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14)
 - [ ] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final)
@@ -169,9 +169,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. `/docker/networks` route displays network list
   5. Deep-linking works: `/docker/containers/n8n_server_1` opens with that container's detail panel pre-expanded
   6. Search input filters list client-side; clicking a row updates URL to deep-link
-**Plans**: 2 plans (1/2 complete)
+**Plans**: 2 plans (2/2 complete)
 - [x] 26-01-PLAN.md — Containers + Images sections (DOC-07, DOC-08, DOC-20 partial) — completed 2026-04-25
-- [ ] 26-02-PLAN.md — Volumes + Networks sections (DOC-09, DOC-10, DOC-20 partial)
+- [x] 26-02-PLAN.md — Volumes + Networks sections (DOC-09, DOC-10, DOC-20 partial) — completed 2026-04-25
 
 ### Phase 27: Stacks + Schedules Routes
 **Goal**: Migrate Stacks and Scheduled Jobs to dedicated routes, preserving all v27.0 tabs and dialogs.

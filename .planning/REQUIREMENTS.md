@@ -25,8 +25,10 @@
 **: `/docker/containers` — full container list (current Containers tab content) as own route. Detail panel slides over from right (current sheet pattern preserved).
 - [x] **DOC-08
 **: `/docker/images` — full image list with Scan + Explain CVEs buttons (current Images tab) as own route.
-- [ ] **DOC-09**: `/docker/volumes` — full volume list as own route. Volume backup config link to Schedules route.
-- [ ] **DOC-10**: `/docker/networks` — full network list as own route.
+- [x] **DOC-09
+**: `/docker/volumes` — full volume list as own route. Volume backup config link to Schedules route.
+- [x] **DOC-10
+**: `/docker/networks` — full network list as own route.
 - [ ] **DOC-11**: `/docker/stacks` — full stack list as own route. Create dialog preserves YAML / Git / AI tabs from v27.0. Stack detail keeps Graph + Logs + Files tabs.
 - [ ] **DOC-12**: `/docker/schedules` — current Settings > Scheduler section as own route (job list + Run Now + Test Destination + AddJob dialog).
 
@@ -42,7 +44,7 @@
 ### UX Quality
 - [ ] **DOC-18**: cmd+k command palette searches across containers, stacks, images, env names, recent events, settings sections. Result click navigates to the exact resource.
 - [ ] **DOC-19**: Theme toggle (light / dark / system) persists per-user. Existing LivOS theme system reused (no new theme infra).
-- [ ] **DOC-20**: All resource routes support deep-linking — `/docker/containers/n8n` opens with n8n container detail panel pre-expanded; `/docker/stacks/myproject` opens stack detail. URLs are bookmarkable and shareable.
+- [ ] **DOC-20**: All resource routes support deep-linking — `/docker/containers/n8n` opens with n8n container detail panel pre-expanded; `/docker/stacks/myproject` opens stack detail. URLs are bookmarkable and shareable. _(Programmatic half closed across Plan 26-01 + 26-02 for all 4 resource types via useDockerResource.getState().setSelectedX(value); URL-bar form remains Phase 29 final closure.)_
 
 ---
 
@@ -56,10 +58,10 @@
 | DOC-04 | Phase 25 | Complete (25-01 + 25-02) | EnvCardGrid + EnvCard + per-env polling (5s containers / 10s events / 30s static counts) shipped in 25-01; per-card Retry button on Unreachable banner shipped in 25-02 |
 | DOC-05 | Phase 25 | Complete (25-02) | TopCpuPanel — top-10 cross-env containers by CPU% via bounded per-env candidate fanout (PER_ENV_CANDIDATES=5); Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers |
 | DOC-06 | Phase 25 | Complete (25-01 + 25-02) | environments.tags TEXT[] column + read/write CRUD + tRPC schemas shipped in 25-01; TagFilterChips above grid + useTagFilter localStorage hook + filterEnvs client-side filter shipped in 25-02 |
-| DOC-07 | Phase 26 | Pending | Containers route |
-| DOC-08 | Phase 26 | Pending | Images route |
-| DOC-09 | Phase 26 | Pending | Volumes route |
-| DOC-10 | Phase 26 | Pending | Networks route |
+| DOC-07 | Phase 26 | Complete (26-01) | ContainerSection — full Containers tab body with search + bulk-action bar + protected-container guards + ContainerDetailSheet wired through useDockerResource store for DOC-20 programmatic deep-link |
+| DOC-08 | Phase 26 | Complete (26-01) | ImageSection — full Images tab body with search + expandable rows (Layer history + Vulnerabilities tabs) + Phase 19 Trivy scan + Phase 23 Explain CVEs preserved end-to-end |
+| DOC-09 | Phase 26 | Complete (26-02) | VolumeSection — full Volumes tab body with search + chevron-expand to VolumeUsagePanel + per-row "Schedule backup" link (IconCalendarTime) that sets selectedVolume + setSection('schedules') so Phase 27 Schedules section can pre-fill the backup-job-create form |
+| DOC-10 | Phase 26 | Complete (26-02) | NetworkSection — full Networks tab body with search (filters by name + driver) + inspect card with Disconnect mutations + bridge useEffect connecting useDockerResource.selectedNetwork to inspectNetwork(id) for programmatic deep-link |
 | DOC-11 | Phase 27 | Pending | Stacks route |
 | DOC-12 | Phase 27 | Pending | Schedules route |
 | DOC-13 | Phase 28 | Pending | Cross-container Logs |

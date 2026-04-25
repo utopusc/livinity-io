@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: 26-02
-status: ready_to_execute
-stopped_at: Completed 26-01-PLAN.md — Containers + Images sections live with search, deep-link store, AI Diagnose + Scan/Explain CVEs preserved (DOC-07 + DOC-08 closed; DOC-20 programmatic half closed for containers+images). Plan 26-02 (Volumes + Networks) next — reuses useDockerResource volume/network slots + filterByQuery + format-relative-date already shipped here.
-last_updated: "2026-04-25T21:04:52.067Z"
+status: executing
+stopped_at: Completed 26-02-PLAN.md — Volumes + Networks sections live with search, deep-link store, Schedule-backup cross-section navigation seam, inspect bridge useEffect, four-slot DOC-20 contract pinned (DOC-09 + DOC-10 closed; DOC-20 programmatic half closed for ALL 4 resource types across 26-01 + 26-02; URL-bar form remains Phase 29). Phase 26 verifier runs next.
+last_updated: "2026-04-25T21:18:03.016Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Plan 26-01 COMPLETE — Containers + Images sections live with search, deep-link store, AI Diagnose + Scan/Explain CVEs preserved (DOC-07 + DOC-08 closed; DOC-20 programmatic half closed for containers+images). Plan 26-02 (Volumes + Networks) next.
+**Current focus:** Phase 26 COMPLETE — All 4 resource routes (Containers/Images/Volumes/Networks) live with search, four-slot deep-link store, Schedule-backup cross-section navigation seam, network inspect bridge useEffect, DOC-20 programmatic half closed for ALL 4 resource types (DOC-07 + DOC-08 + DOC-09 + DOC-10 closed). URL-bar deep-link form remains Phase 29 (DOC-20 final). Phase 26 verifier runs next, then Phase 27 (Stacks + Schedules).
 
 ## Current Position
 
 Phase: 26
-Plan: 1 of 2 complete
+Plan: 2 of 2 complete
 Current Plan: 26-02
-Status: Ready to execute
+Status: Phase 26 complete — verifier next
 Last activity: 2026-04-25
 
-**Progress:** [████████░░] 83%
+**Progress:** [██████████] 100%
 
 ## v28.0 Phase Structure
 
@@ -79,6 +79,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
 | Phase 26 P01 | 10min | 4 tasks | 16 created + 2 modified files |
+| Phase 26 P02 | 8min | 4 (4 commits) tasks | 6 created + 2 modified files |
 
 ## Accumulated Context
 
@@ -135,6 +136,17 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - formatBytes canonical Docker-app location at resources/format-bytes.ts; back-compat re-export from hooks/use-images.ts retained — existing legacy + Plan 25 dashboard imports keep working. Plan 27 may collapse the duplicate after server-control deletion when no consumer imports from hooks/ anymore.
 - DOC-20 programmatic deep-link half closed for containers + images via useDockerResource.getState().setSelectedContainer(name) / setSelectedImage(id). URL-bar form deferred to Phase 29 (DOC-20 final). Plan 28 cross-container logs deep-link will use this same store API. Volumes + Networks slots already exposed for Plan 26-02 + future Phase 28/29 consumers.
 - TDD execution: Task 1 split into RED (test commit 4750bf70 — 17 failing-import tests) + GREEN (feat commit 3bc81521 — 4 source files). Tasks 2-4 single commits per Plan 26-01 task `<action>` blocks (verbatim ports + section composition; testable logic lives in Task 1's helpers). 5 task commits total.
+
+### Plan 26-02 Decisions (2026-04-25)
+
+- Bridge useEffect on [selectedNetwork] only — eslint-disable on react-hooks/exhaustive-deps for inspectNetwork/clearInspect because useNetworks recreates these callbacks every render (closures over fresh setInspectedNetwork). Including them in deps would cause an infinite loop. The hook's setInspectedNetwork is identity-stable, so calling inspectNetwork(id) when id is unchanged is a no-op (T-26-07 mitigation). Pattern reusable for any store-to-hook bridge in Phase 28+ where the hook owns its own internal query lifecycle.
+- Volume Schedule-backup link sets BOTH selectedVolume(name) AND setSection('schedules') in one click — closes the DOC-09 cross-section navigation seam. Setting just the section would leave Phase 27 without a target; setting just the volume slot would not navigate. Inline comment in volume-section.tsx documents the contract for the Phase 27 (DOC-12) planner: read useSelectedVolume() in the Schedules section to pre-fill the backup-job-create form (T-26-11 mitigation).
+- deep-link.unit.test.ts pins the four-slot programmatic deep-link contract (containers + images + volumes + networks share useDockerResource with FOUR independent slots — NOT a single discriminated-union 'selectedResource' field). Test B catches the regression. Phase 28 (cross-container logs) + Phase 29 (palette + URL-bar deep-link) read this contract.
+- Optional Test D (identity-stable subscriber notification) skipped — Plan 26-01's resource-store.unit.test.ts Test G already covers it. The plan explicitly opted out: "Skip if Plan 26-01's resource-store.unit.test.ts Test G already covers this." 26-01 SUMMARY confirmed Test G's identity-stable assertion. No duplication.
+- noFilterResults empty-state branch added to both VolumeSection + NetworkSection, mirroring 26-01's pattern: shows "No volumes/networks match \"<query>\"" with the search query echoed in mono font when filter is active and empty but unfiltered list is non-empty. The original !volumes.length / !networks.length empty-states preserved for the unfiltered-empty case.
+- IconCalendarTime selected as the Schedule-backup affordance icon — verified present in @tabler/icons-react@3.36.1 (node_modules/@tabler/icons-react/dist/esm/icons/IconCalendarTime.mjs resolves). The plan's IconClock fallback was unnecessary.
+- Verbatim port discipline for VolumeUsagePanel + Volume/Network dialogs (Task 1) — bug-for-bug parity with the legacy server-control file. Plan 24-02 D-09 / Plan 26-01 precedent: legacy file untouched, both copies coexist until Plan 27 deletes the legacy file whole.
+- DOC-20 programmatic half closed for ALL 4 resource types now (across 26-01 + 26-02). URL-bar form still Phase 29 (DOC-20 final). Plan 26-02 task commits: 4 atomic (1 refactor port + 2 feat sections + 1 test contract pin) — no TDD split needed since contract was already shipped in Plan 26-01 Task 1.
 
 ### Plan 25-02 Decisions (2026-04-25)
 
@@ -382,6 +394,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T21:04:36.608Z
-Stopped at: Completed 26-01-PLAN.md
+Last session: 2026-04-25T21:18:03.008Z
+Stopped at: Completed 26-02-PLAN.md — Volumes + Networks sections live with search, deep-link store, Schedule-backup cross-section navigation seam, inspect bridge useEffect, four-slot DOC-20 contract pinned (DOC-09 + DOC-10 closed; DOC-20 programmatic half closed for ALL 4 resource types across 26-01 + 26-02; URL-bar form remains Phase 29). Phase 26 verifier runs next.
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.
