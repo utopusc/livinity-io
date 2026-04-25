@@ -1,53 +1,53 @@
 ---
 gsd_state_version: 1.0
-milestone: v27.0
-milestone_name: Docker Management Upgrade
+milestone: v28.0
+milestone_name: Docker Management UI (Dockhand-Style)
 current_plan: Not started
-status: completed
-stopped_at: Completed 23-02-PLAN.md — Phase 23 complete, v27.0 ready for milestone audit
-last_updated: "2026-04-25T04:17:47.890Z"
-last_activity: 2026-04-25
+status: planning
+stopped_at: v28.0 milestone defined (Phases 24-29) — ready for first phase
+last_updated: "2026-04-25T05:50:00.000Z"
+last_activity: 2026-04-25 — v28.0 milestone created with 6 phases / 20 requirements (DOC-01..DOC-20). v27.0 deployed to Mini PC (bruce.livinity.io) successfully.
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 12
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-24)
+See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v27.0 — Docker Management Upgrade (all 7 phases complete — ready for milestone audit)
-**Current focus:** Milestone v27.0 audit — verify 33/33 requirements satisfied across Phases 17-23
+**Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
+**Current focus:** Phase 24 — Docker app skeleton (route, sidebar layout, top status bar, theme toggle). Foundation for all v28.0 phases. Reference design: Dockhand (dockhand.dev / dockhand.bor6.pl).
 
 ## Current Position
 
-Phase: 23
-Plan: 2 of 2 (final plan complete)
+Phase: 24 (not started)
+Plan: 0 of 2
 Current Plan: Not started
-Status: Milestone complete
-Last activity: 2026-04-25
+Status: v28.0 ready to begin
+Last activity: 2026-04-25 — v28 milestone defined; v27.0 deployed to bruce.livinity.io (Mini PC)
 
-**Progress:** [██████████] 100%
+**Progress:** [░░░░░░░░░░] 0%
 
-## v27.0 Phase Structure
+## v28.0 Phase Structure
 
 | Phase | Name | Requirements | Depends On |
 |-------|------|--------------|------------|
-| 17 | Docker Quick Wins | QW-01/02/03/04 | — (foundation) |
-| 18 | Container File Browser | CFB-01/02/03/04/05 | Phase 17 |
-| 19 | Compose Graph + Vuln Scan | CGV-01/02/03/04 | Phase 17 |
-| 20 | Scheduled Tasks + Backup | SCH-01/02/03/04/05 | Phase 17 |
-| 21 | GitOps Stack Deployment | GIT-01/02/03/04/05 | Phase 17, Phase 20 |
-| 22 | Multi-host Docker | MH-01/02/03/04/05 | Phase 17 |
-| 23 | AI-Powered Diagnostics | AID-01/02/03/04/05 | Phase 17, Phase 19 |
+| 24 | Docker App Skeleton | DOC-01, DOC-02, DOC-03 | — (foundation) |
+| 25 | Multi-Environment Dashboard | DOC-04, DOC-05, DOC-06 | Phase 24, v27 Phase 22 |
+| 26 | Resource Routes (Containers/Images/Volumes/Networks) | DOC-07/08/09/10, DOC-20 partial | Phase 24 |
+| 27 | Stacks + Schedules Routes | DOC-11, DOC-12 | Phase 24, v27 Phase 20+21 |
+| 28 | Cross-Container Logs + Activity Timeline | DOC-13, DOC-14 | Phase 24, v27 Phase 17+20+23 |
+| 29 | Shell + Registry + Palette + Docker Settings | DOC-15..DOC-20 | Phase 24, v27 Phase 17+21 |
 
-Coverage: 33/33 v27.0 requirements mapped ✓
+Coverage: 20/20 v28.0 requirements mapped ✓
+Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure only.
 
 ## Performance Metrics
 

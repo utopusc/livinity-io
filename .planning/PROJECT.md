@@ -142,9 +142,39 @@ Livinity now features a unified capability orchestration platform. All capabilit
 
 **11 deployment-time UAT items deferred** (live-LLM round-trips + remote-host infrastructure tests) — code paths fully wired, see `.planning/STATE.md` Deferred Items section.
 
-### Active (next milestone TBD)
+## Current Milestone: v28.0 Docker Management UI (Dockhand-Style)
 
-- [ ] (No active items — define next milestone via /gsd-new-milestone)
+**Goal:** Restructure v27.0's tab-based Server Management page into a standalone Dockhand-style Docker management application — left sidebar nav, top status bar with env + system stats, multi-environment Dashboard, dedicated routes per resource type. Backend foundation (data layer) shipped in v27.0 — v28.0 is UI restructure only.
+
+**Reference design:** Dockhand (https://dockhand.dev / https://dockhand.bor6.pl).
+
+**Phase plan (6 phases, ~12 plans):**
+- Phase 24: Docker app skeleton (route + sidebar + top status bar + theme)
+- Phase 25: Multi-environment Dashboard (env health cards + Top CPU panel + tag filters)
+- Phase 26: Resource routes (Containers/Images/Volumes/Networks → own routes with deep-linking)
+- Phase 27: Stacks + Schedules routes (preserves YAML/Git/AI tabs from v27.0)
+- Phase 28: Cross-container Logs + global Activity timeline (NEW surfaces)
+- Phase 29: Shell + Registry + cmd+k palette + Docker-app Settings (NEW surfaces)
+
+### Active
+
+- [ ] DOC-01: Standalone Docker app at `/docker` with persistent left sidebar (12 entries)
+- [ ] DOC-02: Top status bar — env selector + Docker version + cores + RAM + disk + uptime + Live indicator + cmd+k + theme
+- [ ] DOC-03: Old `/server` deprecated; redirect to `/docker`
+- [ ] DOC-04: Dashboard env-card grid (health, counts, recent events, CPU/mem)
+- [ ] DOC-05: Top containers by CPU panel (cross-env, 5s polling, quick actions)
+- [ ] DOC-06: Env tag filter chips (All / dev / prod / staging)
+- [ ] DOC-07/08/09/10: Containers/Images/Volumes/Networks each → own route
+- [ ] DOC-11: Stacks route (Graph/AI/Git tabs preserved)
+- [ ] DOC-12: Schedules route (current Settings > Scheduler section)
+- [ ] DOC-13: Cross-container Logs aggregator (multi-select + grep + live-tail)
+- [ ] DOC-14: Activity timeline (docker + scheduler + AI alerts)
+- [ ] DOC-15: Cross-container Shell (sidebar + multi-tab sessions)
+- [ ] DOC-16: Registry credentials (AES-256-GCM) + image search
+- [ ] DOC-17: Docker-app Settings (envs + theme + palette + density)
+- [ ] DOC-18: cmd+k command palette across resources
+- [ ] DOC-19: Theme toggle (light/dark/system, per-user)
+- [ ] DOC-20: Deep-linking on every resource route
 
 ### Validated (v27.0 — Docker Management Upgrade)
 
