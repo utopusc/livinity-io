@@ -2,8 +2,29 @@ import {useState} from 'react'
 
 import {trpcReact} from '@/trpc/trpc'
 
+export type DeployStackGitInput = {
+	url: string
+	branch?: string
+	credentialId?: string | null
+	composePath?: string
+}
+
+export type DeployStackInput = {
+	name: string
+	composeYaml?: string
+	git?: DeployStackGitInput
+	envVars?: Array<{key: string; value: string; secret?: boolean}>
+}
+
 export function useStacks() {
 	const [actionResult, setActionResult] = useState<{type: 'success' | 'error'; message: string} | null>(null)
+	// Plan 21-02: capture webhookSecret from a successful deployStack so the form
+	// can render the auto-generated webhook URL + copy buttons. YAML deploys leave
+	// webhookSecret undefined, which the UI uses to skip the panel entirely.
+	const [lastDeployResult, setLastDeployResult] = useState<{
+		name: string
+		webhookSecret?: string
+	} | null>(null)
 
 	const stacksQuery = trpcReact.docker.listStacks.useQuery(undefined, {
 		retry: false,
@@ -11,13 +32,15 @@ export function useStacks() {
 	})
 
 	const deployStackMutation = trpcReact.docker.deployStack.useMutation({
-		onSuccess: (data) => {
+		onSuccess: (data, variables) => {
 			setActionResult({type: 'success', message: data.message})
+			setLastDeployResult({name: variables.name, webhookSecret: data.webhookSecret})
 			stacksQuery.refetch()
 			setTimeout(() => setActionResult(null), 3000)
 		},
 		onError: (error) => {
 			setActionResult({type: 'error', message: error.message})
+			setLastDeployResult(null)
 			setTimeout(() => setActionResult(null), 5000)
 		},
 	})
@@ -58,20 +81,13 @@ export function useStacks() {
 		},
 	})
 
-	const deployStack = (input: {
-		name: string
-		composeYaml: string
-		envVars?: Array<{key: string; value: string; secret?: boolean}>
-	}) => {
+	const deployStack = (input: DeployStackInput) => {
 		setActionResult(null)
+		setLastDeployResult(null)
 		deployStackMutation.mutate(input)
 	}
 
-	const editStack = (input: {
-		name: string
-		composeYaml: string
-		envVars?: Array<{key: string; value: string; secret?: boolean}>
-	}) => {
+	const editStack = (input: DeployStackInput) => {
 		setActionResult(null)
 		editStackMutation.mutate(input)
 	}
@@ -107,5 +123,7 @@ export function useStacks() {
 		removeStack,
 		isRemoving: removeStackMutation.isPending,
 		actionResult,
+		lastDeployResult,
+		clearLastDeployResult: () => setLastDeployResult(null),
 	}
 }

@@ -28,6 +28,7 @@ import {
 	IconTemperature,
 	IconPencil,
 	IconCopy,
+	IconCheck,
 	IconTag,
 	IconDownload,
 	IconHandStop,
@@ -2601,7 +2602,18 @@ function DeployStackForm({
 	>([])
 	const [nameError, setNameError] = useState('')
 
+	// Plan 21-02: Source-of-stack tab state ('yaml' = paste compose, 'git' = clone repo).
+	const [tab, setTab] = useState<'yaml' | 'git'>('yaml')
+	const [gitUrl, setGitUrl] = useState('')
+	const [gitBranch, setGitBranch] = useState('main')
+	const [gitComposePath, setGitComposePath] = useState('docker-compose.yml')
+	const [gitCredentialId, setGitCredentialId] = useState<string | null>(null)
+	const [showCredentialDialog, setShowCredentialDialog] = useState(false)
+
 	const isEditMode = !!editStackName
+	// Edit mode is YAML-only in v1. Switching a stack between YAML and git would
+	// require backend support in editStack (out of scope for 21-02; v28 follow-up).
+	const showGitTab = !isEditMode
 
 	// Fetch existing compose YAML and env vars when editing
 	const {data: composeData, isLoading: isLoadingCompose} = trpcReact.docker.getStackCompose.useQuery(
@@ -2613,8 +2625,18 @@ function DeployStackForm({
 		{enabled: isEditMode && open},
 	)
 
-	const {deployStack, isDeploying, editStack, isEditing} = useStacks()
+	// Fetch git credentials list (only when form is open; refetched on demand from
+	// the inline AddGitCredentialDialog).
+	const credentialsQuery = trpcReact.docker.listGitCredentials.useQuery(undefined, {
+		enabled: open && !isEditMode,
+	})
+	const credentials = (credentialsQuery.data ?? []) as Array<{id: string; name: string; type: string}>
+
+	const {deployStack, isDeploying, editStack, isEditing, lastDeployResult, clearLastDeployResult} = useStacks()
 	const isBusy = isDeploying || isEditing
+	// Show webhook URL panel after a successful git deploy. The form stays open
+	// until the user clicks Done — otherwise the secret would be lost on close.
+	const showWebhookPanel = Boolean(lastDeployResult?.webhookSecret) && tab === 'git'
 
 	// Populate form when edit data loads
 	useEffect(() => {
@@ -2649,8 +2671,16 @@ function DeployStackForm({
 			setComposeYaml('')
 			setEnvVars([])
 			setNameError('')
+			// Plan 21-02: also reset git tab state + clear any lingering deploy result.
+			setTab('yaml')
+			setGitUrl('')
+			setGitBranch('main')
+			setGitComposePath('docker-compose.yml')
+			setGitCredentialId(null)
+			setShowCredentialDialog(false)
+			clearLastDeployResult()
 		}
-	}, [open])
+	}, [open, clearLastDeployResult])
 
 	if (!open) return null
 
@@ -2682,7 +2712,6 @@ function DeployStackForm({
 				return
 			}
 		}
-		if (!composeYaml.trim()) return
 		setNameError('')
 
 		// Strip UI-only `hasValue`; keep {key, value, secret} for tRPC.
@@ -2691,12 +2720,31 @@ function DeployStackForm({
 		const filteredEnv = envVars
 			.filter((e) => e.key.trim())
 			.map((e) => ({key: e.key, value: e.value, secret: Boolean(e.secret)}))
-		const input = {
-			name: isEditMode ? editStackName : stackName.trim(),
-			composeYaml: composeYaml,
+		const baseInput = {
+			name: isEditMode ? (editStackName as string) : stackName.trim(),
 			envVars: filteredEnv.length > 0 ? filteredEnv : undefined,
 		}
 
+		// Plan 21-02 git path: deploy from a remote repo. Form stays open after
+		// success so the webhook URL + secret panel can be shown; the user closes
+		// it via the Done button (which calls onDeploySuccess + onClose).
+		if (tab === 'git' && !isEditMode) {
+			if (!gitUrl.trim()) return
+			deployStack({
+				...baseInput,
+				git: {
+					url: gitUrl.trim(),
+					branch: gitBranch.trim() || 'main',
+					credentialId: gitCredentialId,
+					composePath: gitComposePath.trim() || 'docker-compose.yml',
+				},
+			})
+			return
+		}
+
+		// YAML path (unchanged behavior).
+		if (!composeYaml.trim()) return
+		const input = {...baseInput, composeYaml}
 		if (isEditMode) {
 			editStack(input)
 		} else {
@@ -2745,26 +2793,185 @@ function DeployStackForm({
 					{nameError && <p className='text-xs text-red-500'>{nameError}</p>}
 				</div>
 
-				{/* Compose YAML */}
-				<div className='space-y-1.5'>
-					<Label htmlFor='compose-yaml'>Docker Compose YAML</Label>
-					<textarea
-						id='compose-yaml'
-						value={composeYaml}
-						onChange={(e) => setComposeYaml(e.target.value)}
-						placeholder={`version: '3.8'\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n    restart: unless-stopped`}
-						className='w-full rounded-lg border border-border-default bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/50'
-						style={{
-							fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-							fontSize: '13px',
-							minHeight: '400px',
-							lineHeight: '1.6',
-							resize: 'vertical',
-							tabSize: 2,
-						}}
-						spellCheck={false}
-					/>
-				</div>
+				{/* Compose source — Plan 21-02 wraps Compose YAML in a Tabs primitive
+				    with a new "Deploy from Git" tab. Edit mode is YAML-only (v1). */}
+				{showGitTab ? (
+					<Tabs value={tab} onValueChange={(v) => setTab(v as 'yaml' | 'git')}>
+						<TabsList className='mb-3'>
+							<TabsTrigger value='yaml'>Deploy from YAML</TabsTrigger>
+							<TabsTrigger value='git'>Deploy from Git</TabsTrigger>
+						</TabsList>
+
+						<TabsContent value='yaml'>
+							<div className='space-y-1.5'>
+								<Label htmlFor='compose-yaml'>Docker Compose YAML</Label>
+								<textarea
+									id='compose-yaml'
+									value={composeYaml}
+									onChange={(e) => setComposeYaml(e.target.value)}
+									placeholder={`version: '3.8'\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n    restart: unless-stopped`}
+									className='w-full rounded-lg border border-border-default bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/50'
+									style={{
+										fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+										fontSize: '13px',
+										minHeight: '400px',
+										lineHeight: '1.6',
+										resize: 'vertical',
+										tabSize: 2,
+									}}
+									spellCheck={false}
+								/>
+							</div>
+						</TabsContent>
+
+						<TabsContent value='git'>
+							<div className='space-y-3'>
+								<div className='space-y-1.5'>
+									<Label htmlFor='git-url'>Git Repository URL</Label>
+									<Input
+										id='git-url'
+										value={gitUrl}
+										onChange={(e) => setGitUrl(e.target.value)}
+										placeholder='https://github.com/foo/bar.git or git@github.com:foo/bar.git'
+										className='font-mono text-sm'
+									/>
+								</div>
+								<div className='grid grid-cols-2 gap-3'>
+									<div className='space-y-1.5'>
+										<Label htmlFor='git-branch'>Branch</Label>
+										<Input
+											id='git-branch'
+											value={gitBranch}
+											onChange={(e) => setGitBranch(e.target.value)}
+											placeholder='main'
+										/>
+									</div>
+									<div className='space-y-1.5'>
+										<Label htmlFor='git-compose-path'>Compose File Path</Label>
+										<Input
+											id='git-compose-path'
+											value={gitComposePath}
+											onChange={(e) => setGitComposePath(e.target.value)}
+											placeholder='docker-compose.yml'
+											className='font-mono text-xs'
+										/>
+									</div>
+								</div>
+								<div className='space-y-1.5'>
+									<Label>Credential (optional — leave empty for public repos)</Label>
+									<div className='flex gap-2'>
+										<select
+											value={gitCredentialId ?? ''}
+											onChange={(e) => setGitCredentialId(e.target.value || null)}
+											className='flex-1 rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-sm'
+										>
+											<option value=''>— None (public repo) —</option>
+											{credentials.map((c) => (
+												<option key={c.id} value={c.id}>
+													{c.name} ({c.type})
+												</option>
+											))}
+										</select>
+										<Button
+											type='button'
+											variant='outline'
+											size='sm'
+											onClick={() => setShowCredentialDialog(true)}
+										>
+											<IconPlus size={14} className='mr-1' /> Add credential
+										</Button>
+									</div>
+								</div>
+
+								{/* Webhook URL + secret panel — shown after a successful git deploy.
+								    Form deliberately stays open until the user clicks Done so the
+								    secret can be copied (it isn't retrievable later via the API). */}
+								{showWebhookPanel && lastDeployResult?.webhookSecret && (
+									<div className='rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 space-y-2'>
+										<div className='flex items-center gap-2'>
+											<IconCheck size={16} className='text-emerald-500' />
+											<span className='text-sm font-medium text-emerald-400'>Stack deployed</span>
+										</div>
+										<p className='text-xs text-text-secondary'>
+											Configure your git provider with this webhook URL to redeploy on push:
+										</p>
+										<div className='flex gap-2'>
+											<Input
+												readOnly
+												value={`${window.location.origin}/api/webhooks/git/${lastDeployResult.name}`}
+												className='font-mono text-xs flex-1'
+												onFocus={(e) => e.currentTarget.select()}
+											/>
+											<Button
+												size='sm'
+												variant='outline'
+												onClick={() => {
+													navigator.clipboard.writeText(
+														`${window.location.origin}/api/webhooks/git/${lastDeployResult.name}`,
+													)
+												}}
+											>
+												<IconCopy size={14} />
+											</Button>
+										</div>
+										<p className='text-xs text-text-secondary'>
+											Webhook secret (use in <code>X-Hub-Signature-256</code>):
+										</p>
+										<div className='flex gap-2'>
+											<Input
+												readOnly
+												type='password'
+												value={lastDeployResult.webhookSecret}
+												className='font-mono text-xs flex-1'
+											/>
+											<Button
+												size='sm'
+												variant='outline'
+												onClick={() => {
+													if (lastDeployResult.webhookSecret) {
+														navigator.clipboard.writeText(lastDeployResult.webhookSecret)
+													}
+												}}
+											>
+												<IconCopy size={14} />
+											</Button>
+										</div>
+										<Button
+											size='sm'
+											onClick={() => {
+												clearLastDeployResult()
+												onDeploySuccess()
+												onClose()
+											}}
+										>
+											Done
+										</Button>
+									</div>
+								)}
+							</div>
+						</TabsContent>
+					</Tabs>
+				) : (
+					<div className='space-y-1.5'>
+						<Label htmlFor='compose-yaml'>Docker Compose YAML</Label>
+						<textarea
+							id='compose-yaml'
+							value={composeYaml}
+							onChange={(e) => setComposeYaml(e.target.value)}
+							placeholder={`version: '3.8'\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - "8080:80"\n    restart: unless-stopped`}
+							className='w-full rounded-lg border border-border-default bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand/50'
+							style={{
+								fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+								fontSize: '13px',
+								minHeight: '400px',
+								lineHeight: '1.6',
+								resize: 'vertical',
+								tabSize: 2,
+							}}
+							spellCheck={false}
+						/>
+					</div>
+				)}
 
 				{/* Environment Variables */}
 				<div className='space-y-3'>
@@ -2841,11 +3048,171 @@ function DeployStackForm({
 				<Button variant='outline' onClick={onClose} disabled={isBusy}>
 					Cancel
 				</Button>
-				<Button onClick={handleSubmit} disabled={isBusy || !composeYaml.trim()}>
+				<Button
+					onClick={handleSubmit}
+					disabled={
+						isBusy ||
+						(tab === 'git' && !isEditMode
+							? !gitUrl.trim() || showWebhookPanel
+							: !composeYaml.trim())
+					}
+				>
 					{isBusy ? (isEditMode ? 'Redeploying...' : 'Deploying...') : isEditMode ? 'Redeploy' : 'Deploy'}
 				</Button>
 			</div>
+
+			{/* Inline credential creation — Plan 21-02. Lets a user add an HTTPS
+			    PAT or SSH key without leaving the deploy flow. */}
+			<AddGitCredentialDialog
+				open={showCredentialDialog}
+				onClose={() => setShowCredentialDialog(false)}
+				onCreated={(id) => {
+					setGitCredentialId(id)
+					credentialsQuery.refetch()
+				}}
+			/>
 		</div>
+	)
+}
+
+// Plan 21-02: nested dialog inside DeployStackForm's Git tab. Creates a
+// git_credentials row via tRPC; on success returns the new id so the picker
+// can auto-select it. HTTPS / SSH split mirrors the schema's
+// HttpsCredentialData | SshCredentialData union (data.username/password vs
+// data.privateKey).
+function AddGitCredentialDialog({
+	open,
+	onClose,
+	onCreated,
+}: {
+	open: boolean
+	onClose: () => void
+	onCreated: (credentialId: string) => void
+}) {
+	const [name, setName] = useState('')
+	const [type, setType] = useState<'https' | 'ssh'>('https')
+	const [username, setUsername] = useState('')
+	const [password, setPassword] = useState('')
+	const [privateKey, setPrivateKey] = useState('')
+
+	const createMutation = trpcReact.docker.createGitCredential.useMutation({
+		onSuccess: (data: any) => {
+			if (data?.id) onCreated(data.id)
+			onClose()
+			setName('')
+			setUsername('')
+			setPassword('')
+			setPrivateKey('')
+		},
+	})
+
+	if (!open) return null
+
+	const handleCreate = () => {
+		if (!name.trim()) return
+		if (type === 'https') {
+			if (!username.trim() || !password.trim()) return
+			createMutation.mutate({name: name.trim(), type, data: {username, password}})
+		} else {
+			// Server-side schema requires privateKey.length >= 50 (PEM is always longer).
+			if (!privateKey.trim() || privateKey.length < 50) return
+			createMutation.mutate({name: name.trim(), type, data: {privateKey}})
+		}
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Add Git Credential</DialogTitle>
+					<DialogDescription>
+						Stored encrypted at rest. Used only when cloning the repo on this server.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='space-y-3'>
+					<div className='space-y-1.5'>
+						<Label htmlFor='cred-name'>Name</Label>
+						<Input
+							id='cred-name'
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder='e.g. github-pat'
+						/>
+					</div>
+					<div className='flex gap-2'>
+						<button
+							type='button'
+							onClick={() => setType('https')}
+							className={cn(
+								'flex-1 rounded-lg border px-3 py-2 text-sm',
+								type === 'https' ? 'border-brand bg-brand/10' : 'border-border-default',
+							)}
+						>
+							HTTPS / PAT
+						</button>
+						<button
+							type='button'
+							onClick={() => setType('ssh')}
+							className={cn(
+								'flex-1 rounded-lg border px-3 py-2 text-sm',
+								type === 'ssh' ? 'border-brand bg-brand/10' : 'border-border-default',
+							)}
+						>
+							SSH Key
+						</button>
+					</div>
+					{type === 'https' ? (
+						<>
+							<div className='space-y-1.5'>
+								<Label htmlFor='cred-username'>Username</Label>
+								<Input
+									id='cred-username'
+									value={username}
+									onChange={(e) => setUsername(e.target.value)}
+									placeholder='your-github-username'
+								/>
+							</div>
+							<div className='space-y-1.5'>
+								<Label htmlFor='cred-password'>Personal Access Token</Label>
+								<Input
+									id='cred-password'
+									type='password'
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									placeholder='ghp_xxxxxxxxxxxxxxxxxxxx'
+								/>
+							</div>
+						</>
+					) : (
+						<div className='space-y-1.5'>
+							<Label htmlFor='cred-private-key'>Private Key (PEM)</Label>
+							<textarea
+								id='cred-private-key'
+								value={privateKey}
+								onChange={(e) => setPrivateKey(e.target.value)}
+								placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----'}
+								className='w-full rounded-lg border border-border-default bg-neutral-900 p-3 font-mono text-xs text-white placeholder:text-neutral-500'
+								style={{minHeight: 160}}
+								spellCheck={false}
+							/>
+						</div>
+					)}
+					{createMutation.isError && (
+						<p className='text-xs text-red-500'>
+							{createMutation.error?.message ?? 'Failed to create credential'}
+						</p>
+					)}
+				</div>
+				<DialogFooter>
+					<Button variant='outline' onClick={onClose} disabled={createMutation.isPending}>
+						Cancel
+					</Button>
+					<Button onClick={handleCreate} disabled={createMutation.isPending}>
+						{createMutation.isPending ? 'Creating...' : 'Create'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	)
 }
 
