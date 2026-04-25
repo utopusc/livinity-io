@@ -198,6 +198,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. Live updates: new events appear at top with smooth insertion animation
   5. Clicking an event navigates to its source resource (e.g., container event → container detail)
 **Plans**: 2 plans
+- [ ] 28-01-PLAN.md — Cross-container Logs section (DOC-13) — multiplexed WS aggregator with grep, severity, live-tail; extends /ws/docker/logs handler with optional envId param
+- [ ] 28-02-PLAN.md — Activity Timeline section (DOC-14) — unified docker events + scheduler last-runs + AI alerts feed with source/severity filter chips and click-through routing
 
 ### Phase 29: Shell + Registry + Palette + Docker Settings
 **Goal**: The remaining surfaces — cross-container shell, Docker Hub/private registry credentials, cmd+k command palette, and Docker-app Settings page.
