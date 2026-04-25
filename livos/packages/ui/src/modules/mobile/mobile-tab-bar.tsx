@@ -1,12 +1,13 @@
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useMobileApp} from './mobile-app-context'
-import {IconMessageCircle, IconFolder, IconSettings, IconServer} from '@tabler/icons-react'
+import {IconMessageCircle, IconFolder, IconSettings, IconBrandDocker} from '@tabler/icons-react'
 
 const TABS = [
 	{id: 'ai-chat', label: 'AI Chat', icon: IconMessageCircle, appId: 'LIVINITY_ai-chat', route: '/ai-chat', title: 'AI Chat', appIcon: '/figma-exports/dock-home.png'},
 	{id: 'files', label: 'Files', icon: IconFolder, appId: 'LIVINITY_files', route: '/files/Home', title: 'Files', appIcon: '/figma-exports/dock-files.png'},
 	{id: 'settings', label: 'Settings', icon: IconSettings, appId: 'LIVINITY_settings', route: '/settings', title: 'Settings', appIcon: '/figma-exports/dock-settings.png'},
-	{id: 'server', label: 'Server', icon: IconServer, appId: 'LIVINITY_server-control', route: '/server-control', title: 'Server', appIcon: '/figma-exports/dock-live-usage.png'},
+	// Phase 24-01 — replaces 'server'/LIVINITY_server-control with the new Docker app.
+	{id: 'docker', label: 'Docker', icon: IconBrandDocker, appId: 'LIVINITY_docker', route: '/docker', title: 'Docker', appIcon: '/figma-exports/dock-server.svg'},
 ] as const
 
 export function MobileTabBar() {
