@@ -357,7 +357,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 25. Multi-Environment Dashboard | v28.0 | 2/2 | Complete    | 2026-04-25 |
 | 26. Resource Routes (Containers/Images/Volumes/Networks) | v28.0 | 2/2 | Complete | 2026-04-25 |
 | 27. Stacks + Schedules Routes | v28.0 | 2/2 | Complete | 2026-04-25 |
-| 28. Cross-Container Logs + Activity Timeline | v28.0 | 1/2 | In Progress | — |
+| 28. Cross-Container Logs + Activity Timeline | v28.0 | 2/2 | Complete    | 2026-04-25 |
 
 ---
 

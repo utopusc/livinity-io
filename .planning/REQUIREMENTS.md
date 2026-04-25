@@ -69,7 +69,7 @@
 | DOC-11 | Phase 27 | Complete | Stacks route |
 | DOC-12 | Phase 27 | Complete | Schedules route |
 | DOC-13 | Phase 28 | Complete (28-01) | Cross-container Logs — multi-select sidebar (running containers in selected env), multiplexed WS (one socket per checked container against env-aware `/ws/docker/logs?envId=`), deterministic per-container color stripes + `[name]` line prefixes, regex grep with invalid-regex badge, ERROR/WARN/INFO/DEBUG severity heuristic, live-tail toggle with Dockhand-style auto-disable on manual scroll-up, bare-bones virtualizer (no react-window dep), 25-socket cap + truncation banner |
-| DOC-14 | Phase 28 | Pending | Activity timeline |
+| DOC-14 | Phase 28 | Complete | Activity timeline |
 | DOC-15 | Phase 29 | Pending | Cross-container Shell |
 | DOC-16 | Phase 29 | Pending | Registry credentials + search |
 | DOC-17 | Phase 29 | Pending | Docker-app Settings (envs + theme + palette) |
