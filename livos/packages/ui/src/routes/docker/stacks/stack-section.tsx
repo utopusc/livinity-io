@@ -26,6 +26,7 @@ import {
 	IconChevronDown,
 	IconChevronRight,
 	IconCloudDownload,
+	IconLink,
 	IconPencil,
 	IconPlayerPlay,
 	IconPlayerStop,
@@ -36,9 +37,11 @@ import {
 	IconStack2,
 	IconTrash,
 } from '@tabler/icons-react'
+import {toast} from 'sonner'
 
 import {useStacks} from '@/hooks/use-stacks'
 import {ComposeGraphViewer} from '../_components/compose-graph-viewer'
+import {copyDeepLinkToClipboard} from '../deep-link'
 import {ContainerDetailSheet} from '../resources/container-detail-sheet'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
@@ -230,6 +233,20 @@ export function StackSection() {
 												</TableCell>
 												<TableCell className='text-right pr-4'>
 													<div className='flex items-center justify-end gap-1'>
+														{/* Copy deep link (DOC-20 final) */}
+														<span onClick={(e) => e.stopPropagation()}>
+															<ActionButton
+																icon={IconLink}
+																onClick={() =>
+																	copyDeepLinkToClipboard({section: 'stacks', id: stack.name}).then(
+																		() => toast.success('Deep link copied'),
+																		() => toast.error('Could not copy to clipboard'),
+																	)
+																}
+																color='blue'
+																title='Copy deep link to this stack'
+															/>
+														</span>
 														{/* Start (when stopped or partial) */}
 														{(isStopped || stack.status === 'partial') && (
 															<span onClick={(e) => e.stopPropagation()}>

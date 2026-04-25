@@ -13,6 +13,7 @@
 import {useEffect, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
 import {
+	IconLink,
 	IconNetwork,
 	IconPlus,
 	IconRefresh,
@@ -21,6 +22,7 @@ import {
 	IconUnlink,
 	IconX,
 } from '@tabler/icons-react'
+import {toast} from 'sonner'
 
 import {useNetworks} from '@/hooks/use-networks'
 import {Button} from '@/shadcn-components/ui/button'
@@ -28,6 +30,7 @@ import {Input} from '@/shadcn-components/ui/input'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/shadcn-components/ui/table'
 import {cn} from '@/shadcn-lib/utils'
 
+import {copyDeepLinkToClipboard} from '../deep-link'
 import {useDockerResource, useSelectedNetwork} from '../resource-store'
 import {ActionButton} from './action-button'
 import {filterByQuery} from './filter-rows'
@@ -194,6 +197,17 @@ export function NetworkSection() {
 										</TableCell>
 										<TableCell className='text-right pr-4'>
 											<div className='flex items-center justify-end gap-0.5'>
+												<ActionButton
+													icon={IconLink}
+													onClick={() =>
+														copyDeepLinkToClipboard({section: 'networks', id: network.id}).then(
+															() => toast.success('Deep link copied'),
+															() => toast.error('Could not copy to clipboard'),
+														)
+													}
+													color='blue'
+													title='Copy deep link to this network'
+												/>
 												<ActionButton
 													icon={IconSearch}
 													onClick={() => setSelectedNetwork(network.id)}

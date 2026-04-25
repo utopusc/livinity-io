@@ -21,6 +21,7 @@ import {
 	IconChevronDown,
 	IconChevronRight,
 	IconDownload,
+	IconLink,
 	IconPhoto,
 	IconRefresh,
 	IconSearch,
@@ -28,6 +29,7 @@ import {
 	IconTag,
 	IconTrash,
 } from '@tabler/icons-react'
+import {toast} from 'sonner'
 
 import {formatBytes, useImages} from '@/hooks/use-images'
 import {Button} from '@/shadcn-components/ui/button'
@@ -36,6 +38,7 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/s
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
 import {cn} from '@/shadcn-lib/utils'
 
+import {copyDeepLinkToClipboard} from '../deep-link'
 import {useDockerResource, useSelectedImage} from '../resource-store'
 import {ActionButton} from './action-button'
 import {filterByQuery} from './filter-rows'
@@ -228,6 +231,17 @@ export function ImageSection() {
 												</TableCell>
 												<TableCell className='text-right pr-4'>
 													<div className='flex items-center justify-end gap-0.5' onClick={(e) => e.stopPropagation()}>
+														<ActionButton
+															icon={IconLink}
+															onClick={() =>
+																copyDeepLinkToClipboard({section: 'images', id: image.id}).then(
+																	() => toast.success('Deep link copied'),
+																	() => toast.error('Could not copy to clipboard'),
+																)
+															}
+															color='blue'
+															title='Copy deep link to this image'
+														/>
 														<ActionButton
 															icon={IconShieldCheck}
 															onClick={() => {

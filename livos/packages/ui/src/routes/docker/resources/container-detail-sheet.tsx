@@ -11,6 +11,7 @@ import {
 	IconAlertTriangle,
 	IconPencil,
 	IconCopy,
+	IconLink,
 	IconSearch,
 	IconDownload,
 	IconTrash,
@@ -19,6 +20,7 @@ import {
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import {toast} from 'sonner'
 
 import {useContainerDetail} from '@/hooks/use-container-detail'
 import {useAiDiagnostics} from '@/hooks/use-ai-diagnostics'
@@ -27,6 +29,8 @@ import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {Button} from '@/shadcn-components/ui/button'
 import {cn} from '@/shadcn-lib/utils'
+
+import {copyDeepLinkToClipboard} from '../deep-link'
 
 import {FilesTab} from './container-files-tab'
 
@@ -969,6 +973,21 @@ export function ContainerDetailSheet({
 							<h2 className='truncate text-lg font-bold text-text-primary'>{containerName}</h2>
 						</div>
 						<div className='flex items-center gap-1.5'>
+							{containerName && (
+								<button
+									onClick={() =>
+										copyDeepLinkToClipboard({section: 'containers', id: containerName}).then(
+											() => toast.success('Deep link copied'),
+											() => toast.error('Could not copy to clipboard'),
+										)
+									}
+									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									title='Copy deep link to this container'
+									aria-label='Copy deep link'
+								>
+									<IconLink size={16} />
+								</button>
+							)}
 							{onEdit && containerName && (
 								<button
 									onClick={() => { onEdit(containerName); onOpenChange(false) }}
