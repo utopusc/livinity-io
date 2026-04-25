@@ -85,6 +85,10 @@ export const httpOnlyPaths = [
 	'docker.listGitCredentials',
 	'docker.createGitCredential',
 	'docker.deleteGitCredential',
+	// Phase 22 MH-01 — Environments CRUD (mutations only; listEnvironments stays WS)
+	'docker.createEnvironment',
+	'docker.updateEnvironment',
+	'docker.deleteEnvironment',
 	// Container file browser mutations (Phase 18) -- use HTTP for reliability;
 	// otherwise mutations silently hang on disconnected WS.
 	'docker.containerWriteFile',
