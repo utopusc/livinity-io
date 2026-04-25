@@ -111,10 +111,22 @@ describe('getDockerClient', () => {
 		).rejects.toThrow(/\[env-not-found\]/)
 	})
 
-	test('agent env throws [agent-not-implemented] (Plan 22-03 placeholder)', async () => {
+	test('agent env returns an AgentDockerClient (Plan 22-03)', async () => {
 		mockedGetEnvironment.mockResolvedValue(agentEnv)
 
-		await expect(getDockerClient(agentEnv.id)).rejects.toThrow(/\[agent-not-implemented\]/)
+		const client = await getDockerClient(agentEnv.id)
+
+		// AgentDockerClient is cast to Dockerode at the factory boundary; its
+		// instance has the proxy methods (listContainers, getContainer, etc.).
+		expect(typeof (client as any).listContainers).toBe('function')
+		expect(typeof (client as any).getContainer).toBe('function')
+	})
+
+	test('agent env without agentId throws [env-misconfigured]', async () => {
+		const bad: Environment = {...agentEnv, agentId: null}
+		mockedGetEnvironment.mockResolvedValue(bad)
+
+		await expect(getDockerClient(bad.id)).rejects.toThrow(/\[env-misconfigured\]/)
 	})
 
 	test('tcp-tls env with missing TLS fields throws [env-misconfigured]', async () => {
