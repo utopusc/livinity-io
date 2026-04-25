@@ -4,15 +4,15 @@ milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: Not started
 status: verifying
-stopped_at: Completed 29-01-PLAN.md — Shell + cmd+k palette (DOC-15 + DOC-18). 8 commits, 13 files created. 25 unit tests passing. UI build green.
-last_updated: "2026-04-25T23:33:12.359Z"
+stopped_at: "Completed 29-02-PLAN.md — Registry + Docker Settings + DOC-19/20 closure. v28.0 Phase 29 feature-complete (all 6 DOC-15..DOC-20 closed). 8 commits, 15 files created + 12 modified. 28 new unit tests passing. UI build green. Next: milestone audit."
+last_updated: "2026-04-25T23:54:40.566Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 12
-  completed_plans: 11
-  percent: 92
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 28 COMPLETE (DOC-13 + DOC-14). Plan 28-01 (Cross-container Logs): multiplexed WS aggregator + env-aware /ws/docker/logs handler + deterministic per-container color/severity stripes + regex grep + live-tail. Plan 28-02 (Activity Timeline): unified docker events + scheduler last-runs + AI alerts feed via 3-poll useActivityFeed orchestrator + source/severity filter chips + click-through routing into ContainerDetailSheet/SchedulesSection/matching detail panels + AnimatePresence fade-in-from-top. Cross-env client-filter on AI alerts (T-28-09 mitigation pending Phase 30 server-side scoping). 8 files + 29 new unit tests. Phase 29 (DOC-15..DOC-20) unblocked.
+**Current focus:** Phase 29 COMPLETE — v28.0 feature-complete. Plan 29-01 (Shell + cmd+k Palette): env-aware /ws/docker-exec extension + multi-tab xterm session manager (DOC-15) + categorized cmd+k palette across containers/stacks/images/volumes/networks/envs/sections + recent-searches localStorage ring buffer + StatusBar Search button wiring (DOC-18). Plan 29-02 (Registry + Settings + DOC-19/20): registry_credentials PG table (AES-256-GCM lift-and-shift from Phase 21 git-credentials) + 4 new tRPC routes (listRegistryCredentials/createRegistryCredential/deleteRegistryCredential/searchImages) + pullImage extended with optional registryId → dockerode authconfig (DOC-16); Docker > Settings tabs (Environments cross-import + Theme + Sidebar density radio) (DOC-17); useDockerTheme persistence verified in StatusBar AND Appearance tab (DOC-19); buildDeepLink/parseDeepLink helpers + Copy Deep Link icon buttons on all 5 detail panels — URL-bar form intentionally deferred to v29.0+ (DOC-20 final). 27 files + 28 new unit tests. v28.0 ready for milestone verifier + audit.
 
 ## Current Position
 
@@ -33,7 +33,7 @@ Current Plan: Not started
 Status: Phase complete — ready for verification
 Last activity: 2026-04-25
 
-**Progress:** [█████████░] 92%
+**Progress:** [██████████] 100%
 
 ## v28.0 Phase Structure
 
@@ -85,6 +85,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 28 P01 | 14 | 3 tasks | 16 files |
 | Phase 28 P02 | 11 | 3 tasks | 9 files |
 | Phase 29 P01 | 10 | 3 tasks | 17 files |
+| Phase 29 P02 | 16 min | 3 tasks | 27 files |
 
 ## Accumulated Context
 
@@ -171,6 +172,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - Tabler `Icon` type for `Record<source, Icon>` (not `React.ComponentType<{size?, className?}>`) — Tabler exports `ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>` which is incompatible with the generic ComponentType signature. Precedent: `routes/docker/theme-toggle.tsx:10` uses the same `import {type Icon, ...}` pattern.
 - TDD execution: Task 1 split into RED (test commit b84025b6) + GREEN (feat commit f96f6173). Tasks 2 + 3 ship as single feat commits (a2278a86 + a0a07860) per the plan having no `tdd="true"` flag on those tasks — testable mapping logic lives in Task 1 extracted modules. Same waiver pattern as Plan 24-02 D-12 / 25-01 / 28-01. 4 task commits total + metadata commit.
 - Phase 28 close-out: DOC-13 (Plan 28-01) + DOC-14 (Plan 28-02) both satisfied. v28.0 milestone is now 10/10 plans complete (90% → 100%). Phase 29 (DOC-15..DOC-20) is unblocked. Patterns ready for reuse: 3-query orchestration hook, click-through via store setters, cross-env client-filter as defensive layer, const-array + chip-row pattern, AnimatePresence + deterministic mapper ids.
+
+### Plan 29-02 Decisions (2026-04-25)
+
+- registry-credentials.ts is a verbatim AES-256-GCM lift-and-shift from Phase 21 git-credentials. Same JWT-derived 32-byte key, same iv12+tag16+ct base64 layout, same `encrypted_data NEVER returned via API` rule (SELECT_COLS exclusion). Only delta: payload shape is `{password}` JSON (not `{username, password}`); username + registry_url are non-secret PG columns so the UI can render the credentials list without round-tripping every row through decrypt. Same trust model as git-credentials and stack-secrets — zero new crypto.
+- pullImage backwards-compat extension: `pullImage(image, environmentId?, registryId?)` with optional registryId. Existing anonymous-pull callers (image-section, dashboard pull dialogs) keep working byte-for-byte; only when registryId is present does dockerode receive `{authconfig: {username, password, serveraddress}}`. Routes.ts pullImage zod input extended with `registryId: z.string().uuid().nullable().optional()`.
+- Docker Hub public search uses `https://hub.docker.com/v2/search/repositories?query=X&page_size=25` anonymously — no auth header. T-29-12 dispositioned 'accept': public search reveals only public repositories (no LivOS-side info disclosed); Docker Hub already rate-limits at the IP layer. Adding auth would be cargo-culted.
+- Private registry search uses `${registryUrl}/v2/_catalog?n=25` with `Authorization: Basic base64(user:pass)` + client-side substring filter. The v2 catalog endpoint is not searchable; this matches `docker search` behaviour for private registries. Filter is case-insensitive.
+- 30s AbortController timeout on every fetch (Docker Hub OR private registry); query.slice(0,200) cap before fetch. T-29-13 (DoS via unbounded query) mitigated.
+- All 3 new mutations (createRegistryCredential / deleteRegistryCredential) + the long-running searchImages query route via httpOnlyPaths in common.ts. Same precedent as Phase 21 git-credentials. `searchImages` is a query but routes via HTTP because the underlying fetch can take 5-30s and disconnected WS would silently hang (CLAUDE.md WS-mutation hang issue).
+- EnvironmentsSection cross-imported (NOT duplicated) into Docker > Settings > Environments tab. Same component instance in two surfaces during v28-final overlap window. Phase 30+ may relocate it under routes/docker/_components/ and slim the legacy /settings entry to a redirect; out of scope for v28.0. Cross-import precedent: Plan 26-01 D-06 (ContainerCreateForm + ContainerDetailSheet imported from routes/server-control/ during transition).
+- Sidebar density preference uses defensive merge in zustand persist config — corrupted localStorage values (e.g. user manually edits to 'banana') fall back to 'comfortable' instead of crashing the UI. Same pattern reusable for any future preference store (e.g. palette config in Plan 29-01 → moved to Plan 29-02 deferred since cmd+k palette already shipped without explicit config UI).
+- DOC-19 verification (NOT re-implementation): theme.ts and theme-toggle.tsx untouched. Phase 24-02 cross-instance sync mechanism (storage event + custom 'livos:docker:theme-changed' window event) means flipping the toggle in StatusBar and Appearance tab updates both instantly. Verification check-off, not a new implementation.
+- DOC-20 final closure articulation: programmatic API (Plans 26-01 setSelectedContainer/Image, 26-02 setSelectedVolume/Network, 27-01 setSelectedStack) + Copy Deep Link button (this plan) = v28.0 closure. URL-bar form (e.g. typing /docker/containers/n8n in the address bar) is intentionally deferred to v29.0+ because the window-app pattern (single Livinity SPA hosting a Docker WINDOW) is incompatible with React Router routes inside a window. parseDeepLink is exported and ready when v29.0 picks up the URL parser.
+- All Copy Deep Link buttons go on the leftmost ActionButton position in each row (or in the SheetHeader for container-detail-sheet). Consistent placement across 5 panels makes the affordance discoverable. Stack-section button wraps onClick stopPropagation to keep row-expand behaviour intact.
+- v28.0 close-out: DOC-15 + DOC-16 + DOC-17 + DOC-18 all complete; DOC-19 verified; DOC-20 final closed within window-app constraint. All 6 Phase 29 requirements satisfied. v28.0 (Docker Management UI) is feature-complete pending verifier. Next: milestone audit → milestone complete → cleanup. 12/12 plans, 100% milestone progress.
 
 ### Plan 26-02 Decisions (2026-04-25)
 
@@ -429,6 +445,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T23:32:59.204Z
-Stopped at: Completed 29-01-PLAN.md — Shell + cmd+k palette (DOC-15 + DOC-18). 8 commits, 13 files created. 25 unit tests passing. UI build green.
+Last session: 2026-04-25T23:54:40.556Z
+Stopped at: Completed 29-02-PLAN.md — Registry + Docker Settings + DOC-19/20 closure. v28.0 Phase 29 feature-complete (all 6 DOC-15..DOC-20 closed). 8 commits, 15 files created + 12 modified. 28 new unit tests passing. UI build green. Next: milestone audit.
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.

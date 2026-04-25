@@ -41,15 +41,18 @@
 **: `/docker/activity` — global event timeline (current Events tab content + scheduler run history + AI alert history) sorted descending. Filter by source (docker / scheduler / ai).
 - [x] **DOC-15
 **: `/docker/shell` — cross-container exec terminal with sidebar listing all running containers; click container → opens exec session in main pane. Tabs for multiple concurrent sessions. Uses existing `/ws/docker/exec` per container.
-- [ ] **DOC-16**: `/docker/registry` — Docker Hub + private registry credentials CRUD (encrypted with AES-256-GCM mirroring git-credentials). Image search across configured registries → "Pull" button creates new image entry. Credentials surface in stack-create env vars where needed.
+- [x] **DOC-16
+**: `/docker/registry` — Docker Hub + private registry credentials CRUD (encrypted with AES-256-GCM mirroring git-credentials). Image search across configured registries → "Pull" button creates new image entry. Credentials surface in stack-create env vars where needed.
 
 ### Settings
-- [ ] **DOC-17**: `/docker/settings` houses Environments management (current Settings > Environments) + theme + cmd-k palette config + sidebar density. Global Livinity Settings (users, domains, multi-user toggle, etc.) stay at the existing `/settings` page.
+- [x] **DOC-17
+**: `/docker/settings` houses Environments management (current Settings > Environments) + theme + cmd-k palette config + sidebar density. Global Livinity Settings (users, domains, multi-user toggle, etc.) stay at the existing `/settings` page.
 
 ### UX Quality
 - [x] **DOC-18
 **: cmd+k command palette searches across containers, stacks, images, env names, recent events, settings sections. Result click navigates to the exact resource.
-- [ ] **DOC-19**: Theme toggle (light / dark / system) persists per-user. Existing LivOS theme system reused (no new theme infra).
+- [x] **DOC-19
+**: Theme toggle (light / dark / system) persists per-user. Existing LivOS theme system reused (no new theme infra).
 - [x] **DOC-20**: All resource routes support deep-linking — `/docker/containers/n8n` opens with n8n container detail panel pre-expanded; `/docker/stacks/myproject` opens stack detail. URLs are bookmarkable and shareable. _(Programmatic half closed across Plan 26-01 + 26-02 for all 4 resource types via useDockerResource.getState().setSelectedX(value); URL-bar form remains Phase 29 final closure.)_
 
 ---
@@ -72,12 +75,12 @@
 | DOC-12 | Phase 27 | Complete | Schedules route |
 | DOC-13 | Phase 28 | Complete (28-01) | Cross-container Logs — multi-select sidebar (running containers in selected env), multiplexed WS (one socket per checked container against env-aware `/ws/docker/logs?envId=`), deterministic per-container color stripes + `[name]` line prefixes, regex grep with invalid-regex badge, ERROR/WARN/INFO/DEBUG severity heuristic, live-tail toggle with Dockhand-style auto-disable on manual scroll-up, bare-bones virtualizer (no react-window dep), 25-socket cap + truncation banner |
 | DOC-14 | Phase 28 | Complete | Activity timeline |
-| DOC-15 | Phase 29 | Pending | Cross-container Shell |
-| DOC-16 | Phase 29 | Pending | Registry credentials + search |
-| DOC-17 | Phase 29 | Pending | Docker-app Settings (envs + theme + palette) |
-| DOC-18 | Phase 29 | Pending | cmd+k palette |
-| DOC-19 | Phase 29 | Pending | Theme toggle |
-| DOC-20 | Phase 29 | Complete | Deep-linking on all resource routes |
+| DOC-15 | Phase 29 | Complete (29-01) | Cross-container Shell — sidebar lists running containers in selected env; click → opens new tab with exec session via env-aware `/ws/docker/exec`; multi-tab xterm sessions (close tab disposes WS + xterm); session state local (conversational, not persisted) |
+| DOC-16 | Phase 29 | Complete (29-02) | Registry — `registry_credentials` PG table (AES-256-GCM at rest, mirrors git-credentials); 4 tRPC routes (listRegistryCredentials + createRegistryCredential + deleteRegistryCredential + searchImages); Credentials tab + Image Search tab (Docker Hub + private registry via Basic auth); per-result Pull button bound to extended `pullImage(image, env, registryId?)` |
+| DOC-17 | Phase 29 | Complete (29-02) | Docker-app Settings — Tabs primitive switching Environments (cross-imports Phase 22 EnvironmentsSection — same component, no duplication) + Appearance (theme toggle re-using useDockerTheme + sidebar density radio compact/comfortable persisted to localStorage `livos:docker:sidebar-density`) |
+| DOC-18 | Phase 29 | Complete (29-01) | cmd+k command palette — keyboard shortcut + StatusBar Search button trigger; categorized results (Containers/Stacks/Images/Volumes/Networks/Envs/Recent Events/Settings); recent searches localStorage ring buffer; result click → setSelectedX (resource-store) + setSection navigation |
+| DOC-19 | Phase 29 | Verified (29-02 verify of 24-02) | Theme toggle persistence — confirmed working in BOTH StatusBar AND new Appearance tab via Phase 24-02 cross-instance sync mechanism (storage event + custom 'livos:docker:theme-changed' window event). No new theme infra. |
+| DOC-20 | Phase 29 | Complete (29-02 final) | Deep-linking — programmatic API (Plans 26-01 + 26-02 + 27-01 useDockerResource setSelectedX) + Copy Deep Link button on all 5 detail panels (containers, images, volumes, networks, stacks) + buildDeepLink/parseDeepLink helpers (URI: `livinity://docker/<section>[/<id>]`). URL-bar form intentionally deferred to v29.0+ (window-app pattern incompatible with React Router routes inside windows; parseDeepLink stays exported and ready). |
 
 **Coverage**: 20 requirements across 6 phases (24-29).
 

@@ -129,7 +129,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12)
  (completed 2026-04-25)
 - [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14) (completed 2026-04-25)
-- [ ] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final)
+- [x] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final) (completed 2026-04-25)
 
 ## Phase Details
 
@@ -214,7 +214,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. All resource routes support full deep-linking — bookmarkable URLs.
 **Plans**: 2 plans (1/2 complete)
 - [x] 29-01-PLAN.md — Shell section (DOC-15) + cmd+k command palette (DOC-18) — env-aware /ws/docker-exec extension + multi-tab xterm sessions + categorized palette across containers/stacks/images/volumes/networks/envs/sections (completed 2026-04-25)
-- [ ] 29-02-PLAN.md — Registry credentials + image search (DOC-16) + Docker Settings (DOC-17) + DOC-19 verify + DOC-20 final closure — AES-256-GCM registry vault + Docker Hub search + sidebar density + Copy Deep Link buttons across 5 detail panels
+- [x] 29-02-PLAN.md — Registry credentials + image search (DOC-16) + Docker Settings (DOC-17) + DOC-19 verify + DOC-20 final closure — AES-256-GCM registry vault + Docker Hub search + sidebar density + Copy Deep Link buttons across 5 detail panels (completed 2026-04-25)
 
 <details>
 <summary>v27.0 Docker Management Upgrade (Phases 17-23) — archived per-phase details</summary>
