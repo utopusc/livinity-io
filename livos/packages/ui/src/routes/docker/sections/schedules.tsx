@@ -1,9 +1,3 @@
-// Phase 24-01 placeholder — replaced in Phase 27 (DOC-12).
-export function Schedules() {
-	return (
-		<div className='flex h-full flex-col items-center justify-center gap-2 p-8 text-center'>
-			<h2 className='text-lg font-semibold text-zinc-800 dark:text-zinc-100'>Schedules</h2>
-			<p className='text-sm text-zinc-500 dark:text-zinc-400'>Coming in Phase 27 — Scheduler jobs + Run Now</p>
-		</div>
-	)
-}
+// Phase 27-02 — replaces the Phase 24 placeholder.
+// Body lives in routes/docker/schedules/scheduler-section.tsx (DOC-12).
+export {SchedulerSection as Schedules} from '../schedules/scheduler-section'
