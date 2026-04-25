@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v27.0
 milestone_name: Docker Management Upgrade
-current_plan: 1
-status: executing
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-04-25T03:40:02.018Z"
+current_plan: 2
+status: verifying
+stopped_at: Completed 23-02-PLAN.md — Phase 23 complete, v27.0 ready for milestone audit
+last_updated: "2026-04-25T03:57:22.816Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 15
-  completed_plans: 14
-  percent: 93
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -22,18 +22,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v27.0 — Docker Management Upgrade (Phase 22 in progress — multi-host Docker)
-**Current focus:** Phase 23 — ai-powered-docker-diagnostics
+**Current milestone:** v27.0 — Docker Management Upgrade (all 7 phases complete — ready for milestone audit)
+**Current focus:** Milestone v27.0 audit — verify 33/33 requirements satisfied across Phases 17-23
 
 ## Current Position
 
-Phase: 23 (ai-powered-docker-diagnostics) — EXECUTING
-Plan: 2 of 2
+Phase: 23 (ai-powered-docker-diagnostics) — COMPLETE
+Plan: 2 of 2 (final plan complete)
 Current Plan: 2
-Status: Ready to execute Plan 23-02
-Last activity: 2026-04-25 — Plan 23-01 complete
+Status: Phase 23 complete; v27.0 ready for `/gsd:audit-milestone v27.0`
+Last activity: 2026-04-25
 
-**Progress:** [█████████░] 93%
+**Progress:** [██████████] 100%
 
 ## v27.0 Phase Structure
 
@@ -68,6 +68,7 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 
 | 22-03 | 20 min | 3 | 25 | 2026-04-25 |
 | 23-01 | 10 min | 5 (+1 TDD) | 8 | 2026-04-25 |
+| 23-02 | 11 min | 4 (+1 TDD) | 12 | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
@@ -133,6 +134,24 @@ Coverage: 33/33 v27.0 requirements mapped ✓
 - Re-run/Re-try buttons reset mutation state via `resetDiagnosis()` / `resetExplanation()` / `resetCompose()` before firing again — required because React Query v5 mutations cache the last result; without reset, the panel would briefly show stale data while the new request flies.
 - TDD execution: Task 2 split into RED (test commit `2d96d1df`) + GREEN (feat commit `34fbf563`) per execute-plan TDD protocol; other 4 tasks were single-commit feat tasks. Total 6 commits for the plan.
 - Pattern carried forward to Plan 23-02 (AID-02 + AID-05): `callKimi()` and `redactSecrets()` are exported and reusable for proactive resource-watch handler in scheduler/ + AI Chat container-diagnostics tool. `diagnoseContainer()` itself is reusable as the autonomous "why is my X container slow/failing" tool — needs only an MCP/tool wrapper that the existing chat agent can invoke. Cache prefix `nexus:ai:diag:` is shared across plans for cross-feature dedupe.
+
+### Plan 23-02 Decisions (2026-04-25)
+
+- ai-resource-watch ships default-disabled (`enabled:false` in DEFAULT_JOB_DEFINITIONS). seedDefaults() ON CONFLICT (name) DO NOTHING means existing v27.0 PG installs keep their seeded value — fresh installs only. Operators flip enabled=true via Settings > Scheduler once they've validated Kimi projections in their environment. Same default-flip pattern Plan 21-02 documented for git-stack-sync.
+- Threshold priority order: critical-memory (>=95%) > warning-memory (>=80%) > restart-loop (>=3) > cpu-throttle (delta>0). NO critical-cpu tier — Docker doesn't expose enough signal in a 5-min window to differentiate "occasional throttling" from "constant throttling" reliably without history; we elevate to critical only when memory is the issue. Pure `isThresholdExceeded` function unit-testable in isolation from handler (6 boundary tests + 1 priority test verifies ordering).
+- Throttle delta is `current - last` clamped to 0 on container restart. `cpu_stats.throttling_data.throttled_time` is cumulative since container start; on restart it resets to 0, raw delta would go negative and could be misread as throttling absent. Clamp ensures restart != throttling alarm. Module-scoped `_throttledTimeCache: Map<containerId, lastNanoseconds>` keyed on container Id (stable across renames); test-only `_resetThrottleCacheForTests()` exported for handler-shape tests.
+- 60-min dedupe via partial composite index `(container_name, kind, created_at DESC) WHERE dismissed_at IS NULL`. Single-index seek for `findRecentAlertByKind`. Two partial indexes total: `idx_ai_alerts_undismissed` (for the bell-list query) + `idx_ai_alerts_dedupe` (for the watcher's lookup). Partial indexes keep them small — dismissed alert volume can grow indefinitely without bloating index size. Dismissing an alert resets the dedupe (filter excludes dismissed rows) so users can force re-evaluation by dismissing then waiting for next 5-min tick.
+- Kimi-unavailable mid-loop aborts the run with `status: 'failure'` rather than retrying every container. Next 5-min cron tick will retry — no alert spam if Kimi is down for 30 min. Per-container errors are isolated (one stuck container can't fail the whole job); errorCount surfaces in run-history output JSON.
+- Handler runs against LOCAL socket only (`listContainers(null)`). Multi-host watching deferred to v28 per Plan 22-01 D-06 — the docker compose CLI host-only constraint also applies to the cumulative throttled_time delta cache (each host has its own counter; can't merge across envs without per-env caches and per-env Kimi spend).
+- 4096-char message cap in `insertAiAlert` — defensive against runaway Kimi output. System prompt asks for 60 words but model is non-deterministic; cap prevents PG row bloat.
+- listAiAlerts stays on WS (read-only query polled 30s; WS reconnect handles disconnect). Both dismiss mutations registered in httpOnlyPaths under `// Phase 23 AID-02 — AI Alerts dismissal mutations` comment block — Phase 18 gotcha avoided (disconnected WS mutations silently hang).
+- AlertsBell uses existing shadcn DropdownMenu primitive (Radix-backed, already in `packages/ui/src/shadcn-components/ui/dropdown-menu.tsx`). Zero-dep addition. useAiAlerts onSuccess hooks invalidate `listAiAlerts` via `trpcReact.useUtils().docker.listAiAlerts.invalidate()` — same idiom Plan 22-02 established (tRPC v11 + React Query v5).
+- docker_diagnostics tool routes through `brain.chat()` directly inside nexus-core (same-process). NO HTTP roundtrip to `/api/kimi/chat` needed — that endpoint is itself a thin wrapper around `brain.chat()`. Saves ~10ms latency per call and avoids LIV_API_KEY plumbing inside the tool. Same in-process pattern Plan 17-02 used for `docker_manage`.
+- docker_diagnostics duplicates the redaction regex + DIAGNOSE_SYSTEM_PROMPT from livinityd's `ai-diagnostics.ts` (~30 lines). Intentional per Plan 17-02 precedent: nexus DockerManager does NOT cross-call into livinityd; cross-package imports would require either a shared package or HTTP roundtrip — both worse than the duplication. When/if the prompt drifts between proactive (livinityd) and reactive (nexus) surfaces, that's a feature: each surface tunes independently.
+- Tool input schema is just `{containerName: string}` — no envId. Multi-host diagnose is a v28 follow-up. Tool description IS the LLM router: "Use this tool whenever the user asks why a specific container is slow, failing, OOMing, restarting, crashing, or otherwise misbehaving — even if the user does not explicitly mention logs or stats. Prefer this over docker_manage operation='logs' for diagnostic questions because the output is interpreted, not raw." Zero regex intent matching; Kimi decides based on description alone.
+- `brain` destructured from `this.config` alongside `toolRegistry`/`dockerManager`/`shell` at line 1313 of `registerTools()` — adds 'brain' to the existing destructure rather than reaching for `this.config.brain` inside the closure (closures over destructured locals match the existing pattern).
+- Two commits for Task 2 (RED `2e8eae4d` + GREEN `614ba117`) per execute-plan TDD protocol. Other 3 tasks single-commit feat. Total 5 task commits + 1 metadata commit. 8 unit tests pass on first GREEN (6 isThresholdExceeded boundary + priority + 2 handler-shape tests covering dedupe and throttle delta cache).
+- Phase 23 closeout: all 5 AID requirements satisfied (AID-01/03/04 from Plan 23-01, AID-02/05 from Plan 23-02). v27.0 ready for `/gsd:audit-milestone v27.0` — 33/33 must-haves should pass on server4 deployment.
 
 ### Plan 22-02 Decisions (2026-04-25)
 
@@ -268,6 +287,6 @@ None
 
 ## Session Continuity
 
-Last session: 2026-04-25T03:39:44.275Z
-Stopped at: Completed 23-01-PLAN.md
-Resume with: `/gsd:execute-phase 23 02` to implement Plan 23-02 (AID-02 proactive resource watch via scheduler `BUILT_IN_HANDLERS['ai-resource-watch']` + AID-05 AI Chat sidebar autonomous container diagnostics tool). Plan 23-01 already shipped the reactive surface — `callKimi()`, `redactSecrets()`, `diagnoseContainer()` are exported and reusable. After 23-02 completes Phase 23, run `/gsd:audit-milestone v27.0` to validate all 33 must-haves end-to-end on server4. Then `/gsd:plan-milestone v28.0` to scope the next milestone (focuses: editStack git mode, webhook secret rotation UI, git-backed stack visual badge in Stacks tab; multi-host stack deploy via compose-file replication; multi-host Trivy scan; real-time WS exec/logs over remote envs).
+Last session: 2026-04-25T03:57:22.811Z
+Stopped at: Completed 23-02-PLAN.md — Phase 23 complete, v27.0 ready for milestone audit
+Resume with: `/gsd:audit-milestone v27.0` to validate all 33 v27.0 must-haves end-to-end on server4. Phase 23 is complete (Plan 23-02 shipped AID-02 proactive resource watch + AID-05 autonomous AI Chat container diagnostics; all 5 AID requirements satisfied). After audit passes, run `/gsd:plan-milestone v28.0` to scope the next milestone. v28.0 candidates surfaced during v27.0 execution: (1) multi-host watching for ai-resource-watch (currently local-only per Plan 22-01 D-06 — needs per-env throttle delta caches + per-env Kimi spend); (2) editStack git mode + webhook secret rotation UI + git-backed stack visual badge in Stacks tab; (3) multi-host stack deploy via compose-file replication; (4) multi-host Trivy scan; (5) real-time WS exec/logs over remote envs; (6) docker_diagnostics widening to expose health status + exit code (dockerManager.inspectContainer return shape currently strips them); (7) prompt-tuning analytics view from ai_alerts.payload_json kimi token counts.
