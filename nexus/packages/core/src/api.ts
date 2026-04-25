@@ -416,6 +416,82 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
   });
 
+  // Phase 23 (AID-01/03/04) — One-shot Kimi chat for Docker AI diagnostics.
+  // Wraps brain.chat() with a system+user prompt, no tools, no streaming.
+  // Called from livinityd over X-API-Key (LIV_API_KEY middleware applied to /api/*).
+  // 60-second wall clock so a stuck Kimi call cannot pin nexus-core.
+  app.post('/api/kimi/chat', async (req, res) => {
+    const ALLOWED_TIERS = new Set(['haiku', 'sonnet', 'opus']);
+    try {
+      const body = (req.body ?? {}) as {
+        systemPrompt?: unknown;
+        userPrompt?: unknown;
+        maxTokens?: unknown;
+        tier?: unknown;
+      };
+
+      // Validate
+      if (typeof body.systemPrompt !== 'string' || body.systemPrompt.trim().length === 0) {
+        res.status(400).json({ error: 'systemPrompt must be a non-empty string' });
+        return;
+      }
+      if (typeof body.userPrompt !== 'string' || body.userPrompt.trim().length === 0) {
+        res.status(400).json({ error: 'userPrompt must be a non-empty string' });
+        return;
+      }
+      let maxTokens: number | undefined = undefined;
+      if (body.maxTokens !== undefined && body.maxTokens !== null) {
+        if (typeof body.maxTokens !== 'number' || !Number.isInteger(body.maxTokens) || body.maxTokens < 256 || body.maxTokens > 16384) {
+          res.status(400).json({ error: 'maxTokens must be an integer in [256, 16384]' });
+          return;
+        }
+        maxTokens = body.maxTokens;
+      }
+      let tier: 'haiku' | 'sonnet' | 'opus' | undefined = undefined;
+      if (body.tier !== undefined && body.tier !== null) {
+        if (typeof body.tier !== 'string' || !ALLOWED_TIERS.has(body.tier)) {
+          res.status(400).json({ error: 'tier must be one of haiku|sonnet|opus' });
+          return;
+        }
+        tier = body.tier as 'haiku' | 'sonnet' | 'opus';
+      }
+
+      const systemPrompt = body.systemPrompt as string;
+      const userPrompt = body.userPrompt as string;
+
+      logger.info('Kimi one-shot chat', {
+        systemPromptLen: systemPrompt.length,
+        userPromptLen: userPrompt.length,
+        tier: tier ?? 'sonnet',
+      });
+
+      // 60s timeout race — Kimi calls that overrun must surface as [ai-timeout]
+      // rather than holding the express handler indefinitely.
+      const TIMEOUT_MS = 60_000;
+      const result = await Promise.race([
+        brain.chat({
+          systemPrompt,
+          messages: [{ role: 'user', text: userPrompt }],
+          tier: tier ?? 'sonnet',
+          maxTokens: maxTokens ?? 4096,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('[ai-timeout] Kimi chat exceeded 60s')), TIMEOUT_MS),
+        ),
+      ]);
+
+      res.json({
+        text: result.text,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+      });
+    } catch (err) {
+      const message = formatErrorMessage(err).slice(0, 500);
+      logger.error('Kimi one-shot chat failed', { error: message });
+      res.status(502).json({ error: message });
+    }
+  });
+
   // ── Claude Auth API ─────────────────────────────────────────────
 
   /** Set Claude API key — validates against Anthropic API and stores in Redis */
