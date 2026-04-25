@@ -204,3 +204,33 @@ CREATE TABLE IF NOT EXISTS stacks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_stacks_git_url ON stacks(git_url);
+
+-- =========================================================================
+-- Environments (Phase 22 MH-01) — multi-host Docker management
+-- One row per Docker host: 'socket' (local Unix socket), 'tcp-tls' (remote
+-- dockerd over TLS), or 'agent' (outbound-agent — see docker_agents in 22-03).
+-- A 'local' row is auto-seeded on every boot so single-host installs are
+-- byte-for-byte backwards compatible (route input envId=null/'local' resolves here).
+--
+-- NOTE: agent_id deliberately has NO foreign-key constraint. The docker_agents
+-- table is created in Plan 22-03 — adding an FK now would force a circular
+-- dependency. Plan 22-03 may add an ALTER TABLE … ADD CONSTRAINT later.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS environments (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL UNIQUE,
+  type         TEXT NOT NULL CHECK (type IN ('socket', 'tcp-tls', 'agent')),
+  socket_path  TEXT,                                       -- type='socket'
+  tcp_host     TEXT,                                       -- type='tcp-tls'
+  tcp_port     INTEGER,                                    -- type='tcp-tls'
+  tls_ca_pem   TEXT,                                       -- type='tcp-tls'
+  tls_cert_pem TEXT,                                       -- type='tcp-tls'
+  tls_key_pem  TEXT,                                       -- type='tcp-tls'
+  agent_id     UUID,                                       -- type='agent' (FK declared in 22-03)
+  agent_status TEXT NOT NULL DEFAULT 'offline' CHECK (agent_status IN ('online', 'offline')),
+  last_seen    TIMESTAMPTZ,
+  created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_environments_type ON environments(type);
