@@ -21,8 +21,10 @@
 - [x] **DOC-06**: Dashboard env filter chips (All / dev / prod / staging) filter card grid client-side without re-fetching. _(Plan 25-02: localStorage-persisted single-select with auto-fallback when persisted tag no longer exists.)_
 
 ### Resource Routes
-- [ ] **DOC-07**: `/docker/containers` — full container list (current Containers tab content) as own route. Detail panel slides over from right (current sheet pattern preserved).
-- [ ] **DOC-08**: `/docker/images` — full image list with Scan + Explain CVEs buttons (current Images tab) as own route.
+- [x] **DOC-07
+**: `/docker/containers` — full container list (current Containers tab content) as own route. Detail panel slides over from right (current sheet pattern preserved).
+- [x] **DOC-08
+**: `/docker/images` — full image list with Scan + Explain CVEs buttons (current Images tab) as own route.
 - [ ] **DOC-09**: `/docker/volumes` — full volume list as own route. Volume backup config link to Schedules route.
 - [ ] **DOC-10**: `/docker/networks` — full network list as own route.
 - [ ] **DOC-11**: `/docker/stacks` — full stack list as own route. Create dialog preserves YAML / Git / AI tabs from v27.0. Stack detail keeps Graph + Logs + Files tabs.

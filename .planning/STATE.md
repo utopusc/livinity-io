@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
-current_plan: 26-01
-status: ready_to_plan
-stopped_at: Completed 25-02-PLAN.md — Multi-Environment Dashboard filter chips + Top-CPU panel + per-card retry (DOC-04 + DOC-05 + DOC-06 fully closed). Phase 25 complete. Phase 26 (Resource Routes) next.
-last_updated: "2026-04-25T20:27:18Z"
+current_plan: 26-02
+status: ready_to_execute
+stopped_at: Completed 26-01-PLAN.md — Containers + Images sections live with search, deep-link store, AI Diagnose + Scan/Explain CVEs preserved (DOC-07 + DOC-08 closed; DOC-20 programmatic half closed for containers+images). Plan 26-02 (Volumes + Networks) next — reuses useDockerResource volume/network slots + filterByQuery + format-relative-date already shipped here.
+last_updated: "2026-04-25T21:04:52.067Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
-  percent: 23
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -23,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 25 COMPLETE — Plan 25-02 shipped (filter chips above grid + Top-CPU panel below + per-card Retry on Unreachable banner). DOC-04 + DOC-05 + DOC-06 fully delivered. Phase 26 (Resource Routes — DOC-07/08/09/10) next.
+**Current focus:** Plan 26-01 COMPLETE — Containers + Images sections live with search, deep-link store, AI Diagnose + Scan/Explain CVEs preserved (DOC-07 + DOC-08 closed; DOC-20 programmatic half closed for containers+images). Plan 26-02 (Volumes + Networks) next.
 
 ## Current Position
 
 Phase: 26
-Plan: 2 of 2 complete
-Current Plan: Not started
-Status: Ready to plan
+Plan: 1 of 2 complete
+Current Plan: 26-02
+Status: Ready to execute
 Last activity: 2026-04-25
 
-**Progress:** [██████████] 100% (Phase 25)
+**Progress:** [████████░░] 83%
 
 ## v28.0 Phase Structure
 
@@ -73,10 +73,12 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | 24-02 | 10 min | 4 (+1 TDD) | 8 created + 3 modified | 2026-04-25 |
 | 25-01 | 7 min | 3 (5 commits, 2× TDD) | 5 created + 6 modified | 2026-04-25 |
 | 25-02 | 9 min | 3 (5 commits, 2× TDD) | 7 created + 4 modified | 2026-04-25 |
+| 26-01 | 10 min | 4 (5 commits, 1× TDD) | 16 created + 2 modified | 2026-04-25 |
 
 **Prior milestone (v26.0 — Device Security & User Isolation):**
 | Phase 11-16 | 6 phases | 11 plans | 15/15 requirements satisfied |
 | Audit: passed (42/42 must-haves, 4 attack vectors blocked, auto-approve constraint preserved) |
+| Phase 26 P01 | 10min | 4 tasks | 16 created + 2 modified files |
 
 ## Accumulated Context
 
@@ -119,6 +121,20 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - Schema migration via wrapped DO block: `DO $$ BEGIN ALTER TABLE … ADD COLUMN IF NOT EXISTS … END$$;` — matches the existing device_audit_log_no_modify trigger pattern. No separate migration runner needed (livinityd reads schema.sql at boot and pool.query() executes the entire file). Pattern reusable for any future column addition.
 - TDD execution: Tasks 1+2 split into RED (test commits 4f5b7027, a0ffb73b) + GREEN (feat commits ee16d187, 07a2d5d6); Task 3 (layout files) ships as a single feat commit 9c210d26 per Plan 25-01 Task 3 `<behavior>` waiver (matches Plan 24-02 D-12 'smoke chain test for layout files' precedent — heavy mocking required for render tests; behaviour lives in extracted modules covered by Tasks 1+2). 5 task commits total + metadata commit.
 - Pattern carried forward to Plan 25-02 + Phase 26: per-env query composition (useEnvCardData(envId)) accepts an explicit envId override; reusable for any panel that should display ITS OWN env's metrics regardless of the global selection (Phase 26 detail pages, Phase 28 cross-env logs aggregator, Plan 25-02 Top-CPU panel union across all envs).
+
+### Plan 26-01 Decisions (2026-04-25)
+
+- useDockerResource zustand store with 4 slots (selectedContainer/Image/Volume/Network) — single store, NOT 4 mini-stores. Single subscribe-cost for components consuming multiple slots; matches Plan 24-01 useDockerStore pattern. Plan 26-02 reuses volume + network slots already declared up-front — single source of truth, no store rev needed for 26-02.
+- NO persist middleware on resource-store. Detail-panel-open state is conversational, not preferential. Re-opening the Docker window with a stale detail panel violates least-surprise (vs. useDockerStore which DOES persist section nav, since that IS preferential).
+- Explicit selector hooks (useSelectedContainer/Image/Volume/Network) instead of consumers calling useDockerResource((s) => s.X). Reasons: (1) ContainerSection should NOT re-render when selectedImage changes — explicit hooks document the slice + bound the subscription scope; (2) matches Plan 24-01 SECTION_META + selector-hook pattern.
+- filterByQuery<T> empty-string returns SAME array reference (perf win — consumers can skip useMemo when search inactive). Case-insensitive trimmed substring match for non-empty queries. Pure generic — no React, runs cleanly under jsdom-or-node.
+- Search inputs maxLength={200} per threat T-26-03 — defensive DoS bound on filterByQuery query length. Legacy Containers + Images tabs had no search input at all; Plan 26-01 adds them per phase success criterion 6 + CONTEXT.md decisions.likely_patterns.search.
+- Selection helpers (toggleSelectAll) operate on `containers` (full set) NOT `filteredContainers` so 'select all' under an active filter selects every visible row in the unfiltered list. The bulk action bar surfaces the count regardless of filter state — keeps bulk semantics predictable across filter toggles.
+- Cross-imports from routes/server-control/* (ContainerCreateForm, ContainerDetailSheet) intentional during v28 transition — Plan 24-02 D-09 precedent for EnvironmentSelector + AlertsBell. Helpers (ActionButton/StateBadge/ImageHistoryPanel/ScanResultPanel) duplicated to routes/docker/resources/ — Plan 27 will collapse the duplication after legacy file delete.
+- Four legacy file-local image dialogs (RemoveImage/Prune/Pull/Tag) were never exported from server-control/index.tsx. Ported into resources/image-dialogs.tsx as a single file (4 components, ~200 lines). Those copies become canonical after Plan 27 file deletion. RenameDialog ported into its own file for symmetry; RemoveDialog inlined into container-section.tsx since Containers is the only consumer.
+- formatBytes canonical Docker-app location at resources/format-bytes.ts; back-compat re-export from hooks/use-images.ts retained — existing legacy + Plan 25 dashboard imports keep working. Plan 27 may collapse the duplicate after server-control deletion when no consumer imports from hooks/ anymore.
+- DOC-20 programmatic deep-link half closed for containers + images via useDockerResource.getState().setSelectedContainer(name) / setSelectedImage(id). URL-bar form deferred to Phase 29 (DOC-20 final). Plan 28 cross-container logs deep-link will use this same store API. Volumes + Networks slots already exposed for Plan 26-02 + future Phase 28/29 consumers.
+- TDD execution: Task 1 split into RED (test commit 4750bf70 — 17 failing-import tests) + GREEN (feat commit 3bc81521 — 4 source files). Tasks 2-4 single commits per Plan 26-01 task `<action>` blocks (verbatim ports + section composition; testable logic lives in Task 1's helpers). 5 task commits total.
 
 ### Plan 25-02 Decisions (2026-04-25)
 
@@ -366,6 +382,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T20:27:18Z
-Stopped at: Completed 25-02-PLAN.md — Multi-Environment Dashboard filter chips + Top-CPU panel + per-card Retry (DOC-04 polish + DOC-05 + DOC-06 fully closed). Phase 25 complete. Phase 26 (Resource Routes — DOC-07/08/09/10 + DOC-20 partial) next.
+Last session: 2026-04-25T21:04:36.608Z
+Stopped at: Completed 26-01-PLAN.md
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.

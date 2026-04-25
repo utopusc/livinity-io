@@ -169,8 +169,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. `/docker/networks` route displays network list
   5. Deep-linking works: `/docker/containers/n8n_server_1` opens with that container's detail panel pre-expanded
   6. Search input filters list client-side; clicking a row updates URL to deep-link
-**Plans**: 2 plans
-- [ ] 26-01-PLAN.md — Containers + Images sections (DOC-07, DOC-08, DOC-20 partial)
+**Plans**: 2 plans (1/2 complete)
+- [x] 26-01-PLAN.md — Containers + Images sections (DOC-07, DOC-08, DOC-20 partial) — completed 2026-04-25
 - [ ] 26-02-PLAN.md — Volumes + Networks sections (DOC-09, DOC-10, DOC-20 partial)
 
 ### Phase 27: Stacks + Schedules Routes
