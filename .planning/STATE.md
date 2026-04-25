@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: Not started
-status: ready_to_plan
-stopped_at: Completed 28-02-PLAN.md — Activity Timeline section live (DOC-14). Phase 28 complete. 3 tasks, 4 commits, 8 files created. 29 unit tests passing. UI build green.
-last_updated: "2026-04-25T22:51:23.147Z"
+status: verifying
+stopped_at: Completed 29-01-PLAN.md — Shell + cmd+k palette (DOC-15 + DOC-18). 8 commits, 13 files created. 25 unit tests passing. UI build green.
+last_updated: "2026-04-25T23:33:12.359Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 13
-  completed_phases: 6
-  total_plans: 10
-  completed_plans: 10
-  percent: 46
+  completed_phases: 5
+  total_plans: 12
+  completed_plans: 11
+  percent: 92
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 Phase: 29
 Plan: 2 of 2 complete
 Current Plan: Not started
-Status: Ready to plan
+Status: Phase complete — ready for verification
 Last activity: 2026-04-25
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 92%
 
 ## v28.0 Phase Structure
 
@@ -84,6 +84,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 27 P02 | 10 | 4 tasks | 10 files |
 | Phase 28 P01 | 14 | 3 tasks | 16 files |
 | Phase 28 P02 | 11 | 3 tasks | 9 files |
+| Phase 29 P01 | 10 | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -428,6 +429,6 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T22:51:23.138Z
-Stopped at: Completed 28-02-PLAN.md — Activity Timeline section live (DOC-14). Phase 28 complete. 3 tasks, 4 commits, 8 files created. 29 unit tests passing. UI build green.
+Last session: 2026-04-25T23:32:59.204Z
+Stopped at: Completed 29-01-PLAN.md — Shell + cmd+k palette (DOC-15 + DOC-18). 8 commits, 13 files created. 25 unit tests passing. UI build green.
 Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.

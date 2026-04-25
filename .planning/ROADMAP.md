@@ -212,8 +212,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   3. `/docker/settings` houses Environments management (current Settings > Environments) + theme + cmd+k palette config + sidebar density. Global Livinity Settings stay at `/settings`.
   4. cmd+k palette searches containers, stacks, images, env names, recent events, settings sections. Result click navigates to exact resource.
   5. All resource routes support full deep-linking — bookmarkable URLs.
-**Plans**: 2 plans
-- [ ] 29-01-PLAN.md — Shell section (DOC-15) + cmd+k command palette (DOC-18) — env-aware /ws/docker-exec extension + multi-tab xterm sessions + categorized palette across containers/stacks/images/volumes/networks/envs/sections
+**Plans**: 2 plans (1/2 complete)
+- [x] 29-01-PLAN.md — Shell section (DOC-15) + cmd+k command palette (DOC-18) — env-aware /ws/docker-exec extension + multi-tab xterm sessions + categorized palette across containers/stacks/images/volumes/networks/envs/sections (completed 2026-04-25)
 - [ ] 29-02-PLAN.md — Registry credentials + image search (DOC-16) + Docker Settings (DOC-17) + DOC-19 verify + DOC-20 final closure — AES-256-GCM registry vault + Docker Hub search + sidebar density + Copy Deep Link buttons across 5 detail panels
 
 <details>

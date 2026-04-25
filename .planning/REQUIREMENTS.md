@@ -39,14 +39,16 @@
 **: `/docker/logs` — cross-container log aggregator. Multi-select containers, free-text grep filter, timestamp range, severity filter, live-tail toggle. Re-uses `/ws/docker/logs` per-container with multiplexed UI.
 - [x] **DOC-14
 **: `/docker/activity` — global event timeline (current Events tab content + scheduler run history + AI alert history) sorted descending. Filter by source (docker / scheduler / ai).
-- [ ] **DOC-15**: `/docker/shell` — cross-container exec terminal with sidebar listing all running containers; click container → opens exec session in main pane. Tabs for multiple concurrent sessions. Uses existing `/ws/docker/exec` per container.
+- [x] **DOC-15
+**: `/docker/shell` — cross-container exec terminal with sidebar listing all running containers; click container → opens exec session in main pane. Tabs for multiple concurrent sessions. Uses existing `/ws/docker/exec` per container.
 - [ ] **DOC-16**: `/docker/registry` — Docker Hub + private registry credentials CRUD (encrypted with AES-256-GCM mirroring git-credentials). Image search across configured registries → "Pull" button creates new image entry. Credentials surface in stack-create env vars where needed.
 
 ### Settings
 - [ ] **DOC-17**: `/docker/settings` houses Environments management (current Settings > Environments) + theme + cmd-k palette config + sidebar density. Global Livinity Settings (users, domains, multi-user toggle, etc.) stay at the existing `/settings` page.
 
 ### UX Quality
-- [ ] **DOC-18**: cmd+k command palette searches across containers, stacks, images, env names, recent events, settings sections. Result click navigates to the exact resource.
+- [x] **DOC-18
+**: cmd+k command palette searches across containers, stacks, images, env names, recent events, settings sections. Result click navigates to the exact resource.
 - [ ] **DOC-19**: Theme toggle (light / dark / system) persists per-user. Existing LivOS theme system reused (no new theme infra).
 - [x] **DOC-20**: All resource routes support deep-linking — `/docker/containers/n8n` opens with n8n container detail panel pre-expanded; `/docker/stacks/myproject` opens stack detail. URLs are bookmarkable and shareable. _(Programmatic half closed across Plan 26-01 + 26-02 for all 4 resource types via useDockerResource.getState().setSelectedX(value); URL-bar form remains Phase 29 final closure.)_
 
