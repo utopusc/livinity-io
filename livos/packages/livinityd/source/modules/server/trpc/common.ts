@@ -20,6 +20,13 @@ export const httpOnlyPaths = [
 	'user.acceptInvite',
 	// system.status doesn't use cookies/headers, but the UI polls it across restarts to detect when livinityd is back online; we force HTTP to avoid WS reconnect handshake
 	'system.status',
+	// Phase 30 UPD-02 — system.update is a long-running mutation (60-90s
+	// spawning bash /opt/livos/update.sh). system.updateStatus is polled every
+	// 500ms during an active update. HTTP avoids WS-disconnect hangs (precedent:
+	// docker.scanImage at line 71-72). system.checkUpdate INTENTIONALLY stays
+	// on WS — sub-second query, low rate-limit volume.
+	'system.update',
+	'system.updateStatus',
 	// Multi-user management routes — use HTTP to avoid WS connection dependency
 	'user.createInvite',
 	'user.listAllUsers',
