@@ -32,6 +32,7 @@ import {useVolumes} from '@/hooks/use-volumes'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/shadcn-components/ui/table'
+import {Tooltip, TooltipContent, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
 
 import {copyDeepLinkToClipboard} from '../deep-link'
@@ -158,14 +159,14 @@ export function VolumeSection() {
 				</div>
 			) : (
 				<div className='overflow-x-auto'>
-					<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
-						<Table>
+					<div className='rounded-xl border border-border-default bg-white overflow-hidden'>
+						<Table className='table-fixed w-full'>
 							<TableHeader>
 								<TableRow>
-									<TableHead className='pl-4'>Name</TableHead>
-									<TableHead>Driver</TableHead>
-									<TableHead>Mount Point</TableHead>
-									<TableHead className='text-right pr-4'>Actions</TableHead>
+									<TableHead className='pl-4 w-[35%]'>Name</TableHead>
+									<TableHead className='w-[15%]'>Driver</TableHead>
+									<TableHead className='w-[35%]'>Mount Point</TableHead>
+									<TableHead className='sticky right-0 z-10 bg-white text-right pr-4 w-[140px]'>Actions</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -173,9 +174,9 @@ export function VolumeSection() {
 									const isExpanded = expandedVolume === volume.name
 									return (
 										<Fragment key={volume.name}>
-											<TableRow>
-												<TableCell className='pl-4'>
-													<div className='flex items-center gap-2'>
+											<TableRow className='group'>
+												<TableCell className='pl-4 min-w-0'>
+													<div className='flex min-w-0 items-center gap-2'>
 														<button
 															onClick={() => setExpandedVolume(isExpanded ? null : volume.name)}
 															className='shrink-0 text-text-tertiary hover:text-text-primary transition-colors'
@@ -185,18 +186,30 @@ export function VolumeSection() {
 																: <IconChevronRight size={14} />
 															}
 														</button>
-														<span className='font-mono text-sm font-medium'>{volume.name}</span>
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<span className='block min-w-0 flex-1 truncate font-mono text-sm font-medium'>
+																	{volume.name}
+																</span>
+															</TooltipTrigger>
+															<TooltipContent>{volume.name}</TooltipContent>
+														</Tooltip>
 													</div>
 												</TableCell>
 												<TableCell>
 													<span className='text-sm text-text-secondary'>{volume.driver}</span>
 												</TableCell>
-												<TableCell>
-													<span className='truncate font-mono text-xs text-text-secondary' title={volume.mountpoint}>
-														{volume.mountpoint}
-													</span>
+												<TableCell className='min-w-0'>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<span className='block min-w-0 truncate font-mono text-xs text-text-secondary'>
+																{volume.mountpoint}
+															</span>
+														</TooltipTrigger>
+														<TooltipContent>{volume.mountpoint}</TooltipContent>
+													</Tooltip>
 												</TableCell>
-												<TableCell className='text-right pr-4'>
+												<TableCell className='sticky right-0 z-10 bg-white text-right pr-4 group-hover:bg-zinc-50'>
 													<div className='flex items-center justify-end gap-0.5'>
 														<ActionButton
 															icon={IconLink}
@@ -227,7 +240,7 @@ export function VolumeSection() {
 											</TableRow>
 											{isExpanded && (
 												<TableRow>
-													<TableCell colSpan={4} className='p-0 bg-surface-1/50'>
+													<TableCell colSpan={4} className='p-0 bg-zinc-50'>
 														<VolumeUsagePanel volumeName={volume.name} />
 													</TableCell>
 												</TableRow>
