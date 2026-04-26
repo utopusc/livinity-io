@@ -33,7 +33,7 @@ export function UpdatingCover({onRetry}: {onRetry: () => void}) {
 		<BarePage>
 			{!error && (
 				<ProgressLayout
-					title={t('software-update.updating-to', {name: latestVersion.name})}
+					title={t('software-update.updating-to', {name: latestVersion.shortSha})}
 					callout={t('software-update.callout')}
 					progress={indeterminate ? undefined : progress}
 					message={description}

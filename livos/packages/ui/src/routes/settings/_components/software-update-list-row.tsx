@@ -24,7 +24,7 @@ export function SoftwareUpdateListRow({isActive}: {isActive: boolean}) {
 				description={
 					<span className='flex items-center gap-1 pb-3'>
 						<Icon component={RiArrowUpCircleFill} className='text-brand' />
-						{t('software-update.new-version', {name: latestVersion?.name || LOADING_DASH})}
+						{t('software-update.new-version', {name: latestVersion?.shortSha || LOADING_DASH})}
 					</span>
 				}
 			>

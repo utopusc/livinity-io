@@ -82,11 +82,14 @@ export function useSettingsNotificationCount() {
 			}
 
 			if (checkUpdateResult.status === 'fulfilled') {
-				const {name, available} = checkUpdateResult.value
+				const {shortSha, available} = checkUpdateResult.value
 
 				if (available) {
 					currCount++
-					const id = toast.info(t('notifications.new-version-available', {update: name}), softwareUpdateToastOptions)
+					const id = toast.info(
+						t('notifications.new-version-available', {update: shortSha ?? 'available'}),
+						softwareUpdateToastOptions,
+					)
 					toastIds.push(id)
 				}
 			}
