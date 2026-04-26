@@ -41,6 +41,7 @@ import {
 	IconBrain,
 	IconLoader2,
 	IconSparkles,
+	IconDotsVertical,
 } from '@tabler/icons-react'
 import {Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip} from 'recharts'
 
@@ -82,6 +83,12 @@ import {Input} from '@/shadcn-components/ui/input'
 import {Label} from '@/shadcn-components/ui/label'
 import {Checkbox} from '@/shadcn-components/ui/checkbox'
 import {Select, SelectTrigger, SelectValue, SelectContent, SelectItem} from '@/shadcn-components/ui/select'
+import {
+	DropdownMenu,
+	DropdownMenuTrigger,
+	DropdownMenuContent,
+	DropdownMenuItem,
+} from '@/shadcn-components/ui/dropdown-menu'
 import {cn} from '@/shadcn-lib/utils'
 
 // Phase 22 MH-03 — yellow warning when the selected environment is an agent
@@ -4505,36 +4512,7 @@ export default function ServerControl() {
 												</TableCell>
 												<TableCell className='text-right pr-4'>
 													<div className='flex items-center justify-end gap-1'>
-														{/* Edit */}
-														<span onClick={(e) => e.stopPropagation()}>
-															<ActionButton
-																icon={IconPencil}
-																onClick={() => { setSelectedContainer(null); setEditTarget(container.name) }}
-																disabled={isManaging || container.isProtected}
-																color='blue'
-																title={container.isProtected ? 'Protected — cannot edit' : 'Edit'}
-															/>
-														</span>
-														{/* Duplicate */}
-														<span onClick={(e) => e.stopPropagation()}>
-															<ActionButton
-																icon={IconCopy}
-																onClick={() => { setSelectedContainer(null); setDuplicateTarget(container.name) }}
-																disabled={isManaging}
-																color='blue'
-																title='Duplicate'
-															/>
-														</span>
-														{/* Rename */}
-														<span onClick={(e) => e.stopPropagation()}>
-															<ActionButton
-																icon={IconTag}
-																onClick={() => { setSelectedContainer(null); setRenameTarget(container.name) }}
-																disabled={isManaging || container.isProtected}
-																color='blue'
-																title={container.isProtected ? 'Protected — cannot rename' : 'Rename'}
-															/>
-														</span>
+														{/* INLINE high-frequency actions: Start/Stop/Resume, Restart, Remove */}
 														{/* Start -- show for non-running, non-paused states */}
 														{!isRunning && !isPaused && (
 															<span onClick={(e) => e.stopPropagation()}>
@@ -4559,18 +4537,6 @@ export default function ServerControl() {
 																/>
 															</span>
 														)}
-														{/* Pause -- show when running */}
-														{isRunning && (
-															<span onClick={(e) => e.stopPropagation()}>
-																<ActionButton
-																	icon={IconPlayerPause}
-																	onClick={() => manage(container.name, 'pause')}
-																	disabled={isManaging || container.isProtected}
-																	color='amber'
-																	title={container.isProtected ? 'Protected — cannot pause' : 'Pause'}
-																/>
-															</span>
-														)}
 														{/* Resume (unpause) -- show when paused */}
 														{isPaused && (
 															<span onClick={(e) => e.stopPropagation()}>
@@ -4580,18 +4546,6 @@ export default function ServerControl() {
 																	disabled={isManaging}
 																	color='emerald'
 																	title='Resume'
-																/>
-															</span>
-														)}
-														{/* Kill -- show when running or paused (emergency stop) */}
-														{(isRunning || isPaused) && (
-															<span onClick={(e) => e.stopPropagation()}>
-																<ActionButton
-																	icon={IconHandStop}
-																	onClick={() => manage(container.name, 'kill')}
-																	disabled={isManaging}
-																	color='red'
-																	title='Kill (SIGKILL)'
 																/>
 															</span>
 														)}
@@ -4613,6 +4567,55 @@ export default function ServerControl() {
 																title={container.isProtected ? 'Protected — cannot remove' : 'Remove'}
 															/>
 														</span>
+														{/* OVERFLOW dropdown: Edit, Duplicate, Rename, Pause, Kill */}
+														<DropdownMenu>
+															<DropdownMenuTrigger asChild>
+																<button
+																	type='button'
+																	className='inline-flex h-8 w-8 items-center justify-center rounded hover:bg-muted'
+																	onClick={(e) => e.stopPropagation()}
+																	aria-label='More actions'
+																>
+																	<IconDotsVertical className='h-4 w-4' />
+																</button>
+															</DropdownMenuTrigger>
+															<DropdownMenuContent align='end' onClick={(e) => e.stopPropagation()}>
+																<DropdownMenuItem
+																	disabled={isManaging || container.isProtected}
+																	onSelect={() => { setSelectedContainer(null); setEditTarget(container.name) }}
+																>
+																	Edit
+																</DropdownMenuItem>
+																<DropdownMenuItem
+																	disabled={isManaging}
+																	onSelect={() => { setSelectedContainer(null); setDuplicateTarget(container.name) }}
+																>
+																	Duplicate
+																</DropdownMenuItem>
+																<DropdownMenuItem
+																	disabled={isManaging || container.isProtected}
+																	onSelect={() => { setSelectedContainer(null); setRenameTarget(container.name) }}
+																>
+																	Rename
+																</DropdownMenuItem>
+																{isRunning && (
+																	<DropdownMenuItem
+																		disabled={isManaging || container.isProtected}
+																		onSelect={() => manage(container.name, 'pause')}
+																	>
+																		Pause
+																	</DropdownMenuItem>
+																)}
+																{(isRunning || isPaused) && (
+																	<DropdownMenuItem
+																		disabled={isManaging}
+																		onSelect={() => manage(container.name, 'kill')}
+																	>
+																		Kill
+																	</DropdownMenuItem>
+																)}
+															</DropdownMenuContent>
+														</DropdownMenu>
 													</div>
 												</TableCell>
 											</TableRow>
