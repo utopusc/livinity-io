@@ -56,22 +56,22 @@ export function ImageHistoryPanel({imageId}: {imageId: string}) {
 				</TableHeader>
 				<TableBody>
 					{historyQuery.data.map((layer, idx) => (
-						<TableRow key={`${imageId}-layer-${idx}`} className='bg-surface-1/50'>
+						<TableRow key={`${imageId}-layer-${idx}`} className='bg-white hover:bg-zinc-50'>
 							<TableCell className='pl-4 pr-4' colSpan={2}>
 								<span
-									className='block truncate max-w-[500px] font-mono text-xs text-text-secondary'
+									className='block truncate max-w-[500px] font-mono text-xs text-zinc-700'
 									title={layer.createdBy}
 								>
 									{layer.createdBy || '(empty)'}
 								</span>
 							</TableCell>
 							<TableCell>
-								<span className='text-xs text-text-tertiary'>
+								<span className='text-xs text-zinc-600'>
 									{layer.size > 0 ? formatBytes(layer.size) : '0 B'}
 								</span>
 							</TableCell>
 							<TableCell className='text-right pr-4'>
-								<span className='text-xs text-text-tertiary'>
+								<span className='text-xs text-zinc-600'>
 									{formatRelativeDate(layer.created)}
 								</span>
 							</TableCell>

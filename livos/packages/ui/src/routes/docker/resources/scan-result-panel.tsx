@@ -57,8 +57,8 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 
 	if (isScanning) {
 		return (
-			<div className='flex items-center gap-3 px-4 py-6 text-sm text-text-secondary'>
-				<IconRefresh size={16} className='animate-spin text-text-tertiary' />
+			<div className='flex items-center gap-3 px-4 py-6 text-sm text-zinc-700'>
+				<IconRefresh size={16} className='animate-spin text-zinc-500' />
 				<span>Running Trivy — first scan may take 60-90s while pulling aquasec/trivy:latest...</span>
 			</div>
 		)
@@ -84,8 +84,8 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 
 	if (!result) {
 		return (
-			<div className='flex flex-col items-center gap-3 py-8 text-center text-sm text-text-secondary'>
-				<IconShieldCheck size={28} className='text-text-tertiary' />
+			<div className='flex flex-col items-center gap-3 py-8 text-center text-sm text-zinc-700'>
+				<IconShieldCheck size={28} className='text-zinc-500' />
 				<p>No scan run yet for this image.</p>
 				<Button size='sm' onClick={() => scanImage(imageRef)}>
 					Run vulnerability scan
@@ -100,15 +100,15 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 
 	return (
 		<div className='space-y-3 px-4 py-3'>
-			<div className='flex flex-wrap items-center gap-2 text-xs text-text-tertiary'>
+			<div className='flex flex-wrap items-center gap-2 text-xs text-zinc-500'>
 				<span>Scanned {formatRelativeDate(Math.floor(result.scannedAt / 1000))}</span>
 				{result.cached && (
 					<span className='inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-700'>
 						cached
 					</span>
 				)}
-				<span className='text-text-tertiary/70'>· {totalCves} CVE{totalCves === 1 ? '' : 's'}</span>
-				<span className='text-text-tertiary/70'>· digest <span className='font-mono'>{result.imageDigest.slice(0, 19)}…</span></span>
+				<span className='text-zinc-500/70'>· {totalCves} CVE{totalCves === 1 ? '' : 's'}</span>
+				<span className='text-zinc-500/70'>· digest <span className='font-mono'>{result.imageDigest.slice(0, 19)}…</span></span>
 				<div className='ml-auto'>
 					<Button
 						size='sm'
@@ -197,7 +197,7 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 			)}
 
 			{expandedSeverity !== null && (
-				<div className='overflow-x-auto rounded-lg border border-border-default bg-surface-base'>
+				<div className='overflow-x-auto rounded-lg border border-zinc-200 bg-white'>
 					<Table>
 						<TableHeader>
 							<TableRow>
@@ -212,7 +212,7 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 						<TableBody>
 							{filteredCves.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={6} className='px-3 py-3 text-center text-xs text-text-tertiary'>
+									<TableCell colSpan={6} className='px-3 py-3 text-center text-xs text-zinc-500'>
 										No {expandedSeverity} CVEs.
 									</TableCell>
 								</TableRow>
@@ -232,32 +232,32 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 													<IconExternalLink size={10} />
 												</a>
 											) : (
-												<span className='font-mono text-xs text-text-secondary'>{cve.id}</span>
+												<span className='font-mono text-xs text-zinc-700'>{cve.id}</span>
 											)}
 										</TableCell>
 										<TableCell className='align-top'>
-											<span className='font-mono text-xs text-text-secondary'>{cve.packageName || '-'}</span>
+											<span className='font-mono text-xs text-zinc-700'>{cve.packageName || '-'}</span>
 										</TableCell>
 										<TableCell className='align-top'>
-											<span className='font-mono text-xs text-text-secondary'>{cve.installedVersion || '-'}</span>
+											<span className='font-mono text-xs text-zinc-700'>{cve.installedVersion || '-'}</span>
 										</TableCell>
 										<TableCell className='align-top'>
 											<span className='font-mono text-xs'>
 												{cve.fixedVersion ? (
 													<span className='text-emerald-600'>{cve.fixedVersion}</span>
 												) : (
-													<span className='text-text-tertiary italic'>unfixed</span>
+													<span className='text-zinc-500 italic'>unfixed</span>
 												)}
 											</span>
 										</TableCell>
 										<TableCell className='align-top'>
-											<span className='font-mono text-xs text-text-secondary'>
+											<span className='font-mono text-xs text-zinc-700'>
 												{cve.cvss !== null ? cve.cvss.toFixed(1) : '-'}
 											</span>
 										</TableCell>
 										<TableCell className='align-top'>
 											<span
-												className='block max-w-[420px] truncate text-xs text-text-secondary'
+												className='block max-w-[420px] truncate text-xs text-zinc-700'
 												title={cve.description || cve.title}
 											>
 												{cve.title || '-'}
