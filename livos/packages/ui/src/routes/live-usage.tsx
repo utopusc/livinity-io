@@ -38,6 +38,9 @@ export default function LiveUsageDialog() {
 				<ImmersiveDialogOverlay />
 				<ImmersiveDialogContent size='md' showScroll>
 					<h1 className={immersiveDialogTitleClass}>{title}</h1>
+					{/* Phase 30 hot-patch round 11: extra top breathing room before the
+					    CPU/Memory/Storage cards so the panel doesn't crowd the title. */}
+					<div className='h-2 sm:h-4' />
 					<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
 						<LiveUsageContent />
 					</ErrorBoundary>
