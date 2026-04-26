@@ -37,6 +37,22 @@ created: 2026-04-26
 
 ---
 
+## Validation-Map → PLAN.md Task Mapping
+
+VALIDATION.md uses letter-suffix IDs (30-01-A..I, 30-02-A..F) for sampling-rate granularity. PLAN.md uses Task 1..N. Mapping:
+
+| VALIDATION row | PLAN file | PLAN task | Notes |
+|----------------|-----------|-----------|-------|
+| 30-01-W0, A, B, C, D, E, F | 30-01-PLAN.md | Task 1 (create stubs), Task 2 (rewrite update.ts to make stubs green) | All run `update.unit.test.ts` |
+| 30-01-G | 30-01-PLAN.md | Task 3 (CONFLICT guard in routes.ts) | Extends `system.integration.test.ts` |
+| 30-01-H | 30-01-PLAN.md | Task 5 (SSH `update.sh` patch — manual checkpoint) | Manual SSH validation |
+| 30-01-I | 30-01-PLAN.md | Task 4 (`httpOnlyPaths` add) | Grep assertion |
+| 30-02-W0, A, B, C, D | 30-02-PLAN.md | Task 1 (create stubs), Task 2 (UpdateNotification component) | All run `update-notification.unit.test.ts` |
+| 30-02-E | 30-02-PLAN.md | Task 3 (`useSoftwareUpdate` patch) | Optional shape regression |
+| 30-02-F | 30-02-PLAN.md | Task 7 (browser E2E — manual checkpoint) | chrome-devtools MCP |
+
+---
+
 ## Per-Task Verification Map
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
@@ -50,7 +66,7 @@ created: 2026-04-26
 | 30-01-F | 01 | 1 | UPD-02 | — | non-zero exit returns false + sets error | unit (mocked rejects) | (same) | ❌ W0 | ⬜ pending |
 | 30-01-G | 01 | 1 | UPD-02 | — | `system.update` throws CONFLICT when status=updating | integration (TRPC caller) | `cd livos/packages/livinityd && npm run test:integration -- system` | ⚠ extend `system.integration.test.ts` | ⬜ pending |
 | 30-01-H | 01 | 1 | UPD-03 | — | `update.sh` writes `/opt/livos/.deployed-sha` after build | manual SSH | `ssh root@minipc "bash /opt/livos/update.sh && cat /opt/livos/.deployed-sha"` | manual-only | ⬜ pending |
-| 30-01-I | 01 | 1 | UPD-01,02 | — | `httpOnlyPaths` includes `system.update` + `system.updateStatus` | unit (assertion) | `grep -E "system\.(update\|updateStatus)" livos/packages/config/source/common.ts` | n/a | ⬜ pending |
+| 30-01-I | 01 | 1 | UPD-01,02 | — | `httpOnlyPaths` includes `system.update` + `system.updateStatus` | unit (assertion) | `grep -E "system\.(update\|updateStatus)" livos/packages/livinityd/source/modules/server/trpc/common.ts` | n/a | ⬜ pending |
 | 30-02-W0 | 02 | 0 | UPD-04 | — | N/A | unit (stubs) | `cd livos/packages/ui && pnpm exec vitest run src/components/update-notification` | ❌ create `update-notification.unit.test.ts` | ⬜ pending |
 | 30-02-A | 02 | 2 | UPD-04 | — | renders when `state === 'update-available'` & SHA not dismissed | unit (RTL+jsdom) | (same) | ❌ W0 | ⬜ pending |
 | 30-02-B | 02 | 2 | UPD-04 | — | "Later" writes SHA to `livos:update-notification:dismissed-sha` | unit | (same) | ❌ W0 | ⬜ pending |
