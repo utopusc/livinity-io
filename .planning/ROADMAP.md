@@ -15,7 +15,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v25.0 Memory & WhatsApp Integration** — Phases 6-10 (shipped 2026-04-03)
 - ✅ **v26.0 Device Security & User Isolation** — Phases 11-16 (shipped 2026-04-24)
 - ✅ **v27.0 Docker Management Upgrade** — Phases 17-23 (shipped 2026-04-25)
-- ✅ **v28.0 Docker Management UI (Dockhand-Style)** — Phases 24-29 (shipped 2026-04-26)
+- ✅ **v28.0 Docker Management UI (Dockhand-Style)** — Phases 24-30 (shipped 2026-04-26)
 
 ## Phases
 
@@ -118,119 +118,24 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 </details>
 
-### v28.0 Docker Management UI (Dockhand-Style) — SHIPPED 2026-04-26 (full archive: `milestones/v28.0-ROADMAP.md`)
+<details>
+<summary>v28.0 Docker Management UI (Dockhand-Style) (Phases 24-30) — SHIPPED 2026-04-26 — archived per-phase details</summary>
 
-**Milestone Goal:** Restructure v27.0's tab-based Server Management page into a standalone Dockhand-style Docker management application. v27.0 shipped the data plumbing (env transport, AI diagnostics, vuln-scan, scheduler, git stacks, file browser, real-time logs); v28.0 surfaces it through a left-sidebar layout with top status bar, multi-environment Dashboard, and dedicated routes per resource type. Adds 4 new surfaces (Logs / Activity / Shell / Registry) that v27.0 didn't ship. Reference: Dockhand (dockhand.dev).
+See `.planning/milestones/v28.0-ROADMAP.md` for full archive of Phases 24-29.
+Phase 30 (Auto-Update Notification, GitHub-aware) added post-archive: see `.planning/milestones/v28.0-PHASE30-ADDENDUM-AUDIT.md` for the standalone audit (passed; 4/4 reqs UPD-01..04; 4 UAT bugs fixed across 3 hot-patch rounds).
 
-- [x] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar, theme toggle, route table (DOC-01, DOC-02, DOC-03)
- (completed 2026-04-25)
-- [x] **Phase 25: Multi-Environment Dashboard** — env card grid, Top containers by CPU panel, env tag filter chips, recent events per env (DOC-04, DOC-05, DOC-06) (completed 2026-04-25)
-- [x] **Phase 26: Resource Routes (Containers/Images/Volumes/Networks)** — migrate current tabs to dedicated routes with deep-linking (DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 partial) (completed 2026-04-25)
-- [x] **Phase 27: Stacks + Schedules Routes** — Stacks route preserves Graph/AI/Git tabs from v27.0; Schedules from current Settings sub-section (DOC-11, DOC-12)
- (completed 2026-04-25)
-- [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14) (completed 2026-04-25)
-- [x] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final) (completed 2026-04-25)
-- [x] **Phase 30: Auto-Update Notification (GitHub-Aware)** — replace legacy OTA infra with GitHub commits API check; UpdateNotification card bottom-right; clicking triggers `/opt/livos/update.sh` via livinityd subprocess + log streaming (UPD-01, UPD-02, UPD-03, UPD-04) (completed 2026-04-26)
+**Milestone Goal:** Restructure v27.0's tab-based Server Management page into a standalone Dockhand-style Docker management application (Phases 24-29) plus replace broken Umbrel OTA infra with GitHub-aware auto-update notification (Phase 30).
 
-## Phase Details
+- [x] **Phase 24: Docker App Skeleton** — `/docker` route, sidebar layout, top status bar (DOC-01..03) — completed 2026-04-25
+- [x] **Phase 25: Multi-Environment Dashboard** — env card grid, Top-CPU panel, tag filter chips (DOC-04..06) — completed 2026-04-25
+- [x] **Phase 26: Resource Routes** — Containers/Images/Volumes/Networks dedicated routes (DOC-07..10, DOC-20 partial) — completed 2026-04-25
+- [x] **Phase 27: Stacks + Schedules Routes** — preserves Graph/AI/Git tabs (DOC-11, DOC-12) — completed 2026-04-25
+- [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multiplex log aggregator, global event timeline (DOC-13, DOC-14) — completed 2026-04-25
+- [x] **Phase 29: Shell + Registry + Palette + Settings** — exec, AES-256-GCM credential vault, cmd+k (DOC-15..20) — completed 2026-04-25
+- [x] **Phase 30: Auto-Update Notification (GitHub-Aware)** — GitHub commits API + bash subprocess + UpdateNotification card + 5 shape-consumer fixes (UPD-01..04) — completed 2026-04-26
 
-### Phase 24: Docker App Skeleton
-**Goal**: Standalone Docker app at `/docker` route with persistent left sidebar + top status bar — the structural foundation for everything in v28.0.
-**Depends on**: Nothing (foundation phase of v28.0; consumes existing v27.0 backend)
-**Requirements**: DOC-01, DOC-02, DOC-03
-**Success Criteria** (what must be TRUE):
-  1. New route `/docker` mounts a layout with persistent left sidebar (collapsible to icon-only) and top status bar
-  2. Sidebar lists 12 entries: Dashboard, Containers, Logs, Shell, Stacks, Images, Volumes, Networks, Registry, Activity, Schedules, Settings — clicking each navigates to that route
-  3. Top status bar shows env selector dropdown, Docker version, Socket type, cores, RAM total, free disk, uptime, current time, Live indicator (WS connection state), Search button, theme toggle — all populated from existing tRPC `docker.getEngineInfo` + `docker.listEnvironments`
-  4. Old `/server` Server Management page redirects to `/docker` (no parallel implementations)
-  5. Theme toggle persists choice (light / dark / system) per user via existing LivOS theme infra
-**Plans**: 2 plans
+</details>
 
-### Phase 25: Multi-Environment Dashboard
-**Goal**: Dashboard view showing all environments at a glance with health, resource counts, recent events, and top containers by CPU.
-**Depends on**: Phase 24, Phase 22 (multi-host)
-**Requirements**: DOC-04, DOC-05, DOC-06
-**Success Criteria**:
-  1. Dashboard route displays env card grid — each card has env name + type icon + connection target + tags + health banner (all-healthy / N-unhealthy) + container counts (running/stopped/paused/restarting) + image/stack/volume/network counts + recent events list (last 8) + CPU/memory utilization
-  2. "Top containers by CPU" panel aggregates across all envs, sorted by CPU%, with quick-action chips (logs / shell / restart)
-  3. Env tag filter chips (All / dev / prod / staging — user-editable) filter the card grid client-side
-  4. Live polling (5s) updates stats; visual transition smooth, no full re-render flicker
-  5. Clicking an env card scopes the rest of the app to that env (sets selectedEnvironmentId in zustand store)
-**Plans**: 2 plans
-- [x] 25-01-PLAN.md — Backend tags column + EnvCard grid (DOC-04 partial, DOC-06 partial) (completed 2026-04-25)
-- [x] 25-02-PLAN.md — Filter chips + Top-CPU panel (DOC-04 final, DOC-05, DOC-06 final)
-
-### Phase 26: Resource Routes (Containers / Images / Volumes / Networks)
-**Goal**: Migrate the four most-used resource lists from horizontal tabs to dedicated routes with deep-linking.
-**Depends on**: Phase 24
-**Requirements**: DOC-07, DOC-08, DOC-09, DOC-10, DOC-20 (partial)
-**Success Criteria**:
-  1. `/docker/containers` route displays full container list (existing Containers tab content) — detail panel slides over from right (sheet pattern preserved)
-  2. `/docker/images` route displays image list with Scan + Explain CVEs buttons (Phase 19 + Phase 23 features preserved)
-  3. `/docker/volumes` route displays volume list; volume backup config opens Schedules route
-  4. `/docker/networks` route displays network list
-  5. Deep-linking works: `/docker/containers/n8n_server_1` opens with that container's detail panel pre-expanded
-  6. Search input filters list client-side; clicking a row updates URL to deep-link
-**Plans**: 2 plans (2/2 complete)
-- [x] 26-01-PLAN.md — Containers + Images sections (DOC-07, DOC-08, DOC-20 partial) — completed 2026-04-25
-- [x] 26-02-PLAN.md — Volumes + Networks sections (DOC-09, DOC-10, DOC-20 partial) — completed 2026-04-25
-
-### Phase 27: Stacks + Schedules Routes
-**Goal**: Migrate Stacks and Scheduled Jobs to dedicated routes, preserving all v27.0 tabs and dialogs.
-**Depends on**: Phase 24, Phase 21 (GitOps), Phase 20 (Scheduler)
-**Requirements**: DOC-11, DOC-12
-**Success Criteria**:
-  1. `/docker/stacks` route displays stack list; Add Stack dialog preserves YAML / Git / AI tabs (Phase 21 + Phase 23 features)
-  2. Stack detail panel preserves Graph / Logs / Files tabs (Phase 19 + Phase 17 + Phase 18 features)
-  3. `/docker/schedules` route displays the scheduler job list (current Settings > Scheduler) with Run Now + Test Destination + AddJob dialog
-  4. Volume-backup job creation flow accessible from `/docker/volumes` link (cross-route navigation)
-  5. Deep-linking: `/docker/stacks/myproject` opens stack detail
-**Plans**: 2 plans (2/2 complete)
-- [x] 27-01-PLAN.md — Stacks section (DOC-11) — list + 3-tab Deploy dialog (YAML/Git/AI) + ComposeGraphViewer; constituent containers click through to existing ContainerDetailSheet preserving Phase 17 logs + Phase 18 files + Phase 19 vuln-scan
-- [x] 27-02-PLAN.md — Schedules section + final server-control delete (DOC-12, DOC-03 final) — port SchedulerSection from Settings; volume pre-fill from useSelectedVolume() (Phase 26-02 contract); relocate 7 cross-imported components; delete routes/server-control/ directory
-
-### Phase 28: Cross-Container Logs + Activity Timeline
-**Goal**: Two new surfaces v27.0 didn't ship — cross-container log aggregator and global event timeline.
-**Depends on**: Phase 24, Phase 17 (real-time logs), Phase 20 (scheduler), Phase 23 (AI alerts)
-**Requirements**: DOC-13, DOC-14
-**Success Criteria**:
-  1. `/docker/logs` route — multi-select containers (sidebar list), free-text grep filter, timestamp range, severity filter, live-tail toggle. Backend: re-uses `/ws/docker/logs` per-container with multiplexed UI.
-  2. Lines from different containers visually distinguished (color stripe + container name prefix)
-  3. `/docker/activity` route — global event timeline aggregating Docker events + scheduler run history + AI alerts. Filter by source (docker / scheduler / ai). Filter by severity. Sorted descending.
-  4. Live updates: new events appear at top with smooth insertion animation
-  5. Clicking an event navigates to its source resource (e.g., container event → container detail)
-**Plans**: 2 plans (2/2 complete)
-- [x] 28-01-PLAN.md — Cross-container Logs section (DOC-13) — multiplexed WS aggregator with grep, severity, live-tail; extends /ws/docker/logs handler with optional envId param (completed 2026-04-25)
-- [x] 28-02-PLAN.md — Activity Timeline section (DOC-14) — unified docker events + scheduler last-runs + AI alerts feed with source/severity filter chips and click-through routing (completed 2026-04-25)
-
-### Phase 30: Auto-Update Notification (GitHub-Aware)
-**Goal**: Detect new commits on the `utopusc/livinity-io` master branch, surface a persistent bottom-right notification card on the desktop, and trigger `/opt/livos/update.sh` via livinityd when the user clicks "Update". Replaces the broken legacy Umbrel OTA infra (`api.livinity.io/latest-release`) which doesn't match this deployment model.
-**Depends on**: Phase 24 (desktop infra), v28.0 hot-patch round 3 (notification UI patterns)
-**Requirements**: UPD-01, UPD-02, UPD-03, UPD-04
-**Success Criteria** (what must be TRUE):
-  1. `system.checkUpdate` tRPC query queries `https://api.github.com/repos/utopusc/livinity-io/commits/master` (no auth needed for public repos, 60 req/hr unauth limit is fine for 1h polling); compares response `sha` to locally stored deployed SHA at `/opt/livos/.deployed-sha`. Returns `{available: boolean, sha: string, shortSha: string, message: string, author: string, committedAt: string}`.
-  2. `/opt/livos/update.sh` writes deployed git SHA to `/opt/livos/.deployed-sha` after a successful build (line at end of script, before "LivOS updated successfully!" banner).
-  3. `system.update` tRPC mutation spawns `bash /opt/livos/update.sh` as a child process, captures stdout/stderr, exposes progress via `system.updateStatus` query (existing). Does NOT reboot — update.sh restarts services itself.
-  4. New `<UpdateNotification />` React component mounts on desktop (router.tsx). Displays a fixed bottom-right card (`bottom-4 right-4 z-[80]`) when `state === 'update-available'` AND not dismissed. Card shows: "New update available" + commit message snippet + 2 buttons ("Update" + "Later"). Animation: framer-motion fade-in/slide-up.
-  5. "Update" button → opens existing `/settings/software-update/confirm` dialog (preserves user-confirms-before-update UX). "Later" persists dismissed SHA to localStorage `livos:update-notification:dismissed-sha` — re-shows when a NEWER SHA appears.
-  6. `useSoftwareUpdate` hook polls every 1 hour (refetchInterval: 3_600_000); also refetches on mount. Toast/error if GitHub API rate-limit hit (graceful degradation).
-**Plans**: 2 plans (2/2 complete)
-- [x] 30-01-PLAN.md — Backend rewrite (update.ts + routes.ts httpOnlyPaths) + update.sh SSH patch (UPD-01, UPD-02, UPD-03) — completed 2026-04-26
-- [x] 30-02-PLAN.md — Frontend UpdateNotification + 1h hook polling + router mount + 5 shape-consumer fixes (UPD-04) — completed 2026-04-26
-
-### Phase 29: Shell + Registry + Palette + Docker Settings
-**Goal**: The remaining surfaces — cross-container shell, Docker Hub/private registry credentials, cmd+k command palette, and Docker-app Settings page.
-**Depends on**: Phase 24, Phase 17 (exec WS), Phase 21 (credential vault pattern)
-**Requirements**: DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20
-**Success Criteria**:
-  1. `/docker/shell` route — sidebar lists running containers; clicking opens exec session in main pane via existing `/ws/docker/exec`. Tabs support multiple concurrent sessions.
-  2. `/docker/registry` route — Docker Hub + private registry credentials CRUD (encrypted with AES-256-GCM mirroring git-credentials pattern from Phase 21). Image search across configured registries with "Pull" button.
-  3. `/docker/settings` houses Environments management (current Settings > Environments) + theme + cmd+k palette config + sidebar density. Global Livinity Settings stay at `/settings`.
-  4. cmd+k palette searches containers, stacks, images, env names, recent events, settings sections. Result click navigates to exact resource.
-  5. All resource routes support full deep-linking — bookmarkable URLs.
-**Plans**: 2 plans (1/2 complete)
-- [x] 29-01-PLAN.md — Shell section (DOC-15) + cmd+k command palette (DOC-18) — env-aware /ws/docker-exec extension + multi-tab xterm sessions + categorized palette across containers/stacks/images/volumes/networks/envs/sections (completed 2026-04-25)
-- [x] 29-02-PLAN.md — Registry credentials + image search (DOC-16) + Docker Settings (DOC-17) + DOC-19 verify + DOC-20 final closure — AES-256-GCM registry vault + Docker Hub search + sidebar density + Copy Deep Link buttons across 5 detail panels (completed 2026-04-25)
 
 <details>
 <summary>v27.0 Docker Management Upgrade (Phases 17-23) — archived per-phase details</summary>

@@ -2,10 +2,11 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
-current_plan: 2
-status: verifying
-stopped_at: "Completed 30-02-PLAN.md — Auto-Update frontend (UPD-04). 6 task commits. UpdateNotification component (99L) + smoke test + 5 shape consumers updated + hourly poll + router mount. Phase 30 complete pending manual browser verification (Task 7 deferred per checkpoint:human-verify protocol). Plan 30-02 grep audit + tsc both clean across 7 touched files."
-last_updated: "2026-04-26T09:19:14.476Z"
+milestone_status: shipped
+current_plan: null
+status: between-milestones
+stopped_at: "v28.0 SHIPPED 2026-04-26. Phase 30 (Auto-Update Notification, GitHub-aware) added post-archive and merged into the milestone via 4 hot-patch rounds: r1 (toast removed + cache invalidate), r2 (NotificationBadge plain text), r3 (Umbrel WhatsNewModal removed). Live UAT confirmed bugs A + D fixed on Mini PC. Tech debt: Bug C (truncation, minor) + BACKLOG 999.1/999.2/999.3. Lifecycle: audit passed → milestone archived → tag v28.0.1 (hot-patch bump). Ready for next milestone."
+last_updated: "2026-04-26T03:40:00.000Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 14
@@ -22,18 +23,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 30 — Auto-Update Notification
+**Current milestone:** v28.0 — Docker Management UI (Dockhand-Style) — SHIPPED 2026-04-26
+**Current focus:** between milestones — ready to start v29.0
 
 ## Current Position
 
-Phase: 30 (Auto-Update Notification) — EXECUTING
-Plan: 2 of 2
-Current Plan: 2
-Status: Phase complete — ready for verification
+Phase: — (no active phase)
+Plan: —
+Status: Milestone shipped, archive committed, tag v28.0.1 pushed.
 Last activity: 2026-04-26
 
-**Progress:** [██████████] 100%
+**Progress:** [██████████] 100% — v28.0 complete (Phases 24-30, all hot-patches)
 
 ## v28.0 Phase Structure
 
