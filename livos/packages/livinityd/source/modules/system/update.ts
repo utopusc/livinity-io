@@ -8,7 +8,44 @@ import Livinityd from '../../index.js'
 type UpdateStatus = ProgressStatus
 
 const GITHUB_COMMITS_URL = 'https://api.github.com/repos/utopusc/livinity-io/commits/master'
+const GITHUB_TAGS_URL = 'https://api.github.com/repos/utopusc/livinity-io/tags?per_page=20'
 const DEPLOYED_SHA_PATH = '/opt/livos/.deployed-sha'
+
+// Phase 30 hot-patch round 5: resolve a human-friendly version label.
+// Strategy: pull the most recent tags from GitHub, find the tag whose commit SHA
+// matches the latest master commit. If none match exactly, find the most recent
+// tag whose commit is an ancestor (best-effort) and append "+shortSha". If the
+// tags API fails or returns nothing, fall back to the bare shortSha.
+async function resolveVersionLabel(
+	latestSha: string,
+	livinityd: Livinityd,
+): Promise<string> {
+	try {
+		const response = await fetch(GITHUB_TAGS_URL, {
+			headers: {
+				'User-Agent': `LivOS-${livinityd.version}`,
+				Accept: 'application/vnd.github+json',
+			},
+		})
+		if (!response.ok) return latestSha.slice(0, 7)
+		const tags = (await response.json()) as Array<{
+			name: string
+			commit: {sha: string}
+		}>
+		const exact = tags.find((t) => t.commit.sha === latestSha)
+		if (exact) return exact.name.startsWith('v') ? exact.name : `v${exact.name}`
+		// No exact match: prefix the most recent tag with "+shortSha" so users still
+		// see "what's the family this commit belongs to" rather than just a hash.
+		const newest = tags[0]
+		if (newest) {
+			const tagLabel = newest.name.startsWith('v') ? newest.name : `v${newest.name}`
+			return `${tagLabel}+${latestSha.slice(0, 7)}`
+		}
+		return latestSha.slice(0, 7)
+	} catch {
+		return latestSha.slice(0, 7)
+	}
+}
 
 // Phase 30 UPD-02: progress-percent map for the update.sh `━━━ Section ━━━` markers.
 // Sections are emitted by /opt/livos/update.sh as it walks the deploy steps.
@@ -68,10 +105,14 @@ export async function getLatestRelease(livinityd: Livinityd) {
 		}
 	}
 
+	// Round 5: human-friendly version label (e.g. "v28.0.1" or "v28.0.1+30bacc28").
+	const version = await resolveVersionLabel(data.sha, livinityd)
+
 	return {
 		available: data.sha !== localSha,
 		sha: data.sha,
 		shortSha: data.sha.slice(0, 7),
+		version,
 		message: data.commit.message,
 		author: data.commit.author.name,
 		committedAt: data.commit.author.date,
