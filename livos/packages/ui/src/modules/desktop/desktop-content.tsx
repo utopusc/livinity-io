@@ -302,7 +302,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 				>
 					<AppIcon
 						label='Docker'
-						src={systemAppsKeyed['LIVINITY_docker'].icon}
+						src='/figma-exports/docker-app-icon.png'
 						onClick={() => launchWindowApp('LIVINITY_docker', '/docker', 'Docker', systemAppsKeyed['LIVINITY_docker'].icon)}
 					/>
 				</motion.div>
