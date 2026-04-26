@@ -1,0 +1,23 @@
+# ── Phase 32 REL-02: livos-rollback.service oneshot ──
+# Installed by phase32-systemd-rollback-patch.sh into:
+#   /etc/systemd/system/livos-rollback.service
+# Idempotency marker (Plan 32-03 grep-checks this exact line):
+#   # ── Phase 32 REL-02: livos-rollback.service oneshot ──
+[Unit]
+Description=LivOS auto-rollback to previous deployed SHA
+# CRITICAL: do NOT add OnFailure= here — rollback failure is hard-stop for
+# operator investigation, not another rollback attempt (would risk infinite
+# loops; mitigated also by .rollback-attempted lock in livos-rollback.sh).
+# CRITICAL: do NOT add Requires=livos.service — would create circular dep.
+
+[Service]
+Type=oneshot
+ExecStart=/opt/livos/livos-rollback.sh
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+# Run as root — needs systemctl restart, /opt/livos/ writes, git clone.
+User=root
+
+[Install]
+WantedBy=multi-user.target
