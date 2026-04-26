@@ -47,7 +47,6 @@ import {
 	type SocketKind,
 } from './format'
 import {SearchButton} from './search-button'
-import {ThemeToggle} from './theme-toggle'
 import {useNow} from './use-now'
 import {useTrpcConnection} from './use-trpc-connection'
 
@@ -95,11 +94,10 @@ export function StatusBar() {
 				<LivePill connected={connected} />
 			</div>
 
-			{/* Right: search + alerts + theme */}
+			{/* Right: search + alerts (theme toggle removed — light mode locked) */}
 			<div className='flex shrink-0 items-center gap-1'>
 				<SearchButton />
 				<AlertsBell />
-				<ThemeToggle />
 			</div>
 		</header>
 	)

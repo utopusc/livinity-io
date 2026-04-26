@@ -4266,29 +4266,6 @@ export default function ServerControl() {
 
 	return (
 		<div className={cn('flex flex-col', !isMobile && 'h-full')}>
-			{/*
-			  DEPRECATED — v28.0 Phase 24: this entire file is unmounted from the dock.
-			  The persistent EnvironmentSelector + AlertsBell now live in the new
-			  Docker app's StatusBar (livos/packages/ui/src/routes/docker/status-bar.tsx).
-			  Content from the tabs below migrates piecemeal into
-			  livos/packages/ui/src/routes/docker/sections/* in Phases 25-29.
-			  Final delete: Plan 27-XX once Stacks migration completes (last consumer).
-			*/}
-			<div className='shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 sm:px-6 dark:text-amber-200'>
-				<strong>Deprecated:</strong> This Server Control page has been replaced by the new Docker
-				app (v28.0). You are seeing this because something still imports{' '}
-				<code>routes/server-control</code>. File{' '}
-				<a
-					className='underline'
-					href='https://github.com/livinity/livinity/issues'
-					target='_blank'
-					rel='noopener noreferrer'
-				>
-					an issue
-				</a>{' '}
-				if you reached this view.
-			</div>
-
 			<OfflineAgentBanner />
 
 			{/* Resource Cards */}

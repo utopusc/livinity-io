@@ -76,6 +76,14 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/docker',
 	},
+	// Restored alongside Docker — provides the legacy Server Management UI.
+	{
+		id: 'LIVINITY_server-control',
+		name: 'Server Management',
+		icon: '/figma-exports/dock-settings.png',
+		systemApp: true,
+		systemAppTo: '/server-control',
+	},
 	{
 		id: 'LIVINITY_my-devices',
 		name: 'Devices',

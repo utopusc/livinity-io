@@ -10,11 +10,8 @@
 // missing case is a compile error. This is what guarantees every entry in
 // SECTION_IDS / SECTION_META has a matching component file.
 //
-// useDockerTheme(rootRef) scopes the dark/light class to the docker-app root
-// (NOT document.documentElement), so other LivOS surfaces continue to render
-// in light mode regardless of the user's docker-app preference.
-
-import {useRef} from 'react'
+// Hot-patch: Docker app is locked to light theme — useDockerTheme is no longer
+// mounted, so the `dark` class never gets attached to the docker-app root.
 
 import {CommandPalette} from './palette/command-palette'
 import {useCmdK} from './palette/use-cmd-k'
@@ -33,12 +30,8 @@ import {Volumes} from './sections/volumes'
 import {Sidebar} from './sidebar'
 import {StatusBar} from './status-bar'
 import {useDockerSection, type SectionId} from './store'
-import {useDockerTheme} from './theme'
 
 export function DockerApp() {
-	const rootRef = useRef<HTMLDivElement>(null)
-	// Mounts the dark/light class on rootRef when theme.resolved changes.
-	useDockerTheme(rootRef)
 	// Plan 29-01 — install global cmd+k / ctrl+k listener for the entire
 	// DockerApp lifetime (DOC-18).
 	useCmdK()
@@ -46,8 +39,7 @@ export function DockerApp() {
 
 	return (
 		<div
-			ref={rootRef}
-			className='flex size-full bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100'
+			className='flex size-full bg-white text-zinc-900'
 		>
 			<Sidebar />
 			<main className='flex min-w-0 flex-1 flex-col overflow-hidden'>

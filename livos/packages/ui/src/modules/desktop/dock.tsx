@@ -192,6 +192,22 @@ export function Dock() {
 					}
 				/>
 				<DockItem
+					appId='LIVINITY_server-control'
+					iconSize={iconSize}
+					iconSizeZoomed={iconSizeZoomed}
+					open={false}
+					mouseX={mouseX}
+					onOpenWindow={(originRect) =>
+						handleOpenWindow(
+							'LIVINITY_server-control',
+							'/server-control',
+							'Server Management',
+							systemAppsKeyed['LIVINITY_server-control'].icon,
+							originRect,
+						)
+					}
+				/>
+				<DockItem
 					appId='LIVINITY_my-devices'
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}

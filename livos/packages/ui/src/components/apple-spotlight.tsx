@@ -348,6 +348,23 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				},
 			},
 			{
+				label: 'Server Management',
+				icon: <TbServer className='text-neutral-600' />,
+				onSelect: () => {
+					if (windowManager) {
+						windowManager.openWindow(
+							'LIVINITY_server-control',
+							'/server-control',
+							'Server Management',
+							systemAppsKeyed['LIVINITY_server-control'].icon,
+						)
+					} else {
+						navigate(systemAppsKeyed['LIVINITY_server-control'].systemAppTo)
+					}
+					onClose()
+				},
+			},
+			{
 				label: 'Devices',
 				icon: <TbDevices2 className='text-neutral-600' />,
 				onSelect: () => {

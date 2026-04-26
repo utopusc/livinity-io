@@ -10,10 +10,8 @@
 //      applies live to the Docker sidebar (no save button needed).
 
 import {RadioGroup, RadioGroupItem} from '@/shadcn-components/ui/radio-group'
-import {Label} from '@/shadcn-components/ui/label'
 
 import {useSidebarDensity, type SidebarDensity} from '../sidebar-density'
-import {ThemeToggle} from '../theme-toggle'
 
 export function AppearanceTab() {
 	const density = useSidebarDensity((s) => s.density)
@@ -21,21 +19,6 @@ export function AppearanceTab() {
 
 	return (
 		<div className='space-y-8 py-4'>
-			<section className='space-y-3'>
-				<header>
-					<h3 className='text-base font-semibold text-zinc-900 dark:text-zinc-100'>Theme</h3>
-					<p className='text-xs text-zinc-500 dark:text-zinc-400'>
-						Light, dark, or follow system. Persists per-browser.
-					</p>
-				</header>
-				<div className='flex items-center gap-3 rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800'>
-					<ThemeToggle />
-					<span className='text-sm text-zinc-600 dark:text-zinc-400'>
-						Click the icon to cycle light → dark → system.
-					</span>
-				</div>
-			</section>
-
 			<section className='space-y-3'>
 				<header>
 					<h3 className='text-base font-semibold text-zinc-900 dark:text-zinc-100'>
