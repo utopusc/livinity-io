@@ -29,6 +29,7 @@ import {Stacks} from './sections/stacks'
 import {Volumes} from './sections/volumes'
 import {Sidebar} from './sidebar'
 import {StatusBar} from './status-bar'
+import {StatusFooter} from './status-footer'
 import {useDockerSection, type SectionId} from './store'
 
 export function DockerApp() {
@@ -43,11 +44,14 @@ export function DockerApp() {
 		>
 			<Sidebar />
 			<main className='flex min-w-0 flex-1 flex-col overflow-hidden'>
-				{/* Plan 24-02: persistent top StatusBar (sticky 48px, matches Sidebar header h-12). */}
+				{/* Plan 24-02: persistent top StatusBar (sticky 48px, matches Sidebar header h-12).
+				    Round 2 hot-patch: split into top-minimal + sticky bottom StatusFooter
+				    (stat pills moved to footer for breathing room at the top). */}
 				<StatusBar />
 				<div className='min-h-0 flex-1 overflow-auto'>
 					<SectionView section={section} />
 				</div>
+				<StatusFooter />
 			</main>
 			{/* Plan 29-01 — single instance of the cmd+k palette. Radix Dialog uses a
 			    portal so the DOM position is non-essential; mounting at the root
