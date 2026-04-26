@@ -2,6 +2,12 @@
 
 Captured ideas that aren't yet scheduled into a milestone. Promote with `/gsd-review-backlog` (or by hand) when ready.
 
+> **Phase 30 status note (2026-04-26 round 10):** Phase 30 closed via 10 hot-patch
+> rounds. r9 added in-memory cache for GitHub rate limit (60/hr unauth → ~2/hr
+> actual). r10 added graceful empty-stub fallback for cold-start cache misses
+> during rate-limit windows. Future hot-patches should NOT re-introduce throws
+> on cache miss — silent fallback is the contract.
+
 ---
 
 ## 999.1 — Software Update sidebar badge
