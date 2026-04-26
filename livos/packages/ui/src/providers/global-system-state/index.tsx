@@ -25,6 +25,8 @@ const GlobalSystemStateContext = createContext<{
 	shutdown: () => void
 	restart: () => void
 	update: () => void
+	updatePending: boolean
+	updateError: RouterError | null
 	migrate: () => void
 	reset: (password: string) => void
 	getError(): RouterError | null
@@ -81,7 +83,14 @@ export function GlobalSystemStateProvider({children}: {children: ReactNode}) {
 	// TODO: handle `onError` for other actions than reset?
 	const restart = useRestart({onMutate, onSuccess})
 	const shutdown = useShutdown({onMutate, onSuccess})
-	const update = useUpdate({onMutate, onSuccess})
+	// v29.0 UX-01/02: useUpdate now returns {update, isPending, error} — pending
+	// state powers the confirm-modal button-disable + dismiss-guard so a click
+	// can't be repeated mid-mutation, and error is exposed for callers that
+	// want richer surfaces than the global toast.
+	const updateApi = useUpdate({onMutate, onSuccess})
+	const update = updateApi.update
+	const updatePending = updateApi.isPending
+	const updateError = updateApi.error as RouterError | null
 	const migrate = useMigrate({onMutate, onSuccess})
 	const reset = useReset({onMutate, onSuccess, onError})
 
@@ -219,7 +228,7 @@ export function GlobalSystemStateProvider({children}: {children: ReactNode}) {
 		case undefined:
 		case 'running': {
 			return (
-				<GlobalSystemStateContext.Provider value={{shutdown, restart, update, migrate, reset, getError, clearError}}>
+				<GlobalSystemStateContext.Provider value={{shutdown, restart, update, updatePending, updateError, migrate, reset, getError, clearError}}>
 					{children}
 					{debugInfo}
 				</GlobalSystemStateContext.Provider>

@@ -23,10 +23,17 @@ export const httpOnlyPaths = [
 	// Phase 30 UPD-02 — system.update is a long-running mutation (60-90s
 	// spawning bash /opt/livos/update.sh). system.updateStatus is polled every
 	// 500ms during an active update. HTTP avoids WS-disconnect hangs (precedent:
-	// docker.scanImage at line 71-72). system.checkUpdate INTENTIONALLY stays
-	// on WS — sub-second query, low rate-limit volume.
+	// docker.scanImage at line 71-72).
 	'system.update',
 	'system.updateStatus',
+	// v29.0 UX-03 — system.checkUpdate moved off WS for the same reason
+	// system.update was: post-restart the user's WS connection can be in a
+	// half-broken state where queries fail silently with "Invalid token" or
+	// "socket hang up" and the UI shows stale cached "no update" data
+	// (BACKLOG 999.6 surface). HTTP delivery surfaces auth/network failures
+	// to the trpc error surface immediately so useSoftwareUpdate.checkLatest()
+	// can toast them via its existing try/catch.
+	'system.checkUpdate',
 	// Multi-user management routes — use HTTP to avoid WS connection dependency
 	'user.createInvite',
 	'user.listAllUsers',

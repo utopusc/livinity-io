@@ -15,6 +15,12 @@ import {
 // Settings > Software Update list row "View" button. Replaces the
 // route-based /settings/software-update/confirm dialog so the user is
 // never bounced into Settings just to confirm an install.
+//
+// v29.0 UX-02: while the update mutation is pending, both the action button
+// and the cancel/dismiss path are disabled. This prevents (a) double-fire on
+// rapid re-clicks while the trpc round-trip is in flight, and (b) the user
+// closing the modal mid-mutation, which previously left them with no UI
+// signal that anything was happening (BACKLOG 999.6 silent-fail surface).
 export function UpdateConfirmModal({
 	open,
 	onOpenChange,
@@ -28,17 +34,26 @@ export function UpdateConfirmModal({
 		message: string
 	} | null
 }) {
-	const {update} = useGlobalSystemState()
+	const {update, updatePending} = useGlobalSystemState()
 
 	const handleConfirm = () => {
-		onOpenChange(false)
+		// Don't close yet — keep modal open until the mutation either resolves
+		// (UpdatingCover takes over via system status) or errors (toast surfaces
+		// via useUpdate.onError; modal closes via onOpenChange below).
 		update()
+	}
+
+	// Guard dismissal while the mutation is in flight so the user can't
+	// accidentally hide the only signal the modal is still doing something.
+	const handleOpenChange = (next: boolean) => {
+		if (updatePending && !next) return
+		onOpenChange(next)
 	}
 
 	const versionLabel = latestVersion?.version || latestVersion?.shortSha
 
 	return (
-		<AlertDialog open={open} onOpenChange={onOpenChange}>
+		<AlertDialog open={open} onOpenChange={handleOpenChange}>
 			<AlertDialogContent>
 				<AlertDialogHeader>
 					<AlertDialogTitle>
@@ -57,8 +72,10 @@ export function UpdateConfirmModal({
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
-					<AlertDialogCancel>Cancel</AlertDialogCancel>
-					<AlertDialogAction onClick={handleConfirm}>Install Update</AlertDialogAction>
+					<AlertDialogCancel disabled={updatePending}>Cancel</AlertDialogCancel>
+					<AlertDialogAction onClick={handleConfirm} disabled={updatePending}>
+						{updatePending ? 'Starting update…' : 'Install Update'}
+					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>
