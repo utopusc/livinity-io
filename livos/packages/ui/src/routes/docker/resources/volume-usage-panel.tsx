@@ -15,7 +15,7 @@ export function VolumeUsagePanel({volumeName}: {volumeName: string}) {
 			<div className='p-3'>
 				<div className='space-y-2'>
 					{Array.from({length: 2}).map((_, i) => (
-						<div key={i} className='h-4 rounded bg-surface-2 animate-pulse' />
+						<div key={i} className='h-4 rounded bg-zinc-200 animate-pulse' />
 					))}
 				</div>
 			</div>
@@ -27,14 +27,14 @@ export function VolumeUsagePanel({volumeName}: {volumeName: string}) {
 	if (containers.length === 0) {
 		return (
 			<div className='px-4 py-3'>
-				<p className='text-xs text-text-tertiary'>No containers using this volume</p>
+				<p className='text-xs text-zinc-500'>No containers using this volume</p>
 			</div>
 		)
 	}
 
 	return (
 		<div className='px-4 py-3'>
-			<div className='rounded-lg border border-border-default overflow-hidden'>
+			<div className='rounded-lg border border-zinc-200 bg-white overflow-hidden'>
 				<Table>
 					<TableHeader>
 						<TableRow>
@@ -44,12 +44,12 @@ export function VolumeUsagePanel({volumeName}: {volumeName: string}) {
 					</TableHeader>
 					<TableBody>
 						{containers.map((c, i) => (
-							<TableRow key={i}>
+							<TableRow key={i} className='bg-white hover:bg-zinc-50'>
 								<TableCell className='pl-3'>
 									<span className='text-xs font-medium'>{c.containerName}</span>
 								</TableCell>
 								<TableCell>
-									<span className='font-mono text-xs text-text-secondary'>{c.mountPath}</span>
+									<span className='font-mono text-xs text-zinc-700'>{c.mountPath}</span>
 								</TableCell>
 							</TableRow>
 						))}
