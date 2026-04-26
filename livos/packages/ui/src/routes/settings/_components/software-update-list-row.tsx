@@ -1,7 +1,9 @@
+import {useState} from 'react'
 import {RiArrowUpCircleFill, RiCheckboxCircleFill, RiInformationLine, RiRefreshLine} from 'react-icons/ri'
 
 import {Icon} from '@/components/ui/icon'
-import {IconButtonLink} from '@/components/ui/icon-button-link'
+import {IconButton} from '@/components/ui/icon-button'
+import {UpdateConfirmModal} from '@/components/update-confirm-modal'
 import {LOADING_DASH} from '@/constants'
 import {useSoftwareUpdate} from '@/hooks/use-software-update'
 import {Button} from '@/shadcn-components/ui/button'
@@ -11,23 +13,31 @@ import {ListRow} from './list-row'
 
 export function SoftwareUpdateListRow({isActive}: {isActive: boolean}) {
 	const {state, currentVersion, latestVersion, checkLatest} = useSoftwareUpdate()
+	const [confirmOpen, setConfirmOpen] = useState(false)
 
 	if (state === 'update-available') {
 		return (
-			<ListRow
-				isActive={isActive}
-				title={currentVersion?.name || `LivOS ${LOADING_DASH}`}
-				description={
-					<span className='flex items-center gap-1 pb-3'>
-						<Icon component={RiArrowUpCircleFill} className='text-brand' />
-						{t('software-update.new-version', {name: latestVersion?.version || latestVersion?.shortSha || LOADING_DASH})}
-					</span>
-				}
-			>
-				<IconButtonLink icon={RiInformationLine} variant='primary' to='/settings/software-update/confirm'>
-					{t('software-update.view')}
-				</IconButtonLink>
-			</ListRow>
+			<>
+				<ListRow
+					isActive={isActive}
+					title={currentVersion?.name || `LivOS ${LOADING_DASH}`}
+					description={
+						<span className='flex items-center gap-1 pb-3'>
+							<Icon component={RiArrowUpCircleFill} className='text-brand' />
+							{t('software-update.new-version', {name: latestVersion?.version || latestVersion?.shortSha || LOADING_DASH})}
+						</span>
+					}
+				>
+					<IconButton icon={RiInformationLine} variant='primary' onClick={() => setConfirmOpen(true)}>
+						{t('software-update.view')}
+					</IconButton>
+				</ListRow>
+				<UpdateConfirmModal
+					open={confirmOpen}
+					onOpenChange={setConfirmOpen}
+					latestVersion={latestVersion ?? null}
+				/>
+			</>
 		)
 	}
 

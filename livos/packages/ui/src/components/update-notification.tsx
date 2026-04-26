@@ -5,17 +5,8 @@ import {formatDistanceToNow, parseISO} from 'date-fns'
 
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useSoftwareUpdate} from '@/hooks/use-software-update'
-import {useGlobalSystemState} from '@/providers/global-system-state'
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@/shadcn-components/ui/alert-dialog'
+
+import {UpdateConfirmModal} from './update-confirm-modal'
 
 // Phase 30 UPD-04 — desktop-only "new update available" card.
 // SHA-keyed dismissal (NOT boolean) so a NEWER commit re-shows the card after
@@ -24,10 +15,9 @@ import {
 // trigger source (useSoftwareUpdate vs beforeinstallprompt), position
 // (bottom-right vs bottom-center), platform (desktop vs mobile).
 //
-// Hot-patch round 4: "Update" no longer navigates to /settings/software-update/confirm.
-// It opens an inline AlertDialog confirm modal and triggers the system.update
-// mutation directly. UpdatingCover (BarePage) is rendered automatically by
-// GlobalSystemStateProvider once systemStatus transitions to 'updating'.
+// Hot-patch round 4: "Update" no longer navigates anywhere.
+// Round 6: confirm modal is now extracted into <UpdateConfirmModal /> so the
+// Settings list-row can reuse the same modal.
 const DISMISSED_KEY = 'livos:update-notification:dismissed-sha'
 
 function safeFormatRelative(iso: string): string {
@@ -41,13 +31,11 @@ function safeFormatRelative(iso: string): string {
 export function UpdateNotification() {
 	const isMobile = useIsMobile()
 	const {state, latestVersion} = useSoftwareUpdate()
-	const {update} = useGlobalSystemState()
 	const [dismissedSha, setDismissedSha] = useState<string | null>(() =>
 		typeof localStorage !== 'undefined' ? localStorage.getItem(DISMISSED_KEY) : null,
 	)
 	const [confirmOpen, setConfirmOpen] = useState(false)
 
-	// Visibility: desktop only, update-available, has SHA, not the SHA we already dismissed.
 	const visible =
 		!isMobile &&
 		state === 'update-available' &&
@@ -60,14 +48,9 @@ export function UpdateNotification() {
 		setDismissedSha(latestVersion.sha)
 	}
 
-	const handleUpdate = () => {
-		setConfirmOpen(true)
-	}
+	const handleUpdate = () => setConfirmOpen(true)
 
-	const handleConfirm = () => {
-		setConfirmOpen(false)
-		update()
-	}
+	const versionLabel = latestVersion?.version || latestVersion?.shortSha
 
 	return (
 		<>
@@ -88,7 +71,7 @@ export function UpdateNotification() {
 						</div>
 						<div className='flex flex-col gap-1'>
 							<p className='text-sm text-zinc-600'>
-								<span className='font-mono'>{(latestVersion.version ?? latestVersion.shortSha)}</span>
+								<span className='font-mono'>{versionLabel}</span>
 								{' — '}
 								{latestVersion.message.split('\n')[0].slice(0, 80)}
 							</p>
@@ -115,30 +98,11 @@ export function UpdateNotification() {
 				)}
 			</AnimatePresence>
 
-			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{latestVersion?.shortSha ? `Update to ${(latestVersion.version ?? latestVersion.shortSha)}?` : 'Install update?'}
-						</AlertDialogTitle>
-						<AlertDialogDescription className='space-y-3'>
-							{latestVersion?.message && (
-								<span className='block text-sm text-zinc-700'>
-									{latestVersion.message.split('\n')[0].slice(0, 200)}
-								</span>
-							)}
-							<span className='block text-sm text-zinc-500'>
-								This will rebuild Livinity from the latest source and restart services. The process
-								takes 2–4 minutes; your session is preserved (no reboot).
-							</span>
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction onClick={handleConfirm}>Install Update</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			<UpdateConfirmModal
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				latestVersion={latestVersion ?? null}
+			/>
 		</>
 	)
 }
