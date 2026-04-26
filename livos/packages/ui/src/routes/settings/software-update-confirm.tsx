@@ -20,10 +20,19 @@ export function SoftwareUpdateConfirmDialog() {
 		<Dialog {...dialogProps}>
 			<DialogContent className='px-0'>
 				<DialogHeader className='px-4 sm:px-8'>
-					<DialogTitle>{latestVersionQ.data?.name}</DialogTitle>
+					<DialogTitle>
+						{latestVersionQ.data?.shortSha
+							? `Update to ${latestVersionQ.data.shortSha}`
+							: 'Software Update'}
+					</DialogTitle>
 				</DialogHeader>
 				<ScrollArea className='flex max-h-[500px] flex-col gap-5 px-4 sm:px-8'>
-					<Markdown>{latestVersionQ.data?.releaseNotes}</Markdown>
+					<Markdown>{latestVersionQ.data?.message ?? ''}</Markdown>
+					{latestVersionQ.data && (
+						<p className='mt-2 text-xs text-text-tertiary'>
+							By {latestVersionQ.data.author} — {latestVersionQ.data.committedAt}
+						</p>
+					)}
 				</ScrollArea>
 				<DialogFooter className='px-4 sm:px-8'>
 					<Button

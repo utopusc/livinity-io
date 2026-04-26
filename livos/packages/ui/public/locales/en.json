@@ -781,7 +781,7 @@
   "software-update.failed-to-check": "Failed to check for updates",
   "software-update.failed.retry": "Retry",
   "software-update.install-now": "Install now",
-  "software-update.new-version": "New {{name}} is available to install",
+  "software-update.new-version": "Update {{name}} is available to install",
   "software-update.on-latest": "You are on the latest LivOS",
   "software-update.see-whats-new": "See <linked>what's new</linked>",
   "software-update.title": "Software update",
