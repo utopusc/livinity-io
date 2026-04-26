@@ -62,4 +62,31 @@ Bir update'in ne yaptığı/neden başarısız olduğu tarayıcıdan görülebil
 
 ## Traceability
 
-(Filled by roadmap step — REQ-ID → Phase mapping.)
+13/13 requirements mapped to Phases 31–35. Zero orphans, zero duplicates.
+
+| REQ-ID   | Phase # | Phase Name                                |
+|----------|---------|-------------------------------------------|
+| BUILD-01 | 31      | update.sh Build Pipeline Integrity        |
+| BUILD-02 | 31      | update.sh Build Pipeline Integrity        |
+| BUILD-03 | 31      | update.sh Build Pipeline Integrity        |
+| BUILD-04 | 35      | GitHub Actions update.sh Smoke Test       |
+| UX-01    | 34      | Update UX Hardening                       |
+| UX-02    | 34      | Update UX Hardening                       |
+| UX-03    | 34      | Update UX Hardening                       |
+| UX-04    | 33      | Update Observability Surface              |
+| REL-01   | 32      | Pre-Update Sanity & Auto-Rollback         |
+| REL-02   | 32      | Pre-Update Sanity & Auto-Rollback         |
+| OBS-01   | 33      | Update Observability Surface              |
+| OBS-02   | 33      | Update Observability Surface              |
+| OBS-03   | 33      | Update Observability Surface              |
+
+**Phase coverage summary:**
+
+| Phase | Requirements                            | Count |
+|-------|-----------------------------------------|-------|
+| 31    | BUILD-01, BUILD-02, BUILD-03            | 3     |
+| 32    | REL-01, REL-02                          | 2     |
+| 33    | OBS-01, OBS-02, OBS-03, UX-04           | 4     |
+| 34    | UX-01, UX-02, UX-03                     | 3     |
+| 35    | BUILD-04                                | 1     |
+| **Total** |                                     | **13** |

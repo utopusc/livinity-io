@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v29.0
 milestone_name: Deploy & Update Stability
-milestone_status: defining
+milestone_status: planning
 current_plan: null
-status: defining-requirements
-stopped_at: "v29.0 milestone started 2026-04-26. PROJECT.md updated with Current Milestone section. Scope: update.sh build integrity (999.5/5b), system.update UI hardening (999.6), auto-rollback on failed boot, update history + observability UI, sidebar update badge (999.1), GitHub Actions update.sh smoke test. Phase numbering continues from v28.0 last phase (30) → v29.0 starts at Phase 31. Next: research decision → REQUIREMENTS.md → ROADMAP.md."
-last_updated: "2026-04-26T04:00:00.000Z"
+status: roadmap-defined
+stopped_at: "v29.0 ROADMAP.md created 2026-04-26. 5 phases (31-35) covering 13/13 requirements. Phase 31 (BUILD-01..03) is foundation; Phase 32 layers REL-01/02 rollback safety; Phase 33 (OBS-01..03 + UX-04) builds observability + sidebar badge; Phase 34 (UX-01..03) hardens mutation error surface; Phase 35 (BUILD-04) adds GitHub Actions update.sh smoke test. Next: /gsd-plan-phase 31."
+last_updated: "2026-04-26T05:00:00.000Z"
 last_activity: 2026-04-26
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -23,17 +23,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v29.0 — Deploy & Update Stability — DEFINING REQUIREMENTS
-**Current focus:** Bootstrap milestone — REQUIREMENTS.md + ROADMAP.md to be created next
+**Current milestone:** v29.0 — Deploy & Update Stability — ROADMAP DEFINED
+**Current focus:** Roadmap created (5 phases, Phase 31 → Phase 35). Next: plan Phase 31 (update.sh build pipeline integrity).
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 31 (not started — planning pending)
 Plan: —
-Status: Defining requirements (PROJECT.md updated, REQUIREMENTS + ROADMAP pending)
-Last activity: 2026-04-26 — Milestone v29.0 started
+Status: Roadmap defined; awaiting `/gsd-plan-phase 31`
+Last activity: 2026-04-26 — v29.0 ROADMAP.md written, REQUIREMENTS.md traceability filled
 
-**Progress:** [          ] 0% — v29.0 bootstrap
+**Progress:** [          ] 0% — 0/5 phases complete
+
+## v29.0 Phase Structure
+
+| Phase | Name | Requirements | Depends On |
+|-------|------|--------------|------------|
+| 31 | update.sh Build Pipeline Integrity | BUILD-01, BUILD-02, BUILD-03 | — (foundation) |
+| 32 | Pre-Update Sanity & Auto-Rollback | REL-01, REL-02 | Phase 31 |
+| 33 | Update Observability Surface | OBS-01, OBS-02, OBS-03, UX-04 | Phase 31 |
+| 34 | Update UX Hardening | UX-01, UX-02, UX-03 | Phase 32 (+ benefits from Phase 33) |
+| 35 | GitHub Actions update.sh Smoke Test | BUILD-04 | Phase 31 |
+
+Coverage: 13/13 v29.0 requirements mapped ✓ (BUILD×4, UX×4, REL×2, OBS×3 — zero orphans, zero duplicates)
+Backend: minimal additive — `system.listUpdateHistory` + `system.readUpdateLog` tRPC routes (Phase 33). Heaviest changes are SSH-applied `update.sh` patches (Phase 31, 32) per Phase 30 patch-script + bootstrap precedent.
 
 ## v28.0 Phase Structure
 

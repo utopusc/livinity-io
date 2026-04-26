@@ -16,8 +16,19 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v26.0 Device Security & User Isolation** — Phases 11-16 (shipped 2026-04-24)
 - ✅ **v27.0 Docker Management Upgrade** — Phases 17-23 (shipped 2026-04-25)
 - ✅ **v28.0 Docker Management UI (Dockhand-Style)** — Phases 24-30 (shipped 2026-04-26)
+- 🚧 **v29.0 Deploy & Update Stability** — Phases 31-35 (in progress)
 
 ## Phases
+
+### v29.0 Deploy & Update Stability — ACTIVE
+
+- [ ] **Phase 31: update.sh Build Pipeline Integrity** — Fail-loud build guards + idempotent pnpm-store dist-copy + silent-fail root-cause kill (BUILD-01, BUILD-02, BUILD-03)
+- [ ] **Phase 32: Pre-Update Sanity & Auto-Rollback** — Disk/write/GitHub pre-flight checks + livinityd 3× crash → previous SHA rollback via systemd OnFailure (REL-01, REL-02)
+- [ ] **Phase 33: Update Observability Surface** — Structured `update-history/*.log` + Past Deploys list + log viewer modal + sidebar Software Update badge (OBS-01, OBS-02, OBS-03, UX-04)
+- [ ] **Phase 34: Update UX Hardening** — `system.update` onError toasts + pending-state guards + httpOnlyPaths for long-running mutations (UX-01, UX-02, UX-03)
+- [ ] **Phase 35: GitHub Actions update.sh Smoke Test** — PR-time Docker container boot health check, blocks merge on failure (BUILD-04)
+
+### Past Milestones
 
 <details>
 <summary>v19.0 Custom Domain Management (Phases 07-10.1) — SHIPPED 2026-03-27</summary>
@@ -136,7 +147,6 @@ Phase 30 (Auto-Update Notification, GitHub-aware) added post-archive: see `.plan
 
 </details>
 
-
 <details>
 <summary>v27.0 Docker Management Upgrade (Phases 17-23) — archived per-phase details</summary>
 
@@ -144,151 +154,102 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
 
 **Milestone Goal:** Elevate Livinity's Docker management to best-in-class self-hosted Docker platform with Dockhand-inspired features (file browser, GitOps stacks, vulnerability scanning, compose graph viewer, multi-host) plus AI-powered diagnostics as Livinity's unique moat.
 
-- [x] **Phase 17: Docker Quick Wins** - Real-time log streaming + stack secrets + redeploy-with-pull + extended AI docker tools
- (completed 2026-04-24)
-- [x] **Phase 18: Container File Browser** - Browse, upload, download, edit, delete files inside containers via exec + tar streaming
- (completed 2026-04-24)
-- [x] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** - React Flow service dependency graph + Trivy image CVE scanning with SHA256 cache
- (completed 2026-04-24)
-- [x] **Phase 20: Scheduled Tasks + Container Backup** - node-cron scheduler with image prune / update check / git sync + volume backup to S3/SFTP/local
- (completed 2026-04-24)
-- [x] **Phase 21: GitOps Stack Deployment** - Stack schema with git_url + HMAC webhook redeploy + blobless clone — Livinity's hard moat
- (completed 2026-04-25)
-- [x] **Phase 22: Multi-host Docker Management** - environments table + outbound agent (Node/Go) opening WebSocket to Livinity — no open TCP on remote host
- (completed 2026-04-25)
-- [x] **Phase 23: AI-Powered Docker Diagnostics** - Kimi log analyzer + OOM predictor + natural-language compose generator + vulnerability explainer
- (completed 2026-04-25)
+- [x] **Phase 17: Docker Quick Wins** — completed 2026-04-24
+- [x] **Phase 18: Container File Browser** — completed 2026-04-24
+- [x] **Phase 19: Compose Graph Viewer + Vulnerability Scanning** — completed 2026-04-24
+- [x] **Phase 20: Scheduled Tasks + Container Backup** — completed 2026-04-24
+- [x] **Phase 21: GitOps Stack Deployment** — completed 2026-04-25
+- [x] **Phase 22: Multi-host Docker Management** — completed 2026-04-25
+- [x] **Phase 23: AI-Powered Docker Diagnostics** — completed 2026-04-25
+
+</details>
 
 ## Phase Details
 
-### Phase 17: Docker Quick Wins
-**Goal**: Four tightly-scoped, high-value upgrades to existing Docker infrastructure — real-time logs, secret-safe stacks, one-click redeploy, and AI tool breadth.
-**Depends on**: Nothing (foundation phase of v27.0)
-**Requirements**: QW-01, QW-02, QW-03, QW-04
+### Phase 31: update.sh Build Pipeline Integrity
+**Goal**: Kill the recurring "[OK] @livos/config built" silent-success lie — every package's build output is verified non-empty before update.sh proceeds; pnpm-store dist-copy is idempotent across all `@nexus+core*` resolution dirs; root cause behind the original silent fail is identified and removed.
+**Depends on**: Nothing (foundation phase of v29.0; unblocks the recurring Phase 30 deploy blocker)
+**Requirements**: BUILD-01, BUILD-02, BUILD-03
 **Success Criteria** (what must be TRUE):
-  1. User opens container detail panel and sees log output stream in real time with ANSI colors; new log lines appear within 1s; no 5s polling gap
-  2. Stack create/edit UI has a `secret` checkbox per env var; secrets are never written to stacks/{name}/.env on disk; shell env injection succeeds
-  3. Stack detail has a "Redeploy (pull latest)" button that pulls all images first then recreates containers; works with both YAML and (future) git stacks
-  4. AI calling docker_manage with operation="stack-deploy" or "stack-remove" or "image-pull" succeeds end-to-end with the same output shape as existing tRPC routes
-**Plans**: 2 plans
-**Plan files**:
-- [x] 19-01-PLAN.md — Compose Graph Viewer (CGV-01): reactflow + js-yaml UI parsing service deps
-- [x] 19-02-PLAN.md — Image Vulnerability Scanning (CGV-02, CGV-03, CGV-04): Trivy backend + Redis SHA256 cache + severity badges UI
-**Plan files**:
-- [x] 17-01-PLAN.md — Real-time log WebSocket + stack secrets as shell env (QW-01, QW-02)
-- [x] 17-02-PLAN.md — Redeploy-with-pull button + extended AI docker_manage tool (QW-03, QW-04)
+  1. On a host where one of the build steps (e.g., `pnpm --filter @livos/config build` or nexus core `tsc`) silently produces an empty `dist/`, `update.sh` exits non-zero with a clear "BUILD-FAIL: <package> has empty dist/" line — never logs "[OK] built" while leaving livinityd in a restart loop.
+  2. On a host with multiple `@nexus+core*` directories under `node_modules/.pnpm/` (sharp-version drift case), `update.sh` copies the freshly-built nexus core dist into ALL matching dirs and verifies post-copy each target's `dist/index.js` is non-empty; previously, only the first match got the new dist and livinityd kept importing stale code.
+  3. After running the patched `update.sh` on Mini PC and Server4 with NO source changes (no-op deploy), exit code is 0, livinityd boots within 30s, and `journalctl -u livos -n 50` shows zero "Cannot find module" / "is not a function" symptoms.
+  4. The original root cause (cwd drift / pnpm lock mismatch / env var loss — to be identified during the phase) is patched at its source: re-running update.sh 3× in a row from a fresh repo clone produces 3× successful deploys, no BUILD-01 guard trips required to "save" the run.
+**Plans**: TBD
+**Patch artifact**: `.planning/phases/31-update-sh-build-integrity/artifacts/phase31-update-sh-patch.sh` (applied via SSH to both Mini PC and Server4 — Phase 30 precedent)
 
-### Phase 18: Container File Browser
-**Goal**: Full file manager for container filesystems — list, navigate, download, upload, edit, delete — built on Docker exec + tar without requiring host volume mounts.
-**Depends on**: Phase 17 (uses WebSocket infrastructure patterns)
-**Requirements**: CFB-01, CFB-02, CFB-03, CFB-04, CFB-05
+### Phase 32: Pre-Update Sanity & Auto-Rollback
+**Goal**: Make a failed deploy self-heal — `update.sh` refuses to start if the host can't possibly succeed (disk, perms, GitHub reachability), and if livinityd 3× crashes after a successful deploy, the system automatically reverts to the previous known-good SHA without user intervention.
+**Depends on**: Phase 31 (reuses the `/opt/livos/.deployed-sha` file pattern + fail-loud exit conventions; rollback assumes update.sh already records SHAs reliably)
+**Requirements**: REL-01, REL-02
 **Success Criteria** (what must be TRUE):
-  1. Container detail panel has a "Files" tab; clicking lists the root filesystem of the container with breadcrumb navigation
-  2. User downloads a file by clicking a download icon; browser receives a tar stream unpacked to the original filename; round-trip works for text and binary files under 100MB
-  3. User uploads a file by drag-drop into any directory in the file browser; file appears in the container's filesystem within seconds
-  4. User clicks "Edit" on a text file under 1MB, edits inline in a Monaco/CodeMirror editor, and saves; changes persist in the container
-  5. User can delete files and empty directories; non-empty directories require explicit "Delete recursively" confirmation
-**Plans**: 2 plans
-**Plan files**:
-- [x] 18-01-PLAN.md — Backend: list/read/write/download/delete helpers + tRPC routes + REST endpoints (CFB-01, CFB-02, CFB-03, CFB-05)
-- [x] 18-02-PLAN.md — UI: Files tab with breadcrumb, dropzone, edit modal, recursive-delete confirmation (CFB-01, CFB-02, CFB-03, CFB-04, CFB-05)
+  1. Running `update.sh` on a host with < 2 GB free disk OR a non-writable `/opt/livos` OR an unreachable `api.github.com` exits non-zero immediately (before any `git clone` / `rsync`) with a single-line actionable error ("PRECHECK-FAIL: disk free 1.4GB < 2GB required"); the `system.update` mutation surfaces this exact message to UX-01's toast in Phase 34.
+  2. After update.sh successfully completes but livinityd then crashes 3 times within 5 minutes (systemd `Restart=` cycle), the system automatically rewrites `/opt/livos/.deployed-sha` to the previous SHA, restarts livos.service, and the next boot uses the prior code — verifiable by intentionally pushing a commit that breaks livinityd boot and observing recovery within ~2 minutes.
+  3. After an auto-rollback fires, the next successful livinityd boot writes a marker into `/opt/livos/data/update-history/` consumed by Phase 33's Past Deploys UI as `status:rolled-back`; the user sees the rollback event in the browser without needing SSH.
+  4. Sanity-check + rollback logic is implemented as a systemd unit-level concern (`OnFailure=` watchdog or sibling oneshot service) — NOT a livinityd in-process concern — so it works even when livinityd itself can't start.
+**Plans**: TBD
+**Patch artifact**: `.planning/phases/32-pre-update-sanity-rollback/artifacts/phase32-systemd-rollback-patch.sh` (applies systemd unit drop-in + watchdog script via SSH to both hosts)
 
-### Phase 19: Compose Graph Viewer + Vulnerability Scanning
-**Goal**: Visual compose graph for understanding multi-service topologies + on-demand Trivy image scanning with persistent SHA256-keyed cache.
-**Depends on**: Phase 17
-**Requirements**: CGV-01, CGV-02, CGV-03, CGV-04
+### Phase 33: Update Observability Surface
+**Goal**: A user diagnoses any update outcome (success / fail / rolled-back) entirely from Settings > Software Update without ever opening SSH — structured per-deploy logs feed a Past Deploys table with click-through full-log viewer; sidebar Software Update row shows a badge when an update is available.
+**Depends on**: Phase 31 (logs are emitted by the patched update.sh) — UX-04 sidebar badge has no infra dependency but rides along here because both touch Settings > Software Update
+**Requirements**: OBS-01, OBS-02, OBS-03, UX-04
 **Success Criteria** (what must be TRUE):
-  1. Stack detail panel has a "Graph" tab; compose YAML is parsed and rendered as a React Flow graph showing services as nodes with `depends_on` arrows, networks as groups, and port mappings as badges
-  2. Image list has a "Scan" column/action; clicking Scan runs `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image <tag> --format json` inside a Trivy container
-  3. Scan results stored in Redis at `nexus:vuln:<sha256>` and reused on subsequent Scan clicks for the same image (even if the tag moved)
-  4. UI shows severity badges (CRITICAL/HIGH/MEDIUM/LOW) with counts; clicking a badge expands to show CVE list with CVSS scores and fix availability
-**Plans**: 2 plans
+  1. Every `update.sh` invocation writes a single structured log file at `/opt/livos/data/update-history/update-<ISO-timestamp>-<7char-sha>.log` containing per-step lines (precheck / clone / rsync / pnpm-install / build / dist-copy / restart), the final exit code, and total duration in seconds — verifiable by `ls -la /opt/livos/data/update-history/` after a deploy.
+  2. Settings > Software Update displays a "Past Deploys" table populated from the last 50 log files, columns SHA + ISO timestamp + status (success/failed/rolled-back) + duration, sorted newest-first; users see this update history without any SSH or tail command.
+  3. Clicking a Past Deploys row opens a log viewer modal showing the last 500 lines of that deploy's log with monospace formatting + a "Download full log" button that streams the entire file as `.log` — user can copy/paste into a GitHub issue.
+  4. When an update is available (existing GitHub-commits check from Phase 30), the Settings sidebar's "Software Update" row displays a small numeric badge (e.g., "1") next to the label that disappears once the user opens the page or installs the update — verifiable in both light and dark themes.
+  5. New `system.listUpdateHistory` and `system.readUpdateLog` tRPC routes ship with adminProcedure RBAC + filename validation (no `..` traversal); they read directly from `/opt/livos/data/update-history/` with no DB writes.
+**Plans**: TBD
+**UI hint**: yes
 
-### Phase 20: Scheduled Tasks + Container Backup
-**Goal**: node-cron-based scheduler for routine Docker maintenance (image prune, update check, git sync) + volume backup to S3/SFTP/local with encryption at rest.
-**Depends on**: Phase 17
-**Requirements**: SCH-01, SCH-02, SCH-03, SCH-04, SCH-05
+### Phase 34: Update UX Hardening
+**Goal**: "Install Update tıklandı, hiçbir şey olmadı" silent-fail (BACKLOG 999.6) is impossible — every `system.update` failure surfaces as an actionable toast, the button is disabled while pending, and WS hang-ups during long-running mutations fall back to HTTP transport instead of silently dropping.
+**Depends on**: Phase 32 (consumes REL-02's actionable precheck error messages); benefits from Phase 33 (toast can link to the new Past Deploys log row)
+**Requirements**: UX-01, UX-02, UX-03
 **Success Criteria** (what must be TRUE):
-  1. PostgreSQL `scheduled_jobs` table stores job definitions; livinityd loads them on startup and schedules with node-cron; jobs survive restart
-  2. Three built-in scheduled tasks ship enabled by default with sensible defaults: image-prune (weekly Sunday 3am), container-update-check (daily 6am), git-stack-sync (hourly)
-  3. Settings > Scheduler UI lists all jobs with last-run timestamp, next-run, status (success/failure), and enable/disable toggle
-  4. User configures a backup job picking a volume, destination type (S3/SFTP/local), destination config, and schedule; backup runs on schedule and produces a tar.gz at destination
-  5. Volume backup uses an ephemeral `alpine:latest` helper container to tar the volume contents and stream to the destination without mounting the volume on the host
-**Plans**: 2 plans
-**Plan files**:
-- [x] 20-01-PLAN.md — Scheduler module + built-in maintenance tasks (SCH-01, SCH-02): scheduled_jobs PG table + node-cron runner + image-prune/container-update-check/git-stack-sync handlers
-- [x] 20-02-PLAN.md — Backup module + destinations + Settings UI (SCH-03, SCH-04, SCH-05): alpine-tar streaming + S3/SFTP/local uploaders + AES-256-GCM creds vault + Settings > Scheduler section
+  1. Triggering `system.update` while disk is full / GitHub unreachable / WS disconnected produces a toast within 5 seconds containing the actual error text (e.g., "Disk full — 1.4GB free, 2GB required" or "GitHub unreachable") in EVERY caller of the mutation — verifiable by killing network or filling disk and clicking Install Update from both the Settings page and the UpdateNotification card.
+  2. After clicking Install Update, the button is `disabled` (visually grayed + non-clickable) for the entire `mutation.isPending` window; the UpdatingCover modal cannot be dismissed by Escape, backdrop click, or back-button while the update is running — verifiable by attempting all 3 dismissal vectors during a deploy.
+  3. `system.update` and `system.checkUpdate` are listed in `livos/packages/ui/src/lib/trpc/common.ts` `httpOnlyPaths`; killing the WebSocket mid-mutation does NOT cause the mutation to silently hang — it completes via HTTP and surfaces success or onError as expected (verifiable via Chrome DevTools Network panel).
+  4. Every `useMutation({ mutationKey: ['system.update'] })` (and equivalent for checkUpdate) call in the UI tree has a defined `onError` handler that emits a user-visible toast — verified by `grep -rn "system\.update" livos/packages/ui/src` returning zero callers without an onError binding.
+**Plans**: TBD
+**UI hint**: yes
 
-### Phase 21: GitOps Stack Deployment
-**Goal**: Deploy and auto-sync compose stacks from git repositories with HMAC-verified webhooks for instant CI/CD on push — Livinity's self-hosted GitOps moat.
-**Depends on**: Phase 17, Phase 20
-**Requirements**: GIT-01, GIT-02, GIT-03, GIT-04, GIT-05
+### Phase 35: GitHub Actions update.sh Smoke Test
+**Goal**: A PR can no longer merge an `update.sh` regression — every PR runs the full `update.sh` inside a fresh Docker container and verifies livinityd actually boots and serves `/health`; failed PRs are blocked at the GitHub merge gate.
+**Depends on**: Phase 31 (the patched update.sh is what gets exercised in CI; without Phase 31's fail-loud guards the smoke test could itself silently pass)
+**Requirements**: BUILD-04
 **Success Criteria** (what must be TRUE):
-  1. Stack schema (PostgreSQL) has git_url, git_branch (default "main"), git_credential_id columns; credentials stored in `git_credentials` table encrypted with AES-256 using JWT_SECRET-derived key
-  2. `deployStack` with a git config does a blobless clone (`git clone --filter=blob:none --depth=1 --branch=<branch> <url>`), copies the compose file to stacks/{name}/, deploys with `docker compose up -d`
-  3. Webhook endpoint `POST /api/webhooks/git/:stackName` verifies HMAC-SHA256 signature against a per-stack webhook secret; on valid signature, triggers redeploy (git pull + compose up)
-  4. Stack create/edit UI has a "Deploy from Git" tab with fields: git URL, branch, credential selector, compose-path (default `docker-compose.yml`), webhook secret (auto-generated, copyable)
-  5. Git stacks auto-sync every N minutes via the Phase 20 scheduler (`git-stack-sync` job iterates configured git stacks and calls `git pull` + redeploy if HEAD changed)
-**Plans**: 2 plans
-**Plan files**:
-- [x] 21-01-PLAN.md — Backend: schema (stacks + git_credentials) + git-credentials AES-256-GCM module + git-deploy simple-git clone/pull + deployStack git path + HMAC webhook (GIT-01, GIT-02, GIT-03)
-- [x] 21-02-PLAN.md — UI: Deploy from Git tab + credential picker + webhook URL display + scheduler git-stack-sync handler implementation (GIT-04, GIT-05)
-
-### Phase 22: Multi-host Docker Management
-**Goal**: Manage multiple Docker hosts from one Livinity instance — local socket, remote TCP/TLS, or outbound agent for NAT-traversal — with environment selector in UI.
-**Depends on**: Phase 17
-**Requirements**: MH-01, MH-02, MH-03, MH-04, MH-05
-**Success Criteria** (what must be TRUE):
-  1. `environments` PostgreSQL table stores host configs (id, name, type enum: 'socket'|'tcp-tls'|'agent', socket_path or tcp_host+tls_cert or agent_id)
-  2. Dockerode client is factory-created per environmentId; all `docker.*` tRPC routes accept optional environmentId param (defaults to "local" socket)
-  3. Server Control UI has an environment selector dropdown in the header; switching selector refreshes all Docker views for the chosen environment
-  4. Outbound agent binary (Node) can be installed on a remote host with a registration token; agent opens WebSocket to `wss://{domain}/agent/connect`, authenticates with token, and proxies Docker API calls with < 100ms added latency
-  5. Agent tokens manageable from Settings > Environments > Agents — generate, revoke, view last-seen; revoking terminates the active WebSocket within 5 seconds
-**Plans**: 3 plans
-**Plan files**:
-- [x] 22-01-PLAN.md — environments PG table + Dockerode factory + tRPC envId param (MH-01, MH-02)
-- [x] 22-02-PLAN.md — UI environment selector + Settings > Environments management (MH-03)
-- [x] 22-03-PLAN.md — Outbound docker-agent package + WebSocket transport + token CRUD with 5s-revoke SLA (MH-04, MH-05)
-
-### Phase 23: AI-Powered Docker Diagnostics
-**Goal**: Leverage Kimi AI to turn Docker management from manual-reading-of-logs into proactive plain-English guidance — the capability no competing Docker manager can replicate.
-**Depends on**: Phase 17, Phase 19 (vulnerability scanning)
-**Requirements**: AID-01, AID-02, AID-03, AID-04, AID-05
-**Success Criteria** (what must be TRUE):
-  1. Container detail has an "AI Diagnose" button; clicking sends last 200 log lines + resource stats + image info to Kimi and returns a plain-English summary: likely cause, suggested action, confidence
-  2. Backend scheduler polls `docker stats` + `getEngineInfo` every 5 minutes; when a container's memory usage exceeds 80% of its limit OR CPU throttling is active, AI surfaces a proactive notification ("your postgres container will OOM in ~10 minutes")
-  3. Stack create UI has a "Generate from prompt" button; user types "Nextcloud with Redis and MariaDB, expose on 8080"; AI returns a valid compose YAML user can review and deploy
-  4. After a vulnerability scan, AI can explain the most critical CVEs in plain language and suggest concrete upgrade paths ("CVE-2024-XXXX in nginx:1.24 → upgrade to nginx:1.27-alpine")
-  5. AI Chat sidebar recognizes queries like "why is my X container slow/failing" and automatically pulls container diagnostics without the user manually specifying logs
-**Plans**: 2 plans
+  1. A new workflow at `.github/workflows/update-sh-smoke.yml` triggers on every PR that touches `update.sh`, the patch artifacts under `.planning/phases/3*/artifacts/`, or any source path that affects livinityd / nexus build outputs.
+  2. The workflow boots a fresh Ubuntu 24.04 Docker container with Node 22 + pnpm + system PostgreSQL + Redis, runs the full `update.sh` against the PR's HEAD SHA, then issues `curl -fsS http://localhost:8080/health` and verifies the livinityd process is alive 30 seconds after start — the workflow is the source of truth for "does this PR deploy cleanly?"
+  3. A PR that intentionally introduces a build break (e.g., a TypeScript error in nexus/packages/core) FAILS the smoke test workflow and is blocked from merge by the required-status-check gate; a clean PR PASSES within ~10 minutes wall-clock.
+  4. Workflow runtime stays under 15 minutes wall-clock to remain practical for PR review cadence; cache strategy (pnpm store / npm cache / Docker layer cache) is in place to keep median runs ~5-8 minutes.
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-v27.0 phases execute in numeric order: 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 23
-Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21 depends on Phase 20's scheduler. Phase 23 depends on Phase 19's vulnerability scan results.
+v29.0 phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35
+- Phase 31 is the foundation (every other phase depends on update.sh emitting reliable signals)
+- Phase 32 layers the rollback safety net on top
+- Phase 33 (observability) and Phase 35 (CI smoke test) can parallelize after Phase 31 (Phase 33 needs the new log format; Phase 35 needs the patched update.sh)
+- Phase 34 (UX hardening) consumes Phase 32's actionable error messages — runs after both 31 and 32
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 17. Docker Quick Wins | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 18. Container File Browser | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 19. Compose Graph + Vuln Scan | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 20. Scheduled Tasks + Backup | v27.0 | 2/2 | Complete   | 2026-04-24 |
-| 21. GitOps Stack Deployment | v27.0 | 2/2 | Complete   | 2026-04-25 |
-| 22. Multi-host Docker | v27.0 | 3/3 | Complete    | 2026-04-25 |
-| 23. AI-Powered Docker Diagnostics | v27.0 | 2/2 | Complete    | 2026-04-25 |
-| 24. Docker App Skeleton | v28.0 | 2/2 | Complete    | 2026-04-25 |
-| 25. Multi-Environment Dashboard | v28.0 | 2/2 | Complete    | 2026-04-25 |
-| 26. Resource Routes (Containers/Images/Volumes/Networks) | v28.0 | 2/2 | Complete | 2026-04-25 |
-| 27. Stacks + Schedules Routes | v28.0 | 2/2 | Complete | 2026-04-25 |
-| 28. Cross-Container Logs + Activity Timeline | v28.0 | 2/2 | Complete    | 2026-04-25 |
-| 29. Shell + Registry + Palette + Docker Settings | v28.0 | 2/2 | Complete    | 2026-04-25 |
-| 30. Auto-Update Notification (GitHub-Aware) | v28.0 | 2/2 | Complete    | 2026-04-26 |
+| 31. update.sh Build Pipeline Integrity | v29.0 | 0/0 | Not started | — |
+| 32. Pre-Update Sanity & Auto-Rollback | v29.0 | 0/0 | Not started | — |
+| 33. Update Observability Surface | v29.0 | 0/0 | Not started | — |
+| 34. Update UX Hardening | v29.0 | 0/0 | Not started | — |
+| 35. GitHub Actions update.sh Smoke Test | v29.0 | 0/0 | Not started | — |
 
 ---
 
 ## Previous Milestones
 
+- v28.0 Docker Management UI (Dockhand-Style) (Phases 24-30, Shipped 2026-04-26)
+- v27.0 Docker Management Upgrade (Phases 17-23, Shipped 2026-04-25)
+- v26.0 Device Security & User Isolation (Phases 11-16, Shipped 2026-04-24)
 - v25.0 Memory & WhatsApp Integration (Phases 6-10, Shipped 2026-04-03)
 - v24.0 Mobile Responsive UI (Phases 1-5, Shipped 2026-04-01)
 - v23.0 Mobile PWA (Phases 37-40, Shipped 2026-04-01)
