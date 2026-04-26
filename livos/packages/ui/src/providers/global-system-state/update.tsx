@@ -5,9 +5,18 @@ import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
 export function useUpdate({onMutate, onSuccess}: {onMutate?: () => void; onSuccess?: (didWork: boolean) => void}) {
+	const utils = trpcReact.useUtils()
 	const updateVersionMut = trpcReact.system.update.useMutation({
 		onMutate,
-		onSuccess,
+		onSuccess: (didWork) => {
+			// Phase 30 hot-patch: invalidate checkUpdate so the bottom-right
+			// `<UpdateNotification />` and Settings sub-pages refetch the new
+			// `.deployed-sha` (written by update.sh near the end of its run) and
+			// hide themselves once available === false. Without this, the card
+			// would persist until the next 1-hour refetchInterval tick.
+			utils.system.checkUpdate.invalidate()
+			onSuccess?.(didWork)
+		},
 	})
 
 	const update = () => updateVersionMut.mutate()

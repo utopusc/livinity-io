@@ -70,28 +70,14 @@ export function useSettingsNotificationCount() {
 				duration: Infinity,
 			}
 
-			const softwareUpdateToastOptions: ExternalToast = {
-				action: {
-					label: t('notifications.view'),
-					onClick: () => {
-						navigate(`/settings/software-update/confirm`)
-					},
-				},
-				// Don't auto-close
-				duration: Infinity,
-			}
-
+			// Phase 30 hot-patch: software-update toast removed. The persistent
+			// `<UpdateNotification />` desktop card (livos/packages/ui/src/components/update-notification.tsx)
+			// is now the single surface for "update available" notifications. We still
+			// count it toward the Settings dock badge so the existing red-dot count UX
+			// keeps working for the user.
 			if (checkUpdateResult.status === 'fulfilled') {
-				const {shortSha, available} = checkUpdateResult.value
-
-				if (available) {
-					currCount++
-					const id = toast.info(
-						t('notifications.new-version-available', {update: shortSha ?? 'available'}),
-						softwareUpdateToastOptions,
-					)
-					toastIds.push(id)
-				}
+				const {available} = checkUpdateResult.value
+				if (available) currCount++
 			}
 
 			if (cpuTempResult.status === 'fulfilled') {
