@@ -172,7 +172,7 @@ export function ContainerCreateForm({
 	// Show loading spinner while fetching inspect data
 	if (sourceContainerName && inspectLoading) {
 		return (
-			<div className='absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface-base'>
+			<div className='absolute inset-0 z-50 flex flex-col items-center justify-center bg-white'>
 				<IconLoader2 size={32} className='animate-spin text-text-tertiary' />
 				<p className='mt-3 text-sm text-text-tertiary'>Loading container configuration...</p>
 			</div>
@@ -358,7 +358,7 @@ export function ContainerCreateForm({
 	}
 
 	return (
-		<div className='absolute inset-0 z-50 flex flex-col bg-surface-base'>
+		<div className='absolute inset-0 z-50 flex flex-col bg-white'>
 			{/* Header */}
 			<div className='flex shrink-0 items-center justify-between border-b border-border-default px-4 py-3 sm:px-6 sm:py-4'>
 				<div>
