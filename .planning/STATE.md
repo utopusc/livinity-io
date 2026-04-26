@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.0
 milestone_name: Deploy & Update Stability
-status: completed
+status: executing
 stopped_at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
-last_updated: "2026-04-26T14:24:15.405Z"
-last_activity: 2026-04-26 — Phase 31 Plan 02 complete (patch script authored — 370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup; Plan 31-03 SSH-apply unblocked)
+last_updated: "2026-04-26T16:30:41.043Z"
+last_activity: 2026-04-26 -- Phase --phase execution started
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 3
-  completed_plans: 2
-  percent: 67
+  completed_phases: 1
+  total_plans: 6
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -22,14 +22,14 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v29.0 — Deploy & Update Stability — ROADMAP DEFINED
-**Current focus:** Roadmap created (5 phases, Phase 31 → Phase 35). Next: plan Phase 31 (update.sh build pipeline integrity).
+**Current focus:** Phase --phase — 32
 
 ## Current Position
 
-Phase: 31 (in progress)
-Plan: 31-01 + 31-02 complete; 31-03 next (SSH-apply + post-apply verification)
-Status: Plan 31-02 (patch script) complete — `phase31-update-sh-patch.sh` (370 lines) authored and locally validated. Idempotent, executable, syntax-clean. Backup-then-syntax-check-then-restore safety net. 4 markers + 10 verify wirings + BUILD-03 cleanup (worker/mcp-server masking strip + memory-build injection on Server4 + inconclusive-verdict marker). Plan 31-03 (SSH-apply on Mini PC + Server4 with HUMAN-VERIFY checkpoint) unblocked.
-Last activity: 2026-04-26 — Phase 31 Plan 02 complete (patch script ready for Plan 03 to ship)
+Phase: --phase (32) — EXECUTING
+Plan: 1 of --name
+Status: Executing Phase --phase
+Last activity: 2026-04-26 -- Phase --phase execution started
 
 **Progress:** [███████░░░] 67% (2 of 3 Phase 31 plans complete)
 
@@ -511,4 +511,4 @@ Last session: 2026-04-26T14:23:55.810Z
 Stopped at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
-**Planned Phase:** 31 (update.sh Build Pipeline Integrity) — 3 plans — 2026-04-26T13:50:05.333Z
+**Planned Phase:** 32 (Pre-Update Sanity & Auto-Rollback) — 3 plans — 2026-04-26T16:29:49.181Z
