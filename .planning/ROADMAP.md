@@ -190,8 +190,11 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
   2. After update.sh successfully completes but livinityd then crashes 3 times within 5 minutes (systemd `Restart=` cycle), the system automatically rewrites `/opt/livos/.deployed-sha` to the previous SHA, restarts livos.service, and the next boot uses the prior code — verifiable by intentionally pushing a commit that breaks livinityd boot and observing recovery within ~2 minutes.
   3. After an auto-rollback fires, the next successful livinityd boot writes a marker into `/opt/livos/data/update-history/` consumed by Phase 33's Past Deploys UI as `status:rolled-back`; the user sees the rollback event in the browser without needing SSH.
   4. Sanity-check + rollback logic is implemented as a systemd unit-level concern (`OnFailure=` watchdog or sibling oneshot service) — NOT a livinityd in-process concern — so it works even when livinityd itself can't start.
-**Plans**: TBD
-**Patch artifact**: `.planning/phases/32-pre-update-sanity-rollback/artifacts/phase32-systemd-rollback-patch.sh` (applies systemd unit drop-in + watchdog script via SSH to both hosts)
+**Plans**: 3 plans
+- [ ] 32-01-PLAN.md — REL-01 precheck implementation: precheck-block.sh + 3 bash unit tests + vitest test G round-trip
+- [ ] 32-02-PLAN.md — REL-02 rollback machinery: livos-rollback.sh + livos-rollback.service + auto-rollback.conf + 2 bash unit tests
+- [ ] 32-03-PLAN.md — Compose phase32-systemd-rollback-patch.sh + SSH-apply on Mini PC + Server4 (HUMAN-VERIFY) + canary-commit doc
+**Patch artifact**: `.planning/phases/32-pre-update-sanity-auto-rollback/artifacts/phase32-systemd-rollback-patch.sh` (applies systemd unit drop-in + watchdog script via SSH to both hosts)
 
 ### Phase 33: Update Observability Surface
 **Goal**: A user diagnoses any update outcome (success / fail / rolled-back) entirely from Settings > Software Update without ever opening SSH — structured per-deploy logs feed a Past Deploys table with click-through full-log viewer; sidebar Software Update row shows a badge when an update is available.
