@@ -148,9 +148,26 @@ Livinity now features a unified capability orchestration platform. All capabilit
 
 **45 deployment-time UAT items** + 10 info-severity tech-debt items deferred (window-app pattern incompatibility prevents real URL-bar deep-linking — v29.0+).
 
-### Active (next milestone TBD)
+## Current Milestone: v29.0 Deploy & Update Stability
 
-- [ ] (No active items — define next milestone via /gsd-new-milestone)
+**Goal:** LivOS update'i tek tıkla güvenli, gözlemlenebilir ve geri-alınabilir hale getir — kullanıcı SSH'lanmadan güvenle update edebilsin.
+
+**Target features:**
+- `update.sh` build-pipeline integrity (BACKLOG 999.5 + 999.5b — silent build failures + pnpm-store dist-copy idempotency)
+- `system.update` UI error surfacing (BACKLOG 999.6 — Install Update mutation onError toast, pending-state guards, WS hang-up HTTP fallback)
+- Auto-rollback on failed boot (livinityd 3× crash → previous SHA via systemd OnFailure or watchdog)
+- Update history + observability UI (Settings > Software Update with past deploys list + log links)
+- Sidebar Software Update badge (BACKLOG 999.1)
+- GitHub Actions update.sh smoke test (PR-time Docker container regression catch)
+
+**Key context:**
+- update.sh lives outside the repo on each host (Mini PC + Server4) — patch-script + bootstrap pattern (Phase 30 precedent) required
+- Phase numbering continues from v28.0 last phase (30) → v29.0 starts at Phase 31
+- Strategic Tier 1 alignment: operational reliability before adding more product surface
+
+### Active (v29.0)
+
+- [ ] UPD-* requirements (defined in REQUIREMENTS.md after this milestone is bootstrapped)
 
 ### Validated (v28.0 — Docker Management UI Dockhand-Style)
 
@@ -307,4 +324,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-26 after v28.0 milestone shipped (Docker Management UI Dockhand-Style)*
+*Last updated: 2026-04-26 — v29.0 Deploy & Update Stability milestone started (PROJECT.md only; REQUIREMENTS.md + ROADMAP.md to follow)*

@@ -1,39 +1,39 @@
 ---
 gsd_state_version: 1.0
-milestone: v28.0
-milestone_name: Docker Management UI
-milestone_status: shipped
+milestone: v29.0
+milestone_name: Deploy & Update Stability
+milestone_status: defining
 current_plan: null
-status: between-milestones
-stopped_at: "v28.0 SHIPPED 2026-04-26. Phase 30 (Auto-Update Notification, GitHub-aware) added post-archive and merged into the milestone via 4 hot-patch rounds: r1 (toast removed + cache invalidate), r2 (NotificationBadge plain text), r3 (Umbrel WhatsNewModal removed). Live UAT confirmed bugs A + D fixed on Mini PC. Tech debt: Bug C (truncation, minor) + BACKLOG 999.1/999.2/999.3. Lifecycle: audit passed → milestone archived → tag v28.0.1 (hot-patch bump). Ready for next milestone."
-last_updated: "2026-04-26T03:40:00.000Z"
+status: defining-requirements
+stopped_at: "v29.0 milestone started 2026-04-26. PROJECT.md updated with Current Milestone section. Scope: update.sh build integrity (999.5/5b), system.update UI hardening (999.6), auto-rollback on failed boot, update history + observability UI, sidebar update badge (999.1), GitHub Actions update.sh smoke test. Phase numbering continues from v28.0 last phase (30) → v29.0 starts at Phase 31. Next: research decision → REQUIREMENTS.md → ROADMAP.md."
+last_updated: "2026-04-26T04:00:00.000Z"
 last_activity: 2026-04-26
 progress:
-  total_phases: 14
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-25)
+See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v28.0 — Docker Management UI (Dockhand-Style) — SHIPPED 2026-04-26
-**Current focus:** between milestones — ready to start v29.0
+**Current milestone:** v29.0 — Deploy & Update Stability — DEFINING REQUIREMENTS
+**Current focus:** Bootstrap milestone — REQUIREMENTS.md + ROADMAP.md to be created next
 
 ## Current Position
 
-Phase: — (no active phase)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Milestone shipped, archive committed, tag v28.0.1 pushed.
-Last activity: 2026-04-26
+Status: Defining requirements (PROJECT.md updated, REQUIREMENTS + ROADMAP pending)
+Last activity: 2026-04-26 — Milestone v29.0 started
 
-**Progress:** [██████████] 100% — v28.0 complete (Phases 24-30, all hot-patches)
+**Progress:** [          ] 0% — v29.0 bootstrap
 
 ## v28.0 Phase Structure
 
