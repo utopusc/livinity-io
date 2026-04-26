@@ -23,9 +23,9 @@ Phase 30 deploy turlarında her seferinde tetiklenen `update.sh` build silent-fa
 
 Phase 30 sonrası UAT'de tespit edilen "Install Update tıklandı, hiçbir şey olmadı" silent-fail (BACKLOG 999.6) kapatılır + tıklama-tıklamı UX boşlukları doldurulur.
 
-- [ ] **UX-01**: `system.update` mutation `onError` her çağırıcıda kullanıcıya toast olarak yüzeye çıkar (actionable error text — "Disk full" / "GitHub unreachable" / "WS disconnected").
-- [ ] **UX-02**: Install Update butonu `mutation.isPending` boyunca disable + UpdatingCover dismiss-guard (kullanıcı modali kazara kapatamaz, geri-press disabled).
-- [ ] **UX-03**: `system.update` (ve diğer long-running mutations: `system.checkUpdate`) `httpOnlyPaths` listesine alınır — WS hang-up sırasında HTTP transport'tan akar, silent-drop biter.
+- [x] **UX-01**: `system.update` mutation `onError` her çağırıcıda kullanıcıya toast olarak yüzeye çıkar (actionable error text — "Disk full" / "GitHub unreachable" / "WS disconnected"). ✓ (commit `11634c5a` — emergency fix during Phase 31 verification, Phase 34 yarıda yapıldı)
+- [x] **UX-02**: Install Update butonu `mutation.isPending` boyunca disable + UpdatingCover dismiss-guard (kullanıcı modali kazara kapatamaz, geri-press disabled). ✓ (commit `11634c5a`)
+- [x] **UX-03**: `system.update` (ve diğer long-running mutations: `system.checkUpdate`) `httpOnlyPaths` listesine alınır — WS hang-up sırasında HTTP transport'tan akar, silent-drop biter. ✓ (commit `11634c5a` — `system.update`/`updateStatus` zaten Phase 30'da eklenmişti, `checkUpdate` Phase 34 yarıda eklendi)
 - [ ] **UX-04**: Settings sidebar'da update mevcutsa "Software Update" satırının yanında bir badge gösterilir (BACKLOG 999.1).
 
 ### Reliability & Auto-Rollback (REL)
