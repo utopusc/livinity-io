@@ -70,7 +70,13 @@ precheck() {
         local json_path="${history_dir}/${iso_ts}-precheck-fail.json"
         # Escape double-quotes in reason for JSON safety
         local escaped_reason=${fail_reason//\"/\\\"}
-        cat > "$json_path" 2>/dev/null <<JSON
+        # Wrap the heredoc redirect in a brace group so bash's own
+        # "no such file or directory" complaint is also silenced when the
+        # history dir couldn't be created (e.g. precheck running on a host
+        # where /opt/livos does not exist — test environments). The
+        # PRECHECK-FAIL stderr message below is the contract; the JSON write
+        # is best-effort logging that Phase 33 consumes.
+        { cat > "$json_path" <<JSON
 {
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "status": "precheck-failed",
@@ -78,6 +84,7 @@ precheck() {
   "duration_ms": ${duration_ms}
 }
 JSON
+        } 2>/dev/null
         chmod 644 "$json_path" 2>/dev/null || true
         echo "$fail_reason" >&2
         exit 1
