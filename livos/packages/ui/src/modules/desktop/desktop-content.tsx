@@ -281,7 +281,53 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 			}
 		}
 
-		// Hardcoded system apps on desktop
+		// Hardcoded system apps on desktop — Docker + Server Management open as
+		// windows from the desktop tile, mirroring how they launch from the dock.
+		const launchWindowApp = (appId: string, route: string, title: string, icon: string) => {
+			if (isMobile) {
+				openApp(appId, route, title, icon)
+				return
+			}
+			if (!windowManager) return
+			windowManager.openWindow(appId, route, title, icon)
+		}
+
+		const dockerItem: AppGridItem = {
+			id: 'LIVINITY_docker',
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<AppIcon
+						label='Docker'
+						src={systemAppsKeyed['LIVINITY_docker'].icon}
+						onClick={() => launchWindowApp('LIVINITY_docker', '/docker', 'Docker', systemAppsKeyed['LIVINITY_docker'].icon)}
+					/>
+				</motion.div>
+			),
+		}
+		appItems.push(dockerItem)
+
+		const serverControlItem: AppGridItem = {
+			id: 'LIVINITY_server-control',
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<AppIcon
+						label='Server Management'
+						src={systemAppsKeyed['LIVINITY_server-control'].icon}
+						onClick={() => launchWindowApp('LIVINITY_server-control', '/server-control', 'Server Management', systemAppsKeyed['LIVINITY_server-control'].icon)}
+					/>
+				</motion.div>
+			),
+		}
+		appItems.push(serverControlItem)
+
 		const remoteDesktopItem: AppGridItem = {
 			id: 'LIVINITY_remote-desktop',
 			node: (
@@ -387,7 +433,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, folders, widgets, openStreamApp, isMobile, openApp])
+	}, [userApps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
 
 	return (
 		<motion.div className='flex h-full w-full select-none flex-col' variants={variants} animate={variant} initial={{opacity: 1}} transition={{duration: 0.15, ease: 'easeOut'}}>
