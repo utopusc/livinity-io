@@ -31,7 +31,7 @@ Phase: 29
 Plan: 2 of 2 complete
 Current Plan: Not started
 Status: Milestone complete
-Last activity: 2026-04-26
+Last activity: 2026-04-26 - Completed quick task 260425-sfg: v28.0 hot-patch bundle (tailwind sync + UI fixes + deploy)
 
 **Progress:** [██████████] 100%
 
@@ -421,6 +421,12 @@ None
 ### Blockers/Concerns
 
 - Mini PC SSH direct IP (10.69.31.68) currently unreachable — deploys to bruce will need tunnel-based access or network reconnection
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260425-sfg | v28.0 hot-patch: tailwind sync + bg-surface-base + actions dropdown + row click + memory build | 2026-04-26 | 17e85ddd | [260425-sfg-v28-0-hot-patch-bundle-tailwind-sync-bg-](./quick/260425-sfg-v28-0-hot-patch-bundle-tailwind-sync-bg-/) |
 
 ## Deferred Items
 
