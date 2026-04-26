@@ -1,8 +1,14 @@
 ---
 phase: 30-auto-update
 verified: 2026-04-26T02:30:00Z
-status: human_needed
-score: 16/16 must-haves verified (automated); 1 manual browser E2E pending
+revalidated: 2026-04-26T03:30:00Z
+status: passed
+score: 16/16 automated + UAT verified A (no toast) + D (cache invalidate after update) on Mini PC
+uat_followups:
+  - hot_patch_r2: "NotificationBadge plain-text fix — deploy verified, manual count visibility test deferred"
+  - hot_patch_r3: "What's new content (Umbrel-leftover) — LivOS rebrand pending"
+  - backlog_999_1: "Settings sidebar Software Update badge"
+  - backlog_999_2: "Confirm dialog modal vs route UX"
 overrides_applied: 0
 human_verification:
   - test: "Browser E2E smoke (Path A on Server4) — 9-step protocol"

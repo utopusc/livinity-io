@@ -18,7 +18,6 @@ import {
 import {Button} from '@/shadcn-components/ui/button'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
-import {useLinkToDialog} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
 
 function NotificationContent({children}: {children: string}) {
@@ -174,7 +173,6 @@ export function Notifications() {
 	// Hooks and state
 	const {notifications, clearNotification} = useNotifications()
 	const navigate = useNavigate()
-	const linkToDialog = useLinkToDialog()
 
 	// Determine if we need to query backup repositories
 	// TODO: remove support for legacy "backups-failing" notification format
@@ -186,18 +184,18 @@ export function Notifications() {
 		enabled: hasBackupNotification,
 	})
 
-	// Separate livos-updated notification from others
+	// Phase 30 hot-patch round 3: WhatsNewModal removed (Umbrel-leftover content).
+	// `livos-updated` notification is silently cleared — the new
+	// `<UpdateNotification />` desktop card already conveys "you just updated" via its
+	// commit message, and the bottom-right card disappears once .deployed-sha == HEAD.
 	const standardNotifications = notifications.filter((n) => n !== 'livos-updated')
 	const showWhatsNew = notifications.includes('livos-updated')
 
-	// Navigate to whats-new dialog when the livos-updated notification is present
-	// Clear the notification immediately to prevent re-navigation
 	useEffect(() => {
 		if (showWhatsNew) {
 			clearNotification('livos-updated')
-			navigate(linkToDialog('whats-new'))
 		}
-	}, [showWhatsNew, navigate, linkToDialog, clearNotification])
+	}, [showWhatsNew, clearNotification])
 
 	// Get notification content based on notification type
 	const getNotificationContent = (notification: string): NotificationContent => {
