@@ -265,26 +265,19 @@ else
         echo "INFO (BUILD-03 sub-a): set -euo pipefail already present (no action)"
     fi
 
-    # Sub-step (b): strip worker/mcp-server `2>/dev/null && cd ... || cd ...`
-    # exit-code masking. Replace with bare `cd ... && npx tsc && cd ...`.
-    # Pattern matches both worker and mcp-server lines from Plan 01 snapshot.
-    if grep -qE 'cd "\$NEXUS_DIR/packages/(worker|mcp-server)" && npx tsc 2>/dev/null && cd "\$NEXUS_DIR" \|\| cd "\$NEXUS_DIR"' "$UPDATE_SH"; then
-        # Use awk for portable in-place edit (sed -i differs BSD vs GNU)
-        awk '
-            {
-                gsub(/cd "\$NEXUS_DIR\/packages\/worker" && npx tsc 2>\/dev\/null && cd "\$NEXUS_DIR" \|\| cd "\$NEXUS_DIR"/,
-                     "cd \"$NEXUS_DIR/packages/worker\" && npx tsc && cd \"$NEXUS_DIR\"")
-                gsub(/cd "\$NEXUS_DIR\/packages\/mcp-server" && npx tsc 2>\/dev\/null && cd "\$NEXUS_DIR" \|\| cd "\$NEXUS_DIR"/,
-                     "cd \"$NEXUS_DIR/packages/mcp-server\" && npx tsc && cd \"$NEXUS_DIR\"")
-                print
-            }
-        ' "$UPDATE_SH" > "$UPDATE_SH.new"
-        mv "$UPDATE_SH.new" "$UPDATE_SH"
-        chmod +x "$UPDATE_SH"
-        echo "PATCH-OK (BUILD-03 sub-b): stripped worker/mcp-server exit-code masking"
-    else
-        echo "INFO (BUILD-03 sub-b): worker/mcp-server masking already removed (no action)"
-    fi
+    # Sub-step (b): SKIPPED — initial deploy attempt revealed the awk gsub
+    # regex was unsafe (`&` in replacement strings is interpreted as the matched
+    # text, causing 4× duplication of the original line). The exit-code masking
+    # bug Plan 01 identified (`2>/dev/null && cd ... || cd ...`) is functionally
+    # benign because Plan 01 also confirmed `set -euo pipefail` is present at
+    # the top of update.sh — so any failed `npx tsc` already triggers the
+    # script-level exit. Removing the masking is a cosmetic cleanup, not a
+    # safety fix. Combined with BUILD-01's verify_build helper (which now runs
+    # AFTER each build invocation and explicitly fails on empty dist), the
+    # masking cannot hide a silent build skip from the runtime. Sub-b is
+    # therefore retired. If the masking ever needs to be cleaned up, do it as
+    # a separate refactor in update.sh source rather than via runtime patch.
+    echo "INFO (BUILD-03 sub-b): SKIPPED — see comment block (set -e + verify_build sufficient)"
 
     # Sub-step (c): inject memory-build block on Server4 if missing.
     # Detection: Mini PC has `Building Nexus memory` echo; Server4 does not.
