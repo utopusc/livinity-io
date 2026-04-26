@@ -173,6 +173,10 @@ export function Dock() {
 						)
 					}
 				/>
+				{/* Phase 30 hot-patch round 11 (post-v28.0.2): Server Management
+				    restored to the dock per user request. Docker is intentionally
+				    NOT in the dock — user wants the original sleek server-control
+				    entry, not the heavyweight Docker app. */}
 				<DockItem
 					appId='LIVINITY_server-control'
 					iconSize={iconSize}

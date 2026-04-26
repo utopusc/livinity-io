@@ -76,11 +76,13 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/docker',
 	},
-	// Restored alongside Docker — provides the legacy Server Management UI.
+	// Phase 30 hot-patch round 11: icon updated from broken dock-settings.png
+	// (file did not exist in /figma-exports/) to the sleek dock-server.svg.
+	// User wanted a clean settings-style server icon matching the dock aesthetic.
 	{
 		id: 'LIVINITY_server-control',
 		name: 'Server Management',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/dock-server.svg',
 		systemApp: true,
 		systemAppTo: '/server-control',
 	},
