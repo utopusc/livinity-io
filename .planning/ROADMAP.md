@@ -130,6 +130,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
  (completed 2026-04-25)
 - [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14) (completed 2026-04-25)
 - [x] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final) (completed 2026-04-25)
+- [ ] **Phase 30: Auto-Update Notification (GitHub-Aware)** — replace legacy OTA infra with GitHub commits API check; UpdateNotification card bottom-right; clicking triggers `/opt/livos/update.sh` via livinityd subprocess + log streaming (UPD-01, UPD-02, UPD-03, UPD-04)
 
 ## Phase Details
 
@@ -201,6 +202,21 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 2 plans (2/2 complete)
 - [x] 28-01-PLAN.md — Cross-container Logs section (DOC-13) — multiplexed WS aggregator with grep, severity, live-tail; extends /ws/docker/logs handler with optional envId param (completed 2026-04-25)
 - [x] 28-02-PLAN.md — Activity Timeline section (DOC-14) — unified docker events + scheduler last-runs + AI alerts feed with source/severity filter chips and click-through routing (completed 2026-04-25)
+
+### Phase 30: Auto-Update Notification (GitHub-Aware)
+**Goal**: Detect new commits on the `utopusc/livinity-io` master branch, surface a persistent bottom-right notification card on the desktop, and trigger `/opt/livos/update.sh` via livinityd when the user clicks "Update". Replaces the broken legacy Umbrel OTA infra (`api.livinity.io/latest-release`) which doesn't match this deployment model.
+**Depends on**: Phase 24 (desktop infra), v28.0 hot-patch round 3 (notification UI patterns)
+**Requirements**: UPD-01, UPD-02, UPD-03, UPD-04
+**Success Criteria** (what must be TRUE):
+  1. `system.checkUpdate` tRPC query queries `https://api.github.com/repos/utopusc/livinity-io/commits/master` (no auth needed for public repos, 60 req/hr unauth limit is fine for 1h polling); compares response `sha` to locally stored deployed SHA at `/opt/livos/.deployed-sha`. Returns `{available: boolean, sha: string, shortSha: string, message: string, author: string, committedAt: string}`.
+  2. `/opt/livos/update.sh` writes deployed git SHA to `/opt/livos/.deployed-sha` after a successful build (line at end of script, before "LivOS updated successfully!" banner).
+  3. `system.update` tRPC mutation spawns `bash /opt/livos/update.sh` as a child process, captures stdout/stderr, exposes progress via `system.updateStatus` query (existing). Does NOT reboot — update.sh restarts services itself.
+  4. New `<UpdateNotification />` React component mounts on desktop (router.tsx). Displays a fixed bottom-right card (`bottom-4 right-4 z-[80]`) when `state === 'update-available'` AND not dismissed. Card shows: "New update available" + commit message snippet + 2 buttons ("Update" + "Later"). Animation: framer-motion fade-in/slide-up.
+  5. "Update" button → opens existing `/settings/software-update/confirm` dialog (preserves user-confirms-before-update UX). "Later" persists dismissed SHA to localStorage `livos:update-notification:dismissed-sha` — re-shows when a NEWER SHA appears.
+  6. `useSoftwareUpdate` hook polls every 1 hour (refetchInterval: 3_600_000); also refetches on mount. Toast/error if GitHub API rate-limit hit (graceful degradation).
+**Plans**: 2 plans
+  - 30-01: Backend rewrite + update.sh patch (UPD-01, UPD-02, UPD-03)
+  - 30-02: Frontend UpdateNotification + hook polling + router mount (UPD-04)
 
 ### Phase 29: Shell + Registry + Palette + Docker Settings
 **Goal**: The remaining surfaces — cross-container shell, Docker Hub/private registry credentials, cmd+k command palette, and Docker-app Settings page.
@@ -361,6 +377,8 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 26. Resource Routes (Containers/Images/Volumes/Networks) | v28.0 | 2/2 | Complete | 2026-04-25 |
 | 27. Stacks + Schedules Routes | v28.0 | 2/2 | Complete | 2026-04-25 |
 | 28. Cross-Container Logs + Activity Timeline | v28.0 | 2/2 | Complete    | 2026-04-25 |
+| 29. Shell + Registry + Palette + Docker Settings | v28.0 | 2/2 | Complete    | 2026-04-25 |
+| 30. Auto-Update Notification (GitHub-Aware) | v28.0 | 0/2 | Pending    | — |
 
 ---
 

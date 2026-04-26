@@ -2,17 +2,19 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
+current_phase: 30
+current_phase_name: Auto-Update Notification (GitHub-Aware)
 current_plan: Not started
-status: completed
-stopped_at: "Completed 29-02-PLAN.md — Registry + Docker Settings + DOC-19/20 closure. v28.0 Phase 29 feature-complete (all 6 DOC-15..DOC-20 closed). 8 commits, 15 files created + 12 modified. 28 new unit tests passing. UI build green. Next: milestone audit."
-last_updated: "2026-04-26T02:22:14.632Z"
+status: in_progress
+stopped_at: "Phase 30 added on 2026-04-26 — backend rewrite + frontend UpdateNotification. REQUIREMENTS.md locked. Ready for /gsd-autonomous to plan & execute. 2 plans expected: 30-01 (backend + update.sh patch), 30-02 (frontend + integration)."
+last_updated: "2026-04-26T07:30:00.000Z"
 last_activity: 2026-04-26
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 6
-  total_plans: 12
+  total_plans: 14
   completed_plans: 12
-  percent: 100
+  percent: 85
 ---
 
 # Project State
@@ -27,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 ## Current Position
 
-Phase: 29
+Phase: 30 (Auto-Update Notification — pending plan + execute)
 Plan: 2 of 2 complete
 Current Plan: Not started
 Status: Milestone complete
-Last activity: 2026-04-26 - Completed quick task 260425-x6q: v28.0 hot-patch round 3 (window-only nav + Wi-Fi UI removed + activity wrap + dock cleanup, deployed)
+Last activity: 2026-04-26 - Phase 30 (Auto-Update Notification) added to v28.0 — REQUIREMENTS.md locked, ready for /gsd-autonomous
 
 **Progress:** [██████████] 100%
 
