@@ -228,4 +228,26 @@ describe('performUpdate (UPD-02)', () => {
 		const status = getUpdateStatus()
 		expect(status.error).toBeTruthy()
 	})
+
+	test('G: PRECHECK-FAIL stderr round-trips to updateStatus.error verbatim', async () => {
+		const proc = makeFakeProc()
+		const taggedInvoker: any = vi.fn(() => proc)
+		vi.mocked(execa.$ as any).mockImplementation(((_opts: any) => taggedInvoker) as any)
+
+		const promise = performUpdate(livinityd)
+		await Promise.resolve()
+		// Simulate update.sh exiting non-zero with PRECHECK-FAIL on stderr.
+		// execa surfaces stderr text in the rejection error's .message.
+		proc._reject(
+			new Error(
+				'Command failed with exit code 1: bash /opt/livos/update.sh\nPRECHECK-FAIL: insufficient disk space on /opt/livos (need >=2GB, have 1GB)',
+			),
+		)
+		const ok = await promise
+
+		expect(ok).toBe(false)
+		const status = getUpdateStatus()
+		expect(status.error).toBeTruthy()
+		expect(String(status.error)).toContain('PRECHECK-FAIL: insufficient disk space')
+	})
 })
