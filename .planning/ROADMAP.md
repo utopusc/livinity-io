@@ -191,8 +191,8 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
   3. After an auto-rollback fires, the next successful livinityd boot writes a marker into `/opt/livos/data/update-history/` consumed by Phase 33's Past Deploys UI as `status:rolled-back`; the user sees the rollback event in the browser without needing SSH.
   4. Sanity-check + rollback logic is implemented as a systemd unit-level concern (`OnFailure=` watchdog or sibling oneshot service) — NOT a livinityd in-process concern — so it works even when livinityd itself can't start.
 **Plans**: 3 plans
-- [ ] 32-01-PLAN.md — REL-01 precheck implementation: precheck-block.sh + 3 bash unit tests + vitest test G round-trip
-- [ ] 32-02-PLAN.md — REL-02 rollback machinery: livos-rollback.sh + livos-rollback.service + auto-rollback.conf + 2 bash unit tests
+- [x] 32-01-PLAN.md — REL-01 precheck implementation: precheck-block.sh + 3 bash unit tests + vitest test G round-trip
+- [x] 32-02-PLAN.md — REL-02 rollback machinery: livos-rollback.sh + livos-rollback.service + auto-rollback.conf + 2 bash unit tests
 - [ ] 32-03-PLAN.md — Compose phase32-systemd-rollback-patch.sh + SSH-apply on Mini PC + Server4 (HUMAN-VERIFY) + canary-commit doc
 **Patch artifact**: `.planning/phases/32-pre-update-sanity-auto-rollback/artifacts/phase32-systemd-rollback-patch.sh` (applies systemd unit drop-in + watchdog script via SSH to both hosts)
 
