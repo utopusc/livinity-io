@@ -174,23 +174,6 @@ export function Dock() {
 						)
 					}
 				/>
-				{/* Phase 24-01 — replaces the legacy server-control app. */}
-				<DockItem
-					appId='LIVINITY_docker'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIVINITY_docker',
-							'/docker',
-							'Docker',
-							systemAppsKeyed['LIVINITY_docker'].icon,
-							originRect,
-						)
-					}
-				/>
 				<DockItem
 					appId='LIVINITY_server-control'
 					iconSize={iconSize}
@@ -219,38 +202,6 @@ export function Dock() {
 							'/my-devices',
 							'Devices',
 							systemAppsKeyed['LIVINITY_my-devices'].icon,
-							originRect,
-						)
-					}
-				/>
-				<DockItem
-					appId='LIVINITY_subagents'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIVINITY_subagents',
-							'/subagents',
-							'Agents',
-							systemAppsKeyed['LIVINITY_subagents'].icon,
-							originRect,
-						)
-					}
-				/>
-				<DockItem
-					appId='LIVINITY_schedules'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIVINITY_schedules',
-							'/schedules',
-							'Schedules',
-							systemAppsKeyed['LIVINITY_schedules'].icon,
 							originRect,
 						)
 					}
