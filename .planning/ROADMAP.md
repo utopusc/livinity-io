@@ -215,8 +215,8 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. "Update" button → opens existing `/settings/software-update/confirm` dialog (preserves user-confirms-before-update UX). "Later" persists dismissed SHA to localStorage `livos:update-notification:dismissed-sha` — re-shows when a NEWER SHA appears.
   6. `useSoftwareUpdate` hook polls every 1 hour (refetchInterval: 3_600_000); also refetches on mount. Toast/error if GitHub API rate-limit hit (graceful degradation).
 **Plans**: 2 plans
-  - 30-01: Backend rewrite + update.sh patch (UPD-01, UPD-02, UPD-03)
-  - 30-02: Frontend UpdateNotification + hook polling + router mount (UPD-04)
+- [ ] 30-01-PLAN.md — Backend rewrite (update.ts + routes.ts httpOnlyPaths) + update.sh SSH patch (UPD-01, UPD-02, UPD-03)
+- [ ] 30-02-PLAN.md — Frontend UpdateNotification + 1h hook polling + router mount + 4 shape-consumer fixes (UPD-04)
 
 ### Phase 29: Shell + Registry + Palette + Docker Settings
 **Goal**: The remaining surfaces — cross-container shell, Docker Hub/private registry credentials, cmd+k command palette, and Docker-app Settings page.
