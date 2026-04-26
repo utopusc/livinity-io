@@ -18,7 +18,6 @@ import {DockProfile} from './dock-profile'
 import {LogoutDialog} from './logout-dialog'
 
 const LiveUsageDialog = React.lazy(() => import('@/routes/live-usage'))
-const WhatsNewModal = React.lazy(() => import('@/routes/whats-new-modal').then((m) => ({default: m.WhatsNewModal})))
 
 const DOCK_BOTTOM_PADDING_PX = 8
 
@@ -230,11 +229,6 @@ export function Dock() {
 			<ErrorBoundary fallbackRender={() => null}>
 				<Suspense>
 					<LiveUsageDialog />
-				</Suspense>
-			</ErrorBoundary>
-			<ErrorBoundary fallbackRender={() => null}>
-				<Suspense>
-					<WhatsNewModal />
 				</Suspense>
 			</ErrorBoundary>
 		</>
