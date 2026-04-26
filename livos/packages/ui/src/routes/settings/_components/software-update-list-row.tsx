@@ -20,7 +20,9 @@ export function SoftwareUpdateListRow({isActive}: {isActive: boolean}) {
 			<>
 				<ListRow
 					isActive={isActive}
-					title={currentVersion?.name || `LivOS ${LOADING_DASH}`}
+					title={currentVersion?.version
+					? `LivOS ${currentVersion.version}`
+					: currentVersion?.name || `LivOS ${LOADING_DASH}`}
 					description={
 						<span className='flex items-center gap-1 pb-3'>
 							<Icon component={RiArrowUpCircleFill} className='text-brand' />
@@ -44,7 +46,9 @@ export function SoftwareUpdateListRow({isActive}: {isActive: boolean}) {
 	return (
 		<ListRow
 			isActive={isActive}
-			title={currentVersion?.name || `LivOS ${LOADING_DASH}`}
+			title={currentVersion?.version
+					? `LivOS ${currentVersion.version}`
+					: currentVersion?.name || `LivOS ${LOADING_DASH}`}
 			description={
 				<span className='flex items-center gap-1 pb-3'>
 					{state === 'at-latest' || state === 'checking' ? (

@@ -30,17 +30,29 @@ function safeFormatRelative(iso: string): string {
 
 export function UpdateNotification() {
 	const isMobile = useIsMobile()
-	const {state, latestVersion} = useSoftwareUpdate()
+	const {state, currentVersion, latestVersion} = useSoftwareUpdate()
 	const [dismissedSha, setDismissedSha] = useState<string | null>(() =>
 		typeof localStorage !== 'undefined' ? localStorage.getItem(DISMISSED_KEY) : null,
 	)
 	const [confirmOpen, setConfirmOpen] = useState(false)
 
+	// Phase 30 hot-patch round 8 defense-in-depth: even if checkUpdate's cached
+	// response says available=true, the deployed SHA (from system.version) and
+	// the latest GitHub HEAD SHA must actually differ for us to show the card.
+	// This guards against the brief window after an update where the
+	// cache-layer hasn't refetched yet but currentVersion.sha is already
+	// fresh (system.version is a separate query and refetches independently).
+	const shasDiffer =
+		!currentVersion?.sha ||
+		!latestVersion?.sha ||
+		currentVersion.sha !== latestVersion.sha
+
 	const visible =
 		!isMobile &&
 		state === 'update-available' &&
 		!!latestVersion?.sha &&
-		latestVersion.sha !== dismissedSha
+		latestVersion.sha !== dismissedSha &&
+		shasDiffer
 
 	const handleLater = () => {
 		if (!latestVersion?.sha) return

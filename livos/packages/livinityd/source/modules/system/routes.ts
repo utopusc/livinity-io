@@ -9,7 +9,7 @@ import stripAnsi from 'strip-ansi'
 
 import type {ProgressStatus} from '../apps/schema.js'
 import {performReset, getResetStatus} from './factory-reset.js'
-import {getUpdateStatus, performUpdate, getLatestRelease} from './update.js'
+import {getUpdateStatus, performUpdate, getLatestRelease, readDeployedSha, resolveVersionLabel} from './update.js'
 import {
 	getCpuTemperature,
 	getSystemDiskUsage,
@@ -37,9 +37,19 @@ export function setSystemStatus(status: SystemStatus) {
 export default router({
 	online: publicProcedure.query(() => true),
 	version: publicProcedure.query(async ({ctx}) => {
+		// Phase 30 hot-patch round 8: derive the current version label from the
+		// locally-deployed SHA via the same git-tag-aware resolver that
+		// `checkUpdate` uses. Falls back to the legacy package.json version when
+		// `.deployed-sha` is missing (first boot, never run update.sh).
+		const deployedSha = await readDeployedSha()
+		const versionLabel = deployedSha
+			? await resolveVersionLabel(deployedSha, ctx.livinityd)
+			: ctx.livinityd.versionName
 		return {
-			version: ctx.livinityd.version,
+			version: versionLabel,
 			name: ctx.livinityd.versionName,
+			sha: deployedSha,
+			shortSha: deployedSha ? deployedSha.slice(0, 7) : undefined,
 		}
 	}),
 	status: publicProcedure.query(() => systemStatus),

@@ -32,7 +32,11 @@ export function SoftwareUpdateDrawer() {
 					<FadeInImg src='/figma-exports/livinity-ios.png' className='h-[96px] w-[96px]' />
 					<div className='mb-4' />
 					<p className='text-12 -tracking-2 opacity-50'>{t('software-update.current-running')}</p>
-					<p className='text-15 -tracking-4'>{currentVersion?.name || `LivOS ${LOADING_DASH}`}</p>
+					<p className='text-15 -tracking-4'>
+						{currentVersion?.version
+							? `LivOS ${currentVersion.version}`
+							: currentVersion?.name || `LivOS ${LOADING_DASH}`}
+					</p>
 					{/* Make it look like a button, but non-interactive */}
 				</div>
 				<DrawerFooter>

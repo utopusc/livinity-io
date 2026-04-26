@@ -16,7 +16,19 @@ const DEPLOYED_SHA_PATH = '/opt/livos/.deployed-sha'
 // matches the latest master commit. If none match exactly, find the most recent
 // tag whose commit is an ancestor (best-effort) and append "+shortSha". If the
 // tags API fails or returns nothing, fall back to the bare shortSha.
-async function resolveVersionLabel(
+// Round 8: read the locally-deployed SHA so the UI's "current version" pill
+// can be derived from the same source-of-truth as the "latest version" check.
+// Returns null when the file doesn't exist yet (first boot, pre-update.sh-ever).
+export async function readDeployedSha(): Promise<string | null> {
+	try {
+		return (await fs.readFile(DEPLOYED_SHA_PATH, 'utf8')).trim()
+	} catch (err: any) {
+		if (err.code === 'ENOENT') return null
+		throw err
+	}
+}
+
+export async function resolveVersionLabel(
 	latestSha: string,
 	livinityd: Livinityd,
 ): Promise<string> {
