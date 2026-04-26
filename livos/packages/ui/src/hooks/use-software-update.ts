@@ -11,9 +11,17 @@ export function useSoftwareUpdate() {
 	const utils = trpcReact.useUtils()
 	const latestVersionQ = trpcReact.system.checkUpdate.useQuery(undefined, {
 		retry: false,
-		refetchOnReconnect: false,
-		refetchOnWindowFocus: false,
-		refetchInterval: MS_PER_HOUR, // Phase 30 UPD-04 — hourly background poll for new commits
+		// Phase 30 hot-patch round 7: aggressive freshness so the bottom-right
+		// UpdateNotification card disappears immediately after an update without
+		// requiring a hard refresh. Was: refetchOnWindowFocus=false, no staleTime.
+		// After: every mount + every window focus refetches; data is always stale.
+		// Cost: ~1 GitHub call per tab focus instead of ~1/hour. Quota fine
+		// (60/hr unauth, focus events are rare).
+		staleTime: 0,
+		refetchOnMount: 'always',
+		refetchOnReconnect: true,
+		refetchOnWindowFocus: true,
+		refetchInterval: MS_PER_HOUR, // hourly background poll while idle
 	})
 	const osVersionQ = trpcReact.system.version.useQuery()
 

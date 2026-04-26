@@ -8,13 +8,14 @@ export function useUpdate({onMutate, onSuccess}: {onMutate?: () => void; onSucce
 	const utils = trpcReact.useUtils()
 	const updateVersionMut = trpcReact.system.update.useMutation({
 		onMutate,
-		onSuccess: (didWork) => {
-			// Phase 30 hot-patch: invalidate checkUpdate so the bottom-right
-			// `<UpdateNotification />` and Settings sub-pages refetch the new
-			// `.deployed-sha` (written by update.sh near the end of its run) and
-			// hide themselves once available === false. Without this, the card
-			// would persist until the next 1-hour refetchInterval tick.
-			utils.system.checkUpdate.invalidate()
+		onSuccess: async (didWork) => {
+			// Phase 30 hot-patch round 1 + 7: force-refetch checkUpdate so the
+			// bottom-right `<UpdateNotification />` (and Settings sub-pages)
+			// pick up the new `.deployed-sha` immediately. invalidate alone
+			// only marks the cache stale — refetch ensures the stale data is
+			// replaced before the next render cycle. Without this, the card
+			// would persist until the user reloaded or focused the window.
+			await utils.system.checkUpdate.refetch()
 			onSuccess?.(didWork)
 		},
 	})
