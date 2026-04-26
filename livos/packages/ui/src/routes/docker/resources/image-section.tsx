@@ -36,6 +36,7 @@ import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/shadcn-components/ui/table'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
+import {Tooltip, TooltipContent, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
 
 import {copyDeepLinkToClipboard} from '../deep-link'
@@ -182,14 +183,14 @@ export function ImageSection() {
 				</div>
 			) : (
 				<div className='overflow-x-auto'>
-					<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
-						<Table>
+					<div className='rounded-xl border border-border-default bg-white overflow-hidden'>
+						<Table className='table-fixed w-full'>
 							<TableHeader>
 								<TableRow>
-									<TableHead className='pl-4'>Repository:Tag</TableHead>
-									<TableHead>Size</TableHead>
-									<TableHead>Created</TableHead>
-									<TableHead className='text-right pr-4'>Actions</TableHead>
+									<TableHead className='pl-4 w-[55%]'>Repository:Tag</TableHead>
+									<TableHead className='w-[15%]'>Size</TableHead>
+									<TableHead className='w-[15%]'>Created</TableHead>
+									<TableHead className='sticky right-0 z-10 bg-white text-right pr-4 w-[180px]'>Actions</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -198,26 +199,31 @@ export function ImageSection() {
 									const primaryTag = isNone ? '<none>:<none>' : image.repoTags[0]
 									const extraCount = image.repoTags.length - 1
 									const isExpanded = expandedImage === image.id
+									const fullTagList = image.repoTags.join(', ')
 									return (
 										<Fragment key={image.id}>
 											<TableRow
-												className='cursor-pointer'
+												className='group cursor-pointer'
 												onClick={() => setExpandedImage(isExpanded ? null : image.id)}
 											>
-												<TableCell className='pl-4'>
-													<div className='flex items-center gap-2'>
+												<TableCell className='pl-4 min-w-0'>
+													<div className='flex min-w-0 items-center gap-2'>
 														{isExpanded
 															? <IconChevronDown size={14} className='shrink-0 text-text-tertiary' />
 															: <IconChevronRight size={14} className='shrink-0 text-text-tertiary' />
 														}
-														<span
-															className={cn('truncate font-mono text-sm', isNone && 'italic text-text-tertiary')}
-															title={image.repoTags.join(', ')}
-														>
-															{primaryTag}
-														</span>
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<span
+																	className={cn('block min-w-0 flex-1 truncate font-mono text-sm', isNone && 'italic text-text-tertiary')}
+																>
+																	{primaryTag}
+																</span>
+															</TooltipTrigger>
+															<TooltipContent>{fullTagList}</TooltipContent>
+														</Tooltip>
 														{extraCount > 0 && (
-															<span className='inline-flex items-center rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600'>
+															<span className='shrink-0 inline-flex items-center rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600'>
 																+{extraCount} more
 															</span>
 														)}
@@ -229,7 +235,7 @@ export function ImageSection() {
 												<TableCell>
 													<span className='text-sm text-text-secondary'>{formatRelativeDate(image.created)}</span>
 												</TableCell>
-												<TableCell className='text-right pr-4'>
+												<TableCell className='sticky right-0 z-10 bg-white text-right pr-4 group-hover:bg-zinc-50'>
 													<div className='flex items-center justify-end gap-0.5' onClick={(e) => e.stopPropagation()}>
 														<ActionButton
 															icon={IconLink}
@@ -272,7 +278,7 @@ export function ImageSection() {
 											</TableRow>
 											{isExpanded && (
 												<TableRow>
-													<TableCell colSpan={4} className='p-0 border-t border-border-default bg-surface-1/30'>
+													<TableCell colSpan={4} className='p-0 border-t border-border-default bg-zinc-50'>
 														<Tabs
 															value={getActiveImageTab(image.id)}
 															onValueChange={(v) => setActiveImageTab(image.id, v as 'history' | 'scan')}
