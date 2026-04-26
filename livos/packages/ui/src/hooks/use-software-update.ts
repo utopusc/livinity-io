@@ -2,6 +2,7 @@ import {useCallback} from 'react'
 
 import {toast} from '@/components/ui/toast'
 import {trpcReact} from '@/trpc/trpc'
+import {MS_PER_HOUR} from '@/utils/date-time'
 import {t} from '@/utils/i18n'
 
 export type UpdateState = 'initial' | 'checking' | 'at-latest' | 'update-available' | 'upgrading'
@@ -12,6 +13,7 @@ export function useSoftwareUpdate() {
 		retry: false,
 		refetchOnReconnect: false,
 		refetchOnWindowFocus: false,
+		refetchInterval: MS_PER_HOUR, // Phase 30 UPD-04 — hourly background poll for new commits
 	})
 	const osVersionQ = trpcReact.system.version.useQuery()
 
