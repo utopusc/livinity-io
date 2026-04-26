@@ -16,5 +16,10 @@ export function useEngineInfo() {
 		isLoading: engineQuery.isLoading,
 		isError: engineQuery.isError,
 		error: engineQuery.error,
+		// Round 2 hot-patch: StatusFooter "Live" indicator uses dataUpdatedAt
+		// to render a truthful "fresh" badge instead of the broken WS-readyState
+		// poll (Docker UI mostly routes via httpOnly tRPC paths, so wsClient
+		// state is meaningless for the user-visible "is data flowing" question).
+		dataUpdatedAt: engineQuery.dataUpdatedAt,
 	}
 }

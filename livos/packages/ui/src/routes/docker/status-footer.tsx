@@ -11,7 +11,11 @@
 //   - Uptime                             → trpcReact.system.uptime
 //   - Socket type                        → useEnvironments → current env.type
 //   - Current time                       → useNow() (1s tick)
-//   - Live indicator                     → useTrpcConnection() (1s WS poll)
+//   - Live indicator                     → engineInfo.dataUpdatedAt freshness
+//                                          (Round 2: replaced broken WS poll;
+//                                          docker.* mutations are httpOnly so
+//                                          wsClient.readyState is meaningless
+//                                          for "is data flowing" UX intent).
 //
 // Visual consistency requirement (per Round 2 task spec): mirrors StatusBar's
 // border-zinc-200 + bg-white/95 backdrop classes — only border-t / bottom-0
@@ -43,10 +47,14 @@ import {
 	type SocketKind,
 } from './format'
 import {useNow} from './use-now'
-import {useTrpcConnection} from './use-trpc-connection'
+
+// Freshness window: engineInfo polls quietly via tRPC's stale-while-revalidate.
+// staleTime is 60s in useEngineInfo, so allowing 90s here gives one cycle of
+// margin without flapping when the network blips for a single poll.
+const FRESH_MS = 90_000
 
 export function StatusFooter() {
-	const {engineInfo} = useEngineInfo()
+	const {engineInfo, dataUpdatedAt} = useEngineInfo()
 	const {data: environments} = useEnvironments()
 	const selectedId = useSelectedEnvironmentId()
 	const current = environments?.find((e) => e.id === selectedId)
@@ -56,7 +64,9 @@ export function StatusFooter() {
 		retry: false,
 	})
 	const now = useNow()
-	const {connected} = useTrpcConnection()
+	// Honest "live" signal: did our most recent engineInfo response arrive
+	// within the freshness window? Re-evaluated each useNow() tick (1s).
+	const connected = dataUpdatedAt > 0 && now.getTime() - dataUpdatedAt < FRESH_MS
 
 	const versionLabel = engineInfo ? `Docker ${engineInfo.version}` : 'Docker —'
 	const socketLabel = current ? formatSocketType(current.type as SocketKind) : 'Socket'
@@ -110,19 +120,19 @@ function LivePill({connected}: {connected: boolean}) {
 				'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
 				connected
 					? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-					: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400',
+					: 'border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
 			)}
 			aria-live='polite'
-			aria-label={connected ? 'WebSocket connected' : 'WebSocket disconnected'}
+			aria-label={connected ? 'Engine info up-to-date' : 'Engine info stale (no recent response)'}
 		>
 			<IconCircleFilled
 				size={8}
 				className={cn(
-					connected ? 'text-emerald-500' : 'text-red-500',
+					connected ? 'text-emerald-500' : 'text-zinc-400',
 					connected && 'animate-pulse',
 				)}
 			/>
-			<span className='font-medium'>{connected ? 'Live' : 'Offline'}</span>
+			<span className='font-medium'>{connected ? 'Live' : 'Stale'}</span>
 		</span>
 	)
 }
