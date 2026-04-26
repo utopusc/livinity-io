@@ -1,7 +1,7 @@
 // Phase 28 Plan 28-02 — ActivityRow (DOC-14).
 //
 // Single-row presentation for one ActivityEvent. Layout left-to-right:
-//   [4px severity stripe] [source icon] [title + body (truncated)] [subtype badge] [relative time]
+//   [4px severity stripe] [source icon] [title + body (wrapped via break-all)] [subtype badge] [relative time]
 //
 // The whole row is a <button> for keyboard a11y. Clicking dispatches the
 // onClick callback which the parent's click-through router consumes (sets
@@ -66,11 +66,11 @@ export function ActivityRow({event, onClick}: ActivityRowProps) {
 		>
 			<Icon size={16} className='shrink-0 text-zinc-500 dark:text-zinc-400' />
 			<div className='flex min-w-0 flex-1 flex-col'>
-				<span className='truncate text-sm font-medium text-zinc-800 dark:text-zinc-100'>
+				<span className='break-all text-sm font-medium text-zinc-800 dark:text-zinc-100'>
 					{event.title}
 				</span>
 				{event.body ? (
-					<span className='truncate text-xs text-zinc-500 dark:text-zinc-400'>{event.body}</span>
+					<span className='break-all text-xs text-zinc-500 dark:text-zinc-400'>{event.body}</span>
 				) : null}
 			</div>
 			<span className='shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'>
