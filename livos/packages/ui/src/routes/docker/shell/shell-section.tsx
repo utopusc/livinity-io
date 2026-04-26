@@ -106,8 +106,8 @@ export function ShellSection() {
 				<div className='relative min-h-0 flex-1 bg-neutral-950'>
 					{tabs.length === 0 ? (
 						<div className='flex h-full flex-col items-center justify-center gap-2 text-center'>
-							<IconTerminal2 size={32} className='text-text-tertiary' />
-							<p className='text-sm text-text-secondary'>
+							<IconTerminal2 size={32} className='text-white' />
+							<p className='text-sm text-white'>
 								Click a container in the sidebar to open a shell session.
 							</p>
 						</div>
