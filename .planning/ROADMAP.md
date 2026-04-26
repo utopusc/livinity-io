@@ -176,7 +176,7 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
   3. After running the patched `update.sh` on Mini PC and Server4 with NO source changes (no-op deploy), exit code is 0, livinityd boots within 30s, and `journalctl -u livos -n 50` shows zero "Cannot find module" / "is not a function" symptoms.
   4. The original root cause (cwd drift / pnpm lock mismatch / env var loss — to be identified during the phase) is patched at its source: re-running update.sh 3× in a row from a fresh repo clone produces 3× successful deploys, no BUILD-01 guard trips required to "save" the run.
 **Plans**: 3 plans
-- [ ] 31-01-PLAN.md — Root-cause investigation → 31-ROOT-CAUSE.md (BUILD-03)
+- [x] 31-01-PLAN.md — Root-cause investigation → 31-ROOT-CAUSE.md (BUILD-03) ✓ 2026-04-26
 - [ ] 31-02-PLAN.md — Author idempotent patch script (BUILD-01 verify_build + BUILD-02 multi-dir dist-copy loop + BUILD-03 root-cause fix)
 - [ ] 31-03-PLAN.md — SSH-apply patch to Mini PC + Server4, verify livinityd boots clean (HUMAN-VERIFY)
 **Patch artifact**: `.planning/phases/31-update-sh-build-pipeline-integrity/artifacts/phase31-update-sh-patch.sh` (applied via SSH to both Mini PC and Server4 — Phase 30 precedent)
@@ -240,7 +240,7 @@ v29.0 phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 31. update.sh Build Pipeline Integrity | v29.0 | 0/3 | Planned | — |
+| 31. update.sh Build Pipeline Integrity | v29.0 | 1/3 | In progress | — |
 | 32. Pre-Update Sanity & Auto-Rollback | v29.0 | 0/0 | Not started | — |
 | 33. Update Observability Surface | v29.0 | 0/0 | Not started | — |
 | 34. Update UX Hardening | v29.0 | 0/0 | Not started | — |

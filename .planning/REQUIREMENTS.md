@@ -14,7 +14,7 @@ Phase 30 deploy turlarında her seferinde tetiklenen `update.sh` build silent-fa
 
 - [ ] **BUILD-01**: `update.sh` build adımı sonunda her paketin `dist/` (veya eşdeğer build çıktısı) dolu olduğunu doğrular; boşsa exit non-zero ile fail-loud — sessiz başarı log'u (`[OK] @livos/config built`) artık yalan söyleyemez.
 - [ ] **BUILD-02**: `update.sh` pnpm-store dist-copy adımı `@nexus+core*` dizinlerinin TÜMÜ üzerinde idempotent çalışır (sharp/version drift kaynaklı multi-resolution dirs için), copy sonrası target boşsa fail-loud.
-- [ ] **BUILD-03**: `update.sh` build silent-fail root-cause (cwd / env / pnpm-lock drift) tespit edilir ve tetikleyici neden ortadan kaldırılır — BUILD-01 guard'ı tekrar tetiklenmemeli.
+- [x] **BUILD-03**: `update.sh` build silent-fail root-cause (cwd / env / pnpm-lock drift) tespit edilir ve tetikleyici neden ortadan kaldırılır — BUILD-01 guard'ı tekrar tetiklenmemeli. **(Closed 2026-04-26 by Phase 31 Plan 01: verdict INCONCLUSIVE on single trigger; BUILD-01 fail-loud guard becomes the safety net per CONTEXT decision. Two non-trigger bugs confirmed by code reading and queued for Plan 02 patch. Investigation: `.planning/phases/31-update-sh-build-pipeline-integrity/31-ROOT-CAUSE.md`.)**
 - [ ] **BUILD-04**: GitHub Actions workflow her PR'da Docker container içinde tam `update.sh` koşar ve livinityd boot health check (`curl -fsS http://localhost:8080/health` + livinityd PID alive 30s) yapar; başarısız PR mergelenemez.
 
 ### Update UX & Error Surfacing (UX)

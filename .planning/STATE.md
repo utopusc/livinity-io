@@ -2,18 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.0
 milestone_name: Deploy & Update Stability
-milestone_status: planning
-current_plan: null
-status: roadmap-defined
-stopped_at: "v29.0 ROADMAP.md created 2026-04-26. 5 phases (31-35) covering 13/13 requirements. Phase 31 (BUILD-01..03) is foundation; Phase 32 layers REL-01/02 rollback safety; Phase 33 (OBS-01..03 + UX-04) builds observability + sidebar badge; Phase 34 (UX-01..03) hardens mutation error surface; Phase 35 (BUILD-04) adds GitHub Actions update.sh smoke test. Next: /gsd-plan-phase 31."
-last_updated: "2026-04-26T05:00:00.000Z"
-last_activity: 2026-04-26
+status: Phase 31 in progress; Plan 31-01 (root-cause investigation) complete; awaiting Plan 31-02 (patch script authoring)
+stopped_at: "Completed 31-01-PLAN.md — root-cause investigation. 1 atomic commit. 31-ROOT-CAUSE.md (168L) authored with 6-row hypothesis matrix verdict (1 confirmed bug + 4 ruled-out + 2 inconclusive); 7-item remediation list IS the spec for Plan 02 patch script. Two confirmed bugs by code reading: (1) `find ... | head -1` pnpm-store dist-copy single-target (BACKLOG 999.5b); (2) worker/mcp-server `2>/dev/null && cd ... || cd ...` exit-code masking. Verdict: BUILD-03 root-cause INCONCLUSIVE — BUILD-01 fail-loud guard becomes the safety net per CONTEXT decision. Inter-host drift documented (Mini PC has memory build + UI public sync that Server4 lacks)."
+last_updated: "2026-04-26T14:25:00.000Z"
+last_activity: 2026-04-26 — Phase 31 Plan 01 (root-cause) complete; BUILD-03 satisfied (verdict + remediation spec)
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -28,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 ## Current Position
 
-Phase: 31 (not started — planning pending)
-Plan: —
-Status: Roadmap defined; awaiting `/gsd-plan-phase 31`
-Last activity: 2026-04-26 — v29.0 ROADMAP.md written, REQUIREMENTS.md traceability filled
+Phase: 31 (in progress)
+Plan: 31-01 complete; 31-02 next
+Status: Plan 31-01 (root-cause investigation) complete — BUILD-03 satisfied with inconclusive-trigger / sufficient-symptom-elimination verdict. Plan 31-02 (patch script) unblocked.
+Last activity: 2026-04-26 — Phase 31 Plan 01 complete (root-cause + remediation spec for Plan 02)
 
-**Progress:** [          ] 0% — 0/5 phases complete
+**Progress:** [#         ] 13% — 0/5 phases complete (1/3 Phase 31 plans done; 2/3 if counting plans 01+02 from CURRENT phase plans)
 
 ## v29.0 Phase Structure
 
@@ -101,8 +99,18 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 29 P02 | 16 min | 3 tasks | 27 files |
 | Phase 30 P01 | 35 min | 6 tasks (5 commits, 1× TDD) | 3 created + 4 modified + 2 remote-patched | 2026-04-26 |
 | Phase 30 P02 | 9 min | 7 tasks | 9 files |
+| Phase 31 P01 | 25 min | 1 task (investigation only) | 2 created (31-ROOT-CAUSE.md + 31-01-SUMMARY.md) | 2026-04-26 |
 
 ## Accumulated Context
+
+### Plan 31-01 Decisions (2026-04-26)
+
+- BUILD-03 root-cause hunt verdict: **inconclusive on trigger, sufficient on symptom-elimination**. No single deterministic trigger could be pinned by code reading alone (would require live repro on a fresh clone — out of scope for a non-mutating investigation). Per Phase 31 CONTEXT decision, BUILD-01's fail-loud guard becomes the safety net. If guard ever fires post-Phase-31 deploy, OBS-01's update-history (Phase 33) will pin the contributing factor. Pattern reusable for any future infra root-cause hunt where live repro isn't safe — verdict gating on "what code-reading can prove" is honest and ship-able.
+- Inter-host drift between Mini PC and Server4 update.sh confirmed: Mini PC is one revision newer (memory build + UI public-asset rsync + extra TS-config copies). Plan 31-02's patch script must be idempotent against BOTH versions and `grep`-guard the memory-build replacement (since Server4 lacks that anchor). The patch should also ADD the missing memory-build block to Server4 as remediation item #6 (incidental finding, not BACKLOG-tracked but trivial-cleanup-by-extension).
+- Two non-trigger bugs flagged for Plan 02 remediation alongside BUILD-01/02: (a) worker/mcp-server `2>/dev/null && cd ... || cd ...` exit-code masking on lines 177/180 — confirmed bug by code reading even though not the BACKLOG 999.5 trigger; (b) memory-build missing on Server4. Justification: both are confirmed bugs with no extra anchor work; deferring would mean a separate phase for trivial cleanup. Documented in remediation items #5 and #6.
+- `pnpm install --frozen-lockfile 2>/dev/null || pnpm install` silent fallback (line 131) and the race-condition risk (H5) are flagged as **watch-items** — NOT patched in Phase 31. H4/H5 are inconclusive; rewriting them risks regression with no clear win. Per remediation note #7 of 31-ROOT-CAUSE.md: revisit in a later phase IF BUILD-01 guard fires post-deploy AND OBS-01 logs correlate with these patterns. Carries forward as a small focused investigation if/when triggered.
+- Plan 31-02 anchor strategy: every `ok "<pkg> built"` line in update.sh has a stable text marker — Plan 02 patch script can `grep -n` for each anchor and `awk`-splice a `verify_build "<dir>" "<pkg>"` call ahead of it (Phase 30 precedent). Idempotency check: `grep -q 'verify_build()' "$UPDATE_SH"` short-circuit. The dist-copy loop replaces the entire `local_pnpm_nexus=$(find ... | head -1) ... fi` block (lines 183-187) — anchor is the unique `local_pnpm_nexus=` variable name.
+- Investigation-as-spec pattern: 31-ROOT-CAUSE.md's `## Recommended Remediation For Plan 02` section IS the literal input contract for the next plan's patch script. No re-investigation needed by Plan 02 — the planner can treat the 7-item list as the bash to write. Reusable for any future "investigation phase + remediation phase" split where the investigation produces a code-shaped spec.
 
 ### Plan 30-02 Decisions (2026-04-26)
 
@@ -493,4 +501,4 @@ Last session: 2026-04-26T09:18:54.334Z
 Stopped at: Completed 30-02-PLAN.md — Auto-Update frontend (UPD-04). 6 task commits. UpdateNotification component (99L) + smoke test + 5 shape consumers updated + hourly poll + router mount. Phase 30 complete pending manual browser verification (Task 7 deferred per checkpoint:human-verify protocol). Plan 30-02 grep audit + tsc both clean across 7 touched files.
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
-**Planned Phase:** 30 (Auto-Update Notification) — 2 plans — Plan 1/2 complete
+**Planned Phase:** 31 (update.sh Build Pipeline Integrity) — 3 plans — 2026-04-26T13:50:05.333Z
