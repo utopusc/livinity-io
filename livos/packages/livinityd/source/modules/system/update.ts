@@ -11,6 +11,17 @@ const GITHUB_COMMITS_URL = 'https://api.github.com/repos/utopusc/livinity-io/com
 const GITHUB_TAGS_URL = 'https://api.github.com/repos/utopusc/livinity-io/tags?per_page=20'
 const DEPLOYED_SHA_PATH = '/opt/livos/.deployed-sha'
 
+// Phase 30 hot-patch round 9: in-memory cache to dampen GitHub rate-limit
+// pressure (60 req/hr unauth per IP). Without these caches the UI page-load
+// burst of {checkUpdate query + version query + windowFocus refetch + manual
+// "Check for updates" click} can issue 4-6 requests in seconds and exhaust
+// the quota. With caches, repeated calls reuse the same response until TTL.
+const COMMITS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — checkUpdate hot path
+const TAGS_CACHE_TTL_MS = 60 * 60 * 1000   // 1 hour — tags rarely change
+
+let commitsCache: {at: number; data: any} | null = null
+let tagsCache: {at: number; data: Array<{name: string; commit: {sha: string}}>} | null = null
+
 // Phase 30 hot-patch round 5: resolve a human-friendly version label.
 // Strategy: pull the most recent tags from GitHub, find the tag whose commit SHA
 // matches the latest master commit. If none match exactly, find the most recent
@@ -33,21 +44,31 @@ export async function resolveVersionLabel(
 	livinityd: Livinityd,
 ): Promise<string> {
 	try {
-		const response = await fetch(GITHUB_TAGS_URL, {
-			headers: {
-				'User-Agent': `LivOS-${livinityd.version}`,
-				Accept: 'application/vnd.github+json',
-			},
-		})
-		if (!response.ok) return latestSha.slice(0, 7)
-		const tags = (await response.json()) as Array<{
-			name: string
-			commit: {sha: string}
-		}>
+		// Round 9: serve from in-memory cache when fresh — tags only change
+		// when a new release is published, so 1-hour TTL is generous.
+		let tags: Array<{name: string; commit: {sha: string}}> | null = null
+		if (tagsCache && Date.now() - tagsCache.at < TAGS_CACHE_TTL_MS) {
+			tags = tagsCache.data
+		} else {
+			const response = await fetch(GITHUB_TAGS_URL, {
+				headers: {
+					'User-Agent': `LivOS-${livinityd.version}`,
+					Accept: 'application/vnd.github+json',
+				},
+			})
+			if (response.ok) {
+				tags = (await response.json()) as Array<{name: string; commit: {sha: string}}>
+				tagsCache = {at: Date.now(), data: tags}
+			} else if (tagsCache) {
+				// Round 9: rate-limit / network failure → reuse last good response
+				// rather than degrading to bare shortSha. Better stale than blank.
+				tags = tagsCache.data
+			}
+		}
+		if (!tags) return latestSha.slice(0, 7)
+
 		const exact = tags.find((t) => t.commit.sha === latestSha)
 		if (exact) return exact.name.startsWith('v') ? exact.name : `v${exact.name}`
-		// No exact match: prefix the most recent tag with "+shortSha" so users still
-		// see "what's the family this commit belongs to" rather than just a hash.
 		const newest = tags[0]
 		if (newest) {
 			const tagLabel = newest.name.startsWith('v') ? newest.name : `v${newest.name}`
@@ -98,24 +119,37 @@ export async function getLatestRelease(livinityd: Livinityd) {
 		if (err.code !== 'ENOENT') throw err
 	}
 
-	// 2. Fetch latest commit on master. GitHub requires a User-Agent — without
-	// it the request returns 403 (Pitfall #7 / docs.github.com REST overview).
-	const response = await fetch(GITHUB_COMMITS_URL, {
-		headers: {
-			'User-Agent': `LivOS-${livinityd.version}`,
-			Accept: 'application/vnd.github+json',
-		},
-	})
-	if (!response.ok) {
-		throw new Error(`GitHub API returned ${response.status}: ${await response.text()}`)
-	}
-	const data = (await response.json()) as {
+	// 2. Fetch latest commit on master. Round 9: in-memory cache (5 min TTL)
+	// dampens GitHub rate-limit pressure when the UI bursts requests on
+	// page load + window focus + manual check.
+	type CommitData = {
 		sha: string
-		commit: {
-			message: string
-			author: {name: string; email: string; date: string}
+		commit: {message: string; author: {name: string; email: string; date: string}}
+	}
+	let data: CommitData | null = null
+	if (commitsCache && Date.now() - commitsCache.at < COMMITS_CACHE_TTL_MS) {
+		data = commitsCache.data
+	} else {
+		const response = await fetch(GITHUB_COMMITS_URL, {
+			headers: {
+				'User-Agent': `LivOS-${livinityd.version}`,
+				Accept: 'application/vnd.github+json',
+			},
+		})
+		if (response.ok) {
+			data = (await response.json()) as CommitData
+			commitsCache = {at: Date.now(), data}
+		} else if (commitsCache) {
+			// Round 9: rate-limit / 5xx → serve stale cache rather than fail
+			data = commitsCache.data
+			livinityd.logger.log(
+				`GitHub API returned ${response.status} on checkUpdate; serving cached response`,
+			)
+		} else {
+			throw new Error(`GitHub API returned ${response.status}: ${await response.text()}`)
 		}
 	}
+	if (!data) throw new Error('GitHub API returned no data and no cache available')
 
 	// Round 5: human-friendly version label (e.g. "v28.0.1" or "v28.0.1+30bacc28").
 	const version = await resolveVersionLabel(data.sha, livinityd)
