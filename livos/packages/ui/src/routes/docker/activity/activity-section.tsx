@@ -102,7 +102,7 @@ export function ActivitySection() {
 	)
 
 	return (
-		<div className='flex h-full flex-col'>
+		<div className='flex h-full min-h-0 flex-col'>
 			{/* Sticky header: title + counts + filter chips */}
 			<div className='shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950'>
 				<div className='flex items-center justify-between px-4 pb-1 pt-3'>
