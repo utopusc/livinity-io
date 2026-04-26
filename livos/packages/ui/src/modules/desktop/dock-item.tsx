@@ -209,8 +209,11 @@ export function DockItem({
 
 				{onOpenWindow ? (
 					<button
+						type='button'
 						className='absolute inset-0 outline-none rounded-xl'
-						onClick={() => {
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
 							const rect = ref.current?.getBoundingClientRect()
 							const originRect = rect
 								? {x: rect.x, y: rect.y, width: rect.width, height: rect.height}
