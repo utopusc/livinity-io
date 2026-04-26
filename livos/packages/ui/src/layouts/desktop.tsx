@@ -4,9 +4,7 @@ import {useCmdkOpen} from '@/components/cmdk'
 import {AppSettingsDialog} from '@/modules/app-store/app-page/app-settings-dialog'
 import {DefaultCredentialsDialog} from '@/modules/app-store/app-page/default-credentials-dialog'
 import {DesktopContent} from '@/modules/desktop/desktop-content'
-import {DesktopWifiButtonConnected} from '@/modules/wifi/desktop-wifi-button-connected'
 import {useApps} from '@/providers/apps'
-import {tw} from '@/utils/tw'
 
 export function Desktop() {
 	const {isLoading} = useApps()
@@ -38,12 +36,9 @@ function DesktopPage() {
 				}
 			>
 				<DesktopContent onSearchClick={() => setOpen(true)} />
-				<DesktopWifiButtonConnected className={topRightPositionerClass} />
 			</div>
 			<DefaultCredentialsDialog />
 			<AppSettingsDialog />
 		</>
 	)
 }
-
-const topRightPositionerClass = tw`absolute right-5 top-5 z-10`

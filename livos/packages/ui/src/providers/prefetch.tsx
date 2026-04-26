@@ -34,8 +34,6 @@ export function Prefetcher() {
 			utils.system.cpuTemperature,
 
 			// Settings switches
-			utils.wifi.supported,
-			utils.wifi.connected,
 			utils.user.is2faEnabled,
 			utils.apps.getTorEnabled,
 

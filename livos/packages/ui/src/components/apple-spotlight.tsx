@@ -464,12 +464,6 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				action: () => navigate('settings/account/change-password'),
 			},
 			{
-				label: t('wifi'),
-				description: 'Network settings',
-				icon: <TbSettings className='text-neutral-500' />,
-				action: () => navigate('/settings/wifi'),
-			},
-			{
 				label: t('language'),
 				description: 'Language preferences',
 				icon: <TbSettings className='text-neutral-500' />,
