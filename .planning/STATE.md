@@ -31,7 +31,7 @@ Phase: 29
 Plan: 2 of 2 complete
 Current Plan: Not started
 Status: Milestone complete
-Last activity: 2026-04-26 - Completed quick task 260425-v1s: v28.0 hot-patch round 2 (10 UI/structural fixes, server-control 4793→1199 lines, deployed)
+Last activity: 2026-04-26 - Completed quick task 260425-x6q: v28.0 hot-patch round 3 (window-only nav + Wi-Fi UI removed + activity wrap + dock cleanup, deployed)
 
 **Progress:** [██████████] 100%
 
@@ -428,6 +428,7 @@ None
 |---|-------------|------|--------|-----------|
 | 260425-sfg | v28.0 hot-patch: tailwind sync + bg-surface-base + actions dropdown + row click + memory build | 2026-04-26 | 17e85ddd | [260425-sfg-v28-0-hot-patch-bundle-tailwind-sync-bg-](./quick/260425-sfg-v28-0-hot-patch-bundle-tailwind-sync-bg-/) |
 | 260425-v1s | v28.0 hot-patch round 2: activity overflow + docker logo + server-mgmt strip + status bar reorg + 6 UX fixes | 2026-04-26 | 76b1ec06 | [260425-v1s-v28-0-hot-patch-round-2-activity-overflo](./quick/260425-v1s-v28-0-hot-patch-round-2-activity-overflo/) |
+| 260425-x6q | v28.0 hot-patch round 3: dock click window-only + Wi-Fi UI strip + activity wrap + dock cleanup | 2026-04-26 | 620bf072 | [260425-x6q-v28-0-hot-patch-round-3-window-only-nav-](./quick/260425-x6q-v28-0-hot-patch-round-3-window-only-nav-/) |
 
 ## Deferred Items
 
