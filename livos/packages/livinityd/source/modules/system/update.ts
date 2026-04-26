@@ -146,16 +146,40 @@ export async function getLatestRelease(livinityd: Livinityd) {
 				`GitHub API returned ${response.status} on checkUpdate; serving cached response`,
 			)
 		} else {
-			throw new Error(`GitHub API returned ${response.status}: ${await response.text()}`)
+			// Round 10: cold-start cache miss + GitHub fail → graceful fallback.
+			// Return empty/safe defaults instead of throwing. The UI will compute
+			// available=false (no SHA to compare), avoiding the "Failed to check
+			// for updates" toast spam during rate-limit windows. Cache populates
+			// on the next successful call once GitHub quota resets.
+			livinityd.logger.log(
+				`GitHub API ${response.status} on cold checkUpdate; returning empty stub (will retry on next call)`,
+			)
+			data = {
+				sha: '',
+				commit: {
+					message: '',
+					author: {name: '', email: '', date: new Date().toISOString()},
+				},
+			}
 		}
 	}
-	if (!data) throw new Error('GitHub API returned no data and no cache available')
+	if (!data) {
+		// Should be unreachable now, but keep the safety net.
+		data = {
+			sha: '',
+			commit: {message: '', author: {name: '', email: '', date: new Date().toISOString()}},
+		}
+	}
 
 	// Round 5: human-friendly version label (e.g. "v28.0.1" or "v28.0.1+30bacc28").
-	const version = await resolveVersionLabel(data.sha, livinityd)
+	// Round 10: skip resolveVersionLabel entirely if data.sha is empty (cold-start
+	// fallback) to avoid burning a tags-API call when commits API already failed.
+	const version = data.sha ? await resolveVersionLabel(data.sha, livinityd) : ''
 
 	return {
-		available: data.sha !== localSha,
+		// Round 10: empty SHA (cold-start fallback) → available=false so the UI
+		// quietly shows "On latest" instead of misfiring an update prompt.
+		available: data.sha !== '' && data.sha !== localSha,
 		sha: data.sha,
 		shortSha: data.sha.slice(0, 7),
 		version,
