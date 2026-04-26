@@ -88,7 +88,7 @@ export function UpdateNotification() {
 						</div>
 						<div className='flex flex-col gap-1'>
 							<p className='text-sm text-zinc-600'>
-								<span className='font-mono'>{latestVersion.shortSha}</span>
+								<span className='font-mono'>{(latestVersion.version ?? latestVersion.shortSha)}</span>
 								{' — '}
 								{latestVersion.message.split('\n')[0].slice(0, 80)}
 							</p>
@@ -119,7 +119,7 @@ export function UpdateNotification() {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{latestVersion?.shortSha ? `Update to ${latestVersion.shortSha}?` : 'Install update?'}
+							{latestVersion?.shortSha ? `Update to ${(latestVersion.version ?? latestVersion.shortSha)}?` : 'Install update?'}
 						</AlertDialogTitle>
 						<AlertDialogDescription className='space-y-3'>
 							{latestVersion?.message && (

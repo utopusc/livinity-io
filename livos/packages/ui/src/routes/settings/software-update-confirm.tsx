@@ -21,9 +21,11 @@ export function SoftwareUpdateConfirmDialog() {
 			<DialogContent className='px-0'>
 				<DialogHeader className='px-4 sm:px-8'>
 					<DialogTitle>
-						{latestVersionQ.data?.shortSha
-							? `Update to ${latestVersionQ.data.shortSha}`
-							: 'Software Update'}
+						{latestVersionQ.data?.version
+							? `Update to ${latestVersionQ.data.version}`
+							: latestVersionQ.data?.shortSha
+								? `Update to ${latestVersionQ.data.shortSha}`
+								: 'Software Update'}
 					</DialogTitle>
 				</DialogHeader>
 				<ScrollArea className='flex max-h-[500px] flex-col gap-5 px-4 sm:px-8'>
