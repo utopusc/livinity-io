@@ -47,8 +47,6 @@ const StartMigrationDrawerOrDialog = React.lazy(() =>
 		default: m.StartMigrationDrawerOrDialog,
 	})),
 )
-const Wifi = React.lazy(() => import('@/routes/settings/wifi'))
-const WifiUnsupported = React.lazy(() => import('@/routes/settings/wifi-unsupported'))
 const AccountDrawer = React.lazy(() =>
 	import('@/routes/settings/mobile/account').then((m) => ({default: m.AccountDrawer})),
 )
@@ -127,8 +125,6 @@ export function Settings() {
 						{/* Fall-through `/account` to here. If going to account, always show drawer, even if on desktop */}
 						{<Route path='/account/:accountTab' Component={AccountDrawer} />}
 						{isMobile && <Route path='/wallpaper' Component={WallpaperDrawer} />}
-						<Route path='/wifi' Component={Wifi} />
-						<Route path='/wifi-unsupported' Component={WifiUnsupported} />
 						{/* Backup: mobile drawer (/backups) opens first on mobile to give same options as desktop */}
 						{isMobile && <Route path='/backups' Component={BackupsMobileDrawer} />}
 						<Route path='/backups/*' Component={BackupsRestoreDialog} />
