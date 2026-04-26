@@ -93,6 +93,57 @@
 
 ---
 
+## Milestone: v28.0 — Docker Management UI (Dockhand-Style)
+
+**Shipped:** 2026-04-26
+**Phases:** 6 (24-29) | **Plans:** 12 | **Tasks:** ~33
+
+### What Was Built
+
+- Phase 24: LIVINITY_docker app shell — 12-entry sidebar + 48px StatusBar with 8 stat pills + theme toggle (light/dark/system, scoped class-based dark mode); replaces LIVINITY_server-control everywhere
+- Phase 25: Multi-environment Dashboard — EnvCardGrid + TopCpuPanel (top-10 cross-env, bounded fanout) + TagFilterChips with localStorage persist; environments.tags TEXT[] column
+- Phase 26: Containers/Images/Volumes/Networks each as own section with search + detail panels; useDockerResource zustand store with 4 slots (programmatic deep-link DOC-20 partial)
+- Phase 27: Stacks section (preserves YAML/Git/AI deploy tabs from v27) + Schedules section with volume backup pre-fill seam; FINAL CLEANUP — deleted 4815-line legacy server-control + 792-line legacy scheduler-section + git-mv'd 7 components to permanent homes
+- Phase 28: NEW surfaces — cross-container Logs multiplexed WS aggregator (color stripe + name prefix + grep + severity + live-tail + 5000-line ring buffer) + Activity Timeline unifying 3 sources
+- Phase 29: NEW surfaces — multi-tab xterm Shell + Registry credentials AES-256-GCM vault + Docker Hub/private search + Docker Settings (Environments + Appearance + Palette tabs) + cmd+k command palette + Copy Deep Link buttons
+
+### What Worked
+
+- **Backend reuse hypothesis held.** v28.0 was 95% UI restructure. Net-new backend = 2 schema additions (environments.tags + registry_credentials) + 2 envId WS extensions (logs-socket + exec-socket — same pattern across phases) + 4 thin tRPC routes (registry CRUD + image search). Zero new modules.
+- **Pattern reuse cascade.** Phase 28's envId-extension pattern for docker-logs-socket cleanly reused in Phase 29 for docker-exec-socket. Phase 21's git-credentials AES-256-GCM module lifted+shifted verbatim to registry-credentials. Phase 22's EnvironmentsSection cross-imported into Docker Settings. Phase 24's sidebar pattern reused as Logs sidebar (Phase 28) and Shell sidebar (Phase 29).
+- **resource-store extension model.** Phase 26 declared 4 slots up-front (selectedContainer/Image/Volume/Network); Phase 27 added 5th (selectedStack) without restructuring. cmd+k palette (Phase 29) consumes all 5 slots through a single setSelectedX/setSection convention.
+- **consume-and-clear cross-section seam** (Phase 26-02 → Phase 27-02). Volumes section sets selectedVolume + flips to Schedules section; AddBackupDialog reads useSelectedVolume() on mount and immediately calls setSelectedVolume(null). Single-shot navigation without persistent coupling.
+- **window-app pattern correctly identified at planning time.** Phase 24 planner discovered that Server Control isn't a route (per router.tsx:47-48 explicit comment); pivoted to LIVINITY_docker app id pattern. Saved Phase 26+ from URL-routing rework.
+- **Atomic-commit + 4-grep gate cleanup discipline.** Plan 27-02 deleted 5607 lines (server-control + scheduler-section) across 4 sequential commits with build-green between each, plus a 4-grep gate to verify zero stale references survived.
+
+### What Was Inefficient
+
+- **MILESTONES.md "One-liner:" placeholder leak again.** Same issue as v27.0 — milestone-complete CLI's one-liner extraction missed 5+ SUMMARY files. Hand-cleaned post-archive. Future-fix: improve `milestone complete` extractor to fall back to objective field when one_liner is missing.
+- **STATE.md repository corruption mid-phase.** During Phase 25 dispatch, .git/refs/heads/master got nullified somehow (all-zero SHA). Required manual ref recovery from reflog. Likely a parallel-write race condition. No data lost (reflog intact) but 5 minutes of debugging.
+- **No formal interactive UI testing inside autonomous loop.** All 45 HUMAN-UAT items are deferred to deployment-time eyeball — that's correct for a window-app (can't run xterm/Radix Tooltip headlessly), but means Phase 24-29 visual polish only validated post-deploy.
+
+### Patterns Established
+
+- **`{section}-section.tsx` + `sections/{name}.tsx` 1-line re-export** convention. Section bodies live in subdirectory (`routes/docker/{shell,registry,settings,logs,activity,palette,resources,stacks,schedules,dashboard}/`); placeholder file becomes `export {Section} from '../X-section'`. Keeps sections/ directory as a flat navigation map.
+- **`docker.{resource}{action}` tRPC naming** with optional `environmentId` first param. Phase 22 set this; Phase 29's registry routes (createRegistryCredential, listRegistryCredentials, etc.) follow the same naming.
+- **Two-effect WS lifecycle** (deps reconcile + empty-deps cleanup) for React StrictMode dev double-invocation. Phase 28-01 useMultiplexedLogs established this; Phase 29-01 useExecTabs reuses it.
+- **`livos:docker:*` localStorage key namespace** for user preferences (theme / sidebar-collapsed / sidebar-density / dashboard:selected-tag / palette:recent / resource-store NOT persisted because conversational state).
+- **Window-app architecture confirmed**: section navigation = zustand state (NOT URL routing). Programmatic deep-link via setSelectedX. URL-bar deep-linking deferred to v29.0+ (window-app pattern incompatible with browser routes).
+
+### Key Lessons
+
+1. **Backend foundation pays compound dividends.** v27.0 invested in env-aware tRPC + outbound agent + AES vault + node-cron scheduler + AI bridge. v28.0 consumed that backend with zero invasive changes — pure UI restructure delivered 20 requirements in 12 plans across 6 phases.
+2. **Architecture discovery during planning saves implementation rework.** Phase 24 planner's window-app discovery reframed all 6 phases. Catching the "no React Router" reality at plan-phase time prevented 5 phases of misdirected URL-routing code.
+3. **Cleanup phases (27-02) need atomic commit discipline.** Deleting 5607 lines safely required: relocate first → consumer-import-fix second → delete third → 4-grep gate verifies last. Build-green between each commit prevented stale-import bugs.
+4. **HUMAN-UAT capture matters even in window-apps.** 45 items captured per-phase form a deployment checklist. Beats "we'll know it works when we see it."
+
+### Cost Observations
+- Model mix: ~85% opus (planner + executor heavy work), ~15% sonnet (verifier confirmation runs)
+- Sessions: ~12 (this autonomous run; 1 user mid-session continuation after PG fix)
+- Notable: Phase 27 was the largest by surface area (Stacks + Schedules + final cleanup) — completed in ~30 min total work; the cleanup task discipline (atomic commits + 4-grep gate) was load-bearing
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -101,6 +152,7 @@
 |-----------|--------|-------|------------|
 | v19.0 | 5 | 10 | First milestone with decimal sub-phase (10.1), integration checker at audit |
 | v27.0 | 7 | 15 | First milestone with `workflow.skip_discuss=true` + auto-generated CONTEXT.md (Phases 22-23); first milestone with `type: tdd` plans shipping AI-bound code paths |
+| v28.0 | 6 | 12 | First UI-only milestone (zero new backend modules — only schema additions + WS envId extensions). First milestone with `workflow.ui_phase=false` (skipped UI-SPEC interactive flow). Largest cleanup task (Plan 27-02 deleted 5607 lines via 4-grep gate). First milestone where backend foundation hypothesis (v27 → v28 reuse) was validated end-to-end. |
 
 ### Cumulative Quality
 
@@ -108,6 +160,7 @@
 |-----------|-------------------|------------------|-----------------|
 | v19.0 | 43/43 must-haves (100%) | 2 cross-phase gaps | 7 items |
 | v27.0 | 90/90 must-haves (100%, 14 deferred to live-LLM/cron UAT) | 0 cross-phase gaps | 14 deferred-feature (v28) + 5 pre-existing-noise + 4 runtime-validation |
+| v28.0 | 20/20 DOC requirements (100%, 45 deployment-time UAT items) | 0 cross-phase gaps; 9/9 integrations + 4/4 E2E flows verified | 10 info-severity (URL-bar form, per-env CPU pill, registry audit-log entries — all v29.0+) |
 
 ### Top Lessons (Verified Across Milestones)
 

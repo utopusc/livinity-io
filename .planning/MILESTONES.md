@@ -1,5 +1,29 @@
 # Milestones
 
+## v28.0 Docker Management UI (Dockhand-Style) (Shipped: 2026-04-26)
+
+**Phases completed:** 6 phases (24-29), 12 plans, 33 tasks
+**Requirements satisfied:** 20/20 (DOC-01..DOC-20)
+**Milestone audit:** passed (9/9 cross-phase integrations confirmed, 4/4 E2E flows complete, zero gaps)
+**Known deferred items at close:** 45 deployment-time UAT items + 10 info-severity tech-debt (URL-bar deep-link form deferred to v29.0+ — window-app pattern incompatibility)
+
+**Key accomplishments:**
+
+- LIVINITY_docker system app shell — 12-entry collapsible sidebar + zustand section store + scoped class-based dark mode (light/dark/system) — replaces LIVINITY_server-control in dock + desktop + mobile + spotlight launchers.
+- Persistent 48px Dockhand-style top StatusBar mounted in DockerApp `<main>` — EnvironmentSelector + 8 stat pills (Docker version / Socket type / N cores / GB RAM / GB free / uptime / HH:MM / Live indicator) + Search button + AlertsBell + light/dark/system theme toggle. Closes DOC-01 + DOC-02 + DOC-03.
+- EnvCardGrid replaces the Phase 24 dashboard placeholder with one Dockhand-style health card per environment (header + tags + health banner + container counts + 2x2 stats + 8-event feed); environments.tags TEXT[] column lands idempotently for the filter chips Plan 25-02 consumes.
+- Layered DOC-05 + DOC-06 onto Plan 25-01's EnvCardGrid: TagFilterChips above the grid (localStorage-persisted single-select), TopCpuPanel below it (top-10 cross-env containers by CPU% with Logs/Shell/Restart quick-action chips), and per-card Retry button on the Unreachable banner. Phase 25 closes — DOC-04 + DOC-05 + DOC-06 fully delivered across Plans 25-01 + 25-02.
+- Replaces Phase 24 Containers + Images placeholders with the full live tab bodies from `routes/server-control/index.tsx` — adds search inputs (NEW), wires detail-panel state through `useDockerResource` zustand store for programmatic deep-link (DOC-20 partial), preserves Phase 19 vulnerability scan + Phase 22 env-aware tRPC + Phase 23 AI Diagnose / Explain CVEs end-to-end.
+- Replaces Phase 24 Volumes + Networks placeholders with the full live tab bodies from `routes/server-control/index.tsx` — adds search inputs (NEW), wires deep-link state through `useDockerResource` zustand store for volumes + networks (DOC-20 partial half now closed for all 4 resource types), adds per-row Schedule-backup cross-section navigation seam (DOC-09), pins the four-slot programmatic deep-link contract via 3-case vitest contract test for Phase 28 + 29 future readers.
+- Stacks section migration to v28 Docker app — verbatim port of legacy StacksTab + DeployStackForm with YAML/Git/AI deploy tabs preserved (Phase 21+23 features), constituent-container click-through to ContainerDetailSheet preserves Phase 17 logs / Phase 18 file browser / Phase 19 vuln-scan, selectedStack added as 5th slot to useDockerResource (DOC-11).
+- Schedules section migration with AddBackupDialog volume pre-fill via useSelectedVolume() consume-and-clear seam, full Phase 20 + 23 features (Run Now / Test Destination / S3+SFTP+Local destinations) preserved (DOC-12). FINAL CLEANUP: deleted 4815-line `routes/server-control/index.tsx` + 792-line legacy `scheduler-section.tsx` + ServerControlWindowContent adapter; 7 components git-mv'd to permanent homes; 4-grep gate verifies zero remaining references (DOC-03 final).
+- Cross-container Logs section — multiplexed WS aggregator with one connection per checked container via existing /ws/docker/logs (extended env-aware via getDockerClient with back-compat). Color stripe per container (deterministic hash → HSL), [container-name] line prefix, regex grep with maxLength=500, severity classifier (ERROR/WARN/INFO/DEBUG word-boundary regex), live-tail toggle with 4px scroll-tolerance auto-disable, 5000-line ring buffer, 25-socket cap, virtualized list (no react-window dep) (DOC-13).
+- Activity Timeline section — unified event stream from 3 sources (dockerEvents WS + scheduler.listJobs lastRun* columns + docker.listAiAlerts). Filter chips for source + severity, click-through routing per source type, AnimatePresence fade-in on 5s poll. Zero new tables, zero new tRPC routes — existing columns sufficient (DOC-14).
+- Cross-container Shell section — multi-tab xterm sessions with `display:none` for inactive tabs (preserves session state). Per-tab uses /ws/docker/exec extended env-aware (mirror of Phase 28-01 logs pattern). cmd+k command palette with categorized search across 7 categories (containers/stacks/images/volumes/networks/envs/recent-events/settings), localStorage recent-searches ring buffer max 8, anti-flicker close-then-navigate ordering (DOC-15 + DOC-18).
+- Registry section live with AES-256-GCM credential vault and Docker Hub + private registry search; Docker Settings section live with cross-imported Environments + Theme + Sidebar density; Copy Deep Link buttons on all 5 detail panels closing DOC-20 within the window-app constraint
+
+---
+
 ## v27.0 Docker Management Upgrade (Shipped: 2026-04-25)
 
 **Phases completed:** 7 phases (17-23), 15 plans, 40 tasks

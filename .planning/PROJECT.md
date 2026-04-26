@@ -142,39 +142,30 @@ Livinity now features a unified capability orchestration platform. All capabilit
 
 **11 deployment-time UAT items deferred** (live-LLM round-trips + remote-host infrastructure tests) — code paths fully wired, see `.planning/STATE.md` Deferred Items section.
 
-## Current Milestone: v28.0 Docker Management UI (Dockhand-Style)
+## Current State: v28.0 Shipped (Docker Management UI)
 
-**Goal:** Restructure v27.0's tab-based Server Management page into a standalone Dockhand-style Docker management application — left sidebar nav, top status bar with env + system stats, multi-environment Dashboard, dedicated routes per resource type. Backend foundation (data layer) shipped in v27.0 — v28.0 is UI restructure only.
+**Shipped 2026-04-26.** Server Management is now a standalone Dockhand-style Docker app — `LIVINITY_docker` window app with persistent left sidebar (12 entries), top StatusBar with env + 8 stat pills, multi-environment Dashboard, dedicated sections per resource type, plus 4 NEW surfaces (cross-container Logs, Activity Timeline, multi-tab Shell, Registry). 20/20 DOC requirements satisfied across 6 phases. Backend foundation reused from v27.0 — v28.0 was UI restructure with minimal additive backend (envId WS extensions + registry_credentials table + 4 thin tRPC routes).
 
-**Reference design:** Dockhand (https://dockhand.dev / https://dockhand.bor6.pl).
+**45 deployment-time UAT items** + 10 info-severity tech-debt items deferred (window-app pattern incompatibility prevents real URL-bar deep-linking — v29.0+).
 
-**Phase plan (6 phases, ~12 plans):**
-- Phase 24: Docker app skeleton (route + sidebar + top status bar + theme)
-- Phase 25: Multi-environment Dashboard (env health cards + Top CPU panel + tag filters)
-- Phase 26: Resource routes (Containers/Images/Volumes/Networks → own routes with deep-linking)
-- Phase 27: Stacks + Schedules routes (preserves YAML/Git/AI tabs from v27.0)
-- Phase 28: Cross-container Logs + global Activity timeline (NEW surfaces)
-- Phase 29: Shell + Registry + cmd+k palette + Docker-app Settings (NEW surfaces)
+### Active (next milestone TBD)
 
-### Active
+- [ ] (No active items — define next milestone via /gsd-new-milestone)
 
-- [ ] DOC-01: Standalone Docker app at `/docker` with persistent left sidebar (12 entries)
-- [ ] DOC-02: Top status bar — env selector + Docker version + cores + RAM + disk + uptime + Live indicator + cmd+k + theme
-- [ ] DOC-03: Old `/server` deprecated; redirect to `/docker`
-- [ ] DOC-04: Dashboard env-card grid (health, counts, recent events, CPU/mem)
-- [ ] DOC-05: Top containers by CPU panel (cross-env, 5s polling, quick actions)
-- [ ] DOC-06: Env tag filter chips (All / dev / prod / staging)
-- [ ] DOC-07/08/09/10: Containers/Images/Volumes/Networks each → own route
-- [ ] DOC-11: Stacks route (Graph/AI/Git tabs preserved)
-- [ ] DOC-12: Schedules route (current Settings > Scheduler section)
-- [ ] DOC-13: Cross-container Logs aggregator (multi-select + grep + live-tail)
-- [ ] DOC-14: Activity timeline (docker + scheduler + AI alerts)
-- [ ] DOC-15: Cross-container Shell (sidebar + multi-tab sessions)
-- [ ] DOC-16: Registry credentials (AES-256-GCM) + image search
-- [ ] DOC-17: Docker-app Settings (envs + theme + palette + density)
-- [ ] DOC-18: cmd+k command palette across resources
-- [ ] DOC-19: Theme toggle (light/dark/system, per-user)
-- [ ] DOC-20: Deep-linking on every resource route
+### Validated (v28.0 — Docker Management UI Dockhand-Style)
+
+- ✓ DOC-01/02/03 — Standalone LIVINITY_docker app shell, 12-entry collapsible sidebar, 48px top StatusBar with EnvironmentSelector + 8 stat pills + Search button + AlertsBell + theme toggle. LIVINITY_server-control deprecated everywhere (Phase 24)
+- ✓ DOC-04/05/06 — Multi-env Dashboard with EnvCardGrid + TopCpuPanel (top-10 cross-env, Logs/Shell/Restart quick chips) + TagFilterChips (localStorage-persisted single-select). environments.tags TEXT[] column (Phase 25)
+- ✓ DOC-07/08/09/10 — Containers / Images / Volumes / Networks each own section with search + detail panel + programmatic deep-link via useDockerResource zustand store. Phase 19 vuln-scan + Phase 22 env-aware tRPC + Phase 23 AI Diagnose / Explain CVEs preserved end-to-end (Phase 26)
+- ✓ DOC-11/12 — Stacks section (YAML/Git/AI deploy tabs preserved) + Schedules section with AddBackupDialog volume pre-fill (consume-and-clear). 4815-line legacy server-control deleted (Phase 27)
+- ✓ DOC-13 — Cross-container Logs multiplexed WS aggregator (color stripe + name prefix + grep + severity + live-tail + 5000-line ring buffer) (Phase 28)
+- ✓ DOC-14 — Activity Timeline unified from 3 sources (dockerEvents + scheduler.lastRun + ai_alerts) with filter chips + click-through routing (Phase 28)
+- ✓ DOC-15 — Cross-container Shell with multi-tab xterm sessions (display:none preserves state). docker-exec-socket envId-aware (Phase 29)
+- ✓ DOC-16 — Registry section with AES-256-GCM credential vault (lift+shift from Phase 21 git-credentials) + Docker Hub + private registry search + pullImage with optional registryId (Phase 29)
+- ✓ DOC-17 — Docker Settings section with Environments + Appearance (theme + sidebar density compact/comfortable) + Palette tabs (Phase 29)
+- ✓ DOC-18 — cmd+k command palette with categorized search across 7 categories + recent-searches ring buffer (Phase 29)
+- ✓ DOC-19 — Theme toggle persistence verified (light/dark/system per-user, cross-instance sync)
+- ✓ DOC-20 — Programmatic deep-link API closure across all 5 resource types + Copy Deep Link buttons on detail panels. URL-bar form deferred to v29.0+ (window-app pattern constraint)
 
 ### Validated (v27.0 — Docker Management Upgrade)
 
@@ -316,4 +307,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-25 after v27.0 milestone shipped (Docker Management Upgrade)*
+*Last updated: 2026-04-26 after v28.0 milestone shipped (Docker Management UI Dockhand-Style)*
