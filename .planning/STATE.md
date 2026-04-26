@@ -2,19 +2,17 @@
 gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
-current_phase: 30
-current_phase_name: Auto-Update Notification (GitHub-Aware)
-current_plan: Not started
-status: in_progress
-stopped_at: "Phase 30 added on 2026-04-26 — backend rewrite + frontend UpdateNotification. REQUIREMENTS.md locked. Ready for /gsd-autonomous to plan & execute. 2 plans expected: 30-01 (backend + update.sh patch), 30-02 (frontend + integration)."
-last_updated: "2026-04-26T07:30:00.000Z"
-last_activity: 2026-04-26
+current_plan: 2
+status: executing
+stopped_at: "Completed 30-01-PLAN.md — Auto-Update backend (UPD-01, UPD-02, UPD-03). 5 task commits. update.ts rewritten as GitHub commits API + execa subprocess; routes.ts patched (CONFLICT guard, no reboot/stop); httpOnlyPaths extended; SSH-patched /opt/livos/update.sh on Server4 + Mini PC; .deployed-sha bootstrapped on both hosts. 8/8 update.unit.test.ts + 1/1 routes.unit.test.ts GREEN. Next: 30-02 frontend."
+last_updated: "2026-04-26T08:59:56Z"
+last_activity: 2026-04-26 -- Plan 30-01 complete; Plan 30-02 next
 progress:
   total_phases: 14
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 12
-  percent: 85
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 ---
 
 # Project State
@@ -25,17 +23,17 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v28.0 — Docker Management UI (Dockhand-Style)
-**Current focus:** Phase 29 COMPLETE — v28.0 feature-complete. Plan 29-01 (Shell + cmd+k Palette): env-aware /ws/docker-exec extension + multi-tab xterm session manager (DOC-15) + categorized cmd+k palette across containers/stacks/images/volumes/networks/envs/sections + recent-searches localStorage ring buffer + StatusBar Search button wiring (DOC-18). Plan 29-02 (Registry + Settings + DOC-19/20): registry_credentials PG table (AES-256-GCM lift-and-shift from Phase 21 git-credentials) + 4 new tRPC routes (listRegistryCredentials/createRegistryCredential/deleteRegistryCredential/searchImages) + pullImage extended with optional registryId → dockerode authconfig (DOC-16); Docker > Settings tabs (Environments cross-import + Theme + Sidebar density radio) (DOC-17); useDockerTheme persistence verified in StatusBar AND Appearance tab (DOC-19); buildDeepLink/parseDeepLink helpers + Copy Deep Link icon buttons on all 5 detail panels — URL-bar form intentionally deferred to v29.0+ (DOC-20 final). 27 files + 28 new unit tests. v28.0 ready for milestone verifier + audit.
+**Current focus:** Phase 30 — Auto-Update Notification
 
 ## Current Position
 
-Phase: 30 (Auto-Update Notification — pending plan + execute)
-Plan: 2 of 2 complete
-Current Plan: Not started
-Status: Milestone complete
-Last activity: 2026-04-26 - Phase 30 (Auto-Update Notification) added to v28.0 — REQUIREMENTS.md locked, ready for /gsd-autonomous
+Phase: 30 (Auto-Update Notification) — EXECUTING
+Plan: 2 of 2
+Current Plan: 2
+Status: Executing Phase 30 — backend complete, frontend pending
+Last activity: 2026-04-26 -- Plan 30-01 complete; Plan 30-02 next
 
-**Progress:** [██████████] 100%
+**Progress:** [█████░░░░░] 50%
 
 ## v28.0 Phase Structure
 
@@ -88,8 +86,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 28 P02 | 11 | 3 tasks | 9 files |
 | Phase 29 P01 | 10 | 3 tasks | 17 files |
 | Phase 29 P02 | 16 min | 3 tasks | 27 files |
+| Phase 30 P01 | 35 min | 6 tasks (5 commits, 1× TDD) | 3 created + 4 modified + 2 remote-patched | 2026-04-26 |
 
 ## Accumulated Context
+
+### Plan 30-01 Decisions (2026-04-26)
+
+- CONFLICT-guard test for system.update lives in NEW routes.unit.test.ts (not extended into system.integration.test.ts). vi.mock('execa') at module scope conflicts with the integration file's existing real-execa-dependent tests for getDiskUsage / memoryUsage. Plan 3 explicitly permitted this fallback ("If integration testing infra is too heavy, write it as a unit test"). Pattern: any future "long-running mutation that needs concurrent-invocation testing" should follow the same dedicated-unit-file approach.
+- update.sh patch anchor = "# ── Step 9: Cleanup ───" marker, NOT "Restarting services" step. Both Server4 (10359 bytes, marker at line 240) and Mini PC (10822 bytes, marker at line 251) have divergent line numbers but the marker text is identical. Anchor by stable text, not line number. The patch script (.planning/phases/30-auto-update/artifacts/phase30-update-sh-patch.sh) uses `grep -n '^# ── Step 9: Cleanup'` to find the line dynamically, then awk to splice — idempotent (re-runs detect "Recording deployed SHA" already present and exit 0).
+- Bootstrap step layered onto Task 5 beyond plan-strict requirement: pre-populated /opt/livos/.deployed-sha with current GitHub master SHA on both hosts via curl + tee. Without this, `getLatestRelease` returns ENOENT-handled `available:true` until next update.sh deploy — meaning UpdateNotification card persists for users already on latest. With bootstrap, card only appears when a NEW commit lands. Carries forward to ANY future deploy-runtime-state-write pattern: write-on-deploy + bootstrap-on-patch is the pair.
+- Test E split into E + E2 to disambiguate stream-time vs final-state semantics. Original Test E asserted `getUpdateStatus().progress === 10` after `await proc` — ambiguous because by that point performUpdate has already overwritten status to `progress:100, description:'Updated'`. E now asserts final state; E2 reads status BEFORE proc resolves to assert mid-stream section-marker parsing. Pattern reusable for any unit test of code that mutates shared state during async stream processing.
+- livinityd User=root verified on BOTH hosts via `systemctl cat livos.service`. Assumption A1 from RESEARCH.md (line 609) is now confirmed, not assumed. No sudoers-NOPASSWD config needed on Mini PC for /opt/livos/update.sh subprocess — ExecStart runs the npx tsx process as root. T-30-04 ElevationOfPrivilege threat dispositioned `accept` based on this verified config.
+- grep -c "reboot()" returns 3 in routes.ts (not 2) because line 92 is a documentation comment containing the literal `reboot()`. Stricter audit needed: `grep -E '^\s*await reboot\(\)'` (matches 2 — restart + factoryReset). General lesson: any audit grep that counts function calls must filter out comments via leading-whitespace + keyword regex. Plan acceptance criteria's "exactly 2" was about real calls.
+- system.checkUpdate INTENTIONALLY left on WS (NOT added to httpOnlyPaths). Sub-second query, polled hourly, low rate-limit volume. Open Question #1 from RESEARCH.md (rate-limit error visibility) tracks revisit. If Plan 30-02 frontend testing finds opaque WS error bodies, add it. Carries forward as a small surface area for Plan 30-02 to inspect.
+- pre-existing Windows-runtime test failure on getMemoryUsage (`ps -Ao pid,pss --no-header` — Linux-only ps flags) verified out-of-scope by stash-and-rerun: same failure reproduces with all Phase 30 changes stashed. Out of scope per executor scope-boundary rule. Documented in commit body and SUMMARY.md so the next executor doesn't waste cycles "fixing" it.
+- Patch script archived in repo as `.planning/phases/30-auto-update/artifacts/phase30-update-sh-patch.sh` — update.sh itself is not in the repo but the patch IS, so the next agent re-running it (e.g., on a new host) has a deterministic source of truth. Pattern reusable for any future SSH-applied runtime patch.
 
 ### Plan 24-01 Decisions (2026-04-25)
 
@@ -455,6 +466,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-25T23:54:40.556Z
-Stopped at: Completed 29-02-PLAN.md — Registry + Docker Settings + DOC-19/20 closure. v28.0 Phase 29 feature-complete (all 6 DOC-15..DOC-20 closed). 8 commits, 15 files created + 12 modified. 28 new unit tests passing. UI build green. Next: milestone audit.
-Resume with: `/gsd:plan-phase 26` to author Plan 26-01 (Resource Routes — Containers/Images/Volumes/Networks). Plan 25-02 shipped 5 task commits (4cfebf7b RED useTagFilter + e5d33252 GREEN tag chips + per-card Retry + be661a0e RED sortTopCpu + 128206f6 GREEN sort-top-cpu + use-top-cpu fanout + dad89657 TopCpuPanel + dashboard wiring) — Dashboard section now renders TagFilterChips ABOVE EnvCardGrid (single-select localStorage-persisted; auto-fallback on missing tag; hidden when no env has tags) + TopCpuPanel BELOW EnvCardGrid (top-10 cross-env containers by CPU% via bounded per-env candidate fanout; Logs/Shell/Restart quick-action chips per row; restart proactively disabled on protected containers; sonner toast on mutation). EnvCard's Unreachable banner now ships a Retry button (refetches single card's 6 queries via use-env-card-data's new refetch() callback). 33/33 dashboard tests pass + 61/61 UI docker route tests pass + UI build green + zero new typecheck errors in plan-touched files. v28.0 progress: Phase 24 + Phase 25 done; Phases 26-29 pending. Reusable patterns: bounded cross-env fanout (per-env cheap-call → top-N candidates → expensive-call fanout-on-candidates); localStorage-backed UI selection with auto-fallback; pure helpers at module scope for unit testing without @testing-library/react.
+Last session: 2026-04-26T08:59:56Z
+Stopped at: Completed 30-01-PLAN.md — Auto-Update backend (UPD-01, UPD-02, UPD-03). 5 task commits (72ccb349 RED tests + a4482e02 GREEN update.ts rewrite + 1de2c0bd routes.ts CONFLICT guard / drop reboot+stop + f382d6fd httpOnlyPaths + 15daf8a4 SSH-patch artifact). update.ts now queries https://api.github.com/repos/utopusc/livinity-io/commits/master and compares response SHA to /opt/livos/.deployed-sha; performUpdate spawns bash /opt/livos/update.sh via execa with section-marker progress parsing; system.update mutation drops reboot()+ctx.livinityd.stop() and adds TRPCError CONFLICT guard; system.update + system.updateStatus added to httpOnlyPaths (system.checkUpdate intentionally stays on WS). SSH-patched /opt/livos/update.sh on Server4 (45.137.194.103) + Mini PC (10.69.31.68) to write /opt/livos/.deployed-sha after Step 8 services restart, before Step 9 cleanup; both hosts bootstrapped with current GitHub master SHA b6981b5fc55d31c63a22012c0621d09a864750b6; rollback artifacts at /opt/livos/update.sh.pre-phase30 on both hosts. livinityd User=root verified on BOTH hosts (Assumption A1 confirmed). 8/8 update.unit.test.ts + 1/1 routes.unit.test.ts GREEN; pre-existing Windows-only ps -Ao failure in system.integration.test.ts verified out-of-scope.
+Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
+
+**Planned Phase:** 30 (Auto-Update Notification) — 2 plans — Plan 1/2 complete

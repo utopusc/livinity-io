@@ -130,9 +130,9 @@ NOT: update.sh repo'da YOK (Mini PC'de standalone script). Round 1 hot-patch'te 
 
 ## Exit criteria
 
-- [ ] Backend: `system.checkUpdate` yeni shape döner, GitHub'a query yapar
-- [ ] Backend: `system.update` update.sh subprocess çalıştırır + log streamer
-- [ ] Mini PC: `/opt/livos/update.sh` `.deployed-sha` yazar (SSH patch)
+- [x] Backend: `system.checkUpdate` yeni shape döner, GitHub'a query yapar — Plan 30-01 (UPD-01) completed 2026-04-26
+- [x] Backend: `system.update` update.sh subprocess çalıştırır + log streamer — Plan 30-01 (UPD-02) completed 2026-04-26
+- [x] Mini PC + Server4: `/opt/livos/update.sh` `.deployed-sha` yazar (SSH patch) — Plan 30-01 (UPD-03) completed 2026-04-26 + bootstrap b6981b5f on both hosts
 - [ ] Frontend: `<UpdateNotification />` component yazılı + mount edilmiş
 - [ ] Frontend: useSoftwareUpdate 1h polling
 - [ ] Browser verify: localStorage'tan dismissed-sha sil → yeni SHA push'la → notification görünmeli → "Later" tıklarsa yarın aynı SHA push'lasak notification yine görünmemeli, ama daha yeni SHA gelse görünmeli
