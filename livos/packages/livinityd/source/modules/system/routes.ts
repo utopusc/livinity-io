@@ -46,10 +46,9 @@ export default router({
 	updateStatus: privateProcedure.query(() => getUpdateStatus()),
 	uptime: privateProcedure.query(() => os.uptime()),
 	checkUpdate: privateProcedure.query(async ({ctx}) => {
-		let {version, name, releaseNotes} = await getLatestRelease(ctx.livinityd)
-		// v prefix is needed in the tag name for legacy reasons, remove it before comparing to local version
-		const available = version.replace('v', '') !== ctx.livinityd.version
-		return {available, version, name, releaseNotes}
+		// Phase 30 UPD-01: GitHub commits API + .deployed-sha comparison.
+		// New return shape: {available, sha, shortSha, message, author, committedAt}.
+		return await getLatestRelease(ctx.livinityd)
 	}),
 	getReleaseChannel: privateProcedure.query(async ({ctx}) => {
 		return (await ctx.livinityd.store.get('settings.releaseChannel')) || 'stable'
@@ -80,17 +79,23 @@ export default router({
 		}
 	}),
 	update: privateProcedure.mutation(async ({ctx}) => {
+		// Phase 30 UPD-02: concurrent-update guard (Pitfall #8).
+		// Two clicks racing two parallel update.sh runs would corrupt the rsync.
+		if (systemStatus === 'updating') {
+			throw new TRPCError({code: 'CONFLICT', message: 'Update already in progress'})
+		}
 		systemStatus = 'updating'
 		let success = false
 		try {
 			success = await performUpdate(ctx.livinityd)
-			if (success) {
-				await setTimeout(1000)
-				await ctx.livinityd.stop()
-				await reboot()
-			}
+			// Phase 30 UPD-02: NO ctx.livinityd.stop() — would sever the response stream.
+			// Phase 30 UPD-02: NO reboot() — update.sh restarts services itself via
+			// `systemctl restart livos liv-core liv-worker liv-memory` at the tail.
 		} finally {
-			if (!success) systemStatus = 'running'
+			// Mark running again whether or not the update succeeded; the UI polls
+			// system.status to decide when to refresh. Errors (success=false) are
+			// surfaced via getUpdateStatus().error.
+			systemStatus = 'running'
 		}
 		return success
 	}),

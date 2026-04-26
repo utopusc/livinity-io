@@ -56,3 +56,7 @@ describe('memoryUsage', () => {
 		expect(unAuthedRouter.memoryUsage()).rejects.toHaveProperty('code', 'UNAUTHORIZED')
 	})
 })
+
+// Phase 30 UPD-02 — CONFLICT-guard test for system.update lives in
+// routes.unit.test.ts because the test infrastructure needs vi.mock('execa')
+// at module level, which would break the real-execa-based tests above.
