@@ -177,7 +177,7 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
   4. The original root cause (cwd drift / pnpm lock mismatch / env var loss — to be identified during the phase) is patched at its source: re-running update.sh 3× in a row from a fresh repo clone produces 3× successful deploys, no BUILD-01 guard trips required to "save" the run.
 **Plans**: 3 plans
 - [x] 31-01-PLAN.md — Root-cause investigation → 31-ROOT-CAUSE.md (BUILD-03) ✓ 2026-04-26
-- [ ] 31-02-PLAN.md — Author idempotent patch script (BUILD-01 verify_build + BUILD-02 multi-dir dist-copy loop + BUILD-03 root-cause fix)
+- [x] 31-02-PLAN.md — Author idempotent patch script (BUILD-01 verify_build + BUILD-02 multi-dir dist-copy loop + BUILD-03 cleanup) ✓ 2026-04-26
 - [ ] 31-03-PLAN.md — SSH-apply patch to Mini PC + Server4, verify livinityd boots clean (HUMAN-VERIFY)
 **Patch artifact**: `.planning/phases/31-update-sh-build-pipeline-integrity/artifacts/phase31-update-sh-patch.sh` (applied via SSH to both Mini PC and Server4 — Phase 30 precedent)
 

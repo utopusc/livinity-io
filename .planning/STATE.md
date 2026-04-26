@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v29.0
 milestone_name: Deploy & Update Stability
-status: Phase 31 in progress; Plan 31-01 (root-cause investigation) complete; awaiting Plan 31-02 (patch script authoring)
-stopped_at: "Completed 31-01-PLAN.md — root-cause investigation. 1 atomic commit. 31-ROOT-CAUSE.md (168L) authored with 6-row hypothesis matrix verdict (1 confirmed bug + 4 ruled-out + 2 inconclusive); 7-item remediation list IS the spec for Plan 02 patch script. Two confirmed bugs by code reading: (1) `find ... | head -1` pnpm-store dist-copy single-target (BACKLOG 999.5b); (2) worker/mcp-server `2>/dev/null && cd ... || cd ...` exit-code masking. Verdict: BUILD-03 root-cause INCONCLUSIVE — BUILD-01 fail-loud guard becomes the safety net per CONTEXT decision. Inter-host drift documented (Mini PC has memory build + UI public sync that Server4 lacks)."
-last_updated: "2026-04-26T14:25:00.000Z"
-last_activity: 2026-04-26 — Phase 31 Plan 01 (root-cause) complete; BUILD-03 satisfied (verdict + remediation spec)
+status: completed
+stopped_at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
+last_updated: "2026-04-26T14:24:15.405Z"
+last_activity: 2026-04-26 — Phase 31 Plan 02 complete (patch script authored — 370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup; Plan 31-03 SSH-apply unblocked)
 progress:
   total_phases: 5
   completed_phases: 0
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Phase: 31 (in progress)
-Plan: 31-01 complete; 31-02 next
-Status: Plan 31-01 (root-cause investigation) complete — BUILD-03 satisfied with inconclusive-trigger / sufficient-symptom-elimination verdict. Plan 31-02 (patch script) unblocked.
-Last activity: 2026-04-26 — Phase 31 Plan 01 complete (root-cause + remediation spec for Plan 02)
+Plan: 31-01 + 31-02 complete; 31-03 next (SSH-apply + post-apply verification)
+Status: Plan 31-02 (patch script) complete — `phase31-update-sh-patch.sh` (370 lines) authored and locally validated. Idempotent, executable, syntax-clean. Backup-then-syntax-check-then-restore safety net. 4 markers + 10 verify wirings + BUILD-03 cleanup (worker/mcp-server masking strip + memory-build injection on Server4 + inconclusive-verdict marker). Plan 31-03 (SSH-apply on Mini PC + Server4 with HUMAN-VERIFY checkpoint) unblocked.
+Last activity: 2026-04-26 — Phase 31 Plan 02 complete (patch script ready for Plan 03 to ship)
 
-**Progress:** [#         ] 13% — 0/5 phases complete (1/3 Phase 31 plans done; 2/3 if counting plans 01+02 from CURRENT phase plans)
+**Progress:** [███████░░░] 67% (2 of 3 Phase 31 plans complete)
 
 ## v29.0 Phase Structure
 
@@ -100,8 +100,18 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 30 P01 | 35 min | 6 tasks (5 commits, 1× TDD) | 3 created + 4 modified + 2 remote-patched | 2026-04-26 |
 | Phase 30 P02 | 9 min | 7 tasks | 9 files |
 | Phase 31 P01 | 25 min | 1 task (investigation only) | 2 created (31-ROOT-CAUSE.md + 31-01-SUMMARY.md) | 2026-04-26 |
+| Phase 31 P02 | 4 min | 1 task tasks | 2 created (phase31-update-sh-patch.sh + 31-02-SUMMARY.md) files |
 
 ## Accumulated Context
+
+### Plan 31-02 Decisions (2026-04-26)
+
+- Patch script `phase31-update-sh-patch.sh` (370 lines, executable, `bash -n` clean) authored at `.planning/phases/31-update-sh-build-pipeline-integrity/artifacts/`. Delivers BUILD-01 + BUILD-02 + BUILD-03 in one idempotent SSH-applyable artifact. Backup-then-syntax-check-then-restore safety net at end (writes `/opt/livos/update.sh.pre-phase31`, runs `bash -n` on patched output, reverts from backup if syntax check fails). Pattern reusable for any future SSH-applied multi-step patch where partial-application is unacceptable.
+- `verify_build` signature follows PLAN.md `<interfaces>` (pkg first, outdir second) rather than 31-ROOT-CAUSE.md alternate (dir first). PLAN.md is the spec of record for execution; the call-site array is structured around pkg-first labeling. Pattern: when investigation doc and plan doc disagree on a minor signature detail, plan doc wins for execution; the divergence is documented in the SUMMARY's Decisions section so future agents understand which signature reads downstream.
+- BOTH npm-workspace (`npm run build --workspace=packages/core`) AND legacy (`cd "$NEXUS_DIR/packages/core" && npx tsc`) invocation forms wired into BUILD-01 verify-call array (10 wirings total, 5 per form). Live `update.sh.minipc` snapshot uses the legacy form; the npm-workspace form is wired as future-proofing. Each wiring is idempotent (`grep -qF` skips already-wired sites), so wiring 'extra' patterns is safe — they no-op on hosts that don't have them. Pattern: when patching a script whose invocation conventions might evolve, wire BOTH old and new forms — idempotency makes over-wiring free.
+- Awk `gsub` chosen over `sed -i` for the worker/mcp-server `2>/dev/null && cd ... || cd ...` exit-code masking strip. Reason: `sed -i` differs between BSD (`-i ''`) and GNU (`-i`); awk in-place edit (write to `.new`, mv) is unambiguously portable across Mini PC (Ubuntu 24.04) and Server4. Pattern reusable for any cross-host patch script: prefer awk-write-to-new + mv over `sed -i`.
+- Memory-build injection (Plan 01 remediation #6) anchors on `ok "Nexus core built"` line which is present on BOTH hosts; injection is guarded by `grep -qF 'Building Nexus memory'` so the Mini PC (which already has the block) is not double-injected. Pattern: when a remediation needs to fix one host's missing block but leave another host alone, anchor on a stable cross-host marker + use `grep -qF` to detect block-already-present.
+- BUILD-03 implements Plan 01's "inconclusive trigger / sufficient symptom-elimination" verdict as: (a) `set -euo pipefail` presence check + auto-inject if missing (defensive); (b) worker/mcp-server masking strip (Plan 01 remediation #5); (c) memory-build injection on Server4 (Plan 01 remediation #6); (d) inconclusive-verdict marker comment block recorded near top of patched update.sh so future agents reading the file understand BUILD-01 is the safety net by design, not a missed root-cause hunt. Marker constant `MARKER_RC` is the BUILD-03 idempotency anchor.
 
 ### Plan 31-01 Decisions (2026-04-26)
 
@@ -497,8 +507,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-26T09:18:54.334Z
-Stopped at: Completed 30-02-PLAN.md — Auto-Update frontend (UPD-04). 6 task commits. UpdateNotification component (99L) + smoke test + 5 shape consumers updated + hourly poll + router mount. Phase 30 complete pending manual browser verification (Task 7 deferred per checkpoint:human-verify protocol). Plan 30-02 grep audit + tsc both clean across 7 touched files.
+Last session: 2026-04-26T14:23:55.810Z
+Stopped at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
 **Planned Phase:** 31 (update.sh Build Pipeline Integrity) — 3 plans — 2026-04-26T13:50:05.333Z
