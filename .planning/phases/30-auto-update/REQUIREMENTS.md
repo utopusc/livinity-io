@@ -133,8 +133,8 @@ NOT: update.sh repo'da YOK (Mini PC'de standalone script). Round 1 hot-patch'te 
 - [x] Backend: `system.checkUpdate` yeni shape döner, GitHub'a query yapar — Plan 30-01 (UPD-01) completed 2026-04-26
 - [x] Backend: `system.update` update.sh subprocess çalıştırır + log streamer — Plan 30-01 (UPD-02) completed 2026-04-26
 - [x] Mini PC + Server4: `/opt/livos/update.sh` `.deployed-sha` yazar (SSH patch) — Plan 30-01 (UPD-03) completed 2026-04-26 + bootstrap b6981b5f on both hosts
-- [ ] Frontend: `<UpdateNotification />` component yazılı + mount edilmiş
-- [ ] Frontend: useSoftwareUpdate 1h polling
-- [ ] Browser verify: localStorage'tan dismissed-sha sil → yeni SHA push'la → notification görünmeli → "Later" tıklarsa yarın aynı SHA push'lasak notification yine görünmemeli, ama daha yeni SHA gelse görünmeli
-- [ ] Tıklayınca confirm dialog açılır (pencere kapatılmaz)
-- [ ] update.sh subprocess başarılı çalıştırır, services restart olur
+- [x] Frontend: `<UpdateNotification />` component yazılı + mount edilmiş — Plan 30-02 (UPD-04) completed 2026-04-26 (component @ src/components/update-notification.tsx, mount @ router.tsx:85)
+- [x] Frontend: useSoftwareUpdate 1h polling — Plan 30-02 (UPD-04) completed 2026-04-26 (refetchInterval: MS_PER_HOUR @ src/hooks/use-software-update.ts:16)
+- [ ] Browser verify: localStorage'tan dismissed-sha sil → yeni SHA push'la → notification görünmeli → "Later" tıklarsa yarın aynı SHA push'lasak notification yine görünmemeli, ama daha yeni SHA gelse görünmeli — manual verification deferred to verifier; 9-step protocol documented in 30-02-SUMMARY.md
+- [x] Tıklayınca confirm dialog açılır (pencere kapatılmaz) — Plan 30-02 (UPD-04) completed 2026-04-26 (Update button → navigate('/settings/software-update/confirm') in update-notification.tsx)
+- [ ] update.sh subprocess başarılı çalıştırır, services restart olur — manual verification deferred (requires real Server4/Mini PC deploy)

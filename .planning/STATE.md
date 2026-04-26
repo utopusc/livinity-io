@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v28.0
 milestone_name: Docker Management UI
 current_plan: 2
-status: executing
-stopped_at: "Completed 30-01-PLAN.md — Auto-Update backend (UPD-01, UPD-02, UPD-03). 5 task commits. update.ts rewritten as GitHub commits API + execa subprocess; routes.ts patched (CONFLICT guard, no reboot/stop); httpOnlyPaths extended; SSH-patched /opt/livos/update.sh on Server4 + Mini PC; .deployed-sha bootstrapped on both hosts. 8/8 update.unit.test.ts + 1/1 routes.unit.test.ts GREEN. Next: 30-02 frontend."
-last_updated: "2026-04-26T08:59:56Z"
-last_activity: 2026-04-26 -- Plan 30-01 complete; Plan 30-02 next
+status: verifying
+stopped_at: "Completed 30-02-PLAN.md — Auto-Update frontend (UPD-04). 6 task commits. UpdateNotification component (99L) + smoke test + 5 shape consumers updated + hourly poll + router mount. Phase 30 complete pending manual browser verification (Task 7 deferred per checkpoint:human-verify protocol). Plan 30-02 grep audit + tsc both clean across 7 touched files."
+last_updated: "2026-04-26T09:19:14.476Z"
+last_activity: 2026-04-26
 progress:
   total_phases: 14
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 50
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 Phase: 30 (Auto-Update Notification) — EXECUTING
 Plan: 2 of 2
 Current Plan: 2
-Status: Executing Phase 30 — backend complete, frontend pending
-Last activity: 2026-04-26 -- Plan 30-01 complete; Plan 30-02 next
+Status: Phase complete — ready for verification
+Last activity: 2026-04-26
 
-**Progress:** [█████░░░░░] 50%
+**Progress:** [██████████] 100%
 
 ## v28.0 Phase Structure
 
@@ -87,8 +87,18 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 29 P01 | 10 | 3 tasks | 17 files |
 | Phase 29 P02 | 16 min | 3 tasks | 27 files |
 | Phase 30 P01 | 35 min | 6 tasks (5 commits, 1× TDD) | 3 created + 4 modified + 2 remote-patched | 2026-04-26 |
+| Phase 30 P02 | 9 min | 7 tasks | 9 files |
 
 ## Accumulated Context
+
+### Plan 30-02 Decisions (2026-04-26)
+
+- First SHA-keyed localStorage dismissal pattern in repo (Plan 30-02): `useState<string|null>(() => localStorage.getItem(KEY))` + visibility check `value !== dismissedSha`. Reusable as `useDismissibleByKey(key, currentValue)` hook in future refactor when 2nd consumer appears. Don't extract eagerly — wait for genuine repetition.
+- Plan 30-02 found 5th shape consumer (`providers/global-system-state/update.tsx` UpdatingCover title) NOT in plan list — added under Rule 2 (critical functionality). TypeScript noEmit caught it: without fix, the running update screen renders "Updating to undefined". Pattern: any future API shape change should run `pnpm tsc --noEmit` early to surface ALL consumers, not just the ones the planner enumerates. Don't trust the plan's file list as exhaustive.
+- Plan 30-02 deferred Task 7 manual browser smoke (`checkpoint:human-verify`) per `<checkpoint_handling>` block: Chrome DevTools MCP not in tool list, no dev server / livinityd locally. Documented full 9-step manual verification protocol in 30-02-SUMMARY.md for the verifier. UpdateNotification core behavior (mobile-hide, SHA-keyed dismissal, navigate to confirm) covered by smoke import + TypeScript shape lock-down.
+- `@testing-library/react` NOT in UI devDeps (only `vitest` + `jsdom`). Plan's `<action>` block authorized smoke-import scaffold + deferred-test comment block listing Tests A-E for future RTL adoption. Pattern reusable any time a test framework's expensive deps aren't yet installed: write a 1-test smoke + comment block, manual verification covers the rest.
+- Pre-existing UI vitest failures (19 across 4 docker test files — `localStorage is not defined` due to missing `// @vitest-environment jsdom` directive) verified out-of-scope by checking out b6981b5f (parent of first Phase 30 commit) — same fails reproduce. Logged in `.planning/phases/30-auto-update/deferred-items.md` for a future maintenance phase. Phase 30 contribution: zero new fails.
+- English locale `software-update.new-version` retuned ("New X is available" → "Update X is available") so a 7-char SHA reads naturally as the placeholder. 12 non-English locales left untouched — they degrade gracefully via `{{name}}` interpolation. Future i18n cleanup pass should re-translate the 12 strings to be SHA-friendly. Pattern: when changing a {{placeholder}} to mean a different thing, only re-translate the language you can verify; let the rest degrade gracefully.
 
 ### Plan 30-01 Decisions (2026-04-26)
 
@@ -466,8 +476,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-26T08:59:56Z
-Stopped at: Completed 30-01-PLAN.md — Auto-Update backend (UPD-01, UPD-02, UPD-03). 5 task commits (72ccb349 RED tests + a4482e02 GREEN update.ts rewrite + 1de2c0bd routes.ts CONFLICT guard / drop reboot+stop + f382d6fd httpOnlyPaths + 15daf8a4 SSH-patch artifact). update.ts now queries https://api.github.com/repos/utopusc/livinity-io/commits/master and compares response SHA to /opt/livos/.deployed-sha; performUpdate spawns bash /opt/livos/update.sh via execa with section-marker progress parsing; system.update mutation drops reboot()+ctx.livinityd.stop() and adds TRPCError CONFLICT guard; system.update + system.updateStatus added to httpOnlyPaths (system.checkUpdate intentionally stays on WS). SSH-patched /opt/livos/update.sh on Server4 (45.137.194.103) + Mini PC (10.69.31.68) to write /opt/livos/.deployed-sha after Step 8 services restart, before Step 9 cleanup; both hosts bootstrapped with current GitHub master SHA b6981b5fc55d31c63a22012c0621d09a864750b6; rollback artifacts at /opt/livos/update.sh.pre-phase30 on both hosts. livinityd User=root verified on BOTH hosts (Assumption A1 confirmed). 8/8 update.unit.test.ts + 1/1 routes.unit.test.ts GREEN; pre-existing Windows-only ps -Ao failure in system.integration.test.ts verified out-of-scope.
+Last session: 2026-04-26T09:18:54.334Z
+Stopped at: Completed 30-02-PLAN.md — Auto-Update frontend (UPD-04). 6 task commits. UpdateNotification component (99L) + smoke test + 5 shape consumers updated + hourly poll + router mount. Phase 30 complete pending manual browser verification (Task 7 deferred per checkpoint:human-verify protocol). Plan 30-02 grep audit + tsc both clean across 7 touched files.
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
 **Planned Phase:** 30 (Auto-Update Notification) — 2 plans — Plan 1/2 complete

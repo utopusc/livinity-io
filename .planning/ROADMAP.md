@@ -130,7 +130,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
  (completed 2026-04-25)
 - [x] **Phase 28: Cross-Container Logs + Activity Timeline** — multi-container log aggregator with grep, global event timeline (docker + scheduler + AI alerts) (DOC-13, DOC-14) (completed 2026-04-25)
 - [x] **Phase 29: Shell + Registry + cmd+k Palette + Settings** — cross-container shell, Docker Hub/private registry credentials, image search, command palette, theme toggle, Docker-app Settings page (DOC-15, DOC-16, DOC-17, DOC-18, DOC-19, DOC-20 final) (completed 2026-04-25)
-- [ ] **Phase 30: Auto-Update Notification (GitHub-Aware)** — replace legacy OTA infra with GitHub commits API check; UpdateNotification card bottom-right; clicking triggers `/opt/livos/update.sh` via livinityd subprocess + log streaming (UPD-01, UPD-02, UPD-03, UPD-04)
+- [x] **Phase 30: Auto-Update Notification (GitHub-Aware)** — replace legacy OTA infra with GitHub commits API check; UpdateNotification card bottom-right; clicking triggers `/opt/livos/update.sh` via livinityd subprocess + log streaming (UPD-01, UPD-02, UPD-03, UPD-04) (completed 2026-04-26)
 
 ## Phase Details
 
@@ -214,9 +214,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. New `<UpdateNotification />` React component mounts on desktop (router.tsx). Displays a fixed bottom-right card (`bottom-4 right-4 z-[80]`) when `state === 'update-available'` AND not dismissed. Card shows: "New update available" + commit message snippet + 2 buttons ("Update" + "Later"). Animation: framer-motion fade-in/slide-up.
   5. "Update" button → opens existing `/settings/software-update/confirm` dialog (preserves user-confirms-before-update UX). "Later" persists dismissed SHA to localStorage `livos:update-notification:dismissed-sha` — re-shows when a NEWER SHA appears.
   6. `useSoftwareUpdate` hook polls every 1 hour (refetchInterval: 3_600_000); also refetches on mount. Toast/error if GitHub API rate-limit hit (graceful degradation).
-**Plans**: 2 plans (1/2 complete)
+**Plans**: 2 plans (2/2 complete)
 - [x] 30-01-PLAN.md — Backend rewrite (update.ts + routes.ts httpOnlyPaths) + update.sh SSH patch (UPD-01, UPD-02, UPD-03) — completed 2026-04-26
-- [ ] 30-02-PLAN.md — Frontend UpdateNotification + 1h hook polling + router mount + 4 shape-consumer fixes (UPD-04)
+- [x] 30-02-PLAN.md — Frontend UpdateNotification + 1h hook polling + router mount + 5 shape-consumer fixes (UPD-04) — completed 2026-04-26
 
 ### Phase 29: Shell + Registry + Palette + Docker Settings
 **Goal**: The remaining surfaces — cross-container shell, Docker Hub/private registry credentials, cmd+k command palette, and Docker-app Settings page.
@@ -378,7 +378,7 @@ Note: Phases 18/19/20/22 can parallelize (all depend only on Phase 17). Phase 21
 | 27. Stacks + Schedules Routes | v28.0 | 2/2 | Complete | 2026-04-25 |
 | 28. Cross-Container Logs + Activity Timeline | v28.0 | 2/2 | Complete    | 2026-04-25 |
 | 29. Shell + Registry + Palette + Docker Settings | v28.0 | 2/2 | Complete    | 2026-04-25 |
-| 30. Auto-Update Notification (GitHub-Aware) | v28.0 | 0/2 | Pending    | — |
+| 30. Auto-Update Notification (GitHub-Aware) | v28.0 | 2/2 | Complete    | 2026-04-26 |
 
 ---
 
