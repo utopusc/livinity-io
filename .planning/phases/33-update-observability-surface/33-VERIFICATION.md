@@ -1,7 +1,8 @@
 ---
 phase: 33-update-observability-surface
 verified: 2026-04-27T12:00:00Z
-status: human_needed
+status: passed
+human_verification_resolved: 2026-04-27 (live Mini PC deploy 1d44d610 + browser approval)
 score: 5/5 must-haves verified
 overrides_applied: 0
 human_verification:
