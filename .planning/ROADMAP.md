@@ -207,8 +207,8 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
   4. When an update is available (existing GitHub-commits check from Phase 30), the Settings sidebar's "Software Update" row displays a small numeric badge (e.g., "1") next to the label that disappears once the user opens the page or installs the update — verifiable in both light and dark themes.
   5. New `system.listUpdateHistory` and `system.readUpdateLog` tRPC routes ship with adminProcedure RBAC + filename validation (no `..` traversal); they read directly from `/opt/livos/data/update-history/` with no DB writes.
 **Plans**: 3 plans
-- [ ] 33-01-PLAN.md — Backend tRPC routes (system.listUpdateHistory + system.readUpdateLog) + httpOnlyPaths wiring + 3-layer filename guard + 12+ unit tests (OBS-02, OBS-03)
-- [ ] 33-02-PLAN.md — phase33-update-sh-logging-patch.sh artifact + bash test (4 scenarios) + Mini PC SSH-apply (HUMAN-VERIFY) (OBS-01)
+- [x] 33-01-PLAN.md — Backend tRPC routes (system.listUpdateHistory + system.readUpdateLog) + httpOnlyPaths wiring + 3-layer filename guard + 12+ unit tests (OBS-02, OBS-03)
+- [x] 33-02-PLAN.md — phase33-update-sh-logging-patch.sh artifact + bash test (4 scenarios) + Mini PC SSH-apply verified (OBS-01)
 - [ ] 33-03-PLAN.md — Frontend (PastDeploysTable + UpdateLogViewerDialog + MenuItemBadge) + RTL/smoke tests (OBS-02, OBS-03, UX-04)
 **Patch artifact**: `.planning/phases/33-update-observability-surface/artifacts/phase33-update-sh-logging-patch.sh` (SSH-applied to Mini PC; mirrors Phase 31/32 patch-script architecture)
 **UI hint**: yes
