@@ -112,6 +112,8 @@ const MemorySectionLazy = React.lazy(() =>
 )
 const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
 import {SoftwareUpdateListRow} from './software-update-list-row'
+import {PastDeploysTable} from './past-deploys-table'
+import {MenuItemBadge} from './menu-item-badge'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -238,7 +240,7 @@ export function SettingsContent() {
 							<motion.button
 								key={item.id}
 								onClick={() => setActiveSection(item.id)}
-								className='flex w-full items-center gap-3 rounded-radius-sm px-3 py-3 text-left transition-colors hover:bg-surface-2'
+								className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-3 text-left transition-colors hover:bg-surface-2'
 								initial={{opacity: 0, x: -10}}
 								animate={{opacity: 1, x: 0}}
 								transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
@@ -251,6 +253,7 @@ export function SettingsContent() {
 									<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
 								</div>
 								<TbChevronRight className='h-4 w-4 shrink-0 text-text-tertiary' />
+								<MenuItemBadge itemId={item.id} activeSection={activeSection} />
 							</motion.button>
 						))}
 					</div>
@@ -289,7 +292,7 @@ export function SettingsContent() {
 								<motion.button
 									key={item.id}
 									onClick={() => setActiveSection(item.id)}
-									className='flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
+									className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
 									initial={{opacity: 0, x: -10}}
 									animate={{opacity: 1, x: 0}}
 									transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
@@ -302,6 +305,7 @@ export function SettingsContent() {
 										<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
 									</div>
 									<TbChevronRight className='h-4 w-4 text-text-tertiary' />
+									<MenuItemBadge itemId={item.id} activeSection={activeSection} />
 								</motion.button>
 							))}
 						</div>
@@ -379,6 +383,7 @@ function SettingsDetailView({
 										<div className='text-body-sm font-medium truncate'>{item.label}</div>
 									</div>
 									{item.id === section && <TbChevronRight className='relative z-10 h-4 w-4 text-text-secondary' />}
+									<MenuItemBadge itemId={item.id} activeSection={section} />
 								</button>
 							))}
 						</div>
@@ -1834,6 +1839,8 @@ function SoftwareUpdateSection() {
 		<div className='space-y-4'>
 			<p className='text-body-sm text-text-secondary'>Check for LivOS updates.</p>
 			<SoftwareUpdateListRow isActive={false} />
+			<h3 className='mt-6 text-body font-medium'>Past Deploys</h3>
+			<PastDeploysTable />
 		</div>
 	)
 }
