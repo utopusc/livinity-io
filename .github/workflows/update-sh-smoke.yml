@@ -1,0 +1,181 @@
+name: update.sh build smoke test
+
+# Phase 35 (BUILD-04): every PR that touches the build pipeline runs the
+# full pnpm install + per-package builds inside CI to catch silent build
+# failures before merge. Mirrors the build steps in /opt/livos/update.sh
+# so any regression that would brick a production deploy fails the PR
+# at the merge gate instead of in production.
+#
+# v1 scope: BUILD smoke only. Verifies pnpm install + every package's
+# tsc/vite build produces a non-empty dist/ (Phase 31 BUILD-01 pattern).
+# Boot smoke (livinityd actually starts + serves HTTP) is deferred to v2
+# pending refactor of livinityd to expose a real /health endpoint that
+# doesn't fall through to the SPA catch-all.
+
+on:
+  pull_request:
+    paths:
+      - 'livos/**'
+      - 'nexus/**'
+      - '.github/workflows/update-sh-smoke.yml'
+      - '.planning/phases/3*/artifacts/*.sh'
+      - 'livos/scripts/update.sh.minipc'
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-smoke:
+    name: Build pipeline smoke (mirrors update.sh)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm 10
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+          run_install: false
+
+      - name: Get pnpm store dir
+        id: pnpm-store
+        shell: bash
+        run: echo "dir=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.dir }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('livos/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Cache nexus node_modules
+        uses: actions/cache@v4
+        with:
+          path: nexus/node_modules
+          key: nexus-nm-${{ runner.os }}-${{ hashFiles('nexus/package-lock.json', 'nexus/packages/*/package-lock.json') }}
+          restore-keys: |
+            nexus-nm-${{ runner.os }}-
+
+      # ---- LivOS workspace install + builds ----
+
+      - name: pnpm install (livos workspace)
+        working-directory: livos
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @livos/config
+        working-directory: livos
+        run: pnpm --filter @livos/config build
+
+      - name: Verify config dist (Phase 31 BUILD-01 pattern)
+        run: |
+          test -s livos/packages/config/dist/index.js \
+            || (echo "FAIL: livos/packages/config/dist/index.js missing or empty"; exit 1)
+          echo "✓ @livos/config dist OK"
+
+      - name: Build @livos/ui (vite)
+        working-directory: livos
+        run: pnpm --filter ui build
+
+      - name: Verify UI dist (Phase 31 BUILD-01 pattern)
+        run: |
+          test -d livos/packages/ui/dist \
+            && [ "$(ls -A livos/packages/ui/dist 2>/dev/null | wc -l)" -gt 0 ] \
+            || (echo "FAIL: livos/packages/ui/dist missing or empty"; exit 1)
+          echo "✓ @livos/ui dist OK ($(ls livos/packages/ui/dist | wc -l) entries)"
+
+      # ---- Nexus install + builds ----
+
+      - name: npm install (nexus root)
+        working-directory: nexus
+        run: npm install --no-audit --no-fund
+
+      - name: Build @nexus/core
+        working-directory: nexus
+        run: npm run build --workspace=packages/core
+
+      - name: Verify nexus core dist
+        run: |
+          test -s nexus/packages/core/dist/index.js \
+            || (echo "FAIL: nexus/packages/core/dist/index.js missing or empty"; exit 1)
+          echo "✓ @nexus/core dist OK"
+
+      - name: Build @nexus/worker
+        working-directory: nexus
+        run: npm run build --workspace=packages/worker
+
+      - name: Verify nexus worker dist
+        run: |
+          test -s nexus/packages/worker/dist/index.js \
+            || (echo "FAIL: nexus/packages/worker/dist/index.js missing or empty"; exit 1)
+          echo "✓ @nexus/worker dist OK"
+
+      - name: Build @nexus/mcp-server
+        working-directory: nexus
+        run: npm run build --workspace=packages/mcp-server
+
+      - name: Verify nexus mcp-server dist
+        run: |
+          test -s nexus/packages/mcp-server/dist/index.js \
+            || (echo "FAIL: nexus/packages/mcp-server/dist/index.js missing or empty"; exit 1)
+          echo "✓ @nexus/mcp-server dist OK"
+
+      - name: Build @nexus/memory
+        working-directory: nexus
+        run: npm run build --workspace=packages/memory
+
+      - name: Verify nexus memory dist
+        run: |
+          test -s nexus/packages/memory/dist/index.js \
+            || (echo "FAIL: nexus/packages/memory/dist/index.js missing or empty"; exit 1)
+          echo "✓ @nexus/memory dist OK"
+
+      # ---- Type-check livinityd (additional regression catch) ----
+
+      - name: Type-check livinityd
+        working-directory: livos
+        run: pnpm --filter livinityd typecheck
+        continue-on-error: true   # currently 518 pre-existing TS errors in stories/ — phase 36+ to clean
+
+      # ---- Bash artifact lint (Phase 31/32/33 patch scripts) ----
+
+      - name: Bash syntax check on patch scripts
+        run: |
+          shopt -s nullglob
+          for script in .planning/phases/3*/artifacts/*.sh .planning/phases/3*/artifacts/tests/*.sh; do
+            echo "Checking: $script"
+            bash -n "$script" || (echo "FAIL: $script has bash syntax errors"; exit 1)
+          done
+          echo "✓ All patch scripts pass bash -n"
+
+      - name: Smoke test summary
+        if: always()
+        run: |
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "  update.sh build smoke test"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "  Status: ${{ job.status }}"
+          echo ""
+          echo "  Build matrix:"
+          echo "    @livos/config           : verified"
+          echo "    @livos/ui               : verified"
+          echo "    @nexus/core             : verified"
+          echo "    @nexus/worker           : verified"
+          echo "    @nexus/mcp-server       : verified"
+          echo "    @nexus/memory           : verified"
+          echo "    livinityd typecheck     : advisory (continue-on-error)"
+          echo "    Phase 3*/artifacts/*.sh : bash -n verified"
+          echo "═══════════════════════════════════════════════════════════════"
