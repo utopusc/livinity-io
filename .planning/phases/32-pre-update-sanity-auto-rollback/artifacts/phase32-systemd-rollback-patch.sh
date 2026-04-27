@@ -388,10 +388,13 @@ echo "[ROLLBACK] cloning into $TEMP_DIR"
 git clone --no-checkout "$REPO_URL" "$TEMP_DIR"
 echo "[ROLLBACK] fetching previous SHA $PREV_SHA"
 if ! git -C "$TEMP_DIR" fetch --depth=1 origin "$PREV_SHA" 2>/dev/null; then
-    echo "[ROLLBACK] depth-1 fetch failed; falling back to --unshallow"
-    git -C "$TEMP_DIR" fetch --unshallow
+    echo "[ROLLBACK] depth-1 fetch failed; falling back to full branch fetch"
+    git -C "$TEMP_DIR" fetch origin 2>/dev/null || git -C "$TEMP_DIR" fetch --unshallow 2>/dev/null || true
 fi
-git -C "$TEMP_DIR" checkout "$PREV_SHA"
+if ! git -C "$TEMP_DIR" checkout "$PREV_SHA" 2>&1; then
+    echo "[ROLLBACK-ABORT] could not checkout $PREV_SHA after fetch — SHA may not be reachable from any branch tip (force-push?); aborting" >&2
+    exit 1
+fi
 
 # ── Rsync source files (mirrors update.sh) ─────────────────────────────────
 echo "[ROLLBACK] rsyncing livinityd source"
