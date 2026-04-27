@@ -1,0 +1,149 @@
+# ── Phase 33 OBS-01: log file emission ── (canonical trap block — also embedded
+# byte-identical inside phase33-update-sh-logging-patch.sh's HEREDOC. Manual
+# sync — patch script's tail asserts the two are diff-clean.)
+#
+# When sourced from a stub update.sh, behavior is identical to the in-update.sh
+# variant EXCEPT it honors three env-var overrides for testability:
+#   - HISTORY_DIR_OVERRIDE         — root for log + JSON writes (default /opt/livos/data/update-history)
+#   - LIVOS_UPDATE_START_ISO_FS_OVERRIDE — pin the start timestamp for skip-detection tests
+#   - DEPLOYED_SHA_FILE_OVERRIDE   — path to .deployed-sha (default /opt/livos/.deployed-sha)
+HISTORY_DIR="${HISTORY_DIR_OVERRIDE:-/opt/livos/data/update-history}"
+DEPLOYED_SHA_FILE="${DEPLOYED_SHA_FILE_OVERRIDE:-/opt/livos/.deployed-sha}"
+mkdir -p "$HISTORY_DIR"
+
+LIVOS_UPDATE_START_TS=$(date -u +%s)
+LIVOS_UPDATE_START_TS_MS=$(date -u +%s%3N 2>/dev/null || echo $((LIVOS_UPDATE_START_TS * 1000)))
+LIVOS_UPDATE_START_ISO_FS="${LIVOS_UPDATE_START_ISO_FS_OVERRIDE:-$(date -u +%Y-%m-%dT%H-%M-%SZ)}"
+LIVOS_UPDATE_START_ISO_JSON=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+LIVOS_UPDATE_LOG_FILE="${HISTORY_DIR}/update-${LIVOS_UPDATE_START_ISO_FS}-$$-pending.log"
+LIVOS_UPDATE_FROM_SHA=$(cat "$DEPLOYED_SHA_FILE" 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+LIVOS_UPDATE_TO_SHA=""
+
+# Open log via process substitution. MUST be done before the first echo of the
+# real update.sh body so precheck output is captured. (When sourced into a stub
+# this also captures the stub's stdout/stderr.)
+exec > >(tee -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
+
+phase33_finalize() {
+    local exit_code=$?
+    local end_ts end_ts_ms duration_ms status reason_field
+    end_ts=$(date -u +%s)
+    end_ts_ms=$(date -u +%s%3N 2>/dev/null || echo $((end_ts * 1000)))
+    duration_ms=$((end_ts_ms - LIVOS_UPDATE_START_TS_MS))
+
+    # Re-honor LIVOS_UPDATE_START_ISO_FS_OVERRIDE at finalize time. This lets
+    # tests set the override AFTER sourcing the template (e.g. inside a stub
+    # body that simulates Phase 32's precheck() writing a JSON row right before
+    # exit 1). In production the override env var is never set, so this is a
+    # zero-impact pass-through. The .pending log filename was set at startup
+    # and won't match the new ISO_FS — handled by the file-existence checks
+    # below using the (possibly-overridden) precheck_json path.
+    if [[ -n "${LIVOS_UPDATE_START_ISO_FS_OVERRIDE:-}" ]]; then
+        LIVOS_UPDATE_START_ISO_FS="$LIVOS_UPDATE_START_ISO_FS_OVERRIDE"
+    fi
+
+    # Per O-08 / R-06: if Phase 32 precheck() already wrote a precheck-fail row
+    # with our START_ISO_FS prefix, do NOT write a duplicate failed.json. Instead
+    # rename our .pending log to <ts>-precheck-fail.log AND backfill log_path
+    # into the existing precheck-fail.json (so OBS-03 modal can render the log).
+    local precheck_json="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-precheck-fail.json"
+    if [[ -f "$precheck_json" ]]; then
+        local pf_log="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-precheck-fail.log"
+        if [[ -f "$LIVOS_UPDATE_LOG_FILE" ]]; then
+            mv "$LIVOS_UPDATE_LOG_FILE" "$pf_log" 2>/dev/null || true
+        fi
+        # Backfill log_path into the existing JSON (best-effort — never crash trap)
+        if ! grep -q '"log_path"' "$precheck_json" 2>/dev/null; then
+            local tmp; tmp=$(mktemp)
+            # Insert "log_path": "<pf_log>" before the closing brace. Two-pass
+            # awk: collect all lines, then re-emit with the extra field inserted
+            # before the final '}'. Robust against trailing newlines and any
+            # field ordering inside the JSON body.
+            awk -v lp="$pf_log" '
+                { lines[NR] = $0 }
+                END {
+                    # Find the line index of the final "}"
+                    last_brace = 0
+                    for (i = NR; i >= 1; i--) {
+                        if (lines[i] ~ /^[[:space:]]*\}[[:space:]]*$/) { last_brace = i; break }
+                    }
+                    if (last_brace == 0) {
+                        # No closing brace found — emit unchanged
+                        for (i = 1; i <= NR; i++) print lines[i]
+                    } else {
+                        # Emit everything up to (but not including) the last brace,
+                        # ensuring the line immediately before it ends with a comma.
+                        for (i = 1; i < last_brace; i++) {
+                            if (i == last_brace - 1) {
+                                line = lines[i]
+                                # Append "," if not already trailing
+                                if (line !~ /,[[:space:]]*$/) {
+                                    sub(/[[:space:]]*$/, "", line)
+                                    line = line ","
+                                }
+                                print line
+                            } else {
+                                print lines[i]
+                            }
+                        }
+                        print "  \"log_path\": \"" lp "\""
+                        for (i = last_brace; i <= NR; i++) print lines[i]
+                    }
+                }
+            ' "$precheck_json" > "$tmp" 2>/dev/null && mv "$tmp" "$precheck_json" 2>/dev/null || rm -f "$tmp"
+            chmod 644 "$precheck_json" 2>/dev/null || true
+        fi
+        return
+    fi
+
+    if (( exit_code == 0 )); then
+        status="success"
+    else
+        status="failed"
+    fi
+
+    # Rename .pending → final (only if SHA was captured by Splice 2 / TO_SHA setter)
+    local final_log_file="$LIVOS_UPDATE_LOG_FILE"
+    if [[ -n "$LIVOS_UPDATE_TO_SHA" ]]; then
+        final_log_file="${HISTORY_DIR}/update-${LIVOS_UPDATE_START_ISO_FS}-${LIVOS_UPDATE_TO_SHA:0:7}.log"
+        mv "$LIVOS_UPDATE_LOG_FILE" "$final_log_file" 2>/dev/null || true
+    fi
+
+    # IMPORTANT: extract reason BEFORE appending the [PHASE33-SUMMARY] line.
+    # The summary line contains the literal substring "failed" which would
+    # match the reason regex below and `tail -1` would pick the summary itself
+    # instead of the real error line. Build JSON reason FIRST, append summary
+    # SECOND.
+    reason_field=""
+    if [[ "$status" == "failed" ]]; then
+        local last_err
+        last_err=$(grep -E '\[FAIL\]|fail|Error|error' "$final_log_file" 2>/dev/null \
+            | grep -vF '[PHASE33-SUMMARY]' \
+            | tail -1 | tr -d '"' | cut -c1-200)
+        reason_field=", \"reason\": \"${last_err:-unknown error (exit $exit_code)}\""
+    fi
+
+    # Append summary line OUTSIDE the tee redirection (direct write — tee may
+    # have already flushed and closed by the time the trap fires post-exit).
+    {
+        echo ""
+        echo "[PHASE33-SUMMARY] status=$status exit_code=$exit_code duration_seconds=$((duration_ms / 1000))"
+    } >> "$final_log_file" 2>/dev/null || true
+
+    local from_field=""
+    [[ -n "$LIVOS_UPDATE_FROM_SHA" ]] && [[ "$LIVOS_UPDATE_FROM_SHA" != "unknown" ]] && from_field=", \"from_sha\": \"$LIVOS_UPDATE_FROM_SHA\""
+    local to_field=""
+    [[ -n "$LIVOS_UPDATE_TO_SHA" ]] && to_field=", \"to_sha\": \"$LIVOS_UPDATE_TO_SHA\""
+
+    local json_path="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-${status}.json"
+    cat > "$json_path" <<JSON
+{
+  "timestamp": "${LIVOS_UPDATE_START_ISO_JSON}",
+  "status": "${status}"${from_field}${to_field},
+  "duration_ms": ${duration_ms},
+  "log_path": "${final_log_file}"${reason_field}
+}
+JSON
+    chmod 644 "$json_path" 2>/dev/null || true
+}
+trap phase33_finalize EXIT
