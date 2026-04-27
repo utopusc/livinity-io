@@ -209,7 +209,7 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
 **Plans**: 3 plans
 - [x] 33-01-PLAN.md — Backend tRPC routes (system.listUpdateHistory + system.readUpdateLog) + httpOnlyPaths wiring + 3-layer filename guard + 12+ unit tests (OBS-02, OBS-03)
 - [x] 33-02-PLAN.md — phase33-update-sh-logging-patch.sh artifact + bash test (4 scenarios) + Mini PC SSH-apply verified (OBS-01)
-- [ ] 33-03-PLAN.md — Frontend (PastDeploysTable + UpdateLogViewerDialog + MenuItemBadge) + RTL/smoke tests (OBS-02, OBS-03, UX-04)
+- [x] 33-03-PLAN.md — Frontend (PastDeploysTable + UpdateLogViewerDialog + MenuItemBadge) + RTL/smoke tests (OBS-02, OBS-03, UX-04)
 **Patch artifact**: `.planning/phases/33-update-observability-surface/artifacts/phase33-update-sh-logging-patch.sh` (SSH-applied to Mini PC; mirrors Phase 31/32 patch-script architecture)
 **UI hint**: yes
 
