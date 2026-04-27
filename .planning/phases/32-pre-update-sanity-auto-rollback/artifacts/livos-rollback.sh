@@ -56,6 +56,21 @@ if [[ -f "$ROLLBACK_LOCK" ]]; then
 fi
 touch "$ROLLBACK_LOCK"
 
+# EXIT trap: log a clear failure marker when the process dies unexpectedly
+# (SIGTERM from systemd timeout, set -e abort mid-build, OOM kill, etc.).
+# NOTE: Per O-05 lock-persistence policy the lock is deliberately NOT removed
+# on error — it stays so the operator can see a previous attempt failed before
+# allowing another auto-rollback cycle. The trap exists purely to emit a
+# visible journal message; without it a mid-run death is completely silent.
+cleanup_lock_on_error() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]] && [[ -f "$ROLLBACK_LOCK" ]]; then
+        echo "[ROLLBACK-ERROR] process exited with code $exit_code; lock preserved at $ROLLBACK_LOCK for operator review" >&2
+        echo "[ROLLBACK-ERROR] to retry after investigating: sudo rm $ROLLBACK_LOCK && sudo systemctl start livos-rollback.service" >&2
+    fi
+}
+trap cleanup_lock_on_error EXIT
+
 # ── Read previous SHA ──────────────────────────────────────────────────────
 if [[ ! -f "$PREV_SHA_FILE" ]]; then
     echo "[ROLLBACK-ABORT] first deploy ever, no previous SHA to revert to."
