@@ -1,0 +1,8 @@
+# Force LF line endings for all shell scripts — prevents CRLF-in-heredoc breakage
+# when deploying from Windows clones via `ssh host 'sudo bash -s' < script.sh`.
+# Without this, `git config core.autocrlf=true` checks out .sh files with \r\n,
+# causing heredoc terminators to not match on the remote Linux host.
+*.sh text eol=lf
+*.conf text eol=lf
+.planning/phases/**/artifacts/**/*.sh text eol=lf
+.planning/phases/**/artifacts/**/*.conf text eol=lf
