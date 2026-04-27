@@ -162,7 +162,7 @@ describe('performUpdate (UPD-02)', () => {
 		const ok = await performUpdate(livinityd)
 
 		expect(ok).toBe(true)
-		expect(factory).toHaveBeenCalledWith({cwd: '/opt/livos'})
+		expect(factory).toHaveBeenCalledWith({cwd: '/opt/livos', detached: true})
 		// invoker should be called as a tagged template — first arg is the strings array
 		expect(taggedInvoker).toHaveBeenCalled()
 		const callArgs = taggedInvoker.mock.calls[0]
