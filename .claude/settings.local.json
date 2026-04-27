@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Skill(gsd:execute-phase)"
+      "Skill(gsd:execute-phase)",
+      "Bash(head -n 51 \"C:/Users/hello/Desktop/Projects/contabo/livinity-io/.planning/STATE.md\")",
+      "Bash(tail -n +52 \"C:/Users/hello/Desktop/Projects/contabo/livinity-io/.planning/STATE.md\")",
+      "Bash(/c/Windows/System32/OpenSSH/ssh.exe -i \"C:/Users/hello/Desktop/Projects/contabo/pem/minipc\" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 bruce@10.69.31.68 'sudo cat /opt/livos/update.sh')",
+      "Bash(echo \"MINIPC EXIT: $?\")",
+      "Bash(/c/Windows/System32/OpenSSH/ssh.exe -i \"C:/Users/hello/Desktop/Projects/contabo/pem/contabo_master\" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 root@45.137.194.103 'cat /opt/livos/update.sh')",
+      "Bash(echo \"SERVER4 EXIT: $?\")"
     ]
   }
 }
