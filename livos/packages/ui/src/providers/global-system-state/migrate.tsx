@@ -54,19 +54,3 @@ export function MigratingCover({onRetry}: {onRetry: () => void}) {
 	)
 }
 
-export function useSoftwareUpdate({
-	onMutate,
-	onSuccess,
-}: {
-	onMutate?: () => void
-	onSuccess?: (didWork: boolean) => void
-}) {
-	const updateVersionMut = trpcReact.system.update.useMutation({
-		onMutate,
-		onSuccess,
-	})
-
-	const update = () => updateVersionMut.mutate()
-
-	return update
-}
