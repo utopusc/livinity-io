@@ -193,7 +193,7 @@ See `.planning/milestones/v27.0-ROADMAP.md` for full archive.
 **Plans**: 3 plans
 - [x] 32-01-PLAN.md — REL-01 precheck implementation: precheck-block.sh + 3 bash unit tests + vitest test G round-trip
 - [x] 32-02-PLAN.md — REL-02 rollback machinery: livos-rollback.sh + livos-rollback.service + auto-rollback.conf + 2 bash unit tests
-- [ ] 32-03-PLAN.md — Compose phase32-systemd-rollback-patch.sh + SSH-apply on Mini PC + Server4 (HUMAN-VERIFY) + canary-commit doc
+- [x] 32-03-PLAN.md — Compose phase32-systemd-rollback-patch.sh + SSH-apply on Mini PC verified (Server4 deferred per user → BACKLOG 999.7) + canary-commit doc
 **Patch artifact**: `.planning/phases/32-pre-update-sanity-auto-rollback/artifacts/phase32-systemd-rollback-patch.sh` (applies systemd unit drop-in + watchdog script via SSH to both hosts)
 
 ### Phase 33: Update Observability Surface
