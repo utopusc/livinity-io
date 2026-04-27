@@ -26,7 +26,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - [x] **Phase 32: Pre-Update Sanity & Auto-Rollback** — Disk/write/GitHub pre-flight checks + livinityd 3× crash → previous SHA rollback via systemd OnFailure (REL-01, REL-02) — completed 2026-04-27 (Mini PC verified live, 17/17 must-haves; Server4 deferred → BACKLOG 999.7)
 - [x] **Phase 33: Update Observability Surface** — Structured `update-history/*.log` + Past Deploys list + log viewer modal + sidebar Software Update badge (OBS-01, OBS-02, OBS-03, UX-04) — completed 2026-04-27 (Mini PC live deploy validated end-to-end: trap fired in 70s, success.json written, browser-confirmed UI)
 - [x] **Phase 34: Update UX Hardening** — `system.update` onError toasts + pending-state guards + httpOnlyPaths for long-running mutations (UX-01, UX-02, UX-03) — completed 2026-04-27 (reconciliation: emergency fix `11634c5a` + dead-code removal + BACKLOG 999.6 regression test, 4/4 SCs)
-- [ ] **Phase 35: GitHub Actions update.sh Smoke Test** — PR-time Docker container boot health check, blocks merge on failure (BUILD-04)
+- [x] **Phase 35: GitHub Actions update.sh Smoke Test** — PR-time Docker container boot health check, blocks merge on failure (BUILD-04) — completed 2026-04-27 (build-smoke v1: 6 package builds + dist verifies + bash artifact lint; boot-smoke deferred to v2 pending real /health endpoint; SC-3 canary validation = operator opt-in)
 
 ### Past Milestones
 
@@ -251,7 +251,7 @@ v29.0 phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35
 | 32. Pre-Update Sanity & Auto-Rollback | v29.0 | 3/3 | Complete    | 2026-04-27 |
 | 33. Update Observability Surface | v29.0 | 3/3 | Complete    | 2026-04-27 |
 | 34. Update UX Hardening | v29.0 | 1/1 | Complete    | 2026-04-27 |
-| 35. GitHub Actions update.sh Smoke Test | v29.0 | 0/0 | Not started | — |
+| 35. GitHub Actions update.sh Smoke Test | v29.0 | 1/1 | Complete    | 2026-04-27 |
 
 ---
 
