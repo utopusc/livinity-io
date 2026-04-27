@@ -36,6 +36,13 @@ run_scenario() {
     local stub_body="$2"
     local sandbox
     sandbox=$(mktemp -d)
+    # Guard: eval "$cond" in assert() is safe only when paths contain no spaces
+    # or shell metacharacters. Fail fast here so we never silently mis-evaluate
+    # assertions on systems where TMPDIR contains spaces (e.g., macOS CI).
+    if [[ "$sandbox" == *' '* || "$sandbox" == *'$'* || "$sandbox" == *'`'* ]]; then
+        echo "FATAL: sandbox path '$sandbox' contains unsafe characters for eval" >&2
+        exit 1
+    fi
     export PHASE33_TEST_HOME="$sandbox"
 
     # Mock /opt/livos/data/update-history under the sandbox
@@ -62,6 +69,8 @@ EOF
 assert() {
     local desc="$1"
     local cond="$2"
+    # NOTE: eval is safe here because run_scenario guards that sandbox paths
+    # contain no spaces or shell metacharacters before any assertions run.
     if eval "$cond"; then
         PASSED=$((PASSED + 1))
     else
