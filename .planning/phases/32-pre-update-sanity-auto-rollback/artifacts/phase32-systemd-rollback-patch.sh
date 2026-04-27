@@ -491,6 +491,10 @@ for store_dir in /opt/livos/node_modules/.pnpm/@nexus+core*/; do
     COPY_COUNT=$((COPY_COUNT + 1))
 done
 echo "[ROLLBACK] nexus core dist copied to $COPY_COUNT pnpm-store dir(s)"
+if (( COPY_COUNT == 0 )); then
+    echo "[ROLLBACK-ABORT] no @nexus+core* dirs found in pnpm-store — livinityd import will fail; aborting rather than restart with stale dist" >&2
+    exit 1
+fi
 
 # ── Write new SHA + history JSON ───────────────────────────────────────────
 echo "$PREV_SHA" > "$CURRENT_SHA_FILE"
