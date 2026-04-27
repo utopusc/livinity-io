@@ -26,8 +26,13 @@ touch "$SANDBOX/.rollback-attempted"
 echo "abc1234" > "$SANDBOX/.deployed-sha.previous"
 
 PATCHED="$TMPDIR/livos-rollback.sh"
-sed "s|/opt/livos|$SANDBOX|g" "$ROLLBACK_SH" > "$PATCHED"
+# Rewrite BOTH /opt/livos and /opt/nexus so any future abort-path tests that
+# reach nexus paths don't touch real host dirs.
+sed -e "s|/opt/livos|$SANDBOX|g" \
+    -e "s|/opt/nexus|$SANDBOX/nexus|g" \
+    "$ROLLBACK_SH" > "$PATCHED"
 chmod +x "$PATCHED"
+mkdir -p "$SANDBOX/nexus"
 
 STDERR_FILE="$TMPDIR/stderr"
 STDOUT_FILE="$TMPDIR/stdout"

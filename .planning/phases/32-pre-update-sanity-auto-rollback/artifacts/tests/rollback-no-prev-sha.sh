@@ -24,10 +24,14 @@ mkdir -p "$SANDBOX/data/update-history"
 # Intentionally do NOT create $SANDBOX/.deployed-sha.previous — that's the test condition
 # Intentionally do NOT touch $SANDBOX/.rollback-attempted — must NOT trigger loop guard
 
-# Copy + path-rewrite the rollback script
+# Copy + path-rewrite the rollback script — rewrite BOTH /opt/livos and /opt/nexus
+# so any future abort-path tests that reach nexus paths don't touch real host dirs.
 PATCHED="$TMPDIR/livos-rollback.sh"
-sed "s|/opt/livos|$SANDBOX|g" "$ROLLBACK_SH" > "$PATCHED"
+sed -e "s|/opt/livos|$SANDBOX|g" \
+    -e "s|/opt/nexus|$SANDBOX/nexus|g" \
+    "$ROLLBACK_SH" > "$PATCHED"
 chmod +x "$PATCHED"
+mkdir -p "$SANDBOX/nexus"
 
 STDERR_FILE="$TMPDIR/stderr"
 STDOUT_FILE="$TMPDIR/stdout"
