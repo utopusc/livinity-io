@@ -1,5 +1,5 @@
 import os from 'node:os'
-import fs from 'node:fs/promises'
+import fs, {stat as fsStat} from 'node:fs/promises'
 import path from 'node:path'
 import {setTimeout} from 'node:timers/promises'
 
@@ -189,6 +189,25 @@ export default router({
 			const resolved = path.resolve(HISTORY_DIR_RESOLVED, input.filename)
 			if (!resolved.startsWith(HISTORY_DIR_RESOLVED + path.sep) && resolved !== HISTORY_DIR_RESOLVED) {
 				throw new TRPCError({code: 'BAD_REQUEST', message: 'Invalid filename'})
+			}
+
+			// R-04 size cap: read stat before readFile to prevent a rogue/corrupt log
+			// file from exhausting the livinityd heap and crashing the management plane.
+			const MAX_LOG_BYTES = 50 * 1024 * 1024 // 50 MB
+			try {
+				const stat = await fsStat(resolved)
+				if (stat.size > MAX_LOG_BYTES) {
+					throw new TRPCError({
+						code: 'PAYLOAD_TOO_LARGE',
+						message: `Log file too large (${Math.round(stat.size / 1048576)}MB, max 50MB)`,
+					})
+				}
+			} catch (err: any) {
+				if (err instanceof TRPCError) throw err
+				if (err && err.code === 'ENOENT') {
+					throw new TRPCError({code: 'NOT_FOUND', message: 'Log file not found'})
+				}
+				throw err
 			}
 
 			let content: string

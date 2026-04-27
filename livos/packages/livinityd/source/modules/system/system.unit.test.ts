@@ -215,6 +215,7 @@ describe('system.readUpdateLog filename validation (Phase 33 OBS-03 security)', 
 describe('system.readUpdateLog happy path (Phase 33 OBS-03)', () => {
 	test('H1: valid filename, < 500 lines, returns full content with truncated:false', async () => {
 		const body = Array.from({length: 100}, (_, i) => `line${i}`).join('\n')
+		vi.mocked(fsPromises.stat).mockResolvedValue({size: 1024} as any)
 		vi.mocked(fsPromises.readFile).mockResolvedValue(body)
 		const caller = makeCaller()
 		const result = await caller.readUpdateLog({filename: 'update-2026-04-26T18-24-30Z-abc1234.log', full: false})
@@ -224,6 +225,7 @@ describe('system.readUpdateLog happy path (Phase 33 OBS-03)', () => {
 
 	test('H2: > 500 lines, returns last 500 + truncated:true + totalLines', async () => {
 		const body = Array.from({length: 1000}, (_, i) => `line${i}`).join('\n')
+		vi.mocked(fsPromises.stat).mockResolvedValue({size: 1024} as any)
 		vi.mocked(fsPromises.readFile).mockResolvedValue(body)
 		const caller = makeCaller()
 		const result = await caller.readUpdateLog({filename: 'update-2026-04-26T18-24-30Z-abc1234.log', full: false})
@@ -236,6 +238,7 @@ describe('system.readUpdateLog happy path (Phase 33 OBS-03)', () => {
 
 	test('H3: full:true returns entire content even if > 500 lines', async () => {
 		const body = Array.from({length: 1000}, (_, i) => `line${i}`).join('\n')
+		vi.mocked(fsPromises.stat).mockResolvedValue({size: 1024} as any)
 		vi.mocked(fsPromises.readFile).mockResolvedValue(body)
 		const caller = makeCaller()
 		const result = await caller.readUpdateLog({filename: 'update-2026-04-26T18-24-30Z-abc1234.log', full: true})
@@ -243,10 +246,10 @@ describe('system.readUpdateLog happy path (Phase 33 OBS-03)', () => {
 		expect(result.content.split('\n')).toHaveLength(1000)
 	})
 
-	test('H4: ENOENT becomes TRPCError NOT_FOUND', async () => {
+	test('H4: ENOENT from stat becomes TRPCError NOT_FOUND', async () => {
 		const enoent: any = new Error('ENOENT')
 		enoent.code = 'ENOENT'
-		vi.mocked(fsPromises.readFile).mockRejectedValue(enoent)
+		vi.mocked(fsPromises.stat).mockRejectedValue(enoent)
 		const caller = makeCaller()
 		await expect(
 			caller.readUpdateLog({filename: 'update-2026-04-26T18-24-30Z-abc1234.log', full: false}),
@@ -258,5 +261,27 @@ describe('Phase 33 OBS-02/03 — httpOnlyPaths registration', () => {
 	test('HOP1: both new routes appear in httpOnlyPaths', () => {
 		expect(httpOnlyPaths).toContain('system.listUpdateHistory')
 		expect(httpOnlyPaths).toContain('system.readUpdateLog')
+	})
+})
+
+describe('system.readUpdateLog 50MB size cap (Phase 33 R-04)', () => {
+	test('SC1: rejects with PAYLOAD_TOO_LARGE when log file exceeds 50MB', async () => {
+		const OVER_50_MiB = 53 * 1024 * 1024 // 53 MiB > 50 MiB cap
+		vi.mocked(fsPromises.stat).mockResolvedValue({size: OVER_50_MiB} as any)
+		const caller = makeCaller()
+		await expect(
+			caller.readUpdateLog({filename: 'update-2026-04-26T18-24-30Z-abc1234.log', full: false}),
+		).rejects.toMatchObject({code: 'PAYLOAD_TOO_LARGE'})
+		// readFile must NOT be called when stat shows file is too large
+		expect(fsPromises.readFile).not.toHaveBeenCalled()
+	})
+
+	test('SC2: allows log file exactly at 50MB limit (boundary)', async () => {
+		const MAX = 50 * 1024 * 1024
+		vi.mocked(fsPromises.stat).mockResolvedValue({size: MAX} as any)
+		vi.mocked(fsPromises.readFile).mockResolvedValue('one line')
+		const caller = makeCaller()
+		const result = await caller.readUpdateLog({filename: 'update-2026-04-26T18-24-30Z-abc1234.log', full: false})
+		expect(result.truncated).toBe(false)
 	})
 })
