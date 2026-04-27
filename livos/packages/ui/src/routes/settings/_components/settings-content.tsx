@@ -84,6 +84,9 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {ChangePasswordWarning, ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
+import {SoftwareUpdateListRow} from './software-update-list-row'
+import {PastDeploysTable} from './past-deploys-table'
+import {MenuItemBadge} from './menu-item-badge'
 
 // Lazy-loaded DM Pairing content
 const DmPairingContentLazy = React.lazy(() =>
@@ -111,9 +114,6 @@ const MemorySectionLazy = React.lazy(() =>
 	import('@/routes/settings/memory').then((m) => ({default: m.MemorySection})),
 )
 const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
-import {SoftwareUpdateListRow} from './software-update-list-row'
-import {PastDeploysTable} from './past-deploys-table'
-import {MenuItemBadge} from './menu-item-badge'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
