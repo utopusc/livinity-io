@@ -34,6 +34,13 @@ export const httpOnlyPaths = [
 	// to the trpc error surface immediately so useSoftwareUpdate.checkLatest()
 	// can toast them via its existing try/catch.
 	'system.checkUpdate',
+	// Phase 33 OBS-02 / OBS-03 — admin-only filesystem reads of
+	// /opt/livos/data/update-history/. Used in the "diagnose a just-failed
+	// update" flow, where the user's WS may be in a half-broken state from the
+	// deploy restart cycle. HTTP guarantees the query reaches livinityd and
+	// any error surfaces to the toast handler.
+	'system.listUpdateHistory',
+	'system.readUpdateLog',
 	// Multi-user management routes — use HTTP to avoid WS connection dependency
 	'user.createInvite',
 	'user.listAllUsers',
