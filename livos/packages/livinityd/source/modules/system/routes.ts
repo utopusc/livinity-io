@@ -1,4 +1,6 @@
 import os from 'node:os'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import {setTimeout} from 'node:timers/promises'
 
 import {TRPCError} from '@trpc/server'
@@ -24,7 +26,7 @@ import {
 	syncDns,
 } from './system.js'
 
-import {privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
+import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
 
 type SystemStatus = 'running' | 'updating' | 'shutting-down' | 'restarting' | 'migrating' | 'resetting' | 'restoring'
 let systemStatus: SystemStatus = 'running'
@@ -109,6 +111,105 @@ export default router({
 		}
 		return success
 	}),
+	// ─────────────────────────────────────────────────────────────────────
+	// Phase 33 OBS-02 — list last N deploy history entries
+	//   Reads /opt/livos/data/update-history/*.json (Phase 32 schema:
+	//   <ts>-rollback.json / <ts>-precheck-fail.json + Phase 33 33-02
+	//   adds <ts>-success.json / <ts>-failed.json). Returns the parsed
+	//   bodies plus the source filename, sorted newest-first.
+	// ─────────────────────────────────────────────────────────────────────
+	listUpdateHistory: adminProcedure
+		.input(z.object({limit: z.number().int().min(1).max(200).default(50)}))
+		.query(async ({input}) => {
+			const HISTORY_DIR = '/opt/livos/data/update-history'
+			let entries: string[] = []
+			try {
+				entries = await fs.readdir(HISTORY_DIR)
+			} catch (err: any) {
+				if (err && err.code === 'ENOENT') return [] // dir absent on dev machines
+				throw err
+			}
+			const jsonFiles = entries.filter((f) => f.endsWith('.json'))
+			const records = await Promise.all(
+				jsonFiles.map(async (f) => {
+					try {
+						const raw = await fs.readFile(path.join(HISTORY_DIR, f), 'utf8')
+						const parsed = JSON.parse(raw)
+						if (typeof parsed?.timestamp !== 'string') return null
+						return {filename: f, ...parsed}
+					} catch {
+						return null // corrupt JSON: skip, don't crash the entire list
+					}
+				}),
+			)
+			const valid = records.filter((r): r is NonNullable<typeof r> => r !== null)
+			valid.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
+			return valid.slice(0, input.limit)
+		}),
+
+	// ─────────────────────────────────────────────────────────────────────
+	// Phase 33 OBS-03 — read a single deploy log file (tail-500 default,
+	//   full content on demand for download). 3-layer filename guard:
+	//     1. basename equality (rejects '/' and '\')
+	//     2. regex whitelist /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(log|json)$/
+	//        (rejects '..foo.log' — leading '.' is forbidden; rejects
+	//        '.bash_history' — no .log/.json extension)
+	//     3. resolved-path startswith resolved HISTORY_DIR (defense-in-
+	//        depth / refactor-safety). Resolving BOTH sides ensures the
+	//        comparison works on Windows (path.resolve normalises drive +
+	//        separator) — though in production HISTORY_DIR is the literal
+	//        POSIX path on the Mini PC.
+	// ─────────────────────────────────────────────────────────────────────
+	readUpdateLog: adminProcedure
+		.input(
+			z.object({
+				filename: z.string().min(1).max(200),
+				full: z.boolean().default(false),
+			}),
+		)
+		.query(async ({input}) => {
+			const HISTORY_DIR = '/opt/livos/data/update-history'
+			const FILENAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(log|json)$/
+
+			// Layer 1: basename equality — rejects any path separator
+			if (path.basename(input.filename) !== input.filename) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Invalid filename'})
+			}
+			// Layer 2: regex whitelist — first char must be alnum (rejects
+			// '..hidden.log'), only alphanum + . _ - allowed, must end with
+			// .log or .json (rejects '.bash_history').
+			if (!FILENAME_RE.test(input.filename)) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Invalid filename'})
+			}
+			// Layer 3: resolved containment — defense-in-depth for refactor
+			// safety. Resolve BOTH sides so the comparison works regardless of
+			// host OS (Windows path.resolve injects a drive letter that won't
+			// match a hard-coded POSIX prefix string).
+			const HISTORY_DIR_RESOLVED = path.resolve(HISTORY_DIR)
+			const resolved = path.resolve(HISTORY_DIR_RESOLVED, input.filename)
+			if (!resolved.startsWith(HISTORY_DIR_RESOLVED + path.sep) && resolved !== HISTORY_DIR_RESOLVED) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Invalid filename'})
+			}
+
+			let content: string
+			try {
+				content = await fs.readFile(resolved, 'utf8')
+			} catch (err: any) {
+				if (err && err.code === 'ENOENT') {
+					throw new TRPCError({code: 'NOT_FOUND', message: 'Log file not found'})
+				}
+				throw err
+			}
+
+			if (input.full) return {filename: input.filename, content, truncated: false}
+
+			const lines = content.split('\n')
+			const TAIL = 500
+			if (lines.length <= TAIL) return {filename: input.filename, content, truncated: false}
+			const tail = lines.slice(-TAIL).join('\n')
+			return {filename: input.filename, content: tail, truncated: true, totalLines: lines.length}
+		}),
+
 	hiddenService: privateProcedure.query(async ({ctx}) => {
 		try {
 			return await fse.readFile(`${ctx.livinityd.dataDirectory}/tor/data/web/hostname`, 'utf-8')
