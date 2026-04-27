@@ -1,5 +1,21 @@
 # Milestones
 
+## v29.0 Deploy & Update Stability (Shipped: 2026-04-27)
+
+**Phases completed:** 5 phases, 11 plans, 22 tasks
+
+**Key accomplishments:**
+
+- Code-read root-cause hunt on /opt/livos/update.sh build silent-fail — produced verdict matrix (1 confirmed bug, 4 ruled-out hypotheses, 2 inconclusive contributing factors) plus 7-item remediation spec that IS Plan 02's patch-script input contract.
+- Idempotent 370-line patch script `phase31-update-sh-patch.sh` that delivers BUILD-01 (verify_build helper + 10 wired call sites), BUILD-02 (multi-dir @nexus+core dist-copy loop), and BUILD-03 (worker/mcp-server masking strip + memory-build injection on Server4 + inconclusive-verdict marker), with backup-then-syntax-check-then-restore safety net.
+- Patch applied to both prod hosts
+- Single self-contained patch script `phase32-systemd-rollback-patch.sh` (embeds all 4 Plan 01+02 artifacts as HEREDOCs) applied to Mini PC with full idempotency proven, all 4 systemd directives verified, and a 61.1-second synthetic-trigger rollback validating the entire OnFailure → oneshot → JSON-history chain — Server4 explicitly deferred per user pivot to Factory Reset (BACKLOG 999.7).
+- Self-contained idempotent patch wraps `/opt/livos/update.sh` in a `tee` + EXIT-trap that emits canonical `update-<ts>-<sha>.log` + `<ts>-success|failed.json` records — applied + idempotency-verified + bash-n-clean on Mini PC; live trap-firing deferred to organic first-deploy via UI per user opt (21/21 bash unit-test assertions cover all 4 trap scenarios).
+- Pure code cleanup phase, no plan-checker / executor agents needed.
+- Tier downgrade (build-only vs full deploy smoke):
+
+---
+
 ## v28.0 Docker Management UI (Dockhand-Style) (Shipped: 2026-04-26)
 
 **Phases completed:** 6 phases (24-29), 12 plans, 33 tasks
