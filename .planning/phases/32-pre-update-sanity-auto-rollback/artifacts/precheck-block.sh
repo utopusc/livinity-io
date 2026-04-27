@@ -23,6 +23,13 @@
 #
 # On any failure: writes <iso-ts>-precheck-fail.json to update-history/ AND
 # exits 1 (Phase 33 OBS-02 will render these as "deploy attempted, blocked").
+#
+# IMPORTANT — call-site convention: the patch script inserts `precheck || exit 1`
+# (not bare `precheck`). This function uses `exit 1` internally (not `return 1`)
+# by design — it must only be called from a non-subshell context. The `|| exit 1`
+# at the call site is a defensive belt-and-suspenders guard: if this function is
+# ever refactored to use `return 1` semantics, the calling update.sh will still
+# correctly abort rather than silently continuing past a failed precheck.
 precheck() {
     local start_ts end_ts duration_ms iso_ts history_dir
     start_ts=$(date -u +%s%3N 2>/dev/null || echo $(($(date -u +%s) * 1000)))
