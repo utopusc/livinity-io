@@ -24,7 +24,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 - [ ] **Phase 31: update.sh Build Pipeline Integrity** — Fail-loud build guards + idempotent pnpm-store dist-copy + silent-fail root-cause kill (BUILD-01, BUILD-02, BUILD-03)
 - [x] **Phase 32: Pre-Update Sanity & Auto-Rollback** — Disk/write/GitHub pre-flight checks + livinityd 3× crash → previous SHA rollback via systemd OnFailure (REL-01, REL-02) — completed 2026-04-27 (Mini PC verified live, 17/17 must-haves; Server4 deferred → BACKLOG 999.7)
-- [ ] **Phase 33: Update Observability Surface** — Structured `update-history/*.log` + Past Deploys list + log viewer modal + sidebar Software Update badge (OBS-01, OBS-02, OBS-03, UX-04)
+- [x] **Phase 33: Update Observability Surface** — Structured `update-history/*.log` + Past Deploys list + log viewer modal + sidebar Software Update badge (OBS-01, OBS-02, OBS-03, UX-04) — completed 2026-04-27 (Mini PC live deploy validated end-to-end: trap fired in 70s, success.json written, browser-confirmed UI)
 - [ ] **Phase 34: Update UX Hardening** — `system.update` onError toasts + pending-state guards + httpOnlyPaths for long-running mutations (UX-01, UX-02, UX-03)
 - [ ] **Phase 35: GitHub Actions update.sh Smoke Test** — PR-time Docker container boot health check, blocks merge on failure (BUILD-04)
 
@@ -249,7 +249,7 @@ v29.0 phases execute in numeric order: 31 -> 32 -> 33 -> 34 -> 35
 |-------|-----------|----------------|--------|-----------|
 | 31. update.sh Build Pipeline Integrity | v29.0 | 1/3 | In progress | — |
 | 32. Pre-Update Sanity & Auto-Rollback | v29.0 | 3/3 | Complete    | 2026-04-27 |
-| 33. Update Observability Surface | v29.0 | 0/3 | Planned     | — |
+| 33. Update Observability Surface | v29.0 | 3/3 | Complete    | 2026-04-27 |
 | 34. Update UX Hardening | v29.0 | 0/0 | Not started | — |
 | 35. GitHub Actions update.sh Smoke Test | v29.0 | 0/0 | Not started | — |
 

@@ -26,7 +26,7 @@ Phase 30 sonrası UAT'de tespit edilen "Install Update tıklandı, hiçbir şey 
 - [x] **UX-01**: `system.update` mutation `onError` her çağırıcıda kullanıcıya toast olarak yüzeye çıkar (actionable error text — "Disk full" / "GitHub unreachable" / "WS disconnected"). ✓ (commit `11634c5a` — emergency fix during Phase 31 verification, Phase 34 yarıda yapıldı)
 - [x] **UX-02**: Install Update butonu `mutation.isPending` boyunca disable + UpdatingCover dismiss-guard (kullanıcı modali kazara kapatamaz, geri-press disabled). ✓ (commit `11634c5a`)
 - [x] **UX-03**: `system.update` (ve diğer long-running mutations: `system.checkUpdate`) `httpOnlyPaths` listesine alınır — WS hang-up sırasında HTTP transport'tan akar, silent-drop biter. ✓ (commit `11634c5a` — `system.update`/`updateStatus` zaten Phase 30'da eklenmişti, `checkUpdate` Phase 34 yarıda eklendi)
-- [ ] **UX-04**: Settings sidebar'da update mevcutsa "Software Update" satırının yanında bir badge gösterilir (BACKLOG 999.1).
+- [x] **UX-04**: Settings sidebar'da update mevcutsa "Software Update" satırının yanında bir badge gösterilir (BACKLOG 999.1).
 
 ### Reliability & Auto-Rollback (REL)
 
@@ -39,9 +39,9 @@ Phase 30 sonrası UAT'de tespit edilen "Install Update tıklandı, hiçbir şey 
 
 Bir update'in ne yaptığı/neden başarısız olduğu tarayıcıdan görülebilir olsun — SSH'a düşmeden teşhis.
 
-- [ ] **OBS-01**: `update.sh` her koşusunda yapılandırılmış log dosyası yazar — `/opt/livos/data/update-history/update-<ISO-timestamp>-<sha>.log` formatında, tüm step'ler + exit code + duration.
-- [ ] **OBS-02**: Settings > Software Update sayfasında "Past Deploys" listesi gösterilir — `update-history/*.log` dosyalarından okunan SHA, timestamp, status (success/failed/rolled-back), duration tablosu, en yeni en üstte, son 50 entry.
-- [ ] **OBS-03**: Past Deploys satırı tıklanınca log viewer modal açılır (tail -n 500 of update log + "Download full log" butonu) — kullanıcı CVE-style log'u kopyalayıp issue açabilir.
+- [x] **OBS-01**: `update.sh` her koşusunda yapılandırılmış log dosyası yazar — `/opt/livos/data/update-history/update-<ISO-timestamp>-<sha>.log` formatında, tüm step'ler + exit code + duration.
+- [x] **OBS-02**: Settings > Software Update sayfasında "Past Deploys" listesi gösterilir — `update-history/*.log` dosyalarından okunan SHA, timestamp, status (success/failed/rolled-back), duration tablosu, en yeni en üstte, son 50 entry.
+- [x] **OBS-03**: Past Deploys satırı tıklanınca log viewer modal açılır (tail -n 500 of update log + "Download full log" butonu) — kullanıcı CVE-style log'u kopyalayıp issue açabilir.
 
 ---
 
