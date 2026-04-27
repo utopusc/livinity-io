@@ -150,3 +150,58 @@ The card's "Update" button (round 4) and the Settings list-row "View" button (ro
 **Estimate:** 1-2 hours of investigation — could be Suspense boundary tuning, query enabled gate, or window-mount delay.
 
 ---
+
+## 999.7 — Factory Reset (one-click wipe + reinstall) in Settings
+
+**Captured:** 2026-04-26 (mid-Phase-32 user pivot, after Mini PC SSH apply succeeded)
+**Source:** Direct user request — "fabrika ayarlarına sıfırla" button in Settings, single-click wipes the host and reinstalls fresh from `https://livinity.io/install.sh` with the user's existing Livinity API key (so the reinstalled host re-pairs with the same identity, no re-onboarding).
+
+**Why:** Currently a broken Mini PC has no clean recovery path other than full SSH wipe + manual reinstall. A one-click factory reset would let the user recover from a corrupted state (failed migrations, stuck containers, ratlocked configs, etc.) without leaving the dashboard. Phase 32's auto-rollback handles the "deploy went bad" case; this handles the "host went bad" case.
+
+**Behavior (UX):**
+1. Settings > Advanced > "Factory Reset" button (red, with shield/warning icon)
+2. Click → confirmation modal with explicit list of what will be deleted (apps, DB, volumes, sessions, JWT secret, settings)
+3. Modal asks: "Reinstalled host should..."
+   - **(a) Restore my account** — preserves the Livinity API key so the reinstalled host comes back as the same logical instance (current login still works after reinstall completes)
+   - **(b) Start fresh as new user** — wipes API key, reinstalled host onboards as a new instance from scratch
+4. On confirm → backend triggers wipe + curl-piped reinstall → host restarts → user sees "Reinstalling..." cover page with progress
+5. After ~5-10 min reinstalled → user redirected to login (option a → existing creds work, option b → onboarding flow)
+
+**What needs to exist (technical scope):**
+- `https://livinity.io/install.sh` — verified to exist + accept `--api-key <key>` CLI arg + idempotent + survives running on a host that already has `/opt/livos/`. **AUDIT BEFORE PLANNING — may need authoring or hardening.**
+- New tRPC route `system.factoryReset({ preserveApiKey: boolean })` — runs the wipe + reinstall in a detached process, returns immediately so the UI can show a progress page
+- Wipe procedure (bash, runs as root):
+  - `systemctl stop livos liv-core liv-worker liv-memory livos-rollback caddy` (don't kill the SSH session)
+  - `docker stop $(docker ps -aq) ; docker rm $(docker ps -aq) ; docker volume prune -f` (user app cleanup)
+  - `sudo -u postgres psql -c "DROP DATABASE livos; DROP USER livos;"` (fresh DB)
+  - `rm -rf /opt/livos /opt/nexus /etc/systemd/system/{livos,liv-core,liv-worker,liv-memory,livos-rollback}.service /etc/systemd/system/livos.service.d/`
+  - If preserveApiKey: stash the API key to `/tmp/livos-reset-apikey` BEFORE the rm, then pass to install.sh
+  - `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --api-key <stashed-or-fresh>`
+- Settings UI: `livos/packages/ui/src/routes/settings/advanced/factory-reset.tsx` (new) with confirm modal + "preserve account vs. new user" radio + progress overlay
+- During reinstall, surface progress via the same BarePage cover the update.sh uses (Phase 30 pattern)
+
+**Cross-phase contracts:**
+- Reuses Phase 30's BarePage update overlay
+- Reuses Phase 32's `update-history/<ts>-factory-reset.json` event log shape (extend OBS-01 schema with status: "factory-reset")
+- Reuses Phase 31's idempotent SSH-applied script pattern for the wipe+install bash
+
+**Risks (HARD — must be designed for):**
+- R1: User loses ALL their app data — confirmation modal must enumerate explicitly, not generic "are you sure?"
+- R2: Network failure during reinstall leaves host in half-deleted state — install.sh needs `--resume` or the wipe step needs a snapshot first
+- R3: API key preservation race — the user might revoke the key from livinity.io between wipe and reinstall — handle 401 from install.sh gracefully
+- R4: install.sh may not exist yet OR may not support --api-key — pre-plan audit MUST verify
+- R5: Mini PC tunnel through Server5 — if Server5 is down, install.sh can't reach back to identify the host. Maybe use a public bootstrap key as fallback.
+- R6: `docker volume prune` is destructive across ALL volumes, not just LivOS — limit scope to volumes owned by LivOS-managed containers
+
+**API key handling (CRITICAL):**
+- API key is sensitive. Store in `/opt/livos/.env` as `LIV_API_KEY=<value>`, **never** in repo, never in plan markdown, never in commit messages. The Settings UI fetches it via the existing authenticated context, never displays in plain.
+- For the reinstall command, install.sh receives the key via stdin or an `--api-key-file` flag (NOT shell argv where it appears in `ps`).
+
+**Estimate:** 2-3 phases (likely v30.x):
+- Phase A: install.sh audit + harden (verify it exists, accepts --api-key, is idempotent — if not, author it)
+- Phase B: backend `system.factoryReset` route + wipe/reinstall bash + JSON event row
+- Phase C: Settings UI button + confirm modal + progress overlay + cross-cutting tests
+
+**Status:** PARKED. Promote to active when v29.0 (Deploy & Update Stability) ships and the install.sh audit (Phase A) confirms feasibility. Until then, recovery is manual SSH.
+
+---
