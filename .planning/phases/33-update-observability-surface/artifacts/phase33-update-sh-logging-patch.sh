@@ -166,7 +166,7 @@ phase33_finalize() {
         local last_err
         last_err=$(grep -E '\[FAIL\]|fail|Error|error' "$final_log_file" 2>/dev/null \
             | grep -vF '[PHASE33-SUMMARY]' \
-            | tail -1 | tr -d '"' | cut -c1-200)
+            | tail -1 | tr -d '"\\' | tr -d '\n' | LC_ALL=C cut -c1-200)
         reason_field=", \"reason\": \"${last_err:-unknown error (exit $exit_code)}\""
     fi
 
