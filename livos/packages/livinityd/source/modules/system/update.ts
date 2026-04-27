@@ -193,7 +193,16 @@ export async function performUpdate(livinityd: Livinityd): Promise<boolean> {
 	setUpdateStatus({running: true, progress: 5, description: 'Starting update...', error: false})
 
 	try {
-		const proc = $({cwd: '/opt/livos'})`bash /opt/livos/update.sh`
+		// HOTFIX 2026-04-27: detached spawn so update.sh survives livinityd's
+		// own restart. Without this, when update.sh runs `systemctl restart livos`
+		// near the end, systemd kills livinityd → update.sh dies as a child →
+		// `.deployed-sha` never gets updated AND Phase 33's EXIT trap never fires
+		// (no success.json/failed.json written, log file stuck as `-pending.log`).
+		// `detached: true` puts update.sh in its own process group via setsid(),
+		// so signals to livinityd don't propagate to it. Stdout/stderr pipes
+		// continue working until livinityd dies; tee in update.sh keeps writing
+		// to the .pending log file regardless.
+		const proc = $({cwd: '/opt/livos', detached: true})`bash /opt/livos/update.sh`
 
 		const handleOutput = (chunk: Buffer) => {
 			const text = stripAnsi(chunk.toString())
