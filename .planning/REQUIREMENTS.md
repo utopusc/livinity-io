@@ -32,8 +32,8 @@ Phase 30 sonrası UAT'de tespit edilen "Install Update tıklandı, hiçbir şey 
 
 `update.sh` başarıyla bitse bile livinityd başlamazsa kullanıcı handasız kalmasın — sistem otomatik geri sarsın.
 
-- [ ] **REL-01**: livinityd 3 ardışık başarısız boot sonrası (systemd `OnFailure=` veya watchdog script) `/opt/livos/.deployed-sha` dosyasını önceki SHA'ya geri çevirir + livos.service restart eder + kullanıcıya rollback olayını UI'da bildirir.
-- [ ] **REL-02**: `update.sh` başlamadan önce sanity check yapar — disk free > 2GB, `/opt/livos` write access, GitHub `api.github.com/repos/utopusc/livinity-io` reachable; herhangi biri fail ederse mutation `onError`'a anlamlı sebep ile döner (UX-01 ile kombine).
+- [x] **REL-01**: livinityd 3 ardışık başarısız boot sonrası (systemd `OnFailure=` veya watchdog script) `/opt/livos/.deployed-sha` dosyasını önceki SHA'ya geri çevirir + livos.service restart eder + kullanıcıya rollback olayını UI'da bildirir.
+- [x] **REL-02**: `update.sh` başlamadan önce sanity check yapar — disk free > 2GB, `/opt/livos` write access, GitHub `api.github.com/repos/utopusc/livinity-io` reachable; herhangi biri fail ederse mutation `onError`'a anlamlı sebep ile döner (UX-01 ile kombine).
 
 ### Observability (OBS)
 
