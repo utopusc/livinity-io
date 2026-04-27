@@ -947,7 +947,7 @@ No `.claude/skills/` directory present (verified via Glob). No project skill rul
 | A5 | Phase 32's precheck-fail JSON is the ONLY thing written before the trap fires; no other Phase 32 path writes a JSON. Verified by reading `phase32-systemd-rollback-patch.sh` — only precheck() writes precheck-fail.json. The rollback path is in `livos-rollback.sh`, NOT in `update.sh`. | R-06 / O-08 | If wrong, the trap could double-write a row. Mitigated by the existing `if ls .../precheck-fail.json` guard. |
 | A6 | `path.basename` in Node.js correctly normalizes Windows paths (`evil\\path.log` → `path.log`). Standard Node behavior. | Path traversal layer 1 | If wrong, regex layer 2 catches the backslash. Defense-in-depth holds. |
 | A7 | `/opt/livos/data/update-history/` files are world-readable (mode 644) per Phase 32. livinityd can read them as livos OR root user. Verified Phase 32 uses `chmod 644`. | Backend read | If livinityd runs as a user without read access, plan-phase needs `chmod` or `chgrp livos` adjustment. |
-| A8 | The Mini PC's livinityd process has access to `/opt/livos/data/update-history/`. Verified MEMORY: livinityd runs from `/opt/livos/packages/livinityd/source` and `/opt/livos/.env` confirms working dir. | Backend read | If different on Server4, that's Server4's concern (out of scope per MEMORY). |
+| A8 | The Mini PC's livinityd process has access to `/opt/livos/data/update-history/`. Verified MEMORY: livinityd runs from `/opt/livos/packages/livinityd/source` and `/opt/livos/.env` confirms working dir. | Backend read | If wrong, livinityd needs read perms via `chmod` / `chgrp livos`. |
 
 **Eight assumptions, all LOW risk.** Each has a clear fallback if wrong; none would invalidate the architectural design.
 

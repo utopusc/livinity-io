@@ -121,7 +121,6 @@ _Note: Tasks 1+2 used `--no-verify` per parallel-worktree protocol; this SUMMARY
 ### Files NOT touched (deferred / out of scope)
 
 - **Live `/opt/livos/update.sh` invocation** (steps D-H of Task 3): NOT executed per user opt. First real deploy via UI `/update` button (after Plan 33-03 ships) will populate the Past Deploys table organically.
-- **Server4** (`root@45.137.194.103`): NO changes. Phase 33 patch script is repo-resident and re-runnable on Server4 at any future time via `ssh root@45.137.194.103 'sudo bash -s' < phase33-update-sh-logging-patch.sh`. Same Phase 32 deferral pattern.
 - **STATE.md / ROADMAP.md / REQUIREMENTS.md**: Owned by orchestrator after worktree merge — this SUMMARY commit does NOT touch them per scope contract.
 
 ## Verification Results
@@ -270,7 +269,6 @@ All 4 scenarios green (validated in worktree before Task 3 SSH apply):
 | **OBS-01 final summary line `[PHASE33-SUMMARY] status=... exit_code=... duration_seconds=...`** | Embedded in trap, fires post-rename to final log | Plan 33-03 log viewer modal can grep this line for at-a-glance summary chip rendering. |
 | **Skip-on-precheck-fail / log_path backfill (O-08 lock)** | Implemented in trap; covered by `test_precheck_fail_skip` scenario | None — Phase 32's precheck-fail.json rows now get `log_path` field added by Phase 33 trap on co-occurring update.sh invocation. |
 | **httpOnlyPaths registration for `system.listUpdateHistory` + `system.readUpdateLog`** | NOT this plan's scope | Plan 33-01 must add both routes to `httpOnlyPaths` in `livos/packages/livinityd/source/lib/common.ts` (per MEMORY.md: long-running mutations hang on WS transport). |
-| **Server4 OBS-01 patch coverage** | DEFERRED — patch script is repo-resident, re-applicable via `ssh root@45.137.194.103 'sudo bash -s' < phase33-update-sh-logging-patch.sh` | None blocking; user can opt to apply at any future time. Same Phase 32 Plan 03 precedent. |
 
 ## Acceptance Criteria Status (per Plan 33-02)
 
@@ -309,9 +307,6 @@ Plan 33-02 status: **completed-with-deferred-live-validation**: full delivery on
 - Past Deploys table can render rows the moment Plan 33-01 routes ship (deferred live deploy will produce the first row organically on next user-initiated update)
 - Log viewer modal pattern: `row.log_path?.split('/').pop()` → `system.readUpdateLog({ filename })` → tail 500 lines monospace + "Download full log" button (full file stream)
 - `[PHASE33-SUMMARY]` line is greppable for at-a-glance summary chip rendering at the top of the log viewer modal
-
-**For Server4:**
-- Patch script ready in repo. User can apply at any future time via `ssh root@45.137.194.103 'sudo bash -s' < phase33-update-sh-logging-patch.sh`. Idempotent + safe to re-apply. Same Phase 31/32 deferral pattern.
 
 ## Self-Check: PASSED
 
