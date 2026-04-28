@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────
+# ── Phase 31 BUILD-03: root-cause fix ──
+# Trigger root cause: INCONCLUSIVE per 31-ROOT-CAUSE.md (no controlled repro).
+# BUILD-01 verify_build guard above is the safety net — if it ever fires
+# in production, OBS-01 update-history will pin which contributing factor
+# (H4 lockfile fallback / H5 race / unknown) was active that run.
 # LivOS Safe Update Script
 # Updates code, UI, and services WITHOUT touching user data
 # Usage: bash update.sh
@@ -8,11 +13,13 @@
 set -euo pipefail
 
 # ── v29.0-hotpatch: escape livos.service cgroup ───────────
-# When invoked from livinityd (livos.service), `systemctl restart livos.service`
-# kills the entire cgroup mid-call — including this script. detached:true on the
-# spawn side only escapes the process group, not the cgroup. Re-exec into a
-# transient systemd scope so we survive the restart and reach the .deployed-sha
-# write + finalize trap.
+# When livinityd (livos.service) spawns this script, `systemctl restart livos.service`
+# below kills the entire cgroup mid-call — taking this script with it before the
+# Phase 33 finalize trap can rename -pending → -success and write .deployed-sha.
+# detached:true on the spawn side only escapes the process group, not the cgroup.
+# Re-exec into a transient systemd .scope under system.slice so we survive the
+# livos restart. Idempotency guard via LIVOS_UPDATE_SCOPED env var.
+# IMPORTANT: must come BEFORE Phase 33 tee setup so the new scope owns the log fd.
 if [[ -z "${LIVOS_UPDATE_SCOPED:-}" ]] && command -v systemd-run >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
     export LIVOS_UPDATE_SCOPED=1
     exec systemd-run --scope --collect --quiet \
@@ -20,6 +27,128 @@ if [[ -z "${LIVOS_UPDATE_SCOPED:-}" ]] && command -v systemd-run >/dev/null 2>&1
         --description="LivOS Update (cgroup-escaped)" \
         -- "$0" "$@"
 fi
+
+# ── Phase 33 OBS-01: log file emission ──
+# Tee all stdout+stderr to a per-deploy log file and write the machine-readable
+# JSON record on exit. Mirrors Phase 32's precheck-fail.json + livos-rollback.sh
+# JSON write idiom — Phase 33 UI reads these via system.listUpdateHistory.
+HISTORY_DIR="/opt/livos/data/update-history"
+DEPLOYED_SHA_FILE="/opt/livos/.deployed-sha"
+mkdir -p "$HISTORY_DIR"
+
+LIVOS_UPDATE_START_TS=$(date -u +%s)
+LIVOS_UPDATE_START_TS_MS=$(date -u +%s%3N 2>/dev/null || echo $((LIVOS_UPDATE_START_TS * 1000)))
+LIVOS_UPDATE_START_ISO_FS=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+LIVOS_UPDATE_START_ISO_JSON=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+LIVOS_UPDATE_LOG_FILE="${HISTORY_DIR}/update-${LIVOS_UPDATE_START_ISO_FS}-$$-pending.log"
+LIVOS_UPDATE_FROM_SHA=$(cat "$DEPLOYED_SHA_FILE" 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+LIVOS_UPDATE_TO_SHA=""
+
+exec > >(tee -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
+
+phase33_finalize() {
+    local exit_code=$?
+    local end_ts end_ts_ms duration_ms status reason_field
+    end_ts=$(date -u +%s)
+    end_ts_ms=$(date -u +%s%3N 2>/dev/null || echo $((end_ts * 1000)))
+    duration_ms=$((end_ts_ms - LIVOS_UPDATE_START_TS_MS))
+
+    # Skip-on-precheck-fail (per O-08 / R-06): if Phase 32 precheck() wrote a
+    # precheck-fail row with our START_ISO_FS prefix, rename .pending log to
+    # <ts>-precheck-fail.log + backfill log_path into the existing JSON.
+    local precheck_json="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-precheck-fail.json"
+    if [[ -f "$precheck_json" ]]; then
+        local pf_log="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-precheck-fail.log"
+        if [[ -f "$LIVOS_UPDATE_LOG_FILE" ]]; then
+            mv "$LIVOS_UPDATE_LOG_FILE" "$pf_log" 2>/dev/null || true
+        fi
+        if ! grep -q '"log_path"' "$precheck_json" 2>/dev/null; then
+            local tmp; tmp=$(mktemp)
+            # Insert "log_path": "<pf_log>" before the closing brace. Two-pass
+            # awk: collect all lines, then re-emit with the extra field inserted
+            # before the final '}'. Robust against trailing newlines and any
+            # field ordering inside the JSON body.
+            awk -v lp="$pf_log" '
+                { lines[NR] = $0 }
+                END {
+                    last_brace = 0
+                    for (i = NR; i >= 1; i--) {
+                        if (lines[i] ~ /^[[:space:]]*\}[[:space:]]*$/) { last_brace = i; break }
+                    }
+                    if (last_brace == 0) {
+                        for (i = 1; i <= NR; i++) print lines[i]
+                    } else {
+                        for (i = 1; i < last_brace; i++) {
+                            if (i == last_brace - 1) {
+                                line = lines[i]
+                                if (line !~ /,[[:space:]]*$/) {
+                                    sub(/[[:space:]]*$/, "", line)
+                                    line = line ","
+                                }
+                                print line
+                            } else {
+                                print lines[i]
+                            }
+                        }
+                        print "  \"log_path\": \"" lp "\""
+                        for (i = last_brace; i <= NR; i++) print lines[i]
+                    }
+                }
+            ' "$precheck_json" > "$tmp" 2>/dev/null && mv "$tmp" "$precheck_json" 2>/dev/null || rm -f "$tmp"
+            chmod 644 "$precheck_json" 2>/dev/null || true
+        fi
+        return
+    fi
+
+    if (( exit_code == 0 )); then
+        status="success"
+    else
+        status="failed"
+    fi
+
+    local final_log_file="$LIVOS_UPDATE_LOG_FILE"
+    if [[ -n "$LIVOS_UPDATE_TO_SHA" ]]; then
+        final_log_file="${HISTORY_DIR}/update-${LIVOS_UPDATE_START_ISO_FS}-${LIVOS_UPDATE_TO_SHA:0:7}.log"
+        mv "$LIVOS_UPDATE_LOG_FILE" "$final_log_file" 2>/dev/null || true
+    fi
+
+    # IMPORTANT: extract reason BEFORE appending the [PHASE33-SUMMARY] line.
+    # The summary line contains the literal substring "failed" which would
+    # match the reason regex below and `tail -1` would pick the summary itself
+    # instead of the real error line.
+    reason_field=""
+    if [[ "$status" == "failed" ]]; then
+        local last_err
+        last_err=$(grep -E '\[FAIL\]|fail|Error|error' "$final_log_file" 2>/dev/null \
+            | grep -vF '[PHASE33-SUMMARY]' \
+            | tail -1 | tr -d '"' | cut -c1-200)
+        reason_field=", \"reason\": \"${last_err:-unknown error (exit $exit_code)}\""
+    fi
+
+    {
+        echo ""
+        echo "[PHASE33-SUMMARY] status=$status exit_code=$exit_code duration_seconds=$((duration_ms / 1000))"
+    } >> "$final_log_file" 2>/dev/null || true
+
+    local from_field=""
+    [[ -n "$LIVOS_UPDATE_FROM_SHA" ]] && [[ "$LIVOS_UPDATE_FROM_SHA" != "unknown" ]] && from_field=", \"from_sha\": \"$LIVOS_UPDATE_FROM_SHA\""
+    local to_field=""
+    [[ -n "$LIVOS_UPDATE_TO_SHA" ]] && to_field=", \"to_sha\": \"$LIVOS_UPDATE_TO_SHA\""
+
+    local json_path="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-${status}.json"
+    cat > "$json_path" <<JSON
+{
+  "timestamp": "${LIVOS_UPDATE_START_ISO_JSON}",
+  "status": "${status}"${from_field}${to_field},
+  "duration_ms": ${duration_ms},
+  "log_path": "${final_log_file}"${reason_field}
+}
+JSON
+    chmod 644 "$json_path" 2>/dev/null || true
+}
+trap phase33_finalize EXIT
+trap 'exit 130' INT TERM HUP
+
 
 # ── Constants ─────────────────────────────────────────────
 LIVOS_DIR="/opt/livos"
@@ -38,6 +167,112 @@ info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
+
+# ── Phase 32 REL-01: precheck ──
+# Refuses to start update.sh if the host can't possibly succeed.
+# Three guards: disk free >= 2GB on /opt/livos, /opt/livos writable,
+# api.github.com/repos/utopusc/livinity-io reachable within 5s.
+# Output format `PRECHECK-FAIL: <reason>` MUST stay parser-friendly — Phase 34
+# UX-01 toast handler matches `^PRECHECK-FAIL: (.+)$` regex on this string.
+# Single-line, < 200 chars, no ANSI codes.
+#
+# On any failure: writes <iso-ts>-precheck-fail.json to update-history/ AND
+# exits 1 (Phase 33 OBS-02 will render these as "deploy attempted, blocked").
+precheck() {
+    local start_ts end_ts duration_ms iso_ts history_dir
+    start_ts=$(date -u +%s%3N 2>/dev/null || echo $(($(date -u +%s) * 1000)))
+    iso_ts=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+    history_dir="/opt/livos/data/update-history"
+
+    # FIRST action: ensure history dir exists (so the failure-row write below
+    # has a target). Phase 33 also creates this — idempotent.
+    mkdir -p "$history_dir" 2>/dev/null || true
+
+    local fail_reason=""
+
+    # Guard 1: disk free >= 2 GB on /opt/livos's mount
+    local avail_gb
+    avail_gb=$(df -BG -P /opt/livos 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$4); print $4+0}')
+    if [[ -z "${avail_gb:-}" ]]; then
+        fail_reason="PRECHECK-FAIL: cannot determine free disk space on /opt/livos (df failed — check mountpoint exists)"
+    elif (( avail_gb < 2 )); then
+        fail_reason="PRECHECK-FAIL: insufficient disk space on /opt/livos (need >=2GB, have ${avail_gb}GB)"
+    fi
+
+    # Guard 2: /opt/livos writable (only if guard 1 passed)
+    if [[ -z "$fail_reason" ]]; then
+        local probe
+        if ! probe=$(mktemp -p /opt/livos .precheck-XXXXXX 2>/dev/null); then
+            fail_reason="PRECHECK-FAIL: /opt/livos is not writable (check mount/perms — root must own dir)"
+        else
+            rm -f "$probe"
+        fi
+    fi
+
+    # Guard 3: GitHub reachable (only if guards 1+2 passed)
+    if [[ -z "$fail_reason" ]]; then
+        local curl_exit=0
+        curl -fsI -m 5 https://api.github.com/repos/utopusc/livinity-io >/dev/null 2>&1 || curl_exit=$?
+        if (( curl_exit != 0 )); then
+            fail_reason="PRECHECK-FAIL: GitHub api.github.com unreachable (curl exit ${curl_exit} — check network or rate-limit)"
+        fi
+    fi
+
+    # On failure: write precheck-failed.json + emit reason to stderr + exit 1
+    if [[ -n "$fail_reason" ]]; then
+        end_ts=$(date -u +%s%3N 2>/dev/null || echo $(($(date -u +%s) * 1000)))
+        duration_ms=$((end_ts - start_ts))
+        local json_path="${history_dir}/${iso_ts}-precheck-fail.json"
+        # Escape double-quotes in reason for JSON safety
+        local escaped_reason=${fail_reason//\"/\\\"}
+        # Wrap the heredoc redirect in a brace group so bash's own
+        # "no such file or directory" complaint is also silenced when the
+        # history dir couldn't be created (e.g. precheck running on a host
+        # where /opt/livos does not exist — test environments). The
+        # PRECHECK-FAIL stderr message below is the contract; the JSON write
+        # is best-effort logging that Phase 33 consumes.
+        { cat > "$json_path" <<JSON
+{
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "precheck-failed",
+  "reason": "${escaped_reason}",
+  "duration_ms": ${duration_ms}
+}
+JSON
+        } 2>/dev/null
+        chmod 644 "$json_path" 2>/dev/null || true
+        echo "$fail_reason" >&2
+        exit 1
+    fi
+}
+
+# ── Phase 32 REL-02 prep: SHA rotation ──
+# Shifts current /opt/livos/.deployed-sha to .deployed-sha.previous BEFORE
+# update.sh writes the new SHA. Plan 32-02's livos-rollback.sh reads
+# .deployed-sha.previous to know which SHA to revert to.
+# No-op on first-ever deploy (no .deployed-sha to rotate).
+record_previous_sha() {
+    if [[ -f /opt/livos/.deployed-sha ]]; then
+        cp /opt/livos/.deployed-sha /opt/livos/.deployed-sha.previous
+        chmod 644 /opt/livos/.deployed-sha.previous 2>/dev/null || true
+    fi
+}
+
+# ── Phase 31 BUILD-01: verify_build helper ──
+# Asserts that a build produced non-empty output. Call AFTER every build
+# invocation. Failure prints `BUILD-FAIL: <pkg> produced empty <dir>` to stderr
+# and exits 1 — kills the silent-success lie that BACKLOG 999.5 tracked.
+# Usage: verify_build "@livos/config" "/opt/livos/packages/config/dist"
+verify_build() {
+    local pkg="$1"
+    local outdir="$2"
+    if [[ ! -d "$outdir" ]] || [[ -z "$(find "$outdir" -type f 2>/dev/null | head -1)" ]]; then
+        echo "BUILD-FAIL: $pkg produced empty $outdir" >&2
+        exit 1
+    fi
+    echo "[VERIFY] $pkg dist OK ($outdir)"
+}
+
 step()  { echo -e "\n${CYAN}━━━ $* ━━━${NC}"; }
 
 # ── Pre-flight checks ────────────────────────────────────
@@ -57,6 +292,9 @@ fi
 
 ok "Pre-flight passed"
 
+# Phase 32 REL-01 call site
+precheck
+
 # ── Step 1: Pull latest code from GitHub ──────────────────
 step "Pulling latest code"
 
@@ -65,6 +303,8 @@ rm -rf "$TEMP_DIR"
 
 info "Cloning latest from GitHub..."
 git clone --depth 1 "$REPO_URL" "$TEMP_DIR" || fail "Failed to clone repository"
+# ── Phase 33 OBS-01 prep: capture target SHA for log filename rename ──
+LIVOS_UPDATE_TO_SHA=$(git -C "$TEMP_DIR" rev-parse HEAD 2>/dev/null || echo "")
 
 ok "Latest code fetched"
 
@@ -94,11 +334,14 @@ rsync -a --delete \
     "$TEMP_DIR/livos/packages/ui/src/" \
     "$LIVOS_DIR/packages/ui/src/"
 # Also copy vite config, tailwind config, index.html etc.
-for f in vite.config.ts tailwind.config.js postcss.config.js tsconfig.json tsconfig.app.json tsconfig.node.json index.html components.json; do
+for f in vite.config.ts tailwind.config.ts tailwind.config.js postcss.config.ts postcss.config.js tsconfig.json tsconfig.app.json tsconfig.node.json index.html components.json; do
     if [[ -f "$TEMP_DIR/livos/packages/ui/$f" ]]; then
         cp "$TEMP_DIR/livos/packages/ui/$f" "$LIVOS_DIR/packages/ui/$f"
     fi
 done
+# Sync public assets (icons, images, PWA manifest)
+info "Updating UI public assets..."
+rsync -a "$TEMP_DIR/livos/packages/ui/public/" "$LIVOS_DIR/packages/ui/public/"
 ok "UI source updated"
 
 # Update config package source
@@ -162,6 +405,7 @@ ok "@livos/config built"
 # Build UI
 info "Building UI (this may take a minute)..."
 cd "$LIVOS_DIR/packages/ui"
+verify_build "@livos/ui" "/opt/livos/packages/ui/dist"
 npm run build 2>&1 | tail -5
 cd "$LIVOS_DIR"
 
@@ -173,20 +417,56 @@ ok "UI built and linked"
 if [[ -d "$NEXUS_DIR" ]]; then
     info "Building Nexus core..."
     cd "$NEXUS_DIR/packages/core" && npx tsc && cd "$NEXUS_DIR"
+verify_build "@nexus/core" "/opt/nexus/packages/core/dist"
     ok "Nexus core built"
+
+    # Build memory service
+    if [[ -d "$NEXUS_DIR/packages/memory" ]]; then
+        info "Building Nexus memory..."
+        cd "$NEXUS_DIR/packages/memory"
+        npm run build 2>&1 | tail -3
+        cd "$NEXUS_DIR"
+        ok "Nexus memory built"
+    fi
 
     info "Building Nexus worker..."
     cd "$NEXUS_DIR/packages/worker" && npx tsc 2>/dev/null && cd "$NEXUS_DIR" || cd "$NEXUS_DIR"
+verify_build "@nexus/worker" "/opt/nexus/packages/worker/dist"
 
     info "Building Nexus mcp-server..."
     cd "$NEXUS_DIR/packages/mcp-server" && npx tsc 2>/dev/null && cd "$NEXUS_DIR" || cd "$NEXUS_DIR"
+verify_build "@nexus/mcp-server" "/opt/nexus/packages/mcp-server/dist"
 
     # Copy nexus dist to pnpm symlink location
-    local_pnpm_nexus=$(find "$LIVOS_DIR/node_modules/.pnpm" -maxdepth 1 -name '@nexus+core*' -type d 2>/dev/null | head -1)
-    if [[ -n "$local_pnpm_nexus" ]] && [[ -d "$NEXUS_DIR/packages/core/dist" ]]; then
-        cp -r "$NEXUS_DIR/packages/core/dist" "$local_pnpm_nexus/node_modules/@nexus/core/"
-        ok "Nexus dist linked to pnpm store"
+    # ── Phase 31 BUILD-02: multi-dir dist-copy loop ──
+    # Replaces the `find ... | head -1` single-target bug (BACKLOG 999.5b).
+    # Copies @nexus/core dist into ALL pnpm-store resolution dirs so livinityd
+    # always picks up fresh dist regardless of which dir its symlink resolves to.
+    NEXUS_CORE_DIST_SRC="$NEXUS_DIR/packages/core/dist"
+    if [[ ! -d "$NEXUS_CORE_DIST_SRC" ]] || [[ -z "$(find "$NEXUS_CORE_DIST_SRC" -type f 2>/dev/null | head -1)" ]]; then
+        echo "DIST-COPY-FAIL: source $NEXUS_CORE_DIST_SRC is empty — nexus core build did not emit" >&2
+        exit 1
     fi
+    COPY_COUNT=0
+    for store_dir in /opt/livos/node_modules/.pnpm/@nexus+core*/; do
+        [[ -d "$store_dir" ]] || continue
+        target_parent="${store_dir}node_modules/@nexus/core"
+        target="${target_parent}/dist"
+        mkdir -p "$target_parent"
+        rm -rf "$target"
+        cp -r "$NEXUS_CORE_DIST_SRC" "$target"
+        if [[ -z "$(find "$target" -type f 2>/dev/null | head -1)" ]]; then
+            echo "DIST-COPY-FAIL: post-copy target $target is empty" >&2
+            exit 1
+        fi
+        COPY_COUNT=$((COPY_COUNT + 1))
+        echo "[VERIFY] nexus core dist copied to $store_dir"
+    done
+    if [[ "$COPY_COUNT" -eq 0 ]]; then
+        echo "DIST-COPY-FAIL: no @nexus+core* dirs found under /opt/livos/node_modules/.pnpm/" >&2
+        exit 1
+    fi
+    ok "Nexus dist linked to $COPY_COUNT pnpm-store resolution dir(s)"
 fi
 
 # ── Step 6: Update gallery cache ──────────────────────────
@@ -248,6 +528,21 @@ if systemctl is-active --quiet liv-core.service; then
     ok "Liv-core service running"
 else
     warn "Liv-core service may not have started - check: journalctl -u liv-core -n 30"
+fi
+
+# ── Phase 30 UPD-03: Record deployed SHA ──────────────────
+step "Recording deployed SHA"
+if [[ -d "$TEMP_DIR/.git" ]]; then
+    # Phase 32 REL-02 prep call site
+    record_previous_sha
+    if git -C "$TEMP_DIR" rev-parse HEAD > /opt/livos/.deployed-sha 2>/dev/null; then
+        chmod 644 /opt/livos/.deployed-sha 2>/dev/null || true
+        ok "Deployed SHA recorded: $(cat /opt/livos/.deployed-sha | cut -c1-7)"
+    else
+        warn "Could not record deployed SHA (livinityd update notifications may be inaccurate)"
+    fi
+else
+    warn "TEMP_DIR/.git not found; skipping .deployed-sha write"
 fi
 
 # ── Step 9: Cleanup ───────────────────────────────────────
