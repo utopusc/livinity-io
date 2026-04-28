@@ -1,166 +1,210 @@
-# Project Research Summary
+# Project Research Summary — v30.0 Backup & Restore
 
-**Project:** Livinity v25.0 -- WhatsApp Channel + Cross-Session Memory Search
-**Domain:** Multi-channel messaging integration + persistent AI memory for self-hosted AI server OS
-**Researched:** 2026-04-02
-**Confidence:** MEDIUM-HIGH
+**Project:** Livinity (LivOS) — v30.0 Backup & Restore milestone
+**Domain:** Self-hosted multi-component disaster recovery (PostgreSQL + Redis + filesystem + per-user Docker volumes + secrets) for a multi-user residential AI server OS
+**Researched:** 2026-04-28
+**Confidence:** HIGH (all four research dimensions grounded in 2025-26 web sources, post-mortems, and direct LivOS source inspection of Phase 20 + v29.0 Phase 33)
+
+---
 
 ## Executive Summary
 
-Livinity v25.0 adds two independent but complementary capabilities: WhatsApp as a sixth messaging channel (joining Telegram, Discord, Slack, Matrix, Gmail) and cross-session conversation persistence with full-text search. The codebase is well-positioned for both -- a clean `ChannelProvider` interface exists with five working implementations, and the memory service already has SQLite with embeddings infrastructure. The work is primarily integration and migration, not greenfield architecture.
+LivOS v30.0 ships **system-level backup & restore** for a single-host (Mini PC) multi-user residential AI server OS. Industry consensus across 2026 references (restic + Backrest, Kopia, Borgmatic, Synology, Time Machine, Veeam, pgBackRest, PBS, Home Assistant 2026.4) is unambiguous: a credible backup product **must** ship encryption-at-rest with a recovery code, scheduled automated backups, multi-destination support, retention policies, integrity verification, and a tested disaster-recovery path. The dominant 2026 architectural shape is **logical PG dump (`pg_dump -Fc`) + Redis BGSAVE + filesystem snapshot, encrypted with `age` (typage)**, scheduled via existing cron infrastructure, with restore as a **standalone shell tool that does NOT depend on the daemon being healthy**. The single biggest moat available — the one no competing self-hosted backup product currently offers — is **AI-assisted restore guidance + pre-update auto-snapshot integration**, where the backup system reads recent failed updates (v29.0 Phase 33 history) and proposes "roll back to before today's failed deploy."
 
-The recommended approach is to use **Baileys v6.7.21** (stable, not the v7 RC) for WhatsApp, with Redis-backed auth state instead of the file-based default that Baileys documentation explicitly warns against using in production. For conversation search, **SQLite FTS5** (already compiled into better-sqlite3) provides keyword search with zero new dependencies. Embedding every message is wasteful -- instead, embed only conversation summaries and use FTS5 as the primary search engine with optional semantic reranking on top results. The existing ad-hoc WhatsApp code in daemon.ts (Redis inbox/outbox, JID routing) must be migrated into the ChannelProvider pattern, not preserved alongside it.
+The recommended approach is to **reuse Phase 20's existing infrastructure** (`scheduled_jobs` PG table, `Scheduler` + `inFlight` mutex, S3/SFTP/local destination uploaders, AES-256-GCM credential vault, alpine-tar Docker volume streaming) but **explicitly build a NEW sibling `system-backup` handler** rather than extending the per-volume `volume-backup` handler — the two have different shapes (single-volume → tar.gz vs multi-source → manifest+sources). A new module `modules/system-backup/` orchestrates the run lifecycle (state machine: pending → running → uploading → verifying → complete), each source is a `Readable`-stream factory, and a shell `livos-restore.sh` solves the chicken-and-egg DR scenario. **Critically, before any v30.0 implementation work begins, a Phase 0 Reuse-Audit Spike must benchmark Phase 20 against v30.0-scale workloads** — Phase 20's in-memory `inFlight: Set` and JWT-derived vault key were sized for short, app-volume jobs and have known failure modes (mid-flight orphans, factory-reset bricks all backups) that would silently break at v30.0 scale.
 
-The primary risks are: (1) **WhatsApp account ban** from Meta's anti-automation detection -- mitigated by aggressive rate limiting, user warnings, and treating WhatsApp as a degradable channel; (2) **auth state corruption** from Baileys' Signal protocol session keys losing sync on crash -- mitigated by Redis-backed transactional persistence; (3) **userId fragmentation** across channels causing the AI to treat the same human as separate users -- mitigated by designing a user identity mapping table before any conversation data accumulates; and (4) **memory scaling wall** as multi-channel input drives brute-force embedding search past acceptable latency -- mitigated by adding FTS5 for keyword search and deferring full vector indexing until volume demands it.
+The biggest risks come from three families: (1) **Schrödinger's backup** — green dashboards lie because the only test that matters is a real restore, so verification + drill must ship in the same phase as the writer, never later; (2) **encryption-key catastrophe** — lost passphrase = total data loss with no exceptions, so a mandatory BIP39 recovery-kit modal blocks plan creation, and the master key must NOT be derived from the JWT secret (factory reset rotates JWT and would silently brick every backup); (3) **livinityd-coupled backup process** — like v29.0's update.sh, long-running backups must survive livinityd restart via cgroup-escape (`systemd-run --scope`), and a Redis-coordinated mutex must prevent backup-during-update collisions that would corrupt both. Everything else (ransomware path-to-backups, multi-destination consistency, restore-while-running, multi-user data leakage, schema drift across versions) is well-understood and addressable with documented patterns.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-Only two new production dependencies are needed. The existing stack (Express, tRPC, Redis, better-sqlite3, ioredis) handles everything else.
+The stack is **predominantly reuse + targeted additions**. Phase 20 already provides the destination uploaders (S3 via `@aws-sdk/lib-storage`, SFTP via `ssh2-sftp-client`, local via `fs`), the AES-256-GCM credential vault, the `Scheduler` with `inFlight` mutex, and the alpine-tar Docker volume streaming. The new dependencies are minimal: one npm package (`age-encryption@^0.2.4`) for stream encryption inside livinityd, plus three system binaries already partially present (`pg_dump 16` from postgresql-client-16, `kopia 0.18.x` already vendored, `rclone 1.73.x` for B2/Wasabi/MinIO/R2 multi-cloud transport). See `.planning/research/STACK.md` for full version compatibility matrix.
 
 **Core technologies:**
-- **Baileys v6.7.21**: WhatsApp Web API via direct WebSocket -- ~50MB RAM vs 300-600MB for whatsapp-web.js, no Puppeteer/Chromium, native TypeScript, production-stable (v7 is still RC)
-- **qrcode v1.5.4**: Server-side QR code generation to data URL -- lightweight (3 deps), renders base64 PNG for UI display
-- **SQLite FTS5** (built into better-sqlite3): Full-text search with BM25 ranking on conversation history -- zero new dependencies, <5ms query time at self-hosted scale
 
-**What NOT to add:** whatsapp-web.js (Puppeteer dependency), any vector database (overkill), elasticsearch/meilisearch (unnecessary), pino (bridge to winston instead).
+- **`pg_dump --format=custom --compress=zstd:3`** — logical PG snapshot of the single `livos` DB. Cross-version-restorable (survives a future PG 17 upgrade), parallel-restore via `pg_restore -j N`. `pg_basebackup`/pgBackRest are enterprise-overkill at LivOS scale.
+- **`redis-cli BGSAVE` + RDB copy (no AOF)** — second-of-loss tolerable for ephemeral session/conversation state. Never use blocking `SAVE`.
+- **`age-encryption` (typage) ^0.2.4** — pure-TS X25519+ChaCha20-Poly1305 stream cipher by Filippo Valsorda, ESM-only, no native deps. Modern PGP replacement. Used as a stream filter on top of kopia (for non-kopia destinations) AND for sealed `.env`/secrets/standalone archives.
+- **Existing `kopia` (already vendored)** — content-defined chunking, dedup across snapshots, encryption, restore-resume, S3/SFTP/B2/rclone backends. Reused for `/opt/livos/data` filesystem snapshots; do NOT switch to restic/borg.
+- **Existing Phase 20 alpine-tar Docker volume streaming** — proven working, kept verbatim; new code adds optional age-encryption stream filter.
+- **`rclone 1.73.x`** — universal transport for kopia repos to B2/Wasabi/MinIO/R2 (70+ providers, native B2 avoids S3-compat 1000-req cap). Direct `@aws-sdk/lib-storage` is preferred for raw streaming uploads (Phase 20 path) because it has Node-native abort + progress events.
+- **Existing `node-cron` Scheduler + `inFlight: Set` mutex** — DO NOT introduce BullMQ. LivOS is single-process; in-process mutex is correct. Add a `heartbeat_at` column on `scheduled_jobs` for crash-survivability of long-running jobs.
+- **`zstd:3` compression everywhere we control format** — 5-10× faster than gzip at near-equal ratio, ~4× faster decompression (matters more for restore than backup). Keep gzip available as lowest-common-denominator fallback.
+- **Standalone `livos-restore.sh`** — pure shell + `openssl enc -aes-256-gcm` + `psql` + `redis-cli` + `docker` + `tar`. Zero Node dependency. Solves the chicken-and-egg: livinityd cannot bootstrap itself when `/opt/livos` is gone.
 
 ### Expected Features
 
-**Must have (table stakes):**
-- **TS-01: WhatsApp ChannelProvider** -- migrate ad-hoc daemon.ts code into standardized ChannelProvider implementation matching Telegram/Discord pattern
-- **TS-02: QR Code Auth via Web UI** -- server-to-browser QR display with auto-refresh, pairing code as fallback for remote setups
-- **TS-03: Connection Status and Reconnection** -- auto-reconnect with exponential backoff, clear UI status indicators
-- **TS-04: Cross-Session Conversation Persistence** -- write-through from Redis hot cache to SQLite durable store for all channels
-- **TS-05: AI Conversation Search Tool** -- `conversation_search` tool in ToolRegistry so AI can recall past discussions
-- **DF-01: Memory Management UI** -- Settings page for viewing, searching, and deleting stored memories and conversations (trust-building feature)
+**Must have (table stakes — none optional):**
 
-**Should have (competitive):**
-- **TS-06: Unified userId Mapping** -- cross-channel identity resolution via PostgreSQL mapping table
-- **DF-02: Auto Memory Extraction from All Channels** -- extend BullMQ extraction pipeline to WhatsApp/Telegram
-- **DF-03: WhatsApp Group Support** -- mention-triggered responses in group chats
+- Scheduled automatic backups (cron-style); manual "Backup Now" trigger
+- Mandatory encryption-at-rest with passphrase + BIP39 recovery code (Kopia-style refuse-unencrypted; Home Assistant 2026.4 Argon2id pattern)
+- PostgreSQL `pg_dump` (NOT file-copy of `/var/lib/postgresql`); Redis BGSAVE-based RDB snapshot
+- Multi-destination support (1+, up to 5 per plan; 3-2-1 capable)
+- Retention policies (`keep_last` + GFS daily/weekly/monthly)
+- Backup history UI (per-run JSON record + log file, copy v29.0 Phase 33 pattern verbatim)
+- Failure notifications (in-UI badge mirror Phase 34, optional email + webhook)
+- Integrity verification (light per-run + scheduled full)
+- In-place restore with type-to-confirm + pre-restore auto-snapshot insurance
+- Selective/granular restore (browse manifest tree, single-file recovery — covers 80% of real restores)
+- Disaster recovery: restore-to-fresh-install via `install.sh --restore-from`
+- Backup ↔ update mutex (Redis lock, prevents Phase 33-style collision)
+- Per-plan source selection (PostgreSQL, Redis, /opt/livos/data, Docker volumes, .env, Caddyfile)
 
-**Defer (v26+):**
-- WhatsApp media/image analysis (requires multimodal pipeline)
-- Graph-based memory (SQLite + embeddings sufficient at current scale)
-- Cross-channel conversation continuity (requires unified identity first)
-- Multi-account WhatsApp (unnecessary complexity for personal use)
+**Should have (differentiators — top 4 to ship in v30.0):**
+
+1. **Pre-update auto-snapshot integration with v29.0 Phase 32/33** — the killer feature; turns existing rollback into full data rollback. Hard dependency on `update.sh` calling `backup.runNow({plan: 'pre-update', tags: ['pre-update', sha]})` BEFORE Phase 30/31 update steps. Free user value.
+2. **Restore drill (test-restore that doesn't touch production)** — PBS recommends monthly drill cadence. Differentiator because most homelab tools require manual orchestration. Restores into ephemeral `livos_drill` PG DB + tmpfs FS + scratch Docker network, runs sanity queries, tears down.
+3. **BIP39 recovery code + mandatory recovery-kit modal at plan creation** — small effort, prevents the #1 backup horror story. Modeled on Home Assistant 2026.4 emergency-kit pattern.
+4. **AI-assisted restore guidance (MVP version)** — THE moat in the "AI + Self-Hosting" gap. Even an MVP "show me snapshots near the failed update" version differentiates. Wires Phase 33 update history + new `backup_history` into a `diagnostic_restore` MCP tool.
+
+**Defer to v30.1:**
+
+- Full AI-driven restore agent (Phase 23 `docker_diagnostics`-level integration)
+- "What changed" diff view between snapshots
+- Cron-with-preview tab (presets only at v30.0)
+- Bandwidth throttling / scheduled run windows
+- Encryption key rotation
+- Pre-/post-backup hooks (Borgmatic-style)
+- Snapshot tagging + search
+- Immutable destination toggle (S3 Object Lock — basic append-only credentials ship in v30.0)
+- Cross-user delegation token flow (admin restore on behalf of departed user)
+- PWA Web Push notifications
+- Cgroup-escape for long-running backups (mirror v29.1 update.sh hot-patch timing)
+
+**Defer to v31+:**
+
+- PITR for Postgres (WAL archiving) — too heavy
+- TPM-backed encryption / YubiKey hardware key
+- P2P backup to friends' LivOS instances
+- Hourly local snapshot tier (Time Machine model — needs ZFS/btrfs detection)
+- Cross-environment backup (multi-host Docker per Phase 22)
+
+**Anti-features (do NOT build):**
+
+- Proprietary backup format (use restic/kopia open formats — survives LivOS dying)
+- Vendor key escrow ("we'll handle keys for you" — defeats Zero Trust)
+- No-passphrase / "set up later" backups (Kopia's stance is correct: refuse)
+- Cloud-only managed default destination (defeats self-hosted value prop)
+- Backup of `/` root filesystem (unbounded, corrupts /proc /sys /dev)
+- Real-time CDP / continuous replication (wrong layer for homelab)
+- "Auto-detect what to back up" magic (always wrong eventually)
+- Cross-tenant deduplication (multi-user data-leak risk)
+- Email-based passphrase reset (encryption theater)
+- Browser-based decryption (key in JS context = exfiltration)
 
 ### Architecture Approach
 
-Two independent tracks converge at the message processing layer. Track A (WhatsApp Channel) adds a new `WhatsAppProvider` following the proven ChannelProvider pattern with Redis-backed auth state and QR-over-Redis polling. Track B (Cross-Session Memory) adds `conversation_messages` and FTS5 virtual tables to the existing memory service SQLite database, with a write-through pattern (Redis hot cache for active sessions, SQLite for historical search). These tracks are fully independent and can be built in parallel, converging only when auto-memory-extraction from WhatsApp is wired up.
+**Verdict: new sibling `system-backup` module, NOT extension of Phase 20's `volume-backup`.** The two have fundamentally different shapes (single-volume tar vs multi-source manifest), and extending would risk regressions for operators relying on existing per-volume jobs. The orchestrator lives IN-PROCESS in livinityd, driven by the existing Phase 20 scheduler with a new `BUILT_IN_HANDLERS['system-backup']` entry. Three new PG tables (`backup_destinations`, `backup_history`, `backup_keys`) plus reuse of `scheduled_jobs.type='system-backup'` for the schedule itself. Bootstrap restore is a **standalone shell script** (`livos-restore.sh`) at repo root, NOT a livinityd flag — livinityd cannot bootstrap itself when `/opt/livos` is gone. See `.planning/research/ARCHITECTURE.md` for full schema, state machine, data flow, and integration points.
 
 **Major components:**
-1. **WhatsAppProvider** (`channels/whatsapp.ts`) -- Baileys socket lifecycle, QR emission, message routing via ChannelProvider interface
-2. **WhatsAppAuthStore** (`channels/whatsapp-auth.ts`) -- Redis-backed auth state replacing Baileys' file-based default
-3. **ConversationArchiver** (`memory/src/archiver.ts`) -- persists channel conversation turns to SQLite + FTS5 index
-4. **ConversationSearchEndpoint** (memory service routes) -- `/conversations/search` and `/conversations/messages` APIs
-5. **Memory Management Panel** (`settings/memory.tsx`) -- view, search, delete stored memories and conversation history
-6. **UserIdentityMapper** (`user-identity.ts`) -- maps channel-specific IDs to canonical LivOS user IDs
+
+1. **`system-backup/orchestrator.ts` + `state-machine.ts`** — owns the run lifecycle; acquires Redis lock; drives state transitions; writes to `backup_history` BEFORE every transition (crash-resilient); mirrors v29.0 Phase 33 pending-rename atomicity.
+2. **`system-backup/sources/{pg-dump,redis-dump,filesystem-tar,secrets,docker-volumes}.ts`** — each is a `Readable`-stream factory matching a `BackupSource` interface. Orchestrator pipes stream → SHA-256 hasher → AES-256-GCM cipher → file.
+3. **`system-backup/key-vault.ts`** — generates 32-byte master key on first run, wraps with KEK from `/opt/livos/data/secrets/backup-key` (separate file, NOT JWT-derived). Per-run envelope encryption: random data-key wrapped under master key.
+4. **`system-backup/manifest.ts`** — builds + verifies the unencrypted `manifest.json` (per-source SHA-256, sizes, schema_version, livos_sha, key_id, wrapped_data_key, Argon2id params).
+5. **`system-backup/destination.ts`** — thin shim that re-exports `uploadToS3 / uploadToSftp / uploadToLocal` from Phase 20's `scheduler/backup.ts` verbatim.
+6. **`livos-restore.sh` (standalone shell)** — disaster-recovery linchpin. Pure shell + `openssl` + `psql` + `redis-cli` + `docker` + `tar`. Zero Node dependency.
+7. **UI: `features/system-backup/` (Settings > Backup section)** — history table, destination CRUD with test-connection probe, run-now button, drill-mode banner, restore wizard, master-passphrase setup. Long-running mutations in `httpOnlyPaths`.
+
+**Decision: one master key per LivOS install, NOT per-user.** Rationale: `pg_dump` of the `livos` DB is global and crosses user boundaries (it has every user's password hash, sessions, app instances); Docker volumes are owned by dockerd at the OS layer; per-user passphrases mean a user forgetting theirs is unrecoverable; LivOS already runs everything as root in `livinityd`. The per-user UI filters `backup_history.manifest_json` by username and lets users trigger partial restores of their own apps; admin restore for offboarding flows is logged via `device_audit_log` (Phase 15 immutability triggers).
 
 ### Critical Pitfalls
 
-1. **WhatsApp account ban** -- Meta actively detects automated messaging. Mitigate with rate limiting (max 10 msgs/min), randomized delays, prominent user warnings before QR scan, and treating WhatsApp as a degradable channel.
-2. **Baileys auth state corruption** -- Signal protocol keys must persist atomically; a single missed key update causes permanent decryption failure. Mitigate with Redis-backed auth state using pipeline writes (not file-based).
-3. **Echo loop** -- WhatsApp libraries receive the bot's own sent messages as incoming events. Mitigate by filtering `msg.key.fromMe === true` and adding sent-message deduplication in Redis.
-4. **userId fragmentation** -- Without identity mapping, the same user on Telegram and WhatsApp has separate memory stores. Design the mapping table before data accumulates; retrofitting is expensive.
-5. **Memory scaling wall** -- Brute-force cosine similarity over all embeddings blocks the event loop at 1000+ memories. Mitigate with FTS5 for keyword search (free, instant) and defer full vector indexing until volume demands it.
+13 pitfalls were identified across 6 dimensions. The top five — those that cause silent data loss, irrecoverable backups, or data leakage and CANNOT be patched in later — are:
+
+1. **Schrödinger's backup (green dashboard, dead archive)** — Daily backups report success for 4 months; restore reveals truncated tar, invalid SQL, or a rotated key. **Avoid:** verify-on-write ships in the SAME phase as the writer. Mandatory L1 (per-source SHA mid-run) + L2 (post-upload HEAD/ETag) + L3 (weekly drill, restore into ephemeral `livos_drill` DB and run sanity queries). UI surfaces "Last successful drill: X days ago" — red if >14 days.
+2. **Encryption-key catastrophe (data fine, key gone)** — restic/borg/Kopia/CrashPlan all explicitly say "lost passphrase = permanent data loss." **Avoid:** mandatory Emergency Kit modal at plan creation (Home Assistant 2026.4 pattern); printable PDF or password-manager save; modal cannot be dismissed. Master key in separate `/opt/livos/data/secrets/backup-key` file, NOT JWT-derived. Wrap-key architecture for rotation; pre-flight key check on every Backup Now.
+3. **Inconsistent snapshot (PG mid-transaction, Redis mid-write, FS mid-rename)** — Without coordinated quiesce, three point-in-time snapshots from three different times produce torn restores. **Avoid:** application-level quiesce protocol via Redis pub/sub (`backup:quiesce` → subscribers finish writes, `backup:resume` releases). Snapshot ordering: PG first, Redis second, filesystem last. Manifest records `quiesce_started_at`/`pg_dump_lsn`. For per-app Docker volumes: `docker pause` during tar.
+4. **Ransomware path to backups (attacker wipes archives too)** — Standard 2024-26 playbook: compromise livinityd, read S3 creds, `DeleteObjectsV2`, then encrypt live data. **Avoid:** append-only credentials by default; UI guides user to create application key WITHOUT `s3:DeleteObject`; auto-detect at destination-test time and warn yellow if creds CAN delete. Server-side retention via lifecycle, NOT client-side prune. 3-2-1 enforcement.
+5. **Self-update + backup interaction (update.sh kills backup mid-write)** — Backup runs as livinityd child process; `systemctl restart livos.service` during update kills it. v29.0 already needed cgroup-escape hot-patches; same pattern applies. **Avoid:** persistent in-flight registry in PG (`backup_runs(id, status='running', started_at, pid)`) replaces in-memory `inFlight: Set`. update.sh pre-flight check sleeps if `/opt/livos/data/backup-in-progress.flag` exists. UI Install Update button disabled when backup running. Cgroup-escape via `systemd-run --scope --collect` deferred to v30.1 (mirror v29.1 timing).
+
+See `.planning/research/PITFALLS.md` for the full set including: (6) restore-while-running PG corruption, (7) multi-user backup data leakage, (8) network partition + orphan multipart uploads, (9) Phase 20 reuse blast-radius, (10) multi-destination consistency, (11) restore version drift / schema migrations, (12) DST and time-skew, (13) disk-fill from retention failure.
+
+### Pitfall → Phase Coverage Mapping
+
+| # | Pitfall | Prevention Phase | Defer-OK? |
+|---|---------|------------------|-----------|
+| 1 | Schrödinger's backup | P3 (manifest+verify L1+L2) + P7 (drill L3) | **NO** — verify-on-write SAME phase as writer |
+| 2 | Encryption-key catastrophe | P1 (key vault) + P6 (recovery escrow + modal) | **NO** — recovery kit ships with encryption |
+| 3 | Inconsistent snapshot | P2 (orchestrator + quiesce design) + P3 (per-source) | **NO** — quiesce design before any source |
+| 4 | Ransomware path | P4 (destinations append-only by default) | v30.1 OK for full Object Lock UX |
+| 5 | Disk-fill | P2 (pre-flight statvfs) + P4 (retention verify) | **NO** — pre-flight is one statvfs call |
+| 6 | Restore-while-running | P7 (livos-restore.sh stops services + restore-pending recovery) | **NO** — half-shipped restore is worse than none |
+| 7 | Multi-user data leakage | P1 (single master key + admin escrow decision) + P6 (RBAC routes) | **NO** — encryption boundary is architectural |
+| 8 | Network partition / orphan multipart | P4 (try/finally + Upload.abort) | **NO** — abort-on-error is one line |
+| 9 | Update + backup collision | P5 (PG-backed inFlight + update.sh guard) + v30.1 hotpatch (cgroup-escape) | cgroup-escape OK for v30.1 |
+| 10 | Phase 20 reuse blast-radius | **P0 (REUSE-AUDIT SPIKE)** + P1 (separate vault key) | **NO** — must spike before committing |
+| 11 | Multi-destination consistency | P1 (multi-dest schema from day 1) + P4 (per-dest retry) | **NO** — schema decision is permanent |
+| 12 | Restore version drift | P1 (BAK-VERSION in manifest) + P7 (restore migration) | **NO** — version stamp is free if done day 1 |
+| 13 | Time skew / DST | P1 (BAK-TZ column on scheduled_jobs) | **NO** — schema decision is permanent |
+
+---
 
 ## Implications for Roadmap
 
-Based on research, the work naturally divides into 5 phases across two independent tracks, with a final integration phase.
+### Phase Summary (8 phases total — Phase 36 through Phase 43)
 
-### Phase 1: WhatsApp Channel Foundation
-**Rationale:** Foundational -- nothing else in the WhatsApp track works without the provider. Library choice (Baileys), auth state architecture (Redis), and echo-loop prevention must be correct from day one. Switching later means full rewrite.
-**Delivers:** WhatsApp connected as a proper ChannelProvider, messages flowing through the standardized pipeline, Baileys auth persisted in Redis.
-**Addresses:** TS-01 (WhatsApp ChannelProvider)
-**Avoids:** Pitfall 1 (session death spiral -- by choosing Baileys), Pitfall 2 (Chromium OOM -- by choosing Baileys), Pitfall 5 (auth state loss -- Redis-backed auth), Pitfall 7 (echo loop -- fromMe filter), Pitfall 8 (supply chain -- verified package only)
+**Phase 36 — Reuse-Audit Spike (NON-NEGOTIABLE)** — benchmark Phase 20 against v30.0 scale before freezing schema.
 
-### Phase 2: WhatsApp QR Code and Settings UI
-**Rationale:** Users cannot use WhatsApp without scanning a QR code. The setup UX is the first interaction and must work flawlessly. Depends on Phase 1 provider emitting QR events.
-**Delivers:** WhatsApp tab in Settings > Integrations with QR code display, connection status, disconnect button. Pairing code fallback for remote setups.
-**Addresses:** TS-02 (QR Code Auth UI), TS-03 (Connection Status and Reconnection)
-**Avoids:** Pitfall 10 (QR UX dead end -- auto-refresh, status indicators, pairing code fallback)
+**Phase 37 — Schema Foundation + Key Vault** — three new PG tables, separate `/opt/livos/data/secrets/backup-key` (NOT JWT-derived), multi-destination + version + timezone schema permanent on day 1.
 
-### Phase 3: WhatsApp Message Routing Consolidation
-**Rationale:** The existing ad-hoc WhatsApp code in daemon.ts (wa_outbox, getWhatsAppHistory, sendWhatsAppResponse) must be removed to avoid dual code paths. This is a cleanup phase that reduces maintenance burden and ensures WhatsApp uses the same routing as all other channels.
-**Delivers:** Unified message routing for all 6 channels. Legacy WhatsApp inbox polling removed. Rate limiting and ban-risk warnings in UI.
-**Addresses:** Consolidation of TS-01 into production quality
-**Avoids:** Pitfall 3 (account ban -- rate limiting built in), Anti-Pattern 1 (separate WhatsApp processing path)
+**Phase 38 — Orchestrator + State Machine + PG Dump** — first end-to-end source, crash-reaper, pre-flight statvfs, pending-rename atomicity, quiesce protocol.
 
-### Phase 4: Cross-Session Conversation Persistence and Search
-**Rationale:** Independent of WhatsApp (can be built in parallel with Phases 1-3). This is the highest-complexity phase with the most new schema work. FTS5 tables, conversation archival pipeline, search API, and the AI tool must all be built and tested together.
-**Delivers:** Conversation messages persisted to SQLite across all channels. FTS5 full-text search. `conversation_search` AI tool. Write-through from Redis hot cache to SQLite durable store.
-**Addresses:** TS-04 (Cross-Session Persistence), TS-05 (AI Conversation Search Tool)
-**Avoids:** Pitfall 6 (memory scaling wall -- FTS5 instead of brute-force embeddings), Anti-Pattern 2 (Redis long-term storage), Anti-Pattern 3 (embedding every message)
+**Phase 39 — Redis + Filesystem + Secrets + Docker Volumes + Manifest** — remaining sources + integrity contract.
 
-### Phase 5: Unified Identity and Memory Management UI
-**Rationale:** Depends on both WhatsApp (Phase 3) and conversation persistence (Phase 4) being complete. User identity mapping must precede auto-memory-extraction to avoid accumulating fragmented data.
-**Delivers:** Cross-channel user identity mapping. Memory Management Settings page (view, search, delete). Auto-memory-extraction from all channels via BullMQ. Memory deduplication improvements.
-**Addresses:** TS-06 (Unified userId Mapping), DF-01 (Memory Management UI), DF-02 (Auto Memory Extraction)
-**Avoids:** Pitfall 4 (userId fragmentation -- mapping table designed first), Pitfall 9 (memory dedup failure -- canonical userId enables cross-channel dedup)
+**Phase 40 — Destinations + Append-Only + Multi-Destination + Retention + L2 Verify** — Phase 20 uploader reuse, ransomware-resistant defaults, post-upload HEAD verify.
 
-### Phase Ordering Rationale
+**Phase 41 — Scheduler + Pre-Update Auto-Snapshot + Backup↔Update Mutex** — the killer v29.0 integration; update.sh guard.
 
-- **Phases 1-3 and Phase 4 are independent tracks.** WhatsApp channel work and memory persistence have zero dependencies on each other. They can be built in parallel or sequentially depending on capacity.
-- **Phase 1 must come first in the WhatsApp track** because every subsequent WhatsApp phase depends on the ChannelProvider existing and Baileys being correctly configured.
-- **Phase 5 depends on both tracks** -- identity mapping needs channels to be standardized (Phase 3) and conversations to be persisted (Phase 4). The Memory Management UI needs persistent data to display.
-- **Cleanup (Phase 3) before integration (Phase 5)** -- removing legacy WhatsApp code before adding cross-channel identity mapping prevents the migration from touching dead code paths.
+**Phase 42 — UI: History + Run-Now + Destinations + Recovery-Kit Modal** — mandatory BIP39 modal that blocks plan creation, sidebar status badge.
+
+**Phase 43 — `livos-restore.sh` + install.sh `--from-backup` + Restore-Pending Recovery + Drill Mode** — disaster-recovery linchpin; pure shell; drill mode (default-disabled); selective + full-system restore wizards in UI.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 1:** Baileys connection lifecycle edge cases (reconnect timing, disconnect reasons, "Bad MAC" recovery). The connection.update event handling has several undocumented edge cases. Test with actual WhatsApp server.
-- **Phase 4:** FTS5 trigger-based sync vs manual INSERT performance. The memory service schema migration needs careful planning to not break existing memory data. Test FTS5 query performance with realistic conversation volumes.
-- **Phase 5:** DmPairing extension for WhatsApp (phone-number-based linking vs code-based linking). The existing DmPairingManager may need architectural changes for WhatsApp's identity model.
+- **Needs research:** Phase 36 (the spike IS the research), Phase 43 (livos-restore.sh requires 1-day prototype spike on fresh Ubuntu 24.04 VM)
+- **Standard patterns:** Phases 37-42 (all build on Phase 20 + Phase 33 + well-documented external libraries)
 
-Phases with standard patterns (skip research-phase):
-- **Phase 2:** QR code display and tRPC polling are straightforward UI work following existing patterns in integrations.tsx.
-- **Phase 3:** Code removal and consolidation following the existing ChannelManager pattern. Well-understood refactoring.
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Only 2 new dependencies. Baileys is the clear choice over whatsapp-web.js. FTS5 is built-in. Multiple sources corroborate. |
-| Features | MEDIUM | Feature set is well-defined with clear dependency graph. WhatsApp ban risk lowers confidence on long-term viability. |
-| Architecture | HIGH | Direct codebase analysis of existing channel + memory systems. Patterns are proven across 5 channels. Two-track independence confirmed by dependency analysis. |
-| Pitfalls | HIGH | Well-documented failure modes from multiple GitHub issue threads. Baileys auth state and echo loop pitfalls have verified solutions. |
+| Stack | **HIGH** | All primary recommendations validated against Phase 20 code AND independent 2025-26 sources. |
+| Features | **HIGH** | Table stakes drawn from 8+ reference products with universal cross-confirmation. Anti-features cited from documented community pain. |
+| Architecture | **HIGH** | Schema design, orchestrator pattern, source-plugin pattern, Phase 20 reuse all grounded in read source. State-machine + pending-rename atomicity lifted directly from v29.0 Phase 33. |
+| Pitfalls | **HIGH** | Verified via official PG/restic/borg/Kopia docs, real-world post-mortems, AND direct LivOS source inspection. |
 
-**Overall confidence:** MEDIUM-HIGH
-
-The architecture and implementation patterns are well-understood. The primary uncertainty is external: WhatsApp's unofficial API stability and Meta's ban enforcement. This is an inherent risk of unofficial API integration, not a gap in research.
+**Overall confidence:** **HIGH.** v30.0 is primarily integration + targeted additions, not greenfield design.
 
 ### Gaps to Address
 
-- **Baileys v6 vs v7 API differences**: STACK.md recommends v6.7.21 (stable), ARCHITECTURE.md references v7 patterns in some code examples. Reconcile during Phase 1 planning -- pin to v6.7.21 and verify all code examples match that version's API.
-- **Auth state: Redis vs SQLite disagreement**: STACK.md recommends SQLite-backed auth state, ARCHITECTURE.md recommends Redis-backed auth state. **Recommendation: Use Redis** -- it is already the state store for all Baileys-adjacent data in the codebase, and the ChannelManager infrastructure already depends on it.
-- **Kimi embedding rate limits at scale**: Untested how many embedding calls per minute Kimi API allows. This affects conversation summary embedding throughput in Phase 4. Mitigation: batch and rate-limit embedding generation, rely on FTS5 as primary search.
-- **WhatsApp group message content in Baileys 6.x**: FEATURES.md notes known issues with group message content not being passed in some versions. Verify during Phase 1 implementation.
-- **Memory service schema migration**: Existing conversations table in memory.db may have data. Migration path needs careful planning to not lose existing memories.
+1. **Phase 36 spike output is a hard input to Phase 37 schema.** Allocate one full day.
+2. **Network-resilience strategy under Mini PC tunnel reality.** v30.0 MVP rule = whole-run failure on network drop, next scheduled run picks up. v30.1 chunked-upload work is separate.
+3. **AI-assisted restore guidance MVP scope.** Phase 42 ships data plumbing; full agent integration is v30.1.
+4. **Master-passphrase-loss policy enforcement at the UI layer.** Phase 42 recovery-kit modal copy must frame "no recovery, period" front and center.
+5. **Drill mode operational cost.** L3 monthly drill restores into ephemeral PG/Redis/Docker — consumes disk + IO. Default-disabled in Phase 43.
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Baileys GitHub (WhiskeySockets)](https://github.com/WhiskeySockets/Baileys) -- connection lifecycle, auth state, message handling
-- [Baileys Documentation](https://baileys.wiki/docs/intro/) -- configuration, QR flow, connecting
-- [SQLite FTS5 Documentation](https://www.sqlite.org/fts5.html) -- query syntax, BM25 ranking, external content tables
-- [better-sqlite3 FTS5 confirmation (GitHub #1253)](https://github.com/WiseLibs/better-sqlite3/issues/1253) -- FTS5 compiled by default
-- Direct codebase analysis: `channels/types.ts`, `channels/index.ts`, `channels/telegram.ts`, `daemon.ts`, `memory/src/index.ts`
 
-### Secondary (MEDIUM confidence)
-- [npm: baileys](https://www.npmjs.com/package/baileys) -- version history, v6.7.21 latest stable
-- [Baileys Redis Auth pattern](https://github.com/hbinduni/baileys-redis-auth) -- Redis auth state reference
-- [whatsapp-web.js GitHub issues (#3812, #3224, #3459, #5817)](https://github.com/pedroslopez/whatsapp-web.js/issues) -- session and memory failure modes
-- [CSO Online: malicious Baileys fork "lotusbail"](https://www.csoonline.com/article/4111068/whatsapp-api-worked-exactly-as-promised-and-stole-everything.html) -- supply chain attack documentation
-- [Meta WhatsApp AI chatbot ban policy 2026](https://respond.io/blog/whatsapp-general-purpose-chatbots-ban) -- ban risk assessment
+**Stack:** age-encryption.org spec; npm `age-encryption` (typage) by Filippo Valsorda; Crunchy Data Intro to Postgres Backups; PostgreSQL 18 official docs; Microsoft Learn pg_dump best practices; Redis docs Persistence; Kopia.io docs; rclone.org changelog/S3-providers.
 
-### Tertiary (LOW confidence)
-- [sqlite-vec](https://github.com/asg017/sqlite-vec) -- optional future enhancement for vector indexing, not needed for v25.0
-- [Mem0 Architecture](https://mem0.ai/) -- memory layer patterns, graph vs vector comparison
-- WhatsApp ban avoidance heuristics -- community knowledge, no official documentation from Meta
+**Features:** Backrest README + backrest.org; Kopia features + encryption docs; Borgmatic README; Synology Hyper Backup integrity docs; pgBackRest user guide; Home Assistant 2026.4 modernization blog; Veeam Instant Recovery; Proxmox Backup 2026 cloud-pbs.com; AWS Restore Testing dev guide; WorkOS multi-tenant RBAC; Azure Backup MUA docs.
+
+**Pitfalls:** pgforensics.com (Schrödinger's Backup); PostgreSQL 18 backup-dump chapter; Helge Klein restic+B2 ransomware writeup; TrendMicro S3 ransomware Nov 2025; Kopia ransomware-protection docs; BorgBackup issue #4236; Home Assistant issue #134162 + emergency-kit feature.
+
+**LivOS-internal (HIGH — direct source inspection):** `livos/packages/livinityd/source/modules/scheduler/{backup.ts,backup-secrets.ts,index.ts}`; `livos/packages/livinityd/source/modules/backups/`; `livos/packages/livinityd/source/modules/database/schema.sql`; v29.0 Phase 33 update.sh + system/update.ts.
 
 ---
-*Research completed: 2026-04-02*
-*Ready for roadmap: yes*
+
+*Research completed: 2026-04-28*
+*Synthesized from: STACK.md (HIGH), FEATURES.md (HIGH), ARCHITECTURE.md (HIGH), PITFALLS.md (HIGH)*
+*Ready for roadmap: Phase 36 spike is the recommended starting work item.*

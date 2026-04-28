@@ -1,265 +1,455 @@
-# Pitfalls Research: WhatsApp Integration & Cross-Session Memory
+# Pitfalls Research — v30.0 Backup & Restore
 
-**Domain:** WhatsApp Web channel integration + cross-session AI memory for self-hosted AI platform
-**Researched:** 2026-04-02
-**Confidence:** HIGH (codebase analysis + ecosystem research + multiple corroborating sources)
+**Domain:** Adding backup/restore to a multi-user self-hosted system (LivOS on residential Mini PC)
+**Researched:** 2026-04-28
+**Confidence:** HIGH (verified via official PG/restic/borg docs, real-world post-mortems, direct LivOS source inspection of Phase 20 + v29.0 update.sh)
+
+> **LivOS-specific framing:** these pitfalls assume the v30.0 implementation reuses Phase 20 (`livos/packages/livinityd/source/modules/scheduler/backup.ts` + `backup-secrets.ts` + `node-cron` Scheduler) and runs on the Mini PC alongside livos.service / liv-core.service / system PostgreSQL / Redis. Each "Phase to address" maps to BAK-* requirements that the upcoming v30.0 ROADMAP must include.
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: WhatsApp Session Death Spiral (whatsapp-web.js)
-
-**What goes wrong:**
-whatsapp-web.js sessions silently stop receiving messages after 10-60 minutes without any error events. The client appears connected (status shows connected), but the underlying Puppeteer browser process has lost its WebSocket connection to WhatsApp servers. On server restart, sessions fail to restore and demand a fresh QR code scan, requiring physical access to the phone. After 2-3 days, even properly saved sessions expire and require re-authentication. This creates a cycle: deploy, scan QR, works for hours/days, dies silently, requires manual intervention.
-
-**Why it happens:**
-whatsapp-web.js wraps a headless Chromium instance that loads WhatsApp Web. WhatsApp Web's internal WebSocket can disconnect silently when the browser process enters certain states (high memory, garbage collection pauses, network hiccups). The library's `disconnected` event does not fire in all failure modes. Additionally, WhatsApp rotates session tokens server-side, and if the client misses a token rotation window (30+ days inactive, or server-side invalidation), the stored session becomes permanently invalid.
-
-**How to avoid:**
-1. Use Baileys instead of whatsapp-web.js. Baileys uses a direct WebSocket connection (no browser/Puppeteer), consuming ~50MB RAM instead of ~500MB+. It handles the WhatsApp multi-device protocol natively.
-2. If using whatsapp-web.js: implement a heartbeat health check that sends a `client.getWWebVersion()` call every 60 seconds. If it fails or times out, trigger `client.destroy()` + `client.initialize()`.
-3. Store auth state in PostgreSQL (not filesystem) using a custom auth state handler so session survives container restarts and server migrations.
-4. Build a "session health" indicator in the UI that shows time-since-last-message and triggers an alert after 5 minutes of silence during expected active hours.
-
-**Warning signs:**
-- `message` events stop arriving but `disconnected` never fires
-- Chromium process memory exceeds 800MB
-- No messages received for 5+ minutes during a period when messages should arrive
-- QR code requested again after server restart even though session files exist
-
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- Library choice and session architecture must be decided up front. Switching libraries later means rewriting the entire provider.
+Mistakes that cause silent data loss, irrecoverable backups, or data leakage. These MUST be designed around — they cannot be patched in later.
 
 ---
 
-### Pitfall 2: Chromium Memory Leak and OOM on Production Server
+### Pitfall 1: Schrödinger's Backup — green dashboard, dead archive
 
 **What goes wrong:**
-whatsapp-web.js spawns a headless Chromium process that leaks memory continuously. On Server4 (the production LivOS server), this competes with PostgreSQL, Redis, PM2 processes, and Docker containers for the same RAM. After 12-48 hours, the Chromium process consumes 1-2GB, causing the Linux OOM killer to terminate either Chromium (killing WhatsApp) or another critical process (killing Nexus or Redis). This is especially dangerous because Server4 already runs a heavy workload.
+Daily backups run and report success for 4 months. User's NVMe dies. They click Restore. Tar is truncated, or pg_dump SQL has invalid syntax mid-file, or the encryption key was rotated 2 months ago and old archives can't be decrypted. "We had backups" turns into "we had files we never tested restoring." This is the single most common backup failure mode — green checkmarks lie because the only test that matters is a real restore.
 
 **Why it happens:**
-Puppeteer-controlled Chromium accumulates memory through: JavaScript heap growth from processing WhatsApp Web's React app, DOM node retention from message history rendering, and IndexedDB growth as chat history accumulates. The `--disable-dev-shm-usage` flag helps in containers but doesn't prevent the fundamental memory growth pattern. Multiple GitHub issues (3459, 294, 5817) document this as an unresolved, ongoing problem.
+- "Backup succeeded" is conflated with "upload completed" (HTTP 200 on the last byte).
+- Archive integrity is verified only by checksum-of-stream, not by re-reading the destination and replaying it.
+- Restore is treated as a rare emergency procedure, not a routine smoke test.
+- Format/schema/encryption-key drift between backup-time and restore-time is invisible until the day you need it.
 
-**How to avoid:**
-1. **Use Baileys.** This eliminates the Chromium dependency entirely. Baileys uses a lightweight WebSocket connection that typically consumes 30-80MB total.
-2. If forced to use whatsapp-web.js: schedule a periodic restart (every 6-12 hours) with `client.destroy()` followed by `client.initialize()` and automatic session restore from saved auth.
-3. Set `cgroup` memory limits for the WhatsApp process so it gets OOM-killed in isolation before it affects other services.
-4. Monitor with `process.memoryUsage()` and auto-restart when RSS exceeds 500MB.
+**Real-world evidence:**
+- pgforensics.com "Schrödinger's Backup: Automating PostgreSQL Restore Validation (Because Green Dashboards Lie)" — a full PG-restore-validation pipeline exists precisely because users repeatedly discover bad backups only at disaster time.
+- Home Assistant GitHub issue #134162 — encrypted backups unrecoverable after key rotation; user had backed up successfully for months.
+- restic forum — multiple "I have backups but I can't restore" threads where the archive itself was fine but the user lost the password.
+
+**Prevention strategy in DESIGN:**
+1. **Mandatory post-backup verification job (BAK-VERIFY):** after every successful backup, immediately spawn an alpine container that streams the just-uploaded artifact back, pipes through `gunzip -t`, and (for PG dumps) replays the SQL into an ephemeral `pg_restore --schema-only --dry-run` against a throwaway DB. Failure marks the backup as `verified=false` in `backup_runs` table — UI shows red badge, NOT green check.
+2. **Auto-restore drill (BAK-DRILL):** weekly cron job that picks the most recent verified backup, restores it to a `livos_drill` ephemeral PG database + a temp Docker volume mount, runs a sanity query (`SELECT count(*) FROM users WHERE id IS NOT NULL` against the drill DB), then tears down. Records `last_successful_drill_at` in `backup_jobs` table.
+3. **UI surface:** Settings > Backups page MUST display "Last successful drill: X days ago" — red if >14 days, no exceptions. Past restorability, not past upload-success, is the metric.
+4. **Don't trust HTTP 200:** S3 uploads can return 200 then later be marked corrupt by the destination. Issue a `HEAD` after `Upload.done()` and verify `ContentLength` matches expected.
 
 **Warning signs:**
-- `htop` shows a chromium/chrome process growing steadily over hours
-- RSS memory for the nexus-core PM2 process doubles within 24 hours
-- Other PM2 processes restart unexpectedly (OOM killer cascade)
-- System swap usage increasing
+- `backup_runs.verified` column shows `null` for >24h after job claims success → verifier never ran.
+- "Last successful drill" never advances past the day backup was first configured.
+- Manual restore from UI takes >5x the duration shown in scheduler history (real restore involves IO the verifier never exercised).
 
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- This is a library selection decision. Choosing Baileys eliminates this pitfall entirely.
+**Phase to address:** **Phase 4 (BAK-VERIFY) + Phase 7 (BAK-DRILL).** Verify-on-write must ship in same phase as the backup writer (not later) — otherwise we accumulate unverified archives. Drill is its own phase because it needs ephemeral PG provisioning.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 3: WhatsApp Account Ban from Automated Messaging
+### Pitfall 2: Encryption-key catastrophe — data is fine, key is gone
 
 **What goes wrong:**
-Meta's anti-automation detection permanently bans the WhatsApp account associated with the phone number. The ban is on the phone number itself, not the library or server -- meaning the user loses their personal WhatsApp account, all chat history, and cannot register the same number again. In 2025-2026, Meta has deployed AI-powered detection that identifies automated behavior with higher precision than ever before.
+User configures backup with passphrase `correcthorsebatterystaple`, backups run for 8 months. NVMe dies. User reinstalls LivOS on new Mini PC, types passphrase from memory — wrong. Or: they used the auto-generated key stored in `/opt/livos/data/secrets/jwt`, never wrote it down, and the laptop they were going to migrate from also crashed. **The archive is bit-perfect, the key is gone, the data is dead.**
+
+A subtler variant: key rotation. User rotates encryption passphrase in v30.5; old archives encrypted under old key remain in S3. They never tested decrypting old archives with new key (it doesn't work). 6 months later they need an old archive — locked out.
 
 **Why it happens:**
-WhatsApp's Terms of Service prohibit automated or bulk messaging on personal accounts. Detection triggers include: sending messages from a server IP (non-mobile network), consistent response times (bots reply faster than humans), identical message patterns, high message volume in short periods, and IP/phone-number geographic mismatch. Using unofficial APIs (whatsapp-web.js, Baileys) is itself a ToS violation. Meta is actively cracking down, particularly on AI chatbots, with a 2026 policy explicitly targeting general-purpose AI assistants.
+- Self-hosted users routinely conflate "I have a backup" with "I can decrypt my backup."
+- LivOS already derives the Phase 20 vault key from `sha256(JWT_SECRET file contents)` — if the JWT secret file is lost (factory reset, disk failure, manual nuke), every encrypted credential AND every encrypted backup payload becomes unreadable.
+- restic, borg, BorgBase, CrashPlan all explicitly document: "lost passphrase = permanent data loss, no recovery, no exceptions."
+- Key rotation breaks old archives unless old keys are retained for restore-only.
 
-**How to avoid:**
-1. **Warn users prominently** in the WhatsApp setup UI: "Using WhatsApp automation risks account ban. Use a secondary phone number." Display this warning before the QR code scan, require explicit acknowledgment.
-2. Implement aggressive rate limiting: max 10 messages per minute, max 80 per hour, randomized delays (2-8 seconds) between sends.
-3. Never send identical messages to different recipients.
-4. Add message variation: randomly vary punctuation, spacing, or phrasing in automated responses.
-5. Use a phone number registered on the same ISP/country as the server IP. VPN/server IP mismatches are a strong signal.
-6. Start with low volume and gradually increase (the "warm-up" pattern).
-7. This is a self-hosted personal assistant, not a business broadcast tool. The risk is lower for personal 1:1 conversations but still real.
+**Real-world evidence:**
+- BorgBackup issue #4236 "Borg Backup recovery. Key lost is lost" — closed with "no recovery possible, by design."
+- restic forum "Forgotten password" — repository password cannot be recovered, even by hosting provider.
+- Home Assistant emergency kit feature — explicit acknowledgment that users must print/store the key offline.
+- AhsayCBS sells an "Encryption Key Recovery Service" because the problem is so frequent.
+
+**Prevention strategy in DESIGN:**
+1. **Mandatory Emergency Kit on backup creation (BAK-EKIT):** the FIRST time the user configures backup encryption, modal dialog forces them to either (a) download a printable PDF "LivOS Backup Recovery Kit" containing the passphrase + recovery codes + decryption instructions, OR (b) save it to their password manager (clipboard with "Don't show me again — I saved it" hard-confirm checkbox). Modal cannot be dismissed without one of those actions. Pattern modeled on Home Assistant's emergency kit.
+2. **Don't derive backup key from JWT secret** (current Phase 20 vault pattern). Generate a separate `BACKUP_MASTER_KEY` random 32-byte value, stored in `/opt/livos/data/secrets/backup-key`, with the recovery kit being the ONLY copy outside that file. Reason: factory-reset rotates JWT secret, which would silently brick every existing backup if backup keys were derived from it.
+3. **Wrap-key architecture for rotation:** every backup archive embeds a per-archive random data-encryption-key (DEK), wrapped by the user's master key. Key rotation re-wraps all archive DEKs with the new master, no need to re-encrypt the (potentially TB-sized) archive bodies. Old master key kept in a `key_history` table for restore-only access.
+4. **Recovery-code escrow option:** offer (opt-in) Shamir Secret Sharing 2-of-3 split where one share goes to user's email, one to a paper code, one stays on disk. Mitigates "user wiped laptop with all kit copies."
+5. **Pre-flight key check:** every backup-now click first decrypts the most recent archive's header with the current master key. If it fails, hard-block the backup ("your master key cannot decrypt your last archive — restore-without-confirming-key would silently break consistency").
 
 **Warning signs:**
-- Temporary sending blocks (messages don't deliver for 1-24 hours)
-- "This account is not allowed to use WhatsApp" error
-- QR code scan succeeds but session is immediately terminated
-- Phone receives a warning notification from WhatsApp about unusual activity
+- User has never opened the "Show recovery kit" page in Settings (telemetry-able).
+- `backup_jobs.last_decrypt_check_at` >7 days old.
+- `key_history` empty after a rotation event (means old archives are now orphaned).
 
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- Rate limiting and user warnings must be built into the initial implementation, not added later.
+**Phase to address:** **Phase 2 (BAK-EKIT) — encryption design and recovery kit must ship in the same phase as encryption itself.** Adding the kit later means existing users have no kit. Phase 8+ for SSS recovery codes.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 4: userId Fragmentation Across Channels
+### Pitfall 3: Inconsistent snapshot — PG mid-transaction, Redis mid-write, FS mid-rename
 
 **What goes wrong:**
-The same human user has completely different identifiers on each channel: Telegram uses numeric IDs (`12345678`), Discord uses snowflake IDs (`987654321098765432`), WhatsApp uses phone numbers (`12025550108@s.whatsapp.net`), Slack uses workspace-scoped IDs (`U0123ABC`), and the LivOS Web UI uses PostgreSQL user UUIDs. The memory service stores memories keyed by `user_id`, but without unification, the same person's Telegram memories are invisible when they chat from WhatsApp. The AI treats them as separate users with no shared context.
+Backup runs at 03:00. At 03:00:00.473, user's AI agent is mid-transaction: `INSERT INTO conversations` is committed, `INSERT INTO messages` is not. Backup tar streams `/opt/livos/data/` while a Docker container is rotating `app.log`. PostgreSQL is being snapshotted via `pg_dump` while the user's session has open WAL. **Restore produces a DB where messages reference a non-existent conversation, app data references files that aren't in the FS tar, and Redis cache is from 30 seconds before PG.**
+
+This is the #1 cause of "backup restored but app crashes on startup" — backups across PG + Redis + filesystem are NOT atomic, and naïve concurrent reads produce a torn state that no single component flags as corrupt.
 
 **Why it happens:**
-The current `ChannelManager` passes `msg.userId` directly from each provider (e.g., `String(msg.from?.id || 0)` in Telegram, `message.author.id` in Discord). The `DmPairingManager` already maps channel-specific userIds to an allowlist per channel, but this mapping is not used to resolve a canonical userId. The memory service at `nexus/packages/memory` stores and retrieves memories by `user_id` with no concept of aliases. Each channel stores its own isolated userId, so cross-channel memory recall fails completely.
+- Phase 20's existing `streamVolumeAsTarGz()` mounts the volume read-only and tars it — fine for a static volume, but Docker apps with active writers race the tar enumeration.
+- `pg_dump` is internally consistent (per PG docs, uses a snapshot), BUT only relative to PG. Files written by the app to FS that reference PG rows aren't synchronized.
+- Redis `BGSAVE` produces a point-in-time RDB but its timestamp is independent of the PG dump and FS tar timestamps.
+- Without a coordinated quiesce, you have THREE point-in-time snapshots from THREE different times.
 
-**How to avoid:**
-1. Create a `user_identity_map` table in PostgreSQL: `(canonical_user_id UUID, channel TEXT, channel_user_id TEXT, UNIQUE(channel, channel_user_id))`.
-2. Extend the DM pairing flow: when a user is approved on a new channel, link their channel-specific ID to their canonical LivOS user. The pairing code already routes through the Web UI admin, which knows the canonical userId.
-3. Add a resolution layer in `ChannelManager.onMessage()` before calling `daemon.addToInbox()`: look up the canonical userId from the identity map, and pass that to the memory service.
-4. For WhatsApp specifically, the phone number can serve as a natural cross-channel identifier if the user also has it on file in their LivOS profile.
-5. Build an "Identity Linking" UI in Settings where users can see which channel accounts are linked and manually link/unlink them.
+**Real-world evidence:**
+- PostgreSQL docs confirm `pg_dump` is consistent within PG only; cross-system consistency is the application's responsibility.
+- CVE-2024-7348 — TOCTOU race in pg_dump itself.
+- Datto VSS errors — Windows VSS tries to coordinate writers exactly because uncoordinated snapshots are known-broken.
+
+**Prevention strategy in DESIGN:**
+1. **Application-level quiesce protocol (BAK-QUIESCE):** before pg_dump starts, livinityd sends an internal `backup:quiesce` Redis pub/sub event. Subscribers (nexus core, AI agent loop, Docker app gateway) finish in-flight writes and pause new writes for the duration of the dump. Maximum quiesce window: 30 seconds, hard timeout. After dump, `backup:resume` event releases.
+2. **Snapshot ordering convention:** PG dump FIRST (cheapest, most critical), Redis RDB SECOND (using `--no-pager` synchronous BGSAVE), filesystem volume tar LAST. All three timestamps recorded in archive manifest. On restore, replay in reverse order: FS first (slowest), then Redis, then PG (fastest, last).
+3. **Manifest with consistency boundary:** archive includes `manifest.json` with `quiesce_started_at`, `quiesce_ended_at`, `pg_dump_lsn`, `redis_save_id`, `volume_freeze_token`. Restore-time validation: if any component's timestamp falls outside the quiesce window, mark restore as "torn — proceed at your own risk" and require explicit user confirmation.
+4. **For per-app Docker volumes:** if the app is running, EITHER (a) `docker pause` the container during tar (ms-scale freeze, transparent to the running process), OR (b) skip and warn ("App `nextcloud` is running — skipping volume backup. Stop the app to back up its data.").
+5. **WAL archiving for hot-standby option (advanced):** beyond basic pg_dump, support WAL-shipping to a destination so point-in-time recovery is possible. Defer to Phase 9+ but design schema with this in mind from Phase 1.
 
 **Warning signs:**
-- AI says "I don't recall us discussing that" when the user switches from Telegram to WhatsApp mid-conversation
-- Memory search returns empty for a known user when queried from a different channel
-- Memory deduplication creates separate near-identical memories for the same user across channels
-- User count in memory stats is inflated (N channels x M users instead of M users)
+- Restored DB has FK constraint violations on startup.
+- Redis cache contains references to entities that don't exist in PG.
+- App data volume contains file IDs that don't exist in PG `files` table.
+- Quiesce window in manifest >30s — means application didn't release fast enough; investigate write storm.
 
-**Phase to address:**
-Phase 2 (Cross-Session Memory) -- Must be addressed before memory goes live, otherwise incorrect data accumulates and is hard to clean up retroactively.
+**Phase to address:** **Phase 3 (BAK-QUIESCE) — must ship before any cross-system backup.** Phase 1 should design the manifest format with consistency boundary fields even if quiesce isn't wired yet.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 5: Baileys Auth State Loss on Restart
+### Pitfall 4: Ransomware-paths-to-backups — attacker wipes archives too
 
 **What goes wrong:**
-Baileys requires persisting Signal protocol session keys after every single message send/receive. If even one key update is missed (process crash between message receipt and key persistence), the session becomes corrupted. On next restart, Baileys cannot decrypt incoming messages, receives "Bad MAC" errors, and the only recovery is deleting all auth state and re-scanning the QR code. The official `useMultiFileAuthState` function writes JSON files to disk on every update, which is explicitly documented as "NOT for production" due to excessive I/O and corruption risk.
+Attacker compromises livinityd via a 0-day in a Docker app or a stolen API token. They now have RCE on the Mini PC. They locate `/opt/livos/data/secrets/`, read the S3 credentials from the Phase 20 backup-secrets vault, and issue `DeleteObjectsV2` against the backup bucket. **All cloud backups gone in 4 seconds.** Then they encrypt the live data and demand ransom. Local-disk backups are also wiped because attacker has root.
+
+This is the standard 2024-2026 ransomware playbook — attackers explicitly hunt for backup credentials before triggering the encrypt phase.
 
 **Why it happens:**
-WhatsApp uses the Signal protocol for end-to-end encryption. Session keys are ratcheted forward with every message -- if the persisted state diverges from WhatsApp's server-side state by even one step, decryption fails permanently for that session. File-based persistence is vulnerable to: partial writes during crash, filesystem sync delays, and race conditions when multiple messages arrive simultaneously. The official docs state: "if updates are not persisted, message delivery will break on the next restart."
+- Standard S3 credentials have full Read+Write+Delete on the bucket. Compromised LivOS = compromised backups.
+- Local disk backups under `/opt/livos/data/backups` share fate with the live data.
+- Phase 20's `backup-secrets.ts` encrypts the credentials, but they're decrypted in memory by livinityd whenever a backup runs — RCE on livinityd defeats the encryption.
 
-**How to avoid:**
-1. Implement a custom auth state handler that persists to PostgreSQL (already available in the stack) with transactional writes. Wrap `set()` calls in a database transaction so partial writes are impossible.
-2. Use the `baileysauth` library or write a custom adapter following the `useMultiFileAuthState` interface but backed by PostgreSQL/Redis.
-3. Never use `useMultiFileAuthState` in production. Use it only as a reference implementation.
-4. Implement a startup validation: on boot, attempt to send a test message to self. If it fails with decryption errors, automatically wipe auth state and request re-authentication via QR code in the UI.
-5. Back up auth state to Redis as a secondary store for fast recovery.
+**Real-world evidence:**
+- TrendMicro Nov 2025 "Breaking Down S3 Ransomware: Variants, Attack Paths and Trend Vision One Defenses" — documented S3 ransomware patterns.
+- restic forum "S3 Immutable Backups for ransomware recovery" — community widely understands this attack.
+- Helge Klein's "restic: Encrypted Offsite Backup With Ransomware Protection" — canonical writeup of the B2-application-key-without-delete pattern.
+- Kopia ransomware-protection docs — formalizes the immutable-destination model.
+
+**Prevention strategy in DESIGN:**
+1. **Append-only credentials by default (BAK-APPEND-ONLY):** UI flow for S3/B2 destination MUST guide user to create an application key without `s3:DeleteObject` (B2: `listBuckets,listFiles,readFiles,writeFiles` — explicitly NOT `deleteFiles`). Auto-detect at destination-test time: if test creds CAN delete, show yellow warning "These credentials can delete backups. Ransomware on your LivOS could wipe your archives."
+2. **Object Lock support (BAK-LOCK):** for S3-compatible destinations supporting Object Lock, set `x-amz-object-lock-mode: COMPLIANCE` + `x-amz-object-lock-retain-until-date` = (now + retention_days). Even root on the S3 account cannot delete locked objects. UI checkbox: "Make this destination ransomware-proof (Object Lock — irreversible)."
+3. **Server-side retention via lifecycle (not client-side prune):** since we can't delete with append-only creds, retention happens via S3 lifecycle policy or B2 lifecycle rules — NOT by livinityd issuing deletes. UI generates the lifecycle JSON for user to paste into S3 console (or, if creds have config-write permission via a separate "admin" key, applies it once at setup).
+4. **3-2-1 enforcement in UI:** require AT LEAST one immutable destination before allowing the schedule to be enabled. Local-disk-only is allowed but flagged red ("Single-point-of-failure: ransomware on your Mini PC will destroy these backups").
+5. **Air-gapped local copy pattern:** support optional "external USB" destination where livinityd writes backup, then displays a notification "Disconnect USB drive now to make this copy ransomware-proof." Manual but effective for technical home users.
 
 **Warning signs:**
-- "Bad MAC" or "decryption failed" errors in logs after restart
-- Messages show as delivered (double check) on sender's phone but never trigger the message handler
-- Auth state files grow unboundedly on disk
-- Frequent QR code re-scans needed after deployments
+- Destination test reveals delete permission → log warning.
+- Backup-write user can also list other buckets / has root S3 perms (probably reused user's main S3 account).
+- Single destination (no 3-2-1) configured.
 
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- Auth state architecture must be correct from day one. Fixing a corrupted auth state store that has been accumulating keys for weeks is extremely difficult.
+**Phase to address:** **Phase 5 (BAK-APPEND-ONLY) + Phase 6 (BAK-LOCK).** Phase 5 is a UI-and-permission-test concern that gates on Phase 1 destination model. Phase 6 (Object Lock) is a separate destination capability flag.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 6: Memory Embedding Brute-Force Scaling Wall
+### Pitfall 5: Backup blowing up the disk — silent fill
 
 **What goes wrong:**
-The current memory service in `nexus/packages/memory` performs brute-force cosine similarity search over all user embeddings (up to 100 most recent) on every query. As conversations accumulate across multiple channels (Web UI, Telegram, WhatsApp, Discord), the memory count grows to thousands per user. Each `/search` or `/context` call loads all embeddings from SQLite, deserializes JSON arrays, and computes cosine similarity in JavaScript. At 1,000+ memories with 1536-dimension embeddings, each search takes 500ms+; at 10,000 memories, it becomes multi-second and blocks the event loop.
+User configures local-disk backup to `/opt/livos/data/backups`, retention=keepLast:30. Backup runs daily, each archive 50 GB (PG + Redis + all per-user app volumes). After 30 days = 1.5 TB. Mini PC NVMe is 900 GB. **Backup #19 fails at "no space left on device" — but earlier failures filled the disk so far that PG itself can no longer write WAL → entire LivOS halts.** Or: retention pruning has a bug and never deletes, archives accumulate forever.
 
 **Why it happens:**
-The current implementation was designed for a small-scale prototype (the code even says "v2" and limits to 100 recent memories). Adding WhatsApp and cross-session memory dramatically increases volume: every conversation turn across every channel generates memories. The `LIMIT 100` in the current query is a band-aid that means older memories are never searched, effectively creating a recency-only memory (not true long-term recall). The brute-force approach has O(n) complexity per query with no indexing.
+- Phase 20's `volumeBackupHandler` writes destination size unbounded — no pre-flight free-space check.
+- Retention is a "keepLast: N" config but if the prune logic fails (FS error, race with another job), no alarm — just silent accumulation.
+- LivOS shares the NVMe between live data and local backups — full disk = system down, not "just" backup failure.
+- Compression failures (incompressible data, e.g. already-encrypted user files in apps) defeat assumed compression ratios.
 
-**How to avoid:**
-1. Add `sqlite-vec` extension to `better-sqlite3` for native vector search with indexed KNN queries. This brings queries from O(n) to O(log n) and handles 100k+ embeddings efficiently.
-2. Remove the `LIMIT 100` from search queries and rely on vector index for performance.
-3. Implement a two-tier memory system: "hot" memories (last 7 days) in Redis for instant retrieval, "cold" memories in SQLite with vector index for semantic search.
-4. Add a background compaction job: periodically summarize old memories into higher-level summaries, reducing the total count while preserving knowledge.
-5. Track embedding dimension and ensure consistency: if the Kimi embedding model changes dimension, old embeddings become incompatible.
+**Real-world evidence:**
+- Commvault community "DDB backup job seem to be not pruning any data" — pruning silently fails for disk-space reasons unrelated to retention config.
+- Veritas Backup Exec "Low disk space" alerts exist precisely because this is a recurring issue.
+- Proxmox forum "Backup retention settings" — many users hit unbounded growth from misconfigured GFS rules.
+
+**Prevention strategy in DESIGN:**
+1. **Pre-flight free-space gate (BAK-PREFLIGHT):** before starting any backup, livinityd runs `statvfs()` on the destination path (for local) or HEAD on a test object (for S3 + estimate via `Content-Length` of last archive × 2). If free space < 1.5× last archive size, abort with `failure: insufficient_space` and emit alert. NEVER start a backup that cannot fit.
+2. **Hard reservation for live system:** local-disk destination MUST be on a different mount than `/opt/livos/data/` (different volume / external drive / dedicated partition). UI rejects `/opt/livos/data/backups` as a destination — too dangerous. If user really wants same-drive, require `--I-know-this-can-brick-LivOS` flag.
+3. **Retention-prune verification:** after every prune, query the destination listing and assert `count <= keepLast + 1` (1 for the just-written archive). If invariant violates, emit alert "Retention pruning is not working — backups will fill disk." Don't trust the prune SQL/API to silently succeed.
+4. **Disk-usage telemetry:** publish `backup_destinations_used_bytes` to Settings UI — graph over time. Sudden spike = compression broke (probably encrypted-source data) → user can investigate before it's a crisis.
+5. **Destination size budget:** UI per-destination "Max total size" config (default 500 GB). When approached, prune more aggressively even if outside retention rule. Fail-safe over fail-secure: bricked LivOS is worse than dropped old backups.
 
 **Warning signs:**
-- `/context` endpoint latency exceeds 200ms
-- Memory service CPU spikes during AI conversations
-- Users report AI response delays when memory context is being assembled
-- SQLite database file exceeds 100MB
+- `backup_destinations.used_bytes` growing linearly with no plateau.
+- `pg_settings.checkpoint_warning` events on the Mini PC (PG can't write).
+- `df /` < 10% free on `/opt/livos/data/`.
+- Last 3 backup runs have status=success but size grew 3× — silent compression failure.
 
-**Phase to address:**
-Phase 2 (Cross-Session Memory) -- Must be addressed when memory volume increases. The current implementation works for small scale but will fail with multi-channel input.
+**Phase to address:** **Phase 4 (BAK-PREFLIGHT) + Phase 7 (retention verification).** Pre-flight is in same phase as the backup writer (cheap to add). Retention verification needs the prune logic to exist first.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 7: Echo Loop Between WhatsApp and AI Agent
+### Pitfall 6: Restore-while-running disaster — corrupting live PG mid-restore
 
 **What goes wrong:**
-The AI agent sends a response to WhatsApp. WhatsApp-web.js (or Baileys) receives the sent message as an incoming event (because it sees all messages in the chat, including its own). This triggers the message handler again, which sends the message to the AI agent, which generates another response, creating an infinite loop. The loop consumes API tokens, burns rate limits, and can trigger WhatsApp anti-spam detection and account ban.
+Admin clicks "Restore from 2026-04-15 backup." LivOS is running. Restore handler calls `pg_restore` against the live `livos` database while livinityd's tRPC handlers are mid-transaction. **Conflicting writes cause partial restore: some tables overwritten, some not, FK constraints broken.** Worse: restore fails halfway, livinityd restarts, sees a half-restored DB, marks itself as broken on startup. Now the user has neither the old data nor the new data — they have a Frankenstein.
+
+A second variant: restore stops services (good!), restore fails halfway (e.g., decrypt error), services never restart (bad!) — admin is locked out with no UI to retry, has to SSH and manually `systemctl start livos`.
 
 **Why it happens:**
-Unlike Telegram (where the bot API distinguishes between incoming and outgoing messages clearly), WhatsApp Web libraries receive all messages in a chat, including messages sent by the connected account. The existing Telegram provider doesn't face this because `grammy` handles bot message filtering internally. The current `ChannelManager.onMessage` handler has no `fromMe` check -- it forwards all messages to `daemon.addToInbox()`.
+- pg_restore overwrites tables row-by-row; concurrent reads see torn state.
+- Docker volume restore replaces files while a container has them open — open file handles point to deleted inodes.
+- "Stop services → restore → restart" is a 3-step dance where step 3 is conditional on step 2's success — easy to skip on error path.
 
-**How to avoid:**
-1. In the WhatsApp provider, filter messages with `msg.fromMe === true` (whatsapp-web.js) or `msg.key.fromMe === true` (Baileys) and skip them.
-2. Add a sent-message deduplication set in Redis (similar to Telegram's `dedup:${updateId}` pattern): before sending a response, store the message ID with a 5-minute TTL, and reject incoming messages matching stored IDs.
-3. Add a global guard in `ChannelManager.onMessage()` that checks a `fromBot` flag before forwarding to the daemon.
-4. Implement a per-chat cooldown: after sending a response, ignore messages from the same chat for 2 seconds.
+**Real-world evidence:**
+- SQL Server backup-restore docs (Microsoft Learn) explicitly require RESTRICTED_USER mode for restore.
+- PostgreSQL pg_restore docs: target DB must be empty or `--clean` used; either way, concurrent connections cause errors.
+- v29.0's own update.sh experience — restart-during-active-state is the same class of problem as restore-during-active-state.
+
+**Prevention strategy in DESIGN:**
+1. **Restore is a separate cgroup-escaped script (BAK-RESTORE-CGROUP):** mirror v29.0 update.sh pattern — restore.sh is `exec systemd-run --scope` so it survives livos.service restart. Sequence: (a) record restore intent in `/opt/livos/data/restore-pending.json`, (b) `systemctl stop livos liv-core liv-worker liv-memory`, (c) restore PG via `pg_restore --clean` against stopped DB, (d) restore Redis via `SHUTDOWN NOSAVE` + replace dump.rdb + start, (e) restore volumes via tar extract, (f) `systemctl start livos liv-core liv-worker liv-memory`, (g) clear restore-pending.json.
+2. **livinityd boot-time recovery check (BAK-RESTORE-RECOVERY):** on every livos.service start, livinityd reads `/opt/livos/data/restore-pending.json`. If present + status=in_progress, refuses to come up cleanly: shows "Restore was interrupted. Click Retry or Roll Back" maintenance page on port 8080. No regular UI until resolved. Mirrors Phase 32 ROLL-01 auto-rollback pattern from v29.0.
+3. **Restore-to-staging by default (BAK-DRY-RESTORE):** UI's primary "Restore" button restores to a separate ephemeral PG database (`livos_restore_staging`) + temp Docker mounts. User clicks "Promote to live" only after sanity-checking the staging — at which point services stop and the staging swap-in happens atomically.
+4. **No restore-while-update-running:** check `/opt/livos/data/update-pending` (from update.sh) and refuse restore. Same vice versa: refuse update if restore-pending.
 
 **Warning signs:**
-- AI responds to its own messages in rapid succession
-- Kimi/Claude API token usage spikes unexpectedly
-- WhatsApp sends "you're sending messages too quickly" warnings
-- Server CPU spikes from rapid message processing loop
+- `restore-pending.json` exists at livinityd startup → previous restore did not complete cleanly.
+- pg_restore exit code 1 with "deadlock detected" → concurrent connections weren't blocked.
+- Container restart loop on services that depend on restored volumes (open file handles to deleted inodes).
 
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- This must be handled in the message handler from the very first implementation. An echo loop in production can burn hundreds of API calls in seconds.
+**Phase to address:** **Phase 8 (BAK-RESTORE) + Phase 8b (BAK-RESTORE-RECOVERY).** Cannot ship restore without recovery path — half-shipped restore is worse than no restore.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 8: Malicious Baileys Fork / Supply Chain Attack
+### Pitfall 7: Multi-user backup data leakage
 
 **What goes wrong:**
-The Baileys ecosystem has had documented supply chain attacks. A malicious fork called "lotusbail" embedded a hardcoded pairing code that silently added the attacker's device as a trusted endpoint on the victim's WhatsApp account. Even after uninstalling the malicious package, the attacker's linked device remained connected until manually removed from WhatsApp settings. The attacker could read all messages, impersonate the user, and exfiltrate data.
+Admin runs full system backup. Archive contains `users` table (all users + password hashes), all per-user app volumes including User A's private notes app, all conversation histories. Admin shares this archive with a contractor for "disaster recovery testing." **Contractor now has every user's data.** Or: User B (member, not admin) clicks "Restore my data" — UI accidentally lets them restore User A's data into User B's account, mixing identities.
+
+A subtler variant: per-user encryption was promised in v7.0 multi-user docs, but backup uses a single system-level key — meaning every user's archive is decryptable by the admin (who may not own that user's data semantically, esp. in family/team settings).
 
 **Why it happens:**
-Baileys is a reverse-engineered WhatsApp protocol implementation. Forks are common, many with slight modifications. The npm ecosystem makes it easy to publish similar-sounding packages. Developers searching for "baileys" find dozens of forks (`@fadzzzslebew/baileys`, `@zenzxz/baileys`, etc.) and may install a compromised one. The official package is `@whiskeysockets/baileys` (or `baileys` on npm from WhiskeySockets).
+- Single-tenant backup design retrofitted onto a multi-user system without rethinking encryption boundaries.
+- Phase 20 backup-secrets has ONE vault key for the whole system — no per-user separation.
+- Restore UI takes a `userId` parameter that's user-controlled; missing tenant-filter on the restore handler = cross-user restore.
+- Audit logs that contain references to other users' actions get included in any per-user backup.
 
-**How to avoid:**
-1. **Only install from the official source**: `@whiskeysockets/baileys` from WhiskeySockets. Pin the exact version in package.json.
-2. Use `npm audit` and `pnpm audit` to check for known vulnerabilities.
-3. After initial QR pairing, verify linked devices in WhatsApp mobile: Settings > Linked Devices. There should be exactly one entry (the server).
-4. Periodically re-check linked devices from the UI (add a "Check Linked Devices" button).
-5. Lock down the dependency with a lockfile hash check in CI.
+**Real-world evidence:**
+- WorkOS multi-tenant guide — "A single missed `WHERE tenant_id = ?` clause becomes a potential data leak."
+- AWS multi-tenant SaaS backup blog — segregation must be designed in, not bolted on.
+- ComplyDog SaaS privacy guide — backups are a documented OWASP-multi-tenancy weak point.
+
+**Prevention strategy in DESIGN:**
+1. **Per-user encryption sub-key (BAK-PER-USER-KEY):** wrap-key architecture from Pitfall 2 includes per-user DEKs derived from the user's password (or a user-set backup passphrase). Admin can backup a user's data, but can only DECRYPT it if the user provides their backup passphrase. This is a hard boundary.
+2. **Restore RBAC enforcement (BAK-RESTORE-RBAC):** restore handler uses `adminProcedure` middleware; cross-user restore (`restoreUserId !== currentUser.userId`) requires `currentUser.role === 'admin'` AND records audit event with both user IDs. Member tier can only restore their own archive.
+3. **Per-user backup scoping:** "Backup my data" for a member produces an archive containing ONLY rows where `user_id = currentUser.userId` from every table (filter at SQL level, not at file level). Full-system backup is admin-only.
+4. **Audit-log scrubbing on per-user backup:** `audit_logs` filtered by `actor_user_id = currentUser.userId` — don't leak admin's actions on other users to the user being backed up.
+5. **Pre-restore confirmation modal:** "You are about to restore User A's data into User A's account. This will overwrite User A's current data. Type `RESTORE A` to confirm." Hard-block typo'd user IDs.
 
 **Warning signs:**
-- Unknown linked device appears in WhatsApp mobile settings
-- Messages being read without user interaction (double blue ticks appearing on messages user hasn't opened)
-- Unexpected package name in node_modules (not `@whiskeysockets/baileys`)
+- `audit_logs.actor_user_id` doesn't match `target_user_id` in restore events without admin role.
+- Member-tier user successfully decrypts an archive that wasn't theirs (telemetry: track decrypt failures vs successes per role).
+- Restore UI shows another user's name in a member-tier session.
 
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- Dependency selection and verification must happen before any code is written.
+**Phase to address:** **Phase 2 (per-user keys) + Phase 8 (RBAC on restore).** Per-user keys are encryption-architectural; bolting on later means existing archives have wrong key boundary.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 9: Memory Deduplication Fails Across Channels
+### Pitfall 8: Network partition during backup — partial S3 upload, no resume
 
 **What goes wrong:**
-The same topic discussed on Telegram and then on WhatsApp creates duplicate memories. The user says "My birthday is March 15" on Telegram, and later "I was born on March 15th" on WhatsApp. The deduplication threshold (cosine similarity >= 0.92) may not catch these because: (a) the phrasing differs enough to drop below 0.92, and (b) the dedup check only looks at the 50 most recent memories for one `user_id`, but if userId is fragmented (Pitfall 4), it searches a completely different memory set. The result is the AI stores 2-5 copies of the same fact from different channels.
+50 GB backup is mid-upload to S3 via residential Mini PC. Cloudflare-Server5-Mini PC tunnel drops at 70% upload (residential ISP rerouting, common). `Upload.done()` throws `NetworkError`. Phase 20 marks the job as failed. **The 35 GB partial in S3 is now garbage taking up bucket space — no `abortMultipartUpload` was sent, so the multipart parts linger and incur cost.** Next scheduled run starts from scratch. Over weeks of flaky tunnel, S3 bill silently quintuples from abandoned multipart fragments.
 
 **Why it happens:**
-The current dedup logic in `POST /add` only checks `WHERE user_id = ?` with `LIMIT 50` ordered by `updated_at DESC`. With fragmented userIds, each channel's memories are isolated. Even with unified userId, the 50-memory window is too small once multi-channel conversation volume grows. The 0.92 threshold is tuned for near-identical text, not semantically equivalent paraphrases.
+- Phase 20's `lib-storage Upload` does NOT auto-abort failed multipart uploads on stream error — abandoned parts stay around indefinitely.
+- No resume support: every failure restarts from byte 0.
+- No bandwidth throttling — backup competes with tunnel traffic, making the tunnel even flakier during backup.
+- S3 charges for storage of incomplete multipart parts; B2 charges for upload bytes; both can rack up costs invisibly.
 
-**How to avoid:**
-1. Solve userId unification first (Pitfall 4). Without canonical userId, dedup across channels is impossible.
-2. Lower the dedup threshold to 0.85 for cross-channel memories (semantic equivalence, not textual similarity).
-3. Remove the `LIMIT 50` from dedup checks or increase it significantly. With vector index (Pitfall 6), this becomes efficient.
-4. Add a metadata field `source_channel` to memories so the dedup logic can apply a looser threshold for cross-channel duplicates.
-5. Implement a periodic background job that scans for near-duplicate memories across the full store and merges them.
+**Real-world evidence:**
+- AWS docs explicitly recommend `S3 lifecycle rule: AbortIncompleteMultipartUpload after N days` to clean up — this is well-known.
+- Residential network reliability is a known issue for self-hosted backup; tools like restic/borg specifically advertise resume-from-failure.
+- Backblaze B2 charges for incomplete uploads — community has hit this.
+
+**Prevention strategy in DESIGN:**
+1. **Try/finally with explicit abort (BAK-MULTIPART-CLEAN):** wrap every `lib-storage Upload` in try/catch; on any error, call `upload.abort()` to issue `AbortMultipartUpload` request. Add to current Phase 20 `uploadToS3` immediately.
+2. **Lifecycle rule on bucket setup (BAK-LIFECYCLE):** when user configures S3/B2 destination, generate a lifecycle JSON snippet that includes `AbortIncompleteMultipartUpload after 1 day`. UI provides one-click "Apply" if creds have config-write permission, else copy-paste instructions.
+3. **Chunked archive with resumable uploads (BAK-CHUNKED):** for archives >5 GB, split at 1-GB chunks at the tar level (multi-volume tar). Each chunk uploads independently with retry-with-backoff (exponential, max 3 retries). Manifest lists chunks; restore concatenates. Single-chunk failure doesn't kill the whole backup. Phase 9+ work, but design schema for it from Phase 1.
+4. **Bandwidth throttle (BAK-THROTTLE):** UI option "Limit backup bandwidth to X MB/s" — uses `Throttle` stream from `stream` module to cap. Default suggested: 50% of measured upstream. Prevents backup from killing the tunnel.
+5. **Restore-bandwidth cost preview:** UI shows estimated egress cost per restore for cloud destinations ("Restoring 50 GB from B2 = ~$0.50, from AWS S3 = ~$4.50"). Educates users away from expensive choices for full-restore scenarios.
 
 **Warning signs:**
-- Memory stats show memory count growing faster than unique facts being discussed
-- AI mentions the same fact twice in context ("I know your birthday is March 15. Also, you were born on March 15th.")
-- Token budget for memory context is consumed by redundant information
+- S3 list-multipart-uploads returns >10 entries → cleanup failing.
+- Backup duration variance >3× between runs → network-driven retries.
+- B2/S3 bill diverges from `backup_destinations.used_bytes` calculation → orphan multiparts.
 
-**Phase to address:**
-Phase 2 (Cross-Session Memory) -- Dedup improvements depend on userId unification and should be implemented together.
+**Phase to address:** **Phase 4 (BAK-MULTIPART-CLEAN) + Phase 4b (BAK-LIFECYCLE).** Both must ship with destination support — abort-on-error is a one-liner that absolutely cannot be deferred. Chunked uploads (Phase 9+) is a larger redesign.
+
+**Confidence:** HIGH
 
 ---
 
-### Pitfall 10: QR Code Authentication UX Dead End
+### Pitfall 9: Self-update + backup interaction — update.sh kills backup mid-write
 
 **What goes wrong:**
-The QR code for WhatsApp authentication must be scanned from the user's phone. In a self-hosted server scenario, the server may be headless, remote, or accessed only through a web browser. The QR code must be transmitted from the server process to the user's browser UI in real-time, refreshed every 20 seconds (whatsapp-web.js) or on timeout (Baileys). If the WebSocket between LivOS UI and the server drops during QR display, the user sees a stale QR code, scans it, and nothing happens. They retry, get frustrated, and abandon setup.
+User starts a 50 GB backup at 10:00 (estimated 90 min). At 10:30, the v30.5 update notification banner appears. User clicks "Install Update." update.sh fires `systemctl restart livos.service` at 10:35. The backup process is owned by livinityd → killed. **The S3 upload is half-done; the local-tar partial is on disk; the cloud archive is corrupt; manifest is never written.** Worst case: the partial cloud archive has the same filename as what would be the successful archive, so it gets recorded as successful in scheduled_jobs.last_run_status = 'success' before the restart. Now there's a dead archive masquerading as alive.
 
 **Why it happens:**
-WhatsApp QR codes are time-sensitive tokens. The server generates them, but the user needs to see them in a different context (browser UI). This requires a real-time channel (WebSocket or SSE) from the WhatsApp provider to the frontend. The current channel providers don't have a pattern for UI-interactive setup -- Telegram, Discord, and Slack all use static tokens/bot-tokens entered in a text field. WhatsApp's QR flow is fundamentally different and requires a bidirectional setup flow.
+- Phase 20's backup runs in livinityd's process tree → child of livos.service cgroup → killed when service restarts.
+- v29.0 update.sh does NOT check for in-flight backups before restarting livos.service.
+- Scheduler's in-memory `inFlight: Set<string>` is cleared on process restart — next start of livinityd has no idea a backup was killed.
+- update.sh own cgroup-escape (Phase 33) doesn't apply to livinityd's children — only to update.sh itself.
 
-**How to avoid:**
-1. Use the existing WebSocket infrastructure (`/ws/agent` pattern from v20.0) to stream QR codes from the WhatsApp provider to the Settings UI in real-time.
-2. Display the QR code as a base64-encoded image in the Settings > Integrations > WhatsApp panel. Auto-refresh every 15 seconds (before the 20-second expiry).
-3. Show clear status indicators: "Waiting for QR scan...", "QR expired, regenerating...", "Authenticated!", "Session restored from saved state."
-4. Also support **pairing codes** as an alternative to QR scanning (Baileys supports this natively with `requestPairingCode(phoneNumber)`). Pairing codes are 8-digit numbers that the user enters on their phone, which works better for remote server setups.
-5. Implement a timeout: if QR is not scanned within 5 minutes, stop generating and show "Setup timed out. Click to retry."
+**Real-world evidence:**
+- LivOS-internal: v29.0 hot-patches were necessary because update.sh restart killed update.sh — exact same pattern applies to backup.
+- Direct inspection of `livos/packages/livinityd/source/modules/scheduler/index.ts:21,99,131` — `inFlight` is a Map in livinityd memory.
+
+**Prevention strategy in DESIGN:**
+1. **Persistent in-flight registry (BAK-INFLIGHT-PG):** replace in-memory `inFlight: Set` with PG table `backup_runs(id, job_id, status='running', started_at, pid, host)`. Survives livinityd restarts. On startup, livinityd reads outstanding `running` rows older than 1 hour, marks them `failed_orphan` with reason="livinityd restarted mid-backup".
+2. **update.sh pre-flight check (BAK-UPDATE-GUARD):** add to update.sh, BEFORE the `systemctl restart livos` line: `if [[ -f /opt/livos/data/backup-in-progress.flag ]]; then echo "Backup in progress, deferring update by 5 min"; sleep 300; goto retry; fi`. Maximum 3 retries; after that, abort the update (do NOT force-kill backup).
+3. **Backup also cgroup-escapes (BAK-INFLIGHT-CGROUP):** for backups exceeding a threshold (>10 min estimated), spawn the backup process in `systemd-run --scope --collect` so it survives livinityd / livos.service restart. Mirrors v29.0 update.sh pattern. Reports completion via writing manifest atomically + signaling livinityd via Redis pub/sub.
+4. **UI "Install Update" guard:** if a backup is running, the Install Update button is disabled with tooltip "Backup in progress. Update will be available when backup completes."
+5. **Atomic manifest write:** never write `manifest.json` until ALL chunks + verification + retention pass. If any phase fails, no manifest = no archive (orphaned chunks cleaned by lifecycle).
 
 **Warning signs:**
-- Users report "I scanned the QR but nothing happened"
-- QR code in UI doesn't match the current server-side QR (stale display)
-- Setup flow hangs indefinitely with spinner
-- Users with remote-only server access cannot complete setup
+- `backup_runs.status='running'` rows with `started_at < now() - interval '6 hours'` → orphans from killed backups.
+- update.sh log shows "Backup in progress" deferral messages (expected, fine) OR shows zero such messages over weeks of usage (suspicious — either no backups or guard not wired).
+- S3 bucket has objects without corresponding manifest (orphans from killed backups).
 
-**Phase to address:**
-Phase 1 (WhatsApp Core Integration) -- The authentication UX is the first thing users interact with. A broken setup flow means WhatsApp integration is never used.
+**Phase to address:** **Phase 4 (BAK-INFLIGHT-PG) + Phase 5 (BAK-UPDATE-GUARD) + Phase 9+ (BAK-INFLIGHT-CGROUP).** Phase 4 must be done with the writer; Phase 5 is a small update.sh patch that ships in same milestone; cgroup-escape is a v30.1 hotpatch candidate (mirrors v29.1 timing).
+
+**Confidence:** HIGH
+
+---
+
+### Pitfall 10: Phase 20 reuse blast-radius
+
+**What goes wrong:**
+v30.0 reuses Phase 20's `streamVolumeAsTarGz()`, `backup-secrets.ts`, `Scheduler` directly. Existing assumptions (single-volume small archives, 15-min jobs, in-memory inFlight) break under v30.0 scope (multi-component archives, multi-hour jobs, system PG dump). Symptoms: livinityd OOM at 32 GB tar buffer, alpine container hits Docker's default `--memory=` limit and OOMs mid-tar, Scheduler's `inFlight` skip drops the long-running backup's retry, backup-secrets vault key is the JWT secret which factory-reset rotates.
+
+**Why it happens:**
+- Phase 20 was designed for app-volume backups (small, fast). v30.0 must back up the whole system (PG + Redis + all volumes + secrets) — different scale entirely.
+- Phase 20's `tar | upload` pipe assumes upload is faster than tar; for slow tunnels + fast NVMe, tar buffers in-RAM until upload catches up.
+- The current vault key derivation (`sha256(JWT_SECRET)`) silently breaks if JWT secret rotates (which it does on factory reset, per `livos/packages/livinityd/source/modules/system/factory-reset.ts`).
+- `inFlight: Set` was sized for jobs that complete in seconds, not hours.
+
+**Real-world evidence:**
+- Direct source inspection: `backup.ts:117-125` demuxes stdout via PassThrough — back-pressure between tar output and S3 upload is ad-hoc.
+- `backup-secrets.ts:21-31` — `JWT_SECRET_PATH = '/opt/livos/data/secrets/jwt'` is the SOLE key source. No fallback, no recovery.
+- v29.0 update.sh experience — Phase 20 patterns that "worked fine" for short jobs broke at production timescales.
+
+**Prevention strategy in DESIGN:**
+1. **New vault key, separate file (BAK-VAULT-KEY):** `/opt/livos/data/secrets/backup-key` — random 32-byte file generated at first backup config, NEVER derived from JWT. Migrate Phase 20 backup-secrets to use new key (one-time migration on v30.0 upgrade — read with old JWT-derived key, re-encrypt with new key). Factory-reset SKIPS this file (or asks user explicitly).
+2. **PG-backed inFlight (covered in Pitfall 9):** replace in-memory Set with table.
+3. **Bounded back-pressure:** add a `Throttle({rate: 50_000_000})` (50 MB/s) stream between tar and upload. Prevents tar from out-running upload and buffering 32 GB in livinityd memory.
+4. **Per-job memory limit on alpine container:** `HostConfig.Memory: 256 * 1024 * 1024` — tar doesn't need >256 MB; if it does, something's wrong (probably hard-link bomb).
+5. **Reuse audit (Phase 1 spike):** before writing any v30.0 code, run a Phase 0 spike that benchmarks Phase 20 with: (a) 100 GB volume, (b) flaky network, (c) livinityd restart mid-job, (d) 24-hour run. Document failures explicitly. Only reuse what passes.
+
+**Warning signs:**
+- livinityd RSS climbs >2 GB during backup → tar-buffering not bounded.
+- Alpine container restart logs show "OOMKilled" → memory limit too low or tar misbehaving.
+- backup-secrets decrypt errors after factory reset → JWT-derived key missed migration.
+- Job retry doesn't fire after livinityd restart → in-flight cleanup didn't run.
+
+**Phase to address:** **Phase 1 (reuse audit spike) + Phase 2 (BAK-VAULT-KEY).** Skipping the spike is the single biggest risk to the milestone — v29.0 demonstrated that "reuse this proven module" can hide scale issues.
+
+**Confidence:** HIGH (direct source inspection)
+
+---
+
+### Pitfall 11: Multi-destination consistency — what does "success" mean?
+
+**What goes wrong:**
+User configures backup to 3 destinations: local + S3 + B2. Local succeeds (200ms), S3 succeeds (8 min), B2 fails (timeout at 12 min). What's the job status? "success" — misleading, B2 is empty. "failure" — also misleading, 2 of 3 succeeded. **Phase 20 currently only supports one destination per job → users create 3 jobs, which means tar runs 3 times → 3× IO load, 3× consistency snapshots that don't match → restore from S3 archive vs B2 archive returns slightly different data.**
+
+A subtler variant: cross-destination drift over time. After 100 backups, S3 has all 100, B2 has 95 (5 failed silently), local has 50 (retention pruned). User assumes "I have 3-2-1, I'm safe" — but B2 has gaps and they don't know which.
+
+**Why it happens:**
+- Phase 20's `BackupJobConfig.destination` is singular. Users with 3-2-1 needs create 3 jobs, breaking consistency.
+- No per-destination success tracking on a single backup run.
+- Failure on one destination doesn't trigger a retry on JUST that destination.
+
+**Prevention strategy in DESIGN:**
+1. **Multi-destination per job (BAK-MULTI-DEST):** schema change — `BackupJobConfig.destinations: BackupDestination[]`. Single tar stream is `tee`'d to N destinations in parallel via Node.js stream cloning (or sequentially, with the local-disk staging acting as the source for cloud uploads).
+2. **Per-destination status in `backup_runs.destinations_json`:** `[{type: 's3', status: 'success', uploaded_bytes, latency_ms}, {type: 'b2', status: 'failure', error: '...'}]`. Job overall status = `partial_success` if any destination succeeded, `failure` if all failed.
+3. **Configurable success criterion:** UI option "Required destinations" (default: 1, options: any/all/N-of-M). User decides if "1 of 3 succeeded" is acceptable.
+4. **Per-destination retry (BAK-RETRY-DEST):** failed destinations are queued for retry on the next scheduler tick — re-uploads from local-disk staging (the local copy is implicit when multi-destination is enabled). Prevents whole-tar re-run.
+5. **3-2-1 health UI:** Settings > Backups page shows a matrix: Job × Destination, with last-N-runs status icons. Drift visible at a glance.
+
+**Warning signs:**
+- `backup_runs.destinations_json` shows >5% of destinations in `failure` over last 30 days → destination is failing intermittently, ignored.
+- User-perceived "all green" vs actual "1 of 3 destinations green" → UI misleading.
+
+**Phase to address:** **Phase 1 (schema with multi-destination from day 1) + Phase 6 (per-destination retry).** Singular destination is a Phase 20 limitation v30.0 must explicitly correct in the schema, not work around.
+
+**Confidence:** HIGH
+
+---
+
+### Pitfall 12: Restore version drift — schema migration on restore
+
+**What goes wrong:**
+User on LivOS v30.0 takes daily backups. v33.0 ships with a new `audit_logs` schema (column rename, new FK). User upgrades to v33.0. 6 weeks later they need to restore a v30.0 backup. **pg_restore fails with column-not-found errors. Schema migrations needed to bring the v30.0 dump up to v33.0 schema, but the migrations are EXPECTED to run against current schema, not against an old dump being restored INTO a new schema.**
+
+A subtler variant: backup format itself (`manifest.json` schema, encryption format, tar layout) changes between versions. v30.0 archives can't be read by v33.0 restore code. Or worse: v33.0 restore code SILENTLY reads them but mis-parses, restoring corrupted data.
+
+**Why it happens:**
+- LivOS schema evolves (Phase X migrations run on every livinityd start). pg_dump captures point-in-time schema.
+- Backup format is implicit — no version field in archive itself.
+- Restore code is written against current code's expectations.
+
+**Prevention strategy in DESIGN:**
+1. **Version stamp in manifest (BAK-VERSION):** every archive's `manifest.json` includes `livos_version`, `pg_schema_version` (from `schema_migrations` table), `archive_format_version`, `created_at`. Restore-time compatibility check FIRST.
+2. **Forward-compatible restore (BAK-FORWARD-COMPAT):** restore handler reads archive_format_version, picks the matching parser. v30.0 parser preserved in code forever (or until explicitly dropped with major-version bump). NEVER silently re-interpret old archives.
+3. **Schema migration on restore (BAK-RESTORE-MIGRATE):** after pg_restore loads old data into staging DB, run forward migrations: `migrate up --from <archive_pg_schema_version> --to <current>`. Migrations must be idempotent + reversible.
+4. **Refusal to restore unknown formats:** if archive_format_version > current parser supports, restore refuses with "This backup is from a newer version of LivOS than is currently installed. Upgrade LivOS first, then retry restore."
+5. **Documented breaking-change policy:** any archive-format-breaking change requires a major version bump + dual-write period (write both old and new format for 1 minor version) so users can downgrade gracefully.
+
+**Warning signs:**
+- Restore from old archive succeeds but app crashes on first query (schema drift accepted silently).
+- `archive_format_version` field missing from manifest → archive predates Phase 1 work; needs special-case handling.
+
+**Phase to address:** **Phase 1 (BAK-VERSION in manifest schema) + Phase 8 (BAK-RESTORE-MIGRATE).** Stamping version is free and must be done from day 1 — adding it later means existing archives are unstamped.
+
+**Confidence:** HIGH
+
+---
+
+### Pitfall 13: Time skew & DST — schedule misses or doubles
+
+**What goes wrong:**
+Mini PC is in Istanbul (`Europe/Istanbul`, UTC+3 year-round since 2016). User schedules backup `0 3 * * *` ("daily at 03:00"). DST transition happens... wait, Turkey doesn't DST. But: user travels, takes laptop with their own machine in Berlin, configures backup from laptop, the cron string is interpreted in **server timezone** (Istanbul) — runs at Istanbul 03:00 = Berlin 02:00. User thinks "03:00" means their local 03:00. Backups run at unexpected times.
+
+A second variant: NTP drifts on Mini PC (residential network, sometimes blocks NTP). Backup timestamps drift from cloud destination timestamps. Retention "delete older than 30 days" deletes archives that are technically 28 days old per the destination clock. Or: backup runs twice in one day during a clock skew event.
+
+**Why it happens:**
+- node-cron uses server local time by default.
+- Cron syntax has no timezone field (vs cron-style ICS with TZID).
+- LivOS doesn't currently expose a timezone setting per user / per job.
+- NTP isn't guaranteed on residential networks.
+
+**Prevention strategy in DESIGN:**
+1. **Explicit per-job timezone (BAK-TZ):** `scheduled_jobs` schema gains `timezone TEXT NOT NULL DEFAULT 'UTC'`. UI exposes timezone picker on schedule create. Cron interpreted via `cron-parser` in that TZ.
+2. **All timestamps stored UTC, displayed local:** archive manifests, backup_runs, retention calculations all use UTC. UI converts at display time.
+3. **NTP health monitoring:** livinityd periodically (`hourly`) compares system time to a known NTP server's time (e.g., `pool.ntp.org`). If drift >5 min, surface alert in Settings UI.
+4. **Retention by archive's manifest timestamp, not server time:** "delete older than 30 days" calculates `now() - archive.created_at` from manifest, not from local time at delete-time. Robust against clock changes.
+5. **Idempotency token:** backup job dedupe key = `job_id + scheduled_for_utc`. Re-firing same scheduled run (e.g., during clock-rollback) is a no-op.
+
+**Warning signs:**
+- User reports "my backup ran at 6 AM, I scheduled it for 3 AM" → timezone mismatch.
+- Two `backup_runs` rows with same scheduled_for + close started_at → clock-rollback double-fire.
+- `last_run_at` for a daily job shows >25h gap → clock-skip miss.
+
+**Phase to address:** **Phase 1 (BAK-TZ in schema).** Trivially expensive to add later if schema is nailed down at Phase 1.
+
+**Confidence:** MEDIUM (LivOS scope; common pattern but specific impact depends on user behavior)
 
 ---
 
@@ -267,123 +457,162 @@ Phase 1 (WhatsApp Core Integration) -- The authentication UX is the first thing 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Use `useMultiFileAuthState` for Baileys | Works immediately, zero setup | Session corruption, excessive I/O, security risk | Never in production -- only for local dev testing |
-| Store WhatsApp auth in filesystem instead of DB | No schema migration needed | Lost on container rebuild, can't survive server migration, no atomic writes | Only during initial prototyping, must migrate before merge |
-| Skip userId unification, use channel-specific IDs | Memory works per-channel immediately | Cross-channel recall broken, duplicate memories accumulate, impossible to fix retroactively without data migration | Never -- design the mapping table first, even if empty |
-| Brute-force embedding search (current approach) | Simple code, no SQLite extension needed | Blocks event loop at scale, older memories invisible due to LIMIT | Acceptable for first 500 memories per user, must add vector index before cross-channel memory |
-| Single `ChannelId` type without WhatsApp | No type changes needed | TypeScript compiler won't catch missing WhatsApp cases in switch statements | Never -- add `'whatsapp'` to the union type immediately |
-| Hardcode rate limits instead of configurable | Ship faster | Different users have different risk tolerances, can't adjust without code change | Acceptable for v1 if documented, make configurable in v2 |
+| Reuse Phase 20 backup-secrets vault key (sha256(JWT)) | Day-1 wiring works | Factory reset silently destroys all backups | NEVER — must use separate `/data/secrets/backup-key` from Phase 2 |
+| Skip post-write verification, assume HTTP 200 means success | -50% backup runtime | Schrödinger's backups; user discovers at restore time | NEVER — verify-on-write is non-negotiable |
+| Single-destination per job (mirror Phase 20 schema) | Smaller schema PR | Users fan out 3 jobs for 3-2-1, breaking consistency | Only for v30.0-alpha if 3-2-1 is post-MVP — but design schema with array from day 1 |
+| In-memory `inFlight: Set` (mirror Phase 20 Scheduler) | No PG schema change | Mid-flight orphans on restart, can't dedupe across processes | NEVER for v30.0 — system-scale jobs run for hours |
+| Hardcoded `keepLast: N` retention with no GFS | Simple UI | Users can't do Grandfather-Father-Son rotation | OK for v30.0 MVP; add GFS in v30.5+ |
+| Restore-to-live as primary flow (no staging) | Faster perceived restore | Mid-restore failure leaves inconsistent state | NEVER — staging swap-in is mandatory |
+| Single encryption passphrase, no rotation | Simple UI | User can't change passphrase ever; one leak = forever leaked | Acceptable in v30.0 if rotation deferred to v30.1 — but design key-wrap from day 1 |
+| Skip Object Lock support for cloud destinations | Smaller test matrix | Users cannot defend against ransomware | Acceptable for v30.0-MVP (append-only key alone gets 80% of value); Object Lock as Phase 6 |
+
+---
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Baileys WebSocket | Assuming connection is stable; no reconnection logic | Baileys auto-reconnects but fires `connection.update` events. Listen for `connection: 'close'` with `DisconnectReason` and implement exponential backoff for non-recoverable reasons (logged out, banned) vs. auto-retry for transient failures |
-| Baileys message handler | Processing `messages.upsert` without checking `type === 'notify'` | Only process `type === 'notify'` messages. `type === 'append'` are historical messages loaded on sync and should not trigger AI responses |
-| WhatsApp message format | Assuming all messages have `message.conversation` (plain text) | WhatsApp messages can be `extendedTextMessage`, `imageMessage`, `documentMessage`, etc. Check multiple message type fields. Use Baileys' `getContentType()` utility |
-| Memory service auth | Calling memory service without `X-API-Key` header | The memory service requires `requireApiKey` middleware. The API key must match `LIV_API_KEY`. Ensure all internal calls include this header |
-| DM Pairing for WhatsApp | Sending pairing code via WhatsApp reply (works for Telegram) | WhatsApp DMs are already from a known phone number. The pairing flow should verify phone number ownership differently -- possibly by sending a code to the Web UI that the user confirms |
-| Redis channel pub/sub | Forgetting to create a duplicate Redis connection for subscriptions | ioredis requires `redis.duplicate()` for pub/sub subscribers (current code already does this correctly in ChannelManager). WhatsApp provider must follow the same pattern |
-| Daemon inbox | Passing WhatsApp phone number as `from` field | Current code uses `msg.chatId` as the `from` parameter. For WhatsApp, chatId is the phone number with `@s.whatsapp.net` suffix. Ensure the daemon and response routing handle this format |
+| `pg_dump` against running PG | Use `--single-transaction` only (no schema lock) | `pg_dump -Fc --single-transaction --no-acl --no-owner` + acquire AccessShareLock on critical tables; rely on PG's MVCC snapshot for consistency within PG |
+| Redis BGSAVE | Fire-and-forget assumption | `WAIT 0 5000` after BGSAVE to confirm; check `lastsave` timestamp; copy `dump.rdb` only after confirmation |
+| Docker volume tar via alpine | `tar czf -` without `--numeric-owner` | `tar --numeric-owner --acls --xattrs czf - data` — preserves UID/GID across hosts (Mini PC bruce uid=1000 vs restore-target uid=?) |
+| S3 `lib-storage Upload` | Don't catch errors → orphan multipart | `try { await upload.done() } catch (e) { await upload.abort(); throw e }` |
+| B2 application keys | Use master key with full perms | Create restricted key: `listBuckets,listFiles,readFiles,writeFiles` — explicitly omit `deleteFiles` |
+| ssh2-sftp-client | `put(stream, ...)` without timeout | Wrap in `Promise.race([put(...), timeout(30min)])`; sftp client doesn't have built-in timeout |
+| node-cron | Server-local TZ | Pass `{timezone: job.timezone}` option from `scheduled_jobs.timezone` column |
+| AES-256-GCM (Phase 20 vault) | Reuse IV across encryptions | Already correct in `backup-secrets.ts:34` (`crypto.randomBytes(12)` per call); preserve this when extending |
+| systemd-run --scope from livinityd | Forget to test scope-collect interaction | Mirror update.sh pattern: `systemd-run --scope --collect --quiet --unit=livos-backup-${jobId}-${ts}` |
+| Cloudflare tunnel + slow upload | Backup competes with tunnel for bandwidth, killing UI | Throttle backup to 50% upstream; surface "tunnel will be slow during backup" warning |
+
+---
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Embedding computation on every memory add | Slow memory writes, Kimi API rate limits hit | Batch embeddings: queue memories and compute embeddings in batches of 10-20 every 5 seconds | >50 memories/hour (easily reached with multi-channel) |
-| Loading all embeddings for cosine similarity | Memory search latency >500ms, event loop blocked | Use sqlite-vec for indexed vector search | >1,000 memories per user |
-| QR code generation spam | Server generates QR codes every 20 seconds even when no one is looking | Only generate QR codes when the Settings > WhatsApp panel is actively open (WebSocket-gated) | Continuous unnecessary computation when idle |
-| Chromium process per WhatsApp session | 500MB+ RAM per session, OOM risk | Use Baileys (no browser needed) | Immediately on server with <4GB free RAM |
-| Synchronous JSON.parse of large embedding arrays | Event loop stalls during memory search | Pre-parse and cache frequently accessed embeddings in Redis, or use binary format with sqlite-vec | >500 concurrent searches/minute |
+| Unbounded tar buffering in livinityd RAM | livinityd RSS climbs to 4-8 GB during backup | Throttle stream between tar and upload; cap alpine container memory at 256 MB | Volumes >50 GB or upload <10 MB/s (residential upload) |
+| pg_dump -j (parallel) on 4-core Mini PC | Mini PC CPU pinned, AI agent latency spikes | Force `pg_dump -j 1` on Mini PC; only allow `-j N` if `nproc >= 8` | Always on residential hardware |
+| Unbatched Docker volume enumeration | Backup of 50 per-user apps takes hours | Parallel pool of 3 concurrent volume tars; serialize cloud uploads | >20 concurrent users with apps |
+| Synchronous fsync on every PG row in restore | Restore takes 6 hours instead of 30 min | `pg_restore -1` (single transaction) + `synchronous_commit=off` during restore only | Always for >1 GB DB restores |
+| Re-encrypting full archive on key rotation | TB-sized re-uploads | Wrap-key architecture: rotate master key only; archive DEK stays put | Always — prevent the wrong design from day 1 |
+| Building manifest from full archive scan at restore-list time | Settings > Backups loads in 30s | Cache manifest list in `backup_archives` PG table, refresh on backup-write | Bucket has >100 archives |
+| Large in-memory deletion of orphan multiparts | Hangs Settings UI | Background scheduler job, not foreground UI button | Cleanups >50 orphans |
+
+---
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Installing unofficial Baileys fork | Attacker gains full WhatsApp access, can read all messages, impersonate user | Only install `@whiskeysockets/baileys` from WhiskeySockets. Verify package hash. Check linked devices after pairing |
-| Storing WhatsApp auth state unencrypted | Anyone with filesystem access can hijack the WhatsApp session | Encrypt auth state at rest using a key derived from the LivOS server secret (`/data/secrets/jwt`). Decrypt only in memory |
-| Exposing QR code endpoint without auth | Anyone who accesses the API can link their phone to the server's WhatsApp | QR code WebSocket must require authenticated LivOS session (admin role). Current tRPC `adminProcedure` pattern should gate this |
-| Not sanitizing WhatsApp message content | XSS in memory content, injection in AI prompts | Sanitize all incoming WhatsApp text before storing in memory or passing to AI. Strip HTML, limit length, escape special characters |
-| WhatsApp phone number in logs | PII exposure in log files, violates privacy expectations | Mask phone numbers in logs: `+1***5108` instead of `+12025550108`. Only log full numbers at DEBUG level |
-| Memory service accessible without auth from other containers | Any container on the Docker network can read/write memories | Memory service already has `requireApiKey`. Ensure it's not bypassed. Bind to 127.0.0.1 only (current config does this correctly) |
+| Encrypted credentials decrypted in livinityd memory long-term | RCE on livinityd → credentials extractable from heap | Decrypt creds only at job start, use, then `Buffer.fill(0)` immediately. Never store decrypted creds in instance state. |
+| Single master key for all users | Admin can decrypt every user's data without consent | Per-user DEK derived from user-set backup passphrase (NOT login password — separate concept) |
+| Backup metadata leaks user existence | List of usernames visible via S3 object key listing (`backup-bruce-2026...tar`) | Hash usernames in object keys: `backup-${hash(userId)}-...`; store reverse map in PG |
+| Restore endpoint accepts any userId | Cross-user restore by parameter manipulation | Restore endpoint enforces `currentUser.role === 'admin' OR currentUser.userId === restoreUserId` |
+| Local-disk backup readable by all containers | Compromised app container reads `/opt/livos/data/backups` | Set perms `0700 root:root` on backup directory; bind-mount only the destination path into the alpine helper, not parent |
+| Decryption key in process env | `cat /proc/$(pidof livinityd)/environ` exposes key | Read key from disk on demand, never put in env; clear from memory after use |
+| No audit log of restore actions | Insider threat: admin restores user data, exfiltrates, no trace | Every restore logs `audit_logs(action='backup.restore', actor_user_id, target_user_id, archive_id, ip)` — immutable trigger like `device_audit_log` from v26.0 |
+| Backup archives signed by destination, not by source | MITM substitutes attacker archive with attacker key | Sign manifest with HMAC over (archive_sha256 + master_key); verify at restore-time |
+| Recovery kit downloaded over plain HTTP | Network attacker captures kit | Recovery kit only delivered via authenticated UI session over TLS; never email/SMS |
+
+---
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| QR code too small on mobile browser | User can't scan from phone while viewing on same phone | Show pairing code option alongside QR. Pairing code is an 8-digit number the user types on their phone |
-| No feedback during WhatsApp connection | User scans QR, sees nothing for 10-30 seconds, thinks it failed | Show real-time status: "Connecting...", "Syncing messages...", "Loading contacts...", "Ready!" with progress steps |
-| WhatsApp disconnects silently | User thinks WhatsApp integration is working, but messages are being dropped | Show connection status badge in the sidebar/channel list. Red badge = disconnected. Trigger push notification on disconnect if PWA is installed |
-| Memory search returns too many results | AI context is cluttered, response quality drops | Implement the existing token budget system (already in `/context` endpoint) but calibrate: 2000 tokens is aggressive for multi-channel. Start with 1000 tokens of memory context |
-| No way to see what the AI remembers | Users feel creeped out or confused by what the AI knows | Memory management UI must be in v1, not deferred. Show memories as a searchable list with source channel, date, and a delete button per memory |
-| WhatsApp setup requires phone to be nearby | Remote server users can't set up WhatsApp without physical phone access to server | Document that QR scanning works remotely through the web UI. Ensure the QR code is transmitted correctly via WebSocket. Pairing code as fallback |
+| "Backup" button with no preview of size/duration | User clicks, walks away, NVMe fills | Pre-flight estimate: "This backup will be ~50 GB and take ~90 min. Continue?" |
+| Restore confirmation lets user click "Yes" without typing target | Accidental restore wipes live data | Type-to-confirm: "Type the word RESTORE to overwrite live data" |
+| Backup status shown only when user opens Settings | User doesn't notice 30 days of failures | Persistent toast / sidebar badge if last 3 runs failed |
+| Encryption passphrase prompt buried in advanced settings | User skips, backup is unencrypted, posts to Reddit | Encryption REQUIRED for cloud destinations; UI doesn't allow disabling for non-local |
+| Recovery kit shown once, never findable again | User loses kit, can't get a new one | "Show recovery kit" button always available in Settings; require password re-auth before display |
+| Schedule expressed in cron syntax | User can't figure out `0 3 * * 0` means weekly Sunday | Visual schedule builder ("Daily at HH:MM" / "Weekly on [day]") that compiles to cron under the hood |
+| "Job succeeded" with no breakdown when 1 of 3 destinations failed | User thinks 3-2-1 working, isn't | Per-destination status pills next to job name |
+| No "compare backups" view for drill | User can't tell if drill restore matches today's data | Drill report shows row-count diffs per table between drill-restore and live |
+| Restore wipes preferences silently | User loses their dock layout, theme, etc. | Restore preview lists categories ("DB: 1.2 GB, Volumes: 8 GB, Settings: 4 KB — ALL will be replaced") |
+
+---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **WhatsApp Provider:** `fromMe` filter implemented -- verify echo loop cannot occur by sending a test message and confirming no re-processing
-- [ ] **WhatsApp Provider:** Group message handling -- verify bot only responds when mentioned (same pattern as Telegram `activationMode`)
-- [ ] **WhatsApp Provider:** Media messages handled -- verify non-text messages (images, documents, stickers) don't crash the handler (graceful skip or process)
-- [ ] **Auth State:** Persistence verified across restart -- stop PM2 process, restart, confirm messages still received without QR re-scan
-- [ ] **Auth State:** Persistence verified across server reboot -- full system reboot, confirm session survives
-- [ ] **userId Mapping:** Cross-channel memory recall tested -- create a memory from Telegram, retrieve it from WhatsApp for the same linked user
-- [ ] **Memory Dedup:** Cross-channel dedup tested -- add semantically similar memories from two channels, confirm they merge
-- [ ] **Rate Limiting:** Verified under load -- send 20 messages in 1 minute, confirm rate limiter throttles responses without crashing
-- [ ] **QR Code Flow:** Tested with network interruption -- disconnect WebSocket during QR display, reconnect, confirm QR refreshes
-- [ ] **Session Health:** Tested silent disconnect -- disconnect server network for 30 seconds, reconnect, confirm WhatsApp recovers automatically
-- [ ] **Memory Context:** Token budget enforced -- verify memory context never exceeds the configured budget even with 1000+ memories
-- [ ] **ChannelId Type:** `'whatsapp'` added to the union type -- verify TypeScript compilation catches all unhandled switch cases
+- [ ] **Encryption:** Often missing recovery kit flow — verify "Show recovery kit" button works AFTER user logs out and back in.
+- [ ] **Verification:** Often missing actual restore test — verify `verifier.ts` does pg_restore --schema-only against ephemeral DB, not just `gunzip -t`.
+- [ ] **Drill:** Often missing teardown of drill DB — verify `livos_drill` is dropped after each drill run, no residue.
+- [ ] **Multi-destination:** Often missing per-destination retry on partial fail — verify failed B2 retries while S3 succeeds, not whole-job retry.
+- [ ] **Restore:** Often missing recovery from interrupted restore — verify livinityd refuses to start cleanly with `restore-pending.json` present.
+- [ ] **Update guard:** Often missing the deferral path — verify update.sh sleeps when `backup-in-progress.flag` exists.
+- [ ] **Append-only creds:** Often missing destination-test detection — verify "Test destination" reports yellow warning when creds CAN delete.
+- [ ] **Multipart cleanup:** Often missing abort-on-error — verify failed S3 upload triggers `AbortMultipartUpload` (check S3 list-multipart after killing a backup mid-upload).
+- [ ] **Per-user keys:** Often missing real isolation — verify admin CANNOT decrypt user A's archive without user A's passphrase.
+- [ ] **Manifest:** Often missing forward-compat version field — verify manifest.json contains `archive_format_version` AND restore refuses unknown values.
+- [ ] **Audit:** Often missing immutable enforcement — verify `audit_logs` BEFORE UPDATE/DELETE trigger blocks tampering.
+- [ ] **Disk-fill prevention:** Often missing actual statvfs check — verify pre-flight fails when free space < 1.5× last archive.
+- [ ] **Bandwidth throttle:** Often missing real throttle — verify upload speed actually capped (use `dd | pv | curl` smoke test).
+- [ ] **Time zone:** Often missing per-job TZ — verify schedule fires at correct time when LivOS server TZ ≠ user TZ.
+- [ ] **Quiesce:** Often missing real subscriber response — verify nexus core ACKs `backup:quiesce` event before pg_dump starts; doesn't just rely on timeout.
+
+---
 
 ## Recovery Strategies
 
+When pitfalls occur despite prevention, how to recover.
+
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| WhatsApp session dies silently | LOW | Destroy client, clear auth state if corrupted, re-initialize, prompt user for QR scan via UI notification |
-| Chromium OOM kills other processes | MEDIUM | `pm2 restart all`, verify Redis data intact, check PostgreSQL wasn't mid-transaction |
-| Account banned | HIGH | Cannot recover the phone number. Must register a new WhatsApp account with a different number. All chat history lost. Warn user in advance |
-| Auth state corruption (Baileys) | MEDIUM | Delete all auth state from PostgreSQL, prompt user for fresh QR scan. Messages received during downtime are lost |
-| userId fragmentation (memories already accumulated) | HIGH | Write a migration script that: (1) creates identity map entries for known users, (2) re-keys existing memories to canonical userId, (3) runs dedup pass on merged memory sets. Must be run carefully with backups |
-| Echo loop burns API tokens | LOW | Kill the nexus-core process immediately, add `fromMe` guard, redeploy. API cost is already incurred but capped by per-request cost |
-| Malicious package installed | CRITICAL | Immediately unlink all devices from WhatsApp mobile settings. Rotate all credentials. Audit npm packages. Reinstall from verified source |
-| Memory embedding dimension mismatch | MEDIUM | If embedding model changes, all existing embeddings become incompatible. Must re-embed all memories or store model version with each embedding for compatibility detection |
+| Lost encryption key, recovery kit also lost | TOTAL — no recovery | Document policy: "There is no recovery from full key+kit loss. Period." UI message must be explicit. |
+| Schrödinger backup discovered at restore time | HIGH — manual archive forensics | Try older archives sequentially. Try alpine `gunzip -dc | tar t` to isolate corruption. If all corrupt, escalate to user-data-from-other-sources (e.g., re-download from livinity.io platform if applicable). |
+| Mid-restore failure | MEDIUM | Boot LivOS in maintenance mode (refuse to start cleanly with restore-pending.json). UI offers "Retry" or "Roll back to pre-restore snapshot" (auto-snapshot taken before restore). |
+| Ransomware wiped local + cloud (bypass append-only) | HIGH | Recover from air-gapped USB / Object-Locked S3. If no Object Lock, recover from B2 versioning lifecycle (90-day version retention). |
+| Update mid-backup killed backup | LOW | Backup-runs cleanup on livinityd start marks orphan; next scheduled run picks up. User's only impact: missed one backup. |
+| Cross-user restore (admin restored A into B) | HIGH | Take a snapshot before any restore (auto-snapshot is the recovery mechanism). Roll back B's data to pre-restore snapshot. |
+| Disk full from retention failure | MEDIUM | Manual SSH: `find /opt/livos/data/backups -mtime +N -delete`; investigate why prune skipped; PG checkpoint may need WAL cleanup too. |
+| Forgotten to check destination test before scheduling | LOW | Settings shows red badge on jobs where `last_run_status='failure'`; user notices and fixes creds. |
+| Schema drift on old archive | MEDIUM | Restore archive_format_version-N parser tries forward migrations; if migrations fail, restore-to-staging only and let user manually export specific data. |
+
+---
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Session Death Spiral | Phase 1: WhatsApp Core | Health check endpoint responds, messages arrive within 60s test window |
-| Chromium Memory Leak | Phase 1: Library Choice | Use Baileys (no Chromium). If whatsapp-web.js: memory stays under 500MB after 24h soak test |
-| Account Ban Risk | Phase 1: Rate Limiting | Rate limiter test: 100 rapid messages queued, only 10/min actually sent |
-| userId Fragmentation | Phase 2: Memory Architecture | Same canonical userId returned for Telegram ID and WhatsApp number of same linked user |
-| Auth State Loss | Phase 1: Auth Persistence | PM2 restart + server reboot both resume without QR scan |
-| Memory Scaling Wall | Phase 2: Vector Index | Search latency under 100ms with 5,000 memories per user |
-| Echo Loop | Phase 1: Message Handler | Send test message from server, confirm it does NOT trigger re-processing |
-| Supply Chain Attack | Phase 1: Dependency Audit | `pnpm audit`, package hash verified, linked devices checked post-setup |
-| Memory Dedup Failure | Phase 2: Dedup Enhancement | Paraphrased fact from two channels merges into single memory entry |
-| QR Code UX Dead End | Phase 1: Settings UI | QR refreshes in browser, pairing code alternative works, status indicators accurate |
+| 1. Schrödinger's backup | Phase 4 (BAK-VERIFY) + Phase 7 (BAK-DRILL) | E2E test: corrupt an archive, run drill, verify drill marks job red |
+| 2. Encryption catastrophe | Phase 2 (BAK-EKIT + key wrap) | E2E test: rotate key, restore old archive successfully |
+| 3. Inconsistent snapshot | Phase 3 (BAK-QUIESCE) | E2E test: write to PG mid-backup, verify quiesce event blocks the write |
+| 4. Ransomware path to backups | Phase 5 (BAK-APPEND-ONLY) + Phase 6 (BAK-LOCK) | E2E test: with append-only creds, attempt deleteObject → expect 403 |
+| 5. Disk-fill | Phase 4 (BAK-PREFLIGHT) + Phase 7 (retention verify) | E2E test: fill disk to 90%, run backup → expect pre-flight reject |
+| 6. Restore-while-running | Phase 8 (BAK-RESTORE) + Phase 8b (BAK-RESTORE-RECOVERY) | E2E test: kill -9 restore mid-flight, restart livinityd → expect maintenance page |
+| 7. Multi-user data leakage | Phase 2 (per-user keys) + Phase 8 (RBAC) | E2E test: as member, attempt to restore admin's archive → expect 403 |
+| 8. Network partition | Phase 4 (BAK-MULTIPART-CLEAN) + Phase 4b (BAK-LIFECYCLE) | E2E test: kill upload mid-flight, verify abortMultipartUpload sent |
+| 9. Update + backup interaction | Phase 4 (BAK-INFLIGHT-PG) + Phase 5 (BAK-UPDATE-GUARD) + v30.1 hotpatch (cgroup-escape) | E2E test: trigger update during backup → expect deferral message |
+| 10. Phase 20 reuse blast-radius | Phase 1 (reuse audit spike) + Phase 2 (BAK-VAULT-KEY) | Spike report explicitly documents Phase 20 limitations under v30.0 scope |
+| 11. Multi-destination consistency | Phase 1 (multi-dest schema) + Phase 6 (per-dest retry) | E2E test: 3-destination job with 1 fail → expect partial_success status |
+| 12. Restore version drift | Phase 1 (BAK-VERSION) + Phase 8 (BAK-RESTORE-MIGRATE) | E2E test: restore v30.0 archive into simulated v33.0 schema → migrations run |
+| 13. Time skew / DST | Phase 1 (BAK-TZ) | E2E test: schedule in TZ-A, verify cron fires at correct UTC instant |
+
+---
 
 ## Sources
 
-- [whatsapp-web.js session stops receiving messages (GitHub #3812)](https://github.com/pedroslopez/whatsapp-web.js/issues/3812)
-- [whatsapp-web.js session disconnect after 2-3 days (GitHub #3224)](https://github.com/pedroslopez/whatsapp-web.js/issues/3224)
-- [whatsapp-web.js memory leak after deployment (GitHub #3459)](https://github.com/pedroslopez/whatsapp-web.js/issues/3459)
-- [whatsapp-web.js high memory leak ~1GB (GitHub #5817)](https://github.com/pedroslopez/whatsapp-web.js/issues/5817)
-- [whatsapp-web.js "Protocol error: Session closed" crash (GitHub #3904)](https://github.com/pedroslopez/whatsapp-web.js/issues/3904)
-- [whatsapp-web.js best practices and troubleshooting (DeepWiki)](https://deepwiki.com/pedroslopez/whatsapp-web.js/9-best-practices-and-troubleshooting)
-- [whatsapp-web.js authentication strategies (DeepWiki)](https://deepwiki.com/pedroslopez/whatsapp-web.js/2.1-authentication-strategies)
-- [Baileys documentation -- connecting](https://baileys.wiki/docs/socket/connecting/)
-- [Baileys -- useMultiFileAuthState not for production (npm)](https://www.npmjs.com/package/@whiskeysockets/baileys)
-- [baileysauth -- database auth state adapter (GitHub)](https://github.com/rzkytmgr/baileysauth)
-- [CSO Online -- malicious Baileys fork "lotusbail" supply chain attack](https://www.csoonline.com/article/4111068/whatsapp-api-worked-exactly-as-promised-and-stole-everything.html)
-- [WhatsApp automation ban avoidance guide 2025](https://tisankan.dev/whatsapp-automation-how-do-you-stay-unbanned/)
-- [WhatsApp account ban reasons 2025 (Whautomate)](https://whautomate.com/top-reasons-why-whatsapp-accounts-get-banned-in-2025-and-how-to-avoid-them/)
-- [Meta's 2026 WhatsApp AI chatbot ban policy (respond.io)](https://respond.io/blog/whatsapp-general-purpose-chatbots-ban)
-- [Meta's 2026 WhatsApp AI chatbot ban (MEF)](https://mobileecosystemforum.com/2025/12/01/metas-whatsapp-ai-chatbot-ban/)
-- [AI-resilient WhatsApp strategies 2026 (AI Journal)](https://aijourn.com/ai-resilient-whatsapp-strategies-navigating-the-2026-account-ban-wave/)
-- [sqlite-vec vector search extension](https://github.com/asg017/sqlite-vec)
-- [sqlite-vec performance benchmarks (Alex Garcia blog)](https://alexgarcia.xyz/blog/2024/sqlite-vec-stable-release/index.html)
-- [AI agent with multi-session memory (Towards Data Science)](https://towardsdatascience.com/ai-agent-with-multi-session-memory/)
-- [Baileys-2025-Rest-API multi-session support (GitHub)](https://github.com/PointerSoftware/Baileys-2025-Rest-API)
+- [pgforensics: Schrödinger's Backup — Automating PostgreSQL Restore Validation](https://pgforensics.com/schrodingers-backup-automating-postgresql-restore-validation-because-green-dashboards-lie/)
+- [PostgreSQL 18 docs: pg_dump consistency model](https://www.postgresql.org/docs/current/app-pgdump.html)
+- [PostgreSQL 18 docs: SQL Dump backup chapter](https://www.postgresql.org/docs/current/backup-dump.html)
+- [Helge Klein: restic + B2 ransomware-resistant backups (canonical writeup)](https://helgeklein.com/blog/restic-encrypted-offsite-backup-with-ransomware-protection-for-your-homeserver/)
+- [Computingforgeeks: Immutable backups Linux MinIO Restic Borg (Apr 2026)](https://computingforgeeks.com/immutable-backups-ransomware-proof-linux-minio-restic-borg/)
+- [Kopia docs: Ransomware Protection](https://kopia.io/docs/advanced/ransomware-protection/)
+- [TrendMicro: S3 Ransomware Variants and Attack Paths (Nov 2025)](https://www.trendmicro.com/en_us/research/25/k/s3-ransomware.html)
+- [BorgBackup issue #4236: Lost key = no recovery](https://github.com/borgbackup/borg/issues/4236)
+- [restic forum: Forgotten password thread](https://forum.restic.net/t/forgotten-password/2990)
+- [Home Assistant: Backup emergency kit feature](https://www.home-assistant.io/more-info/backup-emergency-kit/)
+- [Home Assistant issue #134162: Encryption key rotation breaks old backups](https://github.com/home-assistant/core/issues/134162)
+- [WorkOS: Multi-tenant SaaS architecture guide](https://workos.com/blog/developers-guide-saas-multi-tenant-architecture)
+- [AWS: Managed database backup and recovery in multi-tenant SaaS](https://aws.amazon.com/blogs/database/managed-database-backup-and-recovery-in-a-multi-tenant-saas-application/)
+- [Google Cloud: Using chaos engineering to test DR plans](https://cloud.google.com/blog/products/devops-sre/using-chaos-engineering-to-test-dr-plans)
+- [OneUptime: Automated backups Ubuntu restic/borg (Jan 2026)](https://oneuptime.com/blog/post/2026-01-07-ubuntu-automated-backups-restic-borg/view)
+- LivOS source inspection: `livos/packages/livinityd/source/modules/scheduler/backup.ts` (Phase 20 reuse target)
+- LivOS source inspection: `livos/packages/livinityd/source/modules/scheduler/backup-secrets.ts` (vault key derivation)
+- LivOS source inspection: `livos/packages/livinityd/source/modules/scheduler/index.ts:21,99,131` (in-flight Set)
+- LivOS source inspection: `update.sh:15-45,170-171,545-556` (cgroup-escape pattern from v29.0)
+- LivOS context: v29.0 milestone audit + v29.1 hot-patches (cgroup-escape, SIGPIPE survival, completion sentinel)
 
 ---
-*Pitfalls research for: WhatsApp Web Integration & Cross-Session Memory (v25.0)*
-*Researched: 2026-04-02*
+*Pitfalls research for: v30.0 Backup & Restore — multi-user self-hosted on Mini PC*
+*Researched: 2026-04-28*
+*Confidence: HIGH (verified via official docs, real-world post-mortems, direct LivOS source inspection)*
