@@ -148,26 +148,41 @@ Livinity now features a unified capability orchestration platform. All capabilit
 
 **45 deployment-time UAT items** + 10 info-severity tech-debt items deferred (window-app pattern incompatibility prevents real URL-bar deep-linking — v29.0+).
 
-## Current Milestone: v29.0 Deploy & Update Stability
+## Current Milestone: v30.0 Backup & Restore
 
-**Goal:** LivOS update'i tek tıkla güvenli, gözlemlenebilir ve geri-alınabilir hale getir — kullanıcı SSH'lanmadan güvenle update edebilsin.
+**Goal:** Korumalı, otomatize ve test-edilebilir backup/restore — kullanıcı LivOS'tan gönül rahatlığıyla self-host edebilsin, data kaybı korkusu olmasın.
 
 **Target features:**
-- `update.sh` build-pipeline integrity (BACKLOG 999.5 + 999.5b — silent build failures + pnpm-store dist-copy idempotency)
-- `system.update` UI error surfacing (BACKLOG 999.6 — Install Update mutation onError toast, pending-state guards, WS hang-up HTTP fallback)
-- Auto-rollback on failed boot (livinityd 3× crash → previous SHA via systemd OnFailure or watchdog)
-- Update history + observability UI (Settings > Software Update with past deploys list + log links)
-- Sidebar Software Update badge (BACKLOG 999.1)
-- GitHub Actions update.sh smoke test (PR-time Docker container regression catch)
+- Snapshot scope: PostgreSQL (livos DB), Redis (settings/conversations), app data volumes (/opt/livos/data), per-app Docker volumes, .env secrets
+- Scheduled backups (cron-like — daily/weekly/custom)
+- Multiple destinations: local disk, S3-compatible (S3/B2/Wasabi/MinIO/SFTP)
+- Encryption at rest (passphrase-derived key, age or libsodium)
+- Retention policies (keep N most recent + age-based pruning)
+- Manual "Backup Now" trigger from UI
+- Restore flow: full disaster recovery (restore-to-fresh-install) + partial restore (single app data, single user)
+- Backup history UI with status, size, duration, restore button
+- Restore drill (test-restore that doesn't overwrite production)
 
 **Key context:**
-- update.sh lives outside the repo on each host (Mini PC + Server4) — patch-script + bootstrap pattern (Phase 30 precedent) required
-- Phase numbering continues from v28.0 last phase (30) → v29.0 starts at Phase 31
-- Strategic Tier 1 alignment: operational reliability before adding more product surface
+- v29.0 update flow newly stabilized (cgroup-escape, SIGPIPE survival, self-rsync) — backup builds on its job-orchestration patterns (`scheduled_jobs` PG table, node-cron handlers)
+- Mini PC has system PostgreSQL (NOT Dockerized) — `pg_dump` direct, not via container exec
+- Per-user Docker isolation (v7.0) means per-app volumes too — backup must enumerate per-user containers
+- Multi-user system: backups should respect user boundaries (admin can backup all, user can backup own data; admin cross-user backup is sensitive — needs explicit consent)
+- Phase 20 (v27.0) already has volume-backup + S3/SFTP/local destinations + AES-256-GCM credential vault → reuse, don't reinvent
+- Strategic positioning: "AI + Self-Hosting" category gap — robust backup is the trust foundation that lets AI features ship without data-loss anxiety
 
-### Active (v29.0)
+### Active (v30.0)
 
-- [ ] UPD-* requirements (defined in REQUIREMENTS.md after this milestone is bootstrapped)
+- [ ] BAK-* requirements (defined in REQUIREMENTS.md after this milestone is bootstrapped)
+
+### Validated (v29.0 — Deploy & Update Stability)
+
+- ✓ Phase 31 BUILD-01/02/03 — `update.sh` build-pipeline integrity: verify_build helper + 10 wired call sites, multi-dir @nexus+core dist-copy loop, worker/mcp-server masking strip + memory-build injection
+- ✓ Phase 32 ROLL-01/02 — systemd OnFailure auto-rollback: livos-rollback.sh + livos-precheck.sh + JSON history records, 61.1s synthetic-trigger rollback validated end-to-end
+- ✓ Phase 33 OBS-01 — Update observability surface: tee + EXIT-trap canonical `update-<ts>-<sha>.log` + `<ts>-success|failed.json`, Settings > Software Update past-deploys UI
+- ✓ Phase 34 UX — Update UX hardening (Install Update mutation onError toast, pending guards, sidebar badge)
+- ✓ Phase 35 — GitHub Actions update.sh smoke test (PR-time regression catch via Docker container)
+- ✓ v29.1 hot-patches (post-milestone) — cgroup-escape via `systemd-run --scope`, SIGPIPE survival via `trap '' PIPE` + `tee --output-error=warn-nopipe`, completion sentinel for honest success reporting, update.sh self-rsync (atomic mv pattern)
 
 ### Validated (v28.0 — Docker Management UI Dockhand-Style)
 

@@ -1,37 +1,35 @@
 ---
 gsd_state_version: 1.0
-milestone: v29.0
-milestone_name: Deploy & Update Stability
-status: completed
-stopped_at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
-last_updated: "2026-04-27T12:45:43.248Z"
-last_activity: 2026-04-27
+milestone: v30.0
+milestone_name: Backup & Restore
+status: defining-requirements
+stopped_at: Milestone v30.0 started — research + requirements pending.
+last_updated: "2026-04-28T15:00:00.000Z"
+last_activity: 2026-04-28
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-26)
+See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v29.0 — Deploy & Update Stability — ROADMAP DEFINED
-**Current focus:** Phase --phase — 33
+**Current milestone:** v30.0 — Backup & Restore — DEFINING REQUIREMENTS
+**Current focus:** Pre-roadmap (research → requirements → roadmap)
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-04-27
-
-**Progress:** [███████░░░] 67% (2 of 3 Phase 31 plans complete)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-28 — Milestone v30.0 started, post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.
 
 ## v29.0 Phase Structure
 
