@@ -339,6 +339,24 @@ rsync -a --delete \
     "$LIVOS_DIR/packages/livinityd/source/"
 ok "livinityd source updated"
 
+# v29.1 mini-milestone: self-rsync — deploy update.sh itself so future
+# update.sh hot-patches reach Mini PC automatically without manual SCP.
+# IMPORTANT: must use atomic mv (not in-place cp), otherwise the running
+# bash reads partial new content through its open fd and crashes mid-run.
+# `cp` to a sibling .new path then `mv` over the original — the mv is a
+# rename within the same filesystem, so the new content gets a NEW inode
+# and bash's open fd on the old inode keeps the old script readable until
+# the current run finishes. Next invocation will read the new version.
+info "Updating update.sh..."
+if [[ -f "$TEMP_DIR/update.sh" ]]; then
+    cp "$TEMP_DIR/update.sh" "$LIVOS_DIR/update.sh.new"
+    chmod +x "$LIVOS_DIR/update.sh.new"
+    mv "$LIVOS_DIR/update.sh.new" "$LIVOS_DIR/update.sh"
+    ok "update.sh updated (next run will use new version)"
+else
+    warn "update.sh not in TEMP_DIR — skipping self-update"
+fi
+
 # Update package.json files (for dependency changes)
 info "Updating package manifests..."
 cp "$TEMP_DIR/livos/package.json" "$LIVOS_DIR/package.json"
