@@ -28,6 +28,22 @@ if [[ -z "${LIVOS_UPDATE_SCOPED:-}" ]] && command -v systemd-run >/dev/null 2>&1
         -- "$0" "$@"
 fi
 
+# ── v29.0-hotpatch: survive livinityd's death during livos.service restart ──
+# After cgroup-escape, the script lives in livos-update-*.scope, but stdout/stderr
+# are still piped back to livinityd (execa spawn without stdio:'ignore'). When
+# `systemctl restart livos.service` runs, livinityd dies → its pipe end closes →
+# tee's writes to its stdout fail with SIGPIPE → tee dies → bash's writes to the
+# FIFO break → bash dies (with whatever last $? was, which can misleadingly be 0
+# from the systemctl that just succeeded). Trap fires reporting status=success
+# but the script never reached "Recording deployed SHA" / cleanup steps.
+#
+# Two-part fix:
+#   1. trap '' PIPE — bash itself ignores SIGPIPE; writes to broken pipes return
+#      EPIPE (silent failure) instead of killing bash.
+#   2. tee --output-error=warn-nopipe — tee continues writing to the log file
+#      even when its stdout pipe to dead livinityd breaks.
+trap '' PIPE
+
 # ── Phase 33 OBS-01: log file emission ──
 # Tee all stdout+stderr to a per-deploy log file and write the machine-readable
 # JSON record on exit. Mirrors Phase 32's precheck-fail.json + livos-rollback.sh
@@ -44,7 +60,7 @@ LIVOS_UPDATE_LOG_FILE="${HISTORY_DIR}/update-${LIVOS_UPDATE_START_ISO_FS}-$$-pen
 LIVOS_UPDATE_FROM_SHA=$(cat "$DEPLOYED_SHA_FILE" 2>/dev/null | tr -d '[:space:]' || echo "unknown")
 LIVOS_UPDATE_TO_SHA=""
 
-exec > >(tee -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
+exec > >(tee --output-error=warn-nopipe -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
 
 phase33_finalize() {
     local exit_code=$?
@@ -100,7 +116,12 @@ phase33_finalize() {
         return
     fi
 
-    if (( exit_code == 0 )); then
+    # v29.0-hotpatch: defense-in-depth — exit_code=0 alone is not enough to
+    # claim success. The script may exit 0 prematurely (e.g., bash truly
+    # completing after a no-op tail) without reaching "Recording deployed SHA"
+    # or cleanup. Only declare success if the main flow set the completion
+    # sentinel below ("Recording deployed SHA" step + cleanup reached).
+    if (( exit_code == 0 )) && [[ "${LIVOS_UPDATE_COMPLETED:-0}" == "1" ]]; then
         status="success"
     else
         status="failed"
@@ -550,6 +571,12 @@ step "Cleanup"
 
 rm -rf "$TEMP_DIR"
 ok "Temp files cleaned"
+
+# v29.0-hotpatch: completion sentinel — only set after the deploy SHA was
+# recorded and cleanup ran. phase33_finalize uses this to avoid reporting
+# false-positive success when the script exits 0 prematurely (e.g., due to
+# SIGPIPE chain from livinityd's death during livos.service restart).
+LIVOS_UPDATE_COMPLETED=1
 
 # ── Done ──────────────────────────────────────────────────
 echo ""
