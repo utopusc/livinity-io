@@ -120,7 +120,76 @@ Deferred to v31+:
 
 ## Traceability
 
-[Roadmap will populate this section — REQ-ID → Phase mapping after roadmap creation]
+| Requirement | Phase | Phase Name | Status |
+|-------------|-------|------------|--------|
+| BAK-CORE-01 | Phase 36 | Reuse-Audit Spike | Pending |
+| BAK-CORE-02 | Phase 37 | Schema Foundation + Key Vault | Pending |
+| BAK-CORE-03 | Phase 38 | Orchestrator + State Machine + PG Dump | Pending |
+| BAK-CORE-04 | Phase 38 | Orchestrator + State Machine + PG Dump | Pending |
+| BAK-CORE-05 | Phase 38 | Orchestrator + State Machine + PG Dump | Pending |
+| BAK-SRC-01 | Phase 38 | Orchestrator + State Machine + PG Dump | Pending |
+| BAK-SRC-02 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-SRC-03 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-SRC-04 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-SRC-05 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-SRC-06 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-SRC-07 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-SRC-08 | Phase 39 | Remaining Sources + Manifest + L1 Verify | Pending |
+| BAK-DEST-01 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-DEST-02 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-DEST-03 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-DEST-04 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-DEST-05 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-DEST-06 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-DEST-07 | Phase 40 | Destinations + Retention + L2 Verify | Pending |
+| BAK-CRYPT-01 | Phase 37 | Schema Foundation + Key Vault | Pending |
+| BAK-CRYPT-02 | Phase 37 | Schema Foundation + Key Vault | Pending |
+| BAK-CRYPT-03 | Phase 37 | Schema Foundation + Key Vault | Pending |
+| BAK-CRYPT-04 | Phase 42 | UI - Recovery-Kit Modal (Argon2id passphrase escrow is UI-driven) | Pending |
+| BAK-CRYPT-05 | Phase 42 | UI - Recovery-Kit Modal (BIP39 mnemonic flow + 3-of-24 verification) | Pending |
+| BAK-CRYPT-06 | Phase 38 | Orchestrator pre-flight gates (key-vault unlock check) | Pending |
+| BAK-SCHED-01 | Phase 41 | Scheduler + Pre-Update Auto-Snapshot + Update Mutex | Pending |
+| BAK-SCHED-02 | Phase 41 | Scheduler + Pre-Update Auto-Snapshot + Update Mutex | Pending |
+| BAK-SCHED-03 | Phase 41 | Scheduler + Pre-Update Auto-Snapshot + Update Mutex | Pending |
+| BAK-SCHED-04 | Phase 41 | Scheduler + Pre-Update Auto-Snapshot + Update Mutex | Pending |
+| BAK-SCHED-05 | Phase 41 | Scheduler + Pre-Update Auto-Snapshot + Update Mutex | Pending |
+| BAK-UI-01 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-02 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-03 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-04 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-05 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-06 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-07 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-UI-08 | Phase 42 | UI - History + Run-Now + Destinations + Recovery-Kit Modal | Pending |
+| BAK-RESTORE-01 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-02 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-03 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-04 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-05 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-06 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-07 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+| BAK-RESTORE-08 | Phase 43 | Standalone Restore + Drill Mode + RBAC | Pending |
+
+**Coverage summary:** 47/47 v30.0 requirements mapped to Phases 36-43. Zero orphans, zero duplicates.
+
+**Category counts:**
+- BAK-CORE: 5 (Phase 36 x1, Phase 37 x1, Phase 38 x3)
+- BAK-SRC: 8 (Phase 38 x1, Phase 39 x7)
+- BAK-DEST: 7 (Phase 40 x7)
+- BAK-CRYPT: 6 (Phase 37 x3, Phase 38 x1, Phase 42 x2)
+- BAK-SCHED: 5 (Phase 41 x5)
+- BAK-UI: 8 (Phase 42 x8)
+- BAK-RESTORE: 8 (Phase 43 x8)
+
+**Phase counts:**
+- Phase 36: 1 requirement (BAK-CORE-01)
+- Phase 37: 4 requirements (BAK-CORE-02, BAK-CRYPT-01/02/03)
+- Phase 38: 5 requirements (BAK-CORE-03/04/05, BAK-SRC-01, BAK-CRYPT-06)
+- Phase 39: 7 requirements (BAK-SRC-02..08)
+- Phase 40: 7 requirements (BAK-DEST-01..07)
+- Phase 41: 5 requirements (BAK-SCHED-01..05)
+- Phase 42: 10 requirements (BAK-CRYPT-04/05, BAK-UI-01..08)
+- Phase 43: 8 requirements (BAK-RESTORE-01..08)
 
 ## Status
 

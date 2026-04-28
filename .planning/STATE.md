@@ -2,12 +2,13 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Backup & Restore
-status: defining-requirements
-stopped_at: Milestone v30.0 started — research + requirements pending.
-last_updated: "2026-04-28T15:00:00.000Z"
+status: roadmap-ready
+stopped_at: ROADMAP.md authored — Phase 36 (Reuse-Audit Spike) is the recommended starting plan.
+last_updated: "2026-04-28T16:30:00.000Z"
 last_activity: 2026-04-28
+current_phase: 36
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,15 +22,44 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v30.0 — Backup & Restore — DEFINING REQUIREMENTS
-**Current focus:** Pre-roadmap (research → requirements → roadmap)
+**Current milestone:** v30.0 — Backup & Restore — ROADMAP READY
+**Current focus:** Phase 36 (Reuse-Audit Spike) — non-negotiable benchmark of Phase 20 codepath against v30.0 multi-source multi-hour workloads. Output gates Phase 37 schema design.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 36 (Reuse-Audit Spike) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-28 — Milestone v30.0 started, post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.
+Status: Roadmap authored, awaiting plan-phase
+Last activity: 2026-04-28 — ROADMAP.md authored. v30.0 is 8 phases (36-43); 47/47 v30.0 requirements mapped, zero orphans. Research synthesis followed verbatim — Phase 36 spike is non-negotiable; Phase 43 (livos-restore.sh) flagged needs phase research. Post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.
+
+## v30.0 Phase Structure (Phases 36-43)
+
+| Phase | Name | Requirements | Depends On |
+|-------|------|--------------|------------|
+| 36 | Reuse-Audit Spike | BAK-CORE-01 | — (entry; reads existing Phase 20 + v29.0 Phase 33 source) |
+| 37 | Schema Foundation + Key Vault | BAK-CORE-02, BAK-CRYPT-01, BAK-CRYPT-02, BAK-CRYPT-03 | Phase 36 |
+| 38 | Orchestrator + State Machine + PG Dump | BAK-CORE-03, BAK-CORE-04, BAK-CORE-05, BAK-SRC-01, BAK-CRYPT-06 | Phase 37 |
+| 39 | Remaining Sources + Manifest + L1 Verify | BAK-SRC-02..08 | Phase 38 |
+| 40 | Destinations + Retention + L2 Verify | BAK-DEST-01..07 | Phase 39 |
+| 41 | Scheduler + Pre-Update Auto-Snapshot + Update Mutex | BAK-SCHED-01..05 | Phase 40 (one source must work end-to-end before cron fires) |
+| 42 | UI — History + Run-Now + Destinations + Recovery-Kit Modal | BAK-CRYPT-04, BAK-CRYPT-05, BAK-UI-01..08 | Phase 41 |
+| 43 | Standalone Restore + Drill Mode + RBAC | BAK-RESTORE-01..08 | Phase 42 (needs real backup to restore FROM) |
+
+Coverage: 47/47 v30.0 requirements mapped — (BAK-CORE x5, BAK-SRC x8, BAK-DEST x7, BAK-CRYPT x6, BAK-SCHED x5, BAK-UI x8, BAK-RESTORE x8 — zero orphans, zero duplicates)
+Granularity: fine (8 phases — within 8-12 fine-tier band)
+Research flags: Phase 36 (the spike IS the research, no separate phase research file required); Phase 43 (livos-restore.sh shell script is the disaster-recovery linchpin and the highest-risk single deliverable in v30.0 — recommend 1-day prototype spike on a fresh Ubuntu 24.04 VM before plan-phase)
+Critical sequencing constraints (non-violatable per research/PITFALLS.md):
+  - Phase 36 spike output IS hard input to Phase 37 schema (do not freeze schema before audit)
+  - Schema (P37) lands BEFORE any code (P38+); multi-destination + BAK-VERSION + BAK-TZ + heartbeat permanent on day 1
+  - Key vault (P37) before sources (P38-39) — sources need encryption to write
+  - Orchestrator + PG (P38) before all other sources — sources implement orchestrator interface
+  - Manifest (P39) before destinations (P40) — destinations move bytes; manifest is the integrity contract
+  - Scheduler (P41) AFTER one source works end-to-end (don't tie cron to half-built sources)
+  - UI (P42) AFTER backend end-to-end testable
+  - Standalone restore (P43) LAST — needs a real backup to restore FROM
+  - Verify-on-write SAME phase as writer: L1 SHA-256 in P39, L2 HEAD in P40 (Pitfalls #1, #5, #8 violations otherwise)
+  - Recovery kit ships SAME phase as encryption-driven UI (P42) — encryption + recovery escrow are inseparable
+  - Pre-update auto-snapshot (P41) is the killer v29.0 integration; turns Phase 32 binary rollback into full data rollback
 
 ## v29.0 Phase Structure
 
