@@ -7,6 +7,20 @@
 
 set -euo pipefail
 
+# ── v29.0-hotpatch: escape livos.service cgroup ───────────
+# When invoked from livinityd (livos.service), `systemctl restart livos.service`
+# kills the entire cgroup mid-call — including this script. detached:true on the
+# spawn side only escapes the process group, not the cgroup. Re-exec into a
+# transient systemd scope so we survive the restart and reach the .deployed-sha
+# write + finalize trap.
+if [[ -z "${LIVOS_UPDATE_SCOPED:-}" ]] && command -v systemd-run >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
+    export LIVOS_UPDATE_SCOPED=1
+    exec systemd-run --scope --collect --quiet \
+        --unit="livos-update-$$-$(date +%s)" \
+        --description="LivOS Update (cgroup-escaped)" \
+        -- "$0" "$@"
+fi
+
 # ── Constants ─────────────────────────────────────────────
 LIVOS_DIR="/opt/livos"
 NEXUS_DIR="/opt/nexus"
