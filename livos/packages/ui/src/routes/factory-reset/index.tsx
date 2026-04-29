@@ -50,7 +50,17 @@ export default function FactoryReset() {
 					element={
 						<EnsureLoggedIn>
 							<SplitDialog>
-								<ConfirmWithPassword onSubmit={reset} error={getPasswordError()} clearError={clearError} />
+								{/*
+								  Phase 38 Plan 01 NOTE — the legacy password gate is dead code (Plan 03
+								  replaces this whole route with the new explicit-list modal). For the
+								  Plan 01 typecheck-clean gate we discard the password field and pass the
+								  new {preserveApiKey} shape with the safer default (true → restore-account).
+								*/}
+								<ConfirmWithPassword
+									onSubmit={(_password: string) => reset({preserveApiKey: true})}
+									error={getPasswordError()}
+									clearError={clearError}
+								/>
 							</SplitDialog>
 						</EnsureLoggedIn>
 					}

@@ -28,7 +28,8 @@ const GlobalSystemStateContext = createContext<{
 	updatePending: boolean
 	updateError: RouterError | null
 	migrate: () => void
-	reset: (password: string) => void
+	// Phase 38 Plan 01 — D-BE-01 schema rewrite. Was: (password: string) => void
+	reset: (input: {preserveApiKey: boolean}) => void
 	getError(): RouterError | null
 	clearError(): void
 } | null>(null)
