@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {setTimeout} from 'node:timers/promises'
+import {fileURLToPath} from 'node:url'
 
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
@@ -53,10 +54,24 @@ export const APIKEY_TMP_PATH = '/tmp/livos-reset-apikey' as const
 export const UPDATE_HISTORY_DIR = '/opt/livos/data/update-history' as const
 export const SNAPSHOT_SIDECAR_PATH = '/tmp/livos-pre-reset.path' as const
 
+// Runtime deployment directories (D-CG-02): the bash artifacts get copied here
+// at first-call cold-start. Mode 0755 — executable by root + livinityd's user.
+export const RESET_SCRIPT_RUNTIME_DIR = '/opt/livos/data/factory-reset' as const
+export const WRAPPER_RUNTIME_DIR = '/opt/livos/data/wrapper' as const
+
 // Plan 03 fills in the deployment+spawn paths; this plan declares the runtime
 // targets only so consumers can reference them without circular imports.
 export const RESET_SCRIPT_RUNTIME_PATH = '/opt/livos/data/factory-reset/reset.sh' as const
 export const WRAPPER_RUNTIME_PATH = '/opt/livos/data/wrapper/livos-install-wrap.sh' as const
+
+// Source-tree paths (for first-call cold-start copy). At runtime on Mini PC
+// the source IS the runtime tree: livinityd is launched with tsx against
+// /opt/livos/packages/livinityd/source/, so __dirname here resolves to the
+// directory holding both factory-reset.sh and livos-install-wrap.sh.
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+export const SOURCE_RESET_SH = path.join(__dirname, 'factory-reset.sh')
+export const SOURCE_WRAPPER = path.join(__dirname, 'livos-install-wrap.sh')
 
 // ── Zod input schema (D-RT-01) ──────────────────────────────────────────────
 
@@ -193,6 +208,64 @@ export function buildEventPath(): {timestamp: string; eventPath: string} {
 		.replace(/\.\d{3}Z$/, 'Z')
 	const eventPath = path.posix.join(UPDATE_HISTORY_DIR, `${timestamp}-factory-reset.json`)
 	return {timestamp, eventPath}
+}
+
+// ── Runtime artifact deployment (D-CG-02) ───────────────────────────────────
+
+/**
+ * Copies factory-reset.sh and livos-install-wrap.sh from the source tree to
+ * /opt/livos/data/{factory-reset,wrapper}/ with mode 0755.
+ *
+ * Idempotent: if the destination file exists with the executable bit set AND
+ * its mtime is greater-than-or-equal-to the source's mtime, the copy is
+ * skipped. Otherwise the destination is overwritten and re-chmodded. Both
+ * source files MUST exist; absence is a TRPCError INTERNAL_SERVER_ERROR
+ * (means dev/build broke).
+ *
+ * Per CONTEXT.md D-CG-02 (first-call cold-start deploy chosen for v29.2 —
+ * source-tree shipping out of scope this milestone). Steady-state cost is a
+ * single fs.stat per artifact (~1ms total).
+ */
+export async function deployRuntimeArtifacts(): Promise<void> {
+	const pairs: Array<[string, string]> = [
+		[SOURCE_RESET_SH, RESET_SCRIPT_RUNTIME_PATH],
+		[SOURCE_WRAPPER, WRAPPER_RUNTIME_PATH],
+	]
+
+	for (const [src, dst] of pairs) {
+		// Verify source exists (R_OK = readable by current EUID).
+		try {
+			await fs.access(src, fs.constants.R_OK)
+		} catch {
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: `factory-reset source missing in install: ${src}`,
+			})
+		}
+
+		// Ensure destination directory exists (mkdir -p).
+		await fs.mkdir(path.dirname(dst), {recursive: true, mode: 0o755})
+
+		// Freshness check: if dest is fresh AND has the executable bit, skip.
+		// Otherwise overwrite. Any stat failure on the destination → first call.
+		let needsCopy = true
+		try {
+			const [srcStat, dstStat] = await Promise.all([fs.stat(src), fs.stat(dst)])
+			const dstMode = dstStat.mode & 0o777
+			if (dstStat.mtimeMs >= srcStat.mtimeMs && (dstMode & 0o100) !== 0) {
+				needsCopy = false
+			}
+		} catch {
+			// Destination doesn't exist (or stat failed) — first call, must copy.
+		}
+
+		if (needsCopy) {
+			await fs.copyFile(src, dst)
+			// Defensive chmod after copy in case the source mode is restrictive
+			// or copyFile preserved a non-executable mode.
+			await fs.chmod(dst, 0o755)
+		}
+	}
 }
 
 // ── Top-level entry point (called by routes.ts) ─────────────────────────────
