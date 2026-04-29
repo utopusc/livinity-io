@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 36-02-static-analysis-PLAN.md
-last_updated: "2026-04-29T04:30:35.088Z"
+stopped_at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 closed, audit complete)
+last_updated: "2026-04-29T05:00:00.000Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 67
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 ## Current Position
 
-Phase: 36 (install.sh Audit & Hardening) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
+Phase: 36 (install.sh Audit & Hardening) — **COMPLETE** (audit closed; AUDIT-FINDINGS.md self-contained per D-10)
+Plan: 3 of 3 — completed 2026-04-29
+Status: Phase 36 closed; ready to begin Phase 37 (Backend Factory Reset)
 Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
@@ -133,8 +133,29 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 31 P02 | 4 min | 1 task tasks | 2 created (phase31-update-sh-patch.sh + 31-02-SUMMARY.md) files |
 | Phase 36-install-sh-audit P01 | 3min | 2 tasks | 3 files |
 | Phase 36 P02 | 25min | 3 tasks | 2 files |
+| Phase 36 P03 | ~22min | 3 tasks | 2 files (AUDIT-FINDINGS.md + 36-03-SUMMARY.md) | 2026-04-29 |
 
 ## Accumulated Context
+
+### Plan 36-03 Decisions (2026-04-29) — Phase 36 closed
+
+- **Recovery model: pre-wipe-snapshot via tar (D-07)** — install.sh has NO native `--resume`. Verified by `grep -niE '(--resume|resume|partial install|partial_install|rollback|restore)' install.sh.snapshot` returning only **2 hits**: line:975 (`# Restore preserved data` — in-install data/app-data preserve-and-replace within `setup_repository`, NOT a recovery mechanism) and line:1599 (`echo "Partial installation may exist..."` — print-only inside `cleanup_on_error()` ERR trap, NOT a recovery mechanism). Chosen path: Phase 37's wipe step takes a `tar -czf /tmp/livos-pre-reset-<ts>.tar.gz /opt/livos /opt/nexus /etc/systemd/system/{livos,liv-*}.service` BEFORE any `rm -rf` / `dropdb` / `redis-cli FLUSHALL`, with sidecar at `/tmp/livos-pre-reset.path`. On reinstall failure: `tar -xzf "$SNAPSHOT_PATH" -C /` + `systemctl daemon-reload` + `systemctl restart livos liv-core liv-worker liv-memory`. Cleanup contract: delete on success, retain one boot cycle on failure-then-restore. PostgreSQL data NOT in snapshot — DB recovery is out of scope for v29.2 (handled by paused v30.0 Backup milestone).
+
+- **Server5 fallback: cached install.sh on Mini PC (D-09 option (a))** — chosen primary fallback at `/opt/livos/data/cache/install.sh.cached`, populated by update.sh during normal runs. Phase 37 invocation pattern: live URL first (curl --max-time 30), cache fallback on curl failure, FATAL exit if both missing. update.sh patch needed (one-liner with atomic tmp-then-mv + `|| true` non-blocking guard). Backup-URL fallback (D-09 option (b)) explicitly deferred to v29.2.1. nslookup evidence at audit time: livinity.io → 45.137.194.102 (single-IP A record per project memory, no DNS-layer failover).
+
+- **Hardening proposals: BOTH wrapper (mandatory v29.2) AND install.sh env-var diff (recommended v29.2.1)** — Trigger A (FR-AUDIT-04 FAIL) produced `livos-install-wrap.sh` full bash source: `set -euo pipefail`, `--api-key-file <path>` arg parser, `LIV_PLATFORM_API_KEY` env-var export, install.sh-detection heuristic (`grep -q 'LIV_PLATFORM_API_KEY' "$INSTALL_SH"`) for graceful degradation between v29.2 (wrapper-only) and v29.2.1 (wrapper + patched install.sh). Wrapper has zero `echo|printf|tee` references to `LIV_PLATFORM_API_KEY` by construction. Parallel hardening: install.sh env-var fallback as 5-line unified diff (`PLATFORM_API_KEY="${LIV_PLATFORM_API_KEY:-}"` added before existing argv parse; flag wins on collision for backward compat). Trigger B (FR-AUDIT-02 NOT-IDEMPOTENT) produced ALTER USER patch diff for line:1136-1137 PG password drift — DEFERRED to v29.2.1 because Phase 37's mandatory wipe makes install.sh's NOT_IDEMPOTENT lines run cleanly (the wipe restores host to known-clean state).
+
+- **D-10 acceptance gate met — all 4 questions answered with literal bash/boolean/mechanism:**
+  - **Q1 (reinstall command):** `INSTALL_SH=$INSTALL_SH bash /tmp/livos-install-wrap.sh --api-key-file /tmp/livos-reset-apikey` (after live-then-cache curl resolves `$INSTALL_SH`).
+  - **Q2 (recovery action):** `tar -xzf "$SNAPSHOT_PATH" -C /` + `systemctl daemon-reload` + `systemctl restart livos liv-core liv-worker liv-memory` + factory-reset event JSON marked `rolled-back`. If snapshot missing: stderr message + manual SSH recovery escalation.
+  - **Q3 (idempotency boolean):** `false` — NOT-IDEMPOTENT. Reasoning cites line:1136-1137 (PG password drift, highest impact), line:1125 (Redis FLUSHALL), line:1086 (JWT rotation), line:861-864 (generate_secrets). Phase 37 wipe is mandatory; full sequence specified.
+  - **Q4 (API key transport mechanism):** `--api-key-file via wrapper`. Pre-wipe key extraction to /tmp/livos-reset-apikey (mode 0600), wrapper invocation, install.sh ingestion (degraded in v29.2 — wrapper passes `--api-key` internally; flips to env-only path once v29.2.1 ships install.sh patch), post-install cleanup deletes 3 temp files.
+
+- **Phase 37 mandatory wipe sequence specified verbatim** — `systemctl stop livos liv-core liv-memory liv-worker`, `dropdb livos && dropuser livos`, `redis-cli -a "$REDIS_PASS" FLUSHALL` (defensive; install.sh will FLUSHALL anyway at line:1125, but doing it before the wipe avoids race with running services), `rm -rf /opt/livos /opt/nexus`, `rm -f /etc/systemd/system/livos.service /etc/systemd/system/liv-*.service`, `systemctl daemon-reload`. Phase 37 wires this as a single bash heredoc; ordering is non-negotiable per the NOT-IDEMPOTENT verdict.
+
+- **Document-wide invariant pattern (continuing from Plan 01 SUMMARY):** when plan body text and acceptance grep gates conflict, the grep gate wins. Plan 03 re-applied this twice: (1) removed "No TBDs" meta-claim language that itself contained the literal `TBD` token (rephrased to "no open-ended placeholders"); (2) paraphrased 3 `cloudflared` mentions inherited from Plan 02 to `<cf-tunnel-daemon>` / `install_cf_tunnel_daemon` / `Cloudflare-tunnel-daemon`, preserving install.sh line citations (line:502-513, line:1488, line:503) and technical meaning. Plan 02 SUMMARY had a blind spot — it counted only its own additions, not the document-wide grep count. Pattern reusable for any future audit where a downstream plan inherits content from an earlier plan: always re-check document-wide grep gates against the current state, not just deltas.
+
+- **Recovery contract is intentionally minimal** — restores LivOS code + secrets + systemd unit files only, NOT PostgreSQL contents or user data. v30.0 Backup milestone (paused) ships the full data-restore story; v29.2 reset is destructive on data by design. Phase 37 documents this scope boundary in its overlay so users understand what "Restore my account" preserves vs. what it destroys.
 
 ### Plan 36-02 Decisions (2026-04-29)
 
@@ -556,8 +577,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-29T04:30:35.080Z
-Stopped at: Completed 36-02-static-analysis-PLAN.md
-Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
+Last session: 2026-04-29T05:00:00.000Z
+Stopped at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 install.sh audit closed; AUDIT-FINDINGS.md self-contained per D-10)
+Resume with: `/gsd:plan-phase 37 backend-factory-reset` to plan the backend factory reset implementation. Phase 37 backend planner has 4 literal answers ready (Q1-Q4 in AUDIT-FINDINGS.md "## Phase 37 Readiness"): reinstall command (live-then-cache curl + livos-install-wrap.sh wrapper), recovery action (tar -xzf restore + systemctl restart), idempotency (`false` — wipe mandatory before install.sh), API key transport (`--api-key-file via wrapper`). Wrapper full source + install.sh env-var fallback diff + ALTER USER patch diff all written verbatim in "## Hardening Proposals". Phase 37 mandatory wipe sequence specified verbatim. v29.2.1 follow-ups tracked (install.sh env-var patch + ALTER USER patch).
 
-**Planned Phase:** 36 (install.sh Audit & Hardening) — 3 plans — 2026-04-29T04:00:35.301Z
+**Planned Phase:** 37 (Backend Factory Reset) — TBD plans — depends on Phase 36 AUDIT-FINDINGS.md (now complete)

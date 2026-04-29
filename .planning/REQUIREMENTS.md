@@ -17,7 +17,7 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
 **: `livinity.io/install.sh` existence + content audit. Verify it lives at the expected URL, that it accepts `--api-key <key>` (or equivalent) CLI argument, and that it idempotently survives running on a host that already has `/opt/livos/` populated. Document findings in `phases/36-install-sh-audit/AUDIT-FINDINGS.md`.
 - [x] **FR-AUDIT-02
 **: Idempotent re-execution behavior verified — re-running install.sh on a freshly-wiped host vs an already-installed host both end in a working LivOS state with no manual intervention. If install.sh is NOT idempotent, harden it (or author a wrapper).
-- [ ] **FR-AUDIT-03**: Half-deleted state recovery path identified — if reinstall fails mid-curl (network drop, disk full, install.sh exits non-zero), what's the recovery? Either install.sh supports `--resume`, OR the wipe step takes a pre-wipe snapshot of `/opt/livos` so a fallback exists. Document in audit findings.
+- [x] **FR-AUDIT-03**: Half-deleted state recovery path identified — if reinstall fails mid-curl (network drop, disk full, install.sh exits non-zero), what's the recovery? Either install.sh supports `--resume`, OR the wipe step takes a pre-wipe snapshot of `/opt/livos` so a fallback exists. Document in audit findings. — Plan 36-03 (2026-04-29): install.sh has NO native `--resume`; chosen path is pre-wipe tar snapshot per D-07 with literal `tar -czf` / `tar -xzf` bash blocks specified for Phase 37; sidecar at `/tmp/livos-pre-reset.path`; cleanup contract specified.
 - [x] **FR-AUDIT-04
 **: API key passing via stdin or `--api-key-file <path>` flag verified — NOT via argv (visible in `ps`). If install.sh only supports argv, harden it.
 - [x] **FR-AUDIT-05

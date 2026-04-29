@@ -24,7 +24,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 **Active milestone: v29.2 Factory Reset (Phases 36-38)**
 
-- [ ] **Phase 36: install.sh Audit & Hardening** — Verify `livinity.io/install.sh` exists, accepts `--api-key`, idempotent, supports stdin/`--api-key-file`, half-deleted-state recovery; document in AUDIT-FINDINGS.md
+- [x] **Phase 36: install.sh Audit & Hardening** — Verify `livinity.io/install.sh` exists, accepts `--api-key`, idempotent, supports stdin/`--api-key-file`, half-deleted-state recovery; document in AUDIT-FINDINGS.md — completed 2026-04-29 (NOT-IDEMPOTENT verdict, argv FAIL, wrapper spec'd, recovery via pre-wipe-snapshot, all 4 D-10 questions answered)
 - [ ] **Phase 37: Backend Factory Reset** — `system.factoryReset({preserveApiKey})` tRPC route, idempotent wipe bash (services + scoped Docker + DB drop + filesystem rm), API key stash, install.sh re-execution via cgroup-escape, JSON event row in update-history
 - [ ] **Phase 38: UI Factory Reset** — Settings > Advanced "Danger Zone" button, explicit-list confirmation modal, preserve-account-vs-fresh radio, type-FACTORY-RESET-to-confirm, BarePage progress overlay, post-reset login routing, pre-reset blocking checks
 
@@ -43,7 +43,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 3 plans
   - [x] 36-01-snapshot-provenance-PLAN.md — Fetch install.sh, capture headers, scaffold AUDIT-FINDINGS.md (FR-AUDIT-01, FR-AUDIT-05) — completed 2026-04-29 (snapshot SHA-256 c00be0bf...3137, 1604 lines, AUDIT-FINDINGS.md scaffold with 9 sections)
   - [x] 36-02-static-analysis-PLAN.md — Argument surface + idempotency verdict + API key transport (FR-AUDIT-01, FR-AUDIT-02, FR-AUDIT-04) — completed 2026-04-29 (1 flag mapped, 74 commands classified, verdict NOT-IDEMPOTENT, transport argv FR-AUDIT-04 FAIL → Plan 03 wrapper required)
-  - [ ] 36-03-recovery-server5-hardening-PLAN.md — Recovery model + Server5 fallback + hardening proposals + Phase 37 readiness (FR-AUDIT-03, FR-AUDIT-05)
+  - [x] 36-03-recovery-server5-hardening-PLAN.md — Recovery model + Server5 fallback + hardening proposals + Phase 37 readiness (FR-AUDIT-03, FR-AUDIT-05) — completed 2026-04-29 (recovery: pre-wipe tar snapshot per D-07; Server5 fallback: cached install.sh on Mini PC per D-09 (a); hardening: livos-install-wrap.sh full source mandatory v29.2 + install.sh env-var diff + ALTER USER diff deferred to v29.2.1; Phase 37 Readiness: all 4 D-10 questions answered with literal bash)
 **Research flag**: this phase IS the audit/research; AUDIT-FINDINGS.md is the deliverable
 
 ### Phase 37: Backend Factory Reset
@@ -78,7 +78,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 36. install.sh Audit & Hardening | 1/3 | In progress | - |
+| 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
 | 37. Backend Factory Reset | 0/? | Not started | - |
 | 38. UI Factory Reset | 0/? | Not started | - |
 
