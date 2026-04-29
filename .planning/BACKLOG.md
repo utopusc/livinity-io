@@ -205,3 +205,21 @@ The card's "Update" button (round 4) and the Settings list-row "View" button (ro
 **Status:** PARKED. Promote to active when v29.0 (Deploy & Update Stability) ships and the install.sh audit (Phase A) confirms feasibility. Until then, recovery is manual SSH.
 
 ---
+
+## 999.8 — `update.sh` source/production drift detection
+
+**Captured:** 2026-04-28 (post v29.1 self-rsync hot-patch `ee0ed072`)
+**Source:** During v29.1 cgroup-escape work, the source repo's `update.sh` (278 lines) had silently diverged from Mini PC's production `/opt/livos/update.sh` (557 lines). Phase 30/31/32/33 enhancements (finalize trap, deployed-SHA recording, precheck-fail handling, BUILD-03 verify_build) had been applied directly on server and never committed back. SCP'ing the local-stale version came within a hair of deleting 280 lines of production logic. Caught + reverted (`93844e6f` restored canonical 557-line baseline + applied patch correctly).
+
+**Why parked rather than active:** Self-rsync (`ee0ed072`) now addresses the dominant failure mode — every Install Update auto-syncs `/opt/livos/update.sh` from origin/master. Drift sticks for at most one update cycle, not indefinitely. Residual risk is narrow: SSH-edited prod `update.sh` gets silently overwritten on next user-triggered update with no warning. Catastrophic only if the manual edit was load-bearing AND no one upstreamed it.
+
+**What it would do (small audit script):**
+- `scripts/audit-update-sh-drift.sh` — `sha256sum` of prod `/opt/livos/update.sh` vs repo `update.sh`; mismatch exits non-zero with diff
+- Hook into `/gsd-audit-milestone` to refuse archiving if drift detected
+- Optional: pre-commit hook on `update.sh` changes warning if prod diverges
+
+**Estimate:** 15-30 min (single bash script + audit-milestone hook).
+
+**Status:** PARKED. Promote when (a) any manual `/opt/livos/update.sh` SSH-edit happens, (b) milestone audit catches a drift surprise, or (c) a v30.x cleanup pass has spare bandwidth.
+
+---
