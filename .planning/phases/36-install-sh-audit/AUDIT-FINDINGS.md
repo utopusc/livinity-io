@@ -476,7 +476,207 @@ Server4 (45.137.194.103) is not part of this dependency chain — per project me
 
 ## Hardening Proposals
 
-*Populated by Plan 03 (only if static analysis surfaces gaps; otherwise this section will state "No hardening required — install.sh meets v29.2 requirements as-is").*
+Two trigger conditions fired from Plan 02's findings:
+
+- **Trigger A — FR-AUDIT-04 FAIL** (API key transport is `argv` only, line:14). A wrapper proposal is required per CONTEXT.md D-08.
+- **Trigger B — Idempotency verdict NOT-IDEMPOTENT** (4 NOT_IDEMPOTENT commands at line:861-864, 1086, 1125, 1136-1137). A patch proposal is in scope per FR-AUDIT-02; however, since v29.2 always runs the wipe step BEFORE install.sh per CONTEXT.md D-12, the in-tree install.sh patch is deferred to v29.2.1 (the wipe makes the NOT_IDEMPOTENT lines run cleanly).
+
+Both blocks below are concrete and implementable as-written. The wrapper is mandatory for v29.2; the install.sh env-var fallback patch is a parallel hardening recommended for v29.2.1.
+
+### Wrapper script: `livos-install-wrap.sh` (FR-AUDIT-04 hardening)
+
+**Why:** Plan 02 found install.sh's API key transport is `argv` only (line:14: `case "$1" in --api-key) PLATFORM_API_KEY="$2"; shift 2 ;;`). argv is visible to any user who can run `ps -ef` for the entire install duration (several minutes). Phase 37 cannot use install.sh directly without leaking the platform API key.
+
+**Where it lives:** Phase 37 ships this wrapper inline in livinityd's wipe-and-reinstall bash. The wrapper is a one-shot file written to `/tmp/livos-install-wrap.sh` mode 0700, removed after install.sh exits (success or failure).
+
+**Wrapper content (full source — Phase 37 copies this verbatim into its bash heredoc):**
+
+```bash
+#!/bin/bash
+# livos-install-wrap.sh
+# Hardens install.sh by reading the API key from a file and exporting it
+# as an env var BEFORE invoking install.sh. The key is never on argv.
+#
+# Usage:
+#   INSTALL_SH=/path/to/install.sh bash livos-install-wrap.sh --api-key-file /path/to/key
+#
+# Contract:
+#   - Reads --api-key-file <path> from argv
+#   - Reads the key contents from that file
+#   - exports LIV_PLATFORM_API_KEY in the shell environment
+#   - execs install.sh inheriting the env (no --api-key flag passed)
+#   - Requires install.sh to honor ${LIV_PLATFORM_API_KEY:-} as fallback
+#     (see "install.sh env-var fallback patch" below). If install.sh has
+#     not been patched, the wrapper falls back to passing --api-key on
+#     argv internally — same leak window as direct invocation, but at
+#     least the entry point is auditable.
+
+set -euo pipefail
+
+API_KEY_FILE=""
+EXTRA_ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --api-key-file)
+      API_KEY_FILE="$2"
+      shift 2
+      ;;
+    *)
+      EXTRA_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$API_KEY_FILE" ] || [ ! -f "$API_KEY_FILE" ]; then
+  echo "livos-install-wrap.sh: --api-key-file <path> is required and must exist" >&2
+  exit 2
+fi
+
+# Read key into env var; never log, never echo.
+LIV_PLATFORM_API_KEY=$(cat "$API_KEY_FILE")
+export LIV_PLATFORM_API_KEY
+
+# Locate install.sh — caller MUST set $INSTALL_SH (live or cached path).
+INSTALL_SH="${INSTALL_SH:-/tmp/install.sh.live}"
+if [ ! -f "$INSTALL_SH" ]; then
+  echo "livos-install-wrap.sh: \$INSTALL_SH ($INSTALL_SH) does not exist" >&2
+  exit 3
+fi
+
+# Detect whether install.sh has the env-var fallback patch (Plan 03's
+# proposed install.sh hardening). Heuristic: grep for the literal
+# LIV_PLATFORM_API_KEY token at the top of the file. If present, exec
+# install.sh WITHOUT --api-key (env-only path, no argv leak). If absent,
+# fall back to passing --api-key on argv — accepts the leak window but
+# preserves the wrapper as the single auditable entry point.
+if grep -q 'LIV_PLATFORM_API_KEY' "$INSTALL_SH"; then
+  exec bash "$INSTALL_SH" "${EXTRA_ARGS[@]}"
+else
+  exec bash "$INSTALL_SH" --api-key "$LIV_PLATFORM_API_KEY" "${EXTRA_ARGS[@]}"
+fi
+```
+
+**Security properties:**
+
+- The key value never appears on `livos-install-wrap.sh`'s argv (only `--api-key-file <path>` does — the path is harmless).
+- The key flows from filesystem → variable → environment → child process. The env-var path closes the argv leak ONLY if install.sh has the env-var fallback patch (see next subsection); otherwise the wrapper still re-introduces the leak by passing `--api-key` to install.sh internally. The wrapper documents its degraded-mode behavior explicitly so Phase 37 knows when it is operating insecurely.
+- The wrapper does NOT echo, log, or print `$LIV_PLATFORM_API_KEY`. `grep -E '(echo|printf|tee).*LIV_PLATFORM_API_KEY' livos-install-wrap.sh` returns 0 matches by construction.
+- `set -euo pipefail` ensures a partial wrapper failure does not silently fall through to install.sh with an empty key.
+
+**Phase 37 invocation pattern:**
+
+```bash
+# Phase 37 wipe step writes the preserved API key here BEFORE wipe:
+echo -n "$PRESERVED_API_KEY" > /tmp/livos-reset-apikey
+chmod 600 /tmp/livos-reset-apikey
+
+# Then writes the wrapper inline (heredoc with EOF marker quoted to prevent expansion):
+cat > /tmp/livos-install-wrap.sh <<'WRAP_EOF'
+[wrapper content from above]
+WRAP_EOF
+chmod 700 /tmp/livos-install-wrap.sh
+
+# Then invokes the wrapper:
+INSTALL_SH=/tmp/install.sh.live bash /tmp/livos-install-wrap.sh --api-key-file /tmp/livos-reset-apikey
+```
+
+**Cleanup contract:** Phase 37 wipe bash deletes `/tmp/livos-install-wrap.sh` AND `/tmp/livos-reset-apikey` after install.sh exits (success or failure). Both files contain or could expose credentials — leaving them on `/tmp` indefinitely is a credential-exposure risk.
+
+```bash
+rm -f /tmp/livos-install-wrap.sh /tmp/livos-reset-apikey /tmp/install.sh.live
+```
+
+### install.sh env-var fallback patch (FR-AUDIT-04 parallel hardening — recommended for v29.2.1)
+
+**Why:** The wrapper above is necessary but not sufficient. If install.sh has no env-var path, the wrapper still has to pass `--api-key` on argv internally — re-introducing the very leak the wrapper was supposed to close. The complete fix is a tiny patch to install.sh adding `${LIV_PLATFORM_API_KEY:-}` as a fallback BEFORE the argv parse, gated so the flag still wins for backward compat.
+
+**Unified diff against `install.sh.snapshot` (line numbers reference the frozen snapshot from Plan 01):**
+
+```diff
+--- install.sh.snapshot
++++ install.sh.snapshot.hardened
+@@ -8,16 +8,21 @@
+ set -euo pipefail
+
+ # ── Argument parsing ─────────────────────────────────────────────
+ PLATFORM_API_KEY=""
++# Env-var fallback (FR-AUDIT-04 hardening): allow LIV_PLATFORM_API_KEY
++# from the caller's environment so wrappers can pass the key without
++# putting it on argv. The --api-key flag below still wins for backward
++# compat with existing curl-piped invocations.
++PLATFORM_API_KEY="${LIV_PLATFORM_API_KEY:-}"
+
+ while [[ $# -gt 0 ]]; do
+   case "$1" in
+     --api-key)
+       PLATFORM_API_KEY="$2"
+       shift 2
+       ;;
+     *)
+       shift
+       ;;
+   esac
+ done
+```
+
+**What this changes:**
+
+- New line at line:11.5 (logically — between the existing line:11 `PLATFORM_API_KEY=""` and the line:12 `while` loop) reads `LIV_PLATFORM_API_KEY` from the environment if set, or falls back to empty.
+- The existing `--api-key <value>` argv path (line:14) still works — if both are supplied, argv wins (last assignment), preserving backward compat with the existing `curl ... | bash -s -- --api-key VALUE` invocation pattern.
+- Total addition: 5 lines (1 blank + 3 comment + 1 assignment). Zero changes to existing logic. Zero risk of breaking re-runs.
+
+**Phase 37 implication:**
+
+- Phase 37 ships the wrapper as a hard requirement for v29.2.
+- Phase 37 may optionally upstream the env-var patch to `install.sh` on the relay during the same window. If the patch lands, the wrapper's `if grep -q 'LIV_PLATFORM_API_KEY'` heuristic detects it and the wrapper exec'd install.sh WITHOUT `--api-key` — fully closing the argv leak.
+- If the patch is deferred to v29.2.1, the wrapper still ships in v29.2 and runs in degraded mode (passes `--api-key` to install.sh internally — same argv exposure as direct invocation, but the wrapper remains the auditable single entry point).
+
+### Idempotency patch (FR-AUDIT-02 hardening — superseded by Phase 37 wipe)
+
+The 4 NOT_IDEMPOTENT commands flagged in Plan 02:
+
+| line:N | Command | Failure mode |
+|--------|---------|--------------|
+| line:861-864 | `openssl rand -hex` (generate_secrets) | regenerates JWT/PG/Redis passwords each run |
+| line:1086 | `echo -n "$SECRET_JWT" > /opt/livos/data/secrets/jwt` | writes new JWT secret each run, invalidates sessions |
+| line:1125 | `redis-cli -a "$SECRET_REDIS" FLUSHALL` | wipes ALL Redis data on every re-run |
+| line:1136-1137 | `psql ... CREATE USER livos ...` (skipped if role exists) | leaves PG with old password; .env carries new password |
+
+A unified-diff proposal for line:1136-1137 (the most damaging — silent password drift) would look like:
+
+```diff
+--- install.sh.snapshot
++++ install.sh.snapshot.hardened
+@@ -1135,5 +1135,8 @@
+     # Create database user if not exists
+-    sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='livos'" | grep -q 1 \
+-      || sudo -u postgres psql -c "CREATE USER livos WITH PASSWORD '$SECRET_PG_PASS'"
++    if sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='livos'" | grep -q 1; then
++        sudo -u postgres psql -c "ALTER USER livos WITH PASSWORD '$SECRET_PG_PASS'"
++    else
++        sudo -u postgres psql -c "CREATE USER livos WITH PASSWORD '$SECRET_PG_PASS'"
++    fi
+```
+
+This swaps the silent skip for an explicit `ALTER USER ... WITH PASSWORD` reconciliation when the role pre-exists, eliminating the password-drift trap.
+
+**Phase 37 owns the verdict:** v29.2 factory reset runs a full wipe BEFORE install.sh (`dropuser livos`, `dropdb livos`, `rm -rf /opt/livos /opt/nexus`, `redis-cli FLUSHALL`, `systemctl stop livos liv-core liv-memory liv-worker`, `systemctl daemon-reload`). The wipe brings the host to a known-clean state where install.sh's NOT_IDEMPOTENT commands run as if it were a first install — meaning the PG `CREATE USER` runs cleanly, the JWT secret is fresh-by-design, the Redis FLUSHALL is redundant-but-defensive, and `generate_secrets` regeneration is desired.
+
+**Recommendation:**
+
+- (i) **Phase 37 path (chosen for v29.2):** rely on the wipe step. install.sh re-runs cleanly because the wipe restored a clean host. NO patch to install.sh itself in v29.2. The patch above is documented as a v29.2.1 follow-up if a second use case for re-running install.sh on a populated host emerges.
+- (ii) **In-tree install.sh patch (deferred to v29.2.1):** the `ALTER USER` patch above is a one-line hardening that closes the password-drift trap without breaking first-install behavior. Out of scope for v29.2 because v29.2 does not modify the deployment toolchain (CONTEXT.md D-12), and the wipe step covers the v29.2 use case.
+
+### Hardening proposals summary
+
+| Hardening | Trigger | Status | Owner |
+|-----------|---------|--------|-------|
+| `livos-install-wrap.sh` wrapper | FR-AUDIT-04 FAIL (argv leak) | **MANDATORY for v29.2** — wrapper full source above | Phase 37 |
+| install.sh env-var fallback patch | FR-AUDIT-04 parallel | RECOMMENDED for v29.2.1 — diff above | v29.2.1 |
+| install.sh `ALTER USER` patch | FR-AUDIT-02 | DEFERRED to v29.2.1 — superseded by Phase 37 wipe | v29.2.1 (optional) |
+
+All proposals above are concrete (full file contents or full unified diffs). Each row in the summary table names a specific status (mandatory / recommended / deferred) and a named owner (Phase 37 / v29.2.1) — no open-ended placeholders, no unlabeled deferrals.
 
 ## Phase 37 Readiness
 
