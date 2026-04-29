@@ -1,3 +1,4 @@
+import {spawn} from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {setTimeout} from 'node:timers/promises'
@@ -268,21 +269,109 @@ export async function deployRuntimeArtifacts(): Promise<void> {
 	}
 }
 
+// ── Cgroup-escape spawn (D-CG-01) ───────────────────────────────────────────
+
+/**
+ * Spawns the wipe+reinstall bash inside a transient `systemd-run --scope --collect`
+ * unit so the bash survives `systemctl stop livos` mid-flight (cgroup-escape
+ * pattern, project memory reference_cgroup_escape.md).
+ *
+ * Returns immediately after spawn (does NOT await the bash). The bash writes
+ * progress to the JSON event row at `eventPath`; the UI polls that row.
+ *
+ * Per CONTEXT.md D-CG-01 (canonical invocation). Throws TRPCError
+ * INTERNAL_SERVER_ERROR if `systemd-run` is unavailable on the host (e.g., dev
+ * machine without systemd) or if EUID is not 0 (livinityd should always run as
+ * root on Mini PC; this is a defense-in-depth sanity check complementing
+ * adminProcedure RBAC).
+ */
+export async function spawnResetScope(args: {
+	preserveApiKey: boolean
+	eventPath: string
+	timestamp: string
+}): Promise<void> {
+	// Pre-spawn assertions: systemd-run must be on PATH AND livinityd must be
+	// running as root. Both checks throw before the spawn call so the route
+	// handler can surface a clear INTERNAL_SERVER_ERROR.
+	await assertSystemdRunAvailable()
+	assertRootEuid()
+
+	const unitName = `livos-factory-reset-${args.timestamp}`
+	const child = spawn(
+		'systemd-run',
+		[
+			'--scope',
+			'--collect',
+			'--unit', unitName,
+			'--quiet',
+			'bash',
+			RESET_SCRIPT_RUNTIME_PATH,
+			args.preserveApiKey ? '--preserve-api-key' : '--no-preserve-api-key',
+			args.eventPath,
+		],
+		{
+			detached: true,
+			stdio: 'ignore',
+		},
+	)
+	child.unref()
+
+	// We do NOT await the child. Route handler returns immediately; the bash
+	// logs go to the JSON event row at args.eventPath.
+}
+
+/**
+ * Runs `command -v systemd-run` via execa to assert the binary is on PATH.
+ * Throws TRPCError INTERNAL_SERVER_ERROR with a diagnostic message if the
+ * lookup fails (non-systemd hosts, container envs, broken PATH, etc.).
+ *
+ * Isolated as a helper for unit-test mockability — the test mocks 'execa' to
+ * reject and verifies the wrapped TRPCError surfaces.
+ */
+async function assertSystemdRunAvailable(): Promise<void> {
+	const {execa} = await import('execa')
+	try {
+		await execa('command', ['-v', 'systemd-run'], {shell: '/bin/bash'})
+	} catch {
+		throw new TRPCError({
+			code: 'INTERNAL_SERVER_ERROR',
+			message: 'systemd-run binary not found on host (factory reset requires systemd)',
+		})
+	}
+}
+
+/**
+ * Asserts process.geteuid() returns 0. On Windows dev hosts process.geteuid
+ * does not exist (typeof check returns -1), and on non-root linux it returns
+ * the actual UID. Either case → INTERNAL_SERVER_ERROR with the observed EUID
+ * in the message for diagnostics.
+ *
+ * On Mini PC at runtime, livinityd is launched by the livos.service systemd
+ * unit as root (User=root in the unit file), so geteuid() === 0.
+ */
+function assertRootEuid(): void {
+	const euid = typeof process.geteuid === 'function' ? process.geteuid() : -1
+	if (euid !== 0) {
+		throw new TRPCError({
+			code: 'INTERNAL_SERVER_ERROR',
+			message: `factory reset requires root (livinityd EUID is ${euid}); cannot proceed`,
+		})
+	}
+}
+
 // ── Top-level entry point (called by routes.ts) ─────────────────────────────
 
 /**
  * Top-level entry point invoked by the tRPC route. Performs:
- *   1. preflightCheck (throws on rejection)
- *   2. stashApiKey if preserveApiKey
- *   3. (Plan 03 wires the systemd-run --scope --collect spawn here)
- *   4. Returns FactoryResetAccepted with eventPath + snapshotPath sidecar
+ *   1. preflightCheck (throws on rejection — D-RT-05)
+ *   2. deployRuntimeArtifacts (lazy first-call cold-start copy — D-CG-02)
+ *   3. stashApiKey if preserveApiKey (D-KEY-01)
+ *   4. spawnResetScope: detached systemd-run --scope --collect spawn (D-CG-01)
+ *   5. Returns FactoryResetAccepted with eventPath + snapshotPath sidecar
  *
- * Plan 02 STUB: the spawn step is a comment marker that Plan 03 fills in.
- * The function still computes the eventPath and returns it so the route surface
- * is stable — Plan 03's diff replaces only the marker block.
- *
- * Callers MUST NOT deploy a Plan-02-only build to Mini PC: the route returns
- * accepted:true without actually triggering a wipe. Plan 03 ships the spawn.
+ * Wall-clock budget: ≤200ms (D-RT-03). The spawn is detached and unref'd; the
+ * bash runs in a separate transient cgroup so `systemctl stop livos` mid-wipe
+ * does NOT kill it.
  */
 export async function performFactoryReset(
 	_livinityd: Livinityd,
@@ -290,20 +379,25 @@ export async function performFactoryReset(
 ): Promise<FactoryResetAccepted> {
 	await preflightCheck(input)
 
+	// Lazy-deploy the bash artifacts on first call (D-CG-02). Idempotent: a
+	// fresh executable copy at /opt/livos/data/{factory-reset,wrapper}/ skips
+	// the copy and only stat()s.
+	await deployRuntimeArtifacts()
+
 	if (input.preserveApiKey) {
 		await stashApiKey()
 	}
 
-	const {eventPath} = buildEventPath()
+	const {timestamp, eventPath} = buildEventPath()
 
-	// === SPAWN_INSERTION_POINT ===
-	// Plan 03 inserts the systemd-run --scope --collect spawn + runtime artifact
-	// deployment HERE. Plan 02 returns the metadata without spawning. The route
-	// is therefore a no-op wipe in v29.2-plan-02 builds — this is expected;
-	// Plan 03 ships the spawn. To avoid shipping a half-broken route in main,
-	// callers MUST NOT deploy Plan 02's binary to Mini PC without Plan 03
-	// also landed.
-	// === /SPAWN_INSERTION_POINT ===
+	// Detached spawn into a cgroup-escaped transient scope (D-CG-01). The
+	// helper performs systemd-run + EUID 0 sanity checks before spawning;
+	// any rejection surfaces as TRPCError INTERNAL_SERVER_ERROR.
+	await spawnResetScope({
+		preserveApiKey: input.preserveApiKey,
+		eventPath,
+		timestamp,
+	})
 
 	return {
 		accepted: true,
