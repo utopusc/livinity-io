@@ -1,16 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v29.2
-milestone_name: Factory Reset
-status: roadmap-ready
-stopped_at: v29.2 mini-milestone bootstrapped (3 phases, 19 FR-* reqs). v30.0 Backup paused — full artifacts archived at .planning/milestones/v30.0-DEFINED/. Phase 36 (install.sh Audit) is the entry point.
-last_updated: "2026-04-28T17:00:00.000Z"
-last_activity: 2026-04-28
-current_phase: 36
+milestone: v10.0
+milestone_name: milestone
+status: Roadmap authored, awaiting plan-phase
+stopped_at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
+last_updated: "2026-04-29T04:00:35.310Z"
+last_activity: 2026-04-28 — ROADMAP.md authored. v30.0 is 8 phases (36-43); 47/47 v30.0 requirements mapped, zero orphans. Research synthesis followed verbatim — Phase 36 spike is non-negotiable; Phase 43 (livos-restore.sh) flagged needs phase research. Post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -51,6 +50,7 @@ Coverage: 47/47 v30.0 requirements mapped — (BAK-CORE x5, BAK-SRC x8, BAK-DEST
 Granularity: fine (8 phases — within 8-12 fine-tier band)
 Research flags: Phase 36 (the spike IS the research, no separate phase research file required); Phase 43 (livos-restore.sh shell script is the disaster-recovery linchpin and the highest-risk single deliverable in v30.0 — recommend 1-day prototype spike on a fresh Ubuntu 24.04 VM before plan-phase)
 Critical sequencing constraints (non-violatable per research/PITFALLS.md):
+
   - Phase 36 spike output IS hard input to Phase 37 schema (do not freeze schema before audit)
   - Schema (P37) lands BEFORE any code (P38+); multi-destination + BAK-VERSION + BAK-TZ + heartbeat permanent on day 1
   - Key vault (P37) before sources (P38-39) — sources need encryption to write
@@ -541,4 +541,4 @@ Last session: 2026-04-26T14:23:55.810Z
 Stopped at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
-**Planned Phase:** 33 (Update Observability Surface) — 3 plans — 2026-04-27T09:53:24.787Z
+**Planned Phase:** 36 (install.sh Audit & Hardening) — 3 plans — 2026-04-29T04:00:35.301Z
