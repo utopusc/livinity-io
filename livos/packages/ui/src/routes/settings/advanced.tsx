@@ -11,6 +11,7 @@ import {useIsExternalDns} from '@/hooks/use-is-externaldns'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useSoftwareUpdate} from '@/hooks/use-software-update'
 import {useTorEnabled} from '@/hooks/use-tor-enabled'
+import {DangerZone} from '@/routes/settings/_components/danger-zone'
 import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
 import {Dialog, DialogHeader, DialogScrollableContent, DialogTitle} from '@/shadcn-components/ui/dialog'
 import {Drawer, DrawerContent, DrawerHeader, DrawerScroller, DrawerTitle} from '@/shadcn-components/ui/drawer'
@@ -117,13 +118,9 @@ export default function AdvancedSettingsDrawerOrDialog() {
 								/>
 							</label>
 							{remoteTorAccessSettingRow}
-							<label className={cardClass}>
-								<CardText title={t('factory-reset')} description={t('factory-reset-description')} />
-								<IconButtonLink className='pointer-events-auto self-center' to={'/factory-reset'} variant='destructive'>
-									{t('reset')}
-								</IconButtonLink>
-							</label>
+							{/* Phase 38 Plan 02: legacy inline factory-reset row REMOVED — Danger Zone (below) is the only entry point. */}
 						</div>
+						<DangerZone />
 					</DrawerScroller>
 				</DrawerContent>
 			</Drawer>
@@ -167,13 +164,9 @@ export default function AdvancedSettingsDrawerOrDialog() {
 							/>
 						</label>
 						{remoteTorAccessSettingRow}
-						<label className={cardClass}>
-							<CardText title={t('factory-reset')} description={t('factory-reset-description')} />
-							<IconButtonLink className='pointer-events-auto self-center' to={'/factory-reset'} variant='destructive'>
-								{t('reset')}
-							</IconButtonLink>
-						</label>
+						{/* Phase 38 Plan 02: legacy inline factory-reset row REMOVED — Danger Zone (below) is the only entry point. */}
 					</div>
+					<DangerZone />
 				</div>
 			</DialogScrollableContent>
 		</Dialog>
