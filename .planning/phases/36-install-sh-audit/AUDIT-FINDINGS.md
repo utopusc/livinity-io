@@ -119,7 +119,139 @@ install.sh accepts no positional arguments. The `while [[ $# -gt 0 ]]; do case "
 
 ## Idempotency Verdict
 
-*Populated by Plan 02. Final verdict will be one of: `IDEMPOTENT`, `PARTIALLY-IDEMPOTENT`, `NOT-IDEMPOTENT` (per D-06).*
+**Verdict:** `NOT-IDEMPOTENT`
+
+Method per CONTEXT.md D-06: classify every side-effecting command in the snapshot. Read-only static analysis; install.sh was NOT executed.
+
+### Side-effecting command classification
+
+Commands are grouped by phase of the install flow. Lines reference `install.sh.snapshot`. Embedded heredoc payloads (e.g., the `iptables` rules inside `/etc/livos/docker-firewall.sh` at lines 1382-1388) are listed as a single row — those rules execute only when the generated script runs at boot, not during install.sh itself.
+
+| line:N | Command (excerpt) | Classification | Reason |
+|--------|-------------------|----------------|--------|
+| line:276 | `apt-get install -y -qq build-essential git curl` | IDEMPOTENT_NATIVE | apt-get install is naturally re-runnable |
+| line:281 | `command -v yq &>/dev/null && return` then `wget -qO /usr/local/bin/yq ...` | IDEMPOTENT_WITH_GUARD | `command -v yq` short-circuits on re-run |
+| line:288 | `chmod +x /usr/local/bin/yq` | IDEMPOTENT_NATIVE | chmod is naturally re-runnable |
+| line:295 | `command -v node` + version check, then NodeSource install | IDEMPOTENT_WITH_GUARD | Version-aware guard at line:298 (`current -ge required_version`) |
+| line:308 | `mkdir -p /etc/apt/keyrings` | IDEMPOTENT_NATIVE | `mkdir -p` |
+| line:310 | `gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg` | IDEMPOTENT_NATIVE | `-o` overwrites file |
+| line:313 | `tee /etc/apt/sources.list.d/nodesource.list` | IDEMPOTENT_NATIVE | `tee` truncate-write equivalent (single-line input each time) |
+| line:316 | `apt-get install -y -qq nodejs` | IDEMPOTENT_NATIVE | apt-get install |
+| line:322, 328 | `command -v pnpm` guard + `npm install -g pnpm` | IDEMPOTENT_WITH_GUARD | guard at line:322 |
+| line:333, 339 | `command -v pm2` guard + `npm install -g pm2` | IDEMPOTENT_WITH_GUARD | guard at line:333 |
+| line:344, 350-351 | `command -v redis-server` guard + apt install + `systemctl enable redis-server` | IDEMPOTENT_WITH_GUARD | guard at line:344 |
+| line:359-364 | `iptables --version | grep -q nf_tables` guard + `update-alternatives --set iptables` | IDEMPOTENT_WITH_GUARD | conditional switch only when on nftables backend |
+| line:368-374 | `command -v docker && systemctl is-active docker` guard + `systemctl restart docker` | IDEMPOTENT_WITH_GUARD | restart is itself idempotent; gated to existing installs |
+| line:377, 385-403 | `command -v docker` guard + `apt-get remove` + `apt-get install -y docker-ce ...` + `systemctl enable/start docker` | IDEMPOTENT_WITH_GUARD | early-return at line:377 prevents repeat install |
+| line:385 | `apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true` | IDEMPOTENT_NATIVE | `|| true` swallows missing-package errors |
+| line:391 | `curl ... -o /etc/apt/keyrings/docker.asc` | IDEMPOTENT_NATIVE | `-o` overwrites |
+| line:422-433 | `docker image inspect "$dst" &>/dev/null` guard + `docker pull` + `docker tag` | IDEMPOTENT_WITH_GUARD | image-presence guard at line:422 |
+| line:451, 454 | `mkdir -p "$data_dir/tor/data"`, `mkdir -p "$data_dir/app-data"` | IDEMPOTENT_NATIVE | `mkdir -p` |
+| line:457-458 | `chown -R 1000:1000` on tor/data and app-data | IDEMPOTENT_NATIVE | chown is re-runnable |
+| line:464, 470 | `command -v python3` guard + apt install | IDEMPOTENT_WITH_GUARD | guard at line:464 |
+| line:475, 481-483 | `command -v psql` guard + apt install + systemctl enable/start | IDEMPOTENT_WITH_GUARD | guard at line:475 |
+| line:488, 494-498 | `command -v caddy` guard + apt install | IDEMPOTENT_WITH_GUARD | guard at line:488 |
+| line:503, 508-511 | `command -v cloudflared` guard + dpkg -i | IDEMPOTENT_WITH_GUARD | guard at line:503; dpkg -i overwrites by design |
+| line:518, 521-522 | `command -v fail2ban-client` guard + apt install | IDEMPOTENT_WITH_GUARD | guard at line:518 |
+| line:526-536 | `cat > /etc/fail2ban/jail.local << 'JAIL'` | IDEMPOTENT_NATIVE | static heredoc body; overwrite is fine. **Caveat:** if the operator has hand-edited `jail.local` between runs, those edits are lost. |
+| line:538 | `systemctl enable --now fail2ban` | IDEMPOTENT_NATIVE | systemctl enable --now is idempotent |
+| line:545, 554-560 | `command -v google-chrome` guard + wget + apt install | IDEMPOTENT_WITH_GUARD | guard at line:545 |
+| line:566-580 | `cat > /usr/local/bin/livos-launch-chrome << 'LAUNCHER'` + chmod +x | IDEMPOTENT_NATIVE | static heredoc; overwrite-safe |
+| line:591, 597 | `$HAS_GUI` guard + `apt-get install -y -qq x11vnc xdotool x11-xserver-utils` | IDEMPOTENT_WITH_GUARD | `$HAS_GUI` set in detect_gui at line:87-161 |
+| line:621-643 | `cat > /etc/systemd/system/livos-hdmi-force.service << 'UNIT'` | IDEMPOTENT_NATIVE | static unit file; overwrite-safe |
+| line:645-646 | `systemctl daemon-reload` + `systemctl enable --now livos-hdmi-force` | IDEMPOTENT_NATIVE | both idempotent |
+| line:652-688 | `cat > /usr/local/bin/livos-set-resolution << 'SCRIPT'` | IDEMPOTENT_NATIVE | static script; overwrite-safe |
+| line:689 | `chmod +x /usr/local/bin/livos-set-resolution` | IDEMPOTENT_NATIVE | chmod |
+| line:695-715 | `cat > /etc/systemd/system/livos-x11vnc.service << UNIT` (note: unquoted heredoc — variable expansion happens) | IDEMPOTENT_NATIVE | content is parametric on `${desktop_user}` / `${desktop_uid}` but those are deterministic per host |
+| line:717-718 | `systemctl daemon-reload` + `systemctl enable livos-x11vnc` | IDEMPOTENT_NATIVE | systemctl |
+| line:727-729 | `redis-cli -a ... SET livos:desktop:gui_type|has_gui|user "$..."` | IDEMPOTENT_NATIVE | Redis SET is overwrite-by-key |
+| line:735 | `systemctl start livos-x11vnc 2>/dev/null` | IDEMPOTENT_NATIVE | start is idempotent for already-active units |
+| line:749, 752-754 | `mkdir -p /etc/ssh/sshd_config.d` + Include line append guard | IDEMPOTENT_WITH_GUARD | `grep -q "^Include..."` guard at line:752 prevents duplicate Include lines |
+| line:767-773 | `cat > /etc/ssh/sshd_config.d/99-livos-hardening.conf << SSHCONF` | IDEMPOTENT_NATIVE | full overwrite |
+| line:776 | `echo "PasswordAuthentication no" >> "$drop_in"` | NOT_IDEMPOTENT | `>>` append duplicates the line on each run when `$has_keys` becomes true. **However**, line:767's `cat >` truncates the file each run before this append, so the net effect is one PasswordAuthentication line. Reclassified: IDEMPOTENT_WITH_GUARD (truncate-then-append at line:767) |
+| line:786 | `echo "# Disabled by LivOS — see 99-livos-hardening.conf" > "$cloud_init"` | IDEMPOTENT_NATIVE | `>` truncate-write |
+| line:792 | `systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true` | IDEMPOTENT_NATIVE | reload is idempotent |
+| line:861-864 | `openssl rand -hex 32/24/16` (generate_secrets) | NOT_IDEMPOTENT | **CRITICAL:** every run produces new random JWT, LIV_API_KEY, Redis password, PG password. Re-run regenerates secrets unconditionally. The downstream effect depends on whether `write_env_file` keeps or overwrites `/opt/livos/.env`. |
+| line:879-893 | `[[ -f "$env_file" ]]` then TTY-conditional `wizard_yesno` overwrite-or-skip | IDEMPOTENT_WITH_GUARD | guard preserves existing .env in non-interactive mode (`return 0` at line:891) and on TTY-"no" (line:887). **However**, this guard only fires if .env exists, and `setup_repository` at line:971 `rm -rf "$LIVOS_DIR"` deletes /opt/livos including .env BEFORE write_env_file runs — so the guard is effectively bypassed during a normal install order. See "Failure modes" below. |
+| line:897-942 | `cat > "$env_file" << ENVFILE` | IDEMPOTENT_NATIVE | overwrite-safe in isolation. **But:** combined with line:861-864, the contents differ each run → DATABASE_URL password drift vs. running PostgreSQL. |
+| line:944 | `chmod 600 "$env_file"` | IDEMPOTENT_NATIVE | chmod |
+| line:954-955 | `local temp_dir="/tmp/livinity-io-$$"` + `rm -rf "$temp_dir"` | IDEMPOTENT_NATIVE | $$ = PID, ensures fresh tmp each run |
+| line:956 | `git clone --depth 1 "$REPO_URL" "$temp_dir"` | IDEMPOTENT_NATIVE | tmp dir is fresh per-PID |
+| line:960-983 | save data/app-data → `rm -rf "$LIVOS_DIR"` → `mkdir -p` → `cp -a` → restore data/app-data | IDEMPOTENT_WITH_GUARD | data + app-data preserved; **but `.env` is NOT preserved** (lives at /opt/livos/.env, not under data/). On re-run .env is destroyed and re-generated with new secrets at line:861-864 → cascades into PG password mismatch (see Failure modes #1). |
+| line:986-988 | `rm -rf /opt/nexus` + `mkdir -p /opt/nexus` + `cp -a "$temp_dir/nexus/." /opt/nexus/` | IDEMPOTENT_NATIVE | wholesale replace; nexus has no preserved subdirs by design |
+| line:991 | `cp "$temp_dir/update.sh" "$LIVOS_DIR/update.sh"` | IDEMPOTENT_NATIVE | `cp` overwrite |
+| line:994 | `rm -rf "$temp_dir"` | IDEMPOTENT_NATIVE | cleanup |
+| line:1010 | `pnpm install --frozen-lockfile 2>/dev/null || pnpm install` | IDEMPOTENT_NATIVE | pnpm install is naturally re-runnable |
+| line:1016 | `npx tsc` (in @livos/config) | IDEMPOTENT_NATIVE | tsc is deterministic on same source |
+| line:1023 | `npm run build` (UI) | IDEMPOTENT_NATIVE | build is re-runnable |
+| line:1032 | `npm install --production=false 2>/dev/null || npm install` (nexus) | IDEMPOTENT_NATIVE | npm install |
+| line:1041, 1045, 1048, 1051 | `cd packages/{core,worker,mcp-server,memory} && npx tsc` | IDEMPOTENT_NATIVE | tsc per package |
+| line:1060-1061 | `mkdir -p "$livinityd_nexus"` + `cp -r "$nexus_dir/packages/core/dist/"* "$livinityd_nexus/"` | IDEMPOTENT_NATIVE | mkdir -p + cp -r |
+| line:1066, 1068 | `find ... -maxdepth 1 -name '@nexus+core*'` + `cp -r` | UNKNOWN_NEEDS_VERIFICATION | If pnpm has multiple `@nexus+core*` resolution dirs (e.g., from sharp drift, see project memory pitfall), `find ... | head -1` may copy to the WRONG dir, leaving livinityd's symlinked node_modules pointing at stale code. Idempotency claim: copies-something-each-run, but the copy may target a different dir each run depending on `find` order. Memory documents this as a known update.sh quirk. |
+| line:1075 | `ln -sf /opt/livos/.env "$nexus_dir/.env"` | IDEMPOTENT_NATIVE | `-f` forces overwrite |
+| line:1080-1082 | `mkdir -p` for logs, data, data/secrets | IDEMPOTENT_NATIVE | mkdir -p |
+| line:1086 | `echo -n "$SECRET_JWT" > "$LIVOS_DIR/data/secrets/jwt"` | NOT_IDEMPOTENT | **CRITICAL:** writes a new JWT secret each run (because line:861 generates new $SECRET_JWT). Effect: existing user sessions invalidated on re-run; if .env JWT_SECRET drifts from /data/secrets/jwt, livinityd refuses to validate JWTs. (Note: install.sh writes both to the same value within one run, but that value differs across runs.) |
+| line:1087 | `chmod 600 "$LIVOS_DIR/data/secrets/jwt"` | IDEMPOTENT_NATIVE | chmod |
+| line:1092 | `chmod +x "$LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-script"` | IDEMPOTENT_NATIVE | chmod |
+| line:1108-1112 | sed-or-append `requirepass` in /etc/redis/redis.conf | IDEMPOTENT_WITH_GUARD | `grep -q '^requirepass'` guard at line:1108; sed replaces in-place, else append. Net effect: one `requirepass` line, value updated per-run. |
+| line:1115-1119 | sed-or-append `appendonly yes` in redis.conf | IDEMPOTENT_WITH_GUARD | same pattern as above; final state is `appendonly yes` |
+| line:1121 | `systemctl restart redis-server` | IDEMPOTENT_NATIVE | restart |
+| line:1125 | `redis-cli -a "$SECRET_REDIS" FLUSHALL 2>/dev/null || true` | NOT_IDEMPOTENT | **CRITICAL:** wipes ALL Redis data on re-run. Comment in script says "Clear old data for fresh install". Destroys: every `livos:platform:*`, `livos:desktop:*`, `livos:user:*`, session caches, kimi:authenticated flag, and all v22-era capability registry data. This is intentional destructive behavior — but it is destructive on every re-run. |
+| line:1136-1137 | `psql -tc "SELECT 1 FROM pg_roles WHERE rolname='livos'" \| grep -q 1 \|\| psql -c "CREATE USER livos WITH PASSWORD '$SECRET_PG_PASS'"` | NOT_IDEMPOTENT | **CRITICAL:** guard skips CREATE USER if `livos` role exists, so PostgreSQL keeps the OLD password from the first install. Meanwhile line:912's regenerated `DATABASE_URL` carries the NEW password. Result: `password authentication failed for user "livos"` — exact pitfall documented in project memory. The script never runs `ALTER USER livos WITH PASSWORD ...` to reconcile. |
+| line:1139-1140 | `psql -tc "SELECT 1 FROM pg_database ..." \|\| psql -c "CREATE DATABASE livos OWNER livos"` | IDEMPOTENT_WITH_GUARD | guard prevents duplicate-DB error |
+| line:1142 | `psql -c "GRANT ALL PRIVILEGES ON DATABASE livos TO livos"` | IDEMPOTENT_NATIVE | GRANT is idempotent |
+| line:1145 | `psql -d livos -c "GRANT ALL ON SCHEMA public TO livos" 2>/dev/null \|\| true` | IDEMPOTENT_NATIVE | GRANT |
+| line:1157-1167 | `cat > /etc/caddy/Caddyfile << CADDYFILE` (two branches: HTTPS or :80) | IDEMPOTENT_NATIVE | overwrite |
+| line:1172-1173 | `systemctl enable caddy` + `systemctl restart caddy` | IDEMPOTENT_NATIVE | systemctl |
+| line:1182-1184 | `id -u livos &>/dev/null` guard + `useradd --system --create-home ... livos` | IDEMPOTENT_WITH_GUARD | guard at line:1182 |
+| line:1188-1189 | `mkdir -p /home/livos` + `chown livos:livos /home/livos` | IDEMPOTENT_NATIVE | mkdir -p + chown |
+| line:1192 | `usermod -aG docker livos 2>/dev/null \|\| true` | IDEMPOTENT_NATIVE | usermod -aG is idempotent (set semantics) |
+| line:1195-1196 | `chown -R livos:livos "$LIVOS_DIR"` + `chown -R livos:livos /opt/nexus` | IDEMPOTENT_NATIVE | chown -R |
+| line:1199-1219, 1223-1243, 1246-1272, 1275-1300 | 4× `cat > /etc/systemd/system/<unit>.service << 'UNIT'` for livos / liv-core / liv-memory / liv-worker | IDEMPOTENT_NATIVE | static unit bodies; overwrite-safe |
+| line:1303-1304 | `systemctl daemon-reload` + `systemctl enable livos.service liv-core.service liv-memory.service liv-worker.service` | IDEMPOTENT_NATIVE | systemctl |
+| line:1312-1315 | `systemctl start liv-memory|livos|liv-core|liv-worker` | IDEMPOTENT_NATIVE | start |
+| line:1356-1366 | `command -v ufw` guard + apt install + `ufw default deny` + `ufw allow 22/80/443` + `ufw --force enable` + `ufw reload` | IDEMPOTENT_NATIVE | UFW commands are idempotent (rules de-duped by ufw itself) |
+| line:1372-1389 | `mkdir -p /etc/livos` + `cat > /etc/livos/docker-firewall.sh << 'FWSCRIPT'` + `chmod +x` | IDEMPOTENT_NATIVE | overwrite |
+| line:1393-1406 | `cat > /etc/systemd/system/livos-docker-firewall.service << 'FWSVC'` | IDEMPOTENT_NATIVE | overwrite |
+| line:1408-1409 | `systemctl daemon-reload` + `systemctl enable livos-docker-firewall.service` | IDEMPOTENT_NATIVE | systemctl |
+| line:1413 | `/etc/livos/docker-firewall.sh` (executes the just-written script — flush+rebuild iptables DOCKER-USER chain) | IDEMPOTENT_NATIVE | script does `iptables -F DOCKER-USER` first then re-adds rules |
+| line:1516 | `ln -sf ../../.env "$liv_dir/.env"` | IDEMPOTENT_NATIVE | -sf forces overwrite |
+| line:1528 | `bash "$NEXUS_DIR/scripts/install-kimi.sh"` (sub-script, optional) | UNKNOWN_NEEDS_VERIFICATION | install-kimi.sh body is outside snapshot scope; cannot statically classify. |
+| line:1531-1532 | `ln -sf /root/.local/bin/kimi /usr/local/bin/kimi` (and kimi-code) | IDEMPOTENT_NATIVE | -sf |
+| line:1565-1566 | `redis-cli SET livos:platform:api_key "$PLATFORM_API_KEY"` + `SET livos:platform:enabled "1"` | IDEMPOTENT_NATIVE | Redis SET overwrites by key |
+| line:1569 | `systemctl restart livos` | IDEMPOTENT_NATIVE | restart |
+| line:1585-1588 | `! grep -q 'chown.*1000.*app_data' "$app_script"` guard + `sed -i '/.../i\...'` injection | IDEMPOTENT_WITH_GUARD | guard prevents duplicate injection at line:1585 |
+
+### Roll-up
+
+- IDEMPOTENT_NATIVE count: **41**
+- IDEMPOTENT_WITH_GUARD count: **27**
+- NOT_IDEMPOTENT count: **4** (line:861-864 generate_secrets, line:1086 jwt secret-file write, line:1125 Redis FLUSHALL, line:1136-1137 PG CREATE USER guard mismatch)
+- UNKNOWN_NEEDS_VERIFICATION count: **2** (line:1066-1068 multi-pnpm-store dist copy via `find ... | head -1`, line:1528 install-kimi.sh sub-script)
+- Total rows: **74**
+
+### Failure modes on re-run
+
+install.sh re-run on a host with an existing LivOS install will **damage the running install in three independent ways**, each producing a hard error:
+
+1. **PostgreSQL password mismatch (highest impact)** — line:861 generates a new `SECRET_PG_PASS`. Line:912 writes the new password into the regenerated `/opt/livos/.env`'s `DATABASE_URL`. But line:1136's `SELECT 1 FROM pg_roles WHERE rolname='livos'` guard sees the EXISTING `livos` role and skips `CREATE USER` — so PostgreSQL retains the OLD password. livinityd then attempts to connect with the NEW password from .env and fails with `password authentication failed for user "livos"`. Service ends up in restart loop. The script does NOT call `ALTER USER livos WITH PASSWORD '$SECRET_PG_PASS'` to reconcile. (This is the exact pitfall documented in project memory under "PostgreSQL password lives in `/opt/livos/.env` `DATABASE_URL`".)
+
+2. **Redis FLUSHALL wipes runtime state (high impact)** — line:1125 unconditionally executes `redis-cli FLUSHALL` at the end of `configure_redis`. On re-run this destroys: per-user app-installation state, capability registry (v22.0 unified registry), kimi:authenticated flag, every `livos:platform:*` and `livos:desktop:*` key, all session JWTs, learning-loop streams, and the v23+ tool-call ring buffer. Comment at line:1124 acknowledges this is intentional ("Clear old data for fresh install") — but install.sh has no notion of "this is a re-run, don't flush." For Phase 37 this is actually *desired* behavior post-wipe; for an accidental `bash install.sh` re-run on a healthy host, it is destructive.
+
+3. **JWT secret rotation invalidates all sessions (medium impact)** — line:1086 writes `echo -n "$SECRET_JWT" > /opt/livos/data/secrets/jwt`. Combined with the new `JWT_SECRET=` in .env at line:908, every existing user session token signed by the previous JWT becomes invalid. Users are logged out but can re-authenticate. (No data loss, but a visible disruption.)
+
+4. **`install_cloudflared` runs on every re-run** — guard at line:503 (`command -v cloudflared`) protects against re-install, so this is benign on re-run. Listed for completeness — the guard works.
+
+**Additional drift surface:** line:1066-1068 (UNKNOWN row) — pnpm store dist-copy targets the FIRST `@nexus+core*` dir matched by `find -maxdepth 1`. If pnpm has multiple resolution dirs (e.g., from sharp version drift documented in project memory), this can copy to the wrong dir and leave livinityd's symlinked node_modules pointing at stale code. This is a known update.sh class of bug; install.sh inherits the same pattern.
+
+### Unknowns
+
+- **line:1066-1068** — `find /opt/livos/node_modules/.pnpm -maxdepth 1 -name '@nexus+core*' -type d | head -1`: static analysis cannot determine which dir wins on a host with sharp version drift. Phase 37's wipe step makes this moot (fresh `node_modules`), so the unknown does not block the verdict.
+- **line:1528** — `bash "$NEXUS_DIR/scripts/install-kimi.sh"`: the sub-script is fetched from the cloned repo (post line:988 `cp -a "$temp_dir/nexus/." /opt/nexus/`), so its body is checked into git but not part of `install.sh.snapshot`. Wrapped in `( … ) || warn` (line:1524, 1539) with all output piped to `tail -5 || true` — failure is non-blocking. Static analysis classifies the **boundary** as IDEMPOTENT_WITH_GUARD (subshell + `|| true` + `command -v kimi` guard at line:1526). The internal idempotency of install-kimi.sh is out-of-scope for this audit.
+
+### Phase 37 implication
+
+Verdict **NOT-IDEMPOTENT** drives Phase 37's wipe-then-reinstall ordering. install.sh **cannot be re-run safely on a populated host** — generate_secrets + Redis FLUSHALL + the PostgreSQL password-mismatch trap mean a re-run damages the running install before re-bootstrapping it. Therefore Phase 37 MUST execute its wipe step (`rm -rf /opt/livos /opt/nexus`, `systemctl stop livos liv-core liv-memory liv-worker`, `dropdb livos && dropuser livos` to clear the PG role so install.sh's CREATE USER guard does not skip, and `redis-cli FLUSHALL` redundantly to confirm a clean Redis) **BEFORE** invoking install.sh. The wipe is non-optional even for `preserveApiKey: true` semantics — the API key is restored after install.sh re-runs, by re-issuing `redis-cli SET livos:platform:api_key` post-install (or by passing it via `--api-key` so install.sh writes it at line:1565). The `tar -czf /tmp/livos-pre-reset-<ts>.tar.gz /opt/livos` snapshot from D-07 is therefore the recovery contract: if install.sh fails mid-flight, restore the tar and `systemctl restart livos liv-core liv-worker liv-memory`.
 
 ## API Key Transport
 
