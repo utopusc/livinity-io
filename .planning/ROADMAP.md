@@ -25,7 +25,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Active milestone: v29.2 Factory Reset (Phases 36-38)**
 
 - [x] **Phase 36: install.sh Audit & Hardening** — Verify `livinity.io/install.sh` exists, accepts `--api-key`, idempotent, supports stdin/`--api-key-file`, half-deleted-state recovery; document in AUDIT-FINDINGS.md — completed 2026-04-29 (NOT-IDEMPOTENT verdict, argv FAIL, wrapper spec'd, recovery via pre-wipe-snapshot, all 4 D-10 questions answered)
-- [ ] **Phase 37: Backend Factory Reset** — `system.factoryReset({preserveApiKey})` tRPC route, idempotent wipe bash (services + scoped Docker + DB drop + filesystem rm), API key stash, install.sh re-execution via cgroup-escape, JSON event row in update-history
+- [x] **Phase 37: Backend Factory Reset** — `system.factoryReset({preserveApiKey})` tRPC route, idempotent wipe bash (services + scoped Docker + DB drop + filesystem rm), API key stash, install.sh re-execution via cgroup-escape, JSON event row in update-history — completed 2026-04-29 (4 plans, 41/41 unit tests, 3 shellcheck-clean bash artifacts, opt-in destructive integration scaffold; FR-BACKEND-01..07 satisfied; v29.2 ships in wrapper-degraded mode for install.sh argv leak — full env-var fix deferred to v29.2.1)
 - [ ] **Phase 38: UI Factory Reset** — Settings > Advanced "Danger Zone" button, explicit-list confirmation modal, preserve-account-vs-fresh radio, type-FACTORY-RESET-to-confirm, BarePage progress overlay, post-reset login routing, pre-reset blocking checks
 
 ## Phase Details
@@ -59,9 +59,9 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   6. install.sh failure modes handled: 401 on revoked API key surfaces in JSON event row with `error: "api-key-401"` and the post-reset UI shows "API key invalid — log into livinity.io and re-issue"; transient Server5 5xx triggers up to 3 retries before flagging `error: "server5-unreachable"`
 **Plans**: 4 plans
   - [x] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05) — completed 2026-04-29 (2 source bash files, both shellcheck-clean exit 0; idempotent wipe + pre-wipe tar snapshot + JSON event lifecycle + EXIT-trap apikey cleanup; v29.2 ships in wrapper-degraded mode)
-  - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03)
+  - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03) — completed 2026-04-29
   - [x] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06) — completed 2026-04-29 (deployRuntimeArtifacts + spawnResetScope helpers wired into performFactoryReset; 28/28 unit tests passing including 200ms wall-clock + preflight-gates-spawn invariant; argv matches reference_cgroup_escape.md verbatim)
-  - [ ] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07)
+  - [x] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07) — completed 2026-04-29 (PIPESTATUS-captured exit + tee'd log + classify_install_error helper for 4-way failure classification — api-key-401 / server5-unreachable / install-sh-failed / install-sh-unreachable per D-ERR-01; 41/41 unit tests including 13 new D-EVT-02 schema + D-EVT-03 Phase 33 reader compat; opt-in factory-reset.integration.test.sh scaffold with 4 fail-closed gates — running it is opt-in human work post-phase, NOT a CI step)
 
 ### Phase 38: UI Factory Reset
 **Goal**: A user can find the Factory Reset button in Settings > Advanced, read an explicit list of what will be deleted, type-to-confirm, choose preserve-account-vs-fresh, and watch the reinstall progress in a BarePage cover (mirroring Phase 30 update overlay). The pre-flight blocks reset if an update or backup is running, the network is unreachable, or the user lacks admin role.
@@ -79,7 +79,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   - [x] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05) — completed 2026-04-29
   - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03) — completed 2026-04-29
   - [x] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06) — completed 2026-04-29
-  - [ ] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07)
+  - [x] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07) — completed 2026-04-29 (PIPESTATUS-captured exit + tee'd log + classify_install_error helper for 4-way failure classification — api-key-401 / server5-unreachable / install-sh-failed / install-sh-unreachable per D-ERR-01; 41/41 unit tests including 13 new D-EVT-02 schema + D-EVT-03 Phase 33 reader compat; opt-in factory-reset.integration.test.sh scaffold with 4 fail-closed gates — running it is opt-in human work post-phase, NOT a CI step)
 **UI hint**: yes
 
 ## Progress
@@ -87,7 +87,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
-| 37. Backend Factory Reset | 3/4 | Executing (Plan 04 next) | - |
+| 37. Backend Factory Reset | 4/4 | Complete | 2026-04-29 |
 | 38. UI Factory Reset | 0/? | Not started | - |
 
 ## Coverage Summary

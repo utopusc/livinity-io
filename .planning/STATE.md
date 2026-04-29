@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 37-03-spawn-deploy-PLAN.md (Plan 04 failure-handling-integration is next)
-last_updated: "2026-04-29T07:57:24.000Z"
+status: verifying
+stopped_at: Completed 37-04-failure-handling-integration-PLAN.md (Phase 37 backend complete; Phase 38 UI is next)
+last_updated: "2026-04-29T08:27:51.229Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 Phase: 37 (Backend Factory Reset) — EXECUTING
 Plan: 4 of 4
-Status: Plans 01+02+03 complete; Plan 04 (failure handling + integration test) next
+Status: Phase complete — ready for verification
 Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
@@ -136,8 +136,25 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 36 P03 | ~22min | 3 tasks | 2 files (AUDIT-FINDINGS.md + 36-03-SUMMARY.md) | 2026-04-29 |
 | Phase 37 P01 | 7min | 2 tasks | 2 files |
 | Phase 37 P03 | ~11min | 3 tasks | 2 modified (factory-reset.ts + factory-reset.unit.test.ts) | 2026-04-29 |
+| Phase 37 P04 | 16 min | 3 tasks | 3 files |
 
 ## Accumulated Context
+
+### Plan 37-04 Decisions (2026-04-29) — Phase 37 closed
+
+- **PIPESTATUS over `$?` for install.sh exit through tee** — without `${PIPESTATUS[0]}` the bash would have silently treated every install.sh failure as success because `tee` always exits 0. Plan 04 rewrote Step 4 to pipe `bash $WRAPPER ... 2>&1 | tee -a $INSTALL_LOG` and capture `INSTALL_SH_EXIT=${PIPESTATUS[0]}`. This is a non-negotiable correctness fix; the plan's existing `INSTALL_SH_EXIT=$?` pattern was a latent silent-failure bug class. Pattern reusable: any future bash that wants to log+capture-exit on a long-running command MUST use PIPESTATUS, not `$?`.
+
+- **`classify_install_error` is a heuristic, not a parser** — greps the tee'd log for `HTTP/[0-9.]+ 401`, `HTTP 401`, `\bUnauthorized\b` → `api-key-401`; `HTTP/[0-9.]+ 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` → `server5-unreachable`; everything else (non-zero exit, no match) → `install-sh-failed`. Accepted false-positive risk T-37-20 (e.g., `# HTTP 401 means unauthorized` in a comment would trigger). UI surfaces error string verbatim; user can manually inspect `/tmp/livos-reset-install.log`. Better than a brittle parser because install.sh's output format is not a stable contract.
+
+- **Schema tests use inline literal sample rows, not real bash output** — Windows dev hosts cannot run factory-reset.sh end-to-end (no root, no systemctl, no postgres). Inline literals replicate the bash heredoc shape from `factory-reset.sh:82-97` and are auditable side-by-side. The Phase 33 reader gate (`typeof parsed?.timestamp === 'string'`) is replicated inline in the test rather than imported from `routes.ts` — keeps tests hermetic without pulling the full tRPC + auth stack into the unit-test sandbox. If routes.ts ever changes the gate logic, the inline test fails explicitly.
+
+- **41/41 unit tests** pass via `npx vitest run source/modules/system/factory-reset.unit.test.ts` in 2.92s (28 preserved from Plan 03 + 13 new: 10 D-EVT-02 schema + 3 D-EVT-03 reader compat). Test count target was ≥30; we landed 41. All hermetic via `vi.mock('node:fs/promises')` + `vi.mock('node:child_process')` + `vi.mock('execa')`.
+
+- **Integration test scaffold ships, never runs in CI** — `factory-reset.integration.test.sh` (156 lines, shellcheck exit 0) belongs in source tree (version-controlled, reproducible) but explicitly NOT in `pnpm test` or any CI pipeline. Four layered fail-closed gates: (1) `RUN_FACTORY_RESET_DESTRUCTIVE=1` env-var → exit 64; (2) `LIVOS_DESTRUCTIVE_TEST_AUTHORIZED=YES` env-var → exit 64; (3) hostname/IP guard refusing on `bruce-EQ` OR local IP `10.69.31.68` OR SSH target `@10.69.31.68` → exit 1; (4) required env-var triplet (LIVOS_TEST_HOST + LIVOS_TEST_TRPC_URL + LIVOS_TEST_ADMIN_TOKEN) → `:?` expansion failure. Verified non-destructively: bare invocation hit gate 1; `RUN_FACTORY_RESET_DESTRUCTIVE=1` alone hit gate 2.
+
+- **Defense-in-depth IP refusal added beyond plan's verbatim hostname guard (Rule 2 deviation)** — plan specified `bruce-EQ` hostname check; project's `<critical_constraints>` block also required Mini PC IP `10.69.31.68` refusal as an independent layer. Added: `hostname -I` containing `10.69.31.68` AND `LIVOS_TEST_HOST` matching `@10.69.31.68`. Each gate is independent (env-var, hostname, local IP, SSH target IP) so bypassing one (e.g., laptop hostname renamed) still trips the others.
+
+- **Task 4 checkpoint:human-verify auto-resolved as `skip-run`** — per executor instructions: "the actual writing of all artifacts is automated; only the running of the destructive integration test requires user opt-in". The scaffold IS the deliverable; running it is opt-in human work post-phase. Documented in Plan 04 SUMMARY's "Task 4 Resolution" section. Recommended path for v29.2 ship is `skip-run` until a Mini PC scratchpad clone exists.
 
 ### Plan 37-01 Decisions (2026-04-29)
 

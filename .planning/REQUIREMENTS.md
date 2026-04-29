@@ -39,7 +39,8 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
 - [x] **FR-BACKEND-05
 **: JSON event row in `/opt/livos/data/update-history/<ts>-factory-reset.json` extending Phase 33 OBS-01 schema with `status: "factory-reset"`. Records: timestamp, preserveApiKey choice, wipe duration, reinstall duration, install.sh exit code, final status (success/failed/half-deleted).
 - [x] **FR-BACKEND-06**: Detached process spawn via `systemd-run --scope --collect` (v29.1 cgroup-escape pattern) — wipe survives `systemctl stop livos` mid-flight. Without this, the wipe kills its own livinityd parent and dies before reinstall starts. — completed 2026-04-29 (Plan 37-03 spawnResetScope helper + EUID 0 + systemd-run availability gates; argv matches reference_cgroup_escape.md verbatim; verified hermetically by 28/28 unit tests)
-- [ ] **FR-BACKEND-07**: 401 from install.sh handled gracefully — if user revoked the API key on livinity.io between modal-confirm and install.sh execution, the reinstall fails 401; surface as "API key invalid — log into livinity.io and re-issue" in the JSON event row + admin notification.
+- [x] **FR-BACKEND-07
+**: 401 from install.sh handled gracefully — if user revoked the API key on livinity.io between modal-confirm and install.sh execution, the reinstall fails 401; surface as "API key invalid — log into livinity.io and re-issue" in the JSON event row + admin notification.
 
 ### Category: User Interface (FR-UI) — Phase 38
 
