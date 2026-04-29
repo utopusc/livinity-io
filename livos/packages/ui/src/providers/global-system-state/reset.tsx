@@ -1,15 +1,15 @@
-import {BarePage} from '@/layouts/bare/bare-page'
-import {ProgressLayout} from '@/modules/bare/progress-layout'
 import {trpcReact, type RouterError} from '@/trpc/trpc'
-import {t} from '@/utils/i18n'
 
 import type {PreserveApiKeyChoice} from '@/features/factory-reset/lib/types'
+import {FactoryResetProgress} from '@/routes/factory-reset/_components/factory-reset-progress'
 
 // Phase 38 Plan 01 — schema rewrite from {password: string} to
 // {preserveApiKey: boolean}. The backend route was rewritten in Phase 37
 // (D-BE-01); the v29.2 mutation accepts {preserveApiKey} and returns
-// {accepted, eventPath, snapshotPath}. Plan 03 wires a real new modal flow;
-// for Plan 01 we just un-break the type system.
+// {accepted, eventPath, snapshotPath}.
+//
+// Phase 38 Plan 04 — ResettingCover swapped from the Plan 01 indeterminate
+// stub to the real listUpdateHistory poller (FactoryResetProgress).
 
 export function useReset({
 	onMutate,
@@ -34,21 +34,8 @@ export function useReset({
 	return reset
 }
 
-// Plan 01 STUB — indeterminate progress overlay while the bash detaches and
-// starts writing the JSON event row. Plan 04 replaces this with a real polling
-// overlay (`listUpdateHistory` + state machine + 90s consecutive-failure
-// reconnect handling). For Plan 01 it just keeps the legacy 'resetting' branch
-// of GlobalSystemStateProvider compiling and visually intact.
+// Phase 38 Plan 04 — replaces the Plan 01 stub with the real listUpdateHistory
+// poller + post-reset routing + error/recovery fan-out.
 export function ResettingCover() {
-	return (
-		<BarePage>
-			<ProgressLayout
-				title={t('factory-reset')}
-				callout={t('factory-reset.resetting.dont-turn-off-device')}
-				progress={undefined}
-				message={'Reinstalling LivOS…'}
-				isRunning={true}
-			/>
-		</BarePage>
-	)
+	return <FactoryResetProgress />
 }
