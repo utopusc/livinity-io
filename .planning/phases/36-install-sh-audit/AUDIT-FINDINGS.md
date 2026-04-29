@@ -309,11 +309,170 @@ This is the literal command Phase 37 will use IF the v29.2 milestone ships befor
 
 ## Recovery Model
 
-*Populated by Plan 03. Will document either install.sh's native `--resume` or the pre-wipe-snapshot fallback per D-07.*
+Method per CONTEXT.md D-07: inspect install.sh for native `--resume`; if absent, propose pre-wipe-snapshot fallback for Phase 37 to implement. Read-only static analysis; install.sh was NOT executed.
+
+### Native --resume support
+
+install.sh has **NO native `--resume` support**. Verified by `grep -niE '(--resume|resume|partial install|partial_install|rollback|restore)' install.sh.snapshot` — only **two** matches in the entire 1604-line script:
+
+- **line:975** — `# Restore preserved data` — the ONLY "restore" keyword in the script. This is a comment inside `setup_repository()` (line:954-994) referring to the function's preserve-and-replace pattern: it backs up `/opt/livos/data` and `/opt/livos/app-data` to a tmp dir BEFORE `rm -rf $LIVOS_DIR` (line:971), then restores those two subdirs after the fresh checkout (line:976-983). This restore is **scoped to data + app-data only** and runs in the SAME install — it does NOT survive a half-failed install.sh exit, does NOT preserve `/opt/livos/.env`, does NOT preserve secrets at `/opt/livos/data/secrets/jwt`, does NOT preserve `/opt/nexus`, and does NOT preserve systemd unit files. It is a within-install convenience, not a recovery mechanism.
+
+- **line:1599** — `echo "Partial installation may exist. Check /opt/livos for cleanup."` — inside `cleanup_on_error()` (line:1595-1601), invoked by an ERR trap. The function does NOTHING but print this message; the comment at line:1600 explicitly says `# Don't auto-remove - user may want to inspect`. This is **not** a recovery mechanism — it is a manual-cleanup notice. There is no `--resume` branch in argument parsing (`grep -E "^[[:space:]]*case \"\\\$1\"" install.sh.snapshot` returns one match at line:13, and that case statement contains only `--api-key` and the fallthrough; see Argument Surface section).
+
+**Conclusion:** install.sh has no resume / rollback / partial-install detection. If install.sh exits non-zero mid-flight, the host is left in whatever half-deleted state the failure point produced (e.g., `/opt/livos` `rm -rf`-ed at line:971 but never re-`cp -a`-ed at line:973 because of an upstream curl/git failure). Phase 37's recovery story therefore CANNOT rely on install.sh self-healing.
+
+### Chosen recovery path
+
+**Pre-wipe snapshot (D-07 fallback)** — Phase 37 wipe step takes a tar archive of the current LivOS deployment BEFORE any destructive operation; if reinstall exits non-zero, the archive is restored.
+
+**Pre-wipe command (Phase 37 wipe step runs this BEFORE `rm -rf` / `dropdb` / `redis-cli FLUSHALL`):**
+
+```bash
+SNAPSHOT_PATH="/tmp/livos-pre-reset-$(date +%s).tar.gz"
+tar -czf "$SNAPSHOT_PATH" \
+  /opt/livos \
+  /opt/nexus \
+  /etc/systemd/system/livos.service \
+  /etc/systemd/system/liv-core.service \
+  /etc/systemd/system/liv-worker.service \
+  /etc/systemd/system/liv-memory.service \
+  2>/dev/null || true
+echo "$SNAPSHOT_PATH" > /tmp/livos-pre-reset.path
+chmod 600 "$SNAPSHOT_PATH" /tmp/livos-pre-reset.path
+```
+
+Notes:
+- `2>/dev/null || true` swallows "file not found" warnings if any of the systemd unit files are missing (best-effort archival).
+- `chmod 600` because `.env` inside `/opt/livos/.env` contains DB password + API keys; the tar inherits its archived files' contents but the archive file itself must be locked down.
+- `/tmp/livos-pre-reset.path` records the snapshot path so the restore step can find it without timestamp guessing.
+- PostgreSQL data is NOT included in the tar (data lives in `/var/lib/postgresql/`, owned by `postgres`). DB rollback is handled separately via `pg_dump` if Phase 37 chooses to add it; for v29.2 the wipe runs `dropdb livos` so a restored `/opt/livos/.env` would point at a non-existent DB. **This is acceptable** because v29.2 factory reset is destructive by design; the snapshot exists to recover the FILESYSTEM state of LivOS code + secrets, NOT user data. Phase 37 documents this scope in its overlay.
+
+**Restore command (Phase 37 runs this on reinstall failure):**
+
+```bash
+SNAPSHOT_PATH=$(cat /tmp/livos-pre-reset.path 2>/dev/null)
+if [ -f "$SNAPSHOT_PATH" ]; then
+  tar -xzf "$SNAPSHOT_PATH" -C /
+  systemctl daemon-reload
+  systemctl restart livos liv-core liv-worker liv-memory
+  echo "Restored from $SNAPSHOT_PATH"
+else
+  echo "FATAL: no pre-wipe snapshot — host is in half-deleted state. Manual SSH recovery required." >&2
+  exit 2
+fi
+```
+
+The tar paths are absolute (`/opt/livos/...`, `/etc/systemd/system/...`), so `-C /` restores files in place at their original locations. `systemctl daemon-reload` re-reads the restored unit files; the four `systemctl restart` lines bring services back to their pre-reset state. The factory-reset event JSON is updated with `status: "rolled-back"` so Settings > Software Update history reflects the failure-and-recovery accurately.
+
+### Cleanup
+
+Once reinstall completes successfully and the new livinityd boots green (post-install health probe — Phase 37 owns that probe), Phase 37 deletes `$SNAPSHOT_PATH` and `/tmp/livos-pre-reset.path` to avoid leaking previous-deployment data on disk. The snapshot tar contains `.env` (DB password + API keys) and `/opt/livos/data/secrets/jwt` — leaving it on `/tmp` indefinitely is a credential-exposure risk.
+
+```bash
+# Phase 37 success cleanup:
+SNAPSHOT_PATH=$(cat /tmp/livos-pre-reset.path 2>/dev/null) && [ -f "$SNAPSHOT_PATH" ] && rm -f "$SNAPSHOT_PATH"
+rm -f /tmp/livos-pre-reset.path
+```
+
+If reinstall failed AND restore succeeded, retain the snapshot for one boot cycle (in case the operator wants to inspect it post-mortem); cleanup on next successful update.
+
+### Phase 37 implication
+
+Phase 37 owns: (1) capturing the snapshot tar BEFORE any wipe operation, (2) recording the path to `/tmp/livos-pre-reset.path`, (3) detecting reinstall non-zero exit and triggering restore, (4) cleaning up on success. This audit specifies **WHAT** the recovery contract is (the literal tar commands above); Phase 37 specifies **WHEN** within its idempotent wipe bash and how it integrates with the cgroup-escape pattern (v29.1 / Phase 32 prior art).
+
+The recovery contract is intentionally minimal — it restores LivOS code + secrets, not user data or PostgreSQL contents. v30.0 Backup milestone (paused) ships the full data-restore story; v29.2 reset is destructive on data by design.
 
 ## Server5 Dependency Analysis
 
-*Populated by Plan 03. Will document Cloudflare-DNS → relay → install.sh-origin chain and fallback options per D-09.*
+Method per CONTEXT.md D-09: trace the routing chain via project-memory facts + light DNS confirmation. Read-only — no SSH to relay, no curl beyond DNS resolution.
+
+### Routing chain
+
+1. Client requests `https://livinity.io/install.sh`.
+2. Cloudflare resolves DNS authoritatively for `livinity.io` (DNS-only role per project memory hard rule — Cloudflare is NOT an HTTP proxy/tunnel; there is no Cloudflare tunneling daemon in this stack).
+3. Resolved A record points to **the relay host (45.137.194.102)** per project memory; the relay acts as an HTTP origin for `livinity.io/install.sh`.
+4. Relay host serves `install.sh` from its origin filesystem (Caddy + Next.js handler — `Via: 1.1 Caddy` header captured in Provenance section).
+
+Cloudflare in this topology is **only** authoritative DNS for `*.livinity.io` — it is NOT a load balancer, NOT a proxy/tunnel, NOT a CDN cache layer. If the relay host's HTTP service is down, `https://livinity.io/install.sh` returns connection-level failure at the relay; Cloudflare cannot serve a stale copy because Cloudflare never proxied the bytes.
+
+### DNS resolution evidence
+
+`nslookup livinity.io` at audit time (2026-04-29):
+
+```
+Non-authoritative answer:
+Server:  unifi.localdomain
+Address:  192.168.20.1
+
+Name:    livinity.io
+Address:  45.137.194.102
+```
+
+The A record resolves to a single IP (the relay host's public address per project memory). This confirms the topology: DNS → single relay IP, no anycast, no multi-region failover at the DNS layer. If the relay host is unreachable, the audit and Phase 37 both lose access to `install.sh`.
+
+### Single-point-of-failure surface
+
+| Failure mode | Impact on factory reset | Severity |
+|--------------|-------------------------|----------|
+| Relay HTTP service down (Caddy/Next.js failure) | Phase 37 reinstall cannot fetch install.sh from live URL | CRITICAL |
+| Relay host down (network / power / OS-level failure) | Same as above + livinity.io tunnel down (any user reaching Mini PC via livinity.io is also unreachable) | CRITICAL |
+| Cloudflare DNS misconfiguration (record drift / TTL pollution) | Name resolution fails — Phase 37 reinstall cannot find install.sh | HIGH |
+| install.sh content corruption on relay (post-deploy drift, partial write) | Reinstall runs corrupted script; idempotency verdict invalidated; outcome non-deterministic | HIGH |
+
+All four modes share a common mitigation: **a local cache on Mini PC**, populated during a normal run when the relay was healthy, gives Phase 37 a fallback that survives any of the four failures (so long as Mini PC has done at least one successful update in the recent past).
+
+### Chosen primary fallback (per D-09)
+
+**(a) Cached copy on Mini PC at `/opt/livos/data/cache/install.sh.cached`.**
+
+Mechanism:
+
+- During every `update.sh` run, copy the freshly-fetched `install.sh` into `/opt/livos/data/cache/install.sh.cached` (mode 0755). This piggybacks on `update.sh`'s existing curl of GitHub raw content for the source tree — adding a single best-effort `curl https://livinity.io/install.sh -o /opt/livos/data/cache/install.sh.cached || true` line costs nothing and is non-blocking (cache miss is acceptable; cache stale is acceptable).
+- Phase 37 reinstall step tries the live URL first; on failure (curl exit non-zero, HTTP non-2xx, or timeout within retry budget), falls back to the cached copy.
+- The cache age (mtime of the file) is recorded in the factory-reset event JSON for observability — operators and Phase 37 history UI can display "fell back to install.sh cache from <date>" as a visible warning.
+- Cache is intentionally NOT validated against a SHA-256 expected value — install.sh ships frequently and the cache is best-effort; the operator's signal that the cache served them is the event JSON's age field.
+
+**update.sh patch needed (one-liner, deferred to Phase 37 if not already shipped):**
+
+```bash
+# Insert near the top of update.sh, after the source rsync but before pnpm install:
+mkdir -p /opt/livos/data/cache
+curl -sSL --max-time 30 https://livinity.io/install.sh -o /opt/livos/data/cache/install.sh.cached.tmp \
+  && mv /opt/livos/data/cache/install.sh.cached.tmp /opt/livos/data/cache/install.sh.cached \
+  || rm -f /opt/livos/data/cache/install.sh.cached.tmp
+chmod 755 /opt/livos/data/cache/install.sh.cached 2>/dev/null || true
+```
+
+Atomic rename (`tmp` then `mv`) ensures the cache is never half-written even if curl is interrupted. `|| true` ensures update.sh continues even if the cache write fails. Phase 37 backend planner decides whether to fold this into update.sh during Phase 37 or ship it as a tiny dependent patch (e.g., Phase 37.x).
+
+**Phase 37 invocation pattern (using the cache):**
+
+```bash
+if curl -sSL --max-time 30 https://livinity.io/install.sh -o /tmp/install.sh.live; then
+  INSTALL_SH=/tmp/install.sh.live
+elif [ -f /opt/livos/data/cache/install.sh.cached ]; then
+  INSTALL_SH=/opt/livos/data/cache/install.sh.cached
+  echo "Relay unreachable - using cached install.sh from $(stat -c %y "$INSTALL_SH")"
+else
+  echo "FATAL: no install.sh available - aborting reset" >&2
+  exit 1
+fi
+bash "$INSTALL_SH" --api-key-file /tmp/livos-reset-apikey
+```
+
+The bash above is the **literal pattern Phase 37 implements**. The `--api-key-file` invocation depends on the wrapper from Hardening Proposals — see Q4 in Phase 37 Readiness for the full transport mechanism.
+
+### Deferred fallback
+
+**(b) Backup URL on a non-relay origin** — deferred to v29.2.1 if needed. The cached fallback (a) covers the common case (any user who has done at least one successful update on Mini PC). The edge case is a never-updated host failing reset on its first reset attempt — out of scope for v29.2. v29.2.1 may add a GitHub Release backup URL or a CDN-hosted mirror if telemetry shows users hitting the fallback edge.
+
+### Phase 37 implication
+
+Phase 37 backend code MUST implement the live-then-cache fallback bash above. update.sh ALSO needs the one-line cache-population addition — Phase 37 planner decides whether that lands in Phase 37 itself (preferred — keeps the audit-driven changes co-located) or as a Phase 37.x dependent patch.
+
+### NOT referenced
+
+Server4 (45.137.194.103) is not part of this dependency chain — per project memory hard rule (2026-04-27), Server4 is off-limits and not relevant to LivOS operations. The relay host is the only dependency this audit cares about.
 
 ## Hardening Proposals
 
