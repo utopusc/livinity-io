@@ -255,7 +255,57 @@ Verdict **NOT-IDEMPOTENT** drives Phase 37's wipe-then-reinstall ordering. insta
 
 ## API Key Transport
 
-*Populated by Plan 02. Will name a specific transport: `argv | stdin | --api-key-file | env-var` (per D-08).*
+Method per CONTEXT.md D-08: read install.sh for `$1` / `${API_KEY}` consumption + grep for log leaks. Static analysis only — install.sh was NOT executed.
+
+### Transport mechanism
+
+**Primary transport:** `argv`
+
+**Evidence:**
+
+- **line:11** — `PLATFORM_API_KEY=""` — installs the variable as empty default; flag-driven population only.
+- **line:13-14** — `case "$1" in --api-key) PLATFORM_API_KEY="$2"; shift 2 ;;` — the platform key is read from positional `$2` after the `--api-key` flag, two-arg form. `$2` is part of the process argv, visible to any user with access to `/proc/$PID/cmdline` (which on Linux means any unprivileged local user — `/proc/$PID/cmdline` is world-readable by default for processes owned by other users on most distros, and at minimum any user on the same host with `ps` privileges).
+- **line:1558** — `if [[ -n "$PLATFORM_API_KEY" ]]; then` — gate: only acts on the key if non-empty (i.e., if `--api-key` was supplied).
+- **line:1565** — `redis-cli -a "$redis_pass" SET livos:platform:api_key "$PLATFORM_API_KEY" 2>/dev/null` — the captured key is then passed as a positional argument to `redis-cli`, which itself launches a child process. The key is therefore visible TWICE in the process table during the brief redis-cli invocation: once as install.sh's `$2`, once as redis-cli's argv. (The `redis_pass` in `-a "$redis_pass"` is a separate argv-leak concern — it leaks the Redis admin password during the same window — but the request is to audit the *platform* API key; the redis_pass leak is noted in the leak-surface table for completeness.)
+- **No alternative transport:** there is no `read -rsp ... PLATFORM_API_KEY`, no `${LIV_PLATFORM_API_KEY:-}` env-var read, no `--api-key-file <path>` flag handler. (Verified: `grep -nE "PLATFORM_API_KEY|API_KEY" install.sh.snapshot` returns only the lines listed above plus `LIV_API_KEY=${SECRET_API_KEY}` at line:909 — which is install.sh *generating* its own internal API key, unrelated to the platform key.)
+
+### Leak surface
+
+| Risk | Found at line:N | Severity | Notes |
+|------|-----------------|----------|-------|
+| argv exposure (visible to `ps`) | line:14 (install.sh's own argv as `$2`) | **high** | The command line `bash install.sh --api-key abcd1234...` is visible to any user with `ps` access for the duration of the install (potentially several minutes). On most Linux distros `/proc/$PID/cmdline` is readable by other unprivileged users for processes owned by the same user, and root processes' cmdline is world-readable by `ps -ef` for anyone with shell access. |
+| echo / log statement leaking key | n/a | **none** | `grep -nE "echo.*PLATFORM_API_KEY\|echo.*api[-_]key\|info.*PLATFORM_API_KEY\|warn.*PLATFORM_API_KEY\|fail.*PLATFORM_API_KEY" install.sh.snapshot` returns 0 matches. install.sh never echoes, info()s, or fail()s with the key in a string. The closest line is "ok 'API key configured'" at line:1567 which contains no key value. |
+| `set -x` + API_KEY in scope | n/a | **none** | install.sh sets `set -euo pipefail` at line:8 but never `set -x`. `grep -n "set -x\|set [+-][a-z]*x" install.sh.snapshot` returns 0 matches. xtrace would not leak the key at any point. |
+| sub-process argv pass-through | line:1565 (`redis-cli -a "$redis_pass" SET livos:platform:api_key "$PLATFORM_API_KEY"`) | **medium** | The key value flows into `redis-cli`'s argv during the brief SET call. Window is small (single-shot redis-cli invocation), but the key is visible to `ps` for that interval. The `redis-cli` man page recommends `--no-auth-warning` and provides no stdin variant for `SET` value, so even a hardened wrapper would face the same constraint here without a per-call workaround (e.g., `redis-cli` from a heredoc-fed script, or piping a `SET` command via `redis-cli < <(echo "SET ... $key")` which still exposes the value via `/proc/.../fd/0` to the same audience). |
+| env in `/proc/PID/environ` | n/a | **none** | install.sh does NOT `export PLATFORM_API_KEY`. The variable lives only in the function-local scope of `main()` (line:11 declares it inside `main`). It does not appear in any child process's environment. (Verified: `grep -n "export.*PLATFORM_API_KEY\|export.*API_KEY" install.sh.snapshot` returns 0 matches.) The Redis SET is the only outbound flow; `redis-cli` inherits whatever `main()` exported, which excludes PLATFORM_API_KEY. |
+
+### FR-AUDIT-04 compliance
+
+**Verdict:** FAIL
+
+**Reasoning:** FR-AUDIT-04 mandates the API key flow into install.sh "via stdin or `--api-key-file <path>` flag — NOT via argv (visible in `ps`)". install.sh's only ingestion path is `--api-key <value>` on argv (line:14), which is precisely the prohibited pattern. The argv-exposure window covers the entire install (several minutes), during which any local user with shell access can capture the key via `ps -ef | grep install.sh`. The internal redis-cli sub-process call (line:1565) creates a second narrower window. The script does not log the key in cleartext to journal/stdout, and does not pollute `/proc/PID/environ` (set -x off, no export), so leak surface is contained to argv only — but argv-only IS the disqualifying condition. **Plan 03 must produce a wrapper proposal** per CONTEXT.md D-08: a `livos-install-wrap.sh` that reads the key from a file (or fd/3 / heredoc), exports it as an env var to install.sh's child shell only when needed, and invokes install.sh WITHOUT the `--api-key` flag — leaving install.sh to source `LIV_PLATFORM_API_KEY` from the wrapper-set env (requires a parallel hardening patch to install.sh itself: add an `${LIV_PLATFORM_API_KEY:-}` fallback at line:11 before the argv parse, gated so flag still wins for backward compat). For the redis-cli sub-call, the wrapper or hardened install.sh should switch to `redis-cli` heredoc-fed input or `--pipe` mode to avoid the argv re-exposure at line:1565.
+
+### Phase 37 invocation hint
+
+If Plan 03 ships the wrapper proposal and install.sh is patched to read `${LIV_PLATFORM_API_KEY:-}` as an env-var fallback, Phase 37 invokes:
+
+```
+LIV_PLATFORM_API_KEY="$(cat /tmp/livos-reset-apikey)" bash livos-install-wrap.sh
+```
+
+If Plan 03 ships the wrapper but install.sh is NOT yet patched (wrapper-only hardening), the wrapper itself absorbs the argv exposure (the wrapper passes `--api-key "$KEY"` to install.sh on argv internally) — this still leaks the key to local users for the install duration but contains the API surface to a single auditable wrapper path. Phase 37 then invokes:
+
+```
+bash livos-install-wrap.sh --api-key-file /tmp/livos-reset-apikey
+```
+
+**Until Plan 03's wrapper exists, the unhardened fallback is:**
+
+```
+bash /opt/livos/data/cache/install.sh.cached --api-key "$(cat /tmp/livos-reset-apikey)"
+```
+
+This is the literal command Phase 37 will use IF the v29.2 milestone ships before Plan 03's wrapper lands. It accepts the documented argv leak as a known risk for the v29.2 release window, with the wrapper as a follow-on hardening (tracked under D-08, FR-AUDIT-04 outstanding). Plan 03 will decide whether to gate v29.2 on the wrapper or accept the argv-leak as a known issue with a v29.2.1 follow-up. (Note: `/opt/livos/data/cache/install.sh.cached` is the path D-09 specifies; that cache is populated by a future Phase 37 update.sh enhancement per CONTEXT.md FIX 2 — at v29.2 ship time, Phase 37 may need to fall back to a fresh `curl` if cache is missing.)
 
 ## Recovery Model
 
