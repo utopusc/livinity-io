@@ -41,6 +41,13 @@ export const httpOnlyPaths = [
 	// any error surfaces to the toast handler.
 	'system.listUpdateHistory',
 	'system.readUpdateLog',
+	// v29.2 Phase 37 FR-BACKEND-01 — system.factoryReset is a long-running
+	// mutation: returns 202-style {accepted, eventPath, snapshotPath} in <200ms,
+	// but the wipe+reinstall spawn in a transient systemd-run scope can take
+	// 5-10min. UI polls listUpdateHistory for progress (the JSON event row
+	// extends Phase 33 OBS-01 schema with status:"factory-reset"). HTTP only —
+	// the WS would 401 mid-wipe when livinityd is killed. Mirror system.update.
+	'system.factoryReset',
 	// Multi-user management routes — use HTTP to avoid WS connection dependency
 	'user.createInvite',
 	'user.listAllUsers',

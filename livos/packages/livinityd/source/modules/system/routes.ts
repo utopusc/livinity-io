@@ -1,8 +1,6 @@
 import os from 'node:os'
 import fs, {stat as fsStat} from 'node:fs/promises'
 import path from 'node:path'
-import {setTimeout} from 'node:timers/promises'
-
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 import {$} from 'execa'
@@ -10,7 +8,7 @@ import fse from 'fs-extra'
 import stripAnsi from 'strip-ansi'
 
 import type {ProgressStatus} from '../apps/schema.js'
-import {performReset, getResetStatus} from './factory-reset.js'
+import {getResetStatus, performFactoryReset, factoryResetInputSchema} from './factory-reset.js'
 import {getUpdateStatus, performUpdate, getLatestRelease, readDeployedSha, resolveVersionLabel} from './update.js'
 import {
 	getCpuTemperature,
@@ -276,29 +274,23 @@ export default router({
 			return stripAnsi(process!.stdout)
 		}),
 	//
-	factoryReset: privateProcedure
-		.input(
-			z.object({
-				password: z.string(),
-			}),
-		)
+	// v29.2 Phase 37 — system.factoryReset({preserveApiKey}) replaces the legacy
+	// password-gated route. adminProcedure-only; pre-flight checks live inside
+	// performFactoryReset (see factory-reset.ts D-RT-04/05). Returns 202-style
+	// {accepted, eventPath, snapshotPath} immediately; the actual wipe spawns
+	// in a transient systemd-run scope (Plan 03 inserts the spawn at
+	// SPAWN_INSERTION_POINT). Registered in httpOnlyPaths in common.ts so the
+	// long-running mutation cannot ride the WebSocket (mirror system.update).
+	factoryReset: adminProcedure
+		.input(factoryResetInputSchema)
 		.mutation(async ({ctx, input}) => {
-			if (!(await ctx.user.validatePassword(input.password))) {
-				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Invalid password'})
-			}
 			systemStatus = 'resetting'
-			let success = false
 			try {
-				success = await performReset(ctx.livinityd)
-				if (success) {
-					await setTimeout(1000)
-					await ctx.livinityd.stop()
-					await reboot()
-				}
-			} finally {
-				if (!success) systemStatus = 'running'
+				return await performFactoryReset(ctx.livinityd, input)
+			} catch (error) {
+				systemStatus = 'running'
+				throw error
 			}
-			return success
 		}),
 	// Public because we delete the user too and want to continue to get status updates
 	getFactoryResetStatus: publicProcedure.query((): ProgressStatus | undefined => {
