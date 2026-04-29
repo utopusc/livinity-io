@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 closed, audit complete)
-last_updated: "2026-04-29T05:00:00.000Z"
+status: Phase 36 closed; ready to begin Phase 37 (Backend Factory Reset)
+stopped_at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 install.sh audit closed; AUDIT-FINDINGS.md self-contained per D-10)
+last_updated: "2026-04-29T05:18:47.616Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 3
+  total_plans: 7
   completed_plans: 3
-  percent: 100
+  percent: 43
 ---
 
 # Project State
@@ -581,4 +581,4 @@ Last session: 2026-04-29T05:00:00.000Z
 Stopped at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 install.sh audit closed; AUDIT-FINDINGS.md self-contained per D-10)
 Resume with: `/gsd:plan-phase 37 backend-factory-reset` to plan the backend factory reset implementation. Phase 37 backend planner has 4 literal answers ready (Q1-Q4 in AUDIT-FINDINGS.md "## Phase 37 Readiness"): reinstall command (live-then-cache curl + livos-install-wrap.sh wrapper), recovery action (tar -xzf restore + systemctl restart), idempotency (`false` — wipe mandatory before install.sh), API key transport (`--api-key-file via wrapper`). Wrapper full source + install.sh env-var fallback diff + ALTER USER patch diff all written verbatim in "## Hardening Proposals". Phase 37 mandatory wipe sequence specified verbatim. v29.2.1 follow-ups tracked (install.sh env-var patch + ALTER USER patch).
 
-**Planned Phase:** 37 (Backend Factory Reset) — TBD plans — depends on Phase 36 AUDIT-FINDINGS.md (now complete)
+**Planned Phase:** 37 (Backend Factory Reset) — 4 plans — 2026-04-29T05:18:47.608Z
