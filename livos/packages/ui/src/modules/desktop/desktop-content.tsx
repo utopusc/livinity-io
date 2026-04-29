@@ -310,23 +310,8 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}
 		appItems.push(dockerItem)
 
-		const serverControlItem: AppGridItem = {
-			id: 'LIVINITY_server-control',
-			node: (
-				<motion.div
-					initial={{opacity: 0, scale: 0}}
-					animate={{opacity: 1, scale: 1}}
-					transition={{type: 'spring', stiffness: 400, damping: 25}}
-				>
-					<AppIcon
-						label='Server Management'
-						src={systemAppsKeyed['LIVINITY_server-control'].icon}
-						onClick={() => launchWindowApp('LIVINITY_server-control', '/server-control', 'Server Management', systemAppsKeyed['LIVINITY_server-control'].icon)}
-					/>
-				</motion.div>
-			),
-		}
-		appItems.push(serverControlItem)
+		// Server Management is dock-only (TbServerCog icon) — desktop entry removed per user request.
+		// Symmetric to Docker which is desktop-only-not-dock; together they keep dock minimal.
 
 		const remoteDesktopItem: AppGridItem = {
 			id: 'LIVINITY_remote-desktop',
