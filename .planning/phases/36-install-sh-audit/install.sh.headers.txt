@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+Alt-Svc: h3=":443"; ma=2592000
+Cache-Control: public, max-age=300
+Content-Disposition: inline
+Content-Type: text/plain; charset=utf-8
+Date: Wed, 29 Apr 2026 04:12:32 GMT
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+Via: 1.1 Caddy
+
+HTTP_CODE=200
+FINAL_URL=https://livinity.io/install.sh
+# SHA256=c00be0bf7e246878b3af2e470b138b2370ab498fc7aa80379945103273136437
+# SOURCE=live (HTTP 200 from livinity.io)
+# FETCHED_AT=2026-04-29T04:12:32Z
+# BYTE_SIZE=56494
+# LINE_COUNT=1604
