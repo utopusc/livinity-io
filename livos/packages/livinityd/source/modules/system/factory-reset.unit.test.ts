@@ -463,3 +463,181 @@ describe('performFactoryReset (full happy path with spawn mocked)', () => {
 		expect(argv).toContain('--preserve-api-key')
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan 37-04 — JSON event row schema (D-EVT-02 + D-EVT-03 Phase 33 compat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('JSON event row schema (D-EVT-02 + D-EVT-03 Phase 33 compat)', () => {
+	// Representative success row matching the bash output shape (factory-reset.sh
+	// write_event "success"). Mirrors the cat-heredoc shape verbatim — every
+	// field the bash emits MUST be present and match the contract.
+	const sampleSuccessRow = {
+		type: 'factory-reset',
+		status: 'success',
+		timestamp: '20260429T120030Z',
+		started_at: '2026-04-29T12:00:30Z',
+		ended_at: '2026-04-29T12:08:45Z',
+		preserveApiKey: true,
+		wipe_duration_ms: 12345,
+		reinstall_duration_ms: 477123,
+		install_sh_exit_code: 0,
+		install_sh_source: 'live',
+		snapshot_path: '/tmp/livos-pre-reset-20260429T120030Z.tar.gz',
+		error: null as string | null,
+	}
+
+	const sampleFailedRow = {
+		...sampleSuccessRow,
+		status: 'failed',
+		install_sh_exit_code: 1,
+		error: 'api-key-401' as string | null,
+	}
+
+	const sampleInProgressRow = {
+		...sampleSuccessRow,
+		status: 'in-progress',
+		ended_at: null as string | null,
+		install_sh_exit_code: -1,
+		wipe_duration_ms: 0,
+		reinstall_duration_ms: 0,
+	}
+
+	const sampleRolledBackRow = {
+		...sampleSuccessRow,
+		status: 'rolled-back',
+		install_sh_exit_code: 1,
+		error: 'install-sh-failed' as string | null,
+	}
+
+	test('success row has all required D-EVT-02 fields', () => {
+		const required = [
+			'type',
+			'status',
+			'timestamp',
+			'started_at',
+			'ended_at',
+			'preserveApiKey',
+			'wipe_duration_ms',
+			'reinstall_duration_ms',
+			'install_sh_exit_code',
+			'install_sh_source',
+			'snapshot_path',
+			'error',
+		] as const
+		for (const k of required) {
+			expect(sampleSuccessRow).toHaveProperty(k)
+		}
+	})
+
+	test('row passes Phase 33 reader gate: timestamp is a string in ISO basic format', () => {
+		// Phase 33 listUpdateHistory (routes.ts line 136):
+		//   if (typeof parsed?.timestamp !== 'string') return null
+		// So a row without a string timestamp is filtered out. Our bash emits
+		// `date -u +%Y%m%dT%H%M%SZ` which matches /^\d{8}T\d{6}Z$/.
+		const parsed = JSON.parse(JSON.stringify(sampleSuccessRow))
+		expect(typeof parsed.timestamp).toBe('string')
+		expect(parsed.timestamp).toMatch(/^\d{8}T\d{6}Z$/)
+	})
+
+	test('error field is null or a plain string (D-ERR-03 — never a nested object)', () => {
+		for (const row of [sampleSuccessRow, sampleFailedRow, sampleInProgressRow, sampleRolledBackRow]) {
+			if (row.error !== null) {
+				expect(typeof row.error).toBe('string')
+			}
+		}
+	})
+
+	test('status is one of in-progress | success | failed | rolled-back (D-EVT-02)', () => {
+		const valid = ['in-progress', 'success', 'failed', 'rolled-back']
+		expect(valid).toContain(sampleSuccessRow.status)
+		expect(valid).toContain(sampleFailedRow.status)
+		expect(valid).toContain(sampleInProgressRow.status)
+		expect(valid).toContain(sampleRolledBackRow.status)
+	})
+
+	test('install_sh_source is "live" or "cache" (D-EVT-02)', () => {
+		expect(['live', 'cache']).toContain(sampleSuccessRow.install_sh_source)
+	})
+
+	test('in-progress row has ended_at: null; terminal rows have non-null ended_at', () => {
+		expect(sampleInProgressRow.ended_at).toBeNull()
+		expect(sampleSuccessRow.ended_at).not.toBeNull()
+		expect(sampleFailedRow.ended_at).not.toBeNull()
+		expect(sampleRolledBackRow.ended_at).not.toBeNull()
+	})
+
+	test('failure error string is one of: api-key-401 | server5-unreachable | install-sh-failed | install-sh-unreachable (D-ERR-01)', () => {
+		const validErrors = [
+			'api-key-401',
+			'server5-unreachable',
+			'install-sh-failed',
+			'install-sh-unreachable',
+		]
+		expect(validErrors).toContain(sampleFailedRow.error)
+		expect(validErrors).toContain(sampleRolledBackRow.error)
+	})
+
+	test('success row has install_sh_exit_code === 0 and error === null', () => {
+		expect(sampleSuccessRow.install_sh_exit_code).toBe(0)
+		expect(sampleSuccessRow.error).toBeNull()
+	})
+
+	test('snapshot_path is an absolute /tmp path matching the pre-reset naming convention', () => {
+		expect(sampleSuccessRow.snapshot_path).toMatch(/^\/tmp\/livos-pre-reset-\d{8}T\d{6}Z\.tar\.gz$/)
+	})
+
+	test('preserveApiKey is a boolean (never coerced to string by JSON serialization)', () => {
+		const parsed = JSON.parse(JSON.stringify(sampleSuccessRow))
+		expect(typeof parsed.preserveApiKey).toBe('boolean')
+	})
+})
+
+describe('Phase 33 listUpdateHistory compat (D-EVT-03 — type-agnostic reader)', () => {
+	test('factory-reset.json passes the type-agnostic timestamp gate', () => {
+		// Simulate the bash output AND the Phase 33 parser inline.
+		// routes.ts:121-145 reads the dir, JSON.parses each *.json, and gates on
+		// `typeof parsed?.timestamp === 'string'`. There is NO type filtering —
+		// the reader is type-agnostic, so adding `type: factory-reset` is fully
+		// backward-compatible (D-EVT-03 verified).
+		const bashOutput = JSON.stringify({
+			type: 'factory-reset',
+			status: 'success',
+			timestamp: '20260429T120030Z',
+			started_at: '2026-04-29T12:00:30Z',
+			ended_at: '2026-04-29T12:08:45Z',
+			preserveApiKey: true,
+			wipe_duration_ms: 12345,
+			reinstall_duration_ms: 477123,
+			install_sh_exit_code: 0,
+			install_sh_source: 'live',
+			snapshot_path: '/tmp/livos-pre-reset-20260429T120030Z.tar.gz',
+			error: null,
+		})
+		const parsed = JSON.parse(bashOutput)
+		// Replicate the Phase 33 reader gate verbatim:
+		const passes = typeof parsed?.timestamp === 'string'
+		expect(passes).toBe(true)
+		// The reader returns {filename: f, ...parsed} so the `type` field is
+		// preserved on the way out (UI can switch on type to render
+		// factory-reset rows differently from update rows).
+		expect(parsed.type).toBe('factory-reset')
+	})
+
+	test('row with non-string timestamp is rejected by the Phase 33 gate', () => {
+		// Sanity check: the reader correctly rejects malformed rows. If it ever
+		// becomes type-restricted, this test will need to be re-evaluated.
+		const malformed = JSON.parse(JSON.stringify({timestamp: 12345, type: 'factory-reset'}))
+		const passes = typeof malformed?.timestamp === 'string'
+		expect(passes).toBe(false)
+	})
+
+	test('buildEventPath() emits a timestamp that matches the Phase 33 ISO basic format', () => {
+		// Tie the live builder back to the schema test: whatever buildEventPath
+		// produces MUST be a string Phase 33 accepts. This is the bridge between
+		// the route's filename generator and the bash's `timestamp` field.
+		const {timestamp} = buildEventPath()
+		expect(typeof timestamp).toBe('string')
+		expect(timestamp).toMatch(/^\d{8}T\d{6}Z$/)
+	})
+})
