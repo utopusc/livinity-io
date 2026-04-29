@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed Plan 38-02 (Danger Zone button + admin gate). Plan 03 (confirmation modal) is next.
-last_updated: "2026-04-29T12:45:00.000Z"
-last_activity: 2026-04-29 -- Phase 38 Plan 02 done
+stopped_at: Completed Plan 38-03 (confirmation modal — FactoryResetModal + preflight-decision + usePreflight + delete legacy password gate). Plan 04 (BarePage progress overlay + post-reset routing) is next.
+last_updated: "2026-04-29T13:30:00.000Z"
+last_activity: 2026-04-29 -- Phase 38 Plan 03 done
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
-  percent: 82
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 38 (UI Factory Reset) — EXECUTING
-Plan: 3 of 4
-Status: Plans 01+02 complete; Plan 03 (confirmation modal) next
+Plan: 4 of 4
+Status: Plans 01+02+03 complete; Plan 04 (BarePage progress overlay + post-reset routing + recovery static page) next
 Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
@@ -138,6 +138,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 37 P03 | ~11min | 3 tasks | 2 modified (factory-reset.ts + factory-reset.unit.test.ts) | 2026-04-29 |
 | Phase 37 P04 | 16 min | 3 tasks | 3 files |
 | Phase 38 P01 | 10 | 2 tasks | 14 files |
+| Phase 38 P03 | 12 min | 3 tasks | 6 created + 3 modified + 3 deleted | 2026-04-29 |
 
 ## Accumulated Context
 
@@ -629,8 +630,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-29T11:31:25.620Z
-Stopped at: Completed Plan 38-01 (foundation + un-break)
-Resume with: `/gsd:plan-phase 37 backend-factory-reset` to plan the backend factory reset implementation. Phase 37 backend planner has 4 literal answers ready (Q1-Q4 in AUDIT-FINDINGS.md "## Phase 37 Readiness"): reinstall command (live-then-cache curl + livos-install-wrap.sh wrapper), recovery action (tar -xzf restore + systemctl restart), idempotency (`false` — wipe mandatory before install.sh), API key transport (`--api-key-file via wrapper`). Wrapper full source + install.sh env-var fallback diff + ALTER USER patch diff all written verbatim in "## Hardening Proposals". Phase 37 mandatory wipe sequence specified verbatim. v29.2.1 follow-ups tracked (install.sh env-var patch + ALTER USER patch).
+Last session: 2026-04-29T13:30:00.000Z
+Stopped at: Completed Plan 38-03 (confirmation modal — FactoryResetModal renders verbatim 7-item DELETION_LIST as <ul>, preserve-vs-fresh radio with safer "preserve" default, FACTORY-RESET-strict-equality typed-confirm via lib helper, computeConfirmEnabled gates the destructive button on update-in-progress + 5s-AbortController network preflight + typed-confirm; legacy password gate components deleted)
+Resume with: `/gsd:execute-plan 38 04-progress-overlay-and-post-reset-routing` to ship Plan 04 — replace the Plan 01 ResettingCover stub with a real polling overlay reading trpc.system.listUpdateHistory at 2s interval, wire the D-OV-03 state→text mapping via deriveFactoryResetState/stateLabel from Plan 01 lib, handle the 90s consecutive-failure threshold (D-OV-04), implement post-reset routing (D-RT-01: preserveApiKey ? /login : /onboarding), error page (D-RT-02 with mapErrorTagToMessage), recovery rolled-back page (D-RT-03), and the static /help/factory-reset-recovery instructions page.
 
 **Planned Phase:** 38 (UI Factory Reset) — 4 plans — 2026-04-29T08:59:04.487Z

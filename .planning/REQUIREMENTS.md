@@ -45,10 +45,11 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
 ### Category: User Interface (FR-UI) — Phase 38
 
 - [ ] **FR-UI-01**: Settings > Advanced section — entry point. New section "Danger Zone" (or similar) below existing settings. Red destructive button "Factory Reset" with shield/warning icon.
-- [ ] **FR-UI-02**: Confirmation modal that explicitly enumerates what will be deleted: "All apps, all user accounts, all data, all settings, all sessions, all secrets (JWT, AI keys, schedules), all Docker volumes managed by LivOS." NOT a generic "are you sure?" — the explicit list IS the consent (R1 mitigation).
-- [ ] **FR-UI-03**: Account preservation radio inside modal:
+- [x] **FR-UI-02**: Confirmation modal that explicitly enumerates what will be deleted: "All apps, all user accounts, all data, all settings, all sessions, all secrets (JWT, AI keys, schedules), all Docker volumes managed by LivOS." NOT a generic "are you sure?" — the explicit list IS the consent (R1 mitigation). — completed 2026-04-29 (Plan 38-03 FactoryResetModal renders DELETION_LIST as a real <ul> with 7 verbatim <li> children sourced from `@/features/factory-reset/lib/deletion-list`; D-MD-01 single source of truth)
+- [x] **FR-UI-03**: Account preservation radio inside modal:
   - **(a) "Restore my account"** — Livinity API key preserved; reinstalled host comes back as the same logical instance; current login still works after reinstall completes
   - **(b) "Start fresh as new user"** — API key wiped; reinstalled host onboards as a new instance from the wizard
+  — completed 2026-04-29 (Plan 38-03 RadioGroup with `useState<RadioValue>('preserve')` initial state — "Restore my account" preselected as the safer default per D-RD-01; both options ship the spec-locked description text; on Confirm calls `reset({preserveApiKey: radioValue === 'preserve'})`)
 - [x] **FR-UI-04
 **: Type-to-confirm input — user must type literal string `FACTORY RESET` (case-sensitive) to enable the final Confirm button. Modal cannot be dismissed accidentally.
 - [x] **FR-UI-05
