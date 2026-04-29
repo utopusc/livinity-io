@@ -1,4 +1,9 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import {setTimeout} from 'node:timers/promises'
+
+import {TRPCError} from '@trpc/server'
+import {z} from 'zod'
 import {$} from 'execa'
 
 // TODO: import packageJson from '../../package.json' assert {type: 'json'}
@@ -9,12 +14,248 @@ import type Livinityd from '../../index.js'
 import {LIVINITY_APP_STORE_REPO} from '../../constants.js'
 import {performUpdate, getUpdateStatus} from './update.js'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v29.2 Factory Reset module — Phase 37
+//
+// This module exposes the v29.2 factoryReset lifecycle:
+//   - factoryResetInputSchema / FactoryResetInput     — Zod-validated input
+//   - preflightCheck(input)                           — gate: rejects when an
+//                                                       update is in-progress
+//                                                       OR when preserveApiKey
+//                                                       requires a missing key
+//   - stashApiKey()                                   — extracts the API key
+//                                                       from /opt/livos/.env
+//                                                       and writes it to
+//                                                       /tmp/livos-reset-apikey
+//                                                       (mode 0600)
+//   - buildEventPath()                                — computes the JSON event
+//                                                       row path under
+//                                                       /opt/livos/data/update-history
+//   - performFactoryReset(livinityd, input)           — top-level entry point
+//                                                       called by the tRPC
+//                                                       route.  Plan 02 STUB:
+//                                                       the systemd-run spawn
+//                                                       is replaced with a
+//                                                       comment marker that
+//                                                       Plan 03 will fill in.
+//
+// Legacy exports preserved for one cycle (D-RT-01 / D-DEF):
+//   - getResetStatus / setResetStatus / resetResetStatus / performReset
+//   These are no longer reachable from the tRPC route surface (system.factoryReset
+//   was rewritten in routes.ts). The legacy `getFactoryResetStatus` query in
+//   routes.ts still calls `getResetStatus()` so we keep that surface intact.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Module-level path constants (LITERAL — never variable-derived) ──────────
+
+export const ENV_FILE_PATH = '/opt/livos/.env' as const
+export const APIKEY_TMP_PATH = '/tmp/livos-reset-apikey' as const
+export const UPDATE_HISTORY_DIR = '/opt/livos/data/update-history' as const
+export const SNAPSHOT_SIDECAR_PATH = '/tmp/livos-pre-reset.path' as const
+
+// Plan 03 fills in the deployment+spawn paths; this plan declares the runtime
+// targets only so consumers can reference them without circular imports.
+export const RESET_SCRIPT_RUNTIME_PATH = '/opt/livos/data/factory-reset/reset.sh' as const
+export const WRAPPER_RUNTIME_PATH = '/opt/livos/data/wrapper/livos-install-wrap.sh' as const
+
+// ── Zod input schema (D-RT-01) ──────────────────────────────────────────────
+
+export const factoryResetInputSchema = z.object({
+	preserveApiKey: z.boolean(),
+})
+
+export type FactoryResetInput = z.infer<typeof factoryResetInputSchema>
+
+// ── Result type (D-RT-01 return shape) ──────────────────────────────────────
+
+export interface FactoryResetAccepted {
+	accepted: true
+	eventPath: string
+	// The path that *will* be written by the bash; sidecar at SNAPSHOT_SIDECAR_PATH
+	// points to the actual tar.gz path once the bash starts. Plan 02 returns the
+	// sidecar path (not the tar.gz path itself) because the tar isn't created
+	// until Plan 03's spawn lands.
+	snapshotPath: string
+}
+
+// ── Pre-flight check (D-RT-05) ──────────────────────────────────────────────
+
+/**
+ * Pre-flight checks that gate the spawn. Each check is fast (<50ms target).
+ * Throws TRPCError on rejection:
+ *   - CONFLICT when an *-update.json with status:in-progress exists
+ *   - BAD_REQUEST when preserveApiKey=true but /opt/livos/.env is missing or
+ *     does not contain a non-empty LIV_PLATFORM_API_KEY
+ *
+ * preserveApiKey=false skips the .env check entirely (D-KEY-02).
+ */
+export async function preflightCheck(input: FactoryResetInput): Promise<void> {
+	// Check 1: update-in-progress (D-RT-05)
+	try {
+		const entries = await fs.readdir(UPDATE_HISTORY_DIR)
+		for (const f of entries) {
+			if (!f.endsWith('-update.json')) continue
+			try {
+				const raw = await fs.readFile(path.join(UPDATE_HISTORY_DIR, f), 'utf8')
+				const parsed = JSON.parse(raw)
+				if (parsed?.status === 'in-progress') {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: 'An update is currently in progress; cannot factory-reset',
+					})
+				}
+			} catch (err) {
+				if (err instanceof TRPCError) throw err
+				// corrupt JSON — skip this file, continue scanning
+			}
+		}
+	} catch (err: any) {
+		if (err instanceof TRPCError) throw err
+		if (err && err.code === 'ENOENT') {
+			// dir absent — no updates have ever run; allow reset
+		} else {
+			throw err
+		}
+	}
+
+	// Check 2: API key present in .env if preserveApiKey (D-RT-05)
+	if (input.preserveApiKey) {
+		let envContent = ''
+		try {
+			envContent = await fs.readFile(ENV_FILE_PATH, 'utf8')
+		} catch (err: any) {
+			if (err && err.code === 'ENOENT') {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: '/opt/livos/.env not found — cannot preserve API key',
+				})
+			}
+			throw err
+		}
+		const m = envContent.match(/^LIV_PLATFORM_API_KEY=(.*)$/m)
+		const value = m ? m[1].replace(/^["']|["']$/g, '').trim() : ''
+		if (!value) {
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message: 'LIV_PLATFORM_API_KEY missing from /opt/livos/.env — cannot preserve API key',
+			})
+		}
+	}
+}
+
+// ── API key stash (D-KEY-01) ────────────────────────────────────────────────
+
+/**
+ * Reads LIV_PLATFORM_API_KEY from /opt/livos/.env and writes it to
+ * /tmp/livos-reset-apikey with mode 0600. Returns the path on success.
+ *
+ * Caller MUST have already passed preflightCheck(input={preserveApiKey:true}).
+ * The bash spawned by Plan 03 has an EXIT trap that removes APIKEY_TMP_PATH
+ * unconditionally (D-KEY-03), so this file never outlives the reset run.
+ */
+export async function stashApiKey(): Promise<string> {
+	const envContent = await fs.readFile(ENV_FILE_PATH, 'utf8')
+	const m = envContent.match(/^LIV_PLATFORM_API_KEY=(.*)$/m)
+	if (!m) {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: 'LIV_PLATFORM_API_KEY not found in /opt/livos/.env',
+		})
+	}
+	const value = m[1].replace(/^["']|["']$/g, '').trim()
+	if (!value) {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: 'LIV_PLATFORM_API_KEY is empty in /opt/livos/.env',
+		})
+	}
+	// Write with mode 0600 (umask-safe via the explicit mode option).
+	await fs.writeFile(APIKEY_TMP_PATH, value, {mode: 0o600})
+	// Re-chmod defensively in case the file existed beforehand with looser perms.
+	await fs.chmod(APIKEY_TMP_PATH, 0o600)
+	return APIKEY_TMP_PATH
+}
+
+// ── Event metadata helper ───────────────────────────────────────────────────
+
+/**
+ * Computes the JSON event row path for this reset invocation.
+ * Format matches Phase 33 OBS-01 (UTC ISO timestamp basic-format),
+ * e.g. "20260429T120030Z".
+ *
+ * Uses path.posix.join so the resulting path stays POSIX-shaped on Windows
+ * dev hosts — the path flows into bash argv on the Mini PC.
+ */
+export function buildEventPath(): {timestamp: string; eventPath: string} {
+	const timestamp = new Date()
+		.toISOString()
+		.replace(/[-:]/g, '')
+		.replace(/\.\d{3}Z$/, 'Z')
+	const eventPath = path.posix.join(UPDATE_HISTORY_DIR, `${timestamp}-factory-reset.json`)
+	return {timestamp, eventPath}
+}
+
+// ── Top-level entry point (called by routes.ts) ─────────────────────────────
+
+/**
+ * Top-level entry point invoked by the tRPC route. Performs:
+ *   1. preflightCheck (throws on rejection)
+ *   2. stashApiKey if preserveApiKey
+ *   3. (Plan 03 wires the systemd-run --scope --collect spawn here)
+ *   4. Returns FactoryResetAccepted with eventPath + snapshotPath sidecar
+ *
+ * Plan 02 STUB: the spawn step is a comment marker that Plan 03 fills in.
+ * The function still computes the eventPath and returns it so the route surface
+ * is stable — Plan 03's diff replaces only the marker block.
+ *
+ * Callers MUST NOT deploy a Plan-02-only build to Mini PC: the route returns
+ * accepted:true without actually triggering a wipe. Plan 03 ships the spawn.
+ */
+export async function performFactoryReset(
+	_livinityd: Livinityd,
+	input: FactoryResetInput,
+): Promise<FactoryResetAccepted> {
+	await preflightCheck(input)
+
+	if (input.preserveApiKey) {
+		await stashApiKey()
+	}
+
+	const {eventPath} = buildEventPath()
+
+	// === SPAWN_INSERTION_POINT ===
+	// Plan 03 inserts the systemd-run --scope --collect spawn + runtime artifact
+	// deployment HERE. Plan 02 returns the metadata without spawning. The route
+	// is therefore a no-op wipe in v29.2-plan-02 builds — this is expected;
+	// Plan 03 ships the spawn. To avoid shipping a half-broken route in main,
+	// callers MUST NOT deploy Plan 02's binary to Mini PC without Plan 03
+	// also landed.
+	// === /SPAWN_INSERTION_POINT ===
+
+	return {
+		accepted: true,
+		eventPath,
+		// Sidecar path — bash writes the actual tar.gz path here once the
+		// snapshot step (Plan 01 §Snapshot) runs.
+		snapshotPath: SNAPSHOT_SIDECAR_PATH,
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Legacy exports — KEEP for backward compat with the public
+// `getFactoryResetStatus` query in routes.ts. The legacy `performReset` is no
+// longer reachable from the tRPC surface (system.factoryReset was rewritten),
+// but is retained for one cycle so external callers (if any) don't break. The
+// state-tracking variables are exported only via getResetStatus().
+// ─────────────────────────────────────────────────────────────────────────────
+
 type ResetStatus = ProgressStatus
 
 let resetStatus: ResetStatus
 resetResetStatus()
 
-function resetResetStatus() {
+/** @deprecated v29.2 — replaced by JSON event row at /opt/livos/data/update-history/<ts>-factory-reset.json. UI should poll listUpdateHistory instead. */
+export function resetResetStatus() {
 	resetStatus = {
 		running: false,
 		progress: 0,
@@ -23,21 +264,24 @@ function resetResetStatus() {
 	}
 }
 
-function setResetStatus(properties: Partial<ResetStatus>) {
+/** @deprecated v29.2 — replaced by JSON event row. */
+export function setResetStatus(properties: Partial<ResetStatus>) {
 	resetStatus = {...resetStatus, ...properties}
 }
 
+/** @deprecated v29.2 — kept so the public `system.getFactoryResetStatus` query still compiles. */
 export function getResetStatus() {
 	return resetStatus
 }
 
+/**
+ * @deprecated v29.2 — replaced by performFactoryReset() + bash. The legacy
+ * implementation is preserved in source for one cycle; it is NOT reachable
+ * from the tRPC route surface anymore (system.factoryReset was rewritten to
+ * use performFactoryReset).
+ */
 export async function performReset(livinityd: Livinityd) {
 	const {dataDirectory} = livinityd
-
-	// The following must try hard to even complete on a heavily broken system.
-	// For instance, the user might be unable to log in, networking might be
-	// unavailable, and even the Livinityd codebase might have been altered. As a
-	// precaution, wrap anything that could fail in a try/catch or similar.
 
 	function failWithError(error: string) {
 		try {
@@ -48,8 +292,6 @@ export async function performReset(livinityd: Livinityd) {
 		return false
 	}
 
-	// Attempt to stop all apps gracefully, 5..15%. Possible that the promises
-	// never resolve or reject, so let them race with a timeout.
 	setResetStatus({running: true, progress: 5, description: 'Resetting...', error: false})
 	try {
 		await Promise.race([livinityd.appStore.stop(), setTimeout(60000)])
@@ -58,32 +300,26 @@ export async function performReset(livinityd: Livinityd) {
 		await Promise.race([livinityd.apps.stop(), setTimeout(60000)])
 	} catch {}
 
-	// Kill anything related to Docker to be sure, 15..20%.
 	setResetStatus({progress: 15})
 	try {
 		await Promise.race([$`systemctl stop docker docker.socket`, setTimeout(60000)])
 	} catch {}
 	try {
-		// Make sure that Docker is indeed down, so there are no open file handles
-		// into Docker's data directory that would prevent us from wiping app data.
 		await $`pkill -9 docker`
 	} catch {
 		// exits with status 1 if there are no matching processes anymore
 	}
 
-	// Wipe the Docker data directory on the data partition, 20..35%. This is
-	// a bind-mounted directory, so cannot be destroyed but must be emptied.
 	setResetStatus({progress: 20})
 	try {
 		const dockerDataDirectory = '/var/lib/docker'
-		await $`mkdir -p ${dockerDataDirectory}` // just in case
-		await $`find ${dockerDataDirectory} -mindepth 1 -delete` // empty directory
-		await $`chmod 710 ${dockerDataDirectory}` // restore expected
+		await $`mkdir -p ${dockerDataDirectory}`
+		await $`find ${dockerDataDirectory} -mindepth 1 -delete`
+		await $`chmod 710 ${dockerDataDirectory}`
 	} catch (err) {
 		return failWithError(`Failed to wipe app data: ${(err as any).message}`)
 	}
 
-	// Remember the current user for later in case it's still functional
 	let userExists = false
 	let userName: string
 	let userHashedPassword: string
@@ -95,13 +331,8 @@ export async function performReset(livinityd: Livinityd) {
 		}
 	} catch {}
 
-	// Wipe the user data directory on the data partition, 35..50%. This is a
-	// bind-mounted directory, so cannot be destroyed but must be emptied.
 	setResetStatus({progress: 35})
 
-	// Stop critical services with mounts otherwise the below step will recursively nuke the data
-	// on all mounted network and usb devices. This is error prone and can fail. We should move over
-	// to atomic factory reset once Rugix migration is complete to make this safe.
 	try {
 		await livinityd.backups.stop()
 		await livinityd.files.externalStorage.stop()
@@ -111,18 +342,12 @@ export async function performReset(livinityd: Livinityd) {
 	}
 
 	try {
-		await $`mkdir -p ${dataDirectory}` // just in case
-		// For extra precaution we skip external and network mount dirs here
-		// to make sure we definitely don't nuke them if the above step fails.
-		await $`find ${dataDirectory} -mindepth 1 -not -path ${livinityd.files.getBaseDirectory('/External')} -not -path ${livinityd.files.getBaseDirectory('/External')}/* -not -path ${livinityd.files.getBaseDirectory('/Network')} -not -path ${livinityd.files.getBaseDirectory('/Network')}/* -delete` // empty directory
-		await $`chmod 755 ${dataDirectory}` // restore expected
+		await $`mkdir -p ${dataDirectory}`
+		await $`find ${dataDirectory} -mindepth 1 -not -path ${livinityd.files.getBaseDirectory('/External')} -not -path ${livinityd.files.getBaseDirectory('/External')}/* -not -path ${livinityd.files.getBaseDirectory('/Network')} -not -path ${livinityd.files.getBaseDirectory('/Network')}/* -delete`
+		await $`chmod 755 ${dataDirectory}`
 	} catch (err) {
 		return failWithError(`Failed to wipe user data: ${(err as any).message}`)
 	} finally {
-		// We are doing an OTA update next. Make sure that a minimally functioning
-		// system remains in case the update fails. Also attempt this when user data
-		// could not be fully wiped. Keep the user so the user sees a login prompt,
-		// not an onboarding prompt that could be mistaken for a successful reset.
 		try {
 			if (userExists) {
 				await livinityd.store.set('user.name', userName!)
@@ -138,10 +363,6 @@ export async function performReset(livinityd: Livinityd) {
 		} catch {}
 	}
 
-	// Perform an OTA update, 50..90%. This step is the most likely to fail if the
-	// system is broken, because networking might be down or the system has been
-	// altered to a point where the update mechanism became non-functional. In
-	// these cases, only an USB-restore can help.
 	const updateStartPercentage = 50
 	const updateEndPercentage = 95
 	setResetStatus({progress: updateStartPercentage})
@@ -176,7 +397,6 @@ export async function performReset(livinityd: Livinityd) {
 		updating = false
 	}
 
-	// Delete the config file and reboot, 95..100%.
 	setResetStatus({progress: 95})
 	try {
 		await $`rm -f ${dataDirectory}/livinity.yaml`
