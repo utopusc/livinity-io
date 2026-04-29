@@ -58,7 +58,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. JSON event row at `/opt/livos/data/update-history/<ts>-factory-reset.json` records: timestamp, preserveApiKey choice, wipe duration, reinstall duration, install.sh exit code, final status. Schema extends Phase 33 OBS-01 `update-history` shape with `status: "factory-reset"`. After reinstall, the new livinityd's history reader picks it up and surfaces in Phase 38 UI
   6. install.sh failure modes handled: 401 on revoked API key surfaces in JSON event row with `error: "api-key-401"` and the post-reset UI shows "API key invalid — log into livinity.io and re-issue"; transient Server5 5xx triggers up to 3 retries before flagging `error: "server5-unreachable"`
 **Plans**: 4 plans
-  - [ ] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05)
+  - [x] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05) — completed 2026-04-29 (2 source bash files, both shellcheck-clean exit 0; idempotent wipe + pre-wipe tar snapshot + JSON event lifecycle + EXIT-trap apikey cleanup; v29.2 ships in wrapper-degraded mode)
   - [ ] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03)
   - [ ] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06)
   - [ ] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07)
@@ -87,7 +87,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
-| 37. Backend Factory Reset | 0/4 | Not started | - |
+| 37. Backend Factory Reset | 1/4 | Executing (Plan 02 next) | - |
 | 38. UI Factory Reset | 0/? | Not started | - |
 
 ## Coverage Summary

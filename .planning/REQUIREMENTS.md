@@ -26,15 +26,18 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
 ### Category: Backend (FR-BACKEND) — Phase 37
 
 - [ ] **FR-BACKEND-01**: `system.factoryReset({ preserveApiKey: boolean })` tRPC route in livinityd. Spawns a detached wipe+reinstall bash process and returns immediately so UI can show progress page. Mutation added to `httpOnlyPaths` in `common.ts` (mirror `system.update` pattern).
-- [ ] **FR-BACKEND-02**: Wipe procedure (bash, runs as root, idempotent):
+- [x] **FR-BACKEND-02
+**: Wipe procedure (bash, runs as root, idempotent):
   - `systemctl stop livos liv-core liv-worker liv-memory livos-rollback caddy` (preserve sshd)
   - Stop & remove ALL Docker containers managed by LivOS (`docker ps -a` filtered by `user_app_instances` enumeration, NOT global `docker stop $(docker ps -aq)` which would kill non-LivOS containers)
   - `docker volume prune -f` scoped to LivOS-managed volume names (R6 mitigation — global prune is destructive)
   - `sudo -u postgres psql -c "DROP DATABASE livos; DROP USER livos;"` (fresh DB)
   - `rm -rf /opt/livos /opt/nexus /etc/systemd/system/{livos,liv-core,liv-worker,liv-memory,livos-rollback}.service /etc/systemd/system/livos.service.d/`
 - [ ] **FR-BACKEND-03**: API key preservation — if `preserveApiKey: true`, stash current `LIV_API_KEY` to `/tmp/livos-reset-apikey` (mode 0600) BEFORE the rm step; pass via `--api-key-file` to install.sh; remove `/tmp/livos-reset-apikey` after install.sh completes successfully or fails.
-- [ ] **FR-BACKEND-04**: install.sh re-execution — `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --api-key-file /tmp/livos-reset-apikey` (or equivalent per audit findings). Wrap in try/catch with retry logic if Server5 transient.
-- [ ] **FR-BACKEND-05**: JSON event row in `/opt/livos/data/update-history/<ts>-factory-reset.json` extending Phase 33 OBS-01 schema with `status: "factory-reset"`. Records: timestamp, preserveApiKey choice, wipe duration, reinstall duration, install.sh exit code, final status (success/failed/half-deleted).
+- [x] **FR-BACKEND-04
+**: install.sh re-execution — `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --api-key-file /tmp/livos-reset-apikey` (or equivalent per audit findings). Wrap in try/catch with retry logic if Server5 transient.
+- [x] **FR-BACKEND-05
+**: JSON event row in `/opt/livos/data/update-history/<ts>-factory-reset.json` extending Phase 33 OBS-01 schema with `status: "factory-reset"`. Records: timestamp, preserveApiKey choice, wipe duration, reinstall duration, install.sh exit code, final status (success/failed/half-deleted).
 - [ ] **FR-BACKEND-06**: Detached process spawn via `systemd-run --scope --collect` (v29.1 cgroup-escape pattern) — wipe survives `systemctl stop livos` mid-flight. Without this, the wipe kills its own livinityd parent and dies before reinstall starts.
 - [ ] **FR-BACKEND-07**: 401 from install.sh handled gracefully — if user revoked the API key on livinity.io between modal-confirm and install.sh execution, the reinstall fails 401; surface as "API key invalid — log into livinity.io and re-issue" in the JSON event row + admin notification.
 

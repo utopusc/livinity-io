@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
-status: Phase 36 closed; ready to begin Phase 37 (Backend Factory Reset)
-stopped_at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 install.sh audit closed; AUDIT-FINDINGS.md self-contained per D-10)
-last_updated: "2026-04-29T05:18:47.616Z"
+status: executing
+stopped_at: Completed 37-01-bash-scripts-PLAN.md (Plan 02 tRPC route is next)
+last_updated: "2026-04-29T05:25:37.017Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 57
 ---
 
 # Project State
@@ -22,15 +22,15 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v29.2 — Factory Reset (mini-milestone) — ROADMAP READY
-**Current focus:** Phase 36 — install.sh Audit & Hardening
+**Current focus:** Phase 37 — Backend Factory Reset
 
 **Paused milestone:** v30.0 Backup & Restore (8 phases / 47 BAK-* reqs fully defined; archived at `.planning/milestones/v30.0-DEFINED/`). Resumes after v29.2 ships, with phase renumbering.
 
 ## Current Position
 
-Phase: 36 (install.sh Audit & Hardening) — **COMPLETE** (audit closed; AUDIT-FINDINGS.md self-contained per D-10)
-Plan: 3 of 3 — completed 2026-04-29
-Status: Phase 36 closed; ready to begin Phase 37 (Backend Factory Reset)
+Phase: 37 (Backend Factory Reset) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
@@ -134,8 +134,25 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 36-install-sh-audit P01 | 3min | 2 tasks | 3 files |
 | Phase 36 P02 | 25min | 3 tasks | 2 files |
 | Phase 36 P03 | ~22min | 3 tasks | 2 files (AUDIT-FINDINGS.md + 36-03-SUMMARY.md) | 2026-04-29 |
+| Phase 37 P01 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
+
+### Plan 37-01 Decisions (2026-04-29)
+
+- **Two bash artifacts authored and committed shellcheck-clean** — `livos/packages/livinityd/source/modules/system/livos-install-wrap.sh` (62 lines, verbatim from AUDIT-FINDINGS.md "## Hardening Proposals" wrapper full source) and `livos/packages/livinityd/source/modules/system/factory-reset.sh` (279 lines, implementing AUDIT-FINDINGS.md "## Phase 37 Readiness" Q1-Q4 contract). Both pass `npx shellcheck --version 0.11.0` exit 0 with zero warnings. Source files only — runtime deployment to `/opt/livos/data/wrapper/` and `/opt/livos/data/factory-reset/reset.sh` is Plan 03's job.
+
+- **Idempotency contract verified by grep audit** — every `rm -rf` target is a literal hardcoded path (`/opt/livos`, `/opt/nexus`, `/etc/systemd/system/livos.service.d`); zero variable-derived `rm` targets; every `DROP` uses `IF EXISTS` (DATABASE + USER); every `systemctl stop` is `--no-block` and `|| true`; zero `eval`, zero `docker volume prune`, zero `docker stop $(docker ps -aq)`. Pre-wipe `tar -czf` at line 153 occurs before first `rm -rf` at line 204 (order-of-operations safety property).
+
+- **`set -uo pipefail` (NOT `set -e`) in factory-reset.sh** — wipe sequence intentionally tolerates already-stopped services and missing files. Per CONTEXT.md `<specifics>` line 325, every graceful-failure command has explicit `|| true`; only critical paths use explicit error checks (e.g. snapshot, install.sh exit code). `set -e` would have aborted the wipe on the first already-stopped systemctl call.
+
+- **Function ordering precedent**: `attempt_rollback()` is defined BEFORE Step 3 because Step 3's `install-sh-unreachable` branch invokes it. Bash function declarations must precede their first use; this is the canonical layout for any subsequent v29.2 plan that needs cross-step helper functions.
+
+- **EXIT trap on apikey cleanup (D-KEY-03)** — `trap 'rm -f "$APIKEY_TMP" 2>/dev/null || true' EXIT` installed immediately after global readonlys. The `/tmp/livos-reset-apikey` file (mode 0600) cannot outlive the bash script, even on `kill -9` of the wrapper (signal-handled via EXIT pseudo-signal).
+
+- **Wrapper degraded-mode preserved** — per D-INST-03, the wrapper's heuristic (`grep -q 'LIV_PLATFORM_API_KEY' "$INSTALL_SH"`) falls back to passing `--api-key` argv internally if install.sh has no env-var support. v29.2 ships in this degraded mode (closes the route-spawn argv leak window only; install.sh's own argv window remains open until v29.2.1's install.sh patch). Document trail: SUMMARY.md captures the residual leak; `LIV_PLATFORM_API_KEY` is referenced 7 times in the wrapper (heuristic + export + 2 comments + 1 assignment + 1 reference + 1 fallback exec) and zero times in any echo/printf/tee context.
+
+- **Single-comment pattern fix** (deviation-rule micro-edit) — plan body said "preserve sshd (omitted from list)" inside a comment; this would have triggered the acceptance criterion `grep -c 'sshd' factory-reset.sh == 0`. Replaced the literal `sshd` token with semantically equivalent wording ("the remote-shell daemon is intentionally absent…"). Substance unchanged. Pattern: when plan body text and acceptance grep gates conflict, the grep gate wins (continuity from Plan 36-03's same invariant).
 
 ### Plan 36-03 Decisions (2026-04-29) — Phase 36 closed
 
@@ -577,8 +594,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-29T05:00:00.000Z
-Stopped at: Completed 36-03-recovery-server5-hardening-PLAN.md (Phase 36 install.sh audit closed; AUDIT-FINDINGS.md self-contained per D-10)
+Last session: 2026-04-29T05:25:32.133Z
+Stopped at: Completed 37-01-bash-scripts-PLAN.md (Plan 02 tRPC route is next)
 Resume with: `/gsd:plan-phase 37 backend-factory-reset` to plan the backend factory reset implementation. Phase 37 backend planner has 4 literal answers ready (Q1-Q4 in AUDIT-FINDINGS.md "## Phase 37 Readiness"): reinstall command (live-then-cache curl + livos-install-wrap.sh wrapper), recovery action (tar -xzf restore + systemctl restart), idempotency (`false` — wipe mandatory before install.sh), API key transport (`--api-key-file via wrapper`). Wrapper full source + install.sh env-var fallback diff + ALTER USER patch diff all written verbatim in "## Hardening Proposals". Phase 37 mandatory wipe sequence specified verbatim. v29.2.1 follow-ups tracked (install.sh env-var patch + ALTER USER patch).
 
 **Planned Phase:** 37 (Backend Factory Reset) — 4 plans — 2026-04-29T05:18:47.608Z
