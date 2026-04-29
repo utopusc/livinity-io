@@ -38,6 +38,7 @@ const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
+const FactoryResetRecoveryHelp = React.lazy(() => import('./routes/help/factory-reset-recovery'))
 const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
 
 function SpotlightConnected() {
@@ -154,6 +155,13 @@ export const router = createBrowserRouter([
 			{
 				path: 'factory-reset/*',
 				element: <FactoryReset />,
+			},
+			{
+				// Phase 38 Plan 04 — D-RT-02 manual SSH recovery instructions.
+				// Linked from FactoryResetErrorPage's "Manual SSH recovery
+				// instructions" button.
+				path: 'help/factory-reset-recovery',
+				element: <FactoryResetRecoveryHelp />,
 			},
 		],
 	},
