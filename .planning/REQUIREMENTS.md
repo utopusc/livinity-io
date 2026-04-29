@@ -49,13 +49,17 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
 - [ ] **FR-UI-03**: Account preservation radio inside modal:
   - **(a) "Restore my account"** — Livinity API key preserved; reinstalled host comes back as the same logical instance; current login still works after reinstall completes
   - **(b) "Start fresh as new user"** — API key wiped; reinstalled host onboards as a new instance from the wizard
-- [ ] **FR-UI-04**: Type-to-confirm input — user must type literal string `FACTORY RESET` (case-sensitive) to enable the final Confirm button. Modal cannot be dismissed accidentally.
-- [ ] **FR-UI-05**: BarePage progress overlay during reinstall — same pattern as Phase 30 update overlay. Shows "Reinstalling..." + animated progress + estimated 5-10 min countdown. Polls JSON event row for status updates.
-- [ ] **FR-UI-06**: Post-reset login redirect logic:
+- [x] **FR-UI-04
+**: Type-to-confirm input — user must type literal string `FACTORY RESET` (case-sensitive) to enable the final Confirm button. Modal cannot be dismissed accidentally.
+- [x] **FR-UI-05
+**: BarePage progress overlay during reinstall — same pattern as Phase 30 update overlay. Shows "Reinstalling..." + animated progress + estimated 5-10 min countdown. Polls JSON event row for status updates.
+- [x] **FR-UI-06
+**: Post-reset login redirect logic:
   - If preserveApiKey + reinstall succeeded → redirect to /login, existing JWT still valid (livinityd's first boot recognizes the persisted API key, regenerates session)
   - If !preserveApiKey + reinstall succeeded → redirect to /onboarding wizard (fresh-install flow)
   - If reinstall failed → show error page with diagnostic JSON link + "Try again" + "Manual SSH recovery instructions" link
-- [ ] **FR-UI-07**: Pre-reset blocking checks in modal — disabled button (with reason tooltip) if:
+- [x] **FR-UI-07
+**: Pre-reset blocking checks in modal — disabled button (with reason tooltip) if:
   - A backup is currently running (BAK-SCHED-04 lock — but BAK-SCHED isn't shipped yet at v29.2 time, so just check the v29.1 update-in-progress flag)
   - An update is currently running
   - Network is unreachable to livinity.io (curl -s -o /dev/null -w "%{http_code}" pre-flight check)

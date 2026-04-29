@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
-status: paused
-stopped_at: Phase 38 Wave 1 (Plan 38-01) PAUSED by user mid-execution. Agent created 2 of 6 lib skeleton files (typed-confirm.ts, types.ts) but committed nothing. To resume safely re-spawn the gsd-executor for Plan 38-01 — it will overwrite/extend the partial files and complete normally. No commits lost.
-last_updated: "2026-04-29T09:05:00.000Z"
-last_activity: 2026-04-29 -- Phase 38 Wave 1 paused
+status: executing
+stopped_at: Completed Plan 38-01 (foundation + un-break)
+last_updated: "2026-04-29T11:31:25.634Z"
+last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 11
-  completed_plans: 7
-  percent: 64
+  completed_plans: 8
+  percent: 73
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 38 (UI Factory Reset) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 38
-Last activity: 2026-04-29 -- Phase 38 execution started
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
 
@@ -137,6 +137,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 37 P01 | 7min | 2 tasks | 2 files |
 | Phase 37 P03 | ~11min | 3 tasks | 2 modified (factory-reset.ts + factory-reset.unit.test.ts) | 2026-04-29 |
 | Phase 37 P04 | 16 min | 3 tasks | 3 files |
+| Phase 38 P01 | 10 | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -628,8 +629,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-29T05:25:32.133Z
-Stopped at: Completed 37-01-bash-scripts-PLAN.md (Plan 02 tRPC route is next)
+Last session: 2026-04-29T11:31:25.620Z
+Stopped at: Completed Plan 38-01 (foundation + un-break)
 Resume with: `/gsd:plan-phase 37 backend-factory-reset` to plan the backend factory reset implementation. Phase 37 backend planner has 4 literal answers ready (Q1-Q4 in AUDIT-FINDINGS.md "## Phase 37 Readiness"): reinstall command (live-then-cache curl + livos-install-wrap.sh wrapper), recovery action (tar -xzf restore + systemctl restart), idempotency (`false` — wipe mandatory before install.sh), API key transport (`--api-key-file via wrapper`). Wrapper full source + install.sh env-var fallback diff + ALTER USER patch diff all written verbatim in "## Hardening Proposals". Phase 37 mandatory wipe sequence specified verbatim. v29.2.1 follow-ups tracked (install.sh env-var patch + ALTER USER patch).
 
 **Planned Phase:** 38 (UI Factory Reset) — 4 plans — 2026-04-29T08:59:04.487Z
