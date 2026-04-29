@@ -202,7 +202,7 @@ The card's "Update" button (round 4) and the Settings list-row "View" button (ro
 - Phase B: backend `system.factoryReset` route + wipe/reinstall bash + JSON event row
 - Phase C: Settings UI button + confirm modal + progress overlay + cross-cutting tests
 
-**Status:** PARKED. Promote to active when v29.0 (Deploy & Update Stability) ships and the install.sh audit (Phase A) confirms feasibility. Until then, recovery is manual SSH.
+**Status:** ✅ PROMOTED 2026-04-28 — active as v29.2 mini-milestone (Phases 36-38). See `.planning/REQUIREMENTS.md` (FR-* requirements) and `.planning/ROADMAP.md`.
 
 ---
 

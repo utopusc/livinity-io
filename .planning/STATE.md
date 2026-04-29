@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v30.0
-milestone_name: Backup & Restore
+milestone: v29.2
+milestone_name: Factory Reset
 status: roadmap-ready
-stopped_at: ROADMAP.md authored — Phase 36 (Reuse-Audit Spike) is the recommended starting plan.
-last_updated: "2026-04-28T16:30:00.000Z"
+stopped_at: v29.2 mini-milestone bootstrapped (3 phases, 19 FR-* reqs). v30.0 Backup paused — full artifacts archived at .planning/milestones/v30.0-DEFINED/. Phase 36 (install.sh Audit) is the entry point.
+last_updated: "2026-04-28T17:00:00.000Z"
 last_activity: 2026-04-28
 current_phase: 36
 progress:
-  total_phases: 8
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -22,12 +22,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v30.0 — Backup & Restore — ROADMAP READY
-**Current focus:** Phase 36 (Reuse-Audit Spike) — non-negotiable benchmark of Phase 20 codepath against v30.0 multi-source multi-hour workloads. Output gates Phase 37 schema design.
+**Current milestone:** v29.2 — Factory Reset (mini-milestone) — ROADMAP READY
+**Current focus:** Phase 36 (install.sh Audit & Hardening) — verify `livinity.io/install.sh` exists, accepts `--api-key-file`, idempotent on already-installed hosts. Findings gate Phase 37's wipe/reinstall design.
+
+**Paused milestone:** v30.0 Backup & Restore (8 phases / 47 BAK-* reqs fully defined; archived at `.planning/milestones/v30.0-DEFINED/`). Resumes after v29.2 ships, with phase renumbering.
 
 ## Current Position
 
-Phase: 36 (Reuse-Audit Spike) — not started
+Phase: 36 (install.sh Audit & Hardening) — not started
 Plan: —
 Status: Roadmap authored, awaiting plan-phase
 Last activity: 2026-04-28 — ROADMAP.md authored. v30.0 is 8 phases (36-43); 47/47 v30.0 requirements mapped, zero orphans. Research synthesis followed verbatim — Phase 36 spike is non-negotiable; Phase 43 (livos-restore.sh) flagged needs phase research. Post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.

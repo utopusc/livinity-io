@@ -148,32 +148,42 @@ Livinity now features a unified capability orchestration platform. All capabilit
 
 **45 deployment-time UAT items** + 10 info-severity tech-debt items deferred (window-app pattern incompatibility prevents real URL-bar deep-linking — v29.0+).
 
-## Current Milestone: v30.0 Backup & Restore
+## Current Milestone: v29.2 Factory Reset (mini-milestone)
 
-**Goal:** Korumalı, otomatize ve test-edilebilir backup/restore — kullanıcı LivOS'tan gönül rahatlığıyla self-host edebilsin, data kaybı korkusu olmasın.
+**Goal:** Tek tıkla "fabrika ayarlarına dön" — kullanıcı UI'dan Settings > Advanced > Factory Reset'e bastığında kirli/bozuk bir Mini PC durumundan SSH'e gerek kalmadan temiz bir kuruluma geri dönebilsin. v29.0'ın update-rollback'i deploy hatalarını çözüyordu; bu host-bozulma senaryosunu çözüyor.
 
 **Target features:**
-- Snapshot scope: PostgreSQL (livos DB), Redis (settings/conversations), app data volumes (/opt/livos/data), per-app Docker volumes, .env secrets
-- Scheduled backups (cron-like — daily/weekly/custom)
-- Multiple destinations: local disk, S3-compatible (S3/B2/Wasabi/MinIO/SFTP)
-- Encryption at rest (passphrase-derived key, age or libsodium)
-- Retention policies (keep N most recent + age-based pruning)
-- Manual "Backup Now" trigger from UI
-- Restore flow: full disaster recovery (restore-to-fresh-install) + partial restore (single app data, single user)
-- Backup history UI with status, size, duration, restore button
-- Restore drill (test-restore that doesn't overwrite production)
+- Settings > Advanced > Factory Reset (red destructive button + warning icon)
+- Confirmation modal: tam liste (apps, DB, volumes, sessions, JWT secret, settings)
+- Account preservation choice: (a) Restore my account (API key korunur) vs (b) Start fresh as new user (her şey wipe)
+- Backend `system.factoryReset({preserveApiKey})` tRPC route (detached spawn, livinityd kill survives — v29.1 cgroup-escape pattern)
+- Idempotent wipe + curl-piped install.sh re-execution
+- BarePage progress overlay during reinstall (Phase 30 pattern reuse)
+- JSON event row in `/opt/livos/data/update-history` with status `factory-reset`
+- Post-reset: option (a) → existing creds work, option (b) → onboarding flow
 
 **Key context:**
-- v29.0 update flow newly stabilized (cgroup-escape, SIGPIPE survival, self-rsync) — backup builds on its job-orchestration patterns (`scheduled_jobs` PG table, node-cron handlers)
-- Mini PC has system PostgreSQL (NOT Dockerized) — `pg_dump` direct, not via container exec
-- Per-user Docker isolation (v7.0) means per-app volumes too — backup must enumerate per-user containers
-- Multi-user system: backups should respect user boundaries (admin can backup all, user can backup own data; admin cross-user backup is sensitive — needs explicit consent)
-- Phase 20 (v27.0) already has volume-backup + S3/SFTP/local destinations + AES-256-GCM credential vault → reuse, don't reinvent
-- Strategic positioning: "AI + Self-Hosting" category gap — robust backup is the trust foundation that lets AI features ship without data-loss anxiety
+- BACKLOG 999.7 was parked since v22 — now promoted; spec already detailed (UX flow + risks + API key handling)
+- 2-3 phases per estimate: Phase A install.sh audit, Phase B backend + wipe/reinstall, Phase C UI
+- Phase numbering continues from v29.0 last phase 35 → v29.2 = Phase 36-38 (v30.0 phases will renumber when resumed)
+- `livinity.io/install.sh` MUST be audited first — verify exists + accepts `--api-key` + idempotent on already-installed host
+- API key sensitivity: pass via stdin or `--api-key-file`, NEVER argv (visible in `ps`)
+- Limited Docker volume scope — only LivOS-managed containers, NOT global `volume prune` (R6 mitigation)
 
-### Active (v30.0)
+### Active (v29.2)
 
-- [ ] BAK-* requirements (defined in REQUIREMENTS.md after this milestone is bootstrapped)
+- [ ] FR-* requirements (defined in REQUIREMENTS.md after this milestone is bootstrapped)
+
+### Defined (v30.0 — Backup & Restore — PAUSED)
+
+v30.0 milestone fully bootstrapped (research + REQUIREMENTS + ROADMAP, 8 phases / 47 BAK-* requirements) on 2026-04-28. Paused in favor of v29.2 Factory Reset. Resume with phase renumbering when v29.2 ships.
+
+**Archived artifacts:**
+- `.planning/milestones/v30.0-DEFINED/REQUIREMENTS.md` (47 BAK-* requirements)
+- `.planning/milestones/v30.0-DEFINED/ROADMAP.md` (Phase 36-43 details — will renumber to 39-46 when resumed)
+- `.planning/milestones/v30.0-DEFINED/research/` (STACK / FEATURES / ARCHITECTURE / PITFALLS / SUMMARY)
+
+Working source files (`.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/research/`) repurposed for v29.2.
 
 ### Validated (v29.0 — Deploy & Update Stability)
 

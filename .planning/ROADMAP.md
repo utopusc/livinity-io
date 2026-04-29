@@ -17,156 +17,82 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 - ✅ **v27.0 Docker Management Upgrade** — Phases 17-23 (shipped 2026-04-25)
 - ✅ **v28.0 Docker Management UI (Dockhand-Style)** — Phases 24-30 (shipped 2026-04-26)
 - ✅ **v29.0 Deploy & Update Stability** — Phases 31-35 (shipped 2026-04-27)
-- ⏳ **v30.0 Backup & Restore** — Phases 36-43 (in progress)
+- ⏳ **v29.2 Factory Reset (mini-milestone)** — Phases 36-38 (in progress)
+- 📋 **v30.0 Backup & Restore** — DEFINED, paused (8 phases / 47 BAK-* reqs archived in `.planning/milestones/v30.0-DEFINED/`; resumes after v29.2 with phase renumber)
 
 ## Phases
 
-**Active milestone: v30.0 Backup & Restore (Phases 36-43)**
+**Active milestone: v29.2 Factory Reset (Phases 36-38)**
 
-- [ ] **Phase 36: Reuse-Audit Spike** — Benchmark Phase 20 codepath against v30.0 multi-source multi-hour workloads; produce decision matrix that gates schema design
-- [ ] **Phase 37: Schema Foundation + Key Vault** — Permanent PG schema (3 new tables), separate `/opt/livos/data/secrets/backup-key` (NOT JWT-derived), envelope encryption foundation
-- [ ] **Phase 38: Orchestrator + State Machine + PG Dump** — Crash-resilient run lifecycle, pre-flight gates, quiesce protocol, first end-to-end source (`pg_dump`)
-- [ ] **Phase 39: Remaining Sources + Manifest + L1 Verify** — Redis/FS/secrets/docker-volume sources + HMAC-signed manifest + per-source SHA-256 mid-stream
-- [ ] **Phase 40: Destinations + Retention + L2 Verify** — Multi-destination uploads (local/S3/SFTP), append-only credentials by default, post-upload HEAD/ETag verification
-- [ ] **Phase 41: Scheduler + Pre-Update Auto-Snapshot + Update Mutex** — node-cron registration, the killer v29.0 update.sh integration, Redis-coordinated mutex
-- [ ] **Phase 42: UI: History + Run-Now + Destinations + Recovery-Kit Modal** — Settings > Backup section, mandatory BIP39 modal blocking plan creation, sidebar status badge
-- [ ] **Phase 43: Standalone Restore + Drill Mode + RBAC** — `livos-restore.sh` shell tool, `install.sh --from-backup`, restore-pending recovery, drill mode, multi-user RBAC
+- [ ] **Phase 36: install.sh Audit & Hardening** — Verify `livinity.io/install.sh` exists, accepts `--api-key`, idempotent, supports stdin/`--api-key-file`, half-deleted-state recovery; document in AUDIT-FINDINGS.md
+- [ ] **Phase 37: Backend Factory Reset** — `system.factoryReset({preserveApiKey})` tRPC route, idempotent wipe bash (services + scoped Docker + DB drop + filesystem rm), API key stash, install.sh re-execution via cgroup-escape, JSON event row in update-history
+- [ ] **Phase 38: UI Factory Reset** — Settings > Advanced "Danger Zone" button, explicit-list confirmation modal, preserve-account-vs-fresh radio, type-FACTORY-RESET-to-confirm, BarePage progress overlay, post-reset login routing, pre-reset blocking checks
 
 ## Phase Details
 
-### Phase 36: Reuse-Audit Spike
-**Goal**: Decision matrix that documents which Phase 20 capabilities scale to v30.0 multi-source multi-hour workloads and which require replacement, gating Phase 37 schema design
-**Depends on**: Nothing (entry point of v30.0; reads existing Phase 20 + v29.0 Phase 33 source)
-**Requirements**: BAK-CORE-01
+### Phase 36: install.sh Audit & Hardening
+**Goal**: De-risk the entire factory-reset chain by proving (or hardening) that `livinity.io/install.sh` exists, accepts an API key without leaking it, runs idempotently on already-installed hosts, and has a recovery story for half-deleted state. The audit's findings gate Phase 37's wipe/reinstall design — without confidence in install.sh's behavior, the wipe step is a one-way trip into a brick.
+**Depends on**: Nothing (entry point of v29.2; Audit-only — no production wipes)
+**Requirements**: FR-AUDIT-01, FR-AUDIT-02, FR-AUDIT-03, FR-AUDIT-04, FR-AUDIT-05
 **Success Criteria** (what must be TRUE):
-  1. User can read a single decision-matrix artifact (`.planning/phases/36-reuse-audit-spike/SPIKE-FINDINGS.md`) that names every Phase 20 component and marks it KEEP / FORK / REPLACE with reason
-  2. The spike produces an explicit verdict on the four flagged failure modes — livinityd-restart resilience of in-flight jobs, in-memory `inFlight: Set` mutex limits, JWT-derived vault key blast-radius on factory reset, back-pressure under network drops
-  3. Schema impact list is enumerated — every column / table that Phase 37 must add or change to support multi-destination, BAK-VERSION, BAK-TZ, heartbeat is named, with the source data flow that drove the requirement
-  4. Phase 37 planner can read the artifact alone and start schema work without re-reading Phase 20 source
+  1. `phases/36-install-sh-audit/AUDIT-FINDINGS.md` documents the actual fetched contents of `livinity.io/install.sh`, its argument surface, and its idempotency behavior on a host that already has `/opt/livos/`
+  2. The findings explicitly state whether install.sh accepts `--api-key-file <path>` (or `--api-key` via stdin) — NEVER argv. If argv-only, the audit produces a hardening patch that adds the safer interface
+  3. Half-deleted-state recovery plan documented — either install.sh natively supports `--resume`, OR Phase 37's wipe step takes a pre-wipe `/opt/livos` snapshot to a known recovery directory before unlinking
+  4. Server5 outage fallback identified — if relay is down at reset time, the documented path to recovery (cached install.sh, public bootstrap key, alternate URL) exists or is filed as v29.2.1 follow-up
+  5. Phase 37 backend planner can read AUDIT-FINDINGS.md alone and design the wipe+reinstall bash without re-running the audit
 **Plans**: TBD
-**Research flag**: this phase IS research; no separate phase research file required
+**Research flag**: this phase IS the audit/research; AUDIT-FINDINGS.md is the deliverable
 
-### Phase 37: Schema Foundation + Key Vault
-**Goal**: Permanent v30.0 data model and encryption foundation in place, allowing every downstream phase to write rows and bytes against contracts that will not change
-**Depends on**: Phase 36 (consumes spike's decision matrix)
-**Requirements**: BAK-CORE-02, BAK-CRYPT-01, BAK-CRYPT-02, BAK-CRYPT-03
+### Phase 37: Backend Factory Reset
+**Goal**: A `system.factoryReset({preserveApiKey})` tRPC route triggers an idempotent root-level wipe of LivOS (services + scoped Docker + DB + filesystem) and re-executes install.sh as a detached cgroup-escaped process so it survives killing its own livinityd parent. The wipe stops short of nuking unrelated host state (NOT global `docker volume prune`) and emits a JSON event row matching v29.0 Phase 33 schema with `status: "factory-reset"`.
+**Depends on**: Phase 36 (consumes install.sh AUDIT-FINDINGS.md to know exactly what arguments to pass and how to wrap)
+**Requirements**: FR-BACKEND-01, FR-BACKEND-02, FR-BACKEND-03, FR-BACKEND-04, FR-BACKEND-05, FR-BACKEND-06, FR-BACKEND-07
 **Success Criteria** (what must be TRUE):
-  1. Three new PG tables (`backup_destinations`, `backup_history`, `backup_keys`) live in `livos/packages/livinityd/source/modules/database/schema.sql` with multi-destination, BAK-VERSION (manifest schema version), BAK-TZ (per-job timezone), and `heartbeat_at` column on `scheduled_jobs` — schema changes are permanent and idempotent on Mini PC restart
-  2. A 32-byte master key is generated on first livinityd boot and persisted at `/opt/livos/data/secrets/backup-key` (mode 0600, NOT JWT-derived); rotating the JWT secret leaves backups decryptable
-  3. `system-backup/key-vault.ts` exposes `wrapDataKey(masterKey)` and `unwrapDataKey(envelope)` and is consumable by `system-backup/sources/*.ts` in Phase 38 — proven by a unit test that round-trips a random data-key through wrap/unwrap and matches input bytes
-  4. `age-encryption@^0.2.4` (typage) is installed and integrated as a stream filter that any `Readable` source can pipe through; an integration test encrypts a 10MB stream and decrypts it back to byte-identical output
-**Plans**: TBD
-
-### Phase 38: Orchestrator + State Machine + PG Dump
-**Goal**: One source (PostgreSQL — the highest-stakes data) flows end-to-end through a crash-resilient orchestrator, proving the run lifecycle, quiesce protocol, and pre-flight gates before any other source plugs in
-**Depends on**: Phase 37 (needs schema for run records and key vault for encryption)
-**Requirements**: BAK-CORE-03, BAK-CORE-04, BAK-CORE-05, BAK-SRC-01, BAK-CRYPT-06
-**Success Criteria** (what must be TRUE):
-  1. User can trigger a PG-only backup on the Mini PC and observe the run move through `pending → running → uploading → verifying → complete` in `backup_history`, with a row-write BEFORE every transition (verifiable by killing livinityd mid-run and confirming the row reflects last-written state, not last-attempted state)
-  2. Pre-flight refuses to start the run when free disk is below threshold, destination is unreachable, key vault unlock fails, or an update is in progress — each refusal lands as a distinct `error` reason in `backup_history` AND surfaces in the next phase's UI toast
-  3. Crash-reaper at livinityd startup converts orphaned `running` rows (no recent `heartbeat_at`) to `failed` with reason "livinityd restarted mid-run" — verified by killing livinityd mid-run, restarting, and observing the row transition without manual intervention
-  4. Pending-rename atomicity holds at destination layer: `<runId>-pending/` directory exists during the run, rename to `<runId>-success/` happens only after manifest upload completes (mirrors v29.0 Phase 33 pattern)
-  5. PG dump output uses `pg_dump --format=custom --compress=zstd:3`, writes through a SHA-256 hash + age-encryption stream, and the resulting LSN is recorded in the manifest for the run
+  1. `system.factoryReset({preserveApiKey: boolean})` tRPC route exists in `livos/packages/livinityd/source/modules/system/`, returns immediately (detached spawn), and is registered in `httpOnlyPaths` in `common.ts` so the long-running mutation cannot ride the WebSocket — verified by curl-invoking the route and observing a 202-equivalent response within 200ms
+  2. Wipe procedure stops `livos liv-core liv-worker liv-memory livos-rollback caddy` (preserves sshd), iterates `user_app_instances` to scope `docker stop`/`docker rm` to LivOS-managed containers ONLY, drops `livos` PG database + user, and removes `/opt/livos /opt/nexus /etc/systemd/system/{livos,liv-core,liv-worker,liv-memory,livos-rollback}.service`. Idempotent — running the wipe twice on the same host produces no errors
+  3. `preserveApiKey: true` stashes `LIV_API_KEY` from `/opt/livos/.env` to `/tmp/livos-reset-apikey` (mode 0600) BEFORE the rm step; install.sh receives it via `--api-key-file /tmp/livos-reset-apikey` (per Phase 36 audit); the temp file is removed after install.sh completes (success OR failure). `preserveApiKey: false` skips the stash entirely
+  4. The wipe+reinstall bash runs in a transient `systemd-run --scope --collect` cgroup (v29.1 pattern) so `systemctl stop livos` mid-flight does NOT kill the wipe process — verified by triggering reset, killing livos.service mid-wipe, and observing the wipe still completing
+  5. JSON event row at `/opt/livos/data/update-history/<ts>-factory-reset.json` records: timestamp, preserveApiKey choice, wipe duration, reinstall duration, install.sh exit code, final status. Schema extends Phase 33 OBS-01 `update-history` shape with `status: "factory-reset"`. After reinstall, the new livinityd's history reader picks it up and surfaces in Phase 38 UI
+  6. install.sh failure modes handled: 401 on revoked API key surfaces in JSON event row with `error: "api-key-401"` and the post-reset UI shows "API key invalid — log into livinity.io and re-issue"; transient Server5 5xx triggers up to 3 retries before flagging `error: "server5-unreachable"`
 **Plans**: TBD
 
-### Phase 39: Remaining Sources + Manifest + L1 Verify
-**Goal**: Every source LivOS knows how to back up plugs into the orchestrator interface; the manifest is the integrity contract that ties them together; per-source SHA-256 hashing fails the run on corruption
-**Depends on**: Phase 38 (sources implement the orchestrator's `BackupSource` interface and register through it)
-**Requirements**: BAK-SRC-02, BAK-SRC-03, BAK-SRC-04, BAK-SRC-05, BAK-SRC-06, BAK-SRC-07, BAK-SRC-08
+### Phase 38: UI Factory Reset
+**Goal**: A user can find the Factory Reset button in Settings > Advanced, read an explicit list of what will be deleted, type-to-confirm, choose preserve-account-vs-fresh, and watch the reinstall progress in a BarePage cover (mirroring Phase 30 update overlay). The pre-flight blocks reset if an update or backup is running, the network is unreachable, or the user lacks admin role.
+**Depends on**: Phase 37 (UI calls the live tRPC route and reads the live JSON event row for progress)
+**Requirements**: FR-UI-01, FR-UI-02, FR-UI-03, FR-UI-04, FR-UI-05, FR-UI-06, FR-UI-07
 **Success Criteria** (what must be TRUE):
-  1. User can configure a backup plan that selects PostgreSQL + Redis + filesystem + secrets + per-app Docker volumes, run it, and see all five sources land as separate encrypted artifacts inside the run directory with sizes and per-source SHA-256s
-  2. The application-level quiesce protocol fires before any source captures data: subscribers receive `backup:quiesce` on Redis pub/sub, finish in-flight writes, the orchestrator captures sources in PG → Redis → FS order, then `backup:resume` releases — `quiesce_started_at` and `quiesce_ended_at` are recorded in the manifest
-  3. `manifest.json` includes per-source SHA-256, sizes, schema_version, livos_sha, key_id, wrapped_data_key, Argon2id params, quiesce timestamps, and source-list; the manifest is HMAC-signed with the master key and uploaded LAST after all sources land in `<runId>-pending/`
-  4. Mid-stream corruption of any source (simulated by interrupting one source's pipe) causes the run to fail with reason "L1 SHA-256 mismatch" in `backup_history.error` and the `<runId>-pending/` directory does NOT get renamed to `-success/`
-  5. The `filesystem-tar` source NEVER writes outside its hard-coded allowlist — verified by attempting to add `/proc` or `/` to the source config and observing rejection at config-validation time, not run-time
-**Plans**: TBD
-
-### Phase 40: Destinations + Retention + L2 Verify
-**Goal**: Backups can be written to one or more destinations, ransomware-resistant by default, with retention policies and post-upload integrity verification — the bytes leave the host with proof of arrival
-**Depends on**: Phase 39 (destinations move the manifest + sources produced upstream)
-**Requirements**: BAK-DEST-01, BAK-DEST-02, BAK-DEST-03, BAK-DEST-04, BAK-DEST-05, BAK-DEST-06, BAK-DEST-07
-**Success Criteria** (what must be TRUE):
-  1. User can configure local-disk, S3-compatible, AND SFTP destinations via tRPC + UI; the underlying uploaders are re-exported verbatim from Phase 20's `scheduler/backup.ts` (zero forking — one bug fix lands everywhere)
-  2. A backup plan can target 1-to-5 destinations; partial-fail produces a "partial success" run record (one destination uploaded, one failed); all-fail produces a "failed" run; single-destination plans are flagged red in the next phase's UI as 3-2-1-violating
-  3. Test-connection probes append-only credential safety: when an S3 access key has `s3:DeleteObject` permission, the destination shows a yellow warning before save; the UI guides the user toward delete-less application keys per provider (S3 / B2 / Wasabi / MinIO / R2)
-  4. After every successful upload, an L2 HEAD/ETag check verifies the destination object matches the source SHA — mismatch fails the destination with reason in the run record; verified by mutating a local-destination file post-upload and observing the next run's L2 step flag the corruption
-  5. Retention policy `keep_last N` plus GFS daily/weekly/monthly executes server-side via lifecycle rules where supported, falls back to client-side prune; post-prune count is verified `<= keep_last + 1` and prune failures surface in the run record
-  6. Network-drop mid-upload aborts the multipart upload via try/finally + `Upload.abort()`; the run is marked failed; the next scheduled run picks up cleanly without orphaned multipart fragments lingering at the destination
+  1. Settings > Advanced > "Danger Zone" section shows a red destructive Factory Reset button with shield/warning icon; only admin users see it — non-admin users see an explanatory note instead
+  2. Click opens a confirmation modal that explicitly enumerates everything being deleted ("All apps, all user accounts, all data, all settings, all sessions, all secrets including JWT and AI keys, all schedules, all Docker volumes managed by LivOS"); the explicit list IS the consent surface, not generic "are you sure?"
+  3. Modal includes a radio with two options: "Restore my account" (preserveApiKey=true) and "Start fresh as new user" (preserveApiKey=false); both options have a one-line description so the user understands the post-reset login flow they're choosing
+  4. Modal final-confirm requires the user to type literal `FACTORY RESET` (case-sensitive) into a text input before the destructive button enables — verified by typing variants and observing the button stays disabled
+  5. On confirm, BarePage progress overlay takes over the screen (Phase 30 pattern reuse), showing "Reinstalling..." + animated progress + estimated 5-10 min countdown. The overlay polls the JSON event row every few seconds and updates state in place
+  6. Post-reset: if `preserveApiKey=true` AND reinstall succeeded, redirect to /login (existing creds work). If `preserveApiKey=false` AND reinstall succeeded, redirect to /onboarding wizard. If reinstall failed, show error page with the JSON event row link + "Try again" button + "Manual SSH recovery instructions" link
+  7. Pre-reset blocking checks in modal: button disabled (with tooltip explaining why) if update is in progress, OR pre-flight `curl -s -o /dev/null https://livinity.io` returns non-2xx, OR (when v30.0 Backup ships) a backup is in flight per BAK-SCHED-04 lock. v29.2 only checks update-in-progress; backup mutex is forward-compatible
 **Plans**: TBD
 **UI hint**: yes
-
-### Phase 41: Scheduler + Pre-Update Auto-Snapshot + Update Mutex
-**Goal**: Backups happen automatically on a cron schedule, manually via "Backup Now," AND — the killer integration with v29.0 — automatically before every update.sh run, turning Phase 32 binary rollback into full data rollback
-**Depends on**: Phase 40 (cron firing requires a working source-to-destination pipeline; pre-update auto-snapshot writes real bytes)
-**Requirements**: BAK-SCHED-01, BAK-SCHED-02, BAK-SCHED-03, BAK-SCHED-04, BAK-SCHED-05
-**Success Criteria** (what must be TRUE):
-  1. `BUILT_IN_HANDLERS['system-backup']` is registered with Phase 20's Scheduler; a default-disabled `system-backup-daily` job (cron `0 3 * * *`) is seeded into `scheduled_jobs` and surfaces in Settings > Schedules; user can opt in via UI
-  2. Manual "Backup Now" via tRPC `systemBackup.runNow({plan, tags})` triggers a real run end-to-end and stores the tags array on `backup_history` for provenance — verified by running with `tags: ['manual', 'pre-experiment']` and observing the row
-  3. `update.sh` calls `systemBackup.runNow({plan: 'pre-update', tags: ['pre-update', sha]})` BEFORE Phase 30/31 update steps; the update blocks until snapshot completes (or skips with a visible warning if no backup plan is configured) — verified by running an update on the Mini PC and observing a `pre-update`-tagged run lands before code rsync
-  4. The backup ↔ update mutex prevents collisions: while a backup runs, the Redis lock `nexus:system-backup:lock` plus filesystem sentinel `/opt/livos/data/backup-in-progress.flag` cause `update.sh` pre-flight to sleep 5 minutes (max 3 retries) before aborting with explicit error; the UI Install Update button is disabled while a backup is running
-  5. Schedule presets (Daily 3am, Weekly Sunday 3am, Custom cron) are exposed in the UI; the pipeline accepts user-supplied cron expressions and refuses invalid ones at save time
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 42: UI — History + Run-Now + Destinations + Recovery-Kit Modal
-**Goal**: Users can configure, run, monitor, and recover backups entirely from the LivOS Settings UI; the mandatory BIP39 recovery-kit modal blocks plan creation until the user proves they captured the secret
-**Depends on**: Phase 41 (UI surfaces real cron jobs, manual triggers, and the Install Update integration must be testable)
-**Requirements**: BAK-CRYPT-04, BAK-CRYPT-05, BAK-UI-01, BAK-UI-02, BAK-UI-03, BAK-UI-04, BAK-UI-05, BAK-UI-06, BAK-UI-07, BAK-UI-08
-**Success Criteria** (what must be TRUE):
-  1. User can navigate to Settings > Backup and find five tabbed subsections (Plan, Destinations, History, Recovery Kit, Drill); the layout matches existing Settings UI conventions
-  2. The first time a user creates a backup plan, the Recovery Kit modal appears showing passphrase + BIP39 24-word mnemonic + "We cannot recover this — save it now" warning; the modal cannot be dismissed without typing 3-of-24 verification words; a printable PDF download is offered; an Argon2id-derived KEK independently wraps the master key for `livos-restore.sh` use
-  3. Backup history table reuses v29.0 Phase 33 LogViewer pattern verbatim — columns Timestamp / Status / Sources / Destinations / Size / Duration / Tags / Actions; clicking a row opens the full log; clicking "Restore from this snapshot" deep-links into the restore wizard (Phase 43)
-  4. "Backup Now" button kicks off a manual run with type-to-confirm if user has unsaved work; live progress (state-machine state + per-source progress) streams via tRPC subscription registered in `httpOnlyPaths` in `common.ts` (mirrors `system.update` precedent — long-running mutations cannot ride the WebSocket)
-  5. Destination CRUD UI supports per-type forms (local / S3 / SFTP) with test-connection button surfacing the Phase 40 delete-permission warning; provider-specific append-only-credentials guidance text is visible
-  6. Sidebar status badge shows green / yellow / red mirroring v29.0 Phase 34 pattern: yellow if last successful drill > 14 days, red if last 3 backups failed OR no encryption configured; in-UI failure toasts fire on backup failure; optional email + webhook URL fields per plan
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 43: Standalone Restore + Drill Mode + RBAC
-**Goal**: A user whose `/opt/livos` is gone — corrupted disk, ransomware, hardware failure — can restore from any configured destination using a pure shell script with zero Node dependency; the same machinery exercised monthly via drill mode proves the backups are restorable, not just present
-**Depends on**: Phase 42 (drill UI + restore wizard depend on history table; restore needs a real backup to restore FROM; standalone shell needs the manifest format finalized through Phase 39)
-**Requirements**: BAK-RESTORE-01, BAK-RESTORE-02, BAK-RESTORE-03, BAK-RESTORE-04, BAK-RESTORE-05, BAK-RESTORE-06, BAK-RESTORE-07, BAK-RESTORE-08
-**Success Criteria** (what must be TRUE):
-  1. User can run `livos-restore.sh <destination> <runId>` on a fresh Ubuntu 24.04 VM with `/opt/livos` empty, supply the BIP39-derived passphrase, and end up with a fully working LivOS install at `manifest.livos_sha` — PG restored, Redis restored, `/opt/livos/data` restored, secrets restored, per-user Docker volumes restored, services running. Pure shell + openssl + psql + redis-cli + docker + tar; zero Node binary at restore time
-  2. `install.sh --from-backup <destination> <runId>` wires fresh-install bootstrap directly to `livos-restore.sh`, solving the chicken-and-egg disaster recovery scenario where livinityd cannot bootstrap itself
-  3. If a previous restore was interrupted (`/opt/livos/data/restore-pending.json` present), livinityd refuses to come up cleanly and serves a maintenance page with explicit recovery instructions — half-shipped restores cannot silently corrupt a running install
-  4. In-UI restore wizard supports three modes: (a) selective single-file restore via manifest tree browsing, (b) single-app restore filtered by `user_app_instances.username`, (c) full-system restore via `execa → livos-restore.sh`; in-place restore requires type-to-confirm and triggers an automatic pre-restore snapshot for insurance
-  5. Multi-user RBAC is enforced: admins see all backups and can restore anything (logged to `device_audit_log` per Phase 15 immutability); non-admin users see only backups containing their own data and can only restore their own apps — verified by attempting cross-user restore as non-admin and observing the rejection
-  6. Drill mode (`livos-restore.sh --drill --target-prefix livos-drill-`) restores into ephemeral `livos_drill_<runId>` PG DB + scratch Docker volumes + tmpfs FS, runs `pg_isready` plus sanity queries, tears down on success; default-disabled monthly cron; admin opts in. UI shows "Last successful drill: X days ago" — yellow at >14 days, red on drill failure with `ai_alerts` entry
-  7. Schema migration on restore enforces version compatibility: `manifest.livos_version` and `manifest.pg_schema_version` are checked against current; same-minor-version restores proceed, cross-major-version restores are blocked with explicit error (cross-version migration deferred to v30.5+)
-**Plans**: TBD
-**UI hint**: yes
-**Research flag**: needs phase research before planning — `livos-restore.sh` is the disaster-recovery linchpin and the highest-risk single deliverable in v30.0; recommend 1-day prototype spike on a fresh Ubuntu 24.04 VM before plan-phase
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 36. Reuse-Audit Spike | 0/? | Not started | - |
-| 37. Schema Foundation + Key Vault | 0/? | Not started | - |
-| 38. Orchestrator + State Machine + PG Dump | 0/? | Not started | - |
-| 39. Remaining Sources + Manifest + L1 Verify | 0/? | Not started | - |
-| 40. Destinations + Retention + L2 Verify | 0/? | Not started | - |
-| 41. Scheduler + Pre-Update Auto-Snapshot + Update Mutex | 0/? | Not started | - |
-| 42. UI — History + Run-Now + Destinations + Recovery-Kit Modal | 0/? | Not started | - |
-| 43. Standalone Restore + Drill Mode + RBAC | 0/? | Not started | - |
+| 36. install.sh Audit & Hardening | 0/? | Not started | - |
+| 37. Backend Factory Reset | 0/? | Not started | - |
+| 38. UI Factory Reset | 0/? | Not started | - |
 
 ## Coverage Summary
 
-**Total v30.0 requirements:** 47
-**Mapped:** 47
+**Total v29.2 requirements:** 19
+**Mapped:** 19
 **Orphaned:** 0
 **Duplicated:** 0
 
 | Category | Count | Phase(s) |
 |----------|-------|----------|
-| BAK-CORE | 5 | 36 (×1), 37 (×1), 38 (×3) |
-| BAK-SRC | 8 | 38 (×1), 39 (×7) |
-| BAK-DEST | 7 | 40 (×7) |
-| BAK-CRYPT | 6 | 37 (×3), 38 (×1), 42 (×2) |
-| BAK-SCHED | 5 | 41 (×5) |
-| BAK-UI | 8 | 42 (×8) |
-| BAK-RESTORE | 8 | 43 (×8) |
+| FR-AUDIT | 5 | 36 (×5) |
+| FR-BACKEND | 7 | 37 (×7) |
+| FR-UI | 7 | 38 (×7) |
+
+**Note on v30.0:** v30.0 Backup & Restore was bootstrapped (8 phases / 47 BAK-* reqs) and paused 2026-04-28 in favor of v29.2. Full archived artifacts at `.planning/milestones/v30.0-DEFINED/` (REQUIREMENTS.md + ROADMAP.md + research/{STACK,FEATURES,ARCHITECTURE,PITFALLS,SUMMARY}.md). When resumed, phase numbers re-base to start after v29.2's last phase.
 
 ### Past Milestones
 
