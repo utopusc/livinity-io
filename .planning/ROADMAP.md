@@ -77,7 +77,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   7. Pre-reset blocking checks in modal: button disabled (with tooltip explaining why) if update is in progress, OR pre-flight `curl -s -o /dev/null https://livinity.io` returns non-2xx, OR (when v30.0 Backup ships) a backup is in flight per BAK-SCHED-04 lock. v29.2 only checks update-in-progress; backup mutex is forward-compatible
 **Plans**: 4 plans
   - [x] 38-01-foundation-and-unbreak-PLAN.md — Pure-logic lib (types, error-tags, state-machine, typed-confirm, network-preflight, deletion-list) + un-break useReset/GlobalSystemStateContext for Phase 37 schema (FR-UI-04, FR-UI-05, FR-UI-06, FR-UI-07)
-  - [ ] 38-02-danger-zone-button-PLAN.md — Settings > Advanced > Danger Zone section with admin-only Factory Reset button + non-admin fallback note (FR-UI-01, FR-UI-07)
+  - [x] 38-02-danger-zone-button-PLAN.md — Settings > Advanced > Danger Zone section with admin-only Factory Reset button + non-admin fallback note (FR-UI-01, FR-UI-07) — completed 2026-04-29
   - [ ] 38-03-confirmation-modal-PLAN.md — Explicit-list confirmation modal with radio + type-to-confirm + pre-flight-gated submit (FR-UI-02, FR-UI-03, FR-UI-04, FR-UI-07)
   - [ ] 38-04-progress-overlay-and-post-reset-routing-PLAN.md — BarePage progress overlay polling listUpdateHistory + 90s reconnect + redirect/error fan-out + recovery static page (FR-UI-05, FR-UI-06)
 **UI hint**: yes
@@ -88,7 +88,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 |-------|----------------|--------|-----------|
 | 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
 | 37. Backend Factory Reset | 4/4 | Complete | 2026-04-29 |
-| 38. UI Factory Reset | 0/4 | Planned | - |
+| 38. UI Factory Reset | 2/4 | Executing (Plan 03 next) | - |
 
 ## Coverage Summary
 
