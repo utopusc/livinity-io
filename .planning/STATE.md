@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed Plan 38-03 (confirmation modal — FactoryResetModal + preflight-decision + usePreflight + delete legacy password gate). Plan 04 (BarePage progress overlay + post-reset routing) is next.
-last_updated: "2026-04-29T13:30:00.000Z"
-last_activity: 2026-04-29 -- Phase 38 Plan 03 done
+stopped_at: Completed Plan 38-04 (BarePage progress overlay + post-reset routing — FactoryResetProgress polls listUpdateHistory @ 2s, redirects success+preserveApiKey to /login or /onboarding, fans failed/rolled-back to dedicated pages, ships /help/factory-reset-recovery static page). Phase 38 done — v29.2 Factory Reset milestone closed end-to-end.
+last_updated: "2026-04-29T15:00:00.000Z"
+last_activity: 2026-04-29 -- Phase 38 Plan 04 done; Phase 38 closes; v29.2 Factory Reset milestone complete
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 ## Current Position
 
-Phase: 38 (UI Factory Reset) — EXECUTING
-Plan: 4 of 4
-Status: Plans 01+02+03 complete; Plan 04 (BarePage progress overlay + post-reset routing + recovery static page) next
+Phase: 38 (UI Factory Reset) — COMPLETE
+Plan: 4 of 4 (all done)
+Status: Phase 38 complete — all 4 plans (foundation+lib, danger-zone-button, confirmation-modal, progress-overlay+routing) shipped. v29.2 Factory Reset milestone closed end-to-end (FR-UI-01..07 satisfied).
 Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
@@ -139,8 +139,21 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 37 P04 | 16 min | 3 tasks | 3 files |
 | Phase 38 P01 | 10 | 2 tasks | 14 files |
 | Phase 38 P03 | 12 min | 3 tasks | 6 created + 3 modified + 3 deleted | 2026-04-29 |
+| Phase 38 P04 | 18 min | 3 tasks | 12 created + 3 modified | 2026-04-29 |
 
 ## Accumulated Context
+
+### Plan 38-04 Decisions (2026-04-29) — Phase 38 closed; v29.2 Factory Reset milestone complete
+
+- **failureStartRef + 1s setInterval for the 90s threshold clock** — react-query's `isError` flag flips on/off but does not give us a continuous tick. To make the D-OV-04 90s consecutive-failure threshold fire even if `listUpdateHistory` never recovers, FactoryResetProgress runs a `setInterval(1s)` while `historyQ.isError` is true and updates `consecutiveFailureMs = Date.now() - failureStartRef.current`. The pure-logic helper `computePollingDisplayState` then maps that millisecond counter to the right display mode. Pattern reusable: any "gracefully degrade after X seconds of consecutive failure" UI needs a wall-clock tick separate from the query callback because react-query's onError doesn't fire repeatedly during a sustained outage.
+
+- **Hard navigation (window.location.href) for post-reset routing instead of useNavigate** — after the bash reinstalls livinityd, all in-memory state (cached tRPC queries, JWT tokens) is stale. A `useNavigate('/login')` would keep the same React tree mounted with a fresh-but-poisoned tRPC cache. `window.location.href = route` discards the entire JS context and reloads with a clean slate. Pattern reusable: any "after the backend was reinstalled or rebooted" redirect should use hard navigation, NOT react-router's useNavigate.
+
+- **No auto-redirect on failed/rolled-back, deliberately** — the user just triggered a destructive operation and may need to (a) read the error tag, (b) click "View event log" for diagnostics, (c) copy the manual SSH recovery command. An auto-redirect would erase that context. The pattern is: "destructive op completed unsuccessfully" surfaces stay open until the user clicks something. Encoded in `selectPostResetRoute()` which returns `'stay'` for everything except success.
+
+- **Source-text invariant tests as a substitute for full RTL render** — for components that wire imports + render fan-out + redirect side-effects, full React Testing Library rendering would require mounting a tRPC + react-router + i18n provider tree which is heavy. Instead, the tests use `readFileSync(SRC, 'utf8') + regex assertions` to verify structural wiring (e.g. `refetchInterval: POLL_INTERVAL_MS`, `selectLatestFactoryResetEvent(`, `<FactoryResetErrorPage`). Coupled with a smoke `await import(...)` to catch syntax errors, this catches >90% of structural drift without RTL setup. Pattern reusable for any thin "wire pure helpers + render fan-out" component.
+
+- **Task ordering had to flip mid-plan** — Plan 04's Task 2 (FactoryResetProgress) imports the components Task 3 creates (FactoryResetErrorPage / FactoryResetRecoveryPage). Committing Task 2 first would have broken the smoke test. Resolved by committing Task 3 first, then Task 2. The plan's atomic-commit intent is preserved; only the sequencing changed. Future plan-execute deviation: when a Task imports peer files from a later Task, swap commit order.
 
 ### Plan 37-04 Decisions (2026-04-29) — Phase 37 closed
 

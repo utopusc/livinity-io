@@ -26,7 +26,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 - [x] **Phase 36: install.sh Audit & Hardening** — Verify `livinity.io/install.sh` exists, accepts `--api-key`, idempotent, supports stdin/`--api-key-file`, half-deleted-state recovery; document in AUDIT-FINDINGS.md — completed 2026-04-29 (NOT-IDEMPOTENT verdict, argv FAIL, wrapper spec'd, recovery via pre-wipe-snapshot, all 4 D-10 questions answered)
 - [x] **Phase 37: Backend Factory Reset** — `system.factoryReset({preserveApiKey})` tRPC route, idempotent wipe bash (services + scoped Docker + DB drop + filesystem rm), API key stash, install.sh re-execution via cgroup-escape, JSON event row in update-history — completed 2026-04-29 (4 plans, 41/41 unit tests, 3 shellcheck-clean bash artifacts, opt-in destructive integration scaffold; FR-BACKEND-01..07 satisfied; v29.2 ships in wrapper-degraded mode for install.sh argv leak — full env-var fix deferred to v29.2.1)
-- [ ] **Phase 38: UI Factory Reset** — Settings > Advanced "Danger Zone" button, explicit-list confirmation modal, preserve-account-vs-fresh radio, type-FACTORY-RESET-to-confirm, BarePage progress overlay, post-reset login routing, pre-reset blocking checks
+- [x] **Phase 38: UI Factory Reset** — Settings > Advanced "Danger Zone" button, explicit-list confirmation modal, preserve-account-vs-fresh radio, type-FACTORY-RESET-to-confirm, BarePage progress overlay, post-reset login routing, pre-reset blocking checks — completed 2026-04-29 (4 plans, 135/135 unit tests, FR-UI-01..07 satisfied; v29.2 Factory Reset milestone closed end-to-end)
 
 ## Phase Details
 
@@ -79,7 +79,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   - [x] 38-01-foundation-and-unbreak-PLAN.md — Pure-logic lib (types, error-tags, state-machine, typed-confirm, network-preflight, deletion-list) + un-break useReset/GlobalSystemStateContext for Phase 37 schema (FR-UI-04, FR-UI-05, FR-UI-06, FR-UI-07)
   - [x] 38-02-danger-zone-button-PLAN.md — Settings > Advanced > Danger Zone section with admin-only Factory Reset button + non-admin fallback note (FR-UI-01, FR-UI-07) — completed 2026-04-29
   - [x] 38-03-confirmation-modal-PLAN.md — Explicit-list confirmation modal with radio + type-to-confirm + pre-flight-gated submit (FR-UI-02, FR-UI-03, FR-UI-04, FR-UI-07) — completed 2026-04-29 (FactoryResetModal with verbatim 7-item DELETION_LIST <ul>, preserve-vs-fresh radio with safer "preserve" default, strict-equality FACTORY RESET typed-confirm via lib helper, computeConfirmEnabled gates on update-in-progress + 5s-AbortController network preflight, onPointerDownOutside disabled but Escape enabled per D-CF-03; 3 legacy components deleted, 10 new i18n keys, 29 vitest assertions across 3 test files)
-  - [ ] 38-04-progress-overlay-and-post-reset-routing-PLAN.md — BarePage progress overlay polling listUpdateHistory + 90s reconnect + redirect/error fan-out + recovery static page (FR-UI-05, FR-UI-06)
+  - [x] 38-04-progress-overlay-and-post-reset-routing-PLAN.md — BarePage progress overlay polling listUpdateHistory + 90s reconnect + redirect/error fan-out + recovery static page (FR-UI-05, FR-UI-06) — completed 2026-04-29 (FactoryResetProgress polls @ 2s, computePollingDisplayState encodes 90s reconnect threshold via vi.useFakeTimers harness, selectPostResetRoute splits success+preserveApiKey for /login vs /onboarding, FactoryResetErrorPage renders error-tag-specific message + 3 buttons (View event log / Try again / Manual SSH recovery), FactoryResetRecoveryPage renders rolled-back success, /help/factory-reset-recovery static page contains the verbatim D-RT-02 tar+systemctl recovery command, ResettingCover stub swapped to FactoryResetProgress; 52 new vitest assertions across 5 test files)
 **UI hint**: yes
 
 ## Progress
@@ -88,7 +88,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 |-------|----------------|--------|-----------|
 | 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
 | 37. Backend Factory Reset | 4/4 | Complete | 2026-04-29 |
-| 38. UI Factory Reset | 3/4 | Executing (Plan 04 next) | - |
+| 38. UI Factory Reset | 4/4 | Complete | 2026-04-29 |
 
 ## Coverage Summary
 
