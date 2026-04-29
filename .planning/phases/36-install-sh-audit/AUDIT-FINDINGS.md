@@ -63,7 +63,59 @@ If the SHA-256 differs at re-fetch time, `livinity.io/install.sh` has drifted si
 
 ## Argument Surface
 
-*Populated by Plan 02.*
+Static analysis of `install.sh.snapshot` (line refs are to that file). install.sh was NOT executed.
+
+### Flags
+
+| Flag | line:N | Required | Default | Description |
+|------|--------|----------|---------|-------------|
+| `--api-key <value>` | line:14 | optional | `""` (empty) | Sets `PLATFORM_API_KEY` from `$2`. Two-arg form only (`--api-key=VALUE` is NOT supported — splits on space). LEAKS via `ps` — see API Key Transport section. |
+
+**Unrecognized-flag handling:** line:16 `*) shift ;;` — any non-`--api-key` token (including `--help`, `--api-key-file`, `--resume`, `--force`, `--no-build`, `--version`, `--debug`, etc.) is **silently shifted off without warning or error**. install.sh accepts no other flags. There is no `getopts`, no `--help` text, no `--version` reporter. (Static evidence: `grep -E "case \"\\\$1\"|getopts" install.sh.snapshot` returns one `case "$1"` at line:13 only; no `getopts`.)
+
+### Environment variables consumed
+
+install.sh consumes very few environment variables — most LIV-namespaced env vars are *generated and written* into `/opt/livos/.env`, not read from the caller's environment. Distinction below: **read** vs. **written**.
+
+| Variable | line:N | Required | Default | Description |
+|----------|--------|----------|---------|-------------|
+| `EUID` | line:164 | yes (implicit) | (shell-provided) | Root check — script aborts via `fail()` if `EUID -ne 0`. |
+| `DEBIAN_FRONTEND` | line:1474 | no | (script *exports* `noninteractive` for itself) | Suppresses apt prompts during install. Set BY install.sh, not consumed FROM caller. Listed for completeness. |
+| `DISPLAY` | line:568, 656 | no | unset | Used inside the embedded `livos-launch-chrome` and `livos-set-resolution` scripts written to `/usr/local/bin/`. Not consumed by install.sh's main flow. |
+| `XAUTHORITY` / `HOME` | line:570, 658 | no | derived | Same — used in embedded user-side scripts only. |
+| `REDIS_URL` | line:724, 1338, 1563 | no | (sourced from `/opt/livos/.env` after generation) | Re-read post-`write_env_file` to extract the redis password for `redis-cli` calls. Not a caller-supplied input. |
+| (no `LIV_API_KEY` consumed) | n/a | — | — | `LIV_API_KEY` is **generated** (line:909) into `.env` but never read from the caller's env. |
+| (no `KIMI_API_KEY` consumed) | n/a | — | — | Written empty (line:905) into `.env` for later configuration via UI; not consumed. |
+| (no `JWT_SECRET` consumed) | n/a | — | — | Generated (line:861, 908). |
+
+**Key finding:** install.sh consumes **only one user-supplied input** — `--api-key <value>` via argv. There is **no** `LIV_API_KEY=... bash install.sh` env-var path, **no** stdin password prompt for the platform API key, and **no** `--api-key-file` flag. (Verified by `grep -nE "\\\$\\{LIV_API_KEY|\\\$\\{API_KEY\\}|\\\$\\{PLATFORM_API_KEY:-|read.*API_KEY|--api-key-file" install.sh.snapshot` returning only the lines listed in this section, with no env-var read of the platform key.)
+
+### Stdin behavior
+
+install.sh **does not read the platform API key from stdin**. The `read -r/-rsp/-rp` calls that exist (line:103, 206, 224, 249, 252, 269) are confined to:
+
+- **line:103** — `read -r u` inside an `awk | while` pipeline parsing `loginctl list-sessions` output (desktop-user detection). Unrelated to user input.
+- **line:206** — `read -rp "$prompt [$default]: " value` inside `wizard_input()` — interactive TTY path for non-API-key prompts (domain, etc.).
+- **line:224** — `read -rsp "$prompt: " value` inside `wizard_password()` — silent password prompt, used for **interactive wizard** dialogs but **not invoked for the platform API key** (no caller in the script invokes `wizard_password` against `PLATFORM_API_KEY`; the platform key only flows in via argv at line:14).
+- **line:249, 252** — `read -rp` in `wizard_yesno()` — yes/no confirmations.
+- **line:269** — `read -rp "Press Enter to continue..."` — pause for `wizard_msgbox()`.
+
+**Conclusion:** install.sh does not read the platform API key from stdin. The wizard's `wizard_password` helper is dead code with respect to the platform key — it is only used for hypothetical future prompts, not the current `--api-key` path. (Verified: no `wizard_password.*PLATFORM_API_KEY` or `read.*API_KEY` line exists in the snapshot.)
+
+### Positional arguments
+
+install.sh accepts no positional arguments. The `while [[ $# -gt 0 ]]; do case "$1" in ... esac done` loop at line:12-17 only matches `--api-key`; everything else falls through to `*) shift ;;` (line:16) and is discarded. The script is invoked as `bash install.sh [--api-key VALUE]` and ignores any other tokens.
+
+### Findings summary
+
+- Total flags discovered: **1** (`--api-key <value>`)
+- Total env vars consumed (caller-supplied path): **1** (`EUID`, implicit; `DEBIAN_FRONTEND` is set by the script itself, not consumed)
+- Total env vars *generated* into `.env` and consumed thereafter via sourcing: **1** (`REDIS_URL` post-`write_env_file`)
+- Stdin support for API key: **no**
+- Positional args: **no**
+- Argument-surface anomalies: **2**
+  1. **Unknown flags silently ignored** — `*) shift ;;` (line:16) makes typos like `--api-key-file` no-ops without warning. Phase 37's wrapper must validate flag spelling.
+  2. **`install_cloudflared()` present but obsolete** (line:502-513, called at line:1488) — install.sh installs `cloudflared` even though the live LivOS stack does not use it (per project memory: Cloudflare is DNS-only, traffic flows through the Server5 relay, not via a Cloudflare tunneling daemon). This is dead infrastructure carried over from an earlier deployment model. Documented as anomaly; **NOT a blocker** for v29.2 reset (the package gets installed but never started/used). Plan 03's Hardening Proposals may flag for removal.
 
 ## Idempotency Verdict
 
