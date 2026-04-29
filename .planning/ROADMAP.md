@@ -60,7 +60,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 **Plans**: 4 plans
   - [x] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05) — completed 2026-04-29 (2 source bash files, both shellcheck-clean exit 0; idempotent wipe + pre-wipe tar snapshot + JSON event lifecycle + EXIT-trap apikey cleanup; v29.2 ships in wrapper-degraded mode)
   - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03)
-  - [ ] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06)
+  - [x] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06) — completed 2026-04-29 (deployRuntimeArtifacts + spawnResetScope helpers wired into performFactoryReset; 28/28 unit tests passing including 200ms wall-clock + preflight-gates-spawn invariant; argv matches reference_cgroup_escape.md verbatim)
   - [ ] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07)
 
 ### Phase 38: UI Factory Reset
@@ -75,10 +75,10 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. On confirm, BarePage progress overlay takes over the screen (Phase 30 pattern reuse), showing "Reinstalling..." + animated progress + estimated 5-10 min countdown. The overlay polls the JSON event row every few seconds and updates state in place
   6. Post-reset: if `preserveApiKey=true` AND reinstall succeeded, redirect to /login (existing creds work). If `preserveApiKey=false` AND reinstall succeeded, redirect to /onboarding wizard. If reinstall failed, show error page with the JSON event row link + "Try again" button + "Manual SSH recovery instructions" link
   7. Pre-reset blocking checks in modal: button disabled (with tooltip explaining why) if update is in progress, OR pre-flight `curl -s -o /dev/null https://livinity.io` returns non-2xx, OR (when v30.0 Backup ships) a backup is in flight per BAK-SCHED-04 lock. v29.2 only checks update-in-progress; backup mutex is forward-compatible
-**Plans**: 4 plans
-  - [ ] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05)
-  - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03)
-  - [ ] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06)
+**Plans**: 4 plans (Phase 37 plan list — duplicated here as a hand-off legend; canonical state lives in the Phase 37 entry above)
+  - [x] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05) — completed 2026-04-29
+  - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03) — completed 2026-04-29
+  - [x] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06) — completed 2026-04-29
   - [ ] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07)
 **UI hint**: yes
 
@@ -87,7 +87,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
-| 37. Backend Factory Reset | 2/4 | Executing (Plan 03 next) | - |
+| 37. Backend Factory Reset | 3/4 | Executing (Plan 04 next) | - |
 | 38. UI Factory Reset | 0/? | Not started | - |
 
 ## Coverage Summary

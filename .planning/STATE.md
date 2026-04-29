@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 37-02-trpc-route-PLAN.md (Plan 03 spawn+deploy is next)
-last_updated: "2026-04-29T07:45:00.000Z"
+stopped_at: Completed 37-03-spawn-deploy-PLAN.md (Plan 04 failure-handling-integration is next)
+last_updated: "2026-04-29T07:57:24.000Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 37 (Backend Factory Reset) — EXECUTING
-Plan: 3 of 4
-Status: Plans 01+02 complete; Plan 03 (spawn + deploy) next
+Plan: 4 of 4
+Status: Plans 01+02+03 complete; Plan 04 (failure handling + integration test) next
 Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
@@ -135,6 +135,7 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 36 P02 | 25min | 3 tasks | 2 files |
 | Phase 36 P03 | ~22min | 3 tasks | 2 files (AUDIT-FINDINGS.md + 36-03-SUMMARY.md) | 2026-04-29 |
 | Phase 37 P01 | 7min | 2 tasks | 2 files |
+| Phase 37 P03 | ~11min | 3 tasks | 2 modified (factory-reset.ts + factory-reset.unit.test.ts) | 2026-04-29 |
 
 ## Accumulated Context
 
@@ -153,6 +154,22 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 - **Wrapper degraded-mode preserved** — per D-INST-03, the wrapper's heuristic (`grep -q 'LIV_PLATFORM_API_KEY' "$INSTALL_SH"`) falls back to passing `--api-key` argv internally if install.sh has no env-var support. v29.2 ships in this degraded mode (closes the route-spawn argv leak window only; install.sh's own argv window remains open until v29.2.1's install.sh patch). Document trail: SUMMARY.md captures the residual leak; `LIV_PLATFORM_API_KEY` is referenced 7 times in the wrapper (heuristic + export + 2 comments + 1 assignment + 1 reference + 1 fallback exec) and zero times in any echo/printf/tee context.
 
 - **Single-comment pattern fix** (deviation-rule micro-edit) — plan body said "preserve sshd (omitted from list)" inside a comment; this would have triggered the acceptance criterion `grep -c 'sshd' factory-reset.sh == 0`. Replaced the literal `sshd` token with semantically equivalent wording ("the remote-shell daemon is intentionally absent…"). Substance unchanged. Pattern: when plan body text and acceptance grep gates conflict, the grep gate wins (continuity from Plan 36-03's same invariant).
+
+### Plan 37-03 Decisions (2026-04-29)
+
+- **Cgroup-escape spawn argv matches `reference_cgroup_escape.md` verbatim** — `systemd-run --scope --collect --unit livos-factory-reset-<ISO_TIMESTAMP_BASIC> --quiet bash /opt/livos/data/factory-reset/reset.sh <--preserve-api-key|--no-preserve-api-key> <eventPath>` with `{detached: true, stdio: 'ignore'}` and immediate `child.unref()`. `--scope` puts the bash in a separate transient cgroup under `system.slice` so `systemctl stop livos` mid-flight does NOT cascade-kill the bash. `--collect` auto-removes the transient unit on exit (no leftover dead units in `systemctl list-units`). `detached: true` alone is INSUFFICIENT — only escapes process group, not cgroup; the user's project memory verbatim warns about this and Plan 03 enforces the systemd-run path.
+
+- **Lazy first-call cold-start deploy chosen over update.sh-based shipping** — per CONTEXT.md D-CG-02 path (b): `deployRuntimeArtifacts()` runs at every route invocation. Idempotency via mtime + executable-bit heuristic: skip copy when destination mtime ≥ source mtime AND mode bit 0o100 is set. Otherwise `fs.copyFile` + `fs.chmod(0o755)`. Steady-state cost is 1 × `fs.stat` per artifact (~1ms). First-call cost adds the copy + chmod (~10-20ms). This avoids touching update.sh in v29.2 (deferred to v29.2.1+). Source-tree path resolution via `fileURLToPath(import.meta.url)` + `path.dirname()` works under tsx without a build step (livinityd source-as-runtime layout on Mini PC).
+
+- **Defense-in-depth pre-spawn assertions inside `spawnResetScope`, NOT the route handler** — `assertSystemdRunAvailable()` (execa probe `command -v systemd-run`) and `assertRootEuid()` (process.geteuid() === 0) both throw `TRPCError INTERNAL_SERVER_ERROR` with diagnostic messages. Placed inside the helper so the same checks apply if `spawnResetScope` is ever invoked from another entry point (e.g., a future CLI command or background scheduler). These complement (do NOT replace) `adminProcedure` RBAC: procedure-level check protects user identity; EUID + systemd-run checks protect deployment-environment misconfiguration (livinityd accidentally running as non-root, or non-systemd host).
+
+- **execa probe via dynamic import (`await import('execa')`) instead of top-level import** — keeps the function unit-test-mockable via `vi.mock('execa')` without re-shaping the module-level imports. The existing top-level `import {$} from 'execa'` is preserved for the legacy `performReset` deprecated path; the new spawn helper uses the dynamic-import named export. Pattern reusable: when adding test-mockable execa calls to a module that already has a top-level execa import, prefer dynamic import for the new path so the test mock surface stays granular.
+
+- **Test count grew to 28 (target was ≥22)** — 12 preserved from Plan 02 (4 schema + 6 preflight + 3 stash + 1 buildEventPath; the count is 14 actually because preflight has 6 cases not 5 — the original plan counted "5 cases" but the file has 6 including corrupt-JSON), 6 new for `deployRuntimeArtifacts`, 4 new for `spawnResetScope`, 4 updated for `performFactoryReset` (split the 200ms timing assertion into its own test rather than folding into happy-path). All hermetic via `vi.mock('node:child_process')` + `vi.mock('execa')` + `vi.mock('node:fs/promises')`. No subprocess spawning, no real fs, no network. `tests: 22ms` per vitest summary — 200ms wall-clock budget verified empirically (well under).
+
+- **Window vs. Mini PC EUID handling** — `process.geteuid` is undefined on Windows dev machines (typeof check returns -1 sentinel). Test uses `(process as any).geteuid = () => 0` mock; on Mini PC livinityd runs as root via systemd unit `User=root`, so `geteuid() === 0` cleanly. Failure mode (non-root) yields `factory reset requires root (livinityd EUID is <n>); cannot proceed` — diagnostic includes the observed EUID for ops investigation.
+
+- **`grep -c 'Plan 03 inserts'` invariant** — the SPAWN_INSERTION_POINT marker block from Plan 02 is fully replaced (count = 0). The replacement is the live `await deployRuntimeArtifacts()` + `await spawnResetScope({...})` pair, sandwiched between `stashApiKey` and the return statement. No marker comments remain — this is the single biggest "is the plan actually wired in?" signal for any future drift audit.
 
 ### Plan 36-03 Decisions (2026-04-29) — Phase 36 closed
 
