@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
-status: Roadmap authored, awaiting plan-phase
-stopped_at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
-last_updated: "2026-04-29T04:00:35.310Z"
-last_activity: 2026-04-28 — ROADMAP.md authored. v30.0 is 8 phases (36-43); 47/47 v30.0 requirements mapped, zero orphans. Research synthesis followed verbatim — Phase 36 spike is non-negotiable; Phase 43 (livos-restore.sh) flagged needs phase research. Post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.
+status: executing
+stopped_at: Completed 36-01-snapshot-provenance-PLAN.md - install.sh snapshot (SHA-256 c00be0bf...3137, 56494B, 1604 lines) + AUDIT-FINDINGS.md scaffold (9 sections, 2 populated, 7 stubbed)
+last_updated: "2026-04-29T04:17:05.267Z"
+last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v29.2 — Factory Reset (mini-milestone) — ROADMAP READY
-**Current focus:** Phase 36 (install.sh Audit & Hardening) — verify `livinity.io/install.sh` exists, accepts `--api-key-file`, idempotent on already-installed hosts. Findings gate Phase 37's wipe/reinstall design.
+**Current focus:** Phase 36 — install.sh Audit & Hardening
 
 **Paused milestone:** v30.0 Backup & Restore (8 phases / 47 BAK-* reqs fully defined; archived at `.planning/milestones/v30.0-DEFINED/`). Resumes after v29.2 ships, with phase renumbering.
 
 ## Current Position
 
-Phase: 36 (install.sh Audit & Hardening) — not started
-Plan: —
-Status: Roadmap authored, awaiting plan-phase
-Last activity: 2026-04-28 — ROADMAP.md authored. v30.0 is 8 phases (36-43); 47/47 v30.0 requirements mapped, zero orphans. Research synthesis followed verbatim — Phase 36 spike is non-negotiable; Phase 43 (livos-restore.sh) flagged needs phase research. Post v29.1 hot-patches (cgroup-escape, SIGPIPE survival, self-rsync) shipped to Mini PC.
+Phase: 36 (install.sh Audit & Hardening) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-04-29
 
 ## v30.0 Phase Structure (Phases 36-43)
 
@@ -131,8 +131,17 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 30 P02 | 9 min | 7 tasks | 9 files |
 | Phase 31 P01 | 25 min | 1 task (investigation only) | 2 created (31-ROOT-CAUSE.md + 31-01-SUMMARY.md) | 2026-04-26 |
 | Phase 31 P02 | 4 min | 1 task tasks | 2 created (phase31-update-sh-patch.sh + 31-02-SUMMARY.md) files |
+| Phase 36-install-sh-audit P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
+
+### Plan 36-01 Decisions (2026-04-29)
+
+- `livinity.io/install.sh` was reachable at audit time (HTTP 200), so the FR-AUDIT-05 Tier-1 unavailability branch was NOT exercised. Snapshot persisted at `.planning/phases/36-install-sh-audit/install.sh.snapshot` (1604 lines, 56494 bytes, SHA-256 `c00be0bf7e246878b3af2e470b138b2370ab498fc7aa80379945103273136437`). Future Plans 02 and 03 read this exact frozen file; if SHA-256 ever differs at re-fetch, downstream findings must be re-validated against the new bytes.
+- Version anchor for the audit is the SHA-256 hash of the snapshot, NOT HTTP cache validators — the upstream Caddy + Next.js handler emits **neither `Last-Modified` nor `ETag`**. Pattern reusable for any future audit of a Caddy-fronted Next.js endpoint where standard cache headers are absent: hash-based provenance is the only stable identity.
+- Mini PC cache absence at `/opt/livos/data/cache/install.sh.cached` recorded as the **expected** v29.2-time state (per CONTEXT.md D-09 / FIX 2 — cache is populated by a future Phase 37 update.sh enhancement; v29.2 audit predates that enhancement). Plans 03 will document the full fallback chain; Plan 01 just records the absence as expected-not-defective.
+- AUDIT-FINDINGS.md "Raw Fetch" uses **reference-only** mode (snapshot file cited, not embedded inline) because 1604 lines >> 200-line embed threshold from Plan 01. Plans 02/03 cite line ranges from `install.sh.snapshot` directly. Pattern: scaffold plans should set the embed-vs-reference decision once, downstream plans inherit it.
+- Plan body text vs. acceptance grep gates can contradict: Plan 01 body suggested writing the literal phrase "`cloudflared` is not in this stack" but acceptance criterion required `grep -c "cloudflared" == 0`. Resolved by paraphrasing to "Cloudflare tunneling daemon" — the **acceptance gate is the testable contract**; plan body text is illustrative. Same pattern applied to "Populated by Plan" stub markers (acceptance gate count=7 won over plan body's active-voice phrasing for section 9). Pattern: when plan body text and acceptance grep gates conflict, the grep gate wins.
 
 ### Plan 31-02 Decisions (2026-04-26)
 
@@ -537,8 +546,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-26T14:23:55.810Z
-Stopped at: Completed 31-02-PLAN.md — patch script authored (370 lines, 4 markers, 10 verify wirings, BUILD-03 cleanup). Plan 31-03 (SSH-apply) unblocked.
+Last session: 2026-04-29T04:17:05.258Z
+Stopped at: Completed 36-01-snapshot-provenance-PLAN.md - install.sh snapshot (SHA-256 c00be0bf...3137, 56494B, 1604 lines) + AUDIT-FINDINGS.md scaffold (9 sections, 2 populated, 7 stubbed)
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
 **Planned Phase:** 36 (install.sh Audit & Hardening) — 3 plans — 2026-04-29T04:00:35.301Z

@@ -41,7 +41,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   4. Server5 outage fallback identified — if relay is down at reset time, the documented path to recovery (cached install.sh, public bootstrap key, alternate URL) exists or is filed as v29.2.1 follow-up
   5. Phase 37 backend planner can read AUDIT-FINDINGS.md alone and design the wipe+reinstall bash without re-running the audit
 **Plans**: 3 plans
-  - [ ] 36-01-snapshot-provenance-PLAN.md — Fetch install.sh, capture headers, scaffold AUDIT-FINDINGS.md (FR-AUDIT-01, FR-AUDIT-05)
+  - [x] 36-01-snapshot-provenance-PLAN.md — Fetch install.sh, capture headers, scaffold AUDIT-FINDINGS.md (FR-AUDIT-01, FR-AUDIT-05) — completed 2026-04-29 (snapshot SHA-256 c00be0bf...3137, 1604 lines, AUDIT-FINDINGS.md scaffold with 9 sections)
   - [ ] 36-02-static-analysis-PLAN.md — Argument surface + idempotency verdict + API key transport (FR-AUDIT-01, FR-AUDIT-02, FR-AUDIT-04)
   - [ ] 36-03-recovery-server5-hardening-PLAN.md — Recovery model + Server5 fallback + hardening proposals + Phase 37 readiness (FR-AUDIT-03, FR-AUDIT-05)
 **Research flag**: this phase IS the audit/research; AUDIT-FINDINGS.md is the deliverable
@@ -78,7 +78,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 36. install.sh Audit & Hardening | 0/3 | Not started | - |
+| 36. install.sh Audit & Hardening | 1/3 | In progress | - |
 | 37. Backend Factory Reset | 0/? | Not started | - |
 | 38. UI Factory Reset | 0/? | Not started | - |
 
