@@ -75,11 +75,11 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. On confirm, BarePage progress overlay takes over the screen (Phase 30 pattern reuse), showing "Reinstalling..." + animated progress + estimated 5-10 min countdown. The overlay polls the JSON event row every few seconds and updates state in place
   6. Post-reset: if `preserveApiKey=true` AND reinstall succeeded, redirect to /login (existing creds work). If `preserveApiKey=false` AND reinstall succeeded, redirect to /onboarding wizard. If reinstall failed, show error page with the JSON event row link + "Try again" button + "Manual SSH recovery instructions" link
   7. Pre-reset blocking checks in modal: button disabled (with tooltip explaining why) if update is in progress, OR pre-flight `curl -s -o /dev/null https://livinity.io` returns non-2xx, OR (when v30.0 Backup ships) a backup is in flight per BAK-SCHED-04 lock. v29.2 only checks update-in-progress; backup mutex is forward-compatible
-**Plans**: 4 plans (Phase 37 plan list — duplicated here as a hand-off legend; canonical state lives in the Phase 37 entry above)
-  - [x] 37-01-bash-scripts-PLAN.md — Author factory-reset.sh + livos-install-wrap.sh source files (FR-BACKEND-02, FR-BACKEND-04, FR-BACKEND-05) — completed 2026-04-29
-  - [x] 37-02-trpc-route-PLAN.md — Wire system.factoryReset adminProcedure + httpOnlyPaths + Zod input + pre-flight checks + API key stash (FR-BACKEND-01, FR-BACKEND-03) — completed 2026-04-29
-  - [x] 37-03-spawn-deploy-PLAN.md — Cgroup-escape spawn via systemd-run + first-call deployment of bash artifacts to /opt/livos/data/ (FR-BACKEND-01, FR-BACKEND-06) — completed 2026-04-29
-  - [x] 37-04-failure-handling-integration-PLAN.md — install.sh failure classification + JSON event schema tests + opt-in destructive integration test (FR-BACKEND-05, FR-BACKEND-07) — completed 2026-04-29 (PIPESTATUS-captured exit + tee'd log + classify_install_error helper for 4-way failure classification — api-key-401 / server5-unreachable / install-sh-failed / install-sh-unreachable per D-ERR-01; 41/41 unit tests including 13 new D-EVT-02 schema + D-EVT-03 Phase 33 reader compat; opt-in factory-reset.integration.test.sh scaffold with 4 fail-closed gates — running it is opt-in human work post-phase, NOT a CI step)
+**Plans**: 4 plans
+  - [ ] 38-01-foundation-and-unbreak-PLAN.md — Pure-logic lib (types, error-tags, state-machine, typed-confirm, network-preflight, deletion-list) + un-break useReset/GlobalSystemStateContext for Phase 37 schema (FR-UI-04, FR-UI-05, FR-UI-06, FR-UI-07)
+  - [ ] 38-02-danger-zone-button-PLAN.md — Settings > Advanced > Danger Zone section with admin-only Factory Reset button + non-admin fallback note (FR-UI-01, FR-UI-07)
+  - [ ] 38-03-confirmation-modal-PLAN.md — Explicit-list confirmation modal with radio + type-to-confirm + pre-flight-gated submit (FR-UI-02, FR-UI-03, FR-UI-04, FR-UI-07)
+  - [ ] 38-04-progress-overlay-and-post-reset-routing-PLAN.md — BarePage progress overlay polling listUpdateHistory + 90s reconnect + redirect/error fan-out + recovery static page (FR-UI-05, FR-UI-06)
 **UI hint**: yes
 
 ## Progress
@@ -88,7 +88,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
 |-------|----------------|--------|-----------|
 | 36. install.sh Audit & Hardening | 3/3 | Complete | 2026-04-29 |
 | 37. Backend Factory Reset | 4/4 | Complete | 2026-04-29 |
-| 38. UI Factory Reset | 0/? | Not started | - |
+| 38. UI Factory Reset | 0/4 | Planned | - |
 
 ## Coverage Summary
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 37-04-failure-handling-integration-PLAN.md (Phase 37 backend complete; Phase 38 UI is next)
-last_updated: "2026-04-29T08:27:51.229Z"
+stopped_at: Completed 37-01-bash-scripts-PLAN.md (Plan 02 tRPC route is next)
+last_updated: "2026-04-29T08:59:04.496Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 7
+  total_plans: 11
   completed_plans: 7
-  percent: 100
+  percent: 64
 ---
 
 # Project State
@@ -632,4 +632,4 @@ Last session: 2026-04-29T05:25:32.133Z
 Stopped at: Completed 37-01-bash-scripts-PLAN.md (Plan 02 tRPC route is next)
 Resume with: `/gsd:plan-phase 37 backend-factory-reset` to plan the backend factory reset implementation. Phase 37 backend planner has 4 literal answers ready (Q1-Q4 in AUDIT-FINDINGS.md "## Phase 37 Readiness"): reinstall command (live-then-cache curl + livos-install-wrap.sh wrapper), recovery action (tar -xzf restore + systemctl restart), idempotency (`false` — wipe mandatory before install.sh), API key transport (`--api-key-file via wrapper`). Wrapper full source + install.sh env-var fallback diff + ALTER USER patch diff all written verbatim in "## Hardening Proposals". Phase 37 mandatory wipe sequence specified verbatim. v29.2.1 follow-ups tracked (install.sh env-var patch + ALTER USER patch).
 
-**Planned Phase:** 37 (Backend Factory Reset) — 4 plans — 2026-04-29T05:18:47.608Z
+**Planned Phase:** 38 (UI Factory Reset) — 4 plans — 2026-04-29T08:59:04.487Z
