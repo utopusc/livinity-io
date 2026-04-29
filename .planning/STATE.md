@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v10.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 36-01-snapshot-provenance-PLAN.md - install.sh snapshot (SHA-256 c00be0bf...3137, 56494B, 1604 lines) + AUDIT-FINDINGS.md scaffold (9 sections, 2 populated, 7 stubbed)
-last_updated: "2026-04-29T04:17:05.267Z"
+stopped_at: Completed 36-02-static-analysis-PLAN.md
+last_updated: "2026-04-29T04:30:35.088Z"
 last_activity: 2026-04-29
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 33
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 36 (install.sh Audit & Hardening) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-29
 
@@ -132,8 +132,18 @@ Backend: 0 new modules (consumes v27.0 tRPC routes); v28.0 is UI restructure onl
 | Phase 31 P01 | 25 min | 1 task (investigation only) | 2 created (31-ROOT-CAUSE.md + 31-01-SUMMARY.md) | 2026-04-26 |
 | Phase 31 P02 | 4 min | 1 task tasks | 2 created (phase31-update-sh-patch.sh + 31-02-SUMMARY.md) files |
 | Phase 36-install-sh-audit P01 | 3min | 2 tasks | 3 files |
+| Phase 36 P02 | 25min | 3 tasks | 2 files |
 
 ## Accumulated Context
+
+### Plan 36-02 Decisions (2026-04-29)
+
+- **Idempotency verdict: NOT-IDEMPOTENT** (74 side-effecting commands classified per CONTEXT.md D-06; 41 IDEMPOTENT_NATIVE / 27 IDEMPOTENT_WITH_GUARD / 4 NOT_IDEMPOTENT / 2 UNKNOWN). Hard re-run failures: `generate_secrets` (line:861-864) regenerates JWT/PG/Redis passwords each run; `configure_redis` (line:1125) `FLUSHALL`s ALL Redis data unconditionally; `configure_postgresql` (line:1136-1137) skips CREATE USER via `SELECT 1 FROM pg_roles` guard, so PG keeps OLD password while regenerated `.env` carries NEW password — exact `password authentication failed for user "livos"` pitfall from project memory; `setup_repository` (line:971) `rm -rf "$LIVOS_DIR"` destroys `/opt/livos/.env` (only `data/` and `app-data/` are preserved), bypassing `write_env_file`'s overwrite guard. Phase 37 wipe is therefore non-optional — must `dropdb livos && dropuser livos` + `redis-cli FLUSHALL` + `rm -rf /opt/livos /opt/nexus` BEFORE invoking install.sh, else install.sh's CREATE USER guard skips and livinityd crashes post-restart.
+- **API key transport: argv-only (FR-AUDIT-04 FAIL)** — `--api-key $2` at line:14 puts the platform API key on install.sh's argv, visible to `ps -ef` for the entire install duration. Sub-process pass-through at line:1565 (`redis-cli -a "$redis_pass" SET livos:platform:api_key "$PLATFORM_API_KEY"`) creates a second narrower argv-leak window. No echo/log leaks (zero `grep` hits on `echo.*PLATFORM_API_KEY`), no `set -x`, no `export PLATFORM_API_KEY` so `/proc/PID/environ` is clean. Plan 03 explicitly tasked with `livos-install-wrap.sh` proposal + `${LIV_PLATFORM_API_KEY:-}` env-var fallback patch to install.sh; for the redis-cli sub-call, a heredoc-fed or `--pipe` form is required to close the line:1565 leak.
+- **Argument surface anomaly — silent unknown-flag shift** at line:16 (`*) shift ;;`). install.sh accepts only `--api-key <value>`; every other token (including typos like `--api-key-file`, plus legitimate-sounding `--help`, `--version`, `--resume`, `--force`, `--no-build`) is silently shifted off without warning or error. There is no `getopts`, no `--help` text. Phase 37's wrapper or any operator-facing tooling MUST validate flag spelling client-side because install.sh will not.
+- **`install_cloudflared` (line:502-513, called at line:1488) flagged as anomaly but non-blocking** — the function exists and runs but the package is dead infrastructure since the current stack uses Cloudflare DNS-only with a Server5 relay (not a Cloudflare tunneling daemon). Recorded as anomaly in Argument Surface findings summary; left to Plan 03's Hardening Proposals to decide whether removal is in scope. Does NOT influence the idempotency or API-key verdicts. The package install itself is guarded by `command -v cloudflared` so it is benignly idempotent on re-run.
+- **Server4 NOT introduced into AUDIT-FINDINGS.md beyond Plan 01's existing disclaimer** — `grep -n "Server4|45\.137\.194\.103" install.sh.snapshot` returned zero matches, so per executor critical_constraints rule #4, no anomaly rows added. The hard rule (project memory 2026-04-27) is upheld: Server4 is not part of LivOS operations and is not referenced in this audit beyond the original disclaimer.
+- **Verdict floor for Idempotency was set at NOT-IDEMPOTENT (not PARTIALLY-IDEMPOTENT)** per CONTEXT.md D-06 rule "any NOT_IDEMPOTENT producing a hard error on re-run → NOT-IDEMPOTENT". Three of the four NOT_IDEMPOTENT rows produce hard errors (PG mismatch crashes auth, FLUSHALL destroys runtime state, JWT rotation invalidates sessions). PARTIALLY-IDEMPOTENT would have understated Phase 37's risk envelope. Pattern: idempotency verdicts must be decisive per CONTEXT.md "every open question must resolve into a chosen path" — choose the floor that matches worst-case re-run behavior.
 
 ### Plan 36-01 Decisions (2026-04-29)
 
@@ -546,8 +556,8 @@ All UAT items are deployment-time runtime tests — code paths are fully wired, 
 
 ## Session Continuity
 
-Last session: 2026-04-29T04:17:05.258Z
-Stopped at: Completed 36-01-snapshot-provenance-PLAN.md - install.sh snapshot (SHA-256 c00be0bf...3137, 56494B, 1604 lines) + AUDIT-FINDINGS.md scaffold (9 sections, 2 populated, 7 stubbed)
+Last session: 2026-04-29T04:30:35.080Z
+Stopped at: Completed 36-02-static-analysis-PLAN.md
 Resume with: `/gsd-execute-plan 30 02` to ship the frontend (UpdateNotification component + hook polling + 4 shape-consumer fixes per Plan 30-02). The new tRPC return shape `{available, sha, shortSha, message, author, committedAt}` is now live and ready to be consumed.
 
 **Planned Phase:** 36 (install.sh Audit & Hardening) — 3 plans — 2026-04-29T04:00:35.301Z

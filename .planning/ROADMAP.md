@@ -42,7 +42,7 @@ Livinity roadmap tracks all milestones from v10.0 onward.
   5. Phase 37 backend planner can read AUDIT-FINDINGS.md alone and design the wipe+reinstall bash without re-running the audit
 **Plans**: 3 plans
   - [x] 36-01-snapshot-provenance-PLAN.md — Fetch install.sh, capture headers, scaffold AUDIT-FINDINGS.md (FR-AUDIT-01, FR-AUDIT-05) — completed 2026-04-29 (snapshot SHA-256 c00be0bf...3137, 1604 lines, AUDIT-FINDINGS.md scaffold with 9 sections)
-  - [ ] 36-02-static-analysis-PLAN.md — Argument surface + idempotency verdict + API key transport (FR-AUDIT-01, FR-AUDIT-02, FR-AUDIT-04)
+  - [x] 36-02-static-analysis-PLAN.md — Argument surface + idempotency verdict + API key transport (FR-AUDIT-01, FR-AUDIT-02, FR-AUDIT-04) — completed 2026-04-29 (1 flag mapped, 74 commands classified, verdict NOT-IDEMPOTENT, transport argv FR-AUDIT-04 FAIL → Plan 03 wrapper required)
   - [ ] 36-03-recovery-server5-hardening-PLAN.md — Recovery model + Server5 fallback + hardening proposals + Phase 37 readiness (FR-AUDIT-03, FR-AUDIT-05)
 **Research flag**: this phase IS the audit/research; AUDIT-FINDINGS.md is the deliverable
 
