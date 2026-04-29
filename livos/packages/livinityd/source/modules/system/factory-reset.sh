@@ -44,6 +44,7 @@ readonly INSTALL_SH_LIVE=/tmp/install.sh.live
 readonly INSTALL_SH_CACHED=/opt/livos/data/cache/install.sh.cached
 readonly WRAPPER=/opt/livos/data/wrapper/livos-install-wrap.sh
 readonly SNAPSHOT_SIDECAR=/tmp/livos-pre-reset.path
+readonly INSTALL_LOG=/tmp/livos-reset-install.log
 
 TIMESTAMP_ISO=$(date -u +%Y%m%dT%H%M%SZ)
 SNAPSHOT_PATH=/tmp/livos-pre-reset-${TIMESTAMP_ISO}.tar.gz
@@ -97,6 +98,37 @@ write_event() {
 EOF
 }
 
+# classify_install_error — map install.sh log + exit code to a named error string.
+# Per CONTEXT.md D-ERR-01:
+#   exit 0                                 → "null"
+#   log shows HTTP 401 / Unauthorized      → "api-key-401"
+#   log shows HTTP 5xx                     → "server5-unreachable"
+#   any other non-zero exit                → "install-sh-failed"
+# Best-effort heuristic: if install.sh emits 401 in a non-error context (e.g.,
+# a comment or debug log line) we may produce a false positive — accepted per
+# T-37-20 (UI surfaces the error verbatim, user can manually inspect log).
+classify_install_error() {
+  local log="$1"
+  local exit_code="$2"
+  if [ "$exit_code" -eq 0 ]; then
+    echo "null"
+    return
+  fi
+  # 401 / Unauthorized — covers HTTP/1.1 401, HTTP/2 401, HTTP/2.0 401, bare
+  # "HTTP 401", and standalone "Unauthorized" tokens.
+  if grep -qE '(HTTP/[0-9.]+ 401|HTTP 401|\bUnauthorized\b)' "$log" 2>/dev/null; then
+    echo "api-key-401"
+    return
+  fi
+  # 5xx (transient relay failure — Server5 / Cloudflare).
+  if grep -qE '(HTTP/[0-9.]+ 5[0-9][0-9]|HTTP 5[0-9][0-9])' "$log" 2>/dev/null; then
+    echo "server5-unreachable"
+    return
+  fi
+  # Generic non-zero exit.
+  echo "install-sh-failed"
+}
+
 # attempt_rollback — restore from pre-wipe tar snapshot on reinstall failure.
 # Defined BEFORE Step 3 because Step 3's install-sh-unreachable branch invokes it.
 # Returns 1 on rollback success (caller exits 1 = rolled-back).
@@ -110,7 +142,7 @@ attempt_rollback() {
       systemctl daemon-reload || true
       systemctl restart livos liv-core liv-worker liv-memory 2>/dev/null || true
       write_event "rolled-back" "$err"
-      rm -f "$INSTALL_SH_LIVE"
+      rm -f "$INSTALL_SH_LIVE" "$INSTALL_LOG" 2>/dev/null || true
       # Retain snapshot one cycle for post-mortem (per Recovery Model).
       return 1
     fi
@@ -247,33 +279,43 @@ if [ -z "$INSTALL_SH" ]; then
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Step 4: Run install.sh via wrapper (D-INST-01)
+# Step 4: Run install.sh via wrapper (D-INST-01) with output capture for
+# error classification. Per CONTEXT.md D-ERR-01 — install.sh stdout+stderr
+# are merged via 2>&1 and tee'd to $INSTALL_LOG so classify_install_error()
+# can grep for HTTP 401 / 5xx after the run.
+#
+# CRITICAL: ${PIPESTATUS[0]} captures the LEFT side of the pipe (install.sh /
+# wrapper). Plain `$?` would capture `tee`, which always exits 0. Using
+# PIPESTATUS is non-negotiable here — without it, every install.sh failure
+# would silently appear as a success.
 # ────────────────────────────────────────────────────────────────────────────
 
+: > "$INSTALL_LOG"
+
 if [ "$PRESERVE" = "true" ] && [ -f "$WRAPPER" ] && [ -r "$APIKEY_TMP" ]; then
-  INSTALL_SH="$INSTALL_SH" bash "$WRAPPER" --api-key-file "$APIKEY_TMP"
+  INSTALL_SH="$INSTALL_SH" bash "$WRAPPER" --api-key-file "$APIKEY_TMP" 2>&1 | tee -a "$INSTALL_LOG"
+  INSTALL_SH_EXIT=${PIPESTATUS[0]}
 else
   # No-preserve path: run install.sh directly, no key. Wrapper requires
   # --api-key-file so direct invocation is correct here.
-  bash "$INSTALL_SH"
+  bash "$INSTALL_SH" 2>&1 | tee -a "$INSTALL_LOG"
+  INSTALL_SH_EXIT=${PIPESTATUS[0]}
 fi
-INSTALL_SH_EXIT=$?
 REINSTALL_END_MS=$(ms_now)
 
 # ────────────────────────────────────────────────────────────────────────────
-# Step 5: Failure handling + finalisation (D-AUD-03 restore + D-ERR-01/02)
+# Step 5: Failure handling + finalisation (D-AUD-03 restore + D-ERR-01/02/03)
 # ────────────────────────────────────────────────────────────────────────────
 
 if [ "$INSTALL_SH_EXIT" -eq 0 ]; then
   write_event "success"
-  # D-AUD-03 success cleanup — snapshot, sidecar, fetched install.sh.
-  rm -f "$SNAPSHOT_PATH" "$SNAPSHOT_SIDECAR" "$INSTALL_SH_LIVE"
+  # D-AUD-03 success cleanup — snapshot, sidecar, fetched install.sh, log.
+  rm -f "$SNAPSHOT_PATH" "$SNAPSHOT_SIDECAR" "$INSTALL_SH_LIVE" "$INSTALL_LOG"
   exit 0
 else
-  # Map exit code to error string (D-ERR-01).
-  # 401 / Server5 5xx detection is best-effort (D-ERR-01: "if not detectable,
-  # fall back to generic"). Generic fallback is the only path here.
-  ERR_KIND="install-sh-failed"
+  # Map exit code + log content to a named error string (D-ERR-01).
+  # Possible values: api-key-401 | server5-unreachable | install-sh-failed.
+  ERR_KIND=$(classify_install_error "$INSTALL_LOG" "$INSTALL_SH_EXIT")
   attempt_rollback "$ERR_KIND"
   exit $?
 fi
