@@ -1,21 +1,28 @@
-// Phase 37-02 unit tests for the v29.2 factory-reset module.
+// Phase 37-02 + 37-03 unit tests for the v29.2 factory-reset module.
 // Mirrors update.unit.test.ts patterns: vi.mock('node:fs/promises'),
 // Livinityd({dataDirectory:'/tmp'}) for the unused _livinityd argument,
 // vitest singleThread (configured in package.json line 16).
 //
 // Coverage:
 //   - factoryResetInputSchema: 4 cases (true / false / non-boolean / missing)
-//   - preflightCheck (D-RT-05): 5 cases (update-in-progress / missing .env /
-//       missing key / no-preserve happy / preserve happy)
-//   - stashApiKey (D-KEY-01): 2 cases (happy / missing key)
+//   - preflightCheck (D-RT-05): 6 cases (update-in-progress / missing .env /
+//       missing key / no-preserve happy / preserve happy / corrupt JSON)
+//   - stashApiKey (D-KEY-01): 3 cases (happy / missing key / quoted value)
 //   - buildEventPath: 1 case (ISO basic format + path shape)
-//   - performFactoryReset (Plan 02 stub): 2 cases (happy / preserve triggers stash)
+//   - deployRuntimeArtifacts (D-CG-02): 6 cases (copy-on-missing / skip-when-fresh /
+//       re-copy-when-stale / re-copy-when-not-executable / missing-source / mkdir-p)
+//   - spawnResetScope (D-CG-01): 4 cases (systemd-run-missing / non-root-EUID /
+//       argv-shape / no-preserve flag)
+//   - performFactoryReset (full happy path with spawn mocked): 3 cases
+//       (200ms-return / preflight-gates-spawn / preserveApiKey-reaches-spawn)
 //
 // Tests MUST NOT spawn subprocesses, hit network, or touch the real filesystem.
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import {describe, beforeEach, afterEach, expect, test, vi} from 'vitest'
+import {EventEmitter} from 'node:events'
+import * as childProcess from 'node:child_process'
 import fs from 'node:fs/promises'
 import {TRPCError} from '@trpc/server'
 
@@ -25,12 +32,29 @@ import {
 	stashApiKey,
 	performFactoryReset,
 	buildEventPath,
+	deployRuntimeArtifacts,
+	spawnResetScope,
 	APIKEY_TMP_PATH,
 	SNAPSHOT_SIDECAR_PATH,
+	RESET_SCRIPT_RUNTIME_PATH,
+	WRAPPER_RUNTIME_PATH,
 } from './factory-reset.js'
 import Livinityd from '../../index.js'
 
 vi.mock('node:fs/promises')
+vi.mock('node:child_process')
+vi.mock('execa')
+
+/** Build a minimal fake child-process emitter that satisfies child_process.spawn's
+ * return-shape contract for our purposes (unref + pid). */
+function fakeChild() {
+	const ee = new EventEmitter() as any
+	ee.unref = vi.fn()
+	ee.pid = 42
+	ee.stdout = null
+	ee.stderr = null
+	return ee
+}
 
 describe('factoryResetInputSchema (D-RT-01)', () => {
 	test('accepts {preserveApiKey: true}', () => {
@@ -188,16 +212,201 @@ describe('buildEventPath', () => {
 	})
 })
 
-describe('performFactoryReset (Plan 02 stub — no spawn yet)', () => {
-	let livinityd: any
-
+describe('deployRuntimeArtifacts (D-CG-02)', () => {
 	beforeEach(() => {
-		livinityd = new Livinityd({dataDirectory: '/tmp'})
-		// Default: empty update-history (so preflight passes)
-		vi.mocked(fs.readdir).mockResolvedValue([] as any)
+		vi.mocked(fs.access).mockResolvedValue()
+		vi.mocked(fs.mkdir).mockResolvedValue(undefined as any)
+		vi.mocked(fs.copyFile).mockResolvedValue()
+		vi.mocked(fs.chmod).mockResolvedValue()
 	})
 
 	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	test('copies both files when destinations are missing (first call)', async () => {
+		// stat: source ok, dest ENOENT
+		vi.mocked(fs.stat).mockImplementation(async (p: any) => {
+			if (String(p).startsWith('/opt/')) {
+				const e: any = new Error('ENOENT')
+				e.code = 'ENOENT'
+				throw e
+			}
+			return {mtimeMs: 1000, mode: 0o644} as any
+		})
+		await deployRuntimeArtifacts()
+		expect(fs.copyFile).toHaveBeenCalledTimes(2)
+		expect(fs.chmod).toHaveBeenCalledWith(RESET_SCRIPT_RUNTIME_PATH, 0o755)
+		expect(fs.chmod).toHaveBeenCalledWith(WRAPPER_RUNTIME_PATH, 0o755)
+	})
+
+	test('skips copy when destination is fresh AND has executable bit', async () => {
+		vi.mocked(fs.stat).mockResolvedValue({mtimeMs: 9999, mode: 0o755} as any)
+		await deployRuntimeArtifacts()
+		expect(fs.copyFile).not.toHaveBeenCalled()
+	})
+
+	test('re-copies when destination mtime is older than source mtime', async () => {
+		vi.mocked(fs.stat).mockImplementation(async (p: any) => {
+			// /opt/* paths are destinations (stale: mtime 1)
+			if (String(p).startsWith('/opt/')) return {mtimeMs: 1, mode: 0o755} as any
+			// other paths are source (fresh: mtime 9999)
+			return {mtimeMs: 9999, mode: 0o644} as any
+		})
+		await deployRuntimeArtifacts()
+		expect(fs.copyFile).toHaveBeenCalledTimes(2)
+	})
+
+	test('re-copies when destination lacks the executable bit (mode 0o644)', async () => {
+		vi.mocked(fs.stat).mockImplementation(async (p: any) => {
+			// dest fresh by mtime but NOT executable → must re-copy + chmod
+			if (String(p).startsWith('/opt/')) return {mtimeMs: 9999, mode: 0o644} as any
+			return {mtimeMs: 1, mode: 0o644} as any
+		})
+		await deployRuntimeArtifacts()
+		expect(fs.copyFile).toHaveBeenCalled()
+	})
+
+	test('throws INTERNAL_SERVER_ERROR when source is missing (fs.access ENOENT)', async () => {
+		const enoent: any = new Error('ENOENT: source missing')
+		enoent.code = 'ENOENT'
+		vi.mocked(fs.access).mockRejectedValue(enoent)
+
+		let caught: any
+		try {
+			await deployRuntimeArtifacts()
+		} catch (e) {
+			caught = e
+		}
+		expect(caught).toBeInstanceOf(TRPCError)
+		expect(caught.code).toBe('INTERNAL_SERVER_ERROR')
+		expect(caught.message).toContain('factory-reset source missing')
+	})
+
+	test('mkdir -p creates the runtime parent directories', async () => {
+		vi.mocked(fs.stat).mockResolvedValue({mtimeMs: 9999, mode: 0o755} as any)
+		await deployRuntimeArtifacts()
+		expect(fs.mkdir).toHaveBeenCalledWith(
+			'/opt/livos/data/factory-reset',
+			expect.objectContaining({recursive: true}),
+		)
+		expect(fs.mkdir).toHaveBeenCalledWith(
+			'/opt/livos/data/wrapper',
+			expect.objectContaining({recursive: true}),
+		)
+	})
+})
+
+describe('spawnResetScope (D-CG-01)', () => {
+	let originalGeteuid: any
+
+	beforeEach(async () => {
+		originalGeteuid = process.geteuid
+		;(process as any).geteuid = () => 0
+		// Default: execa('command -v systemd-run') resolves OK.
+		const execaMod: any = await import('execa')
+		execaMod.execa = vi.fn().mockResolvedValue({stdout: '/usr/bin/systemd-run'})
+	})
+
+	afterEach(() => {
+		;(process as any).geteuid = originalGeteuid
+		vi.restoreAllMocks()
+	})
+
+	test('rejects with INTERNAL_SERVER_ERROR when systemd-run is unavailable', async () => {
+		const execaMod: any = await import('execa')
+		execaMod.execa = vi.fn().mockRejectedValue(new Error('not found'))
+
+		let caught: any
+		try {
+			await spawnResetScope({preserveApiKey: true, eventPath: '/x', timestamp: 'T'})
+		} catch (e) {
+			caught = e
+		}
+		expect(caught).toBeInstanceOf(TRPCError)
+		expect(caught.code).toBe('INTERNAL_SERVER_ERROR')
+		expect(caught.message).toMatch(/systemd-run/i)
+	})
+
+	test('rejects with INTERNAL_SERVER_ERROR when EUID is not 0', async () => {
+		;(process as any).geteuid = () => 1000
+
+		let caught: any
+		try {
+			await spawnResetScope({preserveApiKey: false, eventPath: '/x', timestamp: 'T'})
+		} catch (e) {
+			caught = e
+		}
+		expect(caught).toBeInstanceOf(TRPCError)
+		expect(caught.code).toBe('INTERNAL_SERVER_ERROR')
+		expect(caught.message).toMatch(/root/i)
+	})
+
+	test('argv shape: --scope --collect --unit <name> --quiet bash <reset.sh> --preserve-api-key <eventPath>', async () => {
+		const child = fakeChild()
+		vi.mocked(childProcess.spawn).mockReturnValue(child as any)
+
+		await spawnResetScope({
+			preserveApiKey: true,
+			eventPath: '/event.json',
+			timestamp: '20260429T120000Z',
+		})
+
+		expect(childProcess.spawn).toHaveBeenCalledWith(
+			'systemd-run',
+			[
+				'--scope',
+				'--collect',
+				'--unit', 'livos-factory-reset-20260429T120000Z',
+				'--quiet',
+				'bash',
+				RESET_SCRIPT_RUNTIME_PATH,
+				'--preserve-api-key',
+				'/event.json',
+			],
+			expect.objectContaining({detached: true, stdio: 'ignore'}),
+		)
+		expect(child.unref).toHaveBeenCalled()
+	})
+
+	test('preserveApiKey=false produces --no-preserve-api-key in argv', async () => {
+		const child = fakeChild()
+		vi.mocked(childProcess.spawn).mockReturnValue(child as any)
+
+		await spawnResetScope({preserveApiKey: false, eventPath: '/e', timestamp: 'T'})
+
+		const argvList = vi.mocked(childProcess.spawn).mock.calls[0][1] as string[]
+		expect(argvList).toContain('--no-preserve-api-key')
+		expect(argvList).not.toContain('--preserve-api-key')
+	})
+})
+
+describe('performFactoryReset (full happy path with spawn mocked)', () => {
+	let livinityd: any
+	let originalGeteuid: any
+
+	beforeEach(async () => {
+		livinityd = new Livinityd({dataDirectory: '/tmp'})
+		originalGeteuid = process.geteuid
+		;(process as any).geteuid = () => 0
+
+		// Default mocks: empty update-history, fresh artifacts, root EUID, systemd-run OK.
+		vi.mocked(fs.readdir).mockResolvedValue([] as any)
+		vi.mocked(fs.access).mockResolvedValue()
+		vi.mocked(fs.mkdir).mockResolvedValue(undefined as any)
+		vi.mocked(fs.copyFile).mockResolvedValue()
+		vi.mocked(fs.chmod).mockResolvedValue()
+		vi.mocked(fs.stat).mockResolvedValue({mtimeMs: 9999, mode: 0o755} as any)
+		vi.mocked(fs.writeFile).mockResolvedValue()
+
+		const execaMod: any = await import('execa')
+		execaMod.execa = vi.fn().mockResolvedValue({stdout: '/usr/bin/systemd-run'})
+
+		vi.mocked(childProcess.spawn).mockReturnValue(fakeChild() as any)
+	})
+
+	afterEach(() => {
+		;(process as any).geteuid = originalGeteuid
 		vi.restoreAllMocks()
 	})
 
@@ -209,22 +418,18 @@ describe('performFactoryReset (Plan 02 stub — no spawn yet)', () => {
 		expect(result.snapshotPath).toBe(SNAPSHOT_SIDECAR_PATH)
 	})
 
-	test('preserveApiKey=true triggers stashApiKey + returns metadata', async () => {
-		vi.mocked(fs.readFile).mockResolvedValue('LIV_PLATFORM_API_KEY=k1\n' as any)
-		vi.mocked(fs.writeFile).mockResolvedValue()
-		vi.mocked(fs.chmod).mockResolvedValue()
-
-		const result = await performFactoryReset(livinityd, {preserveApiKey: true})
-
+	test('returns within 200ms wall-clock (D-RT-03)', async () => {
+		const t0 = Date.now()
+		const result = await performFactoryReset(livinityd, {preserveApiKey: false})
+		const elapsed = Date.now() - t0
+		// 200ms budget per CONTEXT.md D-RT-03. If this is flaky in CI, raise to
+		// 500ms with a comment — the actual cost is ~10-20ms (execa probe) plus
+		// stat overhead. Anything > 200ms suggests an unintended sync await.
+		expect(elapsed).toBeLessThan(200)
 		expect(result.accepted).toBe(true)
-		expect(fs.writeFile).toHaveBeenCalledWith(
-			APIKEY_TMP_PATH,
-			'k1',
-			expect.objectContaining({mode: 0o600}),
-		)
 	})
 
-	test('propagates preflightCheck CONFLICT when an update is in progress', async () => {
+	test('preflight rejection (update-in-progress) does NOT spawn', async () => {
 		vi.mocked(fs.readdir).mockResolvedValue(['20260429T120000Z-update.json'] as any)
 		vi.mocked(fs.readFile).mockResolvedValue(
 			JSON.stringify({status: 'in-progress'}) as any,
@@ -238,5 +443,23 @@ describe('performFactoryReset (Plan 02 stub — no spawn yet)', () => {
 		}
 		expect(caught).toBeInstanceOf(TRPCError)
 		expect(caught.code).toBe('CONFLICT')
+		// The crucial invariant: preflight gates the spawn entirely.
+		expect(childProcess.spawn).not.toHaveBeenCalled()
+	})
+
+	test('preserveApiKey=true triggers stashApiKey + reaches spawn with --preserve-api-key', async () => {
+		vi.mocked(fs.readFile).mockResolvedValue('LIV_PLATFORM_API_KEY=k1\n' as any)
+
+		const result = await performFactoryReset(livinityd, {preserveApiKey: true})
+
+		expect(result.accepted).toBe(true)
+		expect(fs.writeFile).toHaveBeenCalledWith(
+			APIKEY_TMP_PATH,
+			'k1',
+			expect.objectContaining({mode: 0o600}),
+		)
+		// Verify the spawn carried the preserve flag through.
+		const argv = vi.mocked(childProcess.spawn).mock.calls[0][1] as string[]
+		expect(argv).toContain('--preserve-api-key')
 	})
 })
