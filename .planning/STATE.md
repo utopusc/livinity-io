@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.3
 milestone_name: Marketplace AI Broker (Subscription-Only)
-status: phase-40-shipped-locally
-stopped_at: Phase 40 (Per-User OAuth + HOME isolation) shipped LOCAL. Phases 39+40 ready for batch deploy. Phase 41 (Anthropic broker) ready to plan; usage limit hit on Phase 40 executor (resets 3am PT) — recommend pausing autonomous chain until limit refreshes OR user decides to proceed.
-last_updated: "2026-04-30T10:05:00.000Z"
-last_activity: 2026-04-30 -- Phase 40 (FR-AUTH-01..03) executed autonomously: 5 commits, 4/4 success criteria PASS (criterion 2 honestly deferred to synthetic-isolation framing per D-40-05), 14/14 tests PASS, sacred file new baseline 623a65b9a50a89887d36f770dcd015b691793a7f
+status: phase-41-shipped-locally
+stopped_at: Phases 39+40+41 shipped LOCAL (16 commits ahead of origin/master). Phase 42 (OpenAI-compat broker) ready to plan — translation-layer work on top of Phase 41's HTTP-proxy broker.
+last_updated: "2026-04-30T11:10:00.000Z"
+last_activity: 2026-04-30 -- Phase 41 (FR-BROKER-A-01..04) executed autonomously: 6 commits, 5/5 success criteria PASS, 49/49 tests PASS, sacred file untouched (still 623a65b9...). Strategy B (HTTP proxy to /api/agent/stream) chosen over in-process SdkAgentRunner. Phase 40 carry-forward closed (X-LivOS-User-Id wiring on /api/agent/stream).
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 33
+  completed_phases: 3
+  total_plans: 13
+  completed_plans: 13
+  percent: 50
 ---
 
 # Project State
@@ -22,14 +22,14 @@ See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 shipped locally; Phase 41 next
+**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 + 41 shipped locally (50% done); Phase 42 next
 
 ## Current Position
 
-Phase: 40 ✅ SHIPPED LOCALLY (5 commits + summary); 39 ✅ SHIPPED LOCALLY (4 commits)
-Next: 41 (Anthropic Messages Broker) — structurally unblocked, plan-level work can proceed without deploy
-Status: **Usage limit hit during Phase 40 executor (resets 3am PT)** — Phase 40 itself completed cleanly before limit; Phase 41 spawn would risk hitting limit again
-Last activity: 2026-04-30 — Phase 40 autonomous execution completed cleanly
+Phase: 41 ✅ SHIPPED LOCALLY (6 commits); 40 ✅ SHIPPED (5 commits); 39 ✅ SHIPPED (4 commits)
+Next: 42 (OpenAI-Compatible Broker) — `/v1/chat/completions` translation layer on top of Phase 41's broker
+Status: **3/6 phases done (50%)**, 16 commits ahead of origin/master, sacred file SHA untouched at `623a65b9...`
+Last activity: 2026-04-30 — Phase 41 autonomous execution completed cleanly
 
 ## ▶ HUMAN HANDOFF — v29.3 Phase 39 + 40 batch handoff
 
