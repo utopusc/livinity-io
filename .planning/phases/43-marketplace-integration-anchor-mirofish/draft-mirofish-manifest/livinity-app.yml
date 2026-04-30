@@ -1,0 +1,28 @@
+manifestVersion: 1.0.0
+id: mirofish
+name: MiroFish
+tagline: Open-source AI prediction engine powered by your Claude subscription
+category: ai-agents
+version: 1.0.0
+port: 3000
+description: >-
+  MiroFish is a next-generation AI prediction engine powered by multi-agent
+  technology. By extracting seed information from the real world (breaking news,
+  policy drafts, financial signals), it constructs a high-fidelity parallel
+  digital world where thousands of intelligent agents with independent
+  personalities, long-term memory, and behavioral logic interact and undergo
+  social evolution. On Livinity, MiroFish runs on your own hardware and uses
+  your personal Claude subscription via the Livinity AI broker — no API key,
+  no extra billing, no cloud dependency.
+website: https://github.com/666ghj/MiroFish
+developer: 666ghj
+submitter: utopusc
+submission: https://github.com/utopusc/livinity-apps
+repo: https://github.com/666ghj/MiroFish
+support: https://github.com/666ghj/MiroFish/issues
+gallery: []
+releaseNotes: |
+  Initial Livinity packaging. AI provider auto-configured to use your Claude
+  subscription via the Livinity AI broker (livinity-broker:8080). No API key
+  entry required. Ports: 3000 (frontend, web-accessible), 5001 (backend, internal).
+requiresAiProvider: true
