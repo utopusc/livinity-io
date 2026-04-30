@@ -43,6 +43,7 @@ import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 
 import fileApi from '../files/api.js'
 import {mountBrokerRoutes} from '../livinity-broker/index.js'
+import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1207,6 +1208,13 @@ class Server {
 			return api
 		}
 		this.app.use('/api/files', createApi(fileApi))
+
+		// ── Usage Capture Middleware (Phase 44 — wraps /u/:userId/v1/* OUTSIDE broker) ──
+		// Per Phase 44 D-44-04..06: capture lives in usage-tracking/, NOT in livinity-broker.
+		// Express middleware ordering means this runs BEFORE the broker handler on the
+		// shared /u/:userId/v1 prefix. Captures usage from res.json (sync) and
+		// res.write/res.end (SSE) without touching broker source (Phase 41/42 frozen).
+		mountUsageCaptureMiddleware(this.app, this.livinityd)
 
 		// ── Livinity Broker (Phase 41 — Anthropic Messages API for marketplace apps) ──
 		// Routes: POST /u/:userId/v1/messages (sync + SSE per Plan 41-03)
