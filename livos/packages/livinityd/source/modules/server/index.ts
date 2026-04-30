@@ -42,6 +42,7 @@ import {
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 
 import fileApi from '../files/api.js'
+import {mountBrokerRoutes} from '../livinity-broker/index.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1206,6 +1207,12 @@ class Server {
 			return api
 		}
 		this.app.use('/api/files', createApi(fileApi))
+
+		// ── Livinity Broker (Phase 41 — Anthropic Messages API for marketplace apps) ──
+		// Routes: POST /u/:userId/v1/messages (sync + SSE per Plan 41-03)
+		// See livos/packages/livinityd/source/modules/livinity-broker/ +
+		// .planning/phases/41-anthropic-messages-broker/
+		mountBrokerRoutes(this.app, this.livinityd)
 
 		// Handle log file downloads
 		this.app.get('/logs/', async (request, response) => {
