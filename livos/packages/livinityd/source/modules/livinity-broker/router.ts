@@ -1,22 +1,26 @@
 import express, {type Request, type Response} from 'express'
+import type {AgentResult} from '@nexus/core'
 import {containerSourceIpGuard, resolveAndAuthorizeUserId} from './auth.js'
 import {translateAnthropicMessagesToSdkArgs} from './translate-request.js'
+import {createSseAdapter} from './sse-adapter.js'
+import {buildSyncAnthropicResponse, aggregateChunkText} from './sync-response.js'
+import {createSdkAgentRunnerForUser} from './agent-runner-factory.js'
 import type {AnthropicMessagesRequest, BrokerDeps} from './types.js'
 
 /**
  * Create the broker Express router.
  *
- * Route surface (Plan 41-02):
+ * Route surface:
  *   POST /:userId/v1/messages — accepts Anthropic Messages API body, returns
- *                                stub JSON. Plan 41-03 wires the real
- *                                SdkAgentRunner-backed sync + SSE responses.
+ *                                Anthropic Messages JSON (sync) or
+ *                                Anthropic Messages SSE chunks (when stream:true).
  *
  * Middleware chain (in order):
  *   1. containerSourceIpGuard      — reject non-loopback / non-Docker-bridge IPs (401)
  *   2. express.json({limit:'10mb'}) — parse JSON body (10mb headroom for future image blocks)
  *   3. resolveAndAuthorizeUserId   — 400 invalid id / 404 unknown / 403 single-user-mode
  *   4. body validation              — 400 for invalid Anthropic Messages shape
- *   5. handler                      — Plan 41-02 stub (Plan 41-03 replaces with real handler)
+ *   5. handler                      — sync or SSE response per body.stream flag
  */
 export function createBrokerRouter(deps: BrokerDeps): express.Router {
 	const router = express.Router()
@@ -76,17 +80,86 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 			return
 		}
 
-		// 5. Plan 41-02 STUB — Plan 41-03 wires SdkAgentRunner here.
-		// Returning the parsed translation as JSON allows Plan 41-02 integration tests to verify
-		// the pre-handler chain end-to-end without needing a real SdkAgentRunner mock.
-		res.status(200).json({
-			stub: true,
-			phase: '41-02',
-			userId: auth.userId,
-			stream: body.stream === true,
-			translated: sdkArgs,
-			notice: 'Plan 41-03 will replace this stub with the real SdkAgentRunner-backed response.',
-		})
+		// 5. Real handler — proxy to /api/agent/stream + adapt response per stream flag
+		const wantsStream = body.stream === true
+		const model = body.model
+
+		if (wantsStream) {
+			// SSE response (per D-41-12)
+			res.setHeader('Content-Type', 'text/event-stream')
+			res.setHeader('Cache-Control', 'no-cache')
+			res.setHeader('Connection', 'keep-alive')
+			res.setHeader('X-Accel-Buffering', 'no')
+			res.flushHeaders()
+			res.socket?.setNoDelay(true)
+
+			const adapter = createSseAdapter({model, res})
+			const abortController = new AbortController()
+			res.on('close', () => abortController.abort())
+
+			try {
+				const generator = createSdkAgentRunnerForUser({
+					livinityd: deps.livinityd,
+					userId: auth.userId,
+					task: sdkArgs.task,
+					contextPrefix: sdkArgs.contextPrefix,
+					systemPromptOverride: sdkArgs.systemPromptOverride,
+					signal: abortController.signal,
+				})
+				for await (const event of generator) {
+					adapter.onAgentEvent(event)
+				}
+			} catch (err: any) {
+				adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'})
+			} finally {
+				res.end()
+			}
+		} else {
+			// Sync (non-streaming) response (per D-41-13)
+			const buffer = aggregateChunkText()
+			const abortController = new AbortController()
+			let finalResult: AgentResult | undefined
+			try {
+				const generator = createSdkAgentRunnerForUser({
+					livinityd: deps.livinityd,
+					userId: auth.userId,
+					task: sdkArgs.task,
+					contextPrefix: sdkArgs.contextPrefix,
+					systemPromptOverride: sdkArgs.systemPromptOverride,
+					signal: abortController.signal,
+				})
+				// Iterate to drain events (capture final result via generator return)
+				const iter = generator[Symbol.asyncIterator]()
+				while (true) {
+					const step = await iter.next()
+					if (step.done) {
+						finalResult = step.value
+						break
+					}
+					buffer.push(step.value)
+				}
+				const response = buildSyncAnthropicResponse({
+					model,
+					bufferedText: buffer.get(),
+					result:
+						finalResult ?? {
+							success: false,
+							answer: '',
+							turns: 0,
+							totalInputTokens: 0,
+							totalOutputTokens: 0,
+							toolCalls: [],
+							stoppedReason: 'error',
+						},
+				})
+				res.status(200).json(response)
+			} catch (err: any) {
+				res.status(500).json({
+					type: 'error',
+					error: {type: 'api_error', message: err?.message || 'broker error'},
+				})
+			}
+		}
 	})
 
 	return router
