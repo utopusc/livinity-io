@@ -17,6 +17,7 @@ import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import {getBuiltinApp} from './builtin-apps.js'
 import {NativeApp, NATIVE_APP_CONFIGS} from './native-app.js'
 import {generateAppTemplate} from './compose-generator.js'
+import {injectAiProviderConfig} from './inject-ai-provider.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {
 	allocatePort,
@@ -956,6 +957,10 @@ export default class Apps {
 				})
 			}
 		}
+
+		// Phase 43 (FR-MARKET-01, D-43-06/07): inject AI broker config when manifest opts in.
+		// No-op when manifest.requiresAiProvider is absent or false.
+		injectAiProviderConfig(composeData, userId, manifest)
 
 		// Set the host port mapping on the main service
 		if (mainServiceName && composeData.services[mainServiceName]) {

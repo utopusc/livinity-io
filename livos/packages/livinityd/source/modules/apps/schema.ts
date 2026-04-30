@@ -52,6 +52,19 @@ export const AppManifestSchema = z.object({
 	defaultPassword: z.string().optional(),
 	deterministicPassword: z.boolean().optional(),
 	optimizedForLivinityHome: z.boolean().optional(),
+	/**
+	 * When true, the per-user installer auto-injects the Livinity AI broker
+	 * configuration into this app's compose file:
+	 *   - env: ANTHROPIC_BASE_URL=http://livinity-broker:8080/u/<userId>
+	 *   - env: ANTHROPIC_REVERSE_PROXY=http://livinity-broker:8080/u/<userId>
+	 *   - env: LLM_BASE_URL=http://livinity-broker:8080/u/<userId>/v1
+	 *   - extra_hosts: ["livinity-broker:host-gateway"]
+	 *
+	 * Apps with this flag get Claude access via the user's subscription with
+	 * zero BYOK / API key prompts. Optional; defaults to false (omitted = no injection).
+	 * See .planning/phases/43-marketplace-integration-anchor-mirofish/ for details.
+	 */
+	requiresAiProvider: z.boolean().optional(),
 	torOnly: z.boolean().optional(),
 	// In bytes
 	installSize: z.number().int().optional(),
