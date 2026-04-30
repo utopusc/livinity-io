@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.3
 milestone_name: Marketplace AI Broker (Subscription-Only)
-status: phase-41-shipped-locally
-stopped_at: Phases 39+40+41 shipped LOCAL (16 commits ahead of origin/master). Phase 42 (OpenAI-compat broker) ready to plan — translation-layer work on top of Phase 41's HTTP-proxy broker.
-last_updated: "2026-04-30T11:10:00.000Z"
-last_activity: 2026-04-30 -- Phase 41 (FR-BROKER-A-01..04) executed autonomously: 6 commits, 5/5 success criteria PASS, 49/49 tests PASS, sacred file untouched (still 623a65b9...). Strategy B (HTTP proxy to /api/agent/stream) chosen over in-process SdkAgentRunner. Phase 40 carry-forward closed (X-LivOS-User-Id wiring on /api/agent/stream).
+status: phase-42-shipped-locally
+stopped_at: Phases 39+40+41+42 shipped LOCAL. Phase 43 (Marketplace Integration — MiroFish anchor) ready to plan. Usage limit hit on Phase 42 executor mid-final-commit (resets 7:50am PT); manually closed inline (UAT commit + SUMMARY).
+last_updated: "2026-04-30T15:25:00.000Z"
+last_activity: 2026-04-30 -- Phase 42 (FR-BROKER-O-01..04) executed: 5 commits + summary, 4/4 success criteria PASS, 32 livinityd + 9 nexus = 41 tests PASS, sacred file untouched (still 623a65b9...). In-process TS translation chosen over LiteLLM sidecar. OpenAI Python SDK smoke test in 42-UAT.md.
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 13
-  completed_plans: 13
-  percent: 50
+  completed_phases: 4
+  total_plans: 18
+  completed_plans: 18
+  percent: 66
 ---
 
 # Project State
@@ -22,14 +22,14 @@ See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 + 41 shipped locally (50% done); Phase 42 next
+**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 + 41 + 42 shipped locally (66% done); Phase 43 next (MiroFish marketplace integration)
 
 ## Current Position
 
-Phase: 41 ✅ SHIPPED LOCALLY (6 commits); 40 ✅ SHIPPED (5 commits); 39 ✅ SHIPPED (4 commits)
-Next: 42 (OpenAI-Compatible Broker) — `/v1/chat/completions` translation layer on top of Phase 41's broker
-Status: **3/6 phases done (50%)**, 16 commits ahead of origin/master, sacred file SHA untouched at `623a65b9...`
-Last activity: 2026-04-30 — Phase 41 autonomous execution completed cleanly
+Phase: 42 ✅ SHIPPED LOCALLY (5 commits + summary); 41 ✅ SHIPPED (6 commits); 40 ✅ SHIPPED (5 commits); 39 ✅ SHIPPED (4 commits)
+Next: 43 (Marketplace Integration — MiroFish anchor) — env var auto-injection + manifest flag + first end-to-end MiroFish install verification
+Status: **4/6 phases done (66%)**, 26 commits ahead of origin/master, sacred file SHA untouched at `623a65b9...`
+Last activity: 2026-04-30 — Phase 42 OpenAI-compat broker shipped (limit hit on final commit, closed manually)
 
 ## ▶ HUMAN HANDOFF — v29.3 Phase 39 + 40 batch handoff
 
