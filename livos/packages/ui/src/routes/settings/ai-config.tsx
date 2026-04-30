@@ -6,6 +6,7 @@ import {Input} from '@/shadcn-components/ui/input'
 import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
+import {UsageSection} from './_components/usage-section'
 
 export default function AiConfigPage() {
 	// -- Kimi login state -----------------------------------------------
@@ -682,6 +683,9 @@ export default function AiConfigPage() {
 					<h2 className='text-body font-semibold'>Computer Use</h2>
 					<ComputerUseConsentToggle />
 				</div>
+
+				{/* ── Usage Section (Phase 44 FR-DASH-01..03) ───────────── */}
+				<UsageSection />
 			</div>
 		</SettingsPageLayout>
 	)
