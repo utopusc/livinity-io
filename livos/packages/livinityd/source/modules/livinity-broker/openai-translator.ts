@@ -10,29 +10,52 @@ import type {
 } from './openai-types.js'
 
 /**
- * Hardcoded model alias table per D-42-11.
+ * Hardcoded model alias table per D-42-11 (updated Phase 42.2 — current Claude 4.X family).
  *
- * Returns {actualModel: <claude-model>, warn: <true if unknown>}.
- * The CALLER decides whether to log the warning (router.ts logs at warn level
- * with the requested-vs-resolved pair).
+ * Latest model IDs (knowledge cutoff Jan 2026):
+ *   - claude-opus-4-7    (latest Opus, replaces opus-4-6)
+ *   - claude-sonnet-4-6  (current Sonnet)
+ *   - claude-haiku-4-5   (current Haiku)
  *
+ * Friendly aliases:
+ *   - opus    → claude-opus-4-7
+ *   - sonnet  → claude-sonnet-4-6
+ *   - haiku   → claude-haiku-4-5
+ *
+ * OpenAI compat:
+ *   - gpt-4 / gpt-4o / gpt-4-turbo / gpt-* → claude-sonnet-4-6 (default Claude)
+ *
+ * Returns {actualModel: <claude-model>, warn: <true if unknown fallback>}.
  * The OpenAI response's `model` field echoes the CALLER'S requested model
- * (preserves caller expectation), NOT the resolved Claude model. Internal
- * logging records both.
+ * (preserves caller expectation), NOT the resolved Claude model.
  */
 export function resolveModelAlias(requested: string): {actualModel: string; warn: boolean} {
 	const r = (requested || '').toLowerCase().trim()
-	// Pass-through claude-sonnet, claude-opus, claude-haiku families
-	if (r === 'claude-sonnet-4-6' || r.startsWith('claude-sonnet')) {
-		return {actualModel: 'claude-sonnet-4-6', warn: false}
-	}
+	// Friendly short aliases (Phase 42.2)
+	if (r === 'opus') return {actualModel: 'claude-opus-4-7', warn: false}
+	if (r === 'sonnet') return {actualModel: 'claude-sonnet-4-6', warn: false}
+	if (r === 'haiku') return {actualModel: 'claude-haiku-4-5', warn: false}
+	// Explicit Claude model IDs — opus family resolves to latest 4-7
 	if (r.startsWith('claude-opus')) {
-		return {actualModel: 'claude-opus-4-6', warn: false}
+		return {actualModel: 'claude-opus-4-7', warn: false}
+	}
+	if (r.startsWith('claude-sonnet')) {
+		return {actualModel: 'claude-sonnet-4-6', warn: false}
 	}
 	if (r.startsWith('claude-haiku')) {
 		return {actualModel: 'claude-haiku-4-5', warn: false}
 	}
-	// OpenAI model names → default Claude
+	// Legacy claude-3-* → modern equivalent
+	if (r.startsWith('claude-3-5-sonnet') || r.startsWith('claude-3-sonnet')) {
+		return {actualModel: 'claude-sonnet-4-6', warn: false}
+	}
+	if (r.startsWith('claude-3-opus')) {
+		return {actualModel: 'claude-opus-4-7', warn: false}
+	}
+	if (r.startsWith('claude-3-haiku') || r.startsWith('claude-3-5-haiku')) {
+		return {actualModel: 'claude-haiku-4-5', warn: false}
+	}
+	// OpenAI model names → default Claude (Sonnet)
 	if (
 		r === 'gpt-4' ||
 		r === 'gpt-4o' ||

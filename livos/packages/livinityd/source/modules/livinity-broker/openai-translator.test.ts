@@ -42,12 +42,13 @@ async function runTests() {
 		ok('Test 2: claude-sonnet* → claude-sonnet-4-6')
 	}
 	{
-		for (const m of ['claude-opus', 'claude-opus-4-6', 'claude-opus-x']) {
+		// Phase 42.2: claude-opus* → latest 4-7 (was 4-6)
+		for (const m of ['claude-opus', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-opus-x']) {
 			const r = resolveModelAlias(m)
-			assert.equal(r.actualModel, 'claude-opus-4-6')
+			assert.equal(r.actualModel, 'claude-opus-4-7', `${m} → claude-opus-4-7`)
 			assert.equal(r.warn, false)
 		}
-		ok('Test 3: claude-opus* → claude-opus-4-6')
+		ok('Test 3: claude-opus* → claude-opus-4-7 (Phase 42.2)')
 	}
 	{
 		for (const m of ['claude-haiku', 'claude-haiku-4-5']) {
@@ -56,6 +57,23 @@ async function runTests() {
 			assert.equal(r.warn, false)
 		}
 		ok('Test 4: claude-haiku* → claude-haiku-4-5')
+	}
+	{
+		// Phase 42.2: friendly short aliases
+		assert.equal(resolveModelAlias('opus').actualModel, 'claude-opus-4-7')
+		assert.equal(resolveModelAlias('sonnet').actualModel, 'claude-sonnet-4-6')
+		assert.equal(resolveModelAlias('haiku').actualModel, 'claude-haiku-4-5')
+		assert.equal(resolveModelAlias('opus').warn, false)
+		assert.equal(resolveModelAlias('sonnet').warn, false)
+		assert.equal(resolveModelAlias('haiku').warn, false)
+		ok('Test 4b: friendly aliases opus/sonnet/haiku → latest of each tier (Phase 42.2)')
+	}
+	{
+		// Phase 42.2: legacy claude-3-* family → modern equivalent
+		assert.equal(resolveModelAlias('claude-3-5-sonnet').actualModel, 'claude-sonnet-4-6')
+		assert.equal(resolveModelAlias('claude-3-opus-20240229').actualModel, 'claude-opus-4-7')
+		assert.equal(resolveModelAlias('claude-3-haiku-20240307').actualModel, 'claude-haiku-4-5')
+		ok('Test 4c: legacy claude-3-* → modern 4.X equivalent (Phase 42.2)')
 	}
 	{
 		const r = resolveModelAlias('foobar-llm-9000')

@@ -14,6 +14,17 @@ import {isMultiUserMode} from '../ai/per-user-claude.js'
  * Single-user mode: omits the header → nexus uses process.env.HOME
  *                   (pre-Phase-41 behavior preserved).
  *
+ * Phase 41.3 hotfix — env override `BROKER_FORCE_ROOT_HOME=true`:
+ *   When set, the X-LivOS-User-Id header is NEVER sent regardless of
+ *   multi-user mode. Every broker request resolves to the daemon's
+ *   process.env.HOME (typically /root for Mini PC root-run livinityd) and
+ *   uses that single shared `~/.claude/.credentials.json`.
+ *   Use case: deployments where one Claude subscription is shared across
+ *   all LivOS users (the user's explicit "tek subscription, root only"
+ *   choice). Avoids the per-user HOME bug where SdkAgentRunner subprocess
+ *   ends up with HOME=<...>/.claude and can't find credentials at the
+ *   correct ~/.claude/.credentials.json path.
+ *
  * Returns an async generator yielding AgentEvent values, with the AgentResult
  * as the generator's return value.
  *
@@ -39,9 +50,12 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
 
 	const multiUser = await isMultiUserMode(livinityd).catch(() => false)
+	const forceRootHome = process.env.BROKER_FORCE_ROOT_HOME === 'true'
 	const headers: Record<string, string> = {'Content-Type': 'application/json'}
 	if (process.env.LIV_API_KEY) headers['X-API-Key'] = process.env.LIV_API_KEY
-	if (multiUser) headers['X-LivOS-User-Id'] = userId // Plan 41-04 wires nexus to consume
+	// Phase 41.3: BROKER_FORCE_ROOT_HOME bypasses per-user HOME isolation.
+	// When set, every broker request shares the daemon's HOME (single subscription mode).
+	if (multiUser && !forceRootHome) headers['X-LivOS-User-Id'] = userId // Plan 41-04 wires nexus to consume
 
 	const body = {
 		task,
