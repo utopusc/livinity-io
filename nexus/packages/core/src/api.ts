@@ -2405,7 +2405,36 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     // Extract userId from JWT for per-user session isolation
     const userId = await extractUserIdFromRequest(req);
+    // webJid uses JWT-derived userId only (NOT header-derived) — session tracking is
+    // anchored on Authorization/cookie auth, not livinityd-proxy header. Header-derived
+    // userId is used solely for HOME isolation below.
     const webJid = userId ? `web-ui:${userId}` : 'web-ui';
+
+    // Phase 41 D-41-16: livinityd forwards X-LivOS-User-Id in multi-user mode so we can
+    // set SdkAgentRunner's homeOverride to the calling user's per-user .claude/ dir.
+    // Trust model: requireApiKey middleware (api.ts:11 + line 229) already gates this
+    // route — only livinityd (with LIV_API_KEY) can send this header. The header is
+    // therefore as trusted as livinityd itself, which is already the trust boundary.
+    const headerUserId = (() => {
+      const raw = req.headers['x-livos-user-id'];
+      if (typeof raw !== 'string') return undefined;
+      // Same regex as per-user-claude.ts getUserClaudeDir validation — defense-in-depth
+      // against path traversal even though the trust model gates this header.
+      if (!/^[a-zA-Z0-9_-]+$/.test(raw)) return undefined;
+      return raw;
+    })();
+
+    // Phase 41 D-41-16: Per-user HOME isolation for the spawned claude CLI subprocess.
+    // Only set when X-LivOS-User-Id header was provided (multi-user mode).
+    // When undefined: SdkAgentRunner falls back to process.env.HOME (pre-Phase-41
+    // behavior, verified preserved by sdk-agent-runner-home-override.test.ts test #2).
+    let homeOverride: string | undefined;
+    if (headerUserId) {
+      // Read data dir from env (testability) — defaults to production path per MEMORY.md.
+      const dataDir = process.env.LIVOS_DATA_DIR || '/opt/livos/data';
+      homeOverride = join(dataDir, 'users', headerUserId, '.claude');
+      logger.info('Phase 41: per-user HOME isolation', { userId: headerUserId, homeOverride });
+    }
 
     // ── Handle slash commands (/usage, /new, /status, etc.) ──────────
     if (isCommand(task) && daemon.userSessionManager) {
@@ -2481,6 +2510,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       brain,
       toolRegistry,
       nexusConfig,
+      ...(homeOverride ? { homeOverride } : {}),    // Phase 41 D-41-16
       maxTurns: Math.min(max_turns || agentDefaults?.maxTurns || parseInt(process.env.AGENT_MAX_TURNS || '30'), 200),
       maxTokens: agentDefaults?.maxTokens || parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
       timeoutMs: agentDefaults?.timeoutMs || parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
