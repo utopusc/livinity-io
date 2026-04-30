@@ -301,7 +301,36 @@ async function runTests() {
 		console.log('  PASS Test 6: stream content chunks visible + [DONE] terminator')
 	}
 
-	console.log('\nAll openai-integration.test.ts tests passed (6/6)')
+	// Phase 42.1 hotfix: Test 7 — GET /v1/models returns OpenAI ListModels shape
+	{
+		setMockUsers(users)
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/admin-1/v1/models`)
+		assert.equal(res.status, 200, `expected 200, got ${res.status}`)
+		const body = (await res.json()) as any
+		assert.equal(body.object, 'list')
+		assert.ok(Array.isArray(body.data), 'data is an array')
+		assert.ok(body.data.length >= 4, 'returns at least 4 models')
+		const ids = body.data.map((m: any) => m.id)
+		assert.ok(ids.includes('claude-sonnet-4-6'), 'includes claude-sonnet-4-6')
+		assert.ok(ids.includes('gpt-4'), 'includes gpt-4 alias')
+		assert.equal(body.data[0].object, 'model')
+		assert.match(body.data[0].owned_by, /^livinity-broker:/)
+		await close()
+		console.log('  PASS Test 7: GET /v1/models returns OpenAI ListModels (Phase 42.1)')
+	}
+
+	// Phase 42.1: Test 8 — GET /v1/models for unknown user returns 404
+	{
+		setMockUsers(users)
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/nonexistent-user/v1/models`)
+		assert.equal(res.status, 404, `expected 404, got ${res.status}`)
+		await close()
+		console.log('  PASS Test 8: GET /v1/models 404 for unknown user (auth gate)')
+	}
+
+	console.log('\nAll openai-integration.test.ts tests passed (8/8)')
 
 	pg.Pool.prototype.connect = originalConnect
 	pg.Pool.prototype.query = originalQuery

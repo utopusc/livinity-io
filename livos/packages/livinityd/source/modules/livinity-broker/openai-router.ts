@@ -22,7 +22,44 @@ import {createOpenAISseAdapter} from './openai-sse-adapter.js'
  * Sync path complete in Plan 42-02; SSE streaming added in Plan 42-03
  * (this handler currently returns 501 when body.stream === true).
  */
+/**
+ * Phase 42.1 hotfix: GET /:userId/v1/models — OpenAI ListModels endpoint.
+ *
+ * Open WebUI (and most OpenAI-compat marketplace clients) call this on startup
+ * to populate the model picker. Without it, the dropdown is empty and the user
+ * cannot start a chat. We return a hardcoded list — broker maps every model
+ * name through resolveModelAlias() to the actual Anthropic backend at request
+ * time, so the list here is purely a UX hint for the client picker.
+ *
+ * Same auth as /chat/completions: user_id URL path validates against users
+ * table; multi-user-OFF + non-admin → 403; container source IP must be in
+ * 127.0.0.1 / ::1 / 172.16.0.0/12 (Phase 41.1).
+ */
+function listModels(userId: string) {
+	const created = Math.floor(Date.now() / 1000)
+	const owned_by = `livinity-broker:${userId.slice(0, 8)}`
+	const ids = [
+		'claude-sonnet-4-6',
+		'claude-opus-4-6',
+		'claude-haiku-4-5',
+		'gpt-4',
+		'gpt-4o',
+		'gpt-3.5-turbo',
+	]
+	return {
+		object: 'list',
+		data: ids.map((id) => ({id, object: 'model', created, owned_by})),
+	}
+}
+
 export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): void {
+	// Phase 42.1: GET /v1/models — OpenAI ListModels (Open WebUI populates picker)
+	router.get('/:userId/v1/models', async (req: Request, res: Response) => {
+		const auth = await resolveAndAuthorizeUserId(req, res, deps.livinityd)
+		if (!auth) return
+		res.status(200).json(listModels(auth.userId))
+	})
+
 	router.post('/:userId/v1/chat/completions', async (req: Request, res: Response) => {
 		// 1. user_id resolution + authorization (reused from Phase 41)
 		const auth = await resolveAndAuthorizeUserId(req, res, deps.livinityd)
