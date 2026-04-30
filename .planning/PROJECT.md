@@ -187,6 +187,28 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-BACKEND-01..07 (7/7) → Phase 37 backend factory reset
 - [x] FR-UI-01..07 (7/7) → Phase 38 UI factory reset
 
+## Next Milestone Goals: v29.3 — Marketplace AI Broker + Multi-User Claude Auth
+
+**Seed:** `.planning/research/v29.3-marketplace-broker-seed.md` (full context + draft requirements)
+
+**Goal:** Marketplace AI uygulamaları (MiroFish, Dify, RAGFlow, CrewAI agent'ları) — kullanıcının Livinity UI'da yaptığı Claude OAuth login'i kullanarak, kendi API key'lerine ihtiyaç duymadan, ToS-uyumlu per-user multi-user desteğiyle Claude'a erişebilsin.
+
+**Key insights:**
+- Livinity'nin Claude OAuth flow'u zaten implementli (`nexus/packages/core/src/providers/claude.ts` — PKCE + public client_id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`).
+- Mevcut `sdk-subscription` mode (Agent SDK `query()` üzerinden) **ToS-compliant**.
+- Mevcut `claude.ts:99-115` OAuth-fallback-with-raw-SDK **riskli** — v29.3 ilk işi kapatmak.
+- Multi-user fan-out = Anthropic ToS yasağı (Nisan 2026 OpenClaw banı). Per-user OAuth + HOME isolation = compliant.
+
+**Suggested phases (refine in `/gsd-new-milestone`):**
+- 39 Risk fix (OAuth fallback closure)
+- 40 Per-user Claude OAuth + HOME isolation
+- 41 Anthropic Messages broker (`/v1/messages` + streaming)
+- 42 OpenAI Chat Completions broker (`/v1/chat/completions` + format translation, possibly via LiteLLM sidecar)
+- 43 Marketplace integration (env var auto-injection + manifest flag)
+- 44 Per-user usage dashboard
+
+**Start with:** `/gsd-new-milestone` (reads seed, asks discovery questions, generates ROADMAP + REQUIREMENTS).
+
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
 v30.0 milestone fully bootstrapped (research + REQUIREMENTS + ROADMAP, 8 phases / 47 BAK-* requirements) on 2026-04-28. Paused in favor of v29.2 Factory Reset. Resume with phase renumbering when v29.2 ships.
