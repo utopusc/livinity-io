@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.3
 milestone_name: Marketplace AI Broker (Subscription-Only)
-status: ready-to-plan
-stopped_at: null
-last_updated: "2026-04-29T22:00:00.000Z"
-last_activity: 2026-04-29 -- v29.3 ROADMAP created by /gsd-roadmapper (6 phases, 17/17 reqs mapped)
+status: phase-39-shipped-locally
+stopped_at: Phase 39 shipped LOCAL ONLY (not deployed to Mini PC, not pushed to remote). Awaiting human review + deploy decision before Phase 40.
+last_updated: "2026-04-30T05:00:00.000Z"
+last_activity: 2026-04-30 -- Phase 39 (FR-RISK-01) executed autonomously: 4 commits, 4/4 success criteria PASS, 5/5 tests green, sacred file SHA 2b3b005bf1594821be6353268ffbbdddea5f9a3a unchanged
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 16
 ---
 
 # Project State
@@ -22,14 +22,66 @@ See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — ready to plan Phase 39
+**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phase 39 shipped locally; pending human review + deploy before Phase 40
 
 ## Current Position
 
-Phase: 39 (next — Risk Fix: Close OAuth Fallback)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-04-29 — ROADMAP.md + REQUIREMENTS.md traceability finalized
+Phase: 39 ✅ SHIPPED LOCALLY (4 commits, NOT deployed, NOT pushed)
+Next: 40 (Per-User Claude OAuth + HOME Isolation) — blocked on human review of Phase 39
+Status: **Awaiting human checkpoint** — review code → deploy to Mini PC → confirm broker can proceed
+Last activity: 2026-04-30 — Phase 39 autonomous execution completed cleanly
+
+## ▶ HUMAN HANDOFF — Sabah uyandığında oku
+
+### Phase 39 (FR-RISK-01) durumu: BAŞARILI, lokal ✅
+
+Otonom çalıştırıldı (sen uyurken), 4 commit master üzerine atıldı:
+
+```
+7f0e0d09 docs(39): phase summary — OAuth fallback closure complete
+eb3c93ff test(39-03): pin OAuth-fallback closure with regression tests (FR-RISK-01)
+aa338404 refactor(39-02): close OAuth fallback in ClaudeProvider.getClient (FR-RISK-01)
+ab62df01 feat(39-01): caller audit for OAuth fallback closure (FR-RISK-01)
+```
+
+**Yapılan değişiklikler:**
+- `nexus/packages/core/src/providers/claude.ts` — iki `authToken:` fallback (env-var + creds-file) silindi, `ClaudeAuthMethodMismatchError` typed error class eklendi
+- `nexus/packages/core/src/providers/manager.ts` + `index.ts` + `api.ts` — caller reroute (audit AUDIT.md'de)
+- 3 yeni test dosyası (`claude.test.ts`, `no-authtoken-regression.test.ts`, `sdk-agent-runner-integrity.test.ts`)
+- `nexus/packages/core/package.json` — `test:phase39` script
+
+**Garantiler (kanıtlanmış):**
+- Sacred `sdk-agent-runner.ts` byte-identical: SHA `2b3b005bf1594821be6353268ffbbdddea5f9a3a`
+- 5/5 test PASS — `cd nexus/packages/core && npm run test:phase39`
+- TypeScript build temiz
+- Subscription tokens artık `@anthropic-ai/sdk`'ya hiçbir koşulda ulaşamıyor — grep regression test bunu kalıcı garantiliyor
+
+### Senin yapman gerekenler
+
+1. **Code review:** `git show ab62df01 aa338404 eb3c93ff 7f0e0d09` — özellikle `claude.ts` deletion + caller reroutes
+2. **Deploy karar:** Eğer onaylıyorsan:
+   ```bash
+   git push origin master
+   # Sonra Mini PC'de:
+   ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"
+   ```
+3. **Phase 40'a devam:** Onayladığında `/gsd-autonomous --from 40` veya `/gsd-discuss-phase 40` çalıştır
+
+### Neden Phase 40+ otonom yapılmadı
+
+Phase 40 (Per-User OAuth + HOME isolation) sistem-seviyesi değişiklikler içeriyor:
+- Linux user account oluşturma / izinler
+- `SdkAgentRunner` spawn'ında HOME env var değişikliği (sacred dosyaya çok yakın çalışma)
+- Multi-user mod davranış değişikliği
+- Settings UI'a "Connect my Claude account" butonu
+
+Bu phase'in kararları (root user nasıl handle edilir? single-user mode'da ne olur? cross-user permission stratejisi?) sen uyanıkken alınmalı. Phase 39 kazılmış kontrollü bir alandı; 40 ise canlı sistem üzerinde değişiklik.
+
+Diğer phase'ler (41 broker, 42 OpenAI-compat, 43 marketplace, 44 dashboard) her biri 1-2 günlük iş — autonomous tek seans değil.
+
+### Mevcut milestone progress
+
+1/6 phase complete (16%). Remaining linear chain: 40 → 41 → 42 → 43 → 44.
 
 ## Roadmap Snapshot
 
