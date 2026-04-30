@@ -85,7 +85,13 @@ Plans:
   2. The same endpoint with `"stream": true` returns OpenAI-format SSE chunks (`data: {"choices":[{"delta":...}]}`) that match OpenAI streaming spec exactly — feeding the raw stream into the official `openai` Python SDK `OpenAI(...).chat.completions.create(..., stream=True)` smoke test consumes the stream without error.
   3. Model-name aliasing: requests with `"model": "gpt-4"`, `"gpt-4o"`, `"claude-sonnet-4-6"` all resolve to the configured default Anthropic model (`claude-sonnet-4-6`); unknown model names log a warning + fall through to default rather than 4xx-erroring.
   4. Bidirectional translation handles role mapping (`system` / `user` / `assistant`), tool / function-call format conversion, and multi-turn history — verified by an integration test that round-trips an OpenAI tool-calling conversation through the broker and asserts both request translation (in) and response translation (out) preserve semantics.
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 42-01-PLAN.md — Codebase audit (read-only AUDIT.md for Plans 42-02..05)
+- [ ] 42-02-PLAN.md — OpenAI types + translator + sync /v1/chat/completions handler
+- [ ] 42-03-PLAN.md — OpenAI SSE adapter + streaming branch wired into router
+- [ ] 42-04-PLAN.md — Tests (32 new) + test:phase42 npm script + sacred-file integrity
+- [ ] 42-05-PLAN.md — 42-UAT.md with verbatim openai Python SDK smoke test (FR-BROKER-O-04)
 
 ### Phase 43: Marketplace Integration (Anchor: MiroFish)
 **Goal:** A marketplace app declaring `requires_ai_provider: true` in its manifest gets `ANTHROPIC_BASE_URL`, `ANTHROPIC_REVERSE_PROXY`, and `LLM_BASE_URL` automatically injected into its per-user Docker compose file at install time — and MiroFish, the v29.3 anchor app, is verified to chat with Claude end-to-end using the user's subscription with zero BYOK / API key prompts.
@@ -175,7 +181,7 @@ Strictly linear — each phase consumes the prior phase's artifact. No paralleli
 | 39. Risk Fix — Close OAuth Fallback | 0/0 | Not started | — |
 | 40. Per-User Claude OAuth + HOME Isolation | 0/5 | Planned | — |
 | 41. Anthropic Messages Broker | 0/5 | Planned | — |
-| 42. OpenAI-Compatible Broker | 0/0 | Not started | — |
+| 42. OpenAI-Compatible Broker | 0/5 | Planned | — |
 | 43. Marketplace Integration (Anchor: MiroFish) | 0/0 | Not started | — |
 | 44. Per-User Usage Dashboard | 0/0 | Not started | — |
 
