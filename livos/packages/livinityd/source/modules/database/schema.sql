@@ -312,3 +312,26 @@ CREATE INDEX IF NOT EXISTS idx_ai_alerts_undismissed
 CREATE INDEX IF NOT EXISTS idx_ai_alerts_dedupe
   ON ai_alerts(container_name, kind, created_at DESC)
   WHERE dismissed_at IS NULL;
+
+-- =========================================================================
+-- Broker Usage (Phase 44 FR-DASH-01)
+-- One row per broker request that completes (sync or SSE). Captured by the
+-- usage-tracking capture middleware which wraps /u/:userId/v1/* OUTSIDE the
+-- livinity-broker module (broker is feature-frozen since Phase 42).
+-- request_id is the Anthropic msg_* / OpenAI chatcmpl-* id; null for 429s.
+-- endpoint = 'messages' | 'chat-completions' | '429-throttled'.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS broker_usage (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_id            TEXT,
+  model             TEXT NOT NULL,
+  prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  request_id        TEXT,
+  endpoint          TEXT NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_broker_usage_user_created ON broker_usage(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_broker_usage_app          ON broker_usage(app_id, created_at DESC);
