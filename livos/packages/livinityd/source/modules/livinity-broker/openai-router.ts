@@ -11,6 +11,7 @@ import {
 } from './openai-translator.js'
 import type {OpenAIChatCompletionsRequest} from './openai-types.js'
 import type {BrokerDeps} from './types.js'
+import {createOpenAISseAdapter} from './openai-sse-adapter.js'
 
 /**
  * Register POST /:userId/v1/chat/completions on the existing broker router.
@@ -107,14 +108,44 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 		// 6. Stream branching
 		const wantsStream = body.stream === true
 		if (wantsStream) {
-			// Plan 42-03 will replace this with the OpenAI SSE adapter
-			res.status(501).json({
-				error: {
-					message: 'streaming not yet implemented (added in Plan 42-03)',
-					type: 'not_implemented',
-					code: 'stream_pending',
-				},
-			})
+			// SSE response (per D-42-09)
+			res.setHeader('Content-Type', 'text/event-stream')
+			res.setHeader('Cache-Control', 'no-cache')
+			res.setHeader('Connection', 'keep-alive')
+			res.setHeader('X-Accel-Buffering', 'no')
+			res.flushHeaders()
+			res.socket?.setNoDelay(true)
+
+			const adapter = createOpenAISseAdapter({requestedModel, res})
+			const abortController = new AbortController()
+			res.on('close', () => abortController.abort())
+
+			let upstreamStoppedReason: AgentResult['stoppedReason'] | undefined
+			try {
+				const generator = createSdkAgentRunnerForUser({
+					livinityd: deps.livinityd,
+					userId: auth.userId,
+					task: sdkArgs.task,
+					contextPrefix: sdkArgs.contextPrefix,
+					systemPromptOverride: sdkArgs.systemPromptOverride,
+					signal: abortController.signal,
+				})
+				const iter = generator[Symbol.asyncIterator]()
+				while (true) {
+					const step = await iter.next()
+					if (step.done) {
+						upstreamStoppedReason = step.value?.stoppedReason
+						break
+					}
+					adapter.onAgentEvent(step.value)
+				}
+			} catch (err: any) {
+				adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'} as any)
+			} finally {
+				// Idempotent — guarantees [DONE] terminator even if upstream stream aborted
+				adapter.finalize(upstreamStoppedReason)
+				if (!res.writableEnded) res.end()
+			}
 			return
 		}
 
