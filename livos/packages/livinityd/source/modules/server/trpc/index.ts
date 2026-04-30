@@ -15,6 +15,7 @@ import notifications from '../../notifications/routes.js'
 import eventBus from '../../event-bus/routes.js'
 import backups from '../../backups/routes.js'
 import ai from '../../ai/routes.js'
+import usage from '../../usage-tracking/routes.js'
 import domain from '../../domain/routes.js'
 import docker from '../../docker/routes.js'
 import scheduler from '../../scheduler/routes.js'
@@ -41,6 +42,7 @@ const appRouter = router({
 	eventBus,
 	backups,
 	ai,
+	usage,
 	domain,
 	docker,
 	scheduler,
