@@ -6,23 +6,29 @@ import type Livinityd from '../../index.js'
 /**
  * Container source IP guard for the broker route.
  *
- * Allowlist (per D-41-08 + 41-AUDIT.md Section 7b — expanded in Phase 41.1 hotfix):
- *   - 127.0.0.1            (IPv4 loopback)
- *   - ::1                  (IPv6 loopback)
- *   - ::ffff:127.0.0.1     (IPv4-mapped-IPv6 loopback — strip prefix before matching)
- *   - 172.16.0.0/12        (RFC 1918 Docker bridge range — covers default bridge 172.17.x.x
- *                           AND per-app compose networks 172.18-172.31.x.x; required because
- *                           every per-app docker-compose creates its own bridge network in
- *                           172.18+ subnets, not the default 172.17 bridge)
+ * Allowlist (per D-41-08 + 41-AUDIT.md Section 7b — expanded in Phase 41.1 + 41.2 hotfixes):
+ *   - 127.0.0.1 / ::1 / ::ffff:127.0.0.1   (loopback)
+ *   - 10.0.0.0/8                           (RFC 1918 — Docker custom networks, swarm overlays
+ *                                            often default here; common in Mini PC setups)
+ *   - 172.16.0.0/12                        (RFC 1918 — default bridge + per-app compose bridges)
+ *   - 192.168.0.0/16                       (RFC 1918 — Docker macvlan / host-bridge configs)
  *
  * Everything else → HTTP 401 + JSON error body.
  *
  * Threat model note: external traffic CANNOT reach this route in production
  * because the Mini PC firewall blocks port 8080 externally and livinityd's
  * existing CORS + helmet stack handles internet-facing routes elsewhere — but
- * this guard is defense-in-depth in case of future misconfiguration. See
- * 41-AUDIT.md Section 7b for full rationale.
+ * this guard is defense-in-depth in case of future misconfiguration. The
+ * full RFC 1918 allowlist is safe because RFC 1918 IPs are unroutable on
+ * the public internet by definition. See 41-AUDIT.md §7b for full rationale.
  */
+function isValidIPv4(parts: string[]): boolean {
+	return (
+		parts.length === 4 &&
+		parts.every((p) => /^\d+$/.test(p) && +p >= 0 && +p <= 255)
+	)
+}
+
 export function containerSourceIpGuard(req: Request, res: Response, next: NextFunction): void {
 	let ip = req.socket.remoteAddress || ''
 	// Strip IPv4-mapped-IPv6 prefix (e.g. ::ffff:127.0.0.1)
@@ -33,16 +39,22 @@ export function containerSourceIpGuard(req: Request, res: Response, next: NextFu
 		return
 	}
 
-	// CIDR check for 172.16.0.0/12 (Docker bridge networks — RFC 1918 block)
-	// Covers default bridge (172.17.x.x) and per-app compose networks (172.18.x.x ... 172.31.x.x)
-	if (ip.startsWith('172.')) {
-		const parts = ip.split('.')
-		if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p) && +p >= 0 && +p <= 255)) {
-			const second = +parts[1]
-			if (second >= 16 && second <= 31) {
-				next()
-				return
-			}
+	const parts = ip.split('.')
+	if (isValidIPv4(parts)) {
+		const a = +parts[0]
+		const b = +parts[1]
+		// RFC 1918 private blocks
+		if (a === 10) {
+			next()
+			return
+		}
+		if (a === 172 && b >= 16 && b <= 31) {
+			next()
+			return
+		}
+		if (a === 192 && b === 168) {
+			next()
+			return
 		}
 	}
 

@@ -111,12 +111,33 @@ async function runTests() {
 		console.log('  PASS Test 7d: 172.32.0.1 rejected (outside 172.16/12)')
 	}
 
-	// Test 8: 10.0.0.1 → reject (private but not Docker bridge)
+	// Test 8 (Phase 41.2 hotfix): 10.0.0.1 → ALLOW (RFC 1918 10/8 — Docker custom/overlay nets)
 	{
 		const r = runGuard('10.0.0.1')
+		assert.equal(r.nextCalled, true)
+		console.log('  PASS Test 8: 10.0.0.1 allowed (RFC 1918 10/8)')
+	}
+
+	// Test 8b (Phase 41.2): 10.21.0.2 → ALLOW (live Mini PC discovery — overlay net)
+	{
+		const r = runGuard('10.21.0.2')
+		assert.equal(r.nextCalled, true)
+		console.log('  PASS Test 8b: 10.21.0.2 allowed (Mini PC overlay net)')
+	}
+
+	// Test 8c (Phase 41.2): 192.168.1.5 → ALLOW (RFC 1918 192.168/16 — macvlan)
+	{
+		const r = runGuard('192.168.1.5')
+		assert.equal(r.nextCalled, true)
+		console.log('  PASS Test 8c: 192.168.1.5 allowed (RFC 1918 192.168/16)')
+	}
+
+	// Test 8d (Phase 41.2): 11.0.0.1 → REJECT (just outside 10/8)
+	{
+		const r = runGuard('11.0.0.1')
 		assert.equal(r.nextCalled, false)
 		assert.equal(r.captured.statusCode, 401)
-		console.log('  PASS Test 8: 10.0.0.1 rejected (other private)')
+		console.log('  PASS Test 8d: 11.0.0.1 rejected (outside RFC 1918)')
 	}
 
 	// Test 9: empty string → reject
@@ -130,7 +151,7 @@ async function runTests() {
 	// resolveAndAuthorizeUserId: deferred to integration.test.ts (Task 2)
 	// Acceptable per Plan 41-05 — integration test covers the full chain end-to-end.
 
-	console.log('\nAll auth.test.ts tests passed (12/12)')
+	console.log('\nAll auth.test.ts tests passed (15/15)')
 }
 
 runTests().catch((err) => {
