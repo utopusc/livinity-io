@@ -38,13 +38,21 @@ import {createOpenAISseAdapter} from './openai-sse-adapter.js'
 function listModels(userId: string) {
 	const created = Math.floor(Date.now() / 1000)
 	const owned_by = `livinity-broker:${userId.slice(0, 8)}`
+	// Phase 42.2: current Claude 4.X family + friendly aliases + OpenAI compat
+	// Order matters — first 3 are friendly aliases (most common picks), then explicit
+	// Claude IDs, then gpt-* aliases for OpenAI-compat marketplace clients.
 	const ids = [
+		// Friendly short aliases — broker resolves to latest version of each tier
+		'opus',
+		'sonnet',
+		'haiku',
+		// Explicit Claude 4.X model IDs (knowledge cutoff Jan 2026)
+		'claude-opus-4-7',
 		'claude-sonnet-4-6',
-		'claude-opus-4-6',
 		'claude-haiku-4-5',
+		// OpenAI compat — broker maps these to claude-sonnet-4-6 default
 		'gpt-4',
 		'gpt-4o',
-		'gpt-3.5-turbo',
 	]
 	return {
 		object: 'list',
