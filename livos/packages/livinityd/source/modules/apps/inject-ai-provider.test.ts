@@ -35,7 +35,7 @@ test('Test 1b: flag undefined → compose unchanged', () => {
 	assert.deepEqual(composeIn, composeBefore)
 })
 
-test('Test 2: flag true on bare service → 3 env vars + extra_hosts added', () => {
+test('Test 2: flag true on bare service → 5 env vars + extra_hosts added', () => {
 	const compose = {services: {app: {image: 'foo'}}} as any
 	injectAiProviderConfig(compose, 'user-uuid', {
 		...validBaseManifest,
@@ -45,6 +45,9 @@ test('Test 2: flag true on bare service → 3 env vars + extra_hosts added', () 
 	assert.equal(svc.environment.ANTHROPIC_BASE_URL, 'http://livinity-broker:8080/u/user-uuid')
 	assert.equal(svc.environment.ANTHROPIC_REVERSE_PROXY, 'http://livinity-broker:8080/u/user-uuid')
 	assert.equal(svc.environment.LLM_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
+	assert.equal(svc.environment.OPENAI_API_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
+	assert.equal(svc.environment.OPENAI_API_KEY, 'livinity-broker-managed')
+	assert.equal(Object.keys(svc.environment).length, 5)
 	assert.deepEqual(svc.extra_hosts, ['livinity-broker:host-gateway'])
 })
 
@@ -63,7 +66,26 @@ test('Test 3: existing env preserved, broker keys added (no overwrite)', () => {
 	assert.equal(env.GENERIC_TIMEZONE, 'UTC')
 	assert.equal(env.ANTHROPIC_BASE_URL, 'http://livinity-broker:8080/u/user-uuid')
 	assert.equal(env.LLM_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
-	assert.equal(Object.keys(env).length, 5)
+	assert.equal(env.OPENAI_API_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
+	assert.equal(env.OPENAI_API_KEY, 'livinity-broker-managed')
+	// 2 pre-existing + 5 broker keys = 7
+	assert.equal(Object.keys(env).length, 7)
+})
+
+test('Test 3c: pre-existing OPENAI_API_KEY is PRESERVED (no overwrite)', () => {
+	const compose = {
+		services: {
+			app: {image: 'foo', environment: {OPENAI_API_KEY: 'sk-user-set-real-key'}},
+		},
+	} as any
+	injectAiProviderConfig(compose, 'user-uuid', {
+		...validBaseManifest,
+		requiresAiProvider: true,
+	})
+	const env = compose.services.app.environment
+	assert.equal(env.OPENAI_API_KEY, 'sk-user-set-real-key')
+	// Other broker keys still added
+	assert.equal(env.OPENAI_API_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
 })
 
 test('Test 3b: pre-existing ANTHROPIC_BASE_URL is PRESERVED (do not overwrite)', () => {

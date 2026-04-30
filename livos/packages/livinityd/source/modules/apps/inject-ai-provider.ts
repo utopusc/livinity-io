@@ -6,10 +6,20 @@ const HOST_GATEWAY_ENTRY = `${BROKER_HOST}:host-gateway`
 
 function buildBrokerEnv(userId: string): Record<string, string> {
 	const base = `http://${BROKER_HOST}:${BROKER_PORT}/u/${userId}`
+	const v1 = `${base}/v1`
 	return {
+		// Anthropic SDK convention
 		ANTHROPIC_BASE_URL: base,
+		// LibreChat / older Anthropic-aware tools
 		ANTHROPIC_REVERSE_PROXY: base,
-		LLM_BASE_URL: `${base}/v1`,
+		// Generic OpenAI-compat / LangChain / many marketplace agents (must point at /v1)
+		LLM_BASE_URL: v1,
+		// OpenAI SDK convention (Open WebUI, MiroFish, CrewAI, LangChain, OpenAI Python SDK)
+		OPENAI_API_BASE_URL: v1,
+		// Many OpenAI-compat clients require a non-empty API key string even when
+		// using a custom base URL (Open WebUI's OAuth UI rejects empty key field).
+		// The string is ignored by the broker; auth is enforced by URL path + IP guard.
+		OPENAI_API_KEY: 'livinity-broker-managed',
 	}
 }
 

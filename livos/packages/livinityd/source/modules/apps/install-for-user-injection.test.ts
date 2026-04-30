@@ -103,7 +103,7 @@ const validBaseManifest: AppManifest = {
 	gallery: [],
 }
 
-test('POSITIVE (FR-MARKET-01 SC #1): manifest with requiresAiProvider: true → compose has 3 env vars + extra_hosts', () => {
+test('POSITIVE (FR-MARKET-01 SC #1): manifest with requiresAiProvider: true → compose has 5 env vars + extra_hosts', () => {
 	const writtenYaml = simulateInstallForUserPipeline({
 		composeYamlInput: baseTestComposeYaml,
 		manifest: {...validBaseManifest, requiresAiProvider: true},
@@ -120,6 +120,8 @@ test('POSITIVE (FR-MARKET-01 SC #1): manifest with requiresAiProvider: true → 
 	expect(env.ANTHROPIC_BASE_URL).toBe('http://livinity-broker:8080/u/test-user-uuid')
 	expect(env.ANTHROPIC_REVERSE_PROXY).toBe('http://livinity-broker:8080/u/test-user-uuid')
 	expect(env.LLM_BASE_URL).toBe('http://livinity-broker:8080/u/test-user-uuid/v1')
+	expect(env.OPENAI_API_BASE_URL).toBe('http://livinity-broker:8080/u/test-user-uuid/v1')
+	expect(env.OPENAI_API_KEY).toBe('livinity-broker-managed')
 	expect(parsed.services[mainService].extra_hosts).toContain('livinity-broker:host-gateway')
 })
 
@@ -140,6 +142,8 @@ test('NEGATIVE (FR-MARKET-01 SC #2 / Risk R6): manifest WITHOUT flag → compose
 	expect(env.ANTHROPIC_BASE_URL).toBeUndefined()
 	expect(env.ANTHROPIC_REVERSE_PROXY).toBeUndefined()
 	expect(env.LLM_BASE_URL).toBeUndefined()
+	expect(env.OPENAI_API_BASE_URL).toBeUndefined()
+	expect(env.OPENAI_API_KEY).toBeUndefined()
 
 	const extraHosts = parsed.services[mainService].extra_hosts || []
 	expect(extraHosts).not.toContain('livinity-broker:host-gateway')
