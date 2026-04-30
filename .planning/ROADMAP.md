@@ -38,7 +38,13 @@
   2. When a user with subscription-only auth (no Redis API key) triggers any code path that previously called `ClaudeProvider.getClient()`, the call either routes through `SdkAgentRunner` (the legitimate path) or throws a clear "use Agent SDK / subscription mode" error — never silently falls back to raw HTTP with the OAuth token.
   3. When a user with an explicit Redis-stored API key calls `ClaudeProvider.getClient()`, the existing API-key path continues to work (BYOK regression test passes — even though BYOK is out of scope for new features, the existing path for legacy admins must not break).
   4. `nexus/packages/core/src/sdk-agent-runner.ts` is byte-identical to its pre-Phase-39 SHA (sacred file untouched — verified by `git diff` showing no changes inside the file body).
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 43-01-PLAN.md — Codebase audit + MiroFish image discovery (read-only AUDIT.md for Plans 43-02..05)
+- [ ] 43-02-PLAN.md — Manifest schema field + injectAiProviderConfig pure function + installForUser wiring + 14 unit tests
+- [ ] 43-03-PLAN.md — MiroFish manifest draft (sibling-repo `utopusc/livinity-apps` PR is operator action)
+- [ ] 43-04-PLAN.md — Integration test (positive + negative) + manifest schema test + UI badge + test:phase43 npm script
+- [ ] 43-05-PLAN.md — 43-UAT.md operator-facing manual UAT (FR-MARKET-02 acceptance gate)
 
 ### Phase 40: Per-User Claude OAuth + HOME Isolation
 **Goal:** Multi-user Mini PC supports independent per-user `claude login`. Each user's OAuth credentials live in their own user HOME, and every `SdkAgentRunner` subprocess spawn carries that user's HOME — making cross-user OAuth credential leak impossible.
@@ -102,7 +108,13 @@ Plans:
   2. A manifest with `requires_ai_provider: false` (or omitted) produces a compose file without those env vars — verified by negative test asserting absent keys.
   3. User installs MiroFish from the marketplace, MiroFish container starts with broker env vars wired automatically, user opens MiroFish UI, types a prompt, and sees a Claude response — without entering an API key, using their Claude subscription. Broker access log shows the request transited `livinity-broker` → `SdkAgentRunner` → Anthropic.
   4. MiroFish UI shows zero "enter your API key" prompts to the user during the entire install + first-prompt flow (manual screenshot verification + DOM-grep for "API key" inputs returning none).
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 43-01-PLAN.md — Codebase audit + MiroFish image discovery (read-only AUDIT.md for Plans 43-02..05)
+- [ ] 43-02-PLAN.md — Manifest schema field + injectAiProviderConfig pure function + installForUser wiring + 14 unit tests
+- [ ] 43-03-PLAN.md — MiroFish manifest draft (sibling-repo `utopusc/livinity-apps` PR is operator action)
+- [ ] 43-04-PLAN.md — Integration test (positive + negative) + manifest schema test + UI badge + test:phase43 npm script
+- [ ] 43-05-PLAN.md — 43-UAT.md operator-facing manual UAT (FR-MARKET-02 acceptance gate)
 **UI hint**: yes
 
 ### Phase 44: Per-User Usage Dashboard
@@ -182,7 +194,7 @@ Strictly linear — each phase consumes the prior phase's artifact. No paralleli
 | 40. Per-User Claude OAuth + HOME Isolation | 0/5 | Planned | — |
 | 41. Anthropic Messages Broker | 0/5 | Planned | — |
 | 42. OpenAI-Compatible Broker | 0/5 | Planned | — |
-| 43. Marketplace Integration (Anchor: MiroFish) | 0/0 | Not started | — |
+| 43. Marketplace Integration (Anchor: MiroFish) | 0/5 | Planned | — |
 | 44. Per-User Usage Dashboard | 0/0 | Not started | — |
 
 ---
