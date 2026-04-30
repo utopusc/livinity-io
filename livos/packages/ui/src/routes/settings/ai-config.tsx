@@ -23,6 +23,14 @@ export default function AiConfigPage() {
 	const [claudeOAuthCode, setClaudeOAuthCode] = useState('')
 	const [claudeOAuthData, setClaudeOAuthData] = useState<{verificationUrl: string} | null>(null)
 
+	// -- Per-user Claude state (multi-user mode only — Phase 40 FR-AUTH-02) -----
+	const [perUserDeviceCode, setPerUserDeviceCode] = useState<{
+		verificationUrl: string
+		userCode: string
+	} | null>(null)
+	const [perUserLoginActive, setPerUserLoginActive] = useState(false)
+	const [perUserLoginError, setPerUserLoginError] = useState<string | null>(null)
+
 	// -- Queries --------------------------------------------------------
 	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery(undefined, {
 		enabled: !loginSession,
@@ -84,6 +92,58 @@ export default function AiConfigPage() {
 			utils.ai.getProviders.invalidate()
 		},
 	})
+
+	// -- Per-user Claude (multi-user mode only — Phase 40 FR-AUTH-02) ---
+	const claudePerUserStatusQ = trpcReact.ai.claudePerUserStatus.useQuery()
+	const isMultiUserMode = claudePerUserStatusQ.data?.multiUserMode === true
+	const isPerUserClaudeConnected =
+		isMultiUserMode && (claudePerUserStatusQ.data?.authenticated ?? false)
+
+	// Subscription is enabled only while a per-user login is in progress.
+	trpcReact.ai.claudePerUserStartLogin.useSubscription(undefined, {
+		enabled: perUserLoginActive,
+		onData: (event: any) => {
+			if (event?.type === 'device_code') {
+				setPerUserDeviceCode({
+					verificationUrl: event.verificationUrl,
+					userCode: event.userCode,
+				})
+			} else if (event?.type === 'success') {
+				setPerUserLoginActive(false)
+				setPerUserDeviceCode(null)
+				setPerUserLoginError(null)
+				utils.ai.claudePerUserStatus.invalidate()
+				utils.ai.getProviders.invalidate()
+			} else if (event?.type === 'error') {
+				setPerUserLoginActive(false)
+				setPerUserDeviceCode(null)
+				setPerUserLoginError(event.message ?? 'login failed')
+			}
+		},
+		onError: (err: any) => {
+			setPerUserLoginActive(false)
+			setPerUserDeviceCode(null)
+			setPerUserLoginError(err?.message ?? 'subscription error')
+		},
+	})
+
+	const claudePerUserLogoutMutation = trpcReact.ai.claudePerUserLogout.useMutation({
+		onSuccess: () => {
+			utils.ai.claudePerUserStatus.invalidate()
+			utils.ai.getProviders.invalidate()
+		},
+	})
+
+	const handleStartPerUserLogin = () => {
+		setPerUserLoginError(null)
+		setPerUserDeviceCode(null)
+		setPerUserLoginActive(true)
+	}
+
+	const handleStopPerUserLogin = () => {
+		setPerUserLoginActive(false)
+		setPerUserDeviceCode(null)
+	}
 
 	// -- Provider selection mutation ------------------------------------
 	const setPrimaryProviderMutation = trpcReact.ai.setPrimaryProvider.useMutation({
@@ -309,6 +369,127 @@ export default function AiConfigPage() {
 				</div>
 
 				{/* -- Claude Provider -------------------------------------- */}
+				{/* Phase 40 (FR-AUTH-02): if multi-user mode is on, show per-user-aware card. */}
+				{/* Single-user mode keeps the existing PKCE OAuth + API key UX byte-identical. */}
+				{isMultiUserMode ? (
+					<div className='space-y-4'>
+						<h2 className='text-body font-semibold'>Claude Account (per-user subscription)</h2>
+
+						<div
+							className={`rounded-radius-md border p-4 space-y-3 ${
+								isPerUserClaudeConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
+							}`}
+						>
+							{claudePerUserStatusQ.isLoading ? (
+								<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
+									<TbLoader2 className='h-4 w-4 animate-spin' />
+									Checking status...
+								</div>
+							) : isPerUserClaudeConnected ? (
+								<div className='space-y-3'>
+									<div className='flex items-center gap-2 text-body-sm text-green-400'>
+										<TbCircleCheck className='h-4 w-4' />
+										Connected — your Claude subscription
+									</div>
+									<p className='text-caption text-text-secondary'>
+										Authenticated via sdk-subscription. AI features active for your account.
+									</p>
+									<Button
+										variant='secondary'
+										size='sm'
+										onClick={() => claudePerUserLogoutMutation.mutate()}
+										disabled={claudePerUserLogoutMutation.isPending}
+									>
+										{claudePerUserLogoutMutation.isPending ? (
+											<>
+												<TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...
+											</>
+										) : (
+											<>
+												<TbLogout className='h-4 w-4' /> Sign Out
+											</>
+										)}
+									</Button>
+									{claudePerUserLogoutMutation.isError && (
+										<p className='text-caption text-red-400'>
+											{claudePerUserLogoutMutation.error.message}
+										</p>
+									)}
+								</div>
+							) : perUserLoginActive ? (
+								<div className='space-y-3'>
+									{perUserDeviceCode ? (
+										<>
+											<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+												<TbLoader2 className='h-4 w-4 animate-spin' />
+												Waiting for authorization...
+											</div>
+											<p className='text-caption text-text-secondary'>
+												1. Open the verification page:
+											</p>
+											<a
+												href={perUserDeviceCode.verificationUrl}
+												target='_blank'
+												rel='noopener noreferrer'
+												className='block w-full'
+											>
+												<Button variant='primary' size='sm' className='w-full'>
+													Open Claude Authorization Page
+												</Button>
+											</a>
+											<p className='text-caption text-text-secondary'>
+												2. Enter this code:
+											</p>
+											<code className='block rounded bg-surface-raised px-3 py-2 font-mono text-body-sm'>
+												{perUserDeviceCode.userCode}
+											</code>
+											<Button
+												variant='secondary'
+												size='sm'
+												onClick={handleStopPerUserLogin}
+												className='w-full'
+											>
+												Cancel
+											</Button>
+										</>
+									) : (
+										<>
+											<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
+												<TbLoader2 className='h-4 w-4 animate-spin' />
+												Starting `claude login`...
+											</div>
+											<Button
+												variant='secondary'
+												size='sm'
+												onClick={handleStopPerUserLogin}
+												className='w-full'
+											>
+												Cancel
+											</Button>
+										</>
+									)}
+								</div>
+							) : (
+								<div className='space-y-4'>
+									<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+										<TbAlertCircle className='h-4 w-4' />
+										Not connected
+									</div>
+									<p className='text-caption text-text-secondary'>
+										Sign in with your Claude subscription to enable AI features for your account.
+									</p>
+									<Button variant='primary' size='sm' onClick={handleStartPerUserLogin}>
+										<TbLogin className='h-4 w-4' />
+										<span className='ml-2'>Sign in with Claude sub</span>
+									</Button>
+									{perUserLoginError ? (
+										<p className='text-caption text-red-400'>{perUserLoginError}</p>
+									) : null}
+								</div>
+							)}
+						</div>
+					</div>
+				) : (
 				<div className='space-y-4'>
 					<h2 className='text-body font-semibold'>Claude Account</h2>
 
@@ -476,6 +657,7 @@ export default function AiConfigPage() {
 						)}
 					</div>
 				</div>
+				)}
 
 				{/* -- Active Model ---------------------------------------- */}
 				<div className='space-y-4'>
