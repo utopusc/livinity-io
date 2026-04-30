@@ -108,6 +108,12 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 	if ((app as any).defaultUsername) manifest.defaultUsername = (app as any).defaultUsername
 	if ((app as any).defaultPassword) manifest.defaultPassword = (app as any).defaultPassword
 	if ((app as any).deterministicPassword) manifest.deterministicPassword = true
+	// Phase 43.3: propagate icon, repo, requiresAiProvider so the marketplace UI
+	// renders correctly + apps.ts:install() Phase 43.2 inject runs for builtin apps
+	// that opt into the broker (e.g. MiroFish, Open WebUI clones).
+	if ((app as any).icon) manifest.icon = (app as any).icon
+	if ((app as any).repo) manifest.repo = (app as any).repo
+	if ((app as any).requiresAiProvider === true) manifest.requiresAiProvider = true
 
 	// Write livinity-app.yml
 	await fse.writeFile(
