@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.3
 milestone_name: Marketplace AI Broker (Subscription-Only)
-status: phase-43-shipped-locally
-stopped_at: Phases 39+40+41+42+43 shipped LOCAL. Phase 44 (Per-User Usage Dashboard) is the FINAL phase. MiroFish image audit: NOT published upstream → Path B (fork+build) chosen; operator must publish ghcr.io/utopusc/mirofish:v29.3 before deploying.
-last_updated: "2026-04-30T16:30:00.000Z"
-last_activity: 2026-04-30 -- Phase 43 (FR-MARKET-01..02) executed autonomously: 6 commits, 4/4 success criteria PASS (mechanism-pass; live MiroFish UAT deferred to operator), 28 tests PASS, sacred file untouched (still 623a65b9...), broker module byte-identical. requiresAiProvider manifest flag + injectAiProviderConfig pure fn + UI badge + 9-section UAT.
+status: feature-complete-locally
+stopped_at: All 6 phases SHIPPED LOCALLY. 44 commits ahead of origin/master. 17/17 requirements satisfied. Sacred SdkAgentRunner SHA 623a65b9... untouched across all phases (1 surgical edit in Phase 40 was behavior-preserving). Operator next steps: push + deploy + 6-phase UAT batch + milestone audit + complete-milestone archive.
+last_updated: "2026-04-30T17:30:00.000Z"
+last_activity: 2026-04-30 -- v29.3 MILESTONE FEATURE-COMPLETE LOCALLY. Phase 44 (FR-DASH-01..03) executed autonomously: 6 commits, 4/4 success criteria PASS (mechanism-verified), 39/39 livinityd usage-tracking tests PASS + chained nexus tests PASS, sacred file untouched, broker module untouched, usage-tracking has zero broker imports.
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
-  percent: 83
+  completed_phases: 6
+  total_plans: 28
+  completed_plans: 28
+  percent: 100
 ---
 
 # Project State
@@ -22,14 +22,70 @@ See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 + 41 + 42 + 43 shipped locally (83% done); Phase 44 = FINAL
+**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — 🎉 FEATURE-COMPLETE LOCALLY 🎉
 
 ## Current Position
 
-Phase: 43 ✅ SHIPPED LOCALLY (6 commits incl summary); 42 ✅ SHIPPED (5 commits + summary); 41 ✅ SHIPPED (6 commits); 40 ✅ SHIPPED (5 commits); 39 ✅ SHIPPED (4 commits)
-Next: 44 (Per-User Usage Dashboard) — FINAL phase; consumes broker traffic for per-user token/app/monthly stats + rate-limit warnings + 429 surfacing
-Status: **5/6 phases done (83%)**, 33 commits ahead of origin/master, sacred file SHA untouched at `623a65b9...`, broker module feature-frozen since Phase 42
-Last activity: 2026-04-30 — Phase 43 MiroFish marketplace integration shipped; image not published upstream (Path B fork+build chosen — operator publishes `ghcr.io/utopusc/mirofish:v29.3` pre-deploy)
+| Phase | Reqs | Status | Commits |
+|-------|------|--------|---------|
+| 39 Risk Fix — Close OAuth Fallback | FR-RISK-01 | ✅ SHIPPED LOCAL | 4 |
+| 40 Per-User OAuth + HOME Isolation | FR-AUTH-01..03 | ✅ SHIPPED LOCAL | 5 |
+| 41 Anthropic Messages Broker | FR-BROKER-A-01..04 | ✅ SHIPPED LOCAL | 6 |
+| 42 OpenAI-Compatible Broker | FR-BROKER-O-01..04 | ✅ SHIPPED LOCAL | 5 |
+| 43 Marketplace Integration (MiroFish) | FR-MARKET-01..02 | ✅ SHIPPED LOCAL | 6 |
+| 44 Per-User Usage Dashboard | FR-DASH-01..03 | ✅ SHIPPED LOCAL | 6 |
+
+**6/6 phases done (100%), 17/17 requirements satisfied, 44 commits ahead of origin/master**, sacred file SHA `623a65b9...` byte-identical to Phase 40 baseline (1 surgical opt-in edit, all subsequent phases preserved it).
+
+Status: **Awaiting operator deploy decision.** Next steps below.
+
+## ▶ OPERATOR HANDOFF — v29.3 deploy + close milestone
+
+### Recommended sequence
+
+1. **Code review (full milestone):** `git log --oneline cfd240d0..HEAD` (the 44 commits ahead). Use `git show <sha>` for any specific phase.
+2. **Local test verification:** `cd nexus/packages/core && npm run test:phase44` (chains all 6 phase test suites).
+3. **MiroFish image publish (Path B fork+build):** Phase 43 audit determined MiroFish isn't published upstream. Before deploy:
+   - Fork `666ghj/MiroFish` to `utopusc/MiroFish`
+   - Build Docker image: `docker build -t ghcr.io/utopusc/mirofish:v29.3 .`
+   - Push to GHCR: `docker push ghcr.io/utopusc/mirofish:v29.3`
+   - Open PR to `utopusc/livinity-apps` with the manifest from `.planning/phases/43-marketplace-integration-anchor-mirofish/draft-mirofish-manifest/`
+4. **Push to remote:** `git push origin master` (44 commits)
+5. **Deploy to Mini PC:** `ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"`
+6. **Run UAT batch (in order):**
+   - Phase 39 UAT: regression check — existing AI Chat still works
+   - Phase 40 UAT (`40-UAT.md`, 27 steps): per-user OAuth login flow
+   - Phase 41 UAT (`41-UAT.md`, 34 steps): Anthropic Messages broker via curl
+   - Phase 42 UAT (`42-UAT.md`, 9 sections): OpenAI-compat broker + Python SDK smoke test
+   - Phase 43 UAT (`43-UAT.md`, 9 sections): MiroFish install + UI prompt → Claude response
+   - Phase 44 UAT (`44-UAT.md`, 9 sections): usage dashboard populates from real broker traffic
+7. **Milestone close:**
+   - `/gsd-audit-milestone` (cross-phase integration audit)
+   - `/gsd-complete-milestone v29.3` (archive ROADMAP + REQUIREMENTS + research → `.planning/milestones/v29.3-*`)
+   - `/gsd-cleanup` (archive `.planning/phases/39-44-*/` directories)
+8. **Optional next:** `/gsd-new-milestone` for v29.4 OR `/gsd-resume-work` on v30.0 Backup defined-but-paused (`.planning/milestones/v30.0-DEFINED/`)
+
+### v29.3 Stats
+
+- **Phases:** 6
+- **Plans:** 28 (avg 4.7 per phase)
+- **Commits:** 44 (master, no remote push)
+- **Tests:** ~150+ across 6 phase suites; sacred file integrity test pinned across all 6 phases
+- **Files created:** ~50 (broker module 14 files, usage-tracking 12 files, UI 5 files, planning artifacts 19 files)
+- **Files modified:** ~10 (sacred SdkAgentRunner: 1 surgical edit Phase 40; everything else additive)
+- **Sacred file:** Phase 39 baseline `2b3b005b...` → Phase 40 new baseline `623a65b9...` (1 surgical opt-in edit) → Phases 41/42/43/44 all byte-identical to Phase 40 baseline
+- **Total LoC delta:** ~6,500 insertions across source + tests + planning artifacts
+
+### Honest deferrals (not blockers)
+
+- All 6 phase manual UATs (operator runs after deploy)
+- MiroFish Docker image build + GHCR publish + sibling-repo PR (operator action; Path B fork+build)
+- Cost forecasting (FR-DASH-future-01)
+- Per-request audit trail / message logging (FR-OBS-future-01)
+- Configurable rate limits via Redis (hardcoded Pro=200/day in Phase 44)
+- Real Linux user accounts (synthetic dirs preserved per D-40-16)
+- Other marketplace anchor apps: Dify, RAGFlow, CrewAI templates (FR-MARKET-future-01..03; v30+)
+- Tool / function calling support in broker (D-41-14, D-42-12; v30+)
 
 ## ▶ HUMAN HANDOFF — v29.3 Phase 39 + 40 batch handoff
 
