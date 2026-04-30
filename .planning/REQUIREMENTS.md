@@ -33,7 +33,8 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
   - `docker volume prune -f` scoped to LivOS-managed volume names (R6 mitigation — global prune is destructive)
   - `sudo -u postgres psql -c "DROP DATABASE livos; DROP USER livos;"` (fresh DB)
   - `rm -rf /opt/livos /opt/nexus /etc/systemd/system/{livos,liv-core,liv-worker,liv-memory,livos-rollback}.service /etc/systemd/system/livos.service.d/`
-- [ ] **FR-BACKEND-03**: API key preservation — if `preserveApiKey: true`, stash current `LIV_API_KEY` to `/tmp/livos-reset-apikey` (mode 0600) BEFORE the rm step; pass via `--api-key-file` to install.sh; remove `/tmp/livos-reset-apikey` after install.sh completes successfully or fails.
+- [x] **FR-BACKEND-03
+**: API key preservation — if `preserveApiKey: true`, stash current `LIV_API_KEY` to `/tmp/livos-reset-apikey` (mode 0600) BEFORE the rm step; pass via `--api-key-file` to install.sh; remove `/tmp/livos-reset-apikey` after install.sh completes successfully or fails.
 - [x] **FR-BACKEND-04
 **: install.sh re-execution — `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --api-key-file /tmp/livos-reset-apikey` (or equivalent per audit findings). Wrap in try/catch with retry logic if Server5 transient.
 - [x] **FR-BACKEND-05
@@ -44,7 +45,8 @@ Phase numbering: continues from v29.0 last phase 35 → v29.2 = **Phase 36, 37, 
 
 ### Category: User Interface (FR-UI) — Phase 38
 
-- [ ] **FR-UI-01**: Settings > Advanced section — entry point. New section "Danger Zone" (or similar) below existing settings. Red destructive button "Factory Reset" with shield/warning icon.
+- [x] **FR-UI-01
+**: Settings > Advanced section — entry point. New section "Danger Zone" (or similar) below existing settings. Red destructive button "Factory Reset" with shield/warning icon.
 - [x] **FR-UI-02**: Confirmation modal that explicitly enumerates what will be deleted: "All apps, all user accounts, all data, all settings, all sessions, all secrets (JWT, AI keys, schedules), all Docker volumes managed by LivOS." NOT a generic "are you sure?" — the explicit list IS the consent (R1 mitigation). — completed 2026-04-29 (Plan 38-03 FactoryResetModal renders DELETION_LIST as a real <ul> with 7 verbatim <li> children sourced from `@/features/factory-reset/lib/deletion-list`; D-MD-01 single source of truth)
 - [x] **FR-UI-03**: Account preservation radio inside modal:
   - **(a) "Restore my account"** — Livinity API key preserved; reinstalled host comes back as the same logical instance; current login still works after reinstall completes
