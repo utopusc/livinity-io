@@ -8,6 +8,7 @@ import {InfoSection} from '@/modules/app-store/app-page/info-section'
 import {PublicAccessSection} from '@/modules/app-store/app-page/public-access-section'
 import {RecommendationsSection} from '@/modules/app-store/app-page/recommendations-section'
 import {ReleaseNotesSection} from '@/modules/app-store/app-page/release-notes-section'
+import {Badge} from '@/shadcn-components/ui/badge'
 import {cn} from '@/shadcn-lib/utils'
 import {RegistryApp, UserApp} from '@/trpc/trpc'
 
@@ -32,6 +33,12 @@ export function AppContent({
 			{/* Desktop */}
 			<div className={cn('hidden flex-row gap-5 lg:flex')}>
 				<div className='flex flex-1 flex-col gap-5'>
+					{/* Phase 43 (D-43-12): subscription-powered marketplace badge */}
+					{app.requiresAiProvider && (
+						<Badge variant='outline' className='self-start'>
+							Uses your Claude subscription
+						</Badge>
+					)}
 					<AboutSection app={app} />
 					<ReleaseNotesSection app={app} />
 				</div>
@@ -49,6 +56,12 @@ export function AppContent({
 			</div>
 			{/* Mobile */}
 			<div className='space-y-5 lg:hidden'>
+				{/* Phase 43 (D-43-12): subscription-powered marketplace badge */}
+				{app.requiresAiProvider && (
+					<Badge variant='outline' className='self-start'>
+						Uses your Claude subscription
+					</Badge>
+				)}
 				{userApp && <SettingsSection userApp={userApp} />}
 				{/* Public Access Section - show for installed apps */}
 				{userApp && (
