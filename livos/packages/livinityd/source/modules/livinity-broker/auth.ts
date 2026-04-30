@@ -6,11 +6,14 @@ import type Livinityd from '../../index.js'
 /**
  * Container source IP guard for the broker route.
  *
- * Allowlist (per D-41-08 + 41-AUDIT.md Section 7b):
+ * Allowlist (per D-41-08 + 41-AUDIT.md Section 7b — expanded in Phase 41.1 hotfix):
  *   - 127.0.0.1            (IPv4 loopback)
  *   - ::1                  (IPv6 loopback)
  *   - ::ffff:127.0.0.1     (IPv4-mapped-IPv6 loopback — strip prefix before matching)
- *   - 172.17.0.0/16        (Docker default bridge network)
+ *   - 172.16.0.0/12        (RFC 1918 Docker bridge range — covers default bridge 172.17.x.x
+ *                           AND per-app compose networks 172.18-172.31.x.x; required because
+ *                           every per-app docker-compose creates its own bridge network in
+ *                           172.18+ subnets, not the default 172.17 bridge)
  *
  * Everything else → HTTP 401 + JSON error body.
  *
@@ -30,12 +33,16 @@ export function containerSourceIpGuard(req: Request, res: Response, next: NextFu
 		return
 	}
 
-	// CIDR check for 172.17.0.0/16 (default Docker bridge)
-	if (ip.startsWith('172.17.')) {
+	// CIDR check for 172.16.0.0/12 (Docker bridge networks — RFC 1918 block)
+	// Covers default bridge (172.17.x.x) and per-app compose networks (172.18.x.x ... 172.31.x.x)
+	if (ip.startsWith('172.')) {
 		const parts = ip.split('.')
 		if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p) && +p >= 0 && +p <= 255)) {
-			next()
-			return
+			const second = +parts[1]
+			if (second >= 16 && second <= 31) {
+				next()
+				return
+			}
 		}
 	}
 
