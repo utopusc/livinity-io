@@ -126,7 +126,13 @@ Plans:
   2. Admin user, viewing Settings > AI Integrations as admin, sees a multi-user filterable view: per-app usage stats showing which user, which model, request count, and token total — with filter chips for user / app / model.
   3. When a user reaches 80% of their Claude subscription daily rate limit (Pro 200/day or Max 5x equivalent), a non-blocking warning banner appears in the AI Integrations panel showing remaining requests; banner disappears at next day's reset.
   4. When a user's subscription returns HTTP 429 from Anthropic (rate limit hit), the broker propagates the 429 (with `Retry-After` header) back to the calling marketplace app, AND the AI Integrations UI surfaces the rate-limit-reached state to the user — they understand it's their subscription cap, not a Livinity outage.
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 44-01-PLAN.md — Codebase audit (read-only AUDIT.md for Plans 44-02..05)
+- [ ] 44-02-PLAN.md — broker_usage schema + capture middleware (parser + db + container-resolver + 16 tests)
+- [ ] 44-03-PLAN.md — tRPC usage router (getMine + getAll with admin gate + 8 tests)
+- [ ] 44-04-PLAN.md — Settings > AI Configuration Usage UI (banner / cards / per-app table / chart / admin view)
+- [ ] 44-05-PLAN.md — Integration test + schema migration regression + test:phase44 + 44-UAT.md
 **UI hint**: yes
 
 ---
@@ -195,7 +201,7 @@ Strictly linear — each phase consumes the prior phase's artifact. No paralleli
 | 41. Anthropic Messages Broker | 0/5 | Planned | — |
 | 42. OpenAI-Compatible Broker | 0/5 | Planned | — |
 | 43. Marketplace Integration (Anchor: MiroFish) | 0/5 | Planned | — |
-| 44. Per-User Usage Dashboard | 0/0 | Not started | — |
+| 44. Per-User Usage Dashboard | 0/5 | Planned | — |
 
 ---
 
