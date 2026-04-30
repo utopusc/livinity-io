@@ -24,6 +24,23 @@ import { logger } from '../logger.js';
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Thrown by ClaudeProvider.getClient() when no explicit API key is configured.
+ * Subscription users must route through SdkAgentRunner (sdk-subscription mode)
+ * instead of calling ClaudeProvider.chat() / chatStream() / think() directly.
+ *
+ * Introduced in v29.3 Phase 39 (FR-RISK-01) — replaces the silent OAuth-token fallback.
+ */
+export class ClaudeAuthMethodMismatchError extends Error {
+  constructor(
+    message: string,
+    public readonly mode: 'subscription-required' | 'no-credentials',
+  ) {
+    super(message);
+    this.name = 'ClaudeAuthMethodMismatchError';
+  }
+}
+
 const CLAUDE_MODELS: Record<string, string> = {
   flash: 'claude-haiku-4-5',
   haiku: 'claude-haiku-4-5',
@@ -80,7 +97,18 @@ export class ClaudeProvider implements AIProvider {
   }
 
   private async getClient(): Promise<Anthropic> {
-    // Try explicit API key (Redis or ANTHROPIC_API_KEY env)
+    // Try explicit API key (Redis or ANTHROPIC_API_KEY env). This is the ONLY
+    // path that constructs an Anthropic client. Subscription users (no API key)
+    // must route through SdkAgentRunner — never through this method.
+    //
+    // Two fallbacks were deleted in v29.3 Phase 39 (FR-RISK-01):
+    //   - an env-var-based OAuth bearer fallback (was claude.ts:91-97)
+    //   - an OAuth credentials-file bearer fallback (was claude.ts:99-115)
+    // Both paths constructed an Anthropic client using a bearer token instead of
+    // an API key, routing Claude OAuth subscription tokens directly into the raw
+    // @anthropic-ai/sdk HTTP client — a ToS-relevant fingerprint risk that v29.3
+    // closes structurally. The grep-regression test in no-authtoken-regression.test.ts
+    // enforces that the deleted pattern cannot reappear in this file.
     try {
       const apiKey = await this.getApiKey();
       if (this.client && apiKey === this.cachedApiKey) return this.client;
@@ -88,33 +116,14 @@ export class ClaudeProvider implements AIProvider {
       this.cachedApiKey = apiKey;
       return this.client;
     } catch {
-      // Fall back to ANTHROPIC_AUTH_TOKEN env var (OAuth token set at startup)
-      if (process.env.ANTHROPIC_AUTH_TOKEN) {
-        if (this.client && this.cachedApiKey === '__auth_token__') return this.client;
-        this.client = new Anthropic({ authToken: process.env.ANTHROPIC_AUTH_TOKEN });
-        this.cachedApiKey = '__auth_token__';
-        return this.client;
-      }
-
-      // Fall back to OAuth credentials file (~/.claude/.credentials.json)
-      try {
-        const fs = await import('fs');
-        const pathMod = await import('path');
-        const home = process.env.HOME || process.env.USERPROFILE || '/root';
-        const credsPath = pathMod.join(home, '.claude', '.credentials.json');
-        if (fs.existsSync(credsPath)) {
-          const creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
-          const token = creds.claudeAiOauth?.accessToken;
-          if (token) {
-            if (this.client && this.cachedApiKey === '__oauth_file__') return this.client;
-            this.client = new Anthropic({ authToken: token });
-            this.cachedApiKey = '__oauth_file__';
-            return this.client;
-          }
-        }
-      } catch {}
-
-      throw new Error('No Anthropic API key configured');
+      logger.warn('ClaudeProvider.getClient() invoked without API key — subscription users must use SdkAgentRunner (FR-RISK-01).');
+      const method = await this.getAuthMethod();
+      const mode: 'subscription-required' | 'no-credentials' =
+        method === 'sdk-subscription' ? 'subscription-required' : 'no-credentials';
+      throw new ClaudeAuthMethodMismatchError(
+        'ClaudeProvider.getClient() requires an explicit Anthropic API key in Redis (nexus:config:anthropic_api_key) or env (ANTHROPIC_API_KEY). Subscription users must route through SdkAgentRunner (sdk-subscription mode) — see nexus/packages/core/src/sdk-agent-runner.ts. Direct OAuth-token fallback removed in v29.3 Phase 39 (FR-RISK-01).',
+        mode,
+      );
     }
   }
 
@@ -288,23 +297,21 @@ export class ClaudeProvider implements AIProvider {
       return true;
     } catch {}
 
-    // 2. Check Claude credentials file (~/.claude/.credentials.json)
-    // Anthropic SDK reads this automatically for OAuth-authenticated users
-    try {
-      const { existsSync, readFileSync } = await import('fs');
-      const { join } = await import('path');
-      const home = process.env.HOME || process.env.USERPROFILE || '/root';
-      const credsPath = join(home, '.claude', '.credentials.json');
-      if (existsSync(credsPath)) {
-        const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
-        if (creds.claudeAiOauth?.accessToken) return true;
-      }
-    } catch {}
-
-    // 3. Check ANTHROPIC_API_KEY env var
+    // 2. Check ANTHROPIC_API_KEY env var
     if (process.env.ANTHROPIC_API_KEY) return true;
 
-    // 4. Fallback: check CLI status
+    // 3. Subscription mode: check Claude CLI status (installed + authenticated)
+    // NOTE: Even if true, callers MUST NOT call this.chat() / chatStream() / think()
+    // for subscription users — those paths require an explicit API key. Subscription
+    // requests must route through SdkAgentRunner. ProviderManager handles this via
+    // the api-key vs sdk-subscription gate it reads from Redis (nexus:config:claude_auth_method).
+    //
+    // Deleted in v29.3 Phase 39 (FR-RISK-01): the ~/.claude/.credentials.json
+    // existence branch (was claude.ts:293-302). That branch returned true for
+    // OAuth-only users, but getClient() can no longer serve a request from it
+    // (the OAuth-token fallback was deleted), so reporting availability would
+    // have been a lie. Subscription users authenticate via the CLI status path
+    // below, and ProviderManager skips this provider for chat/chatStream/think.
     const method = await this.getAuthMethod();
     if (method === 'sdk-subscription') {
       const status = await this.getCliStatus();
