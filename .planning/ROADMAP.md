@@ -49,7 +49,13 @@
   2. As User A (non-root, multi-user mode), `cat /home/user-b/.claude/.credentials.json` fails with permission denied — file mode + directory ownership enforced.
   3. When User A submits any AI Chat or marketplace-app prompt, `ps -ef` during execution shows the spawned `claude` CLI subprocess with `HOME=/home/user-a` (verified by `/proc/<pid>/environ` snapshot).
   4. Settings > AI Integrations shows per-user login status (connected / not-connected / token-expired) accurate within 5 seconds of state change — using their Claude subscription, no API key entry field shown.
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 40-01-PLAN.md — Codebase audit + integration discovery (read-only AUDIT.md)
+- [ ] 40-02-PLAN.md — Sacred file surgical edit (homeOverride) + integrity test re-pin
+- [ ] 40-03-PLAN.md — Per-user .claude/ dir module + claude-login backend tRPC routes
+- [ ] 40-04-PLAN.md — Per-user-aware Claude card in Settings > AI Configurations
+- [ ] 40-05-PLAN.md — Tests + verification + manual UAT checklist
 **UI hint**: yes
 
 ### Phase 41: Anthropic Messages Broker
@@ -161,7 +167,7 @@ Strictly linear — each phase consumes the prior phase's artifact. No paralleli
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Risk Fix — Close OAuth Fallback | 0/0 | Not started | — |
-| 40. Per-User Claude OAuth + HOME Isolation | 0/0 | Not started | — |
+| 40. Per-User Claude OAuth + HOME Isolation | 0/5 | Planned | — |
 | 41. Anthropic Messages Broker | 0/0 | Not started | — |
 | 42. OpenAI-Compatible Broker | 0/0 | Not started | — |
 | 43. Marketplace Integration (Anchor: MiroFish) | 0/0 | Not started | — |
