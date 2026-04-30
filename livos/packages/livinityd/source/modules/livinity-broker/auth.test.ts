@@ -81,12 +81,34 @@ async function runTests() {
 		console.log('  PASS Test 6: 8.8.8.8 rejected (external)')
 	}
 
-	// Test 7: 172.18.0.1 → reject (different bridge)
+	// Test 7 (Phase 41.1 hotfix): 172.18.0.1 → ALLOW (per-app compose bridge in 172.16.0.0/12)
 	{
 		const r = runGuard('172.18.0.1')
+		assert.equal(r.nextCalled, true)
+		console.log('  PASS Test 7: 172.18.0.1 allowed (per-app compose bridge, RFC 1918 172.16/12)')
+	}
+
+	// Test 7b (Phase 41.1 hotfix): 172.31.255.254 → ALLOW (CIDR upper bound of 172.16.0.0/12)
+	{
+		const r = runGuard('172.31.255.254')
+		assert.equal(r.nextCalled, true)
+		console.log('  PASS Test 7b: 172.31.255.254 allowed (172.16/12 upper bound)')
+	}
+
+	// Test 7c (Phase 41.1 hotfix): 172.15.0.1 → REJECT (just below 172.16/12)
+	{
+		const r = runGuard('172.15.0.1')
 		assert.equal(r.nextCalled, false)
 		assert.equal(r.captured.statusCode, 401)
-		console.log('  PASS Test 7: 172.18.0.1 rejected (different bridge)')
+		console.log('  PASS Test 7c: 172.15.0.1 rejected (outside 172.16/12)')
+	}
+
+	// Test 7d (Phase 41.1 hotfix): 172.32.0.1 → REJECT (just above 172.16/12)
+	{
+		const r = runGuard('172.32.0.1')
+		assert.equal(r.nextCalled, false)
+		assert.equal(r.captured.statusCode, 401)
+		console.log('  PASS Test 7d: 172.32.0.1 rejected (outside 172.16/12)')
 	}
 
 	// Test 8: 10.0.0.1 → reject (private but not Docker bridge)
@@ -108,7 +130,7 @@ async function runTests() {
 	// resolveAndAuthorizeUserId: deferred to integration.test.ts (Task 2)
 	// Acceptable per Plan 41-05 — integration test covers the full chain end-to-end.
 
-	console.log('\nAll auth.test.ts tests passed (9/9)')
+	console.log('\nAll auth.test.ts tests passed (12/12)')
 }
 
 runTests().catch((err) => {
