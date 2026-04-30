@@ -148,31 +148,44 @@ Livinity now features a unified capability orchestration platform. All capabilit
 
 **45 deployment-time UAT items** + 10 info-severity tech-debt items deferred (window-app pattern incompatibility prevents real URL-bar deep-linking — v29.0+).
 
-## Current Milestone: v29.2 Factory Reset (mini-milestone)
+## Current State: v29.2 Shipped (Factory Reset mini-milestone) — 2026-04-29
 
-**Goal:** Tek tıkla "fabrika ayarlarına dön" — kullanıcı UI'dan Settings > Advanced > Factory Reset'e bastığında kirli/bozuk bir Mini PC durumundan SSH'e gerek kalmadan temiz bir kuruluma geri dönebilsin. v29.0'ın update-rollback'i deploy hatalarını çözüyordu; bu host-bozulma senaryosunu çözüyor.
+**Delivered:** Tek tıkla "fabrika ayarlarına dön" — kullanıcı UI'dan Settings > Advanced > Factory Reset'e bastığında kirli/bozuk bir Mini PC durumundan SSH'e gerek kalmadan temiz bir kuruluma dönebiliyor.
 
-**Target features:**
-- Settings > Advanced > Factory Reset (red destructive button + warning icon)
-- Confirmation modal: tam liste (apps, DB, volumes, sessions, JWT secret, settings)
-- Account preservation choice: (a) Restore my account (API key korunur) vs (b) Start fresh as new user (her şey wipe)
-- Backend `system.factoryReset({preserveApiKey})` tRPC route (detached spawn, livinityd kill survives — v29.1 cgroup-escape pattern)
-- Idempotent wipe + curl-piped install.sh re-execution
-- BarePage progress overlay during reinstall (Phase 30 pattern reuse)
-- JSON event row in `/opt/livos/data/update-history` with status `factory-reset`
-- Post-reset: option (a) → existing creds work, option (b) → onboarding flow
+**Shipped features:**
+- Settings > Advanced > Danger Zone red destructive button (admin-only)
+- Confirmation modal: 7-item explicit deletion list as `<ul>` + `<li>` (consent surface = the list itself)
+- preserve-account-vs-fresh radio (default: "Restore my account")
+- Type-`FACTORY RESET`-to-confirm strict equality gate
+- Pre-flight blocking: update-in-progress check + 5s AbortController network reachability
+- Backend `system.factoryReset({preserveApiKey})` tRPC route (200ms detached spawn via systemd-run --scope --collect cgroup-escape)
+- Idempotent wipe (sshd preserved, scoped Docker volumes/containers, IF EXISTS DROP, literal-path rm -rf)
+- Pre-wipe `tar -czf` snapshot recovery model (install.sh has no --resume)
+- `livos-install-wrap.sh` wrapper closes route-spawn argv leak window (v29.2.1 will close install.sh's own window via 5-line env-var patch)
+- 4-way install.sh failure classification (api-key-401 / server5-unreachable / install-sh-failed / install-sh-unreachable) via PIPESTATUS exit capture
+- JSON event row at `/opt/livos/data/update-history/<ts>-factory-reset.json` (extends Phase 33 OBS-01 schema)
+- BarePage progress overlay polls listUpdateHistory @ 2s; 90s reconnect threshold for livinityd-killed-mid-wipe
+- Post-reset routing: success+preserve→/login, success+fresh→/onboarding, failed→error page (3 buttons), rolled-back→recovery page
+- `/help/factory-reset-recovery` static page with verbatim SSH recovery command
 
-**Key context:**
-- BACKLOG 999.7 was parked since v22 — now promoted; spec already detailed (UX flow + risks + API key handling)
-- 2-3 phases per estimate: Phase A install.sh audit, Phase B backend + wipe/reinstall, Phase C UI
-- Phase numbering continues from v29.0 last phase 35 → v29.2 = Phase 36-38 (v30.0 phases will renumber when resumed)
-- `livinity.io/install.sh` MUST be audited first — verify exists + accepts `--api-key` + idempotent on already-installed host
-- API key sensitivity: pass via stdin or `--api-key-file`, NEVER argv (visible in `ps`)
-- Limited Docker volume scope — only LivOS-managed containers, NOT global `volume prune` (R6 mitigation)
+**Stats:** 3 phases / 11 plans / 19 requirements / 184 unit tests passing / 50 commits / 48 source files modified
+**Audit:** `.planning/v29.2-MILESTONE-AUDIT.md` — passed (19/19, 10/10 integration, no blockers)
+**Archive:** `.planning/milestones/v29.2-ROADMAP.md` + `.planning/milestones/v29.2-REQUIREMENTS.md`
 
-### Active (v29.2)
+**v29.2.1 carry-forwards:**
+- install.sh env-var fallback patch (closes install.sh's own argv leak window)
+- install.sh ALTER USER patch (improves install.sh's native idempotency)
+- update.sh patch to populate `/opt/livos/data/cache/install.sh.cached`
 
-- [ ] FR-* requirements (defined in REQUIREMENTS.md after this milestone is bootstrapped)
+**Manual verification deferred (opt-in, not blockers):**
+- Phase 37: `factory-reset.integration.test.sh` on Mini PC scratchpad (4 fail-closed gates)
+- Phase 38: 11 browser-based UI flow checks
+
+### Shipped (v29.2)
+
+- [x] FR-AUDIT-01..05 (5/5) → Phase 36 install.sh audit
+- [x] FR-BACKEND-01..07 (7/7) → Phase 37 backend factory reset
+- [x] FR-UI-01..07 (7/7) → Phase 38 UI factory reset
 
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
