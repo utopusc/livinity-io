@@ -26,9 +26,11 @@ const __dirname = dirname(__filename);
 // This test lives in src/providers/, sdk-agent-runner.ts lives in src/
 const sacredFile = join(__dirname, '..', 'sdk-agent-runner.ts');
 
-// Baseline SHA recorded in .planning/phases/39-risk-fix-close-oauth-fallback/39-AUDIT.md Section 5.
+// Baseline SHA originally recorded in .planning/phases/39-risk-fix-close-oauth-fallback/39-AUDIT.md Section 5.
+// BASELINE updated 2026-04-30 by v29.3 Phase 40 (homeOverride addition for per-user OAuth isolation).
+// See .planning/phases/40-per-user-claude-oauth-home-isolation/40-CONTEXT.md D-40-02 / D-40-11.
 // Computed via: git hash-object nexus/packages/core/src/sdk-agent-runner.ts
-const BASELINE_SHA = '2b3b005bf1594821be6353268ffbbdddea5f9a3a';
+const BASELINE_SHA = '623a65b9a50a89887d36f770dcd015b691793a7f';
 
 /**
  * Compute git's blob SHA-1 of a file. Git's blob format is:

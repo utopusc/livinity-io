@@ -263,7 +263,7 @@ CRITICAL RULES:
 
     // Minimal subprocess environment to avoid leaking secrets (Pitfall 12)
     const safeEnv: Record<string, string | undefined> = {
-      HOME: process.env.HOME || '/root',
+      HOME: this.config.homeOverride || process.env.HOME || '/root',
       PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
       NODE_ENV: process.env.NODE_ENV || 'production',
       LANG: process.env.LANG || 'en_US.UTF-8',
