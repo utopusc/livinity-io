@@ -6,6 +6,14 @@ import * as path from 'path'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
 import {getUserPreference, setUserPreference} from '../database/index.js'
+import {
+	isMultiUserMode,
+	ensureUserClaudeDir,
+	spawnPerUserClaudeLogin,
+	checkPerUserClaudeStatus,
+	perUserClaudeLogout,
+	type PerUserClaudeLoginEvent,
+} from './per-user-claude.js'
 
 /** Mask an API key: show first 4 and last 4 chars */
 function maskKey(key: string): string {
@@ -366,6 +374,104 @@ export default router({
 			throw new TRPCError({
 				code: 'INTERNAL_SERVER_ERROR',
 				message: getErrorMessage(error) || 'Failed to logout from Claude',
+			})
+		}
+	}),
+
+	// ── Per-User Claude Auth (multi-user mode only — D-40-07) ──
+
+	/** Per-user Claude connection status. Single-user mode returns {multiUserMode: false}. */
+	claudePerUserStatus: privateProcedure.query(async ({ctx}) => {
+		const multiUser = await isMultiUserMode(ctx.livinityd)
+		if (!multiUser) {
+			return {multiUserMode: false as const, authenticated: false, method: undefined}
+		}
+		if (!ctx.currentUser) {
+			throw new TRPCError({code: 'UNAUTHORIZED', message: 'No current user in context'})
+		}
+		const status = await checkPerUserClaudeStatus(ctx.livinityd, ctx.currentUser.id)
+		return {multiUserMode: true as const, ...status}
+	}),
+
+	/**
+	 * Per-user `claude login` device flow. Subscription emits:
+	 *   - {type: 'device_code', verificationUrl, userCode}  (when prompt parsed)
+	 *   - {type: 'success'} or {type: 'error', message}     (terminal)
+	 *
+	 * Single-user mode: emits {type: 'error', message: 'multi-user mode disabled'} once + completes.
+	 */
+	claudePerUserStartLogin: privateProcedure.subscription(({ctx}) =>
+		observable<PerUserClaudeLoginEvent>((emit) => {
+			let killHandle: (() => void) | null = null
+			let unsubscribed = false
+
+			void (async () => {
+				const multiUser = await isMultiUserMode(ctx.livinityd)
+				if (!multiUser) {
+					emit.next({
+						type: 'error',
+						message: 'multi-user mode disabled — use existing single-user Claude OAuth flow',
+					})
+					emit.complete()
+					return
+				}
+				if (!ctx.currentUser) {
+					emit.next({type: 'error', message: 'no current user in context'})
+					emit.complete()
+					return
+				}
+
+				try {
+					await ensureUserClaudeDir(ctx.livinityd, ctx.currentUser.id)
+				} catch (err) {
+					emit.next({
+						type: 'error',
+						message: `failed to create per-user .claude dir: ${getErrorMessage(err)}`,
+					})
+					emit.complete()
+					return
+				}
+
+				if (unsubscribed) return
+
+				const {events, kill} = spawnPerUserClaudeLogin(ctx.livinityd, ctx.currentUser.id)
+				killHandle = kill
+
+				events.on('event', (event: PerUserClaudeLoginEvent) => {
+					emit.next(event)
+					if (event.type === 'success' || event.type === 'error') {
+						emit.complete()
+					}
+				})
+			})().catch((err) => {
+				emit.next({type: 'error', message: `unexpected: ${getErrorMessage(err)}`})
+				emit.complete()
+			})
+
+			return () => {
+				unsubscribed = true
+				if (killHandle) killHandle()
+			}
+		}),
+	),
+
+	/** Per-user Claude logout (deletes per-user .credentials.json). Single-user mode = no-op. */
+	claudePerUserLogout: privateProcedure.mutation(async ({ctx}) => {
+		const multiUser = await isMultiUserMode(ctx.livinityd)
+		if (!multiUser) {
+			return {multiUserMode: false as const, success: false, message: 'multi-user mode disabled'}
+		}
+		if (!ctx.currentUser) {
+			throw new TRPCError({code: 'UNAUTHORIZED', message: 'No current user in context'})
+		}
+		try {
+			await perUserClaudeLogout(ctx.livinityd, ctx.currentUser.id)
+			return {multiUserMode: true as const, success: true}
+		} catch (err) {
+			ctx.livinityd.logger.error('per-user claude logout failed', err)
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: getErrorMessage(err) || 'failed to logout per-user claude',
 			})
 		}
 	}),
