@@ -18,7 +18,8 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "test:phase39": "tsx src/providers/claude.test.ts && tsx src/providers/no-authtoken-regression.test.ts && tsx src/providers/sdk-agent-runner-integrity.test.ts"
+    "test:phase39": "tsx src/providers/claude.test.ts && tsx src/providers/no-authtoken-regression.test.ts && tsx src/providers/sdk-agent-runner-integrity.test.ts",
+    "test:phase40": "tsx src/providers/sdk-agent-runner-home-override.test.ts && npm run test:phase39"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.84",
