@@ -43,6 +43,13 @@ export interface BuiltinAppManifest {
   website: string
   developer: string
   icon: string
+  repo?: string
+  // Phase 43.3: when true, propagated into livinity-app.yml manifest so
+  // apps.ts:install() Phase 43.2 inject auto-adds 5 broker env vars +
+  // extra_hosts to this app's compose at install time. App container then
+  // reaches the user's Claude subscription via livinity-broker without any
+  // LLM-key prompt inside the app's UI.
+  requiresAiProvider?: boolean
   docker: {
     image: string
     environment?: Record<string, string>
@@ -1171,6 +1178,55 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             retries: 3,
             start_period: '30s',
           },
+        },
+      },
+    },
+  },
+  {
+    id: 'mirofish',
+    name: 'MiroFish',
+    tagline: 'Swarm intelligence engine — predict trends with multi-agent simulations',
+    version: '0.1.0',
+    category: 'ai',
+    port: 3000,
+    description: 'MiroFish is a swarm intelligence engine that uses multi-agent LLM simulations to predict social trends, financial forecasts, and public opinion. The LLM is auto-configured to use your Claude subscription via Livinity Broker — no LLM API key prompt inside the app.\n\nSetup: Get a free ZEP Cloud API key at https://app.getzep.com/ (memory engine, ~30s signup) and paste it during install.\n\nFirst simulation may take 2-5 min as the engine warms up. AGPL-3.0 licensed.',
+    website: 'https://mirofish.ai',
+    developer: '666ghj',
+    icon: 'https://raw.githubusercontent.com/666ghj/MiroFish/main/static/logo.svg',
+    repo: 'https://github.com/666ghj/MiroFish',
+    requiresAiProvider: true,
+    docker: {
+      image: 'ghcr.io/666ghj/mirofish:latest',
+      environment: {
+        LLM_API_KEY: 'livinity-broker-managed',
+        LLM_MODEL_NAME: 'claude-sonnet-4-6',
+      },
+      volumes: ['/app/backend/uploads'],
+    },
+    installOptions: {
+      subdomain: 'mirofish',
+      environmentOverrides: [
+        { name: 'ZEP_API_KEY', label: 'ZEP Cloud API Key (free tier OK — get at app.getzep.com)', type: 'password', required: true },
+        { name: 'LLM_MODEL_NAME', label: 'Claude model (default: claude-sonnet-4-6)', type: 'string', default: 'claude-sonnet-4-6', required: false },
+      ],
+    },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'ghcr.io/666ghj/mirofish:latest',
+          restart: 'unless-stopped',
+          environment: {
+            // Sentinel — broker ignores key, validates by source IP + URL path
+            LLM_API_KEY: 'livinity-broker-managed',
+            LLM_MODEL_NAME: 'claude-sonnet-4-6',
+            // ZEP_API_KEY filled by installOptions.environmentOverrides at install time
+            // LLM_BASE_URL, OPENAI_API_BASE_URL, OPENAI_API_KEY, ANTHROPIC_BASE_URL,
+            // ANTHROPIC_REVERSE_PROXY + extra_hosts auto-injected by Phase 43.2
+            // (apps.ts:install) when manifest.requiresAiProvider === true.
+          },
+          volumes: ['${APP_DATA_DIR}/uploads:/app/backend/uploads'],
+          ports: ['127.0.0.1:3000:3000'],
         },
       },
     },

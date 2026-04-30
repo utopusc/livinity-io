@@ -26,6 +26,7 @@ import {
 	getUserAppInstance,
 	listAllUserAppInstances,
 	findUserById,
+	getAdminUser,
 } from '../database/index.js'
 
 // Redis keys for domain config
@@ -467,6 +468,32 @@ export default class Apps {
 		// Clean up generated template directory (not needed after rsync)
 		if (isGeneratedTemplate) {
 			await fse.remove(appTemplatePath).catch(() => {})
+		}
+
+		// Phase 43.2 (FR-MARKET-01 single-user mode): inject AI broker config when
+		// manifest opts in via `requiresAiProvider: true`. Mirrors Phase 43's
+		// installForUser logic (line ~963) but runs in the single-user install path
+		// that was originally missed by Phase 43 (only multi-user got the inject).
+		// No-op when manifest.requiresAiProvider is absent or false.
+		if (manifest.requiresAiProvider === true) {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			try {
+				const composeContent = await fse.readFile(composeFile, 'utf8')
+				const yaml = (await import('js-yaml')).default
+				const composeData = yaml.load(composeContent)
+				// Resolve admin user_id for the broker URL path. In single-user mode
+				// every request uses this admin id (broker_force_root_home env additionally
+				// makes broker share /root/.claude/ creds across all users).
+				const adminUser = await getAdminUser().catch(() => null)
+				const userId = adminUser?.id || 'default'
+				injectAiProviderConfig(composeData, userId, manifest)
+				await fse.writeFile(composeFile, yaml.dump(composeData))
+				this.logger.log(`Phase 43.2: injected AI broker config for ${appId} (single-user, userId=${userId})`)
+			} catch (error) {
+				// Non-fatal — log + continue install. Container will start without
+				// broker env vars, app may fall back to its default behavior.
+				this.logger.error(`Phase 43.2: failed to inject broker config for ${appId}`, error)
+			}
 		}
 
 		// Save reference to app instance
