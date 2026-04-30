@@ -187,27 +187,29 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-BACKEND-01..07 (7/7) → Phase 37 backend factory reset
 - [x] FR-UI-01..07 (7/7) → Phase 38 UI factory reset
 
-## Next Milestone Goals: v29.3 — Marketplace AI Broker + Multi-User Claude Auth
+## Current Milestone: v29.3 Marketplace AI Broker (Subscription-Only)
+
+**Goal:** Marketplace AI uygulamaları (MiroFish, Dify, RAGFlow, CrewAI agent'ları) — kullanıcının mevcut Claude OAuth subscription'ını kullanarak, BYOK/API key olmadan, ToS-uyumlu per-user multi-user desteğiyle Claude'a erişebilsin.
+
+**Target features:**
+- Risk fix: `claude.ts` OAuth-fallback-with-raw-SDK path silinecek (subscription token raw `@anthropic-ai/sdk`'ya asla geçmesin)
+- Per-user `claude login` + `HOME=/home/<user>` isolation (cross-user OAuth credential leak engellenir)
+- Anthropic-format broker: `POST /v1/messages` + SSE streaming (her zaman SdkAgentRunner üzerinden)
+- OpenAI-compat broker: `POST /v1/chat/completions` + format translation (LiteLLM sidecar opsiyonu)
+- Marketplace integration: `requires_ai_provider` manifest flag + env var auto-injection (`ANTHROPIC_BASE_URL`, `LLM_BASE_URL`)
+- Per-user usage dashboard (token / app / aylık total + subscription rate limit görünürlüğü)
+
+**Locked decisions:**
+- D-TOS-01: Tek admin aboneliği fan-out YASAK — her user kendi OAuth'unu yapacak
+- D-TOS-02: Broker raw HTTP forward yapmayacak — daima Agent SDK `query()` üzerinden
+- D-RISK-01: claude.ts OAuth fallback v29.3'ün ilk fazında SİLİNECEK (refactor değil, kaldırma)
+- D-NO-BYOK: BYOK/API key path yok — sadece subscription
+- D-CONTAINER-01: Marketplace app'leri Docker container'larda → broker hostname `livinity-broker` internal DNS, env var injection trivial
+- D-NO-SERVER4: Server4 OFF-LIMITS (proje hard rule)
+
+**Sacred (do not touch):** Mevcut `SdkAgentRunner` ve `nexus/packages/core/src/sdk-agent-runner.ts` çalışıyor — yapısal değişiklik yapılmayacak. Broker katmanı dışarıdan çağıracak.
 
 **Seed:** `.planning/research/v29.3-marketplace-broker-seed.md` (full context + draft requirements)
-
-**Goal:** Marketplace AI uygulamaları (MiroFish, Dify, RAGFlow, CrewAI agent'ları) — kullanıcının Livinity UI'da yaptığı Claude OAuth login'i kullanarak, kendi API key'lerine ihtiyaç duymadan, ToS-uyumlu per-user multi-user desteğiyle Claude'a erişebilsin.
-
-**Key insights:**
-- Livinity'nin Claude OAuth flow'u zaten implementli (`nexus/packages/core/src/providers/claude.ts` — PKCE + public client_id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`).
-- Mevcut `sdk-subscription` mode (Agent SDK `query()` üzerinden) **ToS-compliant**.
-- Mevcut `claude.ts:99-115` OAuth-fallback-with-raw-SDK **riskli** — v29.3 ilk işi kapatmak.
-- Multi-user fan-out = Anthropic ToS yasağı (Nisan 2026 OpenClaw banı). Per-user OAuth + HOME isolation = compliant.
-
-**Suggested phases (refine in `/gsd-new-milestone`):**
-- 39 Risk fix (OAuth fallback closure)
-- 40 Per-user Claude OAuth + HOME isolation
-- 41 Anthropic Messages broker (`/v1/messages` + streaming)
-- 42 OpenAI Chat Completions broker (`/v1/chat/completions` + format translation, possibly via LiteLLM sidecar)
-- 43 Marketplace integration (env var auto-injection + manifest flag)
-- 44 Per-user usage dashboard
-
-**Start with:** `/gsd-new-milestone` (reads seed, asks discovery questions, generates ROADMAP + REQUIREMENTS).
 
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
@@ -384,4 +386,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-26 — v29.0 Deploy & Update Stability milestone started (PROJECT.md only; REQUIREMENTS.md + ROADMAP.md to follow)*
+*Last updated: 2026-04-29 — v29.3 Marketplace AI Broker (Subscription-Only) milestone started*
