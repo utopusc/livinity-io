@@ -68,7 +68,13 @@ Plans:
   3. Multi-turn message history with system prompt and tool definitions in the request is correctly translated into `SdkAgentRunner.run(prompt, options)` invocation arguments — verified by integration test asserting the runner sees the full conversation context.
   4. When User A's container calls the broker and User B's container calls the broker concurrently, each request executes under its own user's HOME (verified via audit log showing distinct `HOME=/home/user-a` vs `HOME=/home/user-b` spawns) — cross-user subscription use is impossible.
   5. `nexus/packages/core/src/sdk-agent-runner.ts` is byte-identical to its pre-Phase-41 SHA — broker imports + invokes the runner; never modifies it.
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+- [ ] 41-01-PLAN.md — Codebase audit (read-only AUDIT.md for Plans 41-02..05)
+- [ ] 41-02-PLAN.md — Broker module skeleton + IP guard + request translator (stub handler)
+- [ ] 41-03-PLAN.md — SSE adapter + sync response builder + SdkAgentRunner proxy wiring
+- [ ] 41-04-PLAN.md — AI Chat carry-forward (X-LivOS-User-Id header → homeOverride wiring)
+- [ ] 41-05-PLAN.md — Tests (33 new) + test:phase41 npm script + 41-UAT.md manual checklist
 
 ### Phase 42: OpenAI-Compatible Broker
 **Goal:** A marketplace app that speaks OpenAI Chat Completions format (the dominant ecosystem standard, including MiroFish) can `POST /v1/chat/completions` to the broker, get bidirectional OpenAI ↔ Anthropic translation, and reach Claude through the same `SdkAgentRunner` path — with the response validated by feeding it back into the official `openai` Python SDK.
@@ -168,7 +174,7 @@ Strictly linear — each phase consumes the prior phase's artifact. No paralleli
 |-------|----------------|--------|-----------|
 | 39. Risk Fix — Close OAuth Fallback | 0/0 | Not started | — |
 | 40. Per-User Claude OAuth + HOME Isolation | 0/5 | Planned | — |
-| 41. Anthropic Messages Broker | 0/0 | Not started | — |
+| 41. Anthropic Messages Broker | 0/5 | Planned | — |
 | 42. OpenAI-Compatible Broker | 0/0 | Not started | — |
 | 43. Marketplace Integration (Anchor: MiroFish) | 0/0 | Not started | — |
 | 44. Per-User Usage Dashboard | 0/0 | Not started | — |
