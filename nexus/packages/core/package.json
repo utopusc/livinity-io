@@ -20,7 +20,8 @@
     "start": "node dist/index.js",
     "test:phase39": "tsx src/providers/claude.test.ts && tsx src/providers/no-authtoken-regression.test.ts && tsx src/providers/sdk-agent-runner-integrity.test.ts",
     "test:phase40": "tsx src/providers/sdk-agent-runner-home-override.test.ts && npm run test:phase39",
-    "test:phase41": "tsx src/providers/api-home-override.test.ts && npm run test:phase40"
+    "test:phase41": "tsx src/providers/api-home-override.test.ts && npm run test:phase40",
+    "test:phase42": "npm run test:phase41"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.84",
