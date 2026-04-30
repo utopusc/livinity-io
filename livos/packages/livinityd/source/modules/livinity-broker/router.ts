@@ -6,6 +6,7 @@ import {createSseAdapter} from './sse-adapter.js'
 import {buildSyncAnthropicResponse, aggregateChunkText} from './sync-response.js'
 import {createSdkAgentRunnerForUser} from './agent-runner-factory.js'
 import type {AnthropicMessagesRequest, BrokerDeps} from './types.js'
+import {registerOpenAIRoutes} from './openai-router.js'
 
 /**
  * Create the broker Express router.
@@ -161,6 +162,10 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 			}
 		}
 	})
+
+	// Phase 42: register OpenAI Chat Completions endpoint on the same router
+	// (inherits containerSourceIpGuard + express.json middleware applied above).
+	registerOpenAIRoutes(router, deps)
 
 	return router
 }
