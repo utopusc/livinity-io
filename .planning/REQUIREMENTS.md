@@ -81,8 +81,33 @@
 
 ## Traceability
 
-(Filled by `/gsd-roadmapper` — phase ↔ requirement mapping)
+Phase ↔ requirement mapping (filled by `/gsd-roadmapper` 2026-04-29). Every v1 requirement maps to exactly one phase. Coverage = 17 / 17.
+
+| Requirement | Phase | Category | Status |
+|-------------|-------|----------|--------|
+| FR-RISK-01 | Phase 39 | Risk Fix | Pending |
+| FR-AUTH-01 | Phase 40 | Per-User OAuth | Pending |
+| FR-AUTH-02 | Phase 40 | Per-User OAuth | Pending |
+| FR-AUTH-03 | Phase 40 | Per-User OAuth | Pending |
+| FR-BROKER-A-01 | Phase 41 | Anthropic Broker | Pending |
+| FR-BROKER-A-02 | Phase 41 | Anthropic Broker | Pending |
+| FR-BROKER-A-03 | Phase 41 | Anthropic Broker | Pending |
+| FR-BROKER-A-04 | Phase 41 | Anthropic Broker | Pending |
+| FR-BROKER-O-01 | Phase 42 | OpenAI Broker | Pending |
+| FR-BROKER-O-02 | Phase 42 | OpenAI Broker | Pending |
+| FR-BROKER-O-03 | Phase 42 | OpenAI Broker | Pending |
+| FR-BROKER-O-04 | Phase 42 | OpenAI Broker | Pending |
+| FR-MARKET-01 | Phase 43 | Marketplace | Pending |
+| FR-MARKET-02 | Phase 43 | Marketplace | Pending |
+| FR-DASH-01 | Phase 44 | Dashboard | Pending |
+| FR-DASH-02 | Phase 44 | Dashboard | Pending |
+| FR-DASH-03 | Phase 44 | Dashboard | Pending |
+
+**Mapped:** 17 / 17
+**Orphans:** 0
+**Duplicates:** 0
+**Removed from seed:** FR-AUTH-04 (admin single-subscription fan-out opt-in) — explicitly OUT of scope per D-TOS-01.
 
 ---
 
-*Last updated: 2026-04-29 — initial v29.3 requirements drafted from seed + user subscription-only constraint*
+*Last updated: 2026-04-29 — Traceability filled by `/gsd-roadmapper`. Initial requirements drafted from seed + user subscription-only constraint 2026-04-29.*
