@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.3
 milestone_name: Marketplace AI Broker (Subscription-Only)
-status: phase-42-shipped-locally
-stopped_at: Phases 39+40+41+42 shipped LOCAL. Phase 43 (Marketplace Integration — MiroFish anchor) ready to plan. Usage limit hit on Phase 42 executor mid-final-commit (resets 7:50am PT); manually closed inline (UAT commit + SUMMARY).
-last_updated: "2026-04-30T15:25:00.000Z"
-last_activity: 2026-04-30 -- Phase 42 (FR-BROKER-O-01..04) executed: 5 commits + summary, 4/4 success criteria PASS, 32 livinityd + 9 nexus = 41 tests PASS, sacred file untouched (still 623a65b9...). In-process TS translation chosen over LiteLLM sidecar. OpenAI Python SDK smoke test in 42-UAT.md.
+status: phase-43-shipped-locally
+stopped_at: Phases 39+40+41+42+43 shipped LOCAL. Phase 44 (Per-User Usage Dashboard) is the FINAL phase. MiroFish image audit: NOT published upstream → Path B (fork+build) chosen; operator must publish ghcr.io/utopusc/mirofish:v29.3 before deploying.
+last_updated: "2026-04-30T16:30:00.000Z"
+last_activity: 2026-04-30 -- Phase 43 (FR-MARKET-01..02) executed autonomously: 6 commits, 4/4 success criteria PASS (mechanism-pass; live MiroFish UAT deferred to operator), 28 tests PASS, sacred file untouched (still 623a65b9...), broker module byte-identical. requiresAiProvider manifest flag + injectAiProviderConfig pure fn + UI badge + 9-section UAT.
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 18
-  completed_plans: 18
-  percent: 66
+  completed_phases: 5
+  total_plans: 23
+  completed_plans: 23
+  percent: 83
 ---
 
 # Project State
@@ -22,14 +22,14 @@ See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 + 41 + 42 shipped locally (66% done); Phase 43 next (MiroFish marketplace integration)
+**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 + 41 + 42 + 43 shipped locally (83% done); Phase 44 = FINAL
 
 ## Current Position
 
-Phase: 42 ✅ SHIPPED LOCALLY (5 commits + summary); 41 ✅ SHIPPED (6 commits); 40 ✅ SHIPPED (5 commits); 39 ✅ SHIPPED (4 commits)
-Next: 43 (Marketplace Integration — MiroFish anchor) — env var auto-injection + manifest flag + first end-to-end MiroFish install verification
-Status: **4/6 phases done (66%)**, 26 commits ahead of origin/master, sacred file SHA untouched at `623a65b9...`
-Last activity: 2026-04-30 — Phase 42 OpenAI-compat broker shipped (limit hit on final commit, closed manually)
+Phase: 43 ✅ SHIPPED LOCALLY (6 commits incl summary); 42 ✅ SHIPPED (5 commits + summary); 41 ✅ SHIPPED (6 commits); 40 ✅ SHIPPED (5 commits); 39 ✅ SHIPPED (4 commits)
+Next: 44 (Per-User Usage Dashboard) — FINAL phase; consumes broker traffic for per-user token/app/monthly stats + rate-limit warnings + 429 surfacing
+Status: **5/6 phases done (83%)**, 33 commits ahead of origin/master, sacred file SHA untouched at `623a65b9...`, broker module feature-frozen since Phase 42
+Last activity: 2026-04-30 — Phase 43 MiroFish marketplace integration shipped; image not published upstream (Path B fork+build chosen — operator publishes `ghcr.io/utopusc/mirofish:v29.3` pre-deploy)
 
 ## ▶ HUMAN HANDOFF — v29.3 Phase 39 + 40 batch handoff
 
