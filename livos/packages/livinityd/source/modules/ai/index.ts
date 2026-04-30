@@ -7,6 +7,7 @@ import {
 
 import type Livinityd from '../../index.js'
 import {getUserPreference} from '../database/index.js'
+import {isMultiUserMode} from './per-user-claude.js'
 
 export interface AiModuleOptions {
 	livinityd: Livinityd
@@ -466,10 +467,20 @@ export default class AiModule {
 		// Timeout fallback: abort after 10 minutes if not manually stopped
 		const timeout = setTimeout(() => controller.abort(), 600_000)
 
+		// Per Phase 41 D-41-16: forward X-LivOS-User-Id in multi-user mode so nexus can set
+		// SdkAgentRunner's homeOverride to the calling user's per-user .claude/ dir.
+		// Single-user mode: omit header → preserves byte-identical pre-Phase-41 wire behavior.
+		const proxyHeaders: Record<string, string> = {'Content-Type': 'application/json'}
+		if (process.env.LIV_API_KEY) proxyHeaders['X-API-Key'] = process.env.LIV_API_KEY
+		if (userId) {
+			const multiUser = await isMultiUserMode(this.livinityd).catch(() => false)
+			if (multiUser) proxyHeaders['X-LivOS-User-Id'] = userId
+		}
+
 		try {
 			const response = await fetch(`${livApiUrl}/api/agent/stream`, {
 				method: 'POST',
-				headers: {'Content-Type': 'application/json', ...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {})},
+				headers: proxyHeaders,
 				body: JSON.stringify({task, max_turns: 30, conversationId, userPersonalization}),
 				signal: controller.signal,
 			})
