@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.3
 milestone_name: Marketplace AI Broker (Subscription-Only)
-status: phase-39-shipped-locally
-stopped_at: Phase 39 shipped LOCAL ONLY (not deployed to Mini PC, not pushed to remote). Awaiting human review + deploy decision before Phase 40.
-last_updated: "2026-04-30T05:00:00.000Z"
-last_activity: 2026-04-30 -- Phase 39 (FR-RISK-01) executed autonomously: 4 commits, 4/4 success criteria PASS, 5/5 tests green, sacred file SHA 2b3b005bf1594821be6353268ffbbdddea5f9a3a unchanged
+status: phase-40-shipped-locally
+stopped_at: Phase 40 (Per-User OAuth + HOME isolation) shipped LOCAL. Phases 39+40 ready for batch deploy. Phase 41 (Anthropic broker) ready to plan; usage limit hit on Phase 40 executor (resets 3am PT) — recommend pausing autonomous chain until limit refreshes OR user decides to proceed.
+last_updated: "2026-04-30T10:05:00.000Z"
+last_activity: 2026-04-30 -- Phase 40 (FR-AUTH-01..03) executed autonomously: 5 commits, 4/4 success criteria PASS (criterion 2 honestly deferred to synthetic-isolation framing per D-40-05), 14/14 tests PASS, sacred file new baseline 623a65b9a50a89887d36f770dcd015b691793a7f
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 16
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 8
+  percent: 33
 ---
 
 # Project State
@@ -22,16 +22,64 @@ See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phase 39 shipped locally; pending human review + deploy before Phase 40
+**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — Phases 39 + 40 shipped locally; Phase 41 next
 
 ## Current Position
 
-Phase: 39 ✅ SHIPPED LOCALLY (4 commits, NOT deployed, NOT pushed)
-Next: 40 (Per-User Claude OAuth + HOME Isolation) — blocked on human review of Phase 39
-Status: **Awaiting human checkpoint** — review code → deploy to Mini PC → confirm broker can proceed
-Last activity: 2026-04-30 — Phase 39 autonomous execution completed cleanly
+Phase: 40 ✅ SHIPPED LOCALLY (5 commits + summary); 39 ✅ SHIPPED LOCALLY (4 commits)
+Next: 41 (Anthropic Messages Broker) — structurally unblocked, plan-level work can proceed without deploy
+Status: **Usage limit hit during Phase 40 executor (resets 3am PT)** — Phase 40 itself completed cleanly before limit; Phase 41 spawn would risk hitting limit again
+Last activity: 2026-04-30 — Phase 40 autonomous execution completed cleanly
 
-## ▶ HUMAN HANDOFF — Sabah uyandığında oku
+## ▶ HUMAN HANDOFF — v29.3 Phase 39 + 40 batch handoff
+
+### Phase 40 (FR-AUTH-01..03) durumu: BAŞARILI, lokal ✅
+
+5 atomic commit master üzerine atıldı:
+
+```
+dd48f172 docs(40): phase summary
+327d81ed test(40-05): pin Phase 40 invariants with regression tests + UAT checklist
+2ba2540e feat(40-04): per-user-aware Claude card in Settings > AI Configurations
+227a779f feat(40-03): per-user .claude dir + claude-login backend routes
+2cf59b1f feat(40-02): add homeOverride to SdkAgentRunner for per-user OAuth isolation
+b264445f docs(40-01): codebase audit
+```
+
+**Yapılan değişiklikler:**
+- `nexus/packages/core/src/sdk-agent-runner.ts` — line 266 surgical edit (`opts.homeOverride || process.env.HOME || '/root'`) + JSDoc; sacred SHA Phase 39 baseline `2b3b005b...` → yeni baseline `623a65b9...`
+- `nexus/packages/core/src/agent.ts` — `homeOverride?: string` AgentConfig field
+- `livos/packages/livinityd/source/modules/ai/per-user-claude.ts` — YENİ modül (217 satır, 6 export)
+- `livos/packages/livinityd/source/modules/ai/routes.ts` — 3 yeni tRPC route (status query, startLogin subscription, logout mutation)
+- `livos/packages/ui/src/routes/settings/ai-config.tsx` — per-user UI dalı (multi-user mode aktifken)
+- 2 yeni test dosyası, `test:phase40` npm script, 27-step manuel UAT
+
+**Garantiler:**
+- Sacred file: pre-edit `2b3b005b...` doğrulandı → post-edit `623a65b9...` (1 satır mod, behavior-preserving)
+- `npm run test:phase40` PASS (4 yeni + 5 chained Phase 39 = 9/9)
+- `per-user-claude.test.ts` PASS (5/5)
+- Multi-user mode OFF olduğunda Phase 40 logic dead code (her route + UI önce `isMultiUserMode()` kontrol ediyor)
+- `git push` YAPILMADI, deploy YAPILMADI
+
+**Honest deferrals (Phase 41 scope):**
+- AI Chat (`/api/agent/stream`) için per-user HOME wiring — Phase 41 broker scope; Phase 40 sadece `claude login` subprocess için HOME route ediyor
+- POSIX-enforced cross-user isolation — synthetic dirs (livinityd-application-layer enforced) tercih edildi; D-40-05 + D-40-16 honest framing
+- 27-step manual UAT — deploy sonrası
+
+### Senin yapman gerekenler
+
+**Önerilen sıra:**
+1. **Code review (batch):** Phases 39 + 40 birlikte — `git show ab62df01..dd48f172`
+2. **Lokal test:** `cd nexus/packages/core && npm run test:phase40` (9/9 PASS olmalı)
+3. **Push + deploy (Mini PC):**
+   ```bash
+   git push origin master
+   ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"
+   ```
+4. **Manual UAT:** `.planning/phases/40-per-user-claude-oauth-home-isolation/40-UAT.md` — 27 adım Mini PC üzerinde
+5. **Phase 41 başlat:** `/gsd-discuss-phase 41` (broker — büyük phase, fresh context tavsiye edilir)
+
+**Usage limit notu:** Phase 40 executor 5-saatlik quota'yı tüketti (reset 3am PT). Phase 41 daha büyük (yeni HTTP server, format translation, ~200-300 satır kod) — spawn etmeden önce limit'in resetlenmesini bekle veya quota'na bak.
 
 ### Phase 39 (FR-RISK-01) durumu: BAŞARILI, lokal ✅
 
