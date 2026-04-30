@@ -21,6 +21,17 @@ export interface AgentConfig {
   toolRegistry: ToolRegistry;
   /** Optional config for dynamic settings - if not provided, uses hardcoded defaults */
   nexusConfig?: NexusConfig;
+  /**
+   * Override HOME env for the spawned claude CLI subprocess.
+   * Used for per-user OAuth credential isolation in multi-user mode
+   * (each user's `.claude/.credentials.json` lives in their own synthetic dir
+   * under /opt/livos/data/users/<user_id>/.claude/).
+   *
+   * When undefined: falls back to process.env.HOME || '/root' (pre-Phase-40 behavior).
+   *
+   * Introduced in v29.3 Phase 40 (FR-AUTH-03). See .planning/phases/40-per-user-claude-oauth-home-isolation/40-CONTEXT.md D-40-02.
+   */
+  homeOverride?: string;
   maxTurns?: number;
   maxTokens?: number;
   timeoutMs?: number;
