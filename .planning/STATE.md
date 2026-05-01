@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
 status: unknown
-last_updated: "2026-05-01T23:16:08.317Z"
+last_updated: "2026-05-01T23:37:43.359Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 14
-  completed_plans: 13
-  percent: 93
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -43,12 +43,12 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 |-------|------|--------|----------|
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
 | 46 — Fail2ban Admin Panel | 05/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar + P05 master gate/UAT/Settings wire-up ALL SHIPPED — FR-F2B-01..06 ALL CLOSED) | **Complete** | `[██████████] 100%` |
-| 47 — AI Diagnostics (Registry + Identity + Probe) | 03/05 (P01 Mini PC pre-flight diagnostic SHIPPED — verdict=neither; P02 FR-TOOL backend SHIPPED — atomic-swap registry diagnostic + 9/9 tests, commit `99dd6295`; P03 FR-MODEL backend SHIPPED — Branch N diagnostic surface only + 7/7 tests, commits `7fb22dab`+`28b16493`, sacred file byte-identical) | **In Progress** | `[██████░░░░] 60%` |
+| 47 — AI Diagnostics (Registry + Identity + Probe) | 05/05 (P01 Mini PC pre-flight verdict=neither; P02 FR-TOOL backend; P03 FR-MODEL backend Branch N; P04 FR-PROBE backend; P05 tRPC routes + UI scaffold + httpOnlyPaths + UAT — ALL 6 FR-* closed; sacred file byte-identical at `4f868d31...` through all 5 plans) | **Complete** | `[██████████] 100%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[█████████░] 86%` (Phase 45 + Phase 46 fully closed + Phase 47 P01+P02+P03 shipped; 12 of 14 plans shipped)
-**Active phase:** Phase 47 IN PROGRESS — P01 verdict=`neither`, P02 FR-TOOL backend shipped, P03 FR-MODEL backend SHIPPED via Branch N (diagnostic surface only — `model-identity.ts` 6-step diagnostic + 7/7 tests; sacred file `sdk-agent-runner.ts` byte-identical at `4f868d31...`; no v29.4 second re-pin landed; FR-MODEL-01 + FR-MODEL-02 closed)
-**Next step:** Run Phase 47 Plan 04 (FR-PROBE backend — diagnostic UI route layer)
+**Overall milestone progress:** `[██████████] 100%` (Phase 45 + Phase 46 + Phase 47 ALL fully closed; 14 of 14 plans shipped — only Phase 48 left)
+**Active phase:** Phase 47 COMPLETE — all 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) shipped end-to-end (route + UI + test + UAT). Phase 47 Plan 05 commits: `43c1109d` (routes + integration test) + `64873acd` (tRPC reg + httpOnlyPaths + common.test 8/9/10) + `0759f3cc` (UI scaffold + 3 cards) + `924c4325` (sidebar + dual-mount) + `895fe3af` (test:phase47 + 47-UAT.md). Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post Plan 05).
+**Next step:** Run `/gsd-plan-phase 48` for Live SSH Session Viewer (last phase in v29.4 milestone).
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase 47 P02 | 18m | 2 tasks | 3 files |
 | Phase 47 P03 | 3m | 2 tasks | 3 files |
 | Phase 47 P04 | 12m | 2 tasks | 2 files |
+| Phase 47 P05 | 16m | 6 tasks (Task 7 checkpoint auto-approved per autonomous-mode user directive) | 14 files (7 created + 7 modified) |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - Phase 47 FR-MODEL-02 Branch B (if taken): ONE more surgical edit at system-prompt construction site — re-pins integrity test a second time on top of `f5ffdd00`
 - **Phase 47 P01 verdict (2026-05-01, commit `4fe43fa8`): `neither` (clean)** — Branch B NOT triggered; Plan 47-03 took Branch N (no sacred-file edit). Sacred file remains at `4f868d31...` for v29.4. NO second re-pin landed. Out-of-scope discovery: broker tier-bypass bug (`agent-runner-factory.ts` does not thread `body.model` → tier, so all broker requests run on default tier=sonnet) — DEFERRED to v29.5+ as a separate ticket; identity-line is internally consistent with the actually-running tier so this is NOT FR-MODEL-01 source-confabulation.
 - **Phase 47 P03 SHIPPED 2026-05-01 (commits `7fb22dab` feat + `28b16493` test): Branch N executed.** Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (verified pre and post-commit via `git hash-object`). `update.sh` byte-identical. Integrity test byte-identical (Phase 45 audit-only re-pin remains the most recent v29.4 entry). Diagnostic surface `model-identity.ts` (343 LOC, 6-step diagnostic, DI factory pattern) + `model-identity.test.ts` (274 LOC, 7/7 tests pass: 4 verdict buckets + 2 graceful-degrade + 1 G-10 D-NO-SERVER4 hard-wall). FR-MODEL-01 + FR-MODEL-02 closed.
+- **Phase 47 P04 SHIPPED 2026-05-01 (commits `8c81bf50` + `f33c47de`):** apps.healthProbe backend with PG-scoped + 5s timeout + 6/6 tests. Sacred file SHA byte-identical. FR-PROBE-01 + FR-PROBE-02 closed.
+- **Phase 47 P05 SHIPPED 2026-05-01 (commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`): Phase 47 CLOSED.** End-to-end wire-up: tRPC routes (capabilitiesRouter + appsHealthRouter merged via t.mergeRouters) + httpOnlyPaths +2 entries + UI shared scaffold (D-DIAGNOSTICS-CARD) + 3 cards + sidebar admin entry + dual-mount AppHealthCard on app detail + test:phase47 master gate (118/118 PASS individually) + 47-UAT.md (9-section walkthrough). Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (Branch N invariant upheld through ALL 5 plans of Phase 47). All 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) shipped end-to-end.
 
 ### Carry-from v29.3 (accepted debt at milestone close 2026-05-01)
 
@@ -143,7 +146,9 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - [x] **Phase 47 Plan 01** (Mini PC pre-flight FR-MODEL-01 6-step diagnostic) shipped (commit `4fe43fa8`, 2026-05-01) — verdict=`neither`, Plan 47-03 takes Branch N (no sacred-file edit). Identity-line + tierToModel landed correctly on Mini PC; out-of-scope discovery: broker tier-bypass bug deferred to v29.5+.
 - [x] Phase 47 Plan 02 (FR-TOOL — independent of P01 verdict) shipped (commit `99dd6295`, 2026-05-01)
 - [x] Phase 47 Plan 03 (Branch N: diagnostic surface only — no source changes) shipped (commits `7fb22dab` + `28b16493`, 2026-05-01) — sacred file byte-identical at `4f868d31...`; FR-MODEL-01 + FR-MODEL-02 closed
-- [ ] Phase 47 Plan 04 + 05 (FR-PROBE + UAT)
+- [x] Phase 47 Plan 04 (FR-PROBE backend — apps.healthProbe privateProcedure with PG-scoped reachability + 5s timeout + 6/6 tests) shipped (commits `8c81bf50` + `f33c47de`, 2026-05-01) — FR-PROBE-01 + FR-PROBE-02 closed
+- [x] Phase 47 Plan 05 (tRPC routes + UI scaffold + httpOnlyPaths + UAT — closes Phase 47) shipped (commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`, 2026-05-01) — all 6 FR-* requirements end-to-end (route + UI + test + UAT); 118/118 PASS individual run; common.test.ts 7→10 (+ Phase 47 entries); sacred file SHA byte-identical pre/post
+- [x] **Phase 47 (AI Diagnostics) COMPLETE** — all 5 plans / all 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) closed; sacred file UNTOUCHED through all 5 plans (Branch N invariant upheld); Phase 47 ready for Mini PC deploy + 47-UAT.md SC-1..SC-9 walkthrough
 - [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
 - [ ] At v29.4 milestone close: run `/gsd-complete-milestone v29.4` to archive
 

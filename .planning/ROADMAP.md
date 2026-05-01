@@ -45,7 +45,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 
 - [x] **Phase 45: Carry-Forward Sweep** — Land four v29.3 audit gaps (broker 429, sacred SHA re-pin, httpOnlyPaths, OpenAI SSE usage chunk) before any new feature work
 - [x] **Phase 46: Fail2ban Admin Panel** — Server Management "Security" sidebar entry inside `LIVINITY_docker` with jail list, unban+whitelist, manual ban, audit log, mobile cellular toggle
-- [ ] **Phase 47: AI Diagnostics (Registry + Identity + Probe)** — Shared `diagnostics-section.tsx` scaffold hosting capability registry restore, model identity diagnostic+remediation, marketplace app health probe
+- [x] **Phase 47: AI Diagnostics (Registry + Identity + Probe)** — Shared `diagnostics-section.tsx` scaffold hosting capability registry restore, model identity diagnostic+remediation, marketplace app health probe — **COMPLETE 2026-05-01** (all 5 plans / all 6 FR-* requirements closed; sacred file byte-identical through all 5 plans)
 - [ ] **Phase 48: Live SSH Session Viewer** — `/ws/ssh-sessions` journalctl tail with click-IP-to-ban cross-link to Phase 46's manual ban modal
 
 ## Phase Details
@@ -106,8 +106,8 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 - [x] 47-01-PLAN.md — Pre-flight Mini PC 6-step diagnostic + verdict capture (Wave 1, FR-MODEL-01) — **SHIPPED 2026-05-01 commit `4fe43fa8`**, verdict=`neither` (Plan 47-03 takes Branch N, no sacred-file edit; identity-line + tierToModel landed correctly per Phase 43.10/43.12)
 - [x] 47-02-PLAN.md — FR-TOOL backend: capabilities diagnostic + atomic-swap flushAndResync + concurrency test (Wave 2, FR-TOOL-01/02) — **SHIPPED 2026-05-01 commit `99dd6295`**, 9/9 tests passing (B-06 + B-07 + W-12 + W-14 + W-15/G-06 + W-21 + G-03 all covered), sacred file byte-identical
 - [x] 47-03-PLAN.md — FR-MODEL backend: 6-step diagnostic + branched remediation (A/B/C/N decided from 47-01 verdict) (Wave 3, FR-MODEL-01/02) — **SHIPPED 2026-05-01 commits `7fb22dab` feat + `28b16493` test**, Branch N taken (verdict=neither from 47-01) — `model-identity.ts` (343 LOC, 6-step diagnostic, DI factory) + 7/7 tests pass; sacred file `sdk-agent-runner.ts` byte-identical at `4f868d31...`; `update.sh` byte-identical; integrity test byte-identical (no second v29.4 re-pin landed); FR-MODEL-01 + FR-MODEL-02 closed
-- [ ] 47-04-PLAN.md — FR-PROBE backend: apps.healthProbe privateProcedure + PG-scoping + 5s undici timeout (Wave 4, FR-PROBE-01/02)
-- [ ] 47-05-PLAN.md — UI scaffold + 3 cards + tRPC routes + httpOnlyPaths + test:phase47 + 47-UAT.md (Wave 5, FR-TOOL/MODEL/PROBE wiring)
+- [x] 47-04-PLAN.md — FR-PROBE backend: apps.healthProbe privateProcedure + PG-scoping + 5s undici timeout (Wave 4, FR-PROBE-01/02) — **SHIPPED 2026-05-01 commits `8c81bf50` + `f33c47de`**, 6/6 tests passing (G-04 anti-port-scanner + timeout + ECONNREFUSED + defense-in-depth user_id mismatch all covered), sacred file byte-identical
+- [x] 47-05-PLAN.md — UI scaffold + 3 cards + tRPC routes + httpOnlyPaths + test:phase47 + 47-UAT.md (Wave 5, FR-TOOL/MODEL/PROBE wiring) — **SHIPPED 2026-05-01 commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`**, end-to-end wire-up: capabilitiesRouter (3 admin) + appsHealthRouter (privateProcedure, merged via t.mergeRouters) + httpOnlyPaths +2 entries + DiagnosticsSection shared scaffold (D-DIAGNOSTICS-CARD) + 3 cards + sidebar admin entry + dual-mount AppHealthCard on app detail + test:phase47 master gate (118/118 PASS individually) + 47-UAT.md (9-section walkthrough); common.test.ts 7→10 (Tests 8/9/10 added); sacred file byte-identical at `4f868d31...`; G-04 BLOCKER mitigated (privateProcedure + ctx-only userId); T-47-05-02 mitigated (defense-in-depth env redaction); FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02 ALL CLOSED
 **UI hint**: yes
 
 ### Phase 48: Live SSH Session Viewer
