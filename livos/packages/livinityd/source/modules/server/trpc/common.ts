@@ -171,6 +171,15 @@ export const httpOnlyPaths = [
 	'ai.claudeLogout',
 	'ai.setPrimaryProvider',
 	'ai.setComputerUseAutoConsent',
+	// v29.4 Phase 45 Plan 03 (FR-CF-03) — Phase 40 per-user Claude OAuth login
+	// + Phase 44 usage dashboard queries. Long-running subscription/queries
+	// that must survive WS reconnect after `systemctl restart livos` (precedent:
+	// system.update at line 27, ai.claudeStartLogin at line 169). Without HTTP
+	// transport, mutations/queries silently queue and drop during the ~5s WS
+	// reconnect window — pitfall B-12 / X-04.
+	'ai.claudePerUserStartLogin',
+	'usage.getMine',
+	'usage.getAll',
 	// Subagent execution -- use HTTP for reliability (can take 10-60s)
 	'ai.executeSubagent',
 	// Marketplace install -- use HTTP for mutation reliability
