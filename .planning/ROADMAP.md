@@ -61,7 +61,11 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
   4. After killing livinityd via `systemctl restart livos` while Settings tab is open, all three routes (`claudePerUserStartLogin`, `usage.getMine`, `usage.getAll`) resolve within 2s of WS reconnect without UI hang — verified via restart-livinityd-mid-session integration test.
   5. Running an OpenAI streaming chat completion via `/u/:userId/v1/chat/completions` produces a `broker_usage` row with non-zero `prompt_tokens` AND `completion_tokens` — verified via verbatim openai Python SDK smoke test from Phase 42 UAT.
   6. `npm run test:phase45` passes including chained Phase 39 sacred-file integrity test re-asserting new `BASELINE_SHA = 4f868d31...`.
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 45-01-PLAN.md — C2 sacred-file BASELINE_SHA audit-only re-pin (Wave 1, FR-CF-02)
+- [ ] 45-02-PLAN.md — C1 broker 429 forwarding + Retry-After preservation (Wave 2, FR-CF-01)
+- [ ] 45-03-PLAN.md — C3 httpOnlyPaths additions for ai.claudePerUserStartLogin/usage.getMine/usage.getAll (Wave 2, FR-CF-03)
+- [ ] 45-04-PLAN.md — C4 OpenAI SSE usage chunk + token plumbing + test:phase45 npm script (Wave 2, FR-CF-04)
 
 ### Phase 46: Fail2ban Admin Panel
 **Goal**: Admin can recover from SSH lockout via UI (unban + whitelist) without SSH access, observe banned IPs, manually ban malicious IPs (with self-ban guardrails), and review an immutable audit trail of all ban/unban events.
@@ -157,7 +161,7 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 45. Carry-Forward Sweep | 0/0 (TBD via plan-phase) | Not started | - |
+| 45. Carry-Forward Sweep | 0/4 (planned 2026-05-01) | Not started | - |
 | 46. Fail2ban Admin Panel | 0/0 (TBD via plan-phase) | Not started | - |
 | 47. AI Diagnostics (Registry + Identity + Probe) | 0/0 (TBD via plan-phase) | Not started | - |
 | 48. Live SSH Session Viewer | 0/0 (TBD via plan-phase) | Not started | - |
