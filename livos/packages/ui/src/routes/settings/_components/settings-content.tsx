@@ -45,6 +45,7 @@ import {
 	TbBrain,
 	TbServer2,
 	TbCalendarTime,
+	TbStethoscope,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -143,6 +144,8 @@ type SettingsSection =
 	| 'memory'
 	| 'scheduler'
 	| 'software-update'
+	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
+	| 'diagnostics'
 
 interface MenuItem {
 	id: SettingsSection
@@ -176,6 +179,8 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Debug & diagnostics', adminOnly: true},
 	{id: 'advanced', icon: TbSettingsMinus, label: 'Advanced', description: 'Terminal, DNS, Beta', adminOnly: true},
 	{id: 'software-update', icon: TbUpdate, label: 'Software Update', description: 'Check for updates', adminOnly: true},
+	// v29.4 Phase 47 Plan 05 — AI Diagnostics (FR-TOOL/MODEL/PROBE).
+	{id: 'diagnostics', icon: TbStethoscope, label: 'Diagnostics', description: 'Capability registry, model identity, app health', adminOnly: true},
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -475,6 +480,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MemorySectionLazy /></Suspense>
 		case 'software-update':
 			return <SoftwareUpdateSection />
+		case 'diagnostics':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DiagnosticsSectionLazy /></Suspense>
 		default:
 			return null
 	}
@@ -1409,6 +1416,14 @@ const MyDomainsSectionLazy = React.lazy(() => import('./my-domains-section'))
 
 const SchedulerSectionLazy = React.lazy(() =>
 	import('./scheduler-section').then((m) => ({default: m.SchedulerSection})),
+)
+
+// v29.4 Phase 47 Plan 05 — AI Diagnostics lazy section.
+// settings-content.tsx is at livos/packages/ui/src/routes/settings/_components/settings-content.tsx
+// diagnostics-section.tsx is at livos/packages/ui/src/routes/settings/diagnostics/diagnostics-section.tsx
+// Relative path = '../diagnostics/diagnostics-section'.
+const DiagnosticsSectionLazy = React.lazy(() =>
+	import('../diagnostics/diagnostics-section').then((m) => ({default: m.DiagnosticsSection})),
 )
 
 // Lazy-loaded backup setup/restore content
