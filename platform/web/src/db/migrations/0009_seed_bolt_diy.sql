@@ -28,7 +28,7 @@ First-time setup: open Bolt.diy after install, then in the provider menu choose 
 Note: Bolt.diy upstream does NOT currently support ANTHROPIC_BASE_URL env var, so the Anthropic provider entry will bypass Livinity Broker and try to reach api.anthropic.com directly. Stick with OpenAI-Like until the upstream PR lands.
 
 MIT licensed. Active maintenance, 10K+ stars.',
-  'developer',
+  'developer-tools',
   '0.0.7',
   $$version: "3.7"
 services:
