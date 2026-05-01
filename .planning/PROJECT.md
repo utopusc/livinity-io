@@ -187,29 +187,48 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-BACKEND-01..07 (7/7) → Phase 37 backend factory reset
 - [x] FR-UI-01..07 (7/7) → Phase 38 UI factory reset
 
-## Current Milestone: v29.3 Marketplace AI Broker (Subscription-Only)
+## Current State: v29.3 Shipped Local (Marketplace AI Broker, Subscription-Only) — 2026-05-01
 
-**Goal:** Marketplace AI uygulamaları (MiroFish, Dify, RAGFlow, CrewAI agent'ları) — kullanıcının mevcut Claude OAuth subscription'ını kullanarak, BYOK/API key olmadan, ToS-uyumlu per-user multi-user desteğiyle Claude'a erişebilsin.
+**Delivered:** Marketplace AI apps can reach Claude through a per-user subscription-backed broker (`livinity-broker:8080/u/:userId/v1/{messages,chat/completions}`) without entering an API key, while staying ToS-compliant via per-user OAuth + HOME isolation. The sacred `SdkAgentRunner` runs all traffic — broker translates Anthropic Messages and OpenAI Chat Completions formats into the same `query()` invocation underneath.
 
-**Target features:**
-- Risk fix: `claude.ts` OAuth-fallback-with-raw-SDK path silinecek (subscription token raw `@anthropic-ai/sdk`'ya asla geçmesin)
-- Per-user `claude login` + `HOME=/home/<user>` isolation (cross-user OAuth credential leak engellenir)
-- Anthropic-format broker: `POST /v1/messages` + SSE streaming (her zaman SdkAgentRunner üzerinden)
-- OpenAI-compat broker: `POST /v1/chat/completions` + format translation (LiteLLM sidecar opsiyonu)
-- Marketplace integration: `requires_ai_provider` manifest flag + env var auto-injection (`ANTHROPIC_BASE_URL`, `LLM_BASE_URL`)
-- Per-user usage dashboard (token / app / aylık total + subscription rate limit görünürlüğü)
+**Shipped features:**
+- **Risk closure (Phase 39):** `claude.ts` OAuth-fallback-with-raw-SDK path deleted; subscription tokens never reach `@anthropic-ai/sdk`. Pinned with `no-authtoken-regression.test.ts`.
+- **Per-user OAuth + HOME isolation (Phase 40):** synthetic `/opt/livos/data/users/<id>/.claude/` dirs (mode 0o700); 3 tRPC routes (status / startLogin / logout); Settings UI multi-user branch; sacred `SdkAgentRunner` got ONE surgical edit at line 266 adding `homeOverride?: string` plumbing (behavior-preserving).
+- **Anthropic Messages broker (Phase 41):** `POST /u/:userId/v1/messages` (sync + Anthropic-spec SSE chunks); HTTP-proxy strategy to nexus `/api/agent/stream` (Strategy B); `X-LivOS-User-Id` header → per-user `homeOverride` wiring closes Phase 40's deferred AI-Chat HOME-wiring carry-forward.
+- **OpenAI-compat broker (Phase 42):** `POST /u/:userId/v1/chat/completions` (sync + SSE); pure in-process bidirectional translation (no LiteLLM sidecar); model alias table (gpt-4 / gpt-4o / claude-sonnet-4-6 → default Anthropic; unknowns warn-and-fall-through).
+- **Marketplace integration (Phase 43):** manifest schema `requiresAiProvider: true` flag + `injectAiProviderConfig()` pure function + `apps.ts:963` integration point auto-inject `ANTHROPIC_BASE_URL` / `ANTHROPIC_REVERSE_PROXY` / `LLM_BASE_URL` + `extra_hosts: livinity-broker:host-gateway` into per-user docker-compose at install time.
+- **Per-user usage dashboard (Phase 44):** PG `broker_usage` table + Express response capture middleware mounted BEFORE broker; tRPC `usage.getMine` (private) + `usage.getAll` (admin) + Settings > AI Configuration "Usage" subsection (banner / 3 stat cards / 30-day recharts BarChart / per-app table / admin filter view).
 
-**Locked decisions:**
-- D-TOS-01: Tek admin aboneliği fan-out YASAK — her user kendi OAuth'unu yapacak
-- D-TOS-02: Broker raw HTTP forward yapmayacak — daima Agent SDK `query()` üzerinden
-- D-RISK-01: claude.ts OAuth fallback v29.3'ün ilk fazında SİLİNECEK (refactor değil, kaldırma)
-- D-NO-BYOK: BYOK/API key path yok — sadece subscription
-- D-CONTAINER-01: Marketplace app'leri Docker container'larda → broker hostname `livinity-broker` internal DNS, env var injection trivial
-- D-NO-SERVER4: Server4 OFF-LIMITS (proje hard rule)
+**Stats:** 6 phases (39-44) / 28 plans / ~150 automated tests / ~6,500 LOC delta (mostly additive — sacred file 1 surgical edit, broker module byte-identical Phases 41-44).
+**Audit:** `.planning/milestones/v29.3-MILESTONE-AUDIT.md` — `gaps_found` (accepted as v29.4 carry-forward) · **Integration check:** `.planning/milestones/v29.3-INTEGRATION-CHECK.md`.
+**Archive:** `.planning/milestones/v29.3-ROADMAP.md` + `v29.3-REQUIREMENTS.md` + `v29.3-phases/` (39-44).
 
-**Sacred (do not touch):** Mevcut `SdkAgentRunner` ve `nexus/packages/core/src/sdk-agent-runner.ts` çalışıyor — yapısal değişiklik yapılmayacak. Broker katmanı dışarıdan çağıracak.
+**Acknowledged debt at close (carry-forward to v29.4):**
+- C1 — Broker error path collapses to HTTP 500; never forwards 429 + drops Retry-After. FR-DASH-03 only synthetic-verifiable.
+- C2 — Sacred file integrity test BASELINE_SHA stale (`623a65b9...` vs current `4f868d31...`) due to v43.x model-bump commits.
+- C3 — `claudePerUserStartLogin` + `usage.getMine` + `usage.getAll` not in `httpOnlyPaths` — UX hang risk under WS reconnect.
+- C4 — OpenAI SSE adapter emits no `usage` chunk → zero `broker_usage` rows for OpenAI streaming traffic.
+- **MiroFish anchor app dropped** 2026-05-01 per user direction — manifest draft preserved as planning artifact only.
 
-**Seed:** `.planning/research/v29.3-marketplace-broker-seed.md` (full context + draft requirements)
+**Manual UAT deferred (opt-in, not blockers):**
+- 6 UAT files (`40-UAT.md` 27 steps · `41-UAT.md` 34 steps · `42-UAT.md` 9 sections including verbatim openai Python SDK smoke test · `43-UAT.md` · `44-UAT.md`) un-executed pending Mini PC deploy.
+
+### Shipped (v29.3)
+
+- [x] FR-RISK-01 → Phase 39 (OAuth fallback closure)
+- [x] FR-AUTH-01..03 → Phase 40 (per-user OAuth + HOME isolation; POSIX-enforced isolation deferred per D-40-05)
+- [x] FR-BROKER-A-01..04 → Phase 41 (Anthropic Messages broker)
+- [x] FR-BROKER-O-01..04 → Phase 42 (OpenAI-compat broker)
+- [x] FR-MARKET-01 → Phase 43 (manifest auto-injection); FR-MARKET-02 dropped 2026-05-01
+- [x] FR-DASH-01..02 → Phase 44 (dashboard mechanism); FR-DASH-03 partial (debt accepted, C1 carry-forward)
+
+## Next Milestone: v29.4 Server Management Tooling + Bug Sweep
+
+**Goal:** Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server Management surface for Fail2ban / IP-ban administration so SSH access stays operable, and roll up four v29.3 carry-forwards (broker 429, sacred SHA, httpOnlyPaths, OpenAI SSE usage chunk).
+
+**Source:** `.planning/MILESTONE-CONTEXT.md` (8 candidate features in 3 buckets; A bug fixes from live testing · B new Server Management features · C v29.3 carry-forward sweep).
+
+**Bootstrap:** `/gsd-new-milestone v29.4` (workflow detects MILESTONE-CONTEXT.md and runs research → requirements → roadmap).
 
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
@@ -367,6 +386,12 @@ Working source files (`.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.pla
 | Catch-all HTTPS block (not per-domain) | Auto-scales with on_demand_tls, no Caddyfile changes per domain | ✓ Good |
 | domain_sync tunnel messages (not API polling) | Real-time sync, works offline with reconnect batch sync | ✓ Good |
 | Reuse domain.platform.* routes (not new aliases) | Avoids dead code, existing routes already complete | ✓ Good |
+| Subscription-only path (no BYOK) for v29.3 broker | Single auth surface; closes ToS risk; matches user mandate (D-NO-BYOK) | ✓ Good (v29.3) |
+| Per-user `.claude/` synthetic dirs over real Linux user accounts | Avoids `useradd` complexity; livinityd-application-layer enforced; future security audit can add POSIX accounts | — Pending (D-40-05/16) |
+| Strategy B (HTTP proxy to /api/agent/stream) for broker | Reuses single nexus SdkAgentRunner instance; no cross-package brain/toolRegistry handle problem; sacred file untouched | ✓ Good (v29.3 Phase 41) |
+| Pure in-process TS translation for OpenAI broker (not LiteLLM sidecar) | No new container, no new dep, simpler ops; tools intentionally ignored per D-42-12 | ✓ Good (v29.3 Phase 42) |
+| MiroFish anchor app dropped at v29.3 close | User priority shift — manifest mechanism still ships; future anchor-app conversation deferred to v30+ | — Closed by user 2026-05-01 |
+| Synthetic-INSERT verification path for FR-DASH-03 banner | Live 429 path requires C1 broker fix in v29.4; banner UI logic verified via unit tests + synthetic rows for v29.3 | — Pending (debt) |
 
 ## Evolution
 
@@ -386,4 +411,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-29 — v29.3 Marketplace AI Broker (Subscription-Only) milestone started*
+*Last updated: 2026-05-01 — v29.3 Marketplace AI Broker (Subscription-Only) milestone closed (gaps accepted as v29.4 carry-forward; MiroFish dropped)*

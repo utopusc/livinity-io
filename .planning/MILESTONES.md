@@ -1,5 +1,33 @@
 # Milestones
 
+## v29.3 Marketplace AI Broker (Subscription-Only) (Shipped local: 2026-05-01)
+
+**Phases completed:** 6 phases (39-44), 28 plans, ~150 automated tests across phase suites
+**Requirements:** 15/17 mechanism-satisfied · 1 partial (debt accepted: FR-DASH-03 broker 429) · 1 dropped (FR-MARKET-02 MiroFish, user-closed 2026-05-01)
+**Milestone audit:** `gaps_found` — accepted, gaps carried forward to v29.4 (broker 429 forwarding, sacred-file SHA re-pin, httpOnlyPaths, OpenAI SSE usage chunk)
+**Known deferred items at close:** 8 (5 manual UAT files un-executed pending Mini PC deploy + 3 v28.0 hot-patch quick tasks; see STATE.md Deferred Items)
+**Sacred file:** `nexus/packages/core/src/sdk-agent-runner.ts` — 1 surgical edit in Phase 40 (line 266 `homeOverride` fallback chain), byte-identical across Phases 41-44; **drifted post-milestone** to `4f868d31...` from `623a65b9...` baseline due to unrelated v43.x model-bump commits — re-pin landed in v29.4 carry-forward.
+
+**Key accomplishments:**
+
+- Phase 39 — Closed the raw-`@anthropic-ai/sdk` OAuth-fallback path in `claude.ts` so subscription tokens can never reach the raw HTTP path; added `ClaudeAuthMethodMismatchError` typed exception and pinned the deletion with grep-based regression + sacred-file integrity tests.
+- Phase 40 — Per-user `.claude/` synthetic dir module + 3 tRPC routes (status/startLogin/logout) + Settings UI multi-user branch; sacred `SdkAgentRunner` got ONE surgical line edit at line 266 adding `homeOverride?: string` plumbing (behavior-preserving) — new BASELINE_SHA `623a65b9...` re-pinned in integrity test.
+- Phase 41 — Anthropic Messages broker mounted at `livinityd:8080/u/:userId/v1/messages` (sync + Anthropic-spec SSE) backed by HTTP proxy to nexus `/api/agent/stream` (Strategy B). Phase 41-04 closed Phase 40's deferred AI Chat HOME-wiring carry-forward by adding `X-LivOS-User-Id` → `homeOverride` header pipeline in `nexus/.../api.ts`.
+- Phase 42 — OpenAI Chat Completions endpoint at `/u/:userId/v1/chat/completions` with pure in-process bidirectional translation (no LiteLLM sidecar, no nexus changes). Model aliasing (gpt-4 / gpt-4o / claude-sonnet-4-6) with unknown-model warn-and-fall-through. Tools array intentionally ignored per D-41-14/D-42-12.
+- Phase 43 — Manifest schema flag `requiresAiProvider: true` triggers auto-injection of 3 broker env vars (`ANTHROPIC_BASE_URL`, `ANTHROPIC_REVERSE_PROXY`, `LLM_BASE_URL`) plus `extra_hosts: livinity-broker:host-gateway` into per-user docker-compose files at install time. Single integration point in `apps.ts:963`. **MiroFish anchor app dropped 2026-05-01** — manifest draft remains as a planning artifact.
+- Phase 44 — `broker_usage` PG table + Express response capture middleware mounted BEFORE broker on `/u/:userId/v1` (parses both Anthropic Messages and OpenAI Chat Completions `usage` shapes). tRPC `usage.getMine` + `usage.getAll` (admin-gated) + Settings > AI Configuration "Usage" subsection (banner / 3 stat cards / 30-day recharts BarChart / per-app table / admin filter view). Capture module imports zero symbols from `livinity-broker/*`.
+
+**Carry-forward to v29.4** (audit-found integration gaps, MiroFish dropped):
+
+- **C1 (FR-DASH-03 broker 429 forwarding):** `livinity-broker/router.ts:159` returns 500 for ALL upstream errors; `agent-runner-factory.ts:75-76` drops Retry-After. ~10 lines, ~3 unit tests.
+- **C2 (sacred file integrity SHA re-pin):** `sdk-agent-runner-integrity.test.ts:33` BASELINE_SHA stale (`623a65b9...` vs current `4f868d31...`). Either re-pin per Phase 40 D-40-01 ritual or revert v43.x drift.
+- **C3 (httpOnlyPaths):** add `claudePerUserStartLogin` (sub) + `usage.getMine` (q) + `usage.getAll` (q) to `httpOnlyPaths` per project pattern.
+- **C4 (OpenAI SSE usage chunk):** OpenAI streaming traffic produces zero `broker_usage` rows; emit final `usage` chunk in `openai-sse-adapter.ts` before `[DONE]`.
+
+See `.planning/MILESTONE-CONTEXT.md` Section C for full v29.4 carry-forward spec.
+
+---
+
 ## v29.0 Deploy & Update Stability (Shipped: 2026-04-27)
 
 **Phases completed:** 5 phases, 11 plans, 22 tasks

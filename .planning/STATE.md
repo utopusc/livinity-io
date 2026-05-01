@@ -1,244 +1,78 @@
 ---
 gsd_state_version: 1.0
-milestone: v29.3
-milestone_name: Marketplace AI Broker (Subscription-Only)
-status: feature-complete-locally
-stopped_at: All 6 phases SHIPPED LOCALLY. 44 commits ahead of origin/master. 17/17 requirements satisfied. Sacred SdkAgentRunner SHA 623a65b9... untouched across all phases (1 surgical edit in Phase 40 was behavior-preserving). Operator next steps: push + deploy + 6-phase UAT batch + milestone audit + complete-milestone archive.
-last_updated: "2026-04-30T17:30:00.000Z"
-last_activity: 2026-04-30 -- v29.3 MILESTONE FEATURE-COMPLETE LOCALLY. Phase 44 (FR-DASH-01..03) executed autonomously: 6 commits, 4/4 success criteria PASS (mechanism-verified), 39/39 livinityd usage-tracking tests PASS + chained nexus tests PASS, sacred file untouched, broker module untouched, usage-tracking has zero broker imports.
+milestone: v29.4
+milestone_name: Server Management Tooling + Bug Sweep (queued)
+status: between-milestones
+stopped_at: v29.3 milestone closed 2026-05-01 with `gaps_found` accepted (MiroFish dropped, 4 carry-forwards to v29.4). Phase directories archived to .planning/milestones/v29.3-phases/. v29.4 MILESTONE-CONTEXT.md prepared with 8 candidate features; ready for /gsd-new-milestone v29.4.
+last_updated: "2026-05-01T17:13:36Z"
+last_activity: 2026-05-01 -- v29.3 milestone closed via /gsd-complete-milestone. Audit found `gaps_found` (FR-MARKET-02 dropped per user, FR-DASH-03 partial debt accepted). Archives written to .planning/milestones/v29.3-{ROADMAP,REQUIREMENTS,MILESTONE-AUDIT,INTEGRATION-CHECK}.md + v29.3-phases/. MILESTONES.md updated. ROADMAP.md collapsed. PROJECT.md evolved (v29.3 moved to Shipped). REQUIREMENTS.md slated for git rm in next commit.
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 28
-  completed_plans: 28
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md
+See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Last shipped milestone:** v29.2 Factory Reset (mini-milestone) — 2026-04-29
-**Current milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — 🎉 FEATURE-COMPLETE LOCALLY 🎉
+**Last shipped milestone:** v29.3 Marketplace AI Broker (Subscription-Only) — 2026-05-01 (local; awaiting deploy)
+**Current focus:** Planning next milestone (v29.4 Server Management Tooling + Bug Sweep — queued via `MILESTONE-CONTEXT.md`)
 
 ## Current Position
 
-| Phase | Reqs | Status | Commits |
-|-------|------|--------|---------|
-| 39 Risk Fix — Close OAuth Fallback | FR-RISK-01 | ✅ SHIPPED LOCAL | 4 |
-| 40 Per-User OAuth + HOME Isolation | FR-AUTH-01..03 | ✅ SHIPPED LOCAL | 5 |
-| 41 Anthropic Messages Broker | FR-BROKER-A-01..04 | ✅ SHIPPED LOCAL | 6 |
-| 42 OpenAI-Compatible Broker | FR-BROKER-O-01..04 | ✅ SHIPPED LOCAL | 5 |
-| 43 Marketplace Integration (MiroFish) | FR-MARKET-01..02 | ✅ SHIPPED LOCAL | 6 |
-| 44 Per-User Usage Dashboard | FR-DASH-01..03 | ✅ SHIPPED LOCAL | 6 |
+**Between milestones.** v29.3 closed; v29.4 not yet bootstrapped.
 
-**6/6 phases done (100%), 17/17 requirements satisfied, 44 commits ahead of origin/master**, sacred file SHA `623a65b9...` byte-identical to Phase 40 baseline (1 surgical opt-in edit, all subsequent phases preserved it).
+| State | Value |
+|-------|-------|
+| Last shipped | v29.3 (6 phases, 28 plans, ~150 tests, 17/17 requirements addressed: 15 satisfied + 1 partial-debt + 1 dropped) |
+| Audit status | `gaps_found` accepted; 4 carry-forwards documented in `MILESTONE-CONTEXT.md` Section C |
+| Origin/master sync | ~44 commits ahead — push has not yet occurred |
+| Mini PC deploy | NOT done — 6 UAT files (`40-UAT.md` … `44-UAT.md`) authored but un-executed |
+| Sacred file SHA | currently `4f868d31...` (drifted from Phase 40 baseline `623a65b9...` due to v43.x model-bump commits — re-pin as v29.4 carry-forward C2) |
 
-Status: **Awaiting operator deploy decision.** Next steps below.
+## Next Steps
 
-## ▶ OPERATOR HANDOFF — v29.3 deploy + close milestone
+1. **Optional — push to origin:** `git push origin master` (44+ commits ahead of remote).
+2. **Optional — deploy + run UATs:** `ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"`, then walk `40-UAT.md` → `44-UAT.md` end-to-end on the Mini PC. UATs remain executable any time post-deploy and do not block v29.4 planning.
+3. **Start v29.4:** `/gsd-new-milestone v29.4` — workflow detects `MILESTONE-CONTEXT.md` and runs research → requirements → roadmap. The 4 v29.3 carry-forwards (C1 broker 429 / C2 sacred SHA / C3 httpOnlyPaths / C4 OpenAI SSE usage chunk) are pre-listed as Section C; user direction "MiroFish'i siktir et" honored — FR-MARKET-02 explicitly dropped, NOT carried forward.
 
-### Recommended sequence
+## Deferred Items
 
-1. **Code review (full milestone):** `git log --oneline cfd240d0..HEAD` (the 44 commits ahead). Use `git show <sha>` for any specific phase.
-2. **Local test verification:** `cd nexus/packages/core && npm run test:phase44` (chains all 6 phase test suites).
-3. **MiroFish image publish (Path B fork+build):** Phase 43 audit determined MiroFish isn't published upstream. Before deploy:
-   - Fork `666ghj/MiroFish` to `utopusc/MiroFish`
-   - Build Docker image: `docker build -t ghcr.io/utopusc/mirofish:v29.3 .`
-   - Push to GHCR: `docker push ghcr.io/utopusc/mirofish:v29.3`
-   - Open PR to `utopusc/livinity-apps` with the manifest from `.planning/phases/43-marketplace-integration-anchor-mirofish/draft-mirofish-manifest/`
-4. **Push to remote:** `git push origin master` (44 commits)
-5. **Deploy to Mini PC:** `ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"`
-6. **Run UAT batch (in order):**
-   - Phase 39 UAT: regression check — existing AI Chat still works
-   - Phase 40 UAT (`40-UAT.md`, 27 steps): per-user OAuth login flow
-   - Phase 41 UAT (`41-UAT.md`, 34 steps): Anthropic Messages broker via curl
-   - Phase 42 UAT (`42-UAT.md`, 9 sections): OpenAI-compat broker + Python SDK smoke test
-   - Phase 43 UAT (`43-UAT.md`, 9 sections): MiroFish install + UI prompt → Claude response
-   - Phase 44 UAT (`44-UAT.md`, 9 sections): usage dashboard populates from real broker traffic
-7. **Milestone close:**
-   - `/gsd-audit-milestone` (cross-phase integration audit)
-   - `/gsd-complete-milestone v29.3` (archive ROADMAP + REQUIREMENTS + research → `.planning/milestones/v29.3-*`)
-   - `/gsd-cleanup` (archive `.planning/phases/39-44-*/` directories)
-8. **Optional next:** `/gsd-new-milestone` for v29.4 OR `/gsd-resume-work` on v30.0 Backup defined-but-paused (`.planning/milestones/v30.0-DEFINED/`)
+Items acknowledged and deferred at v29.3 milestone close on 2026-05-01:
 
-### v29.3 Stats
+| Category | Item | Status |
+|----------|------|--------|
+| uat | Phase 40 — 40-UAT.md (27 steps) | un-executed (next deploy) |
+| uat | Phase 41 — 41-UAT.md (34 steps) | un-executed (next deploy) |
+| uat | Phase 42 — 42-UAT.md (9 sections, includes openai Python SDK smoke test) | un-executed (next deploy) |
+| uat | Phase 43 — 43-UAT.md (9 sections, MiroFish dropped per user) | un-executed; FR-MARKET-02 dropped from carry-forward |
+| uat | Phase 44 — 44-UAT.md (9 sections) | un-executed (next deploy) |
+| quick_task | 260425-sfg-v28.0-hot-patch-bundle-tailwind-sync-bg | unresolved (legacy v28.0 tech debt; not v29.3 scope) |
+| quick_task | 260425-v1s-v28.0-hot-patch-round-2-activity-overflow | unresolved (legacy v28.0 tech debt) |
+| quick_task | 260425-x6q-v28.0-hot-patch-round-3-window-only-nav | unresolved (legacy v28.0 tech debt) |
 
-- **Phases:** 6
-- **Plans:** 28 (avg 4.7 per phase)
-- **Commits:** 44 (master, no remote push)
-- **Tests:** ~150+ across 6 phase suites; sacred file integrity test pinned across all 6 phases
-- **Files created:** ~50 (broker module 14 files, usage-tracking 12 files, UI 5 files, planning artifacts 19 files)
-- **Files modified:** ~10 (sacred SdkAgentRunner: 1 surgical edit Phase 40; everything else additive)
-- **Sacred file:** Phase 39 baseline `2b3b005b...` → Phase 40 new baseline `623a65b9...` (1 surgical opt-in edit) → Phases 41/42/43/44 all byte-identical to Phase 40 baseline
-- **Total LoC delta:** ~6,500 insertions across source + tests + planning artifacts
-
-### Honest deferrals (not blockers)
-
-- All 6 phase manual UATs (operator runs after deploy)
-- MiroFish Docker image build + GHCR publish + sibling-repo PR (operator action; Path B fork+build)
-- Cost forecasting (FR-DASH-future-01)
-- Per-request audit trail / message logging (FR-OBS-future-01)
-- Configurable rate limits via Redis (hardcoded Pro=200/day in Phase 44)
-- Real Linux user accounts (synthetic dirs preserved per D-40-16)
-- Other marketplace anchor apps: Dify, RAGFlow, CrewAI templates (FR-MARKET-future-01..03; v30+)
-- Tool / function calling support in broker (D-41-14, D-42-12; v30+)
-
-## ▶ HUMAN HANDOFF — v29.3 Phase 39 + 40 batch handoff
-
-### Phase 40 (FR-AUTH-01..03) durumu: BAŞARILI, lokal ✅
-
-5 atomic commit master üzerine atıldı:
-
-```
-dd48f172 docs(40): phase summary
-327d81ed test(40-05): pin Phase 40 invariants with regression tests + UAT checklist
-2ba2540e feat(40-04): per-user-aware Claude card in Settings > AI Configurations
-227a779f feat(40-03): per-user .claude dir + claude-login backend routes
-2cf59b1f feat(40-02): add homeOverride to SdkAgentRunner for per-user OAuth isolation
-b264445f docs(40-01): codebase audit
-```
-
-**Yapılan değişiklikler:**
-- `nexus/packages/core/src/sdk-agent-runner.ts` — line 266 surgical edit (`opts.homeOverride || process.env.HOME || '/root'`) + JSDoc; sacred SHA Phase 39 baseline `2b3b005b...` → yeni baseline `623a65b9...`
-- `nexus/packages/core/src/agent.ts` — `homeOverride?: string` AgentConfig field
-- `livos/packages/livinityd/source/modules/ai/per-user-claude.ts` — YENİ modül (217 satır, 6 export)
-- `livos/packages/livinityd/source/modules/ai/routes.ts` — 3 yeni tRPC route (status query, startLogin subscription, logout mutation)
-- `livos/packages/ui/src/routes/settings/ai-config.tsx` — per-user UI dalı (multi-user mode aktifken)
-- 2 yeni test dosyası, `test:phase40` npm script, 27-step manuel UAT
-
-**Garantiler:**
-- Sacred file: pre-edit `2b3b005b...` doğrulandı → post-edit `623a65b9...` (1 satır mod, behavior-preserving)
-- `npm run test:phase40` PASS (4 yeni + 5 chained Phase 39 = 9/9)
-- `per-user-claude.test.ts` PASS (5/5)
-- Multi-user mode OFF olduğunda Phase 40 logic dead code (her route + UI önce `isMultiUserMode()` kontrol ediyor)
-- `git push` YAPILMADI, deploy YAPILMADI
-
-**Honest deferrals (Phase 41 scope):**
-- AI Chat (`/api/agent/stream`) için per-user HOME wiring — Phase 41 broker scope; Phase 40 sadece `claude login` subprocess için HOME route ediyor
-- POSIX-enforced cross-user isolation — synthetic dirs (livinityd-application-layer enforced) tercih edildi; D-40-05 + D-40-16 honest framing
-- 27-step manual UAT — deploy sonrası
-
-### Senin yapman gerekenler
-
-**Önerilen sıra:**
-1. **Code review (batch):** Phases 39 + 40 birlikte — `git show ab62df01..dd48f172`
-2. **Lokal test:** `cd nexus/packages/core && npm run test:phase40` (9/9 PASS olmalı)
-3. **Push + deploy (Mini PC):**
-   ```bash
-   git push origin master
-   ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"
-   ```
-4. **Manual UAT:** `.planning/phases/40-per-user-claude-oauth-home-isolation/40-UAT.md` — 27 adım Mini PC üzerinde
-5. **Phase 41 başlat:** `/gsd-discuss-phase 41` (broker — büyük phase, fresh context tavsiye edilir)
-
-**Usage limit notu:** Phase 40 executor 5-saatlik quota'yı tüketti (reset 3am PT). Phase 41 daha büyük (yeni HTTP server, format translation, ~200-300 satır kod) — spawn etmeden önce limit'in resetlenmesini bekle veya quota'na bak.
-
-### Phase 39 (FR-RISK-01) durumu: BAŞARILI, lokal ✅
-
-Otonom çalıştırıldı (sen uyurken), 4 commit master üzerine atıldı:
-
-```
-7f0e0d09 docs(39): phase summary — OAuth fallback closure complete
-eb3c93ff test(39-03): pin OAuth-fallback closure with regression tests (FR-RISK-01)
-aa338404 refactor(39-02): close OAuth fallback in ClaudeProvider.getClient (FR-RISK-01)
-ab62df01 feat(39-01): caller audit for OAuth fallback closure (FR-RISK-01)
-```
-
-**Yapılan değişiklikler:**
-- `nexus/packages/core/src/providers/claude.ts` — iki `authToken:` fallback (env-var + creds-file) silindi, `ClaudeAuthMethodMismatchError` typed error class eklendi
-- `nexus/packages/core/src/providers/manager.ts` + `index.ts` + `api.ts` — caller reroute (audit AUDIT.md'de)
-- 3 yeni test dosyası (`claude.test.ts`, `no-authtoken-regression.test.ts`, `sdk-agent-runner-integrity.test.ts`)
-- `nexus/packages/core/package.json` — `test:phase39` script
-
-**Garantiler (kanıtlanmış):**
-- Sacred `sdk-agent-runner.ts` byte-identical: SHA `2b3b005bf1594821be6353268ffbbdddea5f9a3a`
-- 5/5 test PASS — `cd nexus/packages/core && npm run test:phase39`
-- TypeScript build temiz
-- Subscription tokens artık `@anthropic-ai/sdk`'ya hiçbir koşulda ulaşamıyor — grep regression test bunu kalıcı garantiliyor
-
-### Senin yapman gerekenler
-
-1. **Code review:** `git show ab62df01 aa338404 eb3c93ff 7f0e0d09` — özellikle `claude.ts` deletion + caller reroutes
-2. **Deploy karar:** Eğer onaylıyorsan:
-   ```bash
-   git push origin master
-   # Sonra Mini PC'de:
-   ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"
-   ```
-3. **Phase 40'a devam:** Onayladığında `/gsd-autonomous --from 40` veya `/gsd-discuss-phase 40` çalıştır
-
-### Neden Phase 40+ otonom yapılmadı
-
-Phase 40 (Per-User OAuth + HOME isolation) sistem-seviyesi değişiklikler içeriyor:
-- Linux user account oluşturma / izinler
-- `SdkAgentRunner` spawn'ında HOME env var değişikliği (sacred dosyaya çok yakın çalışma)
-- Multi-user mod davranış değişikliği
-- Settings UI'a "Connect my Claude account" butonu
-
-Bu phase'in kararları (root user nasıl handle edilir? single-user mode'da ne olur? cross-user permission stratejisi?) sen uyanıkken alınmalı. Phase 39 kazılmış kontrollü bir alandı; 40 ise canlı sistem üzerinde değişiklik.
-
-Diğer phase'ler (41 broker, 42 OpenAI-compat, 43 marketplace, 44 dashboard) her biri 1-2 günlük iş — autonomous tek seans değil.
-
-### Mevcut milestone progress
-
-1/6 phase complete (16%). Remaining linear chain: 40 → 41 → 42 → 43 → 44.
-
-## Roadmap Snapshot
-
-6 phases, strictly linear, 17/17 v1 requirements mapped:
-
-| # | Phase | Reqs | Depends on |
-|---|-------|------|------------|
-| 39 | Risk Fix — Close OAuth Fallback | FR-RISK-01 | — |
-| 40 | Per-User Claude OAuth + HOME Isolation | FR-AUTH-01..03 | 39 |
-| 41 | Anthropic Messages Broker | FR-BROKER-A-01..04 | 40 |
-| 42 | OpenAI-Compatible Broker | FR-BROKER-O-01..04 | 41 |
-| 43 | Marketplace Integration (Anchor: MiroFish) | FR-MARKET-01..02 | 42 |
-| 44 | Per-User Usage Dashboard | FR-DASH-01..03 | 43 |
-
-Full details: `.planning/ROADMAP.md`.
-
-## Accumulated Context (carried from v29.2)
-
-### Subscription-only constraint (LOCKED for v29.3 and beyond)
-
-User uses ONLY Claude subscription mode (`sdk-subscription` via `@anthropic-ai/claude-agent-sdk` `query()`). Never BYOK / API key.
-
-- Existing `SdkAgentRunner` (`nexus/packages/core/src/sdk-agent-runner.ts`) is **sacred** — no structural changes. All v29.3 broker work wraps it externally.
-- `claude.ts:99-115` raw OAuth-fallback path will be **deleted** (not refactored) in Phase 39.
-- D-NO-BYOK enforced in every phase's success criteria — every user-facing flow must read "without entering an API key" or "using their Claude subscription".
-
-### Carry-forwards from v29.2 (separate scope, not v29.3)
-
-These are tech debt from v29.2 — addressed via dedicated patches outside v29.3:
-- install.sh env-var fallback patch (closes install.sh's own argv leak window)
-- install.sh ALTER USER patch (improves install.sh's native idempotency)
-- update.sh patch to populate `/opt/livos/data/cache/install.sh.cached`
-- Phase 37: `factory-reset.integration.test.sh` on Mini PC scratchpad (manual, opt-in)
-- Phase 38: 11 browser-based UI flow checks (manual, opt-in)
-
-### Deferred (post-v29.3)
-
-- v30.0 Backup unfreeze — `.planning/milestones/v30.0-DEFINED/` (8 phases / 47 BAK-* reqs already defined; needs phase renumber to start after Phase 44).
-- FR-MARKET-future-01 (Dify), FR-MARKET-future-02 (RAGFlow), FR-MARKET-future-03 (CrewAI template) — anchor app for v29.3 is MiroFish only.
-- FR-DASH-future-01 (cost forecasting).
-- FR-OBS-future-01 (per-request audit trail / message logging).
-
-### Deployment target
-
-- Mini PC ONLY (`bruce@10.69.31.68`). D-NO-SERVER4 hard rule. Server4 + Server5 explicitly off-limits for any v29.3 broker / OAuth / dashboard work.
+UAT items remain executable any time post-deploy via the existing UAT files in `.planning/milestones/v29.3-phases/<phase>/`. Audit-found integration gaps carry forward as v29.3 carry-forward items in `.planning/MILESTONE-CONTEXT.md` Section C (C1 broker 429 forwarding, C2 sacred-file SHA re-pin, C3 httpOnlyPaths, C4 OpenAI SSE usage chunk). FR-MARKET-02 (MiroFish) explicitly dropped per user 2026-05-01.
 
 ## Recently Shipped
 
+### v29.3 Marketplace AI Broker (Subscription-Only) (2026-05-01, local)
+
+6-phase milestone delivering subscription-only Claude broker for marketplace AI apps:
+- Phase 39 (FR-RISK-01): closed `claude.ts` raw-SDK OAuth fallback
+- Phase 40 (FR-AUTH-01..03): per-user `.claude/` synthetic dirs + `homeOverride` plumbing in sacred `SdkAgentRunner` (1 surgical line edit)
+- Phase 41 (FR-BROKER-A-01..04): Anthropic Messages broker via HTTP-proxy Strategy B + `X-LivOS-User-Id` header pipeline
+- Phase 42 (FR-BROKER-O-01..04): OpenAI Chat Completions broker (in-process TS translation)
+- Phase 43 (FR-MARKET-01 satisfied; FR-MARKET-02 **dropped 2026-05-01**): manifest auto-injection
+- Phase 44 (FR-DASH-01..02 satisfied; FR-DASH-03 **partial — debt accepted**): per-user usage dashboard
+
+See `.planning/milestones/v29.3-ROADMAP.md` for full archive · `v29.3-MILESTONE-AUDIT.md` for gap analysis · `v29.3-INTEGRATION-CHECK.md` for cross-phase wiring detail · `v29.3-REQUIREMENTS.md` for final disposition per REQ-ID.
+
 ### v29.2 Factory Reset (2026-04-29)
 
-3-phase mini-milestone delivering one-click factory reset:
-- Phase 36 (audit): install.sh AUDIT-FINDINGS.md
-- Phase 37 (backend): system.factoryReset tRPC route + idempotent wipe + cgroup-escape spawn
-- Phase 38 (UI): Settings > Advanced > Danger Zone with type-confirm + BarePage progress overlay
-
-See `.planning/milestones/v29.2-ROADMAP.md` for full archive.
+3-phase mini-milestone delivering one-click factory reset (`/login` reroute on success+preserve, `/onboarding` on success+fresh, recovery page on rolled-back). See `.planning/milestones/v29.2-ROADMAP.md` for full archive.

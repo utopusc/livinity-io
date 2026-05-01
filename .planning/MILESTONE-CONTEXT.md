@@ -118,6 +118,29 @@ runtime init path that wasn't exercised.
   Vercel/CDN edge cache, or page-level revalidate intervals.
   - Acceptance: Marketplace home shows Bolt.diy without manual search.
 
+### C. v29.3 Carry-Forward (from milestone audit, MiroFish dropped per user)
+
+Audit report: `.planning/v29.3-MILESTONE-AUDIT.md` · Integration check: `.planning/v29.3-INTEGRATION-CHECK.md` · User decision 2026-05-01: "MiroFish'i siktir et" → FR-MARKET-02 dropped, NOT carried forward. Other gaps inherited:
+
+- **C1. Broker error-path 429 forwarding (FR-DASH-03 closure).** `livos/packages/livinityd/source/modules/livinity-broker/router.ts:159` currently returns `res.status(500)` for ALL upstream errors — must forward upstream HTTP status (especially 429). `livos/.../livinity-broker/agent-runner-factory.ts:75-76` extracts only status text — must also extract `Retry-After` header and forward it. Until this lands, capture middleware's throttled-row guard `res.statusCode === 429` is structurally unreachable and the Phase 44 rate-limit banner only fires on synthetic INSERTs.
+  - Acceptance: integration test mocking nexus 429 → broker returns 429 + Retry-After preserved + `broker_usage` throttled row written + UI banner shows critical state.
+  - Scope: 2 files, ~10 lines, ~3 unit tests. Small surgical phase.
+
+- **C2. Sacred file integrity test re-pin.** `nexus/packages/core/src/providers/sdk-agent-runner-integrity.test.ts:33` BASELINE_SHA = `623a65b9a50a89887d36f770dcd015b691793a7f` (Phase 40 baseline). Current `git hash-object nexus/packages/core/src/sdk-agent-runner.ts` = `4f868d318abff71f8c8bfbcf443b2393a553018b`. Test will FAIL on next CI run. Drift is from accumulated v43.x surgical edits (43.8 `??` operator, 43.10 identity prepend, 43.12 tierToModel bump) per A2 above. Either follow Phase 40 D-40-01 ritual (verify behavior-preserving + re-pin BASELINE_SHA + commit) or revert any unintended drift. Couple this to A2 since identity work touches the same file.
+  - Acceptance: `npm run test:phase39` (which chains the integrity test) passes; new BASELINE_SHA committed with documenting comment listing all surgical edits since `623a65b9...`.
+
+- **C3. tRPC routes on `httpOnlyPaths`.** Five routes added in v29.3 are NOT registered in `livos/packages/livinityd/source/server/trpc/common.ts` `httpOnlyPaths`: `claudePerUserStartLogin` (sub), `usage.getMine` (q), `usage.getAll` (q). Per project pattern (e.g., `system.checkUpdate`), interactive subscriptions and dashboard queries belong on HTTP to survive WS reconnects. Hang risk after livinityd restart or WS reset.
+  - Acceptance: routes added to `httpOnlyPaths`; manual test of livinityd restart → AI Configurations page renders usage immediately, claude-login subscription survives reconnect.
+
+- **C4. OpenAI SSE `usage` chunk emission (FR-DASH-01/02 completeness).** `livos/packages/livinityd/source/modules/livinity-broker/openai-sse-adapter.ts` does not emit a final `data:` chunk carrying `usage: {prompt_tokens, completion_tokens}` per OpenAI streaming spec. Result: `usage-tracking/parse-usage.ts:108-110` documents that ALL OpenAI streaming traffic produces zero `broker_usage` rows. Dashboard is blind to OpenAI-streaming marketplace apps.
+  - Acceptance: integration test — OpenAI SSE stream from broker contains a `usage` chunk before `[DONE]`; capture middleware writes a row; dashboard surfaces it.
+
+**Note:** C1 + C2 + C3 + C4 are all small surgical fixes that could roll into a single closing phase ("v29.3 carry-forward sweep") OR be distributed across the 7 v29.4 phases by topical fit. Roadmapper decides.
+
+**Out of scope (explicitly dropped 2026-05-01):**
+- FR-MARKET-02 (MiroFish marketplace anchor) — user closed: "MiroFish'i siktir et". Manifest draft + 43-UAT.md remain in `.planning/phases/43-.../` as historical artifacts. Future anchor app candidate is a v30+ conversation if at all.
+- Live UAT execution of v29.3 phases (39 → 44) — all 6 UAT files un-executed. Operator-deferred to natural deploy cadence; not blocking v29.4.
+
 ### B. New features (user-requested in this conversation)
 
 - **B1. Server Management → Fail2ban panel.** Sidebar entry under the
@@ -173,12 +196,13 @@ runtime init path that wasn't exercised.
 | Phase | Goal | Dependencies |
 |---|---|---|
 | 45 | Nexus tool registry diagnostic + restore (A1) | — |
-| 46 | Model identity dist-drift + preset systemPrompt evaluation (A2) | — |
+| 46 | Model identity dist-drift + preset systemPrompt evaluation (A2) + sacred file SHA re-pin (C2) | — |
 | 47 | Bolt.diy proxy + marketplace visibility live audit (A3 + A4) | needs 45 to surface SSH diagnostics |
 | 48 | Fail2ban panel — backend (B1) | — |
 | 49 | Fail2ban panel — frontend + RBAC unban (B2) | 48 |
 | 50 | Mini PC SSH gateway decision (B3a vs B3b) — threat model + spike | 49 |
-| 51 (optional) | SSH session viewer (B4) | 48-50 |
+| 51 | v29.3 carry-forward sweep — broker 429 forwarding (C1) + httpOnlyPaths fix (C3) + OpenAI SSE usage chunk (C4) | — |
+| 52 (optional) | SSH session viewer (B4) | 48-50 |
 
 Phase numbering continues from v29.3's last phase (44).
 
