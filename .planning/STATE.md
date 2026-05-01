@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
 status: unknown
-last_updated: "2026-05-01T21:07:37.358Z"
+last_updated: "2026-05-01T21:18:51.818Z"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -42,13 +42,13 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase | Plan | Status | Progress |
 |-------|------|--------|----------|
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
-| 46 — Fail2ban Admin Panel | 02/05 (P01 diagnostic + P02 backend modules SHIPPED; P03 routes/P04 UI/P05 settings remain) | In Progress | `[████░░░░░░] 40%` |
+| 46 — Fail2ban Admin Panel | 03/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes/integration SHIPPED; P04 UI/P05 settings remain) | In Progress | `[██████░░░░] 60%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[████░░░░░░] 39%` (Phase 45 fully closed + Phase 46 plans 01+02 of 5 shipped; 6 of ~16 plans shipped)
-**Active phase:** Phase 46 — Fail2ban Admin Panel (Plans 01+02 SHIPPED; Plan 03 routes/index barrel next)
-**Next step:** Run Plan 46-03 (routes.ts + index.ts barrel + tRPC registration + integration.test.ts) per `46-03-PLAN.md`
+**Overall milestone progress:** `[████░░░░░░] 44%` (Phase 45 fully closed + Phase 46 plans 01+02+03 of 5 shipped; 7 of ~16 plans shipped)
+**Active phase:** Phase 46 — Fail2ban Admin Panel (Plans 01+02+03 SHIPPED; Plan 04 UI section + modals next)
+**Next step:** Run Plan 46-04 (security-section.tsx + jail-status-card + unban-modal + ban-ip-modal + audit-log-tab + sidebar registration) per `46-04-PLAN.md`
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Server4 patches | 0 (D-NO-SERVER4 hard-wall) | TBD |
 | Phase 46-fail2ban-admin-panel P01 | 5m | 1 tasks | 1 files |
 | Phase 46 P02 | 3m | 1 tasks | 7 files |
+| Phase 46 P03 | 7m | 2 tasks | 6 files |
 
 ## Accumulated Context
 

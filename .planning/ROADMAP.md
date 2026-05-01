@@ -83,7 +83,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 **Plans**: 5 plans
 - [x] 46-01-PLAN.md — Pre-flight Mini PC diagnostic + parser fixture capture (Wave 1, FR-F2B-01) — **shipped 2026-05-01 in commit `8cae1124`**
 - [x] 46-02-PLAN.md — Backend pure modules (parser/client/active-sessions/events) + 31 unit tests (Wave 2, FR-F2B-01/02/04/05) — **shipped 2026-05-01 in commit `5a2c031f`**
-- [ ] 46-03-PLAN.md — tRPC router + httpOnlyPaths additions + integration test (Wave 3, FR-F2B-01/02/03/04/05)
+- [x] 46-03-PLAN.md — tRPC router + httpOnlyPaths additions + integration test (Wave 3, FR-F2B-01/02/03/04/05) — **shipped 2026-05-01 in commit `02063485`**
 - [ ] 46-04-PLAN.md — UI section + sub-components + Settings toggle (Wave 4, FR-F2B-01..06)
 - [ ] 46-05-PLAN.md — test:phase46 master gate + 46-UAT.md (Wave 5, FR-F2B-01..06)
 **UI hint**: yes
@@ -142,11 +142,11 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 | FR-CF-02 | 45 | Carry-Forward | **Complete** (`f5ffdd00`) |
 | FR-CF-03 | 45 | Carry-Forward | **Complete** (`d2c99e8a`) |
 | FR-CF-04 | 45 | Carry-Forward | Pending |
-| FR-F2B-01 | 46 | Fail2ban | Pending |
-| FR-F2B-02 | 46 | Fail2ban | Pending |
-| FR-F2B-03 | 46 | Fail2ban | Pending |
-| FR-F2B-04 | 46 | Fail2ban | Pending |
-| FR-F2B-05 | 46 | Fail2ban | Pending |
+| FR-F2B-01 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
+| FR-F2B-02 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
+| FR-F2B-03 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
+| FR-F2B-04 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
+| FR-F2B-05 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
 | FR-F2B-06 | 46 | Fail2ban | Pending |
 | FR-TOOL-01 | 47 | Diagnostics | Pending |
 | FR-TOOL-02 | 47 | Diagnostics | Pending |
