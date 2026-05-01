@@ -81,8 +81,8 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
   7. `Settings > "Show Security panel"` toggle defaults ON; toggling OFF hides the Security sidebar entry without uninstalling fail2ban (non-destructive backout); preference persists in `user_preferences` table.
   8. All new tRPC mutations (`fail2ban.unbanIp`, `fail2ban.banIp`) are present in `httpOnlyPaths` array at `livos/packages/livinityd/source/modules/server/trpc/common.ts`; restart-livinityd-mid-session integration test confirms no WS-hang.
 **Plans**: 5 plans
-- [ ] 46-01-PLAN.md — Pre-flight Mini PC diagnostic + parser fixture capture (Wave 1, FR-F2B-01)
-- [ ] 46-02-PLAN.md — Backend pure modules (parser/client/active-sessions/events) + 31 unit tests (Wave 2, FR-F2B-01/02/04/05)
+- [x] 46-01-PLAN.md — Pre-flight Mini PC diagnostic + parser fixture capture (Wave 1, FR-F2B-01) — **shipped 2026-05-01 in commit `8cae1124`**
+- [x] 46-02-PLAN.md — Backend pure modules (parser/client/active-sessions/events) + 31 unit tests (Wave 2, FR-F2B-01/02/04/05) — **shipped 2026-05-01 in commit `5a2c031f`**
 - [ ] 46-03-PLAN.md — tRPC router + httpOnlyPaths additions + integration test (Wave 3, FR-F2B-01/02/03/04/05)
 - [ ] 46-04-PLAN.md — UI section + sub-components + Settings toggle (Wave 4, FR-F2B-01..06)
 - [ ] 46-05-PLAN.md — test:phase46 master gate + 46-UAT.md (Wave 5, FR-F2B-01..06)

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
 status: unknown
-last_updated: "2026-05-01T20:19:28.663Z"
+last_updated: "2026-05-01T21:07:37.358Z"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
-  percent: 56
+  completed_plans: 6
+  percent: 67
 ---
 
 # Project State
@@ -42,13 +42,13 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase | Plan | Status | Progress |
 |-------|------|--------|----------|
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
-| 46 — Fail2ban Admin Panel | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
+| 46 — Fail2ban Admin Panel | 02/05 (P01 diagnostic + P02 backend modules SHIPPED; P03 routes/P04 UI/P05 settings remain) | In Progress | `[████░░░░░░] 40%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[███░░░░░░░] 25%` (Phase 45 of 4 phases fully closed; Plans 45-01 + 45-02 + 45-03 + 45-04 of ~16 plans shipped)
-**Active phase:** Phase 46 next (Phase 45 Carry-Forward Sweep COMPLETE — all four C1/C2/C3/C4 carry-forwards shipped)
-**Next step:** Run `/gsd-plan-phase 46` to decompose Phase 46 (Fail2ban Admin Panel) into plans
+**Overall milestone progress:** `[████░░░░░░] 39%` (Phase 45 fully closed + Phase 46 plans 01+02 of 5 shipped; 6 of ~16 plans shipped)
+**Active phase:** Phase 46 — Fail2ban Admin Panel (Plans 01+02 SHIPPED; Plan 03 routes/index barrel next)
+**Next step:** Run Plan 46-03 (routes.ts + index.ts barrel + tRPC registration + integration.test.ts) per `46-03-PLAN.md`
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`); Plans 45-02 + 45-03 + 45-04 all left sacred file byte-identical (Wave 2 isolation upheld through ALL 4 Phase 45 plans) |
 | Server4 patches | 0 (D-NO-SERVER4 hard-wall) | TBD |
 | Phase 46-fail2ban-admin-panel P01 | 5m | 1 tasks | 1 files |
+| Phase 46 P02 | 3m | 1 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -122,7 +123,12 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - [x] Phase 45 Plan 03 (FR-CF-03 httpOnlyPaths additions for ai.claudePerUserStartLogin + usage.getMine + usage.getAll) shipped (commit `d2c99e8a`, 2026-05-01)
 - [x] Phase 45 Plan 04 (FR-CF-04 OpenAI SSE usage chunk + real token plumbing + test:phase45 master gate) shipped (commit `c6061f76`, 2026-05-01)
 - [x] **Phase 45 (Carry-Forward Sweep) COMPLETE** — all 4 plans / all 4 carry-forwards (C1/C2/C3/C4) shipped; test:phase45 chain green (38/38 PASS, exit 0); sacred file UNTOUCHED through all 4 plans (Wave 2 isolation contract upheld)
-- [ ] Run `/gsd-plan-phase 46` for Fail2ban Admin Panel
+- [x] `/gsd-plan-phase 46` decomposed Fail2ban Admin Panel into 5 plans (commit `fb022598`)
+- [x] Phase 46 Plan 01 (Mini PC fail2ban diagnostic + parser fixture corpus) shipped (commit `8cae1124`, 2026-05-01)
+- [x] Phase 46 Plan 02 (backend pure modules: parser/client/active-sessions/events + 31 unit tests) shipped (commit `5a2c031f`, 2026-05-01)
+- [ ] Phase 46 Plan 03 (routes.ts + index.ts barrel + tRPC registration + integration.test.ts)
+- [ ] Phase 46 Plan 04 (UI Security section + jail-status-card + unban/ban modals + audit-log-tab)
+- [ ] Phase 46 Plan 05 (Settings "Show Security panel" toggle + final UAT prep)
 - [ ] After Phase 46 ships, run `/gsd-plan-phase 47` for AI Diagnostics
 - [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
 - [ ] At v29.4 milestone close: run `/gsd-complete-milestone v29.4` to archive
