@@ -45,8 +45,10 @@
 
 ### Marketplace App Health Probe (FR-PROBE) — was A3 + A4
 
-- [ ] **FR-PROBE-01**: New tRPC route `apps.healthProbe(appId)` (privateProcedure — every authenticated user can probe THEIR own apps' reachability) returns `{reachable: boolean, statusCode: number | null, ms: number, lastError: string | null, probedAt: ISO}`. Probe target derives from app's docker-compose published port + app's per-user subdomain (e.g. `bolt.{username}.livinity.io`). Uses `undici` (already in stack) with 5s timeout.
-- [ ] **FR-PROBE-02**: Marketplace app detail page (and Bolt.diy specifically per user report) shows a "Probe reachability" button next to install/uninstall actions. Output renders inline as a status card: green check (reachable + 2xx), yellow warning (reachable + non-2xx), red error (unreachable / timeout). Surfaces same root-cause diagnostic info as the v29.3 livos.app deploy probe pattern (subdomain → Caddy → backend container).
+- [x] **FR-PROBE-01
+**: New tRPC route `apps.healthProbe(appId)` (privateProcedure — every authenticated user can probe THEIR own apps' reachability) returns `{reachable: boolean, statusCode: number | null, ms: number, lastError: string | null, probedAt: ISO}`. Probe target derives from app's docker-compose published port + app's per-user subdomain (e.g. `bolt.{username}.livinity.io`). Uses `undici` (already in stack) with 5s timeout.
+- [x] **FR-PROBE-02
+**: Marketplace app detail page (and Bolt.diy specifically per user report) shows a "Probe reachability" button next to install/uninstall actions. Output renders inline as a status card: green check (reachable + 2xx), yellow warning (reachable + non-2xx), red error (unreachable / timeout). Surfaces same root-cause diagnostic info as the v29.3 livos.app deploy probe pattern (subdomain → Caddy → backend container).
 
 ### Fail2ban Admin Panel (FR-F2B) — was B1 + B2 (table stakes) + last-user + manual-ban + mobile cellular toggle
 
