@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: Server Management Tooling + Bug Sweep
-status: defining-plans
-stopped_at: v29.4 roadmap created 2026-05-01 (4 phases 45-48, 18 reqs, 0 new deps, ~940 LOC delta). Ready for /gsd-plan-phase 45.
-last_updated: "2026-05-01T18:00:00Z"
-last_activity: 2026-05-01 -- /gsd-roadmapper produced v29.4 ROADMAP.md and updated REQUIREMENTS.md traceability (FR-CF-* → 45, FR-F2B-* → 46, FR-TOOL/MODEL/PROBE-* → 47, FR-SSH-* → 48). Strict linear chain enforced (parallelization=false). Sacred file SHA coordination locked (Phase 45 FR-CF-02 audit-only re-pin BEFORE Phase 47 FR-MODEL-02 Branch B surgical edit).
+status: in-progress
+stopped_at: 2026-05-01 -- Phase 45 Plan 01 shipped (FR-CF-02 audit-only sacred-SHA re-pin, commit f5ffdd00). Ready for next plan in Phase 45 (FR-CF-01 / FR-CF-03 / FR-CF-04).
+last_updated: "2026-05-01T19:09:24Z"
+last_activity: 2026-05-01 -- Phase 45 Plan 01 (FR-CF-02) shipped via audit-only commit f5ffdd00 — sacred-file BASELINE_SHA re-pinned 623a65b9... → 4f868d31...; sacred file source bytes unchanged (audit-only contract upheld); v43.x drift commits (9f1562be / 47890a85 / 9d368bb5) cited verbatim in audit block; integrity test PASS; npm run test:phase39 chain PASS.
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 4
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -43,14 +43,14 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 | Phase | Plan | Status | Progress |
 |-------|------|--------|----------|
-| 45 — Carry-Forward Sweep | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
+| 45 — Carry-Forward Sweep | 01/?? (FR-CF-02 shipped) | In-Progress | `[██░░░░░░░░] 25%` |
 | 46 — Fail2ban Admin Panel | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[░░░░░░░░░░] 0%` (0 of 4 phases shipped)
-**Active phase:** Phase 45 (planning pending)
-**Next step:** `/gsd-plan-phase 45`
+**Overall milestone progress:** `[█░░░░░░░░░] 6%` (Plan 45-01 of ~16 plans shipped — 0 of 4 phases fully closed)
+**Active phase:** Phase 45 (Plan 01 done; further plans for FR-CF-01 / FR-CF-03 / FR-CF-04 pending)
+**Next step:** Continue Phase 45 with next plan (FR-CF-01 / FR-CF-03 / FR-CF-04)
 
 ## Performance Metrics
 
@@ -62,7 +62,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | LOC delta | ~940 (per `v29.4-STACK.md`) | TBD |
 | Manual UAT items | 4-6 (one per phase) | TBD |
 | New npm/apt deps | 0 (D-NO-NEW-DEPS) | TBD |
-| Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | TBD |
+| Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`) |
 | Server4 patches | 0 (D-NO-SERVER4 hard-wall) | TBD |
 
 ## Accumulated Context
@@ -82,14 +82,14 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 `nexus/packages/core/src/sdk-agent-runner.ts`:
 - v29.3 Phase 40 baseline (audited): `623a65b9...`
-- v43.x model-bump drift (un-audited): → `4f868d31...` (current)
-- Phase 45 FR-CF-02 plan: audit-only re-pin to `4f868d31...` with audit comment listing every drift commit
-- Phase 47 FR-MODEL-02 Branch B (if taken): ONE more surgical edit at system-prompt construction site — re-pins integrity test a second time
+- v43.x model-bump drift (un-audited at the time): → `4f868d31...` (current)
+- Phase 45 FR-CF-02 (Plan 01) — **SHIPPED 2026-05-01 in commit `f5ffdd00`**: audit-only re-pin to `4f868d31...` with audit comment listing every drift commit (9f1562be / 47890a85 / 9d368bb5). Sacred file source bytes unchanged. Integrity test green.
+- Phase 47 FR-MODEL-02 Branch B (if taken): ONE more surgical edit at system-prompt construction site — re-pins integrity test a second time on top of `f5ffdd00`
 
 ### Carry-from v29.3 (accepted debt at milestone close 2026-05-01)
 
 - **C1 (FR-CF-01 in v29.4)**: `livinity-broker/router.ts:159` collapses ALL upstream errors to HTTP 500; `agent-runner-factory.ts:75-76` drops `Retry-After` header. UI banner-section can render but FR-DASH-03 only synthetic-verifiable until C1 fix lands.
-- **C2 (FR-CF-02 in v29.4)**: `sdk-agent-runner-integrity.test.ts:33` `BASELINE_SHA = '623a65b9...'` is stale (drifted to `4f868d31...` due to v43.x model bumps).
+- **C2 (FR-CF-02 in v29.4)**: ~~`sdk-agent-runner-integrity.test.ts:33` `BASELINE_SHA = '623a65b9...'` is stale (drifted to `4f868d31...` due to v43.x model bumps).~~ **CLOSED 2026-05-01 in Phase 45 Plan 01, commit `f5ffdd00`** — audit-only re-pin to `4f868d31...` with audit block citing v43.x drift commits.
 - **C3 (FR-CF-03 in v29.4)**: `claudePerUserStartLogin` (sub) + `usage.getMine` (q) + `usage.getAll` (q) NOT in `httpOnlyPaths` at `livos/packages/livinityd/source/modules/server/trpc/common.ts:8` — UX hang risk under WS reconnect.
 - **C4 (FR-CF-04 in v29.4)**: `livinity-broker/openai-sse-adapter.ts` does not emit final `usage` chunk before `data: [DONE]` → zero `broker_usage` rows for OpenAI streaming traffic.
 
@@ -115,7 +115,9 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 ### Active Todos
 
-- [ ] Run `/gsd-plan-phase 45` to decompose Phase 45 (Carry-Forward Sweep) into plans
+- [x] Run `/gsd-plan-phase 45` to decompose Phase 45 (Carry-Forward Sweep) into plans (done 2026-05-01)
+- [x] Phase 45 Plan 01 (FR-CF-02 audit-only sacred-SHA re-pin) shipped (commit `f5ffdd00`, 2026-05-01)
+- [ ] Continue Phase 45 with remaining plans (FR-CF-01 / FR-CF-03 / FR-CF-04)
 - [ ] After Phase 45 ships, run `/gsd-plan-phase 46` for Fail2ban Admin Panel
 - [ ] After Phase 46 ships, run `/gsd-plan-phase 47` for AI Diagnostics
 - [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
