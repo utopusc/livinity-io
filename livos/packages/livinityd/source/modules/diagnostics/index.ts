@@ -31,9 +31,22 @@ export {
 	type RedisPipelineLike,
 } from './capabilities.js'
 
+// ── Re-export factories + types from model-identity.ts (Phase 47 Plan 03) ──
+export {
+	makeDiagnoseModelIdentity,
+	realDiagnoseModelIdentity,
+	type DiagnoseModelIdentityResult,
+	type ExecFileFn as ModelIdentityExecFileFn,
+	type FetchFn as ModelIdentityFetchFn,
+	type ModelIdentityDeps,
+	type ModelIdentityVerdict,
+} from './model-identity.js'
+
 // ── Thin convenience wrappers ──────────────────────────────────────────────
 import {realDiagnoseRegistry, realFlushAndResync} from './capabilities.js'
 import type {DiagnoseRegistryResult, FlushAndResyncResult, FlushScope} from './capabilities.js'
+import {realDiagnoseModelIdentity} from './model-identity.js'
+import type {DiagnoseModelIdentityResult} from './model-identity.js'
 
 /**
  * High-level facade for the FR-TOOL-01 diagnostic. Routes.ts (Wave 5)
@@ -56,4 +69,14 @@ export async function flushAndResync(opts: {
 		scope: opts.scope ?? 'builtins',
 		actorUserId: opts.actorUserId,
 	})
+}
+
+/**
+ * High-level facade for the FR-MODEL-01 / FR-MODEL-02 6-step diagnostic.
+ * Plan 47-04's adminProcedure consumes this. The wrapper exists to give
+ * routes.ts a single shape to import (rather than dealing with
+ * `realDiagnoseModelIdentity.diagnose()` directly).
+ */
+export async function diagnoseModelIdentity(): Promise<DiagnoseModelIdentityResult> {
+	return realDiagnoseModelIdentity.diagnose()
 }
