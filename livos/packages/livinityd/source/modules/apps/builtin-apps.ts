@@ -1238,6 +1238,67 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       },
     },
   },
+  {
+    id: 'bolt-diy',
+    name: 'Bolt.diy',
+    tagline: 'AI-powered web app builder — your Claude subscription, no API key needed',
+    version: '0.0.7',
+    category: 'developer',
+    port: 5173,
+    description: 'Bolt.diy is an open-source AI app builder (community fork of bolt.new by StackBlitz Labs) that lets you describe apps in natural language and watch them get built in your browser. The LLM backend is auto-configured to use your Claude subscription via Livinity Broker — no LLM API key prompt inside the app.\n\nWhen prompted to choose a provider, select **OpenAI-Like** in Bolt.diy\'s provider menu (the broker speaks OpenAI Chat Completions format). Then pick any Claude model name (e.g. `claude-sonnet-4-6`, `claude-opus-4-7`). Anthropic provider is currently NOT broker-routable upstream — see Bolt.diy issue tracker for ANTHROPIC_BASE_URL support.\n\nMIT licensed.',
+    website: 'https://stackblitz-labs.github.io/bolt.diy/',
+    developer: 'StackBlitz Labs',
+    icon: 'https://stackblitz-labs.github.io/bolt.diy/assets/logo.svg',
+    repo: 'https://github.com/stackblitz-labs/bolt.diy',
+    requiresAiProvider: true,
+    docker: {
+      image: 'ghcr.io/stackblitz-labs/bolt.diy:latest',
+      environment: {
+        NODE_ENV: 'production',
+        HOST: '0.0.0.0',
+        PORT: '5173',
+        RUNNING_IN_DOCKER: 'true',
+      },
+      volumes: ['/app/data'],
+    },
+    installOptions: {
+      subdomain: 'bolt',
+      // No environmentOverrides — user requested "install and connect to broker
+      // automatically with zero questions". Broker env vars auto-injected by
+      // Phase 43.2 inject step (apps.ts:install). Optional dev tokens (GitHub,
+      // Vercel, Supabase) can be configured later via Bolt.diy's own Settings UI.
+    },
+    compose: {
+      mainService: 'server',
+      services: {
+        server: {
+          image: 'ghcr.io/stackblitz-labs/bolt.diy:latest',
+          restart: 'unless-stopped',
+          environment: {
+            NODE_ENV: 'production',
+            HOST: '0.0.0.0',
+            PORT: '5173',
+            RUNNING_IN_DOCKER: 'true',
+            // OPENAI_API_KEY, OPENAI_API_BASE_URL, OPENAI_LIKE_API_BASE_URL,
+            // ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_REVERSE_PROXY,
+            // LLM_BASE_URL + extra_hosts auto-injected by Phase 43.2 inject
+            // when manifest.requiresAiProvider === true. Bolt.diy reads
+            // OPENAI_LIKE_API_BASE_URL specifically for its "OpenAI-Like"
+            // provider entry, which is the broker-routable path.
+          },
+          volumes: ['${APP_DATA_DIR}/data:/app/data'],
+          ports: ['127.0.0.1:5173:5173'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:5173/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '60s',
+          },
+        },
+      },
+    },
+  },
 ]
 
 export function getBuiltinApp(appId: string): BuiltinAppManifest | undefined {
