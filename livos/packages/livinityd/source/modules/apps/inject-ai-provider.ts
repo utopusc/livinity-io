@@ -16,6 +16,14 @@ function buildBrokerEnv(userId: string): Record<string, string> {
 		LLM_BASE_URL: v1,
 		// OpenAI SDK convention (Open WebUI, MiroFish, CrewAI, LangChain, OpenAI Python SDK)
 		OPENAI_API_BASE_URL: v1,
+		// Bolt.diy's "OpenAI-Like" provider env var (different name than the SDK
+		// convention because Bolt.diy distinguishes "OpenAI proper" from
+		// "OpenAI-compatible third-party endpoints" in its UI provider list).
+		OPENAI_LIKE_API_BASE_URL: v1,
+		// Anthropic SDK convention also under a frequently-used alternative name
+		// (some clients read ANTHROPIC_API_KEY rather than relying on the SDK
+		// default). Sentinel; broker validates by source IP + URL path.
+		ANTHROPIC_API_KEY: 'livinity-broker-managed',
 		// Many OpenAI-compat clients require a non-empty API key string even when
 		// using a custom base URL (Open WebUI's OAuth UI rejects empty key field).
 		// The string is ignored by the broker; auth is enforced by URL path + IP guard.
