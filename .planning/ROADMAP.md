@@ -102,7 +102,12 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
   7. Authenticated user clicks "Probe reachability" on Bolt.diy marketplace app detail page → `apps.healthProbe(appId)` returns `{reachable, statusCode, ms, lastError, probedAt}`; UI renders inline status card (green check / yellow warning / red error) within 5s undici timeout.
   8. `apps.healthProbe` is `privateProcedure` (NOT admin-only) and PG query is scoped to `user_app_instances WHERE user_id = ctx.currentUser.id AND app_id = $1` (mirror of Phase 44 `usage.getMine` pattern — prevents internal port scanner abuse).
   9. If FR-MODEL-02 Branch B taken: `nexus/packages/core/src/sdk-agent-runner-integrity.test.ts` `BASELINE_SHA` re-pinned a SECOND time with audit comment quoting the surgical edit diff; `git diff --shortstat` between FR-CF-02 commit and FR-MODEL-02-B commit shows exactly the systemPrompt construction line(s) changed (no incidental drift).
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 47-01-PLAN.md — Pre-flight Mini PC 6-step diagnostic + verdict capture (Wave 1, FR-MODEL-01)
+- [ ] 47-02-PLAN.md — FR-TOOL backend: capabilities diagnostic + atomic-swap flushAndResync + concurrency test (Wave 2, FR-TOOL-01/02)
+- [ ] 47-03-PLAN.md — FR-MODEL backend: 6-step diagnostic + branched remediation (A/B/C/N decided from 47-01 verdict) (Wave 3, FR-MODEL-01/02)
+- [ ] 47-04-PLAN.md — FR-PROBE backend: apps.healthProbe privateProcedure + PG-scoping + 5s undici timeout (Wave 4, FR-PROBE-01/02)
+- [ ] 47-05-PLAN.md — UI scaffold + 3 cards + tRPC routes + httpOnlyPaths + test:phase47 + 47-UAT.md (Wave 5, FR-TOOL/MODEL/PROBE wiring)
 **UI hint**: yes
 
 ### Phase 48: Live SSH Session Viewer
