@@ -103,7 +103,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
   8. `apps.healthProbe` is `privateProcedure` (NOT admin-only) and PG query is scoped to `user_app_instances WHERE user_id = ctx.currentUser.id AND app_id = $1` (mirror of Phase 44 `usage.getMine` pattern — prevents internal port scanner abuse).
   9. If FR-MODEL-02 Branch B taken: `nexus/packages/core/src/sdk-agent-runner-integrity.test.ts` `BASELINE_SHA` re-pinned a SECOND time with audit comment quoting the surgical edit diff; `git diff --shortstat` between FR-CF-02 commit and FR-MODEL-02-B commit shows exactly the systemPrompt construction line(s) changed (no incidental drift).
 **Plans**: 5 plans
-- [ ] 47-01-PLAN.md — Pre-flight Mini PC 6-step diagnostic + verdict capture (Wave 1, FR-MODEL-01)
+- [x] 47-01-PLAN.md — Pre-flight Mini PC 6-step diagnostic + verdict capture (Wave 1, FR-MODEL-01) — **SHIPPED 2026-05-01 commit `4fe43fa8`**, verdict=`neither` (Plan 47-03 takes Branch N, no sacred-file edit; identity-line + tierToModel landed correctly per Phase 43.10/43.12)
 - [ ] 47-02-PLAN.md — FR-TOOL backend: capabilities diagnostic + atomic-swap flushAndResync + concurrency test (Wave 2, FR-TOOL-01/02)
 - [ ] 47-03-PLAN.md — FR-MODEL backend: 6-step diagnostic + branched remediation (A/B/C/N decided from 47-01 verdict) (Wave 3, FR-MODEL-01/02)
 - [ ] 47-04-PLAN.md — FR-PROBE backend: apps.healthProbe privateProcedure + PG-scoping + 5s undici timeout (Wave 4, FR-PROBE-01/02)
@@ -155,7 +155,7 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 | FR-F2B-06 | 46 | Fail2ban | **Complete** (P05 commit `7abd2e3b` — Settings toggle wired into AdvancedSection) |
 | FR-TOOL-01 | 47 | Diagnostics | Pending |
 | FR-TOOL-02 | 47 | Diagnostics | Pending |
-| FR-MODEL-01 | 47 | Diagnostics | Pending |
+| FR-MODEL-01 | 47 | Diagnostics | **In Progress** (P01 verdict=`neither` shipped `4fe43fa8`; UI card + Branch N surface in P03) |
 | FR-MODEL-02 | 47 | Diagnostics | Pending |
 | FR-PROBE-01 | 47 | Diagnostics | Pending |
 | FR-PROBE-02 | 47 | Diagnostics | Pending |

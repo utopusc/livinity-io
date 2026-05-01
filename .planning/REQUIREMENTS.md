@@ -114,7 +114,7 @@ Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is ap
 | FR-CF-04 | 45 | Carry-Forward | Pending |
 | FR-TOOL-01 | 47 | Diagnostics | Pending |
 | FR-TOOL-02 | 47 | Diagnostics | Pending |
-| FR-MODEL-01 | 47 | Diagnostics | Pending |
+| FR-MODEL-01 | 47 | Diagnostics | **In Progress** — P01 6-step diagnostic captured (verdict=`neither`, commit `4fe43fa8`); UI card + diagnostic surface to land in P03 Branch N |
 | FR-MODEL-02 | 47 | Diagnostics | Pending |
 | FR-PROBE-01 | 47 | Diagnostics | Pending |
 | FR-PROBE-02 | 47 | Diagnostics | Pending |
