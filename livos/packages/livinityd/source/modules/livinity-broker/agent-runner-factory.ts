@@ -3,6 +3,30 @@ import type Livinityd from '../../index.js'
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 
 /**
+ * Phase 45 Plan 02 (FR-CF-01) — typed upstream error.
+ *
+ * Thrown by createSdkAgentRunnerForUser when the upstream nexus
+ * /api/agent/stream call returns a non-OK Response. Captures status
+ * + Retry-After header so the router catch blocks can forward
+ * verbatim per the strict 429-only allowlist (pitfall B-09).
+ *
+ * Retry-After is preserved BYTE-IDENTICAL — both delta-seconds
+ * (`'60'`) and HTTP-date (`'Wed, 21 Oct 2026 07:28:00 GMT'`)
+ * formats are forwarded as-is, no parsing, no normalization
+ * (pitfall B-10 / RFC 7231 §7.1.3).
+ */
+export class UpstreamHttpError extends Error {
+	readonly status: number
+	readonly retryAfter: string | null
+	constructor(message: string, status: number, retryAfter: string | null) {
+		super(message)
+		this.name = 'UpstreamHttpError'
+		this.status = status
+		this.retryAfter = retryAfter
+	}
+}
+
+/**
  * Strategy B per Plan 41-03 <interfaces>:
  * Run a task through nexus's existing /api/agent/stream endpoint via HTTP,
  * with per-user HOME isolation threaded via the `X-LivOS-User-Id` header
@@ -73,7 +97,12 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	})
 
 	if (!response.ok || !response.body) {
-		throw new Error(`/api/agent/stream returned ${response.status} ${response.statusText}`)
+		const retryAfter = response.headers.get('Retry-After')
+		throw new UpstreamHttpError(
+			`/api/agent/stream returned ${response.status} ${response.statusText}`,
+			response.status,
+			retryAfter,
+		)
 	}
 
 	const reader = response.body.getReader()
