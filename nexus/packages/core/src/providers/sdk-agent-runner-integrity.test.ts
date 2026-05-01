@@ -28,9 +28,18 @@ const sacredFile = join(__dirname, '..', 'sdk-agent-runner.ts');
 
 // Baseline SHA originally recorded in .planning/phases/39-risk-fix-close-oauth-fallback/39-AUDIT.md Section 5.
 // BASELINE updated 2026-04-30 by v29.3 Phase 40 (homeOverride addition for per-user OAuth isolation).
+// BASELINE re-pinned 2026-05-01 by v29.4 Phase 45 plan 01 (Carry-Forward C2).
+// Source byte-identical at re-pin; SHA moved from 623a65b9... to 4f868d31... due to v43.x
+// model-bump drift commits (most recent first):
+//   - 9f1562be feat(43.12): bump tierToModel to Claude 4.X (Opus 4.7 / Sonnet 4.6) + Bolt.diy category fix
+//   - 47890a85 feat(43.10): inject model identity line — fix Claude 3.5 Sonnet hallucination
+//   - 9d368bb5 feat(43.8): broker passthrough — drop Nexus identity for raw API callers
+// Verification: `git diff --shortstat <c2-commit>~1 <c2-commit> -- nexus/packages/core/src/sdk-agent-runner.ts`
+// returns empty for the C2 commit (audit-only — no source change).
 // See .planning/phases/40-per-user-claude-oauth-home-isolation/40-CONTEXT.md D-40-02 / D-40-11.
+// See .planning/phases/45-carry-forward-sweep/45-CONTEXT.md FR-CF-02.
 // Computed via: git hash-object nexus/packages/core/src/sdk-agent-runner.ts
-const BASELINE_SHA = '623a65b9a50a89887d36f770dcd015b691793a7f';
+const BASELINE_SHA = '4f868d318abff71f8c8bfbcf443b2393a553018b';
 
 /**
  * Compute git's blob SHA-1 of a file. Git's blob format is:
