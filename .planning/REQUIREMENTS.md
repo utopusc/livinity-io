@@ -60,7 +60,8 @@
 **: Audit log via REUSE of existing `device_audit_log` table (no new table). Each unban/ban/whitelist event writes a row with `device_id := 'fail2ban-host'` sentinel + `tool_name := 'unban_ip' | 'ban_ip' | 'whitelist_ip'` + `params := {jail, ip, reason}` (SHA-256 digest preserved per existing trigger contract) + `user_id := <admin who performed action>`. Audit tab in the panel renders last 50 events with click-to-expand details. Append-only trigger from v22.0 enforces immutability.
 - [x] **FR-F2B-05**: Mobile cellular-IP toggle: when admin opens panel from a mobile browser, surface BOTH the HTTP X-Forwarded-For IP AND a "I'm on cellular" toggle. When toggled, FR-F2B-03
  self-ban detection compares against the cellular CGNAT IP retrieved via `who -u`-equivalent abstraction (livinityd module returning active SSH session source IPs). Prevents accidental self-ban when admin is on a different IP than the session.
-- [ ] **FR-F2B-06**: Settings toggle "Show Security panel" defaults ON; admin can hide the entire sidebar entry. Provides a non-destructive backout if the panel itself causes issues. Toggle persists per-user in `user_preferences` table.
+- [ ] **FR-F2B-06
+**: Settings toggle "Show Security panel" defaults ON; admin can hide the entire sidebar entry. Provides a non-destructive backout if the panel itself causes issues. Toggle persists per-user in `user_preferences` table. *(Plan 04 ships the SecurityToggleRow component + sidebar visibility filter; Plan 05 wires the row into settings-content.tsx — closes when wired.)*
 
 ### Live SSH Session Viewer (FR-SSH) — was B4 (stretch goal, user opted in)
 
@@ -116,12 +117,12 @@ Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is ap
 | FR-MODEL-02 | 47 | Diagnostics | Pending |
 | FR-PROBE-01 | 47 | Diagnostics | Pending |
 | FR-PROBE-02 | 47 | Diagnostics | Pending |
-| FR-F2B-01 | 46 | Fail2ban | Pending |
-| FR-F2B-02 | 46 | Fail2ban | Pending |
-| FR-F2B-03 | 46 | Fail2ban | Pending |
-| FR-F2B-04 | 46 | Fail2ban | Pending |
-| FR-F2B-05 | 46 | Fail2ban | Pending |
-| FR-F2B-06 | 46 | Fail2ban | Pending |
+| FR-F2B-01 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
+| FR-F2B-02 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
+| FR-F2B-03 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
+| FR-F2B-04 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
+| FR-F2B-05 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
+| FR-F2B-06 | 46 | Fail2ban | Pending (P04 ships component; P05 wires into settings-content.tsx) |
 | FR-SSH-01 | 48 | SSH Viewer | Pending |
 | FR-SSH-02 | 48 | SSH Viewer | Pending |
 

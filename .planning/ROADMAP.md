@@ -84,7 +84,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 - [x] 46-01-PLAN.md — Pre-flight Mini PC diagnostic + parser fixture capture (Wave 1, FR-F2B-01) — **shipped 2026-05-01 in commit `8cae1124`**
 - [x] 46-02-PLAN.md — Backend pure modules (parser/client/active-sessions/events) + 31 unit tests (Wave 2, FR-F2B-01/02/04/05) — **shipped 2026-05-01 in commit `5a2c031f`**
 - [x] 46-03-PLAN.md — tRPC router + httpOnlyPaths additions + integration test (Wave 3, FR-F2B-01/02/03/04/05) — **shipped 2026-05-01 in commit `02063485`**
-- [ ] 46-04-PLAN.md — UI section + sub-components + Settings toggle (Wave 4, FR-F2B-01..06)
+- [x] 46-04-PLAN.md — UI section + sub-components + Settings toggle (Wave 4, FR-F2B-01..06) — **shipped 2026-05-01 in commit `f70128b4`**
 - [ ] 46-05-PLAN.md — test:phase46 master gate + 46-UAT.md (Wave 5, FR-F2B-01..06)
 **UI hint**: yes
 
