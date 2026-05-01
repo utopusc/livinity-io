@@ -530,6 +530,13 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     website: 'https://openwebui.com',
     developer: 'Open WebUI',
     icon: 'https://raw.githubusercontent.com/open-webui/open-webui/main/static/favicon.png',
+    // Phase 43.5: opt into broker auto-injection so install via the BUILTIN
+    // path also gets `OPENAI_API_BASE_URL=http://livinity-broker:.../v1`
+    // (Phase 43.2 inject only fires when this flag is true on the manifest
+    // resolved at install time). Without the flag, Open WebUI starts with
+    // OPENAI_API_BASE_URL='https://api.openai.com/v1' and never reaches the
+    // user's Claude subscription.
+    requiresAiProvider: true,
     docker: {
       image: 'ghcr.io/open-webui/open-webui:main',
       environment: {

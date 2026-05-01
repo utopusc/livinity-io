@@ -114,6 +114,14 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 	if ((app as any).icon) manifest.icon = (app as any).icon
 	if ((app as any).repo) manifest.repo = (app as any).repo
 	if ((app as any).requiresAiProvider === true) manifest.requiresAiProvider = true
+	// Phase 43.5: propagate installOptions so generated manifest carries the
+	// install dialog's environmentOverrides + subdomain. Without this, builtin
+	// apps installed via the compose-generated path lose their env-prompt
+	// metadata after rsync (the dialog still works because the marketplace UI
+	// reads installOptions from registry augmentation, but downstream consumers
+	// like reapplyAppConfig that read manifest from disk get an undefined
+	// installOptions and skip subdomain resolution — falling back to appId).
+	if ((app as any).installOptions) manifest.installOptions = (app as any).installOptions
 
 	// Write livinity-app.yml
 	await fse.writeFile(
