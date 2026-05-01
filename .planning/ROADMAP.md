@@ -43,8 +43,8 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 
 ## Phases
 
-- [ ] **Phase 45: Carry-Forward Sweep** — Land four v29.3 audit gaps (broker 429, sacred SHA re-pin, httpOnlyPaths, OpenAI SSE usage chunk) before any new feature work
-- [ ] **Phase 46: Fail2ban Admin Panel** — Server Management "Security" sidebar entry inside `LIVINITY_docker` with jail list, unban+whitelist, manual ban, audit log, mobile cellular toggle
+- [x] **Phase 45: Carry-Forward Sweep** — Land four v29.3 audit gaps (broker 429, sacred SHA re-pin, httpOnlyPaths, OpenAI SSE usage chunk) before any new feature work
+- [x] **Phase 46: Fail2ban Admin Panel** — Server Management "Security" sidebar entry inside `LIVINITY_docker` with jail list, unban+whitelist, manual ban, audit log, mobile cellular toggle
 - [ ] **Phase 47: AI Diagnostics (Registry + Identity + Probe)** — Shared `diagnostics-section.tsx` scaffold hosting capability registry restore, model identity diagnostic+remediation, marketplace app health probe
 - [ ] **Phase 48: Live SSH Session Viewer** — `/ws/ssh-sessions` journalctl tail with click-IP-to-ban cross-link to Phase 46's manual ban modal
 
@@ -85,7 +85,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 - [x] 46-02-PLAN.md — Backend pure modules (parser/client/active-sessions/events) + 31 unit tests (Wave 2, FR-F2B-01/02/04/05) — **shipped 2026-05-01 in commit `5a2c031f`**
 - [x] 46-03-PLAN.md — tRPC router + httpOnlyPaths additions + integration test (Wave 3, FR-F2B-01/02/03/04/05) — **shipped 2026-05-01 in commit `02063485`**
 - [x] 46-04-PLAN.md — UI section + sub-components + Settings toggle (Wave 4, FR-F2B-01..06) — **shipped 2026-05-01 in commit `f70128b4`**
-- [ ] 46-05-PLAN.md — test:phase46 master gate + 46-UAT.md (Wave 5, FR-F2B-01..06)
+- [x] 46-05-PLAN.md — test:phase46 master gate + 46-UAT.md + Settings wire-up (Wave 5, FR-F2B-01..06) — **shipped 2026-05-01 in commit `7abd2e3b`** (86/86 PASS exit 0)
 **UI hint**: yes
 
 ### Phase 47: AI Diagnostics (Registry + Identity + Probe)
@@ -141,13 +141,13 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 | FR-CF-01 | 45 | Carry-Forward | **Complete** (`cdd34445`) |
 | FR-CF-02 | 45 | Carry-Forward | **Complete** (`f5ffdd00`) |
 | FR-CF-03 | 45 | Carry-Forward | **Complete** (`d2c99e8a`) |
-| FR-CF-04 | 45 | Carry-Forward | Pending |
+| FR-CF-04 | 45 | Carry-Forward | **Complete** (`c6061f76`) |
 | FR-F2B-01 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
 | FR-F2B-02 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
 | FR-F2B-03 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
 | FR-F2B-04 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
 | FR-F2B-05 | 46 | Fail2ban | **Complete** (P03 commit `02063485`) |
-| FR-F2B-06 | 46 | Fail2ban | Pending |
+| FR-F2B-06 | 46 | Fail2ban | **Complete** (P05 commit `7abd2e3b` — Settings toggle wired into AdvancedSection) |
 | FR-TOOL-01 | 47 | Diagnostics | Pending |
 | FR-TOOL-02 | 47 | Diagnostics | Pending |
 | FR-MODEL-01 | 47 | Diagnostics | Pending |
@@ -166,8 +166,8 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 45. Carry-Forward Sweep | 3/4 (45-01 + 45-02 + 45-03 shipped 2026-05-01) | In-Progress | - |
-| 46. Fail2ban Admin Panel | 0/5 | Plans-Defined | - |
+| 45. Carry-Forward Sweep | 4/4 (45-01..04 ALL shipped 2026-05-01) | **Complete** | 2026-05-01 |
+| 46. Fail2ban Admin Panel | 5/5 (46-01..05 ALL shipped 2026-05-01) | **Complete** | 2026-05-01 |
 | 47. AI Diagnostics (Registry + Identity + Probe) | 0/0 (TBD via plan-phase) | Not started | - |
 | 48. Live SSH Session Viewer | 0/0 (TBD via plan-phase) | Not started | - |
 

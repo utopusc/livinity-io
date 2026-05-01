@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
 status: unknown
-last_updated: "2026-05-01T21:42:00.000Z"
+last_updated: "2026-05-01T21:50:17.022Z"
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -42,13 +42,13 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase | Plan | Status | Progress |
 |-------|------|--------|----------|
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
-| 46 — Fail2ban Admin Panel | 04/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar SHIPPED; P05 Settings wiring + UAT remains) | In Progress | `[████████░░] 80%` |
+| 46 — Fail2ban Admin Panel | 05/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar + P05 master gate/UAT/Settings wire-up ALL SHIPPED — FR-F2B-01..06 ALL CLOSED) | **Complete** | `[██████████] 100%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[█████░░░░░] 50%` (Phase 45 fully closed + Phase 46 plans 01+02+03+04 of 5 shipped; 8 of ~16 plans shipped)
-**Active phase:** Phase 46 — Fail2ban Admin Panel (Plans 01+02+03+04 SHIPPED; Plan 05 Settings page wiring + UAT remains)
-**Next step:** Run Plan 46-05 (wire SecurityToggleRow into settings-content.tsx + final UAT prep) per `46-05-PLAN.md`
+**Overall milestone progress:** `[██████░░░░] 56%` (Phase 45 + Phase 46 fully closed; 9 of ~16 plans shipped; awaiting Phase 47 + 48 plan trees)
+**Active phase:** Phase 46 COMPLETE — milestone-closeable (test:phase46 86/86 PASS exit 0, 46-UAT.md drafted, sacred file byte-identical)
+**Next step:** Run `/gsd-plan-phase 47` to define plan tree for Phase 47 (AI Diagnostics: Registry + Identity + Probe)
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase 46 P02 | 3m | 1 tasks | 7 files |
 | Phase 46 P03 | 7m | 2 tasks | 6 files |
 | Phase 46-fail2ban-admin-panel P04 | 14m | 2 tasks | 11 files |
+| Phase 46 P05 | 6m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -128,9 +129,10 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - [x] `/gsd-plan-phase 46` decomposed Fail2ban Admin Panel into 5 plans (commit `fb022598`)
 - [x] Phase 46 Plan 01 (Mini PC fail2ban diagnostic + parser fixture corpus) shipped (commit `8cae1124`, 2026-05-01)
 - [x] Phase 46 Plan 02 (backend pure modules: parser/client/active-sessions/events + 31 unit tests) shipped (commit `5a2c031f`, 2026-05-01)
-- [ ] Phase 46 Plan 03 (routes.ts + index.ts barrel + tRPC registration + integration.test.ts)
+- [x] Phase 46 Plan 03 (routes.ts + index.ts barrel + tRPC registration + integration.test.ts) shipped
 - [x] Phase 46 Plan 04 (UI Security section + jail-status-card + unban/ban modals + audit-log-tab + sidebar registration + SecurityToggleRow component) shipped (commit `f70128b4`, 2026-05-01)
-- [ ] Phase 46 Plan 05 (Settings "Show Security panel" toggle wiring into settings-content.tsx + final UAT prep)
+- [x] Phase 46 Plan 05 (Settings "Show Security panel" toggle wired into settings-content.tsx > AdvancedSection + test:phase46 npm master gate 86/86 PASS + 46-UAT.md 9-section walkthrough) shipped (commit `7abd2e3b`, 2026-05-01)
+- [x] **Phase 46 (Fail2ban Admin Panel) COMPLETE** — all 5 plans / all 6 FR-F2B requirements (01-06) closed; test:phase46 chain green (86/86 PASS, exit 0); sacred file UNTOUCHED through all 5 plans
 - [ ] After Phase 46 ships, run `/gsd-plan-phase 47` for AI Diagnostics
 - [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
 - [ ] At v29.4 milestone close: run `/gsd-complete-milestone v29.4` to archive
