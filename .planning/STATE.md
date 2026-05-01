@@ -1,17 +1,15 @@
 ---
 gsd_state_version: 1.0
 milestone: v29.4
-milestone_name: Server Management Tooling + Bug Sweep
-status: in-progress
-stopped_at: 2026-05-01 -- Phase 45 (Carry-Forward Sweep) FULLY SHIPPED — all 4 plans complete (45-01 + 45-02 + 45-03 + 45-04). Plan 45-04 (FR-CF-04 OpenAI SSE usage chunk + real token plumbing + test:phase45 master gate) shipped in commit c6061f76. test:phase45 chain green (38/38 PASS, exit 0). Ready for /gsd-plan-phase 46 (Fail2ban Admin Panel).
-last_updated: "2026-05-01T20:00:00Z"
-last_activity: 2026-05-01 -- Phase 45 Plan 04 (FR-CF-04) shipped in atomic commit c6061f76 — OpenAIChatCompletionChunk extended with optional usage{prompt_tokens, completion_tokens, total_tokens}; makeChunk gained 3rd usage? param; final_answer/error AgentEvent branches refactored to deferred-emission (capture stoppedReasonHint instead of writing terminal chunk + [DONE] inline); finalize(stoppedReason?, usage?) now SOLE canonical terminal emitter (writes chunk-with-usage BEFORE [DONE], pitfall B-13 wire-order); agent-runner-factory.ts done-event reads optional totalInputTokens/totalOutputTokens with backward-compatible 0 fallback; openai-router.ts streaming finally-block captures full streamFinalResult and threads tokens through adapter.finalize; openai-sse-adapter.test.ts gained Tests 11+12 (12/12 PASS, wire-order + zero-token degenerate) plus caller-convention update for Tests 3+10; new test:phase45 npm script chains test:phase44 (transitively 39→44 with re-pinned BASELINE_SHA 4f868d31...) + integration.test.ts (45-02, 10/10) + common.test.ts (45-03, 4/4) + openai-sse-adapter.test.ts (this plan, 12/12) = 38/38 total PASS; sacred file UNTOUCHED (Wave 2 isolation contract upheld through ALL 4 Phase 45 plans).
+milestone_name: — Server Management Tooling + Bug Sweep
+status: unknown
+last_updated: "2026-05-01T20:19:28.663Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_plans: 9
+  completed_plans: 5
+  percent: 56
 ---
 
 # Project State
@@ -64,6 +62,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | New npm/apt deps | 0 (D-NO-NEW-DEPS) | TBD |
 | Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`); Plans 45-02 + 45-03 + 45-04 all left sacred file byte-identical (Wave 2 isolation upheld through ALL 4 Phase 45 plans) |
 | Server4 patches | 0 (D-NO-SERVER4 hard-wall) | TBD |
+| Phase 46-fail2ban-admin-panel P01 | 5m | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -81,6 +80,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 ### Sacred File State
 
 `nexus/packages/core/src/sdk-agent-runner.ts`:
+
 - v29.3 Phase 40 baseline (audited): `623a65b9...`
 - v43.x model-bump drift (un-audited at the time): → `4f868d31...` (current)
 - Phase 45 FR-CF-02 (Plan 01) — **SHIPPED 2026-05-01 in commit `f5ffdd00`**: audit-only re-pin to `4f868d31...` with audit comment listing every drift commit (9f1562be / 47890a85 / 9d368bb5). Sacred file source bytes unchanged. Integrity test green.
@@ -101,6 +101,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 ### Critical Sequencing Constraint
 
 **FR-CF-02 (Phase 45) MUST land BEFORE FR-MODEL-02 Branch B (Phase 47).**
+
 - C2 = audit-only commit (no source change). Re-pins `BASELINE_SHA` from `623a65b9...` to `4f868d31...`.
 - FR-MODEL-02 Branch B = surgical edit on top of post-C2 SHA. Re-pins integrity test a second time.
 - Strict linear chain (`parallelization: false`) enforces this naturally.
@@ -167,6 +168,7 @@ UAT items remain executable any time post-deploy via the existing UAT files in `
 ### v29.3 Marketplace AI Broker (Subscription-Only) (2026-05-01, local)
 
 6-phase milestone delivering subscription-only Claude broker for marketplace AI apps:
+
 - Phase 39 (FR-RISK-01): closed `claude.ts` raw-SDK OAuth fallback
 - Phase 40 (FR-AUTH-01..03): per-user `.claude/` synthetic dirs + `homeOverride` plumbing in sacred `SdkAgentRunner` (1 surgical line edit)
 - Phase 41 (FR-BROKER-A-01..04): Anthropic Messages broker via HTTP-proxy Strategy B + `X-LivOS-User-Id` header pipeline
