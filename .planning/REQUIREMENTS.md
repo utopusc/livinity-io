@@ -34,8 +34,10 @@
 
 ### Model Identity Stability (FR-MODEL) — was A2
 
-- [ ] **FR-MODEL-01**: Settings > Advanced > Diagnostics card shows "Model Identity" sub-section running a 6-step on-Mini-PC diagnostic: (1) curl broker `/v1/messages` with `messages: [{role: user, content: "What model are you?"}]`, (2) inspect `response.model` field, (3) snapshot `/proc/<claude-pid>/environ` of any active claude CLI subprocess, (4) `ls -la /opt/livos/node_modules/.pnpm/@nexus+core*/` to detect pnpm-store dist drift, (5) `readlink -f` resolved nexus/core dist path inside livinityd's node_modules, (6) `grep` deployed dist for the system-prompt identity-line marker. Surfaces a verdict: dist-drift / source-confabulation / both / neither.
-- [ ] **FR-MODEL-02**: Based on FR-MODEL-01 verdict, exactly ONE remediation lands:
+- [x] **FR-MODEL-01
+**: Settings > Advanced > Diagnostics card shows "Model Identity" sub-section running a 6-step on-Mini-PC diagnostic: (1) curl broker `/v1/messages` with `messages: [{role: user, content: "What model are you?"}]`, (2) inspect `response.model` field, (3) snapshot `/proc/<claude-pid>/environ` of any active claude CLI subprocess, (4) `ls -la /opt/livos/node_modules/.pnpm/@nexus+core*/` to detect pnpm-store dist drift, (5) `readlink -f` resolved nexus/core dist path inside livinityd's node_modules, (6) `grep` deployed dist for the system-prompt identity-line marker. Surfaces a verdict: dist-drift / source-confabulation / both / neither.
+- [x] **FR-MODEL-02**: Based on FR-MODEL-01
+ verdict, exactly ONE remediation lands:
   - **Branch A (dist drift):** patch `update.sh` pnpm-store dist-copy step (BACKLOG 999.5b) so it copies into the LAST `find -maxdepth 1 -name '@nexus+core*' | tail -1` (currently uses head -1 which can resolve to stale dir). NO sacred-file edit. ~30 LOC.
   - **Branch B (source confabulation):** sacred-file surgical edit at `sdk-agent-runner.ts` system-prompt construction site to switch from raw `systemPrompt: "..."` to `{type: 'preset', preset: 'claude_code', append: ...}`. Phase 40 D-40-01 ritual MUST be followed (pre-SHA → edit → post-SHA → integrity test re-pinned with audit comment). Sequenced AFTER FR-CF-02 (C2 lands first as audit-only, FR-MODEL-02-Branch-B adds a NEW surgical edit on top with new SHA).
   - **Branch C (both):** Both fixes land in two separate atomic commits; integrity test re-pinned to final SHA after Branch B.
@@ -116,8 +118,8 @@ Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is ap
 | FR-CF-04 | 45 | Carry-Forward | Pending |
 | FR-TOOL-01 | 47 | Diagnostics | Pending |
 | FR-TOOL-02 | 47 | Diagnostics | Pending |
-| FR-MODEL-01 | 47 | Diagnostics | **In Progress** — P01 6-step diagnostic captured (verdict=`neither`, commit `4fe43fa8`); UI card + diagnostic surface to land in P03 Branch N |
-| FR-MODEL-02 | 47 | Diagnostics | Pending |
+| FR-MODEL-01 | 47 | Diagnostics | **Complete** — P01 6-step diagnostic captured (verdict=`neither`, commit `4fe43fa8`); P03 shipped diagnostic surface as runtime-callable `realDiagnoseModelIdentity.diagnose()` + 7/7 tests (commits `7fb22dab` + `28b16493`, Branch N) |
+| FR-MODEL-02 | 47 | Diagnostics | **Complete** — Branch N taken per P01 verdict=`neither`. NO source remediation needed; sacred file `sdk-agent-runner.ts` byte-identical at `4f868d31...`; `update.sh` byte-identical; integrity test BASELINE_SHA NOT re-pinned a second time. Identity-line + tierToModel landed correctly per Phase 43.10/43.12. |
 | FR-PROBE-01 | 47 | Diagnostics | Pending |
 | FR-PROBE-02 | 47 | Diagnostics | Pending |
 | FR-F2B-01 | 46 | Fail2ban | Complete (P04 commit f70128b4) |

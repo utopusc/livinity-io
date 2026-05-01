@@ -105,7 +105,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 **Plans**: 5 plans
 - [x] 47-01-PLAN.md — Pre-flight Mini PC 6-step diagnostic + verdict capture (Wave 1, FR-MODEL-01) — **SHIPPED 2026-05-01 commit `4fe43fa8`**, verdict=`neither` (Plan 47-03 takes Branch N, no sacred-file edit; identity-line + tierToModel landed correctly per Phase 43.10/43.12)
 - [x] 47-02-PLAN.md — FR-TOOL backend: capabilities diagnostic + atomic-swap flushAndResync + concurrency test (Wave 2, FR-TOOL-01/02) — **SHIPPED 2026-05-01 commit `99dd6295`**, 9/9 tests passing (B-06 + B-07 + W-12 + W-14 + W-15/G-06 + W-21 + G-03 all covered), sacred file byte-identical
-- [ ] 47-03-PLAN.md — FR-MODEL backend: 6-step diagnostic + branched remediation (A/B/C/N decided from 47-01 verdict) (Wave 3, FR-MODEL-01/02)
+- [x] 47-03-PLAN.md — FR-MODEL backend: 6-step diagnostic + branched remediation (A/B/C/N decided from 47-01 verdict) (Wave 3, FR-MODEL-01/02) — **SHIPPED 2026-05-01 commits `7fb22dab` feat + `28b16493` test**, Branch N taken (verdict=neither from 47-01) — `model-identity.ts` (343 LOC, 6-step diagnostic, DI factory) + 7/7 tests pass; sacred file `sdk-agent-runner.ts` byte-identical at `4f868d31...`; `update.sh` byte-identical; integrity test byte-identical (no second v29.4 re-pin landed); FR-MODEL-01 + FR-MODEL-02 closed
 - [ ] 47-04-PLAN.md — FR-PROBE backend: apps.healthProbe privateProcedure + PG-scoping + 5s undici timeout (Wave 4, FR-PROBE-01/02)
 - [ ] 47-05-PLAN.md — UI scaffold + 3 cards + tRPC routes + httpOnlyPaths + test:phase47 + 47-UAT.md (Wave 5, FR-TOOL/MODEL/PROBE wiring)
 **UI hint**: yes
