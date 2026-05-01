@@ -19,7 +19,13 @@
  */
 
 import assert from 'node:assert/strict'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import {fileURLToPath} from 'node:url'
 import {httpOnlyPaths} from './common.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 function ok(label: string) {
 	console.log(`  PASS ${label}`)
@@ -105,7 +111,74 @@ function runTests() {
 		ok('Test 7: bare fail2ban names absent (namespaced convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (7/7)')
+	// v29.4 Phase 47 Plan 05 — AI Diagnostics mutations.
+	// Same WS-reconnect-survival reason as Phase 45's FR-CF-03 cluster +
+	// Phase 46's fail2ban cluster. Atomic-swap registry rebuild = 5-10s mutation;
+	// app-health probe = timing-sensitive mutation. Both must use HTTP.
+	// Test 8: 'capabilities.flushAndResync' + 'apps.healthProbe' present
+	{
+		assert.ok(
+			httpOnlyPaths.includes('capabilities.flushAndResync' as any),
+			"httpOnlyPaths must include 'capabilities.flushAndResync' (FR-TOOL-02 / B-12 — atomic-swap rebuild can take 5-10s; mutation must survive WS reconnect)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('apps.healthProbe' as any),
+			"httpOnlyPaths must include 'apps.healthProbe' (FR-PROBE-01 / B-12 — timing-sensitive mutation must survive WS reconnect)",
+		)
+		ok('Test 8: Phase 47 entries present in httpOnlyPaths')
+	}
+
+	// Test 9: namespace footgun guard. Phase 47 chose Option B (separate
+	// namespaces 'capabilities.*' + 'apps.*' merged via t.mergeRouters), NOT
+	// Option A (single 'diagnostics.*' namespace). Catches the bare-name
+	// footgun where someone adds 'flushAndResync' instead of
+	// 'capabilities.flushAndResync', AND the wrong-Option footgun where
+	// someone adds 'diagnostics.capabilitiesFlushAndResync'.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('flushAndResync' as any),
+			"httpOnlyPaths must NOT include bare 'flushAndResync' (must be namespaced as 'capabilities.flushAndResync')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('healthProbe' as any),
+			"httpOnlyPaths must NOT include bare 'healthProbe' (must be namespaced as 'apps.healthProbe')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('diagnostics.capabilitiesFlushAndResync' as any),
+			"Phase 47 chose Option B (separate namespaces) — 'diagnostics.*' prefix MUST NOT be used",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('diagnostics.appsHealthProbe' as any),
+			"Phase 47 chose Option B (separate namespaces) — 'diagnostics.*' prefix MUST NOT be used",
+		)
+		ok('Test 9: Phase 47 namespace prefix correct (Option B; bare/Option-A names absent)')
+	}
+
+	// Test 10: privateProcedure invariant for apps.healthProbe. httpOnlyPaths
+	// is transport routing, not authorization — but the Phase 47 G-04 BLOCKER
+	// requires healthProbe be `privateProcedure` (per-user scope), NOT
+	// adminProcedure. Read the routes.ts source to verify.
+	{
+		const routesPath = path.resolve(
+			__dirname,
+			'../../diagnostics/routes.ts',
+		)
+		const routesSrc = fs.readFileSync(routesPath, 'utf8')
+		assert.ok(
+			/healthProbe:\s*privateProcedure/.test(routesSrc),
+			"healthProbe must be wired as `privateProcedure` (FR-PROBE-01 / G-04 BLOCKER — anti-port-scanner)",
+		)
+		// Defense-in-depth: the routes file MUST source userId from ctx,
+		// never from input. Catches the regression where someone changes
+		// `userId: ctx.currentUser.id` to `userId: input.userId`.
+		assert.ok(
+			!/userId:\s*input\.userId/.test(routesSrc),
+			'healthProbe MUST NOT accept userId from input (G-04 BLOCKER — userId from ctx ONLY)',
+		)
+		ok('Test 10: apps.healthProbe wired as privateProcedure with ctx-only userId')
+	}
+
+	console.log('\nAll common.test.ts tests passed (10/10)')
 }
 
 runTests()

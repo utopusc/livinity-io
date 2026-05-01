@@ -5,6 +5,10 @@ import {type Context} from './context.js'
 import {isAuthenticated, isAuthenticatedIfUserExists, requireRole} from './is-authenticated.js'
 import {websocketLogger} from './websocket-logger.js'
 
+// `t` is exported (not just internal) so v29.4 Phase 47 Plan 05 can call
+// `t.mergeRouters(appsBase, appsHealthRouter)` from server/trpc/index.ts to
+// extend the existing `apps` namespace with the new `apps.healthProbe`
+// procedure (FR-PROBE-01 / G-07 namespacing Option B).
 export const t = initTRPC.context<Context>().create({
 	// TODO: Add more context on why this is needed
 	// https://trpc.io/docs/server/error-formatting#adding-custom-formatting

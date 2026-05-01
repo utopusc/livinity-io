@@ -188,6 +188,16 @@ export const httpOnlyPaths = [
 	// cheap, idempotent, retry-safe. Pitfall B-12 / X-04.
 	'fail2ban.unbanIp',
 	'fail2ban.banIp',
+	// v29.4 Phase 47 Plan 05 — AI Diagnostics mutations. Atomic-swap registry
+	// rebuild can take 5-10s during full resync (mirror docker.scanImage line
+	// 100 precedent). App-health probe is a mutation timing-sensitive (returns
+	// elapsed ms) and must survive WS reconnect (precedent: usage.getMine line
+	// 181). Pitfall B-12 / X-04. Namespacing follows Option B per Phase 47
+	// G-07: separate 'capabilities.*' (top-level admin namespace) and
+	// 'apps.*' (merged into existing apps router via t.mergeRouters), mirroring
+	// Phase 45/46's separate-namespace convention.
+	'capabilities.flushAndResync',
+	'apps.healthProbe',
 	// Subagent execution -- use HTTP for reliability (can take 10-60s)
 	'ai.executeSubagent',
 	// Marketplace install -- use HTTP for mutation reliability
