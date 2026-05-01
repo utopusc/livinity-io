@@ -20,7 +20,7 @@
 
 ### Carry-Forward Sweep (FR-CF) — from v29.3 audit
 
-- [ ] **FR-CF-01** *(C1)*: Broker error path forwards Anthropic upstream HTTP 429 verbatim (NOT collapsed to 500) AND preserves the upstream `Retry-After` header (seconds OR HTTP-date format, both forms forwarded as-is). Verified by integration test mocking nexus 429 → broker returns 429 + Retry-After preserved + `broker_usage` throttled row written + UI banner-section renders critical state. Status code allowlist is STRICT 429-only (502/504 do NOT get re-mapped to 429).
+- [x] **FR-CF-01** *(C1)*: Broker error path forwards Anthropic upstream HTTP 429 verbatim (NOT collapsed to 500) AND preserves the upstream `Retry-After` header (seconds OR HTTP-date format, both forms forwarded as-is). Verified by integration test mocking nexus 429 → broker returns 429 + Retry-After preserved + `broker_usage` throttled row written + UI banner-section renders critical state. Status code allowlist is STRICT 429-only (502/504 do NOT get re-mapped to 429). **Completed 2026-05-01 in commit `cdd34445`.**
 - [x] **FR-CF-02** *(C2)*: Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` integrity test BASELINE_SHA re-pinned from stale `623a65b9...` to current `4f868d31...` per Phase 40 D-40-01 audit-only ritual. Commit gate: `git diff --shortstat nexus/packages/core/src/sdk-agent-runner.ts` returns empty (test constant changes only — no source edit). Audit comment in test file lists every surgical edit that contributed to drift since the previous baseline. **Completed 2026-05-01 in commit `f5ffdd00`.**
 - [ ] **FR-CF-03** *(C3)*: tRPC routes `claudePerUserStartLogin` (subscription) + `usage.getMine` (query) + `usage.getAll` (query) added to `httpOnlyPaths` array at `livos/packages/livinityd/source/modules/server/trpc/common.ts`. Verified by killing livinityd while UI is open, restarting, observing each route resolves on reconnect without WS-hang.
 - [ ] **FR-CF-04** *(C4)*: OpenAI SSE adapter `livos/.../livinity-broker/openai-sse-adapter.ts` emits a final `data:` chunk containing `{usage: {prompt_tokens, completion_tokens, ...}, choices: [{index: 0, delta: {}, finish_reason: "stop"}]}` BEFORE `data: [DONE]\n\n`. Verified by integration test asserting OpenAI Python SDK consumes the stream successfully AND `broker_usage` row is written for OpenAI streaming traffic.
@@ -100,7 +100,7 @@ Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is ap
 
 | Requirement | Phase | Category | Status |
 |-------------|-------|----------|--------|
-| FR-CF-01 | 45 | Carry-Forward | Pending |
+| FR-CF-01 | 45 | Carry-Forward | **Complete** (`cdd34445`) |
 | FR-CF-02 | 45 | Carry-Forward | **Complete** (`f5ffdd00`) |
 | FR-CF-03 | 45 | Carry-Forward | Pending |
 | FR-CF-04 | 45 | Carry-Forward | Pending |

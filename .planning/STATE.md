@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: Server Management Tooling + Bug Sweep
 status: in-progress
-stopped_at: 2026-05-01 -- Phase 45 Plan 01 shipped (FR-CF-02 audit-only sacred-SHA re-pin, commit f5ffdd00). Ready for next plan in Phase 45 (FR-CF-01 / FR-CF-03 / FR-CF-04).
-last_updated: "2026-05-01T19:09:24Z"
-last_activity: 2026-05-01 -- Phase 45 Plan 01 (FR-CF-02) shipped via audit-only commit f5ffdd00 — sacred-file BASELINE_SHA re-pinned 623a65b9... → 4f868d31...; sacred file source bytes unchanged (audit-only contract upheld); v43.x drift commits (9f1562be / 47890a85 / 9d368bb5) cited verbatim in audit block; integrity test PASS; npm run test:phase39 chain PASS.
+stopped_at: 2026-05-01 -- Phase 45 Plan 02 shipped (FR-CF-01 broker 429 forwarding + Retry-After preservation, commit cdd34445). Ready for next plan in Phase 45 (FR-CF-03 / FR-CF-04).
+last_updated: "2026-05-01T19:18:47Z"
+last_activity: 2026-05-01 -- Phase 45 Plan 02 (FR-CF-01) shipped in atomic commit cdd34445 — UpstreamHttpError class in agent-runner-factory.ts captures upstream {status, retryAfter}; Anthropic + OpenAI sync catch blocks branch on instanceof with strict 429-only allowlist (rate_limit_error / rate_limit_exceeded_error error types); Retry-After byte-identical forwarding (delta-seconds + HTTP-date both verified); 5 new integration tests (10/10 PASS) covering 18 status-code sub-cases via Tests 7+9 parameterized loops; sacred file untouched (Wave 2 isolation contract preserved on top of 45-01).
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -43,14 +43,14 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 | Phase | Plan | Status | Progress |
 |-------|------|--------|----------|
-| 45 — Carry-Forward Sweep | 01/?? (FR-CF-02 shipped) | In-Progress | `[██░░░░░░░░] 25%` |
+| 45 — Carry-Forward Sweep | 02/?? (FR-CF-02 + FR-CF-01 shipped) | In-Progress | `[█████░░░░░] 50%` |
 | 46 — Fail2ban Admin Panel | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[█░░░░░░░░░] 6%` (Plan 45-01 of ~16 plans shipped — 0 of 4 phases fully closed)
-**Active phase:** Phase 45 (Plan 01 done; further plans for FR-CF-01 / FR-CF-03 / FR-CF-04 pending)
-**Next step:** Continue Phase 45 with next plan (FR-CF-01 / FR-CF-03 / FR-CF-04)
+**Overall milestone progress:** `[█░░░░░░░░░] 13%` (Plans 45-01 + 45-02 of ~16 plans shipped — 0 of 4 phases fully closed)
+**Active phase:** Phase 45 (Plans 01-02 done; further plans for FR-CF-03 / FR-CF-04 pending)
+**Next step:** Continue Phase 45 with next plan (FR-CF-03 / FR-CF-04)
 
 ## Performance Metrics
 
@@ -62,7 +62,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | LOC delta | ~940 (per `v29.4-STACK.md`) | TBD |
 | Manual UAT items | 4-6 (one per phase) | TBD |
 | New npm/apt deps | 0 (D-NO-NEW-DEPS) | TBD |
-| Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`) |
+| Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`); Plan 45-02 left sacred file byte-identical (Wave 2 isolation upheld) |
 | Server4 patches | 0 (D-NO-SERVER4 hard-wall) | TBD |
 
 ## Accumulated Context
@@ -88,7 +88,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 ### Carry-from v29.3 (accepted debt at milestone close 2026-05-01)
 
-- **C1 (FR-CF-01 in v29.4)**: `livinity-broker/router.ts:159` collapses ALL upstream errors to HTTP 500; `agent-runner-factory.ts:75-76` drops `Retry-After` header. UI banner-section can render but FR-DASH-03 only synthetic-verifiable until C1 fix lands.
+- **C1 (FR-CF-01 in v29.4)**: ~~`livinity-broker/router.ts:159` collapses ALL upstream errors to HTTP 500; `agent-runner-factory.ts:75-76` drops `Retry-After` header. UI banner-section can render but FR-DASH-03 only synthetic-verifiable until C1 fix lands.~~ **CLOSED 2026-05-01 in Phase 45 Plan 02, commit `cdd34445`** — UpstreamHttpError class threads upstream {status, retryAfter} through agent-runner-factory.ts; Anthropic + OpenAI sync catch blocks branch on instanceof with strict 429-only allowlist; 5 new integration tests (10/10 PASS) covering 18 status-code sub-cases (9 statuses × 2 routers via Tests 7+9 loops) + 2 Retry-After format cases (delta-seconds + HTTP-date byte-identical). v29.3 FR-DASH-03 banner-section now end-to-end correct (no longer "synthetic-verifiable only").
 - **C2 (FR-CF-02 in v29.4)**: ~~`sdk-agent-runner-integrity.test.ts:33` `BASELINE_SHA = '623a65b9...'` is stale (drifted to `4f868d31...` due to v43.x model bumps).~~ **CLOSED 2026-05-01 in Phase 45 Plan 01, commit `f5ffdd00`** — audit-only re-pin to `4f868d31...` with audit block citing v43.x drift commits.
 - **C3 (FR-CF-03 in v29.4)**: `claudePerUserStartLogin` (sub) + `usage.getMine` (q) + `usage.getAll` (q) NOT in `httpOnlyPaths` at `livos/packages/livinityd/source/modules/server/trpc/common.ts:8` — UX hang risk under WS reconnect.
 - **C4 (FR-CF-04 in v29.4)**: `livinity-broker/openai-sse-adapter.ts` does not emit final `usage` chunk before `data: [DONE]` → zero `broker_usage` rows for OpenAI streaming traffic.
@@ -117,7 +117,8 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 - [x] Run `/gsd-plan-phase 45` to decompose Phase 45 (Carry-Forward Sweep) into plans (done 2026-05-01)
 - [x] Phase 45 Plan 01 (FR-CF-02 audit-only sacred-SHA re-pin) shipped (commit `f5ffdd00`, 2026-05-01)
-- [ ] Continue Phase 45 with remaining plans (FR-CF-01 / FR-CF-03 / FR-CF-04)
+- [x] Phase 45 Plan 02 (FR-CF-01 broker 429 forwarding + Retry-After preservation) shipped (commit `cdd34445`, 2026-05-01)
+- [ ] Continue Phase 45 with remaining plans (FR-CF-03 / FR-CF-04)
 - [ ] After Phase 45 ships, run `/gsd-plan-phase 46` for Fail2ban Admin Panel
 - [ ] After Phase 46 ships, run `/gsd-plan-phase 47` for AI Diagnostics
 - [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
