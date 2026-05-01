@@ -84,6 +84,7 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {ChangePasswordWarning, ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
+import {SecurityToggleRow} from './security-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
@@ -1819,6 +1820,9 @@ function AdvancedSection() {
 				onCheckedChange={(checked) => externalDnsMut.mutate(checked)}
 				disabled={isExternalDnsLoading}
 			/>
+
+			{/* Security panel (FR-F2B-06) — toggle visibility of Server Management > Security sidebar entry. */}
+			<SecurityToggleRow />
 
 			{/* Factory Reset */}
 			<div className='flex items-center justify-between rounded-radius-md border border-red-500/20 bg-red-500/5 p-4'>
