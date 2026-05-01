@@ -10,6 +10,83 @@ Captured ideas that aren't yet scheduled into a milestone. Promote with `/gsd-re
 
 ---
 
+## 999.7 — MiroFish anchor app is NOT production-ready (upstream bug)
+
+**Captured:** 2026-05-01 (during v29.3 marketplace install dialog regression sweep)
+**Source:** Live deploy on Mini PC, post Phase 43.7. Install dialog now prompts
+ZEP_API_KEY correctly, broker auto-injection works (compose has 5 broker env vars).
+Container starts. But the app is unreachable in the browser.
+
+**Symptoms** (browser DevTools console at `https://mirofish.bruce.livinity.io/`):
+1. `Connecting to 'http://localhost:5001/api/simulation/history?limit=20' violates
+   CSP "connect-src 'self' wss: ws: https://*.livinity.io"`
+2. `WebSocket connection to 'wss://localhost:3000/?token=...' failed` —
+   Vite HMR client present in production build
+3. `Loading the font 'https://frontend-cdn.perplexity.ai/_agi_assets/fonts/...woff2'
+   violates CSP "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com
+   https://fonts.googleapis.com"` — third-party font from a non-allowed CDN
+
+**Root cause:** MiroFish's frontend (`666ghj/MiroFish`, Vue 3 + Vite) is hardcoded
+to xhr `http://localhost:5001` for backend calls. When served from a remote host,
+"localhost" resolves to the user's laptop, not the MiroFish container.
+
+The CSP delivered by livinityd/helmet (`server/index.ts:258-285`) merely surfaces
+the violation in the console — even with CSP fully open, the request fails because
+`localhost:5001` is unreachable from the user's machine. Plus the Docker image is
+clearly built in dev mode (Vite HMR socket present).
+
+**Fix sketch (defer to v29.4 or later):**
+1. Fork `666ghj/MiroFish` to `utopusc/MiroFish-livinity` (or equivalent).
+2. Frontend: replace hardcoded `localhost:5001` axios baseURL with
+   `${window.location.origin}/api` (or env-driven `VITE_API_URL`).
+3. Backend: serve under a `/api` route prefix (or accept calls from non-localhost).
+4. Docker: production build (`npm run build`) + nginx/caddy serving SPA + API
+   under same origin. Drop Vite dev server.
+5. Republish image to GHCR (`ghcr.io/utopusc/mirofish-livinity:v29.4`).
+6. Update `livos/packages/livinityd/source/modules/apps/builtin-apps.ts` MiroFish
+   entry to point at the new image.
+
+**Where to investigate:** MiroFish frontend axios setup — likely
+`frontend/src/api/index.js` or `services/`. Look for `axios.create({baseURL:})`.
+
+**Severity:** HIGH for v29.3 — MiroFish was the v29.3 anchor app demonstrating
+broker auto-injection. Mechanism works (Open WebUI proves it end-to-end), but the
+chosen anchor doesn't run in the browser. Move broker validation to Open WebUI as
+the anchor for v29.3 audit, defer MiroFish fork to v29.4.
+
+---
+
+## 999.8 — Marketplace install path fragmentation (3 iframes, 3 handlers)
+
+**Captured:** 2026-05-01 (Phase 43.6 + 43.7 root cause sweep)
+**Source:** v29.3 install regression — env override dialog wasn't firing for
+MiroFish (ZEP_API_KEY) or n8n (basic auth). Root cause: 3 different code paths
+serve "Install" buttons, each had to be patched individually.
+
+**The three paths:**
+| Component | Iframe URL | Handler | Patched in |
+|---|---|---|---|
+| `InstallButtonConnected` | (no iframe — in-app UI) | direct `useAppInstall.install()` | 43.4 (registry augment + envOverrides fallback) |
+| `marketplace-app-window.tsx` | `livinity.io/app/<id>?embed=true` | `INSTALL_APP` postMessage | 43.6 (handleMessage gate) |
+| `app-store-content.tsx` + `useAppStoreBridge` | `livinity.io/store?token=...` | `install` postMessage | 43.7 (bridge callback + dialog state) |
+
+**Symptom each fix solved (not all paths exercised by all users):**
+- 43.4 → in-app install (rare; users go through marketplace iframes)
+- 43.6 → single-app detail view of marketplace
+- 43.7 → marketplace browse view (most common entry point)
+
+**Tech debt:** the env override prompt is now duplicated across 3 callers. Each
+new install entry point in the future will silently regress. Consolidate by:
+- Move dialog rendering to a single global provider (e.g. `<EnvPromptProvider>`
+  near root, exposes `promptForEnv(appId)` via context).
+- All three handlers call `await ctx.promptForEnv(appId)` then mutate.
+- Single source of truth, hard to bypass.
+
+**Severity:** MEDIUM — works today after 43.4/43.6/43.7, but next iframe handler
+will need its own patch unless consolidated.
+
+---
+
 ## 999.5 — `update.sh` build-step silent failure (CRITICAL — recurring)
 
 **Captured:** 2026-04-26 (Phase 30 round 10 + post-30 round 11 UI deploy)
