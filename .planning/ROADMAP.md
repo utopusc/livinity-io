@@ -120,7 +120,11 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
   3. Live tail respects 5000-line ring buffer (mirror of Phase 28 cross-container logs aggregator); user-scroll past the 4px tolerance auto-disables live-tail with explicit "Resume tailing" button.
   4. `/ws/ssh-sessions` endpoint enforces `adminProcedure` RBAC (NOT `protectedProcedure`); rejecting non-admin handshake with WS close code 4403 (mirror of v26.0 `authorizeDeviceAccess` pattern).
   5. NO geo-IP/ASN enrichment, NO `maxmind` dependency added — raw IP + click-to-ban gives 80% of value at 0% install cost (geo enrichment deferred to FR-SSH-future-01 / v30+).
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 48-01-PLAN.md — Backend ssh-sessions module (journalctl-stream + ws-handler + WS route mount + 2 unit-test files; FR-SSH-01)
+- [ ] 48-02-PLAN.md — UI ssh-sessions-tab + Security section third-tab wiring + click-to-ban cross-link (FR-SSH-02)
+- [ ] 48-03-PLAN.md — test:phase48 master gate + integration test + 48-UAT.md operator script (FR-SSH-01 + FR-SSH-02)
 **UI hint**: yes
 
 ## Dependency Graph
@@ -174,7 +178,7 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 | 45. Carry-Forward Sweep | 4/4 (45-01..04 ALL shipped 2026-05-01) | **Complete** | 2026-05-01 |
 | 46. Fail2ban Admin Panel | 5/5 (46-01..05 ALL shipped 2026-05-01) | **Complete** | 2026-05-01 |
 | 47. AI Diagnostics (Registry + Identity + Probe) | 0/0 (TBD via plan-phase) | Not started | - |
-| 48. Live SSH Session Viewer | 0/0 (TBD via plan-phase) | Not started | - |
+| 48. Live SSH Session Viewer | 0/3 (48-01..03 plans created; pending execution) | Plans defined | - |
 
 ## Sacred File SHA History
 
