@@ -11,6 +11,7 @@
 // the switch case in DockerApp's SectionView. The compiler enforces all
 // four touchpoints.
 
+import {useMemo} from 'react'
 import {
 	IconActivity,
 	IconBox,
@@ -24,6 +25,7 @@ import {
 	IconNetwork,
 	IconPhoto,
 	IconSettings,
+	IconShieldLock,
 	IconStack2,
 	IconTerminal2,
 	type Icon,
@@ -31,6 +33,7 @@ import {
 
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
+import {trpcReact} from '@/trpc/trpc'
 
 import {useSidebarDensity} from './sidebar-density'
 import {
@@ -60,6 +63,10 @@ export const SECTION_META: Record<SectionId, SectionMetaEntry> = {
 	networks: {icon: IconNetwork, label: 'Networks', comingPhase: 26},
 	registry: {icon: IconCloudDownload, label: 'Registry', comingPhase: 29},
 	activity: {icon: IconActivity, label: 'Activity', comingPhase: 28},
+	// Phase 46-04 — Security (fail2ban admin panel) — Wave 4 ships the UI.
+	// Label is 'Security' (NOT 'Fail2ban') per architecture research: leaves
+	// room for future audit/sessions/alerts sub-tabs without rename.
+	security: {icon: IconShieldLock, label: 'Security', comingPhase: 46},
 	schedules: {icon: IconClock, label: 'Schedules', comingPhase: 27},
 	settings: {icon: IconSettings, label: 'Settings', comingPhase: 29},
 }
@@ -70,6 +77,22 @@ export function Sidebar() {
 	const collapsed = useSidebarCollapsed()
 	const toggle = useToggleSidebar()
 	const density = useSidebarDensity((s) => s.density)
+
+	// Phase 46-04 FR-F2B-06 — sidebar entry visibility for the Security section
+	// is coupled to user_preferences.security_panel_visible (defaults ON; treat
+	// undefined as ON). Toggling off in Settings hides this entry only — it does
+	// NOT redirect when the section is currently open (see sub-issue #4 —
+	// non-destructive backout).
+	const prefsQuery = trpcReact.preferences.get.useQuery({keys: ['security_panel_visible']})
+	const securityVisible = useMemo(() => {
+		const v = prefsQuery.data?.security_panel_visible
+		// Default ON: undefined / null / true → visible; only explicit `false` hides.
+		return v !== false
+	}, [prefsQuery.data])
+	const visibleSectionIds = useMemo(
+		() => (securityVisible ? SECTION_IDS : SECTION_IDS.filter((id) => id !== 'security')),
+		[securityVisible],
+	)
 
 	return (
 		<aside
@@ -94,7 +117,7 @@ export function Sidebar() {
 			</div>
 			<nav className='flex-1 overflow-y-auto py-2'>
 				<TooltipProvider delayDuration={300}>
-					{SECTION_IDS.map((id) => {
+					{visibleSectionIds.map((id) => {
 						const meta = SECTION_META[id]
 						const Icon = meta.icon
 						const active = section === id

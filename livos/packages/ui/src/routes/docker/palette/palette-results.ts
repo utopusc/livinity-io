@@ -72,6 +72,9 @@ const SECTION_LABELS: Record<SectionId, string> = {
 	networks: 'Networks',
 	registry: 'Registry',
 	activity: 'Activity',
+	// Phase 46-04 — Security (fail2ban admin) — added in Wave 4 alongside the
+	// 13th sidebar entry. Friendly label matches sidebar.tsx SECTION_META.
+	security: 'Security',
 	schedules: 'Schedules',
 	settings: 'Settings',
 }
