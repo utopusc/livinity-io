@@ -141,7 +141,10 @@ export function translateOpenAIChatToSdkArgs(req: OpenAIChatCompletionsRequest):
 		contextPrefix = `Previous conversation:\n${formatted}`
 	}
 
-	let systemPromptOverride: string | undefined
+	// Phase 43.8 (broker passthrough identity fix): default to empty string
+	// when the OpenAI request had no `system` message. Mirrors the Anthropic
+	// translate-request fix — see translate-request.ts for full rationale.
+	let systemPromptOverride: string = ''
 	if (systemMessages.length > 0) {
 		systemPromptOverride = systemMessages.map((m) => extractText(m)).join('\n')
 	}

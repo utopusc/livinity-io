@@ -9,7 +9,10 @@ async function runTests() {
 	})
 	assert.equal(r1.task, 'hello')
 	assert.equal(r1.contextPrefix, undefined)
-	assert.equal(r1.systemPromptOverride, undefined)
+	// Phase 43.8: when caller doesn't supply a system prompt, broker emits
+	// '' (passthrough) so SdkAgentRunner '??' fallback skips the Nexus
+	// agent default. Previous behavior (undefined) injected Nexus identity.
+	assert.equal(r1.systemPromptOverride, '')
 	console.log('  PASS Test 1: single user message')
 
 	// Test 2: multi-turn (3 messages: user → assistant → user)

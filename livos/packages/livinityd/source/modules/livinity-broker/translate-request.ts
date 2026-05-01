@@ -62,8 +62,21 @@ export function translateAnthropicMessagesToSdkArgs(req: AnthropicMessagesReques
 		contextPrefix = `Previous conversation:\n${formatted}`
 	}
 
-	// System prompt
-	let systemPromptOverride: string | undefined
+	// System prompt.
+	//
+	// Phase 43.8 (broker passthrough identity fix): default to empty string
+	// when the caller didn't set a system prompt. Combined with the sacred
+	// file's `??` fix, this routes broker requests through the Agent SDK
+	// with NO system prompt — matching raw Anthropic API semantics. Without
+	// this, every broker-routed request (Open WebUI, marketplace AI apps)
+	// inherited the Nexus agent default ("You are Nexus, an autonomous AI
+	// assistant...") and the model identified as Nexus regardless of caller.
+	//
+	// Note: Anthropic models still hallucinate their own version label
+	// (often saying "Claude 3.5 Sonnet" even on 4.x); this is an upstream
+	// API artifact, not something the broker can correct without injecting
+	// a system prompt — which would defeat the passthrough goal.
+	let systemPromptOverride: string = ''
 	if (typeof req.system === 'string') {
 		systemPromptOverride = req.system
 	} else if (Array.isArray(req.system)) {

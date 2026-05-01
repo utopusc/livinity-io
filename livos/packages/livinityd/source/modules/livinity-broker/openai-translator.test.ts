@@ -90,7 +90,9 @@ async function runTests() {
 		})
 		assert.equal(r.task, 'hi')
 		assert.equal(r.contextPrefix, undefined)
-		assert.equal(r.systemPromptOverride, undefined)
+		// Phase 43.8: empty-string passthrough (was undefined). See
+		// translate-request.test.ts comment for full rationale.
+		assert.equal(r.systemPromptOverride, '')
 		ok('Test 6: single user msg → task only')
 	}
 	{

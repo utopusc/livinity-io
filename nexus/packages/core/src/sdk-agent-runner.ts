@@ -235,8 +235,22 @@ export class SdkAgentRunner extends EventEmitter {
       }
     }
 
-    // Build system prompt
-    let systemPrompt = this.config.systemPromptOverride || `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.
+    // Build system prompt.
+    //
+    // Phase 43.8 (broker passthrough): use `??` instead of `||` so that an
+    // explicit empty string from the caller (broker mode, where the API
+    // request had no `system` field — the user wants raw Anthropic API
+    // semantics, not the agent loop's Nexus identity) passes through
+    // unchanged. Previous `||` treated `''` as falsy and fell back to the
+    // Nexus default, causing every broker-routed app (Open WebUI,
+    // marketplace AI apps) to identify as "Nexus, an autonomous AI
+    // assistant" regardless of the model selected.
+    //
+    // Behavior preserved for all non-empty values — the Nexus default is
+    // still emitted whenever the caller leaves `systemPromptOverride`
+    // unset (undefined or null). Sacred-file rule respected: single
+    // operator change, no structural edits.
+    let systemPrompt = this.config.systemPromptOverride ?? `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.
 
 You have access to MCP tools (prefixed with mcp__nexus-tools__) for shell commands, Docker management, file operations, web browsing, memory, and messaging.
 
