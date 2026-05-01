@@ -127,7 +127,12 @@ export const InstallButtonConnected = forwardRef(
 
 		const compatible = semver.lte(app.manifestVersion, os.version)
 
-		const envOverrides = builtinApp?.installOptions?.environmentOverrides
+		// Read env overrides from the registry app first (covers store-path apps
+		// post Phase 43.4 augmentation), then fall back to the builtinApps query
+		// for direct builtin lookups. Either path is sufficient.
+		const envOverrides =
+			(app as any)?.installOptions?.environmentOverrides ??
+			builtinApp?.installOptions?.environmentOverrides
 
 		const proceedWithInstall = (selectedDeps?: Record<string, string>, envValues?: Record<string, string>) => {
 			waitingForCredentials.current = true

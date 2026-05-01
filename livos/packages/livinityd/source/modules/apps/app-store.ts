@@ -3,6 +3,7 @@ import pRetry from 'p-retry'
 import type Livinityd from '../../index.js'
 import runEvery from '../utilities/run-every.js'
 import AppRepository from './app-repository.js'
+import {getBuiltinApp} from './builtin-apps.js'
 
 export default class AppStore {
 	#livinityd: Livinityd
@@ -90,8 +91,31 @@ export default class AppStore {
 		)
 		const registry = await Promise.all(registryPromises)
 
-		// Remove failed reads and fix type definition to not be maybe null
-		return registry.filter(Boolean) as Array<Awaited<ReturnType<typeof AppRepository.prototype.readRegistry>>>
+		// Augment each app with builtin manifest data (installOptions,
+		// requiresAiProvider) when a matching id exists in BUILTIN_APPS. The
+		// sibling utopusc/livinity-apps repo manifests don't carry installOptions,
+		// so without this merge the install dialog never prompts for env overrides
+		// (ZEP_API_KEY, N8N_BASIC_AUTH_*, etc.) for builtin apps installed via the
+		// store path. Augmentation lets the marketplace UI read these fields from
+		// the registry app directly without a separate builtinApps query.
+		const augmented = registry.filter(Boolean).map((repo) => {
+			if (!repo) return repo
+			return {
+				...repo,
+				apps: repo.apps.map((app) => {
+					const builtin = getBuiltinApp(app.id)
+					if (!builtin) return app
+					return {
+						...app,
+						installOptions: (app as any).installOptions ?? builtin.installOptions,
+						requiresAiProvider: app.requiresAiProvider ?? builtin.requiresAiProvider,
+						port: app.port ?? builtin.port,
+					}
+				}),
+			}
+		})
+
+		return augmented as Array<Awaited<ReturnType<typeof AppRepository.prototype.readRegistry>>>
 	}
 
 	async addRepository(url: string) {
