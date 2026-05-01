@@ -72,7 +72,40 @@ function runTests() {
 		ok('Test 4: bare-name entries absent (namespaced convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (4/4)')
+	// v29.4 Phase 46 Plan 03 — fail2ban admin mutations.
+	// Same WS-reconnect-survival reason as Phase 45's FR-CF-03 cluster.
+	// Test 5: 'fail2ban.unbanIp' — admin unban (action-targeted, B-01)
+	{
+		assert.ok(
+			httpOnlyPaths.includes('fail2ban.unbanIp' as any),
+			"httpOnlyPaths must include 'fail2ban.unbanIp' (FR-F2B-03 + ROADMAP §46.8 — admin mid-recovery from SSH lockout is on a half-broken WS; HTTP guarantees delivery)",
+		)
+		ok("Test 5: 'fail2ban.unbanIp' present in httpOnlyPaths")
+	}
+
+	// Test 6: 'fail2ban.banIp' — admin manual ban (with self-ban gate B-02)
+	{
+		assert.ok(
+			httpOnlyPaths.includes('fail2ban.banIp' as any),
+			"httpOnlyPaths must include 'fail2ban.banIp' (FR-F2B-03 + ROADMAP §46.8 — same WS-reconnect-survival reason as fail2ban.unbanIp)",
+		)
+		ok("Test 6: 'fail2ban.banIp' present in httpOnlyPaths")
+	}
+
+	// Test 7: bare-name footgun guard for fail2ban entries
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('unbanIp' as any),
+			"httpOnlyPaths must NOT include bare 'unbanIp' (must be namespaced as 'fail2ban.unbanIp')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('banIp' as any),
+			"httpOnlyPaths must NOT include bare 'banIp' (must be namespaced as 'fail2ban.banIp')",
+		)
+		ok('Test 7: bare fail2ban names absent (namespaced convention preserved)')
+	}
+
+	console.log('\nAll common.test.ts tests passed (7/7)')
 }
 
 runTests()

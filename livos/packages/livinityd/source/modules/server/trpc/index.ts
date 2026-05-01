@@ -24,6 +24,7 @@ import pm2 from '../../pm2/routes.js'
 import devices from '../../devices/routes.js'
 import audit from '../../devices/audit-routes.js'
 import devicesAdmin from '../../devices/admin-routes.js'
+import fail2ban from '../../fail2ban-admin/routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -51,6 +52,7 @@ const appRouter = router({
 	devices,
 	audit,
 	devicesAdmin,
+	fail2ban,
 })
 
 export type AppRouter = typeof appRouter
