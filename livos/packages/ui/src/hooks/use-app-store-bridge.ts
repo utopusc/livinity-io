@@ -41,9 +41,31 @@ function isAllowedOrigin(origin: string): boolean {
 	return false
 }
 
+type EnvOverride = {
+	name: string
+	label: string
+	type: 'string' | 'password'
+	default?: string
+	required?: boolean
+}
+
 interface AppStoreBridgeOptions {
 	apiKey: string | null
 	instanceName: string
+	/**
+	 * Phase 43.7: optional async callback the bridge invokes BEFORE installing
+	 * an app that declares `installOptions.environmentOverrides`. The callback
+	 * should render a dialog, collect values from the user, and resolve to the
+	 * `Record<string, string>` of values to pass through to the install
+	 * mutation. Throwing/rejecting cancels the install (e.g. user dismissed).
+	 *
+	 * If unset, the bridge installs without overrides (legacy behavior — apps
+	 * that need ZEP_API_KEY / N8N_BASIC_AUTH_PASSWORD will start mis-configured).
+	 */
+	onEnvOverridesNeeded?: (
+		appId: string,
+		overrides: EnvOverride[],
+	) => Promise<Record<string, string>>
 }
 
 /**
@@ -138,6 +160,30 @@ export function useAppStoreBridge(
 
 	const handleInstall = useCallback(
 		async (appId: string) => {
+			// Phase 43.7: resolve env overrides for this app and prompt the user
+			// BEFORE kicking off the install. Both BUILTIN_APPS and (post Phase 43.4)
+			// registry-augmented manifests carry installOptions; the bridge resolves
+			// from whichever is available and hands off to the dialog callback.
+			let envValues: Record<string, string> | undefined
+			try {
+				const [registry, builtins] = await Promise.all([
+					trpcClient.appStore.registry.query().catch(() => []),
+					trpcClient.appStore.builtinApps.query().catch(() => []),
+				])
+				const allRegistryApps = (registry as Array<{apps: Array<any>}> | undefined)
+					?.flatMap((r) => r?.apps ?? []) ?? []
+				const registryApp = allRegistryApps.find((a) => a?.id === appId)
+				const builtinApp = (builtins as Array<any>).find((b) => b?.id === appId)
+				const overrides: EnvOverride[] | undefined =
+					registryApp?.installOptions?.environmentOverrides ??
+					builtinApp?.installOptions?.environmentOverrides
+				if (overrides && overrides.length > 0 && optionsRef.current.onEnvOverridesNeeded) {
+					envValues = await optionsRef.current.onEnvOverridesNeeded(appId, overrides)
+				}
+			} catch {
+				// Best-effort prompt — fall through to install without overrides.
+			}
+
 			// Send installing status immediately
 			sendToIframe({type: 'progress', appId, progress: 0})
 			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
@@ -159,7 +205,10 @@ export function useAppStoreBridge(
 			}, 2000)
 
 			try {
-				await trpcClient.apps.install.mutate({appId})
+				await trpcClient.apps.install.mutate({
+					appId,
+					...(envValues ? {environmentOverrides: envValues} : {}),
+				})
 				clearInterval(pollInterval)
 				sendToIframe({type: 'progress', appId, progress: 100})
 				reportEvent(appId, 'install')

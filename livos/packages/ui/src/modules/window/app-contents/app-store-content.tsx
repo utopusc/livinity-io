@@ -1,17 +1,45 @@
-import {useRef} from 'react'
+import {useRef, useState} from 'react'
 
 import {Loading} from '@/components/ui/loading'
 import {useAppStoreBridge} from '@/hooks/use-app-store-bridge'
+import {EnvironmentOverridesDialog} from '@/modules/app-store/environment-overrides-dialog'
 import {trpcReact} from '@/trpc/trpc'
+
+type EnvOverride = {
+	name: string
+	label: string
+	type: 'string' | 'password'
+	default?: string
+	required?: boolean
+}
+
+type PendingPrompt = {
+	appId: string
+	overrides: EnvOverride[]
+	resolve: (values: Record<string, string>) => void
+	reject: (err: Error) => void
+}
 
 export default function AppStoreWindowContent() {
 	const iframeRef = useRef<HTMLIFrameElement>(null)
 	const apiKeyQ = trpcReact.domain.platform.getApiKey.useQuery()
 	const domainQ = trpcReact.domain.getStatus.useQuery()
+	const [pending, setPending] = useState<PendingPrompt | null>(null)
 
 	const apiKey = apiKeyQ.data?.apiKey ?? null
 	const hostname = domainQ.data?.domain || window.location.hostname
-	useAppStoreBridge(iframeRef, {apiKey, instanceName: hostname})
+	useAppStoreBridge(iframeRef, {
+		apiKey,
+		instanceName: hostname,
+		// Phase 43.7: when the bridge encounters an app with required env
+		// overrides (ZEP_API_KEY for MiroFish, N8N_BASIC_AUTH_PASSWORD for n8n,
+		// etc.), defer to this callback. Returns a promise that resolves to
+		// the user-supplied values or rejects on cancel.
+		onEnvOverridesNeeded: (appId, overrides) =>
+			new Promise<Record<string, string>>((resolve, reject) => {
+				setPending({appId, overrides, resolve, reject})
+			}),
+	})
 
 	if (apiKeyQ.isLoading || domainQ.isLoading) {
 		return (
@@ -28,13 +56,32 @@ export default function AppStoreWindowContent() {
 	const storeUrl = `https://livinity.io/store?token=${encodeURIComponent(apiKey)}&instance=${encodeURIComponent(hostname)}`
 
 	return (
-		<iframe
-			ref={iframeRef}
-			src={storeUrl}
-			style={{width: '100%', height: '100%', border: 'none'}}
-			allow='clipboard-write'
-			title='App Store'
-		/>
+		<>
+			<iframe
+				ref={iframeRef}
+				src={storeUrl}
+				style={{width: '100%', height: '100%', border: 'none'}}
+				allow='clipboard-write'
+				title='App Store'
+			/>
+			{pending && (
+				<EnvironmentOverridesDialog
+					open={true}
+					onOpenChange={(open) => {
+						if (!open) {
+							pending.reject(new Error('Install cancelled — env overrides dialog dismissed'))
+							setPending(null)
+						}
+					}}
+					appName={pending.appId}
+					overrides={pending.overrides}
+					onNext={(values) => {
+						pending.resolve(values)
+						setPending(null)
+					}}
+				/>
+			)}
+		</>
 	)
 }
 
