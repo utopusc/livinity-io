@@ -154,13 +154,18 @@ export function isCdpReachable(url: string): Promise<boolean> {
 }
 
 /** Model tier to SDK model string */
+// Phase 43.12: bumped to current Claude 4.X family (Opus 4.7 / Sonnet 4.6 /
+// Haiku 4.5). Earlier mapping pinned 4.6/4.5 — drift caught during the
+// model-identity hallucination fix sweep. The identity line generated in
+// the systemPrompt now reflects "Claude Opus 4.7" / "Claude Sonnet 4.6"
+// when the caller picks the generic alias.
 export function tierToModel(tier?: string): string | undefined {
   switch (tier) {
-    case 'opus': return 'claude-opus-4-6';
-    case 'sonnet': return 'claude-sonnet-4-5';
+    case 'opus': return 'claude-opus-4-7';
+    case 'sonnet': return 'claude-sonnet-4-6';
     case 'haiku': return 'claude-haiku-4-5';
     case 'flash': return 'claude-haiku-4-5'; // legacy alias
-    default: return 'claude-sonnet-4-5';
+    default: return 'claude-sonnet-4-6';
   }
 }
 
