@@ -64,7 +64,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 **Plans**: 4 plans
 - [x] 45-01-PLAN.md — C2 sacred-file BASELINE_SHA audit-only re-pin (Wave 1, FR-CF-02) — **shipped 2026-05-01 in commit `f5ffdd00`**
 - [x] 45-02-PLAN.md — C1 broker 429 forwarding + Retry-After preservation (Wave 2, FR-CF-01) — **shipped 2026-05-01 in commit `cdd34445`**
-- [ ] 45-03-PLAN.md — C3 httpOnlyPaths additions for ai.claudePerUserStartLogin/usage.getMine/usage.getAll (Wave 2, FR-CF-03)
+- [x] 45-03-PLAN.md — C3 httpOnlyPaths additions for ai.claudePerUserStartLogin/usage.getMine/usage.getAll (Wave 2, FR-CF-03) — **shipped 2026-05-01 in commit `d2c99e8a`**
 - [ ] 45-04-PLAN.md — C4 OpenAI SSE usage chunk + token plumbing + test:phase45 npm script (Wave 2, FR-CF-04)
 
 ### Phase 46: Fail2ban Admin Panel
@@ -135,7 +135,7 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 |-------------|-------|----------|--------|
 | FR-CF-01 | 45 | Carry-Forward | **Complete** (`cdd34445`) |
 | FR-CF-02 | 45 | Carry-Forward | **Complete** (`f5ffdd00`) |
-| FR-CF-03 | 45 | Carry-Forward | Pending |
+| FR-CF-03 | 45 | Carry-Forward | **Complete** (`d2c99e8a`) |
 | FR-CF-04 | 45 | Carry-Forward | Pending |
 | FR-F2B-01 | 46 | Fail2ban | Pending |
 | FR-F2B-02 | 46 | Fail2ban | Pending |
@@ -161,7 +161,7 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 45. Carry-Forward Sweep | 0/4 (planned 2026-05-01) | Not started | - |
+| 45. Carry-Forward Sweep | 3/4 (45-01 + 45-02 + 45-03 shipped 2026-05-01) | In-Progress | - |
 | 46. Fail2ban Admin Panel | 0/0 (TBD via plan-phase) | Not started | - |
 | 47. AI Diagnostics (Registry + Identity + Probe) | 0/0 (TBD via plan-phase) | Not started | - |
 | 48. Live SSH Session Viewer | 0/0 (TBD via plan-phase) | Not started | - |
