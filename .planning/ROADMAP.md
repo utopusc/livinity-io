@@ -65,7 +65,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 - [x] 45-01-PLAN.md — C2 sacred-file BASELINE_SHA audit-only re-pin (Wave 1, FR-CF-02) — **shipped 2026-05-01 in commit `f5ffdd00`**
 - [x] 45-02-PLAN.md — C1 broker 429 forwarding + Retry-After preservation (Wave 2, FR-CF-01) — **shipped 2026-05-01 in commit `cdd34445`**
 - [x] 45-03-PLAN.md — C3 httpOnlyPaths additions for ai.claudePerUserStartLogin/usage.getMine/usage.getAll (Wave 2, FR-CF-03) — **shipped 2026-05-01 in commit `d2c99e8a`**
-- [ ] 45-04-PLAN.md — C4 OpenAI SSE usage chunk + token plumbing + test:phase45 npm script (Wave 2, FR-CF-04)
+- [x] 45-04-PLAN.md — C4 OpenAI SSE usage chunk + token plumbing + test:phase45 npm script (Wave 2, FR-CF-04) — **shipped 2026-05-01 in commit `c6061f76`**
 
 ### Phase 46: Fail2ban Admin Panel
 **Goal**: Admin can recover from SSH lockout via UI (unban + whitelist) without SSH access, observe banned IPs, manually ban malicious IPs (with self-ban guardrails), and review an immutable audit trail of all ban/unban events.

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: Server Management Tooling + Bug Sweep
 status: in-progress
-stopped_at: 2026-05-01 -- Phase 45 Plan 03 shipped (FR-CF-03 httpOnlyPaths additions for ai.claudePerUserStartLogin + usage.getMine + usage.getAll, commit d2c99e8a). Ready for final Phase 45 plan (FR-CF-04 OpenAI SSE usage chunk).
-last_updated: "2026-05-01T19:25:50Z"
-last_activity: 2026-05-01 -- Phase 45 Plan 03 (FR-CF-03) shipped in atomic commit d2c99e8a — three new namespaced strings ('ai.claudePerUserStartLogin', 'usage.getMine', 'usage.getAll') added to httpOnlyPaths array in livos/packages/livinityd/source/modules/server/trpc/common.ts immediately after the Claude-auth cluster (line 173 → new entries lines 180-182), preceded by 6-line cluster comment citing FR-CF-03 + WS-reconnect-hang reasoning; new common.test.ts (78 lines, bare tsx + node:assert/strict harness) asserts the 3 new entries are present + bare-name footgun guard (4/4 PASS, runs <1s); sacred file untouched (Wave 2 isolation contract preserved on top of 45-01 + 45-02). Closes carry-forward C3.
+stopped_at: 2026-05-01 -- Phase 45 (Carry-Forward Sweep) FULLY SHIPPED — all 4 plans complete (45-01 + 45-02 + 45-03 + 45-04). Plan 45-04 (FR-CF-04 OpenAI SSE usage chunk + real token plumbing + test:phase45 master gate) shipped in commit c6061f76. test:phase45 chain green (38/38 PASS, exit 0). Ready for /gsd-plan-phase 46 (Fail2ban Admin Panel).
+last_updated: "2026-05-01T20:00:00Z"
+last_activity: 2026-05-01 -- Phase 45 Plan 04 (FR-CF-04) shipped in atomic commit c6061f76 — OpenAIChatCompletionChunk extended with optional usage{prompt_tokens, completion_tokens, total_tokens}; makeChunk gained 3rd usage? param; final_answer/error AgentEvent branches refactored to deferred-emission (capture stoppedReasonHint instead of writing terminal chunk + [DONE] inline); finalize(stoppedReason?, usage?) now SOLE canonical terminal emitter (writes chunk-with-usage BEFORE [DONE], pitfall B-13 wire-order); agent-runner-factory.ts done-event reads optional totalInputTokens/totalOutputTokens with backward-compatible 0 fallback; openai-router.ts streaming finally-block captures full streamFinalResult and threads tokens through adapter.finalize; openai-sse-adapter.test.ts gained Tests 11+12 (12/12 PASS, wire-order + zero-token degenerate) plus caller-convention update for Tests 3+10; new test:phase45 npm script chains test:phase44 (transitively 39→44 with re-pinned BASELINE_SHA 4f868d31...) + integration.test.ts (45-02, 10/10) + common.test.ts (45-03, 4/4) + openai-sse-adapter.test.ts (this plan, 12/12) = 38/38 total PASS; sacred file UNTOUCHED (Wave 2 isolation contract upheld through ALL 4 Phase 45 plans).
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -43,14 +43,14 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 
 | Phase | Plan | Status | Progress |
 |-------|------|--------|----------|
-| 45 — Carry-Forward Sweep | 03/04 (FR-CF-02 + FR-CF-01 + FR-CF-03 shipped; FR-CF-04 remaining) | In-Progress | `[████████░░] 75%` |
+| 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
 | 46 — Fail2ban Admin Panel | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[██░░░░░░░░] 19%` (Plans 45-01 + 45-02 + 45-03 of ~16 plans shipped — 0 of 4 phases fully closed; Phase 45 itself 75% complete)
-**Active phase:** Phase 45 (Plans 01-03 done; final plan for FR-CF-04 pending)
-**Next step:** Continue Phase 45 with final plan (FR-CF-04 OpenAI SSE usage chunk emission)
+**Overall milestone progress:** `[███░░░░░░░] 25%` (Phase 45 of 4 phases fully closed; Plans 45-01 + 45-02 + 45-03 + 45-04 of ~16 plans shipped)
+**Active phase:** Phase 46 next (Phase 45 Carry-Forward Sweep COMPLETE — all four C1/C2/C3/C4 carry-forwards shipped)
+**Next step:** Run `/gsd-plan-phase 46` to decompose Phase 46 (Fail2ban Admin Panel) into plans
 
 ## Performance Metrics
 
@@ -62,7 +62,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | LOC delta | ~940 (per `v29.4-STACK.md`) | TBD |
 | Manual UAT items | 4-6 (one per phase) | TBD |
 | New npm/apt deps | 0 (D-NO-NEW-DEPS) | TBD |
-| Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`); Plans 45-02 + 45-03 both left sacred file byte-identical (Wave 2 isolation upheld through Plan 03) |
+| Sacred-file edits | 1 audit-only re-pin (FR-CF-02) + ≤1 surgical edit (FR-MODEL-02 Branch B if taken) | 1 audit-only re-pin shipped (Phase 45 P01, commit `f5ffdd00`); Plans 45-02 + 45-03 + 45-04 all left sacred file byte-identical (Wave 2 isolation upheld through ALL 4 Phase 45 plans) |
 | Server4 patches | 0 (D-NO-SERVER4 hard-wall) | TBD |
 
 ## Accumulated Context
@@ -91,7 +91,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - **C1 (FR-CF-01 in v29.4)**: ~~`livinity-broker/router.ts:159` collapses ALL upstream errors to HTTP 500; `agent-runner-factory.ts:75-76` drops `Retry-After` header. UI banner-section can render but FR-DASH-03 only synthetic-verifiable until C1 fix lands.~~ **CLOSED 2026-05-01 in Phase 45 Plan 02, commit `cdd34445`** — UpstreamHttpError class threads upstream {status, retryAfter} through agent-runner-factory.ts; Anthropic + OpenAI sync catch blocks branch on instanceof with strict 429-only allowlist; 5 new integration tests (10/10 PASS) covering 18 status-code sub-cases (9 statuses × 2 routers via Tests 7+9 loops) + 2 Retry-After format cases (delta-seconds + HTTP-date byte-identical). v29.3 FR-DASH-03 banner-section now end-to-end correct (no longer "synthetic-verifiable only").
 - **C2 (FR-CF-02 in v29.4)**: ~~`sdk-agent-runner-integrity.test.ts:33` `BASELINE_SHA = '623a65b9...'` is stale (drifted to `4f868d31...` due to v43.x model bumps).~~ **CLOSED 2026-05-01 in Phase 45 Plan 01, commit `f5ffdd00`** — audit-only re-pin to `4f868d31...` with audit block citing v43.x drift commits.
 - **C3 (FR-CF-03 in v29.4)**: ~~`claudePerUserStartLogin` (sub) + `usage.getMine` (q) + `usage.getAll` (q) NOT in `httpOnlyPaths` at `livos/packages/livinityd/source/modules/server/trpc/common.ts:8` — UX hang risk under WS reconnect.~~ **CLOSED 2026-05-01 in Phase 45 Plan 03, commit `d2c99e8a`** — three namespaced strings inserted immediately after the Claude-auth cluster, preceded by FR-CF-03 cluster comment; new `common.test.ts` (4 tests, bare tsx + node:assert/strict, runs <1s) asserts presence + bare-name footgun guard. Restart-livinityd-mid-session integration test deferred to UAT on Mini PC per pitfall W-20.
-- **C4 (FR-CF-04 in v29.4)**: `livinity-broker/openai-sse-adapter.ts` does not emit final `usage` chunk before `data: [DONE]` → zero `broker_usage` rows for OpenAI streaming traffic.
+- **C4 (FR-CF-04 in v29.4)**: ~~`livinity-broker/openai-sse-adapter.ts` does not emit final `usage` chunk before `data: [DONE]` → zero `broker_usage` rows for OpenAI streaming traffic.~~ **CLOSED 2026-05-01 in Phase 45 Plan 04, commit `c6061f76`** — OpenAIChatCompletionChunk gained optional usage field; final_answer/error AgentEvent branches refactored to deferred-emission so finalize() can thread usage into terminal chunk; agent-runner-factory.ts done-event reads optional upstream totalInputTokens/totalOutputTokens (backward-compatible 0 fallback); openai-router.ts streaming finally-block threads real tokens through adapter.finalize; new Tests 11+12 (wire-order assertion + zero-token degenerate) bring openai-sse-adapter.test.ts to 12/12 PASS; new test:phase45 npm script chains 39→44 + Phase 45 broker tests (38/38 PASS, exit 0). Verbatim openai Python SDK live-network smoke test deferred to UAT on Mini PC per pitfall W-20.
 
 ### Carry-from v29.3 (manual UAT deferred — opt-in, not blockers for v29.4)
 
@@ -119,8 +119,9 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - [x] Phase 45 Plan 01 (FR-CF-02 audit-only sacred-SHA re-pin) shipped (commit `f5ffdd00`, 2026-05-01)
 - [x] Phase 45 Plan 02 (FR-CF-01 broker 429 forwarding + Retry-After preservation) shipped (commit `cdd34445`, 2026-05-01)
 - [x] Phase 45 Plan 03 (FR-CF-03 httpOnlyPaths additions for ai.claudePerUserStartLogin + usage.getMine + usage.getAll) shipped (commit `d2c99e8a`, 2026-05-01)
-- [ ] Continue Phase 45 with final plan (FR-CF-04 OpenAI SSE usage chunk emission)
-- [ ] After Phase 45 ships, run `/gsd-plan-phase 46` for Fail2ban Admin Panel
+- [x] Phase 45 Plan 04 (FR-CF-04 OpenAI SSE usage chunk + real token plumbing + test:phase45 master gate) shipped (commit `c6061f76`, 2026-05-01)
+- [x] **Phase 45 (Carry-Forward Sweep) COMPLETE** — all 4 plans / all 4 carry-forwards (C1/C2/C3/C4) shipped; test:phase45 chain green (38/38 PASS, exit 0); sacred file UNTOUCHED through all 4 plans (Wave 2 isolation contract upheld)
+- [ ] Run `/gsd-plan-phase 46` for Fail2ban Admin Panel
 - [ ] After Phase 46 ships, run `/gsd-plan-phase 47` for AI Diagnostics
 - [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
 - [ ] At v29.4 milestone close: run `/gsd-complete-milestone v29.4` to archive
