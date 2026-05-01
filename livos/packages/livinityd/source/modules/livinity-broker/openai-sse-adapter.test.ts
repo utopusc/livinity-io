@@ -83,6 +83,8 @@ async function runTests() {
 		const adapter = createOpenAISseAdapter({requestedModel: 'gpt-4', res})
 		adapter.onAgentEvent({type: 'chunk', data: 'X'} as AgentEvent)
 		adapter.onAgentEvent({type: 'final_answer', data: 'X'} as AgentEvent)
+		// v29.4 Phase 45 Plan 04: [DONE] now emitted by finalize() (deferred from final_answer).
+		adapter.finalize()
 		const chunks = parseDataChunks(getBuffer())
 		// Expect: 1 content chunk + 1 terminal chunk + DONE sentinel = 3 entries
 		assert.equal(chunks.length, 3)
@@ -143,12 +145,57 @@ async function runTests() {
 		const {res, getBuffer} = makeFakeRes()
 		const adapter = createOpenAISseAdapter({requestedModel: 'gpt-4', res})
 		adapter.onAgentEvent({type: 'error', data: 'boom'} as AgentEvent)
+		// v29.4 Phase 45 Plan 04: [DONE] now emitted by finalize() (deferred from error).
+		adapter.finalize()
 		const buf = getBuffer()
 		assert.ok(buf.includes('data: [DONE]'), 'error path writes [DONE] terminator')
 		ok('Test 10: error event still writes [DONE] (no SDK hang)')
 	}
 
-	console.log('\nAll openai-sse-adapter.test.ts tests passed (10/10)')
+	// Test 11 — FR-CF-04: terminal chunk carries usage{prompt,completion,total} BEFORE [DONE]
+	// (verifies wire-format compliance per OpenAI streaming spec + pitfall B-13 wire-order).
+	{
+		const {res, getBuffer} = makeFakeRes()
+		const adapter = createOpenAISseAdapter({requestedModel: 'gpt-4', res})
+		adapter.onAgentEvent({type: 'chunk', data: 'hello'} as AgentEvent)
+		adapter.finalize('complete', {prompt_tokens: 7, completion_tokens: 3, total_tokens: 10})
+		const buf = getBuffer()
+		const chunks = parseDataChunks(buf)
+		// Find the terminal chunk (the one with non-null finish_reason)
+		const terminal = chunks.find((c) => c.json && c.json.choices[0].finish_reason !== null)
+		assert.ok(terminal, 'terminal chunk present')
+		assert.deepEqual(
+			terminal!.json.usage,
+			{prompt_tokens: 7, completion_tokens: 3, total_tokens: 10},
+			'usage{prompt,completion,total} on terminal chunk',
+		)
+		// Wire-order check (B-13 mitigation): usage chunk MUST come BEFORE [DONE]
+		const usageIdx = buf.indexOf('"usage"')
+		const doneIdx = buf.indexOf('[DONE]')
+		assert.ok(usageIdx !== -1, 'usage substring present in wire output')
+		assert.ok(doneIdx !== -1, '[DONE] substring present in wire output')
+		assert.ok(usageIdx < doneIdx, 'usage chunk emitted strictly BEFORE [DONE]')
+		ok('Test 11: terminal chunk carries usage{prompt,completion,total} BEFORE [DONE]')
+	}
+
+	// Test 12 — FR-CF-04: degenerate zero-token usage is still PRESENT (spec compliance)
+	{
+		const {res, getBuffer} = makeFakeRes()
+		const adapter = createOpenAISseAdapter({requestedModel: 'gpt-4', res})
+		adapter.onAgentEvent({type: 'chunk', data: 'X'} as AgentEvent)
+		adapter.finalize('complete', {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0})
+		const chunks = parseDataChunks(getBuffer())
+		const terminal = chunks.find((c) => c.json && c.json.choices[0].finish_reason !== null)
+		assert.ok(terminal, 'terminal chunk present')
+		assert.deepEqual(
+			terminal!.json.usage,
+			{prompt_tokens: 0, completion_tokens: 0, total_tokens: 0},
+			'usage object PRESENT with zero values (spec-compliant degenerate)',
+		)
+		ok('Test 12: degenerate zero-token usage still attached to terminal chunk')
+	}
+
+	console.log('\nAll openai-sse-adapter.test.ts tests passed (12/12)')
 }
 
 runTests().catch((err) => {

@@ -165,7 +165,7 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 			const abortController = new AbortController()
 			res.on('close', () => abortController.abort())
 
-			let upstreamStoppedReason: AgentResult['stoppedReason'] | undefined
+			let streamFinalResult: AgentResult | undefined
 			try {
 				const generator = createSdkAgentRunnerForUser({
 					livinityd: deps.livinityd,
@@ -179,7 +179,7 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 				while (true) {
 					const step = await iter.next()
 					if (step.done) {
-						upstreamStoppedReason = step.value?.stoppedReason
+						streamFinalResult = step.value
 						break
 					}
 					adapter.onAgentEvent(step.value)
@@ -187,8 +187,21 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 			} catch (err: any) {
 				adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'} as any)
 			} finally {
-				// Idempotent — guarantees [DONE] terminator even if upstream stream aborted
-				adapter.finalize(upstreamStoppedReason)
+				// Idempotent — guarantees [DONE] terminator even if upstream stream aborted.
+				// FR-CF-04 (Phase 45 Plan 04): pass real upstream tokens to terminal chunk
+				// so the OpenAI SSE wire format includes `usage` before `data: [DONE]`,
+				// and the parse-usage.ts capture middleware writes a non-zero broker_usage row.
+				if (streamFinalResult) {
+					const promptTokens = streamFinalResult.totalInputTokens || 0
+					const completionTokens = streamFinalResult.totalOutputTokens || 0
+					adapter.finalize(streamFinalResult.stoppedReason, {
+						prompt_tokens: promptTokens,
+						completion_tokens: completionTokens,
+						total_tokens: promptTokens + completionTokens,
+					})
+				} else {
+					adapter.finalize()
+				}
 				if (!res.writableEnded) res.end()
 			}
 			return
