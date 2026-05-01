@@ -180,6 +180,14 @@ export const httpOnlyPaths = [
 	'ai.claudePerUserStartLogin',
 	'usage.getMine',
 	'usage.getAll',
+	// v29.4 Phase 46 — Fail2ban admin mutations. Same WS-reconnect-survival
+	// reason as Phase 45's per-user Claude OAuth + usage queries: an admin
+	// mid-recovery from SSH lockout is also likely to be on a half-broken WS
+	// (livinityd may have just been restarted by ban activity). HTTP guarantees
+	// delivery. Queries (listJails / getJailStatus / listEvents) stay on WS —
+	// cheap, idempotent, retry-safe. Pitfall B-12 / X-04.
+	'fail2ban.unbanIp',
+	'fail2ban.banIp',
 	// Subagent execution -- use HTTP for reliability (can take 10-60s)
 	'ai.executeSubagent',
 	// Marketplace install -- use HTTP for mutation reliability
