@@ -125,20 +125,28 @@ export async function* createSdkAgentRunnerForUser(opts: {
 				} catch {
 					continue
 				}
-				// 'done' event from /api/agent/stream carries the final result
+				// 'done' event from /api/agent/stream carries the final result.
+				// FR-CF-04 (Phase 45 Plan 04): read totalInputTokens / totalOutputTokens
+				// from the upstream done event when present; this enables broker_usage
+				// rows for OpenAI streaming (consumed via the openai-sse-adapter usage
+				// chunk + parse-usage.ts:162-172 capture middleware).
+				// Backward-compatible: older nexus builds without the fields fall back
+				// to 0 (existing behavior preserved).
 				if (event.type === 'done' && event.data && typeof event.data === 'object') {
 					const d = event.data as {
 						success?: boolean
 						answer?: string
 						turns?: number
 						stoppedReason?: AgentResult['stoppedReason']
+						totalInputTokens?: number
+						totalOutputTokens?: number
 					}
 					finalResult = {
 						success: d.success ?? false,
 						answer: d.answer ?? '',
 						turns: d.turns ?? 0,
-						totalInputTokens: 0, // not surfaced by /api/agent/stream — Phase 44 may augment
-						totalOutputTokens: 0,
+						totalInputTokens: typeof d.totalInputTokens === 'number' ? d.totalInputTokens : 0,
+						totalOutputTokens: typeof d.totalOutputTokens === 'number' ? d.totalOutputTokens : 0,
 						toolCalls: [],
 						stoppedReason: d.stoppedReason ?? 'complete',
 					}

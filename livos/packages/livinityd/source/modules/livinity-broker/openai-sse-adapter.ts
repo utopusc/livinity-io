@@ -27,7 +27,15 @@ export interface OpenAIChatCompletionChunk {
 		delta: {role?: 'assistant'; content?: string}
 		finish_reason: OpenAIFinishReason | null
 	}>
+	/** v29.4 Phase 45 Plan 04 (FR-CF-04): present ONLY on the terminal chunk
+	 * (with finish_reason: 'stop'/'length'/etc.). Absent on content chunks.
+	 * Order invariant: terminal chunk emitted BEFORE `data: [DONE]\n\n`
+	 * (pitfall B-13). */
+	usage?: {prompt_tokens: number; completion_tokens: number; total_tokens: number}
 }
+
+/** v29.4 Phase 45 Plan 04 (FR-CF-04) — usage shape attached to the terminal chunk. */
+type StreamingUsage = {prompt_tokens: number; completion_tokens: number; total_tokens: number}
 
 /** Literal terminator the OpenAI SDK looks for. MUST be byte-identical. */
 export const OPENAI_SSE_DONE = 'data: [DONE]\n\n'
@@ -57,15 +65,26 @@ function mapFinishReason(stoppedReason?: AgentResult['stoppedReason']): OpenAIFi
  * Mapping:
  *   - 'thinking' (turn 1)  → no chunk emitted (header role on first chunk handles intro)
  *   - 'chunk' (text delta) → emits chunk with delta.content (and delta.role on FIRST emission)
- *   - 'final_answer'       → emits terminal chunk with empty delta + finish_reason + writes [DONE]
- *   - 'error'              → emits chunk with delta:{}, finish_reason:'stop' + [DONE] (best-effort)
+ *   - 'final_answer'       → captures stoppedReasonHint='complete' + ensures role chunk sent.
+ *                             Terminal chunk + [DONE] DEFERRED to finalize() so caller can
+ *                             supply usage tokens (FR-CF-04, Phase 45 Plan 04).
+ *   - 'error'              → captures stoppedReasonHint='error' + ensures role chunk sent.
+ *                             Terminal chunk + [DONE] DEFERRED to finalize() (same reason).
  *
  * Other event types ('tool_call', 'observation', 'done') NOT surfaced — broker
  * runs LivOS MCP tools internally; client gets text + finish only.
  *
- * `finalize(stoppedReason?)` is idempotent — call from `finally` block to
+ * `finalize(stoppedReason?, usage?)` is idempotent — call from `finally` block to
  * guarantee [DONE] terminator even if the upstream stream aborts mid-flight.
  * Without [DONE], the official `openai` Python SDK throws.
+ *
+ * v29.4 Phase 45 Plan 04 (FR-CF-04) — finalize() is now the SOLE canonical
+ * terminal emitter. The 'final_answer' / 'error' AgentEvent branches no longer
+ * write the terminal chunk + [DONE] inline; they capture a stoppedReasonHint
+ * and ensure the role chunk is sent. The router's finally-block calls
+ * finalize(stoppedReason, usage) with real upstream token counts so the
+ * terminal chunk carries `usage{prompt,completion,total}` BEFORE [DONE]
+ * (pitfall B-13 wire-order invariant).
  */
 export function createOpenAISseAdapter(opts: {requestedModel: string; res: Response}) {
 	const {requestedModel, res} = opts
@@ -73,18 +92,25 @@ export function createOpenAISseAdapter(opts: {requestedModel: string; res: Respo
 	const created = Math.floor(Date.now() / 1000)
 	let firstChunkSent = false
 	let finalized = false
+	// FR-CF-04: when the upstream agent emits 'final_answer' or 'error' BEFORE
+	// the router's finally-block calls finalize(), record the implied stoppedReason
+	// so finalize() can emit the right finish_reason if the caller didn't supply one.
+	let stoppedReasonHint: AgentResult['stoppedReason'] | null = null
 
 	function makeChunk(
 		delta: {role?: 'assistant'; content?: string},
 		finishReason: OpenAIFinishReason | null,
+		usage?: StreamingUsage,
 	): OpenAIChatCompletionChunk {
-		return {
+		const chunk: OpenAIChatCompletionChunk = {
 			id,
 			object: 'chat.completion.chunk',
 			created,
 			model: requestedModel,
 			choices: [{index: 0, delta, finish_reason: finishReason}],
 		}
+		if (usage) chunk.usage = usage
+		return chunk
 	}
 
 	return {
@@ -100,24 +126,26 @@ export function createOpenAISseAdapter(opts: {requestedModel: string; res: Respo
 					writeOpenAISseChunk(res, makeChunk({content: text}, null))
 				}
 			} else if (event.type === 'final_answer') {
-				// If we never sent a chunk (no text streamed), emit role chunk first so OpenAI SDK is happy
+				// FR-CF-04 (Phase 45 Plan 04) — terminal chunk + [DONE] emission deferred
+				// to finalize() so the caller's finally-block can supply usage tokens. The
+				// 'final_answer' event itself does not carry token counts; the caller
+				// has finalResult after iteration completes.
+				// Capture the stoppedReason hint so finalize() emits the right finish_reason.
+				// (final_answer corresponds to a 'complete' stoppedReason → finish_reason 'stop'.)
+				stoppedReasonHint = 'complete'
+				// Ensure the role chunk is sent for SDKs expecting it before terminal.
 				if (!firstChunkSent) {
 					firstChunkSent = true
 					writeOpenAISseChunk(res, makeChunk({role: 'assistant', content: ''}, null))
 				}
-				// Terminal chunk
-				writeOpenAISseChunk(res, makeChunk({}, 'stop'))
-				if (!res.writableEnded) res.write(OPENAI_SSE_DONE)
-				finalized = true
 			} else if (event.type === 'error') {
-				// Best-effort: emit terminal chunk + [DONE] so client SDK doesn't hang
+				// FR-CF-04 (Phase 45 Plan 04) — defer terminal + [DONE] to finalize()
+				// so caller can supply usage if any was captured before the error.
+				stoppedReasonHint = 'error'
 				if (!firstChunkSent) {
 					firstChunkSent = true
 					writeOpenAISseChunk(res, makeChunk({role: 'assistant', content: ''}, null))
 				}
-				writeOpenAISseChunk(res, makeChunk({}, 'stop'))
-				if (!res.writableEnded) res.write(OPENAI_SSE_DONE)
-				finalized = true
 			}
 			// 'thinking', 'tool_call', 'observation', 'done' → not surfaced
 		},
@@ -125,14 +153,23 @@ export function createOpenAISseAdapter(opts: {requestedModel: string; res: Respo
 		/**
 		 * Idempotent finalizer. Call from `finally` block to ensure [DONE]
 		 * terminator is written even if the upstream stream aborts.
+		 *
+		 * v29.4 Phase 45 Plan 04 (FR-CF-04): accepts optional `usage` and threads
+		 * it onto the terminal chunk per OpenAI streaming spec. Wire order:
+		 * terminal-chunk-with-usage FIRST, then [DONE] (pitfall B-13).
 		 */
-		finalize(stoppedReason?: AgentResult['stoppedReason']) {
+		finalize(stoppedReason?: AgentResult['stoppedReason'], usage?: StreamingUsage) {
 			if (finalized) return
 			if (!firstChunkSent) {
 				firstChunkSent = true
 				writeOpenAISseChunk(res, makeChunk({role: 'assistant', content: ''}, null))
 			}
-			writeOpenAISseChunk(res, makeChunk({}, mapFinishReason(stoppedReason)))
+			// Use explicit stoppedReason if supplied; otherwise fall back to the
+			// hint captured by onAgentEvent (final_answer → 'complete', error → 'error').
+			const effectiveStop = stoppedReason ?? stoppedReasonHint ?? undefined
+			// FR-CF-04: usage on terminal chunk per OpenAI streaming spec.
+			// Wire order: terminal-chunk-with-usage FIRST, then [DONE] (pitfall B-13).
+			writeOpenAISseChunk(res, makeChunk({}, mapFinishReason(effectiveStop), usage))
 			if (!res.writableEnded) res.write(OPENAI_SSE_DONE)
 			finalized = true
 		},
