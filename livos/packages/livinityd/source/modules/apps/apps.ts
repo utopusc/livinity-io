@@ -556,6 +556,77 @@ export default class Apps {
 		return true
 	}
 
+	/**
+	 * Auto-heal an already-installed app: re-runs broker injection if the manifest
+	 * declares `requiresAiProvider: true` (catches pre-fix installs that were
+	 * created before Phase 43.2 added single-user inject) and re-registers the
+	 * Caddy subdomain with the canonical port from the builtin manifest (catches
+	 * stale Redis subdomain entries pointing at the wrong port).
+	 *
+	 * Called from the install mutation's already-installed admin branch so a
+	 * second click on "Install" effectively re-runs the post-install config
+	 * steps without uninstalling the app.
+	 */
+	async reapplyAppConfig(appId: string): Promise<void> {
+		const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
+		const composeFile = `${appDataDirectory}/docker-compose.yml`
+		const manifestFile = `${appDataDirectory}/livinity-app.yml`
+
+		if (!(await fse.pathExists(composeFile))) {
+			this.logger.log(`reapplyAppConfig: ${appId} not on disk, skipping`)
+			return
+		}
+
+		// Load the on-disk manifest; fall back to BUILTIN_APPS for fields the
+		// store manifest may omit (port, requiresAiProvider, installOptions.subdomain).
+		let manifest: AppManifest | undefined
+		try {
+			manifest = await readManifestInDirectory(appDataDirectory)
+		} catch {}
+		const builtinApp = getBuiltinApp(appId)
+		const requiresAiProvider =
+			manifest?.requiresAiProvider ?? builtinApp?.requiresAiProvider ?? false
+		const port = manifest?.port ?? builtinApp?.port
+		const subdomain =
+			builtinApp?.installOptions?.subdomain ?? (manifest as any)?.subdomain
+
+		// Re-inject broker config when needed (idempotent — inject-ai-provider
+		// overwrites existing broker keys).
+		if (requiresAiProvider) {
+			try {
+				const composeContent = await fse.readFile(composeFile, 'utf8')
+				const yaml = (await import('js-yaml')).default
+				const composeData = yaml.load(composeContent)
+				const adminUser = await getAdminUser().catch(() => null)
+				const userId = adminUser?.id || 'default'
+				injectAiProviderConfig(composeData, userId, manifest ?? (builtinApp as any) ?? {requiresAiProvider: true})
+				await fse.writeFile(composeFile, yaml.dump(composeData))
+				this.logger.log(`reapplyAppConfig: re-injected broker config for ${appId} (userId=${userId})`)
+				// Recreate container so new env reaches the process.
+				try {
+					await $({cwd: appDataDirectory})`docker compose up -d --force-recreate`
+					this.logger.log(`reapplyAppConfig: recreated container for ${appId}`)
+				} catch (error) {
+					this.logger.error(`reapplyAppConfig: failed to recreate container for ${appId}`, error)
+				}
+			} catch (error) {
+				this.logger.error(`reapplyAppConfig: failed to re-inject broker for ${appId}`, error)
+			}
+		}
+
+		// Re-register subdomain with canonical port. registerAppSubdomain
+		// overwrites any existing entry with the same appId, so this fixes
+		// stale Caddy routes pointing at the wrong port (e.g., MiroFish
+		// subdomain pointing at the broker's :8080 instead of MiroFish :3000).
+		if (port) {
+			try {
+				await this.registerAppSubdomain(appId, port, subdomain)
+			} catch (error) {
+				this.logger.error(`reapplyAppConfig: failed to re-register subdomain for ${appId}`, error)
+			}
+		}
+	}
+
 	async uninstall(appId: string) {
 		// If we can't read an app's dependencies for any reason just skip that app, don't abort the uninstall
 		const allDependencies = await Promise.all(this.instances.map((app) => app.getDependencies().catch(() => null)))

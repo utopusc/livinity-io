@@ -175,9 +175,15 @@ export const apps = router({
 					}
 					return {alreadyInstalled: true, perUserInstance: true}
 				}
-				// Admin: grant shared access to global instance
+				// Admin: grant shared access to global instance + auto-heal
+				// post-install config (re-inject broker for pre-fix installs and
+				// re-register subdomain with canonical port). This makes a second
+				// "Install" click on a broken app a recovery action.
 				await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
-				return {alreadyInstalled: true}
+				await ctx.apps.reapplyAppConfig(input.appId).catch((err) => {
+					ctx.apps.logger.error(`reapplyAppConfig failed for ${input.appId}`, err)
+				})
+				return {alreadyInstalled: true, reapplied: true}
 			}
 
 			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides)

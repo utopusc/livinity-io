@@ -65,6 +65,29 @@ export const AppManifestSchema = z.object({
 	 * See .planning/phases/43-marketplace-integration-anchor-mirofish/ for details.
 	 */
 	requiresAiProvider: z.boolean().optional(),
+	/**
+	 * Optional install-time configuration. `subdomain` overrides the auto-derived
+	 * Caddy subdomain (defaults to app id). `environmentOverrides` declares fields
+	 * the install dialog must prompt for and pass through to the compose `environment`
+	 * block (e.g., ZEP_API_KEY, N8N_BASIC_AUTH_USER). Required entries block install
+	 * until the user fills them in.
+	 */
+	installOptions: z
+		.object({
+			subdomain: z.string().optional(),
+			environmentOverrides: z
+				.array(
+					z.object({
+						name: z.string(),
+						label: z.string(),
+						type: z.enum(['string', 'password']),
+						default: z.string().optional(),
+						required: z.boolean().optional(),
+					}),
+				)
+				.optional(),
+		})
+		.optional(),
 	torOnly: z.boolean().optional(),
 	// In bytes
 	installSize: z.number().int().optional(),
