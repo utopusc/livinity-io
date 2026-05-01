@@ -28,6 +28,7 @@ export type SectionId =
 	| 'networks'
 	| 'registry'
 	| 'activity'
+	| 'security'
 	| 'schedules'
 	| 'settings'
 
@@ -48,6 +49,10 @@ export const SECTION_IDS = [
 	'networks',
 	'registry',
 	'activity',
+	// Phase 46-04 — Security (fail2ban admin panel) sits next to Activity in the
+	// operator-cluster ordering: both surface real-time host signal. Placed
+	// BEFORE 'schedules' / 'settings' so it stays in the bottom-cluster.
+	'security',
 	'schedules',
 	'settings',
 ] as const satisfies readonly SectionId[]

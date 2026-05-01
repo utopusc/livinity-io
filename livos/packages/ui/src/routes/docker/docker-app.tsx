@@ -23,6 +23,7 @@ import {Logs} from './sections/logs'
 import {Networks} from './sections/networks'
 import {Registry} from './sections/registry'
 import {Schedules} from './sections/schedules'
+import {Security} from './sections/security'
 import {Settings} from './sections/settings'
 import {Shell} from './sections/shell'
 import {Stacks} from './sections/stacks'
@@ -83,6 +84,8 @@ function SectionView({section}: {section: SectionId}) {
 			return <Registry />
 		case 'activity':
 			return <Activity />
+		case 'security':
+			return <Security />
 		case 'schedules':
 			return <Schedules />
 		case 'settings':
