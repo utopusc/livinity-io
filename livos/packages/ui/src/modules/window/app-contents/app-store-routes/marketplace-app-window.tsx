@@ -2,7 +2,10 @@ import {useEffect, useRef, useCallback, useState} from 'react'
 import {TbArrowLeft, TbExternalLink, TbLoader2} from 'react-icons/tb'
 
 import {useAppInstall} from '@/hooks/use-app-install'
+import {useAvailableApp} from '@/providers/available-apps'
 import {useWindowRouter} from '@/providers/window-router'
+import {EnvironmentOverridesDialog} from '@/modules/app-store/environment-overrides-dialog'
+import {trpcReact} from '@/trpc/trpc'
 
 // Build-time constant defined in vite.config.ts
 declare const __MARKETPLACE_URL__: string
@@ -17,6 +20,21 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 	const iframeRef = useRef<HTMLIFrameElement>(null)
 	const appInstall = useAppInstall(appId)
 	const [isLoading, setIsLoading] = useState(true)
+	const [showEnvDialog, setShowEnvDialog] = useState(false)
+
+	// Phase 43.6: resolve env overrides for this app from the registry
+	// (post-Phase 43.4 augmentation makes BUILTIN_APPS installOptions visible
+	// on RegistryApp). Falls back to the builtinApps query for direct lookups.
+	// Without this, the iframe-driven install flow bypasses the env prompt
+	// dialog entirely — user installs MiroFish/n8n/Open WebUI without ever
+	// being asked for ZEP_API_KEY / basic auth / OPENAI_API_KEY.
+	const availableApp = useAvailableApp(appId)
+	const builtinAppsQ = trpcReact.appStore.builtinApps.useQuery()
+	const registryApp = availableApp.isLoading ? undefined : availableApp.app
+	const builtinApp = builtinAppsQ.data?.find((b) => b.id === appId)
+	const envOverrides =
+		(registryApp as any)?.installOptions?.environmentOverrides ??
+		builtinApp?.installOptions?.environmentOverrides
 
 	// Handle install messages from marketplace iframe
 	const handleMessage = useCallback(
@@ -30,12 +48,19 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 
 				// Verify the appId matches
 				if (requestedAppId === appId) {
-					// Start installation
-					appInstall.install()
+					// If the app declares env overrides, prompt before installing
+					// so secrets like ZEP_API_KEY / N8N_BASIC_AUTH_PASSWORD reach
+					// the compose env (and the install dialog matches what the
+					// in-app InstallButtonConnected path does).
+					if (envOverrides && envOverrides.length > 0) {
+						setShowEnvDialog(true)
+					} else {
+						appInstall.install()
+					}
 				}
 			}
 		},
-		[appId, appInstall],
+		[appId, appInstall, envOverrides],
 	)
 
 	useEffect(() => {
@@ -107,6 +132,19 @@ export default function MarketplaceAppWindow({appId}: MarketplaceAppWindowProps)
 					onLoad={handleIframeLoad}
 				/>
 			</div>
+
+			{envOverrides && envOverrides.length > 0 && (
+				<EnvironmentOverridesDialog
+					appName={(registryApp as any)?.name ?? builtinApp?.name ?? appId}
+					overrides={envOverrides}
+					open={showEnvDialog}
+					onOpenChange={setShowEnvDialog}
+					onNext={(envValues) => {
+						setShowEnvDialog(false)
+						appInstall.install(undefined, envValues)
+					}}
+				/>
+			)}
 		</div>
 	)
 }
