@@ -96,28 +96,28 @@
 
 ## Traceability
 
-Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is approved). Every v1 requirement maps to exactly one phase. Coverage = 21 / 21.
+Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is approved). Every v1 requirement maps to exactly one phase. Coverage = 18 / 18.
 
 | Requirement | Phase | Category | Status |
 |-------------|-------|----------|--------|
-| FR-CF-01 | TBD | Carry-Forward | Pending |
-| FR-CF-02 | TBD | Carry-Forward | Pending |
-| FR-CF-03 | TBD | Carry-Forward | Pending |
-| FR-CF-04 | TBD | Carry-Forward | Pending |
-| FR-TOOL-01 | TBD | Diagnostics | Pending |
-| FR-TOOL-02 | TBD | Diagnostics | Pending |
-| FR-MODEL-01 | TBD | Diagnostics | Pending |
-| FR-MODEL-02 | TBD | Diagnostics | Pending |
-| FR-PROBE-01 | TBD | Diagnostics | Pending |
-| FR-PROBE-02 | TBD | Diagnostics | Pending |
-| FR-F2B-01 | TBD | Fail2ban | Pending |
-| FR-F2B-02 | TBD | Fail2ban | Pending |
-| FR-F2B-03 | TBD | Fail2ban | Pending |
-| FR-F2B-04 | TBD | Fail2ban | Pending |
-| FR-F2B-05 | TBD | Fail2ban | Pending |
-| FR-F2B-06 | TBD | Fail2ban | Pending |
-| FR-SSH-01 | TBD | SSH Viewer | Pending |
-| FR-SSH-02 | TBD | SSH Viewer | Pending |
+| FR-CF-01 | 45 | Carry-Forward | Pending |
+| FR-CF-02 | 45 | Carry-Forward | Pending |
+| FR-CF-03 | 45 | Carry-Forward | Pending |
+| FR-CF-04 | 45 | Carry-Forward | Pending |
+| FR-TOOL-01 | 47 | Diagnostics | Pending |
+| FR-TOOL-02 | 47 | Diagnostics | Pending |
+| FR-MODEL-01 | 47 | Diagnostics | Pending |
+| FR-MODEL-02 | 47 | Diagnostics | Pending |
+| FR-PROBE-01 | 47 | Diagnostics | Pending |
+| FR-PROBE-02 | 47 | Diagnostics | Pending |
+| FR-F2B-01 | 46 | Fail2ban | Pending |
+| FR-F2B-02 | 46 | Fail2ban | Pending |
+| FR-F2B-03 | 46 | Fail2ban | Pending |
+| FR-F2B-04 | 46 | Fail2ban | Pending |
+| FR-F2B-05 | 46 | Fail2ban | Pending |
+| FR-F2B-06 | 46 | Fail2ban | Pending |
+| FR-SSH-01 | 48 | SSH Viewer | Pending |
+| FR-SSH-02 | 48 | SSH Viewer | Pending |
 
 **Mapped:** 18 / 18
 **Orphans:** 0
@@ -125,4 +125,4 @@ Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is ap
 
 ---
 
-*Initial draft: 2026-05-01. Categories sized via parallel research (`v29.4-STACK.md` / `v29.4-FEATURES.md` / `v29.4-ARCHITECTURE.md` / `v29.4-PITFALLS.md` / `v29.4-SUMMARY.md`). Awaiting `/gsd-roadmapper` to fill phase numbers in Traceability table.*
+*Initial draft: 2026-05-01. Categories sized via parallel research (`v29.4-STACK.md` / `v29.4-FEATURES.md` / `v29.4-ARCHITECTURE.md` / `v29.4-PITFALLS.md` / `v29.4-SUMMARY.md`). Roadmap generated 2026-05-01 by `/gsd-roadmapper` — phase numbers filled (18/18 mapped, 0 orphans, 0 duplicates). Phases 45-48; see `.planning/ROADMAP.md`.*
