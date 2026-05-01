@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
 status: unknown
-last_updated: "2026-05-01T22:46:15.756Z"
+last_updated: "2026-05-01T23:30:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 14
-  completed_plans: 10
-  percent: 71
+  completed_plans: 11
+  percent: 79
 ---
 
 # Project State
@@ -43,12 +43,12 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 |-------|------|--------|----------|
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
 | 46 — Fail2ban Admin Panel | 05/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar + P05 master gate/UAT/Settings wire-up ALL SHIPPED — FR-F2B-01..06 ALL CLOSED) | **Complete** | `[██████████] 100%` |
-| 47 — AI Diagnostics (Registry + Identity + Probe) | 01/05 (P01 Mini PC pre-flight diagnostic SHIPPED — verdict=neither, Branch N for P03; commit `4fe43fa8`) | **In Progress** | `[██░░░░░░░░] 20%` |
+| 47 — AI Diagnostics (Registry + Identity + Probe) | 02/05 (P01 Mini PC pre-flight diagnostic SHIPPED — verdict=neither; P02 FR-TOOL backend SHIPPED — atomic-swap registry diagnostic + 9/9 tests, commit `99dd6295`) | **In Progress** | `[████░░░░░░] 40%` |
 | 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
 
-**Overall milestone progress:** `[███████░░░] 71%` (Phase 45 + Phase 46 fully closed + Phase 47 P01 shipped; 10 of 14 plans shipped)
-**Active phase:** Phase 47 IN PROGRESS — P01 verdict=`neither` locked; Plan 47-03 will take Branch N (no sacred-file edit, no v29.4 second re-pin); sacred file byte-identical
-**Next step:** Run Phase 47 Plan 02 (FR-TOOL — independent of P01 verdict) and Plan 03 (Branch N: diagnostic surface only)
+**Overall milestone progress:** `[████████░░] 79%` (Phase 45 + Phase 46 fully closed + Phase 47 P01+P02 shipped; 11 of 14 plans shipped)
+**Active phase:** Phase 47 IN PROGRESS — P01 verdict=`neither`, P02 FR-TOOL backend (capabilities.diagnoseRegistry + flushAndResync atomic-swap) shipped; Plan 47-03 will take Branch N (no sacred-file edit, no v29.4 second re-pin); sacred file byte-identical
+**Next step:** Run Phase 47 Plan 03 (FR-MODEL — Branch N diagnostic surface only)
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase 46-fail2ban-admin-panel P04 | 14m | 2 tasks | 11 files |
 | Phase 46 P05 | 6m | 2 tasks | 3 files |
 | Phase 47-ai-diagnostics P01 | 9m | 1 task (Task 2 checkpoint auto-approved per autonomous-mode user directive) | 1 file (`47-01-DIAGNOSTIC.md`, 323 lines) |
+| Phase 47 P02 | 18m | 2 tasks | 3 files |
 
 ## Accumulated Context
 

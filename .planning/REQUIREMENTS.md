@@ -27,8 +27,10 @@
 
 ### Nexus Tool Registry Restore (FR-TOOL) — was A1
 
-- [ ] **FR-TOOL-01**: Settings > Advanced > Diagnostics card shows a "Capability Registry" sub-section with: Redis manifest count, built-in tool count from source, syncedAt timestamp, and a 3-way categorized list of capabilities — `expected-and-present`, `expected-but-missing` (e.g. `shell`, `docker_*`, `files`, `web_search`), `unexpected-extras`. The "missing" branch distinguishes "missing because Redis lost it" from "missing because precondition not met (e.g. web_search needs API key)".
-- [ ] **FR-TOOL-02**: Admin clicks "Re-sync registry" button → atomic-swap resync (write to temp Redis prefix `capability:tmp:*`, swap-pointer flush, then drop old prefix) so AI chat traffic mid-resync sees either OLD or NEW set, never empty. Pre-existing user-set `enabled: false` overrides from `user_capability_overrides` table are re-applied AFTER resync. Verified by integration test using isolated Redis DB.
+- [x] **FR-TOOL-01
+**: Settings > Advanced > Diagnostics card shows a "Capability Registry" sub-section with: Redis manifest count, built-in tool count from source, syncedAt timestamp, and a 3-way categorized list of capabilities — `expected-and-present`, `expected-but-missing` (e.g. `shell`, `docker_*`, `files`, `web_search`), `unexpected-extras`. The "missing" branch distinguishes "missing because Redis lost it" from "missing because precondition not met (e.g. web_search needs API key)".
+- [x] **FR-TOOL-02
+**: Admin clicks "Re-sync registry" button → atomic-swap resync (write to temp Redis prefix `capability:tmp:*`, swap-pointer flush, then drop old prefix) so AI chat traffic mid-resync sees either OLD or NEW set, never empty. Pre-existing user-set `enabled: false` overrides from `user_capability_overrides` table are re-applied AFTER resync. Verified by integration test using isolated Redis DB.
 
 ### Model Identity Stability (FR-MODEL) — was A2
 
