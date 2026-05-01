@@ -25,7 +25,8 @@
     "test:phase43": "npm run test:phase42",
     "test:phase44": "npm run test:phase43",
     "test:phase45": "npm run test:phase44 && tsx ../../../livos/packages/livinityd/source/modules/livinity-broker/integration.test.ts && tsx ../../../livos/packages/livinityd/source/modules/server/trpc/common.test.ts && tsx ../../../livos/packages/livinityd/source/modules/livinity-broker/openai-sse-adapter.test.ts",
-    "test:phase46": "npm run test:phase45 && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/parser.test.ts && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/client.test.ts && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/active-sessions.test.ts && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/integration.test.ts"
+    "test:phase46": "npm run test:phase45 && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/parser.test.ts && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/client.test.ts && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/active-sessions.test.ts && tsx ../../../livos/packages/livinityd/source/modules/fail2ban-admin/integration.test.ts",
+    "test:phase47": "npm run test:phase46 && tsx ../../../livos/packages/livinityd/source/modules/diagnostics/capabilities.test.ts && tsx ../../../livos/packages/livinityd/source/modules/diagnostics/model-identity.test.ts && tsx ../../../livos/packages/livinityd/source/modules/diagnostics/app-health.test.ts && tsx ../../../livos/packages/livinityd/source/modules/diagnostics/integration.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.84",
