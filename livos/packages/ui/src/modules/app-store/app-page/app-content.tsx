@@ -12,6 +12,9 @@ import {Badge} from '@/shadcn-components/ui/badge'
 import {cn} from '@/shadcn-lib/utils'
 import {RegistryApp, UserApp} from '@/trpc/trpc'
 
+// v29.4 Phase 47 Plan 05 — AppHealthCard dual-mount (FR-PROBE-01).
+import {AppHealthCard} from '@/routes/settings/diagnostics/app-health-card'
+
 import {SettingsSection} from './settings-section'
 
 export function AppContent({
@@ -45,6 +48,8 @@ export function AppContent({
 				{/* Since contents can be arbitrarily wide, we wanna limit */}
 				<div className='flex flex-col gap-5 md:max-w-sm'>
 					{userApp && <SettingsSection userApp={userApp} />}
+					{/* v29.4 Phase 47 Plan 05 — App Health probe inline on detail page (FR-PROBE-01) */}
+					{userApp && <AppHealthCard appId={app.id} appName={app.name} />}
 					{/* Public Access Section - show for installed apps */}
 					{userApp && (
 						<PublicAccessSection appId={app.id} appName={app.name} appPort={app.port || 0} />
@@ -63,6 +68,8 @@ export function AppContent({
 					</Badge>
 				)}
 				{userApp && <SettingsSection userApp={userApp} />}
+				{/* v29.4 Phase 47 Plan 05 — App Health probe inline on detail page (mobile, FR-PROBE-01) */}
+				{userApp && <AppHealthCard appId={app.id} appName={app.name} />}
 				{/* Public Access Section - show for installed apps */}
 				{userApp && (
 					<PublicAccessSection appId={app.id} appName={app.name} appPort={app.port || 0} />
