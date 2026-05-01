@@ -128,6 +128,29 @@ function mockUpstreamSse(events: Array<{type: string; data?: unknown; turn?: num
 	}
 }
 
+/**
+ * FR-CF-01 (Phase 45 Plan 02) — mock upstream nexus /api/agent/stream
+ * returning a non-OK status. Used by Tests 6/7/8/9 to verify broker's
+ * strict 429-only allowlist + Retry-After verbatim forwarding.
+ *
+ * Note: the broker's auth/userId handler runs BEFORE upstream fetch is
+ * invoked, so the mock must NOT intercept the test's own fetch to the
+ * broker — only the broker's outgoing fetch to /api/agent/stream.
+ */
+function mockUpstreamError(opts: {status: number; retryAfter?: string}): () => void {
+	const original = globalThis.fetch
+	globalThis.fetch = (async (input: any, init?: any) => {
+		const urlStr = typeof input === 'string' ? input : input?.url || ''
+		if (!urlStr.includes('/api/agent/stream')) return original(input, init)
+		const headers = new Headers({'Content-Type': 'text/plain'})
+		if (opts.retryAfter !== undefined) headers.set('Retry-After', opts.retryAfter)
+		return new Response('upstream error', {status: opts.status, headers})
+	}) as any
+	return () => {
+		globalThis.fetch = original
+	}
+}
+
 function startBrokerApp(
 	livinityd: any,
 	createBrokerRouter: any,
@@ -287,7 +310,107 @@ async function runTests() {
 		console.log('  PASS Test 5: invalid body shape → 400')
 	}
 
-	console.log('\nAll integration.test.ts tests passed (5/5)')
+	// Test 6 — FR-CF-01: upstream 429 with Retry-After:60 → broker forwards 429 + header verbatim
+	{
+		setMockUsers([{id: 'admin-1', role: 'admin', username: 'admin'}])
+		const restoreFetch = mockUpstreamError({status: 429, retryAfter: '60'})
+		const livinityd = makeFakeLivinityd({multiUser: false})
+		const {createBrokerRouter} = await import('./router.js')
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
+			method: 'POST',
+			headers: {'content-type': 'application/json'},
+			body: JSON.stringify({model: 'claude-sonnet-4-6', messages: [{role: 'user', content: 'hi'}]}),
+		})
+		assert.equal(res.status, 429, `expected 429, got ${res.status}`)
+		assert.equal(res.headers.get('retry-after'), '60', 'Retry-After preserved verbatim (delta-seconds)')
+		const body = (await res.json()) as any
+		assert.equal(body.type, 'error')
+		assert.equal(body.error.type, 'rate_limit_error', 'body.error.type === rate_limit_error')
+		await close()
+		restoreFetch()
+		console.log('  PASS Test 6: Anthropic 429 + Retry-After:60 forwarded verbatim')
+	}
+
+	// Test 6b — FR-CF-01: upstream 429 with HTTP-date Retry-After → broker forwards byte-identical
+	{
+		setMockUsers([{id: 'admin-1', role: 'admin', username: 'admin'}])
+		const httpDate = 'Wed, 21 Oct 2026 07:28:00 GMT'
+		const restoreFetch = mockUpstreamError({status: 429, retryAfter: httpDate})
+		const livinityd = makeFakeLivinityd({multiUser: false})
+		const {createBrokerRouter} = await import('./router.js')
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
+			method: 'POST',
+			headers: {'content-type': 'application/json'},
+			body: JSON.stringify({model: 'claude-sonnet-4-6', messages: [{role: 'user', content: 'hi'}]}),
+		})
+		assert.equal(res.status, 429)
+		assert.equal(res.headers.get('retry-after'), httpDate, 'Retry-After HTTP-date preserved byte-identical')
+		await close()
+		restoreFetch()
+		console.log('  PASS Test 6b: Anthropic 429 + HTTP-date Retry-After byte-identical')
+	}
+
+	// Test 7 — FR-CF-01: parameterized status codes [400,401,403,429,500,502,503,504,529]
+	// verifies broker forwards each upstream status verbatim (no remap to 429, no collapse to 500).
+	for (const status of [400, 401, 403, 429, 500, 502, 503, 504, 529]) {
+		setMockUsers([{id: 'admin-1', role: 'admin', username: 'admin'}])
+		const restoreFetch = mockUpstreamError({status})
+		const livinityd = makeFakeLivinityd({multiUser: false})
+		const {createBrokerRouter} = await import('./router.js')
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
+			method: 'POST',
+			headers: {'content-type': 'application/json'},
+			body: JSON.stringify({model: 'claude-sonnet-4-6', messages: [{role: 'user', content: 'hi'}]}),
+		})
+		assert.equal(res.status, status, `${status} from upstream → ${status} from broker (no remap)`)
+		await close()
+		restoreFetch()
+	}
+	console.log('  PASS Test 7: Anthropic parameterized 9-status-code allowlist (no remap)')
+
+	// Test 8 — FR-CF-01: OpenAI-side upstream 429 + Retry-After → broker forwards 429 + header
+	{
+		setMockUsers([{id: 'admin-1', role: 'admin', username: 'admin'}])
+		const restoreFetch = mockUpstreamError({status: 429, retryAfter: '120'})
+		const livinityd = makeFakeLivinityd({multiUser: false})
+		const {createBrokerRouter} = await import('./router.js')
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
+			method: 'POST',
+			headers: {'content-type': 'application/json'},
+			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'hi'}], stream: false}),
+		})
+		assert.equal(res.status, 429)
+		assert.equal(res.headers.get('retry-after'), '120', 'Retry-After preserved on OpenAI side too')
+		const body = (await res.json()) as any
+		assert.equal(body.error.type, 'rate_limit_exceeded_error', 'OpenAI body.error.type === rate_limit_exceeded_error')
+		await close()
+		restoreFetch()
+		console.log('  PASS Test 8: OpenAI 429 + Retry-After:120 forwarded verbatim')
+	}
+
+	// Test 9 — FR-CF-01: OpenAI-side parameterized status codes (mirror of Test 7)
+	for (const status of [400, 401, 403, 429, 500, 502, 503, 504, 529]) {
+		setMockUsers([{id: 'admin-1', role: 'admin', username: 'admin'}])
+		const restoreFetch = mockUpstreamError({status})
+		const livinityd = makeFakeLivinityd({multiUser: false})
+		const {createBrokerRouter} = await import('./router.js')
+		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
+		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
+			method: 'POST',
+			headers: {'content-type': 'application/json'},
+			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'hi'}], stream: false}),
+		})
+		assert.equal(res.status, status, `OpenAI: ${status} from upstream → ${status} from broker`)
+		await close()
+		restoreFetch()
+	}
+	console.log('  PASS Test 9: OpenAI parameterized 9-status-code allowlist (no remap)')
+
+	console.log('\nAll integration.test.ts tests passed (10/10)')
 
 	// Restore prototypes (good citizenship for any subsequent test in same process)
 	pg.Pool.prototype.connect = originalConnect

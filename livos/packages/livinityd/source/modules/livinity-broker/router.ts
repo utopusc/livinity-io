@@ -4,7 +4,7 @@ import {containerSourceIpGuard, resolveAndAuthorizeUserId} from './auth.js'
 import {translateAnthropicMessagesToSdkArgs} from './translate-request.js'
 import {createSseAdapter} from './sse-adapter.js'
 import {buildSyncAnthropicResponse, aggregateChunkText} from './sync-response.js'
-import {createSdkAgentRunnerForUser} from './agent-runner-factory.js'
+import {createSdkAgentRunnerForUser, UpstreamHttpError} from './agent-runner-factory.js'
 import type {AnthropicMessagesRequest, BrokerDeps} from './types.js'
 import {registerOpenAIRoutes} from './openai-router.js'
 
@@ -155,6 +155,29 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 				})
 				res.status(200).json(response)
 			} catch (err: any) {
+				// FR-CF-01 (Phase 45 Plan 02) — strict 429-only allowlist with Retry-After
+				// verbatim forwarding (pitfall B-09 / B-10). All other upstream statuses
+				// forward at their actual code; non-UpstreamHttpError throws stay 500.
+				if (err instanceof UpstreamHttpError) {
+					if (err.status === 429) {
+						if (err.retryAfter !== null) {
+							res.setHeader('Retry-After', err.retryAfter)
+						}
+						res.status(429).json({
+							type: 'error',
+							error: {type: 'rate_limit_error', message: err.message},
+						})
+						return
+					}
+					// Non-429 upstream error: forward upstream status verbatim
+					// (502/503/504 stay 502/503/504 — NOT remapped to 429, NOT collapsed to 500).
+					res.status(err.status).json({
+						type: 'error',
+						error: {type: 'api_error', message: err.message},
+					})
+					return
+				}
+				// Genuinely-internal error (no upstream Response in scope): preserve 500.
 				res.status(500).json({
 					type: 'error',
 					error: {type: 'api_error', message: err?.message || 'broker error'},

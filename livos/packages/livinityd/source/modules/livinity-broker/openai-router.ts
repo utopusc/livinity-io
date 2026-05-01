@@ -2,7 +2,7 @@ import type express from 'express'
 import type {Request, Response} from 'express'
 import type {AgentResult} from '@nexus/core'
 import {resolveAndAuthorizeUserId} from './auth.js'
-import {createSdkAgentRunnerForUser} from './agent-runner-factory.js'
+import {createSdkAgentRunnerForUser, UpstreamHttpError} from './agent-runner-factory.js'
 import {aggregateChunkText} from './sync-response.js'
 import {
 	translateOpenAIChatToSdkArgs,
@@ -232,6 +232,33 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 			})
 			res.status(200).json(response)
 		} catch (err: any) {
+			// FR-CF-01 (Phase 45 Plan 02) — strict 429-only allowlist with Retry-After
+			// verbatim forwarding (pitfall B-09 / B-10). Mirrors router.ts:157 catch.
+			if (err instanceof UpstreamHttpError) {
+				if (err.status === 429) {
+					if (err.retryAfter !== null) {
+						res.setHeader('Retry-After', err.retryAfter)
+					}
+					res.status(429).json({
+						error: {
+							message: err.message,
+							type: 'rate_limit_exceeded_error',
+							code: 'rate_limit_exceeded',
+						},
+					})
+					return
+				}
+				// Non-429 upstream error: forward upstream status verbatim.
+				res.status(err.status).json({
+					error: {
+						message: err.message,
+						type: 'api_error',
+						code: 'upstream_failure',
+					},
+				})
+				return
+			}
+			// Genuinely-internal error (no upstream Response): preserve 500.
 			res.status(500).json({
 				error: {
 					message: err?.message || 'broker error',
