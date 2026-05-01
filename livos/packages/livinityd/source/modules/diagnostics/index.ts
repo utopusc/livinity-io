@@ -42,11 +42,24 @@ export {
 	type ModelIdentityVerdict,
 } from './model-identity.js'
 
+// ── Re-export factories + types from app-health.ts (Phase 47 Plan 04) ──────
+export {
+	makeProbeAppHealth,
+	realProbeAppHealth,
+	type ProbeResult,
+	type ProbeAppHealthDeps,
+	type FetchFn as AppHealthFetchFn,
+	type GetUserAppInstanceFn,
+	type UserAppInstance as ProbeUserAppInstance,
+} from './app-health.js'
+
 // ── Thin convenience wrappers ──────────────────────────────────────────────
 import {realDiagnoseRegistry, realFlushAndResync} from './capabilities.js'
 import type {DiagnoseRegistryResult, FlushAndResyncResult, FlushScope} from './capabilities.js'
 import {realDiagnoseModelIdentity} from './model-identity.js'
 import type {DiagnoseModelIdentityResult} from './model-identity.js'
+import {realProbeAppHealth} from './app-health.js'
+import type {ProbeResult} from './app-health.js'
 
 /**
  * High-level facade for the FR-TOOL-01 diagnostic. Routes.ts (Wave 5)
@@ -79,4 +92,21 @@ export async function flushAndResync(opts: {
  */
 export async function diagnoseModelIdentity(): Promise<DiagnoseModelIdentityResult> {
 	return realDiagnoseModelIdentity.diagnose()
+}
+
+/**
+ * High-level facade for the FR-PROBE-01 / FR-PROBE-02 reachability probe.
+ * Plan 47-05's privateProcedure consumes this — userId always sourced from
+ * `ctx.currentUser.id`, appId from validated input. The wrapper exists so
+ * routes.ts imports a single thin function rather than the
+ * `realProbeAppHealth.probe()` factory shape.
+ *
+ * G-04 BLOCKER (anti-port-scanner): the underlying probe enforces
+ * PG-scoping at TWO layers — see app-health.ts.
+ */
+export async function probeAppHealth(opts: {
+	userId: string
+	appId: string
+}): Promise<ProbeResult> {
+	return realProbeAppHealth.probe(opts)
 }
