@@ -237,20 +237,32 @@ export class SdkAgentRunner extends EventEmitter {
 
     // Build system prompt.
     //
-    // Phase 43.8 (broker passthrough): use `??` instead of `||` so that an
-    // explicit empty string from the caller (broker mode, where the API
-    // request had no `system` field — the user wants raw Anthropic API
-    // semantics, not the agent loop's Nexus identity) passes through
-    // unchanged. Previous `||` treated `''` as falsy and fell back to the
-    // Nexus default, causing every broker-routed app (Open WebUI,
-    // marketplace AI apps) to identify as "Nexus, an autonomous AI
-    // assistant" regardless of the model selected.
+    // Phase 43.10 (model identity): @anthropic-ai/claude-agent-sdk 0.2.x
+    // suppresses the bundled Claude Code `<env>` block (which carries the
+    // model's display name + exact id) whenever any non-preset systemPrompt
+    // is set. Without that block the model falls back to its training-data
+    // identity ("Claude 3.5 Sonnet") even when query() routes to 4.x.
+    // Fix: prepend an explicit identity line built from `tierToModel(tier)`
+    // so the model always knows which version it is, regardless of whether
+    // the caller is the broker (empty override), an in-app Nexus chat (no
+    // override → Nexus default), or a custom system prompt from any caller.
     //
-    // Behavior preserved for all non-empty values — the Nexus default is
-    // still emitted whenever the caller leaves `systemPromptOverride`
-    // unset (undefined or null). Sacred-file rule respected: single
-    // operator change, no structural edits.
-    let systemPrompt = this.config.systemPromptOverride ?? `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.
+    // Phase 43.8 (broker passthrough — preserved): `??` instead of `||`
+    // keeps explicit empty strings from the broker passthrough mode
+    // routing back to the Nexus default. Combined with 43.10's prepend,
+    // a broker request with `system: ''` produces just the identity line
+    // — no Nexus branding leaks into the response.
+    //
+    // Sacred-file invariant respected: agent loop, watchdog, per-tier
+    // budget caps, restricted subprocess env, MCP tool wiring all
+    // unchanged. Edit confined to the systemPrompt string construction.
+    const _modelId = tierToModel(tier) || 'claude-sonnet-4-5';
+    const _modelMatch = _modelId.match(/claude-(opus|sonnet|haiku)-(\d)-(\d)/);
+    const _displayName = _modelMatch
+      ? `Claude ${_modelMatch[1][0].toUpperCase()}${_modelMatch[1].slice(1)} ${_modelMatch[2]}.${_modelMatch[3]}`
+      : 'Claude';
+    const _identityLine = `You are powered by the model named ${_displayName}. The exact model ID is ${_modelId}.\n\n`;
+    let systemPrompt = _identityLine + (this.config.systemPromptOverride ?? `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.
 
 You have access to MCP tools (prefixed with mcp__nexus-tools__) for shell commands, Docker management, file operations, web browsing, memory, and messaging.
 
@@ -260,7 +272,7 @@ CRITICAL RULES:
 3. Conversation history (if provided) is CONTEXT ONLY. Do NOT re-execute tasks from history.
 4. Be concise. For simple questions, respond in 1-2 sentences without using tools.
 5. If a tool fails, try ONE alternative approach, then report the issue.
-6. When the task is complete, provide your final answer immediately — do not keep exploring.`;
+6. When the task is complete, provide your final answer immediately — do not keep exploring.`);
 
     if (this.config.contextPrefix) {
       task = `${this.config.contextPrefix}\n\n## Current Task\n${task}`;
