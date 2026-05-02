@@ -65,7 +65,13 @@
   3. The chosen agent-mode opt-in mechanism (header vs URL path) is selected with a worked example of an external client request that triggers it vs falls through to passthrough.
   4. The chosen public endpoint platform (Server5 Caddy vs Cloudflare Worker) is paired with a TLS strategy (LE on-demand vs CF-managed) and a rate-limit primitive (Caddy `rate_limit` plugin vs CF Worker WAF rule).
   5. D-51-03 (Branch N sacred-file reversal) is re-evaluated with a verdict: either "not needed in v30 — passthrough handles external identity, agent mode untouched" OR "still needed as v30.1 hot-patch out of scope here."
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 56-01-PLAN.md — Architectural Verdicts (Q1 SDK-direct vs HTTP-proxy + Q2 tools forwarding + Q7 agent-mode streaming)
+- [ ] 56-02-PLAN.md — Auth & Public Endpoint Verdicts (Q3 agent-mode opt-in + Q4 Caddy vs CF Worker + Q5 key rotation + Q6 rate-limit)
+- [ ] 56-03-PLAN.md — Cross-Cut Audits (D-NO-NEW-DEPS + Sacred SHA stability + D-51-03 re-evaluation)
+- [ ] 56-04-PLAN.md — SPIKE-FINDINGS.md synthesis (Executive Summary + Decisions Log + Validation)
 
 ### Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In
 **Goal**: External clients hitting `/v1/messages` and `/v1/chat/completions` get a transparent forward to the upstream Anthropic API with their own `system` prompt and their own `tools[]` preserved verbatim — no Nexus identity, no Nexus MCP tools. LivOS in-app chat keeps the existing Agent-SDK-tooled experience by opting into agent mode.
@@ -162,7 +168,7 @@
 | 53. A4 Security Panel Render         | v29.5     | 0/0            | Complete    | 2026-05-02 |
 | 54. B1 Verification Gate             | v29.5     | 0/0            | Complete    | 2026-05-02 |
 | 55. Live Milestone Verification      | v29.5     | 0/0            | DEFERRED    | →v30 P63   |
-| 56. Research Spike                   | v30.0     | 0/0            | Not started | -          |
+| 56. Research Spike                   | v30.0     | 0/4            | Not started | -          |
 | 57. A1+A2 Passthrough + Agent Mode   | v30.0     | 0/0            | Not started | -          |
 | 58. C1+C2 True Token Streaming       | v30.0     | 0/0            | Not started | -          |
 | 59. B1 Bearer Token Auth             | v30.0     | 0/0            | Not started | -          |
