@@ -1,0 +1,18 @@
+BAN_OR_AUTH_ERROR: ssh: connect to host 10.69.31.68 port 22: Connection timed out
+
+Probe attempted: 2026-05-02
+Origin: orchestrator (this session)
+Probe command: ssh -i C:/Users/hello/Desktop/Projects/contabo/pem/minipc -o ConnectTimeout=20 -o BatchMode=yes bruce@10.69.31.68 'echo alive'
+Result: Connection timed out (fail2ban ACTIVE — IP banned from prior diagnostic session)
+
+Per Plan 49-01 design: STOPPING this plan. Per D-49-01 (LOCKED) NO retries within phase. Plan 49-04's design is to surface BLOCKED to user with explicit recovery instructions.
+
+Recovery paths for the user:
+1. Wait — fail2ban default sshd ban is 10 min, but repeat offenders escalate (e.g., bantime.increment = true scales bantime by factor). Could be 20-60+ min.
+2. Use a different egress IP (VPN, mobile hotspot, different machine) to bypass the ban.
+3. SSH to Mini PC console DIRECTLY (not over network — physical/serial) and run `sudo fail2ban-client unban <orchestrator-IP>` to release.
+4. (Once A4 is fixed in Phase 53) Use the Server Management Security UI panel to unban — but A4 is exactly the regression we are trying to verify, so this path is blocked too.
+
+Phase 49 outcome: BLOCKED on fail2ban. Verdicts for A1, A2, A4 cannot be CONFIRMED via fresh capture in this session. Phase 50-53 must either:
+- (preferred) wait until orchestrator IP is unbanned, then re-run Phase 49 once
+- (fallback) proceed using `.planning/v29.4-REGRESSIONS.md` as the sole fixture for A1, A2, A4 root-cause hypotheses, treating Phase 49's confirm step as deferred until live verification in Phase 55

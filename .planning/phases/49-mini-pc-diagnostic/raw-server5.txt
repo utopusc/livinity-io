@@ -1,0 +1,20 @@
+Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts.
+=== PLATFORM_DB_DISCOVERY ===
+ platform  | platform | UTF8     | libc            | C.UTF-8 | C.UTF-8 |            |           | =Tc/platform         +
+           |          |          |                 |         |         |            |           | platform=CTc/platform
+=== PLATFORM_APPS_TABLE ===
+=== PLATFORM_DIRS ===
+total 40
+drwxr-xr-x 10 root  root  4096 Apr 24 21:40 .
+drwxr-xr-x 22 root  root  4096 Nov  5 12:14 ..
+drwx--x--x  4 root  root  4096 Feb  5 10:38 containerd
+drwxr-xr-x  2 root  root  4096 Mar 25 11:57 downloads
+drwxr-xr-x  3 root  root  4096 Feb  7 21:01 google
+drwxr-xr-x  9 livos livos 4096 Mar 21 10:39 livos
+drwxr-xr-x 16 root  root  4096 May  1 17:54 livos-repo
+drwxr-xr-x  9 livos livos 4096 Feb  7 23:40 nexus
+drwxr-xr-x  6 root  root  4096 Mar 29 10:24 platform
+drwxr-xr-x  6 root  root  4096 Apr 24 21:41 platform-backup-20260424-214005
+=== PLATFORM_GIT_LOG ===
+/opt/livinity-io_not_a_git_repo
+=== END ===
