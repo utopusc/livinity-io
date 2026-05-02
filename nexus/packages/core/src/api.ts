@@ -2548,7 +2548,20 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       const result = await agent.run(task);
       clearInterval(heartbeat);
       // Send final result as last event
-      sendEvent({ type: 'done', data: { success: result.success, answer: result.answer, turns: result.turns, stoppedReason: result.stoppedReason } });
+      // Phase 59 (v29.5 hot-fix) — include token counts in done event so the
+      // broker (livinity-broker agent-runner-factory.ts:141-149) and any other
+      // consumers can populate usage{prompt_tokens, completion_tokens, total_tokens}
+      // on the OpenAI/Anthropic streaming terminal chunk. Without these the broker
+      // emits zero-token usage which downstream clients (Bolt.diy / Vercel AI SDK)
+      // may interpret as a malformed stream.
+      sendEvent({ type: 'done', data: {
+        success: result.success,
+        answer: result.answer,
+        turns: result.turns,
+        stoppedReason: result.stoppedReason,
+        totalInputTokens: result.totalInputTokens,
+        totalOutputTokens: result.totalOutputTokens,
+      }});
       res.end();
     } catch (err) {
       clearInterval(heartbeat);
