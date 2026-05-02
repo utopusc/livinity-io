@@ -92,15 +92,46 @@ Explicitly NOT in v29.5:
 
 ## Traceability
 
-*To be filled by gsd-roadmapper. Phase mapping continues from v29.4's last phase (48), so v29.5 phases start at 49.*
+Filled 2026-05-02 by gsd-roadmapper. Phase mapping continues from v29.4's last phase (48); v29.5 phases start at 49.
+
+**Phase summary:**
+- Phase 49 — Mini PC Live Diagnostic (single-batch SSH)
+- Phase 50 — A1 Tool Registry Built-in Seed
+- Phase 51 — A2 Streaming Regression Fix
+- Phase 52 — A3 Marketplace State Correction (Server5)
+- Phase 53 — A4 Fail2ban Security Panel Render Fix
+- Phase 54 — B1 Live-Verification Gate (Process Change)
+- Phase 55 — Mandatory Milestone-Level Live Verification
 
 | Requirement | Phase | Status |
 |---|---|---|
-| FR-A1-01..04 | TBD | pending |
-| FR-A2-01..04 | TBD | pending |
-| FR-A3-01..04 | TBD | pending |
-| FR-A4-01..04 | TBD | pending |
-| FR-B1-01..05 | TBD | pending |
-| FR-VERIFY-01..05 | TBD | pending |
+| FR-A1-01 (boot seed module + root-cause confirmation) | 49 + 50 | pending |
+| FR-A1-02 (idempotent isolated-Redis integration test) | 50 | pending |
+| FR-A1-03 (live ≥9 keys post-deploy) | 55 | pending |
+| FR-A1-04 (live tool invocation succeeds) | 55 | pending |
+| FR-A2-01 (root cause identified) | 49 | pending |
+| FR-A2-02 (targeted fix applied; D-40-01 ritual if sacred edit) | 51 | pending |
+| FR-A2-03 (live token streaming visible) | 55 | pending |
+| FR-A2-04 (Branch N reversal documented in PROJECT.md) | 51 | pending |
+| FR-A3-01 (Bolt.diy re-seeded on Server5) | 52 | pending |
+| FR-A3-02 (MiroFish removed on Server5) | 52 | pending |
+| FR-A3-03 (live marketplace shows correct apps) | 55 | pending |
+| FR-A3-04 (Bolt.diy wipe root cause documented) | 49 + 52 | pending |
+| FR-A4-01 (root cause identified) | 49 | pending |
+| FR-A4-02 (targeted fix applied) | 53 | pending |
+| FR-A4-03 (live sidebar shows 13 entries incl. Security) | 55 | pending |
+| FR-A4-04 (live Security renders Phase 46 tabs) | 55 | pending |
+| FR-B1-01 (workflow scans VERIFICATION files) | 54 | pending |
+| FR-B1-02 (count > 0 returns human_needed) | 54 | pending |
+| FR-B1-03 (AskUserQuestion default "No") | 54 | pending |
+| FR-B1-04 (--accept-debt forensic trail in MILESTONES.md) | 54 | pending |
+| FR-B1-05 (v29.4 retroactive re-audit returns human_needed) | 54 | pending |
+| FR-VERIFY-01 (Mini PC deploy success) | 55 | pending |
+| FR-VERIFY-02 (4 v29.4 UATs walked) | 55 | pending |
+| FR-VERIFY-03 (6 v29.3 UATs walked) | 55 | pending |
+| FR-VERIFY-04 (4 regressions independently CLOSED) | 55 | pending |
+| FR-VERIFY-05 (audit `passed` only after gate clears) | 55 | pending |
+
+**Coverage:** 26/26 requirements mapped 100%. No orphans. FR-A1-01 and FR-A3-04 each span two phases (diagnostic capture + downstream fix/documentation) — the requirement closes only when both halves complete.
 
 **Total:** 26 requirements across 6 categories.

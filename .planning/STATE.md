@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v29.5
 milestone_name: v29.4 Hot-Patch Recovery + Verification Discipline
-status: defining-requirements
-stopped_at: v29.5 milestone bootstrapped 2026-05-02 from MILESTONE-CONTEXT.md. Closing 4 user-reported v29.4 regressions (A1 tool registry / A2 streaming / A3 marketplace state / A4 Fail2ban panel) + B1 live-verification gate. Phases continue from 49.
+status: ready-to-plan
+stopped_at: v29.5 ROADMAP.md created 2026-05-02 — 7 phases (49-55) derived, 26/26 reqs mapped 100%. Awaiting `/gsd-plan-phase 49` to start execution. Phase 49 is the mandatory single-batch SSH diagnostic; Phases 50-53 fix A1/A2/A3/A4 in parallel after 49; Phase 54 (B1 verification gate) runs independently; Phase 55 is the new mandatory live-verification milestone close.
 last_updated: "2026-05-02T00:00:00Z"
-last_activity: 2026-05-02 -- /gsd-new-milestone v29.5 invoked. MILESTONE-CONTEXT.md consumed (deleted). PROJECT.md updated with Current Milestone block (v29.5). STATE.md reset for new milestone. Awaiting requirements + roadmap creation.
+last_activity: 2026-05-02 -- gsd-roadmapper completed. ROADMAP.md written with 7-phase structure, REQUIREMENTS.md traceability filled, STATE.md updated. Next phase to plan = 49.
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -26,10 +26,30 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v29.5 milestone started)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 49 (Mini PC Live Diagnostic — single-batch SSH) — Not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-02 — Milestone v29.5 started
+Status: Ready to plan Phase 49
+Last activity: 2026-05-02 — Roadmap created (7 phases, 26 reqs mapped)
+
+## Progress
+
+```
+[░░░░░░░░░░░░░░░░░░░░] 0% — 0/7 phases · 0/0 plans
+```
+
+## v29.5 Roadmap Snapshot
+
+| Phase | Goal | Reqs | Depends on |
+|---|---|---|---|
+| 49 | Mini PC live diagnostic (single-batch SSH) | FR-A1-01 / FR-A2-01 / FR-A3-04 / FR-A4-01 | — |
+| 50 | A1 tool registry built-in seed module | FR-A1-01 / FR-A1-02 | 49 |
+| 51 | A2 streaming root-cause fix (D-40-01 ritual if sacred edit) | FR-A2-02 / FR-A2-04 | 49 |
+| 52 | A3 Bolt.diy re-seed + MiroFish un-seed (Server5) | FR-A3-01 / FR-A3-02 / FR-A3-04 | 49 |
+| 53 | A4 Security panel render fix | FR-A4-02 | 49 |
+| 54 | B1 live-verification gate + retroactive v29.4 re-audit | FR-B1-01..05 | — (parallel) |
+| 55 | Mandatory live milestone-level verification | FR-A1-03/04 · FR-A2-03 · FR-A3-03 · FR-A4-03/04 · FR-VERIFY-01..05 | 50, 51, 52, 53, 54 |
+
+**Coverage:** 26/26 requirements mapped 100% (no orphans).
 
 ## v29.5 Milestone Context
 
@@ -43,23 +63,11 @@ Last activity: 2026-05-02 — Milestone v29.5 started
 - **A4 — Fail2ban Security panel render fix** (PWA cache / user_preferences default / sidebar useMemo filter)
 - **B1 — Live-verification gate** (`/gsd-complete-milestone` hard-block on `human_needed` UAT count)
 
-**Suggested phase breakdown (roadmapper will refine):**
-
-| Phase | Goal | Deps |
-|---|---|---|
-| 49 | Mini PC live diagnostic + force-rebuild update.sh check (read-only, single SSH session) | — |
-| 50 | A1 tool registry built-in seed module + livinityd boot wire-up + integration test | 49 |
-| 51 | A2 streaming root-cause investigation + fix (UI build / sacred file / preset) | 49 |
-| 52 | A3 Bolt.diy re-seed + MiroFish un-seed on Server5 platform DB | 49 |
-| 53 | A4 Security panel render investigation + fix | 49 |
-| 54 | B1 Live-verification gate added to /gsd-complete-milestone workflow | — |
-| 55 | Mandatory milestone-level live verification: deploy + walk all UATs on Mini PC | 50, 51, 52, 53, 54 |
-
 **Locked decisions (carry from v29.4):**
 - D-NO-NEW-DEPS preserved
 - D-NO-SERVER4 preserved (Mini PC + Server5 only)
 - D-LIVINITYD-IS-ROOT preserved
-- Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d31...` — likely surgical edit needed for A2 (D-40-01 ritual)
+- Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — likely surgical edit needed for A2 (D-40-01 ritual)
 - **D-LIVE-VERIFICATION-GATE (NEW)** — milestones cannot close `passed` without on-Mini-PC UAT execution
 
 ## Accumulated Context (carried from v29.4)
@@ -92,7 +100,12 @@ Last activity: 2026-05-02 — Milestone v29.5 started
 
 ## Next Steps
 
-1. Decide on research (Step 8 — recommend SKIP since `v29.4-REGRESSIONS.md` already has root-cause + recommendations)
-2. Define REQUIREMENTS.md with FR-A1 / FR-A2 / FR-A3 / FR-A4 / FR-B1 categories
-3. Spawn gsd-roadmapper for ROADMAP.md (continue numbering from 49)
-4. After approval, `/gsd-discuss-phase 49` to start execution
+1. `/gsd-plan-phase 49` — plan the mandatory single-batch SSH diagnostic phase. Phase 49 outputs feed Phases 50-53 root-cause decisions.
+2. After Phase 49 ships, plan Phases 50-53 (parallelizable) + Phase 54 (independent gate work).
+3. Phase 55 is the milestone-close gate — do NOT skip it.
+
+## Forensic Trail
+
+- 2026-05-02 — `/gsd-new-milestone v29.5` invoked. PROJECT.md updated. STATE.md reset.
+- 2026-05-02 — REQUIREMENTS.md filled (26 reqs across 6 categories: A1/A2/A3/A4/B1/VERIFY).
+- 2026-05-02 — gsd-roadmapper produced ROADMAP.md (7 phases, 49-55, 100% coverage). REQUIREMENTS.md traceability filled. STATE.md updated to `ready-to-plan`.
