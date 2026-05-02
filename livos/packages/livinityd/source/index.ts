@@ -23,6 +23,7 @@ import TunnelClient from './modules/platform/tunnel-client.js'
 import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 import {seedLocalEnvironment} from './modules/docker/environments.js'
+import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
@@ -220,6 +221,16 @@ export default class Livinityd {
 			this.server.start(),
 			this.ai.start(),
 		])
+
+		// Phase 50 (v29.5 A1) — defensive eager seed of built-in tools to nexus:cap:tool:*
+		// Survives factory resets and the v29.4 syncAll() stub (D-WAVE5-SYNCALL-STUB).
+		try {
+			await seedBuiltinTools(this.ai.redis)
+			this.logger.log('Seeded 9 built-in tool manifests to capability registry')
+		} catch (err) {
+			// Non-fatal — boot continues; tools will be missing until next syncTools()
+			this.logger.error('Failed to seed builtin tools', err)
+		}
 
 		// Initialize TunnelClient after ai.start() creates the Redis connection
 		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
