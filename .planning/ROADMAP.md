@@ -192,7 +192,20 @@ Plans:
   5. A human runs raw `curl -H "Authorization: Bearer liv_sk_*" https://api.livinity.io/v1/messages` from outside Mini PC's LAN AND a Python `Anthropic(api_key='liv_sk_*', base_url='https://api.livinity.io').messages.create(...)` call — both return spec-compliant streaming Anthropic-shape responses.
   6. A human walks all 14 carry-forward UATs (4 v29.5: 49/50/51/52/53/54; 4 v29.4: 45-48; 6 v29.3: 39-44) on Mini PC and `.planning/phases/63-live-verification/63-UAT-RESULTS.md` exists with one row per step (step ID | description | result PASS/FAIL/BLOCKED | evidence | timestamp) — zero BLOCKED rows allowed for milestone close.
   7. `/gsd-complete-milestone v30.0` returns audit `passed` (NOT `human_needed`) on its first invocation and the gate closes WITHOUT `--accept-debt` — this is the gate's first real-world clean pass and the forensic-trail table in MILESTONES.md gains NO new override row for v30.0.
-**Plans**: TBD
+**Plans**: 11 plans
+
+Plans:
+- [ ] 63-01-PLAN.md -- Wave 0 Pre-flight gate (Phases 56-62 EXECUTED + SSH + DNS + TLS + alias seed + UI tab)
+- [ ] 63-02-PLAN.md -- Wave 1 Mini PC deploy via update.sh + 4-services + Past Deploys panel
+- [ ] 63-03-PLAN.md -- Wave 2 Raw protocol smokes (curl + Anthropic Python SDK; FR-VERIFY-V30-05 + 06)
+- [ ] 63-04-PLAN.md -- Wave 3a Bolt.diy live test (identity + streaming + broker_usage; FR-VERIFY-V30-02)
+- [ ] 63-05-PLAN.md -- Wave 3b Open WebUI live test (system-prompt-honor + token counts; FR-VERIFY-V30-03)
+- [ ] 63-06-PLAN.md -- Wave 3c Continue.dev live test (5s code completion + tool-cleanliness; FR-VERIFY-V30-04)
+- [ ] 63-07-PLAN.md -- Wave 4a UAT walks v29.5 batch (Phases 49/50/51/52/53/54)
+- [ ] 63-08-PLAN.md -- Wave 4b UAT walks v29.4 batch (Phases 45/46/47/48)
+- [ ] 63-09-PLAN.md -- Wave 4c UAT walks v29.3 part 1 (Phases 39/40/41)
+- [ ] 63-10-PLAN.md -- Wave 4d UAT walks v29.3 part 2 (Phases 42/43/44 + Phase 43 OBSOLETE handling)
+- [ ] 63-11-PLAN.md -- Wave 5 Sacred SHA gate + cleanup + /gsd-complete-milestone v30.0 clean-close (FR-VERIFY-V30-08)
 
 ---
 
@@ -214,7 +227,7 @@ Plans:
 | 60. B2 Public Endpoint               | v30.0     | 0/5            | Not started | -          |
 | 61. C3+D1+D2 Spec Compliance         | v30.0     | 0/0            | Not started | -          |
 | 62. E1+E2 Usage + Settings UI        | v30.0     | 0/5            | Not started | -          |
-| 63. Mandatory Live Verification      | v30.0     | 0/0            | Not started | -          |
+| 63. Mandatory Live Verification      | v30.0     | 0/11           | Not started | -          |
 
 ---
 
