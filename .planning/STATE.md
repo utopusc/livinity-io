@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
-status: unknown
-last_updated: "2026-05-01T23:37:43.359Z"
+status: in-progress
+last_updated: "2026-05-02T00:12:20.368Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_plans: 17
+  completed_plans: 15
+  percent: 88
 ---
 
 # Project State
@@ -44,11 +44,11 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
 | 46 — Fail2ban Admin Panel | 05/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar + P05 master gate/UAT/Settings wire-up ALL SHIPPED — FR-F2B-01..06 ALL CLOSED) | **Complete** | `[██████████] 100%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | 05/05 (P01 Mini PC pre-flight verdict=neither; P02 FR-TOOL backend; P03 FR-MODEL backend Branch N; P04 FR-PROBE backend; P05 tRPC routes + UI scaffold + httpOnlyPaths + UAT — ALL 6 FR-* closed; sacred file byte-identical at `4f868d31...` through all 5 plans) | **Complete** | `[██████████] 100%` |
-| 48 — Live SSH Session Viewer | (none yet) | Pending | `[░░░░░░░░░░] 0%` |
+| 48 — Live SSH Session Viewer | 01/03 (P01 backend module + WS route mount FR-SSH-01 SHIPPED commit `9bf91508`; P02 + P03 PENDING) | In Progress | `[███░░░░░░░] 33%` |
 
-**Overall milestone progress:** `[██████████] 100%` (Phase 45 + Phase 46 + Phase 47 ALL fully closed; 14 of 14 plans shipped — only Phase 48 left)
-**Active phase:** Phase 47 COMPLETE — all 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) shipped end-to-end (route + UI + test + UAT). Phase 47 Plan 05 commits: `43c1109d` (routes + integration test) + `64873acd` (tRPC reg + httpOnlyPaths + common.test 8/9/10) + `0759f3cc` (UI scaffold + 3 cards) + `924c4325` (sidebar + dual-mount) + `895fe3af` (test:phase47 + 47-UAT.md). Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post Plan 05).
-**Next step:** Run `/gsd-plan-phase 48` for Live SSH Session Viewer (last phase in v29.4 milestone).
+**Overall milestone progress:** `[█████████░] 88%` (Phase 45 + Phase 46 + Phase 47 ALL fully closed; Phase 48 Plan 01 SHIPPED — 15 of 17 plans shipped; 2 plans remaining: 48-02 UI + 48-03 master gate/UAT)
+**Active phase:** Phase 48 — Plan 48-01 SHIPPED (commit `9bf91508`, 2026-05-01). FR-SSH-01 backend closed: `/ws/ssh-sessions` admin-gated WS handler + journalctl-stream module + 16/16 unit tests pass (8 + 8). Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post P01). Per D-NO-NEW-DEPS: 0 new deps (built-in `node:child_process.spawn` only).
+**Next step:** Run `/gsd-execute-phase 48` to ship Plan 48-02 (UI) — wave 2 starts from the WS URL `/ws/ssh-sessions?token=<JWT>` and the wire format `{timestamp, message, ip, hostname}` JSON-per-event documented in `48-01-SUMMARY.md`.
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase 47 P03 | 3m | 2 tasks | 3 files |
 | Phase 47 P04 | 12m | 2 tasks | 2 files |
 | Phase 47 P05 | 16m | 6 tasks (Task 7 checkpoint auto-approved per autonomous-mode user directive) | 14 files (7 created + 7 modified) |
+| Phase 48 P01 | 25 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - **Phase 47 P03 SHIPPED 2026-05-01 (commits `7fb22dab` feat + `28b16493` test): Branch N executed.** Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (verified pre and post-commit via `git hash-object`). `update.sh` byte-identical. Integrity test byte-identical (Phase 45 audit-only re-pin remains the most recent v29.4 entry). Diagnostic surface `model-identity.ts` (343 LOC, 6-step diagnostic, DI factory pattern) + `model-identity.test.ts` (274 LOC, 7/7 tests pass: 4 verdict buckets + 2 graceful-degrade + 1 G-10 D-NO-SERVER4 hard-wall). FR-MODEL-01 + FR-MODEL-02 closed.
 - **Phase 47 P04 SHIPPED 2026-05-01 (commits `8c81bf50` + `f33c47de`):** apps.healthProbe backend with PG-scoped + 5s timeout + 6/6 tests. Sacred file SHA byte-identical. FR-PROBE-01 + FR-PROBE-02 closed.
 - **Phase 47 P05 SHIPPED 2026-05-01 (commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`): Phase 47 CLOSED.** End-to-end wire-up: tRPC routes (capabilitiesRouter + appsHealthRouter merged via t.mergeRouters) + httpOnlyPaths +2 entries + UI shared scaffold (D-DIAGNOSTICS-CARD) + 3 cards + sidebar admin entry + dual-mount AppHealthCard on app detail + test:phase47 master gate (118/118 PASS individually) + 47-UAT.md (9-section walkthrough). Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (Branch N invariant upheld through ALL 5 plans of Phase 47). All 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) shipped end-to-end.
+- **Phase 48 P01 SHIPPED 2026-05-01 (commit `9bf91508`):** ssh-sessions backend module + WS route mount. New module `livos/packages/livinityd/source/modules/ssh-sessions/` (5 files, 1087 LOC) + 1 modification to `server/index.ts` (one import + one `mountWebSocketServer('/ws/ssh-sessions', ...)` block). 16/16 unit tests pass (8 journalctl-stream + 8 ws-handler). Encoded constants: `RING_BUFFER_LIMIT = 5_000`, close codes 4403 (non-admin) / 4404 (binary missing). Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical). 0 new deps (D-NO-NEW-DEPS upheld; built-in `node:child_process.spawn` only). FR-SSH-01 closed.
 
 ### Carry-from v29.3 (accepted debt at milestone close 2026-05-01)
 
@@ -149,7 +151,9 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - [x] Phase 47 Plan 04 (FR-PROBE backend — apps.healthProbe privateProcedure with PG-scoped reachability + 5s timeout + 6/6 tests) shipped (commits `8c81bf50` + `f33c47de`, 2026-05-01) — FR-PROBE-01 + FR-PROBE-02 closed
 - [x] Phase 47 Plan 05 (tRPC routes + UI scaffold + httpOnlyPaths + UAT — closes Phase 47) shipped (commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`, 2026-05-01) — all 6 FR-* requirements end-to-end (route + UI + test + UAT); 118/118 PASS individual run; common.test.ts 7→10 (+ Phase 47 entries); sacred file SHA byte-identical pre/post
 - [x] **Phase 47 (AI Diagnostics) COMPLETE** — all 5 plans / all 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) closed; sacred file UNTOUCHED through all 5 plans (Branch N invariant upheld); Phase 47 ready for Mini PC deploy + 47-UAT.md SC-1..SC-9 walkthrough
-- [ ] After Phase 47 ships, run `/gsd-plan-phase 48` for Live SSH Session Viewer
+- [x] **Phase 48 Plan 01** (FR-SSH-01 backend module + WS route mount) shipped (commit `9bf91508`, 2026-05-01) — `/ws/ssh-sessions` admin-gated WS handler + journalctl-stream DI factory + 16/16 unit tests pass (8 + 8); sacred file byte-identical at `4f868d31...`; 0 new deps; ring buffer `RING_BUFFER_LIMIT = 5_000`; close codes 4403 (non-admin) / 4404 (binary missing)
+- [ ] Phase 48 Plan 02 (UI — live ssh viewer panel consuming `/ws/ssh-sessions`)
+- [ ] Phase 48 Plan 03 (test:phase48 master gate + UAT)
 - [ ] At v29.4 milestone close: run `/gsd-complete-milestone v29.4` to archive
 
 ### Blockers

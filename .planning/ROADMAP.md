@@ -46,7 +46,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 - [x] **Phase 45: Carry-Forward Sweep** — Land four v29.3 audit gaps (broker 429, sacred SHA re-pin, httpOnlyPaths, OpenAI SSE usage chunk) before any new feature work
 - [x] **Phase 46: Fail2ban Admin Panel** — Server Management "Security" sidebar entry inside `LIVINITY_docker` with jail list, unban+whitelist, manual ban, audit log, mobile cellular toggle
 - [x] **Phase 47: AI Diagnostics (Registry + Identity + Probe)** — Shared `diagnostics-section.tsx` scaffold hosting capability registry restore, model identity diagnostic+remediation, marketplace app health probe — **COMPLETE 2026-05-01** (all 5 plans / all 6 FR-* requirements closed; sacred file byte-identical through all 5 plans)
-- [ ] **Phase 48: Live SSH Session Viewer** — `/ws/ssh-sessions` journalctl tail with click-IP-to-ban cross-link to Phase 46's manual ban modal
+- [ ] **Phase 48: Live SSH Session Viewer** — `/ws/ssh-sessions` journalctl tail with click-IP-to-ban cross-link to Phase 46's manual ban modal — **In Progress (1 of 3 plans shipped)**: Plan 48-01 backend module + WS route mount SHIPPED 2026-05-01 (commit `9bf91508`, FR-SSH-01 closed)
 
 ## Phase Details
 
@@ -122,7 +122,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
   5. NO geo-IP/ASN enrichment, NO `maxmind` dependency added — raw IP + click-to-ban gives 80% of value at 0% install cost (geo enrichment deferred to FR-SSH-future-01 / v30+).
 **Plans**: 3 plans
 Plans:
-- [ ] 48-01-PLAN.md — Backend ssh-sessions module (journalctl-stream + ws-handler + WS route mount + 2 unit-test files; FR-SSH-01)
+- [x] 48-01-PLAN.md — Backend ssh-sessions module (journalctl-stream + ws-handler + WS route mount + 2 unit-test files; FR-SSH-01) — **SHIPPED 2026-05-01 (commit `9bf91508`)**: 16/16 unit tests pass; sacred file byte-identical at `4f868d318abff71f8c8bfbcf443b2393a553018b`; 0 new deps; close codes 4403/4404; ring buffer = 5000
 - [ ] 48-02-PLAN.md — UI ssh-sessions-tab + Security section third-tab wiring + click-to-ban cross-link (FR-SSH-02)
 - [ ] 48-03-PLAN.md — test:phase48 master gate + integration test + 48-UAT.md operator script (FR-SSH-01 + FR-SSH-02)
 **UI hint**: yes
@@ -163,7 +163,7 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 | FR-MODEL-02 | 47 | Diagnostics | Pending |
 | FR-PROBE-01 | 47 | Diagnostics | Pending |
 | FR-PROBE-02 | 47 | Diagnostics | Pending |
-| FR-SSH-01 | 48 | SSH Viewer | Pending |
+| FR-SSH-01 | 48 | SSH Viewer | Complete (P01 commit `9bf91508`) |
 | FR-SSH-02 | 48 | SSH Viewer | Pending |
 
 **Mapped:** 18 / 18

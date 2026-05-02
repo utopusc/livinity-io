@@ -72,7 +72,8 @@
 
 ### Live SSH Session Viewer (FR-SSH) — was B4 (stretch goal, user opted in)
 
-- [ ] **FR-SSH-01**: New "SSH Sessions" sub-section in Security sidebar. WebSocket endpoint `/ws/ssh-sessions` (mirrors `/ws/docker/logs` from Phase 28) streams `journalctl -u ssh -o json -f --since "1 hour ago"` filtered to lines matching `_SYSTEMD_UNIT === "ssh.service"`. Each emitted event includes `__REALTIME_TIMESTAMP`, `MESSAGE`, and an extracted IP (regex). RBAC adminProcedure gate. Pure raw stream — NO geo-IP enrichment, NO ASN lookup (deferred v30+ via `maxmind` if user wants country flags).
+- [x] **FR-SSH-01
+**: New "SSH Sessions" sub-section in Security sidebar. WebSocket endpoint `/ws/ssh-sessions` (mirrors `/ws/docker/logs` from Phase 28) streams `journalctl -u ssh -o json -f --since "1 hour ago"` filtered to lines matching `_SYSTEMD_UNIT === "ssh.service"`. Each emitted event includes `__REALTIME_TIMESTAMP`, `MESSAGE`, and an extracted IP (regex). RBAC adminProcedure gate. Pure raw stream — NO geo-IP enrichment, NO ASN lookup (deferred v30+ via `maxmind` if user wants country flags).
 - [x] **FR-SSH-02**: Session viewer UI renders the live tail with: timestamp column, message column, IP column with click-to-copy button + click-to-ban-IP cross-link to FR-F2B-03
  (the killer feature — see a malicious-looking session, click the IP to open the ban modal pre-populated with that IP). 5000-line ring buffer (mirror Phase 28). Live-tail toggle with 4px scroll-tolerance auto-disable on user scroll.
 
