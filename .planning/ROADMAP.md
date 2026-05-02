@@ -155,7 +155,11 @@ Plans:
   3. A user sends `model: "opus"` or `model: "gpt-4o"` from any client without any version-specific awareness — the request resolves to the current Claude family model and returns a normal response (no "model not found" error); unknown models log a warn and fall through to the default model.
   4. An admin updates the alias table (Redis or file, per Phase 56's choice) without a code change or service restart and sees the new alias take effect on the next request — the documented update procedure works as written.
   5. A future engineer reading `BrokerProvider` TypeScript interface can clearly identify the three pluggable methods (`request`, `streamRequest`, `translateUsage`) and the existing Anthropic implementation is the reference example; OpenAI/Gemini stub interfaces compile without concrete bodies.
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 61-01-PLAN.md — Wave 1 BrokerProvider interface + AnthropicProvider extraction + passthrough-handler refactor (D2-01, D2-02)
+- [ ] 61-02-PLAN.md — Wave 2 OpenAI/Gemini/Mistral provider stubs + grep-guard test (D2-01, D2-02)
+- [ ] 61-03-PLAN.md — Wave 3 Redis-backed alias resolver + SETNX boot seed + Anthropic route bug-fix (D1-01, D1-02)
+- [ ] 61-04-PLAN.md — Wave 4 Rate-limit header forward (Anthropic) + translate (OpenAI, duration string) + final phase gate (C3-01, C3-02, C3-03)
 
 ### Phase 62: E1+E2 Usage Tracking Accuracy + Settings UI (API Keys + Usage tabs)
 **Goal**: Every successful broker completion (Anthropic + OpenAI, streaming + sync) writes a `broker_usage` row attributable to the specific API key used; users have a Settings UI to manage keys and inspect per-key usage breakdowns.
