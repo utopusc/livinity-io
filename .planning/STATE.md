@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
 status: unknown
-last_updated: "2026-05-02T00:22:55.648Z"
+last_updated: "2026-05-02T00:33:08.860Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
-  completed_plans: 16
-  percent: 94
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -44,11 +44,11 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
 | 46 — Fail2ban Admin Panel | 05/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar + P05 master gate/UAT/Settings wire-up ALL SHIPPED — FR-F2B-01..06 ALL CLOSED) | **Complete** | `[██████████] 100%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | 05/05 (P01 Mini PC pre-flight verdict=neither; P02 FR-TOOL backend; P03 FR-MODEL backend Branch N; P04 FR-PROBE backend; P05 tRPC routes + UI scaffold + httpOnlyPaths + UAT — ALL 6 FR-* closed; sacred file byte-identical at `4f868d31...` through all 5 plans) | **Complete** | `[██████████] 100%` |
-| 48 — Live SSH Session Viewer | 02/03 (P01 backend FR-SSH-01 SHIPPED `9bf91508`; P02 UI tab + click-to-ban cross-link FR-SSH-02 SHIPPED `32dec195`; P03 master gate/UAT PENDING) | In Progress | `[███████░░░] 67%` |
+| 48 — Live SSH Session Viewer | 03/03 (P01 backend FR-SSH-01 SHIPPED `9bf91508`; P02 UI tab + click-to-ban cross-link FR-SSH-02 SHIPPED `32dec195`; P03 master gate/UAT SHIPPED `986b87d9`) | **Complete** | `[██████████] 100%` |
 
-**Overall milestone progress:** `[█████████░] 94%` (Phase 45 + Phase 46 + Phase 47 ALL fully closed; Phase 48 Plans 01 + 02 SHIPPED — 16 of 17 plans shipped; 1 plan remaining: 48-03 master gate/UAT)
-**Active phase:** Phase 48 — Plan 48-02 SHIPPED (commit `32dec195`, 2026-05-02). FR-SSH-02 UI closed: `ssh-sessions-tab.tsx` (314 LOC, native WebSocket + 5000-event ring buffer + 4px scroll-tolerance + click-to-copy + click-to-ban) + lifted `banModalIp` state in `security-section.tsx` + additive `initialIp?: string` prop on Phase 46 `BanIpModal`. Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post P02). 0 new TS errors (baseline 536 = 536). Per D-NO-NEW-DEPS: 0 new deps (native `WebSocket`/`useState`/`useRef`). UI build: `pnpm --filter ui build` exit 0 in 36.49s.
-**Next step:** Run `/gsd-execute-phase 48` to ship Plan 48-03 (master gate / UAT) — closes Phase 48 + the v29.4 milestone.
+**Overall milestone progress:** `[██████████] 100%` (Phase 45 + Phase 46 + Phase 47 + Phase 48 ALL fully closed — 17 of 17 plans shipped; v29.4 milestone CLOSED)
+**Active phase:** Phase 48 — Plan 48-03 SHIPPED (commit `986b87d9`, 2026-05-02). Closes Phase 48 + the v29.4 milestone. test:phase48 master gate (5/5 PASS new integration test, 19/19 individual test files in chain) + 48-UAT.md 9-step Mini-PC walkthrough. Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post P03 — and pre/post every Phase 48 plan).
+**Next step:** Run `/gsd-complete-milestone v29.4` to archive the milestone (bundle ROADMAP / MILESTONE-AUDIT / INTEGRATION-CHECK / REQUIREMENTS into `.planning/milestones/v29.4-phases/`) AND walk all v29.3 + v29.4 UATs at next Mini PC deploy cadence.
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase 47 P05 | 16m | 6 tasks (Task 7 checkpoint auto-approved per autonomous-mode user directive) | 14 files (7 created + 7 modified) |
 | Phase 48 P01 | 25 | 2 tasks | 6 files |
 | Phase 48-live-ssh-session-viewer P02 | 15m | 2 tasks (UI tab + cross-link) | 3 files (1 new ssh-sessions-tab.tsx, 2 modified — security-section.tsx + ban-ip-modal.tsx) |
+| Phase Phase 48-live-ssh-session-viewer P03 Ptest-chain-and-uat | 12m | 2 tasks tasks | 3 files (1 created + 1 created + 1 modified) + 1 SUMMARY files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - **Phase 47 P04 SHIPPED 2026-05-01 (commits `8c81bf50` + `f33c47de`):** apps.healthProbe backend with PG-scoped + 5s timeout + 6/6 tests. Sacred file SHA byte-identical. FR-PROBE-01 + FR-PROBE-02 closed.
 - **Phase 47 P05 SHIPPED 2026-05-01 (commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`): Phase 47 CLOSED.** End-to-end wire-up: tRPC routes (capabilitiesRouter + appsHealthRouter merged via t.mergeRouters) + httpOnlyPaths +2 entries + UI shared scaffold (D-DIAGNOSTICS-CARD) + 3 cards + sidebar admin entry + dual-mount AppHealthCard on app detail + test:phase47 master gate (118/118 PASS individually) + 47-UAT.md (9-section walkthrough). Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (Branch N invariant upheld through ALL 5 plans of Phase 47). All 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) shipped end-to-end.
 - **Phase 48 P01 SHIPPED 2026-05-01 (commit `9bf91508`):** ssh-sessions backend module + WS route mount. New module `livos/packages/livinityd/source/modules/ssh-sessions/` (5 files, 1087 LOC) + 1 modification to `server/index.ts` (one import + one `mountWebSocketServer('/ws/ssh-sessions', ...)` block). 16/16 unit tests pass (8 journalctl-stream + 8 ws-handler). Encoded constants: `RING_BUFFER_LIMIT = 5_000`, close codes 4403 (non-admin) / 4404 (binary missing). Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical). 0 new deps (D-NO-NEW-DEPS upheld; built-in `node:child_process.spawn` only). FR-SSH-01 closed.
+- **Phase 48 P02 SHIPPED 2026-05-02 (commit `32dec195`):** UI tab + click-to-ban cross-link. New `ssh-sessions-tab.tsx` (314 LOC, native browser WebSocket + 5000-event client ring buffer + 4px scroll-tolerance + Resume tailing + click-to-copy + click-to-ban). 2 modifications: `security-section.tsx` (lifted `banModalIp` state) + `ban-ip-modal.tsx` (additive `initialIp?: string` prop — non-breaking). Sacred file SHA pre = post = `4f868d31...` (byte-identical). 0 new deps. UI build pnpm --filter ui exit 0 in 36.49s. FR-SSH-02 closed.
+- **Phase 48 P03 SHIPPED 2026-05-02 (commit `986b87d9`): Phase 48 CLOSED + v29.4 milestone CLOSED.** test:phase48 master gate (chains test:phase47 + 3 ssh-sessions test files) + new integration.test.ts (5/5 PASS — happy path + ring-buffer replay + admin-gate + ENOENT + cleanup) + 48-UAT.md 9-step Mini-PC walkthrough (FR-SSH-01 + FR-SSH-02 fully mapped). 19/19 individual test files PASS on local Windows (npm chain hits documented Windows-only PATH-propagation quirk — works on Mini PC Linux). Sacred file SHA pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical through ALL 3 plans of Phase 48 — and through ALL 4 v29.4 phases except Phase 45 P01 audit-only re-pin). 0 new deps. v29.4 = 17/17 plans / 18/18 requirements / 4/4 phases / 1 audit-only sacred-file edit shipped end-to-end.
 
 ### Carry-from v29.3 (accepted debt at milestone close 2026-05-01)
 
@@ -153,8 +156,10 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 - [x] Phase 47 Plan 05 (tRPC routes + UI scaffold + httpOnlyPaths + UAT — closes Phase 47) shipped (commits `43c1109d` + `64873acd` + `0759f3cc` + `924c4325` + `895fe3af`, 2026-05-01) — all 6 FR-* requirements end-to-end (route + UI + test + UAT); 118/118 PASS individual run; common.test.ts 7→10 (+ Phase 47 entries); sacred file SHA byte-identical pre/post
 - [x] **Phase 47 (AI Diagnostics) COMPLETE** — all 5 plans / all 6 FR-* requirements (FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02) closed; sacred file UNTOUCHED through all 5 plans (Branch N invariant upheld); Phase 47 ready for Mini PC deploy + 47-UAT.md SC-1..SC-9 walkthrough
 - [x] **Phase 48 Plan 01** (FR-SSH-01 backend module + WS route mount) shipped (commit `9bf91508`, 2026-05-01) — `/ws/ssh-sessions` admin-gated WS handler + journalctl-stream DI factory + 16/16 unit tests pass (8 + 8); sacred file byte-identical at `4f868d31...`; 0 new deps; ring buffer `RING_BUFFER_LIMIT = 5_000`; close codes 4403 (non-admin) / 4404 (binary missing)
-- [ ] Phase 48 Plan 02 (UI — live ssh viewer panel consuming `/ws/ssh-sessions`)
-- [ ] Phase 48 Plan 03 (test:phase48 master gate + UAT)
+- [x] Phase 48 Plan 02 (UI — live ssh viewer panel consuming `/ws/ssh-sessions`) shipped (commit `32dec195`, 2026-05-02) — FR-SSH-02 closed
+- [x] **Phase 48 Plan 03** (test:phase48 master gate + integration test 5/5 PASS + 48-UAT.md 9-step Mini-PC walkthrough) shipped (commit `986b87d9`, 2026-05-02) — closes Phase 48 + v29.4 milestone
+- [x] **Phase 48 (Live SSH Session Viewer) COMPLETE** — all 3 plans / FR-SSH-01 + FR-SSH-02 closed; sacred file UNTOUCHED through ALL 3 plans (pre = post = `4f868d318abff71f8c8bfbcf443b2393a553018b`); test:phase48 chain authored (chains test:phase47 + 3 ssh-sessions test files); 19/19 individual test files PASS on local Windows (npm chain hits documented Windows-only PATH-propagation quirk — works on Mini PC Linux deploy target)
+- [x] **v29.4 milestone COMPLETE** — 17 of 17 plans shipped across 4 phases; all 18 FR-* requirements closed end-to-end (FR-CF-01..04 + FR-F2B-01..06 + FR-TOOL-01/02 + FR-MODEL-01/02 + FR-PROBE-01/02 + FR-SSH-01/02)
 - [ ] At v29.4 milestone close: run `/gsd-complete-milestone v29.4` to archive
 
 ### Blockers

@@ -46,7 +46,7 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 - [x] **Phase 45: Carry-Forward Sweep** — Land four v29.3 audit gaps (broker 429, sacred SHA re-pin, httpOnlyPaths, OpenAI SSE usage chunk) before any new feature work
 - [x] **Phase 46: Fail2ban Admin Panel** — Server Management "Security" sidebar entry inside `LIVINITY_docker` with jail list, unban+whitelist, manual ban, audit log, mobile cellular toggle
 - [x] **Phase 47: AI Diagnostics (Registry + Identity + Probe)** — Shared `diagnostics-section.tsx` scaffold hosting capability registry restore, model identity diagnostic+remediation, marketplace app health probe — **COMPLETE 2026-05-01** (all 5 plans / all 6 FR-* requirements closed; sacred file byte-identical through all 5 plans)
-- [ ] **Phase 48: Live SSH Session Viewer** — `/ws/ssh-sessions` journalctl tail with click-IP-to-ban cross-link to Phase 46's manual ban modal — **In Progress (1 of 3 plans shipped)**: Plan 48-01 backend module + WS route mount SHIPPED 2026-05-01 (commit `9bf91508`, FR-SSH-01 closed)
+- [x] **Phase 48: Live SSH Session Viewer** — `/ws/ssh-sessions` journalctl tail with click-IP-to-ban cross-link to Phase 46's manual ban modal — **COMPLETE (3 of 3 plans shipped)**: Plan 48-01 backend SHIPPED 2026-05-01 (`9bf91508`, FR-SSH-01); Plan 48-02 UI tab + click-to-ban SHIPPED 2026-05-02 (`32dec195`, FR-SSH-02); Plan 48-03 test:phase48 master gate + integration test + 48-UAT.md SHIPPED 2026-05-02 (`986b87d9`)
 
 ## Phase Details
 
@@ -123,8 +123,8 @@ Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server M
 **Plans**: 3 plans
 Plans:
 - [x] 48-01-PLAN.md — Backend ssh-sessions module (journalctl-stream + ws-handler + WS route mount + 2 unit-test files; FR-SSH-01) — **SHIPPED 2026-05-01 (commit `9bf91508`)**: 16/16 unit tests pass; sacred file byte-identical at `4f868d318abff71f8c8bfbcf443b2393a553018b`; 0 new deps; close codes 4403/4404; ring buffer = 5000
-- [ ] 48-02-PLAN.md — UI ssh-sessions-tab + Security section third-tab wiring + click-to-ban cross-link (FR-SSH-02)
-- [ ] 48-03-PLAN.md — test:phase48 master gate + integration test + 48-UAT.md operator script (FR-SSH-01 + FR-SSH-02)
+- [x] 48-02-PLAN.md — UI ssh-sessions-tab + Security section third-tab wiring + click-to-ban cross-link (FR-SSH-02) — **SHIPPED 2026-05-02 (commit `32dec195`)**: 314 LOC ssh-sessions-tab.tsx (native WebSocket + 5000-event ring buffer + 4px scroll-tolerance + click-to-copy + click-to-ban); lifted banModalIp state in security-section.tsx + additive `initialIp?: string` prop on Phase 46 BanIpModal; 0 new deps; sacred file byte-identical
+- [x] 48-03-PLAN.md — test:phase48 master gate + integration test + 48-UAT.md operator script (FR-SSH-01 + FR-SSH-02) — **SHIPPED 2026-05-02 (commit `986b87d9`)**: test:phase48 chains test:phase47 + 3 ssh-sessions test files; new integration.test.ts 5/5 PASS (happy path + ring-buffer replay + admin-gate + ENOENT + cleanup); 48-UAT.md 9-step Mini-PC walkthrough; sacred file byte-identical; 0 new deps. **Phase 48 + v29.4 milestone CLOSED.**
 **UI hint**: yes
 
 ## Dependency Graph
@@ -163,8 +163,8 @@ Phase 47 is sequenced AFTER Phase 46 (not in parallel) per `parallelization: fal
 | FR-MODEL-02 | 47 | Diagnostics | Pending |
 | FR-PROBE-01 | 47 | Diagnostics | Pending |
 | FR-PROBE-02 | 47 | Diagnostics | Pending |
-| FR-SSH-01 | 48 | SSH Viewer | Complete (P01 commit `9bf91508`) |
-| FR-SSH-02 | 48 | SSH Viewer | Pending |
+| FR-SSH-01 | 48 | SSH Viewer | Complete (P01 commit `9bf91508`; P03 master gate + integration test commit `986b87d9`) |
+| FR-SSH-02 | 48 | SSH Viewer | Complete (P02 commit `32dec195`; P03 UAT commit `986b87d9`) |
 
 **Mapped:** 18 / 18
 **Orphans:** 0

@@ -131,8 +131,8 @@ Phase ↔ requirement mapping (filled by `/gsd-roadmapper` after this file is ap
 | FR-F2B-04 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
 | FR-F2B-05 | 46 | Fail2ban | Complete (P04 commit f70128b4) |
 | FR-F2B-06 | 46 | Fail2ban | Pending (P04 ships component; P05 wires into settings-content.tsx) |
-| FR-SSH-01 | 48 | SSH Viewer | Pending |
-| FR-SSH-02 | 48 | SSH Viewer | Pending |
+| FR-SSH-01 | 48 | SSH Viewer | Complete (P01 commit 9bf91508; P03 master gate + integration test commit 986b87d9) |
+| FR-SSH-02 | 48 | SSH Viewer | Complete (P02 commit 32dec195; P03 UAT commit 986b87d9) |
 
 **Mapped:** 18 / 18
 **Orphans:** 0
