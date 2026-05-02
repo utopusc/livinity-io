@@ -300,6 +300,24 @@ export class AgentSessionManager {
     let sdkTools: ReturnType<typeof buildSdkTools> = [];
     let intentResult: IntentResult | null = null;
 
+    // v29.5 Phase 56-equivalent (post-deploy hot-fix from Phase 51): the IntentRouter
+    // scoping was over-aggressive and stripped builtin tools (shell, docker_*, files,
+    // web_search) from the chat. User reported "agent only has Notion/GDrive/Marketplace"
+    // when prompts didn't lexically match builtin capability descriptions. Builtin
+    // tools are universal — they should ALWAYS be available regardless of intent score.
+    // Listing the canonical built-in tool names that daemon.registerTools() registers;
+    // any name not actually registered is gracefully skipped by the `if (tool)` check.
+    const ALWAYS_INCLUDE_TOOLS = [
+      'shell',
+      'files',
+      'docker_list',
+      'docker_manage',
+      'docker_exec',
+      'docker_logs',
+      'docker_diagnostics',
+      'web_search',
+    ];
+
     if (this.intentRouter) {
       try {
         intentResult = await this.intentRouter.resolveCapabilities(prompt, tier);
@@ -307,6 +325,12 @@ export class AgentSessionManager {
         // Create a scoped registry containing only intent-matched tools
         const scopedRegistry = new ToolRegistry();
         for (const toolName of intentToolNames) {
+          const tool = this.toolRegistry.get(toolName);
+          if (tool) scopedRegistry.register(tool);
+        }
+        // Pin universal builtin tools regardless of intent match — see comment above.
+        for (const toolName of ALWAYS_INCLUDE_TOOLS) {
+          if (scopedRegistry.get(toolName)) continue;
           const tool = this.toolRegistry.get(toolName);
           if (tool) scopedRegistry.register(tool);
         }
