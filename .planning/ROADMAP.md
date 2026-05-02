@@ -52,7 +52,11 @@ Close 4 user-reported v29.4 regressions (A1 tool registry empty, A2 streaming go
   3. The diagnostic output is committed to `.planning/phases/49-mini-pc-diagnostic/49-DIAGNOSTIC-FIXTURE.md` so subsequent phases reference it instead of re-probing the Mini PC.
   4. Each of A1, A2, A3, A4 has a documented root-cause verdict (CONFIRMED hypothesis from REGRESSIONS.md, OR a new hypothesis with evidence).
   5. The orchestrator's IP is NOT banned by Mini PC fail2ban at the end of the phase (verified by a final connectivity check).
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 49-01-PLAN.md — Mini PC single-batch diagnostic SSH (wave 1)
+- [ ] 49-02-PLAN.md — Server5 single-batch diagnostic SSH (wave 1)
+- [ ] 49-03-PLAN.md — Synthesize 49-DIAGNOSTIC-FIXTURE.md from raw outputs (wave 2)
+- [ ] 49-04-PLAN.md — Fail2ban liveness check + commit fixture (wave 3)
 
 ### Phase 50: A1 — Tool Registry Built-in Seed
 **Goal**: 9 BUILT_IN_TOOL_IDS are deterministically present in `nexus:cap:tool:*` after every livinityd boot, surviving factory resets and partial syncs.
@@ -136,7 +140,7 @@ Close 4 user-reported v29.4 regressions (A1 tool registry empty, A2 streaming go
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Mini PC Live Diagnostic | 0/0 | Not started | - |
+| 49. Mini PC Live Diagnostic | 0/4 | Planned | - |
 | 50. A1 Tool Registry Seed | 0/0 | Not started | - |
 | 51. A2 Streaming Fix | 0/0 | Not started | - |
 | 52. A3 Marketplace State | 0/0 | Not started | - |
