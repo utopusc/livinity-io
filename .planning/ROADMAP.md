@@ -170,8 +170,15 @@ Plans:
   2. A user opens Settings > AI Configuration > "API Keys" tab, sees their existing keys with id / label / prefix / created_at / last_used_at / revoked_at columns, and can click "Create Key" to spawn a new one (with the plaintext shown ONCE in a copy-to-clipboard modal) or "Revoke" to retire one.
   3. A user filters the Usage subsection by a specific API key from a dropdown and sees only the rows attributable to that key — totals on the per-app table and the 30-day chart update accordingly.
   4. An admin filtering the cross-user Usage view by `api_key_id` sees only that key's traffic across all users, confirming the admin filter dimension wired through end-to-end.
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 62-01-PLAN.md — Wave 1 Backend test scaffolds + schema migration + database.ts 8-param refactor (FR-BROKER-E1-01)
+- [ ] 62-02-PLAN.md — Wave 2 Capture middleware reads req.apiKeyId at response time (FR-BROKER-E1-02)
+- [ ] 62-03-PLAN.md — Wave 2 tRPC routes accept apiKeyId filter input (FR-BROKER-E2-02 backend)
+- [ ] 62-04-PLAN.md — Wave 2 ApiKeysSection + Create/Revoke modals + ai-config.tsx FLAT insertion (FR-BROKER-E2-01)
+- [ ] 62-05-PLAN.md — Wave 3 Usage filter dropdown + admin filter + FR-BROKER-E1-03 integration test + final phase gate
 
 ### Phase 63: Mandatory Live Verification (D-LIVE-VERIFICATION-GATE)
 **Goal**: Validate v30.0's broker architecture works end-to-end with real external clients on real Mini PC hardware AND close ALL outstanding live-verification debt (v29.5 Phase 55 deferred + v29.4 carry + v29.3 carry — 14 UATs total). This is the FIRST milestone close where the live-verification gate must pass cleanly without `--accept-debt`.
@@ -206,7 +213,7 @@ Plans:
 | 59. B1 Bearer Token Auth             | v30.0     | 0/0            | Not started | -          |
 | 60. B2 Public Endpoint               | v30.0     | 0/5            | Not started | -          |
 | 61. C3+D1+D2 Spec Compliance         | v30.0     | 0/0            | Not started | -          |
-| 62. E1+E2 Usage + Settings UI        | v30.0     | 0/0            | Not started | -          |
+| 62. E1+E2 Usage + Settings UI        | v30.0     | 0/5            | Not started | -          |
 | 63. Mandatory Live Verification      | v30.0     | 0/0            | Not started | -          |
 
 ---
