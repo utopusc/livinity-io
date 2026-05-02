@@ -64,6 +64,10 @@ interface BanIpModalProps {
 	isCellular: boolean
 	setIsCellular: (b: boolean) => void
 	isBanning: boolean
+	// Phase 48 Plan 48-02 — additive prop: pre-populate the IP input on open
+	// (used by SshSessionsTab click-to-ban). Existing callers omit this and
+	// fall through to '' exactly as before. No behavior change unless provided.
+	initialIp?: string
 }
 
 type Stage = 'normal' | 'self-ban'
@@ -78,6 +82,7 @@ export function BanIpModal({
 	isCellular,
 	setIsCellular,
 	isBanning,
+	initialIp,
 }: BanIpModalProps) {
 	const [ip, setIp] = useState('')
 	const [jail, setJail] = useState<string>(jails[0] ?? '')
@@ -87,10 +92,12 @@ export function BanIpModal({
 	const [validationError, setValidationError] = useState<string | null>(null)
 	const [submitError, setSubmitError] = useState<string | null>(null)
 
-	// Reset state every time the dialog re-opens.
+	// Reset state every time the dialog re-opens. Phase 48 Plan 48-02 —
+	// honor `initialIp` (set by SshSessionsTab click-to-ban via lifted state)
+	// so the IP input pre-populates. Falls back to '' for legacy callers.
 	useEffect(() => {
 		if (open) {
-			setIp('')
+			setIp(initialIp ?? '')
 			setJail(jails[0] ?? '')
 			setStage('normal')
 			setConfirmText('')
@@ -98,7 +105,7 @@ export function BanIpModal({
 			setValidationError(null)
 			setSubmitError(null)
 		}
-	}, [open, jails])
+	}, [open, jails, initialIp])
 
 	// Keep jail selection valid as the available jails change.
 	useEffect(() => {
