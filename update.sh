@@ -442,10 +442,21 @@ cd "$LIVOS_DIR"
 ok "@livos/config built"
 
 # Build UI
+# Phase 51 (v29.5 A2) — defensive fresh-build for UI bundle.
+#   1. rm -rf dist BEFORE build forces vite to regenerate from source. Prevents
+#      stale dist surviving deploys when vite's cache hash matches by accident
+#      OR when a prior build silently failed (the v29.4 1m 2s deploy regression
+#      hypothesis: streaming/security-panel UI never actually deployed).
+#   2. verify_build moved to AFTER npm run build (matches the "Call AFTER every
+#      build invocation" contract documented at the function definition). Pre-build
+#      verify_build was a no-op on existing installs (always passed because old
+#      dist was present) and a hard-block on fresh installs (exit 1 because dist
+#      didn't exist yet).
 info "Building UI (this may take a minute)..."
 cd "$LIVOS_DIR/packages/ui"
-verify_build "@livos/ui" "/opt/livos/packages/ui/dist"
+rm -rf dist
 npm run build 2>&1 | tail -5
+verify_build "@livos/ui" "/opt/livos/packages/ui/dist"
 cd "$LIVOS_DIR"
 
 # Ensure UI symlink
