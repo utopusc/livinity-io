@@ -82,7 +82,14 @@ Plans:
   2. A user sends a request with a `tools: [...]` array via the broker — the upstream model invokes ONLY the client-supplied tools; Nexus MCP tools (filesystem, shell, etc.) are not visible or invokable.
   3. A user opens LivOS AI Chat (in-app) — every existing capability still works (capability discovery, tool execution, IntentRouter, system prompt, conversation persistence) byte-for-byte identical to v29.5.
   4. A developer running `git diff 4f868d31...HEAD -- nexus/packages/core/src/sdk-agent-runner.ts` sees an empty diff after Phase 57 ships; the integrity test (`sdk-agent-runner-integrity.test.ts`) passes with the same `BASELINE_SHA`.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 57-01-PLAN.md - Wave 0 Test Scaffolding + README + SDK reachability audit
+- [ ] 57-02-PLAN.md - Wave 1 Mode Dispatch + Credential Extractor + Risk-A1 smoke gate
+- [ ] 57-03-PLAN.md - Wave 2 Anthropic Messages Passthrough Handler + router.ts dispatch
+- [ ] 57-04-PLAN.md - Wave 3 OpenAI Chat Completions Passthrough + openai-router.ts dispatch
+- [ ] 57-05-PLAN.md - Wave 4 Agent Mode Byte-Identity Proof + Sacred File Final Verification
 
 ### Phase 58: C1+C2 True Token Streaming (Anthropic + OpenAI)
 **Goal**: External clients see token-by-token streaming as text generates, not single aggregate chunks at the end. Both Anthropic Messages and OpenAI Chat Completions streaming paths emit spec-compliant byte-level event sequences.
@@ -93,7 +100,14 @@ Plans:
   2. A user pointing Open WebUI at the broker's `/v1/chat/completions` endpoint sees streaming output appear progressively in the UI; the final SSE chunk includes a non-zero `usage.prompt_tokens` + `usage.completion_tokens` shown in Open WebUI's per-message stats.
   3. A user calling `/v1/chat/completions` with `stream: false` (the synchronous OpenAI sync path) gets a single complete OpenAI-shaped JSON response with `id` matching `chatcmpl-<base62-29>`, `object: "chat.completion"`, and non-zero usage fields — no broken JSON, no timeout.
   4. A developer running the streaming integration test (`>3 distinct content_block_delta events`) against any prompt expected to take longer than 2 seconds sees the test pass deterministically across 5 consecutive runs.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 58-00-PLAN.md - Wave 0 Test Infrastructure (fake-Anthropic SSE server + clientFactory test seam + compression audit)
+- [ ] 58-01-PLAN.md - Wave 1 OpenAI Stream Translator Core (TDD: RED + GREEN; cumulative output_tokens + crypto chatcmpl id + stop_reason mapping)
+- [ ] 58-02-PLAN.md - Wave 2 Anthropic Passthrough True Streaming (raw async iterator forwarding)
+- [ ] 58-03-PLAN.md - Wave 3 OpenAI Passthrough Streaming Integration (translator wiring + chatcmpl id hardening)
+- [ ] 58-04-PLAN.md - Wave 4 Integration Tests + Final Phase Gate (5-run determinism + sacred file SHA)
 
 ### Phase 59: B1 Per-User Bearer Token Auth (`liv_sk_*`)
 **Goal**: External API consumers authenticate with a standard `Authorization: Bearer liv_sk_*` token instead of URL-path identity + container IP guard. Users can mint, list, and revoke their own keys; revoked keys return Anthropic-spec 401 errors.
@@ -104,7 +118,14 @@ Plans:
   2. A user invokes `curl -H "Authorization: Bearer liv_sk_..."` against the broker and the request reaches their per-user broker context — the response carries their content, not another user's.
   3. A user revokes a key from the list and immediately retries the same Bearer token via curl — the response is HTTP 401 with body `{"error": {"type": "authentication_error", "message": "API key revoked"}}` (Anthropic-spec shape).
   4. A user with a leaked Bearer token can audit `last_used_at` to see exactly when it was last presented to the broker, confirming the audit trail.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 59-01-PLAN.md — Wave 0 Test Infrastructure + Schema Convention Pre-Flight (6 failing tests + grep guards)
+- [ ] 59-02-PLAN.md — Wave 1 PG Schema Append + database.ts CRUD Layer (twin of docker_agents)
+- [ ] 59-03-PLAN.md — Wave 2 Bearer Middleware + In-Memory Cache + server/index.ts Mount + cli.ts dispose
+- [ ] 59-04-PLAN.md — Wave 3 tRPC Routes (create/list/revoke/listAll) + Audit Hook REUSE + httpOnlyPaths
+- [ ] 59-05-PLAN.md — Wave 4 Integration Tests + Final Phase Gate (sacred file SHA)
 
 ### Phase 60: B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter
 **Goal**: External clients can reach the broker over the open internet at `https://api.livinity.io` using their `liv_sk_*` Bearer token, without the request having to traverse Mini-PC-internal subdomain routing or container IP allowlists.
