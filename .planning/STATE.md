@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v29.4
 milestone_name: — Server Management Tooling + Bug Sweep
-status: in-progress
-last_updated: "2026-05-02T00:12:20.368Z"
+status: unknown
+last_updated: "2026-05-02T00:22:55.648Z"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 17
-  completed_plans: 15
-  percent: 88
+  completed_plans: 16
+  percent: 94
 ---
 
 # Project State
@@ -44,11 +44,11 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | 45 — Carry-Forward Sweep | 04/04 (FR-CF-01 + FR-CF-02 + FR-CF-03 + FR-CF-04 ALL SHIPPED) | **Complete** | `[██████████] 100%` |
 | 46 — Fail2ban Admin Panel | 05/05 (P01 diagnostic + P02 backend modules + P03 tRPC routes + P04 UI section/modals/sidebar + P05 master gate/UAT/Settings wire-up ALL SHIPPED — FR-F2B-01..06 ALL CLOSED) | **Complete** | `[██████████] 100%` |
 | 47 — AI Diagnostics (Registry + Identity + Probe) | 05/05 (P01 Mini PC pre-flight verdict=neither; P02 FR-TOOL backend; P03 FR-MODEL backend Branch N; P04 FR-PROBE backend; P05 tRPC routes + UI scaffold + httpOnlyPaths + UAT — ALL 6 FR-* closed; sacred file byte-identical at `4f868d31...` through all 5 plans) | **Complete** | `[██████████] 100%` |
-| 48 — Live SSH Session Viewer | 01/03 (P01 backend module + WS route mount FR-SSH-01 SHIPPED commit `9bf91508`; P02 + P03 PENDING) | In Progress | `[███░░░░░░░] 33%` |
+| 48 — Live SSH Session Viewer | 02/03 (P01 backend FR-SSH-01 SHIPPED `9bf91508`; P02 UI tab + click-to-ban cross-link FR-SSH-02 SHIPPED `32dec195`; P03 master gate/UAT PENDING) | In Progress | `[███████░░░] 67%` |
 
-**Overall milestone progress:** `[█████████░] 88%` (Phase 45 + Phase 46 + Phase 47 ALL fully closed; Phase 48 Plan 01 SHIPPED — 15 of 17 plans shipped; 2 plans remaining: 48-02 UI + 48-03 master gate/UAT)
-**Active phase:** Phase 48 — Plan 48-01 SHIPPED (commit `9bf91508`, 2026-05-01). FR-SSH-01 backend closed: `/ws/ssh-sessions` admin-gated WS handler + journalctl-stream module + 16/16 unit tests pass (8 + 8). Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post P01). Per D-NO-NEW-DEPS: 0 new deps (built-in `node:child_process.spawn` only).
-**Next step:** Run `/gsd-execute-phase 48` to ship Plan 48-02 (UI) — wave 2 starts from the WS URL `/ws/ssh-sessions?token=<JWT>` and the wire format `{timestamp, message, ip, hostname}` JSON-per-event documented in `48-01-SUMMARY.md`.
+**Overall milestone progress:** `[█████████░] 94%` (Phase 45 + Phase 46 + Phase 47 ALL fully closed; Phase 48 Plans 01 + 02 SHIPPED — 16 of 17 plans shipped; 1 plan remaining: 48-03 master gate/UAT)
+**Active phase:** Phase 48 — Plan 48-02 SHIPPED (commit `32dec195`, 2026-05-02). FR-SSH-02 UI closed: `ssh-sessions-tab.tsx` (314 LOC, native WebSocket + 5000-event ring buffer + 4px scroll-tolerance + click-to-copy + click-to-ban) + lifted `banModalIp` state in `security-section.tsx` + additive `initialIp?: string` prop on Phase 46 `BanIpModal`. Sacred file SHA = `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical pre/post P02). 0 new TS errors (baseline 536 = 536). Per D-NO-NEW-DEPS: 0 new deps (native `WebSocket`/`useState`/`useRef`). UI build: `pnpm --filter ui build` exit 0 in 36.49s.
+**Next step:** Run `/gsd-execute-phase 48` to ship Plan 48-03 (master gate / UAT) — closes Phase 48 + the v29.4 milestone.
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ See: .planning/PROJECT.md (updated 2026-05-01 after v29.3 milestone close)
 | Phase 47 P04 | 12m | 2 tasks | 2 files |
 | Phase 47 P05 | 16m | 6 tasks (Task 7 checkpoint auto-approved per autonomous-mode user directive) | 14 files (7 created + 7 modified) |
 | Phase 48 P01 | 25 | 2 tasks | 6 files |
+| Phase 48-live-ssh-session-viewer P02 | 15m | 2 tasks (UI tab + cross-link) | 3 files (1 new ssh-sessions-tab.tsx, 2 modified — security-section.tsx + ban-ip-modal.tsx) |
 
 ## Accumulated Context
 
