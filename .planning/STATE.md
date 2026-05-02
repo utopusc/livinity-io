@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: defining-requirements
-last_updated: "2026-05-02T19:40:00Z"
-last_activity: "2026-05-02 — v30.0 milestone bootstrap; defining requirements"
+status: roadmap-defined
+last_updated: "2026-05-02T20:00:00Z"
+last_activity: "2026-05-02 — v30.0 ROADMAP.md created; 8 phases (56-63), 38/38 reqs mapped"
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -25,10 +25,30 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Not started (roadmap defined; awaiting `/gsd-discuss-phase 56`)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-02 — Milestone v30.0 started; MILESTONE-CONTEXT.md consumed
+Status: Roadmap defined — 8 phases (56-63), 38/38 reqs mapped, Phase 56 mandatory spike, Phase 63 mandatory live verification
+Last activity: 2026-05-02 — `gsd-roadmapper` produced ROADMAP.md and filled Phase Traceability
+
+## v30.0 Roadmap Snapshot
+
+| Phase | Goal                                                                | Reqs                              | Depends on            |
+|-------|---------------------------------------------------------------------|-----------------------------------|-----------------------|
+| 56    | Research Spike — answer 7 open Qs (passthrough / endpoint / auth)   | (research-only, 0 reqs)           | —                     |
+| 57    | A1+A2 Passthrough Mode + Agent Mode Opt-In                          | A1-01..04, A2-01..02 (6)          | 56                    |
+| 58    | C1+C2 True Token Streaming (Anthropic + OpenAI)                     | C1-01..02, C2-01..03 (5)          | 57                    |
+| 59    | B1 Per-User Bearer Token Auth (`liv_sk_*`)                          | B1-01..05 (5)                     | — (parallel)          |
+| 60    | B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter       | B2-01..02 (2)                     | 59                    |
+| 61    | C3+D1+D2 Rate-Limit Headers + Model Aliases + Provider Stub         | C3-01..03, D1-01..02, D2-01..02 (7) | 57, 58              |
+| 62    | E1+E2 Usage Tracking Accuracy + Settings UI (API Keys + Usage tabs) | E1-01..03, E2-01..02 (5)          | 59                    |
+| 63    | Mandatory Live Verification (D-LIVE-VERIFICATION-GATE)              | VERIFY-V30-01..08 (8)             | 57, 58, 59, 60, 61, 62 |
+
+**Coverage:** 38/38 requirements mapped (100%). Phase 56 is research-only (produces decisions, not code). Phase 63 must close cleanly without `--accept-debt` — first real-world test of D-LIVE-VERIFICATION-GATE.
+
+**Critical path:** 56 → 57 → 58 → 61 → 63.
+**Parallel branches:** 59 → 60 → 63 AND 59 → 62 → 63.
+
+See `.planning/ROADMAP.md` for full phase details, success criteria, dependency graph, and per-requirement coverage table.
 
 ## v30.0 Milestone Context
 
@@ -108,11 +128,12 @@ All consolidate into v30 Phase 63 — the mandatory live verification phase that
 
 ## Next Steps
 
-1. **Define REQUIREMENTS.md** — derive REQ-IDs from MILESTONE-CONTEXT.md 5 feature categories (BROKER-A1/A2, BROKER-B1/B2, BROKER-C1/C2/C3, BROKER-D1/D2, BROKER-E1/E2) plus VERIFY-* for Phase 63 mandatory verification.
-2. **Spawn gsd-roadmapper** — Create ROADMAP.md with 8 phases (56-63) per MILESTONE-CONTEXT.md suggested breakdown. Phase 56 is mandatory research spike. Phase 63 is mandatory live verification (D-LIVE-VERIFICATION-GATE).
-3. **`/gsd-discuss-phase 56`** — gather Phase 56 spike context. Phase 56 is research-heavy and must answer the 7 open questions above before Phase 57 (passthrough mode) can plan.
+1. **`/gsd-discuss-phase 56`** — gather Phase 56 spike context. Phase 56 is research-heavy and must answer the 7 open questions above before Phase 57 (passthrough mode) can plan.
+2. **Phase 56 produces `SPIKE-FINDINGS.md`** with concrete decisions for each of the 7 questions — these unblock Phases 57-62 implementation planning.
+3. **Phases 57 + 59 can begin in parallel** once Phase 56 ships (57 needs the SDK-direct-vs-HTTP-proxy verdict; 59 is independent of Phase 56's outputs and can start as soon as PG migration tooling is ready).
 
 ## Forensic Trail
 
 - 2026-05-02T19:35Z — `/gsd-complete-milestone v29.5 --accept-debt` executed. v29.5 closed; phases archived; tag `v29.5` created.
 - 2026-05-02T19:40Z — `/gsd-new-milestone v30.0` invoked. STATE.md reset. MILESTONE-CONTEXT.md will be deleted after consumption.
+- 2026-05-02T20:00Z — `gsd-roadmapper` produced `.planning/ROADMAP.md` (8 phases 56-63), filled `.planning/REQUIREMENTS.md` Phase Traceability (38/38 mapped), updated this STATE.md with v30.0 Roadmap Snapshot. Status transitioned `defining-requirements` → `roadmap-defined`.

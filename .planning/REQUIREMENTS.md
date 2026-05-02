@@ -102,25 +102,68 @@ Explicit exclusions per MILESTONE-CONTEXT.md "NOT in v30.0" plus what surfaced d
 
 ## Phase Traceability
 
-To be filled by `gsd-roadmapper` after ROADMAP.md is created. Every requirement above must map to exactly one phase. Coverage target: 100%.
+Every requirement above maps to exactly one phase. Coverage: 38/38 (100%).
 
-| Requirement | Phase |
-|---|---|
-| FR-BROKER-A1-01..04 | TBD (passthrough mode) |
-| FR-BROKER-A2-01..02 | TBD (agent mode opt-in) |
-| FR-BROKER-B1-01..05 | TBD (Bearer auth) |
-| FR-BROKER-B2-01..02 | TBD (public endpoint) |
-| FR-BROKER-C1-01..02 | TBD (Anthropic streaming) |
-| FR-BROKER-C2-01..03 | TBD (OpenAI streaming + sync) |
-| FR-BROKER-C3-01..03 | TBD (rate-limit headers) |
-| FR-BROKER-D1-01..02 | TBD (model alias) |
-| FR-BROKER-D2-01..02 | TBD (provider interface) |
-| FR-BROKER-E1-01..03 | TBD (usage tracking) |
-| FR-BROKER-E2-01..02 | TBD (Settings UI) |
-| FR-VERIFY-V30-01..08 | TBD (Phase 63 mandatory verification) |
+| Requirement       | Phase |
+|-------------------|-------|
+| FR-BROKER-A1-01   | 57    |
+| FR-BROKER-A1-02   | 57    |
+| FR-BROKER-A1-03   | 57    |
+| FR-BROKER-A1-04   | 57    |
+| FR-BROKER-A2-01   | 57    |
+| FR-BROKER-A2-02   | 57    |
+| FR-BROKER-B1-01   | 59    |
+| FR-BROKER-B1-02   | 59    |
+| FR-BROKER-B1-03   | 59    |
+| FR-BROKER-B1-04   | 59    |
+| FR-BROKER-B1-05   | 59    |
+| FR-BROKER-B2-01   | 60    |
+| FR-BROKER-B2-02   | 60    |
+| FR-BROKER-C1-01   | 58    |
+| FR-BROKER-C1-02   | 58    |
+| FR-BROKER-C2-01   | 58    |
+| FR-BROKER-C2-02   | 58    |
+| FR-BROKER-C2-03   | 58    |
+| FR-BROKER-C3-01   | 61    |
+| FR-BROKER-C3-02   | 61    |
+| FR-BROKER-C3-03   | 61    |
+| FR-BROKER-D1-01   | 61    |
+| FR-BROKER-D1-02   | 61    |
+| FR-BROKER-D2-01   | 61    |
+| FR-BROKER-D2-02   | 61    |
+| FR-BROKER-E1-01   | 62    |
+| FR-BROKER-E1-02   | 62    |
+| FR-BROKER-E1-03   | 62    |
+| FR-BROKER-E2-01   | 62    |
+| FR-BROKER-E2-02   | 62    |
+| FR-VERIFY-V30-01  | 63    |
+| FR-VERIFY-V30-02  | 63    |
+| FR-VERIFY-V30-03  | 63    |
+| FR-VERIFY-V30-04  | 63    |
+| FR-VERIFY-V30-05  | 63    |
+| FR-VERIFY-V30-06  | 63    |
+| FR-VERIFY-V30-07  | 63    |
+| FR-VERIFY-V30-08  | 63    |
 
-**Coverage:** 31 requirements; mapping pending roadmapper output.
+**Coverage:** 38/38 requirements mapped (100%).
+
+**Phase 56 (research spike) holds zero requirements** — it is a research-only phase that produces architectural decisions consumed by Phases 57-62. The 7 open questions in `STATE.md` "Critical Open Questions for Phase 56 Research Spike" become 7 success criteria entries in the eventual `56-SPIKE-FINDINGS.md`.
+
+**Phase counts at a glance:**
+
+| Phase | Goal                                                | Reqs |
+|-------|-----------------------------------------------------|------|
+| 56    | Research Spike (passthrough + endpoint + auth)      | 0    |
+| 57    | A1+A2 Passthrough Mode + Agent Mode Opt-In          | 6    |
+| 58    | C1+C2 True Token Streaming                          | 5    |
+| 59    | B1 Per-User Bearer Token Auth                       | 5    |
+| 60    | B2 Public Endpoint + Rate-Limit Perimeter           | 2    |
+| 61    | C3+D1+D2 Headers + Aliases + Provider Stub          | 7    |
+| 62    | E1+E2 Usage Tracking + Settings UI                  | 5    |
+| 63    | Mandatory Live Verification (D-LIVE-VERIFICATION)   | 8    |
+
+**Note on requirement count:** the original `/gsd-new-milestone v30.0` handoff prompt referenced "31 requirements" — the actual file enumerates 38 individual checkbox items (4+2+5+2+2+3+3+2+2+3+2+8 across A1/A2/B1/B2/C1/C2/C3/D1/D2/E1/E2/VERIFY). The 38-row Phase Traceability table above is authoritative; the 31 figure was a prompt-side miscount. 100% coverage means 38/38, and that is what the table asserts.
 
 ---
 
-*Last updated: 2026-05-02 — REQUIREMENTS.md derived from MILESTONE-CONTEXT.md 5 feature categories (A/B/C/D/E) plus VERIFY for Phase 63 mandatory live verification.*
+*Last updated: 2026-05-02 — Phase Traceability filled by `gsd-roadmapper`. 38/38 requirements mapped to Phases 57-63 (Phase 56 research-only). Phase 63 closes D-LIVE-VERIFICATION-GATE.*
