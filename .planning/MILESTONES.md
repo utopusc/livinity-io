@@ -1,5 +1,48 @@
 # Milestones
 
+## v29.5 v29.4 Hot-Patch Recovery + Verification Discipline (Shipped: 2026-05-02)
+
+**Phases completed:** 6 phases (49-54), 6 plans, 0 formal tasks (8 hot-patch commits)
+**Phase 55 (mandatory live verification):** **NOT executed** — ad-hoc Bolt.diy live testing surfaced 3 new architectural issues (block-level streaming, identity contamination, OpenAI-Like provider compat) that exceeded v29.5 hot-patch scope; Phase 55 work and the 14 formal UATs (4 v29.4 + 6 v29.3 carry + 4 v29.5) carried forward to v30.0 Broker Professionalization.
+**Milestone audit:** Closed via `--accept-debt` override (B1 gate would have returned `human_needed` with 2 phases unverified). See "Live-Verification Gate Overrides" section at end of this file.
+**Known deferred items at close:** 5 (2 verification gaps for Phases 49+51, 3 v28.0 hot-patch quick tasks; see STATE.md Deferred Items)
+**Sacred file:** `nexus/packages/core/src/sdk-agent-runner.ts` — UNTOUCHED across all v29.5 phases (Branch N reversal for FR-A2-04 / FR-MODEL-02 explicitly DEFERRED per D-51-03; deploy-layer hardening was sufficient for the streaming regression).
+**Net stack delta:** 0 new npm/apt deps, 0 new database tables, 0 new database migrations on Mini PC (Server5 platform DB had a lightweight `apps.status` UPDATE for MiroFish drop in Phase 52).
+
+**Key accomplishments:**
+
+- **Phase 49 — Mini PC Live Diagnostic (single-batch SSH):** Server5 batched diagnostic captured authoritative state (`platform` DB schema, `platform_apps` table absence — apps live in `apps` table, `/opt/platform` layout, recent platform git log for Bolt.diy wipe attribution). Mini PC SSH was banned by fail2ban from prior session — fallback per D-49-02: `.planning/v29.4-REGRESSIONS.md` used as Mini PC fixture, 4 verdict blocks (A1/A2/A3/A4) synthesized into `49-DIAGNOSTIC-FIXTURE.md`. Ban-state isolated: orchestrator IP recovered after 5+ minute gap before Phase 50.
+- **Phase 50 — A1 Tool Registry Built-in Seed:** Defensive eager seed module shipped (`livos/packages/livinityd/source/modules/seed-builtin-tools.ts`, 90 LOC). Writes 9 `BUILT_IN_TOOL_IDS` (shell, docker_run/ps/logs/stop, files_read/write/search, web_search) to `nexus:cap:tool:*` idempotently as the first step after Redis connection in livinityd boot. Sentinel `nexus:cap:_meta:lastSeedAt` set on each run. Map-backed fake-Redis integration test passing 4/4 (idempotency, manifest count, sentinel presence, re-seed determinism). Reuses canonical `BUILT_IN_TOOL_IDS` source from `capabilities.ts` (no manifest duplication). **Live verification on Mini PC: confirmed via ad-hoc post-deploy Redis probe (≥9 keys observed) — formal FR-A1-03/04 walk pending in v30 Phase 63.**
+- **Phase 51 — A2 Streaming Regression Fix (deploy-layer):** Defensive UI fresh-build hardening landed in `update.sh` (+13-line comment block + 1-line `rm -rf dist` added before `npm run build`; `verify_build` reordered from BEFORE to AFTER build). Root cause: stale UI bundle from short (1m 2s) deploys that were skipping vite rebuild. Sacred file `sdk-agent-runner.ts` UNTOUCHED — Branch N reversal for FR-A2-04 explicitly DEFERRED per D-51-03 (insufficient evidence model preset is the actual cause; deploy-layer fix likely sufficient). **Live verification on Mini PC: streaming visibly returned post-deploy per ad-hoc Bolt.diy chat test — but exposed deeper broker-level block-level streaming issue separately (carried into v30.0 Phase C1/C2).**
+- **Phase 52 — A3 Marketplace State Correction (Server5):** MiroFish drop landed in two places — Server5 `platform.apps` `UPDATE status='archived'` query, AND `livos/packages/livinityd/source/modules/builtin-apps.ts` `mirofish` entry deleted (livinityd-side marketplace catalog). Bolt.diy investigation revealed: it's NOT seeded in Server5 `platform_apps` (table doesn't exist) — Bolt.diy lives in livinityd's `builtin-apps.ts`. Hot-patches (commits `a3d5b128` + `fcc3ae4d`) added wrangler-install command + `OPENAI_LIKE_API_KEY` env var to Bolt.diy compose. Root-cause attribution per FR-A3-04: Server5 platform redeploy 2026-04-30 wiped MiroFish from a 2026-04-26 manual seed; Bolt.diy was never on Server5 — confusion arose because livinityd marketplace was the actual source of truth.
+- **Phase 53 — A4 Fail2ban Security Panel Render (no-op):** Phase 49 diagnostic confirmed local code already correct (Phase 46 `security-section.tsx` renders correctly when sidebar is expanded). Real root cause was **collapsed sidebar** — user wasn't seeing Security entry because density was set to "compact" hiding all 13 entries below fold. NO code change required. Phase 51's `update.sh` UI fresh-build was the actual remediation since stale bundle compounded the visibility issue. Documented in Phase 53 commit (`f6281d2e` — `docs(53)`).
+- **Phase 54 — B1 Live-Verification Gate (gsd toolkit):** `/gsd-complete-milestone` workflow now scans `*-VERIFICATION.md` files for `status: human_needed` count and HARD-BLOCKS audit `passed` until either user attestation or `--accept-debt` override. AskUserQuestion default = "No" so accidental enter-key cannot bypass. `--accept-debt` flag appends forensic-trail entry to MILESTONES.md (timestamp, milestone, phases, count, reason, mode). Implementation in `~/.claude/get-shit-done/workflows/complete-milestone.md` `<step name="live_verification_gate">`. Retroactive v29.4 re-audit deferred (v29.4 already shipped under old workflow; gate logic verified against v29.5's own close in this commit cycle). **This very milestone close is the gate's first real-world invocation** — `--accept-debt` mode triggered, forensic entry written.
+
+**Carry-forward to v30.0 Broker Professionalization:**
+
+- **Phase 55 (live verification) NEVER walked** — 14 formal UATs deferred. v30.0 Phase 63 carries the verification load with 3 external client (Bolt.diy / Open WebUI / Continue.dev) live tests + the 14 carry-forward UATs.
+- **Identity contamination** — broker prepends Nexus identity + Nexus tools to external requests. Bolt.diy / Open WebUI / Continue.dev cannot present their own persona. v30 Phase 57 (passthrough mode) bypasses Agent SDK for external traffic.
+- **Block-level streaming** — `sdk-agent-runner.ts:382-389` aggregates `assistant` messages into single chunks; external clients see "non-streaming" or 504. v30 Phase 58 implements true token streaming via Anthropic native SSE pass-through.
+- **Tool injection contamination** — broker injects Nexus MCP tools (`mcpServers['nexus-tools']`) into all requests; client tools (`tools: [...]`) ignored per D-42-12. v30 passthrough mode honors client tools verbatim.
+- **Auth model wrong for external** — URL-path identity + container IP guard. External consumers expect `Authorization: Bearer liv_sk_*`. v30 Phase 59 introduces per-user PG `api_keys` table + Bearer middleware. v30 Phase 60 introduces public `api.livinity.io` endpoint on Server5.
+- **OpenAI-Like provider compat** — Bolt.diy provider needs `OPENAI_LIKE_API_KEY` (hot-patched in `fcc3ae4d`) + 8 model dropdown — v30 spec compliance work covers this end-to-end.
+- **Branch N reversal still pending** (D-51-03 defer) — model identity preset switch may still be needed for in-LivOS-chat self-identification consistency. Re-evaluate during v30 Phase 56 spike.
+
+**v29.5 8-commit ship sequence:**
+
+| # | Commit | Phase | Fix |
+|---|--------|-------|-----|
+| 1 | `b0356559` | 50 | A1 tool registry seed module |
+| 2 | `47cd8a64` | 51 | A2 update.sh fresh-build defensive hardening |
+| 3 | `7ffc0402` | 52 | A3 MiroFish DELETE from livinityd marketplace catalog |
+| 4 | `c63f7bbe` | 54 | B1 live-verification gate (gsd toolkit) |
+| 5 | `07cd3972` / `a3d5b128` | 52 hot-patch | Bolt.diy compose wrangler-install command |
+| 6 | `fcc3ae4d` | 52 hot-patch | Bolt.diy `OPENAI_LIKE_API_KEY` env var |
+| 7 | `2518cf91` | 59-precursor | `/api/agent/stream` done event token fields (used by v30 broker usage tracking) |
+| 8 | `d59b1b51` | v30 seed | Milestone context for Broker Professionalization |
+
+---
+
 ## v29.4 Server Management Tooling + Bug Sweep (Shipped local: 2026-05-01)
 
 **Phases completed:** 4 phases (45-48), 17 plans, ~280 automated tests
@@ -468,3 +511,15 @@ See `.planning/MILESTONE-CONTEXT.md` Section C for full v29.4 carry-forward spec
 **Summary:** Per-user Docker container isolation (installForUser, user_app_instances table, per-user subdomains, per-user Caddy routing). Fixed: port mapping (manifest.port priority), volume triple-nesting, umbrel-app.yml manifest fallback, legacy env var resolution in compose, per-user container restart on startup, gateway appId extraction from qualified IDs, global Jellyfin port misconfiguration. 24/24 tests pass.
 
 **Last phase number:** 8 (v7.2, continues from v7.1)
+
+
+---
+
+## Live-Verification Gate Overrides
+
+This is an APPEND-ONLY forensic trail of `--accept-debt` overrides invoked when closing milestones with `human_needed` verification phases. Introduced 2026-05-02 by v29.5 Phase 54 (D-LIVE-VERIFICATION-GATE).
+
+| Date (UTC ISO8601)   | Milestone | Phases waived                                     | UATs waived | Mode          | User reason / attestation                                                                                                                                                                                          |
+|----------------------|-----------|---------------------------------------------------|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-05-02T19:35:00Z | v29.5     | 49-mini-pc-diagnostic, 51-a2-streaming-fix        | 14          | --accept-debt | Live verification surfaced 3 new architectural issues (Bolt.diy block-level streaming, identity contamination via Nexus system prompt + tools injection, OpenAI-Like provider env compat) that exceeded v29.5 hot-patch scope. Carrying forward to v30.0 Broker Professionalization milestone where Phase 63 mandatory live verification + 3 external client smoke tests close the loop properly. v29.5 mechanism work shipped (8 commits); ad-hoc live spot-checks confirmed A1/A2/A3/A4 mechanism fixes work — formal Phase 55 walkthrough deferred. |
+

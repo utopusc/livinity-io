@@ -253,24 +253,77 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-PROBE-01..02 → Phase 47 (Per-user app health probe)
 - [x] FR-SSH-01..02 → Phase 48 (Live SSH session viewer + click-to-ban)
 
-## Current Milestone: v29.5 v29.4 Hot-Patch Recovery + Verification Discipline
+## Current State: v29.5 Shipped Local (Hot-Patch Recovery + Verification Discipline) — 2026-05-02
 
-**Goal:** Close 4 user-reported v29.4 regressions (tool registry empty, streaming gone, Bolt.diy missing + MiroFish still present, Fail2ban Security panel not rendering) and establish a mandatory live-verification gate so future milestones cannot ship `passed` without on-Mini-PC UAT.
+**Delivered:** Closed 4 v29.4 regressions (A1 tool registry empty, A2 streaming gone, A3 MiroFish still present, A4 Security panel not rendering) via 8 hot-patch commits + introduced **D-LIVE-VERIFICATION-GATE** so future milestones cannot ship `passed` while phases hold `human_needed` verification status. Closed via `--accept-debt` because ad-hoc Bolt.diy live testing surfaced 3 new architectural issues (broker block-level streaming, identity contamination via Nexus system prompt + tools injection, OpenAI-Like provider env compat) that exceed v29.5's hot-patch scope and require the v30.0 Broker Professionalization milestone to fix properly.
 
-**Target features:**
-- A1 — Tool registry restoration: defensive eager seed of 9 BUILT_IN_TOOL_IDS to `nexus:cap:tool:*` on livinityd boot
-- A2 — Streaming regression fix: root-cause (UI build / PWA cache / sacred file surgical edit per D-40-01 ritual; Branch N for FR-MODEL-02 was the wrong call)
-- A3 — Marketplace state: re-seed Bolt.diy + un-seed MiroFish on Server5 `platform_apps`
-- A4 — Fail2ban Security panel render fix (PWA cache / `user_preferences.security_panel_visible` default / sidebar `useMemo` filter)
-- B1 — Mandatory live-verification gate added to `/gsd-complete-milestone` workflow (hard-block on `human_needed` UAT count)
+**Shipped features:**
+- **Phase 49 — Mini PC Live Diagnostic (single-batch SSH):** Server5 batched fixture captured (`platform` DB, `apps` table is the source of truth, `/opt/platform` layout, recent platform git log for Bolt.diy attribution). Mini PC SSH was banned by fail2ban from prior session — fallback per D-49-02: `v29.4-REGRESSIONS.md` used as fixture; 4 verdict blocks synthesized.
+- **Phase 50 — A1 Tool Registry Built-in Seed:** `livos/packages/livinityd/source/modules/seed-builtin-tools.ts` (90 LOC) writes 9 `BUILT_IN_TOOL_IDS` to `nexus:cap:tool:*` idempotently as the first step after Redis connection in livinityd boot; `_meta:lastSeedAt` sentinel; reuses canonical `BUILT_IN_TOOL_IDS` source from `capabilities.ts`; 4/4 fake-Redis integration tests passing.
+- **Phase 51 — A2 Streaming Regression Fix (deploy-layer):** `update.sh` UI fresh-build hardening (rm -rf dist + verify_build reordered after build) — root cause was stale UI bundle from short (1m 2s) deploys skipping vite rebuild. Sacred file UNTOUCHED; Branch N reversal explicitly DEFERRED per D-51-03.
+- **Phase 52 — A3 Marketplace State Correction:** MiroFish DELETED from livinityd `builtin-apps.ts` (the actual marketplace source-of-truth) AND Server5 `apps` table archived. Bolt.diy hot-patches landed (commits `a3d5b128` wrangler-install + `fcc3ae4d` `OPENAI_LIKE_API_KEY`). FR-A3-04 root cause documented: marketplace source-of-truth confusion — `platform_apps` table doesn't exist; `builtin-apps.ts` is canonical.
+- **Phase 53 — A4 Fail2ban Security Panel Render (no-op):** Local code already correct from Phase 46. Real root cause was collapsed sidebar (UI density "compact"); Phase 51's fresh-build was the actual remediation since stale bundle compounded the visibility issue.
+- **Phase 54 — B1 Live-Verification Gate (gsd toolkit):** `/gsd-complete-milestone` hard-blocks `passed` audit when `human_needed` count > 0; AskUserQuestion default = "No"; `--accept-debt` flag appends forensic-trail entry to MILESTONES.md with timestamp, milestone, phases, count, reason, mode. **First real-world invocation = this very v29.5 close.**
+
+**Stats:** 6 phases (49-54) / 6 plans / 8 ship commits / 0 new deps / 0 new DB migrations on Mini PC / sacred file `sdk-agent-runner.ts` byte-identical at `4f868d318abff71f8c8bfbcf443b2393a553018b` across all v29.5 phases.
+**Audit:** Closed via `--accept-debt` override (B1 gate would have returned `human_needed` for Phases 49+51). Forensic entry: `MILESTONES.md` "Live-Verification Gate Overrides" section, timestamp `2026-05-02T19:35:00Z`.
+**Archive:** `.planning/milestones/v29.5-ROADMAP.md` + `v29.5-REQUIREMENTS.md` + `v29.5-phases/` (49-54).
+
+**Carry-forward to v30.0 Broker Professionalization (the dominant carry-forward driver):**
+
+- Phase 55 (live verification) NEVER walked — 14 formal UATs deferred (4 v29.5 + 4 v29.4 + 6 v29.3 carry).
+- **Identity contamination** — broker prepends Nexus identity + Nexus tools to external requests. v30 Phase 57 (passthrough mode) bypasses Agent SDK for external traffic.
+- **Block-level streaming** — `sdk-agent-runner.ts:382-389` aggregates `assistant` messages into single chunks; external clients see "non-streaming" or 504. v30 Phase 58 implements true token streaming via Anthropic native SSE pass-through.
+- **Auth model wrong for external** — URL-path identity + container IP guard. External consumers expect `Authorization: Bearer liv_sk_*`. v30 Phase 59 introduces per-user PG `api_keys` table; v30 Phase 60 introduces public `api.livinity.io` on Server5.
+- **OpenAI-Like provider compat** — `OPENAI_LIKE_API_KEY` hot-patched in v29.5; v30 spec compliance work covers this end-to-end with proper `liv_sk_*` Bearer.
+- **Branch N reversal still pending** — re-evaluate during v30 Phase 56 spike.
+
+### Shipped (v29.5)
+
+- [x] FR-A1-01..02 → Phase 50 (tool registry seed module + integration test)
+- [x] FR-A1-03..04 → DEFERRED to v30 Phase 63 (live verification on Mini PC)
+- [x] FR-A2-01 → Phase 49 (root cause: stale UI bundle from short deploys)
+- [x] FR-A2-02 → Phase 51 (deploy-layer fresh-build hardening)
+- [x] FR-A2-03 → DEFERRED to v30 Phase 63 (live token-streaming verification)
+- [x] FR-A2-04 → DEFERRED per D-51-03 (Branch N reversal pending Phase 56 spike)
+- [x] FR-A3-01..02 → Phase 52 (MiroFish removed; Bolt.diy lives in livinityd, not Server5)
+- [x] FR-A3-03 → DEFERRED to v30 Phase 63
+- [x] FR-A3-04 → Phase 52 (root cause documented: marketplace source-of-truth confusion)
+- [x] FR-A4-01..02 → Phase 53 (no code change needed; collapsed sidebar was the real issue + stale bundle)
+- [x] FR-A4-03..04 → DEFERRED to v30 Phase 63
+- [x] FR-B1-01..05 → Phase 54 (gsd toolkit gate landed; first invocation = this v29.5 close)
+- [⚠] FR-VERIFY-01..05 → DEFERRED to v30 Phase 63 (mandatory live verification not executed in v29.5)
+
+## Current Milestone: v30.0 Livinity Broker Professionalization (Real API Endpoint Mode)
+
+**Goal:** Transform Livinity Broker into a "real-API-key" experience for external/open-source apps (Bolt.diy, Open WebUI, Continue.dev, Cline) — Bearer-token-authed, public-endpoint, true-token-streaming, rate-limit-aware, multi-spec-compliant. Each external client must be able to use its own system prompt and its own tools without identity contamination from Nexus.
+
+**Why this milestone exists:** Live Bolt.diy testing during v29.5 close revealed that the broker's current architecture is fundamentally wrong for external consumers. Broker prepends Nexus identity + Nexus tools to every request, aggregates streaming into single chunks, ignores client-supplied tools, and uses URL-path identity instead of standard Bearer auth. External clients see broken streaming, identity collapse, or 504 timeouts.
+
+**Target features (5 categories):**
+- **A — Architectural Refactor:** Passthrough mode (default for external) bypassing Agent SDK + opt-in agent mode (current behavior, header-gated)
+- **B — Auth & Public Surface:** Per-user `liv_sk_*` Bearer tokens + public `api.livinity.io` reverse proxy on Server5 (TLS + rate-limit perimeter)
+- **C — Spec Compliance:** True token streaming (Anthropic native SSE + OpenAI translation adapter rewrite) + rate-limit headers + provider interface stub
+- **D — Model Strategy:** Friendly alias resolution (opus/sonnet/haiku → current Claude family) + multi-provider interface stub (Anthropic only in v30)
+- **E — Observability:** Per-token usage tracking accuracy + Settings > AI Configuration > API Keys + Usage tabs
+
+**Phase plan (8 phases, 56-63):**
+- Phase 56: Research spike (mandatory before any implementation can plan)
+- Phase 57: A1 Passthrough mode (depends on 56)
+- Phase 58: C1+C2 True token streaming (depends on 57)
+- Phase 59: B1 Bearer token auth (parallel)
+- Phase 60: B2 Public endpoint (depends on 59)
+- Phase 61: C3+D1+D2 Spec compliance + model aliases + provider stub (depends on 57, 58)
+- Phase 62: E1+E2 Usage tracking + Settings UI (depends on 59)
+- Phase 63: **Mandatory live verification** with 3 external clients + 14 carry-forward UATs (depends on 57-62)
 
 **Key context:**
-- Phases continue from v29.4's last (Phase 49 onwards). Phase 55 is the mandatory milestone-level live-verification phase.
-- Server4 remains off-limits (D-NO-SERVER4) — Mini PC + Server5 only.
-- Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — A2 likely needs a surgical sacred-file edit (D-40-01 ritual).
-- 4 v29.4 UATs + 6 v29.3 carry-forward UATs still un-executed — Phase 55 walks all of them on live Mini PC.
-- Mini PC SSH calls MUST batch into a single session (fail2ban auto-ban risk).
-- New locked decision: **D-LIVE-VERIFICATION-GATE** — milestones cannot close `passed` without on-Mini-PC UAT execution per relevant phase.
+- Phases continue from v29.5's last (56 onwards).
+- Server4 remains off-limits (D-NO-SERVER4).
+- Sacred file `sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — UNTOUCHED in v30 (passthrough mode bypasses it; agent mode keeps current behavior).
+- D-NO-BYOK preserved — broker issues its own `liv_sk_*` tokens; user's raw `claude_*` keys never enter the broker.
+- D-LIVE-VERIFICATION-GATE active — Phase 63 must close cleanly without `--accept-debt`.
+- Old "v30.0 Backup & Restore" definition (8 phases / 47 BAK-* reqs in `milestones/v30.0-DEFINED/`) is DEFERRED to a future milestone slot — the v30.0 number is now claimed by Broker Professionalization.
 
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
@@ -434,6 +487,9 @@ Working source files (`.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.pla
 | Pure in-process TS translation for OpenAI broker (not LiteLLM sidecar) | No new container, no new dep, simpler ops; tools intentionally ignored per D-42-12 | ✓ Good (v29.3 Phase 42) |
 | MiroFish anchor app dropped at v29.3 close | User priority shift — manifest mechanism still ships; future anchor-app conversation deferred to v30+ | — Closed by user 2026-05-01 |
 | Synthetic-INSERT verification path for FR-DASH-03 banner | Live 429 path requires C1 broker fix in v29.4; banner UI logic verified via unit tests + synthetic rows for v29.3 | — Pending (debt) |
+| D-LIVE-VERIFICATION-GATE (v29.5 Phase 54) | Milestones cannot ship `passed` while phases hold `human_needed` verification. AskUserQuestion default = "No"; `--accept-debt` flag appends forensic-trail entry to MILESTONES.md | ✓ Good (v29.5; first real-world invocation = v29.5's own close) |
+| D-51-03 — Branch N reversal deferred | Insufficient evidence sacred-file model preset is the actual cause of A2 streaming regression; deploy-layer fresh-build fix shipped first; reversal pending Phase 56 spike findings | — Pending (v30) |
+| v30.0 Broker Professionalization supersedes v30.0 Backup & Restore | Live Bolt.diy testing revealed broker architecture is fundamentally wrong for external API consumers (identity contamination, block-level streaming, wrong auth model). Bigger blocker than backup work; v30 slot reassigned, backup deferred to a future milestone | — Pending (v30 entry) |
 
 ## Evolution
 
@@ -453,4 +509,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-02 — v29.5 v29.4 Hot-Patch Recovery + Verification Discipline milestone started (4 regression fixes A1-A4 + B1 verification gate)*
+*Last updated: 2026-05-02 — v29.5 closed via `--accept-debt`; v30.0 Livinity Broker Professionalization current milestone (8 phases proposed, awaiting `/gsd-new-milestone v30.0` to consume MILESTONE-CONTEXT.md)*

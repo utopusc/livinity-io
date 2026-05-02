@@ -1,0 +1,55 @@
+Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts.
+=== PG_TABLES_PLATFORM ===
+               List of relations
+ Schema |        Name        | Type  |  Owner   
+--------+--------------------+-------+----------
+ public | api_keys           | table | platform
+ public | apps               | table | platform
+ public | bandwidth_usage    | table | platform
+ public | custom_domains     | table | platform
+ public | device_grants      | table | platform
+ public | devices            | table | platform
+ public | install_history    | table | platform
+ public | sessions           | table | platform
+ public | tunnel_connections | table | platform
+ public | users              | table | platform
+(10 rows)
+
+=== PG_GREP_BOLT_MIROFISH ===
+HIT_in_table=apps count=2
+=== PLATFORM_DIR_CONTENT ===
+total 24
+drwxr-xr-x  6 root root 4096 Mar 29 10:24 .
+drwxr-xr-x 10 root root 4096 Apr 24 21:40 ..
+drwxr-xr-x 10 root root 4096 Mar 21 10:39 changelog
+drwxr-xr-x  4 root root 4096 Mar 29 10:28 marketplace
+drwxr-xr-x  5 root root 4096 Mar 26 13:33 relay
+drwxr-xr-x  6 root root 4096 Apr 24 21:43 web
+=== LIVOS_REPO_CONTENT ===
+total 416
+drwxr-xr-x 16 root root  4096 May  1 17:54 .
+drwxr-xr-x 10 root root  4096 Apr 24 21:40 ..
+drwxr-xr-x  3 root root  4096 May  1 17:54 .claude
+drwxr-xr-x  8 root root  4096 May  1 17:54 .git
+-rw-r--r--  1 root root   451 May  1 17:54 .gitattributes
+drwxr-xr-x  3 root root  4096 Feb  7 23:37 .github
+-rw-r--r--  1 root root   452 May  1 17:54 .gitignore
+drwxr-xr-x  7 root root  4096 May  1 17:54 .planning
+drwxr-xr-x  3 root root  4096 Mar 26 13:33 .serena
+-rw-r--r--  1 root root 10167 May  1 17:54 AI_AGENTS_RESEARCH_INDEX.md
+-rw-r--r--  1 root root 29270 May  1 17:54 AI_AGENT_INTEGRATION_PATTERNS.md
+-rw-r--r--  1 root root  9570 May  1 17:54 AI_AGENT_TOOLS_QUICKREF.md
+-rw-r--r--  1 root root 28218 May  1 17:54 AI_AGENT_TOOLS_RESEARCH.md
+-rw-r--r--  1 root root  2132 Feb  7 23:37 CHANGELOG.md
+-rw-r--r--  1 root root  3170 Feb  7 23:37 CODE_OF_CONDUCT.md
+-rw-r--r--  1 root root 22495 May  1 17:54 COMPETITIVE_ANALYSIS_REPORT.md
+-rw-r--r--  1 root root 19284 May  1 17:54 COMPETITOR_PROFILES.md
+-rw-r--r--  1 root root  7146 Feb  7 23:37 CONTRIBUTING.md
+-rw-r--r--  1 root root   312 Mar 19 07:52 CUsershelloAppDataLocalTempdeploy.txt
+-rw-r--r--  1 root root   874 Feb  7 23:37 LICENSE
+-rw-r--r--  1 root root 33456 May  1 17:54 MARKET_RESEARCH_2025-2026.md
+-rw-r--r--  1 root root 16830 May  1 17:54 MARKET_RESEARCH_INDEX.md
+-rw-r--r--  1 root root  7755 May  1 17:54 MARKET_RESEARCH_SUMMARY.md
+-rw-r--r--  1 root root 20522 May  1 17:54 NEXT-MILESTONE-PROMPT.md
+=== GREP_BOLT_IN_FILES ===
+=== END ===
