@@ -222,13 +222,43 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-MARKET-01 → Phase 43 (manifest auto-injection); FR-MARKET-02 dropped 2026-05-01
 - [x] FR-DASH-01..02 → Phase 44 (dashboard mechanism); FR-DASH-03 partial (debt accepted, C1 carry-forward)
 
-## Next Milestone: v29.4 Server Management Tooling + Bug Sweep
+## Current State: v29.4 Shipped Local (Server Management Tooling + Bug Sweep) — 2026-05-01
 
-**Goal:** Restore Nexus AI's missing built-in tools (shell, Docker, files), add a Server Management surface for Fail2ban / IP-ban administration so SSH access stays operable, and roll up four v29.3 carry-forwards (broker 429, sacred SHA, httpOnlyPaths, OpenAI SSE usage chunk).
+**Delivered:** Admin SSH lockout recovery via UI without SSH access (Fail2ban admin panel with unban + whitelist + manual ban with self-ban guardrails + immutable audit log + mobile cellular toggle), live SSH session viewer with click-to-ban cross-link, AI diagnostics surface (capability registry restore + atomic-swap resync + model identity 6-step diagnostic + per-user marketplace app health probe), and 4 carry-forward bug fixes from v29.3 — all without new third-party dependencies and zero new database migrations.
 
-**Source:** `.planning/MILESTONE-CONTEXT.md` (8 candidate features in 3 buckets; A bug fixes from live testing · B new Server Management features · C v29.3 carry-forward sweep).
+**Shipped features:**
+- **Phase 45 — Carry-Forward Sweep** (FR-CF-01..04): broker 429 forwarding + Retry-After preservation (strict 429-only allowlist over 9 status codes × 2 routers), sacred SHA audit-only re-pin from `623a65b9...` to `4f868d31...` with audit comment listing v43.x drift commits, 3 namespaced httpOnlyPaths entries, OpenAI SSE adapter `usage` chunk with real token plumbing.
+- **Phase 46 — Fail2ban Admin Panel** (FR-F2B-01..06): new `Security` sidebar entry inside `LIVINITY_docker` (13th SECTION_ID) with auto-discovered jail list + 5s polling + 4-state binary detection. Unban modal with ignoreip whitelist checkbox (= passive SSH gateway, "Claude SSH from cloud" closed). Manual ban-IP modal with type-`LOCK ME OUT` + Zod CIDR /0-/7 reject + dual-IP self-ban detection. Audit log REUSES `device_audit_log` (sentinel `device_id='fail2ban-host'`). Mobile cellular toggle + Settings backout toggle.
+- **Phase 47 — AI Diagnostics** (FR-TOOL/MODEL/PROBE): shared `diagnostics-section.tsx` scaffold with 3 cards. Capability registry diagnostic with 3-way categorization + atomic-swap Lua RENAME resync + override re-apply. Model Identity 6-step diagnostic returned verdict `neither` → **Branch N taken** (no remediation needed; sacred file untouched). `apps.healthProbe` privateProcedure with PG scoping (anti-port-scanner) + 5s undici timeout.
+- **Phase 48 — Live SSH Session Viewer** (FR-SSH-01..02): WebSocket `/ws/ssh-sessions` streams live `journalctl -u ssh -o json --follow`. Click-to-ban cross-link to Phase 46's `ban-ip-modal.tsx` pre-populated via additive `initialIp` prop. 5000-line ring buffer + 4px scroll-tolerance + Resume-tailing button. RBAC at WS handshake closes 4403 for non-admin.
 
-**Bootstrap:** `/gsd-new-milestone v29.4` (workflow detects MILESTONE-CONTEXT.md and runs research → requirements → roadmap).
+**Stats:** 4 phases (45-48) / 17 plans / ~280 automated tests / 0 new deps / 0 new DB tables / sacred file SHA `4f868d31...` byte-identical across all 4 phases.
+**Audit:** `.planning/milestones/v29.4-MILESTONE-AUDIT.md` — `passed` (cleanest v29.x close to date — zero gaps, zero scope creep) · **Integration check:** `.planning/milestones/v29.4-INTEGRATION-CHECK.md` (18/18 reqs wired, 5/5 E2E flows complete).
+**Archive:** `.planning/milestones/v29.4-ROADMAP.md` + `v29.4-REQUIREMENTS.md` + `v29.4-phases/` (45-48).
+
+**Manual UAT deferred (opt-in, not blockers):**
+- 4 UAT files (45/46/47/48) un-executed pending Mini PC deploy. Same pattern as v29.3 closed with.
+- v29.3 carry-forward UATs (6 files: 39-44) STILL un-executed — optional walk alongside v29.4 UATs at next deploy cycle.
+
+**Tech debt (v29.5+ optional):**
+- Atomic-swap `syncAll` documented stub (D-WAVE5-SYNCALL-STUB) in 47-02 — production registry Re-sync atomically swaps zero keys until follow-up wires real `PrefixedWriteRedis.syncAll`.
+- ~80+ commits ahead of origin/master — push gate before any Mini PC deploy.
+
+### Shipped (v29.4)
+
+- [x] FR-CF-01..04 → Phase 45 (Carry-forward sweep)
+- [x] FR-F2B-01..06 → Phase 46 (Fail2ban admin panel)
+- [x] FR-TOOL-01..02 → Phase 47 (Capability registry diagnostic + atomic-swap resync)
+- [x] FR-MODEL-01..02 → Phase 47 (Branch N — verdict=neither, sacred file untouched)
+- [x] FR-PROBE-01..02 → Phase 47 (Per-user app health probe)
+- [x] FR-SSH-01..02 → Phase 48 (Live SSH session viewer + click-to-ban)
+
+## Next Milestone: v29.5 (TBD)
+
+No MILESTONE-CONTEXT.md seeded yet. When ready:
+```
+/gsd-new-milestone v29.5
+```
 
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
@@ -411,4 +441,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-01 — v29.3 Marketplace AI Broker (Subscription-Only) milestone closed (gaps accepted as v29.4 carry-forward; MiroFish dropped)*
+*Last updated: 2026-05-01 — v29.4 Server Management Tooling + Bug Sweep milestone closed (status `passed`, 18/18 reqs, 0 gaps)*

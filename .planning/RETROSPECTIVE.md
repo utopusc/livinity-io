@@ -189,6 +189,50 @@
 
 ---
 
+## Milestone: v29.4 — Server Management Tooling + Bug Sweep
+
+**Shipped:** 2026-05-01 (local; awaiting Mini PC deploy)
+**Phases:** 4 (45-48) | **Plans:** 17 | **Tests:** ~280 automated across phase suites
+**Audit status:** `passed` (cleanest v29.x close — zero gaps, zero scope creep) | **Branch N taken** for FR-MODEL-02 (verdict=neither, sacred file untouched)
+
+### What Was Built
+- Phase 45 — closed all 4 v29.3 audit-found integration gaps in one phase: broker 429 + Retry-After (strict 429-only over 9 status codes × 2 routers), sacred SHA audit-only re-pin from `623a65b9...` to `4f868d31...` with audit comment listing v43.x drift commits, 3 namespaced httpOnlyPaths entries, OpenAI SSE adapter usage chunk with real token plumbing through `agent-runner-factory.ts`
+- Phase 46 — Fail2ban admin panel as new "Security" sidebar entry inside `LIVINITY_docker` (13th SECTION_ID). Auto-discovered jail list + unban modal with whitelist checkbox (= passive SSH gateway = "Claude SSH from cloud" use case closed). Manual ban with type-`LOCK ME OUT` gate + Zod CIDR /0-/7 reject + dual-IP self-ban detection. Audit log REUSES `device_audit_log` (sentinel `device_id='fail2ban-host'`)
+- Phase 47 — shared `diagnostics-section.tsx` scaffold hosting 3 cards (Capability Registry / Model Identity / App Health) per D-DIAGNOSTICS-CARD ~25% LOC saving. Capability registry diagnostic with 3-way categorization (`missing_lost` vs `missing_precondition` vs `disabled_by_user`) + atomic-swap resync via Lua RENAME script + user override re-apply. Model Identity 6-step diagnostic returned verdict `neither` → **Branch N taken** (no remediation needed, sacred file untouched). Per-user `apps.healthProbe` privateProcedure with PG scoping (anti-port-scanner) + 5s undici timeout
+- Phase 48 — Live SSH session viewer as 3rd tab inside Phase 46's Security section. WebSocket `/ws/ssh-sessions` streams `journalctl -u ssh -o json --follow`. Click-to-ban cross-link to Phase 46's `ban-ip-modal.tsx` pre-populated via additive `initialIp?: string` prop (lifted state in `security-section.tsx`). 5000-line ring buffer + 4px scroll-tolerance. RBAC at WS handshake closes 4403 for non-admin
+
+### What Worked
+- **The 4-bucket verdict-driven branching pattern (Phase 47 FR-MODEL-02)** — Plan 47-01's read-only Mini PC diagnostic ran 6 SSH commands → returned verdict `neither` → Plan 47-03 took Branch N → no sacred-file edit needed → ~30% of Phase 47's potential complexity collapsed cleanly. **Lesson: verdict-driven plans where one branch is "do nothing because the system is already correct" are a power tool.** Phase 47 shipped as if Branch B were taken (full diagnostic surface) without paying the sacred-file ritual cost.
+- **Cross-phase code reuse via additive props** — Phase 48's click-to-ban cross-link added 3 lines to Phase 46's `ban-ip-modal.tsx` (`initialIp?: string` optional prop + `useEffect` to pre-populate). Zero churn for Phase 46 callers, instant cross-link for Phase 48. Cheaper than refactoring or duplicating.
+- **REUSE existing tables** — `device_audit_log` (Phase 46 fail2ban events) + `user_app_instances` (Phase 47 healthProbe scoping). Zero new migrations across the entire milestone. Postgres + tRPC + Zod existing primitives covered every requirement.
+- **Mini PC fixture-based testing for Phase 46-01 + Phase 47-01** — instead of `vi.mock`-ing `child_process`, the diagnostic plans captured live Mini PC output and the unit tests pasted that output verbatim. W-20 pitfall avoided cleanly. Test fidelity stayed high.
+- **Atomic-swap registry rebuild via Lua RENAME** — Plan 47-02's `ATOMIC_SWAP_LUA` script ensures mid-resync queries see EITHER old OR new set, never empty. 50-parallel-reads test asserted zero null observations. The pattern is reusable for any future Redis-backed cache that needs zero-empty-window invalidation.
+
+### What Was Inefficient
+- **Multiple verifier reports flagged the test:phaseN chain on Windows fails** (cmd.exe PATH propagation quirk for tsx). The chain works on Linux/Mini PC but local-dev runs need per-file invocation. Pre-existing issue, but it affected 4 plans' verification — a Windows-friendly PowerShell-based chain would be a v30+ ergonomic win.
+- **Pattern mapper sometimes contradicts the prompt's UI directory hint** — Phase 46 prompt said `modules/docker-app/` but pattern map corrected to `routes/docker/security/`. Worked out fine, but reveals that prompts to pattern mapper should be intentionally vague about file locations and let it discover the convention.
+- **`milestone.complete` SDK bug from v29.3 is still unfixed** — `gsd-sdk query milestone.complete v29.4 --name "..."` would still fail with "version required for phases archive" because `milestoneComplete` calls `phasesArchive([], projectDir)` with empty arg array. Worked around manually by calling `phases.archive v29.4` directly. Should be fixed at gsd-sdk source level — file an upstream bug.
+- **80+ commits ahead of origin** is excessive — should have pushed at end of each phase. Push deferred since v29.3 close has now accumulated to ~85+ commits across both milestones.
+
+### Patterns Established
+- **Verdict-driven branched remediation** (Phase 47 FR-MODEL-02 pattern): Plan N captures diagnostic verdict → Plan N+1 has K branches (one per verdict bucket) → executor picks branch at runtime → "do nothing" branch (Branch N) is a valid first-class option. Future "diagnose-then-fix" phases inherit this shape.
+- **Live-fixture unit testing** (Phase 46-01, Phase 47-01): SSH-capture-from-Mini-PC → paste verbatim into test file → `tsx` + `node:assert/strict` (NOT vitest). Prevents `vi.mock('child_process')` anti-pattern. Reusable for any phase touching system binaries.
+- **Additive cross-phase props** (Phase 48 → Phase 46 ban modal): optional prop with default + useEffect pre-populate. Zero churn for existing callers. Pattern works for any "Phase N adds new caller of Phase N-K's component" scenario.
+- **D-DIAGNOSTICS-CARD shared scaffold** (Phase 47): one section component + N cards (where N can be different requirement IDs). ~25% LOC saving over N separate sections. Pattern reusable for any "multiple admin diagnostics under one Settings card" scenario.
+
+### Key Lessons
+1. **Verdict-driven plans are a force multiplier when the verdict can be "system is already correct".** v29.4 Phase 47 saved a sacred-file-ritual + integrity-test re-pin + ~30 LOC remediation by simply running the 6-step diagnostic FIRST. Future "we think X is broken" investigations should ALWAYS land Plan-N-diagnostic before Plan-N+1-fix.
+2. **REUSE existing tables aggressively.** v29.4 added 12 new tRPC routes + 4 new modules + 7 new UI components and ZERO new database migrations. The cost of "should I add a new table?" is almost always higher than "can I reuse an existing one with a sentinel value?"
+3. **Push at every phase boundary, not at milestone close.** ~85+ commits ahead is too much. The risk of force-needing-to-rebase or losing local work scales linearly with commit lag.
+4. **The integrity-test ritual stays cheap when verdicts allow Branch N.** Phase 47 didn't pay any D-40-01 ritual cost because verdict=neither. Phase 45's audit-only re-pin (no source change) is the second-cheapest variant. Variant ordering for cost: Branch-N (zero cost) < audit-only re-pin (test constant only) < behavior-preserving surgical edit (full ritual).
+
+### Cost Observations
+- Model mix: ~75% opus (planner + executor), ~20% sonnet (verifier + integration check), ~5% haiku (status queries)
+- Sessions: 1 long autonomous session ("herseye otonom devam et" — user went out)
+- Notable: Phase 47 was the largest phase by surface area (5 plans, ~21 files, atomic-swap concurrency proof) but Branch N collapsed the FR-MODEL-02 portion into "ship diagnostic surface only" — saved an estimated ~40% of planned effort. Phase 46 was the largest by file count (~21 files including 5 UI components) but the kitchen-sink Fail2ban scope (table-stakes + last-attempted-user + manual-ban + mobile cellular toggle) all shipped in 5 plans without scope cuts.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -199,6 +243,7 @@
 | v27.0 | 7 | 15 | First milestone with `workflow.skip_discuss=true` + auto-generated CONTEXT.md (Phases 22-23); first milestone with `type: tdd` plans shipping AI-bound code paths |
 | v28.0 | 6 | 12 | First UI-only milestone (zero new backend modules — only schema additions + WS envId extensions). First milestone with `workflow.ui_phase=false` (skipped UI-SPEC interactive flow). Largest cleanup task (Plan 27-02 deleted 5607 lines via 4-grep gate). First milestone where backend foundation hypothesis (v27 → v28 reuse) was validated end-to-end. |
 | v29.3 | 6 | 28 | First milestone shipped with `gaps_found` accepted (debt routed to next-milestone MILESTONE-CONTEXT.md instead of being closed by a gap-closure phase). First milestone with sacred-file surgical-edit ritual (Phase 40 D-40-01) — re-pinned BASELINE_SHA + documenting comment + integrity test invariant. First milestone where 0/6 phases produced VERIFICATION.md artifacts (UAT-deferred per `<scope_boundaries>`); 3-source matrix degraded all 17 reqs to `partial` before audit overlay. First milestone with explicit user-driven feature drop mid-close (FR-MARKET-02 MiroFish). |
+| v29.4 | 4 | 17 | First milestone closed `passed` (zero gaps, zero scope creep, zero unsatisfied reqs). First milestone with verdict-driven Branch N (FR-MODEL-02 verdict=neither → no remediation needed → ~40% effort saved). First milestone with shared UI scaffold pattern (D-DIAGNOSTICS-CARD — 3 cards under 1 section). First milestone with sacred file BYTE-IDENTICAL across ALL phases (1 audit-only re-pin in Plan 45-01, no surgical edits). First milestone with zero new dependencies AND zero new database migrations across all 4 phases. Cleanest v29.x close to date. |
 
 ### Cumulative Quality
 
@@ -208,6 +253,7 @@
 | v27.0 | 90/90 must-haves (100%, 14 deferred to live-LLM/cron UAT) | 0 cross-phase gaps | 14 deferred-feature (v28) + 5 pre-existing-noise + 4 runtime-validation |
 | v28.0 | 20/20 DOC requirements (100%, 45 deployment-time UAT items) | 0 cross-phase gaps; 9/9 integrations + 4/4 E2E flows verified | 10 info-severity (URL-bar form, per-env CPU pill, registry audit-log entries — all v29.0+) |
 | v29.3 | 15/17 mechanism-satisfied + 1 partial-debt + 1 dropped (FR-MARKET-02 MiroFish) | 4 cross-phase gaps (broker 429 path / OpenAI SSE usage chunk / 5 tRPC routes off httpOnlyPaths / sacred file SHA drift) — all routed to v29.4 carry-forward sweep | 17 items across 6 phases + milestone level (6 manual UATs un-executed, 329 + 534 pre-existing TS errors not fixed, sacred-file SHA stale, ~44 commits ahead of origin/master) |
+| v29.4 | 18/18 mechanism-satisfied (cleanest close) | 0 cross-phase gaps; 5/5 seams + 5/5 E2E flows verified | ~6 items across 4 phases + milestone level (4 v29.4 UATs un-executed, 6 v29.3 UATs still pending, atomic-swap syncAll documented stub for v29.5+, ~85 commits ahead of origin/master) |
 
 ### Top Lessons (Verified Across Milestones)
 

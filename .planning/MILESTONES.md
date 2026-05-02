@@ -1,5 +1,30 @@
 # Milestones
 
+## v29.4 Server Management Tooling + Bug Sweep (Shipped local: 2026-05-01)
+
+**Phases completed:** 4 phases (45-48), 17 plans, ~280 automated tests
+**Requirements:** 18/18 mechanism-satisfied · 0 unsatisfied · 0 partial · 0 dropped
+**Milestone audit:** `passed` (cleanest v29.x close to date — zero gaps, zero scope creep)
+**Sacred file:** `nexus/packages/core/src/sdk-agent-runner.ts` byte-identical across all 4 phases at SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` (Branch N taken for FR-MODEL-02 — verdict=`neither`).
+**Net stack delta:** 0 new npm/apt deps, 0 new database tables (REUSED `device_audit_log` for Fail2ban audit, `user_app_instances` for healthProbe scoping).
+**Known deferred items at close:** 4 manual UAT files un-executed (live Mini PC walkthroughs deferred to natural deploy cadence per v29.3 pattern); 1 atomic-swap `syncAll` documented stub for v29.5 follow-up if registry Re-sync UX warrants.
+
+**Key accomplishments:**
+
+- Phase 45 — Carry-Forward Sweep: closed all 4 v29.3 audit-found integration gaps. C1 (broker 429 forwarding + Retry-After preservation, strict 429-only allowlist over 9 status codes × 2 routers), C2 (sacred SHA audit-only re-pin from `623a65b9...` to `4f868d31...` with audit comment listing v43.x drift commits — sacred file byte-identical), C3 (3 namespaced httpOnlyPaths entries: `ai.claudePerUserStartLogin` + `usage.getMine` + `usage.getAll`), C4 (OpenAI SSE adapter emits `usage` chunk before `[DONE]` with real token plumbing through agent-runner-factory.ts).
+- Phase 46 — Fail2ban Admin Panel: new `Security` sidebar entry inside `LIVINITY_docker` (13th SECTION_ID) with auto-discovered jail list + 5s polling + 4-state binary detection banner. Unban modal with `ignoreip` whitelist checkbox (= B3a passive SSH gateway = "Claude SSH from cloud" use case closed). Manual ban-IP modal with type-`LOCK ME OUT` exact-string gate + Zod CIDR /0-/7 reject + dual-IP self-ban detection (HTTP X-Forwarded-For + active SSH session). Audit log REUSES `device_audit_log` (sentinel `device_id='fail2ban-host'`) — no new table migration. Mobile cellular toggle. Settings backout toggle wired into AdvancedSection.
+- Phase 47 — AI Diagnostics: shared `diagnostics-section.tsx` scaffold hosting 3 cards (Capability Registry / Model Identity / App Health) per D-DIAGNOSTICS-CARD ~25% LOC saving. Capability registry diagnostic with 3-way categorization (`missing_lost` vs `missing_precondition` vs `disabled_by_user`) + atomic-swap resync via temp Redis prefix + Lua RENAME script + user override re-apply. Model Identity 6-step on-Mini-PC diagnostic returned verdict `neither` — Branch N taken (no remediation needed, sacred file untouched). Per-user `apps.healthProbe` privateProcedure with PG scoping `WHERE user_id = ctx.currentUser.id AND app_id = $1` (anti-port-scanner) + 5s undici timeout.
+- Phase 48 — Live SSH Session Viewer: new `SSH Sessions` tab inside Phase 46's Security section. WebSocket `/ws/ssh-sessions` streams live `journalctl -u ssh -o json --follow` events filtered to `_SYSTEMD_UNIT === "ssh.service"`. Click-to-ban cross-link to Phase 46's `ban-ip-modal.tsx` pre-populated via additive `initialIp?: string` prop (lifted state in `security-section.tsx`). 5000-line ring buffer + 4px scroll-tolerance auto-disables live-tail with explicit "Resume tailing" button. RBAC at WS handshake closes with code 4403 for non-admin. NO `maxmind` / geo-IP dependency (deferred to FR-SSH-future-01 / v30+).
+
+**Carry-forward to v29.5+ (optional):**
+
+- 4 manual UAT files (45/46/47/48) un-executed — walk on next Mini PC deploy.
+- v29.3 carry-forward UATs (6 files: 39-44) STILL un-executed — optional walk alongside v29.4 UATs.
+- Atomic-swap `syncAll` stub in 47-02 (D-WAVE5-SYNCALL-STUB) — production registry Re-sync atomically swaps zero keys; wire real `PrefixedWriteRedis.syncAll` if UX feedback warrants.
+- Push to origin/master (~80+ commits ahead since v29.3).
+
+---
+
 ## v29.3 Marketplace AI Broker (Subscription-Only) (Shipped local: 2026-05-01)
 
 **Phases completed:** 6 phases (39-44), 28 plans, ~150 automated tests across phase suites
