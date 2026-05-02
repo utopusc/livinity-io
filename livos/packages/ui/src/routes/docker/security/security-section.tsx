@@ -38,6 +38,7 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/t
 import {AuditLogTab} from './audit-log-tab'
 import {BanIpModal, type BanIpInput} from './ban-ip-modal'
 import {JailStatusCard, type JailStatus} from './jail-status-card'
+import {SshSessionsTab} from './ssh-sessions-tab'
 import {UnbanModal} from './unban-modal'
 
 const POLL_INTERVAL_MS = 5_000
@@ -53,12 +54,15 @@ interface UnbanContext {
 export function SecuritySection() {
 	const utils = trpcReact.useUtils()
 
-	// State — selected jail tab, top-level tab (jails vs audit), modal state,
-	// cellular toggle (session-scoped per FR-F2B-05).
-	const [topTab, setTopTab] = useState<'jails' | 'audit'>('jails')
+	// State — selected jail tab, top-level tab (jails / audit / ssh-sessions),
+	// modal state, cellular toggle (session-scoped per FR-F2B-05). Phase 48
+	// Plan 48-02 widens topTab union to include 'ssh-sessions' and adds
+	// `banModalIp` so SshSessionsTab can lift up an IP into BanIpModal.
+	const [topTab, setTopTab] = useState<'jails' | 'audit' | 'ssh-sessions'>('jails')
 	const [selectedJail, setSelectedJail] = useState<string | null>(null)
 	const [isCellular, setIsCellular] = useState<boolean>(false)
 	const [banModalOpen, setBanModalOpen] = useState<boolean>(false)
+	const [banModalIp, setBanModalIp] = useState<string>('')
 	const [unbanCtx, setUnbanCtx] = useState<UnbanContext | null>(null)
 
 	// Pitfall W-02 — 5s polling cadence; staleTime=half-interval mirrors Plan
@@ -237,10 +241,11 @@ export function SecuritySection() {
 				{/* Happy-path body — running with jails: tabs + cards */}
 				{serviceState === 'running' ? (
 					<div className='p-4'>
-						<Tabs value={topTab} onValueChange={(v) => setTopTab(v as 'jails' | 'audit')}>
+						<Tabs value={topTab} onValueChange={(v) => setTopTab(v as 'jails' | 'audit' | 'ssh-sessions')}>
 							<TabsList>
 								<TabsTrigger value='jails'>Jails</TabsTrigger>
 								<TabsTrigger value='audit'>Audit log</TabsTrigger>
+								<TabsTrigger value='ssh-sessions'>SSH Sessions</TabsTrigger>
 							</TabsList>
 							<TabsContent value='jails'>
 								{jails.length === 0 ? (
@@ -291,6 +296,17 @@ export function SecuritySection() {
 							<TabsContent value='audit'>
 								<AuditLogTab />
 							</TabsContent>
+							<TabsContent value='ssh-sessions'>
+								{/* Phase 48 Plan 48-02 — SSH-Sessions tab opens a /ws/ssh-sessions stream
+								   and lifts click-to-ban IP up to this section so BanIpModal can
+								   pre-populate via `initialIp`. */}
+								<SshSessionsTab
+									onBanIp={(ip) => {
+										setBanModalIp(ip)
+										setBanModalOpen(true)
+									}}
+								/>
+							</TabsContent>
 						</Tabs>
 					</div>
 				) : null}
@@ -314,7 +330,12 @@ export function SecuritySection() {
 
 			<BanIpModal
 				open={banModalOpen}
-				onOpenChange={setBanModalOpen}
+				onOpenChange={(o) => {
+					setBanModalOpen(o)
+					// Phase 48 Plan 48-02 — reset lifted-up IP on close so the next
+					// header "Ban an IP" click (no IP context) starts with empty input.
+					if (!o) setBanModalIp('')
+				}}
 				jails={jails}
 				onSubmit={handleBanSubmit}
 				// v29.4: HTTP-source IP and active SSH IPs are surfaced post-detection
@@ -325,6 +346,10 @@ export function SecuritySection() {
 				isCellular={isCellular}
 				setIsCellular={setIsCellular}
 				isBanning={banMutation.isPending}
+				// Phase 48 Plan 48-02 — pre-populate the IP input when the user
+				// clicked "Ban" on a row inside SshSessionsTab. Empty string
+				// preserves the original Phase 46 header-button flow.
+				initialIp={banModalIp}
 			/>
 		</div>
 	)
