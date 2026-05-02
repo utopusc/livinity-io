@@ -27,6 +27,7 @@ import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
 import createDockerLogsHandler from '../docker/docker-logs-socket.js'
+import {createSshSessionsWsHandler} from '../ssh-sessions/index.js'
 import {
 	downloadArchive as downloadContainerArchive,
 	writeFile as writeContainerFile,
@@ -1152,6 +1153,16 @@ class Server {
 		this.mountWebSocketServer('/ws/agent', (wss) => {
 			const logger = this.logger.createChildLogger('ws-agent')
 			const handler = createAgentWebSocketHandler({livinityd: this.livinityd, logger})
+			wss.on('connection', handler)
+		})
+
+		// Phase 48 — Live SSH session viewer (FR-SSH-01). journalctl-tailed
+		// ssh.service events broadcast to admin clients. RBAC enforced inside
+		// the handler (close 4403 for non-admin, 4404 for missing journalctl
+		// binary). Per D-NO-NEW-DEPS — no maxmind / no GeoIP enrichment.
+		this.mountWebSocketServer('/ws/ssh-sessions', (wss) => {
+			const logger = this.logger.createChildLogger('ssh-sessions')
+			const handler = createSshSessionsWsHandler({livinityd: this.livinityd, logger})
 			wss.on('connection', handler)
 		})
 
