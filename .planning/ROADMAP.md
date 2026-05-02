@@ -136,7 +136,14 @@ Plans:
   2. A user from outside the Mini PC LAN connects Open WebUI to `api.livinity.io` with their `liv_sk_*` token and successfully completes a chat round trip — no container-IP-guard rejection, no DNS-only-CDN error.
   3. A user (or a misbehaving client) blasting `api.livinity.io` faster than the configured baseline rate gets HTTP 429 with an Anthropic-compat error body and a `Retry-After` header — they are not silently throttled or 502'd.
   4. A user observes that `api.livinity.io` presents a valid TLS certificate (no "self-signed" warning, no expired-cert warning) when opened in any modern browser.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 60-01-PLAN.md — Wave 0 Server5 ground-truth diagnostic (single-batched ssh) + 5-Q verdict table
+- [ ] 60-02-PLAN.md — Wave 1 xcaddy build + binary swap (`/usr/bin/caddy` → custom build with `caddy-ratelimit`)
+- [ ] 60-03-PLAN.md — Wave 2 Relay code extension for `api.livinity.io` → admin tunnel routing (TDD)
+- [ ] 60-04-PLAN.md — Wave 3 Caddyfile addition + DNS A record + broker IP-guard removal
+- [ ] 60-05-PLAN.md — Wave 4 phase-60-smoke.sh + 60-SMOKE-RESULTS.md + sacred file final gate
 
 ### Phase 61: C3+D1+D2 Rate-Limit Headers + Model Aliases + Provider Interface Stub
 **Goal**: Spec-compliant rate-limit headers reach external clients; friendly model aliases (`opus` / `sonnet` / `haiku` / `gpt-4o`) resolve to the current Claude family without per-client awareness of model versioning; a pluggable `BrokerProvider` interface lets future providers (OpenAI / Gemini / Mistral) be code-drop-ins.
@@ -193,7 +200,7 @@ Plans:
 | 57. A1+A2 Passthrough + Agent Mode   | v30.0     | 0/0            | Not started | -          |
 | 58. C1+C2 True Token Streaming       | v30.0     | 0/0            | Not started | -          |
 | 59. B1 Bearer Token Auth             | v30.0     | 0/0            | Not started | -          |
-| 60. B2 Public Endpoint               | v30.0     | 0/0            | Not started | -          |
+| 60. B2 Public Endpoint               | v30.0     | 0/5            | Not started | -          |
 | 61. C3+D1+D2 Spec Compliance         | v30.0     | 0/0            | Not started | -          |
 | 62. E1+E2 Usage + Settings UI        | v30.0     | 0/0            | Not started | -          |
 | 63. Mandatory Live Verification      | v30.0     | 0/0            | Not started | -          |
