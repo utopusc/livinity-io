@@ -1273,6 +1273,13 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       services: {
         server: {
           image: 'ghcr.io/stackblitz-labs/bolt.diy:latest',
+          // Phase 57 (v29.5 post-deploy hot-fix) — upstream image strips
+          // wrangler (devDependency) via `pnpm prune --prod --ignore-scripts`,
+          // but the dockerstart script needs wrangler in PATH. Container
+          // restart-loops with `sh: 1: wrangler: not found` until wrangler is
+          // installed at runtime. Idempotent install at first start; PATH check
+          // short-circuits subsequent restarts.
+          command: ['sh', '-c', 'command -v wrangler >/dev/null 2>&1 || npm install -g wrangler@latest; pnpm run dockerstart'],
           restart: 'unless-stopped',
           environment: {
             NODE_ENV: 'production',
@@ -1293,7 +1300,8 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             interval: '30s',
             timeout: '10s',
             retries: 3,
-            start_period: '60s',
+            // 90s start_period accommodates one-time wrangler install on first start.
+            start_period: '90s',
           },
         },
       },
