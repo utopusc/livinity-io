@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v29.5
-milestone_name: TBD
-status: between-milestones
-stopped_at: v29.4 milestone closed 2026-05-01 with status `passed` — 18/18 reqs, 0 gaps, cleanest v29.x close. Phase directories archived to .planning/milestones/v29.4-phases/. Awaiting `/gsd-new-milestone v29.5` (no MILESTONE-CONTEXT.md seeded yet — fresh start).
-last_updated: "2026-05-01T22:00:00Z"
-last_activity: 2026-05-01 -- v29.4 milestone closed via /gsd-complete-milestone. Audit `passed` (zero gaps, zero scope creep). Archives written to .planning/milestones/v29.4-{ROADMAP,REQUIREMENTS,MILESTONE-AUDIT,INTEGRATION-CHECK}.md + v29.4-phases/. MILESTONES.md updated. ROADMAP.md collapsed. PROJECT.md evolved (v29.4 moved to Shipped). REQUIREMENTS.md slated for git rm in next commit. Sacred file SHA byte-identical at `4f868d31...` across all 4 phases (Branch N taken for FR-MODEL-02).
+milestone_name: v29.4 Hot-Patch Recovery + Verification Discipline
+status: defining-requirements
+stopped_at: v29.5 milestone bootstrapped 2026-05-02 from MILESTONE-CONTEXT.md. Closing 4 user-reported v29.4 regressions (A1 tool registry / A2 streaming / A3 marketplace state / A4 Fail2ban panel) + B1 live-verification gate. Phases continue from 49.
+last_updated: "2026-05-02T00:00:00Z"
+last_activity: 2026-05-02 -- /gsd-new-milestone v29.5 invoked. MILESTONE-CONTEXT.md consumed (deleted). PROJECT.md updated with Current Milestone block (v29.5). STATE.md reset for new milestone. Awaiting requirements + roadmap creation.
 progress:
   total_phases: 0
   completed_phases: 0
@@ -18,44 +18,81 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-01 after v29.4 milestone close)
+See: .planning/PROJECT.md (updated 2026-05-02 — v29.5 milestone started)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Last shipped milestone:** v29.4 Server Management Tooling + Bug Sweep — 2026-05-01 (local; awaiting deploy)
-**Current focus:** Planning next milestone (v29.5 — TBD; no MILESTONE-CONTEXT.md seeded yet)
+**Current milestone:** v29.5 — v29.4 Hot-Patch Recovery + Verification Discipline
+**Last shipped milestone:** v29.4 Server Management Tooling + Bug Sweep — 2026-05-01 (local; awaiting deploy + UAT walk in Phase 55)
 
 ## Current Position
 
-**Between milestones.** v29.4 closed cleanly; v29.5 not yet bootstrapped.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-02 — Milestone v29.5 started
 
-| State | Value |
-|-------|-------|
-| Last shipped | v29.4 (4 phases, 17 plans, ~280 automated tests, 18/18 mechanism-satisfied) |
-| Audit status | `passed` (cleanest v29.x close — zero gaps, zero scope creep, zero new deps, zero new tables) |
-| Origin/master sync | ~85+ commits ahead — push has not yet occurred |
-| Mini PC deploy | NOT done — 4 UAT files (`45-..-48-UAT.md`) pending, plus 6 v29.3 UATs from previous cycle |
-| Sacred file SHA | `4f868d318abff71f8c8bfbcf443b2393a553018b` (byte-identical across all 4 v29.4 phases; Branch N taken for FR-MODEL-02) |
+## v29.5 Milestone Context
+
+**Why this milestone exists:** User testing immediately after v29.4 deploy revealed 4 critical regressions despite audit returning `passed`. v29.4's audit was insufficient — it accepted `human_needed` UAT deferrals as routine. The fix is BOTH: close the regressions AND change the milestone-completion process so this class of failure cannot repeat.
+
+**Target features (5 categories):**
+
+- **A1 — Tool registry restoration** (`nexus:cap:tool:*` = 0 keys on Mini PC; defensive eager seed of 9 BUILT_IN_TOOL_IDS)
+- **A2 — Streaming regression fix** (root-cause unknown; investigate UI build / PWA cache / sacred file surgical edit per D-40-01)
+- **A3 — Marketplace state** (re-seed Bolt.diy + un-seed MiroFish on Server5 `platform_apps`)
+- **A4 — Fail2ban Security panel render fix** (PWA cache / user_preferences default / sidebar useMemo filter)
+- **B1 — Live-verification gate** (`/gsd-complete-milestone` hard-block on `human_needed` UAT count)
+
+**Suggested phase breakdown (roadmapper will refine):**
+
+| Phase | Goal | Deps |
+|---|---|---|
+| 49 | Mini PC live diagnostic + force-rebuild update.sh check (read-only, single SSH session) | — |
+| 50 | A1 tool registry built-in seed module + livinityd boot wire-up + integration test | 49 |
+| 51 | A2 streaming root-cause investigation + fix (UI build / sacred file / preset) | 49 |
+| 52 | A3 Bolt.diy re-seed + MiroFish un-seed on Server5 platform DB | 49 |
+| 53 | A4 Security panel render investigation + fix | 49 |
+| 54 | B1 Live-verification gate added to /gsd-complete-milestone workflow | — |
+| 55 | Mandatory milestone-level live verification: deploy + walk all UATs on Mini PC | 50, 51, 52, 53, 54 |
+
+**Locked decisions (carry from v29.4):**
+- D-NO-NEW-DEPS preserved
+- D-NO-SERVER4 preserved (Mini PC + Server5 only)
+- D-LIVINITYD-IS-ROOT preserved
+- Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d31...` — likely surgical edit needed for A2 (D-40-01 ritual)
+- **D-LIVE-VERIFICATION-GATE (NEW)** — milestones cannot close `passed` without on-Mini-PC UAT execution
+
+## Accumulated Context (carried from v29.4)
+
+### Mini PC deployment (the only LivOS deployment that matters)
+
+- `bruce@10.69.31.68` — `/opt/livos/` rsync-deployed (no .git on server)
+- systemd: `livos.service` (livinityd via tsx, port 8080), `liv-core.service` (nexus core dist, 3200), `liv-worker.service`, `liv-memory.service`
+- Deploy: `bash /opt/livos/update.sh` (clones from utopusc/livinity-io, rsyncs, builds via pnpm + tsc, restarts services)
+- pnpm-store quirk: multiple `@nexus+core*` dirs may exist — manually verify dist sync after update
+- Redis password: pull from `/opt/livos/.env` REDIS_URL (rotated; legacy `LivRedis2024!` is stale)
+- PG password: `/opt/livos/.env` DATABASE_URL (rotated)
+- JWT secret: `/opt/livos/data/secrets/jwt`
+- Capability registry prefix: **`nexus:cap:*`** (NOT `nexus:capabilities:*`)
+- Pre-existing breakage: `liv-memory.service` restart-loops because `update.sh` doesn't build memory package — separate fix
+
+### Diagnostic ground truth (from `.planning/v29.4-REGRESSIONS.md`)
+
+- Redis DBSIZE: 310 keys, `nexus:cap:*` = 126 keys, **`nexus:cap:tool:*` = 0 keys** ← A1 smoking gun
+- BUILT_IN_TOOL_IDS lists 9 tools: shell, docker_run/ps/logs/stop, files_read/write/search, web_search
+- Phase 47 capabilities.ts uses correct `nexus:cap:` prefix at line 174 ✓
+- Phase 47-02 SUMMARY documented `D-WAVE5-SYNCALL-STUB` — production Re-sync writes ZERO keys to `nexus:cap:_pending:*` (no real seed flow)
+- 1m 2s deploy duration suspiciously short — vite build alone is ~37s; suggests stale UI bundle (A2/A4 root cause)
+- Mini PC fail2ban auto-bans rapid SSH probes — ALL diagnostic SSH calls MUST batch into ONE invocation
+
+### Outstanding UATs to walk in Phase 55
+
+- v29.4: `45-UAT.md` / `46-UAT.md` / `47-UAT.md` / `48-UAT.md`
+- v29.3 carry-forward: `40-UAT.md` / `41-UAT.md` / `42-UAT.md` / `43-UAT.md` / `44-UAT.md`
 
 ## Next Steps
 
-1. **Optional — push to origin:** `git push origin master` (~85+ commits ahead).
-2. **Optional — deploy + run UATs:** `ssh -i .../minipc bruce@10.69.31.68 "sudo bash /opt/livos/update.sh"`, then walk:
-   - v29.4 UATs: `46-UAT.md` + `47-UAT.md` + `48-UAT.md`
-   - v29.3 UATs: `40-UAT.md` … `44-UAT.md` (still pending from previous cycle)
-3. **Start v29.5:** `/gsd-new-milestone v29.5` when ready (no MILESTONE-CONTEXT.md to consume — fresh interactive flow).
-
-## Recently Shipped
-
-### v29.4 Server Management Tooling + Bug Sweep (2026-05-01, local)
-
-4-phase milestone delivering Fail2ban admin UI + Live SSH viewer + AI Diagnostics + 4 carry-forward bug fixes:
-- Phase 45 (FR-CF-01..04): broker 429 forwarding, sacred SHA audit-only re-pin, httpOnlyPaths additions, OpenAI SSE usage chunk
-- Phase 46 (FR-F2B-01..06): Server Management Security sidebar, jail list + unban modal w/ whitelist (= passive SSH gateway), manual ban with LOCK ME OUT gate, device_audit_log REUSE, mobile cellular toggle, Settings backout toggle
-- Phase 47 (FR-TOOL/MODEL/PROBE): shared diagnostics scaffold (3 cards), capability registry atomic-swap resync, **Branch N taken** for model identity (verdict=neither — sacred file untouched), per-user apps.healthProbe with PG-scoped anti-port-scanner protection
-- Phase 48 (FR-SSH-01..02): WebSocket /ws/ssh-sessions journalctl streaming, 5000-line ring buffer, click-to-ban cross-link to Phase 46 ban-modal
-
-See `.planning/milestones/v29.4-ROADMAP.md` · `v29.4-MILESTONE-AUDIT.md` (status `passed`) · `v29.4-INTEGRATION-CHECK.md` (18/18 reqs wired, 5/5 E2E flows complete) · `v29.4-REQUIREMENTS.md`.
-
-### v29.3 Marketplace AI Broker (2026-05-01, local)
-
-6-phase milestone — closed `gaps_found` (FR-MARKET-02 dropped, FR-DASH-03 partial-debt accepted, 4 carry-forwards rolled into v29.4 Phase 45). See `.planning/milestones/v29.3-ROADMAP.md`.
+1. Decide on research (Step 8 — recommend SKIP since `v29.4-REGRESSIONS.md` already has root-cause + recommendations)
+2. Define REQUIREMENTS.md with FR-A1 / FR-A2 / FR-A3 / FR-A4 / FR-B1 categories
+3. Spawn gsd-roadmapper for ROADMAP.md (continue numbering from 49)
+4. After approval, `/gsd-discuss-phase 49` to start execution

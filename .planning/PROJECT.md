@@ -253,12 +253,24 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-PROBE-01..02 → Phase 47 (Per-user app health probe)
 - [x] FR-SSH-01..02 → Phase 48 (Live SSH session viewer + click-to-ban)
 
-## Next Milestone: v29.5 (TBD)
+## Current Milestone: v29.5 v29.4 Hot-Patch Recovery + Verification Discipline
 
-No MILESTONE-CONTEXT.md seeded yet. When ready:
-```
-/gsd-new-milestone v29.5
-```
+**Goal:** Close 4 user-reported v29.4 regressions (tool registry empty, streaming gone, Bolt.diy missing + MiroFish still present, Fail2ban Security panel not rendering) and establish a mandatory live-verification gate so future milestones cannot ship `passed` without on-Mini-PC UAT.
+
+**Target features:**
+- A1 — Tool registry restoration: defensive eager seed of 9 BUILT_IN_TOOL_IDS to `nexus:cap:tool:*` on livinityd boot
+- A2 — Streaming regression fix: root-cause (UI build / PWA cache / sacred file surgical edit per D-40-01 ritual; Branch N for FR-MODEL-02 was the wrong call)
+- A3 — Marketplace state: re-seed Bolt.diy + un-seed MiroFish on Server5 `platform_apps`
+- A4 — Fail2ban Security panel render fix (PWA cache / `user_preferences.security_panel_visible` default / sidebar `useMemo` filter)
+- B1 — Mandatory live-verification gate added to `/gsd-complete-milestone` workflow (hard-block on `human_needed` UAT count)
+
+**Key context:**
+- Phases continue from v29.4's last (Phase 49 onwards). Phase 55 is the mandatory milestone-level live-verification phase.
+- Server4 remains off-limits (D-NO-SERVER4) — Mini PC + Server5 only.
+- Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — A2 likely needs a surgical sacred-file edit (D-40-01 ritual).
+- 4 v29.4 UATs + 6 v29.3 carry-forward UATs still un-executed — Phase 55 walks all of them on live Mini PC.
+- Mini PC SSH calls MUST batch into a single session (fail2ban auto-ban risk).
+- New locked decision: **D-LIVE-VERIFICATION-GATE** — milestones cannot close `passed` without on-Mini-PC UAT execution per relevant phase.
 
 ### Defined (v30.0 — Backup & Restore — PAUSED)
 
@@ -441,4 +453,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-01 — v29.4 Server Management Tooling + Bug Sweep milestone closed (status `passed`, 18/18 reqs, 0 gaps)*
+*Last updated: 2026-05-02 — v29.5 v29.4 Hot-Patch Recovery + Verification Discipline milestone started (4 regression fixes A1-A4 + B1 verification gate)*
