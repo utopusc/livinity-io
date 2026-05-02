@@ -28,6 +28,13 @@ function buildBrokerEnv(userId: string): Record<string, string> {
 		// using a custom base URL (Open WebUI's OAuth UI rejects empty key field).
 		// The string is ignored by the broker; auth is enforced by URL path + IP guard.
 		OPENAI_API_KEY: 'livinity-broker-managed',
+		// Phase 58 (v29.5 post-deploy hot-fix): Bolt.diy's "OpenAI-Like" provider
+		// looks up its API key under apiTokenKey: 'OPENAI_LIKE_API_KEY' (NOT the
+		// generic OPENAI_API_KEY). When this var is empty, Bolt.diy's
+		// getDynamicModels returns [] and the model picker dropdown stays empty.
+		// Same broker-managed sentinel — auth is enforced by URL path + IP guard.
+		// See: bolt.diy/app/lib/modules/llm/providers/openai-like.ts:32-39
+		OPENAI_LIKE_API_KEY: 'livinity-broker-managed',
 	}
 }
 
