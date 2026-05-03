@@ -8,14 +8,16 @@
  * admin user's currently-registered tunnel and forward through it.
  *
  * Threat-model (RESEARCH.md §"Tunnel Hijack" — STRIDE Spoofing T-60-20):
- *   Resolution queries by `username = 'utopusc'` (the actual platform admin in
- *   single-tenant v30 — closed signup, hard-coded sentinel). T-60-20 spoofing
- *   moot because new signups are blocked at platform layer; only the original
- *   account holds this username.
+ *   Resolution queries by `username = 'bruce'` (the LivOS Mini PC tunnel owner
+ *   in single-tenant v30 — the actual user behind the api.livinity.io broker).
+ *   T-60-20 spoofing moot because new signups are blocked at platform layer;
+ *   only the original account holds this username.
  *
- *   v30 hot-patch (Phase 63 R1): originally specified `role = 'admin'` but
- *   `platform.users` has no `role` column — caused 503 on every relay request.
- *   Phase 64+ will add `role` column + UI + migrate to `role='admin'`.
+ *   v30 hot-patch (Phase 63 R1+R1.1): originally specified `role = 'admin'`
+ *   but `platform.users` has no `role` column. Initial fix used
+ *   `username='utopusc'` but utopusc has no active tunnel — bruce does
+ *   (Mini PC livinityd registers as 'bruce'). Phase 64+ will add `role`
+ *   column + tunnel-owner-aware lookup + migrate to `role='broker'` query.
  *
  * Single-tenant v30 design: admin tunnel is the broker gateway. If admin
  * tunnel is offline, ALL `api.livinity.io` traffic 503s. v30+ revisits with
@@ -46,7 +48,7 @@ export async function findAdminTunnel(
   try {
     const result = await pool.query<{ id: string; username: string }>(
       'SELECT id, username FROM users WHERE username = $1 LIMIT 1',
-      ['utopusc'],
+      ['bruce'],
     );
     if (result.rows.length === 0) return null;
     adminUserId = result.rows[0].id;

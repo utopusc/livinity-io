@@ -137,13 +137,13 @@ describe('findAdminTunnel', () => {
     expect(registry.getByUserId).not.toHaveBeenCalled();
   });
 
-  test('T7: query uses username = $1 with parameter "utopusc" (Phase 63 R1 hot-patch)', async () => {
+  test('T7: query uses username = $1 with parameter "bruce" (Phase 63 R1.1 hot-patch — actual tunnel owner)', async () => {
     const adminUserId = 'admin-uuid-123';
-    const tunnel = fakeTunnel({ userId: adminUserId, username: 'utopusc', readyState: 1 });
+    const tunnel = fakeTunnel({ userId: adminUserId, username: 'bruce', readyState: 1 });
     const registry = mockRegistry({
       getByUserId: (id: string) => (id === adminUserId ? tunnel : undefined),
     });
-    const pool = mockPool(async () => ({ rows: [{ id: adminUserId, username: 'utopusc' }] }));
+    const pool = mockPool(async () => ({ rows: [{ id: adminUserId, username: 'bruce' }] }));
 
     await findAdminTunnel(registry, pool);
 
@@ -152,7 +152,7 @@ describe('findAdminTunnel', () => {
     // SQL must filter by username sentinel, NOT by non-existent role column
     expect(sql).toMatch(/WHERE\s+username\s*=\s*\$1/i);
     expect(sql).not.toMatch(/WHERE\s+role/i);
-    expect(params).toEqual(['utopusc']);
+    expect(params).toEqual(['bruce']);
   });
 });
 
