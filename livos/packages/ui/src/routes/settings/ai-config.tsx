@@ -7,6 +7,7 @@ import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
 import {UsageSection} from './_components/usage-section'
+import {ApiKeysSection} from './_components/api-keys-section'
 
 export default function AiConfigPage() {
 	// -- Kimi login state -----------------------------------------------
@@ -683,6 +684,9 @@ export default function AiConfigPage() {
 					<h2 className='text-body font-semibold'>Computer Use</h2>
 					<ComputerUseConsentToggle />
 				</div>
+
+				{/* ── API Keys Section (Phase 62 FR-BROKER-E2-01) ────────── */}
+				<ApiKeysSection />
 
 				{/* ── Usage Section (Phase 44 FR-DASH-01..03) ───────────── */}
 				<UsageSection />
