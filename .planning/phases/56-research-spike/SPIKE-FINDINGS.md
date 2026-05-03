@@ -137,4 +137,164 @@ Read tool used on the sacred file at lines 260-300 (Q1), 340-355 + 375-400 + 435
 
 ---
 
-*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plans 56-02 through 56-04 will append/expand additional sections.*
+## Q3: Agent-Mode Opt-In Mechanism
+
+### Verdict
+Chosen path: **C — Both supported (URL-path segment `/agent/` AND header `X-Livinity-Mode: agent`); path takes precedence; default (no path-segment, no header) = passthrough.**
+
+The broker registers TWO route families per spec (Anthropic Messages + OpenAI Chat Completions): `/u/:userId/v1/...` (passthrough by default; header can opt INTO agent) AND `/u/:userId/agent/v1/...` (forced agent mode; header ignored). Default v30 behavior flips from "agent-only" to "passthrough by default" — a documented breaking change for internal callers that hit the legacy URL expecting agent semantics.
+
+### Rationale (4 reasons)
+1. **Universal client compatibility (covers 100% of the 4 target clients).** Header-only fails for 50% of target clients — Bolt.diy and Cline cannot send `X-Livinity-Mode: agent` in their stock configurations (verified by reading `app/lib/modules/llm/providers/anthropic.ts` and Cline's `provider-config/anthropic` docs page; both expose only base-URL configuration, not arbitrary header injection). Path-only works for ALL 4 (every client supports `base_url` switching). C combines both so Continue.dev / Open WebUI users get per-request flexibility while Bolt.diy / Cline users still have a usable opt-in via base URL.
+2. **Aligns with Anthropic's own header idiom.** Anthropic uses `anthropic-version: 2023-06-01` and `anthropic-beta: <flag>` as canonical opt-in/version-pin custom headers (verified at `docs.anthropic.com/en/api/versioning`). `X-Livinity-Mode: agent` follows the same pattern and is immediately legible to anyone consuming Anthropic's API.
+3. **Aligns with Q1 (passthrough Strategy A).** Q1 chose raw HTTP-proxy with byte-forward of upstream Anthropic SSE. The mode-dispatch needs to live BEFORE the upstream `fetch()` is issued — exactly at the broker route handler entry point. Path-based dispatch is a 1-liner (`router.post('/:userId/agent/v1/messages', ...)` registers a separate handler that calls into the existing agent path). Header-based fallback is another 1-liner (`req.header('X-Livinity-Mode')`) inside the default handler. Neither requires touching Strategy A's `fetch()` call — they only SELECT which branch to take.
+4. **Default flip preserves Q1's "passthrough by default" semantic for all external clients.** Q1's whole point is external clients see the raw Anthropic experience. Making passthrough the default URL behavior ensures any client with a misconfigured or absent custom-header support gets the correct (passthrough) mode, NOT the wrong (agent + identity contamination) mode that v29.5 live testing failed on.
+
+### Alternatives Considered (3)
+- **Alt A: Header-only `X-Livinity-Mode: agent`** — disqualified because 50% of target clients cannot send custom headers. Bolt.diy's `app/lib/modules/llm/providers/anthropic.ts` uses `@ai-sdk/anthropic` with hardcoded URL and no header-injection hook; Cline docs at `docs.cline.bot/provider-config/anthropic` document only "Custom Base URL" (no custom-header surface). Adopting header-only would leave half the v30 target clients permanently locked out of agent mode.
+- **Alt B: Path-only `/u/<id>/agent/v1/messages` vs `/u/<id>/v1/messages`** — viable but missing per-request flexibility for power users. Continue.dev (`requestOptions.headers` per https://docs.continue.dev/reference) and Open WebUI (`ENABLE_FORWARD_USER_INFO_HEADERS` per `backend/open_webui/routers/openai.py`) both support custom-header mode and would benefit from per-request switching without re-pointing `base_url`. Pure path-only forces a base-URL-level commitment.
+- **Alt: No opt-in mechanism at all (URL-fragment-free, mode is server-config-global)** — disqualified because the broker is multi-user and per-user mode preference is more invasive (would need an `api_keys.preferred_mode` column or a Settings toggle); also defeats the per-conversation flexibility users like Continue.dev's developer audience expect.
+
+### Worked Example (the two curl invocations required by acceptance criteria)
+**Default passthrough (mode auto-selected = passthrough; works for all 4 clients):**
+```bash
+curl -X POST https://api.livinity.io/u/<userId>/v1/messages \
+  -H "Authorization: Bearer liv_sk_..." \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-3-5-sonnet-20241022","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}'
+# → broker forwards verbatim to https://api.anthropic.com/v1/messages (Q1 Strategy A)
+```
+
+**Opt-in agent mode via URL path (works for ALL 4 clients):**
+```bash
+curl -X POST https://api.livinity.io/u/<userId>/agent/v1/messages \
+  -H "Authorization: Bearer liv_sk_..." \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-3-5-sonnet-20241022","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}'
+# → broker invokes existing createSdkAgentRunnerForUser() (agent-runner-factory.ts:64-173) — Nexus identity + Nexus tools active
+```
+
+**Opt-in agent mode via header (Continue.dev / Open WebUI only):**
+```bash
+curl -X POST https://api.livinity.io/u/<userId>/v1/messages \
+  -H "Authorization: Bearer liv_sk_..." \
+  -H "X-Livinity-Mode: agent" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-3-5-sonnet-20241022","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}'
+# → same outcome as path-based opt-in
+```
+
+### Code-Level Integration Point
+- **Path-based dispatch (NEW route registration):** `livos/packages/livinityd/source/modules/livinity-broker/router.ts:36` — currently single `router.post('/:userId/v1/messages', ...)`. Phase 57 plan 57-03 splits into two registrations:
+  - `router.post('/:userId/v1/messages', handler({mode: 'passthrough', allowHeaderOverride: true}))` — default = passthrough; honors `X-Livinity-Mode: agent` to override into agent mode.
+  - `router.post('/:userId/agent/v1/messages', handler({mode: 'agent', allowHeaderOverride: false}))` — forced agent; header ignored.
+- **Header-based override site (mirrors existing internal-namespace pattern):** `livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts:82` — broker already uses `X-LivOS-User-Id` (custom `X-LivOS-*` namespace) for inter-process identity propagation. Adding inbound `X-Livinity-Mode` follows the same naming convention and is symmetrical at the broker boundary.
+- **Equivalent dispatch in OpenAI-compat:** `livinity-broker/openai-router.ts:71-283` gets the SAME dual-route treatment (Phase 57 plan 57-04): `/:userId/v1/chat/completions` (passthrough default) and `/:userId/agent/v1/chat/completions` (agent forced).
+
+### Risk + Mitigation
+- **Risk:** Default-behavior flip (legacy URL `/v1/messages` switches from agent to passthrough) breaks internal LivOS callers expecting agent semantics.
+  **Mitigation:** Phase 57 release notes document the migration explicitly; broker emits a one-time soft-warn log line per server-process when a request hits the legacy URL without `X-Livinity-Mode: agent` header (caught by ops within minutes of deploy). Internal LivOS AI Chat is unaffected — it calls nexus directly via `/api/agent/stream` rather than routing through the broker.
+- **Risk:** Path-family duplication inflates test matrix.
+  **Mitigation:** Phase 57 plan 57-03 reuses ONE handler implementation behind a `mode` parameter; only the route registrations are duplicated. Test matrix is (path × mode-source) × (sync × stream) = 8 cases — manageable, with Phase 63 live UAT sampling 4 of them across the 4 target clients.
+
+### D-NO-NEW-DEPS Implications
+Zero new deps. All dispatch logic uses Express's existing `router.post()` registration and `req.header()` lookup primitives — both shipped with `express@^4.21.0` (livinityd) / `^4.18.2` (nexus) already in `package.json`.
+
+### Aligns with Q1
+Q1 chose Strategy A (HTTP-proxy direct to `api.anthropic.com` with raw byte-forward of upstream SSE). Q3's verdict slots cleanly in: the mode-dispatch lives BEFORE the upstream `fetch()` is issued (router-level), so passthrough mode invokes Q1's `forwardToAnthropic()` with body verbatim, while agent mode invokes the existing `createSdkAgentRunnerForUser()` (`agent-runner-factory.ts:64-173`). Neither path mutates the other; both share the same `auth/body-validation` prelude at `router.ts:38-83`.
+
+---
+
+## Q5: API Key Rotation Policy
+
+### Verdict
+Chosen path along TWO axes: **(Axis 1 — Rotation policy:) Manual revoke + recreate** (Stripe / OpenAI / Anthropic 1:1 parity, USER-INITIATED rotation, optional UI-sugar "Rotate" button = revoke + create wrapped in one tRPC call). **(Axis 2 — Default-keyed-vs-opt-in:) Opt-in only** (new users do NOT receive an auto-created `liv_sk_*` on signup; they create their first key manually via Settings > AI Configuration > API Keys when they want external-client access). Both axes together: **Manual rotation, opt-in keys.** Zero scheduler infrastructure, zero grace-overlap complexity, zero auto-keyed dead-rows.
+
+### Rationale (5 reasons spanning both axes)
+1. **(Axis 1) Industry parity — three vendors, same model.** Stripe (per `docs.stripe.com/keys` — "Rotating an API key revokes it and generates a replacement key... If you choose Now, the old key is deleted. If you specify a time, the remaining time until the key expires displays..."), OpenAI (no rotation API exists; SDK uses `api_key=` only — manual create + delete via dashboard only, per `openai-python` README), and Anthropic (per `docs.anthropic.com/en/api/managing-api-keys` — "Create an API key", "Disable API key", "Delete access key" UI affordances; NO automatic rotation; "rotate" UI in Anthropic console is for SIGNING keys, NOT API keys) all ship MANUAL rotation. Auto-rotation is not industry practice for first-party API keys.
+2. **(Axis 1) Schema is already aligned.** FR-BROKER-B1-01 specifies exactly `revoked_at` (nullable timestamp) — no `rotated_at`, no `next_rotation_at`, no `grace_until`. Adopting auto-rotation would require schema additions, a scheduler, and a key-overlap mechanism — none budgeted for v30. Adopting manual rotation: zero schema changes beyond what's already specified.
+3. **(Axis 1) OWASP API2:2023 satisfied.** OWASP's "Broken Authentication" (API2:2023) mandates strong tokens + revocation capability + auth-endpoint anti-brute-force — NOT calendar-based auto-rotation. v30 satisfies all three: `liv_sk_<base62-32chars>` ≈ 190 bits (FR-BROKER-B1-02), `revoked_at` kill-switch (FR-BROKER-B1-04 + B1-05), Q4-verdict rate-limit perimeter at the public endpoint. Documented in Phase 59 SUMMARY.
+4. **(Axis 2) Plaintext-once UX has nowhere to surface a default-keyed plaintext.** FR-BROKER-E2-01 mandates "the plaintext key from create is shown ONCE in a copy-to-clipboard modal." A signup-time auto-keyed plaintext would have to surface in the signup confirmation flow — an awkward UX (mid-onboarding modal users may dismiss or miss) and an audit risk if missed. Default-keyed users would commonly never use the auto-key, leaving dead `revoked_at IS NULL` rows in the DB. Opt-in side-steps both issues.
+5. **(Both axes) Self-hosted single-user reality.** v30 ships to LivOS users who own their own deployments and manage their own external clients (Bolt.diy / Open WebUI / Continue.dev / Cline) for their own apps. They are the same person on both sides of the broker. Manual rotation aligns with this persona's mental model ("I rotated my own key when I felt like it") and opt-in matches their explicit-action preference ("I create a key when I plug in a new app, not before").
+
+### Alternatives Considered (4 — 2 per axis)
+- **(Axis 1) Alt B: Automatic 90-day rotation with grace-overlap window.** Disqualified because (a) no industry parity (Stripe/OpenAI/Anthropic don't ship this), (b) requires scheduler infrastructure not budgeted in v30 (cron-equivalent, retry semantics, notification surface), (c) requires schema additions (`rotated_at`, `previous_key_hash`, `grace_until`) that conflict with FR-BROKER-B1-01's locked schema, (d) surprise rotations break user-controlled external clients without warning, requiring email/notification infrastructure also out of scope. Compliance pressure (SOC2 / ISO27001) is a v30.1+ concern; the manual model can graduate to optional auto-rotation via an `api_key_policies` extension table when actually needed.
+- **(Axis 1) Alt: Rotation enforced via short TTL (e.g. 24-hour) with refresh tokens.** Disqualified — completely misaligns with the API-key-as-static-credential model (FR-BROKER-B1-02 plaintext-shown-once UX explicitly assumes long-lived keys). Effectively turns the system into OAuth without OAuth's discovery + refresh flow infrastructure. Out of scope.
+- **(Axis 2) Alt D: Default-keyed users on signup.** Disqualified per Rationale 4 — UX hole at "where do you show plaintext one time?" plus dead-key proliferation. Brokers like Stripe and OpenAI also do NOT auto-key on signup; user explicitly creates first key.
+- **(Axis 2) Alt: Auto-key only for users who toggle "Enable external API access" in Settings.** Equivalent to opt-in (the toggle IS the explicit user action); just adds a toggle layer. Adopt only if a future requirement separates "wanting any API access" from "having a key" — for v30, the "create key" button itself IS the toggle. Folded into the opt-in verdict.
+
+### Lifecycle Flow (text diagram, references FR-BROKER-B1-01 columns including `revoked_at`)
+```
+[1] User signs into LivOS (Phase 40 multi-user flow). No api_keys row yet.
+        ↓
+[2] User opens Settings > AI Configuration > API Keys (FR-BROKER-E2-01).
+    Table empty for this user.
+        ↓
+[3] User clicks "Create Key", supplies optional `name` label.
+    tRPC createKey() (FR-BROKER-B1-04):
+      - plaintext = "liv_sk_" + base62(crypto.randomBytes(24))   (FR-BROKER-B1-02)
+      - key_hash = sha256(plaintext)
+      - key_prefix = first 8 chars after "liv_sk_" prefix
+      - INSERT INTO api_keys (id, user_id, key_hash, key_prefix, name,
+                              created_at = NOW(), last_used_at = NULL, revoked_at = NULL)
+      - returns { id, plaintext } ONCE
+        ↓
+[4] UI shows plaintext in copy-to-clipboard modal ONCE (FR-BROKER-E2-01).
+    User pastes into external client (Bolt.diy / OWUI / Continue.dev / Cline).
+    Modal closes; plaintext gone forever; only key_hash survives.
+        ↓
+[5] Each broker request → Bearer middleware (FR-BROKER-B1-03):
+      - read Authorization: Bearer <plaintext>
+      - hash = sha256(plaintext); SELECT * FROM api_keys
+            WHERE key_hash = hash AND revoked_at IS NULL
+      - constant-time compare via crypto.timingSafeEqual
+      - on match: UPDATE last_used_at = NOW() (debounced); resolve user_id; request proceeds
+      - on miss (no row OR revoked_at IS NOT NULL): 401 with FR-BROKER-B1-05 body
+            {"error":{"type":"authentication_error","message":"API key revoked"}}
+        ↓
+[6] User wants to rotate:
+      a. Settings → Create new key (steps 3+4 again; new row inserted; new plaintext shown once)
+      b. User updates external clients to use new plaintext
+      c. User clicks "Revoke" on old key → tRPC revokeKey():
+            UPDATE api_keys SET revoked_at = NOW()
+                WHERE id = <oldKeyId> AND user_id = <userId>
+      d. From this moment, requests with old plaintext → 401 (revoked path).
+
+   Grace window = however long user takes between (a) and (c).
+   User-controlled. Matches Stripe model.
+```
+
+### Risk + Mitigation
+- **Risk:** Users forget to revoke old keys after rotation, accumulating unused-but-still-valid keys.
+  **Mitigation:** Settings > API Keys tab shows `last_used_at` per key (FR-BROKER-E2-01). v31+ adds non-blocking soft-warning ("Key 'foo' hasn't been used in 90+ days — consider revoking"); for v30, the user is the same person managing all their own keys for their own apps and the risk surface is low.
+- **Risk:** Plaintext-once UX failure: user closes modal before copying.
+  **Mitigation:** Modal has copy-to-clipboard button + visual confirmation ("Copied!"); worst case = user revokes the lost key + creates a new one (the manual-rotate path itself is the recovery mechanism — no special handling needed).
+- **Risk:** Future enterprise compliance audit flags lack of automatic rotation.
+  **Mitigation:** v30.1+ adds optional `api_key_policies.auto_rotation_days` column gating an opt-in scheduler; v30 schema is forward-compatible because `revoked_at` already exists (the auto-rotate "revoke + create at day N" decomposes to existing primitives).
+- **Risk:** Default-keyed users would lower onboarding friction (counterargument).
+  **Mitigation:** v30 onboarding flow has a Settings tutorial step that points users at "Create your first API key" precisely when they need it (when they want to plug in an external client). Friction is bounded to one click that the user explicitly wants to take. Onboarding metrics in Phase 63 UAT can flag this if friction surfaces as a real issue.
+
+### D-NO-NEW-DEPS Implications
+Zero new deps. Implementation uses `pg@^8.20.0` (livinityd existing) for the `api_keys` table CRUD, `node:crypto` (builtin) for `randomBytes(24)` + `sha256` + `timingSafeEqual`, and the existing tRPC infrastructure for the `createKey` / `listKeys` / `revokeKey` routes. No new package additions in Phase 59.
+
+### Aligns with Phase 56 Mandate
+Q5's verdict is independent of Q1/Q2/Q7 (architectural-perimeter concerns). It establishes the lifecycle contract Phase 59 (Bearer auth) implements and Phase 62 (Settings UI) surfaces. The contract is unambiguous: **manual rotation, opt-in keys, `revoked_at`-driven kill-switch** — full stop.
+
+---
+
+## Cross-Cutting: Sacred File SHA Stability Across Plan 56-02 (Task 1 — Q3 + Q5)
+
+`git hash-object nexus/packages/core/src/sdk-agent-runner.ts` re-run after Task 1:
+
+| Task | SHA after task | Match required `4f868d318abff71f8c8bfbcf443b2393a553018b`? |
+|------|----------------|-----------------------------------------------------------|
+| Task 1 (Q3 + Q5) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+
+Sacred file was NOT read or written during Task 1 (Q3 + Q5 are perimeter / lifecycle concerns; no internal-runner inspection needed). Sacred boundary preserved.
+
+---
+
+*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plans 56-02 (Q4 + Q6 — pending), 56-03, 56-04 will append additional sections.*
