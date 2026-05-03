@@ -357,3 +357,21 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_active  ON api_keys(key_hash) WHERE revoked_at IS NULL;
+
+-- =========================================================================
+-- Phase 62 FR-BROKER-E1-01 — broker_usage.api_key_id (per CONTEXT.md decision).
+-- Idempotent ADD COLUMN IF NOT EXISTS in DO-block (matches Phase 25 pattern
+-- at line 261-264). Backward-compat: existing rows + legacy URL-path traffic
+-- get NULL. ON DELETE SET NULL preserves historic attribution if a key row
+-- is hard-deleted (Phase 59 soft-deletes via revoked_at, but defense-in-depth).
+-- =========================================================================
+DO $$
+BEGIN
+  ALTER TABLE broker_usage
+    ADD COLUMN IF NOT EXISTS api_key_id UUID
+    REFERENCES api_keys(id) ON DELETE SET NULL;
+END$$;
+
+CREATE INDEX IF NOT EXISTS idx_broker_usage_api_key_id
+  ON broker_usage(api_key_id)
+  WHERE api_key_id IS NOT NULL;
