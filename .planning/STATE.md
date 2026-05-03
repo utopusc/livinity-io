@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: completed
-last_updated: "2026-05-03T02:59:49.600Z"
-last_activity: 2026-05-03 — Plan 58-04 executed (Wave 4 — End-to-End Integration Tests + Phase 58 Final Gate); test commit `5733eb7a`; 13/13 integration tests GREEN; 94/94 broker suite GREEN; sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at end-of-phase; openai-sse-adapter.ts byte-identical (two-adapters-coexist preserved). SUMMARY at `.planning/phases/58-true-token-streaming/58-04-SUMMARY.md`. PHASE-SUMMARY at `.planning/phases/58-true-token-streaming/PHASE-SUMMARY.md`. Phase 58 CLOSED. FR-BROKER-C1-01..02 + C2-01..03 (5/5) marked complete in REQUIREMENTS.md.
+status: verifying
+last_updated: "2026-05-02T20:18:00Z"
+last_activity: 2026-05-02 — Plan 59-01 executed (Wave 0 — RED test scaffolds for the new api-keys/ module); test commits `34858a8c` (Task 1 — database/schema-migration/mount-order) + `d07f78f2` (Task 2 — cache/bearer-auth/routes); 6 failing test files cover all 5 phase requirements (FR-BROKER-B1-01..05); RESEARCH.md Open Question 1 closed via schema-migration.test.ts T4 (CREATE EXTENSION absence guard — codebase convention wins over CONTEXT.md pgcrypto suggestion); sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every commit checkpoint; D-NO-NEW-DEPS preserved (zero npm deps added). SUMMARY at `.planning/phases/59-bearer-token-auth/59-01-SUMMARY.md`. Wave 1 (Plan 59-02 — schema migration + database.ts) is unblocked.
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 44
-  completed_plans: 20
-  percent: 45
+  completed_plans: 19
+  percent: 43
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 58 COMPLETE — All 5 waves shipped (plans 58-00, 58-01, 58-02, 58-03, 58-04). PHASE-SUMMARY at `.planning/phases/58-true-token-streaming/PHASE-SUMMARY.md`. Awaiting Phase 59 (B1 Bearer Token Auth — independent of Phase 58, can begin immediately).
-Plan: 58-04 SHIPPED 2026-05-03 — Wave 4 End-to-End Integration Tests + Phase 58 Final Gate. Built `passthrough-streaming-integration.test.ts` (620 LOC, 13 tests across 5 groups + final-gate sacred-SHA + two-adapters-coexist assertions). Group A (verbatim Anthropic forwarding) + Group B (5-run determinism: 5 fresh-server-per-iteration runs each emit ≥3 distinct deltas at ≥50ms apart) + Group C (OpenAI usage on final chunk: prompt_tokens=25, completion_tokens=15, total=40 + chatcmpl id stability + caller-model echo) + Group D (4 stop_reason mappings: end_turn→stop, max_tokens→length, stop_sequence→stop, tool_use→tool_calls) + Group E (sync chatcmpl-29 regex + non-zero usage). Final-gate self-tests `git hash-object` sacred file + `git diff -- openai-sse-adapter.ts` from inside the suite — drift breaks CI. Three Rule-1/2/3 deviations auto-fixed within Task 1: (1) ping filtered from verbatim assertion (SDK consumes heartbeat frames), (2) fake-server gained sync JSON branch for Group E, (3) `REPO_ROOT` walked up from `import.meta.url` for git execSync cwd. Pitfall 1 hygiene: `SACRED_FILE` constructed from path segments to keep trigger substring out of broker source greps. All 13 tests GREEN. Full broker suite 94/94 GREEN (Phase 57 + Wave 0 + Wave 1 + Wave 2 + Wave 3 + Wave 4 = 38+6+23+6+8+13). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical pre/post. `openai-sse-adapter.ts` byte-identical (two-adapters-coexist preserved). D-NO-NEW-DEPS preserved across entire phase. Pitfall 1 grep clean across all broker source.
-Status: Phase 58 CLOSED. 5/5 requirements satisfied end-to-end: FR-BROKER-C1-01 (Wave 2 impl + Wave 4 Group A integration), FR-BROKER-C1-02 (Wave 0 fixture + Wave 4 Group B 5-run determinism), FR-BROKER-C2-01 (Wave 1 mapStopReason + Wave 3 wire-in + Wave 4 Group D 4-case mapping), FR-BROKER-C2-02 (Wave 1 translator finalize + Wave 3 wire-in + Wave 4 Group C usage-on-final-chunk), FR-BROKER-C2-03 (Wave 1 randomChatCmplId + Wave 3 sync-branch swap + Wave 4 Group E sync regex). All 4 Phase 58 ROADMAP success criteria verified end-to-end. Phase 58 ready to ship cleanly without `--accept-debt`. Phase 59 (Bearer Token Auth, independent) and Phase 61/62/63 (downstream dependents documented in PHASE-SUMMARY) all unblocked.
-Last activity: 2026-05-03 — Plan 58-04 executed (Wave 4 — End-to-End Integration Tests + Phase 58 Final Gate); test commit `5733eb7a`; 13/13 integration tests GREEN; SUMMARY at `.planning/phases/58-true-token-streaming/58-04-SUMMARY.md`; PHASE-SUMMARY at `.planning/phases/58-true-token-streaming/PHASE-SUMMARY.md`
+Phase: 59 IN PROGRESS — Wave 0 (Plan 59-01 — RED test scaffolds) SHIPPED 2026-05-02. Awaiting Wave 1 (Plan 59-02 — schema migration + database.ts).
+Plan: 59-01 SHIPPED 2026-05-02 — Wave 0 RED test scaffolds for the new `livos/packages/livinityd/source/modules/api-keys/` module. Six failing test files (30 individual tests across 6 files) cover all 5 phase requirements (FR-BROKER-B1-01..05) plus mount-order + cache + audit cross-cutting concerns. RESEARCH.md Open Question 1 closed via `schema-migration.test.ts T4` — codebase convention (zero `CREATE EXTENSION` lines in schema.sql) wins over CONTEXT.md's pgcrypto suggestion; the absence-guard test will block any future drift adding the line at CI. Three threat-model mitigations embedded: T-59-01 (schema convention guard), T-59-02 (plaintext-never-stored regression guard via walking ALL queryMock params), T-59-04 (mount-order positional check + adminProcedure source-string assertion mirroring common.test.ts:160-178). Test commits: `34858a8c` (Task 1) + `d07f78f2` (Task 2). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every commit checkpoint. D-NO-NEW-DEPS preserved (zero npm deps added — all tests use pre-existing `vitest`, `@trpc/server`, `node:crypto`).
+Status: Wave 0 ships RED-only by design. Production code does NOT yet exist; module-not-found is the correct RED signal for 5/6 files. The 6th file (schema-migration.test.ts) has 4 tests where T1+T2+T3 are RED (api_keys block not yet appended to schema.sql) and T4 is GREEN (the convention guard already passes — schema.sql has zero CREATE EXTENSION lines today; the test locks this in for the future). Wave 1 (Plan 59-02) is unblocked: append api_keys schema block + create database.ts to flip database.test.ts (5 tests) + schema-migration.test.ts T1+T2+T3 GREEN.
+Last activity: 2026-05-02 — Plan 59-01 executed (Wave 0 RED scaffolds); test commits `34858a8c` + `d07f78f2`; SUMMARY at `.planning/phases/59-bearer-token-auth/59-01-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 

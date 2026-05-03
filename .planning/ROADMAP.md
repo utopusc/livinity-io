@@ -121,7 +121,7 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 59-01-PLAN.md — Wave 0 Test Infrastructure + Schema Convention Pre-Flight (6 failing tests + grep guards)
+- [x] 59-01-PLAN.md — Wave 0 Test Infrastructure + Schema Convention Pre-Flight (6 failing tests + grep guards) — SHIPPED 2026-05-02 (commits `34858a8c` + `d07f78f2`; SUMMARY at `.planning/phases/59-bearer-token-auth/59-01-SUMMARY.md`)
 - [ ] 59-02-PLAN.md — Wave 1 PG Schema Append + database.ts CRUD Layer (twin of docker_agents)
 - [ ] 59-03-PLAN.md — Wave 2 Bearer Middleware + In-Memory Cache + server/index.ts Mount + cli.ts dispose
 - [ ] 59-04-PLAN.md — Wave 3 tRPC Routes (create/list/revoke/listAll) + Audit Hook REUSE + httpOnlyPaths
