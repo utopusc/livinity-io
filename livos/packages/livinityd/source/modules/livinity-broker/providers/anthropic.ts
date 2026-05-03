@@ -103,6 +103,23 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 			: `--- Prior conversation context ---\n${flatHistory}\n--- End context ---`
 	}
 
+	// Phase 63 R3.1 — augment PATH so the spawned `claude` CLI is discoverable
+	// regardless of where it was npm-installed. Mini PC observation: bruce
+	// installed claude via npm-global to ~/.local/bin/claude (not /usr/local/bin).
+	// Cover the common install locations across both root + bruce service users.
+	const HOME_DIR = process.env.HOME ?? '/root'
+	const augmentedPath = [
+		`${HOME_DIR}/.local/bin`,
+		'/home/bruce/.local/bin', // Mini PC single-tenant fallback
+		'/root/.local/bin',
+		process.env.PATH ?? '',
+		'/usr/local/bin',
+		'/usr/bin',
+		'/bin',
+	]
+		.filter(Boolean)
+		.join(':')
+
 	const options: AgentSdkOptions = {
 		systemPrompt: systemPrompt || undefined,
 		allowedTools: [],
@@ -113,7 +130,7 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 		cwd,
 		env: {
 			HOME: cwd,
-			PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+			PATH: augmentedPath,
 			NODE_ENV: process.env.NODE_ENV || 'production',
 			LANG: process.env.LANG || 'en_US.UTF-8',
 		},
