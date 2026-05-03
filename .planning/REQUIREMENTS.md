@@ -47,7 +47,8 @@ External API consumers expect `Authorization: Bearer <key>` and a public endpoin
 
 External clients depend on byte-level spec compliance for streaming and rate-limit headers. Today the broker emits 1-2 aggregate chunks; clients see "non-streaming" or 504.
 
-- [ ] **FR-BROKER-C1-01** — Anthropic Messages broker (`/v1/messages`) in passthrough mode emits the full Anthropic SSE event sequence verbatim from the upstream Anthropic API: `event: message_start`, `event: content_block_start`, `event: content_block_delta` (one per delta token group), `event: content_block_stop`, `event: message_delta`, `event: message_stop`. No payload mutation.
+- [x] **FR-BROKER-C1-01
+** — Anthropic Messages broker (`/v1/messages`) in passthrough mode emits the full Anthropic SSE event sequence verbatim from the upstream Anthropic API: `event: message_start`, `event: content_block_start`, `event: content_block_delta` (one per delta token group), `event: content_block_stop`, `event: message_delta`, `event: message_stop`. No payload mutation.
 - [x] **FR-BROKER-C1-02
 ** — A token-streaming integration test asserts the broker emits ≥3 distinct `content_block_delta` events for any prompt expected to take longer than 2 seconds (chunked output, NOT a single aggregate chunk).
 - [x] **FR-BROKER-C2-01

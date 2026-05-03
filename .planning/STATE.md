@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
 status: completed
-last_updated: "2026-05-03T02:24:40.196Z"
-last_activity: 2026-05-02 — Plan 58-01 executed (Wave 1 — TDD OpenAI Stream Translator Core); RED commit `ff066e85` + GREEN commit `62121ccd`; 23/23 unit tests GREEN; SUMMARY at `.planning/phases/58-true-token-streaming/58-01-SUMMARY.md`
+last_updated: "2026-05-02T19:31:00.000Z"
+last_activity: 2026-05-02 — Plan 58-02 executed (Wave 2 — Anthropic Messages true token streaming via async iterator); RED `554f0373` + GREEN `b4e85f58`; SUMMARY at `.planning/phases/58-true-token-streaming/58-02-SUMMARY.md`. FR-BROKER-C1-01 marked complete in REQUIREMENTS.md.
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 44
-  completed_plans: 13
-  percent: 30
+  completed_plans: 15
+  percent: 34
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 58 IN PROGRESS — Waves 0+1 SHIPPED (plans 58-00, 58-01 complete). Awaiting Waves 2-4.
-Plan: 58-01 SHIPPED 2026-05-02 — Wave 1 OpenAI Stream Translator Core (TDD). Built `openai-stream-translator.ts` (285 LOC) — pure-function closure factory consuming Anthropic RawMessageStreamEvent → emitting OpenAI chat.completion.chunk SSE 1:1 per text_delta. Exports `createAnthropicToOpenAIStreamTranslator`, `randomChatCmplId` (crypto.randomBytes-backed `^chatcmpl-[A-Za-z0-9]{29}$` — Phase 57 Pitfall 4 HARDENED), `mapStopReason` (8 known + defensive default). Built `openai-stream-translator.test.ts` (460 LOC, 23 unit cases): TDD RED→GREEN. Cumulative output_tokens behavior LOCKED by 3-message_delta test asserting completion_tokens=20 (NOT 5+12+20=37). Commits: `ff066e85` (test/RED) + `62121ccd` (feat/GREEN). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` stable. openai-sse-adapter.ts byte-identical (two-adapters-coexist). D-NO-NEW-DEPS preserved.
-Status: Phase 58 Waves 0+1 COMPLETE. 4/5 requirements satisfied (FR-BROKER-C1-02 + FR-BROKER-C2-01..03). Wave 3 (OpenAI streaming integration) unblocked — translator factory ready for wire-in at `passthrough-handler.ts:417`. Pattern: `for await (const event of client.messages.stream(...)) translator.onAnthropicEvent(event); translator.finalize()`.
-Last activity: 2026-05-02 — Plan 58-01 executed (Wave 1 — TDD translator core); RED `ff066e85` + GREEN `62121ccd`; SUMMARY at `.planning/phases/58-true-token-streaming/58-01-SUMMARY.md`
+Phase: 58 IN PROGRESS — Waves 0+1+2 SHIPPED (plans 58-00, 58-01, 58-02 complete). Awaiting Waves 3-4.
+Plan: 58-02 SHIPPED 2026-05-02 — Wave 2 Anthropic Messages True Token Streaming (TDD). Replaced Phase 57 transitional aggregate-then-restream block at `passthrough-handler.ts:162` with raw async iterator forwarding via `client.messages.create({...upstreamBody, stream:true})`. Each upstream Anthropic SSE event (`message_start`, `content_block_start`, multiple `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`) now forwarded VERBATIM as `event: <type>\ndata: <json>\n\n` at upstream temporal cadence. Headers: Cache-Control `no-cache, no-transform` + `X-Accel-Buffering: no` + per-event `res.flush?.()` for backpressure-safe immediate flush. `res.writableEnded` checked each iteration for graceful client-disconnect exit. Phase 57's `tryRefreshAndRetry` 401-refresh-and-single-retry preserved unchanged; non-401 APIError still maps to `UpstreamHttpError`. Mid-stream iterator failure emits Anthropic-shape `event: error` chunk before `res.end()`. Sync (`stream:false`) branch UNCHANGED. Wave 0 `clientFactory` test seam preserved (Wave 4 will inject fake-Anthropic SSE server). Test file extended with 6 new TDD streaming tests (RED `554f0373` → GREEN `b4e85f58`). All 14 passthrough-handler tests GREEN; full broker suite 73/73 GREEN. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` stable. `openai-sse-adapter.ts` byte-identical (two-adapters-coexist). `passthroughOpenAIChatCompletions` streaming branch at line 454 still uses Phase 57 transitional aggregate-then-emit single-chunk path — Wave 3 territory. D-NO-NEW-DEPS preserved.
+Status: Phase 58 Waves 0+1+2 COMPLETE. 5/5 requirements coverage at unit level: FR-BROKER-C1-01 (Wave 2 — TRUE today), FR-BROKER-C1-02 (Wave 0 fixture; full closure deferred to Wave 4 integration test), FR-BROKER-C2-01..03 (Wave 1 translator core — wire-in pending Wave 3). Wave 3 (OpenAI streaming integration) unblocked — translator factory + Wave 2 streaming pattern both ready for wire-in at `passthrough-handler.ts:454`. Pattern: same `for await (const event of client.messages.create({stream:true}))` shell as Wave 2 but with `translator.onAnthropicEvent(event)` per iteration + `translator.finalize()` after the loop.
+Last activity: 2026-05-02 — Plan 58-02 executed (Wave 2 — Anthropic Messages true token streaming); RED `554f0373` + GREEN `b4e85f58`; SUMMARY at `.planning/phases/58-true-token-streaming/58-02-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 
