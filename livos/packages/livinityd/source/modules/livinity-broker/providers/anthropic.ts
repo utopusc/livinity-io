@@ -260,7 +260,16 @@ function buildAgentSdkQueryParams(
 	// this, Claude defaults to Bash/Read/Write for file ops, SDK errors with
 	// "Model tried to call unavailable tool 'Bash'" because allowedTools
 	// excludes built-ins.
-	const builtInTools = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', 'TodoWrite', 'WebFetch', 'WebSearch', 'NotebookEdit']
+	const builtInTools = [
+		'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task',
+		'TodoWrite', 'WebFetch', 'WebSearch', 'NotebookEdit',
+		'ToolSearch', 'Skill', 'AskUserQuestion', 'EnterPlanMode',
+		'ExitPlanMode', 'EnterWorktree', 'ExitWorktree', 'Monitor',
+		'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList',
+		'PushNotification', 'RemoteTrigger', 'TaskCreate', 'TaskGet',
+		'TaskList', 'TaskOutput', 'TaskStop', 'TaskUpdate',
+		'ListMcpResourcesTool', 'ReadMcpResourceTool',
+	]
 	const clientToolList = clientToolNames.length > 0 ? clientToolNames.join(', ') : 'none'
 	const finalSystemPrompt = (systemPrompt || '') +
 		`\n\nIMPORTANT: You are a passthrough proxy. The user has provided these tools: ${clientToolList}. ` +
