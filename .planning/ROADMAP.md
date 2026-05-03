@@ -141,7 +141,7 @@ Plans:
 Plans:
 - [x] 60-01-PLAN.md — Wave 0 Server5 ground-truth diagnostic (single-batched ssh) + 5-Q verdict table — SHIPPED 2026-05-03 (commit `59ceeb16`; FIXTURE 312 lines; 5/5 verdicts)
 - [x] 60-02-PLAN.md — Wave 1 xcaddy build + binary swap (`/usr/bin/caddy` → custom build with `caddy-ratelimit`) — SHIPPED 2026-05-03 (commit `262ac9df`; Caddy v2.11.2 + mholt/caddy-ratelimit + caddy-dns/cloudflare; backup `/usr/bin/caddy.bak.20260503-070012`; DELETION_COUNT=0; smoke regression PASS; sacred SHA byte-identical; FR-BROKER-B2-02 satisfied)
-- [ ] 60-03-PLAN.md — Wave 2 Relay code extension for `api.livinity.io` → admin tunnel routing (TDD)
+- [x] 60-03-PLAN.md — Wave 2 Relay code extension for `api.livinity.io` → admin tunnel routing (TDD) — SHIPPED 2026-05-03 (commits `591d30a2` RED + `0e4a55b0` GREEN findAdminTunnel/sendBrokerTunnelOffline; `8cdb3024` RED + `9cf46c25` GREEN server.ts dispatch; 11/11 vitest tests; deployed to Server5 via scp + 1 batched ssh; pm2 restart clean; api.livinity.io probe HTTP/1.1 503 with Anthropic-spec body NOT-502; livinity.io HTTP/2 200 unchanged; sacred SHA byte-identical; FR-BROKER-B2-01 partially satisfied)
 - [ ] 60-04-PLAN.md — Wave 3 Caddyfile addition + DNS A record + broker IP-guard removal
 - [ ] 60-05-PLAN.md — Wave 4 phase-60-smoke.sh + 60-SMOKE-RESULTS.md + sacred file final gate
 
