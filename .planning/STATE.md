@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: "Phase 57 Wave 1 (mode-dispatch + credential-extractor + Risk-A1 smoke gate) CLOSED. 18 of Wave 0's 26 RED tests now GREEN (11 mode-dispatch + 7 credential-extractor) plus 1 NEW Risk-A1 smoke gate GREEN — proves @anthropic-ai/sdk constructs Authorization: Bearer <token> from authToken ClientOption. Phase 57 UNBLOCKED to proceed to Wave 2 (passthrough-handler.ts). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical."
-last_updated: "2026-05-03T01:35:00.000Z"
-last_activity: 2026-05-03 — Plan 57-02 executed end-to-end in ~5min; created mode-dispatch.ts (24 LOC) + credential-extractor.ts (87 LOC); 19/19 GREEN (11+8); Risk-A1 mock-level GATE PASSED (live verification deferred to Phase 63); SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-02-SUMMARY.md`
+status: "Phase 57 Wave 2 (passthroughAnthropicMessages handler + router.ts mode dispatch) CLOSED. All 26 of Wave 0's RED tests now GREEN (11 mode-dispatch + 8 credential-extractor + 8 passthrough-handler = 27 with the +1 Risk-A1 smoke gate). passthrough-handler.ts (227 LOC) ships SDK-direct forward with subscription Bearer auth + token-refresh-on-401 + transitional aggregate-then-restream SSE. router.ts (+39 LOC) dispatches passthrough vs agent — passthrough is now DEFAULT. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical. Wave 4 will fix integration.test.ts regressions by injecting X-Livinity-Mode: agent header."
+last_updated: "2026-05-02T18:43:00.000Z"
+last_activity: 2026-05-02 — Plan 57-03 executed end-to-end in ~6min; created passthrough-handler.ts (227 LOC) + wired router.ts dispatch (+39 LOC); 27/27 GREEN unit tests; sacred SHA byte-identical pre/post; SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-03-SUMMARY.md`
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 44
-  completed_plans: 8
-  percent: 18
+  completed_plans: 9
+  percent: 20
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 57 in-progress (Waves 0+1 complete); Plan 57-03 (Wave 2 — passthrough-handler.ts) ready to start
-Plan: 57-02 SHIPPED 2026-05-03 (commits `8af8dc9e` mode-dispatch + types augmentation, `04a87846` credential-extractor + Risk-A1 smoke gate). 2 NEW production files (mode-dispatch.ts 24 LOC + credential-extractor.ts 87 LOC); 19/19 GREEN tests; Risk-A1 mock-level GATE PASSED (SDK uses authToken as Authorization: Bearer)
-Status: Phase 57 Wave 1 (mode-dispatch + credential-extractor + Risk-A1 smoke gate) CLOSED. 18 of Wave 0's 26 RED tests now GREEN (11 mode-dispatch + 7 credential-extractor) plus 1 NEW Risk-A1 smoke gate GREEN — proves @anthropic-ai/sdk constructs Authorization: Bearer <token> from authToken ClientOption. Phase 57 UNBLOCKED to proceed to Wave 2 (passthrough-handler.ts). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical.
-Last activity: 2026-05-03 — Plan 57-02 executed end-to-end in ~5min; created mode-dispatch.ts (24 LOC) + credential-extractor.ts (87 LOC); 19/19 GREEN (11+8); Risk-A1 mock-level GATE PASSED (live verification deferred to Phase 63); SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-02-SUMMARY.md`
+Phase: 57 in-progress (Waves 0+1+2 complete); Plan 57-04 (Wave 3 — openai-router.ts dispatch) ready to start
+Plan: 57-03 SHIPPED 2026-05-02 (commits `364a723b` passthrough-handler.ts + Wave 0 mock fix, `f48f6827` router.ts dispatch wiring). 1 NEW production file (passthrough-handler.ts 227 LOC) + router.ts +39 LOC; 27/27 GREEN unit tests (Wave 0+1+2 combined); sacred file SHA byte-identical; passthrough is now DEFAULT for /v1/messages
+Status: Phase 57 Wave 2 (passthroughAnthropicMessages handler + router.ts mode dispatch) CLOSED. All 26 of Wave 0's RED tests now GREEN. passthrough-handler.ts ships SDK-direct forward with subscription Bearer auth + token-refresh-on-401 + transitional aggregate-then-restream SSE. router.ts dispatches passthrough vs agent — passthrough is now DEFAULT. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical. Wave 4 will fix integration.test.ts regressions by injecting X-Livinity-Mode: agent header.
+Last activity: 2026-05-02 — Plan 57-03 executed end-to-end in ~6min; created passthrough-handler.ts (227 LOC) + wired router.ts dispatch (+39 LOC); 27/27 GREEN unit tests; sacred SHA byte-identical pre/post; SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-03-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 
