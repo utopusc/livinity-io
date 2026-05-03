@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: "Wave 1 (Plan 59-02) SHIPPED 2026-05-02. api_keys table appended to schema.sql (8 cols + FK CASCADE + UNIQUE key_hash + 2 indexes including partial idx_api_keys_active WHERE revoked_at IS NULL). database.ts + index.ts created (6 PG functions: createApiKey / findApiKeyByHash / listApiKeysForUser / listAllApiKeys / revokeApiKey / hashKey + ApiKeyRow type, twin of docker/agents.ts). All 9 Wave 1 tests GREEN (4 schema-migration + 5 database). Wave 2 (cache + bearer-auth middleware) unblocked. Sacred SHA 4f868d318abff71f8c8bfbcf443b2393a553018b byte-identical."
-last_updated: "2026-05-03T03:20:56Z"
+status: Wave 1 (Plan 59-02) SHIPPED. Wave 2 (cache + bearer-auth middleware) and Wave 3 (events + tRPC routes) remain RED — `mount-order.test.ts`, `cache.test.ts`, `bearer-auth.test.ts`, `routes.test.ts` correctly fail at module-resolution (cache.js / bearer-auth.js / routes.js don't exist yet) — that's the expected post-Wave-1 state per the Wave 0 contract.
+last_updated: "2026-05-03T03:50:58.679Z"
 last_activity: 2026-05-02 — Plan 59-02 executed (Wave 1 schema migration + PG CRUD); task commits `8c4305d3` (schema append) + `bcf41817` (database.ts+index.ts); SUMMARY at `.planning/phases/59-bearer-token-auth/59-02-SUMMARY.md`
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 44
-  completed_plans: 20
-  percent: 45
+  completed_plans: 21
+  percent: 48
 ---
 
 # Project State
