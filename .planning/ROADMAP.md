@@ -44,7 +44,7 @@
 
 - [x] **Phase 56: Research Spike (Passthrough Architecture + Public Endpoint + Auth Patterns)** — SHIPPED 2026-05-02. 4/4 plans complete. 9 D-30-XX decisions locked. SPIKE-FINDINGS.md canonical answer document at `.planning/phases/56-research-spike/SPIKE-FINDINGS.md`; phase summary at `PHASE-SUMMARY.md`. Sacred SHA stable.
 - [x] **Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In** — SHIPPED 2026-05-02. 5/5 plans complete (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every wave + end-of-phase. 95 broker tests GREEN. PHASE-SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`.
-- [ ] **Phase 58: C1+C2 True Token Streaming (Anthropic + OpenAI)** — Anthropic SSE forwarded verbatim; OpenAI translation adapter rewritten as 1:1 delta translator with usage chunk.
+- [x] **Phase 58: C1+C2 True Token Streaming (Anthropic + OpenAI)** — SHIPPED 2026-05-03. 5/5 plans complete (58-00..04). 5/5 requirements satisfied (FR-BROKER-C1-01..02 + FR-BROKER-C2-01..03). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every wave + end-of-phase (asserted from inside Wave 4's final-gate test). `openai-sse-adapter.ts` byte-identical (two-adapters-coexist preserved). D-NO-NEW-DEPS preserved across entire phase. Anthropic SSE now forwarded verbatim via `client.messages.create({stream:true})` async iterator (Wave 2); OpenAI translated 1:1 with `usage` on final chunk + crypto chatcmpl id (Wave 1 + Wave 3). 56 new tests added; broker suite 94/94 GREEN. PHASE-SUMMARY at `.planning/phases/58-true-token-streaming/PHASE-SUMMARY.md`.
 - [ ] **Phase 59: B1 Per-User Bearer Token Auth (`liv_sk_*`)** — `api_keys` PG table + middleware + revocation lifecycle.
 - [ ] **Phase 60: B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter** — Server5 reverse proxy + TLS + rate-limit perimeter.
 - [ ] **Phase 61: C3+D1+D2 Rate-Limit Headers + Model Aliases + Provider Interface Stub** — Anthropic + OpenAI rate-limit header forwarding/translation; friendly model alias resolution; pluggable `BrokerProvider` interface (Anthropic-only concrete impl).
@@ -103,11 +103,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 58-00-PLAN.md - Wave 0 Test Infrastructure (fake-Anthropic SSE server + clientFactory test seam + compression audit)
-- [ ] 58-01-PLAN.md - Wave 1 OpenAI Stream Translator Core (TDD: RED + GREEN; cumulative output_tokens + crypto chatcmpl id + stop_reason mapping)
-- [ ] 58-02-PLAN.md - Wave 2 Anthropic Passthrough True Streaming (raw async iterator forwarding)
-- [ ] 58-03-PLAN.md - Wave 3 OpenAI Passthrough Streaming Integration (translator wiring + chatcmpl id hardening)
-- [ ] 58-04-PLAN.md - Wave 4 Integration Tests + Final Phase Gate (5-run determinism + sacred file SHA)
+- [x] 58-00-PLAN.md - Wave 0 Test Infrastructure (fake-Anthropic SSE server + clientFactory test seam + compression audit) — SHIPPED 2026-05-03 (commits `070f862e` test, `8da22b8d` feat, `280fa4c4` docs)
+- [x] 58-01-PLAN.md - Wave 1 OpenAI Stream Translator Core (TDD: RED + GREEN; cumulative output_tokens + crypto chatcmpl id + stop_reason mapping) — SHIPPED 2026-05-02 (commits `ff066e85` RED, `62121ccd` GREEN, `e97b62ab` docs); 23/23 unit tests GREEN
+- [x] 58-02-PLAN.md - Wave 2 Anthropic Passthrough True Streaming (raw async iterator forwarding) — SHIPPED 2026-05-02 (commits `554f0373` RED, `b4e85f58` GREEN, `8f941d96` docs); 6 new TDD tests GREEN; FR-BROKER-C1-01 closed at unit level
+- [x] 58-03-PLAN.md - Wave 3 OpenAI Passthrough Streaming Integration (translator wiring + chatcmpl id hardening) — SHIPPED 2026-05-02 (commits `949412e2` RED, `745aac42` GREEN, `63a727bf` docs); 8 new tests GREEN; FR-BROKER-C2-01..03 closed at unit level; Phase 57 Pitfall 4 closed
+- [x] 58-04-PLAN.md - Wave 4 Integration Tests + Final Phase Gate (5-run determinism + sacred file SHA) — SHIPPED 2026-05-03 (commit `5733eb7a` test); 13/13 integration tests GREEN; sacred SHA + two-adapters-coexist asserted from inside the suite; 5-run determinism PASSED; broker suite 94/94 GREEN
 
 ### Phase 59: B1 Per-User Bearer Token Auth (`liv_sk_*`)
 **Goal**: External API consumers authenticate with a standard `Authorization: Bearer liv_sk_*` token instead of URL-path identity + container IP guard. Users can mint, list, and revoke their own keys; revoked keys return Anthropic-spec 401 errors.
@@ -220,9 +220,9 @@ Plans:
 | 53. A4 Security Panel Render         | v29.5     | 0/0            | Complete    | 2026-05-02 |
 | 54. B1 Verification Gate             | v29.5     | 0/0            | Complete    | 2026-05-02 |
 | 55. Live Milestone Verification      | v29.5     | 0/0            | DEFERRED    | →v30 P63   |
-| 56. Research Spike                   | v30.0     | 0/4            | Not started | -          |
-| 57. A1+A2 Passthrough + Agent Mode   | v30.0     | 0/0            | Not started | -          |
-| 58. C1+C2 True Token Streaming       | v30.0     | 0/0            | Not started | -          |
+| 56. Research Spike                   | v30.0     | 4/4            | Complete    | 2026-05-02 |
+| 57. A1+A2 Passthrough + Agent Mode   | v30.0     | 5/5            | Complete    | 2026-05-02 |
+| 58. C1+C2 True Token Streaming       | v30.0     | 5/5            | Complete    | 2026-05-03 |
 | 59. B1 Bearer Token Auth             | v30.0     | 0/0            | Not started | -          |
 | 60. B2 Public Endpoint               | v30.0     | 0/5            | Not started | -          |
 | 61. C3+D1+D2 Spec Compliance         | v30.0     | 0/0            | Not started | -          |
