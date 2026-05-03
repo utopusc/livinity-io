@@ -362,7 +362,80 @@ api.livinity.io {
 
 ---
 
-## Cross-Cutting: Sacred File SHA Stability Across Plan 56-02 (Tasks 1-2)
+## Q6: Rate-Limit Policy (Forward Verbatim vs Broker-Side Bucket)
+
+### Verdict
+Chosen path: **C — Server5 Caddy `caddy-ratelimit` perimeter (coarse, edge-side from Q4 verdict) + Broker forwards Anthropic upstream rate-limit headers verbatim (fine-grained, NO broker-side per-key bucket in v30).**
+
+In one phrase: **edge handles abuse, broker handles transparency.** The broker emits ZERO of its own 429s in v30 — every 429 the client sees originates from EITHER the edge perimeter (Caddy) OR upstream Anthropic. **This resolves FR-BROKER-B2-02's "TBD pending Phase 56 spike"** as: broker-side token bucket = NO; rate-limit perimeter = YES (edge per Q4); fine-grained = transparent forward from upstream Anthropic.
+
+### Rationale (3 reasons)
+1. **Aligns 1:1 with Q4 (chosen platform = Server5 Caddy + `caddy-ratelimit` plugin).** Q4 already mandates `caddy-ratelimit` at the edge with `zone per_bearer_key { key {http.request.header.Authorization} window 1m events 1000 }`. Adding broker-side bucket creates the "two layers" complexity called out in Candidate B's cons (clock skew, double-429, eventual consistency). Per Q4's clean responsibility model — edge = coarse abuse-control, broker = pass-through — Q6's verdict is the natural pairing. The Mini PC broker process is protected from network-layer abuse by the edge perimeter, eliminating Candidate A's main downside.
+2. **Q1 Strategy A's raw byte-forward already implements Anthropic-verbatim rate-limit-header forwarding for free.** Q1 chose `pipe(response.body, res)` raw byte-forward of upstream Anthropic SSE/JSON. This semantic ALREADY forwards `anthropic-ratelimit-*-{limit,remaining,reset}` verbatim with zero extra code; Phase 57 plan only needs to add an explicit `Object.entries(upstream.headers).forEach(([k,v]) => res.setHeader(k,v))` BEFORE the body pipe begins (so Express doesn't accidentally drop them). Implementation cost = zero, beyond what Q1 Strategy A already specifies.
+3. **Resolves FR-BROKER-B2-02 "TBD" the simplest way.** The requirement says "default = the user's Anthropic subscription rate forwarded transparently; broker-side token-bucket TBD pending Phase 56 spike." The verdict: the user's Anthropic rate IS the truth, broker is transparent, broker-side bucket is NOT in v30. Future v31+ can add an opt-in broker bucket if multi-tenant fairness becomes a real requirement; v30 schema (FR-BROKER-B1-01) is forward-compatible with future additions like `api_keys.bucket_capacity`.
+
+### Alternatives Considered (3)
+- **Alt A (forward verbatim, no edge perimeter):** Disqualified because it provides ZERO protection against network-layer abuse spamming the Mini PC broker process. Q4's perimeter explicitly addresses this gap; A would undo Q4's benefit.
+- **Alt B (broker-side per-key token bucket via Redis `bucket:<keyId>` Hash + Lua script):** Disqualified for v30 because (a) it duplicates the protection Q4's edge perimeter already provides, (b) adds two layers of 429 logic with edge-case complexity (clock skew, double-429, eventual consistency in any future multi-instance deployment), (c) requires UI surface for per-user bucket configuration outside v30's E2 scope. **Reserved for v31+ if multi-tenant fairness becomes a real requirement.** `ioredis@^5.4.0` is already present in both `livos/packages/livinityd/package.json` and `nexus/packages/core/package.json` so a future implementation requires zero new deps; the schema migration cost is small (add 2 nullable columns to `api_keys`).
+- **Alt: Hybrid (broker-side bucket as soft-limit + edge as hard-limit).** Equivalent to B with B's complexity plus a "soft" semantic; not obviously better than C with reasonable Q4 edge thresholds. Folded into Candidate B's analysis above.
+
+### Header Forwarding List (12 Anthropic + 6 OpenAI + Retry-After)
+
+**Anthropic (raw byte-forward via Q1 Strategy A) — all 6 originally-spec'd headers:**
+1. `anthropic-ratelimit-requests-limit`
+2. `anthropic-ratelimit-requests-remaining`
+3. `anthropic-ratelimit-requests-reset`
+4. `anthropic-ratelimit-tokens-limit`
+5. `anthropic-ratelimit-tokens-remaining`
+6. `anthropic-ratelimit-tokens-reset`
+
+(Plus 6 newer split-token variants Anthropic added — `anthropic-ratelimit-input-tokens-{limit,remaining,reset}` and `anthropic-ratelimit-output-tokens-{limit,remaining,reset}` — also forwarded verbatim by raw byte-forward; total 12 Anthropic headers as confirmed by extracted text from https://docs.anthropic.com/en/api/rate-limits.)
+
+**OpenAI (translated by broker on the OpenAI-compat route — Phase 58/61 owns translator) — all 6 per FR-BROKER-C3-02:**
+1. `x-ratelimit-limit-requests`
+2. `x-ratelimit-remaining-requests`
+3. `x-ratelimit-reset-requests`
+4. `x-ratelimit-limit-tokens`
+5. `x-ratelimit-remaining-tokens`
+6. `x-ratelimit-reset-tokens`
+
+**Translation note:** Anthropic's `*-reset` values are RFC 3339 timestamps; OpenAI's `*-reset` values are integer seconds-until-reset. Translator: `Math.max(0, Math.floor((Date.parse(anthropic_reset) - Date.now()) / 1000))`. Dimension-order also swaps (Anthropic `requests-limit`/`tokens-limit` ↔ OpenAI `limit-requests`/`limit-tokens`). Phase 58/61 plan owns this with TDD coverage.
+
+**Retry-After (BOTH paths) — RFC 7231 §7.1.3 / RFC 9110 §10.2.3:**
+- Format: `Retry-After = HTTP-date / delay-seconds`. Examples: `Retry-After: 120` (delay-seconds, what Anthropic typically emits) or `Retry-After: Fri, 31 Dec 1999 23:59:59 GMT` (HTTP-date). Both forms are RFC-spec and must be accepted by clients.
+- Forwarded verbatim from upstream Anthropic on 429 by Q1 Strategy A's raw byte-forward (passthrough path) AND by existing v29.4 Phase 45 pattern at `livinity-broker/router.ts:158-185` (sync agent-mode path).
+
+### Code-Level Integration Point
+- **Existing forward pattern (REUSE — required citation):** `livos/packages/livinityd/source/modules/livinity-broker/router.ts:158-185` — Phase 45's `UpstreamHttpError` handler already forwards 429 + `Retry-After` verbatim (`if (err.status === 429) { if (err.retryAfter !== null) res.setHeader('Retry-After', err.retryAfter); res.status(429).json({...}) }`). Q6 verdict EXTENDS this:
+  - **Passthrough mode (Q1 Strategy A):** raw `pipe(response.body, res)` ALSO needs to copy upstream rate-limit headers. Phase 57 plan must add `Object.entries(upstream.headers).forEach(([k,v]) => res.setHeader(k, v))` BEFORE `response.body.pipeTo(res)`. Verify in Phase 57 integration test by asserting `res.headers['anthropic-ratelimit-requests-remaining']` is non-empty after a successful upstream call.
+  - **Agent mode (existing path at `agent-runner-factory.ts:99-106`):** upstream Anthropic rate-limit headers don't reach the SSE adapter today (agent-SDK aggregates and emits its own events). v30 leaves agent-mode rate-limit-header forwarding as-is — acceptable per Q7 (agent mode is internal-LivOS scope; rate-limit-header forwarding is an external-client concern).
+- **Edge perimeter (NEW — owned by Q4 verdict):** `platform/relay/Caddyfile` `api.livinity.io` block's `rate_limit { zone per_bearer_key {...} zone per_ip_burst {...} }` directive. Caddy emits 429 + automatic `Retry-After` BEFORE the request reaches the broker on Mini PC.
+- **NO broker-side bucket Redis schema in v30.** Reserved for v31+ if needed; would add `bucket:<keyId>` Hash with TTL via Lua script for atomicity (sketch in `notes-q6-rate-limit.md` F4 — capacity, refill rate, take cost parameters).
+
+### Risk + Mitigation
+- **Risk:** Edge perimeter (Q4 `caddy-ratelimit`) emits 429s with generic `Retry-After` based on Caddy's window (e.g. 60s for a 60s window) which doesn't match Anthropic's actual subscription-tier reset. Clients see Caddy 429 → wait 60s → still hit Anthropic limit → broker 429 again from upstream.
+  **Mitigation:** Caddy zone `events` thresholds set GENEROUSLY above typical Anthropic subscription tier (e.g., Caddy = 1000 reqs/min, Anthropic free tier = 50 reqs/min) — so Caddy edge only kicks in for ABUSIVE traffic (10-20x normal), not normal-but-rate-limited traffic. Phase 60 plan tunes the values based on expected Anthropic tier sizing.
+- **Risk:** Anthropic adds a 13th `anthropic-ratelimit-*` header in the future and our raw byte-forward silently propagates it. Clients depending on a stable header set could break.
+  **Mitigation:** This IS the desired behavior — being transparent IS the goal. If we need to filter, add an allowlist later. For v30: forward whatever upstream sends.
+- **Risk:** Multi-tenant fairness scenario emerges (one user's Settings UI lets multiple `liv_sk_*` keys share the same upstream Anthropic subscription, and one key starves another).
+  **Mitigation:** Defer to v31+ with broker-side bucket (Candidate B); v30 schema (FR-BROKER-B1-01) is forward-compatible (add `api_keys.bucket_capacity` + `api_keys.bucket_refill_rate` columns when needed).
+- **Risk:** OpenAI route's reset-timestamp translation has off-by-one or timezone bugs causing client retry loops.
+  **Mitigation:** Phase 58/61 plan owns this translator with TDD coverage; Phase 63 UAT samples one OpenAI client (e.g., Open WebUI) hitting a rate limit and confirms client behaves correctly.
+
+### D-NO-NEW-DEPS Implications
+**Zero new deps.** All forwarding uses Node 22 builtin `fetch()` + Express `res.setHeader()`. The OpenAI translator uses pure JS arithmetic on header values — no new packages. Even a future v31+ broker-side bucket would use already-present `ioredis@^5.4.0`.
+
+### Q4 Alignment
+
+Q4's verdict picked Server5 Caddy + `caddy-ratelimit` plugin at the edge. Q6's verdict layers cleanly on top: broker remains transparent (forwards upstream rate-limit headers verbatim, emits ZERO own 429s).
+
+- **Edge (Caddy `rate_limit`):** Coarse abuse-control. Threshold tuned far above Anthropic's typical tier so Caddy only triggers for ABUSE (10-20x normal). When Caddy 429s, client sees `Retry-After: <window>` from Caddy; that traffic never reaches Mini PC broker.
+- **Broker (router.ts):** Pass-through via Q1 Strategy A's `pipe(response.body, res)` plus the explicit header copy. When Anthropic upstream 429s mid-conversation, broker forwards 429 + Anthropic's `Retry-After` verbatim per the existing v29.4 Phase 45 pattern at `router.ts:158-185`.
+- **Result:** Two clean layers, no overlap. Mathematically impossible to double-429 (broker never emits its own 429 — only Anthropic does, and Caddy's threshold is far above Anthropic's so Caddy never sees rate-limited-by-Anthropic traffic to re-429 on).
+
+---
+
+## Cross-Cutting: Sacred File SHA Stability Across Plan 56-02 (Tasks 1-3)
 
 `git hash-object nexus/packages/core/src/sdk-agent-runner.ts` re-run after each task:
 
@@ -370,9 +443,10 @@ api.livinity.io {
 |------|----------------|-----------------------------------------------------------|
 | Task 1 (Q3 + Q5) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
 | Task 2 (Q4)      | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+| Task 3 (Q6)      | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
 
-Sacred file was NOT read or written during Tasks 1-2 (Q3 / Q4 / Q5 are perimeter / lifecycle concerns; no internal-runner inspection needed). Sacred boundary preserved.
+Sacred file was NOT read or written during Tasks 1-3 (Q3 / Q4 / Q5 / Q6 are perimeter / lifecycle concerns; no internal-runner inspection needed). Sacred boundary preserved across plan 56-02.
 
 ---
 
-*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plan 56-02 (Q6 — Task 3 pending), 56-03, 56-04 will append additional sections.*
+*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plan 56-02 verdicts (Q3 / Q4 / Q5 / Q6) complete. Plans 56-03 (cross-cuts) and 56-04 (synthesis) will append additional sections.*
