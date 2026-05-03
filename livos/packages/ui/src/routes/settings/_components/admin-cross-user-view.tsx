@@ -5,24 +5,53 @@
  * unfiltered query. Backend (usage.getAll, Plan 44-03) is the authoritative
  * gate — this component is rendered conditionally by UsageSection based on
  * a silent admin probe.
+ *
+ * Phase 62 Plan 62-05 (FR-BROKER-E2-02 admin half) — adds a 4th filter chip:
+ * an api_key_id Select sourced from `apiKeys.listAll` (Phase 59 admin
+ * route). Option label format: `name (key_prefix) — owner: <username>`.
+ * Revoked keys appear with `(revoked)` suffix so admins can review
+ * historical attribution.
  */
 
 import {useState} from 'react'
 import {TbLoader2} from 'react-icons/tb'
 
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/shadcn-components/ui/select'
 import {trpcReact} from '@/trpc/trpc'
 
 import {PerAppTable} from './per-app-table'
+
+// Phase 59 contract: trpcReact.apiKeys.listAll returns snake_case rows
+// with `username` (not `ownerUsername`) and `user_id` (not `ownerId`),
+// per api-keys/routes.ts:222-234.
+interface AdminKeyOption {
+	id: string
+	user_id: string
+	username: string | null
+	key_prefix: string
+	name: string
+	revoked_at: Date | string | null
+}
 
 export function AdminCrossUserView() {
 	const [filterUserId, setFilterUserId] = useState<string>('')
 	const [filterAppId, setFilterAppId] = useState<string>('')
 	const [filterModel, setFilterModel] = useState<string>('')
+	const [filterApiKeyId, setFilterApiKeyId] = useState<string>('')
+
+	const allKeysQ = trpcReact.apiKeys.listAll.useQuery()
 
 	const allUsageQ = trpcReact.usage.getAll.useQuery({
 		user_id: filterUserId || undefined,
 		app_id: filterAppId || undefined,
 		model: filterModel || undefined,
+		api_key_id: filterApiKeyId || undefined,
 	})
 
 	if (allUsageQ.isLoading) {
@@ -37,6 +66,7 @@ export function AdminCrossUserView() {
 	}
 
 	const {stats, rows} = allUsageQ.data
+	const keyOptions: AdminKeyOption[] = (allKeysQ.data ?? []) as AdminKeyOption[]
 
 	return (
 		<div className='space-y-3'>
@@ -62,6 +92,24 @@ export function AdminCrossUserView() {
 					onChange={(e) => setFilterModel(e.target.value)}
 					className='flex-1 min-w-[120px] rounded-radius-sm border border-border-default bg-surface-raised px-2 py-1 text-caption'
 				/>
+				{/* Phase 62 Plan 62-05 FR-BROKER-E2-02 — admin api_key_id filter chip. */}
+				<Select
+					value={filterApiKeyId || 'all'}
+					onValueChange={(v) => setFilterApiKeyId(v === 'all' ? '' : v)}
+				>
+					<SelectTrigger className='flex-1 min-w-[180px]'>
+						<SelectValue placeholder='All keys' />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value='all'>All keys</SelectItem>
+						{keyOptions.map((k) => (
+							<SelectItem key={k.id} value={k.id}>
+								{k.name} ({k.key_prefix}) — owner: {k.username ?? k.user_id}
+								{k.revoked_at ? ' (revoked)' : ''}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 			</div>
 
 			<div className='grid grid-cols-3 gap-2'>
