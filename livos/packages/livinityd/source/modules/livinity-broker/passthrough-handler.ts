@@ -25,9 +25,15 @@ import type Livinityd from '../../index.js'
  *     each event as `event: <type>\ndata: <json>\n\n` — verbatim
  *     pass-through of the upstream Anthropic SSE event sequence at the
  *     same temporal cadence as upstream emits.
- *   - passthroughOpenAIChatCompletions still uses the Phase 57
- *     transitional aggregate-then-emit single-chunk path. Wave 3 will
- *     replace that with translator-based 1:1 delta emission.
+ *   - Phase 58 Wave 3 (FR-BROKER-C2-01..02): true 1:1 delta translation
+ *     for the OpenAI Chat Completions surface. The streaming branch of
+ *     passthroughOpenAIChatCompletions iterates the same SDK async
+ *     iterable and feeds each event through Wave 1's
+ *     createAnthropicToOpenAIStreamTranslator, which writes
+ *     chat.completion.chunk SSE lines per delta and a terminal chunk +
+ *     `data: [DONE]\n\n` on stream end. Sync (stream:false) chatcmpl id
+ *     uses Wave 1's crypto.randomBytes-backed randomChatCmplId
+ *     (FR-BROKER-C2-03; Phase 57 Pitfall 4 closed).
  */
 
 export interface PassthroughOpts {
@@ -277,6 +283,7 @@ import {
 	resolveModelAlias,
 	type OpenAITranslatedMessage,
 } from './openai-translator.js'
+import {createAnthropicToOpenAIStreamTranslator, randomChatCmplId} from './openai-stream-translator.js'
 import type {OpenAIChatCompletionsRequest} from './openai-types.js'
 
 export interface OpenAIPassthroughOpts {
@@ -348,14 +355,6 @@ function buildAnthropicBodyFromOpenAI(body: OpenAIChatCompletionsRequest): Upstr
 	return upstream
 }
 
-/** chatcmpl-* id format. Base62 over 29 chars matches OpenAI wire format. */
-const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-function randomBase62(n: number): string {
-	let out = ''
-	for (let i = 0; i < n; i++) out += BASE62[Math.floor(Math.random() * BASE62.length)]
-	return out
-}
-
 /** Map Anthropic stop_reason → OpenAI finish_reason. */
 function mapStopReasonToFinishReason(stopReason: string | undefined): string {
 	if (stopReason === 'tool_use') return 'tool_calls'
@@ -390,7 +389,8 @@ function buildOpenAIChatCompletionResponse(
 ): OpenAIChatCompletionResponseSync {
 	const message = translateToolUseToOpenAI(anthropicResponse?.content ?? [])
 	const finishReason = mapStopReasonToFinishReason(anthropicResponse?.stop_reason)
-	const id = `chatcmpl-${randomBase62(29)}`
+	// Phase 58 Wave 3 (FR-BROKER-C2-03): crypto.randomBytes-based id (Phase 57 Pitfall 4 closed)
+	const id = randomChatCmplId()
 	const usage = anthropicResponse?.usage ?? {input_tokens: 0, output_tokens: 0}
 	return {
 		id,
@@ -451,43 +451,69 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 
 	try {
 		if (body.stream === true) {
-			// Phase 57 TRANSITIONAL: aggregate-then-emit. Awaits upstream final
-			// message via SDK, then synthesizes a single OpenAI chat.completion.chunk
-			// + [DONE] terminator. Phase 58 swaps for true 1:1 delta translation.
-			let finalMessage: any
-			try {
-				finalMessage = await client.messages.stream(anthropicBody as any).finalMessage()
-			} catch (err) {
-				const refreshed = await tryRefreshAndRetry(err, token, makeClient, async (c) => {
-					return c.messages.stream(anthropicBody as any).finalMessage()
-				})
-				if (refreshed === null) throw mapApiError(err)
-				finalMessage = refreshed
-			}
+			// Phase 58 Wave 3 (FR-BROKER-C2-01..02): true 1:1 delta translation.
+			// Replaces Phase 57's transitional aggregate-then-emit-single-chunk.
+			//
+			// Iterate raw Anthropic SSE events via the SDK async iterator and feed
+			// each into the Wave 1 translator. Translator writes OpenAI
+			// chat.completion.chunk SSE lines per delta. translator.finalize()
+			// emits the final chunk (with usage object derived from cumulative
+			// output_tokens) followed by `data: [DONE]\n\n`.
+			//
+			// Headers mirror Wave 2's Anthropic streaming branch (Cache-Control:
+			// no-transform + X-Accel-Buffering: no) — same buffering hazard
+			// mitigation for Phase 60's reverse-proxy chain.
 
-			const openaiResp = buildOpenAIChatCompletionResponse(finalMessage, body.model)
 			res.setHeader('Content-Type', 'text/event-stream')
-			res.setHeader('Cache-Control', 'no-cache')
+			res.setHeader('Cache-Control', 'no-cache, no-transform')
 			res.setHeader('Connection', 'keep-alive')
+			res.setHeader('X-Accel-Buffering', 'no')
+			res.flushHeaders()
 
-			// Single transitional chunk: re-shape complete response as a delta chunk.
-			const chunk = {
-				id: openaiResp.id,
-				object: 'chat.completion.chunk',
-				created: openaiResp.created,
-				model: openaiResp.model,
-				choices: [
-					{
-						index: 0,
-						delta: openaiResp.choices[0]!.message,
-						finish_reason: openaiResp.choices[0]!.finish_reason,
-					},
-				],
-				usage: openaiResp.usage,
+			const translator = createAnthropicToOpenAIStreamTranslator({
+				requestedModel: body.model, // echo caller's requested model (e.g. "gpt-4o")
+				res,
+			})
+
+			const makeClientFn = opts.clientFactory ?? makeClient
+
+			let stream: AsyncIterable<{type: string}>
+			try {
+				stream = (await client.messages.create({
+					...anthropicBody,
+					stream: true,
+				} as any)) as unknown as AsyncIterable<{type: string}>
+			} catch (err) {
+				const refreshed = await tryRefreshAndRetry<AsyncIterable<{type: string}>>(
+					err,
+					token,
+					makeClientFn,
+					async (c) =>
+						(await c.messages.create({
+							...anthropicBody,
+							stream: true,
+						} as any)) as unknown as AsyncIterable<{type: string}>,
+				)
+				if (refreshed === null) throw mapApiError(err)
+				stream = refreshed
 			}
-			res.write(`data: ${JSON.stringify(chunk)}\n\n`)
-			res.write(`data: [DONE]\n\n`)
-			res.end()
+
+			try {
+				for await (const event of stream) {
+					if (res.writableEnded) break
+					translator.onAnthropicEvent(event as {type: string})
+				}
+			} catch (err) {
+				// Mid-stream SDK iterator error — translator.finalize() in finally
+				// still runs. Best-effort log via livinityd logger to match the
+				// existing Phase 57 logging pattern in this handler.
+				livinityd.logger.log(
+					`[livinity-broker:passthrough:openai] mid-stream error user=${userId}: ${(err as Error)?.message ?? err}`,
+				)
+			} finally {
+				translator.finalize() // idempotent — emits final chunk + [DONE] even on early termination
+				if (!res.writableEnded) res.end()
+			}
 		} else {
 			let response: any
 			try {
