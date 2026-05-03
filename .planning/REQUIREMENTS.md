@@ -84,7 +84,7 @@ External clients send model names like `gpt-4o` or `claude-3-opus`. Broker shoul
 - [x] **FR-BROKER-E1-02
 ** — Both Anthropic Messages and OpenAI Chat Completions broker paths write `broker_usage` rows on EVERY successful streaming and non-streaming completion. Token counts come from the upstream Anthropic `usage` object (or the OpenAI `usage` final chunk for non-streaming).
 - [ ] **FR-BROKER-E1-03** — A streaming integration test against the OpenAI route asserts a `broker_usage` row is written with non-zero `prompt_tokens` + `completion_tokens` after a complete SSE stream (closes v29.3 C4 carry-forward to its full conclusion).
-- [ ] **FR-BROKER-E2-01** — A new "API Keys" tab inside `Settings > AI Configuration` lists the user's keys (key id, label, prefix preview, created_at, last_used_at, revoked_at) with "Create Key" + "Revoke" buttons. The plaintext key from create is shown ONCE in a copy-to-clipboard modal.
+- [x] **FR-BROKER-E2-01** — A new "API Keys" tab inside `Settings > AI Configuration` lists the user's keys (key id, label, prefix preview, created_at, last_used_at, revoked_at) with "Create Key" + "Revoke" buttons. The plaintext key from create is shown ONCE in a copy-to-clipboard modal. — SHIPPED 2026-05-03 (Plan 62-04 commits ec44608c + fd7ba777)
 - [x] **FR-BROKER-E2-02
 ** — The existing "Usage" subsection (v29.3 Phase 44) is enhanced: a per-key filter dropdown lets users see usage broken down by individual API key. Admin filter view (v29.3 `usage.getAll`) gains an `api_key_id` filter.
 

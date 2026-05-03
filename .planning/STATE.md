@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
 status: verifying
-last_updated: "2026-05-03T07:19:30.000Z"
-last_activity: 2026-05-03 — Phase 62 Wave 2 Plan 03 SHIPPED (tRPC `usage` router gains optional apiKeyId/api_key_id filter forwarding to Plan 01's database helpers). Commits `39527673` (RED) + `8d151c84` (GREEN); SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-03-SUMMARY.md`.
+last_updated: "2026-05-03T08:00:00.000Z"
+last_activity: 2026-05-03 — Phase 62 Wave 2 Plan 04 SHIPPED (Settings > AI Configuration gains <ApiKeysSection /> with Stripe-style show-once Create modal + two-step destructive Revoke modal, all wired to Phase 59 trpcReact.apiKeys.{create,list,revoke}). Commits `ec44608c` (RED) + `fd7ba777` (GREEN); SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-04-SUMMARY.md`.
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 44
-  completed_plans: 38
-  percent: 86
+  completed_plans: 39
+  percent: 89
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 62 IN PROGRESS — Wave 2 Plans 02 + 03 SHIPPED 2026-05-03. Plans 04 (settings-ui) + 05 (integration) remain. Phase 63 (mandatory live verification) needs Phase 62 complete + Mini PC `bash /opt/livos/update.sh` first.
-Plan: 62-03 SHIPPED 2026-05-03 — Wave 2 single-task surgical Zod additive. routes.ts `sinceInput` gains optional `apiKeyId: z.string().uuid().optional()` (camelCase, privateProcedure UI ergonomics) and `getAllProc` input gains optional `api_key_id: z.string().uuid().optional()` (snake_case, matches user_id/app_id convention). Both forward to Plan 01's `queryUsageByUser`/`queryUsageAll` `apiKeyId` opt. RED commit `39527673` (2 new failing tests for forwarding); GREEN commit `8d151c84` (routes.ts edits, 21 insertions / 2 deletions). All 45 usage-tracking tests GREEN (was 43; +2 new FR-BROKER-E2-02). Zero regressions. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at start + end of plan. `httpOnlyPaths` already includes `usage.getMine` + `usage.getAll` (no edits needed; transport routing is transparent to Zod input shape). Backwards-compat preserved (Zod non-strict default — older UI bundles still work without sending the new fields). 0 deviations from plan. D-NO-NEW-DEPS preserved. Hand-off: Plan 04 UI consumes `trpc.usage.getMine.useQuery({apiKeyId})` and `trpc.usage.getAll.useQuery({api_key_id})` from the filter dropdown.
-Status: Phase 62 Wave 2 PARTIAL — Plans 02 + 03 of 5 closed; Plan 04 + 05 remain. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical (3 sample points this plan; 17 across Phase 61+62 so far). FR-BROKER-E2-02 satisfied (backend half — tRPC routes accept apiKeyId filter and forward to PG with proper user-scoping preserved). UI half (FR-BROKER-E2-02 frontend) and FR-BROKER-E2-01 (API Keys tab UI) owned by Plan 04. PHASE-SUMMARY pending after Plan 05.
-Last activity: 2026-05-03 — Phase 62 Wave 2 Plan 03 SHIPPED (tRPC `usage` router gains optional apiKeyId/api_key_id filter forwarding). Commits `39527673` (RED) + `8d151c84` (GREEN); SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-03-SUMMARY.md`.
+Phase: 62 IN PROGRESS — Wave 2 Plans 02 + 03 + 04 SHIPPED 2026-05-03. Plan 05 (integration / phase gate) remains. Phase 63 (mandatory live verification) needs Phase 62 complete + Mini PC `bash /opt/livos/update.sh` first.
+Plan: 62-04 SHIPPED 2026-05-03 — Wave 2 frontend UI plan. Three new shadcn-based components mounted in `livos/packages/ui/src/routes/settings/_components/`: `<ApiKeysSection>` (table with header, Create button, sorted-newest-first rendering, revoked-row fade + badge, three terminal states), `<ApiKeysCreateModal>` (two-state Stripe-style: name input → plaintext show-once with amber warning + Copy + dismiss; explicit setPlaintext(null) on close + unmount cleanup useEffect for T-62-14), `<ApiKeysRevokeModal>` (destructive confirmation with Cancel/Revoke + utils.apiKeys.list.invalidate on success). Mounted in `ai-config.tsx` line 689 as flat sibling above `<UsageSection />` (NO Tabs wrapper per RESEARCH.md §Pitfall 4). 1 import + 3-line JSX edit to ai-config.tsx. RED commit `ec44608c` (3 test files, smoke + source-text invariants pattern per Phase 30/33/38 precedent because @testing-library/react NOT installed and D-NO-NEW-DEPS locked); GREEN commit `fd7ba777` (4 files: 3 components + ai-config.tsx). 23/23 tests GREEN (7 section + 9 create-modal + 7 revoke-modal). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at 4 sample points this plan. `vite build` succeeds in 35s. typecheck has 0 NEW errors in api-keys-* or ai-config.tsx (pre-existing errors in unrelated stories/ subpackage and ai-config-dialog.tsx are out of scope per scope-boundary rule). 3 documented deviations: (1) Rule 3 — switched to smoke + source-text-invariant test pattern instead of RTL because RTL not installed; deferred RTL plan documented inline; (2) Rule 1 — reworded a doc comment that contained literal "console.log(plaintext)" string which tripped a grep guard test; (3) authorized adaptation — used Phase 59's actual snake_case field names (key_prefix, created_at, last_used_at, revoked_at) per plan's explicit "adapt during implementation" clause. D-NO-NEW-DEPS preserved (zero package.json / lockfile changes). Hand-off: Plan 05 wires the FR-BROKER-E2-02 UI half (Filter by API Key dropdown into UsageSection + AdminCrossUserView using Plan 03's tRPC apiKeyId input) and writes the Phase 62 PHASE-SUMMARY.
+Status: Phase 62 Wave 2 NEARLY COMPLETE — Plans 02 + 03 + 04 of 5 closed; Plan 05 (integration + filter dropdown + PHASE-SUMMARY) remains. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical (4 sample points this plan; 21 across Phase 61+62 so far). FR-BROKER-E2-01 satisfied (full API Keys CRUD UI shipped with Stripe-style show-once + two-step revoke). FR-BROKER-E2-02 backend satisfied (Plans 02 + 03); FR-BROKER-E2-02 frontend (filter dropdown wiring) owned by Plan 05.
+Last activity: 2026-05-03 — Phase 62 Wave 2 Plan 04 SHIPPED (Settings > AI Configuration gains <ApiKeysSection /> with Stripe-style show-once Create modal + two-step destructive Revoke modal). Commits `ec44608c` (RED) + `fd7ba777` (GREEN); SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-04-SUMMARY.md`.
 
 ## v30.0 Roadmap Snapshot
 

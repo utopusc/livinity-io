@@ -177,7 +177,7 @@ Plans:
 - [ ] 62-01-PLAN.md — Wave 1 Backend test scaffolds + schema migration + database.ts 8-param refactor (FR-BROKER-E1-01)
 - [ ] 62-02-PLAN.md — Wave 2 Capture middleware reads req.apiKeyId at response time (FR-BROKER-E1-02)
 - [ ] 62-03-PLAN.md — Wave 2 tRPC routes accept apiKeyId filter input (FR-BROKER-E2-02 backend)
-- [ ] 62-04-PLAN.md — Wave 2 ApiKeysSection + Create/Revoke modals + ai-config.tsx FLAT insertion (FR-BROKER-E2-01)
+- [x] 62-04-PLAN.md — Wave 2 ApiKeysSection + Create/Revoke modals + ai-config.tsx FLAT insertion (FR-BROKER-E2-01) — SHIPPED 2026-05-03 (commits ec44608c + fd7ba777)
 - [ ] 62-05-PLAN.md — Wave 3 Usage filter dropdown + admin filter + FR-BROKER-E1-03 integration test + final phase gate
 
 ### Phase 63: Mandatory Live Verification (D-LIVE-VERIFICATION-GATE)
