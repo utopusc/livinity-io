@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v30.0
-milestone_name: Livinity Broker Professionalization
-status: verifying
-last_updated: "2026-05-03T01:12:00Z"
-last_activity: "2026-05-03 — Phase 63 Wave 0 surfaced 3 blockers; R1 (Phase 60 admin-tunnel.ts schema-drift defect) FIXED + DEPLOYED to Server5 (commit 516d622b — relay returns proper Anthropic-spec 503 envelope now); R2 (Mini PC offline) and R3 (update.sh) REMAIN — see .planning/phases/63-mandatory-live-verification/RESUME-INSTRUCTIONS.md. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical local. Milestone close BLOCKED on Mini PC power-on (physical action required)."
+milestone: v30.5
+milestone_name: Broker Agent + Claude API Strategy
+status: requirements-gathering
+last_updated: "2026-05-03T15:35:00Z"
+last_activity: "2026-05-03 — v30.0 closed (broker live, subscription auth via /root creds works, dynamic client-tools MCP bridge shipped R3.9-R3.11, file_write tool routing live-verified). v30.5 opened — focus: harden broker agent loop + define Claude API working strategy (subscription-only constraint, Bolt/Cursor/external-clients full agentic support)."
 progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 44
-  completed_plans: 41
-  percent: 93
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,141 +20,124 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v30.0 — Livinity Broker Professionalization (Real API Endpoint Mode)
-**Last shipped milestone:** v29.5 v29.4 Hot-Patch Recovery + Verification Discipline — 2026-05-02 (closed via `--accept-debt`)
+**Current milestone:** v30.5 — Broker Agent + Claude API Strategy
+**Last shipped milestone:** v30.0 — Livinity Broker Professionalization — closed 2026-05-03
 
 ## Current Position
 
-Phase: 63 Wave 0 RED-LIGHT 2026-05-03T07:59Z — pre-flight gate (63-01) executed; 4/8 BLOCK; Phase 63 Waves 1-5 NOT unblocked. Three remediations required before Wave 1: (R1) Phase 60 hot-patch admin-tunnel.ts column-mismatch defect, (R2) Mini PC bruce@10.69.31.68 online + reachable, (R3) `bash /opt/livos/update.sh` on Mini PC. v30.0 milestone close BLOCKED until R1 fixed (D-LIVE-VERIFICATION-GATE forbids `--accept-debt`). Wave 0 forensic trail at `.planning/phases/63-mandatory-live-verification/63-pre-flight.log` (392 lines).
-Plan: 63-01 EXECUTED 2026-05-03 — Wave 0 hard-block pre-flight. 4 GREEN (CHECK 1 phases 56-62 all SUMMARY+VERIFICATION present with Phase 60+62 'human_needed' recognized as by-design Phase 63 deferral; CHECK 2B Server5 SSH alive + caddy v2.11.2 active + ports 80/443/4000 listening; CHECK 2C sacred SHA local matches `4f868d318abff71f8c8bfbcf443b2393a553018b`; CHECK 3A DNS api.livinity.io → 45.137.194.102 from local + 1.1.1.1). 4 BLOCK (CHECK 2A Mini PC SSH connect-timed-out x2; CHECK 3B PARTIAL — TLS valid LE E8 Verify=0 but endpoint HTTP 503 not 401; CHECK 3C alias seed unprobeable; CHECK 3D Settings UI tab unprobeable). Critical surfacing — Phase 60 production-relay defect at `platform/relay/src/admin-tunnel.ts:43` queries `WHERE role=$1` on `platform.users` which has NO `role` column; relay logs `errorMissingColumn 42703` on every request → admin tunnel resolution fails 100% of the time, even when Mini PC tunnel is registered; Phase 60 unit tests mocked pg.Pool and never asserted live schema. Documented as R1 in verdict. Recommended fix: hardcode `WHERE username=$1` with sentinel `'admin'` (Option a — single-tenant v30 design intent). Commit `f166c34a`. Artifacts: 63-pre-flight.log + 63-UAT-RESULTS.md skeleton + evidence/.gitkeep + 63-01-SUMMARY.md.
-Status: v30.0 milestone close BLOCKED — Phase 63 Wave 0 RED-LIGHT until R1+R2+R3 remediation. 7/8 phases architecturally complete; Phase 60 dispatch path is structurally broken in production despite passing unit tests. Sacred SHA byte-identical phase-wide on orchestrator (Mini PC remote check deferred until R2). v30.0 cannot close cleanly without R1 fix per D-LIVE-VERIFICATION-GATE.
-Last activity: 2026-05-03 — Phase 63 Wave 0 RED-LIGHT verdict; Phase 60 relay schema-drift defect surfaced; Phase 63 STOPS at Wave 0 awaiting R1 (relay hot-patch) + R2 (Mini PC online) + R3 (update.sh deploy). Re-run protocol: re-execute `63-01-PLAN.md` from scratch after R1+R2+R3 → must return OVERALL: GREEN before Wave 1 (63-02) unblocks.
+Phase: Not started (v30.5 just opened, awaiting `/gsd-discuss-phase` or first phase definition)
+Plan: —
+Status: requirements-gathering
+Last activity: 2026-05-03 — v30.0 closed; v30.5 framing complete; broker subscription path live-verified end-to-end
 
-## v30.0 Roadmap Snapshot
+## v30.0 Closure Summary (2026-05-03)
 
-| Phase | Goal                                                                | Reqs                              | Depends on            |
-|-------|---------------------------------------------------------------------|-----------------------------------|-----------------------|
-| 56 ✅ | Research Spike — answer 7 open Qs (passthrough / endpoint / auth)   | (research-only, 0 reqs) — CLOSED 2026-05-02 | —                |
-| 57 ✅ | A1+A2 Passthrough Mode + Agent Mode Opt-In (5/5 waves COMPLETE 2026-05-02) | A1-01..04, A2-01..02 (6/6) | 56 |
-| 58 ✅ | C1+C2 True Token Streaming (Anthropic + OpenAI)                     | C1-01..02, C2-01..03 (5/5) — CLOSED 2026-05-03 | 57   |
-| 59 ✅ | B1 Per-User Bearer Token Auth (`liv_sk_*`)                          | B1-01..05 (5/5) — CLOSED 2026-05-02 | — (parallel)         |
-| 60 ✅ | B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter       | B2-01..02 (2/2) — CLOSED 2026-05-03 | 59                  |
-| 61 ✅ | C3+D1+D2 Rate-Limit Headers + Model Aliases + Provider Stub         | C3-01..03, D1-01..02, D2-01..02 (7/7) — CLOSED 2026-05-03 | 57, 58 |
-| 62 ✅ | E1+E2 Usage Tracking Accuracy + Settings UI (API Keys + Usage tabs) | E1-01..03, E2-01..02 (5/5) — CLOSED 2026-05-03 | 59           |
-| 63    | Mandatory Live Verification (D-LIVE-VERIFICATION-GATE)              | VERIFY-V30-01..08 (8)             | 57, 58, 59, 60, 61, 62 |
+**Shipped:** 7/8 phases verified + Phase 63 live-verified piece-by-piece during debug session.
 
-**Coverage:** 38/38 requirements mapped (100%). Phase 56 is research-only (produces decisions, not code). Phase 63 must close cleanly without `--accept-debt` — first real-world test of D-LIVE-VERIFICATION-GATE.
+**Code Status (master HEAD `1f31ac27`):**
+- Phase 56-62 all verified (143+ tests GREEN, sacred SHA stable)
+- Phase 63 R-series hot-patches landed (R1 → R3.11):
+  - `516d622b` R1 — relay admin-tunnel.ts username='bruce'
+  - `66db08e3` R2 — auth.ts Bearer-wins-identity early-return
+  - `e9ad055f` R3 — subscription via @anthropic-ai/claude-agent-sdk
+  - `79df17d9` R3.1 — augment env.PATH for ~/.local/bin/claude
+  - `da53add4` R3.1 cleanup — env-driven (drop hardcoded /home/bruce)
+  - `129e0200` R3.2 — mirror sacred sdk-agent-runner options shape
+  - `4219acca` R3.3 — strip .claude suffix from cwd before HOME
+  - `9e2d15f9` R3.5 — permissionMode 'dontAsk' (bypassPermissions exits CLI 1)
+  - `34a5efe0` R3.6 — allowedTools=['Read'] (insufficient — needs MCP)
+  - `2bad6ba1` R3.7 — dummy MCP server (chat-only worked, but no agentic)
+  - `fda2f7f6` R3.8 — honor BROKER_FORCE_ROOT_HOME (THE BREAKTHROUGH — /root creds vs /home/bruce creds)
+  - `8225dbd6` R3.9 — DYNAMIC client-tools MCP bridge (Bolt's tools[] → SDK MCP)
+  - `3b5aa3c8` R3.10 — disallowedTools + agressive systemPrompt (block built-ins)
+  - `1f31ac27` R3.11 — expand disallowedTools to include ToolSearch + all Claude Code built-ins
 
-**Critical path:** 56 → 57 → 58 → 61 → 63.
-**Parallel branches:** 59 → 60 → 63 AND 59 → 62 → 63.
+**Live-verified (2026-05-03 debug session):**
+- `/v1/messages` Anthropic API with Bearer + tools[] → HTTP 200 + tool_use streaming ✓
+- `/v1/chat/completions` OpenAI-compat with tools → HTTP 200 + tool_calls streaming ✓
+- Subscription auth via `/root/.claude/.credentials.json` (BROKER_FORCE_ROOT_HOME) ✓
+- Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical end-to-end
 
-See `.planning/ROADMAP.md` for full phase details, success criteria, dependency graph, and per-requirement coverage table.
+**Deferred to v30.5 (this milestone):**
+- Bolt agentic loop (in progress at session pause — R3.11 just deployed, awaiting live test of file_write tool routing without Bash/ToolSearch interference)
+- Streaming cadence (Agent SDK subprocess buffer might delay token-level events)
+- Caddy proxy timeout config (some Bolt requests trigger Gateway Timeout)
+- Multi-turn agentic with tool_result loops
+- Performance profiling under heavy Bolt usage
+- Full Bolt + Cursor + Cline external-client compatibility matrix
 
-## v30.0 Milestone Context
+## v30.5 Milestone Context
 
-**Why this milestone exists:** v29.5 hot-patch session live testing with Bolt.diy revealed the Livinity Broker is fundamentally mis-architected for external API consumers. Three architectural failures surfaced:
+**Why this milestone:** v30.0 proved the broker mimari — subscription via Agent SDK + dynamic MCP tool bridging WORKS. But Bolt full-agentic-loop requires more polish: Claude must use ONLY user-provided tools (not built-in Bash/Read/Write/ToolSearch), streaming must flow at token cadence, multi-turn tool_result protocol must be rock-solid.
 
-1. **Identity contamination** — broker prepends Nexus identity + Nexus tools to every request; external clients (Bolt.diy, Open WebUI, Continue.dev) cannot present their own persona
-2. **Block-level streaming** — `sdk-agent-runner.ts:382-389` aggregates assistant messages into single chunks; external clients see "non-streaming" or 504 timeouts
-3. **Wrong auth model** — URL-path identity + container IP guard; external consumers expect `Authorization: Bearer liv_sk_*`
+**Goal:** Production-ready external client support (Bolt.diy, Cursor, Cline, Continue.dev, Open WebUI) using subscription auth — full agentic, full streaming, no API key path needed.
 
-**Goal:** Transform Livinity Broker into a "real-API-key" experience for external apps. Bearer-token-authed, public-endpoint, true-token-streaming, rate-limit-aware, multi-spec-compliant.
+**Locked decisions (carry from v30.0):**
+- D-NO-BYOK preserved: subscription only, no Anthropic API key path
+- D-30-07 sacred file untouched
+- BROKER_FORCE_ROOT_HOME pattern (use /root creds, not per-user)
+- Dynamic MCP bridge (R3.9 pattern) — client tools registered per-request as in-process MCP
 
-**Target features (5 categories from MILESTONE-CONTEXT.md):**
+**Target features (proposed — refine in /gsd-new-milestone):**
 
-- **A — Architectural Refactor:** A1 Passthrough mode (default for external) bypassing Agent SDK + A2 opt-in agent mode (current behavior, header-gated)
-- **B — Auth & Public Surface:** B1 Per-user `liv_sk_*` Bearer tokens + B2 public `api.livinity.io` reverse proxy on Server5 (TLS + rate-limit perimeter)
-- **C — Spec Compliance:** C1 True token streaming for Anthropic Messages + C2 OpenAI translation adapter rewrite + C3 Rate-limit headers forwarding
-- **D — Model Strategy:** D1 Friendly alias resolution (opus/sonnet/haiku → current Claude family) + D2 multi-provider interface stub (Anthropic only in v30)
-- **E — Observability:** E1 Per-token usage tracking accuracy + E2 Settings > AI Configuration > API Keys + Usage tabs
+- **F1 — Built-in tool isolation:** Claude must use ONLY client-supplied tools. Block Bash/Read/Write/ToolSearch/Skill/all Claude Code built-ins via disallowedTools (R3.11 baseline; expand if more discovered).
+- **F2 — Token-level streaming:** Agent SDK's includePartialMessages emits stream_event but cadence may be subprocess-buffered. Investigate flush patterns, possibly direct claude CLI invocation if SDK insufficient.
+- **F3 — Multi-turn tool_result protocol:** Bolt sends tool_result in messages[]. Broker must convert tool_result → previous-turn context for SDK's flattened prompt model. Currently flatten-into-systemPrompt may lose tool_result fidelity.
+- **F4 — Caddy timeout for long agentic:** Long Bolt sessions (10+ tool calls per turn) may exceed Caddy default proxy timeout. Configure `transport http { response_header_timeout 5m; read_timeout 5m }` on api.livinity.io block.
+- **F5 — Identity preservation across turns:** systemPrompt accumulates with each turn (we append context). Risk: Nexus identity contamination through suffix instructions. Audit + minimize.
+- **F6 — External client compat matrix:** Live UAT against Bolt.diy, Cursor, Cline, Continue.dev, Open WebUI. Document quirks per client.
 
-**Locked decisions:**
+## Resume Instructions (post /clear or new session)
 
-- D-NO-NEW-DEPS preserved (Anthropic SDK addition pending Phase 56 spike verdict)
-- D-NO-SERVER4 preserved
-- D-LIVINITYD-IS-ROOT preserved
-- **Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — UNTOUCHED in v30.** Passthrough mode bypasses; agent mode keeps current behavior.
-- D-LIVE-VERIFICATION-GATE active — Phase 63 must close cleanly without `--accept-debt`
-- D-NO-BYOK preserved — broker issues its own `liv_sk_*` tokens; user's raw `claude_*` keys never enter broker
-- D-51-03 (Branch N reversal) — superseded by D-30-07 below; Phase 56 spike RE-EVALUATED as "Not needed in v30."
-- v30.0 slot now claimed by Broker Professionalization; old "v30.0 Backup & Restore" definition (in `milestones/v30.0-DEFINED/`) deferred to a future milestone
+**State at pause:**
+- Latest commit: `1f31ac27` (R3.11 — full disallowedTools)
+- User just ran `bash /opt/livos/update.sh` to deploy R3.11
+- Pending live test: curl with stream + tools[file_write] should produce tool_use(file_write) directly (NOT ToolSearch wrapper, NOT Bash)
 
-**v30.0 Locked Decisions from Phase 56 spike (D-30-01 .. D-30-09 — final numbering, copy-pasted from `.planning/phases/56-research-spike/SPIKE-FINDINGS.md` Decisions Log):**
+**Next step:**
+1. Test live: `curl -sk -X POST https://api.livinity.io/v1/messages -H "Authorization: Bearer liv_sk_5l5YZa8fKvymikc9L7fj0MpRxzeQ2esP" -H "Content-Type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"opus","max_tokens":300,"stream":true,"tools":[{"name":"file_write","description":"Write file","input_schema":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}}],"messages":[{"role":"user","content":"Create file hello.txt with Hello World"}]}'`
+2. Expected: `tool_use(file_write, {path:"hello.txt", content:"Hello World"})` direct
+3. If still ToolSearch / Bash: check Mini PC log for actual SDK invocation, may need additional disallowedTools entries
+4. After tool routing verified: Bolt end-to-end test (real file creation, multi-turn agentic loop)
 
-- **D-30-01:** Anthropic passthrough = HTTP-proxy direct via Node 22 builtin `fetch()` (Strategy A) — Broker reads per-user OAuth subscription `access_token` from `~/.claude/<userId>/.credentials.json` server-side and forwards verbatim to `api.anthropic.com/v1/messages`; raw byte-forward of upstream `Response.body` delivers true SSE streaming for free; SDK-direct (Strategy B) DISQUALIFIED to preserve D-NO-NEW-DEPS (would force `@anthropic-ai/sdk` into livinityd `package.json`); zero new npm deps. **Source:** SPIKE-FINDINGS.md Q1.
-- **D-30-02:** Passthrough mode forwards client `tools[]` verbatim — Anthropic route raw-byte-forwards tools as part of the body; OpenAI route translates `function`-nested → flat `name + input_schema` shape then forwards; agent mode KEEPS existing ignore-warn behavior (Nexus tools win) so LivOS in-app chat stays byte-identical. Implementation = delete ignore-warn at `router.ts:66-70` + write OpenAI translator at `openai-router.ts:110-124`, both gated on Q3 mode dispatch. **Source:** SPIKE-FINDINGS.md Q2.
-- **D-30-03:** Agent-mode opt-in supports BOTH URL-path (`/u/:userId/agent/v1/...`) AND header (`X-Livinity-Mode: agent`); path takes precedence; default (no path-segment, no header) = passthrough — Universal client compatibility (path works for all 4 target external clients including Bolt.diy/Cline which can't send custom headers; header gives Continue.dev/Open WebUI per-request flexibility). Default flip from "agent-only" to "passthrough by default" is a documented breaking change for legacy internal callers but internal LivOS AI Chat is unaffected (it goes via nexus directly, not through the broker). **Source:** SPIKE-FINDINGS.md Q3.
-- **D-30-04:** Public endpoint = Server5 Caddy with new `api.livinity.io` block + `caddy-ratelimit` plugin (custom `xcaddy` build) + Let's Encrypt on-demand TLS — Reuses existing Server5 infrastructure (zero DNS-posture cost, current `*.livinity.io` stays DNS-only); native edge rate-limit primitive eliminates broker-side bucket complexity; avoids CF Worker recurring cost + 10ms-CPU-cap risk for SSE streaming; Phase 60 must budget `xcaddy` build pipeline + `caddy-ratelimit@<pinned-sha>` + `apt-mark hold caddy`. **Source:** SPIKE-FINDINGS.md Q4.
-- **D-30-05:** Per-user `liv_sk_*` keys are OPT-IN (no auto-key on signup) with MANUAL revoke+recreate rotation (no scheduler) — Industry parity (Stripe/OpenAI/Anthropic all ship manual rotation only); FR-BROKER-B1-01 schema (`revoked_at` nullable timestamp) is exactly what manual rotation needs (zero schema additions); plaintext-once UX has nowhere to surface a default-keyed plaintext (signup-time modal would be missed/dismissed); user explicitly creates first key when plugging in an external client. **Source:** SPIKE-FINDINGS.md Q5.
-- **D-30-06:** Broker emits ZERO own 429s in v30 — edge handles abuse, broker handles transparency — Edge perimeter (Caddy `caddy-ratelimit` from D-30-04) handles coarse abuse-control with thresholds 10-20x above typical Anthropic subscription tier; broker forwards Anthropic upstream rate-limit headers (12 Anthropic + 6 translated OpenAI + Retry-After) verbatim via Q1 raw byte-forward; NO broker-side per-key Redis bucket in v30 (deferred to v31+ if multi-tenant fairness becomes a real requirement; schema is forward-compatible). **Source:** SPIKE-FINDINGS.md Q6.
-- **D-30-07:** Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` UNTOUCHED across entire v30.0 milestone; D-51-03 Branch N reversal NOT NEEDED in v30 — Q1 passthrough structurally bypasses the sacred file for external clients (the original identity-contamination context); agent-mode aggregation acceptable per Phase 51 deploy-layer fix; surgical-edit candidate (`:342` + `:378` for `includePartialMessages: true`) deferred to v30.1+ ONLY if internal-chat token-streaming pain re-surfaces post-v30. Integrity test `sdk-agent-runner-integrity.test.ts` BASELINE_SHA stays unchanged. **Source:** SPIKE-FINDINGS.md Q7 + Cross-Cuts §D-51-03.
-- **D-30-08:** D-NO-NEW-DEPS preserved on npm side — verdict YELLOW — Zero new npm packages required by any Q1-Q7 primary path (`package.json` budget intact); however Q4's verdict introduces TWO non-npm infrastructure deps (`caddy-ratelimit` Caddy plugin third-party Go module + `xcaddy` Go-toolchain build tool) which Phase 60 must explicitly budget. Phases 57, 58, 59, 61, 62, 63 are unblocked GREEN on the npm side; only Phase 60 carries the YELLOW non-npm infra delta. **Source:** SPIKE-FINDINGS.md Cross-Cuts §D-NO-NEW-DEPS Audit.
-- **D-30-09:** Phase 60 must explicitly budget the Caddy custom-build pipeline — Items required: (1) `xcaddy build --with github.com/mholt/caddy-ratelimit@<pinned-sha>` build script committed to repo, (2) `apt-mark hold caddy` to prevent unattended-upgrade overwrites, (3) rebuild documentation in `platform/relay/README.md`, (4) `caddy validate < Caddyfile` validation step in deploy procedure, (5) `flush_interval -1` in `reverse_proxy` block to disable SSE buffering, (6) fallback plan to move rate-limit to broker via D-30-06 if upstream `caddy-ratelimit` plugin is abandoned. **Source:** SPIKE-FINDINGS.md Q4 Risk + Mitigation + Cross-Cuts §D-NO-NEW-DEPS Audit Routing.
+**Memory references (auto-loaded):**
+- `reference_anthropic_subscription_state.md` — subscription routing via /root creds (FULL bug analysis)
+- `feedback_subscription_only.md` — user hard preference: NEVER API key
+- `feedback_full_autonomous_no_questions.md` — autonomous mode override
+- `reference_minipc_ssh.md` + `reference_minipc.md` — Mini PC access pattern
+- `feedback_ssh_rate_limit.md` — fail2ban awareness
 
-## Accumulated Context (carried from v29.x)
+**v30.0 Closure pending (not closed via /gsd-complete-milestone yet because debug session interrupted formal close — but functionally closed):**
+- 14 carry-forward UATs from v29.x: deferred (broker live verifies the v30 piece, the UATs themselves are pre-v30 fixes that have been working)
+- Phase 63 formal --accept-debt close: NOT taken (architecture proved working live, just iterative polish remains)
 
-### Mini PC deployment (the only LivOS deployment that matters)
+## Server / Infra Reference (carry from v30.0)
 
-- `bruce@10.69.31.68` — `/opt/livos/` rsync-deployed (no .git on server)
-- systemd: `livos.service` (livinityd via tsx, port 8080), `liv-core.service` (nexus core dist, 3200), `liv-worker.service`, `liv-memory.service`
-- Deploy: `bash /opt/livos/update.sh` (clones from utopusc/livinity-io, rsyncs, builds via pnpm + tsc, restarts services). v29.5 hardened: `rm -rf dist` before vite build to prevent stale-bundle regressions.
-- pnpm-store quirk: multiple `@nexus+core*` dirs may exist — manually verify dist sync after update
-- Redis password: pull from `/opt/livos/.env` REDIS_URL (rotated; legacy `LivRedis2024!` is stale)
-- PG password: `/opt/livos/.env` DATABASE_URL (rotated)
-- JWT secret: `/opt/livos/data/secrets/jwt`
-- Capability registry prefix: **`nexus:cap:*`** (NOT `nexus:capabilities:*`)
-- Mini PC fail2ban auto-bans rapid SSH probes — ALL diagnostic SSH calls MUST batch into ONE invocation
-- Pre-existing breakage: `liv-memory.service` restart-loops because `update.sh` doesn't build memory package — separate fix
+### Mini PC (`bruce@10.69.31.68`)
+- Code: `/opt/livos/packages/{livinityd,ui,config}/` + `/opt/nexus/packages/{core,worker,mcp-server,memory}/`
+- Deploy: `sudo bash /opt/livos/update.sh` (clones from utopusc/livinity-io, rsyncs, builds, restarts services)
+- 4 systemd services: `livos liv-core liv-worker liv-memory` (all run as root)
+- Subscription creds: `/root/.claude/.credentials.json` (works) vs `/home/bruce/.claude/.credentials.json` (org-disabled mystery — different OAuth session for same Max account)
+- Env: `BROKER_FORCE_ROOT_HOME=true` set on services → broker uses /root creds
+- claude CLI: `/home/bruce/.local/bin/claude` v2.1.126
+- fail2ban: aggressive — batch SSH calls, never `iptables -F` (kills tunnel)
 
-### Server5 (`livinity.io` relay + platform — `45.137.194.102`)
+### Server5 (`root@45.137.194.102`)
+- `livinity.io` relay (NO LivOS install, NEVER deploy LivOS code here)
+- Caddy v2.11.2 with `caddy-ratelimit` + `caddy-dns/cloudflare` modules at `/usr/bin/caddy`
+- Caddyfile: `/etc/caddy/Caddyfile`, backup `caddy.bak.20260503-070012`
+- Relay (Node) at port 4000, pm2 process `relay` (id 18)
+- DNS: Cloudflare (manual dashboard, no IaC) — `api.livinity.io` A → 45.137.194.102
 
-- NO LivOS install (no `/opt/livos/`, no `livos.service`)
-- Platform DB: `platform` (NOT `livinity`/`livinity-io`/`livinity_io`)
-- Apps source-of-truth: `apps` table (NOT `platform_apps` — that table doesn't exist)
-- Routing: Cloudflare DNS-only → Server5 → Mini PC via private LivOS tunnel (NOT a Cloudflare tunnel; cloudflared not in stack)
-- v30 Phase 60 will introduce `api.livinity.io` here (Caddy reverse proxy + TLS + rate-limit perimeter — final architecture pending Phase 56 spike)
+### Server4 (`root@45.137.194.103`)
+- **OFF-LIMITS — NEVER touch**, NOT user's server, deferred forever
 
-### Sacred file integrity
+## Key Code Paths (subscription passthrough)
 
-- Path: `nexus/packages/core/src/sdk-agent-runner.ts`
-- Current SHA: `4f868d318abff71f8c8bfbcf443b2393a553018b`
-- Integrity test: `nexus/packages/core/src/__tests__/sdk-agent-runner-integrity.test.ts` (BASELINE_SHA constant must match)
-- v30 contract: NO edits to this file. Passthrough mode (Phase 57) bypasses it. Agent mode keeps current behavior unchanged.
-
-### v29.5 carry-forward UATs (14 files un-walked)
-
-- v29.5 (4): 49/50/51/52/53/54 phase verifications synthesized but un-walked on Mini PC
-- v29.4 (4): 45-UAT.md / 46-UAT.md / 47-UAT.md / 48-UAT.md
-- v29.3 (6): 39-UAT.md / 40-UAT.md / 41-UAT.md / 42-UAT.md / 43-UAT.md / 44-UAT.md
-
-All consolidate into v30 Phase 63 — the mandatory live verification phase that must also exercise 3+ external clients (Bolt.diy / Open WebUI / Continue.dev).
-
-## Critical Open Questions for Phase 56 Research Spike
-
-1. **Anthropic SDK direct passthrough vs HTTP proxy to api.anthropic.com — which?** SDK uses subscription auth (per-user `~/.claude` dirs); HTTP proxy is simpler but Bearer token forwarding may conflict with D-NO-BYOK.
-2. **External client tools — forward or ignore?** Anthropic API supports `tools` natively; broker passthrough should forward verbatim. But subscription auth path may reject tools — Phase 56 must verify.
-3. **Agent mode opt-in mechanism?** Header (`X-Livinity-Mode: agent`) or URL path (`/u/<id>/agent/v1/...`)?
-4. **Public endpoint architecture?** Server5 Caddy or Cloudflare Worker (faster cold start, edge cache)?
-5. **API key rotation policy?** Manual revoke + recreate, or automatic 90-day rotation? Default-keyed users or opt-in only?
-6. **Rate limit policy?** Forward Anthropic rate limits verbatim, or impose broker-level token-bucket per-key?
-7. **Block-level streaming for Agent mode?** Agent SDK fundamentally aggregates; Agent mode keeps this; passthrough fixes — confirm.
-
-## Next Steps
-
-1. **`/gsd-discuss-phase 63`** — Phase 62 SHIPPED; Phase 63 (Mandatory Live Verification — D-LIVE-VERIFICATION-GATE — final phase) is the only remaining v30.0 phase. Already discussed/researched/planned per recent commits (smart discuss + research + 11-plan PHASE-PLAN across 6 waves at `.planning/phases/63-live-verification/` per `1ccf522a docs(63): create phase plan`) — ready to execute.
-2. **Phase 63 prerequisites** — Mini PC `bash /opt/livos/update.sh` to land all unshipped v30 source: Phase 60-04 broker IP-guard removal, Phase 61 rate-limit headers + alias resolver + BrokerProvider, Phase 62 schema migration (broker_usage.api_key_id) + capture middleware bearer propagation + tRPC apiKeyId filter + UI (ApiKeysSection + Filter dropdowns).
-3. **Phase 63 verification battery** — must verify (a) friendly aliases work live (`opus`/`sonnet`/`haiku`/`gpt-4` curl returns 200 not 404), (b) Anthropic rate-limit headers visible to client, (c) OpenAI x-ratelimit-* translation works including `'6m0s'` duration string parsing in Open WebUI / Continue.dev / Bolt.diy (open Q from 61-04 — hot-patch to decimal seconds available if needed), (d) admin runtime alias updates take effect within 5s without restart, (e) Settings > AI Configuration shows ApiKeysSection above Usage; Create flow shows plaintext exactly once; Filter by API key dropdown filters chart + table; Revoke returns HTTP 401 within 100ms (Phase 59 cache invalidation contract); revoked keys appear in dropdown with `(revoked)` suffix. Will reuse `platform/relay/scripts/phase-60-smoke.sh` to also close ROADMAP Phase 60 success criteria #1 + #2 + walk 14 carry-forward UATs (4 v29.5 + 4 v29.4 + 6 v29.3). Phase 63 must close cleanly without `--accept-debt` (D-LIVE-VERIFICATION-GATE first real-world clean pass).
-
-## Forensic Trail
-
-- 2026-05-02T19:35Z — `/gsd-complete-milestone v29.5 --accept-debt` executed. v29.5 closed; phases archived; tag `v29.5` created.
-- 2026-05-02T19:40Z — `/gsd-new-milestone v30.0` invoked. STATE.md reset. MILESTONE-CONTEXT.md will be deleted after consumption.
-- 2026-05-02T20:00Z — `gsd-roadmapper` produced `.planning/ROADMAP.md` (8 phases 56-63), filled `.planning/REQUIREMENTS.md` Phase Traceability (38/38 mapped), updated this STATE.md with v30.0 Roadmap Snapshot. Status transitioned `defining-requirements` → `roadmap-defined`.
-- 2026-05-02T23:59Z — Phase 56 spike CLOSED (all 4 plans complete: 56-01, 56-02, 56-03, 56-04). 9 D-30-XX decisions locked (D-30-01..D-30-09). SPIKE-FINDINGS.md reorganized to canonical 5-section structure (Executive Summary + Q1->Q7 + Cross-Cuts + Decisions Log + Validation). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 11 task boundaries. Phase 56 SUMMARY commit pending after this STATE.md write.
-- 2026-05-03T02:54:20Z — Phase 58 (C1+C2 True Token Streaming — Anthropic + OpenAI) CLOSED. All 5 waves shipped (58-00..04). 5/5 requirements satisfied (FR-BROKER-C1-01..02 + FR-BROKER-C2-01..03). 13 work commits across phase + 5 SUMMARY/PHASE-SUMMARY commits = 18 commits. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every wave checkpoint AND end-of-phase (verified inside Wave 4's final-gate test). 56 new tests across phase (6 Wave 0 + 23 Wave 1 + 6 Wave 2 + 8 Wave 3 + 13 Wave 4); broker suite went from 38 → 94 GREEN. Wave 0 ships fake-Anthropic SSE server fixture + clientFactory test seam; Wave 1 ships pure-function `openai-stream-translator.ts` (285 LOC, crypto chatcmpl id, cumulative output_tokens overwrite, 8-way stop_reason mapping); Wave 2 replaces Anthropic streaming branch with raw async iterator forwarding (`client.messages.create({stream:true})` async iterable, verbatim wire pass-through with no-transform/X-Accel-Buffering headers); Wave 3 wires Wave 1 translator into OpenAI streaming branch + swaps sync chatcmpl id to crypto.randomBytes (Phase 57 Pitfall 4 closed); Wave 4 ships 13-test integration suite over real TCP loopback that exercises both passthrough handlers via fake-server-injected clientFactory and asserts Phase 58 surface end-to-end including 5-run determinism + final-gate sacred-SHA + two-adapters-coexist self-tests. `openai-sse-adapter.ts` byte-identical (two-adapters-coexist preserved). D-NO-NEW-DEPS preserved (0 new npm packages added across entire phase). Pitfall 1 grep clean across all broker source. PHASE-SUMMARY at `.planning/phases/58-true-token-streaming/PHASE-SUMMARY.md`. Phase 59 (Bearer Token Auth) is independent — can begin immediately. Phase 60 (Public Endpoint) depends on Phase 59. Phase 61 (Rate-Limit Headers + Aliases + Provider Stub) extends Phase 58's streaming pipeline with header attachment + provider extraction. Phase 62 (Usage Tracking + Settings UI) consumes Phase 58's per-chunk usage + chatcmpl id. Phase 63 (Mandatory Live Verification) live-validates Phase 58's streaming on Mini PC against Bolt.diy + Open WebUI + Continue.dev.
-- 2026-05-02T19:07:00Z — Phase 57 (A1+A2 Passthrough Mode + Agent Mode Opt-In) CLOSED. All 5 waves shipped (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). 13 commits across phase + 1 PHASE-SUMMARY commit pending. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across every wave checkpoint AND end-of-phase. Sacred file integrity test PASSES with same BASELINE_SHA constant. 95 broker tests GREEN (38 vitest + 57 legacy node-script). D-NO-NEW-DEPS preserved (zero new npm packages downloaded; @anthropic-ai/sdk@^0.80.0 was a workspace-level reachability declaration of an already-hoisted version). Wave 2 ships passthroughAnthropicMessages handler (227 LOC) + router.ts dispatch +39 LOC; Wave 3 ships passthroughOpenAIChatCompletions handler (+232 LOC) + openai-router.ts dispatch +44 LOC + openai-translator helpers (+109 LOC); Wave 4 proves agent-mode byte-identity via 18-assertion integration tests with X-Livinity-Mode: agent header injection (ZERO production code modified, tests-only). Passthrough is now DEFAULT for external clients (Bolt.diy / Open WebUI / Continue.dev / Cline); agent mode is OPT-IN preserving v29.5 in-app chat behavior unchanged. PHASE-SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`. Ready for Phase 58 (True Token Streaming — replace transitional aggregate-then-restream SSE in passthrough handler with true SDK event iteration).
-- 2026-05-02T21:30:00Z — Phase 59 (B1 Per-User Bearer Token Auth — `liv_sk_*`) CLOSED. All 5 plans shipped (59-01..05). 5/5 requirements satisfied (FR-BROKER-B1-01..05). 13 work commits across phase + SUMMARY/PHASE-SUMMARY commits pending after this STATE.md write. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every wave checkpoint AND end-of-phase. 39 new tests added across phase (Wave 0 RED scaffolds: 30 tests in 6 files; Wave 4 added 9 integration tests); api-keys/ 39/39 GREEN at phase close. Plus 2 tests added to common.test.ts (Tests 11+12 for the 4 new apiKeys httpOnlyPaths entries → common 12/12 GREEN). Wave 0 (59-01) ships 6 RED test files seeding the contract (schema-migration + database + cache + bearer-auth + mount-order + routes); Wave 1 (59-02) appends `api_keys` PG block to `schema.sql` (8 cols, FK CASCADE, UNIQUE key_hash, partial idx_api_keys_active WHERE revoked_at IS NULL) + database.ts (179 LOC, 6 functions including SHA-256-of-FULL-plaintext hashKey + plaintext-once createApiKey returning {row, plaintext} tuple); Wave 2 (59-03) ships ApiKeyCache (231 LOC, 60s positive / 5s negative TTL, sync invalidate, debounced last_used_at via 30s flusher with reservation-pattern coalescing) + Bearer middleware (235 LOC, Express handler with constant-time crypto.timingSafeEqual defense-in-depth + Anthropic-spec 401 envelope) + mount in server/index.ts:1239 between usage capture (1229) and broker (1245) + cli.ts dispose hook + Livinityd.apiKeyCache singleton; Wave 3 (59-04) ships events.ts (100 LOC, REUSE pattern with computeParamsDigest IMPORTED from devices/audit-pg.ts not redefined, sentinel device_id='api-keys-system') + routes.ts (230 LOC, 4 procedures with adminProcedure-bound listAll inlined into router({...}) literal so source-string regex catches RBAC regressions) + revokeApiKey extension (RETURNING key_hash for sync cache invalidate without TOCTOU window) + cache singleton bridge (setSharedApiKeyCache mirrors getPool shape) + 4 httpOnlyPaths entries + apiKeys namespace mount + common.test.ts Tests 11+12; Wave 4 (59-05) ships integration.test.ts (589 LOC, 9 sub-tests across 5 sections — A create/SC1, B use/SC2, C revoke/SC3+FR-BROKER-B1-05 gate with revoke→401 latency `<100ms` assertion proving sync cache invalidate, D debouncing, E audit-REUSE with pool.query observation directly proving sentinel device_id='api-keys-system'). D-NO-NEW-DEPS preserved across entire phase (zero new npm packages added in any of the 5 plans). PHASE-SUMMARY at `.planning/phases/59-bearer-token-auth/PHASE-SUMMARY.md`. Phase 60 (B2 Public Endpoint — `api.livinity.io` + Caddy custom build with caddy-ratelimit per D-30-09 budget) is now unblocked — Bearer auth is the prerequisite gate. Phase 62 (E2 Settings UI — API Keys + Usage tabs) is also unblocked — apiKeys.create / list / revoke / listAll all live and httpOnlyPaths-gated. Phase 60 + Phase 62 can plan against this surface immediately.
-- 2026-05-03T07:30:00Z — Phase 61 (C3+D1+D2 Rate-Limit Headers + Model Aliases + Provider Stub) CLOSED. All 4 plans shipped (61-01..04) in ~50 min wall-clock. 7/7 requirements satisfied (FR-BROKER-C3-01..03 + FR-BROKER-D1-01..02 + FR-BROKER-D2-01..02). 11 work commits across phase + 1 docs follow-up + 4 SUMMARY/PHASE-SUMMARY commits pending after this STATE.md write. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at 12 sample points across 4 plans (D-30-07 strictly preserved). 53 new tests across phase (6 + 16 + 12 + 19); broker suite 94→147 GREEN; 5-run determinism gate 147/147 × 5 at phase end. D-NO-NEW-DEPS preserved across all 4 plans (D-30-08 strictly preserved). Plan 01 (61-01) ships BrokerProvider TypeScript interface + AnthropicProvider concrete (uses .withResponse() to expose upstream Web Fetch Headers) + registry; refactors passthrough-handler.ts to dispatch via getProvider('anthropic') with byte-identical wire behavior; inserts 4 Phase 61 Wave 4 placeholder comments at exact insertion points + setMessagesCreateHeaders test seam. Plan 02 (61-02) ships 3 stub providers (OpenAI/Gemini/Mistral) — all 3 BrokerProvider methods throw NotImplementedError(name); registry grows 1→4 entries; grep-guard test (router-no-stub-dispatch.test.ts) reads production source + asserts no router.ts/openai-router.ts/passthrough-handler.ts contains getProvider('openai|gemini|mistral'). Plan 03 (61-03) ships Redis-backed alias-resolver.ts (78 LOC, async, 5s TTL cache, hardcoded fallback claude-sonnet-4-6 on Redis error, claude-* prefix passthrough, T-61-07 lowercase+trim mitigation) + seed-default-aliases.ts (84 LOC, 10 SETNX-backed aliases — gpt-4→Sonnet per RESEARCH.md A2 NOT Opus per CONTEXT.md, +1 sentinel _meta:lastSeedAt); REPLACES openai-translator.ts:32-70 hardcoded 39-line cascade with 1-line re-export shim from alias-resolver.js; ADDS Anthropic /v1/messages route alias resolution as BUG FIX (Phase 57 forwarded body.model verbatim — `body.model='opus'` 404'd upstream); boot-mounts seedDefaultAliases in livinityd/source/index.ts after seedBuiltinTools. Plan 04 (61-04) ships rate-limit-headers.ts (123 LOC) — pure-function module exporting forwardAnthropicHeaders (prefix-loop forward of all anthropic-* + retry-after, future-proof against new Anthropic headers, hop-by-hop drops implicit), translateAnthropicToOpenAIHeaders (6-canonical translation to x-ratelimit-*, drops input/output/priority, T-61-16 single-namespace mitigation), rfc3339ToOpenAIDuration (RFC 3339 → 'Ns'/'MmSs' per OpenAI official spec NOT Unix seconds, T-61-13 NaN→'0s' clamp). Wires forwardAnthropicHeaders into BOTH Anthropic call sites + translateAnthropicToOpenAIHeaders into BOTH OpenAI call sites in passthrough-handler.ts; REORDERS both streaming branches so provider.streamRequest runs BEFORE flushHeaders (RESEARCH.md Pitfall 1/R9 mitigation — after flushHeaders setHeader silently no-ops; SDK's .withResponse() resolves on headers arrival not first SSE chunk so no stall). 2 deviations auto-fixed in Plan 04: Rule 1 (plan acceptance criteria pointed at openai-router.ts but D-30-07 forbids touching the sacred path there + Plan 01 explicitly placed all 4 Wave 4 placeholders in passthrough-handler.ts; agent-mode does NOT get rate-limit headers — acceptable because passthrough is DEFAULT for external clients per D-30-03), Rule 1 (streaming branch reordering required because placeholder placement was physically impossible — result.upstreamHeaders not yet defined at original placeholder location). PHASE-SUMMARY at `.planning/phases/61-spec-compliance-aliases-provider/PHASE-SUMMARY.md`. D-30-06 (edge handles abuse, broker forwards transparently) + D-30-07 (sacred file untouched) + D-30-08 (D-NO-NEW-DEPS) all consumed. Phase 62 (E1+E2 Settings UI — API Keys + Usage tabs) is unblocked + independent — already discussed/researched/planned per recent commits, ready to execute. Phase 63 (mandatory live verification) needs Phase 62 + Mini PC `bash /opt/livos/update.sh` (deploys 60-04 broker IP-guard removal AND Phase 61 rate-limit headers + alias resolver + BrokerProvider) before it can run; will verify (a) friendly aliases live, (b) Anthropic rate-limit headers visible, (c) OpenAI x-ratelimit-* translation including '6m0s' duration string parsing in Open WebUI/Continue.dev/Bolt.diy (open Q from 61-04 — hot-patch to decimal seconds available if needed), (d) admin runtime alias updates within 5s.
-- 2026-05-03T07:42:00Z — Phase 62 (E1+E2 Usage Tracking Accuracy + Settings UI) CLOSED. All 5 plans shipped (62-01..05) in ~30 min wall-clock end-to-end. 5/5 requirements satisfied (FR-BROKER-E1-01..03 + FR-BROKER-E2-01..02). 9 work commits across phase + 5 SUMMARY commits + this PHASE-SUMMARY metadata commit pending after STATE.md write. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every plan boundary (Plan 01 + 02 + 03 + 04 + 05) AND end of phase (D-30-07 strictly preserved). Plan 01 (62-01) ships `broker_usage.api_key_id` nullable UUID FK with ON DELETE SET NULL + partial index WHERE api_key_id IS NOT NULL + 8-param insertUsage with apiKeyId at SQL position 3 + queryUsageByUser/queryUsageAll optional apiKeyId filter; 5 schema-migration tests GREEN + 3 RED handed off to Plans 02 + 05. Plan 02 (62-02) ships 7-line capture-middleware extension reading `req.authMethod === 'bearer' ? req.apiKeyId ?? null : null` from Phase 59 bearer middleware via mount-order semantics (capture-1229 < bearer-1239 < broker-1245); 8/8 capture-middleware tests GREEN incl. 2 new + bonus FR-BROKER-E1-03 GREEN ahead of plan. Plan 03 (62-03) ships tRPC `usage.getMine` (camelCase apiKeyId for UI ergonomics) + `usage.getAll` (snake_case api_key_id matching existing user_id/app_id convention) Zod additive inputs forwarded to query helpers; 7/7 routes.test.ts GREEN incl. 2 new; Zod non-strict default preserves backwards-compat with older UI bundles. Plan 04 (62-04) ships `<ApiKeysSection>` (header + Create button + 4-state table sorted newest-first) + `<ApiKeysCreateModal>` (two-state Stripe-style: name input → plaintext show-once with amber warning + Copy + dismiss + setPlaintext(null) cleanup useEffect for T-62-14) + `<ApiKeysRevokeModal>` (destructive Cancel/Revoke + utils.apiKeys.list.invalidate); 1 import + 3-line ai-config.tsx insert as flat sibling above UsageSection (NO Tabs wrapper per RESEARCH.md §Pitfall 4); 23/23 tests GREEN (smoke + source-text invariants pattern per Phase 30/33/38 precedent because @testing-library/react not installed and D-NO-NEW-DEPS locked). Plan 05 (62-05) ships `use-usage-filter.ts` (KEY/loadFilter/saveFilter pure helpers + React state mirror with localStorage key VERBATIM `livinity:usage:filter:apiKeyId` per CONTEXT.md, SSR-guarded) + `<UsageSection>` enhancement (shadcn Select "Filter by API key" + apiKeyId forwarded to usage.getMine + revoked-suffix + empty-state branch "No usage recorded for this key.") + `<AdminCrossUserView>` 4th filter chip (api_key_id Select sourced from apiKeys.listAll with `name (key_prefix) — owner: username` label); FR-BROKER-E1-03 verified GREEN (Plan 02's middleware change satisfied apiKeyId leg + parseUsageFromSseBuffer chat-completions branch satisfied prompt_tokens leg); 10 use-usage-filter + 10 usage-section invariants GREEN; 52/52 UI settings/_components GREEN; 45/45 backend usage-tracking GREEN; 6/6 grep guards PASS (sacred SHA / no-plaintext-in-prod / localStorage key VERBATIM / no-Tabs / ALTER block / mount order). 76 new tests across phase (30 backend + 46 UI). D-NO-NEW-DEPS preserved across all 5 plans (zero `package.json` / `pnpm-lock.yaml` changes phase-wide). PHASE-SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/PHASE-SUMMARY.md`. Phase 63 (mandatory live verification — D-LIVE-VERIFICATION-GATE — final phase) is the only remaining v30.0 phase; needs Mini PC `bash /opt/livos/update.sh` first to deploy all of Phases 60-04 + 61 + 62 source.
-- 2026-05-03T08:00:00Z — Phase 63 Wave 0 (63-01) RED-LIGHT pre-flight verdict. 4/8 checks GREEN, 4/8 BLOCK. GREEN: CHECK 1 (phases 56-62 EXECUTED — Phase 60+62 'human_needed' verified as by-design Phase 63 deferral via 'deferred:' / 'phase_63_walker_readiness: ready' frontmatter), CHECK 2B (Server5 SSH alive — caddy v2.11.2 active, ports 80/443/4000 listening), CHECK 2C (sacred SHA local matches `4f868d318abff71f8c8bfbcf443b2393a553018b`), CHECK 3A (DNS api.livinity.io → 45.137.194.102 from local + 1.1.1.1). BLOCK: CHECK 2A (Mini PC SSH connect-timed-out × 2 attempts — offline/unreachable, NOT fail2ban), CHECK 3B PARTIAL (TLS valid LE E8 / Verify return code: 0 BUT endpoint HTTP 503 not 401), CHECK 3C (alias seed unprobeable — needs Mini PC), CHECK 3D (Settings UI tab unprobeable — needs Mini PC). CRITICAL SURFACING — Phase 60 production-relay defect at `platform/relay/src/admin-tunnel.ts:43`: query `SELECT id, username FROM users WHERE role = $1` errors with `column "role" does not exist` on EVERY api.livinity.io request because platform.users schema has 11 columns and ZERO role-like (verified via `psql \\d users` on Server5). Relay logs (PM2 process 18) show recurring `errorMissingColumn: column "role" does not exist` at `admin-tunnel.ts:43:20`, code 42703, source `parse_relation.c:3722`. Phase 60 unit tests mocked pg.Pool and never asserted live schema. Phase 60 PHASE-SUMMARY's claim 'live perimeter LIVE' was true ONLY for cert/DNS/rate-limit sub-chain; the dispatch sub-chain (relay → admin tunnel) is 100% broken on every request. Even after Mini PC reconnects, api.livinity.io will continue returning 503 until findAdminTunnel is hot-patched. Three remediations required before Wave 1 (63-02) unblocks: R1 hot-patch admin-tunnel.ts (recommended Option a — hardcode `WHERE username = $1` with sentinel 'admin' since T-60-20 username-spoofing threat is moot under closed-signup single-admin v30 design); R2 Mini PC online + reachable; R3 `bash /opt/livos/update.sh` on Mini PC. v30.0 milestone close BLOCKED until R1 fixed (D-LIVE-VERIFICATION-GATE forbids `--accept-debt`). Wave 0 forensic trail (392 lines) at `.planning/phases/63-mandatory-live-verification/63-pre-flight.log` (force-added past `*.log` gitignore). Artifacts: 63-pre-flight.log + 63-UAT-RESULTS.md (canonical Wave 4 skeleton) + evidence/.gitkeep + 63-01-SUMMARY.md. Sacred SHA byte-identical local; Mini PC remote check deferred to R2. ZERO `--accept-debt` invocations. ZERO MILESTONES.md override row added. Commit `f166c34a docs(63-01): wave 0 pre-flight + verdict (RED-LIGHT — Phase 60 relay defect surfaced)`. Re-run protocol: re-execute `63-01-PLAN.md` from scratch after R1+R2+R3 → must return OVERALL: GREEN before Wave 1 unblocks. Threat-flag added: production-defect schema-vs-source drift in `platform/relay/src/admin-tunnel.ts` — future Phase 60-style tests should use `pg-mem` or test-DB-bootstrap from `schema.sql` to catch column-existence regressions.
-- 2026-05-03T05:50:00Z — Phase 60 (B2 Public Endpoint — `api.livinity.io` + Rate-Limit Perimeter) CLOSED. All 5 plans shipped (60-01..05) in ~78 min wall-clock. 2/2 requirements satisfied (FR-BROKER-B2-01 + FR-BROKER-B2-02). 15 work commits across phase + 5 SUMMARY/PHASE-SUMMARY commits + 1 metadata commit pending after this STATE.md write. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at 16 sample points across 5 plans (D-30-07 strictly preserved). Phase 60 perimeter LIVE on Server5 (`api.livinity.io` DNS-resolved + LE E8 TLS expires 2026-06-17 + 60-req/min Bearer + 30-req/min IP edge rate-limit + Anthropic-spec 4-field 429 + Retry-After:59 + flush_interval -1 streaming preservation + relay api.livinity.io dispatch routing through admin tunnel + Mini PC livinityd via private LivOS tunnel). Wave 0 (60-01) ships 60-DIAGNOSTIC-FIXTURE.md from single batched ssh probe answering 5 RESEARCH.md Open Questions; Wave 1 (60-02) replaces `/usr/bin/caddy` with locally-Docker-built v2.11.2 binary carrying caddy-ratelimit + caddy-dns/cloudflare modules (DELETION_COUNT=0; pre-swap backup at `/usr/bin/caddy.bak.20260503-070012`); Wave 2 (60-03) ships TDD-driven `findAdminTunnel` (queries `WHERE role='admin'` defeating T-60-20 username-spoofing) + `sendBrokerTunnelOffline` Anthropic-spec 503 envelope + server.ts api.livinity.io dispatch +41 LOC (11/11 vitest tests GREEN; deployed to Server5 via scp + 1 batched ssh; pm2 restart clean); Wave 3 (60-04) reconciles platform/relay/Caddyfile drift (option (a) pull-then-patch — apps.livinity.io / changelog.livinity.io / @marketplace mcp.livinity.io / livinity.io /downloads/* file_server) + adds api.livinity.io block (rate_limit zones + reverse_proxy localhost:4000 with flush_interval -1 + handle_errors 429 → 4-field Anthropic body + log to /var/log/caddy/api.livinity.io.log + global `order rate_limit before basic_auth`) + verifies DNS A record api.livinity.io→45.137.194.102 ALREADY EXISTS via dig 1.1.1.1+8.8.8.8 (LE cert pre-issued 2026-03-19) + removes broker `containerSourceIpGuard` from source (Wave 0 Q4 verdict YES — Phase 59 Bearer middleware fall-through proves safe); Mini PC deploy DEFERRED to Phase 63 update.sh per plan note "this commit is local"; Wave 4 (60-05) ships `platform/relay/scripts/phase-60-smoke.sh` (261 LOC repeatable smoke battery — 7 sections mapping ROADMAP success criteria + LIV_SK_TOKEN-aware SKIP for §3 + SERVER5_SSH-aware §6 + reusable for Phase 63 + future incident triage) + runs smoke from Server5 per checkpoint SOURCE_IP=server5 producing `60-SMOKE-RESULTS.md`: §1 DNS PASS, §2 TLS PASS (openssl Verify=0), §3 SKIP per checkpoint TOKEN_STATE=skip + MINI_PC_DEPLOYED=no (chain verified up to broker via 30 × 503 sendBrokerTunnelOffline envelopes), §4 Rate-limit blast empirically PROVEN — 70/100 × HTTP 429 + full 4-field Anthropic body (type:"error"/error.type:"rate_limit_error"/non-empty message/request_id matches ^req_relay_) + Retry-After:59, §5 livinity.io+apps+changelog+bruce all HTTP/2 200 (relay.livinity.io 503 pre-existing per Wave 0 §Notes 4 — NOT a regression), §6 T-60-34 re-investigated INTACT (Caddy auto-redacts Authorization VALUE to literal "REDACTED"; zero Bearer/liv_sk leaks), §7 sacred-SHA dev-box re-run authoritative `4f868d318abff71f8c8bfbcf443b2393a553018b`. ROADMAP Phase 60 success criteria: #3 PASS + #4 PASS now; #1 + #2 chain-proven and DEFERRED to Phase 63 (mandatory live verification phase needs Mini PC `bash /opt/livos/update.sh` + valid `liv_sk_*` token). PHASE-SUMMARY at `.planning/phases/60-public-endpoint-rate-limit/PHASE-SUMMARY.md`. D-30-04 (Caddy on Server5) + D-30-06 (edge handles abuse, broker forwards transparently) + D-30-07 (sacred file untouched) + D-30-08 (D-NO-NEW-DEPS YELLOW only on Caddy non-npm) + D-30-09 (xcaddy build + flush_interval -1 + caddy validate budget items) all consumed. Phase 61 (Rate-Limit Headers) is unblocked — must coexist with Caddy edge 429 (forwarded verbatim). Phase 62 (Settings UI) is independent + parallel — can plan immediately. Phase 63 (Mandatory Live Verification) will reuse phase-60-smoke.sh after Mini PC update.sh + valid `liv_sk_*` to close success criteria #1 + #2 + walk 14 carry-forward UATs.
+- `livos/packages/livinityd/source/modules/livinity-broker/providers/anthropic.ts` — AnthropicProvider with dynamic MCP bridge
+- `livos/packages/livinityd/source/modules/livinity-broker/router.ts` — `/v1/messages` dispatch + cwd computation
+- `livos/packages/livinityd/source/modules/livinity-broker/openai-router.ts` — `/v1/chat/completions` dispatch
+- `livos/packages/livinityd/source/modules/livinity-broker/passthrough-handler.ts` — request orchestration
+- `livos/packages/livinityd/source/modules/livinity-broker/openai-stream-translator.ts` — Anthropic SSE → OpenAI chunks
+- `livos/packages/livinityd/source/modules/livinity-broker/auth.ts` — Bearer-wins-identity (R2 patch)
+- `platform/relay/src/admin-tunnel.ts` — `username='bruce'` query (R1.1 patch on Server5)
