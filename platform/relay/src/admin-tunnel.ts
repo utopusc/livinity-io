@@ -8,10 +8,14 @@
  * admin user's currently-registered tunnel and forward through it.
  *
  * Threat-model (RESEARCH.md §"Tunnel Hijack" — STRIDE Spoofing T-60-20):
- *   Resolution queries by `role = 'admin'` (NOT by username = 'admin').
- *   Even if a malicious actor registered a username 'admin', they would
- *   not have role='admin' in the users table — only the actual admin user
- *   does. Querying by role defeats username-spoofing.
+ *   Resolution queries by `username = 'utopusc'` (the actual platform admin in
+ *   single-tenant v30 — closed signup, hard-coded sentinel). T-60-20 spoofing
+ *   moot because new signups are blocked at platform layer; only the original
+ *   account holds this username.
+ *
+ *   v30 hot-patch (Phase 63 R1): originally specified `role = 'admin'` but
+ *   `platform.users` has no `role` column — caused 503 on every relay request.
+ *   Phase 64+ will add `role` column + UI + migrate to `role='admin'`.
  *
  * Single-tenant v30 design: admin tunnel is the broker gateway. If admin
  * tunnel is offline, ALL `api.livinity.io` traffic 503s. v30+ revisits with
@@ -41,8 +45,8 @@ export async function findAdminTunnel(
   let adminUserId: string;
   try {
     const result = await pool.query<{ id: string; username: string }>(
-      'SELECT id, username FROM users WHERE role = $1 LIMIT 1',
-      ['admin'],
+      'SELECT id, username FROM users WHERE username = $1 LIMIT 1',
+      ['utopusc'],
     );
     if (result.rows.length === 0) return null;
     adminUserId = result.rows[0].id;
