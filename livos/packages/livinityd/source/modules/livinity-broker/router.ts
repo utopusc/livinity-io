@@ -9,6 +9,7 @@ import type {AnthropicMessagesRequest, BrokerDeps} from './types.js'
 import {registerOpenAIRoutes} from './openai-router.js'
 import {resolveMode} from './mode-dispatch.js'
 import {passthroughAnthropicMessages} from './passthrough-handler.js'
+import {resolveModelAlias} from './alias-resolver.js'
 
 /**
  * Create the broker Express router.
@@ -68,6 +69,29 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 				error: {type: 'invalid_request_error', message: 'messages must be a non-empty array'},
 			})
 			return
+		}
+
+		// Phase 61 Plan 03 D1 — alias resolution on the Anthropic /v1/messages route
+		// (BUG FIX per RESEARCH.md State of the Art table — Phase 57 today does NO
+		// resolution, so body.model='opus' previously 404'd upstream). Mutate
+		// body.model in place so passthrough-handler.ts (which forwards body
+		// verbatim) and the agent path (which echoes body.model in responses)
+		// both see the resolved Claude model ID.
+		const requestedModel = body.model
+		const {actualModel, warn: aliasWarn} = await resolveModelAlias(
+			deps.livinityd.ai.redis,
+			requestedModel,
+		)
+		if (aliasWarn) {
+			deps.livinityd.logger.log(
+				`[livinity-broker] WARN unknown model '${requestedModel}' → ${actualModel}`,
+			)
+		}
+		if (actualModel !== requestedModel) {
+			deps.livinityd.logger.log(
+				`[livinity-broker] anthropic route requestedModel=${requestedModel} actualModel=${actualModel}`,
+			)
+			body.model = actualModel
 		}
 
 		// Phase 57 (FR-BROKER-A2-01): mode dispatch — passthrough is DEFAULT, agent is opt-in via X-Livinity-Mode: agent.

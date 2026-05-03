@@ -24,6 +24,7 @@ import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
+import {seedDefaultAliases} from './modules/livinity-broker/seed-default-aliases.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
@@ -249,6 +250,17 @@ export default class Livinityd {
 		} catch (err) {
 			// Non-fatal — boot continues; tools will be missing until next syncTools()
 			this.logger.error('Failed to seed builtin tools', err)
+		}
+
+		// Phase 61 Plan 03 D1 — boot-time seed of default broker model aliases.
+		// Uses SETNX so admin runtime edits via `redis-cli SET` survive reboot
+		// (FR-BROKER-D1-02). Non-fatal on failure — broker keeps working with
+		// the resolver's hardcoded fallback (claude-sonnet-4-6).
+		try {
+			await seedDefaultAliases(this.ai.redis)
+			this.logger.log('Seeded broker model aliases to livinity:broker:alias:*')
+		} catch (err) {
+			this.logger.error('Failed to seed broker model aliases', err)
 		}
 
 		// Initialize TunnelClient after ai.start() creates the Redis connection

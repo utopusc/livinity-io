@@ -113,6 +113,11 @@ function makeMinimalLivinityd(): any {
 			warn: () => {},
 			error: () => {},
 		},
+		// Phase 61 Plan 03: passthroughOpenAIChatCompletions calls
+		// resolveModelAlias(livinityd.ai.redis, body.model). Empty Redis →
+		// resolver passes `claude-*` model IDs verbatim, falls through to
+		// hardcoded `claude-sonnet-4-6` for non-claude (e.g. `gpt-4o`).
+		ai: {redis: {async get() { return null }}},
 	}
 }
 
