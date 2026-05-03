@@ -6,6 +6,7 @@ import type {AnthropicMessagesRequest} from './types.js'
 import type Livinityd from '../../index.js'
 import {getProvider} from './providers/registry.js'
 import type {ProviderResponse, ProviderStreamResult} from './providers/interface.js'
+import {forwardAnthropicHeaders} from './rate-limit-headers.js'
 
 /**
  * Phase 57 (FR-BROKER-A1-01..03): Anthropic Messages passthrough handler.
@@ -216,13 +217,14 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 			// none currently mounted) and X-Accel-Buffering: no (nginx hint for
 			// Phase 60 reverse-proxy chain).
 
-			res.setHeader('Content-Type', 'text/event-stream')
-			res.setHeader('Cache-Control', 'no-cache, no-transform')
-			res.setHeader('Connection', 'keep-alive')
-			res.setHeader('X-Accel-Buffering', 'no')
-			// Phase 61 Wave 4 (Plan 04): forwardAnthropicHeaders(result.upstreamHeaders, res) — MUST precede flushHeaders below
-			res.flushHeaders()
-
+			// Phase 61 Plan 04 (FR-BROKER-C3-01): provider.streamRequest is
+			// invoked BEFORE flushHeaders so result.upstreamHeaders are reachable
+			// in time for forwardAnthropicHeaders. After flushHeaders, setHeader
+			// silently no-ops (RESEARCH.md Pitfall 1 / R9). The SDK's
+			// .withResponse() resolves once HTTP response headers arrive but
+			// BEFORE the SSE iterator is consumed, so this re-ordering does not
+			// stall the response — it just shifts the await onto the headers
+			// arrival rather than the first SSE chunk arrival.
 			let result: ProviderStreamResult
 			try {
 				result = await provider.streamRequest(upstreamBody as any, {
@@ -243,10 +245,15 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 				if (refreshed === null) throw mapApiError(err)
 				result = refreshed
 			}
-			// Phase 61 Wave 4 (Plan 04) will read result.upstreamHeaders here and
-			// invoke forwardAnthropicHeaders before any chunk write (currently
-			// captured but unused — preserves Phase 58 streaming behavior).
-			void result.upstreamHeaders
+
+			res.setHeader('Content-Type', 'text/event-stream')
+			res.setHeader('Cache-Control', 'no-cache, no-transform')
+			res.setHeader('Connection', 'keep-alive')
+			res.setHeader('X-Accel-Buffering', 'no')
+			// Phase 61 Plan 04 (FR-BROKER-C3-01): forward upstream anthropic-*
+			// + retry-after headers verbatim BEFORE flushHeaders.
+			forwardAnthropicHeaders(result.upstreamHeaders, res)
+			res.flushHeaders()
 
 			try {
 				for await (const event of result.stream) {
@@ -302,8 +309,9 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 				if (refreshed === null) throw mapApiError(err)
 				result = refreshed
 			}
-			// Phase 61 Wave 4 (Plan 04): forwardAnthropicHeaders(result.upstreamHeaders, res) before res.json below
-			void result.upstreamHeaders
+			// Phase 61 Plan 04 (FR-BROKER-C3-01): forward upstream anthropic-*
+			// + retry-after headers verbatim BEFORE res.json below.
+			forwardAnthropicHeaders(result.upstreamHeaders, res)
 			res.status(200).json(result.raw)
 		}
 	} catch (err) {
