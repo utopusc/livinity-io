@@ -285,16 +285,94 @@ Q5's verdict is independent of Q1/Q2/Q7 (architectural-perimeter concerns). It e
 
 ---
 
-## Cross-Cutting: Sacred File SHA Stability Across Plan 56-02 (Task 1 — Q3 + Q5)
+## Q4: Public Endpoint Architecture (Server5 Caddy vs Cloudflare Worker)
 
-`git hash-object nexus/packages/core/src/sdk-agent-runner.ts` re-run after Task 1:
+### Verdict
+Chosen path: **A — Server5 Caddy + new `api.livinity.io` block + `caddy-ratelimit` plugin (custom build via `xcaddy`).**
+- **Platform:** Server5 Caddy (existing Caddy 2.11.2 deploy, augmented via `xcaddy build --with github.com/mholt/caddy-ratelimit`).
+- **TLS strategy:** Let's Encrypt **on-demand TLS** (already-running primitive at `platform/relay/Caddyfile`).
+- **Rate-limit primitive:** `caddy-ratelimit` HTTP handler (`rate_limit` directive) — sliding-window ring buffer per zone, key configurable to `{http.request.header.Authorization}` for per-`liv_sk_*` perimeter rate-limit at the edge BEFORE the request reaches the Mini PC broker.
+
+### Rationale (4 reasons)
+1. **Reuses existing Server5 infrastructure with zero DNS posture cost.** `*.livinity.io` is currently DNS-only per STATE.md routing topology ("Cloudflare DNS-only → Server5 → Mini PC via private LivOS tunnel; NOT a Cloudflare tunnel"). Candidate B (Cloudflare Worker) would force a per-record posture flip from DNS-only → proxied (orange-clouded) — confirmed REQUIRED via https://developers.cloudflare.com/workers/configuration/routing/routes/ ("subdomain proxied by Cloudflare … you would like to route to"). This flip introduces Cloudflare as a runtime dependency on the request critical path. Candidate A requires zero DNS changes; only adds an A/AAAA record for `api.livinity.io` pointing to Server5.
+2. **TLS already solved at Server5 with on-demand LE.** Current `platform/relay/Caddyfile` runs `on_demand_tls` with `ask http://localhost:4000/internal/ask` gate. Adding `api.livinity.io { tls { on_demand } reverse_proxy <minipc-tunnel-addr>:8080 }` is a 5-line Caddyfile change + `systemctl reload caddy`. No new TLS pipeline. Caddy v2.11.x continues to support on-demand TLS per https://caddyserver.com/docs/automatic-https.
+3. **Native edge rate-limit primitive eliminates broker-side bucket complexity.** `caddy-ratelimit` provides sliding-window per-key rate-limit with automatic `Retry-After` header (verified at https://raw.githubusercontent.com/mholt/caddy-ratelimit/master/README.md — feature list: "Automatically sets Retry-After header"). The broker layer (Q6 — see below) can then forward Anthropic upstream rate-limit headers verbatim WITHOUT also implementing its own perimeter bucket; clean responsibility split — edge=coarse abuse-control, broker=upstream-Anthropic-honest-forward.
+4. **Avoids recurring CF Worker cost + 10ms-CPU-cap risk.** CF Workers Free plan caps at 10ms CPU per request (per https://developers.cloudflare.com/workers/platform/pricing/). SSE proxying that streams large Anthropic responses through a Worker pipe risks blowing this cap intermittently (mostly safe but not guaranteed). Workers Paid plan ($5+/month + $0.02/M CPU-ms) eliminates the cap but adds recurring cost where the Server5+Mini PC stack costs $0 incremental.
+
+### Alternatives Considered (3)
+- **Alt B: Cloudflare Worker + Durable Objects token bucket + WAF coarse rate-limit.** Disqualified primarily because (a) DNS posture flip from DNS-only → proxied for `api.livinity.io` introduces Cloudflare as runtime dependency (today they're DNS resolver only per STATE.md), (b) Workers Paid recurring cost ($5+/month) for streaming CPU headroom, (c) duplicates infrastructure (Caddy still needed for `*.livinity.io` user subdomains; this would add a second perimeter), (d) edge-latency advantage is null for our European-only user base where Mini PC + Server5 are also EU. Note: the Durable Objects + WAF rate-limit story IS technically stronger than `caddy-ratelimit` (globally-consistent state vs node-local ring buffer), but cost/architectural shift doesn't justify v30 adoption.
+- **Alt C: Server5 Caddy native primitives only (no plugin, no xcaddy build).** Disqualified because Caddy's stock binary has NO HTTP rate-limit handler. Without `caddy-ratelimit`, the rate-limit responsibility falls entirely to the broker (Q6's per-key Redis bucket). Functionally viable but loses the edge-coarse perimeter — abusive clients can still spam the Mini PC broker process at the network layer (consuming Mini PC CPU + memory) before the broker emits 429. Edge perimeter is a defense-in-depth win worth the xcaddy build cost.
+- **Alt: Caddy + nginx-rate-limit-equivalent via Caddy executors module.** Not actually a documented option; Caddy has a Go-plugin model only. Rejected as fictional.
+
+### Cold-Start + Latency Notes
+| Platform | Cold-start | Steady-state | Notes |
+|----------|-----------|--------------|-------|
+| **Server5 Caddy + plugin** | ~0ms (long-running process; "cold start" only on Caddy restart, operator-controlled) | ~0ms over existing reverse-proxy chain; rate-limit ring buffer is in-memory | The chosen verdict |
+| **CF Worker (free)** | <1ms (V8 isolates); first invocation in region may be 5-10ms | 10-50ms extra round-trip Cloudflare-edge → Server5/Mini PC for EU clients (no edge latency win for EU-only audience) | 10ms CPU cap risks SSE blow-out |
+| **CF WAF rate-limit** | <1ms (runs at edge before Worker invocation) | <1ms | Coarse-grained only |
+
+[Citations from CF Workers / Caddy docs above; cold-start numbers vendor-published.]
+
+### Code-Level Integration Point
+- **File:** `platform/relay/Caddyfile` (Server5 — current production config — confirmed cited per acceptance criterion).
+- **Insertion site (top of file, BEFORE the existing `*.livinity.io` wildcards so the more-specific match wins):**
+```caddyfile
+api.livinity.io {
+    tls {
+        on_demand
+    }
+
+    rate_limit {
+        zone per_bearer_key {
+            key {http.request.header.Authorization}
+            window 1m
+            events 1000
+        }
+        zone per_ip_burst {
+            key {remote_host}
+            window 10s
+            events 100
+        }
+    }
+
+    reverse_proxy <minipc-tunnel-addr>:8080 {
+        flush_interval -1   # disable buffering for SSE responses
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote_host}
+    }
+}
+```
+- **Phase 60 plan owns:** writing the actual block (with the real Mini PC tunnel address from existing platform routing), running `xcaddy build --with github.com/mholt/caddy-ratelimit` to produce the custom binary, replacing the system Caddy binary at `/usr/bin/caddy`, validating with `caddy validate < Caddyfile`, then `systemctl reload caddy`.
+
+### Risk + Mitigation
+- **Risk: xcaddy custom-build burden** (the headlining risk required by the acceptance criteria — substring "xcaddy" + "custom build" appears in this risk section). Every Caddy upgrade requires re-running `xcaddy build --with github.com/mholt/caddy-ratelimit` at the new pinned version + reinstalling. Package-manager auto-updates of `caddy` could overwrite the custom binary at `/usr/bin/caddy`, causing config validation error on next reload. **Mitigation:** (a) pin system `caddy` package via `apt-mark hold caddy` to prevent unattended upgrades, (b) document rebuild procedure in `platform/relay/README.md` (Phase 60 plan output), (c) Phase 63 live UAT step explicitly verifies `rate_limit` directive is active by sending >100 reqs/10s from one IP and confirming 429 from `api.livinity.io` (not from the Mini PC broker).
+- **Risk: SSE buffering by Caddy reverse_proxy by default.** Caddy `reverse_proxy` may buffer SSE responses if `flush_interval` not set, breaking Q1 / Q7's true-token-streaming guarantee. **Mitigation:** include `flush_interval -1` in the `reverse_proxy` block (per Caddy docs — disables buffering); Phase 60 plan validates with curl-vs-broker comparison test.
+- **Risk: `caddy-ratelimit` is third-party** ("This is not an official repository of the Caddy Web Server organization" per the plugin README disclaimer). **Mitigation:** pin to specific commit SHA in `xcaddy build --with github.com/mholt/caddy-ratelimit@<sha>` invocation; track upstream repo for security advisories; have fallback plan to move rate-limit to broker via Q6 if plugin abandoned.
+
+### D-NO-NEW-DEPS Implications
+**One-time custom build dependency, zero new package.json deps.** `xcaddy` is a Go-toolchain command, not an npm package — it does NOT count toward the Node.js / TypeScript dep budget that D-NO-NEW-DEPS targets. The Caddy binary is replaced; no application-level dependencies change.
+
+### Aligns with Q1 + Q3
+- Q1 (Strategy A — HTTP-proxy direct to `api.anthropic.com`): the Mini PC broker still does the upstream call. Caddy at Server5 just terminates TLS for `api.livinity.io` and reverse-proxies to `<minipc-tunnel-addr>:8080`. Q1's `forwardToAnthropic()` runs unchanged on Mini PC.
+- Q3 (path-based + header-based dispatch): Caddy doesn't care about URL path for routing; it forwards everything under `api.livinity.io` to the broker's Express router. The broker's path-based dispatch (Q3 verdict) sees `/u/<id>/v1/messages` vs `/u/<id>/agent/v1/messages` and selects mode accordingly.
+
+### ASSUMED → VERIFIED
+- **A3** (RESEARCH.md): "Caddy v2.11.2 on Server5 can use `caddy-ratelimit` plugin without rebuilding from source" — **REFUTED — VERIFIED that custom build IS required**. Source: https://caddyserver.com/docs/modules/http.handlers.rate_limit explicitly says "Custom builds: This module does not come with Caddy"; https://raw.githubusercontent.com/mholt/caddy-ratelimit/master/README.md gives `xcaddy build --with github.com/mholt/caddy-ratelimit` as the install method. Phase 60 plan MUST budget the custom-build step.
+- **A4** (RESEARCH.md): "Cloudflare DNS posture for `*.livinity.io` is DNS-only (not proxied)" — **VERIFIED**. STATE.md confirms; cross-confirmed via Cloudflare Workers routing docs requiring "orange-clouded" (proxied) DNS for Worker route attachment. Posture-flip cost would be real for Candidate B.
+
+---
+
+## Cross-Cutting: Sacred File SHA Stability Across Plan 56-02 (Tasks 1-2)
+
+`git hash-object nexus/packages/core/src/sdk-agent-runner.ts` re-run after each task:
 
 | Task | SHA after task | Match required `4f868d318abff71f8c8bfbcf443b2393a553018b`? |
 |------|----------------|-----------------------------------------------------------|
 | Task 1 (Q3 + Q5) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+| Task 2 (Q4)      | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
 
-Sacred file was NOT read or written during Task 1 (Q3 + Q5 are perimeter / lifecycle concerns; no internal-runner inspection needed). Sacred boundary preserved.
+Sacred file was NOT read or written during Tasks 1-2 (Q3 / Q4 / Q5 are perimeter / lifecycle concerns; no internal-runner inspection needed). Sacred boundary preserved.
 
 ---
 
-*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plans 56-02 (Q4 + Q6 — pending), 56-03, 56-04 will append additional sections.*
+*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plan 56-02 (Q6 — Task 3 pending), 56-03, 56-04 will append additional sections.*
