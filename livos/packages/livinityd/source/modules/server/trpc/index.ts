@@ -30,6 +30,12 @@ import fail2ban from '../../fail2ban-admin/routes.js'
 // while `appsHealthRouter` merges into the existing `apps` namespace so
 // `apps.healthProbe` is reachable alongside `apps.list`/`apps.myApps`/etc.
 import diagnosticsRoutes from '../../diagnostics/routes.js'
+// v30.0 Phase 59 Plan 04 — Bearer token API keys (FR-BROKER-B1-04).
+// Top-level `apiKeys` namespace exposes create / list / revoke /
+// listAll. All four mutations/queries are also added to httpOnlyPaths
+// in ./common.ts so the React client routes them through HTTP (cookie
+// + header semantics survive WS reconnect after `systemctl restart livos`).
+import apiKeys from '../../api-keys/routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -63,6 +69,8 @@ const appRouter = router({
 	fail2ban,
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin namespace (FR-TOOL-01/02 + FR-MODEL-01).
 	capabilities: diagnosticsRoutes.capabilitiesRouter,
+	// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).
+	apiKeys,
 })
 
 export type AppRouter = typeof appRouter

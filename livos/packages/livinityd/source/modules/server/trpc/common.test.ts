@@ -178,7 +178,56 @@ function runTests() {
 		ok('Test 10: apps.healthProbe wired as privateProcedure with ctx-only userId')
 	}
 
-	console.log('\nAll common.test.ts tests passed (10/10)')
+	// v30.0 Phase 59 Plan 04 — apiKeys mutations + queries (FR-BROKER-B1-04).
+	// Same WS-reconnect-survival reason as Phase 45/46/47 clusters. apiKeys.create
+	// returns plaintext ONCE — HTTP delivery prevents WS-reconnect-replay
+	// confusion. apiKeys.revoke must succeed mid-restart (admin under duress).
+	// Test 11: all four apiKeys.* entries present in httpOnlyPaths
+	{
+		assert.ok(
+			httpOnlyPaths.includes('apiKeys.create' as any),
+			"httpOnlyPaths must include 'apiKeys.create' (Phase 59 FR-BROKER-B1-04 — plaintext returned ONCE; WS-reconnect-replay would lose the cleartext token)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('apiKeys.list' as any),
+			"httpOnlyPaths must include 'apiKeys.list' (Phase 59 FR-BROKER-B1-04 — mirror create's transport for client-side consistency)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('apiKeys.revoke' as any),
+			"httpOnlyPaths must include 'apiKeys.revoke' (Phase 59 FR-BROKER-B1-04 — admin revoking a leaked key under duress can't afford WS queue/drop window)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('apiKeys.listAll' as any),
+			"httpOnlyPaths must include 'apiKeys.listAll' (Phase 59 FR-BROKER-B1-04 — admin cross-user view; mirrors usage.getAll precedent)",
+		)
+		ok('Test 11: all 4 apiKeys.* entries present in httpOnlyPaths')
+	}
+
+	// Test 12: bare-name footgun guard for Phase 59 entries. Same shape as
+	// Tests 4 (Phase 45), 7 (Phase 46), 9 (Phase 47). Catches the regression
+	// where someone adds 'create' instead of 'apiKeys.create' — every existing
+	// entry follows the <router>.<route> namespace convention.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('create' as any),
+			"httpOnlyPaths must NOT include bare 'create' (must be namespaced as 'apiKeys.create')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('list' as any),
+			"httpOnlyPaths must NOT include bare 'list' (must be namespaced as 'apiKeys.list')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('revoke' as any),
+			"httpOnlyPaths must NOT include bare 'revoke' (must be namespaced as 'apiKeys.revoke')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('listAll' as any),
+			"httpOnlyPaths must NOT include bare 'listAll' (must be namespaced as 'apiKeys.listAll')",
+		)
+		ok('Test 12: bare apiKeys names absent (namespaced convention preserved)')
+	}
+
+	console.log('\nAll common.test.ts tests passed (12/12)')
 }
 
 runTests()

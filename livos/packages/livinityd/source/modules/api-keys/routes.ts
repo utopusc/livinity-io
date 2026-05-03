@@ -186,7 +186,11 @@ const apiKeysRouter = router({
 					// Log and proceed — the row is revoked in PG so the next
 					// cache miss will re-fetch and see revoked_at IS NOT NULL
 					// → 401.
-					ctx.logger.error?.(
+					// `ctx.logger` is typed optional (Context Merge over WSS +
+					// Express both supply it but the type system erases the
+					// guarantee); fall back to console for safety.
+					const log = ctx.logger ?? console
+					log.error(
 						'[api-keys.revoke] cache.invalidate threw — DB revocation is in effect, ' +
 							'but the bearer middleware may serve cached positives for up to 60s',
 						err,

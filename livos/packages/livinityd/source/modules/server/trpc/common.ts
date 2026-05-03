@@ -198,6 +198,18 @@ export const httpOnlyPaths = [
 	// Phase 45/46's separate-namespace convention.
 	'capabilities.flushAndResync',
 	'apps.healthProbe',
+	// v30.0 Phase 59 Plan 04 — apiKeys mutations + queries (FR-BROKER-B1-04).
+	// Same WS-reconnect-survival reason as Phase 45/46/47 clusters above.
+	// apiKeys.create returns plaintext ONCE — HTTP delivery prevents the
+	// WS-reconnect-replay confusion where the cleartext token would be lost
+	// if the WS reconnects mid-mutation. apiKeys.revoke must succeed even
+	// mid-restart (admin revoking a leaked key under duress can't afford the
+	// silent WS queue/drop window). list/listAll mirror the mutations for
+	// transport consistency. Pitfall B-12 / X-04 / RESEARCH.md Pitfall 5.
+	'apiKeys.create',
+	'apiKeys.list',
+	'apiKeys.revoke',
+	'apiKeys.listAll',
 	// Subagent execution -- use HTTP for reliability (can take 10-60s)
 	'ai.executeSubagent',
 	// Marketplace install -- use HTTP for mutation reliability
