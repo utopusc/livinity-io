@@ -82,6 +82,10 @@ describe('Phase 61 Plan 01 Wave 0 — providers/ interface compile gate (FR-BROK
 				resolve(providersDir, 'interface.ts'),
 				resolve(providersDir, 'anthropic.ts'),
 				resolve(providersDir, 'registry.ts'),
+				// Plan 02 (Wave 2) — stub providers MUST also typecheck cleanly.
+				resolve(providersDir, 'openai-stub.ts'),
+				resolve(providersDir, 'gemini-stub.ts'),
+				resolve(providersDir, 'mistral-stub.ts'),
 			]
 			const tsc = resolveTscBinary()
 			try {

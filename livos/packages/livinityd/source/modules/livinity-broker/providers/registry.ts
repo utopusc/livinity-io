@@ -16,9 +16,20 @@
  */
 import type {BrokerProvider} from './interface.js'
 import {AnthropicProvider} from './anthropic.js'
+import {GeminiProvider} from './gemini-stub.js'
+import {MistralProvider} from './mistral-stub.js'
+import {OpenAIProvider} from './openai-stub.js'
 
+// Map seeded with all 4 providers (1 concrete + 3 stubs). Stub instances
+// are constructed once at module load for a stable Map shape — they only
+// throw when their interface methods are invoked, which v30 router/handler
+// dispatch must NEVER do (enforced by router-no-stub-dispatch.test.ts grep
+// guard).
 export const providers = new Map<string, BrokerProvider>([
 	['anthropic', new AnthropicProvider()],
+	['openai', new OpenAIProvider()],
+	['gemini', new GeminiProvider()],
+	['mistral', new MistralProvider()],
 ])
 
 export function getProvider(name: string): BrokerProvider {
