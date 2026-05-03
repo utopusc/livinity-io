@@ -41,6 +41,7 @@
  * public `query()` API directly with passthrough-specific options.
  */
 import Anthropic from '@anthropic-ai/sdk'
+import path from 'node:path'
 import {query as agentQuery, type Options as AgentSdkOptions, type SDKMessage} from '@anthropic-ai/claude-agent-sdk'
 import type {
 	BrokerProvider,
@@ -142,7 +143,12 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 			? {pathToClaudeCodeExecutable: process.env.LIVOS_CLAUDE_BIN}
 			: {}),
 		env: {
-			HOME: cwd,
+			// Phase 63 R3.3 — claude CLI looks for credentials at $HOME/.claude/.credentials.json.
+			// getUserClaudeDir() already returns the .claude dir itself (e.g.
+			// /opt/livos/data/users/<id>/.claude). Setting HOME to that dir makes
+			// claude look at $HOME/.claude/.claude/.credentials.json (DOUBLE .claude — wrong).
+			// Strip the trailing .claude segment so claude resolves correctly.
+			HOME: path.basename(cwd) === '.claude' ? path.dirname(cwd) : cwd,
 			PATH: augmentedPath,
 			NODE_ENV: process.env.NODE_ENV || 'production',
 			LANG: process.env.LANG || 'en_US.UTF-8',
