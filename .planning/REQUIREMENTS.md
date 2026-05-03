@@ -63,18 +63,18 @@ External clients depend on byte-level spec compliance for streaming and rate-lim
 ** — OpenAI streaming emits a `usage` object on the FINAL chunk (before `[DONE]`) with non-zero `prompt_tokens`, `completion_tokens`, `total_tokens`. Builds on v29.5 commit `2518cf91` plumbing.
 - [x] **FR-BROKER-C2-03
 ** — OpenAI sync (non-streaming) `/v1/chat/completions` returns a complete OpenAI response shape with `id` formatted as `chatcmpl-<base62-29>`, `object: "chat.completion"`, `choices`, and non-zero `usage` fields.
-- [ ] **FR-BROKER-C3-01** — Anthropic rate-limit headers (`anthropic-ratelimit-requests-limit/remaining/reset`, `anthropic-ratelimit-tokens-limit/remaining/reset`) are forwarded verbatim from upstream Anthropic API to the broker response.
-- [ ] **FR-BROKER-C3-02** — OpenAI clients receive the equivalent headers translated to OpenAI namespace (`x-ratelimit-limit-requests`, `x-ratelimit-remaining-requests`, `x-ratelimit-reset-requests`, `x-ratelimit-limit-tokens`, `x-ratelimit-remaining-tokens`, `x-ratelimit-reset-tokens`) on every response.
-- [ ] **FR-BROKER-C3-03** — `Retry-After` header is preserved on 429 responses (continues v29.4 Phase 45 C1 work) for both Anthropic and OpenAI broker paths.
+- [x] **FR-BROKER-C3-01** — Anthropic rate-limit headers (`anthropic-ratelimit-requests-limit/remaining/reset`, `anthropic-ratelimit-tokens-limit/remaining/reset`) are forwarded verbatim from upstream Anthropic API to the broker response.
+- [x] **FR-BROKER-C3-02** — OpenAI clients receive the equivalent headers translated to OpenAI namespace (`x-ratelimit-limit-requests`, `x-ratelimit-remaining-requests`, `x-ratelimit-reset-requests`, `x-ratelimit-limit-tokens`, `x-ratelimit-remaining-tokens`, `x-ratelimit-reset-tokens`) on every response.
+- [x] **FR-BROKER-C3-03** — `Retry-After` header is preserved on 429 responses (continues v29.4 Phase 45 C1 work) for both Anthropic and OpenAI broker paths.
 
 ### D — Model Strategy (Friendly Aliases + Multi-Provider Stub)
 
 External clients send model names like `gpt-4o` or `claude-3-opus`. Broker should resolve to the current Claude family without per-client awareness of model versioning.
 
-- [ ] **FR-BROKER-D1-01** — A model-alias resolution table maps friendly aliases (`opus`, `sonnet`, `haiku`, `claude-sonnet-4-6`, `claude-opus-4-7`, plus OpenAI aliases `gpt-4`, `gpt-4o`, `gpt-3.5-turbo`) to current Claude family model IDs. Unknown models warn-and-fall-through to a default model (continues v29.3 Phase 42 pattern).
-- [ ] **FR-BROKER-D1-02** — The alias table is config-driven (Redis-backed or file-based — implementation choice during phase planning) so new Claude models can be added without code changes. A documented update procedure exists.
-- [ ] **FR-BROKER-D2-01** — A pluggable provider interface (`BrokerProvider` TypeScript type) defines `request()`, `streamRequest()`, `translateUsage()` methods. v30 implements ONLY the Anthropic provider; an OpenAI/Gemini/Mistral stub interface is shipped to make future providers a code-drop-in change.
-- [ ] **FR-BROKER-D2-02** — The Anthropic provider implementation is the default and ships in v30. Multi-provider routing (e.g., `model: "openai/gpt-4o"` routes to OpenAI provider) is OUT OF SCOPE for v30 (interface-only; concrete providers ship later).
+- [x] **FR-BROKER-D1-01** — A model-alias resolution table maps friendly aliases (`opus`, `sonnet`, `haiku`, `claude-sonnet-4-6`, `claude-opus-4-7`, plus OpenAI aliases `gpt-4`, `gpt-4o`, `gpt-3.5-turbo`) to current Claude family model IDs. Unknown models warn-and-fall-through to a default model (continues v29.3 Phase 42 pattern).
+- [x] **FR-BROKER-D1-02** — The alias table is config-driven (Redis-backed or file-based — implementation choice during phase planning) so new Claude models can be added without code changes. A documented update procedure exists.
+- [x] **FR-BROKER-D2-01** — A pluggable provider interface (`BrokerProvider` TypeScript type) defines `request()`, `streamRequest()`, `translateUsage()` methods. v30 implements ONLY the Anthropic provider; an OpenAI/Gemini/Mistral stub interface is shipped to make future providers a code-drop-in change.
+- [x] **FR-BROKER-D2-02** — The Anthropic provider implementation is the default and ships in v30. Multi-provider routing (e.g., `model: "openai/gpt-4o"` routes to OpenAI provider) is OUT OF SCOPE for v30 (interface-only; concrete providers ship later).
 
 ### E — Observability (Per-Token Usage Tracking + Settings UI)
 
