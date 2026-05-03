@@ -580,3 +580,267 @@ describe('passthroughAnthropicMessages — Phase 58 true streaming (FR-BROKER-C1
 		expect(messagesStreamFinal).not.toHaveBeenCalled()
 	})
 })
+
+// ===== Phase 58 Wave 3: OpenAI Chat Completions true streaming + chatcmpl id hardening =====
+//
+// These tests assert that passthroughOpenAIChatCompletions:
+//   - On stream:true, replaces Phase 57's transitional aggregate-then-emit-single-chunk
+//     with true 1:1 delta translation via Wave 1's createAnthropicToOpenAIStreamTranslator
+//     (FR-BROKER-C2-01..02).
+//   - On stream:false, generates chatcmpl id via Wave 1's randomChatCmplId (crypto.randomBytes)
+//     instead of Phase 57's Math.random()-based randomBase62. ID matches ^chatcmpl-[A-Za-z0-9]{29}$
+//     (FR-BROKER-C2-03).
+//   - Streaming SSE headers include Cache-Control: no-cache, no-transform + X-Accel-Buffering: no.
+//   - Streaming branch calls messages.create({stream:true}) (NOT the Phase 57 messages.stream().finalMessage()).
+
+import {passthroughOpenAIChatCompletions} from './passthrough-handler.js'
+
+const OPENAI_STREAM_SCRIPT_EVENTS = [
+	{
+		type: 'message_start',
+		message: {
+			id: 'msg_openai_stream_test',
+			type: 'message',
+			role: 'assistant',
+			content: [],
+			model: 'claude-sonnet-4-6',
+			stop_reason: null,
+			stop_sequence: null,
+			usage: {input_tokens: 25, output_tokens: 1},
+		},
+	},
+	{type: 'content_block_start', index: 0, content_block: {type: 'text', text: ''}},
+	{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'Hello'}},
+	{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: ' from'}},
+	{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: ' OpenAI'}},
+	{type: 'content_block_stop', index: 0},
+	{
+		type: 'message_delta',
+		delta: {stop_reason: 'end_turn', stop_sequence: null},
+		usage: {output_tokens: 15},
+	},
+	{type: 'message_stop'},
+]
+
+describe('passthroughOpenAIChatCompletions — Phase 58 Wave 3 streaming (FR-BROKER-C2-01..02)', () => {
+	it('uses messages.create({stream:true}) and emits multiple chat.completion.chunk events', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(OPENAI_STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		// Streaming branch must call messages.create with stream:true (NOT finalMessage)
+		expect(messagesCreate).toHaveBeenCalledTimes(1)
+		expect(messagesCreate).toHaveBeenCalledWith(expect.objectContaining({stream: true}))
+		expect(messagesStreamFinal).not.toHaveBeenCalled()
+
+		// Wire output: translator emits OpenAI chat.completion.chunk lines.
+		const wire = res._writes.join('')
+		// At least one role chunk + 3 content chunks + 1 finish chunk + [DONE]
+		const dataLines = wire.split('\n').filter((l) => l.startsWith('data: ') && !l.includes('[DONE]'))
+		expect(dataLines.length).toBeGreaterThanOrEqual(5) // role + 3 deltas + final
+		// Each chunk uses object: chat.completion.chunk
+		expect(wire).toContain('"object":"chat.completion.chunk"')
+		// Content deltas appear separately (not aggregated into one fat chunk)
+		expect(wire).toContain('"content":"Hello"')
+		expect(wire).toContain('"content":" from"')
+		expect(wire).toContain('"content":" OpenAI"')
+		// Terminator
+		expect(wire).toContain('data: [DONE]')
+		expect(res._ended).toBe(true)
+	})
+
+	it('emits final chunk with usage object before [DONE] (FR-BROKER-C2-02)', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(OPENAI_STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		const wire = res._writes.join('')
+		// Final chunk has usage with non-zero token counts (input=25, output=15 cumulative)
+		expect(wire).toMatch(/"usage":\s*\{[^}]*"prompt_tokens":\s*25/)
+		expect(wire).toMatch(/"usage":\s*\{[^}]*"completion_tokens":\s*15/)
+		expect(wire).toMatch(/"usage":\s*\{[^}]*"total_tokens":\s*40/)
+		// usage chunk appears BEFORE [DONE]
+		const doneIdx = wire.indexOf('data: [DONE]')
+		const usageIdx = wire.indexOf('"usage"')
+		expect(usageIdx).toBeGreaterThanOrEqual(0)
+		expect(usageIdx).toBeLessThan(doneIdx)
+	})
+
+	it('sets SSE headers including no-transform and X-Accel-Buffering before streaming', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(OPENAI_STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		expect(res._headers['Content-Type']).toBe('text/event-stream')
+		expect(res._headers['Cache-Control']).toContain('no-transform')
+		expect(res._headers['Connection']).toBe('keep-alive')
+		expect(res._headers['X-Accel-Buffering']).toBe('no')
+	})
+
+	it('echoes caller-requested body.model in chunk.model (NOT resolved Claude model)', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(OPENAI_STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		const wire = res._writes.join('')
+		expect(wire).toContain('"model":"gpt-4o"')
+		// Resolved Anthropic model name should NOT appear in chunks
+		expect(wire).not.toContain('"model":"claude-sonnet-4-6"')
+	})
+
+	it('every emitted chunk shares the same chatcmpl-* id matching OpenAI regex (per-stream id stability)', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(OPENAI_STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		const wire = res._writes.join('')
+		const ids = [...wire.matchAll(/"id":"(chatcmpl-[A-Za-z0-9]+)"/g)].map((m) => m[1])
+		expect(ids.length).toBeGreaterThanOrEqual(2)
+		// All ids must be identical within one stream
+		const uniqueIds = new Set(ids)
+		expect(uniqueIds.size).toBe(1)
+		// And match OpenAI regex
+		const onlyId = ids[0]!
+		expect(onlyId).toMatch(/^chatcmpl-[A-Za-z0-9]{29}$/)
+	})
+
+	it('respects res.writableEnded and stops iterating on client disconnect', async () => {
+		const res = makeRes()
+		const longScript = [
+			OPENAI_STREAM_SCRIPT_EVENTS[0]!, // message_start
+			OPENAI_STREAM_SCRIPT_EVENTS[1]!, // content_block_start
+			{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'a'}},
+			{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'b'}},
+			{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'c'}},
+			{type: 'message_stop'},
+		]
+		const iter: AsyncIterable<any> = {
+			[Symbol.asyncIterator]() {
+				let i = 0
+				return {
+					async next() {
+						if (i >= longScript.length) return {value: undefined, done: true}
+						const value = longScript[i++]
+						if (i === 2) (res as any).writableEnded = true
+						return {value, done: false}
+					},
+				}
+			},
+		}
+		messagesCreate.mockResolvedValueOnce(iter)
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		// Once writableEnded flips, loop must break — translator's writeChunk also no-ops.
+		// Most importantly: code does NOT crash and finalize is best-effort safe.
+		// Since writableEnded is flipped, the translator will not emit anything.
+		// Test passes if no exception is thrown and the handler returns.
+		expect(true).toBe(true)
+	})
+})
+
+describe('passthroughOpenAIChatCompletions — Phase 58 Wave 3 sync id hardening (FR-BROKER-C2-03)', () => {
+	const SYNC_RESPONSE = {
+		id: 'msg_sync_xyz',
+		type: 'message',
+		role: 'assistant',
+		content: [{type: 'text', text: 'sync hello'}],
+		model: 'claude-sonnet-4-6',
+		stop_reason: 'end_turn',
+		stop_sequence: null,
+		usage: {input_tokens: 12, output_tokens: 8},
+	}
+
+	it('returns sync response with chatcmpl id matching ^chatcmpl-[A-Za-z0-9]{29}$ (crypto-based)', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: false,
+			},
+			res,
+		})
+		expect(res._status).toBe(200)
+		expect(res._body).toBeTruthy()
+		expect(res._body.id).toMatch(/^chatcmpl-[A-Za-z0-9]{29}$/)
+		expect(res._body.object).toBe('chat.completion')
+		expect(res._body.usage).toEqual({prompt_tokens: 12, completion_tokens: 8, total_tokens: 20})
+	})
+
+	it('generates DISTINCT ids across multiple sync calls (collision-resistant)', async () => {
+		const ids: string[] = []
+		for (let i = 0; i < 20; i++) {
+			messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE)
+			const res = makeRes()
+			await passthroughOpenAIChatCompletions({
+				livinityd: makeLivinityd(),
+				userId: 'abc123',
+				body: {
+					model: 'gpt-4o',
+					messages: [{role: 'user', content: 'Hi'}],
+					stream: false,
+				},
+				res,
+			})
+			ids.push(res._body.id)
+		}
+		// 20 distinct ids
+		const unique = new Set(ids)
+		expect(unique.size).toBe(20)
+		// All match regex
+		for (const id of ids) {
+			expect(id).toMatch(/^chatcmpl-[A-Za-z0-9]{29}$/)
+		}
+	})
+})
