@@ -139,8 +139,8 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 60-01-PLAN.md — Wave 0 Server5 ground-truth diagnostic (single-batched ssh) + 5-Q verdict table
-- [ ] 60-02-PLAN.md — Wave 1 xcaddy build + binary swap (`/usr/bin/caddy` → custom build with `caddy-ratelimit`)
+- [x] 60-01-PLAN.md — Wave 0 Server5 ground-truth diagnostic (single-batched ssh) + 5-Q verdict table — SHIPPED 2026-05-03 (commit `59ceeb16`; FIXTURE 312 lines; 5/5 verdicts)
+- [x] 60-02-PLAN.md — Wave 1 xcaddy build + binary swap (`/usr/bin/caddy` → custom build with `caddy-ratelimit`) — SHIPPED 2026-05-03 (commit `262ac9df`; Caddy v2.11.2 + mholt/caddy-ratelimit + caddy-dns/cloudflare; backup `/usr/bin/caddy.bak.20260503-070012`; DELETION_COUNT=0; smoke regression PASS; sacred SHA byte-identical; FR-BROKER-B2-02 satisfied)
 - [ ] 60-03-PLAN.md — Wave 2 Relay code extension for `api.livinity.io` → admin tunnel routing (TDD)
 - [ ] 60-04-PLAN.md — Wave 3 Caddyfile addition + DNS A record + broker IP-guard removal
 - [ ] 60-05-PLAN.md — Wave 4 phase-60-smoke.sh + 60-SMOKE-RESULTS.md + sacred file final gate
@@ -224,7 +224,7 @@ Plans:
 | 57. A1+A2 Passthrough + Agent Mode   | v30.0     | 5/5            | Complete    | 2026-05-02 |
 | 58. C1+C2 True Token Streaming       | v30.0     | 5/5            | Complete    | 2026-05-03 |
 | 59. B1 Bearer Token Auth             | v30.0     | 0/0            | Not started | -          |
-| 60. B2 Public Endpoint               | v30.0     | 0/5            | Not started | -          |
+| 60. B2 Public Endpoint               | v30.0     | 2/5            | In progress | -          |
 | 61. C3+D1+D2 Spec Compliance         | v30.0     | 0/0            | Not started | -          |
 | 62. E1+E2 Usage + Settings UI        | v30.0     | 0/5            | Not started | -          |
 | 63. Mandatory Live Verification      | v30.0     | 0/11           | Not started | -          |
