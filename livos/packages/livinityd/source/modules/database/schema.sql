@@ -335,3 +335,25 @@ CREATE TABLE IF NOT EXISTS broker_usage (
 
 CREATE INDEX IF NOT EXISTS idx_broker_usage_user_created ON broker_usage(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_broker_usage_app          ON broker_usage(app_id, created_at DESC);
+
+-- =========================================================================
+-- API Keys (Phase 59 FR-BROKER-B1-01..05) — Per-user `liv_sk_*` Bearer tokens.
+-- Cleartext returned ONCE on create. SHA-256 hash stored. Revocation is soft
+-- (revoked_at NOT NULL means revoked). Mirrors docker_agents shape (Phase 22).
+-- gen_random_uuid() works WITHOUT a pgcrypto extension declaration (matches
+-- existing convention: 14 other tables use gen_random_uuid() with no extension
+-- line). RESEARCH.md Open Question 1 verdict: omit the extension line.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS api_keys (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key_hash      CHAR(64) NOT NULL UNIQUE,
+  key_prefix    VARCHAR(16) NOT NULL,
+  name          VARCHAR(64) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at  TIMESTAMPTZ,
+  revoked_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active  ON api_keys(key_hash) WHERE revoked_at IS NULL;
