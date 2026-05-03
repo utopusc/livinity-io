@@ -27,6 +27,7 @@ describe('fake-anthropic-sse-server (Phase 58 Wave 0 self-test)', () => {
 			headers: {'Content-Type': 'application/json'},
 			body: JSON.stringify({
 				model: 'claude-sonnet-4-6',
+				stream: true, // Wave 4 update: fake server now serves JSON when stream is omitted
 				messages: [{role: 'user', content: 'hi'}],
 			}),
 		})

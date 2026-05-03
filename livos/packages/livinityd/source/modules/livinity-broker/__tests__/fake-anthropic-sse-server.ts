@@ -48,6 +48,103 @@ export function createFakeAnthropicServer(
 			})
 			return
 		}
+
+		// Phase 58 Wave 4 (FR-BROKER-C2-03): when caller omits stream:true (sync
+		// mode), serve a JSON Message reconstructed from the script — the
+		// Anthropic SDK's messages.create() without stream:true expects a JSON
+		// body, not SSE. We aggregate the script's text deltas + final usage
+		// into a single Message shape so sync-mode integration tests can assert
+		// non-zero usage end-to-end.
+		const wantsStream = req.body?.stream === true
+		if (!wantsStream) {
+			let model = 'claude-sonnet-4-6'
+			let inputTokens = 0
+			let outputTokens = 0
+			let stopReason: string | null = null
+			let messageId = 'msg_test'
+			const contentBlocks: Array<Record<string, unknown>> = []
+			const blockState = new Map<number, {type: string; text: string; toolJson: string; id?: string; name?: string}>()
+
+			for (const event of opts.script) {
+				const data = event.data as any
+				if (event.type === 'message_start') {
+					if (data?.message?.id) messageId = data.message.id
+					if (data?.message?.model) model = data.message.model
+					if (typeof data?.message?.usage?.input_tokens === 'number') {
+						inputTokens = data.message.usage.input_tokens
+					}
+					continue
+				}
+				if (event.type === 'content_block_start') {
+					const idx = data?.index ?? 0
+					const cb = data?.content_block ?? {}
+					blockState.set(idx, {
+						type: cb.type ?? 'text',
+						text: cb.type === 'text' ? (cb.text ?? '') : '',
+						toolJson: '',
+						id: cb.id,
+						name: cb.name,
+					})
+					continue
+				}
+				if (event.type === 'content_block_delta') {
+					const idx = data?.index ?? 0
+					const state = blockState.get(idx)
+					const delta = data?.delta ?? {}
+					if (!state) continue
+					if (delta.type === 'text_delta' && typeof delta.text === 'string') {
+						state.text += delta.text
+					} else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+						state.toolJson += delta.partial_json
+					}
+					continue
+				}
+				if (event.type === 'content_block_stop') {
+					const idx = data?.index ?? 0
+					const state = blockState.get(idx)
+					if (!state) continue
+					if (state.type === 'text') {
+						contentBlocks.push({type: 'text', text: state.text})
+					} else if (state.type === 'tool_use') {
+						let parsedInput: unknown = {}
+						try {
+							parsedInput = state.toolJson ? JSON.parse(state.toolJson) : {}
+						} catch {
+							parsedInput = {}
+						}
+						contentBlocks.push({
+							type: 'tool_use',
+							id: state.id ?? 'toolu_test',
+							name: state.name ?? 'unknown',
+							input: parsedInput,
+						})
+					}
+					continue
+				}
+				if (event.type === 'message_delta') {
+					if (typeof data?.usage?.output_tokens === 'number') {
+						outputTokens = data.usage.output_tokens
+					}
+					if (typeof data?.delta?.stop_reason === 'string') {
+						stopReason = data.delta.stop_reason
+					}
+					continue
+				}
+			}
+
+			res.status(200).json({
+				id: messageId,
+				type: 'message',
+				role: 'assistant',
+				content: contentBlocks,
+				model,
+				stop_reason: stopReason,
+				stop_sequence: null,
+				usage: {input_tokens: inputTokens, output_tokens: outputTokens},
+			})
+			return
+		}
+
 		res.setHeader('Content-Type', 'text/event-stream')
 		res.setHeader('Cache-Control', 'no-cache')
 		res.setHeader('Connection', 'keep-alive')
