@@ -1,6 +1,6 @@
 import express, {type Request, type Response} from 'express'
 import type {AgentResult} from '@nexus/core'
-import {containerSourceIpGuard, resolveAndAuthorizeUserId} from './auth.js'
+import {resolveAndAuthorizeUserId} from './auth.js'
 import {translateAnthropicMessagesToSdkArgs} from './translate-request.js'
 import {createSseAdapter} from './sse-adapter.js'
 import {buildSyncAnthropicResponse, aggregateChunkText} from './sync-response.js'
@@ -19,28 +19,34 @@ import {passthroughAnthropicMessages} from './passthrough-handler.js'
  *                                Anthropic Messages SSE chunks (when stream:true).
  *
  * Middleware chain (in order):
- *   1. containerSourceIpGuard      — reject non-loopback / non-Docker-bridge IPs (401)
- *   2. express.json({limit:'10mb'}) — parse JSON body (10mb headroom for future image blocks)
- *   3. resolveAndAuthorizeUserId   — 400 invalid id / 404 unknown / 403 single-user-mode
- *   4. body validation              — 400 for invalid Anthropic Messages shape
- *   5. handler                      — sync or SSE response per body.stream flag
+ *   1. express.json({limit:'10mb'}) — parse JSON body (10mb headroom for future image blocks)
+ *   2. resolveAndAuthorizeUserId   — 400 invalid id / 404 unknown / 403 single-user-mode
+ *   3. body validation              — 400 for invalid Anthropic Messages shape
+ *   4. handler                      — sync or SSE response per body.stream flag
+ *
+ * Phase 60 — IP guard REMOVED (FR-BROKER-B2-01). Phase 59 Bearer middleware
+ * (mounted at `/u/:userId/v1` in server/index.ts) is the new primary identity
+ * surface for external Bearer-authed traffic via api.livinity.io. For internal
+ * Mini-PC-LAN traffic without a Bearer header, the Phase 59 middleware falls
+ * through (req.userId not set) and the legacy URL-path resolveAndAuthorizeUserId
+ * still validates ownership. The container IP guard previously lived here as
+ * defense-in-depth against external traffic reaching this route — now
+ * superseded by Server5 Caddy + caddy-ratelimit perimeter (Wave 1) + Bearer
+ * auth (Phase 59).
  */
 export function createBrokerRouter(deps: BrokerDeps): express.Router {
 	const router = express.Router()
 
-	// 1. IP guard — first thing, before body parsing
-	router.use(containerSourceIpGuard)
-
-	// 2. JSON body parsing (10MB limit — leaves room for future image content blocks)
+	// 1. JSON body parsing (10MB limit — leaves room for future image content blocks)
 	router.use(express.json({limit: '10mb'}))
 
-	// 3 + 4 + 5. POST /:userId/v1/messages
+	// 2 + 3 + 4. POST /:userId/v1/messages
 	router.post('/:userId/v1/messages', async (req: Request, res: Response) => {
-		// 3. user_id resolution + authorization
+		// 2. user_id resolution + authorization
 		const auth = await resolveAndAuthorizeUserId(req, res, deps.livinityd)
 		if (!auth) return // response already written
 
-		// 4. body validation
+		// 3. body validation
 		const body = req.body as AnthropicMessagesRequest
 		if (!body || typeof body !== 'object') {
 			res.status(400).json({
@@ -120,7 +126,7 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 			return
 		}
 
-		// 5. Real handler — proxy to /api/agent/stream + adapt response per stream flag
+		// 4. Real handler — proxy to /api/agent/stream + adapt response per stream flag
 		const wantsStream = body.stream === true
 		const model = body.model
 
@@ -226,7 +232,9 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 	})
 
 	// Phase 42: register OpenAI Chat Completions endpoint on the same router
-	// (inherits containerSourceIpGuard + express.json middleware applied above).
+	// (inherits express.json middleware applied above; Phase 60 removed the
+	// previous router-level containerSourceIpGuard — Bearer auth at Phase 59
+	// + Caddy perimeter rate-limit at Wave 1 supersede it).
 	registerOpenAIRoutes(router, deps)
 
 	return router

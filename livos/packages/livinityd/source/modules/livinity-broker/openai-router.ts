@@ -19,7 +19,9 @@ import {passthroughOpenAIChatCompletions} from './passthrough-handler.js'
  * Register POST /:userId/v1/chat/completions on the existing broker router.
  *
  * Mounted INSIDE createBrokerRouter() (router.ts) so it inherits the
- * router-level containerSourceIpGuard + express.json middleware.
+ * router-level express.json middleware. (Phase 60 removed the prior
+ * containerSourceIpGuard in favor of Caddy perimeter rate-limit + Phase 59
+ * Bearer auth as the new identity surface — FR-BROKER-B2-01.)
  *
  * Sync path complete in Plan 42-02; SSE streaming added in Plan 42-03
  * (this handler currently returns 501 when body.stream === true).
