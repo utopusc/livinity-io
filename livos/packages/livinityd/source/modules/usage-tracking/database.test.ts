@@ -31,6 +31,7 @@ describe('usage-tracking database Plan 44-02', () => {
 		await insertUsage({
 			userId: 'user-A',
 			appId: 'mirofish',
+			apiKeyId: null,
 			model: 'claude-sonnet-4-6',
 			promptTokens: 42,
 			completionTokens: 13,
@@ -40,8 +41,20 @@ describe('usage-tracking database Plan 44-02', () => {
 		expect(queryMock).toHaveBeenCalledTimes(1)
 		const [sql, params] = queryMock.mock.calls[0]
 		expect(sql).toMatch(/INSERT INTO broker_usage/)
-		expect(sql).toMatch(/user_id, app_id, model, prompt_tokens, completion_tokens, request_id, endpoint/)
-		expect(params).toEqual(['user-A', 'mirofish', 'claude-sonnet-4-6', 42, 13, 'msg_abc', 'messages'])
+		// Phase 62 — column list now 8 columns including api_key_id at position 3
+		expect(sql).toMatch(
+			/user_id, app_id, api_key_id, model, prompt_tokens, completion_tokens, request_id, endpoint/,
+		)
+		expect(params).toEqual([
+			'user-A',
+			'mirofish',
+			null,
+			'claude-sonnet-4-6',
+			42,
+			13,
+			'msg_abc',
+			'messages',
+		])
 	})
 
 	test('T2 — queryUsageByUser issues SELECT with user_id filter and orders by created_at DESC', async () => {

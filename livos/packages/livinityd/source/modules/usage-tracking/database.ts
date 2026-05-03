@@ -11,6 +11,7 @@ import {getPool} from '../database/index.js'
 export type UsageInsertInput = {
 	userId: string
 	appId: string | null
+	apiKeyId: string | null
 	model: string
 	promptTokens: number
 	completionTokens: number
@@ -22,6 +23,7 @@ export type UsageRow = {
 	id: string
 	user_id: string
 	app_id: string | null
+	api_key_id: string | null
 	model: string
 	prompt_tokens: number
 	completion_tokens: number
@@ -34,17 +36,25 @@ const DEFAULT_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 /**
  * Insert one broker_usage row. No-op if pool is uninitialised.
+ *
+ * Phase 62 FR-BROKER-E1-01 — `apiKeyId` is the resolved api_keys(id) UUID
+ * when the request came in over Bearer (Phase 59 middleware sets req.apiKeyId).
+ * Pass `null` for legacy URL-path traffic. The column order here MUST match
+ * the schema column order at schema.sql `broker_usage` ALTER block:
+ *   user_id, app_id, api_key_id, model, prompt_tokens, completion_tokens,
+ *   request_id, endpoint.
  */
 export async function insertUsage(input: UsageInsertInput): Promise<void> {
 	const pool = getPool()
 	if (!pool) return
 	await pool.query(
 		`INSERT INTO broker_usage
-		 (user_id, app_id, model, prompt_tokens, completion_tokens, request_id, endpoint)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		 (user_id, app_id, api_key_id, model, prompt_tokens, completion_tokens, request_id, endpoint)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		[
 			input.userId,
 			input.appId,
+			input.apiKeyId,
 			input.model,
 			input.promptTokens,
 			input.completionTokens,
@@ -57,17 +67,31 @@ export async function insertUsage(input: UsageInsertInput): Promise<void> {
 /**
  * Return the calling user's usage rows since the given date (defaults to 30
  * days). Always scoped to a single user_id — the caller passes ctx.currentUser.id.
+ *
+ * Phase 62 FR-BROKER-E2-02 — optional `apiKeyId` filter ANDs onto the WHERE
+ * (does NOT widen scope). Even if attacker passes another user's key UUID,
+ * the user_id scope guarantees zero rows leak across users (T-62-02 mitigation).
  */
-export async function queryUsageByUser(opts: {userId: string; since?: Date}): Promise<UsageRow[]> {
+export async function queryUsageByUser(opts: {
+	userId: string
+	since?: Date
+	apiKeyId?: string
+}): Promise<UsageRow[]> {
 	const pool = getPool()
 	if (!pool) return []
 	const since = opts.since ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS)
+	const params: unknown[] = [opts.userId, since]
+	let whereExtras = ''
+	if (opts.apiKeyId) {
+		params.push(opts.apiKeyId)
+		whereExtras = ` AND api_key_id = $${params.length}`
+	}
 	const result = await pool.query(
-		`SELECT id, user_id, app_id, model, prompt_tokens, completion_tokens, request_id, endpoint, created_at
+		`SELECT id, user_id, app_id, api_key_id, model, prompt_tokens, completion_tokens, request_id, endpoint, created_at
 		 FROM broker_usage
-		 WHERE user_id = $1 AND created_at >= $2
+		 WHERE user_id = $1 AND created_at >= $2${whereExtras}
 		 ORDER BY created_at DESC`,
-		[opts.userId, since],
+		params,
 	)
 	return result.rows as UsageRow[]
 }
@@ -75,11 +99,16 @@ export async function queryUsageByUser(opts: {userId: string; since?: Date}): Pr
 /**
  * Admin-only cross-user query. Built dynamically with optional filters.
  * Hard LIMIT 1000 to bound memory + DoS surface (T-44-03-03 mitigation).
+ *
+ * Phase 62 FR-BROKER-E2-02 — optional `apiKeyId` filter ANDs into the
+ * dynamic WHERE clause via parameterized $N placeholder (T-62-01 mitigation:
+ * never string-concatenated).
  */
 export async function queryUsageAll(opts: {
 	userId?: string
 	appId?: string
 	model?: string
+	apiKeyId?: string
 	since?: Date
 }): Promise<UsageRow[]> {
 	const pool = getPool()
@@ -99,8 +128,12 @@ export async function queryUsageAll(opts: {
 		params.push(opts.model)
 		conditions.push(`model = $${params.length}`)
 	}
+	if (opts.apiKeyId) {
+		params.push(opts.apiKeyId)
+		conditions.push(`api_key_id = $${params.length}`)
+	}
 	const result = await pool.query(
-		`SELECT id, user_id, app_id, model, prompt_tokens, completion_tokens, request_id, endpoint, created_at
+		`SELECT id, user_id, app_id, api_key_id, model, prompt_tokens, completion_tokens, request_id, endpoint, created_at
 		 FROM broker_usage
 		 WHERE ${conditions.join(' AND ')}
 		 ORDER BY created_at DESC

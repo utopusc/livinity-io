@@ -19,6 +19,7 @@ function makeRow(overrides: Partial<UsageRow>): UsageRow {
 		id: 'r-' + Math.random().toString(36).slice(2),
 		user_id: 'user-A',
 		app_id: 'mirofish',
+		api_key_id: null,
 		model: 'claude-sonnet-4-6',
 		prompt_tokens: 10,
 		completion_tokens: 5,

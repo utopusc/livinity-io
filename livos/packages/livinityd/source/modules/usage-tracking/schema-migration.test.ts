@@ -71,9 +71,11 @@ describe('Phase 44 schema migration — broker_usage idempotency (D-44-20)', () 
 		// 1. Header marker is present so future readers can find the migration block
 		expect(sql).toMatch(/Phase 62 FR-BROKER-E1-01/)
 
-		// 2. Idempotent ADD COLUMN block — wrapped in DO $$ ... END$$ per Phase 25 precedent
+		// 2. Idempotent ADD COLUMN block — wrapped in DO $$ ... END$$ per Phase 25 precedent.
+		// Capture the full block from the marker through the partial index WHERE clause
+		// (the index spans 3 lines: CREATE INDEX … ON … WHERE …).
 		const phase62BlockMatch = sql.match(
-			/Phase 62 FR-BROKER-E1-01[\s\S]*?CREATE INDEX IF NOT EXISTS idx_broker_usage_api_key_id[^\n]*/,
+			/Phase 62 FR-BROKER-E1-01[\s\S]*?WHERE api_key_id IS NOT NULL\s*;/,
 		)
 		expect(phase62BlockMatch).toBeTruthy()
 		const block = phase62BlockMatch![0]
