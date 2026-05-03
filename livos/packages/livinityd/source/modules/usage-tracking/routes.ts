@@ -25,7 +25,17 @@ import {
 } from './database.js'
 import {aggregateUsageStats, computeBannerState, type Tier} from './aggregations.js'
 
-const sinceInput = z.object({since: z.date().optional()}).optional()
+// Phase 62 Plan 03 FR-BROKER-E2-02 — UI filter dropdown can pass an apiKeyId.
+// camelCase here (privateProcedure UI ergonomics); getAll uses snake_case
+// `api_key_id` to match its existing user_id/app_id field convention.
+// Zod stays non-strict (default) so older UI bundles passing no apiKeyId
+// still validate (RESEARCH.md §Pitfall 2 — backwards-compat).
+const sinceInput = z
+	.object({
+		since: z.date().optional(),
+		apiKeyId: z.string().uuid().optional(),
+	})
+	.optional()
 
 const getMineProc = privateProcedure
 	.input(sinceInput)
@@ -43,7 +53,11 @@ const getMineProc = privateProcedure
 
 		const userId = ctx.currentUser.id
 		const since = input?.since
-		const rows: UsageRow[] = await queryUsageByUser({userId, since})
+		const rows: UsageRow[] = await queryUsageByUser({
+			userId,
+			since,
+			apiKeyId: input?.apiKeyId,
+		})
 		const stats = aggregateUsageStats(rows)
 		const todayCount = await countUsageToday(userId)
 
@@ -71,6 +85,10 @@ const getAllProc = adminProcedure
 				user_id: z.string().uuid().optional(),
 				app_id: z.string().optional(),
 				model: z.string().optional(),
+				// Phase 62 Plan 03 FR-BROKER-E2-02 — admin filter dimension.
+				// snake_case to match user_id/app_id convention; forwarded as
+				// camelCase apiKeyId to queryUsageAll (Plan 01 contract).
+				api_key_id: z.string().uuid().optional(),
 				since: z.date().optional(),
 			})
 			.optional(),
@@ -80,6 +98,7 @@ const getAllProc = adminProcedure
 			userId: input?.user_id,
 			appId: input?.app_id,
 			model: input?.model,
+			apiKeyId: input?.api_key_id,
 			since: input?.since,
 		})
 		const stats = aggregateUsageStats(rows)
