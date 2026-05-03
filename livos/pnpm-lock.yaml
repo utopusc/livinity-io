@@ -58,6 +58,9 @@ importers:
 
   packages/livinityd:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.80.0
+        version: 0.80.0(zod@3.25.76)
       '@aws-sdk/client-s3':
         specifier: ^3.700.0
         version: 3.1037.0
