@@ -1,71 +1,7 @@
-import type {Request, Response, NextFunction} from 'express'
+import type {Request, Response} from 'express'
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 import {findUserById, getAdminUser} from '../database/index.js'
 import type Livinityd from '../../index.js'
-
-/**
- * Container source IP guard for the broker route.
- *
- * Allowlist (per D-41-08 + 41-AUDIT.md Section 7b — expanded in Phase 41.1 + 41.2 hotfixes):
- *   - 127.0.0.1 / ::1 / ::ffff:127.0.0.1   (loopback)
- *   - 10.0.0.0/8                           (RFC 1918 — Docker custom networks, swarm overlays
- *                                            often default here; common in Mini PC setups)
- *   - 172.16.0.0/12                        (RFC 1918 — default bridge + per-app compose bridges)
- *   - 192.168.0.0/16                       (RFC 1918 — Docker macvlan / host-bridge configs)
- *
- * Everything else → HTTP 401 + JSON error body.
- *
- * Threat model note: external traffic CANNOT reach this route in production
- * because the Mini PC firewall blocks port 8080 externally and livinityd's
- * existing CORS + helmet stack handles internet-facing routes elsewhere — but
- * this guard is defense-in-depth in case of future misconfiguration. The
- * full RFC 1918 allowlist is safe because RFC 1918 IPs are unroutable on
- * the public internet by definition. See 41-AUDIT.md §7b for full rationale.
- */
-function isValidIPv4(parts: string[]): boolean {
-	return (
-		parts.length === 4 &&
-		parts.every((p) => /^\d+$/.test(p) && +p >= 0 && +p <= 255)
-	)
-}
-
-export function containerSourceIpGuard(req: Request, res: Response, next: NextFunction): void {
-	let ip = req.socket.remoteAddress || ''
-	// Strip IPv4-mapped-IPv6 prefix (e.g. ::ffff:127.0.0.1)
-	if (ip.startsWith('::ffff:')) ip = ip.slice(7)
-
-	if (ip === '127.0.0.1' || ip === '::1') {
-		next()
-		return
-	}
-
-	const parts = ip.split('.')
-	if (isValidIPv4(parts)) {
-		const a = +parts[0]
-		const b = +parts[1]
-		// RFC 1918 private blocks
-		if (a === 10) {
-			next()
-			return
-		}
-		if (a === 172 && b >= 16 && b <= 31) {
-			next()
-			return
-		}
-		if (a === 192 && b === 168) {
-			next()
-			return
-		}
-	}
-
-	res.status(401).json({
-		type: 'error',
-		error: {
-			type: 'authentication_error',
-			message: `request source ip ${ip || '(unknown)'} not on broker allowlist`,
-		},
-	})
-}
 
 /**
  * Resolve userId from URL param + authorize.
@@ -84,6 +20,12 @@ export function containerSourceIpGuard(req: Request, res: Response, next: NextFu
  * Per 41-AUDIT.md Section 4 (corrected from plan example): users-table API
  * is `findUserById` + `getAdminUser` from `'../../database/index.js'`, not
  * `livinityd.users.*` methods.
+ *
+ * Phase 60 — `containerSourceIpGuard` removed from this module
+ * (FR-BROKER-B2-01). Identity is now established by Phase 59 Bearer middleware
+ * for external traffic via api.livinity.io; for internal Mini-PC-LAN traffic
+ * without a Bearer header the Phase 59 middleware falls through and this
+ * URL-path resolver remains the legacy identity surface.
  */
 export async function resolveAndAuthorizeUserId(
 	req: Request,
