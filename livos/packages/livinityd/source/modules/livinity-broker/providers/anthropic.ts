@@ -255,10 +255,23 @@ function buildAgentSdkQueryParams(
 		allowedTools.push('mcp__passthrough-noop__noop')
 	}
 
+	// Phase 63 R3.10 — disallow built-in Claude Code tools so Claude is forced
+	// to use ONLY the client-supplied tools (Bolt's file_write etc). Without
+	// this, Claude defaults to Bash/Read/Write for file ops, SDK errors with
+	// "Model tried to call unavailable tool 'Bash'" because allowedTools
+	// excludes built-ins.
+	const builtInTools = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Task', 'TodoWrite', 'WebFetch', 'WebSearch', 'NotebookEdit']
+	const clientToolList = clientToolNames.length > 0 ? clientToolNames.join(', ') : 'none'
+	const finalSystemPrompt = (systemPrompt || '') +
+		`\n\nIMPORTANT: You are a passthrough proxy. The user has provided these tools: ${clientToolList}. ` +
+		`You MUST use ONLY these tools by their exact names. Built-in Claude Code tools (Bash, Read, Write, Edit, Glob, Grep, etc.) are NOT AVAILABLE — never attempt to call them. ` +
+		`If the user asks for something requiring file/shell ops, use the user's provided tools.`
+
 	const options: AgentSdkOptions = {
-		systemPrompt: systemPrompt || undefined,
+		systemPrompt: finalSystemPrompt,
 		mcpServers,
 		allowedTools,
+		disallowedTools: builtInTools,
 		maxTurns: 1,
 		model: params.model,
 		permissionMode: 'dontAsk',
