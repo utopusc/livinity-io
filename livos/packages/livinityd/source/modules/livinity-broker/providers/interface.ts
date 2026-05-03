@@ -68,6 +68,20 @@ export type ProviderRequestOpts = {
 	authToken: string
 	signal?: AbortSignal
 	clientOverride?: unknown
+	/**
+	 * Phase 63 R3 — subscription auth scope. When provided, AnthropicProvider
+	 * uses @anthropic-ai/claude-agent-sdk's query() with `env.HOME = cwd`
+	 * (per-user .claude credentials dir). When absent, the legacy HTTP path
+	 * runs — but that path is broken for subscription OAuth tokens, kept
+	 * only for backward compat with potential future API key tier paths.
+	 */
+	cwd?: string
+	/**
+	 * Phase 63 R3 — query() override for test seam. When provided, replaces
+	 * the @anthropic-ai/claude-agent-sdk query() call. Production paths
+	 * leave undefined.
+	 */
+	queryOverride?: unknown
 }
 
 /**
