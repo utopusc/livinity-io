@@ -8,16 +8,41 @@ livinity.io {
 	tls {
 		on_demand
 	}
+	handle /downloads/* {
+		root * /opt
+		file_server
+	}
+	handle {
+		reverse_proxy localhost:3000
+	}
+}
+
+apps.livinity.io {
+	tls {
+		on_demand
+	}
 	reverse_proxy localhost:3000
+}
+
+changelog.livinity.io {
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:3002
 }
 
 *.livinity.io {
 	tls {
 		on_demand
 	}
-	reverse_proxy localhost:4000 {
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Real-IP {remote_host}
+	@marketplace host mcp.livinity.io
+	handle @marketplace {
+		reverse_proxy localhost:4100
+	}
+	handle {
+		reverse_proxy localhost:4000 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 }
 
@@ -26,18 +51,6 @@ livinity.io {
 		on_demand
 	}
 	reverse_proxy localhost:4000 {
-		header_up X-Forwarded-Proto {scheme}
 		header_up X-Real-IP {remote_host}
-	}
-}
-
-https:// {
-	tls {
-		on_demand
-	}
-	reverse_proxy localhost:4000 {
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Real-IP {remote_host}
-		header_up X-Custom-Domain {host}
 	}
 }
