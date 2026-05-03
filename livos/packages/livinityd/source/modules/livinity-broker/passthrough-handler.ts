@@ -32,6 +32,13 @@ export interface PassthroughOpts {
 	userId: string
 	body: AnthropicMessagesRequest
 	res: Response
+	/**
+	 * Phase 58 Wave 0 (test seam): override default Anthropic client construction.
+	 * Used by Wave 4 integration tests to wire the SDK to a fake-Anthropic SSE
+	 * server via baseURL. Production code paths leave this undefined; behavior
+	 * unchanged from Phase 57 when undefined.
+	 */
+	clientFactory?: (token: SubscriptionToken) => Anthropic
 }
 
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -42,7 +49,7 @@ const TOKEN_REFRESH_URL = 'https://platform.claude.com/v1/oauth/token'
  * Per Wave 1 Risk-A1 smoke gate: SDK produces `Authorization: Bearer <token>`
  * headers automatically when `authToken` (NOT `apiKey`) is supplied.
  */
-function makeClient(token: SubscriptionToken): Anthropic {
+export function makeClient(token: SubscriptionToken): Anthropic {
 	return new Anthropic({
 		authToken: token.accessToken,
 		defaultHeaders: {'anthropic-version': ANTHROPIC_VERSION},
@@ -140,7 +147,7 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 		`[livinity-broker:passthrough] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true}`,
 	)
 
-	const client = makeClient(token)
+	const client = (opts.clientFactory ?? makeClient)(token)
 
 	// Pitfall (T-57-08): construct upstream body as a NEW object — do NOT
 	// mutate `body` in place. Tools + system pass through verbatim.
@@ -249,6 +256,13 @@ export interface OpenAIPassthroughOpts {
 	userId: string
 	body: OpenAIChatCompletionsRequest
 	res: Response
+	/**
+	 * Phase 58 Wave 0 (test seam): override default Anthropic client construction.
+	 * Used by Wave 4 integration tests to wire the SDK to a fake-Anthropic SSE
+	 * server via baseURL. Production code paths leave this undefined; behavior
+	 * unchanged from Phase 57 when undefined.
+	 */
+	clientFactory?: (token: SubscriptionToken) => Anthropic
 }
 
 /** Anthropic upstream body assembled from an OpenAI request. */
@@ -388,7 +402,7 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 		`[livinity-broker:passthrough:openai] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true}`,
 	)
 
-	const client = makeClient(token)
+	const client = (opts.clientFactory ?? makeClient)(token)
 
 	let anthropicBody: UpstreamAnthropicBody
 	try {
