@@ -37,7 +37,7 @@ External API consumers expect `Authorization: Bearer <key>` and a public endpoin
 
 - [x] **FR-BROKER-B1-01** — A new PostgreSQL `api_keys` table stores per-user API keys: `id`, `user_id`, `key_hash` (SHA-256), `key_prefix` (first 8 chars of the secret for display), `name` (user-supplied label), `created_at`, `last_used_at`, `revoked_at`.
 - [x] **FR-BROKER-B1-02** — Generated keys follow the `liv_sk_<base62-32chars>` format. The plaintext key is shown ONCE at creation time and never stored in plaintext. Verification uses constant-time SHA-256 hash comparison.
-- [ ] **FR-BROKER-B1-03** — Bearer token middleware validates `Authorization: Bearer liv_sk_*` on broker routes BEFORE the existing per-user URL-path identity logic. A valid token resolves to its `user_id`; the URL-path `:userId` becomes optional (Bearer is the source of identity when present).
+- [x] **FR-BROKER-B1-03** — Bearer token middleware validates `Authorization: Bearer liv_sk_*` on broker routes BEFORE the existing per-user URL-path identity logic. A valid token resolves to its `user_id`; the URL-path `:userId` becomes optional (Bearer is the source of identity when present).
 - [x] **FR-BROKER-B1-04
 ** — A user-facing tRPC route allows admins/users to: create a key (returns plaintext once + key id), list their own keys (no plaintext), and revoke a key (sets `revoked_at`).
 - [x] **FR-BROKER-B1-05
