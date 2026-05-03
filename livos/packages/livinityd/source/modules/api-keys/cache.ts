@@ -246,3 +246,41 @@ export class ApiKeyCache {
 export function createApiKeyCache(deps: CreateApiKeyCacheDeps = {}): ApiKeyCache {
 	return new ApiKeyCache(deps)
 }
+
+// ─── Singleton accessor (Wave 3 / Plan 04) ─────────────────────────────────
+// The Livinityd constructor builds the canonical `apiKeyCache` (the one the
+// bearer middleware mounts onto `/u/:userId/v1`). The Wave 3 tRPC routes
+// (`apiKeys.revoke` in particular) need to call `.invalidate(keyHash)` on
+// THAT same instance so revocation propagates synchronously through the same
+// cache the bearer middleware reads from. Rather than thread the cache
+// reference through every tRPC procedure's context, the constructor calls
+// `setSharedApiKeyCache(this.apiKeyCache)` once at startup; routes.ts then
+// calls `getSharedApiKeyCache()` lazily inside each procedure.
+//
+// Mirrors the `getPool()` shape from `database/index.ts` — process-wide
+// singleton, set once at boot, throws if accessed before set.
+
+let sharedInstance: ApiKeyCache | null = null
+
+export function setSharedApiKeyCache(cache: ApiKeyCache): void {
+	sharedInstance = cache
+}
+
+export function getSharedApiKeyCache(): ApiKeyCache {
+	if (sharedInstance === null) {
+		throw new Error(
+			'[api-keys.cache] getSharedApiKeyCache() called before setSharedApiKeyCache() — ' +
+				'Livinityd constructor must register the cache singleton before any tRPC route runs.',
+		)
+	}
+	return sharedInstance
+}
+
+/**
+ * Test-only escape hatch — clears the singleton so independent test files
+ * don't see leftover state from prior runs. Production code MUST NOT call
+ * this; the singleton is set once per process at Livinityd construction.
+ */
+export function resetSharedApiKeyCacheForTests(): void {
+	sharedInstance = null
+}

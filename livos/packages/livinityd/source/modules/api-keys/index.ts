@@ -17,8 +17,19 @@ export {
 export type {ApiKeyRow} from './database.js'
 
 // Wave 2 (Phase 59-03) — Bearer auth hot-path cache.
-export {ApiKeyCache, createApiKeyCache} from './cache.js'
+export {
+	ApiKeyCache,
+	createApiKeyCache,
+	getSharedApiKeyCache,
+	setSharedApiKeyCache,
+	resetSharedApiKeyCacheForTests,
+} from './cache.js'
 export type {CacheEntry, PublicCacheEntry, MinimalLogger} from './cache.js'
 
 // Wave 2 (Phase 59-03) — Bearer middleware factory + mount helper.
 export {createBearerMiddleware, mountBearerAuthMiddleware} from './bearer-auth.js'
+
+// Wave 3 (Phase 59-04) — tRPC router + audit hook.
+export {default as apiKeysRouter} from './routes.js'
+export {recordApiKeyEvent} from './events.js'
+export type {ApiKeyAuditEvent} from './events.js'

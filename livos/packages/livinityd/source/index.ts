@@ -24,7 +24,7 @@ import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
-import {ApiKeyCache, createApiKeyCache} from './modules/api-keys/index.js'
+import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
@@ -155,6 +155,14 @@ export default class Livinityd {
 		// instantiating here keeps the field always-defined for the bearer-auth
 		// middleware mounted by Server.start().
 		this.apiKeyCache = createApiKeyCache({logger: this.logger})
+		// Phase 59 Plan 04 — register the singleton so the apiKeysRouter
+		// (specifically the `revoke` mutation) can call
+		// `getSharedApiKeyCache().invalidate(keyHash)` and hit the SAME cache
+		// the bearer middleware reads from. Without this registration the
+		// route would either crash at first revoke OR (worse) mutate a
+		// detached instance leaving the bearer middleware serving cached
+		// positives for up to 60s — RESEARCH.md Pitfall 1 / T-59-21.
+		setSharedApiKeyCache(this.apiKeyCache)
 	}
 
 	async start() {
