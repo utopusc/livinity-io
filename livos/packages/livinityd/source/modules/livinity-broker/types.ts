@@ -36,3 +36,6 @@ export interface AnthropicMessagesRequest {
 export interface BrokerDeps {
 	livinityd: import('../../index.js').default
 }
+
+// Phase 57: dual-mode dispatch
+export type BrokerMode = 'passthrough' | 'agent'
