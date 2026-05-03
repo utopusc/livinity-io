@@ -85,7 +85,55 @@ Q1 chose Strategy A (HTTP-proxy direct to api.anthropic.com with raw byte-forwar
 
 ## Q7: Agent Mode Block-Level Streaming Confirmation
 
-(Pending — written in Task 3.)
+### Verdict
+Chosen path: **Refined-B — Agent SDK CAN stream token-by-token but sacred file's call-site forces aggregation; passthrough mode (Q1's verdict) sidesteps the issue entirely; sacred file UNTOUCHED in v30; deferred sacred-edit logged as D-30-XX candidate for v30.1+ if internal-chat pain surfaces.**
+
+In one sentence: Agent mode keeps current block-level aggregation behavior in v30 (acceptable per Phase 51's deploy-layer fix); external-client streaming is delivered by Phase 57 passthrough mode bypassing the sacred file entirely; the sacred file is referenced READ-ONLY at `sdk-agent-runner.ts:378-389` (no edit, no recommendation in v30 — untouched per the v30 sacred-file boundary).
+
+### Rationale (4 reasons)
+1. **Sacred file integrity preserved (FR-BROKER-A1-04 + D-30 sacred boundary).** v30 contract is "sdk-agent-runner.ts byte-identical at SHA `4f868d318abff71f8c8bfbcf443b2393a553018b`." Passthrough mode (Q1's Strategy A) lets us achieve all v30 streaming goals for external clients WITHOUT touching the sacred file. A sacred-file edit is unnecessary for v30.0.
+2. **Passthrough delivers true token streaming for free.** Q1 chose raw HTTP-proxy with byte-forward of upstream Anthropic `Response.body` to the broker's `res` socket. This means external clients (Bolt.diy / Open WebUI / Continue.dev) see Anthropic's native SSE event stream — `message_start` → `content_block_start` → `content_block_delta` ×N → `content_block_stop` → `message_delta` → `message_stop` — verbatim, with no aggregation or buffering anywhere along the path. This is the FR-BROKER-C1-01 + C1-02 outcome made concrete.
+3. **Agent mode aggregation is acceptable for internal LivOS AI Chat use.** Internal AI Chat already accommodates aggregated chunks visually (Phase 51's `update.sh` deploy-layer fix ensured fresh vite UI bundles, addressing the visual streaming regression at the deploy layer rather than the streaming-semantic layer). User pain on internal-chat token streaming has not been raised since Phase 51's fix; if it surfaces post-v30, it triggers a v30.1+ phase opening D-30-XX (with sacred-file edit ritual + integrity-test BASELINE_SHA bump + UAT). Per D-51-03 discipline, we don't preemptively reverse.
+4. **The Agent SDK CAN stream — falsifying the plan's candidate-A "fundamentally aggregates" framing — but the sacred file's call-site doesn't enable it.** From `nexus/packages/core/node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts` lines 1003-1006: `includePartialMessages?: boolean` option exists; lines 2144-2150 define `SDKPartialAssistantMessage = {type: 'stream_event', event: BetaRawMessageStreamEvent, ...}`. So the SDK supports `query({options: {includePartialMessages: true, ...}})` to receive token-level Anthropic SSE events. Sacred file's `query({options: {...}})` invocation at lines 340-355 does not opt in; loop at line 440 explicitly ignores `'stream_event'` type (`// Other message types (system, stream_event, tool_progress, etc.) are logged but not emitted`). This combined narrowing IS the aggregation site — fixable but deferred.
+
+### Alternatives Considered (3)
+- **Alt A (plan candidate A): "Agent SDK fundamentally aggregates → Agent mode keeps current behavior; passthrough fixes via direct Anthropic SSE"** — disqualified as the FRAMING but the OUTCOME is what we adopt. Falsifying part: the SDK does NOT fundamentally aggregate; it supports `includePartialMessages: true`. So the verdict shape (passthrough handles external; agent mode unchanged) is right but the rationale must be honest: agent-mode aggregation is a CALL-SITE choice, not an SDK constraint.
+- **Alt C (plan candidate C): "Agent SDK streams natively and sacred file aggregation is incidental → triggers D-51-03 reversal re-eval"** — disqualified because the sacred-file aggregation is NOT incidental (line 440 comment explicitly excludes `stream_event`). Adopting C would still require a sacred-file edit, so the v30 sacred-boundary makes this moot regardless.
+- **Alt: "Sacred-file edit in v30.0 to enable agent-mode streaming"** — disqualified by v30's explicit sacred-file-untouched constraint (FR-BROKER-A1-04, D-51-03 deferral discipline). If pain surfaces post-v30, this becomes a v30.1+ candidate via D-30-XX row, NOT in v30.0 scope.
+
+### Code-Level Integration Point
+- **Sacred file READ-ONLY reference:** `nexus/packages/core/src/sdk-agent-runner.ts:378-389` is the aggregation loop. This is referenced READ-ONLY for verdict context — NO EDIT in v30. The sacred file is UNTOUCHED across the entire v30.0 milestone (read-only access only — Read tool used at lines 260-300 + 340-355 + 378-389 + 440; zero Edit/Write calls; SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` confirmed unchanged at end of every Phase 56 plan task).
+- **Passthrough bypass site (where external-client streaming is delivered):** `livos/packages/livinityd/source/modules/livinity-broker/router.ts:88` — the existing SSE branch (`if (wantsStream) { ... res.setHeader('Content-Type', 'text/event-stream'); ... }`). Phase 57 plan 57-03 wires Q1's passthrough HTTP-proxy here so the SSE response body is piped verbatim from upstream Anthropic to the broker client. This branch ALREADY emits `text/event-stream` content-type; only the upstream source changes (from nexus `/api/agent/stream` aggregated chunks to direct `api.anthropic.com/v1/messages` raw SSE).
+- **For the future v30.1+ D-30-XX candidate (NOT v30):** if internal-chat token streaming is later mandated, the surgical edit lives at `sdk-agent-runner.ts:342` (add `includePartialMessages: true`) and `sdk-agent-runner.ts:378` (add `if (message.type === 'stream_event') { ... emit chunk per delta ... }` branch BEFORE the existing `'assistant'` handling). This is documented in `notes-q7-streaming.md` Section F5 for future reference. NO EDIT made in this phase or any v30 phase — sacred file SHA must remain `4f868d318abff71f8c8bfbcf443b2393a553018b`.
+
+### Risk + Mitigation
+- **Risk:** Internal LivOS AI Chat user complaints resurface about block-level streaming after v30 ships.
+  **Mitigation:** Such complaints open a new v30.1+ phase that opens the D-30-XX candidate row, performs the surgical edit at `sdk-agent-runner.ts:342` + `:378` per F5, runs the D-40-01 sacred-edit ritual (byte-counted diff, BASELINE_SHA bump in `sdk-agent-runner-integrity.test.ts`, audit comment), and closes via D-LIVE-VERIFICATION-GATE clean Mini PC UAT. NOT in v30 scope.
+- **Risk:** External-client passthrough fails to deliver visible token-by-token streaming despite raw byte forward (e.g., Server5 Caddy adds buffering, or the browser/client doesn't render incremental chunks).
+  **Mitigation:** Phase 57+58 integration tests (existing pattern: `>=3 distinct content_block_delta events asserted in <2s`); Phase 60 Caddy config explicitly disables proxy buffering (`flush_interval: -1` or equivalent) for the `api.livinity.io` block; Phase 63 live UAT (FR-VERIFY-V30-02 — Bolt.diy "≥3 visible delta updates in chat bubble").
+- **Risk:** D-30-XX is forgotten — agent-mode internal streaming silently lingers as an unaddressed debt.
+  **Mitigation:** This Q7 verdict explicitly logs the deferred-decision row description in `notes-q7-streaming.md` F5 + here. v30 SUMMARY (56-04 plan output) includes a "Deferred items" section listing D-30-XX as a v30.1+ candidate.
+
+### D-51-03 Implication
+
+Per Phase 51's `51-01-SUMMARY.md`, **D-51-03 deferred Branch N (sacred-file model identity preset switch) reversal pending Phase 56 spike findings**. **Q7's effect on D-51-03 is: Branch N reversal is NOT NEEDED in v30** — Phase 57 passthrough mode bypasses the sacred file for external clients (the use case where identity contamination was originally observed via Bolt.diy live testing). External-client identity preservation is delivered structurally by Q1's raw-byte HTTP-proxy forwarding (whatever the upstream model says reaches the client unmodified — no Nexus prepend possible because the broker never re-emits the message). Internal LivOS AI Chat (agent mode) keeps the current identity-line + aggregation behavior, which is acceptable per Phase 51's deploy-layer fix for the visual UI regression and the absence of repeated internal-chat user complaints since. **D-51-03 stays DEFERRED past v30.0; routed to D-30-XX candidate row for v30.1+ if internal-chat user pain ever resurfaces post-v30.**
+
+### D-NO-NEW-DEPS Implications
+Zero new deps. Q7's verdict is "do nothing in agent mode + leverage Q1's passthrough for external" — no new code, no new package, no new file. The future D-30-XX surgical edit (if ever opened) would also be zero-new-dep (uses the already-installed `@anthropic-ai/claude-agent-sdk@^0.2.84` option `includePartialMessages: true`).
+
+---
+
+## Cross-Cutting: Sacred File SHA Stability Across Plan 56-01
+
+`git hash-object nexus/packages/core/src/sdk-agent-runner.ts` re-run after each task:
+
+| Task | SHA after task | Match required `4f868d318abff71f8c8bfbcf443b2393a553018b`? |
+|------|----------------|-----------------------------------------------------------|
+| Task 1 (Q1) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+| Task 2 (Q2) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+| Task 3 (Q7) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+
+Read tool used on the sacred file at lines 260-300 (Q1), 340-355 + 375-400 + 435-441 (Q7). Zero Edit/Write/NotebookEdit/MultiEdit calls. Sacred boundary preserved across plan 56-01.
 
 ---
 
