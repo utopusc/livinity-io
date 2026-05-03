@@ -5,8 +5,9 @@
  * response shape, plus integration tests for the api.livinity.io dispatch wiring in
  * server.ts (Task 2 — appended at the bottom of this file).
  *
- * Threat model: findAdminTunnel MUST query users.role = 'admin' (not username = 'admin')
- * to defeat tunnel-hijack spoofing — see RESEARCH.md §"Tunnel Hijack" + threat T-60-20.
+ * v30 hot-patch (Phase 63 R1): platform.users has no `role` column, so single-tenant
+ * design uses `username='utopusc'` sentinel (closed-signup defeats username spoofing).
+ * Phase 64+ adds role column + migrates back to role='admin' query.
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
@@ -136,22 +137,22 @@ describe('findAdminTunnel', () => {
     expect(registry.getByUserId).not.toHaveBeenCalled();
   });
 
-  test('T7: query uses role = $1 with parameter "admin" — does NOT match by username string', async () => {
+  test('T7: query uses username = $1 with parameter "utopusc" (Phase 63 R1 hot-patch)', async () => {
     const adminUserId = 'admin-uuid-123';
-    const tunnel = fakeTunnel({ userId: adminUserId, username: 'admin', readyState: 1 });
+    const tunnel = fakeTunnel({ userId: adminUserId, username: 'utopusc', readyState: 1 });
     const registry = mockRegistry({
       getByUserId: (id: string) => (id === adminUserId ? tunnel : undefined),
     });
-    const pool = mockPool(async () => ({ rows: [{ id: adminUserId, username: 'admin' }] }));
+    const pool = mockPool(async () => ({ rows: [{ id: adminUserId, username: 'utopusc' }] }));
 
     await findAdminTunnel(registry, pool);
 
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql, params] = pool.query.mock.calls[0];
-    // SQL must filter by role, NOT by username
-    expect(sql).toMatch(/WHERE\s+role\s*=\s*\$1/i);
-    expect(sql).not.toMatch(/WHERE\s+username/i);
-    expect(params).toEqual(['admin']);
+    // SQL must filter by username sentinel, NOT by non-existent role column
+    expect(sql).toMatch(/WHERE\s+username\s*=\s*\$1/i);
+    expect(sql).not.toMatch(/WHERE\s+role/i);
+    expect(params).toEqual(['utopusc']);
   });
 });
 
