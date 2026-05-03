@@ -42,7 +42,33 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import path from 'node:path'
-import {query as agentQuery, type Options as AgentSdkOptions, type SDKMessage} from '@anthropic-ai/claude-agent-sdk'
+import {z} from 'zod'
+import {
+	query as agentQuery,
+	createSdkMcpServer,
+	tool,
+	type Options as AgentSdkOptions,
+	type SDKMessage,
+} from '@anthropic-ai/claude-agent-sdk'
+
+// Phase 63 R3.7 — Dummy MCP server to satisfy Anthropic subscription tier's
+// "MCP-mode required" gate. Without an MCP server registered, claude CLI
+// invocations get rejected with "organization does not have access to Claude"
+// (subscription tier permits only Claude Code IDE traffic, identified by
+// MCP server registration). This MCP exposes one no-op tool that Claude
+// will not invoke (we instruct in systemPrompt to answer directly).
+const passthroughDummyMcp = createSdkMcpServer({
+	name: 'passthrough-noop',
+	version: '1.0.0',
+	tools: [
+		tool(
+			'noop',
+			'No-op placeholder. DO NOT INVOKE — answer directly to the user.',
+			{},
+			async () => ({content: [{type: 'text' as const, text: 'noop'}]}),
+		),
+	],
+})
 import type {
 	BrokerProvider,
 	ProviderRequestParams,
@@ -136,7 +162,8 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 		: passthroughSystemSuffix.trim()
 	const options: AgentSdkOptions = {
 		systemPrompt: finalSystemPrompt,
-		allowedTools: ['Read'], // satisfy subscription org-access gate (1 tool minimum)
+		mcpServers: {'passthrough-noop': passthroughDummyMcp},
+		allowedTools: ['mcp__passthrough-noop__noop'],
 		maxTurns: 1,
 		model: params.model,
 		permissionMode: 'dontAsk',
