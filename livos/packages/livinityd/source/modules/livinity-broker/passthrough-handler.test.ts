@@ -342,3 +342,241 @@ describe('passthroughAnthropicMessages — sync response forwarded verbatim', ()
 		expect(res._body).toEqual(SAMPLE_MESSAGE)
 	})
 })
+
+// ===== Phase 58 Wave 2: true token streaming (FR-BROKER-C1-01) =====
+//
+// These tests assert the streaming branch (body.stream === true) replaces the
+// Phase 57 transitional aggregate-then-restream behavior with raw async iterator
+// forwarding via client.messages.create({...stream: true}).
+//
+// Each upstream Anthropic event is forwarded VERBATIM as
+//   `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
+// — no buffering, no field rewriting, no aggregation.
+
+const STREAM_SCRIPT_EVENTS = [
+	{
+		type: 'message_start',
+		message: {
+			id: 'msg_stream_test',
+			type: 'message',
+			role: 'assistant',
+			content: [],
+			model: 'claude-sonnet-4-6',
+			stop_reason: null,
+			stop_sequence: null,
+			usage: {input_tokens: 25, output_tokens: 1},
+		},
+	},
+	{
+		type: 'content_block_start',
+		index: 0,
+		content_block: {type: 'text', text: ''},
+	},
+	{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'Hello'}},
+	{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: ' world'}},
+	{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: '!'}},
+	{type: 'content_block_stop', index: 0},
+	{
+		type: 'message_delta',
+		delta: {stop_reason: 'end_turn', stop_sequence: null},
+		usage: {output_tokens: 15},
+	},
+	{type: 'message_stop'},
+]
+
+function makeAsyncIterable<T>(items: T[]): AsyncIterable<T> {
+	return {
+		[Symbol.asyncIterator]() {
+			let i = 0
+			return {
+				async next() {
+					if (i >= items.length) return {value: undefined as any, done: true}
+					return {value: items[i++]!, done: false}
+				},
+			}
+		},
+	}
+}
+
+describe('passthroughAnthropicMessages — Phase 58 true streaming (FR-BROKER-C1-01)', () => {
+	it('forwards each upstream event verbatim as event/data SSE pair', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughAnthropicMessages({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'sonnet',
+				max_tokens: 256,
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		// Mock returns AsyncIterable directly; the SDK's client.messages.create
+		// must be called with stream:true so the SDK yields the iterator.
+		expect(messagesCreate).toHaveBeenCalledTimes(1)
+		expect(messagesCreate).toHaveBeenCalledWith(expect.objectContaining({stream: true}))
+
+		// Reassemble the wire output and verify each event fired in order.
+		const wire = res._writes.join('')
+		// Each event comes through as an `event: <type>\ndata: <json>\n\n` pair.
+		// Count distinct event lines.
+		const eventLines = wire.split('\n').filter((l) => l.startsWith('event: '))
+		expect(eventLines).toEqual([
+			'event: message_start',
+			'event: content_block_start',
+			'event: content_block_delta',
+			'event: content_block_delta',
+			'event: content_block_delta',
+			'event: content_block_stop',
+			'event: message_delta',
+			'event: message_stop',
+		])
+		// Each event payload is the JSON-stringified upstream event verbatim.
+		for (const evt of STREAM_SCRIPT_EVENTS) {
+			expect(wire).toContain(`data: ${JSON.stringify(evt)}`)
+		}
+		expect(res._ended).toBe(true)
+	})
+
+	it('sets SSE headers including no-transform and X-Accel-Buffering before streaming', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughAnthropicMessages({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'sonnet',
+				max_tokens: 256,
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		expect(res._headers['Content-Type']).toBe('text/event-stream')
+		expect(res._headers['Cache-Control']).toContain('no-transform')
+		expect(res._headers['Connection']).toBe('keep-alive')
+		expect(res._headers['X-Accel-Buffering']).toBe('no')
+	})
+
+	it('emits ≥3 content_block_delta events for a multi-delta stream (no aggregation)', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(STREAM_SCRIPT_EVENTS))
+		const res = makeRes()
+		await passthroughAnthropicMessages({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'sonnet',
+				max_tokens: 256,
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		const wire = res._writes.join('')
+		const deltaCount = (wire.match(/event: content_block_delta\n/g) ?? []).length
+		expect(deltaCount).toBeGreaterThanOrEqual(3)
+	})
+
+	it('respects res.writableEnded and stops iterating on client disconnect', async () => {
+		// Build an iterator that flips res.writableEnded after the first event.
+		const res = makeRes()
+		const longScript = [
+			{type: 'message_start', message: {usage: {input_tokens: 1, output_tokens: 0}}},
+			{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'a'}},
+			{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'b'}},
+			{type: 'content_block_delta', index: 0, delta: {type: 'text_delta', text: 'c'}},
+			{type: 'message_stop'},
+		]
+		const iter: AsyncIterable<any> = {
+			[Symbol.asyncIterator]() {
+				let i = 0
+				return {
+					async next() {
+						if (i >= longScript.length) return {value: undefined, done: true}
+						const value = longScript[i++]
+						// Simulate client disconnect after we've yielded the first event.
+						if (i === 2) {
+							;(res as any).writableEnded = true
+						}
+						return {value, done: false}
+					},
+				}
+			},
+		}
+		messagesCreate.mockResolvedValueOnce(iter)
+		await passthroughAnthropicMessages({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'sonnet',
+				max_tokens: 256,
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		const wire = res._writes.join('')
+		const eventLines = wire.split('\n').filter((l) => l.startsWith('event: '))
+		// First event written; subsequent events skipped because writableEnded flipped.
+		expect(eventLines.length).toBe(1)
+		expect(eventLines[0]).toBe('event: message_start')
+	})
+
+	it('emits Anthropic-shape error event on mid-stream iterator failure', async () => {
+		const res = makeRes()
+		const failingIter: AsyncIterable<any> = {
+			[Symbol.asyncIterator]() {
+				let i = 0
+				return {
+					async next() {
+						if (i === 0) {
+							i++
+							return {
+								value: {type: 'message_start', message: {usage: {input_tokens: 1, output_tokens: 0}}},
+								done: false,
+							}
+						}
+						throw new Error('upstream socket reset')
+					},
+				}
+			},
+		}
+		messagesCreate.mockResolvedValueOnce(failingIter)
+		await passthroughAnthropicMessages({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'sonnet',
+				max_tokens: 256,
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res,
+		})
+		const wire = res._writes.join('')
+		expect(wire).toContain('event: error')
+		expect(wire).toContain('upstream socket reset')
+		expect(res._ended).toBe(true)
+	})
+
+	it('does NOT use the Phase 57 transitional messages.stream().finalMessage() helper', async () => {
+		messagesCreate.mockResolvedValueOnce(makeAsyncIterable(STREAM_SCRIPT_EVENTS))
+		await passthroughAnthropicMessages({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'sonnet',
+				max_tokens: 256,
+				messages: [{role: 'user', content: 'Hi'}],
+				stream: true,
+			},
+			res: makeRes(),
+		})
+		// Phase 57 used messages.stream(...).finalMessage(); Phase 58 must use
+		// messages.create({stream:true}). The finalMessage mock should NEVER
+		// be called by the streaming path now.
+		expect(messagesStreamFinal).not.toHaveBeenCalled()
+	})
+})
