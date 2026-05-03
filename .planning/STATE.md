@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: in-progress — Phase 57 Plan 01 (Wave 0) SHIPPED. 26 RED tests + README + fixture + SDK reachability scaffolding complete. Sacred SHA stable. Wave 1 (Plan 57-02) ready to start.
-last_updated: "2026-05-02T18:30:00Z"
-last_activity: 2026-05-02 — Plan 57-01 executed; 2 commits (340ff587 docs scaffolding, d3dfb52f RED tests); 26 failing test cases authored (11 mode-dispatch + 7 credential-extractor + 8 passthrough-handler); README.md documents X-Livinity-Mode opt-in contract; @anthropic-ai/sdk hoisted into livinityd resolution chain (D-NO-NEW-DEPS preserved — same v0.80.0 already in lockfile via @nexus/core); sacred file SHA 4f868d318abff71f8c8bfbcf443b2393a553018b byte-identical across all 4 task boundaries
+status: "Phase 57 Wave 1 (mode-dispatch + credential-extractor + Risk-A1 smoke gate) CLOSED. 18 of Wave 0's 26 RED tests now GREEN (11 mode-dispatch + 7 credential-extractor) plus 1 NEW Risk-A1 smoke gate GREEN — proves @anthropic-ai/sdk constructs Authorization: Bearer <token> from authToken ClientOption. Phase 57 UNBLOCKED to proceed to Wave 2 (passthrough-handler.ts). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical."
+last_updated: "2026-05-03T01:35:00.000Z"
+last_activity: 2026-05-03 — Plan 57-02 executed end-to-end in ~5min; created mode-dispatch.ts (24 LOC) + credential-extractor.ts (87 LOC); 19/19 GREEN (11+8); Risk-A1 mock-level GATE PASSED (live verification deferred to Phase 63); SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-02-SUMMARY.md`
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 44
-  completed_plans: 5
-  percent: 11
+  completed_plans: 8
+  percent: 18
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 57 in-progress (Wave 0 complete); Plan 57-02 (Wave 1) ready to start
-Plan: 57-01 SHIPPED 2026-05-02 (commits `340ff587` docs scaffold, `d3dfb52f` 26 RED tests). README.md + fixture + 3 RED test files; @anthropic-ai/sdk hoisted into livinityd resolution chain (D-NO-NEW-DEPS preserved — same v0.80.0 already in lockfile via @nexus/core)
-Status: Phase 57 Wave 0 (test scaffolding + dep audit) CLOSED. 26 failing test cases define the contract Wave 1+2 must satisfy: 11 mode-dispatch (header parse + Express middleware preservation), 7 credential-extractor (per-user homeOverride + BROKER_FORCE_ROOT_HOME fallback + log-leak guard), 8 passthrough-handler (FR-A1-01..03 + authToken construction + 401 missing subscription + 429 retry-after preservation + sync verbatim). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 4 task boundaries.
-Last activity: 2026-05-02 — Plan 57-01 executed end-to-end; 26 RED tests authored covering FR-BROKER-A1-01..04 + A2-01; @anthropic-ai/sdk reachability verified via `node -e "require.resolve(...)"`; SUMMARY.md created at `.planning/phases/57-passthrough-mode-agent-mode/57-01-SUMMARY.md`
+Phase: 57 in-progress (Waves 0+1 complete); Plan 57-03 (Wave 2 — passthrough-handler.ts) ready to start
+Plan: 57-02 SHIPPED 2026-05-03 (commits `8af8dc9e` mode-dispatch + types augmentation, `04a87846` credential-extractor + Risk-A1 smoke gate). 2 NEW production files (mode-dispatch.ts 24 LOC + credential-extractor.ts 87 LOC); 19/19 GREEN tests; Risk-A1 mock-level GATE PASSED (SDK uses authToken as Authorization: Bearer)
+Status: Phase 57 Wave 1 (mode-dispatch + credential-extractor + Risk-A1 smoke gate) CLOSED. 18 of Wave 0's 26 RED tests now GREEN (11 mode-dispatch + 7 credential-extractor) plus 1 NEW Risk-A1 smoke gate GREEN — proves @anthropic-ai/sdk constructs Authorization: Bearer <token> from authToken ClientOption. Phase 57 UNBLOCKED to proceed to Wave 2 (passthrough-handler.ts). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical.
+Last activity: 2026-05-03 — Plan 57-02 executed end-to-end in ~5min; created mode-dispatch.ts (24 LOC) + credential-extractor.ts (87 LOC); 19/19 GREEN (11+8); Risk-A1 mock-level GATE PASSED (live verification deferred to Phase 63); SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-02-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 

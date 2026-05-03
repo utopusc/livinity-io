@@ -86,7 +86,7 @@ Plans:
 
 Plans:
 - [x] 57-01-PLAN.md - Wave 0 Test Scaffolding + README + SDK reachability audit (SHIPPED 2026-05-02; commits 340ff587, d3dfb52f; 26 RED tests)
-- [ ] 57-02-PLAN.md - Wave 1 Mode Dispatch + Credential Extractor + Risk-A1 smoke gate
+- [x] 57-02-PLAN.md - Wave 1 Mode Dispatch + Credential Extractor + Risk-A1 smoke gate (SHIPPED 2026-05-03; commits 8af8dc9e, 04a87846; 19/19 GREEN; Risk-A1 GATE PASSED)
 - [ ] 57-03-PLAN.md - Wave 2 Anthropic Messages Passthrough Handler + router.ts dispatch
 - [ ] 57-04-PLAN.md - Wave 3 OpenAI Chat Completions Passthrough + openai-router.ts dispatch
 - [ ] 57-05-PLAN.md - Wave 4 Agent Mode Byte-Identity Proof + Sacred File Final Verification
