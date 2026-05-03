@@ -19,3 +19,6 @@ export type {ApiKeyRow} from './database.js'
 // Wave 2 (Phase 59-03) — Bearer auth hot-path cache.
 export {ApiKeyCache, createApiKeyCache} from './cache.js'
 export type {CacheEntry, PublicCacheEntry, MinimalLogger} from './cache.js'
+
+// Wave 2 (Phase 59-03) — Bearer middleware factory + mount helper.
+export {createBearerMiddleware, mountBearerAuthMiddleware} from './bearer-auth.js'

@@ -45,6 +45,7 @@ import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 import fileApi from '../files/api.js'
 import {mountBrokerRoutes} from '../livinity-broker/index.js'
 import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
+import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1226,6 +1227,16 @@ class Server {
 		// shared /u/:userId/v1 prefix. Captures usage from res.json (sync) and
 		// res.write/res.end (SSE) without touching broker source (Phase 41/42 frozen).
 		mountUsageCaptureMiddleware(this.app, this.livinityd)
+
+		// ── Livinity Bearer Auth Middleware (Phase 59 FR-BROKER-B1-03) ──
+		// Mounts BETWEEN usage capture (so 401s are still recorded as
+		// broker_usage rows by the wrapper above) and the broker handler (so
+		// req.userId is set before the per-user URL-path resolver runs).
+		// Missing or non `Bearer liv_sk_*` Authorization headers fall through
+		// to the legacy URL-path resolver inside mountBrokerRoutes — Bearer is
+		// the new primary identity surface; URL-path remains for back-compat.
+		// Mount order asserted by mount-order.test.ts.
+		mountBearerAuthMiddleware(this.app, this.livinityd, this.livinityd.apiKeyCache)
 
 		// ── Livinity Broker (Phase 41 — Anthropic Messages API for marketplace apps) ──
 		// Routes: POST /u/:userId/v1/messages (sync + SSE per Plan 41-03)

@@ -24,6 +24,7 @@ import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
+import {ApiKeyCache, createApiKeyCache} from './modules/api-keys/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
@@ -116,6 +117,11 @@ export default class Livinityd {
 	ai: AiModule
 	tunnelClient: TunnelClient
 	deviceBridge!: DeviceBridge
+	// Phase 59 (FR-BROKER-B1-03) — Bearer auth hot-path cache. Constructed in
+	// the constructor (no DB dep at construction; getPool() is resolved lazily
+	// inside flushLastUsed). Disposed by cli.ts cleanShutdown so pending
+	// last_used_at writes are flushed before SIGTERM/SIGINT exits the process.
+	apiKeyCache: ApiKeyCache
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -144,6 +150,11 @@ export default class Livinityd {
 		this.ai = new AiModule({livinityd: this})
 		// TunnelClient is initialized in start() after ai.start() creates the Redis connection
 		this.tunnelClient = null as unknown as TunnelClient
+		// Phase 59 — Bearer auth cache. Construction is side-effect-free (only
+		// schedules a 30s setInterval that lazily resolves getPool()), so
+		// instantiating here keeps the field always-defined for the bearer-auth
+		// middleware mounted by Server.start().
+		this.apiKeyCache = createApiKeyCache({logger: this.logger})
 	}
 
 	async start() {
@@ -278,6 +289,12 @@ export default class Livinityd {
 
 			// Stop modules
 			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop(), this.scheduler.stop()])
+
+			// Phase 59 — flush pending last_used_at writes BEFORE closing the DB
+			// pool so the final UPDATEs land. Best-effort; errors are swallowed
+			// by dispose() so a stop() failure here never blocks the rest of
+			// the shutdown chain.
+			await this.apiKeyCache.dispose().catch(() => {})
 
 			// Close database connection pool
 			await closeDatabase()

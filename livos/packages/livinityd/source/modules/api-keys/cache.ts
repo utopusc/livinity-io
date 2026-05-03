@@ -46,16 +46,36 @@ export type PublicCacheEntry =
 	| {kind: 'valid'; userId: string; id: string}
 	| {kind: 'invalid'}
 
+/**
+ * Minimal logger surface — both `warn` and `verbose` are optional so this
+ * cache can be wired with the native Livinityd logger (which exposes
+ * `log`/`verbose`/`error`, no `warn`) AND with a richer logger in tests.
+ * Resolution order for non-fatal flush errors:  warn → verbose → error.
+ */
 export interface MinimalLogger {
 	log?: (message: string) => void
-	warn: (message: string) => void
+	warn?: (message: string) => void
+	verbose?: (message: string) => void
 	error: (message: string, err?: unknown) => void
 }
 
 const noopLogger: MinimalLogger = {
 	log: () => {},
 	warn: () => {},
+	verbose: () => {},
 	error: () => {},
+}
+
+function emitWarn(logger: MinimalLogger, message: string): void {
+	if (logger.warn) {
+		logger.warn(message)
+		return
+	}
+	if (logger.verbose) {
+		logger.verbose(message)
+		return
+	}
+	logger.error(message)
 }
 
 export interface CreateApiKeyCacheDeps {
@@ -186,7 +206,7 @@ export class ApiKeyCache {
 					[seenAt, keyHash],
 				)
 			} catch (err) {
-				this.logger.warn(
+				emitWarn(this.logger,
 					`[api-keys.cache] flush UPDATE failed for one key (non-fatal): ${(err as Error).message}`,
 				)
 			}
@@ -211,7 +231,8 @@ export class ApiKeyCache {
 		try {
 			await this.flushLastUsed()
 		} catch (err) {
-			this.logger.warn(
+			emitWarn(
+				this.logger,
 				`[api-keys.cache] dispose flush failed (non-fatal): ${(err as Error).message}`,
 			)
 		}

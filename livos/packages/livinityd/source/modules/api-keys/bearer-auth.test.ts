@@ -26,6 +26,19 @@ import * as crypto from 'node:crypto'
 import {beforeEach, describe, expect, test, vi} from 'vitest'
 import type {Request, Response, NextFunction} from 'express'
 
+// Wave 2 deviation [Rule 1 - Test Bug]: ESM namespace exports for `node:*`
+// built-ins are non-configurable per spec, so `vi.spyOn(crypto, 'timingSafeEqual')`
+// (T8 below) throws "Cannot redefine property". Re-mock the module with a
+// pass-through: the returned object is a plain JS object whose properties
+// vitest CAN redefine, while still delegating to the real implementation so
+// every other crypto call (createHash via spread of actualCrypto) keeps
+// working unchanged. This is the minimal change required to let the test's
+// intent (assert middleware invokes constant-time compare) actually run.
+vi.mock('node:crypto', async () => {
+	const actual = await vi.importActual<typeof import('node:crypto')>('node:crypto')
+	return {...actual, default: actual}
+})
+
 const findApiKeyByHashMock = vi.fn()
 const cacheGetMock = vi.fn()
 const cacheSetValidMock = vi.fn()
