@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: roadmap-defined
-last_updated: "2026-05-02T20:00:00Z"
-last_activity: "2026-05-02 — v30.0 ROADMAP.md created; 8 phases (56-63), 38/38 reqs mapped"
+status: in-progress
+last_updated: "2026-05-02T22:30:00Z"
+last_activity: "2026-05-02 — Phase 56 plan 02 executed; Q3/Q4/Q5/Q6 verdicts complete (4 verdict blocks in SPIKE-FINDINGS.md, 4 notes files); sacred SHA preserved"
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 44
+  completed_plans: 2
+  percent: 5
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: Not started (roadmap defined; awaiting `/gsd-discuss-phase 56`)
-Plan: —
-Status: Roadmap defined — 8 phases (56-63), 38/38 reqs mapped, Phase 56 mandatory spike, Phase 63 mandatory live verification
-Last activity: 2026-05-02 — `gsd-roadmapper` produced ROADMAP.md and filled Phase Traceability
+Phase: 56 (Research Spike — Passthrough Architecture + Public Endpoint + Auth Patterns) — IN PROGRESS, 2/4 plans complete
+Plan: 56-02 COMPLETE (2026-05-02); 56-03 next (cross-cut audits — D-NO-NEW-DEPS, sacred SHA stability, D-51-03 re-eval)
+Status: SPIKE-FINDINGS.md now has 7/7 question verdicts (Q1+Q2+Q7 from 56-01; Q3+Q4+Q5+Q6 from 56-02) — all architectural questions answered, no "TBD" rows remaining for the 7-question core. Cross-cut synthesis (56-03 + 56-04) still pending.
+Last activity: 2026-05-02 — 56-02 plan executed; 4 verdict blocks (Q3/Q4/Q5/Q6) + 4 intermediate notes files created; FR-BROKER-B2-02 "TBD" resolved (no broker-side bucket in v30; edge-only via Q4 Caddy); A3 (caddy-ratelimit in stock binary) REFUTED-VERIFIED (xcaddy custom build IS required); A4 (CF DNS-only posture) VERIFIED; sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` preserved (sacred file never read or written this plan)
 
 ## v30.0 Roadmap Snapshot
 
@@ -53,6 +53,7 @@ See `.planning/ROADMAP.md` for full phase details, success criteria, dependency 
 ## v30.0 Milestone Context
 
 **Why this milestone exists:** v29.5 hot-patch session live testing with Bolt.diy revealed the Livinity Broker is fundamentally mis-architected for external API consumers. Three architectural failures surfaced:
+
 1. **Identity contamination** — broker prepends Nexus identity + Nexus tools to every request; external clients (Bolt.diy, Open WebUI, Continue.dev) cannot present their own persona
 2. **Block-level streaming** — `sdk-agent-runner.ts:382-389` aggregates assistant messages into single chunks; external clients see "non-streaming" or 504 timeouts
 3. **Wrong auth model** — URL-path identity + container IP guard; external consumers expect `Authorization: Bearer liv_sk_*`

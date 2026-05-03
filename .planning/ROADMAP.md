@@ -68,8 +68,8 @@
 **Plans**: 4 plans
 
 Plans:
-- [ ] 56-01-PLAN.md — Architectural Verdicts (Q1 SDK-direct vs HTTP-proxy + Q2 tools forwarding + Q7 agent-mode streaming)
-- [ ] 56-02-PLAN.md — Auth & Public Endpoint Verdicts (Q3 agent-mode opt-in + Q4 Caddy vs CF Worker + Q5 key rotation + Q6 rate-limit)
+- [x] 56-01-PLAN.md — Architectural Verdicts (Q1 SDK-direct vs HTTP-proxy + Q2 tools forwarding + Q7 agent-mode streaming) — SHIPPED 2026-05-02 (commit `2aaf6d2c`)
+- [x] 56-02-PLAN.md — Auth & Public Endpoint Verdicts (Q3 agent-mode opt-in + Q4 Caddy vs CF Worker + Q5 key rotation + Q6 rate-limit) — SHIPPED 2026-05-02 (commits `4f452bd0` Q3+Q5, `3919271a` Q4, `f4eb0e4f` Q6)
 - [ ] 56-03-PLAN.md — Cross-Cut Audits (D-NO-NEW-DEPS + Sacred SHA stability + D-51-03 re-evaluation)
 - [ ] 56-04-PLAN.md — SPIKE-FINDINGS.md synthesis (Executive Summary + Decisions Log + Validation)
 
