@@ -7,6 +7,7 @@ import type Livinityd from '../../index.js'
 import {getProvider} from './providers/registry.js'
 import type {ProviderResponse, ProviderStreamResult} from './providers/interface.js'
 import {forwardAnthropicHeaders, translateAnthropicToOpenAIHeaders} from './rate-limit-headers.js'
+import {ensureUserClaudeDir} from '../ai/per-user-claude.js'
 
 /**
  * Phase 57 (FR-BROKER-A1-01..03): Anthropic Messages passthrough handler.
@@ -58,6 +59,14 @@ export interface PassthroughOpts {
 	userId: string
 	body: AnthropicMessagesRequest
 	res: Response
+	/**
+	 * Phase 63 R3 — when set, dispatch via Agent SDK subscription path
+	 * with `env.HOME = passthroughCwd`. When omitted, falls back to legacy
+	 * HTTP path with token extraction (test suites + API key tier path).
+	 * Production callers (router.ts) compute this via
+	 * `await ensureUserClaudeDir(livinityd, userId)` and forward.
+	 */
+	passthroughCwd?: string
 	/**
 	 * Phase 58 Wave 0 (test seam): override default Anthropic client construction.
 	 * Used by Wave 4 integration tests to wire the SDK to a fake-Anthropic SSE
@@ -174,20 +183,34 @@ async function tryRefreshAndRetry<T>(
 export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promise<void> {
 	const {livinityd, userId, body, res} = opts
 
-	const token = await readSubscriptionToken({livinityd, userId})
-	if (!token) {
-		emitAuthErrorResponse(res, userId)
-		return
+	// Phase 63 R3: subscription auth via Agent SDK. When clientFactory is
+	// provided (test-only seam from Phase 58 Wave 0) OR ensureUserClaudeDir
+	// fails, fall back to legacy HTTP path with token extraction (preserves
+	// 96 broker test expectations + lets API key tier deployments still work).
+	let userClaudeDir: string | undefined
+	let token: SubscriptionToken | null = null
+
+	if (opts.passthroughCwd) {
+		// Production subscription path — caller (router.ts) computed cwd.
+		userClaudeDir = opts.passthroughCwd
+	} else {
+		// Legacy / test path — extract OAuth token, use HTTP-mode provider.
+		// (Production callers always pass passthroughCwd; this branch is a
+		// safety net + the surface that vi.mock'd test suites exercise.)
+		token = await readSubscriptionToken({livinityd, userId})
+		if (!token) {
+			emitAuthErrorResponse(res, userId)
+			return
+		}
 	}
 
 	livinityd.logger.log(
-		`[livinity-broker:passthrough] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true}`,
+		`[livinity-broker:passthrough] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true} ${userClaudeDir ? `cwd=${userClaudeDir}` : 'http-mode'}`,
 	)
 
-	// Phase 61 Plan 01 Wave 1: dispatch via BrokerProvider. The factory test
-	// seam (Phase 58 Wave 0) is forwarded into ProviderRequestOpts.clientOverride.
 	const provider = getProvider('anthropic')
-	const initialClient = opts.clientFactory ? opts.clientFactory(token) : undefined
+	const initialClient = opts.clientFactory && token ? opts.clientFactory(token) : undefined
+	const authTokenForOpts = token?.accessToken ?? 'subscription-managed-by-agent-sdk'
 
 	// Pitfall (T-57-08): construct upstream body as a NEW object — do NOT
 	// mutate `body` in place. Tools + system pass through verbatim.
@@ -228,22 +251,30 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 			let result: ProviderStreamResult
 			try {
 				result = await provider.streamRequest(upstreamBody as any, {
-					authToken: token.accessToken,
+					authToken: authTokenForOpts,
 					clientOverride: initialClient,
+					cwd: userClaudeDir, // Phase 63 R3 — subscription auth scope
 				})
 			} catch (err) {
-				const refreshed = await tryRefreshAndRetry<ProviderStreamResult>(
-					err,
-					token,
-					(opts.clientFactory ?? makeClient),
-					async (refreshedClient) =>
-						provider.streamRequest(upstreamBody as any, {
-							authToken: token.accessToken, // unused when clientOverride present, but provider type requires it
-							clientOverride: refreshedClient,
-						}),
-				)
-				if (refreshed === null) throw mapApiError(err)
-				result = refreshed
+				// Legacy HTTP path: try refresh + retry. Subscription path:
+				// Agent SDK handles refresh internally; tryRefreshAndRetry is
+				// a no-op (no refreshable token).
+				if (token) {
+					const refreshed = await tryRefreshAndRetry<ProviderStreamResult>(
+						err,
+						token,
+						(opts.clientFactory ?? makeClient),
+						async (refreshedClient) =>
+							provider.streamRequest(upstreamBody as any, {
+								authToken: token!.accessToken,
+								clientOverride: refreshedClient,
+							}),
+					)
+					if (refreshed === null) throw mapApiError(err)
+					result = refreshed
+				} else {
+					throw mapApiError(err)
+				}
 			}
 
 			res.setHeader('Content-Type', 'text/event-stream')
@@ -292,25 +323,28 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 			let result: ProviderResponse
 			try {
 				result = await provider.request(upstreamBody as any, {
-					authToken: token.accessToken,
+					authToken: authTokenForOpts,
 					clientOverride: initialClient,
+					cwd: userClaudeDir,
 				})
 			} catch (err) {
-				const refreshed = await tryRefreshAndRetry<ProviderResponse>(
-					err,
-					token,
-					(opts.clientFactory ?? makeClient),
-					async (refreshedClient) =>
-						provider.request(upstreamBody as any, {
-							authToken: token.accessToken,
-							clientOverride: refreshedClient,
-						}),
-				)
-				if (refreshed === null) throw mapApiError(err)
-				result = refreshed
+				if (token) {
+					const refreshed = await tryRefreshAndRetry<ProviderResponse>(
+						err,
+						token,
+						(opts.clientFactory ?? makeClient),
+						async (refreshedClient) =>
+							provider.request(upstreamBody as any, {
+								authToken: token!.accessToken,
+								clientOverride: refreshedClient,
+							}),
+					)
+					if (refreshed === null) throw mapApiError(err)
+					result = refreshed
+				} else {
+					throw mapApiError(err)
+				}
 			}
-			// Phase 61 Plan 04 (FR-BROKER-C3-01): forward upstream anthropic-*
-			// + retry-after headers verbatim BEFORE res.json below.
 			forwardAnthropicHeaders(result.upstreamHeaders, res)
 			res.status(200).json(result.raw)
 		}
@@ -351,6 +385,11 @@ export interface OpenAIPassthroughOpts {
 	 * unchanged from Phase 57 when undefined.
 	 */
 	clientFactory?: (token: SubscriptionToken) => Anthropic
+	/**
+	 * Phase 63 R3 — when set, dispatch via Agent SDK subscription path with
+	 * `env.HOME = passthroughCwd`. Mirrors PassthroughOpts.passthroughCwd.
+	 */
+	passthroughCwd?: string
 }
 
 /** Anthropic upstream body assembled from an OpenAI request. */
@@ -475,11 +514,21 @@ function emitOpenAIAuthErrorResponse(res: Response, userId: string): void {
 export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOpts): Promise<void> {
 	const {livinityd, userId, body, res} = opts
 
-	const token = await readSubscriptionToken({livinityd, userId})
-	if (!token) {
-		emitOpenAIAuthErrorResponse(res, userId)
-		return
+	// Phase 63 R3: dual mode (subscription via Agent SDK in production, HTTP
+	// path with mocked SDK when clientFactory test seam is provided).
+	let userClaudeDir: string | undefined
+	let token: SubscriptionToken | null = null
+
+	if (opts.passthroughCwd) {
+		userClaudeDir = opts.passthroughCwd
+	} else {
+		token = await readSubscriptionToken({livinityd, userId})
+		if (!token) {
+			emitOpenAIAuthErrorResponse(res, userId)
+			return
+		}
 	}
+	const authTokenForOpenAI = token?.accessToken ?? 'subscription-managed-by-agent-sdk'
 
 	// Phase 61 Plan 03 D1 — async Redis-backed alias resolution. Caller logs
 	// the requested→resolved mapping (and any warn for unknown aliases). The
@@ -500,7 +549,7 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 	// passthroughAnthropicMessages above — the OpenAI handler still uses
 	// the Anthropic provider; it only translates request/response shape).
 	const provider = getProvider('anthropic')
-	const initialClient = opts.clientFactory ? opts.clientFactory(token) : undefined
+	const initialClient = opts.clientFactory && token ? opts.clientFactory(token) : undefined
 
 	let anthropicBody: UpstreamAnthropicBody
 	try {
@@ -545,22 +594,27 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 			let result: ProviderStreamResult
 			try {
 				result = await provider.streamRequest(anthropicBody as any, {
-					authToken: token.accessToken,
+					authToken: authTokenForOpenAI,
 					clientOverride: initialClient,
+					cwd: userClaudeDir,
 				})
 			} catch (err) {
-				const refreshed = await tryRefreshAndRetry<ProviderStreamResult>(
-					err,
-					token,
-					(opts.clientFactory ?? makeClient),
-					async (refreshedClient) =>
-						provider.streamRequest(anthropicBody as any, {
-							authToken: token.accessToken,
-							clientOverride: refreshedClient,
-						}),
-				)
-				if (refreshed === null) throw mapApiError(err)
-				result = refreshed
+				if (token) {
+					const refreshed = await tryRefreshAndRetry<ProviderStreamResult>(
+						err,
+						token,
+						(opts.clientFactory ?? makeClient),
+						async (refreshedClient) =>
+							provider.streamRequest(anthropicBody as any, {
+								authToken: token!.accessToken,
+								clientOverride: refreshedClient,
+							}),
+					)
+					if (refreshed === null) throw mapApiError(err)
+					result = refreshed
+				} else {
+					throw mapApiError(err)
+				}
 			}
 
 			res.setHeader('Content-Type', 'text/event-stream')
@@ -599,22 +653,27 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 			let result: ProviderResponse
 			try {
 				result = await provider.request(anthropicBody as any, {
-					authToken: token.accessToken,
+					authToken: authTokenForOpenAI,
 					clientOverride: initialClient,
+					cwd: userClaudeDir,
 				})
 			} catch (err) {
-				const refreshed = await tryRefreshAndRetry<ProviderResponse>(
-					err,
-					token,
-					(opts.clientFactory ?? makeClient),
-					async (refreshedClient) =>
-						provider.request(anthropicBody as any, {
-							authToken: token.accessToken,
-							clientOverride: refreshedClient,
-						}),
-				)
-				if (refreshed === null) throw mapApiError(err)
-				result = refreshed
+				if (token) {
+					const refreshed = await tryRefreshAndRetry<ProviderResponse>(
+						err,
+						token,
+						(opts.clientFactory ?? makeClient),
+						async (refreshedClient) =>
+							provider.request(anthropicBody as any, {
+								authToken: token!.accessToken,
+								clientOverride: refreshedClient,
+							}),
+					)
+					if (refreshed === null) throw mapApiError(err)
+					result = refreshed
+				} else {
+					throw mapApiError(err)
+				}
 			}
 			// Phase 61 Plan 04 (FR-BROKER-C3-02): translate upstream Anthropic
 			// ratelimit headers to OpenAI x-ratelimit-* namespace BEFORE

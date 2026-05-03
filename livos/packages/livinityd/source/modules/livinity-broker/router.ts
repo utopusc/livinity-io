@@ -98,12 +98,24 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 		// Passthrough bypasses the sacred agent runner entirely; agent path below is byte-identical to v29.5.
 		const mode = resolveMode(req)
 		if (mode === 'passthrough') {
+			// Phase 63 R3 — compute per-user claude dir for Agent SDK subscription
+			// path. Failures fall through to legacy HTTP path inside passthrough.
+			let passthroughCwd: string | undefined
+			try {
+				const {ensureUserClaudeDir} = await import('../ai/per-user-claude.js')
+				passthroughCwd = await ensureUserClaudeDir(deps.livinityd, auth.userId)
+			} catch (err: any) {
+				deps.livinityd.logger.log(
+					`[livinity-broker] router: ensureUserClaudeDir failed for user=${auth.userId}: ${err?.message ?? err}`,
+				)
+			}
 			try {
 				await passthroughAnthropicMessages({
 					livinityd: deps.livinityd,
 					userId: auth.userId,
 					body,
 					res,
+					passthroughCwd,
 				})
 				return
 			} catch (err: any) {
