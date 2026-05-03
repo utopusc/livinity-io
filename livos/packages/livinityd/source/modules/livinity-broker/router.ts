@@ -7,6 +7,8 @@ import {buildSyncAnthropicResponse, aggregateChunkText} from './sync-response.js
 import {createSdkAgentRunnerForUser, UpstreamHttpError} from './agent-runner-factory.js'
 import type {AnthropicMessagesRequest, BrokerDeps} from './types.js'
 import {registerOpenAIRoutes} from './openai-router.js'
+import {resolveMode} from './mode-dispatch.js'
+import {passthroughAnthropicMessages} from './passthrough-handler.js'
 
 /**
  * Create the broker Express router.
@@ -61,6 +63,43 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 			})
 			return
 		}
+
+		// Phase 57 (FR-BROKER-A2-01): mode dispatch — passthrough is DEFAULT, agent is opt-in via X-Livinity-Mode: agent.
+		// Passthrough bypasses the sacred agent runner entirely; agent path below is byte-identical to v29.5.
+		const mode = resolveMode(req)
+		if (mode === 'passthrough') {
+			try {
+				await passthroughAnthropicMessages({
+					livinityd: deps.livinityd,
+					userId: auth.userId,
+					body,
+					res,
+				})
+				return
+			} catch (err: any) {
+				// Funnel UpstreamHttpError through the same handler block used by agent mode (lines 158-185).
+				if (err && typeof err.status === 'number') {
+					if (err.retryAfter) res.setHeader('Retry-After', String(err.retryAfter))
+					res.status(err.status).json({
+						type: 'error',
+						error: {
+							type: err.status === 429 ? 'rate_limit_error' : 'api_error',
+							message: err.message ?? 'upstream error',
+						},
+					})
+					return
+				}
+				deps.livinityd.logger.log(
+					`[livinity-broker:passthrough] unexpected error user=${auth.userId}: ${err?.message ?? err}`,
+				)
+				res.status(502).json({
+					type: 'error',
+					error: {type: 'api_error', message: 'upstream Anthropic error'},
+				})
+				return
+			}
+		}
+		// mode === 'agent' — existing code below unchanged
 
 		// Per D-41-14: client-provided tools are ignored with warn log
 		if (Array.isArray(body.tools) && body.tools.length > 0) {
