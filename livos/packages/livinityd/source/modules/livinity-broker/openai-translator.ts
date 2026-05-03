@@ -195,3 +195,113 @@ export function buildSyncOpenAIResponse(opts: {
 		},
 	}
 }
+
+// ===== Phase 57 Wave 3: OpenAI ↔ Anthropic translation helpers (passthrough only) =====
+// These NEW exports are used by passthrough mode only. The existing exports
+// (translateOpenAIChatToSdkArgs, buildSyncOpenAIResponse, resolveModelAlias)
+// are UNCHANGED to avoid agent-mode regression (Pitfall 6).
+//
+// Why these helpers exist as siblings rather than replacements:
+//   - translateOpenAIChatToSdkArgs is for AGENT mode (collapses messages into
+//     task + contextPrefix + systemPromptOverride for the SdkAgentRunner shim)
+//   - The new translateToolsToAnthropic + translateToolUseToOpenAI are for
+//     PASSTHROUGH mode (preserves messages[] structure, forwards tools[]
+//     verbatim with a shape conversion, and translates upstream Anthropic
+//     content[] back to OpenAI tool_calls[] format).
+
+/** OpenAI tool shape (input). Only `type: 'function'` is supported in v30. */
+export interface OpenAIToolFunctionShape {
+	type: 'function'
+	function: {
+		name: string
+		description?: string
+		parameters?: Record<string, unknown>
+	}
+}
+
+/** Anthropic tool shape — minimal type for passthrough translation. */
+export interface AnthropicToolShape {
+	name: string
+	description?: string
+	input_schema: Record<string, unknown>
+}
+
+/**
+ * Translate OpenAI tool array to Anthropic tool array.
+ *   OpenAI:    {type:'function', function:{name, description?, parameters}}
+ *   Anthropic: {name, description?, input_schema}
+ *
+ * Throws on unsupported tool.type (only 'function' supported in v30).
+ * Throws on missing function.name (every tool must have a name).
+ * Defaults parameters to {type:'object',properties:{}} when omitted (Anthropic
+ * requires an input_schema even for no-arg tools).
+ */
+export function translateToolsToAnthropic(openaiTools: unknown[]): AnthropicToolShape[] {
+	return openaiTools.map((rawTool) => {
+		const tool = rawTool as Partial<OpenAIToolFunctionShape>
+		if (tool.type !== 'function') {
+			throw new Error(
+				`unsupported tool type: ${String(tool.type)} (passthrough supports only 'function')`,
+			)
+		}
+		const fn = tool.function
+		if (!fn || typeof fn.name !== 'string') {
+			throw new Error('tool.function.name is required')
+		}
+		return {
+			name: fn.name,
+			description: fn.description,
+			input_schema:
+				(fn.parameters as Record<string, unknown>) ?? {type: 'object', properties: {}},
+		}
+	})
+}
+
+/** OpenAI tool_call shape (in response message.tool_calls[]). */
+export interface OpenAIToolCall {
+	id: string
+	type: 'function'
+	function: {name: string; arguments: string}
+}
+
+/** OpenAI assistant message shape returned to client. */
+export interface OpenAITranslatedMessage {
+	role: 'assistant'
+	content: string | null
+	tool_calls?: OpenAIToolCall[]
+}
+
+/**
+ * Translate Anthropic response content[] (mix of text + tool_use blocks) into
+ * an OpenAI assistant message: { role:'assistant', content, tool_calls? }.
+ *
+ *   - All text blocks concatenated into `content`.
+ *   - Each tool_use block becomes a `tool_calls` entry with arguments JSON-stringified.
+ *   - If only tool_use blocks (no text), content is null and tool_calls populated.
+ *   - Unknown block types are silently skipped (forward-compatible with future
+ *     Anthropic block kinds; passthrough should not crash on novel content).
+ */
+export function translateToolUseToOpenAI(
+	anthropicContent: Array<{type: string; text?: string; id?: string; name?: string; input?: unknown}>,
+): OpenAITranslatedMessage {
+	const textParts: string[] = []
+	const toolCalls: OpenAIToolCall[] = []
+	for (const block of anthropicContent) {
+		if (block.type === 'text' && typeof block.text === 'string') {
+			textParts.push(block.text)
+		} else if (block.type === 'tool_use' && block.id && block.name) {
+			toolCalls.push({
+				id: block.id,
+				type: 'function',
+				function: {
+					name: block.name,
+					arguments: JSON.stringify(block.input ?? {}),
+				},
+			})
+		}
+	}
+	const content = textParts.length > 0 ? textParts.join('') : null
+	const out: OpenAITranslatedMessage = {role: 'assistant', content}
+	if (toolCalls.length > 0) out.tool_calls = toolCalls
+	return out
+}
