@@ -75,9 +75,12 @@ const fakeLivinityd = {
 	},
 } as never
 
-function makeReq(authHeader?: string): Request {
+function makeReq(authHeader?: string, apiKeyHeader?: string): Request {
+	const headers: Record<string, string> = {}
+	if (authHeader) headers.authorization = authHeader
+	if (apiKeyHeader) headers['x-api-key'] = apiKeyHeader
 	return {
-		headers: authHeader ? {authorization: authHeader} : {},
+		headers,
 		params: {},
 	} as unknown as Request
 }
@@ -245,6 +248,107 @@ describe('api-keys bearer-auth Plan 59-01 (RED)', () => {
 		expect(res.statusCode).toBe(401)
 		// Anthropic shape — message is the literal "API key invalid"
 		expect(res._jsonBody).toEqual(ANTHROPIC_INVALID)
+	})
+
+	// ─────────────────────────────────────────────────────────────────────
+	// v30.5 F6 — x-api-key header support (Anthropic-native clients)
+	//
+	// Cline, Continue.dev, @anthropic-ai/sdk, anthropic-sdk-python all send
+	// `x-api-key: liv_sk_...` per the Anthropic API spec. Pre-v30.5 the
+	// middleware only accepted `Authorization: Bearer ...` (OpenAI convention)
+	// so Anthropic-native clients fell through to the URL-path resolver,
+	// which then 404'd because `:userId` carried Server5's relay-side path
+	// placeholder. T9-T12 lock the new dual-scheme contract.
+	// ─────────────────────────────────────────────────────────────────────
+
+	test('T9 — valid x-api-key (cache MISS, PG returns row) → req.userId set, NO Authorization header needed', async () => {
+		cacheGetMock.mockReturnValue(undefined)
+		const plaintext = 'liv_sk_' + 'A'.repeat(32)
+		const expectedHash = createHash('sha256').update(plaintext, 'utf-8').digest('hex')
+		findApiKeyByHashMock.mockResolvedValue({
+			id: 'key-9',
+			userId: 'user-D',
+			keyPrefix: 'liv_sk_A',
+			name: 'cline',
+			createdAt: new Date(),
+			lastUsedAt: null,
+			revokedAt: null,
+		})
+
+		const middleware = createBearerMiddleware(fakeLivinityd, cache)
+		// No Authorization header — only x-api-key (Anthropic SDK convention)
+		const req = makeReq(undefined, plaintext)
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await middleware(req, res as unknown as Response, next)
+
+		expect(next).toHaveBeenCalledTimes(1)
+		expect(findApiKeyByHashMock).toHaveBeenCalledWith(expectedHash)
+		const r = req as Request & {userId?: string; authMethod?: string}
+		expect(r.userId).toBe('user-D')
+		expect(r.authMethod).toBe('bearer')
+	})
+
+	test('T10 — invalid x-api-key (PG returns null) → 401 Anthropic shape, next() NOT called', async () => {
+		cacheGetMock.mockReturnValue(undefined)
+		findApiKeyByHashMock.mockResolvedValue(null)
+
+		const middleware = createBearerMiddleware(fakeLivinityd, cache)
+		const plaintext = 'liv_sk_' + 'B'.repeat(32)
+		const req = makeReq(undefined, plaintext)
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await middleware(req, res as unknown as Response, next)
+
+		expect(next).not.toHaveBeenCalled()
+		expect(res.statusCode).toBe(401)
+		expect(res._jsonBody).toEqual(ANTHROPIC_INVALID)
+	})
+
+	test('T11 — x-api-key NOT starting with liv_sk_ → fall through (third-party Anthropic key passthrough)', async () => {
+		const middleware = createBearerMiddleware(fakeLivinityd, cache)
+		// Real Anthropic API key shape — must be invisible to this middleware
+		// so the broker can pass it straight through to upstream Anthropic.
+		const req = makeReq(undefined, 'sk-ant-api03-real-anthropic-key-pretend')
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await middleware(req, res as unknown as Response, next)
+
+		expect(next).toHaveBeenCalledTimes(1)
+		expect((req as Request & {userId?: string}).userId).toBeUndefined()
+		expect(findApiKeyByHashMock).not.toHaveBeenCalled()
+	})
+
+	test('T12 — x-api-key takes precedence when both headers present (Anthropic spec canonical)', async () => {
+		cacheGetMock.mockReturnValue(undefined)
+		const apiKeyPlaintext = 'liv_sk_' + 'C'.repeat(32)
+		const bearerPlaintext = 'liv_sk_' + 'D'.repeat(32)
+		const expectedHash = createHash('sha256').update(apiKeyPlaintext, 'utf-8').digest('hex')
+		findApiKeyByHashMock.mockResolvedValue({
+			id: 'key-12',
+			userId: 'user-from-apikey',
+			keyPrefix: 'liv_sk_C',
+			name: 'name',
+			createdAt: new Date(),
+			lastUsedAt: null,
+			revokedAt: null,
+		})
+
+		const middleware = createBearerMiddleware(fakeLivinityd, cache)
+		const req = makeReq(`Bearer ${bearerPlaintext}`, apiKeyPlaintext)
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await middleware(req, res as unknown as Response, next)
+
+		expect(next).toHaveBeenCalledTimes(1)
+		// PG MUST be queried with x-api-key's hash, NOT bearer's
+		expect(findApiKeyByHashMock).toHaveBeenCalledWith(expectedHash)
+		const r = req as Request & {userId?: string}
+		expect(r.userId).toBe('user-from-apikey')
 	})
 
 	test('T8 — defense-in-depth constant-time compare via crypto.timingSafeEqual (RESEARCH.md Pattern 2)', async () => {

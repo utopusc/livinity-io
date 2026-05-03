@@ -118,28 +118,33 @@ export function createBearerMiddleware(
 		res: Response,
 		next: NextFunction,
 	): Promise<void> {
+		// v30.5 F6 — accept BOTH auth header schemes:
+		//   1. `x-api-key: liv_sk_...`     (Anthropic-native — Cline, Continue.dev,
+		//                                    @anthropic-ai/sdk, anthropic-sdk-python)
+		//   2. `Authorization: Bearer ...` (OpenAI-style — Bolt, openai-python,
+		//                                    curl convention)
+		// x-api-key takes precedence when both are present (matches Anthropic API
+		// spec: x-api-key is the canonical Anthropic auth header).
+		// T1 — neither header → fall through (legacy URL-path resolver handles it)
+		const apiKeyHeader = req.headers?.['x-api-key']
 		const authHeader = req.headers?.authorization
-		// T1 — no header → fall through (legacy URL-path resolver handles it)
-		if (!authHeader || typeof authHeader !== 'string') {
-			next()
-			return
+		let presented: string | undefined
+
+		if (typeof apiKeyHeader === 'string' && apiKeyHeader.startsWith(KEY_PLAINTEXT_PREFIX)) {
+			// Anthropic SDK path
+			presented = apiKeyHeader
+		} else if (typeof authHeader === 'string') {
+			// Bearer path (case-insensitive scheme per RFC 7235)
+			if (authHeader.toLowerCase().startsWith(BEARER_PREFIX.toLowerCase())) {
+				const candidate = authHeader.slice(BEARER_PREFIX.length)
+				// T2 — Bearer present but NOT a `liv_sk_*` key → fall through.
+				// Third-party Bearer tokens we don't own MUST be invisible to this
+				// middleware (broker passes them straight through to upstream).
+				if (candidate.startsWith(KEY_PLAINTEXT_PREFIX)) presented = candidate
+			}
 		}
 
-		// Scheme word is case-insensitive per RFC 7235; token body is case-sensitive.
-		// Accept "Bearer ", "bearer ", "BEARER ", etc. — same canonicalization the
-		// Anthropic SDK applies before sending.
-		if (!authHeader.toLowerCase().startsWith(BEARER_PREFIX.toLowerCase())) {
-			next()
-			return
-		}
-		const presented = authHeader.slice(BEARER_PREFIX.length)
-
-		// T2 — present but NOT a `liv_sk_*` key → fall through. This is the
-		// "legacy / passthrough" branch: a third-party Bearer token that we
-		// don't own SHOULD be invisible to this middleware. Per Phase 41 the
-		// broker passes Bearer tokens straight through to upstream Anthropic
-		// when no liv_sk_ identity is established.
-		if (!presented.startsWith(KEY_PLAINTEXT_PREFIX)) {
+		if (!presented) {
 			next()
 			return
 		}
