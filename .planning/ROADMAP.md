@@ -226,7 +226,7 @@ Plans:
 | 59. B1 Bearer Token Auth             | v30.0     | 0/0            | Not started | -          |
 | 60. B2 Public Endpoint               | v30.0     | 2/5            | In progress | -          |
 | 61. C3+D1+D2 Spec Compliance         | v30.0     | 0/0            | Not started | -          |
-| 62. E1+E2 Usage + Settings UI        | v30.0     | 0/5            | Not started | -          |
+| 62. E1+E2 Usage + Settings UI        | v30.0     | 3/5            | In progress | -          |
 | 63. Mandatory Live Verification      | v30.0     | 0/11           | Not started | -          |
 
 ---

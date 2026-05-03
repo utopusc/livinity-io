@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: planning
-last_updated: "2026-05-03T07:14:00.000Z"
-last_activity: 2026-05-03 — Phase 62 Wave 2 Plan 02 SHIPPED. capture-middleware.ts now reads req.apiKeyId set by Phase 59 bearer middleware and propagates it to insertUsage. 3 RED tests GREEN (FR-BROKER-E1-02 ×2 + FR-BROKER-E1-03 capture leg). Commit `54e7289d`. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at start + end. SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-02-SUMMARY.md`. Hand-off: Plans 03 (router filter) + 04 (UI) unblocked.
+status: verifying
+last_updated: "2026-05-03T07:19:30.000Z"
+last_activity: 2026-05-03 — Phase 62 Wave 2 Plan 03 SHIPPED (tRPC `usage` router gains optional apiKeyId/api_key_id filter forwarding to Plan 01's database helpers). Commits `39527673` (RED) + `8d151c84` (GREEN); SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-03-SUMMARY.md`.
 progress:
   total_phases: 8
   completed_phases: 6
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 62 IN PROGRESS — Wave 2 Plan 02 SHIPPED 2026-05-03. Plans 03 (usage-router-filter) + 04 (settings-ui) + 05 (integration) remain. Phase 63 (mandatory live verification) needs Phase 62 complete + Mini PC `bash /opt/livos/update.sh` first.
-Plan: 62-02 SHIPPED 2026-05-03 — Wave 2 single-task surgical edit. capture-middleware.ts recordRow now reads `req.authMethod === 'bearer' ? req.apiKeyId ?? null : null` at response time and passes apiKeyId at position 3 of insertUsage payload. 3 RED tests handed off from Plan 01 are now GREEN: FR-BROKER-E1-02 (bearer leg), FR-BROKER-E1-02 (url-path leg), FR-BROKER-E1-03 capture leg (integration.test.ts). All 43 usage-tracking tests GREEN; 0 regressions. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at start + end of plan. Mount-order verified: capture (1229) < bearer (1239) < broker (1245); closure semantics ensure bearer middleware sets req.apiKeyId BEFORE recordRow's res.end fires. Commit `54e7289d` (feat). 0 deviations from plan. D-NO-NEW-DEPS preserved (zero npm/package.json edits; reused Phase 59's global Express.Request augmentation). Hand-off: Plans 03 (router filter — already accepts apiKeyId? param from Wave 1) + 04 (UI dropdown) unblocked because rows now actually carry api_key_id.
-Status: Phase 62 Wave 2 PARTIAL — Plan 02 of 5 closed. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical (2 sample points this plan; 14 across Phase 61+62 so far). FR-BROKER-E1-02 satisfied (capture middleware passes resolved api_keys.id to broker_usage when Bearer-authed). Remaining Phase 62 work: Plan 03 (usage-router tRPC apiKeyId filter), Plan 04 (Settings > AI Configuration > API Keys + Usage tabs UI), Plan 05 (E2E integration verification). PHASE-SUMMARY pending after Plan 05.
-Last activity: 2026-05-03 — Phase 62 Wave 2 Plan 02 SHIPPED (capture-middleware bearer→broker_usage propagation). Commit `54e7289d`; SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-02-SUMMARY.md`.
+Phase: 62 IN PROGRESS — Wave 2 Plans 02 + 03 SHIPPED 2026-05-03. Plans 04 (settings-ui) + 05 (integration) remain. Phase 63 (mandatory live verification) needs Phase 62 complete + Mini PC `bash /opt/livos/update.sh` first.
+Plan: 62-03 SHIPPED 2026-05-03 — Wave 2 single-task surgical Zod additive. routes.ts `sinceInput` gains optional `apiKeyId: z.string().uuid().optional()` (camelCase, privateProcedure UI ergonomics) and `getAllProc` input gains optional `api_key_id: z.string().uuid().optional()` (snake_case, matches user_id/app_id convention). Both forward to Plan 01's `queryUsageByUser`/`queryUsageAll` `apiKeyId` opt. RED commit `39527673` (2 new failing tests for forwarding); GREEN commit `8d151c84` (routes.ts edits, 21 insertions / 2 deletions). All 45 usage-tracking tests GREEN (was 43; +2 new FR-BROKER-E2-02). Zero regressions. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at start + end of plan. `httpOnlyPaths` already includes `usage.getMine` + `usage.getAll` (no edits needed; transport routing is transparent to Zod input shape). Backwards-compat preserved (Zod non-strict default — older UI bundles still work without sending the new fields). 0 deviations from plan. D-NO-NEW-DEPS preserved. Hand-off: Plan 04 UI consumes `trpc.usage.getMine.useQuery({apiKeyId})` and `trpc.usage.getAll.useQuery({api_key_id})` from the filter dropdown.
+Status: Phase 62 Wave 2 PARTIAL — Plans 02 + 03 of 5 closed; Plan 04 + 05 remain. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical (3 sample points this plan; 17 across Phase 61+62 so far). FR-BROKER-E2-02 satisfied (backend half — tRPC routes accept apiKeyId filter and forward to PG with proper user-scoping preserved). UI half (FR-BROKER-E2-02 frontend) and FR-BROKER-E2-01 (API Keys tab UI) owned by Plan 04. PHASE-SUMMARY pending after Plan 05.
+Last activity: 2026-05-03 — Phase 62 Wave 2 Plan 03 SHIPPED (tRPC `usage` router gains optional apiKeyId/api_key_id filter forwarding). Commits `39527673` (RED) + `8d151c84` (GREEN); SUMMARY at `.planning/phases/62-usage-tracking-settings-ui/62-03-SUMMARY.md`.
 
 ## v30.0 Roadmap Snapshot
 
