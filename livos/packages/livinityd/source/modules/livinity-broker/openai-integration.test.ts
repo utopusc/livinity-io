@@ -3,6 +3,13 @@ import express from 'express'
 import http from 'node:http'
 import pg from 'pg'
 
+// Phase 57: every request below sets `X-Livinity-Mode: agent` to opt into the
+// existing Strategy B HTTP-proxy → nexus → sacred sdk-agent-runner.ts path.
+// Default (header absent) = passthrough mode (covered by passthrough-handler.test.ts).
+// Agent mode preserves v29.5 behavior byte-identical (FR-BROKER-A2-02 — agent
+// mode is the OPT-IN existing path; these v29.5 integration tests prove that
+// every assertion still holds when the agent path is selected explicitly).
+
 interface FakeUser {
 	id: string
 	username?: string
@@ -160,7 +167,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'hi'}]}),
 		})
 		assert.equal(res.status, 200, `expected 200, got ${res.status}`)
@@ -188,7 +195,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'hi'}], stream: true}),
 		})
 		assert.equal(res.status, 200)
@@ -216,7 +223,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({
 				model: 'gpt-4',
 				messages: [{role: 'user', content: 'hi'}],
@@ -246,7 +253,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'foobar-llm', messages: [{role: 'user', content: 'hi'}]}),
 		})
 		assert.equal(res.status, 200, 'unknown model still returns 200 (default fallback)')
@@ -265,7 +272,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'gpt-4', messages: []}),
 		})
 		assert.equal(res.status, 400)
@@ -289,7 +296,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'go'}], stream: true}),
 		})
 		const text = await res.text()
@@ -305,7 +312,9 @@ async function runTests() {
 	{
 		setMockUsers(users)
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
-		const res = await fetch(`${url}/u/admin-1/v1/models`)
+		const res = await fetch(`${url}/u/admin-1/v1/models`, {
+			headers: {'x-livinity-mode': 'agent'},
+		})
 		assert.equal(res.status, 200, `expected 200, got ${res.status}`)
 		const body = (await res.json()) as any
 		assert.equal(body.object, 'list')
@@ -324,7 +333,9 @@ async function runTests() {
 	{
 		setMockUsers(users)
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
-		const res = await fetch(`${url}/u/nonexistent-user/v1/models`)
+		const res = await fetch(`${url}/u/nonexistent-user/v1/models`, {
+			headers: {'x-livinity-mode': 'agent'},
+		})
 		assert.equal(res.status, 404, `expected 404, got ${res.status}`)
 		await close()
 		console.log('  PASS Test 8: GET /v1/models 404 for unknown user (auth gate)')
