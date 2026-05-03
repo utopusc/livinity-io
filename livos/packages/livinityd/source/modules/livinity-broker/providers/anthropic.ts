@@ -120,21 +120,34 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 		.filter((p): p is string => typeof p === 'string' && p.length > 0)
 		.join(':')
 
+	// Phase 63 R3.2 — mirror sacred sdk-agent-runner.ts (which works for AI Chat)
+	// invocation shape as closely as possible. Only differences from sacred:
+	// - allowedTools: [] (sacred adds Nexus MCP tool names; we want NONE)
+	// - mcpServers: {} (sacred wires Nexus MCP servers; we want NONE)
+	// - systemPrompt: client's verbatim (sacred prepends Nexus identity line)
+	// - maxTurns: 1 (sacred passes user-config; passthrough is single-turn)
+	// Everything else (env shape, permissionMode='dontAsk', tools:[],
+	// persistSession:false) matches the working agent path.
 	const options: AgentSdkOptions = {
 		systemPrompt: systemPrompt || undefined,
-		allowedTools: [],
 		mcpServers: {},
+		tools: [], // disable built-in Claude Code tools (Bash/Read/Write/etc) — match sacred line 345
+		allowedTools: [],
 		maxTurns: 1,
-		permissionMode: 'bypassPermissions',
 		model: params.model,
-		cwd,
+		permissionMode: 'dontAsk', // match sacred line 350 (NOT 'bypassPermissions')
+		persistSession: false, // match sacred line 351
+		// Optional explicit claude binary path — operator override for non-PATH installs
+		...(process.env.LIVOS_CLAUDE_BIN
+			? {pathToClaudeCodeExecutable: process.env.LIVOS_CLAUDE_BIN}
+			: {}),
 		env: {
 			HOME: cwd,
 			PATH: augmentedPath,
 			NODE_ENV: process.env.NODE_ENV || 'production',
 			LANG: process.env.LANG || 'en_US.UTF-8',
 		},
-	}
+	} as AgentSdkOptions
 
 	return {prompt: promptText, options}
 }
