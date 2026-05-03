@@ -161,19 +161,32 @@ export async function listAllApiKeys(opts?: {userId?: string}): Promise<
  * (revoked_at IS NULL guard means second call is a no-op, preserving the
  * FIRST-revoke timestamp).
  *
- * Returns rowCount so the Wave 3 tRPC route can throw NOT_FOUND on rowCount=0
- * (key already revoked OR doesn't belong to caller OR doesn't exist).
+ * Returns `{rowCount, keyHash?}`:
+ *   - rowCount === 0  → no row updated (already revoked OR not owned OR not
+ *                       found). Wave 3 tRPC route maps to NOT_FOUND.
+ *   - rowCount === 1  → keyHash is the just-revoked row's key_hash. Wave 3's
+ *                       `apiKeys.revoke` passes it to `apiKeyCache.invalidate`
+ *                       so revocation propagates IMMEDIATELY rather than
+ *                       waiting for the 60s positive TTL to elapse
+ *                       (RESEARCH.md Pitfall 1 / Open Question 3 / T-59-21).
+ *
+ * Wave 1 originally returned only `{rowCount}`; Wave 3 (Plan 04) extended
+ * the shape via `RETURNING key_hash` to support synchronous cache
+ * invalidation without a second round-trip from the route handler.
  */
 export async function revokeApiKey(opts: {
 	id: string
 	userId: string
-}): Promise<{rowCount: number}> {
+}): Promise<{rowCount: number; keyHash?: string}> {
 	const pool = getPool()
 	if (!pool) return {rowCount: 0}
 	const result = await pool.query(
 		`UPDATE api_keys SET revoked_at = NOW()
-		 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+		 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+		 RETURNING key_hash`,
 		[opts.id, opts.userId],
 	)
-	return {rowCount: result.rowCount ?? 0}
+	const rowCount = result.rowCount ?? 0
+	if (rowCount === 0) return {rowCount: 0}
+	return {rowCount, keyHash: result.rows[0]?.key_hash as string | undefined}
 }
