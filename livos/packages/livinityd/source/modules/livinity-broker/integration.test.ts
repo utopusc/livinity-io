@@ -3,6 +3,13 @@ import express from 'express'
 import http from 'node:http'
 import pg from 'pg'
 
+// Phase 57: every request below sets `X-Livinity-Mode: agent` to opt into the
+// existing Strategy B HTTP-proxy → nexus → sacred sdk-agent-runner.ts path.
+// Default (header absent) = passthrough mode (covered by passthrough-handler.test.ts).
+// Agent mode preserves v29.5 behavior byte-identical (FR-BROKER-A2-02 — agent
+// mode is the OPT-IN existing path; these v29.5 integration tests prove that
+// every assertion still holds when the agent path is selected explicitly).
+
 /**
  * Integration test for the broker router.
  *
@@ -209,7 +216,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({
 				model: 'claude-sonnet-4-6',
 				messages: [{role: 'user', content: 'hi'}],
@@ -242,7 +249,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({
 				model: 'claude-sonnet-4-6',
 				messages: [{role: 'user', content: 'hi'}],
@@ -267,7 +274,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/nonexistent-user/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({
 				model: 'x',
 				messages: [{role: 'user', content: 'hi'}],
@@ -285,7 +292,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(singleUserLivinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/user-2/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({
 				model: 'x',
 				messages: [{role: 'user', content: 'hi'}],
@@ -302,7 +309,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'x', messages: []}),
 		})
 		assert.equal(res.status, 400, `expected 400, got ${res.status}`)
@@ -319,7 +326,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'claude-sonnet-4-6', messages: [{role: 'user', content: 'hi'}]}),
 		})
 		assert.equal(res.status, 429, `expected 429, got ${res.status}`)
@@ -342,7 +349,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'claude-sonnet-4-6', messages: [{role: 'user', content: 'hi'}]}),
 		})
 		assert.equal(res.status, 429)
@@ -362,7 +369,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/messages`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'claude-sonnet-4-6', messages: [{role: 'user', content: 'hi'}]}),
 		})
 		assert.equal(res.status, status, `${status} from upstream → ${status} from broker (no remap)`)
@@ -380,7 +387,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'hi'}], stream: false}),
 		})
 		assert.equal(res.status, 429)
@@ -401,7 +408,7 @@ async function runTests() {
 		const {url, close} = await startBrokerApp(livinityd, createBrokerRouter)
 		const res = await fetch(`${url}/u/admin-1/v1/chat/completions`, {
 			method: 'POST',
-			headers: {'content-type': 'application/json'},
+			headers: {'content-type': 'application/json', 'x-livinity-mode': 'agent'},
 			body: JSON.stringify({model: 'gpt-4', messages: [{role: 'user', content: 'hi'}], stream: false}),
 		})
 		assert.equal(res.status, status, `OpenAI: ${status} from upstream → ${status} from broker`)
