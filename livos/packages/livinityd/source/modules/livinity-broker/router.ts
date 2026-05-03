@@ -98,16 +98,25 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 		// Passthrough bypasses the sacred agent runner entirely; agent path below is byte-identical to v29.5.
 		const mode = resolveMode(req)
 		if (mode === 'passthrough') {
-			// Phase 63 R3 — compute per-user claude dir for Agent SDK subscription
-			// path. Failures fall through to legacy HTTP path inside passthrough.
+			// Phase 63 R3 — resolve subscription auth scope for Agent SDK spawn.
+			// Phase 63 R3.8 — honor BROKER_FORCE_ROOT_HOME (Phase 57 single-user
+			// fallback flag): when set, use /root/.claude/ creds (the working
+			// subscription session bruce ran `claude login` for as root user).
+			// This is the env var that already routes credential-extractor.ts
+			// to /root in single-tenant deployments — passthrough must follow
+			// the same path resolution to use the same working creds.
 			let passthroughCwd: string | undefined
-			try {
-				const {ensureUserClaudeDir} = await import('../ai/per-user-claude.js')
-				passthroughCwd = await ensureUserClaudeDir(deps.livinityd, auth.userId)
-			} catch (err: any) {
-				deps.livinityd.logger.log(
-					`[livinity-broker] router: ensureUserClaudeDir failed for user=${auth.userId}: ${err?.message ?? err}`,
-				)
+			if (process.env.BROKER_FORCE_ROOT_HOME === 'true') {
+				passthroughCwd = process.env.HOME || '/root'
+			} else {
+				try {
+					const {ensureUserClaudeDir} = await import('../ai/per-user-claude.js')
+					passthroughCwd = await ensureUserClaudeDir(deps.livinityd, auth.userId)
+				} catch (err: any) {
+					deps.livinityd.logger.log(
+						`[livinity-broker] router: ensureUserClaudeDir failed for user=${auth.userId}: ${err?.message ?? err}`,
+					)
+				}
 			}
 			try {
 				await passthroughAnthropicMessages({

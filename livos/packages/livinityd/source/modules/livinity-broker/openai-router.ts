@@ -114,15 +114,19 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 		// Passthrough bypasses sacred sdk-agent-runner.ts entirely; agent path below is byte-identical to v29.5.
 		const mode = resolveMode(req)
 		if (mode === 'passthrough') {
-			// Phase 63 R3 — compute per-user claude dir for Agent SDK subscription path.
+			// Phase 63 R3.8 — honor BROKER_FORCE_ROOT_HOME (mirror credential-extractor.ts:44 + router.ts).
 			let passthroughCwd: string | undefined
-			try {
-				const {ensureUserClaudeDir} = await import('../ai/per-user-claude.js')
-				passthroughCwd = await ensureUserClaudeDir(deps.livinityd, auth.userId)
-			} catch (err: any) {
-				deps.livinityd.logger.log(
-					`[livinity-broker:openai] router: ensureUserClaudeDir failed for user=${auth.userId}: ${err?.message ?? err}`,
-				)
+			if (process.env.BROKER_FORCE_ROOT_HOME === 'true') {
+				passthroughCwd = process.env.HOME || '/root'
+			} else {
+				try {
+					const {ensureUserClaudeDir} = await import('../ai/per-user-claude.js')
+					passthroughCwd = await ensureUserClaudeDir(deps.livinityd, auth.userId)
+				} catch (err: any) {
+					deps.livinityd.logger.log(
+						`[livinity-broker:openai] router: ensureUserClaudeDir failed for user=${auth.userId}: ${err?.message ?? err}`,
+					)
+				}
 			}
 			try {
 				await passthroughOpenAIChatCompletions({
