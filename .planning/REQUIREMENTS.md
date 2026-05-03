@@ -42,8 +42,10 @@ External API consumers expect `Authorization: Bearer <key>` and a public endpoin
 ** — A user-facing tRPC route allows admins/users to: create a key (returns plaintext once + key id), list their own keys (no plaintext), and revoke a key (sets `revoked_at`).
 - [x] **FR-BROKER-B1-05
 ** — Revoked keys return `401 Unauthorized` with body `{"error": {"type": "authentication_error", "message": "API key revoked"}}` (Anthropic-spec error shape).
-- [ ] **FR-BROKER-B2-01** — A public endpoint `api.livinity.io` is reachable from the open internet via Server5. TLS terminates at Server5 (Caddy or CF Worker — Phase 56 spike picks). Container IP guard is REMOVED from broker (Bearer auth replaces it).
-- [ ] **FR-BROKER-B2-02** — A rate-limit perimeter at Server5 enforces a baseline limit (default = the user's Anthropic subscription rate forwarded transparently; broker-side token-bucket TBD pending Phase 56 spike). 429s use Anthropic-compat error shape.
+- [ ] **FR-BROKER-B2-01
+** — A public endpoint `api.livinity.io` is reachable from the open internet via Server5. TLS terminates at Server5 (Caddy or CF Worker — Phase 56 spike picks). Container IP guard is REMOVED from broker (Bearer auth replaces it).
+- [ ] **FR-BROKER-B2-02
+** — A rate-limit perimeter at Server5 enforces a baseline limit (default = the user's Anthropic subscription rate forwarded transparently; broker-side token-bucket TBD pending Phase 56 spike). 429s use Anthropic-compat error shape.
 
 ### C — Spec Compliance (True Token Streaming + Rate Limit Headers)
 

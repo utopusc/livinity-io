@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: Phase 59 (Bearer Token Auth) COMPLETE. All 5 plans (59-01..05) shipped. 5/5 requirements satisfied (FR-BROKER-B1-01..05). api-keys/ 39/39 GREEN. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at phase end. D-NO-NEW-DEPS preserved across entire phase. Awaiting Phase 60 (Public Endpoint), Phase 61 (Rate-Limit + Aliases + Provider Stub), or Phase 62 (Usage UI). Phases 60 + 62 both depend on Phase 59 surface (now SHIPPED).
-last_updated: "2026-05-02T21:30:00Z"
-last_activity: 2026-05-02 — Phase 59 CLOSED. Plan 59-05 (Wave 4 E2E integration tests + phase gate) executed; task commit `14b5784d`; SUMMARY at `.planning/phases/59-bearer-token-auth/59-05-SUMMARY.md`; PHASE-SUMMARY at `.planning/phases/59-bearer-token-auth/PHASE-SUMMARY.md`
+status: Phase 60 (Public Endpoint + Rate-Limit) Wave 0 (60-01) COMPLETE — Server5 diagnostic fixture captured (1 ssh invocation, fail2ban-conservative); 5/5 RESEARCH.md Open Questions answered with concrete actions for Waves 1-3; Caddyfile drift detected (Server5 has 6 blocks, repo has 5 — RECOMMENDED resolution = pull-then-patch); xcaddy + Go ABSENT on Server5 → Wave 1 builds on dev box + scp; CF DNS Caddy module also ABSENT (memory-drift correction). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical. Awaiting Wave 1 (60-02 — Caddy custom build + binary swap).
+last_updated: "2026-05-03T04:52:04Z"
+last_activity: 2026-05-03 — Phase 60 Plan 01 (Wave 0 — Server5 diagnostic) executed; task commit `59ceeb16` (`docs(60-01): wave 0 Server5 diagnostic fixture + 5-Q verdict table`); SUMMARY at `.planning/phases/60-public-endpoint-rate-limit/60-01-SUMMARY.md`; FIXTURE at `.planning/phases/60-public-endpoint-rate-limit/60-DIAGNOSTIC-FIXTURE.md` (312 lines)
 progress:
   total_phases: 8
   completed_phases: 4
