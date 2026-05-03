@@ -19,12 +19,15 @@ import type Livinityd from '../../index.js'
  * and bypasses the agent runner entirely.
  *
  * Streaming behavior:
- *   - Phase 57 (this wave): aggregate-then-restream. Awaits the upstream
- *     final message via SDK's messages.stream().finalMessage(), then
- *     synthesizes a single fat content_block_delta SSE sequence to the
- *     client. This keeps Wave 2 minimal while shipping a working stream.
- *   - Phase 58: swap to true SDK event-iterator pass-through (token
- *     streaming).
+ *   - Phase 58 Wave 2 (FR-BROKER-C1-01): true token streaming. The
+ *     streaming branch of passthroughAnthropicMessages iterates
+ *     client.messages.create({stream:true})'s async iterable and writes
+ *     each event as `event: <type>\ndata: <json>\n\n` — verbatim
+ *     pass-through of the upstream Anthropic SSE event sequence at the
+ *     same temporal cadence as upstream emits.
+ *   - passthroughOpenAIChatCompletions still uses the Phase 57
+ *     transitional aggregate-then-emit single-chunk path. Wave 3 will
+ *     replace that with translator-based 1:1 delta emission.
  */
 
 export interface PassthroughOpts {
@@ -161,59 +164,84 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 
 	try {
 		if (body.stream === true) {
-			// Phase 57 TRANSITIONAL: aggregate then synthesize a single fat
-			// content_block_delta. Phase 58 swaps to true SDK event-iterator
-			// pass-through.
-			let finalMessage: any
-			try {
-				finalMessage = await client.messages.stream(upstreamBody as any).finalMessage()
-			} catch (err) {
-				const refreshed = await tryRefreshAndRetry(err, token, makeClient, async (c) => {
-					return c.messages.stream(upstreamBody as any).finalMessage()
-				})
-				if (refreshed === null) throw mapApiError(err)
-				finalMessage = refreshed
-			}
+			// Phase 58 Wave 2 (FR-BROKER-C1-01): true token streaming — raw async
+			// iterator forwarding. Replaces Phase 57's transitional aggregate-then-
+			// restream block.
+			//
+			// SDK method choice: client.messages.create({stream:true}) returns
+			// Stream<RawMessageStreamEvent> — an async iterable whose `type` field
+			// matches Anthropic's SSE event names verbatim (message_start,
+			// content_block_delta, ...). We forward each event as
+			//   `event: <type>\ndata: <json>\n\n`
+			// — byte-for-byte pass-through of the upstream Anthropic SSE sequence.
+			//
+			// Headers include Cache-Control: no-transform (defense-in-depth against
+			// any future compression middleware mounting — Wave 0 audit confirmed
+			// none currently mounted) and X-Accel-Buffering: no (nginx hint for
+			// Phase 60 reverse-proxy chain).
 
 			res.setHeader('Content-Type', 'text/event-stream')
-			res.setHeader('Cache-Control', 'no-cache')
+			res.setHeader('Cache-Control', 'no-cache, no-transform')
 			res.setHeader('Connection', 'keep-alive')
+			res.setHeader('X-Accel-Buffering', 'no')
+			res.flushHeaders()
 
-			const text = (finalMessage.content ?? [])
-				.filter((b: any) => b.type === 'text')
-				.map((b: any) => b.text)
-				.join('')
+			const makeClientFn = opts.clientFactory ?? makeClient
 
-			const writeEvent = (event: string, data: any) => {
-				res.write(`event: ${event}\n`)
-				res.write(`data: ${JSON.stringify(data)}\n\n`)
+			let stream: AsyncIterable<{type: string}>
+			try {
+				stream = (await client.messages.create({
+					...upstreamBody,
+					stream: true,
+				} as any)) as unknown as AsyncIterable<{type: string}>
+			} catch (err) {
+				const refreshed = await tryRefreshAndRetry<AsyncIterable<{type: string}>>(
+					err,
+					token,
+					makeClientFn,
+					async (c) =>
+						(await c.messages.create({
+							...upstreamBody,
+							stream: true,
+						} as any)) as unknown as AsyncIterable<{type: string}>,
+				)
+				if (refreshed === null) throw mapApiError(err)
+				stream = refreshed
 			}
 
-			writeEvent('message_start', {
-				type: 'message_start',
-				message: {...finalMessage, content: [], stop_reason: null, stop_sequence: null},
-			})
-			writeEvent('content_block_start', {
-				type: 'content_block_start',
-				index: 0,
-				content_block: {type: 'text', text: ''},
-			})
-			writeEvent('content_block_delta', {
-				type: 'content_block_delta',
-				index: 0,
-				delta: {type: 'text_delta', text},
-			})
-			writeEvent('content_block_stop', {type: 'content_block_stop', index: 0})
-			writeEvent('message_delta', {
-				type: 'message_delta',
-				delta: {
-					stop_reason: finalMessage.stop_reason,
-					stop_sequence: finalMessage.stop_sequence,
-				},
-				usage: finalMessage.usage,
-			})
-			writeEvent('message_stop', {type: 'message_stop'})
-			res.end()
+			try {
+				for await (const event of stream) {
+					if (res.writableEnded) break
+					const evtType = (event as {type: string}).type
+					res.write(`event: ${evtType}\n`)
+					res.write(`data: ${JSON.stringify(event)}\n\n`)
+					const flushable = res as unknown as {flush?: () => void}
+					if (typeof flushable.flush === 'function') flushable.flush()
+				}
+			} catch (err) {
+				// Mid-stream error from SDK iterator (network drop, parse failure,
+				// upstream HTTP 529 mid-flight). Best effort: emit an Anthropic-shape
+				// `event: error` chunk then close. The downstream client SDK will
+				// surface this to its caller. Anthropic SSE has no [DONE] terminator
+				// so closing the socket is correct stream termination per spec.
+				if (!res.writableEnded) {
+					try {
+						res.write('event: error\n')
+						res.write(
+							`data: ${JSON.stringify({
+								type: 'error',
+								error: {
+									type: 'api_error',
+									message: (err as Error)?.message ?? 'mid-stream error',
+								},
+							})}\n\n`,
+						)
+					} catch {
+						// socket already gone — nothing more we can do
+					}
+				}
+			}
+			if (!res.writableEnded) res.end()
 		} else {
 			let response: any
 			try {
