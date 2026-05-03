@@ -66,6 +66,11 @@ function cleanShutdown(signal: string) {
 	if (isShuttingDown) return
 	isShuttingDown = true
 	livinityd.logger.log(`Received ${signal}, exiting immediately to release port`)
+	// Phase 59 — flush pending api_keys.last_used_at writes before exit so
+	// audit-visible "last seen" timestamps don't get lost on SIGTERM/SIGINT
+	// (RESEARCH.md Pitfall 2). Best-effort: if dispose throws or the process
+	// is killed by PM2 before it resolves, we still exit — never block here.
+	livinityd.apiKeyCache?.dispose().catch(() => {})
 	process.exit(0)
 }
 process.on('SIGINT', cleanShutdown.bind(null, 'SIGINT'))
