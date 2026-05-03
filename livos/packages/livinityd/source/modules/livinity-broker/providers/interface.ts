@@ -55,10 +55,19 @@ export type ProviderRequestParams = {
  *     is set on the client constructor.
  *   - `signal`: optional AbortSignal — provider forwards to SDK so client
  *     disconnects propagate upstream.
+ *   - `clientOverride`: optional pre-constructed SDK client. Phase 58 Wave 0
+ *     test seam — integration tests inject an Anthropic SDK instance built
+ *     with `baseURL: fakeServer.baseURL` so streaming tests hit a loopback
+ *     fake-Anthropic SSE server instead of api.anthropic.com. Provider uses
+ *     this verbatim instead of constructing its own client when provided.
+ *     Type is `unknown` to keep this interface dependency-pure (callers
+ *     pass an `Anthropic` instance for AnthropicProvider; future provider
+ *     impls would document their own override type).
  */
 export type ProviderRequestOpts = {
 	authToken: string
 	signal?: AbortSignal
+	clientOverride?: unknown
 }
 
 /**
