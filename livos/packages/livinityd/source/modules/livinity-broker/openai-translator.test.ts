@@ -224,3 +224,150 @@ runTests().catch((err) => {
 	console.error('FAILED:', err)
 	process.exit(1)
 })
+
+// ===== Phase 57 Wave 3: vitest blocks for the new passthrough translation helpers =====
+// These exist alongside the legacy node-script style runTests() above so both
+// invocation styles (node script + vitest) report the same suite. The vitest
+// blocks below cover translateToolsToAnthropic + translateToolUseToOpenAI which
+// are NEW exports for passthrough mode.
+
+import {describe, it, expect} from 'vitest'
+import {translateToolsToAnthropic, translateToolUseToOpenAI} from './openai-translator.js'
+
+describe('translateToolsToAnthropic (Phase 57 passthrough)', () => {
+	it('translates no-params tool', () => {
+		const result = translateToolsToAnthropic([
+			{
+				type: 'function',
+				function: {name: 'ping', description: 'Pings', parameters: {type: 'object', properties: {}}},
+			},
+		])
+		expect(result).toEqual([
+			{name: 'ping', description: 'Pings', input_schema: {type: 'object', properties: {}}},
+		])
+	})
+
+	it('translates simple-params tool', () => {
+		const result = translateToolsToAnthropic([
+			{
+				type: 'function',
+				function: {
+					name: 'calculator',
+					description: 'Adds two numbers',
+					parameters: {
+						type: 'object',
+						properties: {a: {type: 'number'}, b: {type: 'number'}},
+						required: ['a', 'b'],
+					},
+				},
+			},
+		])
+		expect(result[0]?.name).toBe('calculator')
+		expect(result[0]?.input_schema).toMatchObject({type: 'object', required: ['a', 'b']})
+	})
+
+	it('translates enum-params tool', () => {
+		const result = translateToolsToAnthropic([
+			{
+				type: 'function',
+				function: {
+					name: 'set_color',
+					parameters: {
+						type: 'object',
+						properties: {color: {type: 'string', enum: ['red', 'green', 'blue']}},
+					},
+				},
+			},
+		])
+		expect((result[0]?.input_schema as any).properties.color.enum).toEqual([
+			'red',
+			'green',
+			'blue',
+		])
+	})
+
+	it('translates nested-object-params tool', () => {
+		const result = translateToolsToAnthropic([
+			{
+				type: 'function',
+				function: {
+					name: 'create_user',
+					parameters: {
+						type: 'object',
+						properties: {
+							user: {
+								type: 'object',
+								properties: {name: {type: 'string'}, age: {type: 'integer'}},
+							},
+						},
+					},
+				},
+			},
+		])
+		expect((result[0]?.input_schema as any).properties.user.type).toBe('object')
+		expect((result[0]?.input_schema as any).properties.user.properties.age.type).toBe('integer')
+	})
+
+	it('translates array-params tool', () => {
+		const result = translateToolsToAnthropic([
+			{
+				type: 'function',
+				function: {
+					name: 'sum_list',
+					parameters: {type: 'object', properties: {numbers: {type: 'array', items: {type: 'number'}}}},
+				},
+			},
+		])
+		expect((result[0]?.input_schema as any).properties.numbers.type).toBe('array')
+		expect((result[0]?.input_schema as any).properties.numbers.items.type).toBe('number')
+	})
+
+	it('throws on unsupported tool type', () => {
+		expect(() =>
+			translateToolsToAnthropic([{type: 'web_search', function: {name: 'x'}} as any]),
+		).toThrow('unsupported tool type')
+	})
+
+	it('throws when function.name is missing', () => {
+		expect(() => translateToolsToAnthropic([{type: 'function', function: {} as any}])).toThrow(
+			'tool.function.name is required',
+		)
+	})
+})
+
+describe('translateToolUseToOpenAI (Phase 57 passthrough)', () => {
+	it('translates text-only response to content with no tool_calls', () => {
+		const result = translateToolUseToOpenAI([{type: 'text', text: 'Hello world'}])
+		expect(result).toEqual({role: 'assistant', content: 'Hello world'})
+	})
+
+	it('aggregates multi-text blocks into single content string', () => {
+		const result = translateToolUseToOpenAI([
+			{type: 'text', text: 'Hello '},
+			{type: 'text', text: 'world'},
+		])
+		expect(result.content).toBe('Hello world')
+	})
+
+	it('translates tool_use block to tool_calls with JSON-stringified arguments', () => {
+		const result = translateToolUseToOpenAI([
+			{type: 'tool_use', id: 'toolu_123', name: 'calculator', input: {a: 2, b: 3}},
+		])
+		expect(result.content).toBeNull()
+		expect(result.tool_calls).toHaveLength(1)
+		expect(result.tool_calls![0]).toEqual({
+			id: 'toolu_123',
+			type: 'function',
+			function: {name: 'calculator', arguments: '{"a":2,"b":3}'},
+		})
+	})
+
+	it('translates mixed text + tool_use response', () => {
+		const result = translateToolUseToOpenAI([
+			{type: 'text', text: 'Calling calculator: '},
+			{type: 'tool_use', id: 'toolu_xyz', name: 'calculator', input: {a: 1, b: 2}},
+		])
+		expect(result.content).toBe('Calling calculator: ')
+		expect(result.tool_calls).toHaveLength(1)
+	})
+})
