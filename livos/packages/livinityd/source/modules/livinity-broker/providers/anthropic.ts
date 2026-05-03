@@ -103,21 +103,21 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 			: `--- Prior conversation context ---\n${flatHistory}\n--- End context ---`
 	}
 
-	// Phase 63 R3.1 — augment PATH so the spawned `claude` CLI is discoverable
-	// regardless of where it was npm-installed. Mini PC observation: bruce
-	// installed claude via npm-global to ~/.local/bin/claude (not /usr/local/bin).
-	// Cover the common install locations across both root + bruce service users.
-	const HOME_DIR = process.env.HOME ?? '/root'
+	// Phase 63 R3.1 — augment PATH so the spawned `claude` CLI is discoverable.
+	// claude is commonly npm-installed to `~/.local/bin/claude` rather than the
+	// system /usr/local/bin. Operators with a non-standard install location can
+	// override by setting LIVOS_CLAUDE_BIN_DIR in the systemd service env.
+	const operatorClaudeBinDir = process.env.LIVOS_CLAUDE_BIN_DIR
+	const homeDir = process.env.HOME ?? '/root'
 	const augmentedPath = [
-		`${HOME_DIR}/.local/bin`,
-		'/home/bruce/.local/bin', // Mini PC single-tenant fallback
-		'/root/.local/bin',
-		process.env.PATH ?? '',
+		operatorClaudeBinDir, // explicit operator override (highest priority)
+		`${homeDir}/.local/bin`, // service-user's local bin (npm global default)
+		process.env.PATH, // systemd-provided PATH (already includes /usr/local/bin etc)
 		'/usr/local/bin',
 		'/usr/bin',
 		'/bin',
 	]
-		.filter(Boolean)
+		.filter((p): p is string => typeof p === 'string' && p.length > 0)
 		.join(':')
 
 	const options: AgentSdkOptions = {
