@@ -46,7 +46,40 @@ Chosen path: **A — HTTP-proxy direct to `api.anthropic.com/v1/messages`** — 
 
 ## Q2: External-Client `tools[]` — Forward or Ignore?
 
-(Pending — written in Task 2.)
+### Verdict
+Chosen path: **Forward verbatim in passthrough mode** — Broker passes `body.tools[]` through to upstream Anthropic untouched on the Anthropic-Messages route, and translates OpenAI's `function`-nested schema → Anthropic's flat `name + input_schema` schema on the OpenAI-compat route, then forwards. Status quo "ignore-warn" is retained ONLY in agent mode (where Nexus tools win, preserving LivOS in-app chat behavior byte-identical).
+
+### Rationale (4 reasons)
+1. **FR-BROKER-A1-03 mandates it.** The requirement explicitly says "External clients see only their own tools (or none)" and "passthrough mode emits NO Nexus MCP tools". The only way to honor "their own tools" is to forward them; the only way to emit "none" when none are sent is to simply not inject anything. Both conclusions point at "preserve client tools[] verbatim".
+2. **Aligns with Q1.** Q1 chose Strategy A (raw HTTP-proxy with byte-forward of upstream Anthropic SSE). Strategy A by construction ALREADY forwards the entire request body — `tools[]` included — to upstream Anthropic. Q2's verdict is thus the path of least resistance for the chosen Q1 strategy: zero additional code beyond the (deleted) ignore-warn at router.ts:66-70 and openai-router.ts:110-124.
+3. **No documented Anthropic tier-gate on tools.** Searched docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview, computer-use, and managing-api-keys — no statement gates `tools[]` to API-key-tier-only requests. Claude Code itself uses tools on subscription auth (positive existence proof). Worst case (Anthropic adds a tier-gate in the future): broker forwards the resulting upstream 4xx verbatim — no broker-side tier-checking code needed.
+4. **Identity contamination clean-up requires it.** v29.5 live testing surfaced that Bolt.diy's own developer-tools were being shadowed by Nexus tools the broker injected. Forward-verbatim eliminates the shadowing entirely; the model sees exactly what the client said it would see, no more.
+
+### Alternatives Considered (3)
+- **Alt 1: Status quo — ignore-warn (D-41-14 / D-42-12)** — disqualified because it directly contradicts FR-BROKER-A1-03 ("emit NO Nexus MCP tools" + "see only their own tools"). Today's behavior is what v29.5 testing failed on.
+- **Alt 2: Selective forward (only forward tools matching a Nexus-vetted allowlist)** — disqualified for being a half-measure that fragments behavior across clients (Bolt.diy tools differ from Open WebUI's differ from Continue.dev's; no static allowlist scales). Adds policy surface that v30 doesn't need.
+- **Alt 3: Forward in BOTH passthrough and agent modes (drop Nexus tool injection entirely)** — disqualified because it would change agent-mode behavior, breaking LivOS in-app chat (the existing IntentRouter + capability registry + Nexus MCP tools are what makes AI Chat work). FR-BROKER-A2-02 explicitly preserves agent mode unchanged.
+
+### Code-Level Integration Point
+- **File 1:** `livos/packages/livinityd/source/modules/livinity-broker/router.ts`
+- **Line range:** `router.ts:66-70` — current ignore-warn block (D-41-14). Phase 57 plan 57-03 deletes this block in passthrough mode and replaces with: in passthrough, the body (including `tools[]`) is forwarded verbatim by Strategy A's `fetch()` to upstream Anthropic. In agent mode (header/path-gated per Q3), the existing ignore-warn is retained.
+- **File 2:** `livos/packages/livinityd/source/modules/livinity-broker/openai-router.ts`
+- **Line range:** `openai-router.ts:110-124` — current ignore-warn block (D-42-12, covers `tools`, `tool_choice`, `function_call`, `functions`). Phase 57 plan 57-04 replaces with: in passthrough, the OpenAI-shape tools are translated to Anthropic-shape (Phase 58 / 61 owns the bidirectional translator) before forwarding; `tool_choice` translates to Anthropic's `tool_choice` (`auto`/`any`/`none`/`{type:'tool', name:...}`); legacy `function_call`/`functions` are converted to modern `tools` shape per OpenAI's own deprecation path. In agent mode, the existing ignore-warn is retained.
+
+### Risk + Mitigation
+- **Risk:** Future Anthropic edge gating of subscription-auth requests with `tools[]` (would force a 4xx response).
+  **Mitigation:** Broker forwards upstream errors verbatim per existing v29.4 Phase 45 pattern (router.ts:158-185). No broker-side tier-checking code needed. UAT step in Phase 63 (FR-VERIFY-V30-02) tests live; if it ever fails after working, that's the signal to re-evaluate. No code change in v30.
+- **Risk:** OpenAI-shape `tools` translation incorrectness (e.g., `parameters` vs `input_schema`, type discriminator handling, missing `tool_choice` translation).
+  **Mitigation:** Phase 58/61 owns this translator with TDD coverage (per the existing pattern of `openai-router.ts` test suite). Q2's mandate is only "forward, don't strip"; the translator quality is a Phase 58/61 implementation detail.
+
+### Worked Example
+See `notes-q2-tools.md` "Worked Example" section: Anthropic-route sample body with `tools: [{name: "get_weather", input_schema: {...}}]` forwarded verbatim → upstream Anthropic returns response with `content: [{type: "tool_use", name: "get_weather", input: {city: "Istanbul"}}]` → broker forwards verbatim. OpenAI-route sample body with `tools: [{type: "function", function: {name: "get_weather", parameters: {...}}}]` translated to Anthropic shape → forwarded → response translated back to OpenAI `tool_calls` shape.
+
+### D-NO-NEW-DEPS Implications
+Zero new deps. Translation logic for the OpenAI route reuses the existing `openai-router.ts` translator scaffold (already in place for messages/responses since v29.3 Phase 42). Anthropic route requires zero translation — Strategy A's raw-byte forward already handles `tools[]`.
+
+### Aligns with Q1
+Q1 chose Strategy A (HTTP-proxy direct to api.anthropic.com with raw byte-forward of upstream SSE). Q2's verdict is the path of least resistance for Strategy A on the Anthropic route: Strategy A's "forward request body verbatim" semantics ALREADY means `tools[]` flows through with zero extra code. The only Q2 implementation work is (a) deleting the ignore-warn at router.ts:66-70, (b) writing the OpenAI ↔ Anthropic tools translator at openai-router.ts:110-124's old site, and (c) gating both deletions on the mode-dispatch from Q3 so agent mode keeps current behavior.
 
 ---
 
