@@ -43,7 +43,7 @@
 **Phase summary:**
 
 - [x] **Phase 56: Research Spike (Passthrough Architecture + Public Endpoint + Auth Patterns)** — SHIPPED 2026-05-02. 4/4 plans complete. 9 D-30-XX decisions locked. SPIKE-FINDINGS.md canonical answer document at `.planning/phases/56-research-spike/SPIKE-FINDINGS.md`; phase summary at `PHASE-SUMMARY.md`. Sacred SHA stable.
-- [ ] **Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In** — Default broker behavior bypasses Agent SDK; agent mode is opt-in via header or path. Sacred file untouched.
+- [x] **Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In** — SHIPPED 2026-05-02. 5/5 plans complete (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every wave + end-of-phase. 95 broker tests GREEN. PHASE-SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`.
 - [ ] **Phase 58: C1+C2 True Token Streaming (Anthropic + OpenAI)** — Anthropic SSE forwarded verbatim; OpenAI translation adapter rewritten as 1:1 delta translator with usage chunk.
 - [ ] **Phase 59: B1 Per-User Bearer Token Auth (`liv_sk_*`)** — `api_keys` PG table + middleware + revocation lifecycle.
 - [ ] **Phase 60: B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter** — Server5 reverse proxy + TLS + rate-limit perimeter.
@@ -87,9 +87,9 @@ Plans:
 Plans:
 - [x] 57-01-PLAN.md - Wave 0 Test Scaffolding + README + SDK reachability audit (SHIPPED 2026-05-02; commits 340ff587, d3dfb52f; 26 RED tests)
 - [x] 57-02-PLAN.md - Wave 1 Mode Dispatch + Credential Extractor + Risk-A1 smoke gate (SHIPPED 2026-05-03; commits 8af8dc9e, 04a87846; 19/19 GREEN; Risk-A1 GATE PASSED)
-- [ ] 57-03-PLAN.md - Wave 2 Anthropic Messages Passthrough Handler + router.ts dispatch
-- [ ] 57-04-PLAN.md - Wave 3 OpenAI Chat Completions Passthrough + openai-router.ts dispatch
-- [ ] 57-05-PLAN.md - Wave 4 Agent Mode Byte-Identity Proof + Sacred File Final Verification
+- [x] 57-03-PLAN.md - Wave 2 Anthropic Messages Passthrough Handler + router.ts dispatch (SHIPPED 2026-05-02; commits 364a723b, f48f6827; passthrough-handler.ts 227 LOC + router.ts +39 LOC; 27/27 GREEN; sacred SHA byte-identical)
+- [x] 57-04-PLAN.md - Wave 3 OpenAI Chat Completions Passthrough + openai-router.ts dispatch (SHIPPED 2026-05-02; commits a563672d, 5fccc0e6; passthrough-handler.ts +232 LOC + openai-translator.ts +109 LOC + openai-router.ts +44 LOC; 38/38 vitest GREEN; sacred SHA byte-identical)
+- [x] 57-05-PLAN.md - Wave 4 Agent Mode Byte-Identity Proof + Sacred File Final Verification (SHIPPED 2026-05-02; commit 4fc964f8; integration.test.ts +17/-10 + openai-integration.test.ts +19/-8; 18/18 v29.5 assertions GREEN with X-Livinity-Mode: agent header; ZERO production code modified; sacred SHA byte-identical pre/post; sacred file integrity test PASS)
 
 ### Phase 58: C1+C2 True Token Streaming (Anthropic + OpenAI)
 **Goal**: External clients see token-by-token streaming as text generates, not single aggregate chunks at the end. Both Anthropic Messages and OpenAI Chat Completions streaming paths emit spec-compliant byte-level event sequences.

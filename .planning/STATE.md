@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: "Phase 57 Wave 2 (passthroughAnthropicMessages handler + router.ts mode dispatch) CLOSED. All 26 of Wave 0's RED tests now GREEN (11 mode-dispatch + 8 credential-extractor + 8 passthrough-handler = 27 with the +1 Risk-A1 smoke gate). passthrough-handler.ts (227 LOC) ships SDK-direct forward with subscription Bearer auth + token-refresh-on-401 + transitional aggregate-then-restream SSE. router.ts (+39 LOC) dispatches passthrough vs agent — passthrough is now DEFAULT. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical. Wave 4 will fix integration.test.ts regressions by injecting X-Livinity-Mode: agent header."
-last_updated: "2026-05-02T18:43:00.000Z"
-last_activity: 2026-05-02 — Plan 57-03 executed end-to-end in ~6min; created passthrough-handler.ts (227 LOC) + wired router.ts dispatch (+39 LOC); 27/27 GREEN unit tests; sacred SHA byte-identical pre/post; SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-03-SUMMARY.md`
+status: "Phase 57 COMPLETE — all 5 waves shipped (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across every wave + end-of-phase. Passthrough mode is now DEFAULT for both /v1/messages (Anthropic) and /v1/chat/completions (OpenAI); agent mode is OPT-IN via X-Livinity-Mode: agent header and proven byte-identical to v29.5 by Wave 4's 18-assertion integration tests. 95 broker tests GREEN (38 vitest + 57 legacy node-script). D-NO-NEW-DEPS preserved across all 5 waves. Ready for Phase 58 (true token streaming)."
+last_updated: "2026-05-02T19:07:00.000Z"
+last_activity: 2026-05-02 — Plan 57-05 executed (Wave 4 — agent-mode byte-identity proof + sacred file final gate); commit `4fc964f8` injects X-Livinity-Mode: agent header into integration.test.ts (10/10 GREEN) + openai-integration.test.ts (8/8 GREEN); sacred SHA byte-identical pre/post; PHASE-SUMMARY.md aggregates Waves 0-4; SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/57-05-SUMMARY.md`; phase rollup at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`
 progress:
   total_phases: 8
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 44
   completed_plans: 9
-  percent: 20
+  percent: 22
 ---
 
 # Project State
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 57 in-progress (Waves 0+1+2 complete); Plan 57-04 (Wave 3 — openai-router.ts dispatch) ready to start
-Plan: 57-03 SHIPPED 2026-05-02 (commits `364a723b` passthrough-handler.ts + Wave 0 mock fix, `f48f6827` router.ts dispatch wiring). 1 NEW production file (passthrough-handler.ts 227 LOC) + router.ts +39 LOC; 27/27 GREEN unit tests (Wave 0+1+2 combined); sacred file SHA byte-identical; passthrough is now DEFAULT for /v1/messages
-Status: Phase 57 Wave 2 (passthroughAnthropicMessages handler + router.ts mode dispatch) CLOSED. All 26 of Wave 0's RED tests now GREEN. passthrough-handler.ts ships SDK-direct forward with subscription Bearer auth + token-refresh-on-401 + transitional aggregate-then-restream SSE. router.ts dispatches passthrough vs agent — passthrough is now DEFAULT. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical. Wave 4 will fix integration.test.ts regressions by injecting X-Livinity-Mode: agent header.
-Last activity: 2026-05-02 — Plan 57-03 executed end-to-end in ~6min; created passthrough-handler.ts (227 LOC) + wired router.ts dispatch (+39 LOC); 27/27 GREEN unit tests; sacred SHA byte-identical pre/post; SUMMARY.md at `.planning/phases/57-passthrough-mode-agent-mode/57-03-SUMMARY.md`
+Phase: 57 COMPLETE (all 5 waves shipped: 57-01, 57-02, 57-03, 57-04, 57-05); awaiting Phase 58 (True Token Streaming — C1+C2)
+Plan: 57-05 SHIPPED 2026-05-02 (commit `4fc964f8` — header injection only). ZERO production code modified in Wave 4. 18 v29.5 broker integration assertions (10 Anthropic + 8 OpenAI) all GREEN with X-Livinity-Mode: agent header. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical pre-flight + end-of-phase across all 5 waves. Sacred file integrity test PASS. PHASE-SUMMARY.md aggregates Waves 0-4 with per-requirement closure map (6/6 satisfied) + Phase 58 hand-off notes.
+Status: Phase 57 COMPLETE — all 5 waves shipped (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across every wave + end-of-phase. Passthrough mode is now DEFAULT for both /v1/messages (Anthropic) and /v1/chat/completions (OpenAI); agent mode is OPT-IN via X-Livinity-Mode: agent header and proven byte-identical to v29.5 by Wave 4's 18-assertion integration tests. 95 broker tests GREEN (38 vitest + 57 legacy node-script). D-NO-NEW-DEPS preserved across all 5 waves. Ready for Phase 58 (true token streaming).
+Last activity: 2026-05-02 — Plan 57-05 executed (Wave 4 — agent-mode byte-identity proof + sacred file final gate); commit `4fc964f8` injects X-Livinity-Mode: agent header into integration.test.ts (10/10 GREEN) + openai-integration.test.ts (8/8 GREEN); sacred SHA byte-identical pre/post; PHASE-SUMMARY.md aggregates Waves 0-4; SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/57-05-SUMMARY.md`; phase rollup at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 
 | Phase | Goal                                                                | Reqs                              | Depends on            |
 |-------|---------------------------------------------------------------------|-----------------------------------|-----------------------|
 | 56 ✅ | Research Spike — answer 7 open Qs (passthrough / endpoint / auth)   | (research-only, 0 reqs) — CLOSED 2026-05-02 | —                |
-| 57 🚧 | A1+A2 Passthrough Mode + Agent Mode Opt-In (Wave 0/4 complete)      | A1-01..04, A2-01..02 (6)          | 56                    |
+| 57 ✅ | A1+A2 Passthrough Mode + Agent Mode Opt-In (5/5 waves COMPLETE 2026-05-02) | A1-01..04, A2-01..02 (6/6) | 56 |
 | 58    | C1+C2 True Token Streaming (Anthropic + OpenAI)                     | C1-01..02, C2-01..03 (5)          | 57                    |
 | 59    | B1 Per-User Bearer Token Auth (`liv_sk_*`)                          | B1-01..05 (5)                     | — (parallel)          |
 | 60    | B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter       | B2-01..02 (2)                     | 59                    |
@@ -151,3 +151,4 @@ All consolidate into v30 Phase 63 — the mandatory live verification phase that
 - 2026-05-02T19:40Z — `/gsd-new-milestone v30.0` invoked. STATE.md reset. MILESTONE-CONTEXT.md will be deleted after consumption.
 - 2026-05-02T20:00Z — `gsd-roadmapper` produced `.planning/ROADMAP.md` (8 phases 56-63), filled `.planning/REQUIREMENTS.md` Phase Traceability (38/38 mapped), updated this STATE.md with v30.0 Roadmap Snapshot. Status transitioned `defining-requirements` → `roadmap-defined`.
 - 2026-05-02T23:59Z — Phase 56 spike CLOSED (all 4 plans complete: 56-01, 56-02, 56-03, 56-04). 9 D-30-XX decisions locked (D-30-01..D-30-09). SPIKE-FINDINGS.md reorganized to canonical 5-section structure (Executive Summary + Q1->Q7 + Cross-Cuts + Decisions Log + Validation). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 11 task boundaries. Phase 56 SUMMARY commit pending after this STATE.md write.
+- 2026-05-02T19:07:00Z — Phase 57 (A1+A2 Passthrough Mode + Agent Mode Opt-In) CLOSED. All 5 waves shipped (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). 13 commits across phase + 1 PHASE-SUMMARY commit pending. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across every wave checkpoint AND end-of-phase. Sacred file integrity test PASSES with same BASELINE_SHA constant. 95 broker tests GREEN (38 vitest + 57 legacy node-script). D-NO-NEW-DEPS preserved (zero new npm packages downloaded; @anthropic-ai/sdk@^0.80.0 was a workspace-level reachability declaration of an already-hoisted version). Wave 2 ships passthroughAnthropicMessages handler (227 LOC) + router.ts dispatch +39 LOC; Wave 3 ships passthroughOpenAIChatCompletions handler (+232 LOC) + openai-router.ts dispatch +44 LOC + openai-translator helpers (+109 LOC); Wave 4 proves agent-mode byte-identity via 18-assertion integration tests with X-Livinity-Mode: agent header injection (ZERO production code modified, tests-only). Passthrough is now DEFAULT for external clients (Bolt.diy / Open WebUI / Continue.dev / Cline); agent mode is OPT-IN preserving v29.5 in-app chat behavior unchanged. PHASE-SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`. Ready for Phase 58 (True Token Streaming — replace transitional aggregate-then-restream SSE in passthrough handler with true SDK event iteration).

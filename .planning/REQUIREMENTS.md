@@ -29,7 +29,7 @@ The broker today routes ALL traffic through Nexus's `SdkAgentRunner` via `/api/a
 ** — Sacred file `sdk-agent-runner.ts` is byte-identical at SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` after all v30 phases ship. The integrity test (`sdk-agent-runner-integrity.test.ts`) BASELINE_SHA pin remains unchanged.
 - [x] **FR-BROKER-A2-01
 ** — Agent mode is opt-in via either an `X-Livinity-Mode: agent` header OR a separate URL path (`/u/<id>/agent/v1/...`). Phase 56 spike picks ONE mechanism. Default behavior when neither is present = passthrough.
-- [ ] **FR-BROKER-A2-02** — Agent mode preserves the current Nexus-tooled behavior end-to-end (identity injection, MCP tools, IntentRouter, capability registry) so LivOS in-app chat remains unchanged.
+- [x] **FR-BROKER-A2-02** — Agent mode preserves the current Nexus-tooled behavior end-to-end (identity injection, MCP tools, IntentRouter, capability registry) so LivOS in-app chat remains unchanged.
 
 ### B — Auth & Public Surface
 
