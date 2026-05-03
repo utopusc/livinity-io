@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
 status: verifying
-last_updated: "2026-05-03T08:02:44.931Z"
-last_activity: 2026-05-03 — Phase 63 Wave 0 (63-01) RED-LIGHT pre-flight verdict (4/8 GREEN, 4/8 BLOCK). Surfaced Phase 60 production-relay defect at `platform/relay/src/admin-tunnel.ts:43` (queries non-existent users.role). Mini PC SSH timeout. Three remediations required (R1 hot-patch + R2 Mini PC online + R3 update.sh). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical local. Commit `f166c34a`. v30.0 close BLOCKED until R1.
+last_updated: "2026-05-03T01:12:00Z"
+last_activity: "2026-05-03 — Phase 63 Wave 0 surfaced 3 blockers; R1 (Phase 60 admin-tunnel.ts schema-drift defect) FIXED + DEPLOYED to Server5 (commit 516d622b — relay returns proper Anthropic-spec 503 envelope now); R2 (Mini PC offline) and R3 (update.sh) REMAIN — see .planning/phases/63-mandatory-live-verification/RESUME-INSTRUCTIONS.md. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical local. Milestone close BLOCKED on Mini PC power-on (physical action required)."
 progress:
   total_phases: 8
   completed_phases: 7
