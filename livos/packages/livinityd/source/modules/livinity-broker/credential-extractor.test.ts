@@ -27,6 +27,7 @@ import {mkdtempSync, writeFileSync, rmSync, mkdirSync, copyFileSync, existsSync}
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {readSubscriptionToken} from './credential-extractor.js'
+import * as perUserClaude from '../ai/per-user-claude.js'
 
 vi.mock('../ai/per-user-claude.js', () => ({
 	isMultiUserMode: vi.fn().mockResolvedValue(true),
@@ -53,6 +54,10 @@ describe('readSubscriptionToken — multi-user mode (per-user homeOverride)', ()
 		workDir = mkdtempSync(join(tmpdir(), 'livbroker-cred-test-'))
 		process.env.LIVOS_DATA_DIR = workDir
 		delete process.env.BROKER_FORCE_ROOT_HOME
+		// Re-establish mock impl: vi.restoreAllMocks() in afterEach wipes
+		// vi.fn().mockResolvedValue(true), so without this every test
+		// after the first would see isMultiUserMode() → undefined.
+		vi.mocked(perUserClaude.isMultiUserMode).mockResolvedValue(true)
 	})
 
 	afterEach(() => {
@@ -153,5 +158,65 @@ describe('readSubscriptionToken — single-user fallback (BROKER_FORCE_ROOT_HOME
 		const result = await readSubscriptionToken({livinityd: makeLivinityd(), userId: 'whatever'})
 		expect(result).not.toBeNull()
 		expect(result!.accessToken).toBe('sk-ant-oat01-FIXTURE-DO-NOT-USE-IN-PRODUCTION')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Phase 57 Plan 02 Wave 1 — Risk-A1 smoke test gate (RESEARCH.md Assumption A1)
+// ---------------------------------------------------------------------------
+// This integration assertion mocks api.anthropic.com (via fake fetch) and
+// verifies that @anthropic-ai/sdk constructs `Authorization: Bearer <token>`
+// from `authToken` ClientOption. If this FAILS, the SDK does NOT use authToken
+// as Bearer for /v1/messages and Phase 57 BLOCKS pending alternative auth path
+// investigation per RESEARCH.md A1 mitigation.
+import Anthropic from '@anthropic-ai/sdk'
+
+describe('Risk-A1 smoke test — @anthropic-ai/sdk constructs Authorization: Bearer from authToken', () => {
+	it('CRITICAL GATE: new Anthropic({authToken}) produces a fetch with Authorization: Bearer header (per RESEARCH.md Q1 verdict + Assumption A1)', async () => {
+		const capturedHeaders: Record<string, string> = {}
+		const fakeFetch = async (_url: string | URL | Request, init?: RequestInit) => {
+			const headersInit = init?.headers
+			if (headersInit instanceof Headers) {
+				headersInit.forEach((v, k) => {
+					capturedHeaders[k.toLowerCase()] = v
+				})
+			} else if (Array.isArray(headersInit)) {
+				for (const [k, v] of headersInit) capturedHeaders[k.toLowerCase()] = v
+			} else if (headersInit) {
+				for (const [k, v] of Object.entries(headersInit)) capturedHeaders[k.toLowerCase()] = String(v)
+			}
+			return new Response(
+				JSON.stringify({
+					id: 'msg_smoketest',
+					type: 'message',
+					role: 'assistant',
+					content: [{type: 'text', text: 'smoke ok'}],
+					model: 'claude-sonnet-4-6',
+					stop_reason: 'end_turn',
+					usage: {input_tokens: 1, output_tokens: 2},
+				}),
+				{status: 200, headers: {'content-type': 'application/json'}},
+			)
+		}
+
+		const client = new Anthropic({
+			authToken: 'sk-ant-oat01-RISK-A1-SMOKE-TEST',
+			defaultHeaders: {'anthropic-version': '2023-06-01'},
+			// @ts-expect-error - SDK accepts custom fetch in ClientOptions
+			fetch: fakeFetch,
+		})
+
+		await client.messages.create({
+			model: 'claude-sonnet-4-6',
+			max_tokens: 16,
+			messages: [{role: 'user', content: 'ping'}],
+		})
+
+		// FR-BROKER-A1-01 + Risk-A1 mitigation: verify Bearer auth header present.
+		expect(capturedHeaders['authorization']).toBe('Bearer sk-ant-oat01-RISK-A1-SMOKE-TEST')
+		// FR-BROKER-A1-01: anthropic-version forwarded.
+		expect(capturedHeaders['anthropic-version']).toBe('2023-06-01')
+		// Critically: x-api-key MUST NOT be present when authToken used.
+		expect(capturedHeaders['x-api-key']).toBeUndefined()
 	})
 })
