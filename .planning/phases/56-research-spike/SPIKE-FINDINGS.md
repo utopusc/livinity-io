@@ -449,4 +449,135 @@ Sacred file was NOT read or written during Tasks 1-3 (Q3 / Q4 / Q5 / Q6 are peri
 
 ---
 
-*This file is updated incrementally as each plan in Phase 56 lands its verdicts. Plan 56-02 verdicts (Q3 / Q4 / Q5 / Q6) complete. Plans 56-03 (cross-cuts) and 56-04 (synthesis) will append additional sections.*
+*Plan 56-02 verdicts (Q3 / Q4 / Q5 / Q6) complete. Plan 56-03 cross-cuts section follows below. Plan 56-04 (synthesis) will append additional sections.*
+
+---
+
+## Cross-Cuts
+
+This section is the output of Plan 56-03 — three cross-cutting audits over the Q1-Q7 verdicts above. Raw audit data and per-Q reasoning trace lives in `notes-cross-cuts.md`.
+
+### D-NO-NEW-DEPS Audit
+
+**Verdict color: YELLOW.** Zero new npm packages required by any Q1-Q7 primary path (the historical letter of D-NO-NEW-DEPS — `package.json` budget — is preserved). However, Q4's verdict introduces TWO non-npm infrastructure dependencies that Phase 60 must explicitly budget: `caddy-ratelimit` Caddy plugin (third-party Go module) + `xcaddy` Go-toolchain build tool. These are not Node.js / TypeScript deps and don't show up in any `package.json`, so the npm-only D-NO-NEW-DEPS gate is GREEN; flagging the Caddy / xcaddy delta as YELLOW prevents Phase 57+ from smuggling them in as zero-cost.
+
+| Package / Runtime                            | Implied by Verdict       | Status                                                          | Cite (file:line, version)                                                                                       |
+| -------------------------------------------- | ------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Node 22 builtin `fetch`                      | Q1 (Strategy A), Q6      | already-present — runtime builtin                               | Node 22 LTS — runtime feature, not a package                                                                    |
+| `node:fs` / `node:fs/promises` / `node:path` | Q1                       | already-present — Node builtins                                 | n/a (builtins)                                                                                                  |
+| `node:crypto`                                | Q5                       | already-present — Node builtin                                  | n/a (builtin)                                                                                                   |
+| `express`                                    | Q3, Q6                   | already-present                                                 | `livos/packages/livinityd/package.json:90` `express: ^4.18.2`; `nexus/packages/core/package.json:43` `^4.21.0`  |
+| `pg`                                         | Q5                       | already-present                                                 | `livos/packages/livinityd/package.json:114` `pg: ^8.20.0`                                                       |
+| `ioredis`                                    | Q6 (deferred to v31)     | already-present — NOT used in v30                               | `livos/packages/livinityd/package.json:98` `^5.4.0`; `nexus/packages/core/package.json:46` `^5.4.0`             |
+| `@anthropic-ai/sdk`                          | Q1 (REJECTED) / Q2       | already-present — NOT relied on by broker passthrough           | `nexus/packages/core/package.json:34` `@anthropic-ai/sdk: ^0.80.0`                                              |
+| `@anthropic-ai/claude-agent-sdk`             | Q7                       | already-present — agent mode uses; passthrough bypasses         | `nexus/packages/core/package.json:33` `@anthropic-ai/claude-agent-sdk: ^0.2.84`                                 |
+| Caddy v2.11.2 system binary                  | Q4                       | already-present — Server5 `/usr/bin/caddy`                      | system binary; not npm                                                                                          |
+| `caddy-ratelimit` Caddy plugin               | Q4                       | **NEW — non-npm Caddy module**; custom build via `xcaddy`       | `github.com/mholt/caddy-ratelimit` (third-party); Phase 60 budget                                               |
+| `xcaddy` Go-toolchain build tool             | Q4                       | **NEW — non-npm Go binary**; one-time build tooling             | `github.com/caddyserver/xcaddy`; Phase 60 budget                                                                |
+| OpenAI-router translator scaffold            | Q2, Q6 (OpenAI side)     | already-present — code, not dep                                 | `livinity-broker/openai-router.ts` (existing since v29.3 Phase 42)                                              |
+
+**Per-Q coverage statement:**
+- **Q1:** no new npm packages implied (Strategy A uses Node builtin `fetch`; Strategy B was DISQUALIFIED specifically because it would have forced `@anthropic-ai/sdk` into livinityd `package.json` — verdict cites this as Rationale #1).
+- **Q2:** no new packages implied (passthrough forwards verbatim; OpenAI translator reuses existing scaffold).
+- **Q3:** no new packages implied (uses existing `express` `router.post()` + `req.header()` primitives).
+- **Q4:** **two new non-npm dependencies** — `caddy-ratelimit` plugin (third-party Caddy module) + `xcaddy` build tool (Go). Phase 60 must budget custom Caddy build pipeline. NOT in npm `package.json` so doesn't strictly violate D-NO-NEW-DEPS letter, but materially new infrastructure.
+- **Q5:** no new packages implied (uses existing `pg@^8.20.0` for `api_keys` table + `node:crypto` builtins for `randomBytes` / `sha256` / `timingSafeEqual`).
+- **Q6:** no new packages implied for v30 (broker forwards verbatim — covered by Q1; NO broker-side bucket so `ioredis` not relied on; future v31+ bucket also zero-new-dep using already-present `ioredis@^5.4.0`).
+- **Q7:** no new packages implied (verdict is "do nothing in agent mode + leverage Q1's passthrough for external" — zero code, zero package).
+
+**Evidence — raw `package.json` grep output:**
+```
+$ grep -nE "@anthropic-ai/(sdk|claude-agent-sdk)|^  \"ioredis\"|^  \"express\"|^  \"pg\"" nexus/packages/core/package.json
+33:    "@anthropic-ai/claude-agent-sdk": "^0.2.84",
+34:    "@anthropic-ai/sdk": "^0.80.0",
+43:    "express": "^4.21.0",
+46:    "ioredis": "^5.4.0",
+
+$ grep -nE "ioredis|\"pg\":|\"express\":" livos/packages/livinityd/package.json
+34:		"@types/express": "^4.17.17",
+90:		"express": "^4.18.2",
+98:		"ioredis": "^5.4.0",
+114:		"pg": "^8.20.0",
+```
+
+All "already-present" cells in the audit table are evidenced by these grep lines. Full reasoning trace per Q in `notes-cross-cuts.md` Task 1.
+
+**Routing for Phase 57+ planning:**
+- Phase 57 (passthrough mode): unblocked — zero new deps required. Proceed.
+- Phase 58 (true token streaming): unblocked — zero new deps required.
+- Phase 59 (per-user bearer auth): unblocked — uses existing `pg@^8.20.0` + `node:crypto`.
+- Phase 60 (public endpoint at `api.livinity.io`): **constrained YELLOW** — must explicitly budget `xcaddy` custom build pipeline + `caddy-ratelimit@<pinned-sha>` plugin; budget items: build script, `apt-mark hold caddy`, README rebuild documentation, validation step (`caddy validate < Caddyfile`), reload procedure, fallback plan if upstream plugin abandoned.
+- Phases 61, 62, 63: unblocked — no new deps implied.
+
+### Sacred File SHA Stability
+
+**Verdict: PASS.** Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` is byte-identical at SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` after plans 56-01 and 56-02 ran. No drift introduced by spike. Sacred boundary preserved.
+
+| Field         | Value                                          |
+| ------------- | ---------------------------------------------- |
+| Expected SHA  | `4f868d318abff71f8c8bfbcf443b2393a553018b`     |
+| Observed SHA  | `4f868d318abff71f8c8bfbcf443b2393a553018b`     |
+| Match?        | YES — byte-identical                           |
+| `git status`  | `nothing to commit, working tree clean`        |
+| `git diff --stat` | (empty — zero lines changed)               |
+
+Captured commands (also in `notes-cross-cuts.md` Task 2):
+```
+$ git hash-object nexus/packages/core/src/sdk-agent-runner.ts
+4f868d318abff71f8c8bfbcf443b2393a553018b
+
+$ git status -- nexus/packages/core/src/sdk-agent-runner.ts
+nothing to commit, working tree clean
+
+$ git diff --stat -- nexus/packages/core/src/sdk-agent-runner.ts
+(zero output — file unchanged in working tree)
+```
+
+### D-51-03 Re-Evaluation
+
+D-51-03 origin (from `.planning/milestones/v29.5-phases/51-a2-streaming-fix/51-01-SUMMARY.md`): "Branch N reversal (sacred-file edit to inject identity assertion to address user complaint that 'model says wrong identity colloquially') is deferred from v29.5 pending future evaluation. Reasons: identity remediation requires sacred file edit + D-40-01 ritual + Mini PC SSH access blocked by fail2ban + v29.4's lesson that audit `passed` requires live UAT — shipping unverified sacred edit repeats the mistake. We choose NOT to reverse → conditional satisfied by deferral with rationale documented." Phase 56 is that future evaluation.
+
+**How Q1 affects it:** Q1 chose Strategy A (raw HTTP-proxy `fetch()` to `api.anthropic.com` with byte-forward of upstream Anthropic SSE). External clients (Bolt.diy / OWUI / Continue.dev / Cline — the context where identity contamination was originally observed in v29.5 live testing) see the upstream Anthropic response VERBATIM. The Nexus identity-line at `sdk-agent-runner.ts:264-270` is NEVER traversed in passthrough mode (sacred file is not invoked). Identity contamination for external clients is structurally eliminated by Q1's architecture, NOT by editing the sacred file.
+
+**How Q7 affects it:** Q7 confirms agent mode keeps current behavior (sacred file untouched; identity-line still emitted in agent path; aggregation unchanged). Q7's "D-51-03 Implication" subsection explicitly concluded: "Branch N reversal is NOT NEEDED in v30 — Phase 57 passthrough mode bypasses the sacred file for external clients (the use case where identity contamination was originally observed via Bolt.diy live testing). External-client identity preservation is delivered structurally by Q1's raw-byte HTTP-proxy forwarding (whatever the upstream model says reaches the client unmodified — no Nexus prepend possible because the broker never re-emits the message). Internal LivOS AI Chat (agent mode) keeps the current identity-line + aggregation behavior, which is acceptable per Phase 51's deploy-layer fix."
+
+**Combined picture:**
+
+| Use case                        | Path in v30           | Identity-line applied?           | Identity contamination risk?                           |
+| ------------------------------- | --------------------- | -------------------------------- | ------------------------------------------------------ |
+| External client (Bolt.diy etc.) | Passthrough (default per Q3) | NO — sacred file bypassed | None — upstream Anthropic response forwarded verbatim  |
+| Internal LivOS AI Chat          | Agent mode (existing path)   | YES — sacred file invoked | Acceptable — internal scope, owner-user controls both sides |
+
+**Re-evaluation verdict: Not needed in v30.**
+
+**Rationale (4 reasons):**
+1. **Q1's architecture structurally eliminates external-client identity contamination** without any sacred-file edit. The original D-51-03 problem surface (external clients seeing prepended Nexus identity) is RESOLVED by passthrough mode bypassing the sacred file entirely. No edit needed for the originally-complained-about scenario.
+2. **Q7 confirms agent mode (internal LivOS AI Chat) is acceptable as-is.** Phase 51's deploy-layer fix (`update.sh` `rm -rf dist` to ensure fresh vite UI bundles) addressed the only related visible regression. No internal-chat identity complaints have re-surfaced since Phase 51 closed. The owner-user controls both sides of internal AI Chat — the colloquial-identity issue surface is materially smaller than for external clients.
+3. **v30 sacred-file-untouched constraint (FR-BROKER-A1-04 + Phase 56 sacred boundary) makes any v30 sacred edit out-of-scope regardless.** Adopting verdict (b) "v30.1 hot-patch" pre-commits to a future edit without evidence of pain; adopting (c) "re-evaluate after Phase 63" punts because Phase 63's UAT script doesn't directly exercise internal-chat self-identification. Verdict (a) is the only option that matches what Q1+Q7 actually established AND respects v30 scope.
+4. **Safety net already exists.** Q7 already routes a v30.1+ D-30-XX candidate row for the surgical edit (sacred file `:342` + `:378`, BASELINE_SHA bump in integrity test, audit comment) IF internal-chat identity pain ever surfaces post-v30. If Phase 63 UAT detects an internal-chat self-identification problem, that surfaces D-30-XX immediately without needing this Plan 56-03 to pre-commit. Safety net + active-verdict (a) reconcile cleanly.
+
+**Action item routing:** Verdict (a) "Not needed in v30" → no further v30 action item. The Q7 D-30-XX candidate row remains the v30.1+ safety net. Phase 56-04 SUMMARY's "Deferred items" section will list D-30-XX explicitly so it isn't forgotten. Phase 63 UAT script (FR-VERIFY-V30-* coverage) implicitly covers internal-chat self-identification because internal AI Chat is part of the LivOS feature set Phase 63 verifies — if a regression surfaces there, it surfaces D-30-XX naturally.
+
+**Decisions Log Entry (placeholder D-30-01; final number assigned during Plan 56-04 synthesis):**
+
+```
+D-30-01: D-51-03 re-evaluation — Not needed in v30. Rationale: Q1 passthrough (default) bypasses sacred file for external clients structurally eliminating identity contamination there; Q7 confirms agent mode (internal LivOS AI Chat) keeps current identity-line, acceptable per Phase 51 deploy-layer fix. Sacred file edit deferred to v30.1+ D-30-XX candidate IF internal-chat identity pain ever re-surfaces post-v30. (Phase 56 spike outcome.)
+```
+
+---
+
+## Cross-Cutting: Sacred File SHA Stability Across Plan 56-03
+
+`git hash-object nexus/packages/core/src/sdk-agent-runner.ts` re-run after each task:
+
+| Task | SHA after task | Match required `4f868d318abff71f8c8bfbcf443b2393a553018b`? |
+|------|----------------|-----------------------------------------------------------|
+| Task 1 (D-NO-NEW-DEPS Audit)        | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+| Task 2 (Sacred SHA Stability check) | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+| Task 3 (D-51-03 Re-Evaluation)      | `4f868d318abff71f8c8bfbcf443b2393a553018b` | ✓ MATCH |
+
+Sacred file was NOT edited / written / staged in any Plan 56-03 task (audits are read-only and operate on cited git-blob output, not on file contents directly — apart from the explicit `git hash-object` command). Sacred boundary preserved across plan 56-03.
+
+---
+
+*Plan 56-03 cross-cuts complete (D-NO-NEW-DEPS audit YELLOW; sacred SHA stability PASS; D-51-03 re-evaluated as "Not needed in v30"). Plan 56-04 (final synthesis) will append the Phase 56 master decisions roll-up + ROADMAP confirmation.*
