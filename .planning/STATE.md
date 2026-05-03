@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: in-progress
-last_updated: "2026-05-02T22:30:00Z"
-last_activity: "2026-05-02 — Phase 56 plan 02 executed; Q3/Q4/Q5/Q6 verdicts complete (4 verdict blocks in SPIKE-FINDINGS.md, 4 notes files); sacred SHA preserved"
+status: in-progress — 56-03 cross-cuts complete; 56-04 synthesis next. Cross-Cuts section appended to SPIKE-FINDINGS.md (D-NO-NEW-DEPS YELLOW; sacred SHA stable; D-51-03 verdict: Not needed in v30).
+last_updated: "2026-05-02T23:55:00Z"
+last_activity: 2026-05-02 — 56-03 plan executed; Cross-Cuts section appended to SPIKE-FINDINGS.md (D-NO-NEW-DEPS verdict YELLOW with two non-npm Caddy/xcaddy infra deps flagged for Phase 60; sacred SHA stability PASS unchanged at `4f868d318abff71f8c8bfbcf443b2393a553018b`; D-51-03 re-evaluated as "Not needed in v30" with v30.1+ D-30-XX safety net retained); notes-cross-cuts.md created with raw audit data; sacred file UNTOUCHED across all three 56-03 tasks
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 44
-  completed_plans: 2
-  percent: 5
+  completed_plans: 3
+  percent: 7
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 56 (Research Spike — Passthrough Architecture + Public Endpoint + Auth Patterns) — IN PROGRESS, 2/4 plans complete
-Plan: 56-02 COMPLETE (2026-05-02); 56-03 next (cross-cut audits — D-NO-NEW-DEPS, sacred SHA stability, D-51-03 re-eval)
-Status: SPIKE-FINDINGS.md now has 7/7 question verdicts (Q1+Q2+Q7 from 56-01; Q3+Q4+Q5+Q6 from 56-02) — all architectural questions answered, no "TBD" rows remaining for the 7-question core. Cross-cut synthesis (56-03 + 56-04) still pending.
-Last activity: 2026-05-02 — 56-02 plan executed; 4 verdict blocks (Q3/Q4/Q5/Q6) + 4 intermediate notes files created; FR-BROKER-B2-02 "TBD" resolved (no broker-side bucket in v30; edge-only via Q4 Caddy); A3 (caddy-ratelimit in stock binary) REFUTED-VERIFIED (xcaddy custom build IS required); A4 (CF DNS-only posture) VERIFIED; sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` preserved (sacred file never read or written this plan)
+Phase: 56 (Research Spike — Passthrough Architecture + Public Endpoint + Auth Patterns) — IN PROGRESS, 3/4 plans complete
+Plan: 56-03 COMPLETE (2026-05-02); 56-04 next (synthesis — Phase 56 master decisions roll-up + ROADMAP confirmation + Phase 57+ implementation guidance)
+Status: SPIKE-FINDINGS.md has all 7 question verdicts AND the Cross-Cuts section. D-NO-NEW-DEPS YELLOW (npm-clean; non-npm Caddy/xcaddy infra delta flagged for Phase 60). Sacred SHA stable at `4f868d318abff71f8c8bfbcf443b2393a553018b` (unchanged across all three 56-x plans). D-51-03 re-evaluated as "Not needed in v30" — Q1 passthrough bypasses sacred file structurally for external clients; Q7 confirms agent mode is acceptable; v30.1+ D-30-XX safety net retained. Plan 56-04 synthesis still pending (final decisions log roll-up, Phase 57+ unblock).
+Last activity: 2026-05-02 — 56-03 plan executed; Cross-Cuts section appended to SPIKE-FINDINGS.md with three subsections (D-NO-NEW-DEPS Audit + Sacred File SHA Stability + D-51-03 Re-Evaluation); notes-cross-cuts.md created with raw audit data and reasoning trace; D-30-01 placeholder decision logged (final number assigned in 56-04); sacred file SHA confirmed unchanged at `4f868d318abff71f8c8bfbcf443b2393a553018b` (sacred file never read or written by any 56-03 task)
 
 ## v30.0 Roadmap Snapshot
 
@@ -76,7 +76,8 @@ See `.planning/ROADMAP.md` for full phase details, success criteria, dependency 
 - **Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — UNTOUCHED in v30.** Passthrough mode bypasses; agent mode keeps current behavior.
 - D-LIVE-VERIFICATION-GATE active — Phase 63 must close cleanly without `--accept-debt`
 - D-NO-BYOK preserved — broker issues its own `liv_sk_*` tokens; user's raw `claude_*` keys never enter broker
-- D-51-03 (Branch N reversal) deferred to Phase 56 spike resolution
+- D-51-03 (Branch N reversal) — Phase 56-03 RE-EVALUATED as **"Not needed in v30"**. Q1 passthrough bypasses sacred file structurally for external clients (the originally-complained-about identity contamination context); Q7 confirms agent mode (internal LivOS AI Chat) acceptable per Phase 51 deploy-layer fix. v30.1+ D-30-XX safety net retained IF internal-chat identity pain re-surfaces post-v30. Logged as decision **D-30-01 placeholder** (final number assigned in Plan 56-04 synthesis).
+- **D-NO-NEW-DEPS audit (Plan 56-03) — YELLOW.** Zero new npm packages required by any Q1-Q7 primary path; npm-side D-NO-NEW-DEPS letter preserved. Two non-npm infra deps flagged for **Phase 60 explicit budget**: `caddy-ratelimit` Caddy plugin (third-party) + `xcaddy` Go-toolchain build tool. Phases 57, 58, 59, 61, 62, 63 are unblocked on npm side; Phase 60 is constrained YELLOW.
 - v30.0 slot now claimed by Broker Professionalization; old "v30.0 Backup & Restore" definition (in `milestones/v30.0-DEFINED/`) deferred to a future milestone
 
 ## Accumulated Context (carried from v29.x)
