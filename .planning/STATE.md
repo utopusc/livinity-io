@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: verifying
-last_updated: "2026-05-02T20:18:00Z"
-last_activity: 2026-05-02 — Plan 59-01 executed (Wave 0 — RED test scaffolds for the new api-keys/ module); test commits `34858a8c` (Task 1 — database/schema-migration/mount-order) + `d07f78f2` (Task 2 — cache/bearer-auth/routes); 6 failing test files cover all 5 phase requirements (FR-BROKER-B1-01..05); RESEARCH.md Open Question 1 closed via schema-migration.test.ts T4 (CREATE EXTENSION absence guard — codebase convention wins over CONTEXT.md pgcrypto suggestion); sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every commit checkpoint; D-NO-NEW-DEPS preserved (zero npm deps added). SUMMARY at `.planning/phases/59-bearer-token-auth/59-01-SUMMARY.md`. Wave 1 (Plan 59-02 — schema migration + database.ts) is unblocked.
+status: "Wave 1 (Plan 59-02) SHIPPED 2026-05-02. api_keys table appended to schema.sql (8 cols + FK CASCADE + UNIQUE key_hash + 2 indexes including partial idx_api_keys_active WHERE revoked_at IS NULL). database.ts + index.ts created (6 PG functions: createApiKey / findApiKeyByHash / listApiKeysForUser / listAllApiKeys / revokeApiKey / hashKey + ApiKeyRow type, twin of docker/agents.ts). All 9 Wave 1 tests GREEN (4 schema-migration + 5 database). Wave 2 (cache + bearer-auth middleware) unblocked. Sacred SHA 4f868d318abff71f8c8bfbcf443b2393a553018b byte-identical."
+last_updated: "2026-05-03T03:20:56Z"
+last_activity: 2026-05-02 — Plan 59-02 executed (Wave 1 schema migration + PG CRUD); task commits `8c4305d3` (schema append) + `bcf41817` (database.ts+index.ts); SUMMARY at `.planning/phases/59-bearer-token-auth/59-02-SUMMARY.md`
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 44
-  completed_plans: 19
-  percent: 43
+  completed_plans: 20
+  percent: 45
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 59 IN PROGRESS — Wave 0 (Plan 59-01 — RED test scaffolds) SHIPPED 2026-05-02. Awaiting Wave 1 (Plan 59-02 — schema migration + database.ts).
-Plan: 59-01 SHIPPED 2026-05-02 — Wave 0 RED test scaffolds for the new `livos/packages/livinityd/source/modules/api-keys/` module. Six failing test files (30 individual tests across 6 files) cover all 5 phase requirements (FR-BROKER-B1-01..05) plus mount-order + cache + audit cross-cutting concerns. RESEARCH.md Open Question 1 closed via `schema-migration.test.ts T4` — codebase convention (zero `CREATE EXTENSION` lines in schema.sql) wins over CONTEXT.md's pgcrypto suggestion; the absence-guard test will block any future drift adding the line at CI. Three threat-model mitigations embedded: T-59-01 (schema convention guard), T-59-02 (plaintext-never-stored regression guard via walking ALL queryMock params), T-59-04 (mount-order positional check + adminProcedure source-string assertion mirroring common.test.ts:160-178). Test commits: `34858a8c` (Task 1) + `d07f78f2` (Task 2). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every commit checkpoint. D-NO-NEW-DEPS preserved (zero npm deps added — all tests use pre-existing `vitest`, `@trpc/server`, `node:crypto`).
-Status: Wave 0 ships RED-only by design. Production code does NOT yet exist; module-not-found is the correct RED signal for 5/6 files. The 6th file (schema-migration.test.ts) has 4 tests where T1+T2+T3 are RED (api_keys block not yet appended to schema.sql) and T4 is GREEN (the convention guard already passes — schema.sql has zero CREATE EXTENSION lines today; the test locks this in for the future). Wave 1 (Plan 59-02) is unblocked: append api_keys schema block + create database.ts to flip database.test.ts (5 tests) + schema-migration.test.ts T1+T2+T3 GREEN.
-Last activity: 2026-05-02 — Plan 59-01 executed (Wave 0 RED scaffolds); test commits `34858a8c` + `d07f78f2`; SUMMARY at `.planning/phases/59-bearer-token-auth/59-01-SUMMARY.md`
+Phase: 59 IN PROGRESS — Wave 1 (Plan 59-02 — schema migration + database.ts) SHIPPED 2026-05-02. Awaiting Wave 2 (Plan 59-03 — cache + bearer-auth middleware).
+Plan: 59-02 SHIPPED 2026-05-02 — Wave 1 PG layer for api_keys: appended `api_keys` block to `schema.sql` (8 cols id/user_id/key_hash/key_prefix/name/created_at/last_used_at/revoked_at, FK CASCADE on user_id, UNIQUE on key_hash, 2 indexes including partial `idx_api_keys_active WHERE revoked_at IS NULL`); created `livos/packages/livinityd/source/modules/api-keys/database.ts` (179 lines, 6 functions: `createApiKey`, `findApiKeyByHash`, `listApiKeysForUser`, `listAllApiKeys`, `revokeApiKey`, `hashKey` + `ApiKeyRow` type — twin of `docker/agents.ts`); created `api-keys/index.ts` barrel. Token format: `liv_sk_<32 base64url>` = 39 chars (24 random bytes → base64url → slice(0,32) → prepend `liv_sk_`). Hash strategy: SHA-256 hex of FULL plaintext (T-59-08 prefix-collision resistant). `key_hash` excluded from `SELECT_COLS` so it's never returned to callers. Plaintext returned ONCE in `createApiKey`'s `{row, plaintext}` tuple. Wave 0 RED tests now GREEN: schema-migration.test.ts (T1+T2+T3+T4 = 4/4) + database.test.ts (T1+T2+T3+T4+T5 = 5/5) = 9/9 Wave 1 tests GREEN. Rule 1 deviation: schema header comment rewritten from `without `CREATE EXTENSION pgcrypto`` to `WITHOUT a pgcrypto extension declaration` so the literal phrase doesn't trip T4's `/CREATE EXTENSION/g` convention guard. Task commits: `8c4305d3` (schema append) + `bcf41817` (database.ts+index.ts). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical at every commit checkpoint. D-NO-NEW-DEPS preserved (zero `package.json` mutations).
+Status: Wave 1 (Plan 59-02) SHIPPED. Wave 2 (cache + bearer-auth middleware) and Wave 3 (events + tRPC routes) remain RED — `mount-order.test.ts`, `cache.test.ts`, `bearer-auth.test.ts`, `routes.test.ts` correctly fail at module-resolution (cache.js / bearer-auth.js / routes.js don't exist yet) — that's the expected post-Wave-1 state per the Wave 0 contract.
+Last activity: 2026-05-02 — Plan 59-02 executed (Wave 1 schema migration + PG CRUD); task commits `8c4305d3` (schema append) + `bcf41817` (database.ts+index.ts); SUMMARY at `.planning/phases/59-bearer-token-auth/59-02-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 
