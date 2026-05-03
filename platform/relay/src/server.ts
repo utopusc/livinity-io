@@ -16,6 +16,7 @@ import { proxyHttpRequest } from './request-proxy.js';
 import { serveOfflinePage } from './offline-page.js';
 import { checkQuota } from './bandwidth.js';
 import { isCustomDomainAuthorized, lookupCustomDomain, resolveCustomDomainApp } from './custom-domains.js';
+import { findAdminTunnel, sendBrokerTunnelOffline } from './admin-tunnel.js';
 import type { TunnelRegistry } from './tunnel-registry.js';
 import type { DeviceRegistry } from './device-registry.js';
 import type { TunnelQuotaExceeded } from './protocol.js';
@@ -204,6 +205,46 @@ export function createRequestHandler(
     }
 
     const { username, appName } = parseSubdomain(req.headers.host);
+
+    // Phase 60 Wave 2 — special-case api.livinity.io BEFORE the existing
+    // username-based routing. Caddy reverse-proxies api.livinity.io to
+    // localhost:4000; without this dispatch, parseSubdomain returns
+    // {username:'api'} and registry.get('api') returns null → serveOfflinePage
+    // (HTML — breaks SDK clients). See RESEARCH.md Pattern 3 + threat T-60-20.
+    const hostnameLower = req.headers.host?.split(':')[0]?.toLowerCase();
+    if (hostnameLower === 'api.livinity.io') {
+      if (!pool) {
+        sendBrokerTunnelOffline(res);
+        return;
+      }
+      const adminTunnel = await findAdminTunnel(registry, pool);
+      if (!adminTunnel || adminTunnel.ws.readyState !== 1 /* WebSocket.OPEN */) {
+        sendBrokerTunnelOffline(res);
+        return;
+      }
+      // Bandwidth quota — same path as existing per-user proxy below; charges
+      // bandwidth to admin user (per-Bearer-key attribution defers to Phase 62 E1).
+      const apiQuota = await checkQuota(redis, adminTunnel.userId);
+      if (!apiQuota.allowed) {
+        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '86400' });
+        res.end(JSON.stringify({
+          type: 'error',
+          error: { type: 'rate_limit_error', message: 'Bandwidth quota exceeded' },
+        }));
+        return;
+      }
+      // URL rewrite — inject /u/<adminUserId> prefix so Phase 59 Bearer middleware
+      // (mounted at /u/:userId/v1 on Mini PC livinityd) catches the request.
+      // Bearer middleware sets req.userId from the liv_sk_* token; the URL :userId
+      // slot is owned by admin (the relay forwarded through admin's tunnel) and
+      // resolveAndAuthorizeUserId validates it against PG. Bearer wins identity at
+      // the broker handler. Defensive guard: preserve URLs already starting with /u/.
+      if (req.url && !req.url.startsWith('/u/')) {
+        req.url = '/u/' + adminTunnel.userId + req.url;
+      }
+      proxyHttpRequest(adminTunnel, req, res, null);
+      return;
+    }
 
     // Health endpoint (on bare domain or direct IP)
     if (!username && req.url === '/health') {
