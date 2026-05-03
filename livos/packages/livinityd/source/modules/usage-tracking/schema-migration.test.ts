@@ -63,4 +63,34 @@ describe('Phase 44 schema migration — broker_usage idempotency (D-44-20)', () 
 		expect(block).toMatch(/endpoint\s+TEXT NOT NULL/)
 		expect(block).toMatch(/created_at\s+TIMESTAMPTZ NOT NULL DEFAULT NOW\(\)/)
 	})
+
+	// =====================================================================
+	// Phase 62 Plan 62-01 — FR-BROKER-E1-01: api_key_id column on broker_usage
+	// =====================================================================
+	test('FR-BROKER-E1-01: broker_usage has api_key_id column with FK to api_keys', () => {
+		// 1. Header marker is present so future readers can find the migration block
+		expect(sql).toMatch(/Phase 62 FR-BROKER-E1-01/)
+
+		// 2. Idempotent ADD COLUMN block — wrapped in DO $$ ... END$$ per Phase 25 precedent
+		const phase62BlockMatch = sql.match(
+			/Phase 62 FR-BROKER-E1-01[\s\S]*?CREATE INDEX IF NOT EXISTS idx_broker_usage_api_key_id[^\n]*/,
+		)
+		expect(phase62BlockMatch).toBeTruthy()
+		const block = phase62BlockMatch![0]
+
+		// 3. ADD COLUMN IF NOT EXISTS api_key_id UUID
+		expect(block).toMatch(/ADD COLUMN IF NOT EXISTS api_key_id UUID/)
+
+		// 4. FK to api_keys(id) ON DELETE SET NULL — preserves history if key hard-deleted
+		expect(block).toMatch(/REFERENCES api_keys\(id\) ON DELETE SET NULL/)
+
+		// 5. Idempotent guard (DO-block + IF NOT EXISTS) — re-running schema.sql at boot is safe
+		expect(block).toMatch(/DO \$\$/)
+		expect(block).toMatch(/END\$\$/)
+
+		// 6. Partial index on non-NULL rows only (matches Pattern 1 from RESEARCH.md)
+		expect(block).toMatch(
+			/CREATE INDEX IF NOT EXISTS idx_broker_usage_api_key_id\s+ON broker_usage\(api_key_id\)\s+WHERE api_key_id IS NOT NULL/,
+		)
+	})
 })

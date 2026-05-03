@@ -46,13 +46,22 @@ type StubRes = {
 	end(chunk?: unknown): StubRes
 }
 
-function makeReq(opts: {userId?: string; urlPath?: string; ip?: string} = {}): Request {
-	return {
+function makeReq(opts: {
+	userId?: string
+	urlPath?: string
+	ip?: string
+	apiKeyId?: string
+	authMethod?: 'bearer' | 'url-path'
+} = {}): Request {
+	const base: Record<string, unknown> = {
 		params: {userId: opts.userId ?? 'USERID'},
 		originalUrl: opts.urlPath ?? '/u/USERID/v1/messages',
 		url: opts.urlPath ?? '/u/USERID/v1/messages',
 		socket: {remoteAddress: opts.ip ?? '172.17.0.5'},
-	} as unknown as Request
+	}
+	if (opts.authMethod) base.authMethod = opts.authMethod
+	if (opts.apiKeyId) base.apiKeyId = opts.apiKeyId
+	return base as unknown as Request
 }
 
 function makeRes(): StubRes {
@@ -133,9 +142,10 @@ async function flushPromises() {
 async function runScenario(
 	urlPath: string,
 	stubBrokerHandler: RequestHandler,
+	reqOverrides: {apiKeyId?: string; authMethod?: 'bearer' | 'url-path'} = {},
 ): Promise<{stub: StubRes}> {
 	const middleware = createCaptureMiddleware(fakeLivinityd)
-	const req = makeReq({urlPath})
+	const req = makeReq({urlPath, ...reqOverrides})
 	const stub = makeRes()
 	const next = vi.fn() as unknown as NextFunction
 
@@ -248,5 +258,59 @@ describe('Phase 44 integration — middleware + stub broker handler -> insertUsa
 		expect(call.completionTokens).toBe(8)
 		expect(call.requestId).toBe('msg_sse')
 		expect(call.model).toBe('claude-sonnet-4-6')
+	})
+
+	// =====================================================================
+	// Phase 62 Plan 62-01 — FR-BROKER-E1-03: OpenAI streaming writes a
+	// broker_usage row with non-zero prompt_tokens AND api_key_id set.
+	//
+	// Closes v29.3 C4 carry-forward: OpenAI streaming previously emitted no
+	// `usage` chunk so capture middleware wrote no row. Phase 58 Plan 58-01
+	// added stream_options.include_usage which makes the broker emit a final
+	// chunk shaped like:
+	//   data: {"id":"chatcmpl-stream","model":"gpt-4","choices":[],"usage":{"prompt_tokens":42,"completion_tokens":17}}\n\n
+	//   data: [DONE]\n\n
+	//
+	// Plan 62-02 + Plan 62-05 close this RED:
+	//  - Plan 62-02 reads req.apiKeyId in capture-middleware → propagates to
+	//    insertUsage payload (the apiKeyId assertion below).
+	//  - Plan 62-05 wires the broker so the OpenAI streaming `usage` chunk is
+	//    actually emitted in production (the prompt_tokens > 0 assertion is
+	//    already exercised by parseUsageFromSseBuffer chat-completions branch
+	//    today; this test pins the contract).
+	// =====================================================================
+	test('FR-BROKER-E1-03: OpenAI streaming writes broker_usage row with non-zero prompt_tokens AND api_key_id set', async () => {
+		const TEST_KEY_UUID = '00000000-0000-4000-8000-000000000003'
+		await runScenario(
+			'/u/USERID/v1/chat/completions',
+			(req, res) => {
+				res.setHeader('content-type', 'text/event-stream')
+				// Phase 58 Plan 58-01:235-239 contract — terminal usage chunk before [DONE]
+				res.write(
+					'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","model":"gpt-4","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}\n\n',
+				)
+				res.write(
+					'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","model":"gpt-4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":42,"completion_tokens":17,"total_tokens":59}}\n\n',
+				)
+				res.write('data: [DONE]\n\n')
+				res.end()
+			},
+			{authMethod: 'bearer', apiKeyId: TEST_KEY_UUID},
+		)
+
+		expect(insertUsageMock).toHaveBeenCalledTimes(1)
+		const call = insertUsageMock.mock.calls[0][0]
+		expect(call.endpoint).toBe('chat-completions')
+		// FR-BROKER-E1-02 leg of E1-03: api_key_id must flow from req → payload.
+		// RED until Plan 62-02 — current capture-middleware ignores req.apiKeyId.
+		expect(call.apiKeyId).toBe(TEST_KEY_UUID)
+		// Token attribution leg of E1-03: streaming usage chunk must produce non-zero counts.
+		// Already supported by parseUsageFromSseBuffer (chat-completions branch); pinned here.
+		expect(call.promptTokens).toBeGreaterThan(0)
+		expect(call.completionTokens).toBeGreaterThan(0)
+		expect(call.promptTokens).toBe(42)
+		expect(call.completionTokens).toBe(17)
+		expect(call.requestId).toBe('chatcmpl-stream')
+		expect(call.model).toBe('gpt-4')
 	})
 })
