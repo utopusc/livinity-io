@@ -6,7 +6,7 @@ import type {AnthropicMessagesRequest} from './types.js'
 import type Livinityd from '../../index.js'
 import {getProvider} from './providers/registry.js'
 import type {ProviderResponse, ProviderStreamResult} from './providers/interface.js'
-import {forwardAnthropicHeaders} from './rate-limit-headers.js'
+import {forwardAnthropicHeaders, translateAnthropicToOpenAIHeaders} from './rate-limit-headers.js'
 
 /**
  * Phase 57 (FR-BROKER-A1-01..03): Anthropic Messages passthrough handler.
@@ -534,18 +534,14 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 			// no-transform + X-Accel-Buffering: no) — same buffering hazard
 			// mitigation for Phase 60's reverse-proxy chain.
 
-			res.setHeader('Content-Type', 'text/event-stream')
-			res.setHeader('Cache-Control', 'no-cache, no-transform')
-			res.setHeader('Connection', 'keep-alive')
-			res.setHeader('X-Accel-Buffering', 'no')
-			// Phase 61 Wave 4 (Plan 04): translateAnthropicToOpenAIHeaders(result.upstreamHeaders, res) — MUST precede flushHeaders below
-			res.flushHeaders()
-
-			const translator = createAnthropicToOpenAIStreamTranslator({
-				requestedModel: body.model, // echo caller's requested model (e.g. "gpt-4o")
-				res,
-			})
-
+			// Phase 61 Plan 04 (FR-BROKER-C3-02): provider.streamRequest is
+			// invoked BEFORE flushHeaders so result.upstreamHeaders are reachable
+			// in time for translateAnthropicToOpenAIHeaders. After flushHeaders,
+			// setHeader silently no-ops (RESEARCH.md Pitfall 1 / R9). The SDK's
+			// .withResponse() resolves once HTTP response headers arrive but
+			// BEFORE the SSE iterator is consumed, so this re-ordering does not
+			// stall the response — it just shifts the await onto headers arrival
+			// rather than first SSE chunk arrival.
 			let result: ProviderStreamResult
 			try {
 				result = await provider.streamRequest(anthropicBody as any, {
@@ -566,7 +562,22 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 				if (refreshed === null) throw mapApiError(err)
 				result = refreshed
 			}
-			void result.upstreamHeaders // Phase 61 Wave 4 read site
+
+			res.setHeader('Content-Type', 'text/event-stream')
+			res.setHeader('Cache-Control', 'no-cache, no-transform')
+			res.setHeader('Connection', 'keep-alive')
+			res.setHeader('X-Accel-Buffering', 'no')
+			// Phase 61 Plan 04 (FR-BROKER-C3-02): translate upstream Anthropic
+			// ratelimit headers to OpenAI x-ratelimit-* namespace BEFORE
+			// flushHeaders. T-61-16 mitigation: anthropic-* NOT also forwarded
+			// on this route (single-namespace per route).
+			translateAnthropicToOpenAIHeaders(result.upstreamHeaders, res)
+			res.flushHeaders()
+
+			const translator = createAnthropicToOpenAIStreamTranslator({
+				requestedModel: body.model, // echo caller's requested model (e.g. "gpt-4o")
+				res,
+			})
 
 			try {
 				for await (const event of result.stream) {
@@ -605,8 +616,10 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 				if (refreshed === null) throw mapApiError(err)
 				result = refreshed
 			}
-			// Phase 61 Wave 4 (Plan 04): translateAnthropicToOpenAIHeaders(result.upstreamHeaders, res) before res.json below
-			void result.upstreamHeaders
+			// Phase 61 Plan 04 (FR-BROKER-C3-02): translate upstream Anthropic
+			// ratelimit headers to OpenAI x-ratelimit-* namespace BEFORE
+			// res.json. T-61-16 mitigation: anthropic-* NOT also forwarded.
+			translateAnthropicToOpenAIHeaders(result.upstreamHeaders, res)
 			const openaiResp = buildOpenAIChatCompletionResponse(result.raw, body.model)
 			res.status(200).json(openaiResp)
 		}
