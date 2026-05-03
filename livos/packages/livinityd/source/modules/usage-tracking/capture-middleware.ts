@@ -50,9 +50,16 @@ export function createCaptureMiddleware(livinityd: Livinityd) {
 			captured = true
 			try {
 				const appId = await resolveAppIdFromIp(remoteIp)
+				// Phase 62 FR-BROKER-E1-02 — read apiKeyId set by Phase 59 bearer middleware.
+				// Mount order: capture < bearer < broker; bearer runs BEFORE res.end fires
+				// recordRow, so req.apiKeyId IS set here when authMethod === 'bearer'.
+				// Explicit coercion: legacy URL-path traffic has req.apiKeyId === undefined
+				// but insertUsage's UsageInsertInput types apiKeyId as `string | null`.
+				const apiKeyId = req.authMethod === 'bearer' ? req.apiKeyId ?? null : null
 				await insertUsage({
 					userId,
 					appId,
+					apiKeyId,
 					model: parsed.model ?? 'unknown',
 					promptTokens: parsed.prompt_tokens,
 					completionTokens: parsed.completion_tokens,
