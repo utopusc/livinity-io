@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: in-progress — Phase 56 spike COMPLETE (4/4 plans). 9 D-30-XX decisions locked; SPIKE-FINDINGS.md reorganized to 5 canonical sections; sacred SHA stable. Awaiting `/gsd-discuss-phase 57` to start passthrough implementation.
-last_updated: "2026-05-02T23:59:00Z"
-last_activity: 2026-05-02 — 56-04 synthesis plan executed (commit `c77b2b1d`); SPIKE-FINDINGS.md reorganized with Executive Summary at top + Q1->Q7 sequential ordering + Cross-Cuts + Decisions Log (9 D-30-XX entries) + Validation table (all 7 Q-rows PASS); 56-04-SUMMARY.md + PHASE-SUMMARY.md created; sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` confirmed unchanged (byte-identical across all 11 task boundaries of Phase 56); zero TBD rows in SPIKE-FINDINGS.md
+status: in-progress — Phase 57 Plan 01 (Wave 0) SHIPPED. 26 RED tests + README + fixture + SDK reachability scaffolding complete. Sacred SHA stable. Wave 1 (Plan 57-02) ready to start.
+last_updated: "2026-05-02T18:30:00Z"
+last_activity: 2026-05-02 — Plan 57-01 executed; 2 commits (340ff587 docs scaffolding, d3dfb52f RED tests); 26 failing test cases authored (11 mode-dispatch + 7 credential-extractor + 8 passthrough-handler); README.md documents X-Livinity-Mode opt-in contract; @anthropic-ai/sdk hoisted into livinityd resolution chain (D-NO-NEW-DEPS preserved — same v0.80.0 already in lockfile via @nexus/core); sacred file SHA 4f868d318abff71f8c8bfbcf443b2393a553018b byte-identical across all 4 task boundaries
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 44
-  completed_plans: 4
-  percent: 9
+  completed_plans: 5
+  percent: 11
 ---
 
 # Project State
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 56 complete; awaiting `/gsd-discuss-phase 57`
-Plan: 56-04 SHIPPED 2026-05-02 (commit `c77b2b1d`); SPIKE-FINDINGS.md reorganized to 5 canonical sections; 9 D-30-XX decisions locked; phase ready for sign-off
-Status: Phase 56 spike CLOSED. SPIKE-FINDINGS.md has Executive Summary (top) + Q1->Q7 verdicts (sequential numerical order) + Cross-Cuts (D-NO-NEW-DEPS YELLOW + Sacred SHA Stability PASS + D-51-03 Re-Evaluation Not-needed-in-v30) + Decisions Log (D-30-01..D-30-09) + Validation table (all 7 Q-rows PASS for file:line + URL + alternatives evidence). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 11 task boundaries. Phase 57-63 unblocked: Phases 57+59 ready to start in parallel; Phase 60 carries YELLOW (must budget xcaddy + caddy-ratelimit per D-30-09).
-Last activity: 2026-05-02 — 56-04 synthesis plan executed; SPIKE-FINDINGS.md reorganized; 56-04-SUMMARY.md + PHASE-SUMMARY.md created; D-30-01..D-30-09 appended to Locked Decisions section below; STATE.md current position bumped to phase-56-complete; ROADMAP.md update pending in next commit
+Phase: 57 in-progress (Wave 0 complete); Plan 57-02 (Wave 1) ready to start
+Plan: 57-01 SHIPPED 2026-05-02 (commits `340ff587` docs scaffold, `d3dfb52f` 26 RED tests). README.md + fixture + 3 RED test files; @anthropic-ai/sdk hoisted into livinityd resolution chain (D-NO-NEW-DEPS preserved — same v0.80.0 already in lockfile via @nexus/core)
+Status: Phase 57 Wave 0 (test scaffolding + dep audit) CLOSED. 26 failing test cases define the contract Wave 1+2 must satisfy: 11 mode-dispatch (header parse + Express middleware preservation), 7 credential-extractor (per-user homeOverride + BROKER_FORCE_ROOT_HOME fallback + log-leak guard), 8 passthrough-handler (FR-A1-01..03 + authToken construction + 401 missing subscription + 429 retry-after preservation + sync verbatim). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 4 task boundaries.
+Last activity: 2026-05-02 — Plan 57-01 executed end-to-end; 26 RED tests authored covering FR-BROKER-A1-01..04 + A2-01; @anthropic-ai/sdk reachability verified via `node -e "require.resolve(...)"`; SUMMARY.md created at `.planning/phases/57-passthrough-mode-agent-mode/57-01-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 
 | Phase | Goal                                                                | Reqs                              | Depends on            |
 |-------|---------------------------------------------------------------------|-----------------------------------|-----------------------|
 | 56 ✅ | Research Spike — answer 7 open Qs (passthrough / endpoint / auth)   | (research-only, 0 reqs) — CLOSED 2026-05-02 | —                |
-| 57    | A1+A2 Passthrough Mode + Agent Mode Opt-In                          | A1-01..04, A2-01..02 (6)          | 56                    |
+| 57 🚧 | A1+A2 Passthrough Mode + Agent Mode Opt-In (Wave 0/4 complete)      | A1-01..04, A2-01..02 (6)          | 56                    |
 | 58    | C1+C2 True Token Streaming (Anthropic + OpenAI)                     | C1-01..02, C2-01..03 (5)          | 57                    |
 | 59    | B1 Per-User Bearer Token Auth (`liv_sk_*`)                          | B1-01..05 (5)                     | — (parallel)          |
 | 60    | B2 Public Endpoint (`api.livinity.io`) + Rate-Limit Perimeter       | B2-01..02 (2)                     | 59                    |

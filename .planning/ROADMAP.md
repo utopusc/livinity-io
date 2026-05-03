@@ -85,7 +85,7 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 57-01-PLAN.md - Wave 0 Test Scaffolding + README + SDK reachability audit
+- [x] 57-01-PLAN.md - Wave 0 Test Scaffolding + README + SDK reachability audit (SHIPPED 2026-05-02; commits 340ff587, d3dfb52f; 26 RED tests)
 - [ ] 57-02-PLAN.md - Wave 1 Mode Dispatch + Credential Extractor + Risk-A1 smoke gate
 - [ ] 57-03-PLAN.md - Wave 2 Anthropic Messages Passthrough Handler + router.ts dispatch
 - [ ] 57-04-PLAN.md - Wave 3 OpenAI Chat Completions Passthrough + openai-router.ts dispatch
