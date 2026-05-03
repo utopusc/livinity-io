@@ -12,6 +12,8 @@ import {
 import type {OpenAIChatCompletionsRequest} from './openai-types.js'
 import type {BrokerDeps} from './types.js'
 import {createOpenAISseAdapter} from './openai-sse-adapter.js'
+import {resolveMode} from './mode-dispatch.js'
+import {passthroughOpenAIChatCompletions} from './passthrough-handler.js'
 
 /**
  * Register POST /:userId/v1/chat/completions on the existing broker router.
@@ -105,6 +107,48 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 			})
 			return
 		}
+
+		// Phase 57 (FR-BROKER-A2-01): mode dispatch — passthrough is DEFAULT, agent is opt-in via X-Livinity-Mode: agent.
+		// Passthrough bypasses sacred sdk-agent-runner.ts entirely; agent path below is byte-identical to v29.5.
+		const mode = resolveMode(req)
+		if (mode === 'passthrough') {
+			try {
+				await passthroughOpenAIChatCompletions({
+					livinityd: deps.livinityd,
+					userId: auth.userId,
+					body,
+					res,
+				})
+				return
+			} catch (err: any) {
+				if (err && typeof err.status === 'number') {
+					const headers: Record<string, string> = {}
+					if (err.retryAfter) headers['retry-after'] = String(err.retryAfter)
+					const errorType =
+						err.status === 429
+							? 'rate_limit_exceeded'
+							: err.status === 401
+								? 'invalid_request_error'
+								: 'api_error'
+					res.status(err.status).set(headers).json({
+						error: {
+							message: err.message ?? 'upstream error',
+							type: errorType,
+							code: err.status === 429 ? 'rate_limit_exceeded' : 'upstream_error',
+						},
+					})
+					return
+				}
+				deps.livinityd.logger.log(
+					`[livinity-broker:passthrough:openai] unexpected error user=${auth.userId}: ${err?.message ?? err}`,
+				)
+				res.status(502).json({
+					error: {message: 'upstream Anthropic error', type: 'api_error', code: 'upstream_error'},
+				})
+				return
+			}
+		}
+		// mode === 'agent' — existing code below unchanged
 
 		// 3. Per D-42-12: client-provided tools / tool_choice / function_call IGNORED with warn log
 		if (Array.isArray(body.tools) && body.tools.length > 0) {
