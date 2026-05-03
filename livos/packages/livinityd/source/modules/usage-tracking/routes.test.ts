@@ -152,4 +152,54 @@ describe('usage router Plan 44-03', () => {
 		expect(result.stats.per_app).toEqual([])
 		expect(result.banner.state).toBe('none')
 	})
+
+	// =========================================================================
+	// Phase 62 Plan 03 — FR-BROKER-E2-02: apiKeyId filter forwarding.
+	//
+	// Wave 1 (Plan 01) extended database.ts queryUsageByUser/queryUsageAll with
+	// optional `apiKeyId?: string`. Plan 03's job is to thread that opt through
+	// the tRPC layer so the UI filter dropdown (Plans 04/05) can pass it.
+	//
+	// Naming convention: getMine input uses camelCase `apiKeyId` (privateProcedure
+	// UI ergonomics); getAll input uses snake_case `api_key_id` to match the
+	// existing user_id/app_id field convention. Both forward to the camelCase
+	// `apiKeyId` opt on the database helpers.
+	//
+	// Cross-user leak prevention preserved: getMine still scopes WHERE
+	// user_id = ctx.currentUser.id; api_key_id is AND-ed (not OR-ed). Even if a
+	// caller passes another user's key UUID, the user_id scope returns zero rows.
+	// =========================================================================
+
+	test('FR-BROKER-E2-02: usage.getMine forwards apiKeyId to queryUsageByUser', async () => {
+		queryUsageByUserMock.mockResolvedValue([])
+		countUsageTodayMock.mockResolvedValue(0)
+		const apiKeyId = '00000000-0000-0000-0000-000000000001'
+
+		const caller = createCaller(makeCtx({role: 'member', userId: 'user-uuid'}))
+		await caller.getMine({apiKeyId})
+
+		expect(queryUsageByUserMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: 'user-uuid',
+				since: undefined,
+				apiKeyId: '00000000-0000-0000-0000-000000000001',
+			}),
+		)
+	})
+
+	test('FR-BROKER-E2-02: usage.getAll forwards api_key_id to queryUsageAll', async () => {
+		queryUsageAllMock.mockResolvedValue([])
+		const apiKeyId = '00000000-0000-0000-0000-000000000002'
+
+		const caller = createCaller(makeCtx({role: 'admin', userId: 'admin-id'}))
+		await caller.getAll({api_key_id: apiKeyId})
+
+		// Zod input field is snake_case (api_key_id) to match user_id/app_id convention,
+		// but the database helper opt is camelCase (apiKeyId) — Plan 01's contract.
+		expect(queryUsageAllMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiKeyId: '00000000-0000-0000-0000-000000000002',
+			}),
+		)
+	})
 })
