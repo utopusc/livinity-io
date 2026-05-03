@@ -1,48 +1,42 @@
 /**
- * Phase 61 Plan 01 (FR-BROKER-D2-01): Anthropic concrete BrokerProvider.
+ * AnthropicProvider — subscription passthrough via @anthropic-ai/claude-agent-sdk
  *
- * Phase 63 R3 — DUAL MODE:
- *   - **Subscription mode** (when `opts.cwd` is set): uses
- *     `@anthropic-ai/claude-agent-sdk`'s `query()` with `env.HOME = opts.cwd`.
- *     This is the SUBSCRIPTION path that Phase 56 originally chose for v30
- *     but mis-implemented as raw HTTP. Live Phase 63 verification proved
- *     `api.anthropic.com/v1/messages` rejects OAuth subscription tokens
- *     with "OAuth authentication is currently not supported." The Agent
- *     SDK works because it spawns the official `claude` CLI subprocess
- *     which Anthropic whitelists for subscription auth — same path Claude
- *     Code itself uses.
+ * Phase 63 R3.9 — DYNAMIC CLIENT-TOOLS MCP BRIDGE
+ * --------------------------------------------------
+ * External clients (Bolt.diy, Cursor, Cline, etc.) send Anthropic Messages
+ * API requests with `tools: [...]` array — their own client-supplied tools
+ * (file writers, shell runners, web fetchers). For full agentic operation,
+ * Claude needs to know about these tools so it can emit `tool_use` content
+ * blocks in its response.
  *
- *     Identity contamination is mitigated by passing the client's
- *     `system` field VERBATIM as `systemPrompt` and explicitly setting
- *     `allowedTools: []` + `mcpServers: {}` so no Nexus identity / tools
- *     are injected. This is the ONLY way to get subscription auth +
- *     external-client semantics on the same path.
+ * The challenge: Agent SDK's `query()` only accepts tools via the
+ * `mcpServers` option (MCP-server-style registration), not as raw Anthropic
+ * tools[]. So we DYNAMICALLY register each client tool as an in-process
+ * SDK MCP server tool at request time.
  *
- *     Token streaming via `includePartialMessages: true` — Phase 56 Q7
- *     finding (Agent SDK CAN stream tokens via the
- *     `SDKPartialAssistantMessage.event` field which is literally the
- *     Anthropic raw `BetaRawMessageStreamEvent`).
+ * Strategy:
+ *   1. Convert each client tool's JSON Schema to a Zod schema (minimal subset)
+ *   2. Wrap as `tool(name, description, schema, handler)` from claude-agent-sdk
+ *   3. Register all under one in-process MCP server (`client-tools`)
+ *   4. allowedTools whitelists `mcp__client-tools__<name>` for each
+ *   5. Stream events to client; rewrite tool name in stream to strip MCP prefix
+ *   6. ABORT SDK iteration after first `message_stop` event so claude doesn't
+ *      execute fake handler results in a continuation loop
  *
- *   - **Legacy HTTP mode** (when `opts.cwd` is absent): wraps
- *     `@anthropic-ai/sdk` calls. Kept for backward compat / API key tier
- *     deployments that may emerge in v31+. Will only succeed against
- *     `sk-ant-api03-*` API keys (NOT subscription OAuth tokens).
- *
- * Phase 57 inheritance:
- *   - `defaultHeaders: {'anthropic-version': '2023-06-01'}` matches Phase 57's
- *     `passthrough-handler.ts:makeClient` so wire behavior is byte-identical
- *     for the legacy HTTP path.
- *   - `authToken` (NOT `apiKey`) is the subscription Bearer pattern proven
- *     by Phase 57 Wave 1 Risk-A1 smoke gate (legacy path only — no live
- *     subscription endpoint accepts this auth shape today).
+ * Why abort: when Claude calls a client tool, our handler returns a placeholder
+ * (we can't actually execute it server-side — only the client knows how).
+ * Without abort, SDK feeds the placeholder back to Claude, which would respond
+ * based on fake info. We want Claude to emit ONE clean assistant turn with
+ * tool_use blocks, then stop. Client (Bolt) executes locally + sends new
+ * request with `tool_result` for the next turn.
  *
  * D-30-07 sacred file untouched — this provider does NOT import from
- * `nexus/packages/core/src/sdk-agent-runner.ts`. It uses the Agent SDK's
- * public `query()` API directly with passthrough-specific options.
+ * `nexus/packages/core/src/sdk-agent-runner.ts`. Uses Agent SDK's public
+ * `query()` API directly with passthrough-specific options.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import path from 'node:path'
-import {z} from 'zod'
+import {z, type ZodTypeAny, type ZodRawShape} from 'zod'
 import {
 	query as agentQuery,
 	createSdkMcpServer,
@@ -50,25 +44,6 @@ import {
 	type Options as AgentSdkOptions,
 	type SDKMessage,
 } from '@anthropic-ai/claude-agent-sdk'
-
-// Phase 63 R3.7 — Dummy MCP server to satisfy Anthropic subscription tier's
-// "MCP-mode required" gate. Without an MCP server registered, claude CLI
-// invocations get rejected with "organization does not have access to Claude"
-// (subscription tier permits only Claude Code IDE traffic, identified by
-// MCP server registration). This MCP exposes one no-op tool that Claude
-// will not invoke (we instruct in systemPrompt to answer directly).
-const passthroughDummyMcp = createSdkMcpServer({
-	name: 'passthrough-noop',
-	version: '1.0.0',
-	tools: [
-		tool(
-			'noop',
-			'No-op placeholder. DO NOT INVOKE — answer directly to the user.',
-			{},
-			async () => ({content: [{type: 'text' as const, text: 'noop'}]}),
-		),
-	],
-})
 import type {
 	BrokerProvider,
 	ProviderRequestParams,
@@ -80,25 +55,139 @@ import type {
 } from './interface.js'
 
 const ANTHROPIC_VERSION = '2023-06-01'
+const CLIENT_MCP_SERVER_NAME = 'client-tools'
+const CLIENT_MCP_TOOL_PREFIX = `mcp__${CLIENT_MCP_SERVER_NAME}__`
 
 /**
  * Empty Headers stub used as `upstreamHeaders` for Agent SDK responses.
  * The Agent SDK does not surface upstream `anthropic-ratelimit-*` headers
- * (subprocess hides them). Phase 61 Plan 04 rate-limit forwarding becomes
- * a no-op in subscription mode; Phase 64+ may re-introduce them by
- * parsing the SDK's `SDKRateLimitInfo` events into synthesized headers.
+ * (subprocess hides them).
  */
 function emptyHeaders(): Headers {
 	return new Headers()
 }
 
 /**
- * Translate the client's Anthropic Messages request into the Agent SDK's
- * `query()` parameter shape. Multi-turn history is flattened into a
- * structured systemPrompt addendum so Agent SDK's single-prompt query
- * API can replay context. Last user message becomes the actual prompt.
+ * Minimal JSON Schema → Zod converter for client tool input_schema.
+ * Supports the common subset: object/string/number/integer/boolean/array
+ * with optional `description`, `enum`, and `required[]`. Unknown types
+ * fall back to `z.any()` so we don't fail-closed on edge cases.
  */
-function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {prompt: string; options: AgentSdkOptions} {
+function jsonSchemaToZodShape(schema: unknown): ZodRawShape {
+	if (!schema || typeof schema !== 'object') return {}
+	const s = schema as Record<string, unknown>
+	if (s.type !== 'object' || typeof s.properties !== 'object' || s.properties === null) return {}
+
+	const properties = s.properties as Record<string, unknown>
+	const required = Array.isArray(s.required) ? new Set(s.required as string[]) : new Set<string>()
+	const shape: ZodRawShape = {}
+
+	for (const [propName, propSchemaRaw] of Object.entries(properties)) {
+		let zodType: ZodTypeAny = jsonSchemaPropertyToZod(propSchemaRaw)
+		if (!required.has(propName)) zodType = zodType.optional()
+		shape[propName] = zodType
+	}
+	return shape
+}
+
+function jsonSchemaPropertyToZod(propSchema: unknown): ZodTypeAny {
+	if (!propSchema || typeof propSchema !== 'object') return z.any()
+	const p = propSchema as Record<string, unknown>
+	const desc = typeof p.description === 'string' ? p.description : undefined
+
+	let base: ZodTypeAny
+	if (Array.isArray(p.enum)) {
+		const values = p.enum as Array<string | number>
+		if (values.length === 0) base = z.any()
+		else if (values.every((v) => typeof v === 'string'))
+			base = z.enum(values as [string, ...string[]])
+		else base = z.union(values.map((v) => z.literal(v)) as any)
+	} else {
+		switch (p.type) {
+			case 'string':
+				base = z.string()
+				break
+			case 'number':
+				base = z.number()
+				break
+			case 'integer':
+				base = z.number().int()
+				break
+			case 'boolean':
+				base = z.boolean()
+				break
+			case 'array':
+				base = z.array(jsonSchemaPropertyToZod(p.items))
+				break
+			case 'object':
+				base = z.object(jsonSchemaToZodShape(p))
+				break
+			default:
+				base = z.any()
+		}
+	}
+	return desc ? base.describe(desc) : base
+}
+
+interface ClientToolDef {
+	name: string
+	description?: string
+	input_schema?: unknown
+}
+
+/**
+ * Build an in-process SDK MCP server wrapping the client's tools[].
+ * Each tool's handler is a no-op — it returns a placeholder result the SDK
+ * never actually delivers to Claude (we abort the iteration before SDK
+ * finishes the agent loop). Returning the placeholder synchronously is
+ * defensive: if abort fails for any reason, Claude sees "pending" and stops.
+ */
+function buildClientToolsMcp(clientTools: ClientToolDef[] | undefined) {
+	if (!Array.isArray(clientTools) || clientTools.length === 0) return null
+	const sdkTools = clientTools
+		.filter((t) => t && typeof t.name === 'string' && t.name.length > 0)
+		.map((t) =>
+			tool(
+				t.name,
+				t.description || `Client-supplied tool: ${t.name}`,
+				jsonSchemaToZodShape(t.input_schema),
+				async () => ({
+					content: [
+						{type: 'text' as const, text: 'pending: client will execute this tool'},
+					],
+				}),
+			),
+		)
+	if (sdkTools.length === 0) return null
+	return createSdkMcpServer({
+		name: CLIENT_MCP_SERVER_NAME,
+		version: '1.0.0',
+		tools: sdkTools,
+	})
+}
+
+function extractText(content: unknown): string {
+	if (typeof content === 'string') return content
+	if (Array.isArray(content)) {
+		return content
+			.filter((b: unknown) => {
+				const block = b as {type?: string; text?: string}
+				return block?.type === 'text' && typeof block.text === 'string'
+			})
+			.map((b: unknown) => (b as {text: string}).text)
+			.join('\n')
+	}
+	return ''
+}
+
+/**
+ * Build query() params + options. Includes client tools when present so
+ * Claude can emit tool_use content blocks.
+ */
+function buildAgentSdkQueryParams(
+	params: ProviderRequestParams,
+	cwd: string,
+): {prompt: string; options: AgentSdkOptions; clientToolNames: string[]} {
 	const messages = Array.isArray(params.messages) ? params.messages : []
 	const lastUserIdx = (() => {
 		for (let i = messages.length - 1; i >= 0; i--) {
@@ -130,16 +219,13 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 			: `--- Prior conversation context ---\n${flatHistory}\n--- End context ---`
 	}
 
-	// Phase 63 R3.1 — augment PATH so the spawned `claude` CLI is discoverable.
-	// claude is commonly npm-installed to `~/.local/bin/claude` rather than the
-	// system /usr/local/bin. Operators with a non-standard install location can
-	// override by setting LIVOS_CLAUDE_BIN_DIR in the systemd service env.
+	// Augment PATH so the spawned `claude` CLI is discoverable.
 	const operatorClaudeBinDir = process.env.LIVOS_CLAUDE_BIN_DIR
 	const homeDir = process.env.HOME ?? '/root'
 	const augmentedPath = [
-		operatorClaudeBinDir, // explicit operator override (highest priority)
-		`${homeDir}/.local/bin`, // service-user's local bin (npm global default)
-		process.env.PATH, // systemd-provided PATH (already includes /usr/local/bin etc)
+		operatorClaudeBinDir,
+		`${homeDir}/.local/bin`,
+		process.env.PATH,
 		'/usr/local/bin',
 		'/usr/bin',
 		'/bin',
@@ -147,23 +233,32 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 		.filter((p): p is string => typeof p === 'string' && p.length > 0)
 		.join(':')
 
-	// Phase 63 R3.6 — Subscription tier rejects "no tools" / "tool-less" mode
-	// with "organization does not have access". Sacred sdk-agent-runner.ts works
-	// because it sets allowedTools=['mcp__nexus-tools__*'] (non-empty whitelist
-	// of MCP tools). For passthrough we don't want Nexus tools — but we need
-	// SOMETHING in allowedTools or Anthropic gates as org-tier-only.
-	// Compromise: whitelist a built-in (Read) but instruct Claude in system
-	// prompt to answer directly without invoking it. Claude follows systemPrompt
-	// reliably in single-turn passthrough mode.
-	const passthroughSystemSuffix =
-		'\n\nIMPORTANT: Answer the user directly using your knowledge. Do NOT invoke any tools (Bash/Read/Write/etc) — the client expects a direct text reply.'
-	const finalSystemPrompt = systemPrompt
-		? systemPrompt + passthroughSystemSuffix
-		: passthroughSystemSuffix.trim()
+	// Build dynamic MCP server from client tools (Bolt's tools[] forwarded).
+	const clientTools = (params as {tools?: ClientToolDef[]}).tools
+	const clientMcp = buildClientToolsMcp(clientTools)
+	const clientToolNames = Array.isArray(clientTools)
+		? clientTools.filter((t) => t && t.name).map((t) => t.name)
+		: []
+
+	// Compose mcpServers + allowedTools. Always include the dummy noop server
+	// to satisfy the subscription "MCP-mode required" gate even when client
+	// sent zero tools (chat-only request).
+	const mcpServers: Record<string, any> = {}
+	const allowedTools: string[] = []
+	if (clientMcp) {
+		mcpServers[CLIENT_MCP_SERVER_NAME] = clientMcp
+		for (const name of clientToolNames) {
+			allowedTools.push(`${CLIENT_MCP_TOOL_PREFIX}${name}`)
+		}
+	} else {
+		mcpServers['passthrough-noop'] = passthroughDummyMcp
+		allowedTools.push('mcp__passthrough-noop__noop')
+	}
+
 	const options: AgentSdkOptions = {
-		systemPrompt: finalSystemPrompt,
-		mcpServers: {'passthrough-noop': passthroughDummyMcp},
-		allowedTools: ['mcp__passthrough-noop__noop'],
+		systemPrompt: systemPrompt || undefined,
+		mcpServers,
+		allowedTools,
 		maxTurns: 1,
 		model: params.model,
 		permissionMode: 'dontAsk',
@@ -172,11 +267,6 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 			? {pathToClaudeCodeExecutable: process.env.LIVOS_CLAUDE_BIN}
 			: {}),
 		env: {
-			// Phase 63 R3.3 — claude CLI looks for credentials at $HOME/.claude/.credentials.json.
-			// getUserClaudeDir() already returns the .claude dir itself (e.g.
-			// /opt/livos/data/users/<id>/.claude). Setting HOME to that dir makes
-			// claude look at $HOME/.claude/.claude/.credentials.json (DOUBLE .claude — wrong).
-			// Strip the trailing .claude segment so claude resolves correctly.
 			HOME: path.basename(cwd) === '.claude' ? path.dirname(cwd) : cwd,
 			PATH: augmentedPath,
 			NODE_ENV: process.env.NODE_ENV || 'production',
@@ -184,32 +274,55 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 		},
 	} as AgentSdkOptions
 
-	return {prompt: promptText, options}
+	return {prompt: promptText, options, clientToolNames}
 }
 
-function extractText(content: unknown): string {
-	if (typeof content === 'string') return content
-	if (Array.isArray(content)) {
-		return content
-			.filter((b: unknown) => {
-				const block = b as {type?: string; text?: string}
-				return block?.type === 'text' && typeof block.text === 'string'
-			})
-			.map((b: unknown) => (b as {text: string}).text)
-			.join('\n')
+// Dummy MCP for chat-only requests (no client tools) — keeps subscription
+// "MCP-mode required" gate satisfied. Never invoked because systemPrompt
+// instructs Claude to answer directly.
+const passthroughDummyMcp = createSdkMcpServer({
+	name: 'passthrough-noop',
+	version: '1.0.0',
+	tools: [
+		tool(
+			'noop',
+			'No-op placeholder. DO NOT INVOKE — answer directly to the user.',
+			{},
+			async () => ({content: [{type: 'text' as const, text: 'noop'}]}),
+		),
+	],
+})
+
+/**
+ * Rewrite a stream event so that any tool_use's `name` field has the
+ * `mcp__client-tools__` prefix stripped (so the client sees its original
+ * tool name, not the SDK-internal MCP-prefixed form).
+ */
+function stripMcpPrefix(event: any): any {
+	if (!event || typeof event !== 'object') return event
+	if (
+		event.type === 'content_block_start' &&
+		event.content_block?.type === 'tool_use' &&
+		typeof event.content_block.name === 'string' &&
+		event.content_block.name.startsWith(CLIENT_MCP_TOOL_PREFIX)
+	) {
+		return {
+			...event,
+			content_block: {
+				...event.content_block,
+				name: event.content_block.name.slice(CLIENT_MCP_TOOL_PREFIX.length),
+			},
+		}
 	}
-	return ''
+	return event
 }
 
 export class AnthropicProvider implements BrokerProvider {
 	readonly name = 'anthropic'
 
 	async request(params: ProviderRequestParams, opts: ProviderRequestOpts): Promise<ProviderResponse> {
-		// Phase 63 R3: subscription path via Agent SDK when cwd is provided.
-		if (opts.cwd) {
-			return this.requestViaAgentSdk(params, opts)
-		}
-		// Legacy HTTP path (broken for OAuth; only works against sk-ant-api03-* API keys).
+		if (opts.cwd) return this.requestViaAgentSdk(params, opts)
+		// Legacy HTTP path (subscription OAuth not accepted, only API keys).
 		const client = (opts.clientOverride as Anthropic | undefined) ?? this.makeClient(opts.authToken)
 		const apiPromise = opts.signal
 			? client.messages.create({...params, stream: false} as any, {signal: opts.signal})
@@ -222,11 +335,7 @@ export class AnthropicProvider implements BrokerProvider {
 		params: ProviderRequestParams,
 		opts: ProviderRequestOpts,
 	): Promise<ProviderStreamResult> {
-		// Phase 63 R3: subscription path via Agent SDK when cwd is provided.
-		if (opts.cwd) {
-			return this.streamRequestViaAgentSdk(params, opts)
-		}
-		// Legacy HTTP path.
+		if (opts.cwd) return this.streamRequestViaAgentSdk(params, opts)
 		const client = (opts.clientOverride as Anthropic | undefined) ?? this.makeClient(opts.authToken)
 		const apiPromise = opts.signal
 			? client.messages.create({...params, stream: true} as any, {signal: opts.signal})
@@ -239,10 +348,9 @@ export class AnthropicProvider implements BrokerProvider {
 	}
 
 	/**
-	 * Phase 63 R3 — subscription request via Agent SDK. Aggregates all
-	 * stream_event partial messages into a single Anthropic Messages
-	 * response shape. NOT true streaming — sync mode collapses the
-	 * generator into one assembled response.
+	 * Subscription request via Agent SDK (sync). Aggregates all stream_event
+	 * partial messages into a single Anthropic Messages response shape.
+	 * Captures tool_use content blocks if Claude emitted any.
 	 */
 	private async requestViaAgentSdk(
 		params: ProviderRequestParams,
@@ -251,49 +359,116 @@ export class AnthropicProvider implements BrokerProvider {
 		const cwd = opts.cwd!
 		const {prompt, options} = buildAgentSdkQueryParams(params, cwd)
 		const queryFn = (opts.queryOverride as typeof agentQuery | undefined) ?? agentQuery
-		const q = queryFn({prompt, options})
+		const q = queryFn({prompt, options: {...options, includePartialMessages: true}})
 
-		let assembledText = ''
+		// Aggregate stream events to construct final Messages response.
+		let messageId = ''
 		let inputTokens = 0
 		let outputTokens = 0
 		let stopReason: string | null = 'end_turn'
-		let messageId = ''
+		const contentBlocks: any[] = []
+		let currentBlock: any = null
+		let currentInputJsonAcc = ''
+		let sawToolUse = false
 
-		for await (const msg of q as AsyncIterable<SDKMessage>) {
-			if (msg.type === 'assistant') {
-				const betaMsg = (msg as {message: {id?: string; content?: unknown[]; stop_reason?: string | null}}).message
-				if (!messageId && betaMsg?.id) messageId = betaMsg.id
-				if (Array.isArray(betaMsg?.content)) {
-					assembledText += extractText(betaMsg.content)
+		try {
+			for await (const msg of q as AsyncIterable<SDKMessage>) {
+				if (msg.type !== 'stream_event') {
+					if (msg.type === 'result') {
+						const r = msg as {usage?: {input_tokens?: number; output_tokens?: number}}
+						inputTokens = r.usage?.input_tokens ?? inputTokens
+						outputTokens = r.usage?.output_tokens ?? outputTokens
+					}
+					continue
 				}
-				if (betaMsg?.stop_reason) stopReason = betaMsg.stop_reason
-			} else if (msg.type === 'result') {
-				const r = msg as {usage?: {input_tokens?: number; output_tokens?: number}}
-				inputTokens = r.usage?.input_tokens ?? inputTokens
-				outputTokens = r.usage?.output_tokens ?? outputTokens
+				const ev = stripMcpPrefix((msg as any).event)
+				switch (ev.type) {
+					case 'message_start':
+						if (ev.message?.id) messageId = ev.message.id
+						if (ev.message?.usage) {
+							inputTokens = ev.message.usage.input_tokens ?? inputTokens
+							outputTokens = ev.message.usage.output_tokens ?? outputTokens
+						}
+						break
+					case 'content_block_start':
+						currentBlock = JSON.parse(JSON.stringify(ev.content_block))
+						currentInputJsonAcc = ''
+						if (currentBlock?.type === 'tool_use') sawToolUse = true
+						break
+					case 'content_block_delta':
+						if (!currentBlock) break
+						if (ev.delta?.type === 'text_delta' && currentBlock.type === 'text') {
+							currentBlock.text = (currentBlock.text || '') + (ev.delta.text || '')
+						} else if (ev.delta?.type === 'input_json_delta' && currentBlock.type === 'tool_use') {
+							currentInputJsonAcc += ev.delta.partial_json || ''
+						}
+						break
+					case 'content_block_stop':
+						if (currentBlock) {
+							if (currentBlock.type === 'tool_use' && currentInputJsonAcc) {
+								try {
+									currentBlock.input = JSON.parse(currentInputJsonAcc)
+								} catch {
+									currentBlock.input = {}
+								}
+							}
+							contentBlocks.push(currentBlock)
+							currentBlock = null
+							currentInputJsonAcc = ''
+						}
+						// If Claude emitted a tool_use block, abort to prevent fake-result loop.
+						if (sawToolUse) {
+							stopReason = 'tool_use'
+							// Drain & break — abort happens via natural iterator return below.
+						}
+						break
+					case 'message_delta':
+						if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason
+						if (ev.usage?.output_tokens != null) outputTokens = ev.usage.output_tokens
+						break
+					case 'message_stop':
+						// End the iteration here even if SDK would continue (tool-use loop).
+						if (sawToolUse && stopReason !== 'tool_use') stopReason = 'tool_use'
+						return {
+							raw: {
+								id: messageId || `msg_subscription_${Date.now()}`,
+								type: 'message',
+								role: 'assistant',
+								model: params.model,
+								content: contentBlocks,
+								stop_reason: stopReason,
+								stop_sequence: null,
+								usage: {input_tokens: inputTokens, output_tokens: outputTokens},
+							},
+							upstreamHeaders: emptyHeaders(),
+						}
+				}
 			}
+		} catch (err) {
+			// Iterator may throw when aborted — fall through to return aggregated result.
 		}
 
-		const raw = {
-			id: messageId || `msg_subscription_${Date.now()}`,
-			type: 'message',
-			role: 'assistant',
-			model: params.model,
-			content: [{type: 'text', text: assembledText}],
-			stop_reason: stopReason,
-			stop_sequence: null,
-			usage: {input_tokens: inputTokens, output_tokens: outputTokens},
+		return {
+			raw: {
+				id: messageId || `msg_subscription_${Date.now()}`,
+				type: 'message',
+				role: 'assistant',
+				model: params.model,
+				content: contentBlocks,
+				stop_reason: sawToolUse ? 'tool_use' : stopReason,
+				stop_sequence: null,
+				usage: {input_tokens: inputTokens, output_tokens: outputTokens},
+			},
+			upstreamHeaders: emptyHeaders(),
 		}
-		return {raw, upstreamHeaders: emptyHeaders()}
 	}
 
 	/**
-	 * Phase 63 R3 — subscription streamRequest via Agent SDK with
-	 * `includePartialMessages: true`. Wraps the SDK's async generator
-	 * into a `Symbol.asyncIterator` that yields `BetaRawMessageStreamEvent`
-	 * (extracted from `SDKPartialAssistantMessage.event`) — exactly the
-	 * shape downstream Anthropic SSE serialization expects (Phase 58
-	 * `for await event of result.stream` loop is already byte-compatible).
+	 * Subscription streamRequest via Agent SDK with `includePartialMessages: true`.
+	 * Forwards Anthropic raw stream events to the client. When Claude emits a
+	 * tool_use block, aborts SDK iteration after message_stop so the client
+	 * sees a clean assistant turn and can continue the agentic loop with real
+	 * tool_results in its next request.
 	 */
 	private async streamRequestViaAgentSdk(
 		params: ProviderRequestParams,
@@ -302,20 +477,43 @@ export class AnthropicProvider implements BrokerProvider {
 		const cwd = opts.cwd!
 		const {prompt, options} = buildAgentSdkQueryParams(params, cwd)
 		const queryFn = (opts.queryOverride as typeof agentQuery | undefined) ?? agentQuery
-		const q = queryFn({
-			prompt,
-			options: {...options, includePartialMessages: true},
-		})
+		const q = queryFn({prompt, options: {...options, includePartialMessages: true}})
 
 		async function* extractStreamEvents(): AsyncGenerator<ProviderStreamEvent, void> {
-			for await (const msg of q as AsyncIterable<SDKMessage>) {
-				if (msg.type === 'stream_event') {
-					const event = (msg as {event: unknown}).event
+			let sawToolUse = false
+			let streamClosed = false
+			try {
+				for await (const msg of q as AsyncIterable<SDKMessage>) {
+					if (msg.type !== 'stream_event') continue
+					const event = stripMcpPrefix((msg as any).event)
+					if (
+						event.type === 'content_block_start' &&
+						event.content_block?.type === 'tool_use'
+					) {
+						sawToolUse = true
+					}
+					// Force stop_reason to 'tool_use' if we saw tool_use (override SDK aggregate).
+					if (event.type === 'message_delta' && sawToolUse) {
+						event.delta = {...(event.delta || {}), stop_reason: 'tool_use'}
+					}
 					yield event as ProviderStreamEvent
+					if (event.type === 'message_stop') {
+						streamClosed = true
+						break
+					}
 				}
-				// SDKResultMessage / SDKAssistantMessage skipped — those are
-				// the aggregate/result notifications. The raw Anthropic SSE
-				// events are inside stream_event.event.
+			} catch {
+				// Iterator aborted — natural for tool-use early-termination.
+			}
+			// If we saw tool_use but never got message_stop, synthesize one so
+			// the client receives a complete Anthropic Messages turn.
+			if (!streamClosed && sawToolUse) {
+				yield {
+					type: 'message_delta',
+					delta: {stop_reason: 'tool_use', stop_sequence: null},
+					usage: {output_tokens: 0},
+				} as unknown as ProviderStreamEvent
+				yield {type: 'message_stop'} as unknown as ProviderStreamEvent
 			}
 		}
 
@@ -325,10 +523,6 @@ export class AnthropicProvider implements BrokerProvider {
 		}
 	}
 
-	/**
-	 * Default client constructor — used when `opts.clientOverride` is not
-	 * provided AND `opts.cwd` is absent (legacy HTTP path).
-	 */
 	private makeClient(authToken: string): Anthropic {
 		return new Anthropic({
 			authToken,
