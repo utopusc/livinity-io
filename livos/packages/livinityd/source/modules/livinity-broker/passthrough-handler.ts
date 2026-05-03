@@ -4,6 +4,8 @@ import {UpstreamHttpError} from './agent-runner-factory.js'
 import {readSubscriptionToken, type SubscriptionToken} from './credential-extractor.js'
 import type {AnthropicMessagesRequest} from './types.js'
 import type Livinityd from '../../index.js'
+import {getProvider} from './providers/registry.js'
+import type {ProviderResponse, ProviderStreamResult} from './providers/interface.js'
 
 /**
  * Phase 57 (FR-BROKER-A1-01..03): Anthropic Messages passthrough handler.
@@ -34,6 +36,20 @@ import type Livinityd from '../../index.js'
  *     `data: [DONE]\n\n` on stream end. Sync (stream:false) chatcmpl id
  *     uses Wave 1's crypto.randomBytes-backed randomChatCmplId
  *     (FR-BROKER-C2-03; Phase 57 Pitfall 4 closed).
+ *
+ * Phase 61 Plan 01 Wave 1 (FR-BROKER-D2-02): SDK calls dispatch through
+ * BrokerProvider. Inline `client.messages.create(...)` is replaced with
+ * `getProvider('anthropic').request(...)` / `streamRequest(...)`. Both
+ * provider methods invoke `.withResponse()` so upstream Web Fetch Headers
+ * are reachable in `result.upstreamHeaders` for Plan 04 (Wave 4) rate-limit
+ * forwarding. The `result.upstreamHeaders` value is captured but NOT
+ * written to `res` in Plan 01 — Wave 4 inserts `forwardAnthropicHeaders(...)`
+ * at the marked placeholders below. Behavior-preserving refactor only.
+ *
+ * The Phase 58 Wave 0 `clientFactory` test seam is preserved by passing the
+ * factory-built client through `ProviderRequestOpts.clientOverride`. The
+ * `tryRefreshAndRetry` path now invokes the provider with a refreshed-token
+ * `clientOverride` instead of constructing a separate `Anthropic` instance.
  */
 
 export interface PassthroughOpts {
@@ -46,6 +62,11 @@ export interface PassthroughOpts {
 	 * Used by Wave 4 integration tests to wire the SDK to a fake-Anthropic SSE
 	 * server via baseURL. Production code paths leave this undefined; behavior
 	 * unchanged from Phase 57 when undefined.
+	 *
+	 * Phase 61 Plan 01 Wave 1: factory-built client is forwarded to the provider
+	 * via `ProviderRequestOpts.clientOverride`. The provider uses it verbatim
+	 * (skipping its own Anthropic constructor) so wire behavior remains
+	 * byte-identical with pre-Phase-61.
 	 */
 	clientFactory?: (token: SubscriptionToken) => Anthropic
 }
@@ -57,6 +78,12 @@ const TOKEN_REFRESH_URL = 'https://platform.claude.com/v1/oauth/token'
  * Construct an Anthropic SDK client bound to the given subscription token.
  * Per Wave 1 Risk-A1 smoke gate: SDK produces `Authorization: Bearer <token>`
  * headers automatically when `authToken` (NOT `apiKey`) is supplied.
+ *
+ * Phase 61 Plan 01 Wave 1: still exported so Phase 58 integration tests'
+ * `makeFakeClientFactory` (which builds an Anthropic instance pointing at
+ * the loopback fake-server) continues to work unchanged. Production calls
+ * now flow through the BrokerProvider which constructs its own client when
+ * `clientOverride` is absent (matching this construction).
  */
 export function makeClient(token: SubscriptionToken): Anthropic {
 	return new Anthropic({
@@ -156,7 +183,10 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 		`[livinity-broker:passthrough] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true}`,
 	)
 
-	const client = (opts.clientFactory ?? makeClient)(token)
+	// Phase 61 Plan 01 Wave 1: dispatch via BrokerProvider. The factory test
+	// seam (Phase 58 Wave 0) is forwarded into ProviderRequestOpts.clientOverride.
+	const provider = getProvider('anthropic')
+	const initialClient = opts.clientFactory ? opts.clientFactory(token) : undefined
 
 	// Pitfall (T-57-08): construct upstream body as a NEW object — do NOT
 	// mutate `body` in place. Tools + system pass through verbatim.
@@ -174,12 +204,12 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 			// iterator forwarding. Replaces Phase 57's transitional aggregate-then-
 			// restream block.
 			//
-			// SDK method choice: client.messages.create({stream:true}) returns
-			// Stream<RawMessageStreamEvent> — an async iterable whose `type` field
-			// matches Anthropic's SSE event names verbatim (message_start,
-			// content_block_delta, ...). We forward each event as
-			//   `event: <type>\ndata: <json>\n\n`
-			// — byte-for-byte pass-through of the upstream Anthropic SSE sequence.
+			// SDK method choice: provider.streamRequest dispatches to
+			// client.messages.create({stream:true}).withResponse() — returns both
+			// the Stream<RawMessageStreamEvent> AsyncIterable AND the upstream
+			// Web Fetch Headers instance (for Wave 4 rate-limit forwarding).
+			// Each event forwarded as `event: <type>\ndata: <json>\n\n` — byte-
+			// for-byte pass-through of the upstream Anthropic SSE sequence.
 			//
 			// Headers include Cache-Control: no-transform (defense-in-depth against
 			// any future compression middleware mounting — Wave 0 audit confirmed
@@ -190,33 +220,36 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 			res.setHeader('Cache-Control', 'no-cache, no-transform')
 			res.setHeader('Connection', 'keep-alive')
 			res.setHeader('X-Accel-Buffering', 'no')
+			// Phase 61 Wave 4 (Plan 04): forwardAnthropicHeaders(result.upstreamHeaders, res) — MUST precede flushHeaders below
 			res.flushHeaders()
 
-			const makeClientFn = opts.clientFactory ?? makeClient
-
-			let stream: AsyncIterable<{type: string}>
+			let result: ProviderStreamResult
 			try {
-				stream = (await client.messages.create({
-					...upstreamBody,
-					stream: true,
-				} as any)) as unknown as AsyncIterable<{type: string}>
+				result = await provider.streamRequest(upstreamBody as any, {
+					authToken: token.accessToken,
+					clientOverride: initialClient,
+				})
 			} catch (err) {
-				const refreshed = await tryRefreshAndRetry<AsyncIterable<{type: string}>>(
+				const refreshed = await tryRefreshAndRetry<ProviderStreamResult>(
 					err,
 					token,
-					makeClientFn,
-					async (c) =>
-						(await c.messages.create({
-							...upstreamBody,
-							stream: true,
-						} as any)) as unknown as AsyncIterable<{type: string}>,
+					(opts.clientFactory ?? makeClient),
+					async (refreshedClient) =>
+						provider.streamRequest(upstreamBody as any, {
+							authToken: token.accessToken, // unused when clientOverride present, but provider type requires it
+							clientOverride: refreshedClient,
+						}),
 				)
 				if (refreshed === null) throw mapApiError(err)
-				stream = refreshed
+				result = refreshed
 			}
+			// Phase 61 Wave 4 (Plan 04) will read result.upstreamHeaders here and
+			// invoke forwardAnthropicHeaders before any chunk write (currently
+			// captured but unused — preserves Phase 58 streaming behavior).
+			void result.upstreamHeaders
 
 			try {
-				for await (const event of stream) {
+				for await (const event of result.stream) {
 					if (res.writableEnded) break
 					const evtType = (event as {type: string}).type
 					res.write(`event: ${evtType}\n`)
@@ -249,17 +282,29 @@ export async function passthroughAnthropicMessages(opts: PassthroughOpts): Promi
 			}
 			if (!res.writableEnded) res.end()
 		} else {
-			let response: any
+			let result: ProviderResponse
 			try {
-				response = await client.messages.create(upstreamBody as any)
-			} catch (err) {
-				const refreshed = await tryRefreshAndRetry(err, token, makeClient, async (c) => {
-					return c.messages.create(upstreamBody as any)
+				result = await provider.request(upstreamBody as any, {
+					authToken: token.accessToken,
+					clientOverride: initialClient,
 				})
+			} catch (err) {
+				const refreshed = await tryRefreshAndRetry<ProviderResponse>(
+					err,
+					token,
+					(opts.clientFactory ?? makeClient),
+					async (refreshedClient) =>
+						provider.request(upstreamBody as any, {
+							authToken: token.accessToken,
+							clientOverride: refreshedClient,
+						}),
+				)
 				if (refreshed === null) throw mapApiError(err)
-				response = refreshed
+				result = refreshed
 			}
-			res.status(200).json(response)
+			// Phase 61 Wave 4 (Plan 04): forwardAnthropicHeaders(result.upstreamHeaders, res) before res.json below
+			void result.upstreamHeaders
+			res.status(200).json(result.raw)
 		}
 	} catch (err) {
 		if (err instanceof UpstreamHttpError) throw err
@@ -430,7 +475,11 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 		`[livinity-broker:passthrough:openai] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true}`,
 	)
 
-	const client = (opts.clientFactory ?? makeClient)(token)
+	// Phase 61 Plan 01 Wave 1: dispatch via BrokerProvider (same pattern as
+	// passthroughAnthropicMessages above — the OpenAI handler still uses
+	// the Anthropic provider; it only translates request/response shape).
+	const provider = getProvider('anthropic')
+	const initialClient = opts.clientFactory ? opts.clientFactory(token) : undefined
 
 	let anthropicBody: UpstreamAnthropicBody
 	try {
@@ -454,7 +503,7 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 			// Phase 58 Wave 3 (FR-BROKER-C2-01..02): true 1:1 delta translation.
 			// Replaces Phase 57's transitional aggregate-then-emit-single-chunk.
 			//
-			// Iterate raw Anthropic SSE events via the SDK async iterator and feed
+			// Iterate raw Anthropic SSE events from provider.streamRequest and feed
 			// each into the Wave 1 translator. Translator writes OpenAI
 			// chat.completion.chunk SSE lines per delta. translator.finalize()
 			// emits the final chunk (with usage object derived from cumulative
@@ -468,6 +517,7 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 			res.setHeader('Cache-Control', 'no-cache, no-transform')
 			res.setHeader('Connection', 'keep-alive')
 			res.setHeader('X-Accel-Buffering', 'no')
+			// Phase 61 Wave 4 (Plan 04): translateAnthropicToOpenAIHeaders(result.upstreamHeaders, res) — MUST precede flushHeaders below
 			res.flushHeaders()
 
 			const translator = createAnthropicToOpenAIStreamTranslator({
@@ -475,31 +525,30 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 				res,
 			})
 
-			const makeClientFn = opts.clientFactory ?? makeClient
-
-			let stream: AsyncIterable<{type: string}>
+			let result: ProviderStreamResult
 			try {
-				stream = (await client.messages.create({
-					...anthropicBody,
-					stream: true,
-				} as any)) as unknown as AsyncIterable<{type: string}>
+				result = await provider.streamRequest(anthropicBody as any, {
+					authToken: token.accessToken,
+					clientOverride: initialClient,
+				})
 			} catch (err) {
-				const refreshed = await tryRefreshAndRetry<AsyncIterable<{type: string}>>(
+				const refreshed = await tryRefreshAndRetry<ProviderStreamResult>(
 					err,
 					token,
-					makeClientFn,
-					async (c) =>
-						(await c.messages.create({
-							...anthropicBody,
-							stream: true,
-						} as any)) as unknown as AsyncIterable<{type: string}>,
+					(opts.clientFactory ?? makeClient),
+					async (refreshedClient) =>
+						provider.streamRequest(anthropicBody as any, {
+							authToken: token.accessToken,
+							clientOverride: refreshedClient,
+						}),
 				)
 				if (refreshed === null) throw mapApiError(err)
-				stream = refreshed
+				result = refreshed
 			}
+			void result.upstreamHeaders // Phase 61 Wave 4 read site
 
 			try {
-				for await (const event of stream) {
+				for await (const event of result.stream) {
 					if (res.writableEnded) break
 					translator.onAnthropicEvent(event as {type: string})
 				}
@@ -515,17 +564,29 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 				if (!res.writableEnded) res.end()
 			}
 		} else {
-			let response: any
+			let result: ProviderResponse
 			try {
-				response = await client.messages.create(anthropicBody as any)
-			} catch (err) {
-				const refreshed = await tryRefreshAndRetry(err, token, makeClient, async (c) => {
-					return c.messages.create(anthropicBody as any)
+				result = await provider.request(anthropicBody as any, {
+					authToken: token.accessToken,
+					clientOverride: initialClient,
 				})
+			} catch (err) {
+				const refreshed = await tryRefreshAndRetry<ProviderResponse>(
+					err,
+					token,
+					(opts.clientFactory ?? makeClient),
+					async (refreshedClient) =>
+						provider.request(anthropicBody as any, {
+							authToken: token.accessToken,
+							clientOverride: refreshedClient,
+						}),
+				)
 				if (refreshed === null) throw mapApiError(err)
-				response = refreshed
+				result = refreshed
 			}
-			const openaiResp = buildOpenAIChatCompletionResponse(response, body.model)
+			// Phase 61 Wave 4 (Plan 04): translateAnthropicToOpenAIHeaders(result.upstreamHeaders, res) before res.json below
+			void result.upstreamHeaders
+			const openaiResp = buildOpenAIChatCompletionResponse(result.raw, body.model)
 			res.status(200).json(openaiResp)
 		}
 	} catch (err) {

@@ -40,12 +40,51 @@ import Anthropic from '@anthropic-ai/sdk'
 const messagesCreate = vi.fn()
 const messagesStreamFinal = vi.fn()
 
+/**
+ * Phase 61 Plan 01 Wave 1 (refactor): the broker now dispatches via
+ * BrokerProvider which invokes `client.messages.create({...}).withResponse()`
+ * to expose upstream Web Fetch Headers. The wrapper below simulates the
+ * Anthropic SDK's APIPromise: it resolves to the same value
+ * `messagesCreate.mockResolvedValue(...)` provides AND exposes a
+ * `.withResponse()` method that resolves to `{data, response}` per the SDK
+ * contract. Existing tests that invoke `messagesCreate.mockResolvedValue(X)`
+ * continue to work — the wrapper auto-shapes X into the {data, response}
+ * envelope on `.withResponse()` calls. Custom Headers can be injected by
+ * setting `messagesCreateHeaders` per-test (default: empty Headers).
+ *
+ * The wrapper is also `then`-able (forwards to the underlying mock promise)
+ * so any caller that uses bare `await client.messages.create(...)` (none
+ * remain in production after the refactor, but the seam remains intact for
+ * any straggler test code).
+ */
+let messagesCreateHeaders: Headers = new Headers()
+
+function setMessagesCreateHeaders(h: Headers): void {
+	messagesCreateHeaders = h
+}
+
 vi.mock('@anthropic-ai/sdk', () => {
 	return {
 		default: vi.fn().mockImplementation((opts: any) => ({
 			_ctorOpts: opts,
 			messages: {
-				create: messagesCreate,
+				create: (...args: unknown[]) => {
+					const underlying = messagesCreate(...args)
+					// `underlying` is whatever the test's mockResolvedValue/mockImplementation
+					// returns — typically a Promise resolving to the Anthropic JSON body
+					// OR an AsyncIterable for streaming. Wrap so .withResponse() returns
+					// {data, response}.
+					return {
+						withResponse: async () => {
+							const data = await Promise.resolve(underlying)
+							return {data, response: {headers: messagesCreateHeaders}}
+						},
+						then: (...thenArgs: any[]) =>
+							Promise.resolve(underlying).then(...(thenArgs as [any, any])),
+						catch: (...catchArgs: any[]) =>
+							Promise.resolve(underlying).catch(...(catchArgs as [any])),
+					}
+				},
 				stream: () => ({finalMessage: messagesStreamFinal}),
 			},
 		})),
