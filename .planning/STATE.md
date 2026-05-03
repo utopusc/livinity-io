@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
 status: completed
-last_updated: "2026-05-03T02:16:13.108Z"
-last_activity: "2026-05-02 — Plan 57-05 executed (Wave 4 — agent-mode byte-identity proof + sacred file final gate); commit `4fc964f8` injects X-Livinity-Mode: agent header into integration.test.ts (10/10 GREEN) + openai-integration.test.ts (8/8 GREEN); sacred SHA byte-identical pre/post; PHASE-SUMMARY.md aggregates Waves 0-4; SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/57-05-SUMMARY.md`; phase rollup at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`"
+last_updated: "2026-05-03T02:24:40.196Z"
+last_activity: 2026-05-02 — Plan 58-01 executed (Wave 1 — TDD OpenAI Stream Translator Core); RED commit `ff066e85` + GREEN commit `62121ccd`; 23/23 unit tests GREEN; SUMMARY at `.planning/phases/58-true-token-streaming/58-01-SUMMARY.md`
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 44
-  completed_plans: 12
-  percent: 27
+  completed_plans: 13
+  percent: 30
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 58 IN PROGRESS — Wave 0 SHIPPED (plan 58-00 complete). Awaiting Waves 1-4.
-Plan: 58-00 SHIPPED 2026-05-03 — Wave 0 test infrastructure for true token streaming. Built `__tests__/fake-anthropic-sse-server.ts` (Express ephemeral-port + CANONICAL_SCRIPT 5 deltas @ 300ms, ~1.6s total) and `clientFactory?` test seam on `PassthroughOpts` + `OpenAIPassthroughOpts`. `makeClient` exported. Compression middleware audit CLEAN (0 matches in server/index.ts — RESEARCH.md A4 confirmed). 6/6 self-tests GREEN, 38/38 Phase 57 regression GREEN. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` stable. openai-sse-adapter.ts byte-identical (two-adapters-coexist). Commits: `070f862e` (test) + `8da22b8d` (feat).
-Status: Phase 58 Wave 0 COMPLETE. 1/5 requirements satisfied (FR-BROKER-C1-02). Wave 1 (translator core) unblocked — can write `openai-stream-translator.test.ts` against synthetic events shaped per CANONICAL_SCRIPT. Wave 4 (integration) unblocked — can wire SDK to fake server via `(token) => new Anthropic({authToken: token.accessToken, baseURL: fake.baseURL})` injected through clientFactory. D-NO-NEW-DEPS preserved.
-Last activity: 2026-05-03 — Plan 58-00 executed (Wave 0 — fake-Anthropic SSE fixture + clientFactory seam + compression audit); commits `070f862e` + `8da22b8d`; SUMMARY at `.planning/phases/58-true-token-streaming/58-00-SUMMARY.md`
+Phase: 58 IN PROGRESS — Waves 0+1 SHIPPED (plans 58-00, 58-01 complete). Awaiting Waves 2-4.
+Plan: 58-01 SHIPPED 2026-05-02 — Wave 1 OpenAI Stream Translator Core (TDD). Built `openai-stream-translator.ts` (285 LOC) — pure-function closure factory consuming Anthropic RawMessageStreamEvent → emitting OpenAI chat.completion.chunk SSE 1:1 per text_delta. Exports `createAnthropicToOpenAIStreamTranslator`, `randomChatCmplId` (crypto.randomBytes-backed `^chatcmpl-[A-Za-z0-9]{29}$` — Phase 57 Pitfall 4 HARDENED), `mapStopReason` (8 known + defensive default). Built `openai-stream-translator.test.ts` (460 LOC, 23 unit cases): TDD RED→GREEN. Cumulative output_tokens behavior LOCKED by 3-message_delta test asserting completion_tokens=20 (NOT 5+12+20=37). Commits: `ff066e85` (test/RED) + `62121ccd` (feat/GREEN). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` stable. openai-sse-adapter.ts byte-identical (two-adapters-coexist). D-NO-NEW-DEPS preserved.
+Status: Phase 58 Waves 0+1 COMPLETE. 4/5 requirements satisfied (FR-BROKER-C1-02 + FR-BROKER-C2-01..03). Wave 3 (OpenAI streaming integration) unblocked — translator factory ready for wire-in at `passthrough-handler.ts:417`. Pattern: `for await (const event of client.messages.stream(...)) translator.onAnthropicEvent(event); translator.finalize()`.
+Last activity: 2026-05-02 — Plan 58-01 executed (Wave 1 — TDD translator core); RED `ff066e85` + GREEN `62121ccd`; SUMMARY at `.planning/phases/58-true-token-streaming/58-01-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 
