@@ -71,33 +71,41 @@ interface CapturedRes {
 }
 
 function makeRes(): Response & CapturedRes {
-	const captured: CapturedRes = {
+	// Wave 2 fix: the captured fields must live ON res so that test assertions
+	// like `res._status` and `res._body` reflect the most recent mutation.
+	// Wave 0's `Object.assign(res, captured)` copied snapshots once at
+	// construction, so subsequent updates to the closure-bound `captured`
+	// object never propagated back to `res` — hence sync-response and
+	// missing-subscription tests saw stale `_status: 200` / `_body: undefined`.
+	const res: any = {
 		_status: 200,
 		_body: undefined,
-		_headers: {},
-		_writes: [],
+		_headers: {} as Record<string, string>,
+		_writes: [] as Array<string | Buffer>,
 		_ended: false,
-	}
-	const res: any = {
 		status(code: number) {
-			captured._status = code
+			res._status = code
 			return res
 		},
 		json(body: any) {
-			captured._body = body
+			res._body = body
 			return res
 		},
 		setHeader(k: string, v: string) {
-			captured._headers[k] = v
+			res._headers[k] = v
+			return res
+		},
+		set(headers: Record<string, string>) {
+			Object.assign(res._headers, headers)
 			return res
 		},
 		write(chunk: string | Buffer) {
-			captured._writes.push(chunk)
+			res._writes.push(chunk)
 			return true
 		},
 		end(chunk?: string | Buffer) {
-			if (chunk !== undefined) captured._writes.push(chunk)
-			captured._ended = true
+			if (chunk !== undefined) res._writes.push(chunk)
+			res._ended = true
 			return res
 		},
 		flushHeaders() {},
@@ -106,7 +114,6 @@ function makeRes(): Response & CapturedRes {
 		},
 		socket: {setNoDelay() {}},
 	}
-	Object.assign(res, captured)
 	return res
 }
 
