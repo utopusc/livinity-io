@@ -1,0 +1,392 @@
+=== PRE-FLIGHT CHECK 1: Phases 56-62 EXECUTED ===
+2026-05-03T07:56:08Z
+OK: Phase 56 dir=.planning/phases/56-research-spike summaries=5 verifications=1 passed=1 human_needed=0
+OK: Phase 57 dir=.planning/phases/57-passthrough-mode-agent-mode summaries=6 verifications=1 passed=1 human_needed=0
+OK: Phase 58 dir=.planning/phases/58-true-token-streaming summaries=6 verifications=1 passed=1 human_needed=0
+OK: Phase 59 dir=.planning/phases/59-bearer-token-auth summaries=6 verifications=1 passed=1 human_needed=0
+BLOCK: Phase 60 has 1 VERIFICATION file(s) with status: human_needed
+OK: Phase 61 dir=.planning/phases/61-spec-compliance-aliases-provider summaries=5 verifications=1 passed=1 human_needed=0
+BLOCK: Phase 62 has 1 VERIFICATION file(s) with status: human_needed
+=== END PRE-FLIGHT CHECK 1 ===
+
+=== PRE-FLIGHT CHECK 1 — DISPOSITION ===
+2026-05-03T07:56:34Z
+Phase 60 + Phase 62 VERIFICATION.md status=human_needed is BY DESIGN — both files explicitly defer their live-behavior UATs to Phase 63 via 'deferred:' frontmatter and 'phase_63_walker_readiness: ready' marker.
+
+Phase 60 deferral metadata:
+phase_63_walker_readiness: ready
+
+Phase 62 deferral metadata:
+deferred:
+    addressed_in: "Phase 63"
+    addressed_in: "Phase 63"
+    addressed_in: "Phase 63"
+    addressed_in: "Phase 63"
+The 4 ROADMAP success criteria describe live behaviors deferred to Phase 63 — they are listed under `deferred:` and `human_verification:` rather than `gaps:` because Phase 63 is the named owner of these UATs (verification battery items 1, 2, 3, 7 in PHASE-SUMMARY.md hand-off).
+
+Conclusion: All 7 phases EXECUTED. Phase 60 + Phase 62 'human_needed' is the EXPECTED hand-off to this phase.
+CHECK 1 final result: GREEN (with deferral hand-off recognized)
+=== END PRE-FLIGHT CHECK 1 DISPOSITION ===
+
+=== PRE-FLIGHT CHECK 2A: Mini PC SSH reachability ===
+2026-05-03T07:56:45Z
+exit_code=255
+=== END PRE-FLIGHT CHECK 2A ===
+
+=== PRE-FLIGHT CHECK 2B: Server5 SSH reachability ===
+2026-05-03T07:57:09Z
+vmi2892422
+root
+ 09:57:11 up 178 days, 20:42,  2 users,  load average: 4.15, 4.18, 4.14
+2026-05-03T07:57:11Z
+---caddy---
+active
+v2.11.2 h1:iOlpsSiSKqEW+SIXrcZsZ/NO74SzB/ycqqvAIEfIm64=
+-rw-r--r-- 1 root root 1410 May  3 07:23 /etc/caddy/Caddyfile
+---api.livinity.io listener---
+LISTEN 0      511                *:8080            *:*    users:(("node",pid=2495841,fd=37))                        
+LISTEN 0      4096               *:80              *:*    users:(("caddy",pid=91372,fd=19))                         
+LISTEN 0      4096               *:443             *:*    users:(("caddy",pid=91372,fd=3))                          
+exit_code=0
+=== END PRE-FLIGHT CHECK 2B ===
+
+=== PRE-FLIGHT CHECK 2C: Sacred file SHA (local) ===
+2026-05-03T07:57:19Z
+expected: 4f868d318abff71f8c8bfbcf443b2393a553018b
+actual:   4f868d318abff71f8c8bfbcf443b2393a553018b
+OK: sacred SHA matches
+=== END PRE-FLIGHT CHECK 2C ===
+
+=== PRE-FLIGHT CHECK 3A: DNS api.livinity.io ===
+2026-05-03T07:57:22Z
+--- local resolver (nslookup) ---
+Non-authoritative answer:
+Server:  unifi.localdomain
+Address:  192.168.20.1
+
+Name:    api.livinity.io
+Address:  45.137.194.102
+
+--- 1.1.1.1 ---
+Non-authoritative answer:
+Server:  one.one.one.one
+Address:  1.1.1.1
+
+Name:    api.livinity.io
+Address:  45.137.194.102
+
+--- expected: 45.137.194.102 (Server5) ---
+=== END PRE-FLIGHT CHECK 3A ===
+
+=== PRE-FLIGHT CHECK 3B: TLS + endpoint ===
+2026-05-03T07:57:30Z
+--- TLS (openssl s_client) ---
+subject=CN=api.livinity.io
+issuer=C=US, O=Let's Encrypt, CN=E8
+New, TLSv1.3, Cipher is TLS_AES_128_GCM_SHA256
+Protocol: TLSv1.3
+Verify return code: 0 (ok)
+    Protocol  : TLSv1.3
+    Cipher    : TLS_AES_128_GCM_SHA256
+    Verify return code: 0 (ok)
+
+--- HEAD /v1/messages ---
+HTTP/1.1 503 Service Unavailable
+Alt-Svc: h3=":443"; ma=2592000
+Content-Type: application/json
+Date: Sun, 03 May 2026 07:57:32 GMT
+Via: 1.1 Caddy
+
+
+--- POST /v1/messages (no auth — expect 401) ---
+HTTP_CODE=503 TIME=0.105267s
+(expected: HTTP_CODE=401 — endpoint live but unauthenticated)
+=== END PRE-FLIGHT CHECK 3B ===
+
+=== PRE-FLIGHT CHECK 3C: Phase 61 alias seed (REQUIRES Mini PC SSH) ===
+2026-05-03T07:57:46Z
+BLOCKED: Cannot probe Mini PC Redis — SSH unreachable per CHECK 2A (connect timeout).
+Phase 61 alias seed verification deferred until Mini PC reachable.
+=== END PRE-FLIGHT CHECK 3C ===
+
+=== PRE-FLIGHT CHECK 3D: Phase 62 Settings UI (REQUIRES live broker via tunnel) ===
+2026-05-03T07:57:46Z
+BLOCKED: Browser smoke test requires bruce.livinity.io reachable, which routes through Server5 → admin tunnel → Mini PC.
+Mini PC unreachable per CHECK 2A → bruce.livinity.io currently 503 (consistent with CHECK 3B endpoint 503).
+Phase 62 UI tab visibility deferred until Mini PC reachable AND update.sh deploys Phase 62 source.
+=== END PRE-FLIGHT CHECK 3D ===
+
+=== AUXILIARY: Server5 → Mini PC tunnel diagnostic (single batched ssh) ===
+2026-05-03T07:57:54Z
+--- relay process ---
+root       93206 1907562  0 07:13 ?        00:01:06 node /opt/platform/relay/src/index.ts
+root       93229   93206  0 07:13 ?        00:00:20 /opt/platform/relay/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.4 --ping
+root     2204231 1907562  0 Mar29 ?        06:06:22 node /opt/platform/marketplace/src/index.ts
+root     2204244 2204231  0 Mar29 ?        01:29:05 /opt/platform/marketplace/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.4 --ping
+root     2495756       1  0 Apr23 ?        00:14:52 /usr/bin/node packages/core/dist/index.js
+--- admin-tunnel listener (port 4000) ---
+LISTEN 0      511                *:4000            *:*    users:(("node /opt/platf",pid=93206,fd=33))               
+--- platform.relay logs tail (looking for Mini PC tunnel registration) ---
+18|relay   |   dataType: undefined,
+18|relay   |   constraint: undefined,
+18|relay   |   file: 'parse_relation.c',
+18|relay   |   line: '3722',
+18|relay   |   routine: 'errorMissingColumn'
+18|relay   | }
+18|relay   | [relay] findAdminTunnel DB error: error: column "role" does not exist
+18|relay   |     at /opt/platform/relay/node_modules/pg-pool/index.js:45:11
+18|relay   |     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+18|relay   |     at async findAdminTunnel (/opt/platform/relay/src/admin-tunnel.ts:43:20)
+18|relay   |     at async Server.<anonymous> (/opt/platform/relay/src/server.ts:220:27) {
+18|relay   |   length: 104,
+18|relay   |   severity: 'ERROR',
+18|relay   |   code: '42703',
+18|relay   |   detail: undefined,
+18|relay   |   hint: undefined,
+18|relay   |   position: '38',
+18|relay   |   internalPosition: undefined,
+18|relay   |   internalQuery: undefined,
+18|relay   |   where: undefined,
+18|relay   |   schema: undefined,
+18|relay   |   table: undefined,
+18|relay   |   column: undefined,
+18|relay   |   dataType: undefined,
+18|relay   |   constraint: undefined,
+18|relay   |   file: 'parse_relation.c',
+18|relay   |   line: '3722',
+18|relay   |   routine: 'errorMissingColumn'
+18|relay   | }
+
+--- platform DB admin tunnel registration ---
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  Peer authentication failed for user "platform"
+exit_code=0
+=== END AUXILIARY ===
+
+=== AUXILIARY 2: Server5 platform DB schema + admin-tunnel.ts inspection ===
+2026-05-03T07:58:20Z
+--- admin-tunnel.ts source on Server5 ---
+/**
+ * Admin Tunnel Resolution
+ *
+ * Phase 60 Wave 2 — used to route `api.livinity.io` traffic. The relay's
+ * `parseSubdomain('api.livinity.io')` returns `{username: 'api'}` which is
+ * NOT a real user; without this helper the relay would fall through to
+ * `serveOfflinePage` (HTML — breaks SDK clients). Instead, we resolve the
+ * admin user's currently-registered tunnel and forward through it.
+ *
+ * Threat-model (RESEARCH.md §"Tunnel Hijack" — STRIDE Spoofing T-60-20):
+ *   Resolution queries by `role = 'admin'` (NOT by username = 'admin').
+ *   Even if a malicious actor registered a username 'admin', they would
+ *   not have role='admin' in the users table — only the actual admin user
+ *   does. Querying by role defeats username-spoofing.
+ *
+ * Single-tenant v30 design: admin tunnel is the broker gateway. If admin
+ * tunnel is offline, ALL `api.livinity.io` traffic 503s. v30+ revisits with
+ * a dedicated `role='broker'` tunnel role for fail-over (RESEARCH.md A4).
+ */
+
+import type http from 'node:http';
+import type pg from 'pg';
+import type { TunnelRegistry, TunnelConnection } from './tunnel-registry.js';
+
+/**
+ * Resolve the admin user's currently-registered tunnel.
+ *
+ * Returns the TunnelConnection if an admin user exists AND has a tunnel
+ * entry in the registry, else null. The caller is responsible for checking
+ * `result.ws.readyState === 1` before forwarding.
+ *
+ * Errors (DB failure / pool absent / no admin row) → null. The caller is
+ * expected to respond with `sendBrokerTunnelOffline` in those cases.
+ */
+export async function findAdminTunnel(
+  registry: TunnelRegistry,
+  pool: pg.Pool | null,
+): Promise<TunnelConnection | null> {
+  if (!pool) return null;
+
+  let adminUserId: string;
+  try {
+    const result = await pool.query<{ id: string; username: string }>(
+      'SELECT id, username FROM users WHERE role = $1 LIMIT 1',
+      ['admin'],
+    );
+    if (result.rows.length === 0) return null;
+    adminUserId = result.rows[0].id;
+  } catch (err) {
+    console.error('[relay] findAdminTunnel DB error:', err);
+    return null;
+  }
+
+  const tunnel = registry.getByUserId(adminUserId);
+  return tunnel ?? null;
+}
+
+/**
+ * Write a 503 JSON Anthropic-spec body for `api.livinity.io` when the admin
+ * tunnel is offline (or admin resolution failed). Use this INSTEAD OF
+ * `serveOfflinePage`, which returns HTML and breaks SDK clients expecting
+ * JSON error envelopes.
+ *
+ * Body shape matches Anthropic Messages API error envelope:
+ *   { type: 'error', error: { type: 'api_error', message: '...' } }
+ */
+export function sendBrokerTunnelOffline(res: http.ServerResponse): void {
+  res.writeHead(503, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    type: 'error',
+    error: { type: 'api_error', message: 'broker tunnel offline' },
+  }));
+}
+
+--- platform DB users schema ---
+                                       Table "public.users"
+           Column           |           Type           | Collation | Nullable |      Default      
+----------------------------+--------------------------+-----------+----------+-------------------
+ id                         | uuid                     |           | not null | gen_random_uuid()
+ username                   | character varying(32)    |           | not null | 
+ email                      | character varying(255)   |           |          | 
+ password_hash              | character varying(255)   |           |          | 
+ email_verified             | boolean                  |           | not null | false
+ created_at                 | timestamp with time zone |           | not null | now()
+ updated_at                 | timestamp with time zone |           | not null | now()
+ email_verification_token   | character varying(255)   |           |          | 
+ email_verification_expires | timestamp with time zone |           |          | 
+ password_reset_token       | character varying(255)   |           |          | 
+ password_reset_expires     | timestamp with time zone |           |          | 
+Indexes:
+    "users_pkey" PRIMARY KEY, btree (id)
+    "users_email_key" UNIQUE CONSTRAINT, btree (email)
+    "users_username_key" UNIQUE CONSTRAINT, btree (username)
+Referenced by:
+    TABLE "api_keys" CONSTRAINT "api_keys_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    TABLE "bandwidth_usage" CONSTRAINT "bandwidth_usage_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    TABLE "devices" CONSTRAINT "devices_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
+    TABLE "sessions" CONSTRAINT "sessions_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    TABLE "tunnel_connections" CONSTRAINT "tunnel_connections_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+
+--- platform DB tables ---
+               List of relations
+ Schema |        Name        | Type  |  Owner   
+--------+--------------------+-------+----------
+ public | api_keys           | table | platform
+ public | apps               | table | platform
+ public | bandwidth_usage    | table | platform
+ public | custom_domains     | table | platform
+ public | device_grants      | table | platform
+ public | devices            | table | platform
+ public | install_history    | table | platform
+ public | sessions           | table | platform
+ public | tunnel_connections | table | platform
+ public | users              | table | platform
+(10 rows)
+
+exit_code=0
+=== END AUXILIARY 2 ===
+
+=== AUXILIARY 3: Platform schema source-of-truth + tunnel_connections state ===
+2026-05-03T07:58:45Z
+--- platform schema files (sql) ---
+/opt/platform/relay/schema.sql
+/opt/platform/relay/src/schema.sql
+/opt/platform/relay/src/src/schema.sql
+/opt/platform/web/src/db/migrations/0005_create_custom_domains.sql
+/opt/platform/web/src/db/migrations/0004_create_devices_tables.sql
+/opt/platform/web/src/db/migrations/0001_seed_apps.sql
+/opt/platform/web/src/db/migrations/0008_device_grants_session_id.sql
+/opt/platform/web/src/db/migrations/0006_add_app_mapping.sql
+/opt/platform/web/src/db/migrations/0007_device_user_id_fk.sql
+/opt/platform/web/src/db/migrations/0009_seed_bolt_diy.sql
+
+--- searching for any role-like column in users ---
+ column_name 
+-------------
+(0 rows)
+
+
+--- current tunnel_connections (any registered Mini PC tunnels?) ---
+ERROR:  column "last_seen_at" does not exist
+LINE 1: SELECT user_id, created_at, last_seen_at FROM tunnel_connect...
+                                    ^
+
+--- which user is the admin (by username) ---
+                  id                  | username |       email       
+--------------------------------------+----------+-------------------
+ 9a746de7-9914-45c6-8d59-fda73f28114c | bruce    | hello@bruceoz.com
+(1 row)
+
+exit_code=0
+=== END AUXILIARY 3 ===
+
+=== AUXILIARY 4: Mini PC SSH retry (single attempt — fail2ban-aware) ===
+2026-05-03T07:59:07Z
+ssh: connect to host 10.69.31.68 port 22: Connection timed out
+exit_code=255
+=== END AUXILIARY 4 ===
+
+=== AUXILIARY 5: Probe Mini PC IP via Server5 (LAN-side reachability check) ===
+2026-05-03T07:59:15Z
+--- Server5 cannot directly reach Mini PC LAN IP 10.69.31.68 (private), but tunnel registry tells us if it ever connected) ---
+                                   Table "public.tunnel_connections"
+     Column      |           Type           | Collation | Nullable |              Default              
+-----------------+--------------------------+-----------+----------+-----------------------------------
+ id              | uuid                     |           | not null | gen_random_uuid()
+ user_id         | uuid                     |           | not null | 
+ session_id      | character varying(64)    |           | not null | 
+ status          | character varying(20)    |           | not null | 'disconnected'::character varying
+ connected_at    | timestamp with time zone |           |          | 
+ disconnected_at | timestamp with time zone |           |          | 
+ client_version  | character varying(32)    |           |          | 
+ client_ip       | inet                     |           |          | 
+ created_at      | timestamp with time zone |           | not null | now()
+Indexes:
+    "tunnel_connections_pkey" PRIMARY KEY, btree (id)
+    "tunnel_connections_session_id_key" UNIQUE CONSTRAINT, btree (session_id)
+    "tunnel_connections_user_id_key" UNIQUE CONSTRAINT, btree (user_id)
+Foreign-key constraints:
+    "tunnel_connections_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+--- recent tunnel_connections rows ---
+ user_id | created_at 
+---------+------------
+(0 rows)
+
+exit_code=0
+=== END AUXILIARY 5 ===
+
+=== PHASE 63 PRE-FLIGHT VERDICT ===
+2026-05-03T07:59:53Z
+
+CHECK 1 (Phases 56-62 EXECUTED):       GREEN — all 7 phases have SUMMARY + VERIFICATION; Phase 60 + 62 'human_needed' is BY DESIGN (deferred to Phase 63 via 'deferred:' / 'phase_63_walker_readiness: ready' frontmatter)
+CHECK 2A (Mini PC SSH):                 BLOCK — connect timed out (no fail2ban error message; pure network unreachable); 2 attempts both timeout. Mini PC is OFFLINE or unreachable from orchestrator network.
+CHECK 2B (Server5 SSH):                 GREEN — hostname=vmi2892422, caddy active v2.11.2, ports 80/443/4000 listening, exit 0
+CHECK 2C (Sacred file SHA local):       GREEN — actual=4f868d318abff71f8c8bfbcf443b2393a553018b matches expected (D-30-07 preserved)
+CHECK 3A (DNS api.livinity.io):         GREEN — both local resolver and 1.1.1.1 return 45.137.194.102 (Server5)
+CHECK 3B (TLS + endpoint reachable):    PARTIAL — TLS valid (LE E8 / Verify return code: 0); endpoint returns HTTP 503 NOT 401. Two root causes:
+                                         (a) Mini PC offline (CHECK 2A)
+                                         (b) PHASE 60 PRODUCTION DEFECT — relay 'findAdminTunnel' query 'SELECT id, username FROM users WHERE role=$1' fails on EVERY request because platform.users has NO role column (psql \d users → 11 columns, zero role-like). Relay logs show 'errorMissingColumn: column "role" does not exist' at admin-tunnel.ts:43. This means even when Mini PC reconnects, api.livinity.io will continue returning 503 until the query is hot-patched.
+CHECK 3C (Phase 61 alias seed):         BLOCK — cannot probe (Mini PC SSH unreachable per CHECK 2A)
+CHECK 3D (Phase 62 UI tab visible):     BLOCK — bruce.livinity.io routes through Mini PC (offline) AND through the broken findAdminTunnel path
+
+OVERALL: BLOCK — Phase 63 STOPS. Three remediation tasks required BEFORE Wave 1:
+
+  R1 — PHASE 60 HOT-PATCH (architectural defect):
+       File: platform/relay/src/admin-tunnel.ts:43
+       Fix: Replace 'WHERE role = $1' query with the actual single-tenant identifier.
+       Options: (a) hardcode 'WHERE username = $1' with 'admin' / 'bruce' (single-tenant v30 design per admin-tunnel.ts header comment); (b) add 'role text NOT NULL DEFAULT \'user\'' column to platform.users + UPDATE bruce SET role='admin'.
+       Recommendation: Option (a) — least-invasive, matches existing schema, single-tenant v30 design intent. The T-60-20 'username-spoofing' threat is moot when (i) signup is closed (single admin user) AND (ii) the admin user is identified by a hard-coded username constant in source.
+       Owner: Phase 60 hot-patch plan (new) OR amended into Phase 63 Wave 1 deploy as a prerequisite step.
+
+  R2 — Mini PC online + reachable from orchestrator:
+       Verify Mini PC powered on, on LAN, fail2ban not banning orchestrator IP.
+       After hardware/network restored, re-run CHECK 2A.
+
+  R3 — Mini PC bash /opt/livos/update.sh:
+       Per Phase 60 + 62 verifier hand-off — deploys Phase 60-04 broker IP-guard removal + Phase 61 (rate-limit headers + alias seed) + Phase 62 (schema migration + UI).
+       After deploy, CHECK 3C (alias seed ≥10) and CHECK 3D (Settings UI tab) become probeable.
+
+DO NOT proceed to Wave 1 (63-02) until R1 + R2 + R3 complete and a re-run of this Wave 0 plan returns OVERALL: GREEN.
+DO NOT pass --accept-debt at v30.0 close — R1 is a real production defect that must be fixed.
+
+=== END VERDICT ===
