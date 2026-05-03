@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: "Phase 57 COMPLETE — all 5 waves shipped (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across every wave + end-of-phase. Passthrough mode is now DEFAULT for both /v1/messages (Anthropic) and /v1/chat/completions (OpenAI); agent mode is OPT-IN via X-Livinity-Mode: agent header and proven byte-identical to v29.5 by Wave 4's 18-assertion integration tests. 95 broker tests GREEN (38 vitest + 57 legacy node-script). D-NO-NEW-DEPS preserved across all 5 waves. Ready for Phase 58 (true token streaming)."
-last_updated: "2026-05-02T19:07:00.000Z"
-last_activity: 2026-05-02 — Plan 57-05 executed (Wave 4 — agent-mode byte-identity proof + sacred file final gate); commit `4fc964f8` injects X-Livinity-Mode: agent header into integration.test.ts (10/10 GREEN) + openai-integration.test.ts (8/8 GREEN); sacred SHA byte-identical pre/post; PHASE-SUMMARY.md aggregates Waves 0-4; SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/57-05-SUMMARY.md`; phase rollup at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`
+status: completed
+last_updated: "2026-05-03T02:16:13.108Z"
+last_activity: "2026-05-02 — Plan 57-05 executed (Wave 4 — agent-mode byte-identity proof + sacred file final gate); commit `4fc964f8` injects X-Livinity-Mode: agent header into integration.test.ts (10/10 GREEN) + openai-integration.test.ts (8/8 GREEN); sacred SHA byte-identical pre/post; PHASE-SUMMARY.md aggregates Waves 0-4; SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/57-05-SUMMARY.md`; phase rollup at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`"
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 44
-  completed_plans: 9
-  percent: 22
+  completed_plans: 12
+  percent: 27
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 57 COMPLETE (all 5 waves shipped: 57-01, 57-02, 57-03, 57-04, 57-05); awaiting Phase 58 (True Token Streaming — C1+C2)
-Plan: 57-05 SHIPPED 2026-05-02 (commit `4fc964f8` — header injection only). ZERO production code modified in Wave 4. 18 v29.5 broker integration assertions (10 Anthropic + 8 OpenAI) all GREEN with X-Livinity-Mode: agent header. Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical pre-flight + end-of-phase across all 5 waves. Sacred file integrity test PASS. PHASE-SUMMARY.md aggregates Waves 0-4 with per-requirement closure map (6/6 satisfied) + Phase 58 hand-off notes.
-Status: Phase 57 COMPLETE — all 5 waves shipped (57-01..05). 6/6 requirements satisfied (FR-BROKER-A1-01..04 + FR-BROKER-A2-01..02). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across every wave + end-of-phase. Passthrough mode is now DEFAULT for both /v1/messages (Anthropic) and /v1/chat/completions (OpenAI); agent mode is OPT-IN via X-Livinity-Mode: agent header and proven byte-identical to v29.5 by Wave 4's 18-assertion integration tests. 95 broker tests GREEN (38 vitest + 57 legacy node-script). D-NO-NEW-DEPS preserved across all 5 waves. Ready for Phase 58 (true token streaming).
-Last activity: 2026-05-02 — Plan 57-05 executed (Wave 4 — agent-mode byte-identity proof + sacred file final gate); commit `4fc964f8` injects X-Livinity-Mode: agent header into integration.test.ts (10/10 GREEN) + openai-integration.test.ts (8/8 GREEN); sacred SHA byte-identical pre/post; PHASE-SUMMARY.md aggregates Waves 0-4; SUMMARY at `.planning/phases/57-passthrough-mode-agent-mode/57-05-SUMMARY.md`; phase rollup at `.planning/phases/57-passthrough-mode-agent-mode/PHASE-SUMMARY.md`
+Phase: 58 IN PROGRESS — Wave 0 SHIPPED (plan 58-00 complete). Awaiting Waves 1-4.
+Plan: 58-00 SHIPPED 2026-05-03 — Wave 0 test infrastructure for true token streaming. Built `__tests__/fake-anthropic-sse-server.ts` (Express ephemeral-port + CANONICAL_SCRIPT 5 deltas @ 300ms, ~1.6s total) and `clientFactory?` test seam on `PassthroughOpts` + `OpenAIPassthroughOpts`. `makeClient` exported. Compression middleware audit CLEAN (0 matches in server/index.ts — RESEARCH.md A4 confirmed). 6/6 self-tests GREEN, 38/38 Phase 57 regression GREEN. Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` stable. openai-sse-adapter.ts byte-identical (two-adapters-coexist). Commits: `070f862e` (test) + `8da22b8d` (feat).
+Status: Phase 58 Wave 0 COMPLETE. 1/5 requirements satisfied (FR-BROKER-C1-02). Wave 1 (translator core) unblocked — can write `openai-stream-translator.test.ts` against synthetic events shaped per CANONICAL_SCRIPT. Wave 4 (integration) unblocked — can wire SDK to fake server via `(token) => new Anthropic({authToken: token.accessToken, baseURL: fake.baseURL})` injected through clientFactory. D-NO-NEW-DEPS preserved.
+Last activity: 2026-05-03 — Plan 58-00 executed (Wave 0 — fake-Anthropic SSE fixture + clientFactory seam + compression audit); commits `070f862e` + `8da22b8d`; SUMMARY at `.planning/phases/58-true-token-streaming/58-00-SUMMARY.md`
 
 ## v30.0 Roadmap Snapshot
 

@@ -48,7 +48,8 @@ External API consumers expect `Authorization: Bearer <key>` and a public endpoin
 External clients depend on byte-level spec compliance for streaming and rate-limit headers. Today the broker emits 1-2 aggregate chunks; clients see "non-streaming" or 504.
 
 - [ ] **FR-BROKER-C1-01** — Anthropic Messages broker (`/v1/messages`) in passthrough mode emits the full Anthropic SSE event sequence verbatim from the upstream Anthropic API: `event: message_start`, `event: content_block_start`, `event: content_block_delta` (one per delta token group), `event: content_block_stop`, `event: message_delta`, `event: message_stop`. No payload mutation.
-- [ ] **FR-BROKER-C1-02** — A token-streaming integration test asserts the broker emits ≥3 distinct `content_block_delta` events for any prompt expected to take longer than 2 seconds (chunked output, NOT a single aggregate chunk).
+- [x] **FR-BROKER-C1-02
+** — A token-streaming integration test asserts the broker emits ≥3 distinct `content_block_delta` events for any prompt expected to take longer than 2 seconds (chunked output, NOT a single aggregate chunk).
 - [ ] **FR-BROKER-C2-01** — OpenAI Chat Completions broker (`/v1/chat/completions`) translates Anthropic SSE → OpenAI `chat.completion.chunk` events 1:1 as deltas arrive. Each Anthropic `content_block_delta` produces exactly one OpenAI delta chunk; final `message_delta` produces the `finish_reason` chunk; `message_stop` produces `data: [DONE]\n\n`.
 - [ ] **FR-BROKER-C2-02** — OpenAI streaming emits a `usage` object on the FINAL chunk (before `[DONE]`) with non-zero `prompt_tokens`, `completion_tokens`, `total_tokens`. Builds on v29.5 commit `2518cf91` plumbing.
 - [ ] **FR-BROKER-C2-03** — OpenAI sync (non-streaming) `/v1/chat/completions` returns a complete OpenAI response shape with `id` formatted as `chatcmpl-<base62-29>`, `object: "chat.completion"`, `choices`, and non-zero `usage` fields.
