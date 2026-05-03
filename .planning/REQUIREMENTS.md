@@ -45,7 +45,8 @@ External API consumers expect `Authorization: Bearer <key>` and a public endpoin
 - [x] **FR-BROKER-B2-01
 
 ** — A public endpoint `api.livinity.io` is reachable from the open internet via Server5. TLS terminates at Server5 (Caddy or CF Worker — Phase 56 spike picks). Container IP guard is REMOVED from broker (Bearer auth replaces it).
-- [ ] **FR-BROKER-B2-02
+- [x] **FR-BROKER-B2-02
+
 ** — A rate-limit perimeter at Server5 enforces a baseline limit (default = the user's Anthropic subscription rate forwarded transparently; broker-side token-bucket TBD pending Phase 56 spike). 429s use Anthropic-compat error shape.
 
 ### C — Spec Compliance (True Token Streaming + Rate Limit Headers)
