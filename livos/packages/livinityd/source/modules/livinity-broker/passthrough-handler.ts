@@ -365,10 +365,14 @@ interface UpstreamAnthropicBody {
  *     content-block translation which is out of scope for Phase 57).
  *   - Tools are shape-translated via translateToolsToAnthropic (verbatim
  *     forward — D-30-02 reverses D-42-12 warn-and-ignore for passthrough).
- *   - Model is resolved via resolveModelAlias (gpt-* → claude-sonnet-4-6 etc.)
- *     so OpenAI clients can target the broker by their familiar names.
+ *   - Phase 61 Plan 03: model alias resolution is now async (Redis-backed)
+ *     and lives in the caller passthroughOpenAIChatCompletions; the resolved
+ *     `actualModel` is passed in here so this builder stays pure-sync.
  */
-function buildAnthropicBodyFromOpenAI(body: OpenAIChatCompletionsRequest): UpstreamAnthropicBody {
+function buildAnthropicBodyFromOpenAI(
+	body: OpenAIChatCompletionsRequest,
+	actualModel: string,
+): UpstreamAnthropicBody {
 	const systemMessages = body.messages.filter((m) => m.role === 'system')
 	const conversationMessages = body.messages.filter(
 		(m) => m.role !== 'system' && m.role !== 'tool' && m.role !== 'function',
@@ -382,8 +386,6 @@ function buildAnthropicBodyFromOpenAI(body: OpenAIChatCompletionsRequest): Upstr
 					)
 					.join('\n\n')
 			: undefined
-
-	const {actualModel} = resolveModelAlias(body.model)
 
 	const upstream: UpstreamAnthropicBody = {
 		model: actualModel,
@@ -471,8 +473,19 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 		return
 	}
 
+	// Phase 61 Plan 03 D1 — async Redis-backed alias resolution. Caller logs
+	// the requested→resolved mapping (and any warn for unknown aliases). The
+	// hardcoded fallback inside resolveModelAlias keeps this resilient if
+	// Redis is down — we never 5xx purely because of a Redis blip.
+	const {actualModel, warn: aliasWarn} = await resolveModelAlias(livinityd.ai.redis, body.model)
+	if (aliasWarn) {
+		livinityd.logger.log(
+			`[livinity-broker:passthrough:openai] WARN unknown model '${body.model}' → ${actualModel}`,
+		)
+	}
+
 	livinityd.logger.log(
-		`[livinity-broker:passthrough:openai] mode=passthrough user=${userId} model=${body.model} stream=${body.stream === true}`,
+		`[livinity-broker:passthrough:openai] mode=passthrough user=${userId} requestedModel=${body.model} actualModel=${actualModel} stream=${body.stream === true}`,
 	)
 
 	// Phase 61 Plan 01 Wave 1: dispatch via BrokerProvider (same pattern as
@@ -483,7 +496,7 @@ export async function passthroughOpenAIChatCompletions(opts: OpenAIPassthroughOp
 
 	let anthropicBody: UpstreamAnthropicBody
 	try {
-		anthropicBody = buildAnthropicBodyFromOpenAI(body)
+		anthropicBody = buildAnthropicBodyFromOpenAI(body, actualModel)
 	} catch (err: any) {
 		// Translation failure (e.g. unsupported tool type, missing function.name)
 		// — surface as an OpenAI invalid_request_error 400 so the client knows

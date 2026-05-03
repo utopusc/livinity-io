@@ -157,7 +157,17 @@ function makeRes(): Response & CapturedRes {
 }
 
 function makeLivinityd(): any {
-	return {logger: {log: vi.fn()}}
+	// Phase 61 Plan 03: passthroughOpenAIChatCompletions calls
+	// resolveModelAlias(livinityd.ai.redis, body.model). Mock with a fake
+	// Redis whose get() returns null — the resolver then either passes
+	// `claude-*` model IDs through verbatim (no warn) or falls through to
+	// the hardcoded `claude-sonnet-4-6` default (warn=true, log absorbed by
+	// the same mock logger). Behaviour matches the pre-Plan-03 sync resolver
+	// for the model strings used in these tests.
+	return {
+		logger: {log: vi.fn()},
+		ai: {redis: {async get() { return null }}},
+	}
 }
 
 const SAMPLE_MESSAGE = {

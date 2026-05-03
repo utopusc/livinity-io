@@ -4,7 +4,22 @@ import {
 	translateOpenAIChatToSdkArgs,
 	buildSyncOpenAIResponse,
 } from './openai-translator.js'
+import {_resetAliasCacheForTest} from './alias-resolver.js'
+import {DEFAULT_ALIASES} from './seed-default-aliases.js'
 import type {AgentResult} from '@nexus/core'
+
+// Phase 61 Plan 03 — `resolveModelAlias` is now async + Redis-backed (re-exported
+// from openai-translator.js for backward-compat with existing imports). The
+// canonical exhaustive resolver coverage lives in __tests__/alias-resolver.test.ts;
+// the block below is a slim smoke test that the re-export shim works AND that
+// the post-Plan-03 default-alias semantics still hit the same Claude family.
+function makeFakeRedisWithDefaults(): {get(k: string): Promise<string | null>} {
+	const store = new Map<string, string>()
+	for (const [alias, target] of Object.entries(DEFAULT_ALIASES)) {
+		store.set(`livinity:broker:alias:${alias}`, target)
+	}
+	return {async get(k: string) { return store.has(k) ? store.get(k)! : null }}
+}
 
 function ok(label: string) {
 	console.log(`  PASS ${label}`)
@@ -24,62 +39,76 @@ function makeResult(overrides: Partial<AgentResult> = {}): AgentResult {
 }
 
 async function runTests() {
-	// --- resolveModelAlias ---
+	// --- resolveModelAlias (Phase 61 Plan 03 — re-exported async shim) ---
+	// Reset the resolver's in-memory TTL cache between blocks so each block
+	// starts from a clean slate (otherwise a stale entry from a prior block
+	// could mask a regression in the new lookup path).
 	{
-		for (const m of ['gpt-4', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo', 'gpt-5']) {
-			const r = resolveModelAlias(m)
-			assert.equal(r.actualModel, 'claude-sonnet-4-6', `${m} → claude-sonnet-4-6`)
-			assert.equal(r.warn, false, `${m} → no warn`)
+		_resetAliasCacheForTest()
+		const redis = makeFakeRedisWithDefaults()
+		// All gpt-* names that ARE in DEFAULT_ALIASES resolve via Redis hit.
+		// Plan-author override per RESEARCH.md A2: gpt-4 / gpt-4o → Sonnet
+		// (NOT Opus per CONTEXT.md), preserving existing v29.3 behaviour.
+		for (const m of ['gpt-4', 'gpt-4o', 'gpt-3.5-turbo']) {
+			const r = await resolveModelAlias(redis, m)
+			assert.equal(r.warn, false, `${m} → no warn (seeded)`)
+			assert.ok(
+				r.actualModel.startsWith('claude-'),
+				`${m} → resolves to a real Claude model (got ${r.actualModel})`,
+			)
 		}
-		ok('Test 1: gpt-* → claude-sonnet-4-6, no warn')
+		ok('Test 1: seeded gpt-* aliases resolve via Redis without warn')
 	}
 	{
-		for (const m of ['claude-sonnet-4-6', 'claude-sonnet-3-5']) {
-			const r = resolveModelAlias(m)
-			assert.equal(r.actualModel, 'claude-sonnet-4-6')
+		_resetAliasCacheForTest()
+		const redis = makeFakeRedisWithDefaults()
+		// claude-* prefix passthrough — verbatim, no warn (resolver step 3).
+		// This is the new "trust the caller knows the model ID" semantic.
+		for (const m of ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5-20251001']) {
+			const r = await resolveModelAlias(redis, m)
+			assert.equal(r.actualModel, m, `${m} → verbatim passthrough`)
 			assert.equal(r.warn, false)
 		}
-		ok('Test 2: claude-sonnet* → claude-sonnet-4-6')
+		ok('Test 2: claude-* prefix passes through verbatim, no warn')
 	}
 	{
-		// Phase 42.2: claude-opus* → latest 4-7 (was 4-6)
-		for (const m of ['claude-opus', 'claude-opus-4-7', 'claude-opus-4-6', 'claude-opus-x']) {
-			const r = resolveModelAlias(m)
-			assert.equal(r.actualModel, 'claude-opus-4-7', `${m} → claude-opus-4-7`)
-			assert.equal(r.warn, false)
-		}
-		ok('Test 3: claude-opus* → claude-opus-4-7 (Phase 42.2)')
+		_resetAliasCacheForTest()
+		const redis = makeFakeRedisWithDefaults()
+		// Friendly short aliases hit Redis (seeded with DEFAULT_ALIASES).
+		assert.equal((await resolveModelAlias(redis, 'opus')).actualModel, 'claude-opus-4-7')
+		assert.equal((await resolveModelAlias(redis, 'sonnet')).actualModel, 'claude-sonnet-4-6')
+		assert.equal(
+			(await resolveModelAlias(redis, 'haiku')).actualModel,
+			'claude-haiku-4-5-20251001',
+		)
+		ok('Test 3: friendly aliases opus/sonnet/haiku → seeded Claude family ID')
 	}
 	{
-		for (const m of ['claude-haiku', 'claude-haiku-4-5']) {
-			const r = resolveModelAlias(m)
-			assert.equal(r.actualModel, 'claude-haiku-4-5')
-			assert.equal(r.warn, false)
-		}
-		ok('Test 4: claude-haiku* → claude-haiku-4-5')
+		_resetAliasCacheForTest()
+		const redis = makeFakeRedisWithDefaults()
+		// Legacy claude-3-* aliases — seeded in DEFAULT_ALIASES.
+		assert.equal(
+			(await resolveModelAlias(redis, 'claude-3-opus')).actualModel,
+			'claude-opus-4-7',
+		)
+		assert.equal(
+			(await resolveModelAlias(redis, 'claude-3-sonnet')).actualModel,
+			'claude-sonnet-4-6',
+		)
+		assert.equal(
+			(await resolveModelAlias(redis, 'claude-3-haiku')).actualModel,
+			'claude-haiku-4-5-20251001',
+		)
+		ok('Test 4: legacy claude-3-* aliases resolve via Redis seed')
 	}
 	{
-		// Phase 42.2: friendly short aliases
-		assert.equal(resolveModelAlias('opus').actualModel, 'claude-opus-4-7')
-		assert.equal(resolveModelAlias('sonnet').actualModel, 'claude-sonnet-4-6')
-		assert.equal(resolveModelAlias('haiku').actualModel, 'claude-haiku-4-5')
-		assert.equal(resolveModelAlias('opus').warn, false)
-		assert.equal(resolveModelAlias('sonnet').warn, false)
-		assert.equal(resolveModelAlias('haiku').warn, false)
-		ok('Test 4b: friendly aliases opus/sonnet/haiku → latest of each tier (Phase 42.2)')
-	}
-	{
-		// Phase 42.2: legacy claude-3-* family → modern equivalent
-		assert.equal(resolveModelAlias('claude-3-5-sonnet').actualModel, 'claude-sonnet-4-6')
-		assert.equal(resolveModelAlias('claude-3-opus-20240229').actualModel, 'claude-opus-4-7')
-		assert.equal(resolveModelAlias('claude-3-haiku-20240307').actualModel, 'claude-haiku-4-5')
-		ok('Test 4c: legacy claude-3-* → modern 4.X equivalent (Phase 42.2)')
-	}
-	{
-		const r = resolveModelAlias('foobar-llm-9000')
+		_resetAliasCacheForTest()
+		const redis = makeFakeRedisWithDefaults()
+		// Unknown alias → warn + falls through to default (Sonnet).
+		const r = await resolveModelAlias(redis, 'foobar-llm-9000')
 		assert.equal(r.actualModel, 'claude-sonnet-4-6')
 		assert.equal(r.warn, true, 'unknown model → warn=true')
-		ok('Test 5: unknown → claude-sonnet-4-6 + warn=true')
+		ok('Test 5: unknown → default fallback (claude-sonnet-4-6) + warn=true')
 	}
 
 	// --- translateOpenAIChatToSdkArgs ---

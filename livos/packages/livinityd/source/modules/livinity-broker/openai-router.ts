@@ -184,9 +184,9 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 			return
 		}
 
-		// 5. Model alias resolution (D-42-11)
+		// 5. Model alias resolution (D-42-11 → Phase 61 Plan 03 D1: now Redis-backed via alias-resolver.ts)
 		const requestedModel = body.model
-		const {actualModel, warn} = resolveModelAlias(requestedModel)
+		const {actualModel, warn} = await resolveModelAlias(deps.livinityd.ai.redis, requestedModel)
 		if (warn) {
 			deps.livinityd.logger.log(
 				`[livinity-broker:openai] WARN unknown model '${requestedModel}' — defaulting to ${actualModel}`,
