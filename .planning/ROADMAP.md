@@ -42,7 +42,7 @@
 
 **Phase summary:**
 
-- [ ] **Phase 56: Research Spike (Passthrough Architecture + Public Endpoint + Auth Patterns)** — Mandatory research-only phase. Answers the 7 open questions. No requirements assigned (produces decisions, not code).
+- [x] **Phase 56: Research Spike (Passthrough Architecture + Public Endpoint + Auth Patterns)** — SHIPPED 2026-05-02. 4/4 plans complete. 9 D-30-XX decisions locked. SPIKE-FINDINGS.md canonical answer document at `.planning/phases/56-research-spike/SPIKE-FINDINGS.md`; phase summary at `PHASE-SUMMARY.md`. Sacred SHA stable.
 - [ ] **Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In** — Default broker behavior bypasses Agent SDK; agent mode is opt-in via header or path. Sacred file untouched.
 - [ ] **Phase 58: C1+C2 True Token Streaming (Anthropic + OpenAI)** — Anthropic SSE forwarded verbatim; OpenAI translation adapter rewritten as 1:1 delta translator with usage chunk.
 - [ ] **Phase 59: B1 Per-User Bearer Token Auth (`liv_sk_*`)** — `api_keys` PG table + middleware + revocation lifecycle.
@@ -71,7 +71,7 @@ Plans:
 - [x] 56-01-PLAN.md — Architectural Verdicts (Q1 SDK-direct vs HTTP-proxy + Q2 tools forwarding + Q7 agent-mode streaming) — SHIPPED 2026-05-02 (commit `2aaf6d2c`)
 - [x] 56-02-PLAN.md — Auth & Public Endpoint Verdicts (Q3 agent-mode opt-in + Q4 Caddy vs CF Worker + Q5 key rotation + Q6 rate-limit) — SHIPPED 2026-05-02 (commits `4f452bd0` Q3+Q5, `3919271a` Q4, `f4eb0e4f` Q6)
 - [x] 56-03-PLAN.md — Cross-Cut Audits (D-NO-NEW-DEPS + Sacred SHA stability + D-51-03 re-evaluation) — SHIPPED 2026-05-02 (commit `60d4b202`); D-NO-NEW-DEPS YELLOW (npm-clean; Caddy/xcaddy non-npm infra delta flagged for Phase 60); sacred SHA stable; D-51-03 verdict "Not needed in v30"
-- [ ] 56-04-PLAN.md — SPIKE-FINDINGS.md synthesis (Executive Summary + Decisions Log + Validation)
+- [x] 56-04-PLAN.md — SPIKE-FINDINGS.md synthesis (Executive Summary + Decisions Log + Validation) — SHIPPED 2026-05-02 (commit `c77b2b1d`); 9 D-30-XX decisions logged; validation table all 7 PASS; sacred SHA stable
 
 ### Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In
 **Goal**: External clients hitting `/v1/messages` and `/v1/chat/completions` get a transparent forward to the upstream Anthropic API with their own `system` prompt and their own `tools[]` preserved verbatim — no Nexus identity, no Nexus MCP tools. LivOS in-app chat keeps the existing Agent-SDK-tooled experience by opting into agent mode.

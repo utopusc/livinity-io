@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Livinity Broker Professionalization
-status: in-progress — 56-03 cross-cuts complete; 56-04 synthesis next. Cross-Cuts section appended to SPIKE-FINDINGS.md (D-NO-NEW-DEPS YELLOW; sacred SHA stable; D-51-03 verdict: Not needed in v30).
-last_updated: "2026-05-02T23:55:00Z"
-last_activity: 2026-05-02 — 56-03 plan executed; Cross-Cuts section appended to SPIKE-FINDINGS.md (D-NO-NEW-DEPS verdict YELLOW with two non-npm Caddy/xcaddy infra deps flagged for Phase 60; sacred SHA stability PASS unchanged at `4f868d318abff71f8c8bfbcf443b2393a553018b`; D-51-03 re-evaluated as "Not needed in v30" with v30.1+ D-30-XX safety net retained); notes-cross-cuts.md created with raw audit data; sacred file UNTOUCHED across all three 56-03 tasks
+status: in-progress — Phase 56 spike COMPLETE (4/4 plans). 9 D-30-XX decisions locked; SPIKE-FINDINGS.md reorganized to 5 canonical sections; sacred SHA stable. Awaiting `/gsd-discuss-phase 57` to start passthrough implementation.
+last_updated: "2026-05-02T23:59:00Z"
+last_activity: 2026-05-02 — 56-04 synthesis plan executed (commit `c77b2b1d`); SPIKE-FINDINGS.md reorganized with Executive Summary at top + Q1->Q7 sequential ordering + Cross-Cuts + Decisions Log (9 D-30-XX entries) + Validation table (all 7 Q-rows PASS); 56-04-SUMMARY.md + PHASE-SUMMARY.md created; sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` confirmed unchanged (byte-identical across all 11 task boundaries of Phase 56); zero TBD rows in SPIKE-FINDINGS.md
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 44
-  completed_plans: 3
-  percent: 7
+  completed_plans: 4
+  percent: 9
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-05-02 — v30.0 milestone started)
 
 ## Current Position
 
-Phase: 56 (Research Spike — Passthrough Architecture + Public Endpoint + Auth Patterns) — IN PROGRESS, 3/4 plans complete
-Plan: 56-03 COMPLETE (2026-05-02); 56-04 next (synthesis — Phase 56 master decisions roll-up + ROADMAP confirmation + Phase 57+ implementation guidance)
-Status: SPIKE-FINDINGS.md has all 7 question verdicts AND the Cross-Cuts section. D-NO-NEW-DEPS YELLOW (npm-clean; non-npm Caddy/xcaddy infra delta flagged for Phase 60). Sacred SHA stable at `4f868d318abff71f8c8bfbcf443b2393a553018b` (unchanged across all three 56-x plans). D-51-03 re-evaluated as "Not needed in v30" — Q1 passthrough bypasses sacred file structurally for external clients; Q7 confirms agent mode is acceptable; v30.1+ D-30-XX safety net retained. Plan 56-04 synthesis still pending (final decisions log roll-up, Phase 57+ unblock).
-Last activity: 2026-05-02 — 56-03 plan executed; Cross-Cuts section appended to SPIKE-FINDINGS.md with three subsections (D-NO-NEW-DEPS Audit + Sacred File SHA Stability + D-51-03 Re-Evaluation); notes-cross-cuts.md created with raw audit data and reasoning trace; D-30-01 placeholder decision logged (final number assigned in 56-04); sacred file SHA confirmed unchanged at `4f868d318abff71f8c8bfbcf443b2393a553018b` (sacred file never read or written by any 56-03 task)
+Phase: 56 complete; awaiting `/gsd-discuss-phase 57`
+Plan: 56-04 SHIPPED 2026-05-02 (commit `c77b2b1d`); SPIKE-FINDINGS.md reorganized to 5 canonical sections; 9 D-30-XX decisions locked; phase ready for sign-off
+Status: Phase 56 spike CLOSED. SPIKE-FINDINGS.md has Executive Summary (top) + Q1->Q7 verdicts (sequential numerical order) + Cross-Cuts (D-NO-NEW-DEPS YELLOW + Sacred SHA Stability PASS + D-51-03 Re-Evaluation Not-needed-in-v30) + Decisions Log (D-30-01..D-30-09) + Validation table (all 7 Q-rows PASS for file:line + URL + alternatives evidence). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 11 task boundaries. Phase 57-63 unblocked: Phases 57+59 ready to start in parallel; Phase 60 carries YELLOW (must budget xcaddy + caddy-ratelimit per D-30-09).
+Last activity: 2026-05-02 — 56-04 synthesis plan executed; SPIKE-FINDINGS.md reorganized; 56-04-SUMMARY.md + PHASE-SUMMARY.md created; D-30-01..D-30-09 appended to Locked Decisions section below; STATE.md current position bumped to phase-56-complete; ROADMAP.md update pending in next commit
 
 ## v30.0 Roadmap Snapshot
 
 | Phase | Goal                                                                | Reqs                              | Depends on            |
 |-------|---------------------------------------------------------------------|-----------------------------------|-----------------------|
-| 56    | Research Spike — answer 7 open Qs (passthrough / endpoint / auth)   | (research-only, 0 reqs)           | —                     |
+| 56 ✅ | Research Spike — answer 7 open Qs (passthrough / endpoint / auth)   | (research-only, 0 reqs) — CLOSED 2026-05-02 | —                |
 | 57    | A1+A2 Passthrough Mode + Agent Mode Opt-In                          | A1-01..04, A2-01..02 (6)          | 56                    |
 | 58    | C1+C2 True Token Streaming (Anthropic + OpenAI)                     | C1-01..02, C2-01..03 (5)          | 57                    |
 | 59    | B1 Per-User Bearer Token Auth (`liv_sk_*`)                          | B1-01..05 (5)                     | — (parallel)          |
@@ -76,9 +76,20 @@ See `.planning/ROADMAP.md` for full phase details, success criteria, dependency 
 - **Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` — UNTOUCHED in v30.** Passthrough mode bypasses; agent mode keeps current behavior.
 - D-LIVE-VERIFICATION-GATE active — Phase 63 must close cleanly without `--accept-debt`
 - D-NO-BYOK preserved — broker issues its own `liv_sk_*` tokens; user's raw `claude_*` keys never enter broker
-- D-51-03 (Branch N reversal) — Phase 56-03 RE-EVALUATED as **"Not needed in v30"**. Q1 passthrough bypasses sacred file structurally for external clients (the originally-complained-about identity contamination context); Q7 confirms agent mode (internal LivOS AI Chat) acceptable per Phase 51 deploy-layer fix. v30.1+ D-30-XX safety net retained IF internal-chat identity pain re-surfaces post-v30. Logged as decision **D-30-01 placeholder** (final number assigned in Plan 56-04 synthesis).
-- **D-NO-NEW-DEPS audit (Plan 56-03) — YELLOW.** Zero new npm packages required by any Q1-Q7 primary path; npm-side D-NO-NEW-DEPS letter preserved. Two non-npm infra deps flagged for **Phase 60 explicit budget**: `caddy-ratelimit` Caddy plugin (third-party) + `xcaddy` Go-toolchain build tool. Phases 57, 58, 59, 61, 62, 63 are unblocked on npm side; Phase 60 is constrained YELLOW.
+- D-51-03 (Branch N reversal) — superseded by D-30-07 below; Phase 56 spike RE-EVALUATED as "Not needed in v30."
 - v30.0 slot now claimed by Broker Professionalization; old "v30.0 Backup & Restore" definition (in `milestones/v30.0-DEFINED/`) deferred to a future milestone
+
+**v30.0 Locked Decisions from Phase 56 spike (D-30-01 .. D-30-09 — final numbering, copy-pasted from `.planning/phases/56-research-spike/SPIKE-FINDINGS.md` Decisions Log):**
+
+- **D-30-01:** Anthropic passthrough = HTTP-proxy direct via Node 22 builtin `fetch()` (Strategy A) — Broker reads per-user OAuth subscription `access_token` from `~/.claude/<userId>/.credentials.json` server-side and forwards verbatim to `api.anthropic.com/v1/messages`; raw byte-forward of upstream `Response.body` delivers true SSE streaming for free; SDK-direct (Strategy B) DISQUALIFIED to preserve D-NO-NEW-DEPS (would force `@anthropic-ai/sdk` into livinityd `package.json`); zero new npm deps. **Source:** SPIKE-FINDINGS.md Q1.
+- **D-30-02:** Passthrough mode forwards client `tools[]` verbatim — Anthropic route raw-byte-forwards tools as part of the body; OpenAI route translates `function`-nested → flat `name + input_schema` shape then forwards; agent mode KEEPS existing ignore-warn behavior (Nexus tools win) so LivOS in-app chat stays byte-identical. Implementation = delete ignore-warn at `router.ts:66-70` + write OpenAI translator at `openai-router.ts:110-124`, both gated on Q3 mode dispatch. **Source:** SPIKE-FINDINGS.md Q2.
+- **D-30-03:** Agent-mode opt-in supports BOTH URL-path (`/u/:userId/agent/v1/...`) AND header (`X-Livinity-Mode: agent`); path takes precedence; default (no path-segment, no header) = passthrough — Universal client compatibility (path works for all 4 target external clients including Bolt.diy/Cline which can't send custom headers; header gives Continue.dev/Open WebUI per-request flexibility). Default flip from "agent-only" to "passthrough by default" is a documented breaking change for legacy internal callers but internal LivOS AI Chat is unaffected (it goes via nexus directly, not through the broker). **Source:** SPIKE-FINDINGS.md Q3.
+- **D-30-04:** Public endpoint = Server5 Caddy with new `api.livinity.io` block + `caddy-ratelimit` plugin (custom `xcaddy` build) + Let's Encrypt on-demand TLS — Reuses existing Server5 infrastructure (zero DNS-posture cost, current `*.livinity.io` stays DNS-only); native edge rate-limit primitive eliminates broker-side bucket complexity; avoids CF Worker recurring cost + 10ms-CPU-cap risk for SSE streaming; Phase 60 must budget `xcaddy` build pipeline + `caddy-ratelimit@<pinned-sha>` + `apt-mark hold caddy`. **Source:** SPIKE-FINDINGS.md Q4.
+- **D-30-05:** Per-user `liv_sk_*` keys are OPT-IN (no auto-key on signup) with MANUAL revoke+recreate rotation (no scheduler) — Industry parity (Stripe/OpenAI/Anthropic all ship manual rotation only); FR-BROKER-B1-01 schema (`revoked_at` nullable timestamp) is exactly what manual rotation needs (zero schema additions); plaintext-once UX has nowhere to surface a default-keyed plaintext (signup-time modal would be missed/dismissed); user explicitly creates first key when plugging in an external client. **Source:** SPIKE-FINDINGS.md Q5.
+- **D-30-06:** Broker emits ZERO own 429s in v30 — edge handles abuse, broker handles transparency — Edge perimeter (Caddy `caddy-ratelimit` from D-30-04) handles coarse abuse-control with thresholds 10-20x above typical Anthropic subscription tier; broker forwards Anthropic upstream rate-limit headers (12 Anthropic + 6 translated OpenAI + Retry-After) verbatim via Q1 raw byte-forward; NO broker-side per-key Redis bucket in v30 (deferred to v31+ if multi-tenant fairness becomes a real requirement; schema is forward-compatible). **Source:** SPIKE-FINDINGS.md Q6.
+- **D-30-07:** Sacred file `nexus/packages/core/src/sdk-agent-runner.ts` SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` UNTOUCHED across entire v30.0 milestone; D-51-03 Branch N reversal NOT NEEDED in v30 — Q1 passthrough structurally bypasses the sacred file for external clients (the original identity-contamination context); agent-mode aggregation acceptable per Phase 51 deploy-layer fix; surgical-edit candidate (`:342` + `:378` for `includePartialMessages: true`) deferred to v30.1+ ONLY if internal-chat token-streaming pain re-surfaces post-v30. Integrity test `sdk-agent-runner-integrity.test.ts` BASELINE_SHA stays unchanged. **Source:** SPIKE-FINDINGS.md Q7 + Cross-Cuts §D-51-03.
+- **D-30-08:** D-NO-NEW-DEPS preserved on npm side — verdict YELLOW — Zero new npm packages required by any Q1-Q7 primary path (`package.json` budget intact); however Q4's verdict introduces TWO non-npm infrastructure deps (`caddy-ratelimit` Caddy plugin third-party Go module + `xcaddy` Go-toolchain build tool) which Phase 60 must explicitly budget. Phases 57, 58, 59, 61, 62, 63 are unblocked GREEN on the npm side; only Phase 60 carries the YELLOW non-npm infra delta. **Source:** SPIKE-FINDINGS.md Cross-Cuts §D-NO-NEW-DEPS Audit.
+- **D-30-09:** Phase 60 must explicitly budget the Caddy custom-build pipeline — Items required: (1) `xcaddy build --with github.com/mholt/caddy-ratelimit@<pinned-sha>` build script committed to repo, (2) `apt-mark hold caddy` to prevent unattended-upgrade overwrites, (3) rebuild documentation in `platform/relay/README.md`, (4) `caddy validate < Caddyfile` validation step in deploy procedure, (5) `flush_interval -1` in `reverse_proxy` block to disable SSE buffering, (6) fallback plan to move rate-limit to broker via D-30-06 if upstream `caddy-ratelimit` plugin is abandoned. **Source:** SPIKE-FINDINGS.md Q4 Risk + Mitigation + Cross-Cuts §D-NO-NEW-DEPS Audit Routing.
 
 ## Accumulated Context (carried from v29.x)
 
@@ -130,12 +141,13 @@ All consolidate into v30 Phase 63 — the mandatory live verification phase that
 
 ## Next Steps
 
-1. **`/gsd-discuss-phase 56`** — gather Phase 56 spike context. Phase 56 is research-heavy and must answer the 7 open questions above before Phase 57 (passthrough mode) can plan.
-2. **Phase 56 produces `SPIKE-FINDINGS.md`** with concrete decisions for each of the 7 questions — these unblock Phases 57-62 implementation planning.
-3. **Phases 57 + 59 can begin in parallel** once Phase 56 ships (57 needs the SDK-direct-vs-HTTP-proxy verdict; 59 is independent of Phase 56's outputs and can start as soon as PG migration tooling is ready).
+1. **`/gsd-discuss-phase 57`** — gather Phase 57 (A1+A2 Passthrough Mode + Agent Mode Opt-In) context with all 9 D-30-XX decisions locked. D-30-01 (HTTP-proxy Strategy A), D-30-02 (forward tools verbatim), D-30-03 (path+header opt-in), D-30-07 (sacred file untouched) provide all needed Phase 57 design decisions.
+2. **Phases 57 + 59 can begin in parallel** — 57 needs D-30-01/02/03/07 (locked); 59 needs D-30-05 (locked). No dependency between them.
+3. **Phase 60 carries YELLOW** per D-30-08 + D-30-09 — must explicitly budget `xcaddy` build pipeline + `caddy-ratelimit@<pinned-sha>` plugin + `apt-mark hold caddy` + `flush_interval -1` SSE-buffering disable + fallback plan.
 
 ## Forensic Trail
 
 - 2026-05-02T19:35Z — `/gsd-complete-milestone v29.5 --accept-debt` executed. v29.5 closed; phases archived; tag `v29.5` created.
 - 2026-05-02T19:40Z — `/gsd-new-milestone v30.0` invoked. STATE.md reset. MILESTONE-CONTEXT.md will be deleted after consumption.
 - 2026-05-02T20:00Z — `gsd-roadmapper` produced `.planning/ROADMAP.md` (8 phases 56-63), filled `.planning/REQUIREMENTS.md` Phase Traceability (38/38 mapped), updated this STATE.md with v30.0 Roadmap Snapshot. Status transitioned `defining-requirements` → `roadmap-defined`.
+- 2026-05-02T23:59Z — Phase 56 spike CLOSED (all 4 plans complete: 56-01, 56-02, 56-03, 56-04). 9 D-30-XX decisions locked (D-30-01..D-30-09). SPIKE-FINDINGS.md reorganized to canonical 5-section structure (Executive Summary + Q1->Q7 + Cross-Cuts + Decisions Log + Validation). Sacred file SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` byte-identical across all 11 task boundaries. Phase 56 SUMMARY commit pending after this STATE.md write.
