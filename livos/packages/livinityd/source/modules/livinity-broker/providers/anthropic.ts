@@ -133,7 +133,7 @@ function buildAgentSdkQueryParams(params: ProviderRequestParams, cwd: string): {
 		systemPrompt: systemPrompt || undefined,
 		maxTurns: 1,
 		model: params.model,
-		permissionMode: 'bypassPermissions', // single-turn passthrough — no human approval loop
+		permissionMode: 'dontAsk', // sacred file uses this — bypassPermissions exits CLI 1
 		persistSession: false,
 		...(process.env.LIVOS_CLAUDE_BIN
 			? {pathToClaudeCodeExecutable: process.env.LIVOS_CLAUDE_BIN}
