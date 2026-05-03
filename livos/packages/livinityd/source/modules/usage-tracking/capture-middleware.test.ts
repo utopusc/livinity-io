@@ -49,6 +49,22 @@ function makeReq(userId = 'USERID', urlPath = '/u/USERID/v1/messages'): Request 
 	} as unknown as Request
 }
 
+/**
+ * Phase 62 Plan 62-01 — req fixture with Phase 59 Bearer middleware fields.
+ * `authMethod = 'bearer'` indicates Phase 59 resolved an api_keys row;
+ * `apiKeyId` is the resolved UUID.
+ */
+function makeBearerReq(opts: {userId?: string; urlPath?: string; apiKeyId: string}): Request {
+	return {
+		params: {userId: opts.userId ?? 'USERID'},
+		originalUrl: opts.urlPath ?? '/u/USERID/v1/messages',
+		url: opts.urlPath ?? '/u/USERID/v1/messages',
+		socket: {remoteAddress: '172.17.0.5'},
+		authMethod: 'bearer',
+		apiKeyId: opts.apiKeyId,
+	} as unknown as Request
+}
+
 function makeRes(): MockRes {
 	const headers: Record<string, string> = {}
 	const res: MockRes = {
@@ -265,5 +281,73 @@ describe('capture-middleware Plan 44-02', () => {
 		expect(call.endpoint).toBe('chat-completions')
 		expect(call.promptTokens).toBe(9)
 		expect(call.completionTokens).toBe(6)
+	})
+
+	// =====================================================================
+	// Phase 62 Plan 62-01 — FR-BROKER-E1-02: apiKeyId propagation from req
+	// to insertUsage payload.
+	//
+	// Phase 59's bearer-auth middleware sets req.authMethod='bearer' and
+	// req.apiKeyId=<uuid> after resolving an api_keys row. The capture
+	// middleware MUST propagate that UUID into insertUsage so per-key
+	// attribution works (FR-BROKER-E2-02 filter dropdown).
+	//
+	// Plan 62-02 closes this RED by reading req.apiKeyId in capture-middleware.ts
+	// and passing it through to insertUsage.
+	// =====================================================================
+	test('FR-BROKER-E1-02: with bearer auth → apiKeyId propagated to insertUsage', async () => {
+		const middleware = createCaptureMiddleware(fakeLivinityd)
+		const TEST_KEY_UUID = '00000000-0000-4000-8000-000000000001'
+		const req = makeBearerReq({apiKeyId: TEST_KEY_UUID})
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await middleware(req, asResponse(res), next)
+		res.json({
+			id: 'msg_bearer',
+			type: 'message',
+			role: 'assistant',
+			content: [{type: 'text', text: 'hi'}],
+			model: 'claude-sonnet-4-6',
+			stop_reason: 'end_turn',
+			stop_sequence: null,
+			usage: {input_tokens: 11, output_tokens: 7},
+		})
+
+		await flushPromises()
+
+		expect(insertUsageMock).toHaveBeenCalledTimes(1)
+		const call = insertUsageMock.mock.calls[0][0]
+		// RED until Plan 62-02 wires req.apiKeyId → insertUsage:
+		// expected: apiKeyId === TEST_KEY_UUID; current: undefined (field absent)
+		expect(call.apiKeyId).toBe(TEST_KEY_UUID)
+	})
+
+	test('FR-BROKER-E1-02: with url-path auth → apiKeyId is null in insertUsage', async () => {
+		const middleware = createCaptureMiddleware(fakeLivinityd)
+		// makeReq() returns NO authMethod, NO apiKeyId — i.e. legacy URL-path traffic
+		const req = makeReq()
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await middleware(req, asResponse(res), next)
+		res.json({
+			id: 'msg_legacy',
+			type: 'message',
+			role: 'assistant',
+			content: [{type: 'text', text: 'hi'}],
+			model: 'claude-sonnet-4-6',
+			stop_reason: 'end_turn',
+			stop_sequence: null,
+			usage: {input_tokens: 4, output_tokens: 2},
+		})
+
+		await flushPromises()
+
+		expect(insertUsageMock).toHaveBeenCalledTimes(1)
+		const call = insertUsageMock.mock.calls[0][0]
+		// RED until Plan 62-02 always sets apiKeyId field (null when no bearer):
+		// expected: apiKeyId === null; current: undefined (field absent)
+		expect(call.apiKeyId).toBeNull()
 	})
 })
