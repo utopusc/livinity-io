@@ -32,6 +32,17 @@ export async function resolveAndAuthorizeUserId(
 	res: Response,
 	livinityd: Livinityd,
 ): Promise<{userId: string} | undefined> {
+	// Phase 60 R2 hot-patch — Bearer wins identity (per Phase 59 design).
+	// When the Phase 59 mountBearerAuthMiddleware authenticated this request,
+	// it set req.authMethod='bearer' + req.userId from api_keys.user_id (the
+	// Mini PC users.id, not the URL :userId param which carries Server5's
+	// user_id when forwarded via the api.livinity.io → relay → bruce-tunnel
+	// chain). Trust the Bearer-resolved userId and skip the URL-path lookup
+	// entirely. The URL :userId slot is now a vestigial path component.
+	if (req.authMethod === 'bearer' && typeof req.userId === 'string' && req.userId.length > 0) {
+		return {userId: req.userId}
+	}
+
 	const userId = req.params.userId
 	// Defensive userId shape — same regex as getUserClaudeDir validation
 	if (!userId || !/^[a-zA-Z0-9_-]+$/.test(userId)) {
