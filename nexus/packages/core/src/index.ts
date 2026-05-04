@@ -9,6 +9,17 @@ import Redis from 'ioredis';
 export { RunStore } from './run-store.js';
 export type { Chunk, ChunkType, RunMeta, RunStatus } from './run-store.js';
 
+// ── Public re-exports (Phase 67-02 — LivAgentRunner orchestrator) ──
+// Wraps SdkAgentRunner via composition (D-05), emits typed RunStore chunks
+// for reasoning extraction (D-14), tool snapshot batching (D-15), and the
+// computer-use stub (D-16). Consumers: 67-03 SSE endpoint + 67-04 hook.
+export { LivAgentRunner, categorizeTool } from './liv-agent-runner.js';
+export type {
+  ToolCallSnapshot,
+  ToolCategory,
+  LivAgentRunnerOptions,
+} from './liv-agent-runner.js';
+
 import { Daemon } from './daemon.js';
 import { Brain } from './brain.js';
 import { Router } from './router.js';
