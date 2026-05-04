@@ -108,8 +108,10 @@
 - [x] **COMPOSER-05
 **: `liv-streaming-text.tsx` — react-markdown + remark-gfm renderer with CSS-only blinking caret on last text block
 - [ ] **COMPOSER-06**: Code blocks with shiki syntax highlighting + copy button on hover; mermaid diagram inline support
-- [ ] **COMPOSER-07**: `liv-agent-status.tsx` — states (idle/listening/thinking/executing/responding/error) with distinct icon + animation + accent color
-- [ ] **COMPOSER-08**: `liv-typing-dots.tsx` — Suna dots animation (`'' → '.' → '..' → '...'` at 500ms) while waiting for first token
+- [x] **COMPOSER-07
+**: `liv-agent-status.tsx` — states (idle/listening/thinking/executing/responding/error) with distinct icon + animation + accent color
+- [x] **COMPOSER-08
+**: `liv-typing-dots.tsx` — Suna dots animation (`'' → '.' → '..' → '...'` at 500ms) while waiting for first token
 - [ ] **COMPOSER-09**: Welcome screen — animated greeting time-of-day adaptive, suggestion cards (3-4 starter prompts), recent conversations strip, slash command hint floating
 
 ### CU-FOUND (Phase 71 — Computer Use Foundation)
