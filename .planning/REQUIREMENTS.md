@@ -142,7 +142,8 @@
 
 ### BROKER-CARRY (Phase 74 — F2-F5 Carryover from v30.5)
 
-- [ ] **BROKER-CARRY-01 (F2)**: Token-level streaming cadence — `liv/packages/core/src/providers/kimi.ts` SSE parser streams tokens as Kimi emits, debounce ~50ms client-side
+- [x] **BROKER-CARRY-01
+ (F2)**: Token-level streaming cadence — `liv/packages/core/src/providers/kimi.ts` SSE parser streams tokens as Kimi emits, debounce ~50ms client-side
 - [ ] **BROKER-CARRY-02 (F3)**: Multi-turn tool_result protocol — assistant `tool_calls[].id` consistently matches `tool.tool_call_id` in next turn; validation in liv-agent-runner adapter layer
 - [ ] **BROKER-CARRY-03 (F4)**: Caddy proxy timeout for long agentic — Mini PC Caddyfile config block for `/api/agent/runs/*` with `transport http { read_timeout 30m write_timeout 30m }`
 - [x] **BROKER-CARRY-04
