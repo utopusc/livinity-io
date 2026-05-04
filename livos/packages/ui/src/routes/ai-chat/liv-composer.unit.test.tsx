@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+//
 // LivComposer — Phase 70-01 Task 2 unit tests.
 //
 // Locked behaviour (CONTEXT D-18..D-21):
