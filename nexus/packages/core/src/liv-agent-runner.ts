@@ -281,10 +281,23 @@ export class LivAgentRunner {
     }
 
     // Wire SDK event listeners.
-    const onAssistantMessage = (msg: AssistantMessageEventPayload) =>
-      this.handleAssistantMessage(runId, msg);
-    const onToolResult = (result: ToolResultEventPayload) =>
-      this.handleToolResult(runId, result);
+    //
+    // EventEmitter.emit() is synchronous and ignores returned Promises, so
+    // we must track in-flight async handler invocations ourselves and await
+    // them before finalizing the run. Otherwise markComplete would fire
+    // while the last assistant message's chunks are still being written.
+    const inFlight = new Set<Promise<void>>();
+    const track = (p: Promise<void>): void => {
+      inFlight.add(p);
+      p.finally(() => inFlight.delete(p)).catch(() => {});
+    };
+
+    const onAssistantMessage = (msg: AssistantMessageEventPayload): void => {
+      track(this.handleAssistantMessage(runId, msg));
+    };
+    const onToolResult = (result: ToolResultEventPayload): void => {
+      track(this.handleToolResult(runId, result));
+    };
 
     this.opts.sdkRunner.on(SDK_EVENT_ASSISTANT_MESSAGE, onAssistantMessage);
     this.opts.sdkRunner.on(SDK_EVENT_TOOL_RESULT, onToolResult);
@@ -292,6 +305,12 @@ export class LivAgentRunner {
     let stopFinalized = false;
     try {
       await this.opts.sdkRunner.run(task);
+      // Drain any handler invocations that the SDK fired during run().
+      // Re-scan inFlight after each settle in case a handler chain queued
+      // additional follow-up work.
+      while (inFlight.size > 0) {
+        await Promise.allSettled(Array.from(inFlight));
+      }
 
       // Natural completion path. If stop fired during run(), the handlers
       // already short-circuited — but mark-complete-once still applies.
