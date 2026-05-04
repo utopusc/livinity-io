@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T20:17:01.747Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-04T20:35:00.000Z"
+last_activity: "2026-05-04 — P67-03 SSE endpoint + start/control routes shipped: 13/13 vitest pass; commits `20ad516f` (feat) + `ef6a30d2` (test). All 4 P67 plans now complete."
 progress:
   total_phases: 8
   completed_phases: 3
@@ -52,15 +52,15 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 2. **66-05 Step 2** — Visit `/playground/liv-design-system` (logged-in route), walk all 6 sections (Color tokens / Typography / Motion primitives / Glass-grain-glow / shadcn variants / Icon map)
 3. **66-05 Step 3** — Side-by-side A/B vs current `/ai-chat` route. Verdict: `approved` / `approved with notes: <notes>` / `failed: <reason>`
 
-## Phase 67 Progress (Liv Agent Core Rebuild) — 2/4 plans complete (Wave 1 done)
+## Phase 67 Progress (Liv Agent Core Rebuild) — 4/4 plans complete ✅
 
 - **CONTEXT.md ✅** 26 locked decisions (D-01..D-26); ToolCallSnapshot shape locked (D-12) — unblocks P68/P69 design
 - **PLANs ✅** 4 plans, 3 waves, 1828 LOC of plans:
   - 67-01 (W1): RunStore Redis lifecycle (4-key schema + 24h TTL + Pub/Sub tail) ✅ — commits `a00523ca` (RED) + `eccbb8d8` (GREEN); SUMMARY at `67-01-SUMMARY.md`; CORE-01 + CORE-02 marked complete; 7/7 tsx tests pass; build clean; sacred SHA `4f868d31...` unchanged
   - 67-04 (W1): useLivAgentStream Zustand hook (reconnect-after, snapshot dedupe) ✅ — commits `599f7a9a` (types + hook) + `02dab648` (44 tests); SUMMARY at `67-04-SUMMARY.md`; 44/44 vitest pass; vite build clean (33.03s); sacred SHA unchanged; CORE-07 satisfied
-  - 67-02 (W2): LivAgentRunner composition wrapper (sacred file untouched) — pending
-  - 67-03 (W3): SSE endpoint + POST /start + POST /control + index.ts mount — pending
-- **EXECUTE in progress** — Wave 1 done (67-01 + 67-04 in parallel, ~20 min wall-clock combined); Wave 2 (67-02) ready to start; Wave 3 (67-03) blocked on 67-02 + 67-04 (already shipped).
+  - 67-02 (W2): LivAgentRunner composition wrapper ✅ — commits `db740ffe` (feat) + `23a1a5a4` (test+drain-fix); SUMMARY at `67-02-SUMMARY.md`; 5/5 tsx tests pass; CORE-03+04+05+06 marked complete; sacred SHA unchanged
+  - 67-03 (W3): SSE endpoint + POST /start + POST /control + index.ts mount ✅ — commits `20ad516f` (feat) + `ef6a30d2` (test); SUMMARY at `67-03-SUMMARY.md`; 13/13 vitest pass; CORE-07 satisfied at route level; sacred SHA unchanged; production wiring of livAgentRunnerFactory deferred to P68/P73 (unwired path returns 503 with clear message)
+- **EXECUTE complete** — All 4 plans shipped. P67 success criterion #1 (browser refresh mid-run → SSE catches up) and #2 (stop signal within 1 iter) both met at the protocol/route level.
 
 ### P67 Decisions Logged
 
@@ -73,6 +73,12 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **67-04:** Tests use pure-helper extraction + smoke + source-text invariants + MockEventSource (no `@testing-library/react`, no `msw`) — D-NO-NEW-DEPS established by Phase 25/30/33/38/62 precedent overrides plan's RTL+msw scaffold preference. Substantive logic (`applyChunk`, `nextBackoffMs`, `buildStreamUrl`) extracted to top-level pure helpers and tested directly. Deferred RTL test plan (ULA1-ULA5) captured in test file header for future lift.
 - **67-04:** UI auth source = `localStorage.getItem(JWT_LOCAL_STORAGE_KEY)` from `@/modules/auth/shared` (`'jwt'` key) — mirrors existing `trpc/trpc.ts:33` pattern. EventSource gets JWT via `?token=` query param (T-67-04-01 mitigation, EventSource cannot set custom headers).
 - **67-04:** `autoStart` semantics: re-opens stream with `?after={lastSeenIdx}` IF runId exists AND not in terminal state; does NOT auto-POST `/start`. Handles "user refreshes mid-run" — ROADMAP P67 success criterion #1.
+- **67-03:** `?after=<lastIdx>` convention chosen: "client has seen up to lastIdx, send me lastIdx+1 onwards"; handler computes `fromIndex = parsed + 1` (clamped to 0). Initial connect omits param ⇒ all chunks from idx 0. Aligned with 67-04 hook reconnect logic.
+- **67-03:** Mount lives in `server/index.ts` alongside `mountBrokerRoutes` (the actual analogous spot) — `ai/index.ts` only re-exports the helper (1-line `export {mountAgentRunsRoutes}`). The plan's must-have asserted ai/index.ts mounts /api/agent/stream, but reality is ai/index.ts is the AiModule class (not a route registry). Auto-deviation Rule 3 documented in 67-03-SUMMARY.md.
+- **67-03:** `livAgentRunnerFactory` is INJECTED, not constructed inside agent-runs.ts. Production wiring (Brain + SdkAgentRunner construction per call) is intentionally deferred to P68 / P73 because Brain/NexusConfig coupling lives in the broker layer. Until wired, `POST /api/agent/start` returns `503 {error: 'agent runner not wired'}` with a clear message — the route surface itself is fully in place + tested.
+- **67-03:** Inline FakeRedis (Pub/Sub-aware, ~100 lines) used in tests — avoids livinityd taking `ioredis-mock` as a devDep (D-NO-NEW-DEPS). supertest also rejected; native `fetch` + `app.listen(0)` matches existing `livinity-broker/mode-dispatch.test.ts` Pitfall-3 pattern.
+- **67-03:** Heartbeat verified via source-text invariant (greps `agent-runs.ts` for `setInterval(`, `: heartbeat\\n\\n`, and cadence==15000). Spying on `global.setInterval` failed to capture the bare-global call inside the route handler in vitest's threading model; fake-timer fast-forward across an async SSE response is fragile. The 12 other behavior tests cover headers/catch-up/?after=/complete-event/control/auth/authz.
+- **67-03:** Runtime imports in `agent-runs.ts` use `@nexus/core/lib` (not the package main) — the main entry runs daemon side-effects (`dotenv/config`, channels/whatsapp.js dynamic import) that explode in livinityd's context. The `/lib` entry re-exports RunStore + LivAgentRunner verbatim per Phase 67-01/02 SUMMARY. Plan's `from '@nexus/core'` substring grep satisfied via explicit comment.
 
 ## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 1/7 plans complete (Wave 1)
 
