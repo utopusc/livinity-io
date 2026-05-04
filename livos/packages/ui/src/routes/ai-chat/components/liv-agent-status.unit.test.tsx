@@ -66,4 +66,28 @@ describe('getNextDot (D-39)', () => {
 		for (let i = 0; i < 4; i++) dot = getNextDot(dot)
 		expect(dot).toBe('')
 	})
+
+	it('two full cycles return to start (idempotent loop)', () => {
+		let dot = ''
+		for (let i = 0; i < 8; i++) dot = getNextDot(dot)
+		expect(dot).toBe('')
+	})
+
+	it('odd-step counts land on expected positions', () => {
+		// 5 steps from '' = 4-cycle + 1 = '.'
+		let dot = ''
+		for (let i = 0; i < 5; i++) dot = getNextDot(dot)
+		expect(dot).toBe('.')
+
+		// 7 steps from '' = '...'
+		dot = ''
+		for (let i = 0; i < 7; i++) dot = getNextDot(dot)
+		expect(dot).toBe('...')
+	})
+
+	it('unknown input always restarts at "." after one more call', () => {
+		// Defensive: '????' → '' → '.'
+		const recovered = getNextDot(getNextDot('????'))
+		expect(recovered).toBe('.')
+	})
 })
