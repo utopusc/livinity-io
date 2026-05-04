@@ -1307,6 +1307,147 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       },
     },
   },
+  {
+    // v30.5 — Suna AI agent platform (Manus-alternative, autonomous agents)
+    // Mimari notu: Suna normalde bundled Supabase ile gelir (heavy stack).
+    // Mini PC'yi koruyacak şekilde EXTERNAL Supabase Cloud (free tier) kullanıyoruz —
+    // user install sırasında supabase.com'da proje açıp 3 değer giriyor.
+    // OpenCode runtime'ı sayesinde Anthropic baseURL config'iyle broker'a yönlendirilebilir.
+    //
+    // VERIFICATION TODO (SSH dönünce):
+    //   1. ghcr.io/suna-ai/suna-backend image'inın expose ettiği port (3000? 8000?)
+    //   2. Frontend image referansı (suna-frontend? veya monorepo'da aynı image mi?)
+    //   3. Worker servisi backend imageını mı kullanıyor?
+    //   4. Auto-migration entrypoint'te yapılıyor mu yoksa elle mi?
+    //   5. OpenCode config dosya yolu (/root/.config/opencode/config.json?)
+    //   6. Health endpoint path
+    id: 'suna',
+    name: 'Suna AI',
+    tagline: 'Autonomous AI agents — your Claude subscription, your own sandbox',
+    version: '0.8.44',
+    category: 'developer',
+    port: 3000,
+    description: 'Suna is an open-source autonomous agent platform (Manus alternative) — agents run 24/7 in isolated Docker sandboxes with shared filesystem, credentials, and history. 60+ skills, 3000+ integrations.\n\n**Setup requires a free Supabase Cloud project** (managed Postgres + Auth, no extra Mini PC services). Visit supabase.com → New Project → Settings → API → copy the 3 values into the install form below.\n\nLLM backend auto-configured to use your Claude subscription via Livinity Broker — no LLM API key prompt.\n\nApache 2.0 licensed.',
+    website: 'https://kortix.com',
+    developer: 'Kortix AI',
+    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/suna/icon.svg',
+    repo: 'https://github.com/kortix-ai/suna',
+    requiresAiProvider: true,  // Phase 43.2 → broker env auto-injection
+    docker: {
+      image: 'ghcr.io/suna-ai/suna-backend:latest',
+      environment: {
+        NODE_ENV: 'production',
+      },
+      volumes: ['/data'],
+    },
+    installOptions: {
+      subdomain: 'suna',
+      // User-provided fields — shown in install dialog. Inject docs link in label
+      // so users know where to obtain each value.
+      environmentOverrides: [
+        {
+          name: 'NEXT_PUBLIC_SUPABASE_URL',
+          label: 'Supabase Project URL (from supabase.com → Settings → API)',
+          type: 'string',
+          required: true,
+        },
+        {
+          name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+          label: 'Supabase Anon Key (public — same Settings → API page)',
+          type: 'string',
+          required: true,
+        },
+        {
+          name: 'SUPABASE_SERVICE_ROLE_KEY',
+          label: 'Supabase Service Role Key (secret — same Settings → API page)',
+          type: 'password',
+          required: true,
+        },
+      ],
+    },
+    compose: {
+      mainService: 'frontend',  // Caddy reverse-proxy hedefi + env override target
+      services: {
+        // Frontend — Next.js UI, public-facing on subdomain
+        frontend: {
+          image: 'ghcr.io/suna-ai/suna-frontend:latest',  // VERIFY image name on SSH
+          restart: 'unless-stopped',
+          environment: {
+            // Supabase — environmentOverrides patches these values into the mainService;
+            // backend service reads SAME values via Docker Compose ${VAR} interpolation
+            // from the compose dir's .env file (livinityd writes one when overrides apply).
+            NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
+            // Backend URL for client-side fetches (internal docker network)
+            NEXT_PUBLIC_BACKEND_URL: 'http://backend:8000',
+            // LLM provider — auto-injected by Phase 43.2 (requiresAiProvider: true)
+            // Suna's OpenCode runtime reads from a config file, NOT directly env;
+            // we will need a small init container or volume-mounted config.json.
+            // VERIFICATION TODO: confirm whether OpenCode honors ANTHROPIC_BASE_URL env
+            // alongside its config.json, or if config.json mount is mandatory.
+          },
+          ports: ['127.0.0.1:3000:3000'],
+          depends_on: ['backend', 'redis'],
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '60s',
+          },
+        },
+        // Backend — FastAPI/Python API server, talks to external Supabase + Redis + spawns sandboxes
+        backend: {
+          image: 'ghcr.io/suna-ai/suna-backend:latest',
+          restart: 'unless-stopped',
+          environment: {
+            SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
+            SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
+            SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
+            REDIS_URL: 'redis://redis:6379',
+            // Sandbox per-agent runner — needs Docker socket. Phase 43.2 should NOT
+            // inject host-gateway here (sandbox containers don't need broker access
+            // through it; they speak to backend which proxies to broker).
+            // VERIFICATION TODO: does Suna spawn sandbox containers via host docker.sock,
+            // or via Daytona / a remote orchestrator?
+          },
+          volumes: [
+            '${APP_DATA_DIR}/backend-data:/app/data',
+            '/var/run/docker.sock:/var/run/docker.sock',  // for sandbox spawning
+          ],
+          depends_on: ['redis'],
+        },
+        // Worker — background tasks (probably same image, different command)
+        worker: {
+          image: 'ghcr.io/suna-ai/suna-backend:latest',
+          restart: 'unless-stopped',
+          // VERIFICATION TODO: confirm worker command — likely `python -m worker`
+          // or similar; current image entrypoint may be uvicorn.
+          // command: ['python', '-m', 'kortix.worker'],
+          environment: {
+            SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
+            SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
+            SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
+            REDIS_URL: 'redis://redis:6379',
+          },
+          volumes: ['${APP_DATA_DIR}/backend-data:/app/data'],
+          depends_on: ['redis'],
+        },
+        // Redis — local cache/queue (lightweight, stays on Mini PC)
+        redis: {
+          image: 'redis:7-alpine',
+          restart: 'unless-stopped',
+          volumes: ['${APP_DATA_DIR}/redis-data:/data'],
+          healthcheck: {
+            test: ['CMD', 'redis-cli', 'ping'],
+            interval: '30s',
+            timeout: '5s',
+            retries: 3,
+          },
+        },
+      },
+    },
+  },
 ]
 
 export function getBuiltinApp(appId: string): BuiltinAppManifest | undefined {
