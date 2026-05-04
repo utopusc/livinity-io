@@ -1398,7 +1398,9 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             // a no-op for the frontend itself (kortix-api consumes them via
             // env-passthrough below + opencode config wrapper).
           },
-          ports: ['127.0.0.1:13737:13737'],
+          // host:13737 → container:3000 (kortix-frontend Next.js listens on 3000;
+          // 13737 is just our chosen host-side binding for Caddy reverse proxy)
+          ports: ['127.0.0.1:13737:3000'],
           depends_on: ['kortix-api'],
           healthcheck: {
             test: ['CMD-SHELL', 'curl -f http://localhost:13737/ || exit 1'],
