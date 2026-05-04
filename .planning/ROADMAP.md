@@ -90,7 +90,7 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 2. 14 UAT files (4 v29.5 + 4 v29.4 + 6 v29.3) walked on Mini PC with results documented
 3. Phase 63 R-series formal walkthrough complete (11 plans)
 4. External client compat matrix doc written (Bolt.diy + Cursor + Cline + Continue.dev + Open WebUI quirks)
-5. 3 v28.0 quick-tasks resolved or moved to backlog
+5. 3 v28.0 quick-tasks resolved or moved to backlog ✓ (P64-05, all 3 already-resolved — see `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-QUICK-TASK-TRIAGE.md`)
 
 ### Phase 65: Liv Rename + Foundation Cleanup
 

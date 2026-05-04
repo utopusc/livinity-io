@@ -25,7 +25,8 @@
 - [ ] **CARRY-02**: 14 carryforward UATs from v29.3-v29.5 walked on Mini PC (4 v29.5 + 4 v29.4 + 6 v29.3)
 - [ ] **CARRY-03**: Phase 63's 11 plan walks completed (formal mandatory live verification)
 - [ ] **CARRY-04**: 3 v28.0 hot-patch quick-tasks resolved or archived to backlog (260425-sfg / 260425-v1s / 260425-x6q)
-- [ ] **CARRY-05**: External client compat matrix UAT — Bolt.diy + Cursor + Cline + Continue.dev + Open WebUI live walkthrough each documented
+- [x] **CARRY-05
+**: External client compat matrix UAT — Bolt.diy + Cursor + Cline + Continue.dev + Open WebUI live walkthrough each documented
 
 ### RENAME (Phase 65 — Liv Rename Foundation)
 
@@ -137,7 +138,8 @@
 - [ ] **BROKER-CARRY-02 (F3)**: Multi-turn tool_result protocol — assistant `tool_calls[].id` consistently matches `tool.tool_call_id` in next turn; validation in liv-agent-runner adapter layer
 - [ ] **BROKER-CARRY-03 (F4)**: Caddy proxy timeout for long agentic — Mini PC Caddyfile config block for `/api/agent/runs/*` with `transport http { read_timeout 30m write_timeout 30m }`
 - [ ] **BROKER-CARRY-04 (F5)**: Identity preservation — inject identity line in every system prompt: "You are Liv Agent, powered by Kimi-for-coding. Today is [date]."
-- [ ] **BROKER-CARRY-05**: Verification — token cadence visible word-by-word; long tool chains no `tool_use_id mismatch` errors; 10min agent run no Caddy 504 timeouts; "who are you?" returns consistent "Liv Agent powered by Kimi"
+- [x] **BROKER-CARRY-05
+**: Verification — token cadence visible word-by-word; long tool chains no `tool_use_id mismatch` errors; 10min agent run no Caddy 504 timeouts; "who are you?" returns consistent "Liv Agent powered by Kimi"
 
 ### MEM (Phase 75 — Reasoning Cards + Lightweight Memory)
 

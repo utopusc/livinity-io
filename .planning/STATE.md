@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: not-started — Phase 64 (v30.5 final cleanup) ready to start
-last_updated: "2026-05-04T17:00:00.000Z"
-last_activity: 2026-05-04 — v31.0 milestone opened (13 phases P64-P76 derived from .planning/v31-DRAFT.md)
+status: planning
+last_updated: "2026-05-04T17:52:41.832Z"
+last_activity: 2026-05-04 — v31 milestone bootstrap complete
 progress:
-  total_phases: 13
+  total_phases: 1
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 5
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Not started — ready for Phase 64
-Plan: —
-Status: Defining phase plans (REQUIREMENTS.md + ROADMAP.md written; awaits per-phase planning)
-Last activity: 2026-05-04 — v31 milestone bootstrap complete
+Phase: 64 (v30.5 Final Cleanup) — in progress
+Plan: 64-05 complete (quick-task triage); 64-01..64-04 still pending
+Status: 64-05 closed CARRY-05; 3 v28.0 quick-tasks classified `already-resolved`
+Last activity: 2026-05-04 — Plan 64-05 executed (commit `e89084d4`); SUMMARY at `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-05-SUMMARY.md`
 
 ## v31.0 Milestone Summary
 
@@ -38,6 +38,7 @@ Last activity: 2026-05-04 — v31 milestone bootstrap complete
 **Source plan:** `.planning/v31-DRAFT.md` (851 lines, file-level breakdown user-validated 2026-05-04).
 
 **13 phases (P64-P76):**
+
 - P64 v30.5 Final Cleanup (Suna sandbox fix + 14 carryforward UATs + Phase 63 walks + external client matrix)
 - P65 Liv Rename Foundation (~5,800 occurrences across 250+ TS files)
 - P66 Liv Design System v1 (color tokens, motion primitives, typography, shadcn liv-* variants)
@@ -55,6 +56,7 @@ Last activity: 2026-05-04 — v31 milestone bootstrap complete
 **Estimated effort:** 171-229 hours (6-12 weeks solo at 4-6h/day).
 
 **Locked decisions for v31 entry:**
+
 - ONLY Suna UI patterns (NO Hermes UI per user direction 2026-05-04)
 - Side panel auto-opens ONLY for `browser-*`/`computer-use-*` tools (Suna behavior)
 - Bytebot: desktop image only (Apache 2.0); agent code NOT used
@@ -76,7 +78,7 @@ Last activity: 2026-05-04 — v31 milestone bootstrap complete
 | verification | Phase 60 (Public Endpoint) — VERIFICATION.md | human_needed | P64 (v30.5 final cleanup) |
 | verification | Phase 62 (Usage Tracking + Settings UI) — VERIFICATION.md | human_needed | P64 |
 | uat_gap | Phase 63 (Mandatory Live Verification) | unknown | P64 |
-| quick_task | 260425-sfg / 260425-v1s / 260425-x6q (3 v28.0 hot-patches) | missing | P64 (resolve or backlog) |
+| quick_task | 260425-sfg / 260425-v1s / 260425-x6q (3 v28.0 hot-patches) | resolved (P64-05, all already-resolved) | — |
 | infra | F7 Suna marketplace sandbox network blocker | open | P71 (Computer Use Foundation) |
 | infra | F2 Token-level streaming cadence | open | P74 |
 | infra | F3 Multi-turn tool_result protocol | open | P74 |
