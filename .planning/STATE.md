@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T19:30:00.000Z"
-last_activity: "2026-05-04 — 66-02 motion primitives shipped (commits `d3a63dd0`, `9f9b1c31`); DESIGN-05 marked complete"
+status: P64 + P66 both at human-verify checkpoint (4/5 plans complete each); user pivoted from Suna infra to AI chat focus mid-session
+last_updated: "2026-05-04T19:55:00.000Z"
+last_activity: "2026-05-04 — Phase 66 Wave 1+2+3 shipped; 66-05 reached `## CHECKPOINT REACHED` (commits `f71ee445`/`fc822b4c`/`b7305f7d`)"
 progress:
-  total_phases: 2
-  completed_phases: 1
+  total_phases: 13
+  completed_phases: 0
   total_plans: 10
   completed_plans: 8
   percent: 80
@@ -38,11 +38,19 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 2. **64-04 Step B** — Browser smoke test: visit `https://suna.bruce.livinity.io/`, type "Navigate to google.com and tell me what you see", confirm agent describes Google homepage
 3. **64-02 deferred** — 11 of 14 v29.3-v29.5 carryforward UATs are `needs-human-walk`; 1 `failed` (Phase 49 fail2ban regression). See `64-UAT-MATRIX.md` for the full list and walk steps.
 
-## Phase 66 Progress (Liv Design System v1)
+## Phase 66 Progress (Liv Design System v1) — 4/5 plans complete
 
-- **66-01** typography/color tokens — status uncertain (tailwind.config.ts shows extensions; no SUMMARY on disk yet)
-- **66-02 COMPLETE (2026-05-04)** — 5 motion primitives (`FadeIn`, `GlowPulse`, `SlideInPanel`, `TypewriterCaret`, `StaggerList`) + barrel under `livos/packages/ui/src/components/motion/`. Commits `d3a63dd0`, `9f9b1c31`. Build green; D-09 invariant held; sacred SHA unchanged. SUMMARY: `.planning/phases/66-liv-design-system-v1/66-02-SUMMARY.md`. Requirement DESIGN-05 marked complete.
-- 66-03/66-04/66-05 — pending
+- **66-01 ✅** liv-tokens.css + Inter Variable + JetBrains Mono + Tailwind type scale + glass/grain/glow utilities. Commits `887ca00c`/`94b0a556`/`b4186d3a`. Build clean (vite 38.73s). 1 documented 1px body shift (15px vs legacy 14px per D-11). SUMMARY: `66-01-SUMMARY.md`.
+- **66-02 ✅** 5 motion primitives (`FadeIn`, `GlowPulse`, `SlideInPanel`, `TypewriterCaret`, `StaggerList`) + barrel export under `livos/packages/ui/src/components/motion/`. Commits `d3a63dd0`/`9f9b1c31`/`e9f48930`. D-09 honored (no motion-primitives/ rewrites). Vite build clean. DESIGN-05 marked complete.
+- **66-03 ✅** shadcn liv-* variants — `liv-primary` (Button), `liv-status-running` (Badge), `liv-elevated` (Card), new `slider.tsx` with `liv-slider`. Added `@radix-ui/react-slider ^1.3.6`. Commits `63d2a14c`/`ff20f731`/`d525cb5c`. Build clean.
+- **66-04 ✅** `LivIcons` typed Tabler map at `livos/packages/ui/src/icons/liv-icons.ts` — 10 tool-category mappings. Commits `5209f475`/`ef6bdb16`. DESIGN-06 marked complete.
+- **66-05 ◆ HUMAN-VERIFY CHECKPOINT** — `/playground/liv-design-system` route + 561-line component shipped (Tasks 1+2). Commits `f71ee445`/`fc822b4c`/`b7305f7d`. **Task 3 = WOW differential A/B walk** — user must visit playground in browser, side-by-side compare with current `/ai-chat`, judge if v31 visual identity is "visibly distinct + brand new" per v31-DRAFT line 257. Walk steps in `66-05-SUMMARY.md`.
+
+## Phase 66 Outstanding Items (user-walk required)
+
+1. **66-05 Step 1** — Start UI dev server: `pnpm --filter ui dev` (port 3000) OR deploy to Mini PC: `ssh ... bruce@10.69.31.68 'sudo bash /opt/livos/update.sh'`
+2. **66-05 Step 2** — Visit `/playground/liv-design-system` (logged-in route), walk all 6 sections (Color tokens / Typography / Motion primitives / Glass-grain-glow / shadcn variants / Icon map)
+3. **66-05 Step 3** — Side-by-side A/B vs current `/ai-chat` route. Verdict: `approved` / `approved with notes: <notes>` / `failed: <reason>`
 
 ## v31.0 Milestone Summary
 
