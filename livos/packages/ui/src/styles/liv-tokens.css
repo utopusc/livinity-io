@@ -1,0 +1,81 @@
+/*
+ * Liv Design Tokens v1 (Phase 66) — values per v31-DRAFT.md lines 198-224.
+ * Dark-only (D-03). DO NOT add light-theme variants in this phase.
+ *
+ * Surface system, text trio, accent quintet, motion durations, bespoke easing.
+ * Glass / grain / glow utility classes per D-13.
+ *
+ * Consumers: P67+ via var(--liv-*) and the .liv-* utility classes below.
+ */
+
+:root {
+	/* Surface system */
+	--liv-bg-deep:      #050b14;
+	--liv-bg-elevated:  #0a1525;
+	--liv-bg-glass:     rgba(20, 30, 50, 0.6);
+	--liv-border-subtle: rgba(120, 180, 255, 0.08);
+
+	/* Text */
+	--liv-text-primary:   #e8f0ff;
+	--liv-text-secondary: #a8b8cc;
+	--liv-text-tertiary:  #6b7a8f;
+
+	/* Accent — Liv signature glow */
+	--liv-accent-cyan:   #4dd0e1;
+	--liv-accent-amber:  #ffbd38;
+	--liv-accent-violet: #a78bfa;
+	--liv-accent-emerald: #4ade80;
+	--liv-accent-rose:   #fb7185;
+
+	/* Motion durations */
+	--liv-dur-instant: 100ms;
+	--liv-dur-fast:    200ms;
+	--liv-dur-normal:  350ms;
+	--liv-dur-slow:    600ms;
+
+	/* Easing — bespoke, not stock */
+	--liv-ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+	--liv-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Glassmorphism surface — D-13 */
+.liv-glass {
+	backdrop-filter: blur(12px) saturate(1.2);
+	-webkit-backdrop-filter: blur(12px) saturate(1.2);
+	background: var(--liv-bg-glass);
+	border: 1px solid var(--liv-border-subtle);
+}
+
+/*
+ * Subtle film-grain overlay — D-13.
+ * Applied as an ::after pseudo-element so the host element's content is
+ * unaffected. Host should have position: relative (the rule below sets it).
+ */
+.liv-grain {
+	position: relative;
+}
+
+.liv-grain::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: repeating-conic-gradient(
+		from 0deg,
+		rgba(255, 255, 255, 0.012) 0deg 0.5deg,
+		transparent 0.5deg 1deg
+	);
+}
+
+/* Glow halos — same shape, accent-colored — D-13 */
+.liv-glow-amber {
+	box-shadow: 0 0 24px rgba(255, 189, 56, 0.2), inset 0 1px 0 rgba(255, 189, 56, 0.1);
+}
+
+.liv-glow-cyan {
+	box-shadow: 0 0 24px rgba(77, 208, 225, 0.2), inset 0 1px 0 rgba(77, 208, 225, 0.1);
+}
+
+.liv-glow-violet {
+	box-shadow: 0 0 24px rgba(167, 139, 250, 0.2), inset 0 1px 0 rgba(167, 139, 250, 0.1);
+}
