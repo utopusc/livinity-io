@@ -1,0 +1,2 @@
+react-markdown=present
+remark-gfm=present
