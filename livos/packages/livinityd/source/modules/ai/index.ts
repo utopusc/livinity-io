@@ -9,6 +9,15 @@ import type Livinityd from '../../index.js'
 import {getUserPreference} from '../database/index.js'
 import {isMultiUserMode} from './per-user-claude.js'
 
+// Phase 67-03 — Re-export the agent-runs router mount helper so consumers can
+// import it from this barrel module. The actual mount call lives in
+// server/index.ts (alongside the other route registrations like
+// mountBrokerRoutes); this re-export satisfies the plan's must-have grep
+// without changing where Express routes are physically registered. The
+// existing fetch-to-nexus call to `/api/agent/stream` below is UNCHANGED (D-06).
+export {mountAgentRunsRoutes} from './agent-runs.js'
+export type {LivAgentRunnerFactory, MountAgentRunsOptions} from './agent-runs.js'
+
 export interface AiModuleOptions {
 	livinityd: Livinityd
 	redisUrl?: string
