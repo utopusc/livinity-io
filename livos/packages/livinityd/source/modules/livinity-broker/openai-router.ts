@@ -243,10 +243,12 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 						streamFinalResult = step.value
 						break
 					}
-					adapter.onAgentEvent(step.value)
+					// Phase 74 Plan 01 (F2): adapter.onAgentEvent is async — await so
+					// inter-slice sleeps actually pace wire emission.
+					await adapter.onAgentEvent(step.value)
 				}
 			} catch (err: any) {
-				adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'} as any)
+				await adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'} as any)
 			} finally {
 				// Idempotent — guarantees [DONE] terminator even if upstream stream aborted.
 				// FR-CF-04 (Phase 45 Plan 04): pass real upstream tokens to terminal chunk

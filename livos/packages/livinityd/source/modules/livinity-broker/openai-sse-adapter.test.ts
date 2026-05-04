@@ -306,32 +306,39 @@ async function runTests() {
 		ok('Test F2-5: final_answer event passes through unsliced')
 	}
 
-	// Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 → no enforced delay
-	// We cannot reset the module-loaded env without re-importing; test harness
-	// re-imports the adapter via dynamic ESM import after setting env. This
-	// validates the env is read at module load (per plan recommendation).
+	// Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 → no enforced delay.
+	// Env is read at module load (per plan recommendation D-06), so this test
+	// uses a sibling tsx fixture script run as a child process with the env
+	// var set. The child prints `ELAPSED=<ms>`; we assert <100ms.
 	{
-		const prev = process.env.LIV_BROKER_SLICE_DELAY_MS
-		process.env.LIV_BROKER_SLICE_DELAY_MS = '0'
-		try {
-			// Bust ESM cache via a query-string suffix on the module URL. tsx supports this.
-			const mod = await import('./openai-sse-adapter.js?bustcache_delay0=' + Date.now())
-			const {res, getBuffer} = makeFakeRes()
-			const adapter = (mod as any).createOpenAISseAdapter({requestedModel: 'gpt-4', res})
-			const text = 'a'.repeat(200)
-			const t0 = Date.now()
-			await adapter.onAgentEvent({type: 'chunk', data: text} as AgentEvent)
-			const elapsed = Date.now() - t0
-			// With delay=0, even 200 bytes should finish in <100ms (no scheduler stalls)
-			assert.ok(
-				elapsed < 100,
-				`with LIV_BROKER_SLICE_DELAY_MS=0, elapsed should be <100ms, got ${elapsed}ms`,
-			)
-			ok(`Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 emits with no delay (${elapsed}ms)`)
-		} finally {
-			if (prev === undefined) delete process.env.LIV_BROKER_SLICE_DELAY_MS
-			else process.env.LIV_BROKER_SLICE_DELAY_MS = prev
-		}
+		const {spawnSync} = await import('node:child_process')
+		const path = await import('node:path')
+		const url = await import('node:url')
+		const here = path.dirname(url.fileURLToPath(import.meta.url))
+		const fixture = path.join(here, '__sse-slice-env-fixture-openai.ts')
+		const child = spawnSync(
+			'pnpm',
+			['exec', 'tsx', fixture],
+			{
+				cwd: path.resolve(here, '../../..'), // livinityd package root
+				env: {...process.env, LIV_BROKER_SLICE_DELAY_MS: '0'},
+				encoding: 'utf8',
+				shell: true,
+			},
+		)
+		const stdout = child.stdout ?? ''
+		const stderr = child.stderr ?? ''
+		const m = /ELAPSED=(\d+)/.exec(stdout)
+		assert.ok(
+			m,
+			`child stdout missing ELAPSED= line; stdout=${JSON.stringify(stdout)}; stderr=${JSON.stringify(stderr)}`,
+		)
+		const elapsed = Number.parseInt(m![1]!, 10)
+		assert.ok(
+			elapsed < 100,
+			`with LIV_BROKER_SLICE_DELAY_MS=0, child elapsed should be <100ms, got ${elapsed}ms`,
+		)
+		ok(`Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 emits with no delay (${elapsed}ms)`)
 	}
 
 	console.log('\nAll openai-sse-adapter.test.ts tests passed (18/18)')

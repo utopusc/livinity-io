@@ -2,6 +2,24 @@ import {randomUUID} from 'node:crypto'
 import type {Response} from 'express'
 import type {AgentEvent, AgentResult} from '@nexus/core'
 import type {OpenAIFinishReason} from './openai-types.js'
+import {SLICE_BYTES, SLICE_DELAY_MS, sliceUtf8, sleep} from './sse-slice.js'
+
+/**
+ * Phase 74 Plan 01 (F2 token-cadence streaming).
+ *
+ * The `chunk` branch of `onAgentEvent` slices each text payload via
+ * `sliceUtf8` and emits one OpenAI SSE chunk per slice with an inter-slice
+ * `sleep(SLICE_DELAY_MS)` pause. Slicing is in the BROKER adapter only — the
+ * sacred `nexus/packages/core/src/sdk-agent-runner.ts`
+ * (SHA `4f868d318abff71f8c8bfbcf443b2393a553018b`) is untouched.
+ *
+ * Slice size + delay are env-configurable:
+ *   - `LIV_BROKER_SLICE_BYTES`    default 24, range [8, 256]
+ *   - `LIV_BROKER_SLICE_DELAY_MS` default 15, range [0, 200]
+ *
+ * Slicing applies ONLY to `chunk` text deltas. `final_answer`, `error`, and
+ * the terminal-chunk + `[DONE]` emission are unchanged.
+ */
 
 /**
  * OpenAI Chat Completions streaming chunk shape.
@@ -114,16 +132,34 @@ export function createOpenAISseAdapter(opts: {requestedModel: string; res: Respo
 	}
 
 	return {
-		onAgentEvent(event: AgentEvent) {
+		async onAgentEvent(event: AgentEvent): Promise<void> {
 			if (finalized) return
 			if (event.type === 'chunk' && typeof event.data === 'string') {
 				const text = event.data
-				if (!firstChunkSent) {
-					firstChunkSent = true
-					// First chunk: role + content (or just role if text is empty)
-					writeOpenAISseChunk(res, makeChunk({role: 'assistant', content: text}, null))
-				} else {
-					writeOpenAISseChunk(res, makeChunk({content: text}, null))
+				// Empty-text chunks preserve the existing first-chunk role-only emission
+				// (no slicing applies to a zero-byte payload).
+				if (text.length === 0) {
+					if (!firstChunkSent) {
+						firstChunkSent = true
+						writeOpenAISseChunk(res, makeChunk({role: 'assistant', content: ''}, null))
+					}
+					return
+				}
+				// F2 (Phase 74 Plan 01): UTF-8-safe slice into ~SLICE_BYTES pieces.
+				// Short text (<= SLICE_BYTES) returns a single-element array — no pacing,
+				// no behaviour change vs. pre-F2.
+				const slices = sliceUtf8(text, SLICE_BYTES)
+				for (let i = 0; i < slices.length; i++) {
+					// Pace BEFORE emitting subsequent slices so the first byte still
+					// hits the wire as fast as possible (LTC = lowest time to first byte).
+					if (i > 0) await sleep(SLICE_DELAY_MS)
+					const piece = slices[i]!
+					if (!firstChunkSent) {
+						firstChunkSent = true
+						writeOpenAISseChunk(res, makeChunk({role: 'assistant', content: piece}, null))
+					} else {
+						writeOpenAISseChunk(res, makeChunk({content: piece}, null))
+					}
 				}
 			} else if (event.type === 'final_answer') {
 				// FR-CF-04 (Phase 45 Plan 04) — terminal chunk + [DONE] emission deferred
