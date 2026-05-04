@@ -24,6 +24,14 @@ export { SdkAgentRunner } from './sdk-agent-runner.js';
 export { RunStore } from './run-store.js';
 export type { Chunk, ChunkType, RunMeta, RunStatus } from './run-store.js';
 
+// ── Liv Agent Runner (Phase 67-02) ───────────────────────────────
+export { LivAgentRunner, categorizeTool } from './liv-agent-runner.js';
+export type {
+  ToolCallSnapshot,
+  ToolCategory,
+  LivAgentRunnerOptions,
+} from './liv-agent-runner.js';
+
 // ── Tool Registry ──────────────────────────────────────────────
 export { ToolRegistry } from './tool-registry.js';
 export type { ToolPolicy } from './tool-registry.js';
