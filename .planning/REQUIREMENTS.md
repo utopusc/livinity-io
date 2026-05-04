@@ -66,7 +66,8 @@
 - [ ] **CORE-04**: `livos/packages/livinityd/source/modules/ai/sse-endpoint.ts` (NEW) — Express SSE handler at `GET /api/agent/runs/:runId/stream` with reconnect support via `?after=`
 - [ ] **CORE-05**: `POST /api/agent/start` queues to BullMQ, returns `{runId}` immediately
 - [ ] **CORE-06**: Frontend `livos/packages/ui/src/lib/use-liv-agent-stream.ts` hook with SSE reconnect (exponential backoff 1s/2s/4s/8s)
-- [ ] **CORE-07**: Browser refresh mid-run → SSE catches up from last chunk; tool snapshots arrive paired (assistantCall + toolResult); reasoning chunks distinguished from text
+- [x] **CORE-07
+**: Browser refresh mid-run → SSE catches up from last chunk; tool snapshots arrive paired (assistantCall + toolResult); reasoning chunks distinguished from text
 
 ### PANEL (Phase 68 — Side Panel + Tool View Dispatcher)
 

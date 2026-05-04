@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: P67-01 complete (RunStore foundation shipped, 7/7 tests pass, sacred SHA verified); P64-04 still at human-verify checkpoint (Mini PC redeploy deferred); P66-05 still at human-verify checkpoint (browser A/B walk deferred)
-last_updated: "2026-05-04T19:45:55.603Z"
-last_activity: "2026-05-04 — 67-01 GREEN commit `eccbb8d8` (RunStore Redis-backed agent-run lifecycle store + 7-test tsx suite + barrel re-exports). RED commit `a00523ca` preceded GREEN per TDD."
+status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
+last_updated: "2026-05-04T19:50:00.000Z"
+last_activity: "2026-05-04 — P67 Wave 1 complete: 67-01 (commits `a00523ca`/`eccbb8d8`) + 67-04 (commits `599f7a9a`/`02dab648`) shipped in parallel"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 14
-  completed_plans: 11
-  percent: 79
+  total_plans: 16
+  completed_plans: 13
+  percent: 81
 ---
 
 # Project State
@@ -52,15 +52,15 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 2. **66-05 Step 2** — Visit `/playground/liv-design-system` (logged-in route), walk all 6 sections (Color tokens / Typography / Motion primitives / Glass-grain-glow / shadcn variants / Icon map)
 3. **66-05 Step 3** — Side-by-side A/B vs current `/ai-chat` route. Verdict: `approved` / `approved with notes: <notes>` / `failed: <reason>`
 
-## Phase 67 Progress (Liv Agent Core Rebuild) — 1/4 plans complete
+## Phase 67 Progress (Liv Agent Core Rebuild) — 2/4 plans complete (Wave 1 done)
 
 - **CONTEXT.md ✅** 26 locked decisions (D-01..D-26); ToolCallSnapshot shape locked (D-12) — unblocks P68/P69 design
 - **PLANs ✅** 4 plans, 3 waves, 1828 LOC of plans:
   - 67-01 (W1): RunStore Redis lifecycle (4-key schema + 24h TTL + Pub/Sub tail) ✅ — commits `a00523ca` (RED) + `eccbb8d8` (GREEN); SUMMARY at `67-01-SUMMARY.md`; CORE-01 + CORE-02 marked complete; 7/7 tsx tests pass; build clean; sacred SHA `4f868d31...` unchanged
-  - 67-04 (W1): useLivAgentStream Zustand hook (reconnect-after, snapshot dedupe) — pending
+  - 67-04 (W1): useLivAgentStream Zustand hook (reconnect-after, snapshot dedupe) ✅ — commits `599f7a9a` (types + hook) + `02dab648` (44 tests); SUMMARY at `67-04-SUMMARY.md`; 44/44 vitest pass; vite build clean (33.03s); sacred SHA unchanged; CORE-07 satisfied
   - 67-02 (W2): LivAgentRunner composition wrapper (sacred file untouched) — pending
   - 67-03 (W3): SSE endpoint + POST /start + POST /control + index.ts mount — pending
-- **EXECUTE in progress** — 67-01 done (~12 min wall-clock); 3 plans remaining.
+- **EXECUTE in progress** — Wave 1 done (67-01 + 67-04 in parallel, ~20 min wall-clock combined); Wave 2 (67-02) ready to start; Wave 3 (67-03) blocked on 67-02 + 67-04 (already shipped).
 
 ### P67 Decisions Logged
 
@@ -68,6 +68,11 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **67-01:** tail Pub/Sub channel publishes chunk INDEX (decimal string) — subscribers re-read full chunk via `getChunks(idx)`. Narrow channel + automatic late-subscriber backfill via single LRANGE.
 - **67-01:** Test backend = ioredis-mock (preferred path); REDIS_URL fallback wired but unused. ioredis-mock@^8.9.0 + @types/ioredis-mock@^8.2.5 added to @nexus/core devDeps.
 - **67-01:** RunStore re-exported from BOTH `nexus/packages/core/src/index.ts` (package main) AND `lib.ts` (`@nexus/core/lib` subpath) — covers both import styles in the wild.
+- **67-04:** Single Zustand store with `Map<conversationId, ConversationStreamState>` chosen over factory-per-conversationId — simpler subscription model, leaner bundle, matches existing UI store pattern (`environment-store.ts`).
+- **67-04:** Frontend types redeclared in `liv-agent-types.ts` (NOT imported from `@nexus/core`) — `@nexus/core` is server-only and not a UI dep; D-NO-NEW-DEPS honored. D-12 lock comment makes drift detectable in single grep.
+- **67-04:** Tests use pure-helper extraction + smoke + source-text invariants + MockEventSource (no `@testing-library/react`, no `msw`) — D-NO-NEW-DEPS established by Phase 25/30/33/38/62 precedent overrides plan's RTL+msw scaffold preference. Substantive logic (`applyChunk`, `nextBackoffMs`, `buildStreamUrl`) extracted to top-level pure helpers and tested directly. Deferred RTL test plan (ULA1-ULA5) captured in test file header for future lift.
+- **67-04:** UI auth source = `localStorage.getItem(JWT_LOCAL_STORAGE_KEY)` from `@/modules/auth/shared` (`'jwt'` key) — mirrors existing `trpc/trpc.ts:33` pattern. EventSource gets JWT via `?token=` query param (T-67-04-01 mitigation, EventSource cannot set custom headers).
+- **67-04:** `autoStart` semantics: re-opens stream with `?after={lastSeenIdx}` IF runId exists AND not in terminal state; does NOT auto-POST `/start`. Handles "user refreshes mid-run" — ROADMAP P67 success criterion #1.
 
 ## v31.0 Milestone Summary
 
