@@ -51,7 +51,8 @@
 - [ ] **DESIGN-03**: Typography scale (Inter Variable for display/body, JetBrains Mono for code)
 - [ ] **DESIGN-04**: Glassmorphism + grain utility classes (`.liv-glass`, `.liv-grain`, `.liv-glow-amber`)
 - [ ] **DESIGN-05**: Tabler icon mapping at `livos/packages/ui/src/icons/liv-icons.ts` (every tool category → Tabler icon)
-- [ ] **DESIGN-06**: Shadcn liv-* variants (`<Button variant="liv-primary">`, `<Card variant="liv-elevated">`, `<Badge variant="liv-status-running">`, `<Slider className="liv-slider">`)
+- [x] **DESIGN-06
+**: Shadcn liv-* variants (`<Button variant="liv-primary">`, `<Card variant="liv-elevated">`, `<Badge variant="liv-status-running">`, `<Slider className="liv-slider">`)
 - [ ] **DESIGN-07**: Storybook/playground page demonstrates every token, motion, variant in one place
 
 ### CORE (Phase 67 — Liv Agent Core Rebuild)

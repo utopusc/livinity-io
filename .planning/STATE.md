@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: Phase 64 — 4/5 plans complete; 64-04 paused at human-verify checkpoint (Mini PC redeploy + Suna smoke test)
-last_updated: "2026-05-04T18:30:00.000Z"
-last_activity: 2026-05-04 — Phase 64 Wave 1+2 executed; 64-04 reached `## CHECKPOINT REACHED` for user-walk
+status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
+last_updated: "2026-05-04T18:36:00.693Z"
+last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
-  total_phases: 13
-  completed_phases: 0
-  total_plans: 5
-  completed_plans: 4
-  percent: 80
+  total_phases: 10
+  completed_phases: 8
+  total_plans: 54
+  completed_plans: 47
+  percent: 87
 ---
 
 # Project State
