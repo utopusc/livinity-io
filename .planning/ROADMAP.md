@@ -134,6 +134,12 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 3. Tool snapshots arrive paired (assistantCall + toolResult) not separate chunks
 4. Reasoning chunks distinguished from text chunks in stream
 
+**Plans:** 4 plans in 3 waves
+- [ ] 67-01-PLAN.md (Wave 1) — RunStore: Redis-backed agent-run lifecycle (createRun/appendChunk/getChunks/subscribeChunks/setControl/markComplete/markError + 24h TTL)
+- [ ] 67-02-PLAN.md (Wave 2, deps: 01) — LivAgentRunner: composition wrapper around SdkAgentRunner; reasoning extraction (D-14), tool snapshot batching (D-15), computer-use stub (D-16)
+- [ ] 67-03-PLAN.md (Wave 3, deps: 01,02) — POST /api/agent/start + GET /api/agent/runs/:runId/stream (SSE with ?after= resume + 15s heartbeat) + POST /api/agent/runs/:runId/control
+- [ ] 67-04-PLAN.md (Wave 1) — useLivAgentStream React hook (Zustand-backed; reconnect-after; ToolCallSnapshot dedupe by toolId)
+
 ### Phase 68: Side Panel + Tool View Dispatcher
 
 **Goal:** Port Suna's ToolCallSidePanel as LivToolPanel. Wire Zustand store. Tool view dispatcher with GenericToolView fallback. Auto-open behavior for visual tools only.
