@@ -21,6 +21,10 @@ const buttonVariants = cva(
 				destructive:
 					'bg-destructive2 hover:bg-destructive2-lighter focus-visible:bg-destructive2-lighter active:bg-destructive2 ring-destructive/40 data-[state=open]:bg-destructive2-lighter shadow-button-highlight-hpx hover:scale-[1.02] active:scale-[0.98] text-white',
 				ghost: 'hover:bg-surface-1 active:bg-surface-base border border-transparent hover:border-border-subtle ring-brand/20',
+				// Liv Design System v1 (Phase 66 / DESIGN-07) — cyan-accent primary surface for Liv-branded callouts.
+				// References Plan 66-01 token --liv-accent-cyan and inlines the .liv-glow-cyan utility on hover.
+				'liv-primary':
+					'bg-[color:var(--liv-accent-cyan)] text-[#050b14] ring-[color:var(--liv-accent-cyan)]/40 active:bg-[#3bbac9] data-[state=open]:bg-[#3bbac9] hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_24px_rgba(77,208,225,0.2),inset_0_1px_0_rgba(77,208,225,0.1)] transition-all duration-[var(--liv-dur-fast)]',
 			},
 			size: {
 				sm: 'rounded-radius-sm h-[44px] md:h-[30px] px-3 text-caption gap-1.5',

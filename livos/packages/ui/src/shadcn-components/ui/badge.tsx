@@ -14,6 +14,10 @@ const badgeVariants = cva(
 				primary: 'border-transparent text-white bg-brand/80',
 				destructive: 'border-transparent text-destructive2 bg-destructive/10',
 				outline: 'text-text-primary border-border-default',
+				// Liv Design System v1 (Phase 66 / DESIGN-07) — cyan accent + leading pulsing dot for live/running surfaces.
+				// References Plan 66-01 token --liv-accent-cyan; pulsing dot via :before pseudo + tailwindcss-animate's animate-pulse.
+				'liv-status-running':
+					'border-[color:var(--liv-accent-cyan)]/40 text-[color:var(--liv-accent-cyan)] bg-[color:var(--liv-accent-cyan)]/10 before:content-[""] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-[color:var(--liv-accent-cyan)] before:mr-1.5 before:animate-pulse',
 			},
 		},
 		defaultVariants: {
