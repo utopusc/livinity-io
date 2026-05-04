@@ -392,13 +392,152 @@ export interface OpenAIPassthroughOpts {
 	passthroughCwd?: string
 }
 
+/** Anthropic content block — minimal shape for translation output. */
+type AnthropicContentBlock =
+	| {type: 'text'; text: string}
+	| {type: 'tool_use'; id: string; name: string; input: unknown}
+	| {type: 'tool_result'; tool_use_id: string; content: string}
+
+type AnthropicMessageOut = {
+	role: 'user' | 'assistant'
+	content: string | AnthropicContentBlock[]
+}
+
 /** Anthropic upstream body assembled from an OpenAI request. */
 interface UpstreamAnthropicBody {
 	model: string
 	max_tokens: number
 	system?: string
-	messages: Array<{role: 'user' | 'assistant'; content: string | unknown}>
+	messages: AnthropicMessageOut[]
 	tools?: ReturnType<typeof translateToolsToAnthropic>
+}
+
+/**
+ * F3 multi-turn tool_result translator (Phase 74 Plan 02).
+ *
+ * OpenAI clients (Continue.dev, Open WebUI, Cline-via-OpenAI) send `tool` role
+ * messages with `tool_call_id` referencing prior `assistant.tool_calls[].id`.
+ * Pre-F3 (Phase 57) the broker FILTERED these messages out at the request
+ * boundary — the upstream Claude never saw the tool's output, breaking
+ * multi-turn agentic loops. F3 folds them into Anthropic `user` messages
+ * carrying `tool_result` content blocks, preserving the ID round-trip.
+ *
+ * Anthropic-protocol passthrough (`/v1/messages`) preserves these IDs
+ * natively via the verbatim `messages` forward — F3 is OpenAI-direction-only
+ * (CONTEXT D-08 / `reference_broker_protocols_verified.md` 2026-05-03).
+ *
+ * Algorithm (per CONTEXT D-09..D-11 + reference_test_cases pseudocode):
+ *   - Walks the input message list in order.
+ *   - `user` / `assistant` (no tool_calls) → emit verbatim with single-string content.
+ *   - `assistant` with `tool_calls[]` → emit Anthropic assistant message whose
+ *     content is an array of `[{type:'text',...}?, ...{type:'tool_use', id, name, input}]`.
+ *     Text block is emitted only when `assistant.content` is a non-empty string.
+ *     `arguments` JSON-parses; on failure, falls back to the raw string + console.warn.
+ *   - Contiguous run of `tool` / `function` role messages → ONE Anthropic
+ *     user message whose content is an array of `tool_result` blocks
+ *     (one per source message), preserving declaration order.
+ *   - `tool` role uses `tool_call_id` verbatim as `tool_use_id` (D-10).
+ *   - `function` role without `tool_call_id` falls back to
+ *     `${function.name}:${index-within-run}` (D-11).
+ *   - `tool_result.content` is the source string verbatim, OR JSON-stringified
+ *     when the source content is a non-string (defensive — modern clients
+ *     send strings).
+ *   - Unknown roles trigger `console.warn` once and are dropped (defensive —
+ *     spec-compliant clients should never trigger this branch).
+ *
+ * Pure-functional: takes a non-system message list (`system` is hoisted to
+ * top-level by the caller) and returns the Anthropic `messages[]` array.
+ */
+function translateMessagesPreservingToolResults(
+	messages: readonly OpenAIChatCompletionsRequest['messages'][number][],
+): AnthropicMessageOut[] {
+	const out: AnthropicMessageOut[] = []
+	let i = 0
+	while (i < messages.length) {
+		const m = messages[i] as any
+		const role = m?.role
+		if (role === 'user') {
+			out.push({role: 'user', content: m.content as string | unknown as string})
+			i++
+		} else if (role === 'assistant') {
+			out.push(translateAssistantMessage(m))
+			i++
+		} else if (role === 'tool' || role === 'function') {
+			// Greedy-collect contiguous tool/function run.
+			const blocks: AnthropicContentBlock[] = []
+			let funcIdx = 0
+			while (
+				i < messages.length &&
+				((messages[i] as any)?.role === 'tool' || (messages[i] as any)?.role === 'function')
+			) {
+				const tm = messages[i] as any
+				const tool_use_id: string =
+					typeof tm.tool_call_id === 'string' && tm.tool_call_id.length > 0
+						? tm.tool_call_id
+						: tm.role === 'function' && typeof tm.name === 'string' && tm.name.length > 0
+							? `${tm.name}:${funcIdx}`
+							: `unknown:${funcIdx}`
+				const content: string =
+					typeof tm.content === 'string' ? tm.content : JSON.stringify(tm.content)
+				blocks.push({type: 'tool_result', tool_use_id, content})
+				funcIdx++
+				i++
+			}
+			out.push({role: 'user', content: blocks})
+		} else {
+			// Defensive: drop unknown roles with a single warn log. (T-74-02-03
+			// mitigation: warn carries the role name only — never logs content.)
+			console.warn(
+				`[liv-broker] dropping message with unknown role: ${String(role)}`,
+			)
+			i++
+		}
+	}
+	return out
+}
+
+/**
+ * Translate a single OpenAI `assistant` role message into an Anthropic
+ * `assistant` message. Handles the inverse direction of
+ * `translateToolUseToOpenAI` (response-side) — emits `tool_use` content
+ * blocks from `tool_calls[]`.
+ *
+ * Emits a single-string content if there are no `tool_calls` (preserves
+ * pre-F3 byte-identical shape for tool-free conversations).
+ */
+function translateAssistantMessage(m: any): AnthropicMessageOut {
+	const toolCalls: Array<{id: string; type: string; function: {name: string; arguments: string}}> =
+		Array.isArray(m?.tool_calls) ? m.tool_calls : []
+	if (toolCalls.length === 0) {
+		// Pre-F3 byte-identical shape: single-string content (or unknown forwarded as-is).
+		return {role: 'assistant', content: m.content as string | unknown as string}
+	}
+	const blocks: AnthropicContentBlock[] = []
+	if (typeof m.content === 'string' && m.content.length > 0) {
+		blocks.push({type: 'text', text: m.content})
+	}
+	for (const tc of toolCalls) {
+		const name = tc?.function?.name
+		const id = tc?.id
+		const rawArgs = tc?.function?.arguments
+		let input: unknown
+		if (typeof rawArgs === 'string') {
+			try {
+				input = rawArgs.length > 0 ? JSON.parse(rawArgs) : {}
+			} catch {
+				console.warn(
+					`[liv-broker] failed to JSON.parse tool_calls[].function.arguments for tool_call id=${String(
+						id,
+					)}; falling back to raw string`,
+				)
+				input = rawArgs
+			}
+		} else {
+			input = rawArgs ?? {}
+		}
+		blocks.push({type: 'tool_use', id: String(id ?? ''), name: String(name ?? ''), input})
+	}
+	return {role: 'assistant', content: blocks}
 }
 
 /**
@@ -407,9 +546,9 @@ interface UpstreamAnthropicBody {
  *   - OpenAI puts the system prompt as messages[0] with role='system';
  *     Anthropic uses a top-level `system` field. Multiple system messages
  *     are concatenated with `\n\n`.
- *   - Tool / function role messages are skipped (they have no Anthropic
- *     equivalent on the request side; tool_result blocks would require
- *     content-block translation which is out of scope for Phase 57).
+ *   - Tool / function role messages → translated to Anthropic `tool_result`
+ *     content blocks (Phase 74 F3, see translateMessagesPreservingToolResults).
+ *     Pre-F3 (Phase 57) these were filtered out, breaking multi-turn loops.
  *   - Tools are shape-translated via translateToolsToAnthropic (verbatim
  *     forward — D-30-02 reverses D-42-12 warn-and-ignore for passthrough).
  *   - Phase 61 Plan 03: model alias resolution is now async (Redis-backed)
@@ -421,9 +560,11 @@ function buildAnthropicBodyFromOpenAI(
 	actualModel: string,
 ): UpstreamAnthropicBody {
 	const systemMessages = body.messages.filter((m) => m.role === 'system')
-	const conversationMessages = body.messages.filter(
-		(m) => m.role !== 'system' && m.role !== 'tool' && m.role !== 'function',
-	)
+	// Phase 74 Plan 02 (F3): non-system messages flow through the walker
+	// (translateMessagesPreservingToolResults) which folds tool/function role
+	// messages into tool_result content blocks. Pre-F3 the filter dropped
+	// tool/function — see CONTEXT D-08..D-11 for rationale.
+	const conversationMessages = body.messages.filter((m) => m.role !== 'system')
 
 	const system =
 		systemMessages.length > 0
@@ -438,10 +579,7 @@ function buildAnthropicBodyFromOpenAI(
 		model: actualModel,
 		max_tokens: body.max_tokens ?? 4096,
 		system,
-		messages: conversationMessages.map((m) => ({
-			role: m.role as 'user' | 'assistant',
-			content: m.content as string | unknown,
-		})),
+		messages: translateMessagesPreservingToolResults(conversationMessages),
 	}
 	if (body.tools && Array.isArray(body.tools) && body.tools.length > 0) {
 		upstream.tools = translateToolsToAnthropic(body.tools)
