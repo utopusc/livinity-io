@@ -118,7 +118,7 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 1. Storybook/playground shows every token, motion, variant in one place
 2. Side-by-side screenshot vs current ai-chat shows visible WOW differential
 3. All shadcn liv-* variants render with proper accent + glow
-4. Motion primitives reusable across subsequent phases
+4. Motion primitives reusable across subsequent phases — **MET (2026-05-04 via 66-02; FadeIn/GlowPulse/SlideInPanel/TypewriterCaret/StaggerList barrel exported from `@/components/motion`)**
 
 ### Phase 67: Liv Agent Core Rebuild
 

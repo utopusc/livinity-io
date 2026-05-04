@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T18:36:00.693Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-04T19:30:00.000Z"
+last_activity: "2026-05-04 — 66-02 motion primitives shipped (commits `d3a63dd0`, `9f9b1c31`); DESIGN-05 marked complete"
 progress:
-  total_phases: 10
-  completed_phases: 8
-  total_plans: 54
-  completed_plans: 47
-  percent: 87
+  total_phases: 2
+  completed_phases: 1
+  total_plans: 10
+  completed_plans: 8
+  percent: 80
 ---
 
 # Project State
@@ -37,6 +37,12 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 1. **64-04 Step A** — Single batched SSH session to Mini PC (commands documented in `64-SUNA-FIX-EVIDENCE.md` Step 1/2): live diagnose → in-place compose patch → restart kortix-api → reachability gate
 2. **64-04 Step B** — Browser smoke test: visit `https://suna.bruce.livinity.io/`, type "Navigate to google.com and tell me what you see", confirm agent describes Google homepage
 3. **64-02 deferred** — 11 of 14 v29.3-v29.5 carryforward UATs are `needs-human-walk`; 1 `failed` (Phase 49 fail2ban regression). See `64-UAT-MATRIX.md` for the full list and walk steps.
+
+## Phase 66 Progress (Liv Design System v1)
+
+- **66-01** typography/color tokens — status uncertain (tailwind.config.ts shows extensions; no SUMMARY on disk yet)
+- **66-02 COMPLETE (2026-05-04)** — 5 motion primitives (`FadeIn`, `GlowPulse`, `SlideInPanel`, `TypewriterCaret`, `StaggerList`) + barrel under `livos/packages/ui/src/components/motion/`. Commits `d3a63dd0`, `9f9b1c31`. Build green; D-09 invariant held; sacred SHA unchanged. SUMMARY: `.planning/phases/66-liv-design-system-v1/66-02-SUMMARY.md`. Requirement DESIGN-05 marked complete.
+- 66-03/66-04/66-05 — pending
 
 ## v31.0 Milestone Summary
 
