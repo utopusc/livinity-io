@@ -1425,12 +1425,16 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
           // Wrapper entrypoint writes OpenCode config (broker baseURL) from env
           // OPENCODE_CONFIG_JSON, then exec's image's CMD. `$$` escape stops
           // compose substitution; shell expands at runtime.
+          working_dir: '/app/apps/api',
+          user: 'bun',
+          // Compose v2 quirk: setting `entrypoint:` resets image's CMD to null,
+          // so `exec "$@"` would have no args. Inline the upstream CMD directly
+          // (`bun run src/index.ts`) to bypass this.
           entrypoint: [
             'sh', '-c',
-            'mkdir -p /root/.config/opencode && ' +
-            'printf "%s" "$$OPENCODE_CONFIG_JSON" > /root/.config/opencode/config.json && ' +
-            'exec "$$@"',
-            '--',
+            'mkdir -p /home/bun/.config/opencode && ' +
+            'printf "%s" "$$OPENCODE_CONFIG_JSON" > /home/bun/.config/opencode/config.json && ' +
+            'exec bun run src/index.ts',
           ],
           environment: {
             // User-entered (from install dialog environmentOverrides) — flow

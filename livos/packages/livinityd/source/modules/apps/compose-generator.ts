@@ -81,6 +81,11 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		if ((serviceDef as any).env_file && (serviceDef as any).env_file.length > 0) {
 			service.env_file = [...(serviceDef as any).env_file]
 		}
+		// v30.5 — working_dir for images that need explicit CWD when entrypoint
+		// is overridden (e.g. Suna's kortix-api expects /app/apps/api).
+		if ((serviceDef as any).working_dir) {
+			service.working_dir = (serviceDef as any).working_dir
+		}
 		if ((serviceDef as any).user) {
 			service.user = (serviceDef as any).user
 		}
