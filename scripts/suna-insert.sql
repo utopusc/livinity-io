@@ -49,7 +49,7 @@ services:
       - ${APP_DATA_DIR}/api-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
 $compose$,
-  '{"env":[],"port":13737,"subdomain":"suna","requiresAiProvider":true,"installOptions":{"environmentOverrides":[{"name":"NEXT_PUBLIC_SUPABASE_URL","label":"Supabase Project URL (from supabase.com → Settings → API)","type":"string","required":true},{"name":"NEXT_PUBLIC_SUPABASE_ANON_KEY","label":"Supabase Anon Key (public — same Settings → API page)","type":"string","required":true},{"name":"SUPABASE_SERVICE_ROLE_KEY","label":"Supabase Service Role Key (secret — same Settings → API page)","type":"password","required":true}]}}'::jsonb,
+  '{"env":[],"port":13737,"subdomain":"suna","requiresAiProvider":true,"installOptions":{"environmentOverrides":[{"name":"NEXT_PUBLIC_SUPABASE_URL","label":"Supabase Project URL (Dashboard → Settings → API)","type":"string","required":true},{"name":"NEXT_PUBLIC_SUPABASE_ANON_KEY","label":"Supabase Anon Key (public; same Settings → API page)","type":"string","required":true},{"name":"SUPABASE_SERVICE_ROLE_KEY","label":"Supabase Service Role Key (secret; same Settings → API page)","type":"password","required":true},{"name":"DATABASE_URL","label":"Supabase Connection String (Dashboard → Settings → Database → URI tab → Use pooling, Mode: Transaction)","type":"password","required":true}]}}'::jsonb,
   'https://avatars.githubusercontent.com/u/128464470',
   false,
   true,
