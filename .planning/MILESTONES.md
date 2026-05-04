@@ -1,5 +1,43 @@
 # Milestones
 
+## v30.0 Livinity Broker Professionalization (Shipped: 2026-05-04)
+
+**Phases completed:** 8 phases (56-63), 44 plans (41/44 summaries — Phase 63 R-series live-verified piece-by-piece, formal walkthrough waived per --accept-debt), 166 commits since v30.0 seed (`d59b1b51`)
+**v30.5 informal scope merged into v30.0 close:** F1 (built-in tool isolation via R3.11 disallowedTools) + F6 (broker x-api-key external compat, commit `4a7c7932`) + F8 (multi-subdomain LivOS support 80%) DONE. F2 (token-streaming cadence) / F3 (multi-turn tool_result) / F4 (Caddy timeout) / F5 (identity preservation) → **v31 carryover**. F7 (Suna marketplace install pattern) 85% — sandbox network blocker → **v31 carryover** (natural fit with Bytebot per-session container architecture in v31 P71/P72).
+**Milestone audit:** Closed via `--accept-debt` override (B1 gate would have returned `human_needed` with Phases 60+62 unverified, 1 UAT gap on Phase 63). See "Live-Verification Gate Overrides" section at end of this file.
+**Known deferred items at close:** 6 (2 verification gaps for Phases 60+62, 1 UAT gap Phase 63, 3 v28.0 hot-patch quick tasks carried forward from prior milestones; see STATE.md Deferred Items section)
+**Sacred file:** `nexus/packages/core/src/sdk-agent-runner.ts` — current SHA `9f1562be...` after 25 normal feature commits (model bumps, broker passthrough, OAuth isolation, R3.11 disallowedTools). Memory's "UNTOUCHED" rule was stale from v22 era; `--accept-debt` close acknowledges file was actively developed under the v29-v30 broker work and stayed functional throughout.
+**Net stack delta:** 0 new top-level npm deps, 0 new DB migrations on Mini PC. Generic LivOS infra wins (compose-generator entrypoint+env_file forwarding, app.ts patchComposeFile environmentOverrides → .env materialization, server/index.ts subdomain proxy `public:true` flag, helmet CSP `*.supabase.co` allowance) make multi-service apps with external auth + their-own-DB possible going forward.
+
+**Key accomplishments:**
+
+- **Phase 56 — Research Spike (4 plans):** Resolved 7 architectural questions blocking implementation (Anthropic SDK direct vs HTTP proxy, tools forwarding, agent-mode opt-in mechanism, public endpoint Caddy vs CF Worker, key rotation, rate-limit policy, Agent mode block-streaming retention). Spec-compliance research informed Phases 57-62 design.
+- **Phase 57 — Passthrough Mode + Agent Mode Opt-In (5 plans):** External clients hitting `/v1/messages` and `/v1/chat/completions` get transparent forward to upstream Anthropic API with their own `system` prompt + their own `tools[]` preserved verbatim — no Nexus identity, no Nexus MCP tools. LivOS in-app chat keeps Agent-SDK tooled experience via header-gated agent mode opt-in.
+- **Phase 58 — True Token Streaming (5 plans):** Both Anthropic Messages and OpenAI Chat Completions streaming paths emit spec-compliant byte-level event sequences. External clients see token-by-token streaming as text generates, not single aggregate chunks at the end.
+- **Phase 59 — Bearer Token Auth (5 plans):** External API consumers authenticate with `Authorization: Bearer liv_sk_*` token instead of URL-path identity + container IP guard. Users can mint, list, revoke their own keys; revoked keys return Anthropic-spec 401.
+- **Phase 60 — Public Endpoint + Rate-Limit Perimeter (5 plans):** External clients reach broker at `https://api.livinity.io` over open internet using `liv_sk_*` Bearer tokens. Server5 platform Caddy runs the perimeter with caddy-ratelimit module + caddy-dns/cloudflare. **VERIFICATION human_needed** — live UAT walk waived per --accept-debt.
+- **Phase 61 — Spec Compliance + Model Aliases + Provider Stub (4 plans):** Spec-compliant rate-limit headers reach external clients; friendly model aliases (`opus`/`sonnet`/`haiku`/`gpt-4o`) resolve to current Claude family without per-client awareness; pluggable `BrokerProvider` interface lets future providers code-drop-in.
+- **Phase 62 — Usage Tracking + Settings UI (5 plans):** Every successful broker completion (Anthropic + OpenAI, streaming + sync) writes `broker_usage` row attributable to specific API key. Users have Settings UI to manage keys and inspect per-key usage breakdowns. **VERIFICATION human_needed** — live UAT walk waived per --accept-debt.
+- **Phase 63 — Mandatory Live Verification (11 plans, 1 summary):** R-series hot-patches landed end-to-end during Bolt.diy live testing — R1 relay admin-tunnel.ts username='bruce', R2 auth.ts Bearer-wins-identity early-return, R3 subscription via @anthropic-ai/claude-agent-sdk, R3.1-R3.7 SDK shape mirroring + permissionMode + dummy MCP, R3.8 BROKER_FORCE_ROOT_HOME (THE BREAKTHROUGH — /root creds vs /home/bruce creds), R3.9 dynamic client-tools MCP bridge, R3.10-R3.11 disallowedTools expansion to block built-ins. Live-verified: `/v1/messages` Anthropic API with Bearer + tools[] → HTTP 200 + tool_use streaming ✓, `/v1/chat/completions` OpenAI-compat with tools → HTTP 200 + tool_calls streaming ✓, subscription auth via /root/.claude/.credentials.json (BROKER_FORCE_ROOT_HOME) ✓. **Formal Phase 63 walkthrough waived per --accept-debt** — 11 plans-worth of UATs deferred to natural ongoing usage; v31 will close remaining live verification gaps as part of Phase 64 (v30.5 carryover sweep) within the v31 plan.
+
+**v30.5 informal scope (folded into v30.0 close):**
+
+- **F1 Built-in tool isolation:** R3.11 disallowedTools list blocks Bash/Read/Write/ToolSearch/all Claude Code built-ins — done.
+- **F6 External client compat (Bearer + x-api-key):** `bearer-auth.ts` accepts both `Authorization: Bearer liv_sk_*` (OpenAI convention) AND `x-api-key: liv_sk_*` (Anthropic spec) — Cline, Cursor, @anthropic-ai/sdk all reach broker. Live-verified via curl.
+- **F8 Multi-subdomain LivOS (80%):** Manual Redis insert pattern works for `suna-api.bruce.livinity.io` etc. Needs `additionalServices` field in BuiltinAppManifest for portability — deferred.
+
+**Carry-forward to v31 — "Liv Agent Reborn" (the dominant carry-forward driver):**
+
+- **F7 Suna marketplace sandbox network blocker:** kortix-api can't reach kortix-sandbox container (different Docker networks). 3 fix candidates documented; manual `docker network connect` test pending. Lifted into v31 P71 (Computer Use Foundation) — Bytebot per-session container architecture solves this category of problem the right way (one bytebotd-style container per user session, app gateway middleware with auth, react-vnc embed in BrowserToolView).
+- **F2 Token-level streaming cadence:** Investigate Agent SDK subprocess flush patterns. Lifted into v31 P74 (F2-F5 Carryover phase).
+- **F3 Multi-turn tool_result protocol:** Bolt sends `tool_result` in `messages[]`. Broker must convert tool_result → previous-turn context. Lifted into v31 P74.
+- **F4 Caddy timeout for long agentic:** `transport http { response_header_timeout 5m; read_timeout 5m }` on api.livinity.io block. Lifted into v31 P74.
+- **F5 Identity preservation:** systemPrompt accumulation audit. Lifted into v31 P74.
+- **External client compat matrix UAT:** Bolt.diy / Cursor / Cline / Continue.dev / Open WebUI walk-through. Lifted into v31 P64 (v30.5 final cleanup at v31 entry).
+- **14 carryover UATs from v29.3-v29.5:** Mechanism live-verified end-to-end via Bolt testing during Phase 63 R-series; formal UATs un-walked. Lifted into v31 P64.
+
+---
+
 ## v29.5 v29.4 Hot-Patch Recovery + Verification Discipline (Shipped: 2026-05-02)
 
 **Phases completed:** 6 phases (49-54), 6 plans, 0 formal tasks (8 hot-patch commits)
@@ -522,4 +560,5 @@ This is an APPEND-ONLY forensic trail of `--accept-debt` overrides invoked when 
 | Date (UTC ISO8601)   | Milestone | Phases waived                                     | UATs waived | Mode          | User reason / attestation                                                                                                                                                                                          |
 |----------------------|-----------|---------------------------------------------------|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 2026-05-02T19:35:00Z | v29.5     | 49-mini-pc-diagnostic, 51-a2-streaming-fix        | 14          | --accept-debt | Live verification surfaced 3 new architectural issues (Bolt.diy block-level streaming, identity contamination via Nexus system prompt + tools injection, OpenAI-Like provider env compat) that exceeded v29.5 hot-patch scope. Carrying forward to v30.0 Broker Professionalization milestone where Phase 63 mandatory live verification + 3 external client smoke tests close the loop properly. v29.5 mechanism work shipped (8 commits); ad-hoc live spot-checks confirmed A1/A2/A3/A4 mechanism fixes work — formal Phase 55 walkthrough deferred. |
+| 2026-05-04T16:30:00Z | v30.0     | 60-public-endpoint, 62-usage-tracking-settings, 63-mandatory-live-verification (formal walkthrough) | 14+11=25 (carryforward + Phase 63's own 11 plans) | --accept-debt | User direction: close v30.0 + v30.5 informal scope together to free runway for v31 "Liv Agent Reborn" UI overhaul + Bytebot computer use. Phase 63 R1-R3.11 series live-verified end-to-end during Bolt.diy debug sessions (subscription auth via /root creds breakthrough at R3.8, dynamic client-tools MCP bridge at R3.9, full disallowedTools at R3.11). v30.5 F7 Suna sandbox network blocker (only 85% complete) explicitly carried into v31 P71 where Bytebot per-session container architecture solves the same network-isolation pattern correctly. F2-F5 deferred items also v31 carryover (P74). Mechanism shipped (166 commits); audit trail per phase summaries; formal UATs deferred to natural ongoing usage rather than batched walkthrough. |
 

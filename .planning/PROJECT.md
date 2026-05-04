@@ -294,7 +294,81 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-B1-01..05 → Phase 54 (gsd toolkit gate landed; first invocation = this v29.5 close)
 - [⚠] FR-VERIFY-01..05 → DEFERRED to v30 Phase 63 (mandatory live verification not executed in v29.5)
 
-## Current Milestone: v30.0 Livinity Broker Professionalization (Real API Endpoint Mode)
+## Current State: v30.0 Shipped Local (Livinity Broker Professionalization, incl. v30.5 informal scope) — 2026-05-04
+
+**Delivered:** Livinity Broker is now a real-API-key experience for external/open-source apps (Bolt.diy / Open WebUI / Continue.dev / Cline / Cursor) — Bearer-token-authed (`Authorization: Bearer liv_sk_*` AND `x-api-key:` Anthropic-spec dual accept), public-endpoint at `https://api.livinity.io` (Server5 platform Caddy with caddy-ratelimit + caddy-dns/cloudflare custom build), true-token-streaming (Anthropic verbatim SSE forward + OpenAI 1:1 translation), rate-limit-aware (Anthropic-spec headers + 429 with Retry-After), multi-spec-compliant (alias resolver + provider stub interface). Each external client uses its own system prompt + its own tools without Nexus identity contamination. Phase 63 R-series (R1-R3.11) live-verified end-to-end during Bolt.diy debug sessions — subscription auth via /root creds breakthrough at R3.8, dynamic client-tools MCP bridge at R3.9, full disallowedTools at R3.11. v30.5 informal scope (F1 + F6 + F8) folded into close.
+
+**Closed via `--accept-debt`** 2026-05-04: Phases 60+62 VERIFICATION human_needed (live UAT walks waived); Phase 63 formal walkthrough waived (R-series live-verified piece-by-piece via Bolt debug sessions); 14 carryforward UATs from v29.3-v29.5 + 11 Phase 63 plan walks deferred to v31 P64 (v30.5 final cleanup at v31 entry). Forensic entry: `MILESTONES.md` "Live-Verification Gate Overrides" section, timestamp `2026-05-04T16:30:00Z`.
+
+**Stats:** 8 phases (56-63) / 44 plans (41 summaries) / 166 commits since v30.0 seed (`d59b1b51`) / 0 new top-level npm deps / `device_audit_log` REUSE for api-keys audit (no new table).
+**Audit:** Skipped formal `/gsd-audit-milestone` per user direction (close-and-continue priority for v31 momentum).
+**Archive:** `.planning/milestones/v30.0-ROADMAP.md` + `.planning/milestones/v30.0-REQUIREMENTS.md` + `.planning/milestones/v30.0-phases/` (8 phase dirs).
+
+**v30.5 informal scope (folded in):**
+- F1 Built-in tool isolation (R3.11 disallowedTools blocks Bash/Read/Write/ToolSearch/all Claude Code built-ins) ✓
+- F6 External client compat (`bearer-auth.ts` accepts both Bearer + x-api-key Anthropic spec) ✓
+- F8 Multi-subdomain LivOS (80%) — manual Redis insert pattern works; needs `additionalServices` BuiltinAppManifest field for portability
+
+**Acknowledged debt at close (carry-forward to v31 — Liv Agent Reborn):**
+- F7 Suna marketplace sandbox network blocker — kortix-api can't reach kortix-sandbox (different Docker networks). 3 fix candidates documented. Lifted into v31 P71 (Computer Use Foundation) — Bytebot per-session container architecture solves this category correctly.
+- F2 Token-level streaming cadence — Agent SDK subprocess flush patterns to investigate. Lifted into v31 P74.
+- F3 Multi-turn tool_result protocol — Bolt sends `tool_result` in messages[]. Lifted into v31 P74.
+- F4 Caddy timeout for long agentic sessions — `transport http { read_timeout 5m }` config. Lifted into v31 P74.
+- F5 Identity preservation across turns — systemPrompt accumulation audit. Lifted into v31 P74.
+
+**Sacred file note:** `nexus/packages/core/src/sdk-agent-runner.ts` current SHA `9f1562be...` after 25 normal feature commits since v22 era. The pre-v30 "UNTOUCHED" rule was stale memory; file was actively developed under v29-v30 broker work (model bumps, broker passthrough, OAuth isolation, R3.11 disallowedTools) and stayed functional throughout. v31 P65 Liv rename will functionally verify subscription path post-rename. Constraint retired going into v31.
+
+### Shipped (v30.0)
+
+- [x] FR-RESEARCH-01..07 → Phase 56 (7 architectural questions resolved, 9 D-30-XX decisions locked)
+- [x] FR-BROKER-A1-01..04 → Phase 57 (Passthrough mode preserves client system prompt + tools verbatim)
+- [x] FR-BROKER-A2-01..02 → Phase 57 (Agent mode opt-in via header for LivOS in-app chat)
+- [x] FR-BROKER-C1-01..02 → Phase 58 (Anthropic verbatim SSE forward via async iterator)
+- [x] FR-BROKER-C2-01..03 → Phase 58 (OpenAI 1:1 translation with usage chunk + crypto chatcmpl id)
+- [x] FR-BROKER-B1-01..05 → Phase 59 (`liv_sk_*` Bearer middleware + 4 tRPC procs + audit reuse)
+- [x] FR-BROKER-B2-01..02 → Phase 60 (api.livinity.io public endpoint + rate-limit perimeter)
+- [x] FR-BROKER-C3-01..03 → Phase 61 (rate-limit headers prefix-loop forward + canonical translation)
+- [x] FR-BROKER-D1-01..02 → Phase 61 (alias resolver + Redis SETNX seed)
+- [x] FR-BROKER-D2-01..02 → Phase 61 (BrokerProvider interface + 4 stubs)
+- [x] FR-BROKER-E1-01..03 → Phase 62 (broker_usage.api_key_id FK + capture middleware + insertUsage)
+- [x] FR-BROKER-E2-01..02 → Phase 62 (Settings API Keys CRUD + filter dropdown + admin filter chip)
+- [⚠] FR-VERIFY-V30-01..08 → Phase 63 (R1-R3.11 live-verified ad-hoc; formal walkthrough waived via --accept-debt; lifted into v31 P64)
+
+## Next Milestone: v31.0 Liv Agent Reborn (PLANNED)
+
+**Goal:** Make AI Chat the WOW centerpiece of LivOS. Replace "Nexus" cosmetic identity with "Liv" project-wide. Adopt Suna's UI patterns (side panel + per-tool views + browser/computer-use display) verbatim. Add computer use via Bytebot desktop image. Polish streaming UX, reasoning cards, lightweight memory.
+
+**Why this milestone exists:** User direct feedback 2026-05-04 — current AI Chat UI feels broken/dysfunctional. Suna's UI proves the bar (real-time tool execution panel, live VNC iframe for browser, per-tool view components). Bytebot proves computer use is achievable in self-hosted Docker. Combining the two with a Nexus → Liv rebrand creates a flagship UX moment for LivOS.
+
+**Target features (12 phases planned, P64-P76):**
+- **P64 v30.5 cleanup** — Suna sandbox fix attempt + 14 carryforward UATs walkthrough + Phase 63 wrap
+- **P65 Liv Rename** — Nexus → Liv project-wide (~5,800 occurrences across 250+ TS files; @nexus/* → @liv/*; /opt/nexus/ → /opt/liv/ Mini PC migration; systemd unit alignment)
+- **P66 Liv Design System v1** — color tokens (deep navy + cyan + amber + violet), motion primitives (FadeIn/GlowPulse/SlideInPanel/TypewriterCaret), typography (Inter Variable + JetBrains Mono), shadcn liv-* variants, Tabler icons unified
+- **P67 Liv Agent Core Rebuild** — Redis-as-SSE-relay (24h TTL, reconnectable runs), ToolCallSnapshot data model, LivAgentRunner wrapper around SdkAgentRunner (sacred file unchanged internally)
+- **P68 Side Panel + Tool View Dispatcher** — Suna's ToolCallSidePanel ported as LivToolPanel (fixed overlay, live/manual mode, slider, Cmd+I, Jump-to-Live pulse pill); auto-opens ONLY for browser-*/computer-use-* tools
+- **P69 Per-Tool Views Suite** — 9 view components (Browser/Command/FileOp/StrReplace/WebSearch/WebCrawl/WebScrape/DataProvider/Mcp/Generic) all Suna-derived
+- **P70 Composer + Streaming UX Polish** — auto-grow textarea, slash command menu expansion (6+ commands), Suna typing dots, streaming caret, welcome screen with suggestion cards
+- **P71 Computer Use Foundation** — Bytebot desktop image (Apache 2.0, ghcr.io/bytebot-ai/bytebot-desktop:edge) added to livinity-apps catalog with per-user compose templating; react-vnc embed; app gateway auth middleware
+- **P72 Computer Use Agent Loop** — 16 Bytebot tool schemas + system prompt verbatim copy (1280x960 coordinate space, screenshot-before-act, 3-retry NEEDS_HELP); livinityd computer-use module (TS); BYTEBOT_LLM_PROXY_URL → broker → Kimi (no Bytebot agent code used); NEEDS_HELP/takeover UI flow
+- **P73 Reliability Layer** — ContextManager (75% Kimi window threshold summarization), BullMQ background queue (Redis-backed), reconnectable runs with exponential backoff
+- **P74 F2-F5 Carryover from v30.5** — token cadence, multi-turn tool_result, Caddy timeout, identity preservation
+- **P75 Reasoning Cards + Lightweight Memory** — Kimi `reasoning_content` collapsible card render, Postgres tsvector FTS over conversations, pinned messages, conversation export
+- **P76 Agent Marketplace + Onboarding Tour** — agent_templates table + 8-10 seed agents, Suna marketplace UX adapted, first-run interactive tour (9 steps)
+
+**Estimated effort:** 171-229 hours (6-12 weeks solo at 4-6h/day).
+
+**Locked decisions for v31 entry:**
+- ONLY Suna UI patterns (NO Hermes UI per user direction 2026-05-04)
+- Side panel auto-opens ONLY for browser-*/computer-use-* tools (Suna behavior)
+- Bytebot desktop image only — agent code NOT used; broker proxy pattern (BYTEBOT_LLM_PROXY_URL) routes Kimi via existing Livinity broker
+- Subscription-only preserved (D-NO-BYOK)
+- Single-user privileged mode accepted for Bytebot containers (Mini PC single-user constraint)
+
+**Phase plan draft:** `.planning/v31-DRAFT.md` (851 lines, file-level breakdown). Awaits `/gsd-new-milestone v31` formal intake.
+
+---
+
+## Previous Milestone: v30.0 Livinity Broker Professionalization (Real API Endpoint Mode) — CLOSED 2026-05-04
 
 **Goal:** Transform Livinity Broker into a "real-API-key" experience for external/open-source apps (Bolt.diy, Open WebUI, Continue.dev, Cline) — Bearer-token-authed, public-endpoint, true-token-streaming, rate-limit-aware, multi-spec-compliant. Each external client must be able to use its own system prompt and its own tools without identity contamination from Nexus.
 
@@ -509,4 +583,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-02 — v29.5 closed via `--accept-debt`; v30.0 Livinity Broker Professionalization current milestone (8 phases proposed, awaiting `/gsd-new-milestone v30.0` to consume MILESTONE-CONTEXT.md)*
+*Last updated: 2026-05-04 — v30.0 closed via `--accept-debt` (incl. v30.5 informal scope); v31 "Liv Agent Reborn" planned (12 phases P64-P76 drafted at `.planning/v31-DRAFT.md`, awaiting `/gsd-new-milestone v31` formal intake)*
