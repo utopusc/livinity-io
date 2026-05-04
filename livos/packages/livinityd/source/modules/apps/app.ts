@@ -210,6 +210,32 @@ export default class App {
 				}
 			}
 			this.logger.log(`Applied ${Object.keys(environmentOverrides).length} environment overrides for ${this.id}`)
+
+			// v30.5 — Also write a `.env` file alongside docker-compose.yml so
+			// MULTI-SERVICE apps can reference user-provided values via Docker
+			// Compose `${VAR}` interpolation in non-main services. The override
+			// values above only land in the mainService's `environment:` block;
+			// without an .env file, secondary services see literal `${VAR}`
+			// strings and crash on validation. (E.g. Suna's kortix-api needs
+			// SUPABASE_URL etc. that user enters in install dialog targeting
+			// frontend mainService.) The .env file is mode 0600 — secrets only
+			// readable by livinityd's owner, never world-readable.
+			try {
+				const envFileLines: string[] = []
+				for (const [key, value] of Object.entries(environmentOverrides)) {
+					// Quote value if it contains spaces, =, $, or newlines (defensive)
+					const needsQuote = /[\s=$\n"]/.test(value)
+					const quoted = needsQuote
+						? `'${value.replace(/'/g, `'\\''`)}'`
+						: value
+					envFileLines.push(`${key}=${quoted}`)
+				}
+				const envFilePath = `${this.dataDirectory}/.env`
+				await fse.writeFile(envFilePath, envFileLines.join('\n') + '\n', {mode: 0o600})
+				this.logger.log(`Wrote .env file at ${envFilePath} (${envFileLines.length} entries) for compose interpolation`)
+			} catch (err: any) {
+				this.logger.log(`[warn] Failed to write .env for ${this.id}: ${err?.message || err}`)
+			}
 		}
 
 		// For apps that need CSRF origin whitelisting (e.g. Portainer behind reverse proxy)

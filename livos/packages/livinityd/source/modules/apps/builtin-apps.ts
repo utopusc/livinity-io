@@ -27,6 +27,10 @@ export interface ComposeServiceDef {
   // the original CMD via "$@". Suna uses this to write OpenCode's config.json
   // from the OPENCODE_CONFIG_JSON env var before launching the agent runtime.
   entrypoint?: string[]
+  // Load env vars from one or more files (paths relative to compose dir).
+  // Multi-service apps use this to share user-provided values written by
+  // app.ts patchComposeFile to `.env` from environmentOverrides.
+  env_file?: string[]
   user?: string
   shm_size?: string
   security_opt?: string[]
@@ -1352,19 +1356,25 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       environmentOverrides: [
         {
           name: 'NEXT_PUBLIC_SUPABASE_URL',
-          label: 'Supabase Project URL (from supabase.com → Settings → API)',
+          label: 'Supabase Project URL (Dashboard → Settings → API)',
           type: 'string',
           required: true,
         },
         {
           name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-          label: 'Supabase Anon Key (public — same Settings → API page)',
+          label: 'Supabase Anon Key (public; same Settings → API page)',
           type: 'string',
           required: true,
         },
         {
           name: 'SUPABASE_SERVICE_ROLE_KEY',
-          label: 'Supabase Service Role Key (secret — same Settings → API page)',
+          label: 'Supabase Service Role Key (secret; same Settings → API page)',
+          type: 'password',
+          required: true,
+        },
+        {
+          name: 'DATABASE_URL',
+          label: 'Supabase Connection String (Dashboard → Settings → Database → URI tab → Use pooling, Mode: Transaction)',
           type: 'password',
           required: true,
         },
@@ -1404,16 +1414,15 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         'kortix-api': {
           image: 'kortix/kortix-api:latest',
           restart: 'unless-stopped',
-          // Wrapper entrypoint: write OpenCode config (broker baseURL) from env
-          // OPENCODE_CONFIG_JSON, then exec image's CMD via "$@". `$$` escape
-          // forces compose to NOT substitute at config-load — shell expands at
-          // runtime. See ComposeServiceDef.entrypoint type doc.
-          //
-          // VERIFICATION TODO on first install:
-          //   - confirm /root/.config/opencode/ is the right path (non-root
-          //     user containers use /home/<user>/.config/). Run
-          //     `docker inspect kortix/kortix-api:latest | jq .Config.User`
-          //     after first pull.
+          // env_file: app.ts writes `.env` from environmentOverrides at install
+          // time (v30.5 plumbing). Contains user-entered Supabase credentials +
+          // DATABASE_URL + broker injection vars. Loaded into ALL services
+          // referencing it; Docker Compose `${VAR}` interpolation also reads
+          // from this file. Mode 0600 — secrets not world-readable.
+          env_file: ['.env'],
+          // Wrapper entrypoint writes OpenCode config (broker baseURL) from env
+          // OPENCODE_CONFIG_JSON, then exec's image's CMD. `$$` escape stops
+          // compose substitution; shell expands at runtime.
           entrypoint: [
             'sh', '-c',
             'mkdir -p /root/.config/opencode && ' +
@@ -1422,15 +1431,29 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             '--',
           ],
           environment: {
-            // External Supabase
+            // User-entered (from install dialog environmentOverrides) — flow
+            // via .env file above. The bare SUPABASE_URL/ANON copies below
+            // alias from NEXT_PUBLIC_* (Suna requires both naming conventions).
             SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
-            SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
             SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
-            // Database mode flag (Kortix uses this to skip bundled Supabase boot)
+            // DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY come from env_file (.env)
+            // — listed implicitly via env_file load.
+            //
+            // Hardcoded operational defaults — Kortix sandbox + tunnel config:
             DB_MODE: 'external',
-            // Forward broker env from frontend (Phase 43.2 inject targets only
-            // mainService — these explicit lines pull them through compose
-            // interpolation from the .env file livinityd writes alongside).
+            DOCKER_HOST: 'unix:///var/run/docker.sock',
+            ALLOWED_SANDBOX_PROVIDERS: 'local_docker',
+            TUNNEL_ENABLED: 'false',
+            // Hardcoded secrets — SECURITY CAVEAT: these are the SAME for every
+            // self-host install of this template. For LivOS marketplace single-
+            // user homelab deployment this is acceptable. v30.6 TODO: livinityd
+            // should generate per-install random secrets and write to .env.
+            // Until then, treat as a placeholder that works for setup.
+            API_KEY_SECRET:
+              'a8f2b91c4d5e6f70812c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4',
+            TUNNEL_SIGNING_SECRET:
+              'b9e3c80d2f4a5e617923d4f5e6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5',
+            // Broker injection (Phase 43.2 → frontend mainService → .env)
             ANTHROPIC_BASE_URL: '${ANTHROPIC_BASE_URL}',
             ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY}',
             OPENCODE_CONFIG_JSON: '${OPENCODE_CONFIG_JSON}',
