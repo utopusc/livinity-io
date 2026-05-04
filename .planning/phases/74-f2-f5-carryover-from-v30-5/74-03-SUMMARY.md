@@ -89,7 +89,14 @@ Full procedure: audit doc Section 7.
 - **Adjustment:** This plan executes only the read-only audit + diff documentation, then stops at the checkpoint. The actual `cp` backup, `cat > /etc/caddy/Caddyfile.new` edit, `caddy validate`, `caddy reload`, and 90-sec curl test are deferred to a continuation run after the operator approves the diff.
 - **Files modified:** none on Server5; only `74-03-CADDY-DIFF.md` and this `74-03-SUMMARY.md` in the repo.
 
-**2. [Out-of-scope finding, deferred] systemd ExecReload permission issue**
+**2. [Rule 1 - Parallel-execution contamination] 68-03 files accidentally committed under 74-03 message**
+- **Found during:** Post-commit `git show --stat HEAD` check.
+- **Issue:** Commit `624d3ef3` includes `livos/packages/ui/src/components/inline-tool-pill.tsx` (+207 lines) and `livos/packages/ui/src/components/inline-tool-pill.unit.test.tsx` (+24/-5 lines) in addition to the intended `74-03-CADDY-DIFF.md` + `74-03-SUMMARY.md`. The two `inline-tool-pill*` files are from a parallel-running Plan 68-03 GREEN wave (predecessor RED commit `a5b8ccb3`). They were already staged in the git index by the parallel agent when my `git add` ran on 74-03 paths only — Git's index is process-shared and the commit packed everything staged.
+- **Disposition:** Document only; do not amend or revert. The 68-03 agent's GREEN wave will see their files were committed under 74-03's message and reconcile. Reverting from 74-03's side would force-rewrite history, which the destructive_git_prohibition rule blocks. Forward-only correction is the right move.
+- **Impact:** None on Server5 / no source quality issue (the inline-tool-pill files are valid 68-03 work, just mis-labeled in commit message). Audit-doc + summary content for 74-03 is unaffected.
+- **Files in commit:** `624d3ef3` lists 4 files; only the two `74-03-*.md` files belong to this plan.
+
+**3. [Out-of-scope finding, deferred] systemd ExecReload permission issue**
 - **Found during:** Pre-edit state capture (Section 1 of audit doc).
 - **Issue:** `caddy.service` `ExecReload` previously failed with `open /var/log/caddy/api.livinity.io.log: permission denied`. Pre-existing (predates 74-03). Affects `systemctl reload caddy` but not the direct `caddy reload --config ...` path used by this plan.
 - **Disposition:** Logged in audit doc Section 1; out-of-scope for 74-03. Documented as deferred item — fix is `chown caddy:caddy /var/log/caddy/api.livinity.io.log` or equivalent group-write permission. Should land in a future infra hygiene plan.
