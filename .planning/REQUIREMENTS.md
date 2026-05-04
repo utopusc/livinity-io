@@ -58,8 +58,10 @@
 
 ### CORE (Phase 67 — Liv Agent Core Rebuild)
 
-- [ ] **CORE-01**: `liv/packages/core/src/run-store.ts` (NEW) — Redis-backed `RunStore` class with `createRun / appendChunk / getChunks / subscribeChunks / markComplete / markError`
-- [ ] **CORE-02**: Redis schema `liv:agent_run:{runId}:{meta,chunks,control}` + Pub/Sub `liv:agent_run:{runId}:tail` with 24h TTL
+- [x] **CORE-01
+**: `liv/packages/core/src/run-store.ts` (NEW) — Redis-backed `RunStore` class with `createRun / appendChunk / getChunks / subscribeChunks / markComplete / markError`
+- [x] **CORE-02
+**: Redis schema `liv:agent_run:{runId}:{meta,chunks,control}` + Pub/Sub `liv:agent_run:{runId}:tail` with 24h TTL
 - [ ] **CORE-03**: `liv/packages/core/src/liv-agent-runner.ts` (NEW) — wraps SdkAgentRunner; emits reasoning chunks, tool snapshots, computer-use tool routing, context manager hook
 - [ ] **CORE-04**: `livos/packages/livinityd/source/modules/ai/sse-endpoint.ts` (NEW) — Express SSE handler at `GET /api/agent/runs/:runId/stream` with reconnect support via `?after=`
 - [ ] **CORE-05**: `POST /api/agent/start` queues to BullMQ, returns `{runId}` immediately

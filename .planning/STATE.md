@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: P64 + P66 at human-verify; P67 planned (4 plans, 1828 LOC, ready to execute in fresh session)
-last_updated: "2026-05-04T20:30:00.000Z"
-last_activity: "2026-05-04 — P67 CONTEXT.md + 4 plans committed (commits `76d695d6` + plans). Recommended `/clear && /gsd-execute-phase 67` for fresh context."
+status: P67-01 complete (RunStore foundation shipped, 7/7 tests pass, sacred SHA verified); P64-04 still at human-verify checkpoint (Mini PC redeploy deferred); P66-05 still at human-verify checkpoint (browser A/B walk deferred)
+last_updated: "2026-05-04T19:45:55.603Z"
+last_activity: "2026-05-04 — 67-01 GREEN commit `eccbb8d8` (RunStore Redis-backed agent-run lifecycle store + 7-test tsx suite + barrel re-exports). RED commit `a00523ca` preceded GREEN per TDD."
 progress:
-  total_phases: 13
-  completed_phases: 0
-  total_plans: 10
-  completed_plans: 8
-  percent: 80
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 14
+  completed_plans: 11
+  percent: 79
 ---
 
 # Project State
@@ -52,15 +52,22 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 2. **66-05 Step 2** — Visit `/playground/liv-design-system` (logged-in route), walk all 6 sections (Color tokens / Typography / Motion primitives / Glass-grain-glow / shadcn variants / Icon map)
 3. **66-05 Step 3** — Side-by-side A/B vs current `/ai-chat` route. Verdict: `approved` / `approved with notes: <notes>` / `failed: <reason>`
 
-## Phase 67 Progress (Liv Agent Core Rebuild) — discuss + plan complete, execute pending
+## Phase 67 Progress (Liv Agent Core Rebuild) — 1/4 plans complete
 
 - **CONTEXT.md ✅** 26 locked decisions (D-01..D-26); ToolCallSnapshot shape locked (D-12) — unblocks P68/P69 design
 - **PLANs ✅** 4 plans, 3 waves, 1828 LOC of plans:
-  - 67-01 (W1): RunStore Redis lifecycle (4-key schema + 24h TTL + Pub/Sub tail)
-  - 67-04 (W1): useLivAgentStream Zustand hook (reconnect-after, snapshot dedupe)
-  - 67-02 (W2): LivAgentRunner composition wrapper (sacred file untouched)
-  - 67-03 (W3): SSE endpoint + POST /start + POST /control + index.ts mount
-- **EXECUTE pending** — 12-16h estimated (wall-clock ~10-12h with W1 parallel). **Recommend `/clear && /gsd-execute-phase 67` for fresh context window** (per planner's note).
+  - 67-01 (W1): RunStore Redis lifecycle (4-key schema + 24h TTL + Pub/Sub tail) ✅ — commits `a00523ca` (RED) + `eccbb8d8` (GREEN); SUMMARY at `67-01-SUMMARY.md`; CORE-01 + CORE-02 marked complete; 7/7 tsx tests pass; build clean; sacred SHA `4f868d31...` unchanged
+  - 67-04 (W1): useLivAgentStream Zustand hook (reconnect-after, snapshot dedupe) — pending
+  - 67-02 (W2): LivAgentRunner composition wrapper (sacred file untouched) — pending
+  - 67-03 (W3): SSE endpoint + POST /start + POST /control + index.ts mount — pending
+- **EXECUTE in progress** — 67-01 done (~12 min wall-clock); 3 plans remaining.
+
+### P67 Decisions Logged
+
+- **67-01:** idx assignment via INCR sidecar counter (`liv:agent_run:{runId}:idx`), atomic, race-free; chosen over LLEN+RPUSH per plan action step 3.
+- **67-01:** tail Pub/Sub channel publishes chunk INDEX (decimal string) — subscribers re-read full chunk via `getChunks(idx)`. Narrow channel + automatic late-subscriber backfill via single LRANGE.
+- **67-01:** Test backend = ioredis-mock (preferred path); REDIS_URL fallback wired but unused. ioredis-mock@^8.9.0 + @types/ioredis-mock@^8.2.5 added to @nexus/core devDeps.
+- **67-01:** RunStore re-exported from BOTH `nexus/packages/core/src/index.ts` (package main) AND `lib.ts` (`@nexus/core/lib` subpath) — covers both import styles in the wild.
 
 ## v31.0 Milestone Summary
 

@@ -37,7 +37,7 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 - [ ] **Phase 64: v30.5 Final Cleanup at v31 Entry** (CARRY-01..05) — F7 Suna sandbox network blocker fix + 14 carryforward UATs + Phase 63's 11 plan walks + 3 v28.0 quick-tasks resolution + external client compat matrix UAT
 - [ ] **Phase 65: Liv Rename + Foundation Cleanup** (RENAME-01..13) — Nexus → Liv project-wide (~5,800 occurrences); `nexus/` → `liv/` git mv; @nexus/* → @liv/*; NEXUS_* → LIV_*; nexus:* Redis → liv:*; Mini PC `/opt/nexus/` → `/opt/liv/` migration
 - [ ] **Phase 66: Liv Design System v1** (DESIGN-01..07) — color tokens (deep navy + cyan + amber + violet), motion primitives (FadeIn/GlowPulse/SlideInPanel/TypewriterCaret), typography (Inter Variable + JetBrains Mono), shadcn liv-* variants, Tabler icons unified
-- [ ] **Phase 67: Liv Agent Core Rebuild** (CORE-01..07) — Redis-as-SSE-relay (24h TTL, reconnectable runs), ToolCallSnapshot data model, LivAgentRunner wrapper around SdkAgentRunner, SSE endpoint with `?after=` resume support
+- [ ] **Phase 67: Liv Agent Core Rebuild** (CORE-01..07) — 1/4 plans (RunStore done 2026-05-04); Redis-as-SSE-relay (24h TTL, reconnectable runs), ToolCallSnapshot data model, LivAgentRunner wrapper around SdkAgentRunner, SSE endpoint with `?after=` resume support
 - [ ] **Phase 68: Side Panel + Tool View Dispatcher** (PANEL-01..10) — Suna ToolCallSidePanel ported as LivToolPanel; auto-opens ONLY for `browser-*`/`computer-use-*` tools; live/manual mode + slider + Cmd+I; Zustand store
 - [ ] **Phase 69: Per-Tool Views Suite** (VIEWS-01..11) — 9 view components (Browser/Command/FileOp/StrReplace/WebSearch/WebCrawl/WebScrape/Mcp/Generic) all Suna-derived + inline tool pill (Suna pattern, not Hermes)
 - [ ] **Phase 70: Composer + Streaming UX Polish** (COMPOSER-01..09) — auto-grow textarea, stop button toggle, slash commands expanded, mention menu, voice + model badge, streaming caret, agent status, typing dots, welcome screen
@@ -134,8 +134,8 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 3. Tool snapshots arrive paired (assistantCall + toolResult) not separate chunks
 4. Reasoning chunks distinguished from text chunks in stream
 
-**Plans:** 4 plans in 3 waves
-- [ ] 67-01-PLAN.md (Wave 1) — RunStore: Redis-backed agent-run lifecycle (createRun/appendChunk/getChunks/subscribeChunks/setControl/markComplete/markError + 24h TTL)
+**Plans:** 4 plans in 3 waves (1/4 complete)
+- [x] 67-01-PLAN.md (Wave 1) — RunStore: Redis-backed agent-run lifecycle (createRun/appendChunk/getChunks/subscribeChunks/setControl/markComplete/markError + 24h TTL) — ✅ done 2026-05-04, commits `a00523ca`+`eccbb8d8`, 7/7 tests pass, sacred SHA verified, CORE-01+CORE-02 complete
 - [ ] 67-02-PLAN.md (Wave 2, deps: 01) — LivAgentRunner: composition wrapper around SdkAgentRunner; reasoning extraction (D-14), tool snapshot batching (D-15), computer-use stub (D-16)
 - [ ] 67-03-PLAN.md (Wave 3, deps: 01,02) — POST /api/agent/start + GET /api/agent/runs/:runId/stream (SSE with ?after= resume + 15s heartbeat) + POST /api/agent/runs/:runId/control
 - [ ] 67-04-PLAN.md (Wave 1) — useLivAgentStream React hook (Zustand-backed; reconnect-after; ToolCallSnapshot dedupe by toolId)
