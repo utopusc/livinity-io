@@ -55,11 +55,13 @@
   "devDependencies": {
     "@types/dockerode": "^3.3.0",
     "@types/express": "^5.0.0",
+    "@types/ioredis-mock": "^8.2.7",
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.0.0",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.5.0",
+    "ioredis-mock": "^8.13.1",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0"
   }
