@@ -20,6 +20,10 @@ export type { AgentEvent, AgentConfig, AgentResult } from './agent.js';
 export { KimiAgentRunner } from './kimi-agent-runner.js';
 export { SdkAgentRunner } from './sdk-agent-runner.js';
 
+// ── Run Store (Phase 67-01) ───────────────────────────────────
+export { RunStore } from './run-store.js';
+export type { Chunk, ChunkType, RunMeta, RunStatus } from './run-store.js';
+
 // ── Tool Registry ──────────────────────────────────────────────
 export { ToolRegistry } from './tool-registry.js';
 export type { ToolPolicy } from './tool-registry.js';
