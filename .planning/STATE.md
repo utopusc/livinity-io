@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: 64-05 closed CARRY-05; 3 v28.0 quick-tasks classified `already-resolved`
-last_updated: "2026-05-04T17:58:07.338Z"
-last_activity: 2026-05-04 — Plan 64-05 executed (commit `e89084d4`); SUMMARY at `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-05-SUMMARY.md`
+status: Phase 64 — 4/5 plans complete; 64-04 paused at human-verify checkpoint (Mini PC redeploy + Suna smoke test)
+last_updated: "2026-05-04T18:30:00.000Z"
+last_activity: 2026-05-04 — Phase 64 Wave 1+2 executed; 64-04 reached `## CHECKPOINT REACHED` for user-walk
 progress:
-  total_phases: 1
+  total_phases: 13
   completed_phases: 0
   total_plans: 5
   completed_plans: 4
@@ -22,14 +22,21 @@ See: .planning/PROJECT.md
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
 **Current milestone:** v31.0 Liv Agent Reborn — Nexus → Liv rename + Suna-only UI overhaul + Bytebot computer use
 **Last shipped milestone:** v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope) — closed 2026-05-04 via `--accept-debt`
-**Next action:** `/gsd-plan-phase 64` (v30.5 final cleanup) OR `/gsd-discuss-phase 64` to refine approach first
+**Next action:** Walk Steps A + B documented in `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-SUNA-FIX-EVIDENCE.md` (Mini PC redeploy + Suna "Navigate to google.com" smoke test). Then re-invoke `/gsd-execute-phase 64` to close out 64-04, or move to Phase 65 (NOT autonomous — see v31-DRAFT.md line 177).
 
 ## Current Position
 
-Phase: 64 (v30.5 Final Cleanup) — in progress
-Plan: 64-05 complete (quick-task triage); 64-01..64-04 still pending
-Status: 64-05 closed CARRY-05; 3 v28.0 quick-tasks classified `already-resolved`
-Last activity: 2026-05-04 — Plan 64-05 executed (commit `e89084d4`); SUMMARY at `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-05-SUMMARY.md`
+Phase: 64 (v30.5 Final Cleanup) — in progress, 4/5 plans complete
+Plans complete: 64-01 (compat matrix), 64-02 (UAT matrix), 64-03 (R-series matrix), 64-05 (quick-task triage)
+Plan paused: 64-04 (Suna sandbox fix) — Tasks 1+2 partial-deferred to user-walk; Task 3 = checkpoint:human-verify (browser smoke test)
+Status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
+Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)
+
+## Phase 64 Outstanding Items (user-walk required)
+
+1. **64-04 Step A** — Single batched SSH session to Mini PC (commands documented in `64-SUNA-FIX-EVIDENCE.md` Step 1/2): live diagnose → in-place compose patch → restart kortix-api → reachability gate
+2. **64-04 Step B** — Browser smoke test: visit `https://suna.bruce.livinity.io/`, type "Navigate to google.com and tell me what you see", confirm agent describes Google homepage
+3. **64-02 deferred** — 11 of 14 v29.3-v29.5 carryforward UATs are `needs-human-walk`; 1 `failed` (Phase 49 fail2ban regression). See `64-UAT-MATRIX.md` for the full list and walk steps.
 
 ## v31.0 Milestone Summary
 
