@@ -2,12 +2,12 @@
 
 ## Milestones
 
-- ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01 with `gaps_found` accepted; MiroFish dropped) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
-- ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01, status `passed`, 18/18 reqs) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
-- ✅ **v29.5 v29.4 Hot-Patch Recovery + Verification Discipline** — Phases 49-54 (shipped local 2026-05-02 via `--accept-debt`; Phase 55 carry-forward; new architectural issues surfaced → v30.0) — see [milestones/v29.5-ROADMAP.md](milestones/v29.5-ROADMAP.md)
-- ✅ **v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope)** — Phases 56-63 (shipped local 2026-05-04 via `--accept-debt`; F7 Suna sandbox + F2-F5 carry to v31) — see [milestones/v30.0-ROADMAP.md](milestones/v30.0-ROADMAP.md)
-- 📋 **v31.0 Liv Agent Reborn** — Phases 64-76 (PLANNED — Nexus → Liv rename + Suna-only UI overhaul + Bytebot computer use; draft at `.planning/v31-DRAFT.md`, awaiting `/gsd-new-milestone` formal intake)
-- ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future milestone slot, e.g. v32.0)
+- ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
+- ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
+- ✅ **v29.5 v29.4 Hot-Patch Recovery + Verification Discipline** — Phases 49-54 (shipped local 2026-05-02 via `--accept-debt`) — see [milestones/v29.5-ROADMAP.md](milestones/v29.5-ROADMAP.md)
+- ✅ **v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope)** — Phases 56-63 (shipped local 2026-05-04 via `--accept-debt`) — see [milestones/v30.0-ROADMAP.md](milestones/v30.0-ROADMAP.md)
+- 🟢 **v31.0 Liv Agent Reborn** — Phases 64-76 (active; consumes [REQUIREMENTS.md](REQUIREMENTS.md))
+- ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v32.0)
 
 ---
 
@@ -16,26 +16,256 @@
 <details>
 <summary>✅ v30.0 Livinity Broker Professionalization (Phases 56-63) — SHIPPED 2026-05-04 via --accept-debt</summary>
 
-- [x] Phase 56: Research Spike (4/4 plans) — 9 D-30-XX decisions locked; SPIKE-FINDINGS.md
-- [x] Phase 57: A1+A2 Passthrough Mode + Agent Mode Opt-In (5/5 plans, 6/6 reqs) — sacred file byte-identical; 95 tests GREEN
-- [x] Phase 58: C1+C2 True Token Streaming (5/5 plans, 5/5 reqs) — Anthropic verbatim SSE forward + OpenAI 1:1 translation; 56 new tests
-- [x] Phase 59: B1 Per-User Bearer Token Auth (5/5 plans, 5/5 reqs) — `liv_sk_*` Bearer middleware + 4 tRPC procs + audit reuse
-- [⚠] Phase 60: B2 Public Endpoint + Rate-Limit (5/5 plans, 2/2 reqs) — Server5 Caddy custom build + api.livinity.io block; **VERIFICATION human_needed** (live UAT walk waived per --accept-debt)
-- [x] Phase 61: C3+D1+D2 Spec Compliance + Aliases + Provider Stub (4/4 plans, 7/7 reqs) — alias-resolver + 4 BrokerProvider stubs; 53 new tests
-- [⚠] Phase 62: E1+E2 Usage Tracking + Settings UI (5/5 plans, 5/5 reqs) — broker_usage.api_key_id FK + Settings API Keys CRUD + filter dropdown; **VERIFICATION human_needed** (live UAT walk waived per --accept-debt)
-- [⚠] Phase 63: Mandatory Live Verification (1/11 plans formal walkthrough) — R1-R3.11 hot-patches live-verified end-to-end during Bolt.diy debug sessions (subscription auth /root creds breakthrough at R3.8, dynamic client-tools MCP at R3.9, full disallowedTools at R3.11). Formal walkthrough waived per --accept-debt; 14 carryforward UATs + Phase 63's own 11 plan walks lifted into v31 P64 (v30.5 final cleanup at v31 entry).
+Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continue.dev, Cline, Cursor) — Bearer + x-api-key dual-auth, public api.livinity.io endpoint, true token streaming, spec-compliant rate-limit + alias resolver + provider stub, per-user usage tracking + Settings UI. v30.5 informal scope (F1/F6/F8) folded into close. F2-F5 + F7 → v31 carryover.
 
-**v30.5 informal scope (folded into v30.0 close):**
-- F1 Built-in tool isolation (R3.11 disallowedTools) — done
-- F6 External client compat (Bearer + x-api-key dual accept) — done; live-verified via curl
-- F8 Multi-subdomain LivOS support (80%) — manual Redis insert pattern works; needs `additionalServices` field for portability
-- F2/F3/F4/F5 + F7 Suna sandbox network → v31 carryover (P74 + P71 respectively)
-
-**Sacred file:** `nexus/packages/core/src/sdk-agent-runner.ts` — current SHA `9f1562be...` after 25 normal feature commits since v22 era. Old "UNTOUCHED" rule was stale memory; file actively developed and stable throughout v29-v30.
-
-**Stats:** 8 phases / 44 plans (41 summaries) / 166 commits since v30.0 seed (`d59b1b51`) / 0 new top-level npm deps.
+8 phases / 44 plans (41 summaries) / 166 commits since v30.0 seed (`d59b1b51`).
 
 </details>
+
+### 🟢 v31.0 Liv Agent Reborn (Active — Phases 64-76)
+
+**Goal:** Make AI Chat the WOW centerpiece of LivOS. Replace "Nexus" cosmetic identity with "Liv" project-wide. Adopt Suna's UI patterns verbatim (side panel + per-tool views + browser/computer-use display). Add computer use via Bytebot desktop image. Polish streaming UX, reasoning cards, lightweight memory, agent marketplace.
+
+**Source plan:** `.planning/v31-DRAFT.md` (851 lines, file-level breakdown user-validated 2026-05-04).
+
+**UI scope guard (locked):** ONLY Suna UI patterns. NO Hermes UI per user direction 2026-05-04.
+
+**Estimated effort:** 171-229 hours (6-12 weeks solo at 4-6h/day).
+
+**Phase summary:**
+
+- [ ] **Phase 64: v30.5 Final Cleanup at v31 Entry** (CARRY-01..05) — F7 Suna sandbox network blocker fix + 14 carryforward UATs + Phase 63's 11 plan walks + 3 v28.0 quick-tasks resolution + external client compat matrix UAT
+- [ ] **Phase 65: Liv Rename + Foundation Cleanup** (RENAME-01..13) — Nexus → Liv project-wide (~5,800 occurrences); `nexus/` → `liv/` git mv; @nexus/* → @liv/*; NEXUS_* → LIV_*; nexus:* Redis → liv:*; Mini PC `/opt/nexus/` → `/opt/liv/` migration
+- [ ] **Phase 66: Liv Design System v1** (DESIGN-01..07) — color tokens (deep navy + cyan + amber + violet), motion primitives (FadeIn/GlowPulse/SlideInPanel/TypewriterCaret), typography (Inter Variable + JetBrains Mono), shadcn liv-* variants, Tabler icons unified
+- [ ] **Phase 67: Liv Agent Core Rebuild** (CORE-01..07) — Redis-as-SSE-relay (24h TTL, reconnectable runs), ToolCallSnapshot data model, LivAgentRunner wrapper around SdkAgentRunner, SSE endpoint with `?after=` resume support
+- [ ] **Phase 68: Side Panel + Tool View Dispatcher** (PANEL-01..10) — Suna ToolCallSidePanel ported as LivToolPanel; auto-opens ONLY for `browser-*`/`computer-use-*` tools; live/manual mode + slider + Cmd+I; Zustand store
+- [ ] **Phase 69: Per-Tool Views Suite** (VIEWS-01..11) — 9 view components (Browser/Command/FileOp/StrReplace/WebSearch/WebCrawl/WebScrape/Mcp/Generic) all Suna-derived + inline tool pill (Suna pattern, not Hermes)
+- [ ] **Phase 70: Composer + Streaming UX Polish** (COMPOSER-01..09) — auto-grow textarea, stop button toggle, slash commands expanded, mention menu, voice + model badge, streaming caret, agent status, typing dots, welcome screen
+- [ ] **Phase 71: Computer Use Foundation** (CU-FOUND-01..07) — Bytebot desktop image to livinity-apps catalog (per-user compose templating, port 14100+, --privileged, shm 2g); react-vnc embed; app gateway auth; container lifecycle (30min idle timeout, max 1/user)
+- [ ] **Phase 72: Computer Use Agent Loop** (CU-LOOP-01..07) — 16 Bytebot tool schemas + system prompt verbatim copy; livinityd computer-use module; BYTEBOT_LLM_PROXY_URL → broker → Kimi; NEEDS_HELP/takeover UI flow
+- [ ] **Phase 73: Reliability Layer** (RELIAB-01..06) — ContextManager (75% Kimi window summarization), BullMQ background queue (per-user concurrency 1), reconnectable runs, per-user resource limits
+- [ ] **Phase 74: F2-F5 Carryover from v30.5** (BROKER-CARRY-01..05) — token cadence streaming, multi-turn tool_result protocol, Caddy timeout for long agentic, identity preservation across turns
+- [ ] **Phase 75: Reasoning Cards + Lightweight Memory** (MEM-01..08) — Kimi reasoning_content collapsible amber card, Postgres tsvector FTS over conversations, pinned messages, conversation export
+- [ ] **Phase 76: Agent Marketplace + Onboarding Tour** (MARKET-01..07) — agent_templates table + 8-10 seed agents, Suna marketplace UX adapted, first-run interactive tour (9 steps), Settings "Liv Agent" section
+
+**Dependencies:**
+```
+P64 → P65 → P66 ─┬→ P67 ─┬→ P68 → P69 → P70
+                  │        ├→ P73
+                  │        ├→ P74
+                  │        ├→ P75
+                  │        └→ P76
+                  └→ P71 → P72
+```
+
+P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/P69/P70/P71/P75/P76. P67 (core rebuild) blocks anything using new ToolCallSnapshot model. P71 (CU foundation) blocks P72 (CU agent loop). P73-P76 can run in parallel after P67 done.
+
+**Locked decisions for v31 entry:**
+- ONLY Suna UI patterns (NO Hermes UI)
+- Side panel auto-opens ONLY for `browser-*`/`computer-use-*` tools
+- Bytebot: desktop image only (Apache 2.0); agent code NOT used
+- Subscription-only preserved (D-NO-BYOK)
+- Single-user privileged Bytebot containers accepted
+- Sacred file old "UNTOUCHED" rule retired (was stale memory; current SHA `9f1562be...` after 25 normal commits)
+
+**Carry from v30.0 (mapped into v31 phases):**
+- F7 Suna sandbox network blocker → P71 (Bytebot per-session container architecture solves this category)
+- F2-F5 broker improvements → P74 (dedicated carryover phase)
+- 14 carryforward UATs + Phase 63's 11 plan walks → P64 (v30.5 final cleanup)
+
+---
+
+## Phase Details
+
+### Phase 64: v30.5 Final Cleanup at v31 Entry
+
+**Goal:** Resolve all v30.0 carry-forward items before v31 momentum builds. Suna sandbox network blocker fixed; 14 carryforward UATs walked; Phase 63's 11 plan walks completed; external client compat matrix documented.
+
+**Depends on:** Nothing (first phase of v31).
+
+**Requirements:** CARRY-01..05
+
+**Success criteria:**
+1. Suna marketplace install → "Navigate to google.com" smoke test passes via Suna UI
+2. 14 UAT files (4 v29.5 + 4 v29.4 + 6 v29.3) walked on Mini PC with results documented
+3. Phase 63 R-series formal walkthrough complete (11 plans)
+4. External client compat matrix doc written (Bolt.diy + Cursor + Cline + Continue.dev + Open WebUI quirks)
+5. 3 v28.0 quick-tasks resolved or moved to backlog
+
+### Phase 65: Liv Rename + Foundation Cleanup
+
+**Goal:** Project-wide cosmetic rename Nexus → Liv. Mechanical, high blast radius, must be atomic.
+
+**Depends on:** Phase 64 (v30.5 cleanup so we don't rename a half-broken state).
+
+**Requirements:** RENAME-01..13
+
+**Success criteria:**
+1. `git grep -i "nexus" liv/ livos/` returns 0 (allowed: archived planning docs)
+2. All systemd units green on Mini PC after `/opt/nexus/` → `/opt/liv/` migration
+3. Subscription Claude responds via `/v1/messages` post-rename
+4. Mini PC migration script idempotent + rollback-ready (< 10 min rollback target)
+
+### Phase 66: Liv Design System v1
+
+**Goal:** Establish visual identity that produces "WOW" reaction. Tokens, motion language, typography, glow primitives, icon language.
+
+**Depends on:** Phase 65 (rename complete; design tokens prefix `liv-` consistent).
+
+**Requirements:** DESIGN-01..07
+
+**Success criteria:**
+1. Storybook/playground shows every token, motion, variant in one place
+2. Side-by-side screenshot vs current ai-chat shows visible WOW differential
+3. All shadcn liv-* variants render with proper accent + glow
+4. Motion primitives reusable across subsequent phases
+
+### Phase 67: Liv Agent Core Rebuild
+
+**Goal:** Replace direct WS streaming with Redis-as-SSE-relay. Introduce ToolCallSnapshot data model. Wrap SdkAgentRunner with new LivAgentRunner orchestrator.
+
+**Depends on:** Phase 65 (uses `liv/` paths).
+
+**Requirements:** CORE-01..07
+
+**Success criteria:**
+1. Browser refresh mid-agent-run → SSE catches up from last chunk
+2. `stop` signal terminates loop within 1 iteration
+3. Tool snapshots arrive paired (assistantCall + toolResult) not separate chunks
+4. Reasoning chunks distinguished from text chunks in stream
+
+### Phase 68: Side Panel + Tool View Dispatcher
+
+**Goal:** Port Suna's ToolCallSidePanel as LivToolPanel. Wire Zustand store. Tool view dispatcher with GenericToolView fallback. Auto-open behavior for visual tools only.
+
+**Depends on:** Phase 66 (design tokens), Phase 67 (ToolCallSnapshot data model).
+
+**Requirements:** PANEL-01..10
+
+**Success criteria:**
+1. Visual tool auto-open: Agent runs `browser-navigate` → panel slides in automatically, even if user previously closed
+2. Non-visual tool no auto-open: Agent runs `execute-command` → no panel pop; tool inline; clickable to open
+3. Click any tool call in chat → panel slides in, focuses that tool
+4. Cmd+I → panel closes; stays closed until next visual tool
+
+### Phase 69: Per-Tool Views Suite
+
+**Goal:** Implement all 9 tool view components + inline tool row. Each visually distinct using Suna pattern.
+
+**Depends on:** Phase 68 (panel + dispatcher framework).
+
+**Requirements:** VIEWS-01..11
+
+**Success criteria:**
+1. Each tool type renders with distinct view component (visually verifiable)
+2. Status transitions smooth (running → done with check icon morph)
+3. Browser tool shows live VNC for computer-use category, static screenshot otherwise
+4. Diff rendering correct on str-replace
+5. Mobile readable for all 9 views
+
+### Phase 70: Composer + Streaming UX Polish
+
+**Goal:** Transform input composer into delightful interaction. Polish streaming feedback. Suna patterns + welcome screen.
+
+**Depends on:** Phase 66 (design tokens), Phase 67 (streaming model).
+
+**Requirements:** COMPOSER-01..09
+
+**Success criteria:**
+1. Type message → streaming caret hugs last token (no orphan)
+2. Drag image → preview chip appears
+3. Press `/` → slash menu opens with 6+ commands
+4. First open → welcome screen with 4 suggestion cards visible
+
+### Phase 71: Computer Use Foundation
+
+**Goal:** Get bytebot-desktop image installed per-user, react-vnc embedding live, app gateway authenticating /computer-use endpoint.
+
+**Depends on:** Phase 65 (uses `liv/` naming for env vars + paths).
+
+**Requirements:** CU-FOUND-01..07
+
+**Success criteria:**
+1. User triggers "/computer start" → container spawns within 15s
+2. VNC iframe loads, shows XFCE desktop
+3. User can take over mouse (viewOnly=false)
+4. Idle 30 min → container stops, next start fresh
+5. Single user constraint enforced (max 1 active container per user account)
+
+### Phase 72: Computer Use Agent Loop
+
+**Goal:** Wire Liv agent to bytebotd. Agent issues 16 Bytebot tools, screenshots come back as tool results, NEEDS_HELP flow when agent stuck.
+
+**Depends on:** Phase 71 (CU foundation), Phase 67 (LivAgentRunner with computer-use tool routing hook).
+
+**Requirements:** CU-LOOP-01..07
+
+**Success criteria:**
+1. "Navigate to google.com and search 'weather'" → end-to-end works, side panel shows live VNC, screenshots per step
+2. "Open Firefox and read https://news.ycombinator.com" → application tool launches, browser navigation, content extracted
+3. Agent stuck (e.g., login page) → emits NEEDS_HELP → user takes over → completes login → returns control → agent resumes
+
+### Phase 73: Reliability Layer
+
+**Goal:** Make agent runs survive crashes, reconnects, long durations. ContextManager prevents Kimi window overflow. BullMQ backgrounds long tasks.
+
+**Depends on:** Phase 67 (run-store base), Phase 72 (computer-use long runs need this).
+
+**Requirements:** RELIAB-01..06
+
+**Success criteria:**
+1. 3-hour agent run survives without context overflow error
+2. Browser refresh mid-run → SSE catches up, no chunks lost
+3. Stop button mid-run → loop terminates within 1 iteration
+4. Pause + Resume → run continues from exact state
+
+### Phase 74: F2-F5 Carryover from v30.5
+
+**Goal:** Tackle 4 deferred broker improvements that were in v30.5 scope.
+
+**Depends on:** Phase 67 (broker integration via LivAgentRunner).
+
+**Requirements:** BROKER-CARRY-01..05
+
+**Success criteria:**
+1. Type "hi" → tokens stream visibly word-by-word (cadence test)
+2. Long tool chain → no `tool_use_id mismatch` errors (Kimi strict validation)
+3. 10-min agent run → no Caddy 504 timeouts
+4. Ask agent "who are you?" → consistent "Liv Agent powered by Kimi" response
+
+### Phase 75: Reasoning Cards + Lightweight Memory
+
+**Goal:** Show Kimi reasoning to user via custom Liv-designed reasoning card. Implement minimal memory via Postgres tsvector FTS.
+
+**Depends on:** Phase 67 (reasoning chunk emission), Phase 66 (GlowPulse motion primitive).
+
+**Requirements:** MEM-01..08
+
+**Success criteria:**
+1. Kimi reasoning collapsible card visible in chat with amber glow when streaming
+2. Conversation history search returns highlighted snippets within 300ms debounced
+3. Pinned messages auto-injected into agent context
+4. Export thread as Markdown / JSON works
+
+### Phase 76: Agent Marketplace + Onboarding Tour
+
+**Goal:** Browse/clone agent templates (Suna pattern adapted). First-run tour that triggers WOW.
+
+**Depends on:** All previous phases (showcase the full UX).
+
+**Requirements:** MARKET-01..07
+
+**Success criteria:**
+1. User opens marketplace → sees 8+ agent templates with cards
+2. "Add to Library" clones template → appears in user's agent list
+3. First-time user opens AI Chat → 9-step tour plays automatically
+4. Tour replayable from Settings
+
+---
+
+## Coverage
+
+All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).
 
 ---
 
@@ -56,10 +286,10 @@
 - v29.3 Marketplace AI Broker (Subscription-Only) (shipped local 2026-05-01)
 - v29.4 Server Management Tooling + Bug Sweep (shipped local 2026-05-01)
 - v29.5 v29.4 Hot-Patch Recovery + Verification Discipline (shipped local 2026-05-02 via `--accept-debt`)
-- **v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope)** (shipped local 2026-05-04 via `--accept-debt`)
-- **v31.0 Liv Agent Reborn** (PLANNED — Nexus → Liv rename + Suna UI overhaul + Bytebot computer use)
+- v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope) (shipped local 2026-05-04 via `--accept-debt`)
+- **v31.0 Liv Agent Reborn** (active — Phases 64-76)
 - (deferred) Backup & Restore — 8 phases defined in `milestones/v30.0-DEFINED/`, renumbered to future slot (likely v32.0)
 
 ---
 
-*Last updated: 2026-05-04 — v30.0 closed via --accept-debt; v31 awaits `/gsd-new-milestone` intake using `.planning/v31-DRAFT.md` as input*
+*Last updated: 2026-05-04 — v31.0 milestone opened with 13 phases (64-76); REQUIREMENTS.md derived from `.planning/v31-DRAFT.md` user-validated plan*

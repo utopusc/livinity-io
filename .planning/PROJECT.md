@@ -334,7 +334,7 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - [x] FR-BROKER-E2-01..02 → Phase 62 (Settings API Keys CRUD + filter dropdown + admin filter chip)
 - [⚠] FR-VERIFY-V30-01..08 → Phase 63 (R1-R3.11 live-verified ad-hoc; formal walkthrough waived via --accept-debt; lifted into v31 P64)
 
-## Next Milestone: v31.0 Liv Agent Reborn (PLANNED)
+## Current Milestone: v31.0 Liv Agent Reborn (ACTIVE — opened 2026-05-04)
 
 **Goal:** Make AI Chat the WOW centerpiece of LivOS. Replace "Nexus" cosmetic identity with "Liv" project-wide. Adopt Suna's UI patterns (side panel + per-tool views + browser/computer-use display) verbatim. Add computer use via Bytebot desktop image. Polish streaming UX, reasoning cards, lightweight memory.
 
@@ -364,7 +364,9 @@ Livinity now features a unified capability orchestration platform. All capabilit
 - Subscription-only preserved (D-NO-BYOK)
 - Single-user privileged mode accepted for Bytebot containers (Mini PC single-user constraint)
 
-**Phase plan draft:** `.planning/v31-DRAFT.md` (851 lines, file-level breakdown). Awaits `/gsd-new-milestone v31` formal intake.
+**Phase plan source:** `.planning/v31-DRAFT.md` (851 lines, file-level breakdown user-validated 2026-05-04). REQUIREMENTS.md and ROADMAP.md derived from this draft 2026-05-04.
+
+**Next action:** `/gsd-plan-phase 64` (Phase 64 = v30.5 final cleanup, the entry point for v31 momentum) OR `/gsd-discuss-phase 64` for Socratic refinement first.
 
 ---
 

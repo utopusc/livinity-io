@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
-milestone: null
-milestone_name: null
-status: between-milestones — v30.0 closed, v31 awaiting /gsd-new-milestone intake
-last_updated: "2026-05-04T16:30:00.000Z"
-last_activity: 2026-05-04 — v30.0 closed via --accept-debt (incl. v30.5 informal scope); v31 plan drafted at .planning/v31-DRAFT.md
+milestone: v31.0
+milestone_name: Liv Agent Reborn
+status: not-started — Phase 64 (v30.5 final cleanup) ready to start
+last_updated: "2026-05-04T17:00:00.000Z"
+last_activity: 2026-05-04 — v31.0 milestone opened (13 phases P64-P76 derived from .planning/v31-DRAFT.md)
 progress:
-  total_phases: 0
+  total_phases: 13
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,81 +20,91 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
+**Current milestone:** v31.0 Liv Agent Reborn — Nexus → Liv rename + Suna-only UI overhaul + Bytebot computer use
 **Last shipped milestone:** v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope) — closed 2026-05-04 via `--accept-debt`
-**Current focus:** Awaiting v31 milestone intake via `/gsd-new-milestone` using `.planning/v31-DRAFT.md` as input.
+**Next action:** `/gsd-plan-phase 64` (v30.5 final cleanup) OR `/gsd-discuss-phase 64` to refine approach first
 
 ## Current Position
 
-Phase: Not started (between milestones)
+Phase: Not started — ready for Phase 64
 Plan: —
-Status: v31 milestone bootstrap pending
-Last activity: 2026-05-04 — v30.0 milestone completed and archived
+Status: Defining phase plans (REQUIREMENTS.md + ROADMAP.md written; awaits per-phase planning)
+Last activity: 2026-05-04 — v31 milestone bootstrap complete
 
-## Deferred Items
+## v31.0 Milestone Summary
 
-Items acknowledged and deferred at v30.0 milestone close on 2026-05-04 (per `--accept-debt` mode):
+**Goal:** Make AI Chat the WOW centerpiece of LivOS. Replace "Nexus" cosmetic identity with "Liv" project-wide. Adopt Suna's UI patterns verbatim (side panel + per-tool views + browser/computer-use display). Add computer use via Bytebot desktop image. Polish streaming UX, reasoning cards, lightweight memory, agent marketplace.
 
-| Category | Item | Status | Carry destination |
-|----------|------|--------|-------------------|
-| verification | Phase 60 (Public Endpoint) — VERIFICATION.md | human_needed | v31 P64 (v30.5 final cleanup at v31 entry) |
-| verification | Phase 62 (Usage Tracking + Settings UI) — VERIFICATION.md | human_needed | v31 P64 |
-| uat_gap | Phase 63 (Mandatory Live Verification) — 0 pending scenarios in 63-UAT-RESULTS.md (formal walkthrough waived; R1-R3.11 live-verified ad-hoc during Bolt.diy debug sessions) | unknown | v31 P64 |
-| quick_task | 260425-sfg-v28-0-hot-patch-bundle-tailwind-sync-bg- | missing | v31 carryover or backlog |
-| quick_task | 260425-v1s-v28-0-hot-patch-round-2-activity-overflo | missing | v31 carryover or backlog |
-| quick_task | 260425-x6q-v28-0-hot-patch-round-3-window-only-nav- | missing | v31 carryover or backlog |
-| infra | F7 Suna marketplace sandbox network blocker (kortix-api can't reach kortix-sandbox container — different Docker networks) | open | v31 P71 (Computer Use Foundation — Bytebot per-session container architecture) |
-| infra | F2 Token-level streaming cadence | open | v31 P74 (F2-F5 Carryover phase) |
-| infra | F3 Multi-turn tool_result protocol | open | v31 P74 |
-| infra | F4 Caddy timeout for long agentic sessions | open | v31 P74 |
-| infra | F5 Identity preservation across turns | open | v31 P74 |
-| uat_carry | 14 carryover UATs from v29.3-v29.5 (mechanism live-verified end-to-end via Bolt testing during Phase 63 R-series; formal walkthrough deferred) | deferred | v31 P64 |
+**Source plan:** `.planning/v31-DRAFT.md` (851 lines, file-level breakdown user-validated 2026-05-04).
 
-## v30.0 Closure Summary (2026-05-04)
+**13 phases (P64-P76):**
+- P64 v30.5 Final Cleanup (Suna sandbox fix + 14 carryforward UATs + Phase 63 walks + external client matrix)
+- P65 Liv Rename Foundation (~5,800 occurrences across 250+ TS files)
+- P66 Liv Design System v1 (color tokens, motion primitives, typography, shadcn liv-* variants)
+- P67 Liv Agent Core Rebuild (Redis SSE relay, ToolCallSnapshot, LivAgentRunner)
+- P68 Side Panel + Tool View Dispatcher (Suna pattern; auto-open ONLY for browser-*/computer-use-*)
+- P69 Per-Tool Views Suite (9 components Suna-derived + inline tool pill)
+- P70 Composer + Streaming UX Polish (auto-grow, slash menu, welcome screen)
+- P71 Computer Use Foundation (Bytebot desktop image + react-vnc + app gateway auth)
+- P72 Computer Use Agent Loop (16 Bytebot tools + system prompt + NEEDS_HELP UI)
+- P73 Reliability Layer (ContextManager 75% threshold, BullMQ queue, reconnectable runs)
+- P74 F2-F5 Carryover (token cadence, tool_result, Caddy timeout, identity)
+- P75 Reasoning Cards + Memory (Postgres tsvector FTS, pinned messages)
+- P76 Agent Marketplace + Onboarding Tour (8-10 seed agents, 9-step interactive tour)
 
-**Shipped:** 8 phases (56-63), 44 plans (41 summaries — Phase 63 R-series live-verified piece-by-piece, formal walkthrough waived per --accept-debt), 166 commits since v30.0 seed (`d59b1b51`).
-
-**v30.5 informal scope merged into v30.0 close:**
-- F1 (built-in tool isolation via R3.11 disallowedTools) ✓
-- F6 (broker x-api-key external compat, commit `4a7c7932`) ✓
-- F8 (multi-subdomain LivOS support 80%) ✓ (manual Redis insert pattern works; needs `additionalServices` BuiltinAppManifest field for portability)
-- F2/F3/F4/F5/F7 → v31 carryover (see Deferred Items above)
-
-**Archived:**
-- `.planning/milestones/v30.0-ROADMAP.md` (full v30.0 roadmap snapshot)
-- `.planning/milestones/v30.0-REQUIREMENTS.md` (38 requirements with archive header)
-- `.planning/milestones/v30.0-phases/` (8 phase dirs: 56-research-spike through 63-mandatory-live-verification)
-
-**Forensic log:** Append-only entry written to `.planning/MILESTONES.md` "Live-Verification Gate Overrides" section with timestamp `2026-05-04T16:30:00Z`, phases waived (60, 62, 63 formal walkthrough), 25 UATs waived (14 carryforward + Phase 63's own 11 plans), mode `--accept-debt`.
-
-## Hard Constraints (carry forward to v31)
-
-- **D-NO-BYOK** preserved — subscription only, no Anthropic API key path
-- **Sacred file** `nexus/packages/core/src/sdk-agent-runner.ts` — current SHA `9f1562be...`. Old "UNTOUCHED" rule retired (was stale from v22 era; file actively developed under v29-v30 broker work and stayed functional throughout). v31 P65 Liv rename will functionally verify subscription path post-rename.
-- **BROKER_FORCE_ROOT_HOME** pattern (use `/root/.claude/.credentials.json`)
-- **Server4 OFF-LIMITS** — Mini PC + Server5 are the only deploy targets
-
-## v31 Bootstrap
-
-Next: `/gsd-new-milestone v31` will read `.planning/v31-DRAFT.md` (851 lines, 12 phases P64-P76) as input.
-
-**v31 high-level scope:**
-- P64: v30.5 final cleanup (Suna sandbox fix attempt + 14 carryforward UATs walkthrough + Phase 63 wrap)
-- P65: Liv Rename (Nexus → Liv project-wide, ~5,800 occurrences)
-- P66: Liv Design System v1 (WOW visual base — color tokens, motion primitives, typography)
-- P67: Liv Agent Core Rebuild (Redis SSE relay, ToolCallSnapshot data model)
-- P68: Side Panel + Tool View Dispatcher (Suna pattern; auto-open ONLY for browser-*/computer-use-*)
-- P69: Per-Tool Views Suite (9 components, Suna-derived inline + side panel)
-- P70: Composer + Streaming UX Polish
-- P71: Computer Use Foundation (Bytebot desktop image + react-vnc + app gateway auth)
-- P72: Computer Use Agent Loop (16 Bytebot tools + system prompt + NEEDS_HELP UI flow)
-- P73: Reliability Layer (ContextManager, BullMQ queue, reconnectable runs)
-- P74: F2-F5 Carryover from v30.5 (token cadence, tool_result protocol, Caddy timeout, identity)
-- P75: Reasoning Cards + Lightweight Memory (Postgres tsvector FTS)
-- P76: Agent Marketplace + Onboarding Tour
+**Estimated effort:** 171-229 hours (6-12 weeks solo at 4-6h/day).
 
 **Locked decisions for v31 entry:**
-- ONLY Suna UI patterns (no Hermes UI per user direction 2026-05-04)
-- Side panel auto-opens ONLY for browser-*/computer-use-* tools
-- Bytebot desktop image (Apache 2.0) — pull from `ghcr.io/bytebot-ai/bytebot-desktop:edge`, single user privileged mode accepted
-- Bytebot agent code NOT used (only image + 16 tool schemas + system prompt copied)
-- Subscription-only via existing Livinity broker (BYTEBOT_LLM_PROXY_URL → broker → Kimi)
+- ONLY Suna UI patterns (NO Hermes UI per user direction 2026-05-04)
+- Side panel auto-opens ONLY for `browser-*`/`computer-use-*` tools (Suna behavior)
+- Bytebot: desktop image only (Apache 2.0); agent code NOT used
+- Subscription-only preserved (D-NO-BYOK)
+- Single-user privileged Bytebot containers accepted (Mini PC single-user constraint)
+- Sacred file old "UNTOUCHED" rule retired (was stale memory; current SHA `9f1562be...` after 25 normal commits since v22 era)
+
+## Hard Constraints (carry forward from v30.0)
+
+- **D-NO-BYOK** — Subscription only, no Anthropic API key path
+- **BROKER_FORCE_ROOT_HOME** — Use `/root/.claude/.credentials.json` for subscription auth
+- **D-NO-SERVER4** — Mini PC + Server5 are the only deploy targets
+- **Side panel auto-open behavior** — ONLY for `browser-*` and `computer-use-*` tool patterns
+
+## Deferred Items (from v30.0 close — mapped into v31 phases)
+
+| Category | Item | Status | v31 Destination |
+|----------|------|--------|-----------------|
+| verification | Phase 60 (Public Endpoint) — VERIFICATION.md | human_needed | P64 (v30.5 final cleanup) |
+| verification | Phase 62 (Usage Tracking + Settings UI) — VERIFICATION.md | human_needed | P64 |
+| uat_gap | Phase 63 (Mandatory Live Verification) | unknown | P64 |
+| quick_task | 260425-sfg / 260425-v1s / 260425-x6q (3 v28.0 hot-patches) | missing | P64 (resolve or backlog) |
+| infra | F7 Suna marketplace sandbox network blocker | open | P71 (Computer Use Foundation) |
+| infra | F2 Token-level streaming cadence | open | P74 |
+| infra | F3 Multi-turn tool_result protocol | open | P74 |
+| infra | F4 Caddy timeout for long agentic sessions | open | P74 |
+| infra | F5 Identity preservation across turns | open | P74 |
+| uat_carry | 14 carryover UATs from v29.3-v29.5 | deferred | P64 |
+
+## Server / Infra Reference (carry from v30.0)
+
+### Mini PC (`bruce@10.69.31.68`)
+
+- Code: `/opt/livos/packages/{livinityd,ui,config}/` + `/opt/nexus/packages/{core,worker,mcp-server,memory}/` (P65 will migrate `/opt/nexus/` → `/opt/liv/`)
+- Deploy: `sudo bash /opt/livos/update.sh` (clones from utopusc/livinity-io, rsyncs, builds, restarts services)
+- 4 systemd services: `livos liv-core liv-worker liv-memory` (already Liv-prefix ✓)
+- Subscription creds: `/root/.claude/.credentials.json` (works) vs `/home/bruce/.claude/.credentials.json` (org-disabled)
+- Env: `BROKER_FORCE_ROOT_HOME=true` set on services → broker uses /root creds
+- claude CLI: `/home/bruce/.local/bin/claude` v2.1.126
+- fail2ban: aggressive — batch SSH calls, never `iptables -F` (kills tunnel)
+
+### Server5 (`root@45.137.194.102`)
+
+- `livinity.io` relay (NO LivOS install, NEVER deploy LivOS code here)
+- Caddy v2.11.2 with `caddy-ratelimit` + `caddy-dns/cloudflare` modules
+- Caddyfile: `/etc/caddy/Caddyfile`, backup `caddy.bak.20260503-070012`
+- Relay (Node) at port 4000, pm2 process `relay` (id 18)
+- DNS: Cloudflare (manual dashboard, no IaC) — `api.livinity.io` A → 45.137.194.102
+- Hosts public app store at `apps.livinity.io` — PostgreSQL `platform.apps` table (26 apps as of 2026-05-03)
+
+### Server4 (`root@45.137.194.103`)
+
+- **OFF-LIMITS — NEVER touch**, NOT user's server, deferred forever
