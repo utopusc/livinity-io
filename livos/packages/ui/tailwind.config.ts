@@ -30,7 +30,7 @@ export default {
 	},
 	theme: {
 		fontFamily: {
-			sans: ['var(--font-jakarta)', 'var(--font-inter)', ...defaultTheme.fontFamily.sans],
+			sans: ['var(--font-jakarta)', 'var(--font-inter)', 'Inter Variable', 'Inter', ...defaultTheme.fontFamily.sans],
 			mono: ['JetBrains Mono', 'Roboto Mono', ...defaultTheme.fontFamily.mono],
 			sticker: ['"Permanent Marker"', 'cursive'],
 		},
@@ -169,22 +169,28 @@ export default {
 				36: '36px',
 				48: '48px',
 				56: '56px',
-				// Semantic font sizes with line-height and letter-spacing
-				// Caption level
+				// Legacy semantic font sizes (kept for backward-compat with non-Liv UI:
+				// settings, docker, file-manager, etc.). New Liv UI (Phase 66+) uses the
+				// liv-* keys further below.
 				'caption-sm': ['11px', {lineHeight: '1.4', letterSpacing: '0.01em'}],
-				caption: ['12px', {lineHeight: '1.4', letterSpacing: '0.01em'}],
-				// Body level
 				'body-sm': ['13px', {lineHeight: '1.5', letterSpacing: '0.01em'}],
-				body: ['14px', {lineHeight: '1.5', letterSpacing: '0.01em'}],
 				'body-lg': ['15px', {lineHeight: '1.5', letterSpacing: '0.01em'}],
-				// Heading level
 				'heading-sm': ['17px', {lineHeight: '1.3', letterSpacing: '0em', fontWeight: '600'}],
 				heading: ['19px', {lineHeight: '1.3', letterSpacing: '0em', fontWeight: '600'}],
 				'heading-lg': ['24px', {lineHeight: '1.2', letterSpacing: '-0.01em', fontWeight: '600'}],
-				// Display level
 				'display-sm': ['32px', {lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700'}],
 				display: ['36px', {lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '700'}],
 				'display-lg': ['48px', {lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '700'}],
+				// Liv Design System v1 type scale (Phase 66, D-11) per v31-DRAFT.md line 238.
+				// Keys `display-1`, `display-2`, `h1`, `body`, `caption`, `mono-sm` produce
+				// the `text-display-1`, `text-h1`, `text-body`, etc. Tailwind utilities that
+				// P67+ chat UI / side panel / composer consume.
+				'display-1': ['48px', {lineHeight: '1.1', fontWeight: '600', letterSpacing: '-0.02em'}],
+				'display-2': ['36px', {lineHeight: '1.15', fontWeight: '600', letterSpacing: '-0.02em'}],
+				h1: ['24px', {lineHeight: '1.25', fontWeight: '600', letterSpacing: '-0.01em'}],
+				body: ['15px', {lineHeight: '1.5', fontWeight: '400'}],
+				caption: ['12px', {lineHeight: '1.4', fontWeight: '400'}],
+				'mono-sm': ['13px', {lineHeight: '1.5', fontWeight: '400', fontFamily: 'JetBrains Mono, monospace'}],
 			},
 			backdropBlur: {
 				'4xl': '180px',
