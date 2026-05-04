@@ -893,3 +893,349 @@ describe('passthroughOpenAIChatCompletions — Phase 58 Wave 3 sync id hardening
 		}
 	})
 })
+
+// ===== Phase 74 Plan 02 (F3) — Multi-turn tool_result protocol translator =====
+//
+// These tests assert that passthroughOpenAIChatCompletions correctly translates
+// OpenAI `tool` / `function` role messages into Anthropic `tool_result` content
+// blocks under a `user` role message, preserving `tool_call_id` <-> `tool_use_id`
+// round-trip per CONTEXT D-09..D-11.
+//
+// Pre-F3 behavior (passthrough-handler.ts:425): `tool` and `function` role
+// messages were FILTERED OUT, breaking multi-turn agentic loops for OpenAI
+// clients (Continue.dev, Open WebUI, Cline-via-OpenAI). F3 replaces that filter
+// with a walker that emits `tool_result` content blocks.
+//
+// Test strategy: assert the upstream payload that `messagesCreate` receives.
+// `messagesCreate` mock captures `{ model, max_tokens, system, messages, ... }`
+// — F3 changes the `messages` shape; we assert deep-equal against a golden
+// vector + several focused-rule cases.
+
+describe('passthroughOpenAIChatCompletions — Phase 74 Plan 02 F3 multi-turn tool_result translator', () => {
+	const SYNC_RESPONSE_F3 = {
+		id: 'msg_f3_test',
+		type: 'message',
+		role: 'assistant',
+		content: [{type: 'text', text: 'ok'}],
+		model: 'claude-sonnet-4-6',
+		stop_reason: 'end_turn',
+		stop_sequence: null,
+		usage: {input_tokens: 10, output_tokens: 2},
+	}
+
+	it('Test #1 (regression): tool-free conversation produces messages identical to pre-F3 baseline', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'system', content: 'You are helpful'},
+					{role: 'user', content: 'Hello'},
+					{role: 'assistant', content: 'Hi there'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		expect(upstreamCall.system).toBe('You are helpful')
+		expect(upstreamCall.messages).toEqual([
+			{role: 'user', content: 'Hello'},
+			{role: 'assistant', content: 'Hi there'},
+		])
+	})
+
+	it('Test #2 (golden vector): 4-turn conversation with 2 tool rounds translates correctly', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'system', content: 'You are helpful'},
+					{role: 'user', content: 'Read foo.txt'},
+					{
+						role: 'assistant',
+						content: null,
+						tool_calls: [
+							{
+								id: 'call_1',
+								type: 'function',
+								function: {name: 'read_file', arguments: '{"path":"foo.txt"}'},
+							},
+						],
+					},
+					{role: 'tool', tool_call_id: 'call_1', content: 'hello world'},
+					{
+						role: 'assistant',
+						content: 'The file says: hello world. Now reading bar.txt.',
+						tool_calls: [
+							{
+								id: 'call_2',
+								type: 'function',
+								function: {name: 'read_file', arguments: '{"path":"bar.txt"}'},
+							},
+						],
+					},
+					{role: 'tool', tool_call_id: 'call_2', content: 'goodbye world'},
+					{role: 'assistant', content: 'Done.'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		expect(upstreamCall.system).toBe('You are helpful')
+		expect(upstreamCall.messages).toEqual([
+			{role: 'user', content: 'Read foo.txt'},
+			{
+				role: 'assistant',
+				content: [
+					{type: 'tool_use', id: 'call_1', name: 'read_file', input: {path: 'foo.txt'}},
+				],
+			},
+			{
+				role: 'user',
+				content: [{type: 'tool_result', tool_use_id: 'call_1', content: 'hello world'}],
+			},
+			{
+				role: 'assistant',
+				content: [
+					{type: 'text', text: 'The file says: hello world. Now reading bar.txt.'},
+					{type: 'tool_use', id: 'call_2', name: 'read_file', input: {path: 'bar.txt'}},
+				],
+			},
+			{
+				role: 'user',
+				content: [{type: 'tool_result', tool_use_id: 'call_2', content: 'goodbye world'}],
+			},
+			{role: 'assistant', content: 'Done.'},
+		])
+	})
+
+	it('Test #3 (round-trip): tool_call_id passes through verbatim as tool_use_id', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'do it'},
+					{
+						role: 'assistant',
+						content: null,
+						tool_calls: [
+							{
+								id: 'toolu_01ABC123XYZ',
+								type: 'function',
+								function: {name: 'do_thing', arguments: '{}'},
+							},
+						],
+					},
+					{role: 'tool', tool_call_id: 'toolu_01ABC123XYZ', content: 'result'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		const toolResultMsg = upstreamCall.messages[2]
+		expect(toolResultMsg.role).toBe('user')
+		expect(toolResultMsg.content[0].tool_use_id).toBe('toolu_01ABC123XYZ')
+		expect(upstreamCall.messages[1].content[0].id).toBe('toolu_01ABC123XYZ')
+	})
+
+	it('Test #4 (run collapse): 3 contiguous tool-role messages fold into ONE user message with 3 blocks', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'parallel calls'},
+					{
+						role: 'assistant',
+						content: null,
+						tool_calls: [
+							{id: 'c1', type: 'function', function: {name: 't1', arguments: '{}'}},
+							{id: 'c2', type: 'function', function: {name: 't2', arguments: '{}'}},
+							{id: 'c3', type: 'function', function: {name: 't3', arguments: '{}'}},
+						],
+					},
+					{role: 'tool', tool_call_id: 'c1', content: 'r1'},
+					{role: 'tool', tool_call_id: 'c2', content: 'r2'},
+					{role: 'tool', tool_call_id: 'c3', content: 'r3'},
+					{role: 'assistant', content: 'all done'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		expect(upstreamCall.messages).toHaveLength(4)
+		const toolResultMsg = upstreamCall.messages[2]
+		expect(toolResultMsg.role).toBe('user')
+		expect(toolResultMsg.content).toHaveLength(3)
+		expect(toolResultMsg.content[0]).toEqual({type: 'tool_result', tool_use_id: 'c1', content: 'r1'})
+		expect(toolResultMsg.content[1]).toEqual({type: 'tool_result', tool_use_id: 'c2', content: 'r2'})
+		expect(toolResultMsg.content[2]).toEqual({type: 'tool_result', tool_use_id: 'c3', content: 'r3'})
+	})
+
+	it('Test #5 (function fallback): deprecated function role without tool_call_id uses name:index fallback', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'compute'},
+					{role: 'assistant', content: 'computing'},
+					{role: 'function', name: 'compute_sum', content: '42'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		const toolResultMsg = upstreamCall.messages[upstreamCall.messages.length - 1]
+		expect(toolResultMsg.role).toBe('user')
+		expect(toolResultMsg.content[0]).toEqual({
+			type: 'tool_result',
+			tool_use_id: 'compute_sum:0',
+			content: '42',
+		})
+	})
+
+	it('Test #6 (mixed function+tool in same run): correct fallback indexing within run', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'mixed'},
+					{role: 'assistant', content: 'doing both'},
+					{role: 'tool', tool_call_id: 'call_1', content: 'a'},
+					{role: 'function', name: 'fn1', content: 'b'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		const toolResultMsg = upstreamCall.messages[upstreamCall.messages.length - 1]
+		expect(toolResultMsg.role).toBe('user')
+		expect(toolResultMsg.content).toHaveLength(2)
+		expect(toolResultMsg.content[0]).toEqual({type: 'tool_result', tool_use_id: 'call_1', content: 'a'})
+		expect(toolResultMsg.content[1]).toEqual({type: 'tool_result', tool_use_id: 'fn1:1', content: 'b'})
+	})
+
+	it('Test #7 (unknown role): logs warn and is dropped from output', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'hi'},
+					{role: 'developer', content: 'hidden'} as any,
+					{role: 'assistant', content: 'ok'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		expect(upstreamCall.messages).toEqual([
+			{role: 'user', content: 'hi'},
+			{role: 'assistant', content: 'ok'},
+		])
+		expect(warnSpy).toHaveBeenCalled()
+		const warnArgs = warnSpy.mock.calls.map((c) => c.join(' ')).join(' | ')
+		expect(warnArgs.toLowerCase()).toContain('developer')
+		warnSpy.mockRestore()
+	})
+
+	it('content as array of content parts is JSON-stringified into tool_result content (defensive fallback)', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'with array content'},
+					{role: 'assistant', content: 'k'},
+					{
+						role: 'tool',
+						tool_call_id: 'c_arr',
+						content: [{type: 'text', text: 'piece1'}, {type: 'text', text: 'piece2'}],
+					} as any,
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		const toolResultMsg = upstreamCall.messages[upstreamCall.messages.length - 1]
+		expect(toolResultMsg.role).toBe('user')
+		expect(toolResultMsg.content[0].tool_use_id).toBe('c_arr')
+		expect(typeof toolResultMsg.content[0].content).toBe('string')
+		expect(toolResultMsg.content[0].content).toContain('piece1')
+		expect(toolResultMsg.content[0].content).toContain('piece2')
+	})
+
+	it('assistant tool_calls with malformed JSON arguments falls back to raw string + warn', async () => {
+		messagesCreate.mockResolvedValueOnce(SYNC_RESPONSE_F3)
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const res = makeRes()
+		await passthroughOpenAIChatCompletions({
+			livinityd: makeLivinityd(),
+			userId: 'abc123',
+			body: {
+				model: 'gpt-4o',
+				messages: [
+					{role: 'user', content: 'try'},
+					{
+						role: 'assistant',
+						content: null,
+						tool_calls: [
+							{
+								id: 'call_bad',
+								type: 'function',
+								function: {name: 'bad_args', arguments: 'NOT_VALID_JSON{{'},
+							},
+						],
+					},
+					{role: 'tool', tool_call_id: 'call_bad', content: 'ok'},
+				],
+				stream: false,
+			} as any,
+			res,
+		})
+		const upstreamCall = messagesCreate.mock.calls[0][0] as any
+		const assistantMsg = upstreamCall.messages[1]
+		expect(assistantMsg.role).toBe('assistant')
+		expect(assistantMsg.content[0].type).toBe('tool_use')
+		expect(assistantMsg.content[0].input).toBe('NOT_VALID_JSON{{')
+		expect(warnSpy).toHaveBeenCalled()
+		warnSpy.mockRestore()
+	})
+})
