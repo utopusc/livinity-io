@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T21:54:47.694Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-04T21:58:00.000Z"
+last_activity: "2026-05-04 — P70-01 LivComposer shipped: 14/14 vitest pass; commits `0ae8e69b` (RED) + `e3cbb4c9` (GREEN). COMPOSER-01 + COMPOSER-02 marked complete."
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 43
-  completed_plans: 25
-  percent: 58
+  completed_plans: 26
+  percent: 60
 ---
 
 # Project State
@@ -79,6 +79,19 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **67-03:** Inline FakeRedis (Pub/Sub-aware, ~100 lines) used in tests — avoids livinityd taking `ioredis-mock` as a devDep (D-NO-NEW-DEPS). supertest also rejected; native `fetch` + `app.listen(0)` matches existing `livinity-broker/mode-dispatch.test.ts` Pitfall-3 pattern.
 - **67-03:** Heartbeat verified via source-text invariant (greps `agent-runs.ts` for `setInterval(`, `: heartbeat\\n\\n`, and cadence==15000). Spying on `global.setInterval` failed to capture the bare-global call inside the route handler in vitest's threading model; fake-timer fast-forward across an async SSE response is fragile. The 12 other behavior tests cover headers/catch-up/?after=/complete-event/control/auth/authz.
 - **67-03:** Runtime imports in `agent-runs.ts` use `@nexus/core/lib` (not the package main) — the main entry runs daemon side-effects (`dotenv/config`, channels/whatsapp.js dynamic import) that explode in livinityd's context. The `/lib` entry re-exports RunStore + LivAgentRunner verbatim per Phase 67-01/02 SUMMARY. Plan's `from '@nexus/core'` substring grep satisfied via explicit comment.
+
+## Phase 70 Progress (Composer + Streaming UX Polish) — 1/8 plans complete (Wave 1)
+
+- **70-01 ✅** `livos/packages/ui/src/routes/ai-chat/liv-composer.tsx` (414 LOC) — auto-grow textarea (24-200px), drag-drop/paste/click file attachment carry-over (20MB cap), slash trigger `^/[^\s]*$`, mention trigger `(\s|^)@(\S*)$` with slash priority, P66 design tokens. Pure helpers `shouldShowSlashMenu` / `shouldShowMentionMenu` / `calculateTextareaHeight` exported. Voice button reused AS-IS (D-30). Stop/model badge as data-testid stubs for 70-06/70-08 swap. Commits `0ae8e69b` (RED) + `e3cbb4c9` (GREEN). 14/14 vitest pass; `pnpm --filter ui build` clean (41.91s); sacred SHA `4f868d31...` unchanged. SUMMARY: `70-01-SUMMARY.md`. COMPOSER-01 + COMPOSER-02 marked complete.
+- **70-02..70-08** — pending (LivSlashMenu, LivWelcome, LivStreamingText, LivAgentStatus + LivTypingDots, LivStopButton + LivModelBadge, LivMentionMenu, integration).
+
+### P70 Decisions Logged
+
+- **70-01:** Pure-helper extraction over RTL component tests (P67-04 D-25 precedent). 3 helpers exported (`shouldShowSlashMenu`, `shouldShowMentionMenu`, `calculateTextareaHeight`) with 14 vitest cases. D-NO-NEW-DEPS preserved — no `@testing-library/react`.
+- **70-01:** `// @vitest-environment jsdom` directive at test file head — required because composer transitively imports `voice-button.tsx` → `trpcReact` → `@/utils/misc.ts` line 110 (`localStorage.getItem('debug')` at module-eval time). jsdom provides localStorage. Pattern matches P67-04 + P68-02 tests.
+- **70-01:** `data-show-slash` + `data-show-mention` + `data-mention-filter` attrs on composer root — derived state exposed for both tests (no DOM render needed) and downstream 70-08 integration consumers.
+- **70-01:** Stop/send button + model badge rendered as `data-testid='liv-composer-stop-stub'` / `'liv-composer-model-badge-stub'` so 70-06 (`LivStopButton`) and 70-08 swap them cleanly without re-touching composer. Composer's prop shape (`isStreaming`, `onStop`, `onSend`, `disabled`, derived `hasContent`) IS the locked contract.
+- **70-01:** VoiceButton prop is `onTranscript` (not `onTranscription` as plan reference signature line 278 stated) — confirmed by reading `voice-button.tsx` lines 26-29 + 97. Used `onTranscript={text => onChange(value ? \`${value} ${text}\` : text)}` — string-concat with space-prefix when typing already in progress.
 
 ## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 1/7 plans complete (Wave 1)
 

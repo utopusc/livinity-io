@@ -101,8 +101,10 @@
 
 ### COMPOSER (Phase 70 — Composer + Streaming UX Polish)
 
-- [ ] **COMPOSER-01**: `livos/packages/ui/src/routes/ai-chat/liv-composer.tsx` (NEW, ~400 LOC, replaces chat-input.tsx) — auto-grow textarea (24px → 200px Suna pattern)
-- [ ] **COMPOSER-02**: Stop button color toggle red↔cyan with icon Square↔ArrowUp; file attachment (drag-drop + click + paste from clipboard); file preview chips
+- [x] **COMPOSER-01
+**: `livos/packages/ui/src/routes/ai-chat/liv-composer.tsx` (NEW, ~400 LOC, replaces chat-input.tsx) — auto-grow textarea (24px → 200px Suna pattern)
+- [x] **COMPOSER-02
+**: Stop button color toggle red↔cyan with icon Square↔ArrowUp; file attachment (drag-drop + click + paste from clipboard); file preview chips
 - [x] **COMPOSER-03**: Slash command menu expanded — `/clear`, `/think`, `/computer`, `/agent <name>`, `/file <path>`, `/skill <name>`
 - [ ] **COMPOSER-04**: Mention menu (`@`) for agents, MCP tools, skills; voice input button (port voice-button.tsx, polish UX); model badge inline
 - [x] **COMPOSER-05

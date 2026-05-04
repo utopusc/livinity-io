@@ -178,7 +178,7 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 **Requirements:** COMPOSER-01..09
 
 **Plans:** 8 plans in 3 waves
-- [ ] 70-01-PLAN.md (Wave 1) — LivComposer auto-grow textarea + file attachment + slash/mention trigger detection (COMPOSER-01, COMPOSER-02)
+- [x] 70-01-PLAN.md (Wave 1) — LivComposer auto-grow textarea + file attachment + slash/mention trigger detection (COMPOSER-01, COMPOSER-02) — commits `0ae8e69b` (RED) + `e3cbb4c9` (GREEN); 14/14 vitest pass; build clean (41.91s); sacred SHA unchanged. SUMMARY: `70-01-SUMMARY.md`.
 - [ ] 70-02-PLAN.md (Wave 1) — LivSlashMenu with 6+ built-in commands + filter helper (COMPOSER-03)
 - [ ] 70-03-PLAN.md (Wave 1) — LivWelcome screen with greeting + 4 suggestion cards (COMPOSER-09)
 - [ ] 70-04-PLAN.md (Wave 1) — LivStreamingText with TypewriterCaret + markdown gate (COMPOSER-05)
