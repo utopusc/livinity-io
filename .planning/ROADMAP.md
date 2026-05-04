@@ -171,11 +171,21 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 ### Phase 70: Composer + Streaming UX Polish
 
-**Goal:** Transform input composer into delightful interaction. Polish streaming feedback. Suna patterns + welcome screen.
+**Goal:** Transform input composer into delightful interaction. Polish streaming feedback. Suna patterns + welcome screen. Mount LivToolPanel + wire useLivAgentStream snapshot bridge (deferred handoff from P67/P68).
 
-**Depends on:** Phase 66 (design tokens), Phase 67 (streaming model).
+**Depends on:** Phase 66 (design tokens), Phase 67 (streaming model + useLivAgentStream hook), Phase 68 (LivToolPanel + useLivToolPanelStore).
 
 **Requirements:** COMPOSER-01..09
+
+**Plans:** 8 plans in 3 waves
+- [ ] 70-01-PLAN.md (Wave 1) — LivComposer auto-grow textarea + file attachment + slash/mention trigger detection (COMPOSER-01, COMPOSER-02)
+- [ ] 70-02-PLAN.md (Wave 1) — LivSlashMenu with 6+ built-in commands + filter helper (COMPOSER-03)
+- [ ] 70-03-PLAN.md (Wave 1) — LivWelcome screen with greeting + 4 suggestion cards (COMPOSER-09)
+- [ ] 70-04-PLAN.md (Wave 1) — LivStreamingText with TypewriterCaret + markdown gate (COMPOSER-05)
+- [ ] 70-05-PLAN.md (Wave 1) — LivAgentStatus (6 visual states + GlowPulse) + LivTypingDots (500ms cycle) (COMPOSER-07, COMPOSER-08)
+- [ ] 70-06-PLAN.md (Wave 2, deps: 70-01) — LivStopButton color toggle (red↔cyan) + LivModelBadge inline (COMPOSER-02, COMPOSER-04)
+- [ ] 70-07-PLAN.md (Wave 2, deps: 70-01) — LivMentionMenu placeholder (9 stub mentions, P76 swaps real data) (COMPOSER-04)
+- [ ] 70-08-PLAN.md (Wave 3, deps: 70-01..70-07) — Integration: mount LivToolPanel + LivComposer + LivWelcome in index.tsx; wire useLivAgentStream snapshot bridge; swap chat-messages.tsx to LivAgentStatus/LivStreamingText/LivTypingDots (all 9 COMPOSER reqs)
 
 **Success criteria:**
 1. Type message → streaming caret hugs last token (no orphan)
