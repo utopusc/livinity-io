@@ -40,6 +40,10 @@ const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore')
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
 const FactoryResetRecoveryHelp = React.lazy(() => import('./routes/help/factory-reset-recovery'))
 const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
+// Phase 66 / Plan 05 — Liv Design System v1 playground.
+// Single visual reference for every primitive shipped by Plans 66-01..66-04.
+// Hidden from main nav (D-21); reachable only via direct URL.
+const LivDesignSystemPlayground = React.lazy(() => import('./routes/playground/liv-design-system'))
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()
@@ -92,6 +96,14 @@ export const router = createBrowserRouter([
 		),
 		ErrorBoundary: ErrorBoundaryPageFallback,
 		children: [
+			// Phase 66 / Plan 05 — Liv Design System v1 playground.
+			// Gated behind EnsureLoggedIn (parent <element>); NOT admin-only per D-21.
+			// Hidden from main nav; only reachable via direct URL.
+			{
+				path: 'playground/liv-design-system',
+				element: <LivDesignSystemPlayground />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
 			{
 				Component: SheetLayout,
 				children: [
