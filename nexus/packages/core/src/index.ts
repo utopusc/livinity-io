@@ -20,6 +20,14 @@ export type {
   LivAgentRunnerOptions,
 } from './liv-agent-runner.js';
 
+// ── Public re-exports (Phase 73-02 — RunQueue / BullMQ wrapper) ──
+// BullMQ-backed agent run queue with per-user concurrency=1 (manual
+// INCR/DECR gate, CONTEXT D-17) on queue 'liv:agent-jobs'. attempts:1
+// (no retries — agent runs are not idempotent, D-19). Consumer:
+// Plan 73-04 wires this into agent-runs.ts.
+export { RunQueue } from './run-queue.js';
+export type { AgentJobData, RunQueueOptions } from './run-queue.js';
+
 import { Daemon } from './daemon.js';
 import { Brain } from './brain.js';
 import { Router } from './router.js';

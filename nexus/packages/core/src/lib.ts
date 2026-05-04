@@ -32,6 +32,10 @@ export type {
   LivAgentRunnerOptions,
 } from './liv-agent-runner.js';
 
+// ── Run Queue (Phase 73-02) ──────────────────────────────────────
+export { RunQueue } from './run-queue.js';
+export type { AgentJobData, RunQueueOptions } from './run-queue.js';
+
 // ── Tool Registry ──────────────────────────────────────────────
 export { ToolRegistry } from './tool-registry.js';
 export type { ToolPolicy } from './tool-registry.js';
