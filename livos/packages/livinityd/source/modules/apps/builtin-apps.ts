@@ -1313,33 +1313,35 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     },
   },
   {
-    // v30.5 — Suna AI agent platform (Manus-alternative, autonomous agents)
-    // Mimari notu: Suna normalde bundled Supabase ile gelir (heavy stack).
-    // Mini PC'yi koruyacak şekilde EXTERNAL Supabase Cloud (free tier) kullanıyoruz —
-    // user install sırasında supabase.com'da proje açıp 3 değer giriyor.
-    // OpenCode runtime'ı sayesinde Anthropic baseURL config'iyle broker'a yönlendirilebilir.
+    // v30.5 — Suna AI agent platform (Kortix, Manus alternative)
     //
-    // VERIFICATION TODO (SSH dönünce):
-    //   1. ghcr.io/suna-ai/suna-backend image'inın expose ettiği port (3000? 8000?)
-    //   2. Frontend image referansı (suna-frontend? veya monorepo'da aynı image mi?)
-    //   3. Worker servisi backend imageını mı kullanıyor?
-    //   4. Auto-migration entrypoint'te yapılıyor mu yoksa elle mi?
-    //   5. OpenCode config dosya yolu (/root/.config/opencode/config.json?)
-    //   6. Health endpoint path
+    // Image source CORRECTED 2026-05-03 after live-reproducing 403 denied at
+    // ghcr.io/suna-ai/suna-backend. Real images live on Docker Hub:
+    //   - kortix/kortix-frontend:latest  (Next.js UI)
+    //   - kortix/kortix-api:latest       (Python FastAPI + OpenCode runtime)
+    //   - kortix/computer:latest         (per-agent sandbox, spawned at runtime via docker.sock)
+    //
+    // Mirrors Kortix's official `docker compose` setup with DB_MODE=external —
+    // 2 services on Mini PC instead of bundled Supabase stack (4 extra). User
+    // points at Supabase Cloud (free tier) via 3 env vars in install dialog.
+    //
+    // OpenCode runtime (inside kortix-api) reads provider config from
+    // ~/.config/opencode/config.json — we write it from OPENCODE_CONFIG_JSON
+    // env (auto-injected by Phase 43.2) at container start via wrapper entrypoint.
     id: 'suna',
     name: 'Suna AI',
     tagline: 'Autonomous AI agents — your Claude subscription, your own sandbox',
     version: '0.8.44',
     category: 'developer',
-    port: 3000,
+    port: 13737,  // matches Kortix's official `kortix start` host binding
     description: 'Suna is an open-source autonomous agent platform (Manus alternative) — agents run 24/7 in isolated Docker sandboxes with shared filesystem, credentials, and history. 60+ skills, 3000+ integrations.\n\n**Setup requires a free Supabase Cloud project** (managed Postgres + Auth, no extra Mini PC services). Visit supabase.com → New Project → Settings → API → copy the 3 values into the install form below.\n\nLLM backend auto-configured to use your Claude subscription via Livinity Broker — no LLM API key prompt.\n\nApache 2.0 licensed.',
     website: 'https://kortix.com',
     developer: 'Kortix AI',
     icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/suna/icon.svg',
     repo: 'https://github.com/kortix-ai/suna',
-    requiresAiProvider: true,  // Phase 43.2 → broker env auto-injection
+    requiresAiProvider: true,  // Phase 43.2 → broker env auto-injection (incl. OPENCODE_CONFIG_JSON)
     docker: {
-      image: 'ghcr.io/suna-ai/suna-backend:latest',
+      image: 'kortix/kortix-frontend:latest',
       environment: {
         NODE_ENV: 'production',
       },
@@ -1347,8 +1349,6 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     },
     installOptions: {
       subdomain: 'suna',
-      // User-provided fields — shown in install dialog. Inject docs link in label
-      // so users know where to obtain each value.
       environmentOverrides: [
         {
           name: 'NEXT_PUBLIC_SUPABASE_URL',
@@ -1371,62 +1371,49 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       ],
     },
     compose: {
-      mainService: 'frontend',  // Caddy reverse-proxy hedefi + env override target
+      mainService: 'frontend',
       services: {
-        // Frontend — Next.js UI, public-facing on subdomain
+        // Frontend — Next.js UI; reaches kortix-api via internal docker network.
+        // Public-facing on suna.<user>.livinity.io via Caddy reverse proxy.
         frontend: {
-          image: 'ghcr.io/suna-ai/suna-frontend:latest',  // VERIFY image name on SSH
+          image: 'kortix/kortix-frontend:latest',
           restart: 'unless-stopped',
           environment: {
-            // Supabase — environmentOverrides patches these values into the mainService;
-            // backend service reads SAME values via Docker Compose ${VAR} interpolation
-            // from the compose dir's .env file (livinityd writes one when overrides apply).
             NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
             NEXT_PUBLIC_SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
-            // Backend URL for client-side fetches (internal docker network)
-            NEXT_PUBLIC_BACKEND_URL: 'http://backend:8000',
-            // LLM provider — auto-injected by Phase 43.2 (requiresAiProvider: true).
-            // Frontend itself doesn't talk to LLMs (backend does); env vars present
-            // here only because Phase 43.2 inject targets the FIRST/main service.
-            // OpenCode config is consumed by backend + worker via their wrapper
-            // entrypoints (see below) which write OPENCODE_CONFIG_JSON →
-            // ~/.config/opencode/config.json before exec'ing the upstream CMD.
+            // Backend reachable via container DNS name (matches Kortix's compose service naming)
+            NEXT_PUBLIC_BACKEND_URL: 'http://kortix-api:13738',
+            // Broker env vars (ANTHROPIC_BASE_URL, OPENCODE_CONFIG_JSON, etc.)
+            // are auto-injected by Phase 43.2 into THIS mainService — they are
+            // a no-op for the frontend itself (kortix-api consumes them via
+            // env-passthrough below + opencode config wrapper).
           },
-          ports: ['127.0.0.1:3000:3000'],
-          depends_on: ['backend', 'redis'],
+          ports: ['127.0.0.1:13737:13737'],
+          depends_on: ['kortix-api'],
           healthcheck: {
-            test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
+            test: ['CMD-SHELL', 'curl -f http://localhost:13737/ || exit 1'],
             interval: '30s',
             timeout: '10s',
             retries: 3,
             start_period: '60s',
           },
         },
-        // Backend — FastAPI/Python API server, talks to external Supabase + Redis + spawns sandboxes
-        backend: {
-          image: 'ghcr.io/suna-ai/suna-backend:latest',
+        // kortix-api — Python FastAPI agent runtime. Speaks Anthropic via
+        // OpenCode (config.json mounted-from-env). Spawns kortix/computer
+        // containers per-agent via host docker.sock for sandboxed execution.
+        'kortix-api': {
+          image: 'kortix/kortix-api:latest',
           restart: 'unless-stopped',
-          // Wrapper entrypoint: write OpenCode config from env, THEN exec the
-          // image's original CMD. We override ENTRYPOINT (not just command) so the
-          // image's CMD is preserved and passed via "$@" — works regardless of
-          // whether the upstream Dockerfile uses ENTRYPOINT, CMD, or both.
+          // Wrapper entrypoint: write OpenCode config (broker baseURL) from env
+          // OPENCODE_CONFIG_JSON, then exec image's CMD via "$@". `$$` escape
+          // forces compose to NOT substitute at config-load — shell expands at
+          // runtime. See ComposeServiceDef.entrypoint type doc.
           //
-          // OPENCODE_CONFIG_JSON is auto-injected by Phase 43.2's broker env builder
-          // (requiresAiProvider: true above). No image fork required.
-          //
-          // VERIFICATION TODO (SSH dönünce):
-          //   - confirm OpenCode config path is /root/.config/opencode/. Non-root
-          //     user containers use /home/<user>/.config/opencode/ — adjust HOME
-          //     or path. `docker inspect ... | jq .Config.User` to check.
-          //   - confirm image has ENTRYPOINT/CMD that passes through cleanly. If
-          //     image has `ENTRYPOINT ["python"]` and `CMD ["-m", "kortix.server"]`
-          //     this wrapper REPLACES ENTRYPOINT — must `exec python "$@"` instead
-          //     of `exec "$@"`. Re-inspect after first deploy.
-          // NB: docker-compose interpolates `$VAR` at config-load time. We want
-          // the SHELL to expand $OPENCODE_CONFIG_JSON and $@ at runtime in the
-          // container, so we escape with `$$` (compose strips one $, container
-          // sees $VAR). Same trick for $@ to be safe — positional params aren't
-          // env vars but the escape is harmless.
+          // VERIFICATION TODO on first install:
+          //   - confirm /root/.config/opencode/ is the right path (non-root
+          //     user containers use /home/<user>/.config/). Run
+          //     `docker inspect kortix/kortix-api:latest | jq .Config.User`
+          //     after first pull.
           entrypoint: [
             'sh', '-c',
             'mkdir -p /root/.config/opencode && ' +
@@ -1435,62 +1422,25 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             '--',
           ],
           environment: {
+            // External Supabase
             SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
             SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
             SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
-            REDIS_URL: 'redis://redis:6379',
-            // Sandbox per-agent runner — needs Docker socket. Phase 43.2 should NOT
-            // inject host-gateway here (sandbox containers don't need broker access
-            // through it; they speak to backend which proxies to broker).
-            // VERIFICATION TODO: does Suna spawn sandbox containers via host docker.sock,
-            // or via Daytona / a remote orchestrator?
+            // Database mode flag (Kortix uses this to skip bundled Supabase boot)
+            DB_MODE: 'external',
+            // Forward broker env from frontend (Phase 43.2 inject targets only
+            // mainService — these explicit lines pull them through compose
+            // interpolation from the .env file livinityd writes alongside).
+            ANTHROPIC_BASE_URL: '${ANTHROPIC_BASE_URL}',
+            ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY}',
+            OPENCODE_CONFIG_JSON: '${OPENCODE_CONFIG_JSON}',
           },
           volumes: [
-            '${APP_DATA_DIR}/backend-data:/app/data',
-            '/var/run/docker.sock:/var/run/docker.sock',  // for sandbox spawning
+            '${APP_DATA_DIR}/api-data:/app/data',
+            // docker.sock: kortix-api spawns kortix/computer sandbox containers
+            // per-agent at runtime. Without this mount, agents can't execute.
+            '/var/run/docker.sock:/var/run/docker.sock',
           ],
-          depends_on: ['redis'],
-        },
-        // Worker — background tasks (probably same image, different command)
-        worker: {
-          image: 'ghcr.io/suna-ai/suna-backend:latest',
-          restart: 'unless-stopped',
-          // Same OpenCode-config wrapper as backend — worker also runs OpenCode
-          // for any agent task it processes. See `backend.entrypoint` above for
-          // rationale. Pass-through `exec "$@"` preserves whatever upstream CMD
-          // the image declares (uvicorn vs python -m kortix.worker — TBD).
-          entrypoint: [
-            'sh', '-c',
-            'mkdir -p /root/.config/opencode && ' +
-            'printf "%s" "$$OPENCODE_CONFIG_JSON" > /root/.config/opencode/config.json && ' +
-            'exec "$$@"',
-            '--',
-          ],
-          // VERIFICATION TODO: if worker needs a DIFFERENT command than backend
-          // (likely — worker probably runs queue consumer, not API), pass it
-          // via `command:` here. docker-compose will append it as args to our
-          // wrapper entrypoint, so $@ resolves to the worker command.
-          // Example: command: ['python', '-m', 'kortix.worker']
-          environment: {
-            SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
-            SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
-            SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
-            REDIS_URL: 'redis://redis:6379',
-          },
-          volumes: ['${APP_DATA_DIR}/backend-data:/app/data'],
-          depends_on: ['redis'],
-        },
-        // Redis — local cache/queue (lightweight, stays on Mini PC)
-        redis: {
-          image: 'redis:7-alpine',
-          restart: 'unless-stopped',
-          volumes: ['${APP_DATA_DIR}/redis-data:/data'],
-          healthcheck: {
-            test: ['CMD', 'redis-cli', 'ping'],
-            interval: '30s',
-            timeout: '5s',
-            retries: 3,
-          },
         },
       },
     },
