@@ -2,6 +2,33 @@ import type {Request, Response} from 'express'
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 import {findUserById, getAdminUser} from '../database/index.js'
 import type Livinityd from '../../index.js'
+import {identityCache} from './identity-cache.js'
+
+/**
+ * Phase 74 Plan 04 (F5 identity preservation) — derive a per-conversation
+ * cache key for the identity cache. Precedence:
+ *   1. `X-Liv-Conversation-Id` header (broker clients explicitly thread this)
+ *   2. `x-request-id` header (set by Caddy / relay middleware on Server5)
+ *   3. UUID-ish fallback (cache misses every call → graceful degradation
+ *      to pre-F5 behavior)
+ *
+ * D-17: composite key `${userId}:${conversationId}` guarantees per-user
+ * isolation even when two users happen to share the same conversationId
+ * (the userId portion has already been validated against PG via the URL-path
+ * branch BEFORE reaching the cache).
+ */
+function deriveCacheKey(req: Request, userId: string): string {
+	const livConv = req.headers['x-liv-conversation-id']
+	if (typeof livConv === 'string' && livConv.length > 0) {
+		return `${userId}:${livConv}`
+	}
+	const reqId = req.headers['x-request-id']
+	if (typeof reqId === 'string' && reqId.length > 0) {
+		return `${userId}:${reqId}`
+	}
+	// Miss-every-time fallback. Equals current pre-F5 behavior.
+	return `${userId}:nonce-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 /**
  * Resolve userId from URL param + authorize.
@@ -26,6 +53,10 @@ import type Livinityd from '../../index.js'
  * for external traffic via api.livinity.io; for internal Mini-PC-LAN traffic
  * without a Bearer header the Phase 59 middleware falls through and this
  * URL-path resolver remains the legacy identity surface.
+ *
+ * Phase 74 Plan 04 — F5 identity cache wraps the URL-path branch (lines after
+ * Bearer short-circuit) with a cache-aside pattern. See `./identity-cache.ts`
+ * + CONTEXT D-16..D-20.
  */
 export async function resolveAndAuthorizeUserId(
 	req: Request,
@@ -39,6 +70,10 @@ export async function resolveAndAuthorizeUserId(
 	// user_id when forwarded via the api.livinity.io → relay → bruce-tunnel
 	// chain). Trust the Bearer-resolved userId and skip the URL-path lookup
 	// entirely. The URL :userId slot is now a vestigial path component.
+	//
+	// F5 cache: NOT consulted on the Bearer path — the api_keys middleware
+	// already short-circuits identity, and caching here would shadow the
+	// api_keys table (which the bearer middleware reads with each request).
 	if (req.authMethod === 'bearer' && typeof req.userId === 'string' && req.userId.length > 0) {
 		return {userId: req.userId}
 	}
@@ -53,16 +88,26 @@ export async function resolveAndAuthorizeUserId(
 		return undefined
 	}
 
+	// F5 cache-aside (Phase 74 Plan 04): resolve `multiUser` first so the
+	// cache lookup can compare against current mode. On hit, skip both
+	// `findUserById` (PG) and `getAdminUser` (PG) lookups entirely.
+	const multiUser = await isMultiUserMode(livinityd).catch(() => false)
+	const cacheKey = deriveCacheKey(req, userId)
+	const cached = identityCache.get(cacheKey, multiUser)
+	if (cached) {
+		return {userId: cached.userId}
+	}
+
 	const user = await findUserById(userId).catch(() => null)
 	if (!user) {
 		res.status(404).json({
 			type: 'error',
 			error: {type: 'not_found_error', message: 'user not found'},
 		})
+		// Do NOT cache failed lookups (D-19 — only successful resolutions).
 		return undefined
 	}
 
-	const multiUser = await isMultiUserMode(livinityd).catch(() => false)
 	if (!multiUser) {
 		// Single-user mode: only the admin user is permitted on the broker.
 		const admin = await getAdminUser().catch(() => null)
@@ -71,9 +116,23 @@ export async function resolveAndAuthorizeUserId(
 				type: 'error',
 				error: {type: 'forbidden', message: 'single-user mode: only admin user permitted on broker'},
 			})
+			// Do NOT cache failed lookups.
 			return undefined
 		}
 	}
+
+	// Successful resolution — write to cache. claudeDir mirrors the
+	// BROKER_FORCE_ROOT_HOME contract from agent-runner-factory.ts:77.
+	const claudeDir =
+		process.env.BROKER_FORCE_ROOT_HOME === 'true'
+			? '/root/.claude'
+			: `/opt/livos/data/users/${userId}/.claude`
+	identityCache.set(cacheKey, {
+		userId,
+		claudeDir,
+		multiUserMode: multiUser,
+		cachedAt: Date.now(),
+	})
 
 	return {userId}
 }
