@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: P64 + P66 both at human-verify checkpoint (4/5 plans complete each); user pivoted from Suna infra to AI chat focus mid-session
-last_updated: "2026-05-04T19:55:00.000Z"
-last_activity: "2026-05-04 — Phase 66 Wave 1+2+3 shipped; 66-05 reached `## CHECKPOINT REACHED` (commits `f71ee445`/`fc822b4c`/`b7305f7d`)"
+status: P64 + P66 at human-verify; P67 planned (4 plans, 1828 LOC, ready to execute in fresh session)
+last_updated: "2026-05-04T20:30:00.000Z"
+last_activity: "2026-05-04 — P67 CONTEXT.md + 4 plans committed (commits `76d695d6` + plans). Recommended `/clear && /gsd-execute-phase 67` for fresh context."
 progress:
   total_phases: 13
   completed_phases: 0
@@ -51,6 +51,16 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 1. **66-05 Step 1** — Start UI dev server: `pnpm --filter ui dev` (port 3000) OR deploy to Mini PC: `ssh ... bruce@10.69.31.68 'sudo bash /opt/livos/update.sh'`
 2. **66-05 Step 2** — Visit `/playground/liv-design-system` (logged-in route), walk all 6 sections (Color tokens / Typography / Motion primitives / Glass-grain-glow / shadcn variants / Icon map)
 3. **66-05 Step 3** — Side-by-side A/B vs current `/ai-chat` route. Verdict: `approved` / `approved with notes: <notes>` / `failed: <reason>`
+
+## Phase 67 Progress (Liv Agent Core Rebuild) — discuss + plan complete, execute pending
+
+- **CONTEXT.md ✅** 26 locked decisions (D-01..D-26); ToolCallSnapshot shape locked (D-12) — unblocks P68/P69 design
+- **PLANs ✅** 4 plans, 3 waves, 1828 LOC of plans:
+  - 67-01 (W1): RunStore Redis lifecycle (4-key schema + 24h TTL + Pub/Sub tail)
+  - 67-04 (W1): useLivAgentStream Zustand hook (reconnect-after, snapshot dedupe)
+  - 67-02 (W2): LivAgentRunner composition wrapper (sacred file untouched)
+  - 67-03 (W3): SSE endpoint + POST /start + POST /control + index.ts mount
+- **EXECUTE pending** — 12-16h estimated (wall-clock ~10-12h with W1 parallel). **Recommend `/clear && /gsd-execute-phase 67` for fresh context window** (per planner's note).
 
 ## v31.0 Milestone Summary
 
