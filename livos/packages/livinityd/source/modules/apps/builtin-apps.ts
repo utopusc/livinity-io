@@ -1397,7 +1397,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             // → bypasses LivOS auth gate → proxies to host:13738 → container:8008.
             // TODO multi-user: hardcoded to bruce.livinity.io for now. Replace with
             // ${LIVINITY_USER_DOMAIN} env injection at install time for portability.
-            NEXT_PUBLIC_BACKEND_URL: 'https://suna-api.bruce.livinity.io',
+            NEXT_PUBLIC_BACKEND_URL: 'https://suna-api.bruce.livinity.io/v1',
             // Broker env vars (ANTHROPIC_BASE_URL, OPENCODE_CONFIG_JSON, etc.)
             // are auto-injected by Phase 43.2 into THIS mainService — they are
             // a no-op for the frontend itself (kortix-api consumes them via
