@@ -20,6 +20,10 @@
  *   7 (bonus). countTokens heuristic matches Math.ceil(JSON.stringify(h).length / 4).
  */
 
+export {}; // Force this file to be parsed as an ES module so top-level
+           // `await` is permitted (run-store.test.ts achieves this via its
+           // static `import { setTimeout } from 'node:timers/promises'`).
+
 // ── Redis client factory ─────────────────────────────────────────
 let createRedis: () => any;
 let usingMock = false;

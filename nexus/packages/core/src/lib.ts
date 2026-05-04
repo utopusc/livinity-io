@@ -32,6 +32,17 @@ export type {
   LivAgentRunnerOptions,
 } from './liv-agent-runner.js';
 
+// ── Context Manager (Phase 73-01) ────────────────────────────────
+// Naive truncate-oldest summarization at 75% Kimi-window threshold.
+// Persists summary_checkpoint to Redis with 24h TTL. Wired into the
+// LivAgentRunner per-iteration hook in Plan 73-03.
+export { ContextManager, countTokens } from './context-manager.js';
+export type {
+  Message,
+  SummarizationStrategy,
+  ContextManagerOptions,
+} from './context-manager.js';
+
 // ── Run Queue (Phase 73-02) ──────────────────────────────────────
 export { RunQueue } from './run-queue.js';
 export type { AgentJobData, RunQueueOptions } from './run-queue.js';

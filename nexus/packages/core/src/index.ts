@@ -20,6 +20,17 @@ export type {
   LivAgentRunnerOptions,
 } from './liv-agent-runner.js';
 
+// ── Public re-exports (Phase 73-01 — ContextManager for Kimi-window safety) ──
+// Naive truncate-oldest summarization at 75% threshold (CONTEXT D-09..D-12).
+// Persists summary_checkpoint to Redis with 24h TTL. Consumed by Plan 73-03
+// which wires it into LivAgentRunner's per-iteration hook.
+export { ContextManager, countTokens } from './context-manager.js';
+export type {
+  Message,
+  SummarizationStrategy,
+  ContextManagerOptions,
+} from './context-manager.js';
+
 // ── Public re-exports (Phase 73-02 — RunQueue / BullMQ wrapper) ──
 // BullMQ-backed agent run queue with per-user concurrency=1 (manual
 // INCR/DECR gate, CONTEXT D-17) on queue 'liv:agent-jobs'. attempts:1
