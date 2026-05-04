@@ -46,6 +46,7 @@ import fileApi from '../files/api.js'
 import {mountBrokerRoutes} from '../livinity-broker/index.js'
 import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
+import {mountAgentRunsRoutes} from '../ai/agent-runs.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1271,6 +1272,20 @@ class Server {
 		// See livos/packages/livinityd/source/modules/livinity-broker/ +
 		// .planning/phases/41-anthropic-messages-broker/
 		mountBrokerRoutes(this.app, this.livinityd)
+
+		// ── Phase 67-03 — Liv Agent Run routes (additive) ─────────────────────
+		// Routes: POST /api/agent/start, GET /api/agent/runs/:runId/stream,
+		// POST /api/agent/runs/:runId/control. Existing /api/agent/stream is
+		// UNCHANGED (D-06) — broker + existing chat UI continue using the
+		// nexus-side SSE endpoint. The new endpoint is reachable from the
+		// browser at livinityd's port (8080) and is JWT-authenticated via
+		// `verifyToken()` (multi-user payload yields userId; legacy maps to
+		// 'admin'). The livAgentRunnerFactory is intentionally left undefined
+		// here — production wiring (constructing SdkAgentRunner with a Brain
+		// bound to nexus's config) lands in P68 / P73. Until then, POST /start
+		// returns 503 with a clear message; the route surface itself is in
+		// place so 67-04's hook + verifier can validate end-to-end.
+		mountAgentRunsRoutes(this.app, this.livinityd)
 
 		// Handle log file downloads
 		this.app.get('/logs/', async (request, response) => {
