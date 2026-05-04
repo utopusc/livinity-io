@@ -71,9 +71,12 @@
 
 ### PANEL (Phase 68 — Side Panel + Tool View Dispatcher)
 
-- [ ] **PANEL-01**: `livos/packages/ui/src/routes/ai-chat/liv-tool-panel.tsx` (NEW, ~300 LOC port of Suna ToolCallSidePanel) — fixed overlay `inset-y-0 right-0 z-30`, responsive widths
-- [ ] **PANEL-02**: Live/Manual mode state machine; "Jump to Live" pulse pill (cyan glow) when manual + running; "Jump to Latest" when manual + idle
-- [ ] **PANEL-03**: Step counter ("Step 3 of 7") via completedSnapshots filtering; slider navigation (shadcn Slider, liv-slider variant)
+- [x] **PANEL-01
+**: `livos/packages/ui/src/routes/ai-chat/liv-tool-panel.tsx` (NEW, ~300 LOC port of Suna ToolCallSidePanel) — fixed overlay `inset-y-0 right-0 z-30`, responsive widths
+- [x] **PANEL-02
+**: Live/Manual mode state machine; "Jump to Live" pulse pill (cyan glow) when manual + running; "Jump to Latest" when manual + idle
+- [x] **PANEL-03
+**: Step counter ("Step 3 of 7") via completedSnapshots filtering; slider navigation (shadcn Slider, liv-slider variant)
 - [ ] **PANEL-04**: Cmd+I keyboard shortcut closes panel; listens for `liv-sidebar-toggled` event to auto-close on sidebar expand
 - [ ] **PANEL-05**: `livos/packages/ui/src/routes/ai-chat/tool-views/index.tsx` (NEW) — `getToolView(toolName)` switch dispatcher with `GenericToolView` fallback
 - [ ] **PANEL-06**: `livos/packages/ui/src/store/liv-chat-store.ts` (NEW Zustand) — state + actions + `appendSnapshot` auto-open logic for visual tools

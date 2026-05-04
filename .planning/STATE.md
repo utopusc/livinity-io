@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T19:50:00.000Z"
-last_activity: "2026-05-04 — P67 Wave 1 complete: 67-01 (commits `a00523ca`/`eccbb8d8`) + 67-04 (commits `599f7a9a`/`02dab648`) shipped in parallel"
+last_updated: "2026-05-04T20:10:09.522Z"
+last_activity: "2026-05-04 — P68 Wave 1: 68-01 (commits `3676aba5`/`8e9a0653`) shipped — useLivToolPanelStore + 22 vitest tests pass"
 progress:
-  total_phases: 5
+  total_phases: 8
   completed_phases: 2
-  total_plans: 16
-  completed_plans: 13
-  percent: 81
+  total_plans: 25
+  completed_plans: 16
+  percent: 64
 ---
 
 # Project State
@@ -73,6 +73,17 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **67-04:** Tests use pure-helper extraction + smoke + source-text invariants + MockEventSource (no `@testing-library/react`, no `msw`) — D-NO-NEW-DEPS established by Phase 25/30/33/38/62 precedent overrides plan's RTL+msw scaffold preference. Substantive logic (`applyChunk`, `nextBackoffMs`, `buildStreamUrl`) extracted to top-level pure helpers and tested directly. Deferred RTL test plan (ULA1-ULA5) captured in test file header for future lift.
 - **67-04:** UI auth source = `localStorage.getItem(JWT_LOCAL_STORAGE_KEY)` from `@/modules/auth/shared` (`'jwt'` key) — mirrors existing `trpc/trpc.ts:33` pattern. EventSource gets JWT via `?token=` query param (T-67-04-01 mitigation, EventSource cannot set custom headers).
 - **67-04:** `autoStart` semantics: re-opens stream with `?after={lastSeenIdx}` IF runId exists AND not in terminal state; does NOT auto-POST `/start`. Handles "user refreshes mid-run" — ROADMAP P67 success criterion #1.
+
+## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 1/7 plans complete (Wave 1)
+
+- **68-01 ✅** useLivToolPanelStore Zustand store + isVisualTool helper. Commits `3676aba5` (feat) + `8e9a0653` (test). SUMMARY at `68-01-SUMMARY.md`. PANEL-01 + PANEL-02 + PANEL-03 marked complete. 22/22 vitest pass (381ms); pnpm --filter ui build clean (35.32s); sacred SHA `4f868d31...` unchanged. Visual-tool regex `/^(browser-|computer-use-|screenshot)/` honors STATE.md line 79 lock. NO persist (CONTEXT D-09 — in-memory only).
+- **68-02..68-07** — pending (LivToolPanel chrome, dispatcher, GenericToolView, InlineToolPill, Cmd+I shortcut, integration test).
+
+### P68 Decisions Logged
+
+- **68-01:** VISUAL_TOOL_PATTERN extracted as exported const (not just inline regex) — improves grep-discoverability of the locked product decision (STATE.md line 79). isVisualTool helper exported as a free function so tests hammer it deterministically (CONTEXT D-05).
+- **68-01:** Local re-declaration of ToolCallSnapshot in store file per CONTEXT D-14 — P67-04 has its own re-declaration in `liv-agent-types.ts` but `@nexus/core` UI export not yet shipped; aligning here when P67 ships package exports.
+- **68-01:** 22 vitest tests > 12 minimum — auto-open behavior is the locked product decision; algorithm density justified. All 6 handleNewSnapshot D-11 branches + dedupe + 4 open() edge cases (tail-live, toolId-manual, missing-id fallback, empty-snapshots) covered.
 
 ## v31.0 Milestone Summary
 
