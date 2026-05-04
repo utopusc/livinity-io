@@ -35,6 +35,23 @@ function buildBrokerEnv(userId: string): Record<string, string> {
 		// Same broker-managed sentinel — auth is enforced by URL path + IP guard.
 		// See: bolt.diy/app/lib/modules/llm/providers/openai-like.ts:32-39
 		OPENAI_LIKE_API_KEY: 'livinity-broker-managed',
+		// v30.5 — OpenCode runtime config (used by Suna and any OpenCode-based agent
+		// platform). OpenCode reads provider config from `~/.config/opencode/config.json`,
+		// not from env vars directly. Apps that bundle OpenCode can read this JSON
+		// string at boot to write that file, OR mount it as a file via
+		// `printenv OPENCODE_CONFIG_JSON > ~/.config/opencode/config.json` in their
+		// entrypoint. Schema: https://opencode.ai/config.json
+		OPENCODE_CONFIG_JSON: JSON.stringify({
+			$schema: 'https://opencode.ai/config.json',
+			provider: {
+				anthropic: {
+					options: {
+						baseURL: v1,
+						apiKey: 'livinity-broker-managed',
+					},
+				},
+			},
+		}),
 	}
 }
 
