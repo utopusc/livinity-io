@@ -68,6 +68,19 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		if (serviceDef.command && serviceDef.command.length > 0) {
 			service.command = serviceDef.command
 		}
+		// v30.5 — entrypoint override (vs command which only overrides CMD).
+		// Suna's kortix-api uses this to run a wrapper that writes OpenCode config
+		// from OPENCODE_CONFIG_JSON env before exec'ing the upstream CMD.
+		if ((serviceDef as any).entrypoint && (serviceDef as any).entrypoint.length > 0) {
+			service.entrypoint = [...(serviceDef as any).entrypoint]
+		}
+		// v30.5 — env_file directive: load env vars from a file in the compose dir.
+		// Multi-service apps use this to share user-provided values written by
+		// app.ts patchComposeFile to `.env` from environmentOverrides. Without this
+		// passthrough, kortix-api fails env validation (DATABASE_URL Required etc.).
+		if ((serviceDef as any).env_file && (serviceDef as any).env_file.length > 0) {
+			service.env_file = [...(serviceDef as any).env_file]
+		}
 		if ((serviceDef as any).user) {
 			service.user = (serviceDef as any).user
 		}
