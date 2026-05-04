@@ -1,5 +1,14 @@
 import 'dotenv/config';
 import Redis from 'ioredis';
+
+// ── Public re-exports (Phase 67-01 — RunStore for LivAgentRunner / SSE handler) ──
+// These exports make `import { RunStore, type Chunk, type RunMeta } from '@nexus/core'`
+// resolve through the package's main entry. The full public surface lives in lib.ts
+// (`@nexus/core/lib`); this top-level re-export is intentionally narrow to keep
+// daemon-side side-effects out of consumers that only want the run-store types.
+export { RunStore } from './run-store.js';
+export type { Chunk, ChunkType, RunMeta, RunStatus } from './run-store.js';
+
 import { Daemon } from './daemon.js';
 import { Brain } from './brain.js';
 import { Router } from './router.js';
