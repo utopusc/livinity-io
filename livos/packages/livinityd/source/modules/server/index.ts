@@ -334,7 +334,7 @@ class Server {
 
 				// Look up subdomain → appId mapping from Redis
 				const subdomainsRaw = await this.livinityd.ai.redis.get('livos:domain:subdomains')
-				const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean}> =
+				const subdomains: Array<{subdomain: string; appId: string; port: number; enabled: boolean; public?: boolean}> =
 					subdomainsRaw ? JSON.parse(subdomainsRaw) : []
 				const subConfig = subdomains.find((s) => s.subdomain === subdomain && s.enabled)
 
@@ -353,6 +353,32 @@ class Server {
 
 				// Default target: the global app port (single-user mode or shared app)
 				let targetPort = subConfig.port
+
+				// v30.5 — Public subdomain bypass for app backend APIs that handle
+				// their own auth (e.g. Suna's kortix-api uses Supabase JWT). Without
+				// this flag, the LivOS auth gate redirects to /login and breaks the
+				// frontend↔backend browser flow because the browser doesn't carry
+				// a LIVINITY_SESSION cookie.
+				if (subConfig.public === true) {
+					// Skip auth, jump straight to proxy
+					let proxy = this.appGatewayProxyCache.get(targetPort)
+					if (!proxy) {
+						this.logger.log(`App gateway (public): creating proxy for port ${targetPort}`)
+						proxy = createProxyMiddleware({
+							target: `http://127.0.0.1:${targetPort}`,
+							changeOrigin: true,
+							logProvider: () => ({
+								log: this.logger.verbose,
+								debug: this.logger.verbose,
+								info: this.logger.verbose,
+								warn: this.logger.verbose,
+								error: this.logger.error,
+							}),
+						})
+						this.appGatewayProxyCache.set(targetPort, proxy)
+					}
+					return proxy(request, response, next)
+				}
 
 				// Auth: require valid session for app subdomain access.
 				// In multi-user mode: LIVINITY_SESSION cookie with RBAC checks.

@@ -1391,8 +1391,13 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
           environment: {
             NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
             NEXT_PUBLIC_SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
-            // Backend reachable via container DNS name (matches Kortix's compose service naming)
-            NEXT_PUBLIC_BACKEND_URL: 'http://kortix-api:13738',
+            // Backend reachable via PUBLIC subdomain (browser can't resolve Docker
+            // hostnames, and CSP blocks cross-origin to internal IPs anyway).
+            // suna-api subdomain registered with public:true in Redis subdomains
+            // → bypasses LivOS auth gate → proxies to host:13738 → container:8008.
+            // TODO multi-user: hardcoded to bruce.livinity.io for now. Replace with
+            // ${LIVINITY_USER_DOMAIN} env injection at install time for portability.
+            NEXT_PUBLIC_BACKEND_URL: 'https://suna-api.bruce.livinity.io',
             // Broker env vars (ANTHROPIC_BASE_URL, OPENCODE_CONFIG_JSON, etc.)
             // are auto-injected by Phase 43.2 into THIS mainService — they are
             // a no-op for the frontend itself (kortix-api consumes them via
@@ -1464,6 +1469,9 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY}',
             OPENCODE_CONFIG_JSON: '${OPENCODE_CONFIG_JSON}',
           },
+          // Expose kortix-api on host port so livinityd HPM can proxy
+          // suna-api.<domain> → 13738 → container:8008 (kortix-api's actual listen port)
+          ports: ['127.0.0.1:13738:8008'],
           volumes: [
             '${APP_DATA_DIR}/api-data:/app/data',
             // docker.sock: kortix-api spawns kortix/computer sandbox containers
