@@ -45,6 +45,9 @@ services:
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENCODE_CONFIG_JSON: ${OPENCODE_CONFIG_JSON}
+      KORTIX_SANDBOX_URL: http://host.docker.internal:14000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${APP_DATA_DIR}/api-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
