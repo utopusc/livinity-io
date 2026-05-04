@@ -1,6 +1,26 @@
 import {randomUUID} from 'node:crypto'
 import type {Response} from 'express'
 import type {AgentEvent} from '@nexus/core'
+import {SLICE_BYTES, SLICE_DELAY_MS, sliceUtf8, sleep} from './sse-slice.js'
+
+/**
+ * Phase 74 Plan 01 (F2 token-cadence streaming).
+ *
+ * The `chunk` branch of `onAgentEvent` slices each text payload via
+ * `sliceUtf8` and emits one Anthropic `content_block_delta` SSE event per
+ * slice with an inter-slice `sleep(SLICE_DELAY_MS)` pause. Slicing is in
+ * the BROKER adapter only — the sacred
+ * `nexus/packages/core/src/sdk-agent-runner.ts`
+ * (SHA `4f868d318abff71f8c8bfbcf443b2393a553018b`) is untouched.
+ *
+ * Slice size + delay are env-configurable:
+ *   - `LIV_BROKER_SLICE_BYTES`    default 24, range [8, 256]
+ *   - `LIV_BROKER_SLICE_DELAY_MS` default 15, range [0, 200]
+ *
+ * Slicing applies ONLY to `chunk` text deltas. `final_answer` (terminal trio:
+ * content_block_stop + message_delta + message_stop), `error`, and the header
+ * trio (message_start + content_block_start + ping) are unchanged.
+ */
 
 /**
  * Discriminated union of Anthropic SSE event shapes the broker emits.
@@ -123,23 +143,33 @@ export function createSseAdapter(opts: {
 	}
 
 	return {
-		onAgentEvent(event: AgentEvent) {
+		async onAgentEvent(event: AgentEvent): Promise<void> {
 			if (closed) return
 			if (event.type === 'thinking' && (event.turn ?? 1) === 1) {
 				ensureHeader()
 			} else if (event.type === 'chunk' && typeof event.data === 'string') {
 				ensureHeader()
 				const text = event.data
-				// Estimate output tokens: ~4 chars per token (matches sdk-agent-runner.ts:361 estimate)
+				if (text.length === 0) return
+				// Estimate output tokens once for the whole event payload (NOT per slice)
+				// so the per-event token-count contract is unchanged by F2 slicing.
 				outputTokens += Math.max(1, Math.ceil(text.length / 4))
-				writeSseChunk(res, {
-					event: 'content_block_delta',
-					data: {
-						type: 'content_block_delta',
-						index: 0,
-						delta: {type: 'text_delta', text},
-					},
-				})
+				// F2 (Phase 74 Plan 01): slice text into UTF-8-safe pieces, pace
+				// each slice with sleep(SLICE_DELAY_MS) before emitting subsequent
+				// slices. Short text (<= SLICE_BYTES) yields a 1-element array
+				// (no pacing, no behaviour change vs. pre-F2).
+				const slices = sliceUtf8(text, SLICE_BYTES)
+				for (let i = 0; i < slices.length; i++) {
+					if (i > 0) await sleep(SLICE_DELAY_MS)
+					writeSseChunk(res, {
+						event: 'content_block_delta',
+						data: {
+							type: 'content_block_delta',
+							index: 0,
+							delta: {type: 'text_delta', text: slices[i]!},
+						},
+					})
+				}
 			} else if (event.type === 'final_answer') {
 				ensureHeader()
 				writeSseChunk(res, {

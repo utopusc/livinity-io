@@ -242,30 +242,41 @@ async function runTests() {
 		console.log('  PASS Test F2-5: final_answer terminal trio not sliced')
 	}
 
-	// Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 → no enforced delay
+	// Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 → no enforced delay.
+	// Env is read at module load (per plan recommendation D-06), so this test
+	// uses a sibling tsx fixture script run as a child process with the env
+	// var set. The child prints `ELAPSED=<ms>`; we assert <100ms.
 	{
-		const prev = process.env.LIV_BROKER_SLICE_DELAY_MS
-		process.env.LIV_BROKER_SLICE_DELAY_MS = '0'
-		try {
-			const mod = await import('./sse-adapter.js?bustcache_delay0=' + Date.now())
-			const fake = new FakeResponse()
-			const adapter = (mod as any).createSseAdapter({model: 'm', res: fake.asResponse()})
-			await adapter.onAgentEvent({type: 'thinking', turn: 1})
-			const text = 'a'.repeat(200)
-			const t0 = Date.now()
-			await adapter.onAgentEvent({type: 'chunk', turn: 1, data: text})
-			const elapsed = Date.now() - t0
-			assert.ok(
-				elapsed < 100,
-				`with LIV_BROKER_SLICE_DELAY_MS=0, elapsed should be <100ms, got ${elapsed}ms`,
-			)
-			console.log(
-				`  PASS Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 emits with no delay (${elapsed}ms)`,
-			)
-		} finally {
-			if (prev === undefined) delete process.env.LIV_BROKER_SLICE_DELAY_MS
-			else process.env.LIV_BROKER_SLICE_DELAY_MS = prev
-		}
+		const {spawnSync} = await import('node:child_process')
+		const path = await import('node:path')
+		const url = await import('node:url')
+		const here = path.dirname(url.fileURLToPath(import.meta.url))
+		const fixture = path.join(here, '__sse-slice-env-fixture-anthropic.ts')
+		const child = spawnSync(
+			'pnpm',
+			['exec', 'tsx', fixture],
+			{
+				cwd: path.resolve(here, '../../..'),
+				env: {...process.env, LIV_BROKER_SLICE_DELAY_MS: '0'},
+				encoding: 'utf8',
+				shell: true,
+			},
+		)
+		const stdout = child.stdout ?? ''
+		const stderr = child.stderr ?? ''
+		const m = /ELAPSED=(\d+)/.exec(stdout)
+		assert.ok(
+			m,
+			`child stdout missing ELAPSED= line; stdout=${JSON.stringify(stdout)}; stderr=${JSON.stringify(stderr)}`,
+		)
+		const elapsed = Number.parseInt(m![1]!, 10)
+		assert.ok(
+			elapsed < 100,
+			`with LIV_BROKER_SLICE_DELAY_MS=0, child elapsed should be <100ms, got ${elapsed}ms`,
+		)
+		console.log(
+			`  PASS Test F2-6: env override LIV_BROKER_SLICE_DELAY_MS=0 emits with no delay (${elapsed}ms)`,
+		)
 	}
 
 	console.log('\nAll sse-adapter.test.ts tests passed (10/10)')

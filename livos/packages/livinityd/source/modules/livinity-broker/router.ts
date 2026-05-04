@@ -198,10 +198,12 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 					signal: abortController.signal,
 				})
 				for await (const event of generator) {
-					adapter.onAgentEvent(event)
+					// Phase 74 Plan 01 (F2): adapter.onAgentEvent is async — await so
+					// inter-slice sleeps actually pace wire emission.
+					await adapter.onAgentEvent(event)
 				}
 			} catch (err: any) {
-				adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'})
+				await adapter.onAgentEvent({type: 'error', data: err?.message || 'broker error'})
 			} finally {
 				res.end()
 			}
