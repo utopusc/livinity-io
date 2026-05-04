@@ -15,11 +15,25 @@
 // render + real click event + real className assertions.
 //
 // Coverage:
-//   1. getUserFriendlyToolName — pure helper, 4 transformation cases.
-//   2. InlineToolPill rendering — name display, visual-tool border,
-//      non-visual no-border.
-//   3. InlineToolPill interactions — click handler fires, animate-pulse on
-//      running status, no animate-pulse on done status.
+//   1. getUserFriendlyToolName — pure helper, 6 transformation cases.
+//   2. isVisualTool — regex matcher, 4 cases.
+//   3. InlineToolPill rendering — name display, visual-tool border,
+//      non-visual no-border, animate-pulse status logic.
+//   4. InlineToolPill interactions — click handler fires, className passthrough.
+//
+// ─────────────────────────────────────────────────────────────────────
+// Deferred RTL tests (uncomment when @testing-library/react lands and
+// remove the react-dom/client harness above — RTL's `render` and
+// `fireEvent` are 1:1 replacements for the helpers below):
+// ─────────────────────────────────────────────────────────────────────
+//   import {render, fireEvent, screen, cleanup} from '@testing-library/react'
+//
+//   ITP1: render(<InlineToolPill snapshot={makeSnapshot({toolName: 'browser-navigate'})} onClick={() => {}} />);
+//         expect(screen.getByText('Browser Navigate')).toBeInTheDocument()
+//   ITP2: const onClick = vi.fn(); render(...); fireEvent.click(screen.getByTestId('inline-tool-pill'));
+//         expect(onClick).toHaveBeenCalledTimes(1)
+//   ITP3: vi.useFakeTimers(); render with status='running'; advance timers 1s;
+//         assert elapsed text updates
 //
 // References:
 //   - .planning/phases/68-side-panel-tool-view-dispatcher/68-CONTEXT.md (D-26..D-28a)
@@ -29,6 +43,11 @@
 import {act} from 'react'
 import {createRoot, type Root} from 'react-dom/client'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+
+// Silence React 18's "current testing environment is not configured to
+// support act(...)" warning under jsdom — we ARE in a test env, vitest
+// just doesn't set this global automatically.
+;(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT = true
 
 import {
 	InlineToolPill,
