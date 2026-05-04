@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: planning
-last_updated: "2026-05-04T17:52:41.832Z"
-last_activity: 2026-05-04 — v31 milestone bootstrap complete
+status: 64-05 closed CARRY-05; 3 v28.0 quick-tasks classified `already-resolved`
+last_updated: "2026-05-04T17:58:07.338Z"
+last_activity: 2026-05-04 — Plan 64-05 executed (commit `e89084d4`); SUMMARY at `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-05-SUMMARY.md`
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
