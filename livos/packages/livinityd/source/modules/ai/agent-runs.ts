@@ -28,7 +28,11 @@
  */
 
 import type {Application, Request, Response} from 'express'
-import {LivAgentRunner, RunStore, type Chunk, type RunMeta} from '@nexus/core'
+// Imports below resolve from '@nexus/core' via the package's `./lib` subpath
+// export — the lib entry is "safe to import without side effects" (the main
+// `@nexus/core` entry pulls in daemon side-effects like `dotenv/config`). Both
+// entries re-export RunStore + LivAgentRunner per Phase 67-01/02 SUMMARY.
+import {LivAgentRunner, RunStore, type Chunk, type RunMeta} from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
 
