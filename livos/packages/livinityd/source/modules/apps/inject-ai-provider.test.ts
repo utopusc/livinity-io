@@ -35,7 +35,7 @@ test('Test 1b: flag undefined → compose unchanged', () => {
 	assert.deepEqual(composeIn, composeBefore)
 })
 
-test('Test 2: flag true on bare service → 5 env vars + extra_hosts added', () => {
+test('Test 2: flag true on bare service → 9 env vars + extra_hosts added', () => {
 	const compose = {services: {app: {image: 'foo'}}} as any
 	injectAiProviderConfig(compose, 'user-uuid', {
 		...validBaseManifest,
@@ -46,9 +46,30 @@ test('Test 2: flag true on bare service → 5 env vars + extra_hosts added', () 
 	assert.equal(svc.environment.ANTHROPIC_REVERSE_PROXY, 'http://livinity-broker:8080/u/user-uuid')
 	assert.equal(svc.environment.LLM_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
 	assert.equal(svc.environment.OPENAI_API_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
+	assert.equal(svc.environment.OPENAI_LIKE_API_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
+	assert.equal(svc.environment.ANTHROPIC_API_KEY, 'livinity-broker-managed')
 	assert.equal(svc.environment.OPENAI_API_KEY, 'livinity-broker-managed')
-	assert.equal(Object.keys(svc.environment).length, 5)
+	assert.equal(svc.environment.OPENAI_LIKE_API_KEY, 'livinity-broker-managed')
+	assert.ok(svc.environment.OPENCODE_CONFIG_JSON, 'OPENCODE_CONFIG_JSON should be set')
+	// 9 broker keys total: 5 base URLs + 3 sentinel API keys + 1 OpenCode JSON config
+	assert.equal(Object.keys(svc.environment).length, 9)
 	assert.deepEqual(svc.extra_hosts, ['livinity-broker:host-gateway'])
+})
+
+test('Test 2b: OPENCODE_CONFIG_JSON contains valid OpenCode config pointing at broker', () => {
+	const compose = {services: {app: {image: 'foo'}}} as any
+	injectAiProviderConfig(compose, 'user-uuid', {
+		...validBaseManifest,
+		requiresAiProvider: true,
+	})
+	const raw = compose.services.app.environment.OPENCODE_CONFIG_JSON
+	const parsed = JSON.parse(raw)
+	assert.equal(parsed.$schema, 'https://opencode.ai/config.json')
+	assert.equal(
+		parsed.provider.anthropic.options.baseURL,
+		'http://livinity-broker:8080/u/user-uuid/v1',
+	)
+	assert.equal(parsed.provider.anthropic.options.apiKey, 'livinity-broker-managed')
 })
 
 test('Test 3: existing env preserved, broker keys added (no overwrite)', () => {
@@ -68,8 +89,9 @@ test('Test 3: existing env preserved, broker keys added (no overwrite)', () => {
 	assert.equal(env.LLM_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
 	assert.equal(env.OPENAI_API_BASE_URL, 'http://livinity-broker:8080/u/user-uuid/v1')
 	assert.equal(env.OPENAI_API_KEY, 'livinity-broker-managed')
-	// 2 pre-existing + 5 broker keys = 7
-	assert.equal(Object.keys(env).length, 7)
+	assert.ok(env.OPENCODE_CONFIG_JSON)
+	// 2 pre-existing + 9 broker keys = 11
+	assert.equal(Object.keys(env).length, 11)
 })
 
 test('Test 3c: pre-existing OPENAI_API_KEY is PRESERVED (no overwrite)', () => {

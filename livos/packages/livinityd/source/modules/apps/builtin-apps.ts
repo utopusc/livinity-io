@@ -22,6 +22,11 @@ export interface ComposeServiceDef {
   devices?: string[]
   depends_on?: string[]
   command?: string[]
+  // ENTRYPOINT override (vs `command:` which only overrides CMD). Useful for
+  // wrapping an upstream image's startup with a config-write step that exec's
+  // the original CMD via "$@". Suna uses this to write OpenCode's config.json
+  // from the OPENCODE_CONFIG_JSON env var before launching the agent runtime.
+  entrypoint?: string[]
   user?: string
   shm_size?: string
   security_opt?: string[]
@@ -1380,11 +1385,12 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             NEXT_PUBLIC_SUPABASE_ANON_KEY: '${NEXT_PUBLIC_SUPABASE_ANON_KEY}',
             // Backend URL for client-side fetches (internal docker network)
             NEXT_PUBLIC_BACKEND_URL: 'http://backend:8000',
-            // LLM provider — auto-injected by Phase 43.2 (requiresAiProvider: true)
-            // Suna's OpenCode runtime reads from a config file, NOT directly env;
-            // we will need a small init container or volume-mounted config.json.
-            // VERIFICATION TODO: confirm whether OpenCode honors ANTHROPIC_BASE_URL env
-            // alongside its config.json, or if config.json mount is mandatory.
+            // LLM provider — auto-injected by Phase 43.2 (requiresAiProvider: true).
+            // Frontend itself doesn't talk to LLMs (backend does); env vars present
+            // here only because Phase 43.2 inject targets the FIRST/main service.
+            // OpenCode config is consumed by backend + worker via their wrapper
+            // entrypoints (see below) which write OPENCODE_CONFIG_JSON →
+            // ~/.config/opencode/config.json before exec'ing the upstream CMD.
           },
           ports: ['127.0.0.1:3000:3000'],
           depends_on: ['backend', 'redis'],
@@ -1400,6 +1406,34 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         backend: {
           image: 'ghcr.io/suna-ai/suna-backend:latest',
           restart: 'unless-stopped',
+          // Wrapper entrypoint: write OpenCode config from env, THEN exec the
+          // image's original CMD. We override ENTRYPOINT (not just command) so the
+          // image's CMD is preserved and passed via "$@" — works regardless of
+          // whether the upstream Dockerfile uses ENTRYPOINT, CMD, or both.
+          //
+          // OPENCODE_CONFIG_JSON is auto-injected by Phase 43.2's broker env builder
+          // (requiresAiProvider: true above). No image fork required.
+          //
+          // VERIFICATION TODO (SSH dönünce):
+          //   - confirm OpenCode config path is /root/.config/opencode/. Non-root
+          //     user containers use /home/<user>/.config/opencode/ — adjust HOME
+          //     or path. `docker inspect ... | jq .Config.User` to check.
+          //   - confirm image has ENTRYPOINT/CMD that passes through cleanly. If
+          //     image has `ENTRYPOINT ["python"]` and `CMD ["-m", "kortix.server"]`
+          //     this wrapper REPLACES ENTRYPOINT — must `exec python "$@"` instead
+          //     of `exec "$@"`. Re-inspect after first deploy.
+          // NB: docker-compose interpolates `$VAR` at config-load time. We want
+          // the SHELL to expand $OPENCODE_CONFIG_JSON and $@ at runtime in the
+          // container, so we escape with `$$` (compose strips one $, container
+          // sees $VAR). Same trick for $@ to be safe — positional params aren't
+          // env vars but the escape is harmless.
+          entrypoint: [
+            'sh', '-c',
+            'mkdir -p /root/.config/opencode && ' +
+            'printf "%s" "$$OPENCODE_CONFIG_JSON" > /root/.config/opencode/config.json && ' +
+            'exec "$$@"',
+            '--',
+          ],
           environment: {
             SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
             SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
@@ -1421,9 +1455,22 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         worker: {
           image: 'ghcr.io/suna-ai/suna-backend:latest',
           restart: 'unless-stopped',
-          // VERIFICATION TODO: confirm worker command — likely `python -m worker`
-          // or similar; current image entrypoint may be uvicorn.
-          // command: ['python', '-m', 'kortix.worker'],
+          // Same OpenCode-config wrapper as backend — worker also runs OpenCode
+          // for any agent task it processes. See `backend.entrypoint` above for
+          // rationale. Pass-through `exec "$@"` preserves whatever upstream CMD
+          // the image declares (uvicorn vs python -m kortix.worker — TBD).
+          entrypoint: [
+            'sh', '-c',
+            'mkdir -p /root/.config/opencode && ' +
+            'printf "%s" "$$OPENCODE_CONFIG_JSON" > /root/.config/opencode/config.json && ' +
+            'exec "$$@"',
+            '--',
+          ],
+          // VERIFICATION TODO: if worker needs a DIFFERENT command than backend
+          // (likely — worker probably runs queue consumer, not API), pass it
+          // via `command:` here. docker-compose will append it as args to our
+          // wrapper entrypoint, so $@ resolves to the worker command.
+          // Example: command: ['python', '-m', 'kortix.worker']
           environment: {
             SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL}',
             SUPABASE_SERVICE_ROLE_KEY: '${SUPABASE_SERVICE_ROLE_KEY}',
