@@ -1,5 +1,5 @@
 import express, {type Request, type Response} from 'express'
-import type {AgentResult} from '@nexus/core'
+import type {AgentResult} from '@liv/core'
 import {resolveAndAuthorizeUserId} from './auth.js'
 import {translateAnthropicMessagesToSdkArgs} from './translate-request.js'
 import {createSseAdapter} from './sse-adapter.js'

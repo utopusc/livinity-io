@@ -45,7 +45,7 @@ import {
 	McpConfigManager,
 	type Chunk,
 	type RunMeta,
-} from '@nexus/core/lib'
+} from '@liv/core/lib'
 
 import type Livinityd from '../../index.js'
 

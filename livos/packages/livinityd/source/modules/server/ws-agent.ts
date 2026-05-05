@@ -24,7 +24,7 @@ import {
 	type ClientWsMessage,
 	type TurnData,
 	type CapabilityManifest,
-} from '@nexus/core/lib'
+} from '@liv/core/lib'
 
 import type Livinityd from '../../index.js'
 import type createLogger from '../utilities/logger.js'

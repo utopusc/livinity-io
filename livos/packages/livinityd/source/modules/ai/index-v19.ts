@@ -3,7 +3,7 @@ import {
 	SubagentManager,
 	ScheduleManager,
 	type AgentEvent,
-} from '@nexus/core/lib'
+} from '@liv/core/lib'
 
 import type Livinityd from '../../index.js'
 import {getUserPreference} from '../database/index.js'

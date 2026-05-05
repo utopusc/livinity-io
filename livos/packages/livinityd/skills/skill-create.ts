@@ -18,7 +18,7 @@ max_turns: 10
 ---
 */
 
-import type { SkillContext, SkillResult } from '@nexus/core/lib';
+import type { SkillContext, SkillResult } from '@liv/core/lib';
 
 export async function handler(ctx: SkillContext): Promise<SkillResult> {
   const task = ctx.message.replace(/^[!\\/]?\s*(skill|yetenek|beceri)\s*/i, '').trim();

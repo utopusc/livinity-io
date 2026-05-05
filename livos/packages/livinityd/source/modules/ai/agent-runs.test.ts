@@ -48,7 +48,7 @@ import http, {type Server} from 'node:http'
 import {AddressInfo} from 'node:net'
 import express from 'express'
 
-import {RunStore, LivAgentRunner} from '@nexus/core/lib'
+import {RunStore, LivAgentRunner} from '@liv/core/lib'
 import {mountAgentRunsRoutes} from './agent-runs.js'
 
 // ── FakeRunQueue (Phase 73-04) ────────────────────────────────────────────

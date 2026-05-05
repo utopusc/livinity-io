@@ -7,7 +7,7 @@ import {
 	RunStore,
 	recoverIncompleteRuns,
 	type AgentEvent,
-} from '@nexus/core/lib'
+} from '@liv/core/lib'
 
 import type Livinityd from '../../index.js'
 import {getPool, getUserPreference} from '../database/index.js'
@@ -562,7 +562,7 @@ export default class AiModule {
 				// Try to import ToolRegistry from @nexus/core/lib, fallback to minimal
 				let registry: any
 				try {
-					const mod = await import('@nexus/core/lib') as any
+					const mod = await import('@liv/core/lib') as any
 					if (mod.ToolRegistry) {
 						registry = new mod.ToolRegistry()
 					} else {

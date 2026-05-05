@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto'
-import type {AgentResult} from '@nexus/core'
+import type {AgentResult} from '@liv/core'
 import type {SdkRunArgs} from './translate-request.js'
 import type {
 	OpenAIChatCompletionsRequest,

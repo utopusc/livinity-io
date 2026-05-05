@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto'
 import type {Response} from 'express'
-import type {AgentEvent, AgentResult} from '@nexus/core'
+import type {AgentEvent, AgentResult} from '@liv/core'
 import type {OpenAIFinishReason} from './openai-types.js'
 import {SLICE_BYTES, SLICE_DELAY_MS, sliceUtf8, sleep} from './sse-slice.js'
 
