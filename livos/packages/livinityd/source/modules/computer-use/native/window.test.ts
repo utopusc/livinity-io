@@ -17,7 +17,16 @@
  * All system calls are mocked (vi.mock node:child_process + node:fs/promises).
  * No real wmctrl / firefox / fs read occurs during unit tests.
  */
-import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach, afterAll, vi} from 'vitest'
+
+// Stub process.platform → 'linux' for the duration of this test file so the
+// D-NATIVE-14 platform guard inside window.ts does NOT throw. The dev env may
+// be Windows / macOS, but the production target is Mini PC linux.
+const originalPlatform = process.platform
+Object.defineProperty(process, 'platform', {
+	value: 'linux',
+	configurable: true,
+})
 
 // vi.mock factory: child_process spawn + exec
 const spawnMock = vi.fn()
@@ -63,6 +72,13 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.restoreAllMocks()
+})
+
+afterAll(() => {
+	Object.defineProperty(process, 'platform', {
+		value: originalPlatform,
+		configurable: true,
+	})
 })
 
 describe('native/window — module shape', () => {
