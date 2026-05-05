@@ -1482,6 +1482,65 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       },
     },
   },
+  {
+    // Phase 71 (CU-FOUND-01) — Bytebot Desktop image for AI-driven computer use.
+    // Container is typically NOT started by the user directly — the Liv Agent
+    // spawns it on demand via the computer-use container manager
+    // (livos/packages/livinityd/source/modules/computer-use/container-manager.ts,
+    // wired in 71-04). Standalone /computer route exists for debugging
+    // (71-06 / CU-FOUND-05).
+    //
+    // Privileged + shm 2g per v31-DRAFT line 577 — required for Bytebot to
+    // operate XFCE + chromium. Mini PC single-user constraint accepts the
+    // privileged exposure (STATE.md line 71). NO docker.sock mount.
+    id: 'bytebot-desktop',
+    name: 'Bytebot Desktop',
+    tagline: 'AI-driven computer use desktop',
+    version: '0.1.0',
+    category: 'developer-tools',
+    port: 9990,
+    description: 'Bytebot Desktop is an XFCE-based Linux desktop image (1280x960) packaged for AI agent control. Apache 2.0 licensed. Designed to be driven programmatically by the Liv Agent — typically not started directly; the Liv Agent spawns this on demand. Includes Firefox, file manager, terminal, and a VNC server (websockify on port 9990) for live screen viewing.',
+    website: 'https://github.com/bytebot-ai/bytebot',
+    developer: 'Bytebot AI',
+    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/bytebot/icon.svg',
+    repo: 'https://github.com/bytebot-ai/bytebot',
+    docker: {
+      image: 'ghcr.io/bytebot-ai/bytebot-desktop:edge',
+      environment: {
+        RESOLUTION: '1280x960',
+        DISPLAY: ':0',
+      },
+      volumes: ['/data'],
+    },
+    installOptions: {
+      subdomain: 'desktop',
+      environmentOverrides: [],
+    },
+    compose: {
+      mainService: 'bytebot',
+      services: {
+        bytebot: {
+          image: 'ghcr.io/bytebot-ai/bytebot-desktop:edge',
+          restart: 'unless-stopped',
+          environment: {
+            RESOLUTION: '1280x960',
+            DISPLAY: ':0',
+          },
+          volumes: ['${APP_DATA_DIR}/data:/data'],
+          ports: ['127.0.0.1:9990:9990'],
+          privileged: true,
+          shm_size: '2g',
+          healthcheck: {
+            test: ['CMD-SHELL', 'curl -f http://localhost:9990/health || exit 1'],
+            interval: '30s',
+            timeout: '10s',
+            retries: 3,
+            start_period: '60s',
+          },
+        },
+      },
+    },
+  },
 ]
 
 export function getBuiltinApp(appId: string): BuiltinAppManifest | undefined {
