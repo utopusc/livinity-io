@@ -33,6 +33,8 @@
  */
 import {setTimeout as sleep} from 'node:timers/promises'
 
+import {z, type ZodTypeAny} from 'zod'
+
 import {BYTEBOT_TOOLS} from '../bytebot-tools.js'
 import {
 	captureScreenshot,
@@ -364,15 +366,67 @@ export const HANDLERS: Record<string, Handler> = {
  * handler is wrapped in a try/catch that converts thrown errors into
  * `{ isError: true, content: [{ type:'text', text:'Error: ...' }] }`.
  */
+/**
+ * Convert a JSON-Schema node (Anthropic / OpenAPI subset) to a Zod type.
+ * Handles the shapes Bytebot uses: object, string, number, boolean, array,
+ * enum strings, nested objects. Unknown shapes fall back to `z.any()`.
+ *
+ * P79-02 (2026-05-05): MCP SDK 1.25.x's registerTool calls
+ * `inputSchema.safeParseAsync()` at runtime — passing a plain JSON-Schema
+ * object throws `v3Schema.safeParseAsync is not a function`. The SDK
+ * expects either a Zod shape (record of ZodTypeAny) OR an AnySchema with
+ * Zod-style methods. We convert at registration time so the bytebot tool
+ * schemas (verbatim JSON Schema from upstream) keep their authoring
+ * format while the SDK gets what it needs.
+ */
+function jsonSchemaPropertyToZod(node: unknown): ZodTypeAny {
+	if (!node || typeof node !== 'object') return z.any()
+	const schema = node as {type?: string; enum?: unknown[]; items?: unknown; properties?: Record<string, unknown>; required?: string[]; description?: string}
+	const t = schema.type
+	if (t === 'string') {
+		if (Array.isArray(schema.enum) && schema.enum.length > 0 && schema.enum.every((v) => typeof v === 'string')) {
+			return z.enum(schema.enum as [string, ...string[]])
+		}
+		return z.string()
+	}
+	if (t === 'integer' || t === 'number') return z.number()
+	if (t === 'boolean') return z.boolean()
+	if (t === 'array') return z.array(jsonSchemaPropertyToZod(schema.items ?? {}))
+	if (t === 'object') {
+		const shape: Record<string, ZodTypeAny> = {}
+		const props = schema.properties ?? {}
+		const required = new Set(schema.required ?? [])
+		for (const [k, v] of Object.entries(props)) {
+			const propZod = jsonSchemaPropertyToZod(v)
+			shape[k] = required.has(k) ? propZod : propZod.optional()
+		}
+		return z.object(shape)
+	}
+	return z.any()
+}
+
+/** Convert top-level JSON-Schema object to a ZodRawShape (record of ZodTypeAny).
+ *  This is what MCP SDK's registerTool({ inputSchema }) expects. */
+function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record<string, unknown>; required?: string[]}): Record<string, ZodTypeAny> {
+	const shape: Record<string, ZodTypeAny> = {}
+	const required = new Set(rootSchema.required ?? [])
+	for (const [k, v] of Object.entries(rootSchema.properties ?? {})) {
+		const propZod = jsonSchemaPropertyToZod(v)
+		shape[k] = required.has(k) ? propZod : propZod.optional()
+	}
+	return shape
+}
+
 export function registerBytebotTools(server: McpServerLike): void {
 	for (const tool of BYTEBOT_TOOLS) {
 		server.registerTool(
 			tool.name,
 			{
 				description: tool.description,
-				// MCP SDK accepts either a Zod shape or a JSON-Schema object;
-				// BYTEBOT_TOOLS use Anthropic's JSON-Schema form, pass through.
-				inputSchema: tool.input_schema,
+				// P79-02 fix: convert JSON-Schema (Anthropic / Bytebot upstream
+				// authoring format) to ZodRawShape since MCP SDK 1.25.x calls
+				// `safeParseAsync` on this object at tool dispatch time.
+				inputSchema: jsonSchemaToZodRawShape(tool.input_schema),
 			},
 			async (args: Record<string, unknown>) => {
 				const handler = HANDLERS[tool.name]
