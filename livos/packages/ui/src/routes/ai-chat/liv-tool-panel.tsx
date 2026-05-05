@@ -42,6 +42,7 @@ import {cn} from '@/shadcn-lib/utils'
 
 import {useLivToolPanelStore, type ToolCallSnapshot} from '@/stores/liv-tool-panel-store'
 
+import LivNeedsHelpCard, {shouldShowNeedsHelpCard} from './components/liv-needs-help-card'
 import {useToolView} from './tool-views/dispatcher'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -176,6 +177,28 @@ export function LivToolPanel() {
 
 						{/* Body (D-19) */}
 						<div className='flex-1 overflow-y-auto' data-testid='panel-body'>
+							{/* Phase 72-native-05 additive mount: NEEDS_HELP banner.
+							 * Surfaces when agent emits set_task_status with kind='needs-help'.
+							 * Callbacks wire to /api/agent/runs/:runId/control + /api/agent/start
+							 * (P67-03 endpoints); 74+ orchestration plans replace these stubs
+							 * with the real run-id + cooperative-stop signal threading. */}
+							{shouldShowNeedsHelpCard(currentSnapshot) && currentSnapshot ? (
+								<LivNeedsHelpCard
+									snapshot={currentSnapshot}
+									onTakeOver={() => {
+										// eslint-disable-next-line no-console -- operator visibility into the takeover gesture (74+ wires the real handoff).
+										console.log('[LivNeedsHelpCard] takeover requested')
+									}}
+									onSubmitGuidance={(text) => {
+										// eslint-disable-next-line no-console
+										console.log('[LivNeedsHelpCard] guidance submitted:', text)
+									}}
+									onCancel={() => {
+										// eslint-disable-next-line no-console
+										console.log('[LivNeedsHelpCard] cancel requested')
+									}}
+								/>
+							) : null}
 							{currentSnapshot ? (
 								<View snapshot={currentSnapshot} isActive={true} />
 							) : (
