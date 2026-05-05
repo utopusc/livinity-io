@@ -34,6 +34,10 @@ const AppStoreDiscover = React.lazy(() => import('./routes/app-store/discover'))
 const AppStoreCategoryPage = React.lazy(() => import('./routes/app-store/category-page'))
 const AppStoreAppPage = React.lazy(() => import('./routes/app-store/app-page'))
 const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'))
+// Phase 76 / Plan 76-04 — Agent Marketplace route. Sibling to /app-store
+// inside the SheetLayout. Lazy-loaded to keep the initial bundle lean
+// and to mirror the existing app-store / community-app-store pattern.
+const AgentMarketplace = React.lazy(() => import('./routes/agent-marketplace'))
 const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
@@ -141,6 +145,12 @@ export const router = createBrowserRouter([
 					{
 						path: 'community-app-store/:appStoreId/:appId',
 						Component: CommunityAppStore,
+						ErrorBoundary: ErrorBoundaryComponentFallback,
+					},
+					{
+						// Phase 76 / Plan 76-04 — Agent Marketplace route.
+						path: 'agent-marketplace',
+						Component: AgentMarketplace,
 						ErrorBoundary: ErrorBoundaryComponentFallback,
 					},
 				],
