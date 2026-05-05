@@ -3,6 +3,15 @@
  *
  * Spec source: 67-03-PLAN.md `<task type="auto">` Task 2.
  *
+ * Phase 73-04 update: POST /api/agent/start now enqueues to RunQueue
+ * (BullMQ-backed) instead of fire-and-forget. All tests in this file now
+ * inject a `runQueueOverride` (FakeRunQueue) to bypass real BullMQ
+ * initialization. The 'spawns runner' test was transformed: previously
+ * asserted `startMock` was called inline with `(runId, task)`; now asserts
+ * `runQueueOverride.enqueue` was called with the correct shape, AND for
+ * end-to-end semantics the FakeRunQueue's enqueue invokes the underlying
+ * factory so chunks land in RunStore.
+ *
  * Test pattern: vitest + native `fetch` against `app.listen(0)` (matches
  * `livinity-broker/mode-dispatch.test.ts` Pitfall-3 pattern). No supertest
  * (D-NO-NEW-DEPS).
@@ -15,8 +24,8 @@
  * livinityd's resolver).
  *
  * Coverage (must-have list, plan Task 2 step 2):
- *   1. POST /api/agent/start creates run + spawns runner; rejects empty task
- *      with 400; rejects missing auth with 401.
+ *   1. POST /api/agent/start creates run + enqueues runner; rejects empty
+ *      task with 400; rejects missing auth with 401.
  *   2. GET /api/agent/runs/:runId/stream installs the 15s heartbeat interval
  *      (verified via setInterval spy — simpler than fake-timer-fast-forward
  *      across an async SSE stream).
@@ -26,6 +35,9 @@
  *      ?after=<n>, assert response body contains chunks idx (n+1)+ and not
  *      idx <=n. Run is marked complete BEFORE the GET so the handler emits
  *      `event: complete` and ends — avoids hang.
+ *   5. POST /start does not call factory directly when runQueueOverride is
+ *      provided (P73-04: factory invocation moved INSIDE the queue worker;
+ *      a fake queue that doesn't run the factory leaves it untouched).
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -38,6 +50,36 @@ import express from 'express'
 
 import {RunStore, LivAgentRunner} from '@nexus/core/lib'
 import {mountAgentRunsRoutes} from './agent-runs.js'
+
+// ── FakeRunQueue (Phase 73-04) ────────────────────────────────────────────
+// Records enqueue calls; optionally invokes a passed factory to preserve
+// end-to-end test semantics (factory runs landing chunks in RunStore).
+// Bypasses real BullMQ — tests do not boot a Worker against FakeRedis (which
+// lacks the BLPOP/XREADGROUP surface BullMQ needs).
+type FakeQueueRecord = {runId: string; userId: string; task: string; enqueuedAt: number}
+
+interface FakeRunQueueOpts {
+	/** When provided, FakeRunQueue.enqueue() invokes this with (runId, task)
+	 *  in addition to recording — preserves the pre-P73-04 end-to-end semantic
+	 *  for the catch-up test which needs chunks to actually land in RunStore. */
+	runFactoryOnEnqueue?: (runId: string, task: string) => Promise<void> | void
+}
+
+function createFakeRunQueue(opts: FakeRunQueueOpts = {}) {
+	const enqueueCalls: FakeQueueRecord[] = []
+	const queue: any = {
+		enqueue: async (data: FakeQueueRecord) => {
+			enqueueCalls.push(data)
+			if (opts.runFactoryOnEnqueue) {
+				await opts.runFactoryOnEnqueue(data.runId, data.task)
+			}
+		},
+		start: async () => {},
+		stop: async () => {},
+		getActiveCount: async (_userId: string) => 0,
+	}
+	return {queue, enqueueCalls}
+}
 
 // ── In-memory Redis stub (subset RunStore needs) ─────────────────────────
 
@@ -149,11 +191,26 @@ interface Harness {
 	redis: FakeRedis
 	runStore: RunStore
 	close: () => Promise<void>
+	/** P73-04: when buildHarness auto-constructed a FakeRunQueue (factory
+	 *  provided + no explicit runQueueOverride), this exposes the recorded
+	 *  enqueue-call array so tests can assert on enqueue shape. Null when
+	 *  caller supplied their own runQueueOverride or skipRunQueue=true. */
+	enqueueCalls: FakeQueueRecord[] | null
 }
 
 interface BuildOptions {
 	livAgentRunnerFactory?: (runId: string, task: string) => LivAgentRunner
 	authUserId?: string | null // null = simulate unauthenticated
+	/** P73-04: when provided, injected directly. When omitted but a factory
+	 *  is provided, the harness constructs a FakeRunQueue that records
+	 *  enqueue calls AND invokes the factory's start() (preserves the
+	 *  end-to-end semantic for the catch-up tests that need chunks in
+	 *  RunStore). The handle is exposed on the Harness so tests can assert
+	 *  on enqueueCalls. */
+	runQueueOverride?: any
+	/** P73-04: skip auto-construction of the default FakeRunQueue (used by
+	 *  the 503-no-runQueue test). */
+	skipRunQueue?: boolean
 }
 
 async function buildHarness(opts: BuildOptions = {}): Promise<Harness> {
@@ -184,9 +241,27 @@ async function buildHarness(opts: BuildOptions = {}): Promise<Harness> {
 		},
 	}
 
-	mountAgentRunsRoutes(app, stubLivinityd, {
+	// P73-04: build a FakeRunQueue that delegates to the factory so chunks
+	// land in RunStore (preserving the original P67-03 end-to-end semantic).
+	// Tests that want to assert "factory NOT called by route" pass an
+	// explicit runQueueOverride that does NOT invoke the factory.
+	let fakeQueueHandle: ReturnType<typeof createFakeRunQueue> | null = null
+	let runQueueOverride = opts.runQueueOverride
+	if (!runQueueOverride && !opts.skipRunQueue && opts.livAgentRunnerFactory) {
+		const factory = opts.livAgentRunnerFactory
+		fakeQueueHandle = createFakeRunQueue({
+			runFactoryOnEnqueue: async (runId, task) => {
+				const runner = await factory(runId, task)
+				await runner.start(runId, task)
+			},
+		})
+		runQueueOverride = fakeQueueHandle.queue
+	}
+
+	await mountAgentRunsRoutes(app, stubLivinityd, {
 		livAgentRunnerFactory: opts.livAgentRunnerFactory,
 		runStoreOverride: runStore,
+		runQueueOverride,
 	})
 
 	const server = await new Promise<Server>((resolve) => {
@@ -207,7 +282,16 @@ async function buildHarness(opts: BuildOptions = {}): Promise<Harness> {
 		await redis.quit()
 	}
 
-	return {app, server, port, url, redis, runStore, close}
+	return {
+		app,
+		server,
+		port,
+		url,
+		redis,
+		runStore,
+		close,
+		enqueueCalls: fakeQueueHandle ? fakeQueueHandle.enqueueCalls : null,
+	}
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────
@@ -220,7 +304,16 @@ describe('POST /api/agent/start', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('creates a run, spawns the runner, returns runId + sseUrl', async () => {
+	it('creates a run, enqueues the runner, returns runId + sseUrl', async () => {
+		// P73-04 transformation: previously this test asserted `startMock`
+		// was called inline because the route fire-and-forget'd the factory.
+		// Now the route calls `runQueue.enqueue` and the (real BullMQ) worker
+		// would later run the factory. The test harness's FakeRunQueue
+		// records enqueue + invokes the factory synchronously inside enqueue,
+		// so BOTH assertions hold: enqueue was called with the right shape,
+		// AND startMock was eventually called by the FakeRunQueue's factory
+		// invocation. New assertion: enqueue shape `{runId, userId, task,
+		// enqueuedAt}` matches the response body.
 		const startMock = vi.fn().mockResolvedValue(undefined)
 		const stopMock = vi.fn().mockResolvedValue(undefined)
 		const fakeRunner = {start: startMock, stop: stopMock} as any as LivAgentRunner
@@ -242,10 +335,24 @@ describe('POST /api/agent/start', () => {
 		expect(body.runId).toMatch(/^[0-9a-f-]{36}$/)
 		expect(body.sseUrl).toBe(`/api/agent/runs/${body.runId}/stream`)
 
-		// Allow the fire-and-forget runner spawn to tick.
+		// Allow the FakeRunQueue's enqueue (which invokes the factory) to
+		// resolve. With FakeRunQueue this happens within `await enqueue(...)`
+		// inside the route handler, but a couple of microtask ticks ensure
+		// any chained promises are flushed.
 		await new Promise((r) => setImmediate(r))
 		await new Promise((r) => setImmediate(r))
 
+		// P73-04 new assertion: enqueue was called with correct shape.
+		expect(h.enqueueCalls).not.toBeNull()
+		expect(h.enqueueCalls!.length).toBe(1)
+		const call = h.enqueueCalls![0]
+		expect(call.runId).toBe(body.runId)
+		expect(call.userId).toBe('user_test')
+		expect(call.task).toBe('hello world')
+		expect(typeof call.enqueuedAt).toBe('number')
+
+		// P67-03 preserved: the factory's runner.start IS still ultimately
+		// invoked — by the FakeRunQueue's factory wrapper, not by the route.
 		expect(startMock).toHaveBeenCalledTimes(1)
 		expect(startMock).toHaveBeenCalledWith(body.runId, 'hello world')
 	})
@@ -296,6 +403,69 @@ describe('POST /api/agent/start', () => {
 		expect(res.status).toBe(503)
 		const body = (await res.json()) as {error: string}
 		expect(body.error).toMatch(/agent runner not wired/i)
+	})
+
+	it('does not call factory directly when runQueueOverride is provided (P73-04 D-23)', async () => {
+		// P73-04 new test: when an explicit runQueueOverride is supplied AND
+		// the override does NOT invoke the factory, the route handler must
+		// only call `enqueue()` — never the factory directly. The factory
+		// invocation moved INSIDE the queue worker (which the fake queue
+		// stubs out). This guards the regression where the route would
+		// double-spawn (call factory inline AND enqueue).
+		const factoryCalls: Array<{runId: string; task: string}> = []
+		const fakeFactory = ((runId: string, task: string) => {
+			factoryCalls.push({runId, task})
+			// Return a stub runner — but the fake queue won't invoke it.
+			return {
+				start: vi.fn().mockResolvedValue(undefined),
+				stop: vi.fn().mockResolvedValue(undefined),
+			} as any
+		}) as (runId: string, task: string) => LivAgentRunner
+
+		const enqueueCalls: FakeQueueRecord[] = []
+		const fakeQueue: any = {
+			enqueue: async (data: FakeQueueRecord) => {
+				enqueueCalls.push(data)
+				// Intentionally NOT invoking the factory — proves the route
+				// handler doesn't call it directly.
+			},
+			start: async () => {},
+			stop: async () => {},
+			getActiveCount: async () => 0,
+		}
+
+		h = await buildHarness({
+			livAgentRunnerFactory: fakeFactory,
+			runQueueOverride: fakeQueue,
+		})
+
+		const res = await fetch(`${h.url}/api/agent/start`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: 'Bearer fake-jwt',
+			},
+			body: JSON.stringify({task: 'hello'}),
+		})
+		expect(res.status).toBe(200)
+		const body = (await res.json()) as {runId: string}
+		expect(body.runId).toBeDefined()
+
+		// Allow microtasks to settle.
+		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setImmediate(r))
+
+		// enqueue was called exactly once with the correct shape.
+		expect(enqueueCalls.length).toBe(1)
+		expect(enqueueCalls[0].runId).toBe(body.runId)
+		expect(enqueueCalls[0].userId).toBe('user_test')
+		expect(enqueueCalls[0].task).toBe('hello')
+		expect(typeof enqueueCalls[0].enqueuedAt).toBe('number')
+
+		// The factory itself was NEVER invoked by the route — it's now held
+		// by RunQueue (here stubbed) and would be invoked by the BullMQ
+		// worker, which our fake replaces.
+		expect(factoryCalls.length).toBe(0)
 	})
 })
 
