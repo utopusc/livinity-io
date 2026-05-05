@@ -22,6 +22,7 @@
 import {TRPCError} from '@trpc/server'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
+import {captureScreenshot} from './native/index.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
@@ -116,6 +117,48 @@ export const computerUseRouter = router({
 		if (!ctx.currentUser) return {ok: true as const}
 		await manager.stopContainer(ctx.currentUser.id)
 		return {ok: true as const}
+	}),
+
+	/**
+	 * Phase 72-native-04 — capture a single PNG screenshot of the host X
+	 * server (Mini PC display :0) via the native nut-js port shipped in
+	 * 72-native-01. Used by:
+	 *   - LivDesktopViewer "live mode" — UI polls every `pollingMs` (default
+	 *     1000ms) to render the desktop without a VNC websocket (D-NATIVE-04
+	 *     replaces the deprecated 71-02 react-vnc viewer).
+	 *   - 72-native-05 MCP `computer_screenshot` tool handler (for the agent
+	 *     loop's eyes-on-screen step).
+	 *
+	 * Auth: privateProcedure (existing isAuthenticated middleware) — same
+	 * gate as the rest of this router. Anonymous callers receive UNAUTHORIZED.
+	 *
+	 * Failure mode (D-NATIVE-14): nut-js native binding unavailable on host
+	 * platform (e.g. dev Windows / Mac without X server) → captureScreenshot
+	 * throws a "Native screenshot unavailable on platform" Error; we re-wrap
+	 * as TRPCError SERVICE_UNAVAILABLE so the UI layer can render the
+	 * LivDesktopViewer error banner with a clear message instead of crashing.
+	 *
+	 * Rate-limit / DoS (T-72N4-02): default LivDesktopViewer pollingMs=1000
+	 * keeps each user under 1 req/sec. Server-side rate limit is enforced by
+	 * the existing trpc-bridge middleware (broker rate-limit pattern); this
+	 * procedure adds nothing new to that layer.
+	 */
+	takeScreenshot: privateProcedure.query(async () => {
+		try {
+			const shot = await captureScreenshot()
+			return {
+				base64: shot.base64,
+				width: shot.width,
+				height: shot.height,
+				timestamp: Date.now(),
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err)
+			throw new TRPCError({
+				code: 'SERVICE_UNAVAILABLE',
+				message: `computer-use native module unavailable: ${message}`,
+			})
+		}
 	}),
 })
 

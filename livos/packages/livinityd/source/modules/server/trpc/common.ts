@@ -238,4 +238,8 @@ export const httpOnlyPaths = [
 	'computerUse.getStatus',
 	'computerUse.startStandaloneSession',
 	'computerUse.stopSession',
+	// v31.0 Phase 72-native-04 — Computer Use takeScreenshot (CU-LOOP-05).
+	// Returns base64 PNG (~50-200KB); mutations route via HTTP for body-size
+	// reasons + WS reconnect resilience identical to siblings above.
+	'computerUse.takeScreenshot',
 ] as const
