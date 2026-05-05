@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto'
+
 import {Redis} from 'ioredis'
 import {
 	SubagentManager,
@@ -8,7 +10,10 @@ import {
 } from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
-import {getUserPreference} from '../database/index.js'
+import {getPool, getUserPreference} from '../database/index.js'
+import {ConversationsRepository} from '../database/conversations-repository.js'
+import {MessagesRepository} from '../database/messages-repository.js'
+import {PinnedMessagesRepository} from '../database/pinned-messages-repository.js'
 import {isMultiUserMode} from './per-user-claude.js'
 
 // Phase 67-03 — Re-export the agent-runs router mount helper so consumers can
@@ -28,6 +33,35 @@ export type {
 	MountConversationSearchOptions,
 	SearchRepoContract,
 } from './conversation-search.js'
+
+// Phase 75-07 — Re-export the pinned-routes mount helper. Mirrors the
+// agent-runs / conversation-search re-exports above. The actual mount call
+// lives in server/index.ts alongside the other route registrations.
+export {mountPinnedRoutes} from './pinned-routes.js'
+export type {
+	MountPinnedRoutesOptions,
+	PinnedRepoContract,
+} from './pinned-routes.js'
+
+/**
+ * Phase 75-07 / CONTEXT D-12 — deterministic UUID-shaped id derived from
+ * (conversationId, msgIndex, role, content) for legacy Redis messages that
+ * lack their own id. SHA-1 truncated to 32 hex chars laid out as a UUID
+ * (8-4-4-4-12). One-way idempotent: the same inputs always produce the same
+ * id, so backfill replays are safe (`ON CONFLICT (id) DO NOTHING`).
+ */
+function deterministicId(
+	conversationId: string,
+	idx: number,
+	role: string,
+	content: string,
+): string {
+	const hex = createHash('sha1')
+		.update(`${conversationId}|${idx}|${role}|${content}`)
+		.digest('hex')
+		.slice(0, 32)
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
 
 export interface AiModuleOptions {
 	livinityd: Livinityd
@@ -265,6 +299,15 @@ export default class AiModule {
 	scheduleManager!: ScheduleManager
 	toolRegistry: any = null
 
+	// Phase 75-07 — Postgres write-through repositories (lazy-initialised
+	// on first use so the AiModule constructor does NOT block on DB pool
+	// being ready). All three are scoped per AiModule instance so tests +
+	// the singleton daemon share the same lifecycle. Failures during
+	// persistToPostgres are caught + logged: Redis stays source-of-truth.
+	conversationsRepo: ConversationsRepository | null = null
+	messagesRepo: MessagesRepository | null = null
+	pinnedRepo: PinnedMessagesRepository | null = null
+
 	private redisUrl: string
 	private conversations = new Map<string, Conversation>()
 
@@ -343,7 +386,152 @@ export default class AiModule {
 		// Fetch tool definitions from nexus and create proxy ToolRegistry
 		await this.fetchToolRegistry()
 
+		// Phase 75-07 — One-shot Redis→Postgres backfill (CONTEXT D-11). Fire-
+		// and-forget: livinityd boot must NEVER wait on backfill; failures log
+		// and continue. Skipped entirely when LIV_SKIP_FTS_BACKFILL=true.
+		if (process.env.LIV_SKIP_FTS_BACKFILL !== 'true') {
+			this.runBackfill().catch((err) =>
+				this.logger.error('[ai] backfill failed (non-fatal)', err),
+			)
+		} else {
+			this.logger.log('[ai] LIV_SKIP_FTS_BACKFILL=true — backfill skipped')
+		}
+
 		this.logger.log('AI module started')
+	}
+
+	/**
+	 * Phase 75-07 — Lazy-initialise the three Postgres repos on first use.
+	 * Returns true when all three are available (DB pool present); false
+	 * when getPool() returns null (DB not initialised). Calling code MUST
+	 * tolerate the false case — Redis is the source-of-truth (CONTEXT D-10).
+	 */
+	private ensureRepos(): boolean {
+		if (this.conversationsRepo && this.messagesRepo && this.pinnedRepo) {
+			return true
+		}
+		const pool = getPool()
+		if (!pool) return false
+		this.conversationsRepo = new ConversationsRepository(pool)
+		this.messagesRepo = new MessagesRepository(pool)
+		this.pinnedRepo = new PinnedMessagesRepository(pool)
+		return true
+	}
+
+	/**
+	 * Phase 75-07 / CONTEXT D-10 — Postgres write-through. Persists the
+	 * conversation + its messages to PG AFTER the Redis write completes.
+	 * Failure is logged + swallowed: the Redis write is the source-of-truth
+	 * runtime read path (this is a search-side index only). No userId means
+	 * legacy single-user mode — we still persist, scoped to a synthetic
+	 * 'admin' uuid lookup if available; if not we no-op.
+	 */
+	private async persistToPostgres(
+		conv: Conversation,
+		userId: string | undefined,
+	): Promise<void> {
+		// Phase 75-07: bail when no DB user_id is available — the messages
+		// table FK is `user_id UUID NOT NULL REFERENCES users(id)`, so we
+		// need a real users-table id. Legacy 'admin' lookup at the
+		// daemon-level happens in `chat()`/per-route paths.
+		if (!userId) return
+		if (!this.ensureRepos()) return
+
+		try {
+			await this.conversationsRepo!.upsert({
+				id: conv.id,
+				userId,
+				title: conv.title,
+				createdAt: new Date(conv.createdAt),
+				updatedAt: new Date(conv.updatedAt),
+			})
+			const inputs = conv.messages.map((m, idx) => ({
+				id: m.id ?? deterministicId(conv.id, idx, m.role, m.content),
+				conversationId: conv.id,
+				userId,
+				role: m.role as 'user' | 'assistant',
+				content:
+					typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+				reasoning: (m as any).reasoning ?? null,
+				metadata: (m as any).metadata ?? {},
+				createdAt: new Date(m.timestamp ?? conv.updatedAt),
+			}))
+			if (inputs.length > 0) {
+				await this.messagesRepo!.upsertMany(inputs)
+			}
+		} catch (err) {
+			this.logger.error('[ai] persistToPostgres failed (non-fatal)', err)
+		}
+	}
+
+	/**
+	 * Phase 75-07 / CONTEXT D-11 — One-shot Redis→Postgres backfill.
+	 * Fire-and-forget on boot. For each known users-table user, checks
+	 * `SELECT COUNT(*) FROM messages WHERE user_id=$1`; if zero, walks
+	 * Redis `${prefix}convs` SMEMBERS, fetches each, and persists. Errors
+	 * per-conversation are logged + skipped — the loop never throws.
+	 *
+	 * Idempotent: persistToPostgres uses ON CONFLICT DO NOTHING for messages
+	 * + ON CONFLICT DO UPDATE for conversations (CONTEXT D-12). Safe to
+	 * re-run after partial failures.
+	 */
+	private async runBackfill(): Promise<void> {
+		if (!this.ensureRepos()) {
+			this.logger.log('[ai] backfill: skipped (DB pool unavailable)')
+			return
+		}
+		const pool = getPool()
+		if (!pool) return
+
+		// Walk users table; for each user with zero messages, try to backfill
+		// from Redis. listUsers is exported from database/index.ts but we
+		// inline the SELECT here to avoid a module-edge import cycle.
+		let userIds: string[] = []
+		try {
+			const {rows} = await pool.query(`SELECT id FROM users`)
+			userIds = rows.map((r: any) => String(r.id))
+		} catch (err) {
+			this.logger.error('[ai] backfill: SELECT users failed', err)
+			return
+		}
+
+		for (const userId of userIds) {
+			try {
+				const {rows: countRows} = await pool.query(
+					`SELECT COUNT(*)::int AS c FROM messages WHERE user_id = $1`,
+					[userId],
+				)
+				const existing = (countRows[0]?.c as number | undefined) ?? 0
+				if (existing > 0) continue // already backfilled
+
+				const prefix = this.userKeyPrefix(userId)
+				const ids = await this.redis.smembers(`${prefix}convs`)
+				if (!ids || ids.length === 0) continue
+
+				let importedConvs = 0
+				let importedMsgs = 0
+				for (const cid of ids) {
+					try {
+						const data = await this.redis.get(`${prefix}conv:${cid}`)
+						if (!data) continue
+						const conv = JSON.parse(data) as Conversation
+						await this.persistToPostgres(conv, userId)
+						importedConvs += 1
+						importedMsgs += conv.messages?.length ?? 0
+					} catch (err) {
+						this.logger.error(
+							`[ai] backfill: per-conv error user=${userId} conv=${cid}`,
+							err,
+						)
+					}
+				}
+				this.logger.log(
+					`[ai] backfill: imported ${importedConvs} conversations / ${importedMsgs} messages for user ${userId}`,
+				)
+			} catch (err) {
+				this.logger.error(`[ai] backfill: per-user error user=${userId}`, err)
+			}
+		}
 	}
 
 	/**
@@ -484,8 +672,26 @@ export default class AiModule {
 			.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
 			.join('\n\n')
 
+		// Phase 75-07 / CONTEXT D-19 — System-prompt injection of pinned
+		// memory. Pinned content (per-user, JWT-scoped) is auto-prepended
+		// to the run task as a "Pinned Memory" section. Capped at 4096 chars
+		// in PinnedMessagesRepository.getContextString (T-75-03-04 DoS
+		// mitigation). Failures land on the logger and continue; missing
+		// userId, no DB pool, or zero pins all yield an empty string and
+		// the behaviour matches the pre-75-07 task assembly verbatim.
+		let pinnedSection = ''
+		if (userId && this.ensureRepos()) {
+			try {
+				pinnedSection = await this.pinnedRepo!.getContextString(userId, 4096)
+			} catch (err) {
+				this.logger.error('[ai] getContextString failed (non-fatal)', err)
+				pinnedSection = ''
+			}
+		}
+
 		const contextPrefix = conversation.messages.length > 1 ? `Previous conversation:\n${recentHistory}\n\n` : ''
-		const task = contextPrefix ? `${contextPrefix}Current message: ${userMessage}` : userMessage
+		const taskBody = contextPrefix ? `${contextPrefix}Current message: ${userMessage}` : userMessage
+		const task = pinnedSection ? `${pinnedSection}\n${taskBody}` : taskBody
 
 		// Read user personalization preferences for AI prompt injection
 		let userPersonalization: {role?: string; responseStyle?: string; useCases?: string[]} | undefined
@@ -804,6 +1010,15 @@ export default class AiModule {
 		} catch (err) {
 			this.logger.error('Failed to save conversation', err)
 		}
+
+		// Phase 75-07 / CONTEXT D-10 — Postgres write-through. Non-blocking:
+		// failures are caught + logged inside persistToPostgres. The Redis
+		// write above remains the source-of-truth runtime read path; this
+		// is purely the search-side FTS index. The double-catch (.catch
+		// here + try/catch inside persistToPostgres) is intentional belt-
+		// and-suspenders — any failure mode lands on the logger, never on
+		// the user.
+		await this.persistToPostgres(conversation, userId).catch(() => {})
 	}
 
 	async getConversation(id: string, userId?: string): Promise<Conversation | undefined> {
