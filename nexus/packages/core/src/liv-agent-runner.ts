@@ -5,6 +5,22 @@
  * `RunStore`-persisted chunk format consumed by the SSE endpoint (67-03)
  * and the `useLivAgentStream` hook (67-04).
  *
+ * Phase 73-03 update: `contextManagerHook` signature changed from
+ * `(tokenCount: number) => Promise<void> | void` (P67-02 best-effort
+ * single pre-iter estimate) to
+ * `(history: Message[]) => Promise<{ history, summarized } | void> | ...`
+ * — per Plan 73-03 D-20. The hook is now invoked PER ITERATION after the
+ * stop-signal check, BEFORE message processing. When the hook returns
+ * `{ summarized: true, history: H' }`, the runner adopts H' as its working
+ * history and emits a `'status'` chunk with payload `'context-summarized'`
+ * so SSE consumers can show a "Context summarized" indicator.
+ *
+ * `currentHistory` lifecycle (CONTEXT D-20.1, Path B chosen): the runner
+ * maintains a parallel `Message[]` array (`this.currentHistory`) populated
+ * as messages are emitted by the SDK runner. Path A (reading from the
+ * sacred SDK runner's internal state) is NOT available — the SDK runner
+ * does not expose its conversation history (D-05 sacred file).
+ *
  * Responsibilities:
  *   - D-14 reasoning extraction: when an assistant message carries Kimi-style
  *     `reasoning_content`, emit a typed `reasoning` chunk BEFORE any text
@@ -64,6 +80,13 @@ import type Redis from 'ioredis';
 import type { SdkAgentRunner } from './sdk-agent-runner.js';
 import type { RunStore } from './run-store.js';
 import type { ToolRegistry } from './tool-registry.js';
+import type { Message } from './context-manager.js';
+
+// Re-export the Message type so consumers (e.g. livinityd's bootstrap that
+// constructs the contextManagerHook callback) can import it from the same
+// module that defines the hook surface — no need to reach into
+// `./context-manager.js` directly. Plan 73-03 D-20.
+export type { Message } from './context-manager.js';
 
 // ── Types (D-12 verbatim — locked binding contract) ─────────────────────
 
@@ -103,18 +126,45 @@ export type ToolCallSnapshot = {
 };
 
 /**
- * Constructor options — D-13 verbatim. `contextManagerHook` and
- * `computerUseRouter` are optional hooks for P73 / P71 respectively;
- * P67 calls the hook (best-effort, single token-count estimate at start)
- * but DOES NOT invoke `computerUseRouter` per scope_guard — the D-16
- * stub error is emitted regardless of router presence.
+ * Constructor options — D-13 (P67-02) + D-20 (Plan 73-03 hook-signature
+ * change).
+ *
+ * `contextManagerHook` (Phase 73-03 — BREAKING CHANGE from P67-02):
+ *   - OLD (P67-02): `(tokenCount: number) => Promise<void> | void` — single
+ *     best-effort pre-iter token-count estimate. REMOVED.
+ *   - NEW (Plan 73-03 D-20): receives the current `Message[]` history and
+ *     may return a (possibly mutated) replacement history along with a
+ *     `summarized` flag. When `summarized === true`, the runner emits a
+ *     `'context-summarized'` status chunk via runStore.appendChunk so SSE
+ *     consumers can show a "Context summarized" indicator. When the hook
+ *     returns `void` (or no `history` field), the runner leaves its
+ *     working history unchanged. Hook errors are non-fatal — logged via
+ *     console.warn and the iteration proceeds with the prior history
+ *     (matches P67-02 line 277 swallow-pattern).
+ *
+ *   Invocation cadence: the hook is called PER ITERATION (every event
+ *   handler invocation), AFTER the stop-signal check (D-21 precedence
+ *   preserved), BEFORE the message processing logic. If stop is observed,
+ *   the hook is NOT invoked.
+ *
+ *   When `contextManagerHook === undefined`, the runner skips the call
+ *   entirely — zero overhead, zero status-chunk emission.
+ *
+ * `computerUseRouter` (P71 — unchanged from P67-02): NEVER invoked in P67;
+ * the D-16 stub error is emitted regardless of router presence. P71 will
+ * replace the stub-emission with `await opts.computerUseRouter?.(snapshot)`.
  */
 export type LivAgentRunnerOptions = {
   runStore: RunStore;
   sdkRunner: SdkAgentRunner;
   toolRegistry: ToolRegistry;
   redisClient: Redis;
-  contextManagerHook?: (tokenCount: number) => Promise<void> | void;
+  contextManagerHook?: (
+    history: Message[],
+  ) =>
+    | Promise<{ history: Message[]; summarized: boolean } | void>
+    | { history: Message[]; summarized: boolean }
+    | void;
   computerUseRouter?: (
     snapshot: ToolCallSnapshot,
   ) => Promise<{ output: unknown; isError: boolean }>;
@@ -235,6 +285,16 @@ export class LivAgentRunner {
   private stopRequested = false;
   private finalAssistantText = '';
 
+  /**
+   * Working conversation history maintained in parallel with SDK runner
+   * emissions (Path B per CONTEXT D-20.1). Path A (reading from the SDK
+   * runner's internal state) is NOT possible because the sacred SDK
+   * runner does not expose its conversation array. Updated on every
+   * assistant-message and tool-result emission. Mutated in place when the
+   * `contextManagerHook` returns a summarized history (Plan 73-03 D-20).
+   */
+  private currentHistory: Message[] = [];
+
   constructor(private readonly opts: LivAgentRunnerOptions) {
     // No-op constructor: storing opts only. Per must-have, instantiating
     // does NOT call any method on sdkRunner — the runner is dormant until
@@ -261,24 +321,21 @@ export class LivAgentRunner {
     this.snapshots.clear();
     this.finalAssistantText = '';
 
+    // Seed `currentHistory` (Path B per CONTEXT D-20.1) with the user task
+    // as the first message — gives `contextManagerHook` something to inspect
+    // on the very first iter, before any assistant message comes back.
+    this.currentHistory = [{ role: 'user', content: task }];
+
     // Status chunk announces transition to running.
     await this.opts.runStore.appendChunk(runId, {
       type: 'status',
       payload: 'running',
     });
 
-    // contextManagerHook (P73 deferred): single best-effort token-count
-    // estimate at start of run. Per scope_guard we do NOT implement
-    // 75% summarization — that's P73. Rough heuristic: 1 token ≈ 4 chars.
-    if (this.opts.contextManagerHook) {
-      const estimatedTokens = Math.ceil(task.length / 4);
-      try {
-        await this.opts.contextManagerHook(estimatedTokens);
-      } catch {
-        // Hook errors are non-fatal — the runner proceeds without
-        // context management. P73 will tighten this to fail-closed.
-      }
-    }
+    // contextManagerHook is now per-iter — see iter handler below
+    // (handleAssistantMessage / handleToolResult call invokeContextManagerHook
+    // after the stop-signal check, before message processing). Plan 73-03 D-20
+    // replaced the P67-02 single pre-iter token-count estimate.
 
     // Wire SDK event listeners.
     //
@@ -388,12 +445,22 @@ export class LivAgentRunner {
    *   2. For each block in `content`:
    *      - `text` ⇒ emit `text` chunk.
    *      - `tool_use` ⇒ open a tool snapshot (running) + maybe stub.
+   *
+   * Phase 73-03: BEFORE step 1 (and after the stop-signal check, D-21
+   * precedence preserved), invokes `contextManagerHook` with the current
+   * working history. If the hook returns a summarized replacement, the
+   * runner adopts it for subsequent iters and emits a 'context-summarized'
+   * status chunk. After processing, this assistant message is appended to
+   * `currentHistory` so the next iter sees up-to-date state.
    */
   private async handleAssistantMessage(
     runId: string,
     msg: AssistantMessageEventPayload,
   ): Promise<void> {
     if (await this.checkStop(runId)) return;
+
+    // Plan 73-03 D-20.1: per-iter contextManagerHook BEFORE message processing.
+    await this.invokeContextManagerHook(runId);
 
     if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.length > 0) {
       await this.opts.runStore.appendChunk(runId, {
@@ -417,6 +484,17 @@ export class LivAgentRunner {
         }
       }
     }
+
+    // Append this assistant message to the working history (Path B). The
+    // hook will see it on the next iter. We coerce the typed
+    // AssistantMessageEventPayload to the broader Message shape.
+    this.currentHistory.push({
+      role: 'assistant',
+      content: Array.isArray(msg.content) ? msg.content : '',
+      ...(typeof msg.reasoning_content === 'string'
+        ? { reasoning_content: msg.reasoning_content }
+        : {}),
+    });
   }
 
   /**
@@ -425,12 +503,20 @@ export class LivAgentRunner {
    * snapshot) are dropped. Computer-use tools: the stub error already
    * fired on tool_use, so a late-arriving real tool_result is overwritten
    * by the stub — semantically correct for D-16.
+   *
+   * Phase 73-03: per-iter contextManagerHook invoked after stop check,
+   * before processing — same precedence pattern as handleAssistantMessage.
+   * After processing, the tool_result is appended to `currentHistory` as
+   * a `role: 'tool'` Message so the hook sees it on the next iter.
    */
   private async handleToolResult(
     runId: string,
     result: ToolResultEventPayload,
   ): Promise<void> {
     if (await this.checkStop(runId)) return;
+
+    // Plan 73-03 D-20.1: per-iter contextManagerHook BEFORE message processing.
+    await this.invokeContextManagerHook(runId);
 
     const existing = this.snapshots.get(result.tool_use_id);
     if (!existing) {
@@ -458,6 +544,20 @@ export class LivAgentRunner {
     await this.opts.runStore.appendChunk(runId, {
       type: 'tool_snapshot',
       payload: merged,
+    });
+
+    // Append the tool_result to the working history (Path B). The hook
+    // will see this on the next iter.
+    this.currentHistory.push({
+      role: 'tool',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: result.tool_use_id,
+          content: result.content,
+          is_error: isError,
+        },
+      ],
     });
   }
 
@@ -518,6 +618,46 @@ export class LivAgentRunner {
         type: 'tool_snapshot',
         payload: stubbed,
       });
+    }
+  }
+
+  /**
+   * Per-iteration `contextManagerHook` invocation (Plan 73-03 D-20.1).
+   *
+   * Called by `handleAssistantMessage` and `handleToolResult` AFTER the
+   * stop-signal check (D-21 precedence preserved), BEFORE message
+   * processing logic. When the hook returns `{ summarized: true, history }`,
+   * the runner adopts the new history and emits a `'context-summarized'`
+   * status chunk. When the hook returns `void` or `{ summarized: false }`,
+   * the runner is a silent no-op.
+   *
+   * Hook errors are non-fatal — logged via console.warn and the iter
+   * proceeds with the prior `currentHistory`. Matches P67-02 line 277
+   * swallow-pattern.
+   *
+   * Greppable invariants for verification:
+   *   - `if (this.opts.contextManagerHook)` — explicit guard for "no hook
+   *     configured" path.
+   *   - `'context-summarized'` literal — status chunk payload.
+   */
+  private async invokeContextManagerHook(runId: string): Promise<void> {
+    if (!this.opts.contextManagerHook) return;
+
+    try {
+      const result = await this.opts.contextManagerHook(this.currentHistory);
+      if (result && Array.isArray(result.history)) {
+        this.currentHistory = result.history;
+        if (result.summarized === true) {
+          await this.opts.runStore.appendChunk(runId, {
+            type: 'status',
+            payload: 'context-summarized',
+          });
+        }
+      }
+    } catch (err) {
+      // Hook errors are non-fatal — proceed without summarization.
+      // Match P67-02 line 277 behavior.
+      console.warn('[LivAgentRunner] contextManagerHook failed:', err);
     }
   }
 
