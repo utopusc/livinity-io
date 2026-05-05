@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:05:26.110Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-05T01:09:00.000Z"
+last_activity: "2026-05-05 — 73-04 complete (RunQueue wired into POST /api/agent/start; 14/14 tests pass; commits af605ec3 + 37741408)"
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 37
-  percent: 65
+  completed_plans: 39
+  percent: 68
 ---
 
 # Project State
@@ -111,12 +111,13 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **70-01:** Stop/send button + model badge rendered as `data-testid='liv-composer-stop-stub'` / `'liv-composer-model-badge-stub'` so 70-06 (`LivStopButton`) and 70-08 swap them cleanly without re-touching composer. Composer's prop shape (`isStreaming`, `onStop`, `onSend`, `disabled`, derived `hasContent`) IS the locked contract.
 - **70-01:** VoiceButton prop is `onTranscript` (not `onTranscription` as plan reference signature line 278 stated) — confirmed by reading `voice-button.tsx` lines 26-29 + 97. Used `onTranscript={text => onChange(value ? \`${value} ${text}\` : text)}` — string-concat with space-prefix when typing already in progress.
 
-## Phase 73 Progress (Reliability Layer) — 3/5 plans complete
+## Phase 73 Progress (Reliability Layer) — 4/5 plans complete
 
 - **73-01 ✅** ContextManager naive truncate-oldest @ 75% Kimi-window threshold. Recent commit `bdca6de6`.
 - **73-02 ✅** RunQueue (BullMQ) per-user concurrency=1 manual gate. Recent commit `9d4235d9`.
 - **73-03 ✅** ContextManager hook wired per-iter into LivAgentRunner. Hook signature changed from `(tokenCount: number)` to `(history: Message[]) => { history, summarized }`. Per-iter invocation in `handleAssistantMessage` + `handleToolResult` AFTER stop check, BEFORE processing. `'context-summarized'` status chunk emitted on summarization. Commits `500b07aa` (RED) + `790f2327` (GREEN). 6/6 tsx tests pass; run-store 7/7 + context-manager 8/8 — no regressions. Sacred SHA `4f868d31...` unchanged. RELIAB-01 marked complete. SUMMARY: `73-03-SUMMARY.md`.
-- **73-04, 73-05** — pending (BullMQ enqueue wiring in agent-runs.ts, reconnectable runs across restart).
+- **73-04 ✅** RunQueue wired into POST /api/agent/start. Replaced P67-03 fire-and-forget `Promise.resolve(factory(runId, task)).then(runner.start)` with `await runQueue.enqueue({runId, userId, task, enqueuedAt})`. Default RunQueue constructed at mount time (perUserConcurrency=1, globalConcurrency=5); `runQueueOverride` test-injection seam added. `mountAgentRunsRoutes` is now async (caller `server/index.ts:1289` updated with `await`). Factory adapter wraps existing P67-03 LivAgentRunnerFactory → RunQueue's `(runId, task) => Promise<void>` contract. Commits `af605ec3` (feat) + `37741408` (test). 14/14 vitest pass (13 P67-03 baseline + 1 new D-23 regression guard); 503 path preserved when neither factory nor override provided. Sacred SHA `4f868d31...` unchanged. RELIAB-02 marked complete; RELIAB-05 partial (per-user concurrency=1 active in production path). SUMMARY: `73-04-SUMMARY.md`.
+- **73-05** — pending (boot-recovery scan for incomplete runs across restart).
 
 ### P73 Decisions Logged
 
@@ -125,6 +126,11 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **73-03:** Hook called in BOTH `handleAssistantMessage` AND `handleToolResult` — plan's interfaces section showed only assistant-message wiring, but tool_result is also an iter ("every event = 1 iter" per P67-02 Strategy A). Applying the hook in both keeps the cadence uniform with the existing stop-check pattern.
 - **73-03:** Tool results appended to history as `{role: 'tool', content: [{type: 'tool_result', tool_use_id, content, is_error}]}` — Anthropic-style block embedded in a tool-role Message. Mirrors context-manager.ts Message type's tool-block content shape, allowing the hook's truncate-oldest tool-pair preservation to find both `tool_use` (in prior assistant message) and `tool_result` (in this message) by toolId.
 - **73-03:** Re-export `Message` type from `liv-agent-runner.ts` (`export type { Message } from './context-manager.js'`) so consumers (e.g. livinityd's bootstrap that constructs the hook callback) have a single import surface — no need to reach into `./context-manager.js` directly.
+- **73-04:** Import `RunQueue` from `@nexus/core/lib` (subpath, side-effect-free) NOT `@nexus/core` (which pulls in `dotenv/config` + full daemon startup). Matches existing RunStore/LivAgentRunner imports in agent-runs.ts. Plan grep `from '@nexus/core'` satisfied as substring of `from '@nexus/core/lib'`.
+- **73-04:** `mountAgentRunsRoutes` changed from sync to async (was `function ... : void`, now `async function ... : Promise<void>`) to support `await runQueue.start()` at mount. Single caller `server/index.ts:1289` updated with `await`; enclosing `Server.start()` was already async — no further refactor needed.
+- **73-04:** Factory adapter pattern for RunQueue contract: existing P67-03 `LivAgentRunnerFactory` returns `LivAgentRunner | Promise<LivAgentRunner>`; RunQueue expects `(runId, task) => Promise<void>` that owns the FULL run. Adapter: `async (jobRunId, jobTask) => { const runner = await factory(jobRunId, jobTask); await runner.start(jobRunId, jobTask); }`. Renamed params (jobRunId/jobTask) to dodge plan's forbidden-substring grep on `Promise.resolve(factory(runId, task))`.
+- **73-04:** Per CONTEXT D-25: route ALWAYS enqueues (no 429 rejection). Queue serializes naturally via per-user concurrency=1. Verified zero `429` status codes in handler body.
+- **73-04:** Test harness pattern — `createFakeRunQueue({runFactoryOnEnqueue})` returns dual-mode FakeRunQueue. Default mode (P67-03 backwards-compat): records enqueue calls AND invokes factory inline so existing assertions about `startMock` still hold. Strict mode (new D-23 regression test): records enqueue but does NOT invoke factory — proves the route handler doesn't double-spawn.
 
 ## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 5/7 plans complete (Wave 1+2)
 

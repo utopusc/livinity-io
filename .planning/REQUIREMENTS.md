@@ -144,7 +144,8 @@
 
 - [x] **RELIAB-01
 **: `liv/packages/core/src/context-manager.ts` — token counting + 75% Kimi window threshold summarization (~150k of 200k); summarize oldest N messages via cheap Kimi call; persist summary checkpoint in Redis
-- [ ] **RELIAB-02**: `liv/packages/core/src/queue/agent-queue.ts` — BullMQ queue `liv:agent-jobs`; per-user concurrency 1, global N; job data `{runId, userId, task, conversationHistory}`
+- [x] **RELIAB-02
+**: `liv/packages/core/src/queue/agent-queue.ts` — BullMQ queue `liv:agent-jobs`; per-user concurrency 1, global N; job data `{runId, userId, task, conversationHistory}`
 - [ ] **RELIAB-03**: `run-store.ts` extended with `pauseRun`, `resumeRun`, `forkRun`, `editMessage`
 - [ ] **RELIAB-04**: Frontend `use-liv-agent-stream.ts` reconnection with exponential backoff + UI banner "Reconnecting..."
 - [ ] **RELIAB-05**: Per-user resource limits (max 3 concurrent runs, 60min max duration, 500k max tokens per run) enforced in BullMQ worker + run-store
