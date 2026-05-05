@@ -612,7 +612,7 @@ export default function AgentsPanel() {
 	const [view, setView] = useState<AgentsView>({mode: 'list'})
 
 	return (
-		<div className='flex h-full flex-col bg-surface-base'>
+		<div data-tour='agent-picker' className='flex h-full flex-col bg-surface-base'>
 			{/* Header (only in list mode) */}
 			{view.mode === 'list' && (
 				<div className='flex-shrink-0 border-b border-border-default px-4 py-3'>

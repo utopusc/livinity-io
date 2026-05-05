@@ -132,6 +132,7 @@ export function LivToolPanel() {
 						variant='liv-elevated'
 						className='flex h-full w-full flex-col rounded-none border-l border-[color:var(--liv-border-subtle)] p-0'
 						data-testid='liv-tool-panel'
+						data-tour='liv-tool-panel'
 					>
 						{/* Header (D-18) */}
 						<header className='flex items-center gap-2 border-b border-[color:var(--liv-border-subtle)] p-3'>
