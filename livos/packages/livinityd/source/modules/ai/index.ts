@@ -2,6 +2,8 @@ import {Redis} from 'ioredis'
 import {
 	SubagentManager,
 	ScheduleManager,
+	RunStore,
+	recoverIncompleteRuns,
 	type AgentEvent,
 } from '@nexus/core/lib'
 
@@ -295,6 +297,39 @@ export default class AiModule {
 
 		this.subagentManager = new SubagentManager(this.redis)
 		this.scheduleManager = new ScheduleManager(this.redis)
+
+		// Phase 73-05 — Boot-time recovery scan: surfaces orphaned agent runs
+		// (meta.status='running'|'queued') left over from a prior daemon crash.
+		// Default mode 'log-only' — observation only for v31 entry per CONTEXT
+		// D-27 (no Redis mutation). Flip to 'mark-stale' via config opt-in
+		// once frequency is observed in production.
+		//
+		// Non-fatal: a recovery failure (e.g. Redis unavailable at boot) is
+		// logged as a warning but does NOT prevent the rest of AI module
+		// startup or downstream `mountAgentRunsRoutes` from running.
+		//
+		// Logger adaptation: livinityd's createLogger returns { log, verbose,
+		// error, createChildLogger } — it does NOT have a `.warn()` method.
+		// Map recovery's `warn` to `error` with a [warn] prefix so the intent
+		// stays visible in logs while keeping signature compatibility.
+		try {
+			const runStore = new RunStore(this.redis)
+			const recovery = await recoverIncompleteRuns(runStore, {
+				mode: 'log-only',
+				logger: {
+					log: (msg: string) => this.logger.log(msg),
+					warn: (msg: string) => this.logger.error(`[warn] ${msg}`),
+				},
+			})
+			this.logger.log(
+				`[ai-mount] run recovery: scanned=${recovery.scanned} ` +
+					`stale=${recovery.stale} markedStale=${recovery.markedStale}`,
+			)
+		} catch (err) {
+			this.logger.error(
+				`[ai-mount] [warn] run recovery failed (non-fatal): ${(err as Error).message}`,
+			)
+		}
 
 		// Fetch tool definitions from nexus and create proxy ToolRegistry
 		await this.fetchToolRegistry()
