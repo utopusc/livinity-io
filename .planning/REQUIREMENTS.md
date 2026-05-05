@@ -106,7 +106,8 @@
 - [x] **COMPOSER-02
 **: Stop button color toggle red↔cyan with icon Square↔ArrowUp; file attachment (drag-drop + click + paste from clipboard); file preview chips
 - [x] **COMPOSER-03**: Slash command menu expanded — `/clear`, `/think`, `/computer`, `/agent <name>`, `/file <path>`, `/skill <name>`
-- [ ] **COMPOSER-04**: Mention menu (`@`) for agents, MCP tools, skills; voice input button (port voice-button.tsx, polish UX); model badge inline
+- [x] **COMPOSER-04
+**: Mention menu (`@`) for agents, MCP tools, skills; voice input button (port voice-button.tsx, polish UX); model badge inline
 - [x] **COMPOSER-05
 **: `liv-streaming-text.tsx` — react-markdown + remark-gfm renderer with CSS-only blinking caret on last text block
 - [ ] **COMPOSER-06**: Code blocks with shiki syntax highlighting + copy button on hover; mermaid diagram inline support
@@ -165,7 +166,8 @@
 - [ ] **MEM-05**: API `GET /api/conversations/search?q=<query>` returns matching messages with snippets
 - [ ] **MEM-06**: Sessions sidebar search input (debounced 300ms) with HighlightedText snippet rendering
 - [ ] **MEM-07**: Pinned messages — right-click or hover menu pin; pinned auto-injected into agent context system prompt; "Pinned" sidebar section
-- [ ] **MEM-08**: Conversation export as Markdown / JSON / PDF (bonus)
+- [x] **MEM-08
+**: Conversation export as Markdown / JSON / PDF (bonus)
 
 ### MARKET (Phase 76 — Agent Marketplace + Onboarding Tour)
 
