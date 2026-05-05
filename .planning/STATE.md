@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T04:24:59.956Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-05T04:38:05Z"
+last_activity: "2026-05-05 — 72-native-05 PLAN COMPLETE (Bytebot MCP server + categorizeTool patch + LivNeedsHelpCard); commits aa5cac13 + 64d0869e + 1bb5c4a0"
 progress:
   total_phases: 13
   completed_phases: 10
   total_plans: 88
-  completed_plans: 69
-  percent: 78
+  completed_plans: 71
+  percent: 81
 ---
 
 # Project State
@@ -170,6 +170,29 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **71-05:** Test ctx uses `dangerouslyBypassAuthentication: true` (the bypass flag designed precisely for this scenario per is-authenticated.ts:11). First GREEN run with `false` failed all 8 routes tests because privateProcedure runs full isAuthenticated middleware which calls verifyToken on a fake stub; bypass flag lets tests focus on procedure-body behavior without mocking the full JWT verifier.
 - **71-05:** `mountDesktopWsUpgrade` ships as no-op stub. http-proxy-middleware's `ws:true` proxies WS upgrades automatically once the proxy was mounted on a prior HTTP request. Standalone /computer flow (71-06) ALWAYS hits the page first via HTTP fetch (warming proxy cache) before opening wss:// — cache is warm when upgrade arrives. If 71-06 end-to-end smoke reveals WS first-frame race, lift the existing pattern from server/index.ts:531-560 and gate by `desktop.*` host. Documented as deferred lift-point.
 - **71-05:** Re-export collision avoided — `ContainerStatus` type lives canonically in container-manager.ts (71-04). desktop-gateway.ts uses local alias `GatewayContainerStatus` (private) so the barrel can re-export ContainerStatus from container-manager.ts only without TS2308 duplicate-export error.
+
+## Phase 72 Progress (Computer Use Agent Loop) — Wave-2 native track
+
+- **72-01 ✅** BYTEBOT_TOOLS verbatim copy (17 schemas). SUMMARY: `72-01-SUMMARY.md`.
+- **72-02 ✅** BYTEBOT_SYSTEM_PROMPT verbatim with 3 D-12 edits. SUMMARY: `72-02-SUMMARY.md`.
+- **72-native-01 ✅** captureScreenshot via nut-js (Apache 2.0 attrib).
+- **72-native-02 ✅** input.ts — 11 input primitives.
+- **72-native-03 ✅** window.ts — openOrFocus / listWindows / readFileBase64.
+- **72-native-04 ✅** LivDesktopViewer + computerUse.takeScreenshot tRPC.
+- **72-native-05 ✅** Bytebot MCP server + categorizeTool patch + LivNeedsHelpCard. Commits `aa5cac13` (Task 1: mcp/server.ts + mcp/tools.ts + 12 vitest cases + livinityd index.ts re-export + @modelcontextprotocol/sdk@^1.12.0 livinityd dep), `64d0869e` (Task 2: liv-agent-runner.ts categorizeTool +1 prefix branch + 4 new test sub-asserts), `1bb5c4a0` (Task 3: LivNeedsHelpCard.tsx + 14 vitest cases + LivToolPanel additive mount). 33/33 tests pass (12 mcp/tools + 7 nexus runner + 14 needs-help-card). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` unchanged across 4 task gates. CU-LOOP-04 + CU-LOOP-05 ready to mark when 72-native-06 (config wiring) lands. SUMMARY: `72-native-05-SUMMARY.md`.
+- **72-native-06** — pending (livinityd McpClientManager config wiring to spawn the bytebot stdio child process).
+- **72-native-07** — pending (UAT walk on Mini PC: smoke-spawn `tsx mcp/server.ts`, verify `tools/list` JSON-RPC, end-to-end NEEDS_HELP UI).
+
+### P72 Decisions Logged
+
+- **72-native-05:** Handler-map (`Record<string, Handler>`) chosen over giant switch for testability + grep-clarity. Per-handler unit tests can grab a single fn from `HANDLERS` without spinning up the registration loop.
+- **72-native-05:** JSON-Schema passthrough for `registerTool` `inputSchema` (NOT Zod conversion). BYTEBOT_TOOLS use Anthropic JSON-Schema verbatim (D-09 contract from 72-01); MCP SDK accepts both shapes. Lower-friction path that keeps zero drift from upstream Bytebot.
+- **72-native-05:** Post-action 750ms settle + screenshot wrap applies only to state-changing actions. Skip list: `computer_screenshot` (is the screenshot), `computer_wait` (no state change), `computer_cursor_position` (read-only), `set_task_status` / `create_task` (terminal/management — no visual change to verify), `computer_read_file` (file IO, not screen state). Per D-NATIVE-05.
+- **72-native-05:** `_liv_meta` underscore-prefixed extension field on MCP CallToolResult drives needs-help/completed/task-created UI gating (D-NATIVE-08). The MCP spec permits arbitrary extras on result objects; underscore-prefix marks private metadata channel.
+- **72-native-05:** `categorizeTool` patch is a strictly additive prefix check at the TOP. `mcp_bytebot_*` fires BEFORE the generic `mcp_*` rule so the bytebot MCP server's tools route to the computer-use UI track instead of the generic mcp fallback. P67-02 D-16 `computer_use_*` / `bytebot_*` block PRESERVED for legacy non-MCP-prefixed tool names.
+- **72-native-05:** LivToolPanel mount placement at the TOP of the panel body, above the dispatched View. NEEDS_HELP is a high-priority user interrupt — putting it below per-tool details would force scroll past content to reach affordances. Matches "alert at top, content below" Suna pattern.
+- **72-native-05:** Stub `onTakeOver` / `onSubmitGuidance` / `onCancel` callbacks log only. The panel doesn't yet have access to runId / conversationId props; full wiring requires new threading from `useLivAgentStream` (P67-04 hook) up through the component tree. Plan 74+ orchestration takes this on. Stubs preserve the binding contract so 74's wiring is a callback swap, not a refactor.
+- **72-native-05:** Added `@modelcontextprotocol/sdk@^1.12.0` to `livos/packages/livinityd/package.json` (Rule 3 deviation). Pnpm strict isolation hides transitive deps; `tsx server.ts` could not resolve the SDK through `@nexus/core`. Same version as `@nexus/core` so pnpm reuses workspace store entry — no new node_modules downloaded. Spirit of D-NO-NEW-DEPS preserved.
 
 ## Phase 73 Progress (Reliability Layer) — 4/5 plans complete
 
