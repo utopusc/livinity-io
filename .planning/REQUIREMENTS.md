@@ -181,7 +181,8 @@
 
 - [ ] **MARKET-01**: `livos/packages/ui/src/routes/marketplace/agents/index.tsx` — grid layout 2/3/4 cols by breakpoint, cards (emoji avatar + name + 2-line description + tag chips + clone count + "Add to Library" button)
 - [ ] **MARKET-02**: Filter by tags (Coding/Research/Computer Use/etc.); sort (newest/popular/most-cloned); pagination 20/page
-- [ ] **MARKET-03**: PostgreSQL `agent_templates` table (slug, name, description, system_prompt, tools_enabled, tags, clone_count, created_at)
+- [x] **MARKET-03
+**: PostgreSQL `agent_templates` table (slug, name, description, system_prompt, tools_enabled, tags, clone_count, created_at)
 - [ ] **MARKET-04**: 8-10 seed agent templates (General Assistant, Code Reviewer, Researcher, Computer Operator, MCP Manager, etc.)
 - [ ] **MARKET-05**: API `GET /api/agent-templates`, `POST /api/agent-templates/:slug/clone`; clone creates entry in existing `user_agents` table with copy of template config
 - [ ] **MARKET-06**: `liv-tour.tsx` first-run interactive tour (9 steps: welcome → composer → slash hint → agent picker → demo task → side panel → reasoning card → marketplace → done); skippable, replayable from settings
