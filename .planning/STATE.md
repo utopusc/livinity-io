@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T22:30:00.000Z"
-last_activity: "2026-05-04 — P76-06 Settings → Liv Agent thin section shipped (D-12): liv-agent.tsx (143 LOC) with Marketplace link + My Agents list + Replay Tour button; settings-content.tsx + index.tsx wired (4 additions per section: union+menu+switch+lazy). pnpm --filter ui build clean (33.13s). Sacred SHA 4f868d31... unchanged. Commit f04537d7. MARKET-07 marked complete."
+last_updated: "2026-05-05T03:14:31.530Z"
+last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
-  total_phases: 10
-  completed_phases: 8
-  total_plans: 57
-  completed_plans: 55
-  percent: 96
+  total_phases: 13
+  completed_phases: 10
+  total_plans: 75
+  completed_plans: 58
+  percent: 77
 ---
 
 # Project State

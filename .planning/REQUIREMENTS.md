@@ -132,7 +132,8 @@
 
 ### CU-FOUND (Phase 71 — Computer Use Foundation)
 
-- [ ] **CU-FOUND-01**: Bytebot desktop catalog entry in `builtin-apps.ts` — image `ghcr.io/bytebot-ai/bytebot-desktop:edge`, port range 14100+, `--privileged`, `shm_size: 2g`, `RESOLUTION=1280x960`, `DISPLAY=:0`
+- [x] **CU-FOUND-01
+**: Bytebot desktop catalog entry in `builtin-apps.ts` — image `ghcr.io/bytebot-ai/bytebot-desktop:edge`, port range 14100+, `--privileged`, `shm_size: 2g`, `RESOLUTION=1280x960`, `DISPLAY=:0`
 - [ ] **CU-FOUND-02**: App gateway auth middleware for desktop subdomain — validates JWT session + active computer-use task, exposes only `/computer-use`, `/websockify`, `/screenshot` endpoints
 - [ ] **CU-FOUND-03**: react-vnc dependency added; `liv-vnc-screen.tsx` wrapper with loading state, error fallback, scale-to-fit, fullscreen button, takeover indicator
 - [ ] **CU-FOUND-04**: WebSocket URL pattern `wss://desktop.bruce.livinity.io/websockify?token=<session-token>`

@@ -221,6 +221,14 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 2. "Open Firefox and read https://news.ycombinator.com" → application tool launches, browser navigation, content extracted
 3. Agent stuck (e.g., login page) → emits NEEDS_HELP → user takes over → completes login → returns control → agent resumes
 
+**Plans:** 6 plans in 4 waves
+- [ ] 72-01-PLAN.md (Wave 1) — 16 Bytebot tool schemas verbatim copy in livinityd computer-use module (CU-LOOP-01)
+- [ ] 72-02-PLAN.md (Wave 1) — Bytebot system prompt verbatim copy with 3 narrow D-12 edits (You are Liv / 1280x960 / NEEDS_HELP+COMPLETED) (CU-LOOP-03)
+- [ ] 72-03-PLAN.md (Wave 2, deps: 72-01,72-02) — BytebotBridge HTTP client + createComputerUseRouter factory + LivAgentRunner D-16 stub replacement (preserves fallback) + agent-runs.ts wiring under BYTEBOT_BRIDGE_ENABLED gate (CU-LOOP-02, CU-LOOP-04)
+- [ ] 72-04-PLAN.md (Wave 2, deps: 72-01) — BYTEBOT_LLM_PROXY_URL env-var spec + D-NO-BYOK gate (validateBytebotLlmProxyUrl rejects api.anthropic/openai/kimi/moonshot) + buildBytebotComposeEnvBlock helper + operator doc (CU-LOOP-06)
+- [ ] 72-05-PLAN.md (Wave 3, deps: 72-03) — LivNeedsHelpCard with amber+GlowPulse + Take over/Provide guidance/Cancel + post-takeover button morph; useLivAgentStream extended with runMeta; LivToolPanel mount (autonomous=false, human-verify) (CU-LOOP-05)
+- [ ] 72-06-PLAN.md (Wave 4, deps: 72-01..72-05) — Integration test (fake bytebotd, 7 scenarios) + Mini PC UAT walk script (3 ROADMAP scenarios) (autonomous=false, human-verify, BLOCKED until P71 deployed) (CU-LOOP-07)
+
 ### Phase 73: Reliability Layer
 
 **Goal:** Make agent runs survive crashes, reconnects, long durations. ContextManager prevents Kimi window overflow. BullMQ backgrounds long tasks.
