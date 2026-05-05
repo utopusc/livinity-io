@@ -115,7 +115,7 @@ async function runNonInteractive(configPath: string): Promise<void> {
     const envPath = join(livosBaseDir, '.env');
 
     p.log.info(`Domain: ${config.domain}${config.useHttps ? ' (HTTPS)' : ''}`);
-    p.log.info(`Paths: LivOS=${livosBaseDir}, Nexus=${nexusBaseDir}`);
+    p.log.info(`Paths: LivOS=${livosBaseDir}, Liv=${nexusBaseDir}`);
 
     // 4. Write .env
     const backupPath = backupEnvFile(envPath);
@@ -330,9 +330,9 @@ async function runOnboardWizard(): Promise<void> {
     }));
 
     const nexusBaseDir = guard(await p.text({
-      message: 'Nexus base directory',
+      message: 'Liv base directory',
       defaultValue: '/opt/nexus',
-      validate: validateNotEmpty('Nexus base directory'),
+      validate: validateNotEmpty('Liv base directory'),
     }));
 
     const mcpPortStr = guard(await p.text({
@@ -373,7 +373,7 @@ async function runOnboardWizard(): Promise<void> {
       `Voice:      ${deepgramApiKey ? 'Configured' : 'Not configured'}`,
       `Gmail:      ${gmailClientId ? 'Configured' : 'Not configured'}`,
       `LivOS dir:  ${livosBaseDir}`,
-      `Nexus dir:  ${nexusBaseDir}`,
+      `Liv dir:    ${nexusBaseDir}`,
       `Ports:      MCP=${mcpPortStr} API=${apiPortStr} Memory=${memoryPortStr}`,
       `Secrets:    JWT, API key, Redis password (auto-generated)`,
     ];
@@ -481,7 +481,7 @@ function printCompletionBanner(
 
   const lines = [
     `LivOS UI:   ${pc.cyan(livosUrl)}`,
-    `Nexus API:  ${pc.cyan(apiUrl)}`,
+    `Liv API:    ${pc.cyan(apiUrl)}`,
     '',
     'Next steps:',
     `  1. Open ${pc.bold(livosUrl)} in your browser`,
