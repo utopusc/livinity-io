@@ -56,6 +56,15 @@ const V32ThemePlayground = React.lazy(() => import('./routes/playground/v32-them
 // Coexists with /ai-chat (legacy) until P90 cutover.
 // Accessible at /ai-chat-v2 for Wave 2 parallel development.
 const AiChatV32 = React.lazy(() => import('./routes/ai-chat/v32/index'))
+// Phase 83 — v32 per-tool views playground.
+// Visual QA for all 9 tool view components + MCP content renderer.
+// Hidden from main nav; reachable only via /playground/v32-tool-views.
+const V32ToolViewsPlayground = React.lazy(() => import('./routes/playground/v32-tool-views'))
+// Phase 86 / V32-MKT — v32 public agent marketplace. NEW route at
+// /marketplace (sibling to legacy /agent-marketplace which it eventually
+// replaces at the P90 cutover). Both routes coexist during dev. Lazy-loaded
+// to mirror the existing app-store / agent-marketplace pattern.
+const Marketplace = React.lazy(() => import('./routes/marketplace'))
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()
@@ -131,6 +140,14 @@ export const router = createBrowserRouter([
 				element: <AiChatV32 />,
 				ErrorBoundary: ErrorBoundaryComponentFallback,
 			},
+			// Phase 83 — v32 per-tool views playground.
+			// Visual QA for all 9 tool view components + MCP content renderer.
+			// Gated behind EnsureLoggedIn (parent element); hidden from main nav.
+			{
+				path: 'playground/v32-tool-views',
+				element: <V32ToolViewsPlayground />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
 			{
 				Component: SheetLayout,
 				children: [
@@ -174,6 +191,14 @@ export const router = createBrowserRouter([
 						// Phase 76 / Plan 76-04 — Agent Marketplace route.
 						path: 'agent-marketplace',
 						Component: AgentMarketplace,
+						ErrorBoundary: ErrorBoundaryComponentFallback,
+					},
+					{
+						// Phase 86 / V32-MKT — v32 public agent marketplace.
+						// Sibling to legacy /agent-marketplace which it replaces
+						// at the P90 cutover. Both coexist during dev.
+						path: 'marketplace',
+						Component: Marketplace,
 						ErrorBoundary: ErrorBoundaryComponentFallback,
 					},
 				],
