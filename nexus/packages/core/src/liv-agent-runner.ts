@@ -201,22 +201,31 @@ const SDK_EVENT_TOOL_RESULT = 'liv:tool_result';
 
 /**
  * Map tool name → ToolCategory. Pattern coverage matches must-have list:
+ *   - mcp_bytebot_*                   ⇒ 'computer-use'  (Plan 72-native-05 D-NATIVE-11)
+ *   - computer_use_* / bytebot_*      ⇒ 'computer-use'  (P67-02 D-16 fallback)
+ *   - mcp_* / mcp-*                   ⇒ 'mcp'
  *   - browser-* / browser_*           ⇒ 'browser'
  *   - execute-command / terminal-*    ⇒ 'terminal'
- *   - read-file / write-file / etc.   ⇒ 'file'
  *   - str-replace / edit-file         ⇒ 'fileEdit'
+ *   - read-file / write-file / etc.   ⇒ 'file'
  *   - web-search / web_search         ⇒ 'webSearch'
  *   - web-crawl / web_crawl           ⇒ 'webCrawl'
  *   - web-scrape / web_scrape         ⇒ 'webScrape'
- *   - mcp_* / mcp-*                   ⇒ 'mcp'
- *   - computer_use_* / bytebot_*      ⇒ 'computer-use'
  *   - everything else                 ⇒ 'generic'
  *
- * Order matters: computer-use + mcp prefixes are checked BEFORE the
- * generic browser/terminal/file checks so a hypothetical `mcp_browser-foo`
- * is categorized as `mcp`, not `browser`.
+ * Order matters: the `mcp_bytebot_*` check fires BEFORE the generic `mcp_*`
+ * rule so the bytebot MCP server's tools route to the computer-use UI track
+ * (LivNeedsHelpCard / LivDesktopViewer) instead of the generic MCP fallback.
+ * The `computer_use_*` / `bytebot_*` prefix check is preserved for any
+ * legacy non-MCP-prefixed tool names (P67-02 D-16 stub fallback).
  */
 export function categorizeTool(toolName: string): ToolCategory {
+  // Plan 72-native-05 D-NATIVE-11 — bytebot MCP server's tools (named
+  // `mcp_bytebot_<bytebot-tool>` by the McpClientManager prefixing rule)
+  // must hit the computer-use track BEFORE the generic mcp_* rule wins.
+  if (toolName.startsWith('mcp_bytebot_')) {
+    return 'computer-use';
+  }
   if (toolName.startsWith('computer_use_') || toolName.startsWith('bytebot_')) {
     return 'computer-use';
   }
