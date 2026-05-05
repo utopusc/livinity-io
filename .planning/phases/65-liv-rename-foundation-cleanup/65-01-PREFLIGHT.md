@@ -199,7 +199,7 @@ git reset --hard 640b928e5e7d8287536b405a01af3b20e075729b
 # (no liv-rename branch was created, so no branch deletion needed)
 ```
 
-**Preflight commit SHA:** _to be filled in by Task 2 commit step_ — this is the SHA of the commit that adds this PREFLIGHT.md to git history. To roll back the snapshot itself: `git revert <preflight-commit-sha>`.
+**Preflight commit SHA:** `22120f4b` — this is the SHA of the commit that adds this PREFLIGHT.md to git history. To roll back the snapshot itself: `git revert 22120f4b`. (Note: the file is appended in-place after commit with the SHA fill-in; the appended diff is left uncommitted, OR can be committed as a follow-up `docs(65-01): record preflight commit SHA in rollback reference` patch. The snapshot data — git starting SHA, sacred SHA, top-5 file SHAs, env-var inventory — is fully captured at commit `22120f4b`.)
 
 ## Cross-plan link
 
