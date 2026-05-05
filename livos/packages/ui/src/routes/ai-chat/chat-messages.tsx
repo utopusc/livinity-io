@@ -22,7 +22,21 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 import {trpcReact} from '@/trpc/trpc'
 
-import {StreamingMessage} from './streaming-message'
+import {LivAgentStatus} from './components/liv-agent-status'
+import {LivStreamingText} from './components/liv-streaming-text'
+import {LivTypingDots} from './components/liv-typing-dots'
+import {StreamingMessage as _LegacyStreamingMessage} from './streaming-message'
+
+// Legacy import retained per CONTEXT D-08 D-NO-DELETE — file remains on disk and
+// is still referenced here for grep-based provenance. Active assistant
+// rendering uses LivStreamingText (see AssistantMessage below).
+void _LegacyStreamingMessage
+
+// Re-export LivAgentStatus + LivTypingDots so `index.tsx` (the message-list
+// owner) can import them from this module — chat-messages is the canonical
+// owner of the streaming-UX surface even though the actual mounts happen at
+// the list level (last-message detection).
+export {LivAgentStatus, LivTypingDots}
 
 // --- Helpers ---
 
@@ -444,10 +458,10 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 					if (block.type === 'text') {
 						const isLast = idx === blocks.length - 1
 						return (
-							<StreamingMessage
+							<LivStreamingText
 								key={`text-${idx}`}
 								content={block.content}
-								isStreaming={message.isStreaming && isLast}
+								isStreaming={!!(message.isStreaming && isLast)}
 							/>
 						)
 					}
@@ -458,7 +472,7 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 				})}
 				{/* Fallback: if no blocks, render content directly */}
 				{!blocks && message.content && (
-					<StreamingMessage content={message.content} isStreaming={message.isStreaming} />
+					<LivStreamingText content={message.content} isStreaming={!!message.isStreaming} />
 				)}
 				{/* Progress shimmer — always at bottom while AI is working */}
 				{showBottomShimmer && (
