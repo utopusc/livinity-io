@@ -32,8 +32,10 @@ import {randomUUID} from 'node:crypto'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {readFile, unlink} from 'node:fs/promises'
+import {execFile} from 'node:child_process'
+import {promisify} from 'node:util'
 
-import {screen, FileType} from '@nut-tree-fork/nut-js'
+const execFileAsync = promisify(execFile)
 
 export interface ScreenshotResult {
 	base64: string
@@ -43,50 +45,46 @@ export interface ScreenshotResult {
 }
 
 /**
- * Capture a PNG screenshot of the host X server (display :0 on Mini PC).
+ * Capture a PNG screenshot of the host X server.
  *
- * Returns:
- *   {base64, width, height, mimeType: 'image/png'}
+ * 2026-05-05 P79-04: Switched from `@nut-tree-fork/nut-js` (libnut native
+ * binding) to `scrot` subprocess. Live test on Mini PC showed nut-js
+ * returning blank/white frames inside the bytebot stdio child context,
+ * even with correct DISPLAY/XAUTHORITY env. scrot reliably captures the
+ * real X11 framebuffer with the same env. Cost: ~30-50ms subprocess fork
+ * vs nut-js's in-process. Acceptable for screenshot tool latency.
  *
- * Throws:
- *   - With a clear platform-specific message if nut-js native bindings fail
- *     to load (e.g. on Windows dev env without X server) — D-NATIVE-14.
- *   - The original error if reading the captured PNG fails (after attempting
- *     to clean up the temp file).
- *   - Non-ENOENT errors during temp-file unlink (ENOENT is swallowed; other
- *     errors signal real bugs we want to surface).
+ * Width/height parsed from PNG IHDR chunk header (bytes 16-23, big-endian
+ * uint32 each) — avoids extra subprocess for xrandr.
+ *
+ * Returns: {base64, width, height, mimeType: 'image/png'}
+ *
+ * Throws clear errors when scrot is missing or DISPLAY unreachable.
  */
 export async function captureScreenshot(): Promise<ScreenshotResult> {
-	// Capture to a UUID-named temp file in the OS temp dir.
-	// UUID prevents collisions across concurrent calls (T-72N1-01 mitigation).
-	// nut-js' screen.capture(filename, format, dir) writes {dir}/{filename}.png
-	// and returns the absolute path of the saved file.
 	const filename = randomUUID()
 	const dir = tmpdir()
+	const tempPath = join(dir, `${filename}.png`)
 
-	let savedPath: string
 	try {
-		savedPath = await screen.capture(filename, FileType.PNG, dir)
+		// `-z` (silent), `-o` (overwrite). Honours DISPLAY/XAUTHORITY env.
+		await execFileAsync('scrot', ['-z', '-o', tempPath], {
+			env: process.env,
+			timeout: 10_000,
+		})
 	} catch (err: unknown) {
-		// Most common failure on dev: native libnut binding doesn't load on the
-		// host platform. Re-wrap with a clearer error so callers (the MCP bridge
-		// in 72-native-05) can surface a useful message to the user.
 		const message = err instanceof Error ? err.message : String(err)
 		throw new Error(
-			`Native screenshot unavailable on platform: ${process.platform}. ` +
-				`Bytebot computer-use requires Linux + X server (Mini PC). ` +
-				`Underlying error: ${message}`,
+			`scrot screenshot failed (DISPLAY=${process.env.DISPLAY ?? '<unset>'}): ${message}`,
 		)
 	}
 
-	// nut-js' return-path quirk: depending on version it may or may not include
-	// the dir prefix. Normalise by joining if it looks like a bare filename.
-	const tempPath =
-		typeof savedPath === 'string' && savedPath.length > 0 ? savedPath : join(dir, `${filename}.png`)
-
 	try {
 		const buffer = await readFile(tempPath)
-		const [width, height] = await Promise.all([screen.width(), screen.height()])
+		// PNG IHDR chunk: header = 8 bytes signature + 4 length + 4 type ('IHDR') + 4 width + 4 height
+		// Bytes 16-19 = width (BE u32), bytes 20-23 = height (BE u32).
+		const width = buffer.readUInt32BE(16)
+		const height = buffer.readUInt32BE(20)
 		return {
 			base64: buffer.toString('base64'),
 			width,
@@ -94,8 +92,7 @@ export async function captureScreenshot(): Promise<ScreenshotResult> {
 			mimeType: 'image/png',
 		}
 	} finally {
-		// Best-effort cleanup. Swallow ENOENT (already gone) but rethrow anything
-		// else (EPERM, EACCES, etc.) — those signal real bugs we want to see.
+		// Best-effort cleanup. Swallow ENOENT; rethrow real errors.
 		try {
 			await unlink(tempPath)
 		} catch (err: unknown) {
@@ -105,7 +102,7 @@ export async function captureScreenshot(): Promise<ScreenshotResult> {
 				'code' in err &&
 				(err as {code: unknown}).code === 'ENOENT'
 			) {
-				// fine — file already gone (concurrent reaper, OS cleanup)
+				// fine — file already gone
 			} else {
 				throw err
 			}
