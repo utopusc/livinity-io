@@ -192,8 +192,10 @@
 
 ### MARKET (Phase 76 — Agent Marketplace + Onboarding Tour)
 
-- [ ] **MARKET-01**: `livos/packages/ui/src/routes/marketplace/agents/index.tsx` — grid layout 2/3/4 cols by breakpoint, cards (emoji avatar + name + 2-line description + tag chips + clone count + "Add to Library" button)
-- [ ] **MARKET-02**: Filter by tags (Coding/Research/Computer Use/etc.); sort (newest/popular/most-cloned); pagination 20/page
+- [x] **MARKET-01
+**: `livos/packages/ui/src/routes/marketplace/agents/index.tsx` — grid layout 2/3/4 cols by breakpoint, cards (emoji avatar + name + 2-line description + tag chips + clone count + "Add to Library" button)
+- [x] **MARKET-02
+**: Filter by tags (Coding/Research/Computer Use/etc.); sort (newest/popular/most-cloned); pagination 20/page
 - [x] **MARKET-03
 **: PostgreSQL `agent_templates` table (slug, name, description, system_prompt, tools_enabled, tags, clone_count, created_at)
 - [x] **MARKET-04
@@ -202,7 +204,8 @@
 **: API `GET /api/agent-templates`, `POST /api/agent-templates/:slug/clone`; clone creates entry in existing `user_agents` table with copy of template config
 - [x] **MARKET-06
 **: `liv-tour.tsx` first-run interactive tour (9 steps: welcome → composer → slash hint → agent picker → demo task → side panel → reasoning card → marketplace → done); skippable, replayable from settings
-- [ ] **MARKET-07**: Settings "Liv Agent" section — model picker, tool permissions, computer use toggle, idle timeout slider, reasoning visibility toggle, replay onboarding tour button
+- [x] **MARKET-07
+**: Settings "Liv Agent" section — model picker, tool permissions, computer use toggle, idle timeout slider, reasoning visibility toggle, replay onboarding tour button
 
 ---
 
