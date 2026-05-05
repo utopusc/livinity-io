@@ -106,7 +106,8 @@
 **: `WebScrapeToolView.tsx` — URL + scraped content (markdown rendered) + extracted images gallery
 - [x] **VIEWS-09
 **: `McpToolView.tsx` — MCP server name badge + tool name + JSON args + content rendered via mcp-content-renderer
-- [ ] **VIEWS-10**: `GenericToolView.tsx` — raw JSON formatted with collapse for nested objects, fallback for unknown tools
+- [x] **VIEWS-10
+**: `GenericToolView.tsx` — raw JSON formatted with collapse for nested objects, fallback for unknown tools
 - [x] **VIEWS-11
 **: `tool-views/utils.ts` — `getToolView`, `getToolIcon`, `getUserFriendlyToolName`, `colorizeDiff`, `extractScreenshot`, `isVisualTool` (used by PANEL-07 auto-open)
 
