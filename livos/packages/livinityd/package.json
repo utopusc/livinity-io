@@ -63,6 +63,7 @@
 		"@aws-sdk/lib-storage": "^3.700.0",
 		"@homebridge/dbus-native": "github:getumbrel/dbus-native#types",
 		"@livos/config": "workspace:*",
+		"@modelcontextprotocol/sdk": "^1.12.0",
 		"@nexus/core": "file:../../../nexus/packages/core",
 		"@novnc/novnc": "^1.6.0",
 		"@nut-tree-fork/nut-js": "^4.2.6",
