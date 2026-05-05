@@ -1,0 +1,70 @@
+/*
+ * v32 Design Tokens (Phase 80) — OKLCH values verbatim from Suna globals.css lines 227-296.
+ *
+ * Prefixed with --liv-* to coexist with the existing shadcn/radix token set
+ * (--background, --foreground, etc.) used by /ai-chat and other legacy routes.
+ * DO NOT remove or rename existing tokens. These are additive only.
+ *
+ * Tailwind utilities:  bg-liv-background, text-liv-foreground, bg-liv-card, etc.
+ * Consumed by:        /playground/v32-theme and Phase 81+ chat components.
+ */
+
+:root {
+  --liv-background: oklch(98.46% 0.002 247.84);
+  --liv-foreground: oklch(0.145 0 0);
+  --liv-card: oklch(1 0 0);
+  --liv-card-foreground: oklch(0.145 0 0);
+  --liv-popover: oklch(1 0 0);
+  --liv-popover-foreground: oklch(0.145 0 0);
+  --liv-primary: oklch(0.205 0 0);
+  --liv-primary-foreground: oklch(0.985 0 0);
+  --liv-secondary: oklch(54.65% 0.246 262.87);
+  --liv-secondary-foreground: oklch(0.205 0 0);
+  --liv-muted: oklch(0.97 0 0);
+  --liv-muted-foreground: oklch(0.556 0 0);
+  --liv-accent: oklch(0.97 0 0);
+  --liv-accent-foreground: oklch(0.145 0 0);
+  --liv-destructive: oklch(0.577 0.245 27.325);
+  --liv-destructive-foreground: oklch(0.577 0.245 27.325);
+  --liv-border: oklch(0.922 0 0);
+  --liv-input: oklch(0.922 0 0);
+  --liv-ring: oklch(0.708 0 0);
+  --liv-sidebar: oklch(98.46% 0.002 247.84);
+  --liv-sidebar-foreground: oklch(0.145 0 0);
+  --liv-sidebar-primary: oklch(0.205 0 0);
+  --liv-sidebar-primary-foreground: oklch(0.985 0 0);
+  --liv-sidebar-accent: oklch(0.97 0 0);
+  --liv-sidebar-accent-foreground: oklch(0.205 0 0);
+  --liv-sidebar-border: oklch(0.922 0 0);
+  --liv-sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --liv-background: oklch(0.185 0.005 285.823);
+  --liv-foreground: oklch(0.985 0 0);
+  --liv-card: oklch(0.145 0 0);
+  --liv-card-foreground: oklch(0.985 0 0);
+  --liv-popover: oklch(0.145 0 0);
+  --liv-popover-foreground: oklch(0.985 0 0);
+  --liv-primary: oklch(0.985 0 0);
+  --liv-primary-foreground: oklch(0.205 0 0);
+  --liv-secondary: oklch(54.65% 0.246 262.87);
+  --liv-secondary-foreground: oklch(0.985 0 0);
+  --liv-muted: oklch(0.269 0 0);
+  --liv-muted-foreground: oklch(0.708 0 0);
+  --liv-accent: oklch(27.39% 0.005 286.03);
+  --liv-accent-foreground: oklch(98.46% 0.002 247.84);
+  --liv-destructive: oklch(0.396 0.141 25.723);
+  --liv-destructive-foreground: oklch(0.637 0.237 25.331);
+  --liv-border: oklch(0.269 0 0);
+  --liv-input: oklch(0.269 0 0);
+  --liv-ring: oklch(0.439 0 0);
+  --liv-sidebar: oklch(21.03% 0.006 285.89);
+  --liv-sidebar-foreground: oklch(0.985 0 0);
+  --liv-sidebar-primary: oklch(0.488 0.243 264.376);
+  --liv-sidebar-primary-foreground: oklch(0.985 0 0);
+  --liv-sidebar-accent: oklch(0.269 0 0);
+  --liv-sidebar-accent-foreground: oklch(0.985 0 0);
+  --liv-sidebar-border: oklch(0.269 0 0);
+  --liv-sidebar-ring: oklch(0.439 0 0);
+}

@@ -30,8 +30,10 @@ export default {
 	},
 	theme: {
 		fontFamily: {
-			sans: ['var(--font-jakarta)', 'var(--font-inter)', 'Inter Variable', 'Inter', ...defaultTheme.fontFamily.sans],
-			mono: ['JetBrains Mono', 'Roboto Mono', ...defaultTheme.fontFamily.mono],
+			// v32 (Phase 80): Geist Variable prepended; existing stack kept as fallback
+			sans: ['Geist Variable', 'var(--font-jakarta)', 'var(--font-inter)', 'Inter Variable', 'Inter', ...defaultTheme.fontFamily.sans],
+			// v32 (Phase 80): Geist Mono Variable prepended
+			mono: ['Geist Mono Variable', 'JetBrains Mono', 'Roboto Mono', ...defaultTheme.fontFamily.mono],
 			sticker: ['"Permanent Marker"', 'cursive'],
 		},
 		container: {
@@ -77,6 +79,38 @@ export default {
 				'radius-3xl': '28px',
 			},
 			colors: {
+				// v32 OKLCH tokens (Phase 80) — bound to --liv-* CSS custom properties.
+				// Use as: bg-liv-background, text-liv-foreground, border-liv-border, etc.
+				// Light/dark values controlled by ThemeProvider toggling <html class="dark">.
+				// var() passthrough: Tailwind emits `color: var(--liv-*)` in the output CSS.
+				// The actual OKLCH values live in v32-tokens.css and switch on `.dark`.
+				'liv-background': 'var(--liv-background)',
+				'liv-foreground': 'var(--liv-foreground)',
+				'liv-card': 'var(--liv-card)',
+				'liv-card-foreground': 'var(--liv-card-foreground)',
+				'liv-popover': 'var(--liv-popover)',
+				'liv-popover-foreground': 'var(--liv-popover-foreground)',
+				'liv-primary': 'var(--liv-primary)',
+				'liv-primary-foreground': 'var(--liv-primary-foreground)',
+				'liv-secondary': 'var(--liv-secondary)',
+				'liv-secondary-foreground': 'var(--liv-secondary-foreground)',
+				'liv-muted': 'var(--liv-muted)',
+				'liv-muted-foreground': 'var(--liv-muted-foreground)',
+				'liv-accent': 'var(--liv-accent)',
+				'liv-accent-foreground': 'var(--liv-accent-foreground)',
+				'liv-destructive': 'var(--liv-destructive)',
+				'liv-destructive-foreground': 'var(--liv-destructive-foreground)',
+				'liv-border': 'var(--liv-border)',
+				'liv-input': 'var(--liv-input)',
+				'liv-ring': 'var(--liv-ring)',
+				'liv-sidebar': 'var(--liv-sidebar)',
+				'liv-sidebar-foreground': 'var(--liv-sidebar-foreground)',
+				'liv-sidebar-primary': 'var(--liv-sidebar-primary)',
+				'liv-sidebar-primary-foreground': 'var(--liv-sidebar-primary-foreground)',
+				'liv-sidebar-accent': 'var(--liv-sidebar-accent)',
+				'liv-sidebar-accent-foreground': 'var(--liv-sidebar-accent-foreground)',
+				'liv-sidebar-border': 'var(--liv-sidebar-border)',
+				'liv-sidebar-ring': 'var(--liv-sidebar-ring)',
 				// Extracted from background
 				brand: 'hsl(var(--color-brand) / <alpha-value>)',
 				'brand-lighter': 'hsl(var(--color-brand-lighter) / <alpha-value>)',
