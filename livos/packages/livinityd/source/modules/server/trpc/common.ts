@@ -230,4 +230,12 @@ export const httpOnlyPaths = [
 	'preferences.get',
 	'preferences.set',
 	'preferences.delete',
+	// v31.0 Phase 71-05 — Computer Use desktop session control (CU-FOUND-04).
+	// Mutations may take 1-15s (Bytebot spawn budget) and must survive WS
+	// reconnect after `systemctl restart livos` (precedent: usage.getMine
+	// line 181, ai.executeSubagent line 214 — long-running mutation cluster).
+	// Pitfall B-12 / X-04 / RESEARCH.md Pitfall 5.
+	'computerUse.getStatus',
+	'computerUse.startStandaloneSession',
+	'computerUse.stopSession',
 ] as const

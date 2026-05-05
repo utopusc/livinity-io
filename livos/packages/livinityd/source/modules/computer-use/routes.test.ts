@@ -77,7 +77,7 @@ function makeCtx(over: any = {}) {
 			verifyToken: vi.fn(async () => ({userId: 'user-1'})),
 		},
 		logger: {log: vi.fn(), error: vi.fn(), verbose: vi.fn()},
-		dangerouslyBypassAuthentication: false,
+		dangerouslyBypassAuthentication: true,
 		...over,
 		// preserve manager reference on returned ctx for assertions
 		_manager: manager,
@@ -148,7 +148,7 @@ describe('computerUseRouter.startStandaloneSession', () => {
 			},
 			server: {signUserToken: vi.fn(async () => 'fake.jwt.token')},
 			logger: {log: vi.fn(), error: vi.fn(), verbose: vi.fn()},
-			dangerouslyBypassAuthentication: false,
+			dangerouslyBypassAuthentication: true,
 		}
 		const caller = computerUseRouter.createCaller(ctx)
 		await expect(caller.startStandaloneSession()).rejects.toThrow(/main domain/i)
