@@ -144,7 +144,8 @@
 
 ### CU-LOOP (Phase 72 — Computer Use Agent Loop)
 
-- [ ] **CU-LOOP-01**: `liv/packages/computer-use/src/bytebot-tools.ts` — verbatim copy of 16 Bytebot tool schemas from `agent.tools.ts` (screenshot, click_mouse, move_mouse, drag_mouse, scroll, type_text, press_keys, wait, application, read_file, write_file, cursor_position, paste_text, cua_command, set_task_status, etc.)
+- [x] **CU-LOOP-01
+**: `liv/packages/computer-use/src/bytebot-tools.ts` — verbatim copy of 16 Bytebot tool schemas from `agent.tools.ts` (screenshot, click_mouse, move_mouse, drag_mouse, scroll, type_text, press_keys, wait, application, read_file, write_file, cursor_position, paste_text, cua_command, set_task_status, etc.)
 - [ ] **CU-LOOP-02**: `liv/packages/computer-use/src/bytebot-bridge.ts` — `BytebotBridge` class wrapping bytebotd HTTP API; POST to `http://localhost:${userPort}/computer-use {action, ...params}`; capture screenshot after action with 750ms settle delay
 - [ ] **CU-LOOP-03**: `liv/packages/computer-use/src/system-prompt.ts` — verbatim port of Bytebot system prompt (1280x960 coordinate space, screenshot-before-act, 3-retry NEEDS_HELP, "Liv" branding)
 - [ ] **CU-LOOP-04**: `liv-agent-runner.ts` modified — detect computer-use task, route `computer_use_*` tool calls to `BytebotBridge.executeAction`, inject computer-use system prompt addendum, track NEEDS_HELP state
