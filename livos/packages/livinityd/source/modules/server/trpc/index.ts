@@ -36,6 +36,12 @@ import diagnosticsRoutes from '../../diagnostics/routes.js'
 // in ./common.ts so the React client routes them through HTTP (cookie
 // + header semantics survive WS reconnect after `systemctl restart livos`).
 import apiKeys from '../../api-keys/routes.js'
+// v31.0 Phase 71-05 — Computer Use desktop session control (CU-FOUND-04).
+// Top-level `computerUse` namespace exposes getStatus / startStandaloneSession
+// / stopSession. All three are added to httpOnlyPaths in ./common.ts because
+// the mutations may take 1-15s (Bytebot spawn budget) and must survive WS
+// reconnect.
+import {computerUseRouter} from '../../computer-use/routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -71,6 +77,8 @@ const appRouter = router({
 	capabilities: diagnosticsRoutes.capabilitiesRouter,
 	// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).
 	apiKeys,
+	// v31.0 Phase 71-05 — computerUse namespace (CU-FOUND-04).
+	computerUse: computerUseRouter,
 })
 
 export type AppRouter = typeof appRouter

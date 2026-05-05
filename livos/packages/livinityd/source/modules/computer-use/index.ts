@@ -34,6 +34,13 @@ export type {
 	MountDesktopGatewayDeps,
 } from './desktop-gateway.js'
 
+// Phase 71-05 — computerUse tRPC router (D-19, CU-FOUND-04).
+// Mounted under `appRouter.computerUse` in server/trpc/index.ts; the 3
+// procedures (getStatus / startStandaloneSession / stopSession) are also
+// listed in httpOnlyPaths so the React client routes through HTTP.
+export {computerUseRouter} from './routes.js'
+export type {ComputerUseRouter} from './routes.js'
+
 // Phase 72-01 — Bytebot tool schemas (CU-LOOP-01). Verbatim Apache 2.0
 // copy from upstream Bytebot agent.tools.ts. See bytebot-tools.ts header
 // for source URL + snapshot date + license attribution.
