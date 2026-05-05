@@ -49,26 +49,26 @@ describe('getStopButtonState (D-22)', () => {
 	})
 })
 
-describe('getModelBadgeText (D-31)', () => {
+describe('getModelBadgeText (D-31, P77-01: default Claude)', () => {
 	it('returns env value when set to a real model name', () => {
 		expect(getModelBadgeText('Sonnet 4.5')).toBe('Sonnet 4.5')
 		expect(getModelBadgeText('kimi-for-coding')).toBe('kimi-for-coding')
 	})
 
-	it('falls back to Kimi when env undefined', () => {
-		expect(getModelBadgeText(undefined)).toBe('Kimi')
+	it('falls back to Claude when env undefined', () => {
+		expect(getModelBadgeText(undefined)).toBe('Claude')
 	})
 
-	it('falls back to Kimi when env null', () => {
-		expect(getModelBadgeText(null)).toBe('Kimi')
+	it('falls back to Claude when env null', () => {
+		expect(getModelBadgeText(null)).toBe('Claude')
 	})
 
-	it('falls back to Kimi when env empty string', () => {
-		expect(getModelBadgeText('')).toBe('Kimi')
+	it('falls back to Claude when env empty string', () => {
+		expect(getModelBadgeText('')).toBe('Claude')
 	})
 
-	it('falls back to Kimi for whitespace-only env', () => {
-		expect(getModelBadgeText('   ')).toBe('Kimi')
-		expect(getModelBadgeText('\t\n')).toBe('Kimi')
+	it('falls back to Claude for whitespace-only env', () => {
+		expect(getModelBadgeText('   ')).toBe('Claude')
+		expect(getModelBadgeText('\t\n')).toBe('Claude')
 	})
 })

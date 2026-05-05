@@ -502,7 +502,8 @@ export default router({
 			}
 		} catch (error) {
 			ctx.livinityd.logger.error('Failed to get providers', error)
-			return {providers: [], primaryProvider: 'kimi', fallbackOrder: ['kimi']}
+			// P77-01: default to 'claude' (broker subscription path); 'kimi' was stale from v6.0
+			return {providers: [], primaryProvider: 'claude', fallbackOrder: ['claude']}
 		}
 	}),
 
