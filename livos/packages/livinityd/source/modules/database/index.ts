@@ -71,6 +71,19 @@ export async function initDatabase(logger: Livinityd['logger']): Promise<boolean
 			client.release()
 		}
 
+		// Phase 76 MARKET-03 — seed agent_templates catalog (idempotent INSERT ON
+		// CONFLICT DO NOTHING). Wrapped in try/catch: seed failure must NOT block
+		// boot (T-76-02-01). Dynamic import keeps the seed strings out of the hot
+		// path when seeding fails to load.
+		try {
+			const {seedAgentTemplates} = await import('./seeds/agent-templates.js')
+			const {inserted, skipped} = await seedAgentTemplates(pool)
+			logger.log(`Agent templates seeded: ${inserted} inserted, ${skipped} skipped`)
+		} catch (err) {
+			logger.error('Agent template seed failed (non-fatal)', err)
+			// do NOT throw — seed failure must not block boot
+		}
+
 		initialized = true
 		logger.log(`Database connected: ${databaseUrl.replace(/:[^:@]+@/, ':***@')}`)
 		return true
