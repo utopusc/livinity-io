@@ -39,6 +39,18 @@ export type {
 export { RunQueue } from './run-queue.js';
 export type { AgentJobData, RunQueueOptions } from './run-queue.js';
 
+// ── Public re-exports (Phase 73-05 — boot-time orphaned-run scanner) ──
+// SCAN-based scanner over `liv:agent_run:*:meta` that surfaces incomplete
+// runs left over from prior daemon crashes. Default mode 'log-only' for
+// v31 entry (CONTEXT D-27 — observation only). Wired into livinityd's
+// AI-module mount in Plan 73-05 Task 3.
+export { recoverIncompleteRuns } from './run-recovery.js';
+export type {
+  RecoveryMode,
+  RecoveryOptions,
+  RecoveryResult,
+} from './run-recovery.js';
+
 import { Daemon } from './daemon.js';
 import { Brain } from './brain.js';
 import { Router } from './router.js';

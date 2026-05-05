@@ -47,6 +47,16 @@ export type {
 export { RunQueue } from './run-queue.js';
 export type { AgentJobData, RunQueueOptions } from './run-queue.js';
 
+// ── Run Recovery (Phase 73-05) ───────────────────────────────────
+// Boot-time orphaned-run scanner. Default 'log-only' mode for v31 entry.
+// Wired from livos/packages/livinityd/source/modules/ai/index.ts.
+export { recoverIncompleteRuns } from './run-recovery.js';
+export type {
+  RecoveryMode,
+  RecoveryOptions,
+  RecoveryResult,
+} from './run-recovery.js';
+
 // ── Tool Registry ──────────────────────────────────────────────
 export { ToolRegistry } from './tool-registry.js';
 export type { ToolPolicy } from './tool-registry.js';
