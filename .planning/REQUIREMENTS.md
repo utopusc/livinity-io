@@ -135,8 +135,10 @@
 - [x] **CU-FOUND-01
 **: Bytebot desktop catalog entry in `builtin-apps.ts` — image `ghcr.io/bytebot-ai/bytebot-desktop:edge`, port range 14100+, `--privileged`, `shm_size: 2g`, `RESOLUTION=1280x960`, `DISPLAY=:0`
 - [ ] **CU-FOUND-02**: App gateway auth middleware for desktop subdomain — validates JWT session + active computer-use task, exposes only `/computer-use`, `/websockify`, `/screenshot` endpoints
-- [ ] **CU-FOUND-03**: react-vnc dependency added; `liv-vnc-screen.tsx` wrapper with loading state, error fallback, scale-to-fit, fullscreen button, takeover indicator
-- [ ] **CU-FOUND-04**: WebSocket URL pattern `wss://desktop.bruce.livinity.io/websockify?token=<session-token>`
+- [x] **CU-FOUND-03
+**: react-vnc dependency added; `liv-vnc-screen.tsx` wrapper with loading state, error fallback, scale-to-fit, fullscreen button, takeover indicator
+- [x] **CU-FOUND-04
+**: WebSocket URL pattern `wss://desktop.bruce.livinity.io/websockify?token=<session-token>`
 - [ ] **CU-FOUND-05**: Standalone computer-use route at `/computer` for direct desktop access (bonus)
 - [x] **CU-FOUND-06
 **: `container-manager.ts` — `ensureContainer(userId)`, `stopContainer(userId)`, `getStatus(userId)`; spawn on first computer-use tool call; 30-min idle timeout; max 1 active container per user
@@ -147,7 +149,8 @@
 - [x] **CU-LOOP-01
 **: `liv/packages/computer-use/src/bytebot-tools.ts` — verbatim copy of 16 Bytebot tool schemas from `agent.tools.ts` (screenshot, click_mouse, move_mouse, drag_mouse, scroll, type_text, press_keys, wait, application, read_file, write_file, cursor_position, paste_text, cua_command, set_task_status, etc.)
 - [ ] **CU-LOOP-02**: `liv/packages/computer-use/src/bytebot-bridge.ts` — `BytebotBridge` class wrapping bytebotd HTTP API; POST to `http://localhost:${userPort}/computer-use {action, ...params}`; capture screenshot after action with 750ms settle delay
-- [ ] **CU-LOOP-03**: `liv/packages/computer-use/src/system-prompt.ts` — verbatim port of Bytebot system prompt (1280x960 coordinate space, screenshot-before-act, 3-retry NEEDS_HELP, "Liv" branding)
+- [x] **CU-LOOP-03
+**: `liv/packages/computer-use/src/system-prompt.ts` — verbatim port of Bytebot system prompt (1280x960 coordinate space, screenshot-before-act, 3-retry NEEDS_HELP, "Liv" branding)
 - [ ] **CU-LOOP-04**: `liv-agent-runner.ts` modified — detect computer-use task, route `computer_use_*` tool calls to `BytebotBridge.executeAction`, inject computer-use system prompt addendum, track NEEDS_HELP state
 - [ ] **CU-LOOP-05**: `liv-needs-help-card.tsx` (NEW) — when agent emits `set_task_status({status: 'NEEDS_HELP', message})`, side panel shows banner with "Take over" / "Provide guidance" / "Cancel task" buttons; user takeover pauses agent, returns control button
 - [ ] **CU-LOOP-06**: BYTEBOT_LLM_PROXY_URL routing wired through Livinity broker → Kimi (no Bytebot agent code used)
