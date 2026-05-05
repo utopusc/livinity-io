@@ -1,78 +1,75 @@
-/** Tool view dispatcher — Phase 68-04.
- *  Maps toolName → React.FC<ToolViewProps>. P68 ships with all cases
- *  falling through to GenericToolView. P69 replaces individual cases
- *  with specific views (BrowserToolView, CommandToolView, etc.).
+/** Tool view dispatcher — Phase 68-04 (skeleton) → 69-05 (specific views wired).
+ *  Maps toolName → React.FC<ToolViewProps>.
  *
- *  Spec: CONTEXT D-20..D-22 + v31-DRAFT line 354.
+ *  Spec: 68-CONTEXT.md D-20..D-22 + 69-CONTEXT.md D-28 + v31-DRAFT line 354.
+ *
+ *  P69-05 wires the 8 specific tool views from P69-01..P69-04. Default fallback
+ *  remains GenericToolView for unknown tool names.
  */
 
 import {useMemo} from 'react'
 import type {FC} from 'react'
 
+import {BrowserToolView} from './browser-tool-view'
+import {CommandToolView} from './command-tool-view'
+import {FileOperationToolView} from './file-operation-tool-view'
 import {GenericToolView} from './generic-tool-view'
+import {McpToolView} from './mcp-tool-view'
+import {StrReplaceToolView} from './str-replace-tool-view'
 import type {ToolViewProps} from './types'
+import {WebCrawlToolView} from './web-crawl-tool-view'
+import {WebScrapeToolView} from './web-scrape-tool-view'
+import {WebSearchToolView} from './web-search-tool-view'
 
 /**
  * Resolves a toolName to its renderer component.
  *
- * P68 returns GenericToolView for everything. P69 plans replace
- * individual cases. The switch is structured by toolName prefix
- * matching v31-DRAFT line 354.
+ * P69 routes 8 specific views; unknown tools fall through to GenericToolView.
  */
 export function getToolView(toolName: string): FC<ToolViewProps> {
 	// Visual tools — auto-open the side panel (per STATE.md line 79)
 	if (toolName.startsWith('browser-')) {
-		// TODO(P69-01): replace with BrowserToolView
-		return GenericToolView
+		return BrowserToolView
 	}
 	if (toolName.startsWith('computer-use-')) {
-		// TODO(P69-01): replace with BrowserToolView (computer-use mode)
-		return GenericToolView
+		return BrowserToolView
 	}
 	if (toolName === 'screenshot' || toolName.startsWith('screenshot-')) {
-		// TODO(P69-01): replace with BrowserToolView (screenshot mode)
-		return GenericToolView
+		return BrowserToolView
 	}
 
 	// Terminal / shell
 	if (toolName.startsWith('execute-') || toolName === 'run-command') {
-		// TODO(P69-02): replace with CommandToolView
-		return GenericToolView
+		return CommandToolView
 	}
 
 	// File ops
 	if (toolName.startsWith('file-') || toolName === 'read-file' || toolName === 'write-file') {
-		// TODO(P69-03): replace with FileOperationToolView
-		return GenericToolView
+		return FileOperationToolView
 	}
 
 	// String-replace edits
 	if (toolName === 'str-replace' || toolName === 'str-replace-editor') {
-		// TODO(P69-04): replace with StrReplaceToolView
-		return GenericToolView
+		return StrReplaceToolView
 	}
 
 	// Web tools
 	if (toolName === 'web-search' || toolName === 'search-web') {
-		// TODO(P69-05): replace with WebSearchToolView
-		return GenericToolView
+		return WebSearchToolView
 	}
 	if (toolName === 'web-crawl' || toolName === 'crawl-website') {
-		// TODO(P69-06): replace with WebCrawlToolView
-		return GenericToolView
+		return WebCrawlToolView
 	}
 	if (toolName === 'web-scrape' || toolName === 'scrape-page') {
-		// TODO(P69-07): replace with WebScrapeToolView
-		return GenericToolView
+		return WebScrapeToolView
 	}
 
-	// MCP tools (Suna pattern: mcp_ prefix)
+	// MCP tools (Suna pattern: mcp_ prefix; alternate mcp- prefix)
 	if (toolName.startsWith('mcp_') || toolName.startsWith('mcp-')) {
-		// TODO(P69-08): replace with McpToolView
-		return GenericToolView
+		return McpToolView
 	}
 
-	// Fallback
+	// Fallback for unknown tool names
 	return GenericToolView
 }
 
