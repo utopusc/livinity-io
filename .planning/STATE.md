@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T03:20:20.683Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-05T03:30:12.955Z"
+last_activity: "2026-05-04 — 71-04 ComputerUseContainerManager shipped (commits `16293fa3`/`11d3f13c`); 16/16 tests pass; CU-FOUND-06 complete"
 progress:
   total_phases: 13
   completed_phases: 10
   total_plans: 75
-  completed_plans: 63
-  percent: 84
+  completed_plans: 64
+  percent: 85
 ---
 
 # Project State
@@ -141,6 +141,27 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **76-03:** `ctx.livinityd!.logger` non-null assertion matches established style in this file (lines 778, 823, 1246, 1277). Zero new typecheck errors above plan-relevant baseline. Same approach as 76-01's typecheck-substitution decision.
 - **76-03:** Defensive 7th test added (T7) — guards the T-76-03-05 contract that `cloneAgentTemplate({slug:'nope'})` short-circuits BEFORE any nexus call AND BEFORE incrementing clone_count. Plan asked for 6 cases; 7 keeps the count-drift threat fully covered.
 - **76-03:** `let fetchSpy: any = null` (not `ReturnType<typeof vi.spyOn>`) — that generic resolves to `MockInstance<(this: unknown, ...args: unknown[]) => unknown>` which can't absorb `vi.spyOn(globalThis, 'fetch')`'s typed return. Casting to `any` matches `livinity-broker/mode-dispatch.test.ts`'s Pitfall-3 workaround.
+
+## Phase 71 Progress (Computer Use Foundation) — 4/6 plans complete
+
+- **71-01 ✅** Bytebot catalog manifest + Server5 SQL template (`scripts/bytebot-insert.sql`). Apache 2.0 attribution.
+- **71-02 ✅** react-vnc + LivVncScreen at `livos/packages/ui/src/routes/ai-chat/tool-views/components/liv-vnc-screen.tsx`. SUMMARY: `71-02-SUMMARY.md`.
+- **71-03 ✅** computer_use_tasks PG schema + task-repository.ts (8 functions, 14 vitest cases). SUMMARY: `71-03-SUMMARY.md`. CU-FOUND-06 schema portion shipped.
+- **71-04 ✅** ComputerUseContainerManager lifecycle owner. Commits `16293fa3` (feat) + `11d3f13c` (test). 16 vitest cases pass (5 ensureContainer / 2 stopContainer / 4 getStatus / 1 bumpActivity / 2 tickIdleTimeouts / 2 start-stop). All 7 methods + 3 constants (IDLE_THRESHOLD_MS=30min, TICK_INTERVAL_MS=5min, SPAWN_BUDGET_MS=15s) exercised. DI seam (DockerInspectFn) keeps tests free of execa. Race-condition retry with 23505 → "state inconsistent" explicit error. Re-uses `apps.installForUser` (no compose-generation duplication). Restart-stopped path uses execa docker compose against existing per-user volumePath. tickIdleTimeouts triple-layer error containment (interval `.catch` + method `try/catch` + per-candidate `.catch`). 73/73 module-wide tests pass (16 new + 57 existing, zero regression). Sacred SHA `4f868d31...` unchanged across 2 commits. CU-FOUND-06 marked complete (REQUIREMENTS.md). SUMMARY: `71-04-SUMMARY.md`.
+- **71-05** — in progress (parallel agent — desktop-gateway.ts already RED-committed `31ca0a49`).
+- **71-06** — pending.
+
+### P71 Decisions Logged
+
+- **71-04:** `Promise.race` vs AbortController for the 15s budget — Promise.race chosen because apps.ts is read-only per scope_guard; cannot extend `installForUser` to accept AbortSignal. The work promise continues running after race rejects, which is benign because next ensureContainer call sees the active row and the restart path takes over.
+- **71-04:** Restart-stopped-container path uses execa `docker compose --file <volumePath>/docker-compose.yml up -d` directly — NOT a re-call of `apps.installForUser` (which would hit the "user already has X installed" guard at apps.ts:957).
+- **71-04:** 23505 race handling: `createActiveTask` already-active → `getActiveTask` re-fetch once. If still null, throw `Bytebot container state inconsistent` rather than retry-loop. Hard signal that the partial unique index is in unexpected state.
+- **71-04:** `setInterval` (NOT `setTimeout` recursion) for the reaper — explicitly forbidden in scope_guard to avoid jitter accumulation.
+- **71-04:** `tickIdleTimeouts` triple-layer error containment — interval callback `.catch`, method `try/catch`, per-candidate `stopContainer().catch`. Unhandled rejections inside the interval would crash livinityd.
+- **71-04:** `vi.mock('../database/index.js')` overrides `getUserAppInstance` while passing through `createActiveTask`/`getActiveTask`/etc. (which then exercise the mocked `pool.query`). Keeps SQL contract assertions live without pg-mem.
+- **71-04:** `vi.mock('execa')` makes docker compose calls in restart/stop paths into no-ops in tests; default real `defaultDockerInspect` only used in production.
+- **71-04:** Test 15s-timeout case attaches `expect(promise).rejects.toThrow(...)` BEFORE `vi.advanceTimersByTimeAsync` — prevents unhandled-rejection warning when the timer fires before any awaiter is registered.
+- **71-04:** No `build` script exists for livinityd (runs TS via tsx per CLAUDE.md memory). Plan's `pnpm --filter livinityd build` substituted with vitest run + targeted typecheck filter (zero errors in new files; 358 pre-existing baseline errors out-of-scope per Rule 3).
 
 ## Phase 73 Progress (Reliability Layer) — 4/5 plans complete
 
