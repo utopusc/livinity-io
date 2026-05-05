@@ -138,7 +138,8 @@
 - [ ] **CU-FOUND-03**: react-vnc dependency added; `liv-vnc-screen.tsx` wrapper with loading state, error fallback, scale-to-fit, fullscreen button, takeover indicator
 - [ ] **CU-FOUND-04**: WebSocket URL pattern `wss://desktop.bruce.livinity.io/websockify?token=<session-token>`
 - [ ] **CU-FOUND-05**: Standalone computer-use route at `/computer` for direct desktop access (bonus)
-- [ ] **CU-FOUND-06**: `container-manager.ts` — `ensureContainer(userId)`, `stopContainer(userId)`, `getStatus(userId)`; spawn on first computer-use tool call; 30-min idle timeout; max 1 active container per user
+- [x] **CU-FOUND-06
+**: `container-manager.ts` — `ensureContainer(userId)`, `stopContainer(userId)`, `getStatus(userId)`; spawn on first computer-use tool call; 30-min idle timeout; max 1 active container per user
 - [ ] **CU-FOUND-07**: User triggers "/computer start" → container spawns within 15s; VNC iframe loads showing XFCE desktop; user can take over mouse (viewOnly=false)
 
 ### CU-LOOP (Phase 72 — Computer Use Agent Loop)
