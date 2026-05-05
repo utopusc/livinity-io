@@ -1,6 +1,20 @@
 // Phase 71 — Computer Use Tasks repository (CU-FOUND-06)
 export * from './task-repository.js'
 
+// Phase 71-04 — ComputerUseContainerManager lifecycle owner (CU-FOUND-06).
+// Single entry point for Bytebot container ensure/stop + 30-min idle reaper.
+export {
+	ComputerUseContainerManager,
+	IDLE_THRESHOLD_MS,
+	TICK_INTERVAL_MS,
+	SPAWN_BUDGET_MS,
+} from './container-manager.js'
+export type {
+	ContainerStatus,
+	EnsureContainerResult,
+	DockerInspectFn,
+} from './container-manager.js'
+
 // Phase 72-01 — Bytebot tool schemas (CU-LOOP-01). Verbatim Apache 2.0
 // copy from upstream Bytebot agent.tools.ts. See bytebot-tools.ts header
 // for source URL + snapshot date + license attribution.
