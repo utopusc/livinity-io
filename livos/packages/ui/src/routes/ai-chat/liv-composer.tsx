@@ -25,11 +25,9 @@
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react'
 
 import {
-	IconArrowUp,
 	IconFile,
 	IconPaperclip,
 	IconPhoto,
-	IconPlayerStop,
 	IconX,
 } from '@tabler/icons-react'
 
@@ -37,6 +35,10 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useKeyboardHeight} from '@/hooks/use-keyboard-height'
 import {cn} from '@/shadcn-lib/utils'
 
+import {LivMentionMenu, type Mention} from './components/liv-mention-menu'
+import {LivModelBadge} from './components/liv-model-badge'
+import {executeImmediateCommand, LivSlashMenu, type SlashCommand} from './components/liv-slash-menu'
+import {LivStopButton} from './components/liv-stop-button'
 import {VoiceButton} from './voice-button'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -132,22 +134,23 @@ export function LivComposer({
 	isStreaming,
 	isConnected,
 	disabled,
-	onSlashAction: _onSlashAction,
-	onSelectMention: _onSelectMention,
+	onSlashAction,
+	onSelectMention,
 }: LivComposerProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [attachments, setAttachments] = useState<FileAttachment[]>([])
 	const [isDragging, setIsDragging] = useState(false)
-	// Selection indices kept here (lifted state) so 70-02 / 70-07 menus can
-	// consume them via prop without re-introducing a useEffect cascade. Today
-	// these are unused locally; the integration plan wires them in.
-	const [selectedSlashIndex, _setSelectedSlashIndex] = useState(0)
-	const [selectedMentionIndex, _setSelectedMentionIndex] = useState(0)
-	void selectedSlashIndex
-	void selectedMentionIndex
-	void _setSelectedSlashIndex
-	void _setSelectedMentionIndex
+
+	// Slash + mention menu state (70-08 wires real menus). Selection indices
+	// live in composer so keyboard nav (Up/Down/Enter/Esc) is centralized.
+	const [selectedSlashIndex, setSelectedSlashIndex] = useState(0)
+	const [slashFilteredCount, setSlashFilteredCount] = useState(0)
+	const slashFilteredRef = useRef<SlashCommand[]>([])
+
+	const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
+	const [mentionFilteredCount, setMentionFilteredCount] = useState(0)
+	const mentionFilteredRef = useRef<Mention[]>([])
 
 	const keyboardHeight = useKeyboardHeight()
 	const isMobile = useIsMobile()
@@ -241,8 +244,118 @@ export function LivComposer({
 		[processFiles],
 	)
 
+	// Derived menu visibility (data attrs for tests + 70-08 integration).
+	const slashOpen = shouldShowSlashMenu(value)
+	const mention = shouldShowMentionMenu(value)
+	const slashFilter = slashOpen ? value.slice(1).toLowerCase() : ''
+	const showSlash = slashOpen && !disabled
+	const showMention = mention.show && !slashOpen && !disabled
+	const placeholder = !isConnected
+		? 'Reconnecting...'
+		: isStreaming
+			? 'Type to send a follow-up...'
+			: 'Message Liv...'
+	const hasContent = value.trim().length > 0 || attachments.length > 0
+
+	// Reset selection index when filtered count shrinks past current index.
+	useEffect(() => {
+		if (selectedSlashIndex >= slashFilteredCount && slashFilteredCount > 0) {
+			setSelectedSlashIndex(0)
+		}
+	}, [slashFilteredCount, selectedSlashIndex])
+
+	useEffect(() => {
+		if (selectedMentionIndex >= mentionFilteredCount && mentionFilteredCount > 0) {
+			setSelectedMentionIndex(0)
+		}
+	}, [mentionFilteredCount, selectedMentionIndex])
+
+	// Slash command selection — immediate-fire commands clear input + dispatch
+	// onSlashAction; arg-bearing commands prefill input with `cmd.name + ' '`.
+	const handleSelectSlash = useCallback(
+		(cmd: SlashCommand) => {
+			if (executeImmediateCommand(cmd.name)) {
+				onSlashAction?.(cmd.name)
+				onChange('')
+			} else {
+				onChange(cmd.name + ' ')
+			}
+			setSelectedSlashIndex(0)
+		},
+		[onChange, onSlashAction],
+	)
+
+	// Mention selection — replace the trailing `@filter` capture with `@<name> `.
+	const handleSelectMention = useCallback(
+		(m: Mention) => {
+			const replaced = value.replace(MENTION_PATTERN, (_match, leading: string) => `${leading}@${m.name} `)
+			onChange(replaced)
+			onSelectMention?.(m.name)
+			setSelectedMentionIndex(0)
+		},
+		[value, onChange, onSelectMention],
+	)
+
+	// Send wrapper — used by LivStopButton + Enter handler.
+	const handleSend = useCallback(() => {
+		if (!value.trim() && attachments.length === 0) return
+		onSend(attachments.length > 0 ? attachments : undefined)
+		setAttachments([])
+	}, [value, attachments, onSend])
+
 	// Submit guard — Enter sends, Shift+Enter newline, IME suppresses (D-19).
+	// Slash/mention menus take priority when visible.
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		// Slash menu navigation (priority over send, priority over mention).
+		if (showSlash && slashFilteredCount > 0) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault()
+				setSelectedSlashIndex((i) => Math.min(i + 1, slashFilteredCount - 1))
+				return
+			}
+			if (e.key === 'ArrowUp') {
+				e.preventDefault()
+				setSelectedSlashIndex((i) => Math.max(i - 1, 0))
+				return
+			}
+			if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+				e.preventDefault()
+				const cmd = slashFilteredRef.current[selectedSlashIndex]
+				if (cmd) handleSelectSlash(cmd)
+				return
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault()
+				onChange('')
+				return
+			}
+		}
+		// Mention menu navigation (only when slash isn't priority).
+		if (showMention && mentionFilteredCount > 0) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault()
+				setSelectedMentionIndex((i) => Math.min(i + 1, mentionFilteredCount - 1))
+				return
+			}
+			if (e.key === 'ArrowUp') {
+				e.preventDefault()
+				setSelectedMentionIndex((i) => Math.max(i - 1, 0))
+				return
+			}
+			if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+				e.preventDefault()
+				const m = mentionFilteredRef.current[selectedMentionIndex]
+				if (m) handleSelectMention(m)
+				return
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault()
+				// Strip trailing @filter so menu closes; preserve preceding text.
+				onChange(value.replace(MENTION_PATTERN, (_m, leading: string) => leading))
+				return
+			}
+		}
+		// Default: send-on-enter.
 		if (
 			e.key === 'Enter' &&
 			!e.shiftKey &&
@@ -251,32 +364,7 @@ export function LivComposer({
 			!isStreaming
 		) {
 			e.preventDefault()
-			if (value.trim() || attachments.length > 0) {
-				onSend(attachments.length > 0 ? attachments : undefined)
-				setAttachments([])
-			}
-		}
-	}
-
-	// Derived menu visibility (data attrs for tests + 70-08 integration).
-	const slashOpen = shouldShowSlashMenu(value)
-	const mention = shouldShowMentionMenu(value)
-	const placeholder = !isConnected
-		? 'Reconnecting...'
-		: isStreaming
-			? 'Type to send a follow-up...'
-			: 'Message Liv...'
-	const hasContent = value.trim().length > 0 || attachments.length > 0
-	const sendDisabled = disabled || (!isStreaming && !hasContent)
-
-	const handlePrimaryClick = () => {
-		if (isStreaming) {
-			onStop()
-			return
-		}
-		if (hasContent) {
-			onSend(attachments.length > 0 ? attachments : undefined)
-			setAttachments([])
+			handleSend()
 		}
 	}
 
@@ -371,35 +459,40 @@ export function LivComposer({
 					onTranscript={text => onChange(value ? `${value} ${text}` : text)}
 				/>
 
-				<span
-					data-testid='liv-composer-model-badge-stub'
-					className='text-xs text-[color:var(--liv-text-tertiary)]'
-					title='Model badge stub — replaced by LivModelBadge in 70-08'
-				>
-					Liv Agent · Kimi
-				</span>
+				<LivModelBadge />
 
 				<span className='ml-auto hidden text-xs text-[color:var(--liv-text-tertiary)] md:inline'>
 					Press <kbd className='rounded border border-[color:var(--liv-border-subtle)] bg-[color:var(--liv-bg-deep)] px-1 font-mono'>/</kbd> for commands
 				</span>
 
-				<button
-					type='button'
-					data-testid='liv-composer-stop-stub'
-					onClick={handlePrimaryClick}
-					disabled={sendDisabled}
-					aria-label={isStreaming ? 'Stop' : 'Send'}
-					title={isStreaming ? 'Stop' : 'Send'}
-					className={cn(
-						'flex h-8 w-8 items-center justify-center rounded-full text-white transition-colors duration-200 disabled:opacity-40',
-						isStreaming
-							? 'bg-[color:var(--liv-accent-rose)]'
-							: 'bg-[color:var(--liv-accent-cyan)]',
-					)}
-				>
-					{isStreaming ? <IconPlayerStop size={16} /> : <IconArrowUp size={16} />}
-				</button>
+				<LivStopButton
+					isStreaming={isStreaming}
+					hasContent={hasContent}
+					disabled={disabled || !isConnected}
+					onSend={handleSend}
+					onStop={onStop}
+				/>
 			</div>
+
+			{/* Slash + mention menus (mutually exclusive — slash priority via showMention guard) */}
+			{showSlash && (
+				<LivSlashMenu
+					filter={slashFilter}
+					selectedIndex={selectedSlashIndex}
+					onSelect={handleSelectSlash}
+					onFilteredCountChange={setSlashFilteredCount}
+					filteredCommandsRef={slashFilteredRef}
+				/>
+			)}
+			{showMention && (
+				<LivMentionMenu
+					filter={mention.filter}
+					selectedIndex={selectedMentionIndex}
+					onSelect={handleSelectMention}
+					onFilteredCountChange={setMentionFilteredCount}
+					filteredMentionsRef={mentionFilteredRef}
+				/>
+			)}
 
 			{/* Drag overlay */}
 			{isDragging && (
