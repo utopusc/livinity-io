@@ -47,6 +47,7 @@ import {mountBrokerRoutes} from '../livinity-broker/index.js'
 import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
 import {mountAgentRunsRoutes} from '../ai/agent-runs.js'
+import {mountConversationSearchRoute} from '../ai/conversation-search.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1288,6 +1289,14 @@ class Server {
 		// Phase 73-04: mountAgentRunsRoutes is now async (constructs + starts
 		// a BullMQ-backed RunQueue at mount time when a factory is provided).
 		await mountAgentRunsRoutes(this.app, this.livinityd)
+
+		// ── Phase 75-06 — Conversation full-text-search route (additive) ─────
+		// GET /api/conversations/search?q=… — JWT-authed, scoped to the
+		// authenticated userId, backed by Plan 75-01's MessagesRepository
+		// (postgres ts_headline + ts_rank). Plan 75-07 will mount the
+		// matching sidebar component; this mount makes the route reachable
+		// end-to-end and independently curl-able today.
+		mountConversationSearchRoute(this.app, this.livinityd)
 
 		// Handle log file downloads
 		this.app.get('/logs/', async (request, response) => {
