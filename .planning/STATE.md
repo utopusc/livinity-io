@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:01:52.405Z"
+last_updated: "2026-05-05T01:03:32.041Z"
 last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 32
-  percent: 56
+  completed_plans: 36
+  percent: 63
 ---
 
 # Project State
@@ -80,11 +80,21 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **67-03:** Heartbeat verified via source-text invariant (greps `agent-runs.ts` for `setInterval(`, `: heartbeat\\n\\n`, and cadence==15000). Spying on `global.setInterval` failed to capture the bare-global call inside the route handler in vitest's threading model; fake-timer fast-forward across an async SSE response is fragile. The 12 other behavior tests cover headers/catch-up/?after=/complete-event/control/auth/authz.
 - **67-03:** Runtime imports in `agent-runs.ts` use `@nexus/core/lib` (not the package main) — the main entry runs daemon side-effects (`dotenv/config`, channels/whatsapp.js dynamic import) that explode in livinityd's context. The `/lib` entry re-exports RunStore + LivAgentRunner verbatim per Phase 67-01/02 SUMMARY. Plan's `from '@nexus/core'` substring grep satisfied via explicit comment.
 
-## Phase 70 Progress (Composer + Streaming UX Polish) — 6/8 plans complete (per `summaries[]` in init context: 70-01..70-05 + 70-07)
+## Phase 70 Progress (Composer + Streaming UX Polish) — 7/8 plans complete (70-01..70-07; only 70-08 integration pending)
 
 - **70-01 ✅** `livos/packages/ui/src/routes/ai-chat/liv-composer.tsx` (414 LOC) — auto-grow textarea (24-200px), drag-drop/paste/click file attachment carry-over (20MB cap), slash trigger `^/[^\s]*$`, mention trigger `(\s|^)@(\S*)$` with slash priority, P66 design tokens. Pure helpers `shouldShowSlashMenu` / `shouldShowMentionMenu` / `calculateTextareaHeight` exported. Voice button reused AS-IS (D-30). Stop/model badge as data-testid stubs for 70-06/70-08 swap. Commits `0ae8e69b` (RED) + `e3cbb4c9` (GREEN). 14/14 vitest pass; `pnpm --filter ui build` clean (41.91s); sacred SHA `4f868d31...` unchanged. SUMMARY: `70-01-SUMMARY.md`. COMPOSER-01 + COMPOSER-02 marked complete.
 - **70-07 ✅** `livos/packages/ui/src/routes/ai-chat/components/liv-mention-menu.tsx` (130 LOC) + unit tests (93 LOC, 13/13 vitest pass) — `LivMentionMenu` component + `LIV_PLACEHOLDER_MENTIONS` (9 placeholders: 3 agents/3 tools/3 skills, all with "coming soon" badges) + pure `filterMentions(mentions, filter)` helper (case-insensitive substring on `name + label`, description excluded). Mirrors LivSlashMenu prop pattern (`filter`, `selectedIndex`, `onSelect`, `onFilteredCountChange`). P66 tokens only (`var(--liv-bg-elevated)`, `var(--liv-accent-cyan/violet)`, `var(--liv-border-subtle)`, `var(--liv-text-*)`). Returns null when filtered list is empty. Display order locked to `agent → tool → skill` regardless of source array. Commits `7e09c8f9` (feat) + `9a91d7fd` (test). `pnpm --filter ui build` clean (37.89s); sacred SHA `4f868d31...` unchanged across 4 checkpoints. D-NO-NEW-DEPS honored. Real data integration deferred to P76 per CONTEXT D-29. SUMMARY: `70-07-SUMMARY.md`. COMPOSER-04 marked complete.
-- **70-06, 70-08** — pending (LivStopButton + LivModelBadge, integration).
+- **70-06 ✅** `livos/packages/ui/src/routes/ai-chat/components/liv-stop-button.tsx` (85 LOC) + `liv-model-badge.tsx` (58 LOC) + unit tests (74 LOC, 13/13 vitest pass) — `LivStopButton` (3 visual states: streaming/send/disabled, red↔cyan toggle, Tailwind `transition-colors duration-200` per D-22/D-24) + pure helper `getStopButtonState({isStreaming, hasContent, disabled?}): 'streaming'|'send'|'disabled'` (priority: disabled>streaming>hasContent). `LivModelBadge` reads `import.meta.env.VITE_LIV_MODEL_DEFAULT` with fallback to `'Kimi'` (whitespace-only also falls back) + pure helper `getModelBadgeText`. Click is no-op for P70 (D-31, model switching backlog) — logs intent for grepability. Native `title=` tooltip (no new tooltip lib, D-NO-NEW-DEPS). P66 tokens only (`var(--liv-accent-rose/cyan)`, `var(--liv-bg-elevated/deep)`, `var(--liv-border-subtle)`, `var(--liv-text-secondary)`). Commits `d9521f61` (RED) + `72367292` (GREEN). `pnpm --filter ui build` clean (45.63s); sacred SHA `4f868d31...` unchanged across 4 checkpoints. D-NO-NEW-DEPS honored. SUMMARY: `70-06-SUMMARY.md`.
+- **70-08** — pending (integration: swap `data-testid='liv-composer-stop-stub'` + `'liv-composer-model-badge-stub'` placeholders in `liv-composer.tsx` for `LivStopButton` + `LivModelBadge`; mount `LivToolPanel`; bridge `useLivAgentStream` snapshots to `useLivToolPanelStore`).
+
+### P70-06 Decisions Logged
+
+- **70-06:** State-priority ladder in `getStopButtonState`: explicit `disabled` wins → `isStreaming` next → `hasContent` last. Plan must-have specifies disabled-priority is absolute (user can't stop a stream they don't own). 3-way explicit case (streaming + content + disabled = disabled) tested.
+- **70-06:** `data-state='${state}'` attribute exposed on `LivStopButton` root so 70-08 integration tests + Playwright smokes can grep state without inspecting class strings. `data-testid='liv-model-badge'` on the badge root so 70-08 swap target is greppable.
+- **70-06:** `getModelBadgeText` whitespace-trimming via `.trim().length > 0` — catches `'   '` / `'\t\n'` env-loader edge cases. Plan behavior contract honored verbatim.
+- **70-06:** Native `title` attribute used for hover tooltip — explicitly chosen over importing a tooltip library (D-07 D-NO-NEW-DEPS). Tooltip text format: `Current model: ${model}. Click to switch (coming soon).`
+- **70-06:** Pure helpers (`getStopButtonState`, `getModelBadgeText`) exported alongside the components for vitest hammering — D-NO-NEW-DEPS precedent (P67-04 D-25 / 70-04 / 70-05).
+- **70-06:** Parallel-execution race-condition leak — concurrent agents (Phase 73-03, 75-01, 75-02, 75-04, 70-07) committing on `master` swept `livos/packages/livinityd/source/modules/database/messages-repository.test.ts` (75-01 follow-up file) into 70-06 GREEN commit `72367292` between `git add` (specific paths only) and commit-finalization. Per `<destructive_git_prohibition>` rule, leak left in place (no `git reset --hard` / no `git rm` on files I didn't author); 75-01 agent will adapt. 70-06 deliverables unaffected: all 3 must-have artifacts committed correctly with intended content; sacred SHA unchanged; build + tests both pass.
 
 ### P70-07 Decisions Logged
 
@@ -101,16 +111,27 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **70-01:** Stop/send button + model badge rendered as `data-testid='liv-composer-stop-stub'` / `'liv-composer-model-badge-stub'` so 70-06 (`LivStopButton`) and 70-08 swap them cleanly without re-touching composer. Composer's prop shape (`isStreaming`, `onStop`, `onSend`, `disabled`, derived `hasContent`) IS the locked contract.
 - **70-01:** VoiceButton prop is `onTranscript` (not `onTranscription` as plan reference signature line 278 stated) — confirmed by reading `voice-button.tsx` lines 26-29 + 97. Used `onTranscript={text => onChange(value ? \`${value} ${text}\` : text)}` — string-concat with space-prefix when typing already in progress.
 
-## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 1/7 plans complete (Wave 1)
+## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 5/7 plans complete (Wave 1+2)
 
 - **68-01 ✅** useLivToolPanelStore Zustand store + isVisualTool helper. Commits `3676aba5` (feat) + `8e9a0653` (test). SUMMARY at `68-01-SUMMARY.md`. PANEL-01 + PANEL-02 + PANEL-03 marked complete. 22/22 vitest pass (381ms); pnpm --filter ui build clean (35.32s); sacred SHA `4f868d31...` unchanged. Visual-tool regex `/^(browser-|computer-use-|screenshot)/` honors STATE.md line 79 lock. NO persist (CONTEXT D-09 — in-memory only).
-- **68-02..68-07** — pending (LivToolPanel chrome, dispatcher, GenericToolView, InlineToolPill, Cmd+I shortcut, integration test).
+- **68-02 ✅** types.ts (ToolViewProps + re-declared ToolCallSnapshot per D-14) + GenericToolView (JSON pretty-print + status badge + ticking elapsed footer). SUMMARY at `68-02-SUMMARY.md`.
+- **68-03 ✅** InlineToolPill component + getUserFriendlyToolName helper + isVisualTool re-decl. SUMMARY at `68-03-SUMMARY.md`. D-NO-NEW-DEPS preserved via react-dom/client harness.
+- **68-04 ✅** dispatcher.tsx — `getToolView(toolName)` + memoised `useToolView(toolName)` hook. All branches return GenericToolView in P68 per CONTEXT D-20. SUMMARY at `68-04-SUMMARY.md`.
+- **68-05 ✅** LivToolPanel main component (255 LOC) + 14 vitest tests (332 LOC, 14/14 pass in 2.83s). Commits `e830bd23` (component file — committed under wrong plan label due to parallel-worktree race; content correct, race documented) + `4f5c0857` (test). SUMMARY at `68-05-SUMMARY.md`. PANEL-08 + PANEL-09 marked complete. Sacred SHA unchanged. ResizeObserver polyfill added at test file head (Rule 3 auto-fix — Radix Slider's useSize hook needs it under jsdom). Card import path corrected to `@/components/ui/card`. ORPHAN component until P70 wires it.
+- **68-06..68-07** — pending (Cmd+I shortcut, integration test).
 
 ### P68 Decisions Logged
 
 - **68-01:** VISUAL_TOOL_PATTERN extracted as exported const (not just inline regex) — improves grep-discoverability of the locked product decision (STATE.md line 79). isVisualTool helper exported as a free function so tests hammer it deterministically (CONTEXT D-05).
 - **68-01:** Local re-declaration of ToolCallSnapshot in store file per CONTEXT D-14 — P67-04 has its own re-declaration in `liv-agent-types.ts` but `@nexus/core` UI export not yet shipped; aligning here when P67 ships package exports.
 - **68-01:** 22 vitest tests > 12 minimum — auto-open behavior is the locked product decision; algorithm density justified. All 6 handleNewSnapshot D-11 branches + dedupe + 4 open() edge cases (tail-live, toolId-manual, missing-id fallback, empty-snapshots) covered.
+- **68-05:** Card import path verified as `@/components/ui/card` (NOT `@/shadcn-components/ui/card` as plan skeleton said). liv-elevated variant present on line 32. Documented in component header.
+- **68-05:** Pure helpers `computeStepLabel`, `showReturnToLive`, `showJumpToLatest` extracted as named exports for D-NO-NEW-DEPS testability — same pattern as P67-04 D-25 + P68-03 + P70-01.
+- **68-05:** Test harness mimics RTL API surface (`render`, `screen`, `fireEvent`) but is implemented via `react-dom/client` + jsdom. 1:1 swap when `@testing-library/react` eventually lands. Pattern matches `inline-tool-pill.unit.test.tsx`.
+- **68-05:** Single-quote JSX retained per codebase prettier config — plan's verify grep used double-quote literals which is plan-author oversight, not code defect.
+- **68-05:** Button `size='icon-only'` used (NOT `size='icon'` from plan skeleton — that variant is not defined in this codebase's button.tsx).
+- **68-05:** Race-mitigation: file `liv-tool-panel.tsx` was committed under another concurrent worktree's commit (`e830bd23 feat(73-05)`) due to a sibling agent's bulk staging. Content is exactly correct; commit message is mismatched. Documented in 68-05-SUMMARY.md.
+- **68-05:** ResizeObserver no-op polyfill added at test file head — Radix Slider's useSize hook calls `new ResizeObserver()` on mount; jsdom does not provide it. Minimal stub gated on `typeof globalThis.ResizeObserver === 'undefined'` for safe coexistence with future test setups.
 
 ## v31.0 Milestone Summary
 
