@@ -84,6 +84,19 @@ export async function initDatabase(logger: Livinityd['logger']): Promise<boolean
 			// do NOT throw — seed failure must not block boot
 		}
 
+		// Phase 85 V32-AGENT-03 — seed v32 agents catalog (5 system agents,
+		// idempotent INSERT ON CONFLICT (id) DO NOTHING). Same try/catch
+		// discipline as agent_templates seed above — boot must not block on
+		// seed failure.
+		try {
+			const {seedAgents} = await import('./seeds/agents.js')
+			const {inserted, skipped} = await seedAgents(pool)
+			logger.log(`Agents seeded: ${inserted} inserted, ${skipped} skipped`)
+		} catch (err) {
+			logger.error('Agents seed failed (non-fatal)', err)
+			// do NOT throw — seed failure must not block boot
+		}
+
 		initialized = true
 		logger.log(`Database connected: ${databaseUrl.replace(/:[^:@]+@/, ':***@')}`)
 		return true
@@ -717,6 +730,28 @@ export {
 	incrementCloneCount,
 	type AgentTemplate,
 } from './agent-templates-repo.js'
+
+// Phase 85 V32-AGENT-02 — agents barrel re-export.
+// Allows Wave 2 P85-UI tRPC routes to do `import {listAgents} from
+// '../database/index.js'` without importing the repo file directly.
+export {
+	listAgents,
+	listPublicAgents,
+	getAgent,
+	createAgent,
+	updateAgent,
+	deleteAgent,
+	cloneAgentToLibrary,
+	setMarketplacePublished,
+	type Agent,
+	type CreateAgentInput,
+	type UpdateAgentInput,
+	type ListAgentsOpts,
+	type ListAgentsResult,
+	type ModelTier,
+	type ConfiguredMcp,
+	type AgentpressTools,
+} from './agents-repo.js'
 
 // Phase 71 CU-FOUND-06 — computer_use_tasks barrel re-export.
 // Allows apps.ts / future container-manager.ts to do

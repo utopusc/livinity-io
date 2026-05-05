@@ -482,3 +482,74 @@ CREATE UNIQUE INDEX IF NOT EXISTS computer_use_tasks_user_active_idx
 
 CREATE INDEX IF NOT EXISTS computer_use_tasks_active_last_activity_idx
   ON computer_use_tasks(last_activity) WHERE status = 'active';
+
+-- =========================================================================
+-- Phase 85 V32-AGENT-01..04 — agents table (v32 milestone Wave 1).
+--
+-- Mirrored from migrations/2026-05-05-v32-agents.sql so that boot's
+-- idempotent schema apply (initDatabase) materializes the table on every
+-- LivOS install without a separate runner. See that file for the full
+-- design-decision commentary (id-vs-agent_id, nullable user_id, agent_templates
+-- backfill mapping). Keep both files in sync for the duration of v32.
+--
+-- Companion seed: seeds/agents.ts (TS runner; SQL mirror at
+-- migrations/2026-05-05-v32-agents-seed.sql).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS agents (
+  id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                  UUID REFERENCES users(id) ON DELETE CASCADE,
+  name                     TEXT NOT NULL,
+  description              TEXT NOT NULL DEFAULT '',
+  system_prompt            TEXT NOT NULL DEFAULT 'You are a helpful assistant.',
+  model_tier               TEXT NOT NULL DEFAULT 'sonnet'
+                             CHECK (model_tier IN ('haiku', 'sonnet', 'opus')),
+  configured_mcps          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  agentpress_tools         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  avatar                   TEXT,
+  avatar_color             TEXT,
+  is_default               BOOLEAN NOT NULL DEFAULT FALSE,
+  is_public                BOOLEAN NOT NULL DEFAULT FALSE,
+  marketplace_published_at TIMESTAMPTZ,
+  download_count           INTEGER NOT NULL DEFAULT 0,
+  tags                     TEXT[] NOT NULL DEFAULT '{}',
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_user_id
+  ON agents(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_agents_is_public_published
+  ON agents(is_public, marketplace_published_at)
+  WHERE is_public = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_agents_default
+  ON agents(user_id, is_default)
+  WHERE is_default = TRUE;
+
+-- V32-AGENT-04 backfill from agent_templates. Idempotent on (name, user_id IS NULL).
+-- See migrations/2026-05-05-v32-agents.sql for column-mapping rationale.
+INSERT INTO agents
+  (name, description, system_prompt, agentpress_tools, tags, avatar,
+   model_tier, configured_mcps, is_public, is_default, marketplace_published_at)
+SELECT
+  t.name,
+  t.description,
+  t.system_prompt,
+  COALESCE(
+    (SELECT jsonb_object_agg(tool_name, TRUE)
+     FROM jsonb_array_elements_text(t.tools_enabled) AS tool_name),
+    '{}'::jsonb
+  ) AS agentpress_tools,
+  t.tags,
+  t.mascot_emoji AS avatar,
+  'sonnet'::text AS model_tier,
+  '[]'::jsonb AS configured_mcps,
+  TRUE  AS is_public,
+  FALSE AS is_default,
+  NOW() AS marketplace_published_at
+FROM agent_templates t
+WHERE NOT EXISTS (
+  SELECT 1 FROM agents a
+  WHERE a.name = t.name AND a.user_id IS NULL
+);
