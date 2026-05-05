@@ -59,3 +59,12 @@ export {
 	BYTEBOT_SYSTEM_PROMPT,
 	injectComputerUseSystemPrompt,
 } from './bytebot-system-prompt.js'
+
+// Phase 72-native (Wave 1) — native X11 primitives barrel. Re-exports
+// captureScreenshot + 11 input primitives + window/file fns from
+// `./native/index.js` so consumers (computer-use Wave-2 MCP server,
+// future plans) can import from this top-level barrel.
+//
+// `mcp/server.ts` is NOT re-exported here — it is an entry-point script
+// (spawned via `tsx mcp/server.ts`), not a library.
+export * from './native/index.js'
