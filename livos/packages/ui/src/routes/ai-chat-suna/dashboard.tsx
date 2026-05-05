@@ -7,7 +7,7 @@
 //   useInitiateAgentWithInvalidation -> removed (Stage 2 wires SSE)
 //   useAccounts -> removed
 //   useModal -> removed
-//   AgentSelector -> simplified (shows "Suna" as static text for visual parity)
+//   AgentSelector -> simplified (shows "Liv" as static text for visual parity)
 //   Examples/suggestions -> removed (Stage 2)
 //   ModalProviders -> removed
 //   localStorage PENDING_PROMPT_KEY logic -> removed
@@ -152,7 +152,7 @@ function DashboardContent() {
                   secondaryGradient,
                 )}
               >
-                Suna
+                Liv
               </span>
             </div>
             <p className="tracking-tight text-3xl font-normal text-muted-foreground/80 mt-2">
@@ -162,7 +162,7 @@ function DashboardContent() {
 
           <div
             className={cn(
-              'w-full mb-2',
+              'w-full mt-6 mb-2',
               'max-w-full',
               'sm:max-w-3xl',
             )}
