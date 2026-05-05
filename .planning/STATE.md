@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T04:38:05Z"
-last_activity: "2026-05-05 — 72-native-05 PLAN COMPLETE (Bytebot MCP server + categorizeTool patch + LivNeedsHelpCard); commits aa5cac13 + 64d0869e + 1bb5c4a0"
+last_updated: "2026-05-05T04:51:27.017Z"
+last_activity: "2026-05-05 — 72-native-06 PLAN COMPLETE (registerBytebotMcpServer boot-wire + ALLOWED_COMMANDS+='tsx'); commits 8d04a7e1 + 8245ed83 + f606b7c3"
 progress:
   total_phases: 13
   completed_phases: 10
