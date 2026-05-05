@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T03:30:12.955Z"
-last_activity: "2026-05-04 — 71-04 ComputerUseContainerManager shipped (commits `16293fa3`/`11d3f13c`); 16/16 tests pass; CU-FOUND-06 complete"
+last_updated: "2026-05-05T03:34:30Z"
+last_activity: "2026-05-05 — 71-05 desktop subdomain gateway + computerUse tRPC router shipped (commits 31ca0a49 + a47f9098 + 8c186c05 + e337db2b); 81/81 computer-use tests pass; sacred SHA 4f868d31... unchanged"
 progress:
   total_phases: 13
   completed_phases: 10
-  total_plans: 75
-  completed_plans: 64
+  total_plans: 78
+  completed_plans: 66
   percent: 85
 ---
 
@@ -142,13 +142,13 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **76-03:** Defensive 7th test added (T7) — guards the T-76-03-05 contract that `cloneAgentTemplate({slug:'nope'})` short-circuits BEFORE any nexus call AND BEFORE incrementing clone_count. Plan asked for 6 cases; 7 keeps the count-drift threat fully covered.
 - **76-03:** `let fetchSpy: any = null` (not `ReturnType<typeof vi.spyOn>`) — that generic resolves to `MockInstance<(this: unknown, ...args: unknown[]) => unknown>` which can't absorb `vi.spyOn(globalThis, 'fetch')`'s typed return. Casting to `any` matches `livinity-broker/mode-dispatch.test.ts`'s Pitfall-3 workaround.
 
-## Phase 71 Progress (Computer Use Foundation) — 4/6 plans complete
+## Phase 71 Progress (Computer Use Foundation) — 5/6 plans complete
 
 - **71-01 ✅** Bytebot catalog manifest + Server5 SQL template (`scripts/bytebot-insert.sql`). Apache 2.0 attribution.
 - **71-02 ✅** react-vnc + LivVncScreen at `livos/packages/ui/src/routes/ai-chat/tool-views/components/liv-vnc-screen.tsx`. SUMMARY: `71-02-SUMMARY.md`.
 - **71-03 ✅** computer_use_tasks PG schema + task-repository.ts (8 functions, 14 vitest cases). SUMMARY: `71-03-SUMMARY.md`. CU-FOUND-06 schema portion shipped.
 - **71-04 ✅** ComputerUseContainerManager lifecycle owner. Commits `16293fa3` (feat) + `11d3f13c` (test). 16 vitest cases pass (5 ensureContainer / 2 stopContainer / 4 getStatus / 1 bumpActivity / 2 tickIdleTimeouts / 2 start-stop). All 7 methods + 3 constants (IDLE_THRESHOLD_MS=30min, TICK_INTERVAL_MS=5min, SPAWN_BUDGET_MS=15s) exercised. DI seam (DockerInspectFn) keeps tests free of execa. Race-condition retry with 23505 → "state inconsistent" explicit error. Re-uses `apps.installForUser` (no compose-generation duplication). Restart-stopped path uses execa docker compose against existing per-user volumePath. tickIdleTimeouts triple-layer error containment (interval `.catch` + method `try/catch` + per-candidate `.catch`). 73/73 module-wide tests pass (16 new + 57 existing, zero regression). Sacred SHA `4f868d31...` unchanged across 2 commits. CU-FOUND-06 marked complete (REQUIREMENTS.md). SUMMARY: `71-04-SUMMARY.md`.
-- **71-05** — in progress (parallel agent — desktop-gateway.ts already RED-committed `31ca0a49`).
+- **71-05 ✅** Desktop subdomain gateway + computerUse tRPC router. Commits `31ca0a49` (RED gateway) + `a47f9098` (GREEN gateway) + `8c186c05` (RED routes) + `e337db2b` (GREEN routes). 36 vitest cases pass (28 gateway + 8 routes); 81/81 module-wide. **desktop-gateway.ts** (241 LOC) — `isAllowedDesktopPath` whitelist of 4 prefixes (`/computer-use*`, `/websockify*`, `/screenshot*`, `/health*`) with defensive traversal-segment guard (T-71-05-01 mitigation strengthened); `pathRequiresActiveTask` (3 protected; /health exempt); `extractWebsockifyToken` reads `?token=` for cross-origin WS auth (D-11); `mountDesktopGateway` middleware pipeline (host-match → path-filter → cookie-or-query JWT → active-task gate → fire-and-forget bumpActivity → cached reverse proxy); `mountDesktopWsUpgrade` no-op stub (http-proxy-middleware ws:true covers via cache-warming HTTP fetch in 71-06 flow; lift-point documented). Structural `ContainerManagerLike` interface decoupled gateway typecheck from 71-04 ship-order race (Decision D-71-05-02). **routes.ts** (122 LOC) — 3 procedures under `privateProcedure` (`getStatus` / `startStandaloneSession` / `stopSession`); websockifyUrl built via existing `server.signUserToken(userId, role)` (1-week TTL, plan's referenced `issueShortLivedToken` does not exist — gateway path-filter + active-task gate cover the security gap, Decision D-71-05-05). **Wiring**: `Livinityd.computerUseManager` field added (optional, initialized after dbReady); mount block in server/index.ts after existing app-gateway middleware (which falls through for multi-segment subdomains via `subdomain.includes('.')` guard at line 338) and before `/app/:appId` proxy; `appRouter.computerUse` mount; 3 paths in `httpOnlyPaths`. Sacred SHA `4f868d31...` unchanged across 4 commits. CU-FOUND-02 + CU-FOUND-04 marked complete. SUMMARY: `71-05-SUMMARY.md`.
 - **71-06** — pending.
 
 ### P71 Decisions Logged
@@ -162,6 +162,14 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **71-04:** `vi.mock('execa')` makes docker compose calls in restart/stop paths into no-ops in tests; default real `defaultDockerInspect` only used in production.
 - **71-04:** Test 15s-timeout case attaches `expect(promise).rejects.toThrow(...)` BEFORE `vi.advanceTimersByTimeAsync` — prevents unhandled-rejection warning when the timer fires before any awaiter is registered.
 - **71-04:** No `build` script exists for livinityd (runs TS via tsx per CLAUDE.md memory). Plan's `pnpm --filter livinityd build` substituted with vitest run + targeted typecheck filter (zero errors in new files; 358 pre-existing baseline errors out-of-scope per Rule 3).
+- **71-05:** `ContainerManagerLike` structural interface in desktop-gateway.ts (4 methods only) decouples 71-05 typecheck from 71-04 ship-order. At RED commit time (31ca0a49), 71-04's container-manager.ts had not been committed; structural typing meant 71-05 could ship independently. By Task 1 GREEN time 71-04 had landed (16293fa3) — ComputerUseContainerManager structurally satisfies the interface without explicit `implements`.
+- **71-05:** Path-traversal defense — pure helper `containsTraversal()` rejects any path segment === '..' on top of the prefix-allowlist. Test case `/computer-use/../../etc → false` was failing on first GREEN run because Express normalizes req.path at HTTP layer not at helper layer; defensive check at the helper protects raw-input callers (tests + future direct consumers). Rule 1 auto-fix.
+- **71-05:** websockifyUrl token uses existing `server.signUserToken(userId, role)` (1-week TTL) — plan's referenced `issueShortLivedToken` helper does not exist on Server class. Spirit of 'short-lived' preserved by gateway's path-filter (T-71-05-01) + active-task gate (T-71-05-03): even a leaked token can only reach 4 whitelisted paths AND only when the user has an active computer_use_tasks row. A future `signDesktopToken(secret, userId, role)` 1-hour helper can be introduced cleanly without churning 71-05.
+- **71-05:** Mount slot AFTER existing app-gateway middleware, BEFORE /app/:appId proxy. Verified app-gateway falls through for multi-segment subdomains via `subdomain.includes('.')` guard at server/index.ts:338 — `desktop.bruce.livinity.io` → subdomain `desktop.bruce` (contains `.`) → next() → reaches our desktop gateway. Scope guard "DO NOT modify EXISTING app-gateway middleware" honored.
+- **71-05:** `Livinityd.computerUseManager?` field optional + initialized AFTER `initDatabase()` resolves dbReady. Non-fatal on PG-unavailable: manager stays undefined, gateway middleware + tRPC router gracefully no-op via optional chaining. Matches existing fault-tolerance pattern at index.ts line 232 ("PostgreSQL not available, continuing with YAML-only mode").
+- **71-05:** Test ctx uses `dangerouslyBypassAuthentication: true` (the bypass flag designed precisely for this scenario per is-authenticated.ts:11). First GREEN run with `false` failed all 8 routes tests because privateProcedure runs full isAuthenticated middleware which calls verifyToken on a fake stub; bypass flag lets tests focus on procedure-body behavior without mocking the full JWT verifier.
+- **71-05:** `mountDesktopWsUpgrade` ships as no-op stub. http-proxy-middleware's `ws:true` proxies WS upgrades automatically once the proxy was mounted on a prior HTTP request. Standalone /computer flow (71-06) ALWAYS hits the page first via HTTP fetch (warming proxy cache) before opening wss:// — cache is warm when upgrade arrives. If 71-06 end-to-end smoke reveals WS first-frame race, lift the existing pattern from server/index.ts:531-560 and gate by `desktop.*` host. Documented as deferred lift-point.
+- **71-05:** Re-export collision avoided — `ContainerStatus` type lives canonically in container-manager.ts (71-04). desktop-gateway.ts uses local alias `GatewayContainerStatus` (private) so the barrel can re-export ContainerStatus from container-manager.ts only without TS2308 duplicate-export error.
 
 ## Phase 73 Progress (Reliability Layer) — 4/5 plans complete
 

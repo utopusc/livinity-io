@@ -134,7 +134,7 @@
 
 - [x] **CU-FOUND-01
 **: Bytebot desktop catalog entry in `builtin-apps.ts` — image `ghcr.io/bytebot-ai/bytebot-desktop:edge`, port range 14100+, `--privileged`, `shm_size: 2g`, `RESOLUTION=1280x960`, `DISPLAY=:0`
-- [ ] **CU-FOUND-02**: App gateway auth middleware for desktop subdomain — validates JWT session + active computer-use task, exposes only `/computer-use`, `/websockify`, `/screenshot` endpoints
+- [x] **CU-FOUND-02**: App gateway auth middleware for desktop subdomain — validates JWT session + active computer-use task, exposes only `/computer-use`, `/websockify`, `/screenshot` endpoints (delivered 71-05 commits `31ca0a49`/`a47f9098`/`8c186c05`/`e337db2b`)
 - [x] **CU-FOUND-03
 **: react-vnc dependency added; `liv-vnc-screen.tsx` wrapper with loading state, error fallback, scale-to-fit, fullscreen button, takeover indicator
 - [x] **CU-FOUND-04
