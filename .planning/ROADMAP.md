@@ -35,7 +35,7 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 **Phase summary:**
 
 - [ ] **Phase 64: v30.5 Final Cleanup at v31 Entry** (CARRY-01..05) — F7 Suna sandbox network blocker fix + 14 carryforward UATs + Phase 63's 11 plan walks + 3 v28.0 quick-tasks resolution + external client compat matrix UAT
-- [ ] **Phase 65: Liv Rename + Foundation Cleanup** (RENAME-01..13) — Nexus → Liv project-wide (~5,800 occurrences); `nexus/` → `liv/` git mv; @nexus/* → @liv/*; NEXUS_* → LIV_*; nexus:* Redis → liv:*; Mini PC `/opt/nexus/` → `/opt/liv/` migration
+- [~] **Phase 65: Liv Rename + Foundation Cleanup** (RENAME-01..13) — Nexus → Liv project-wide (~5,800 occurrences); `nexus/` → `liv/` git mv; @nexus/* → @liv/*; NEXUS_* → LIV_*; nexus:* Redis → liv:*; Mini PC `/opt/nexus/` → `/opt/liv/` migration. **Progress 2026-05-05:** 4/6 plans shipped (65-01 preflight + 65-02 git mv + 65-03 source sweep + 65-06 docs/memory). 65-04 (deploy scripts) + 65-05 (Mini PC migration script + cutover) pending. Sacred SHA `4f868d31...` preserved across all shipped plans.
 - [ ] **Phase 66: Liv Design System v1** (DESIGN-01..07) — color tokens (deep navy + cyan + amber + violet), motion primitives (FadeIn/GlowPulse/SlideInPanel/TypewriterCaret), typography (Inter Variable + JetBrains Mono), shadcn liv-* variants, Tabler icons unified
 - [x] **Phase 67: Liv Agent Core Rebuild** (CORE-01..07) — 4/4 plans complete 2026-05-04; Redis-as-SSE-relay (24h TTL, reconnectable runs), ToolCallSnapshot data model, LivAgentRunner wrapper around SdkAgentRunner, SSE endpoint with `?after=` resume support — production wiring of livAgentRunnerFactory deferred to P68/P73 (route surface complete + 503 stub when unwired)
 - [x] **Phase 68: Side Panel + Tool View Dispatcher** (PANEL-01..10 + PANEL-AUTO-OPEN-E2E) — 7/7 plans complete 2026-05-04; LivToolPanel auto-open contract (visual-tools-only, STATE.md line 79 LOCKED) shipped + E2E regression-protected via 8 integration tests; Cmd+I global shortcut; orphan until P70 mounts in ai-chat/index.tsx; sacred SHA `4f868d31...` unchanged across all 7 plans
@@ -96,15 +96,17 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 **Goal:** Project-wide cosmetic rename Nexus → Liv. Mechanical, high blast radius, must be atomic.
 
+**Progress (2026-05-05):** 4/6 plans shipped — 65-01 (preflight), 65-02 (git mv + 6 package.json), 65-03 (source-code sweep, 4 commits), 65-06 (active docs + memory file). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` preserved across all shipped plans. Pending: 65-04 (deploy scripts) + 65-05 (Mini PC migration script + LIVE CUTOVER user-walk).
+
 **Depends on:** Phase 64 (v30.5 cleanup so we don't rename a half-broken state).
 
-**Requirements:** RENAME-01..13
+**Requirements:** RENAME-01..13 (RENAME-13 documentation update marked complete by 65-06)
 
 **Success criteria:**
-1. `git grep -i "nexus" liv/ livos/` returns 0 (allowed: archived planning docs)
-2. All systemd units green on Mini PC after `/opt/nexus/` → `/opt/liv/` migration
-3. Subscription Claude responds via `/v1/messages` post-rename
-4. Mini PC migration script idempotent + rollback-ready (< 10 min rollback target)
+1. `git grep -i "nexus" liv/ livos/` returns 0 (allowed: archived planning docs) — ✅ achieved by 65-03
+2. All systemd units green on Mini PC after `/opt/nexus/` → `/opt/liv/` migration — ⏳ awaits 65-05 cutover
+3. Subscription Claude responds via `/v1/messages` post-rename — ⏳ awaits 65-05 smoke test
+4. Mini PC migration script idempotent + rollback-ready (< 10 min rollback target) — ⏳ scripts authored in 65-05
 
 ### Phase 66: Liv Design System v1
 

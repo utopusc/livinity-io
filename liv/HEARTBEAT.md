@@ -1,11 +1,11 @@
-# Nexus Heartbeat Tasks
+# Liv Heartbeat Tasks
 
 This file is checked periodically (default: every 30 minutes).
-Add tasks below that Nexus should monitor and alert you about.
+Add tasks below that Liv should monitor and alert you about.
 
 ## Format
 
-Write tasks as bullet points. Nexus will check each one and only alert you if action is needed.
+Write tasks as bullet points. Liv will check each one and only alert you if action is needed.
 
 ## Example Tasks
 

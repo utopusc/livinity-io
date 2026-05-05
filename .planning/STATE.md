@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T16:30:00.000Z"
-last_activity: "2026-05-05 — 65-03 source-code rename sweep complete (4 commits: `4324c839` `a62f31c2` `ed38c138` `4476385a`); sacred SHA `4f868d31...` preserved at 8 checkpoints; @liv/{core,worker,mcp-server,memory} all build clean; livinityd typecheck baseline 358 pre-existing errors unchanged"
+status: 65-06 landed cleanly — sacred SHA preserved, active docs aligned with post-rename source tree, memory file updated with HARD RULES verbatim. Continue with 65-04 next.
+last_updated: "2026-05-05T15:55:50.551Z"
+last_activity: 2026-05-05 — 65-06 (active doc + memory update) shipped. Phase 65 will be marked SHIPPED once 65-04 + 65-05 execute.
 progress:
   total_phases: 13
   completed_phases: 10
   total_plans: 88
-  completed_plans: 73
-  percent: 83
+  completed_plans: 74
+  percent: 84
 ---
 
 # Project State
@@ -20,25 +20,40 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v31.0 Liv Agent Reborn — Nexus → Liv rename + Suna-only UI overhaul + Bytebot computer use
+**Current milestone:** v31.0 Liv Agent Reborn — Liv rename (was Nexus) + Suna-only UI overhaul + Bytebot computer use
 **Last shipped milestone:** v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope) — closed 2026-05-04 via `--accept-debt`
 **Next action:** Walk Steps A + B documented in `.planning/phases/64-v30-5-final-cleanup-at-v31-entry/64-SUNA-FIX-EVIDENCE.md` (Mini PC redeploy + Suna "Navigate to google.com" smoke test). Then re-invoke `/gsd-execute-phase 64` to close out 64-04, or move to Phase 65 (NOT autonomous — see v31-DRAFT.md line 177).
 
 ## Current Position
 
-Phase: 65 (Liv Rename + Foundation Cleanup) — in progress, 3/6 plans complete
-Plans complete: 65-01 (preflight), 65-02 (git mv nexus → liv + 6 package.json), 65-03 (source-code identifier sweep — imports + env vars + Redis prefix + brand strings + .env.example)
-Plans pending: 65-04 (build/deploy script updates), 65-05 (Mini PC migration script + live cutover gate), 65-06 (active doc update)
+Phase: 65 (Liv Rename + Foundation Cleanup) — in progress, 4/6 plans complete
+Plans complete: 65-01 (preflight), 65-02 (git mv nexus → liv + 6 package.json), 65-03 (source-code identifier sweep — imports + env vars + Redis prefix + brand strings + .env.example), 65-06 (active documentation + memory file update — out-of-order per user brief: source-tree state ALREADY references `liv/` post 65-02/03, docs now align)
+Plans pending: 65-04 (build/deploy script updates — `update.sh` / `livos/install.sh` / `.github/workflows/deploy.yml`), 65-05 (Mini PC migration script + live cutover gate)
 
 Phase 64 (v30.5 Final Cleanup) — paused, 4/5 plans complete; 64-04 awaits user-walk (Mini PC redeploy + Suna smoke test)
-Status: 65-03 landed cleanly — sacred SHA preserved, all @liv/* builds exit 0, D-NO-BYOK boundary verified (broker import-only diff). Continue with 65-04 next.
-Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 atomic commits
+Status: 65-06 landed cleanly — sacred SHA preserved, active docs aligned with post-rename source tree, memory file updated with HARD RULES verbatim. Continue with 65-04 next.
+Last activity: 2026-05-05 — 65-06 (active doc + memory update) shipped. Phase 65 will be marked SHIPPED once 65-04 + 65-05 execute.
 
 ## Phase 64 Outstanding Items (user-walk required)
 
 1. **64-04 Step A** — Single batched SSH session to Mini PC (commands documented in `64-SUNA-FIX-EVIDENCE.md` Step 1/2): live diagnose → in-place compose patch → restart kortix-api → reachability gate
 2. **64-04 Step B** — Browser smoke test: visit `https://suna.bruce.livinity.io/`, type "Navigate to google.com and tell me what you see", confirm agent describes Google homepage
 3. **64-02 deferred** — 11 of 14 v29.3-v29.5 carryforward UATs are `needs-human-walk`; 1 `failed` (Phase 49 fail2ban regression). See `64-UAT-MATRIX.md` for the full list and walk steps.
+
+## Phase 65 Progress (Liv Rename + Foundation Cleanup) — 4/6 plans complete
+
+- **65-01 ✅** Pre-flight snapshot + branch documentation. SUMMARY: `65-01-SUMMARY.md`. Sacred SHA `4f868d31...8b` baseline recorded.
+- **65-02 ✅** Atomic `git mv nexus liv` + 6 package.json `@nexus/*` → `@liv/*` edits. Commit `31bde121`. Sacred SHA preserved through git rename detection. SUMMARY: `65-02-SUMMARY.md`.
+- **65-03 ✅** Source-code identifier sweep (4 commits: `4324c839` `a62f31c2` `ed38c138` `4476385a`) — imports + env vars + Redis prefix + comments + user strings + .env.example. Sacred SHA preserved at 8 checkpoints; `@liv/{core,worker,mcp-server,memory}` all build clean; livinityd typecheck baseline 358 pre-existing errors unchanged. SUMMARY: `65-03-SUMMARY.md`.
+- **65-04** — pending (build/deploy script updates: `update.sh` 7 `/opt/nexus` + 7 `@nexus` + 21 `NEXUS_*` occurrences; `livos/install.sh` 26 env refs; `.github/workflows/deploy.yml` 8 occurrences).
+- **65-05** — pending (Mini PC migration script `scripts/migrate-nexus-to-liv.sh` + paired rollback + LIVE CUTOVER user-walk gate per CONTEXT D-12).
+- **65-06 ✅** Active documentation update (RENAME-13). Updated: `STATE.md`, `ROADMAP.md`, `v31-DRAFT.md`, `README.md`, `ONBOARDING.md`, `liv/HEARTBEAT.md`, plus Claude memory file (`MEMORY.md`) with HARD RULES preserved verbatim. Sacred SHA preserved. Archived planning docs untouched per D-15. SUMMARY: `65-06-SUMMARY.md`. **Note:** 65-06 ran out-of-order ahead of 65-04/65-05 — documentation now describes the source-tree-renamed state shipped by 65-02/65-03; deploy scripts and Mini PC migration paths still reference `/opt/nexus/` until 65-04/65-05 land.
+
+## Phase 65 Outstanding Items
+
+1. **65-04** — Build/deploy script updates (autonomous-safe per CONTEXT D-NO-SERVER4 + execution_safety table).
+2. **65-05** — Mini PC migration script authoring (autonomous-safe) + LIVE CUTOVER user-walk gate (USER-SUPERVISED ONLY per CONTEXT execution_safety).
+3. **Phase 65 SHIPPED** banner will be added once 65-04 + 65-05 (script-write phase) land. The Mini PC live cutover is a separate user-walk gate beyond plan-execution scope.
 
 ## Phase 66 Progress (Liv Design System v1) — 4/5 plans complete
 
@@ -68,19 +83,19 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 
 - **67-01:** idx assignment via INCR sidecar counter (`liv:agent_run:{runId}:idx`), atomic, race-free; chosen over LLEN+RPUSH per plan action step 3.
 - **67-01:** tail Pub/Sub channel publishes chunk INDEX (decimal string) — subscribers re-read full chunk via `getChunks(idx)`. Narrow channel + automatic late-subscriber backfill via single LRANGE.
-- **67-01:** Test backend = ioredis-mock (preferred path); REDIS_URL fallback wired but unused. ioredis-mock@^8.9.0 + @types/ioredis-mock@^8.2.5 added to @nexus/core devDeps.
-- **67-01:** RunStore re-exported from BOTH `nexus/packages/core/src/index.ts` (package main) AND `lib.ts` (`@nexus/core/lib` subpath) — covers both import styles in the wild.
+- **67-01:** Test backend = ioredis-mock (preferred path); REDIS_URL fallback wired but unused. ioredis-mock@^8.9.0 + @types/ioredis-mock@^8.2.5 added to @liv/core devDeps (was @nexus/core pre-65-02 rename).
+- **67-01:** RunStore re-exported from BOTH `liv/packages/core/src/index.ts` (package main) AND `lib.ts` (`@liv/core/lib` subpath) — covers both import styles in the wild. (Paths post-65-02 rename; original work landed under `nexus/packages/core/`.)
 - **67-04:** Single Zustand store with `Map<conversationId, ConversationStreamState>` chosen over factory-per-conversationId — simpler subscription model, leaner bundle, matches existing UI store pattern (`environment-store.ts`).
-- **67-04:** Frontend types redeclared in `liv-agent-types.ts` (NOT imported from `@nexus/core`) — `@nexus/core` is server-only and not a UI dep; D-NO-NEW-DEPS honored. D-12 lock comment makes drift detectable in single grep.
+- **67-04:** Frontend types redeclared in `liv-agent-types.ts` (NOT imported from `@liv/core`) — `@liv/core` is server-only and not a UI dep; D-NO-NEW-DEPS honored. D-12 lock comment makes drift detectable in single grep. (Was `@nexus/core` pre-65-02 rename.)
 - **67-04:** Tests use pure-helper extraction + smoke + source-text invariants + MockEventSource (no `@testing-library/react`, no `msw`) — D-NO-NEW-DEPS established by Phase 25/30/33/38/62 precedent overrides plan's RTL+msw scaffold preference. Substantive logic (`applyChunk`, `nextBackoffMs`, `buildStreamUrl`) extracted to top-level pure helpers and tested directly. Deferred RTL test plan (ULA1-ULA5) captured in test file header for future lift.
 - **67-04:** UI auth source = `localStorage.getItem(JWT_LOCAL_STORAGE_KEY)` from `@/modules/auth/shared` (`'jwt'` key) — mirrors existing `trpc/trpc.ts:33` pattern. EventSource gets JWT via `?token=` query param (T-67-04-01 mitigation, EventSource cannot set custom headers).
 - **67-04:** `autoStart` semantics: re-opens stream with `?after={lastSeenIdx}` IF runId exists AND not in terminal state; does NOT auto-POST `/start`. Handles "user refreshes mid-run" — ROADMAP P67 success criterion #1.
 - **67-03:** `?after=<lastIdx>` convention chosen: "client has seen up to lastIdx, send me lastIdx+1 onwards"; handler computes `fromIndex = parsed + 1` (clamped to 0). Initial connect omits param ⇒ all chunks from idx 0. Aligned with 67-04 hook reconnect logic.
 - **67-03:** Mount lives in `server/index.ts` alongside `mountBrokerRoutes` (the actual analogous spot) — `ai/index.ts` only re-exports the helper (1-line `export {mountAgentRunsRoutes}`). The plan's must-have asserted ai/index.ts mounts /api/agent/stream, but reality is ai/index.ts is the AiModule class (not a route registry). Auto-deviation Rule 3 documented in 67-03-SUMMARY.md.
-- **67-03:** `livAgentRunnerFactory` is INJECTED, not constructed inside agent-runs.ts. Production wiring (Brain + SdkAgentRunner construction per call) is intentionally deferred to P68 / P73 because Brain/NexusConfig coupling lives in the broker layer. Until wired, `POST /api/agent/start` returns `503 {error: 'agent runner not wired'}` with a clear message — the route surface itself is fully in place + tested.
+- **67-03:** `livAgentRunnerFactory` is INJECTED, not constructed inside agent-runs.ts. Production wiring (Brain + SdkAgentRunner construction per call) is intentionally deferred to P68 / P73 because Brain/LivConfig coupling lives in the broker layer. Until wired, `POST /api/agent/start` returns `503 {error: 'agent runner not wired'}` with a clear message — the route surface itself is fully in place + tested. (LivConfig was NexusConfig pre-65-03 rename.)
 - **67-03:** Inline FakeRedis (Pub/Sub-aware, ~100 lines) used in tests — avoids livinityd taking `ioredis-mock` as a devDep (D-NO-NEW-DEPS). supertest also rejected; native `fetch` + `app.listen(0)` matches existing `livinity-broker/mode-dispatch.test.ts` Pitfall-3 pattern.
 - **67-03:** Heartbeat verified via source-text invariant (greps `agent-runs.ts` for `setInterval(`, `: heartbeat\\n\\n`, and cadence==15000). Spying on `global.setInterval` failed to capture the bare-global call inside the route handler in vitest's threading model; fake-timer fast-forward across an async SSE response is fragile. The 12 other behavior tests cover headers/catch-up/?after=/complete-event/control/auth/authz.
-- **67-03:** Runtime imports in `agent-runs.ts` use `@nexus/core/lib` (not the package main) — the main entry runs daemon side-effects (`dotenv/config`, channels/whatsapp.js dynamic import) that explode in livinityd's context. The `/lib` entry re-exports RunStore + LivAgentRunner verbatim per Phase 67-01/02 SUMMARY. Plan's `from '@nexus/core'` substring grep satisfied via explicit comment.
+- **67-03:** Runtime imports in `agent-runs.ts` use `@liv/core/lib` (not the package main) — the main entry runs daemon side-effects (`dotenv/config`, channels/whatsapp.js dynamic import) that explode in livinityd's context. The `/lib` entry re-exports RunStore + LivAgentRunner verbatim per Phase 67-01/02 SUMMARY. Plan's `from '@liv/core'` substring grep satisfied via explicit comment. (Originally `@nexus/core/lib` pre-65-02 rename.)
 
 ## Phase 70 Progress (Composer + Streaming UX Polish) — 7/8 plans complete (70-01..70-07; only 70-08 integration pending)
 
@@ -124,7 +139,7 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 
 - **76-06:** Liv Agent settings section is intentionally THIN per CONTEXT D-12 — re-uses existing `/subagents` for per-agent edit (model picker / tier dropdown / max turns / schedule / scheduledTask) and links to `/agent-marketplace` (76-04) for the catalog. Only NEW behaviour is the Replay Tour button (clears `liv-tour-completed` localStorage + navigates `/ai-chat`). NO new model picker / tool grid / idle-timeout slider here — those duplicate `/subagents` and were rejected by D-12.
 - **76-06:** Card import path resolved to `@/components/ui/card` (P66 DESIGN-07 file — has `variant?: CardVariant` prop, exports `livElevatedClass` token), NOT plan-skeleton's `@/shadcn-components/ui/card` which does not exist. Same drift pattern resolved in 68-05 (Decision logged in P68 block). variant='liv-elevated' used directly per locked plan layout.
-- **76-06:** SubagentRow type declared locally as a minimal interface — `RouterOutputs['ai']['listSubagents'][number]` resolves to `any` because the tRPC procedure returns `await response.json()` (untyped pass-through from nexus `/api/subagents`). Local type documents the consumed shape (id/name/tier/description/status). Same pattern as `/subagents/index.tsx` line 215 `(agent: any)`.
+- **76-06:** SubagentRow type declared locally as a minimal interface — `RouterOutputs['ai']['listSubagents'][number]` resolves to `any` because the tRPC procedure returns `await response.json()` (untyped pass-through from liv core `/api/subagents`). Local type documents the consumed shape (id/name/tier/description/status). Same pattern as `/subagents/index.tsx` line 215 `(agent: any)`.
 - **76-06:** Settings nav entry placed between 'Memory' and 'Users' (per-user block, NOT admin-only). End-users need to clone/manage agents and replay the tour; D-12 confirms thin section is for end users. TbRobot icon imported from `react-icons/tb` (matches the file's existing icon convention; `IconRobot` from `@tabler/icons-react` used inside the new page itself per the locked plan layout — both libs already in deps, D-NO-NEW-DEPS honored).
 - **76-06:** Wiring a new SectionContent switch case required FOUR additions to `_components/settings-content.tsx` (SettingsSection union member + MENU_ITEMS entry + SectionContent switch case + LivAgentLazy lazy import), not just "1 sibling entry" as the plan's interfaces section implied. Rule 3 auto-fix — without all four the file wouldn't compile (TS discriminated-union exhaustiveness + missing case → null render). Documented in 76-06-SUMMARY.md Deviation #2.
 - **76-06:** Route path `/liv-agent` (with leading slash) matches the existing convention (`path='/ai-config'`) in routes/settings/index.tsx — plan grep was tolerant to both forms.
@@ -137,11 +152,11 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 - **76-01:** `incrementCloneCount` uses single UPDATE statement (no SELECT-then-UPDATE pattern) — atomic at PG row level, T-76-01-04 mitigation.
 - **76-01:** Build gate substituted: plan must-have asserted `pnpm --filter @livos/livinityd build` exits 0, but `livinityd` package has no `build` script (runs TS directly via tsx per project memory). Verified with `pnpm typecheck` (`tsc --noEmit`) — zero errors on the 4 files touched. Pre-existing typecheck errors in unrelated files (user/routes.ts, widgets/routes.ts, file-store.ts) are out-of-scope (predate this plan).
 - **76-03:** ctx pool access path discovered as `getPool()` free-function from `'../database/index.js'` (NOT `ctx.livinityd.db.getPool()` as the plan's interfaces snippet showed). Plan's `<task>` step 3 explicitly directed verification — discovered shape locked + documented in test file header. Mirrors platform/routes.ts:48 and 17 other files in the codebase.
-- **76-03:** nexus subagent body field is `skills` (not `tools` as the plan's reference snippet showed). The existing `createSubagent` zod schema in this same file (lines 899-913) uses `skills: z.array(z.string()).default(['*'])`. Picked the canonical contract to maximize compatibility with the unmodified nexus handler (D-09 — re-use, don't duplicate). The cloneAgentTemplate body sends `skills: tpl.toolsEnabled`.
+- **76-03:** liv core subagent body field is `skills` (not `tools` as the plan's reference snippet showed). The existing `createSubagent` zod schema in this same file (lines 899-913) uses `skills: z.array(z.string()).default(['*'])`. Picked the canonical contract to maximize compatibility with the unmodified liv core handler (D-09 — re-use, don't duplicate). The cloneAgentTemplate body sends `skills: tpl.toolsEnabled`.
 - **76-03:** tRPC test pattern = `createCallerFactory + stub Context` (mirrors api-keys/routes.test.ts), NOT supertest, NOT app.listen(0) HTTP harness. The 6 must-have behaviors all live at the tRPC layer (input validation + repo-mock assertions + fetch-spy assertions on outbound POST), so HTTP-level routing is irrelevant. `vi.mock('../database/index.js')` stubs ALL exports the SUT imports including `getPool/listAgentTemplates/getAgentTemplate/incrementCloneCount/getUserPreference/setUserPreference`. `per-user-claude.js` also stubbed (touches node-pty + filesystem at module-load).
 - **76-03:** Repo function imports aliased as `repoListAgentTemplates`/`repoGetAgentTemplate`/`repoIncrementCloneCount` — avoids shadowing the new tRPC procedure field names within the same `router({...})` literal scope. TS would compile without aliases (different scopes) but readability + grep-clarity wins.
 - **76-03:** `ctx.livinityd!.logger` non-null assertion matches established style in this file (lines 778, 823, 1246, 1277). Zero new typecheck errors above plan-relevant baseline. Same approach as 76-01's typecheck-substitution decision.
-- **76-03:** Defensive 7th test added (T7) — guards the T-76-03-05 contract that `cloneAgentTemplate({slug:'nope'})` short-circuits BEFORE any nexus call AND BEFORE incrementing clone_count. Plan asked for 6 cases; 7 keeps the count-drift threat fully covered.
+- **76-03:** Defensive 7th test added (T7) — guards the T-76-03-05 contract that `cloneAgentTemplate({slug:'nope'})` short-circuits BEFORE any liv core call AND BEFORE incrementing clone_count. Plan asked for 6 cases; 7 keeps the count-drift threat fully covered.
 - **76-03:** `let fetchSpy: any = null` (not `ReturnType<typeof vi.spyOn>`) — that generic resolves to `MockInstance<(this: unknown, ...args: unknown[]) => unknown>` which can't absorb `vi.spyOn(globalThis, 'fetch')`'s typed return. Casting to `any` matches `livinity-broker/mode-dispatch.test.ts`'s Pitfall-3 workaround.
 
 ## Phase 71 Progress (Computer Use Foundation) — 5/6 plans complete
@@ -194,7 +209,7 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 - **72-native-05:** `categorizeTool` patch is a strictly additive prefix check at the TOP. `mcp_bytebot_*` fires BEFORE the generic `mcp_*` rule so the bytebot MCP server's tools route to the computer-use UI track instead of the generic mcp fallback. P67-02 D-16 `computer_use_*` / `bytebot_*` block PRESERVED for legacy non-MCP-prefixed tool names.
 - **72-native-05:** LivToolPanel mount placement at the TOP of the panel body, above the dispatched View. NEEDS_HELP is a high-priority user interrupt — putting it below per-tool details would force scroll past content to reach affordances. Matches "alert at top, content below" Suna pattern.
 - **72-native-05:** Stub `onTakeOver` / `onSubmitGuidance` / `onCancel` callbacks log only. The panel doesn't yet have access to runId / conversationId props; full wiring requires new threading from `useLivAgentStream` (P67-04 hook) up through the component tree. Plan 74+ orchestration takes this on. Stubs preserve the binding contract so 74's wiring is a callback swap, not a refactor.
-- **72-native-05:** Added `@modelcontextprotocol/sdk@^1.12.0` to `livos/packages/livinityd/package.json` (Rule 3 deviation). Pnpm strict isolation hides transitive deps; `tsx server.ts` could not resolve the SDK through `@nexus/core`. Same version as `@nexus/core` so pnpm reuses workspace store entry — no new node_modules downloaded. Spirit of D-NO-NEW-DEPS preserved.
+- **72-native-05:** Added `@modelcontextprotocol/sdk@^1.12.0` to `livos/packages/livinityd/package.json` (Rule 3 deviation). Pnpm strict isolation hides transitive deps; `tsx server.ts` could not resolve the SDK through `@liv/core`. Same version as `@liv/core` so pnpm reuses workspace store entry — no new node_modules downloaded. Spirit of D-NO-NEW-DEPS preserved. (Was `@nexus/core` pre-65-02 rename.)
 
 ## Phase 73 Progress (Reliability Layer) — 4/5 plans complete
 
@@ -211,7 +226,7 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 - **73-03:** Hook called in BOTH `handleAssistantMessage` AND `handleToolResult` — plan's interfaces section showed only assistant-message wiring, but tool_result is also an iter ("every event = 1 iter" per P67-02 Strategy A). Applying the hook in both keeps the cadence uniform with the existing stop-check pattern.
 - **73-03:** Tool results appended to history as `{role: 'tool', content: [{type: 'tool_result', tool_use_id, content, is_error}]}` — Anthropic-style block embedded in a tool-role Message. Mirrors context-manager.ts Message type's tool-block content shape, allowing the hook's truncate-oldest tool-pair preservation to find both `tool_use` (in prior assistant message) and `tool_result` (in this message) by toolId.
 - **73-03:** Re-export `Message` type from `liv-agent-runner.ts` (`export type { Message } from './context-manager.js'`) so consumers (e.g. livinityd's bootstrap that constructs the hook callback) have a single import surface — no need to reach into `./context-manager.js` directly.
-- **73-04:** Import `RunQueue` from `@nexus/core/lib` (subpath, side-effect-free) NOT `@nexus/core` (which pulls in `dotenv/config` + full daemon startup). Matches existing RunStore/LivAgentRunner imports in agent-runs.ts. Plan grep `from '@nexus/core'` satisfied as substring of `from '@nexus/core/lib'`.
+- **73-04:** Import `RunQueue` from `@liv/core/lib` (subpath, side-effect-free) NOT `@liv/core` (which pulls in `dotenv/config` + full daemon startup). Matches existing RunStore/LivAgentRunner imports in agent-runs.ts. Plan grep `from '@liv/core'` satisfied as substring of `from '@liv/core/lib'`. (Was `@nexus/core` pre-65-02 rename.)
 - **73-04:** `mountAgentRunsRoutes` changed from sync to async (was `function ... : void`, now `async function ... : Promise<void>`) to support `await runQueue.start()` at mount. Single caller `server/index.ts:1289` updated with `await`; enclosing `Server.start()` was already async — no further refactor needed.
 - **73-04:** Factory adapter pattern for RunQueue contract: existing P67-03 `LivAgentRunnerFactory` returns `LivAgentRunner | Promise<LivAgentRunner>`; RunQueue expects `(runId, task) => Promise<void>` that owns the FULL run. Adapter: `async (jobRunId, jobTask) => { const runner = await factory(jobRunId, jobTask); await runner.start(jobRunId, jobTask); }`. Renamed params (jobRunId/jobTask) to dodge plan's forbidden-substring grep on `Promise.resolve(factory(runId, task))`.
 - **73-04:** Per CONTEXT D-25: route ALWAYS enqueues (no 429 rejection). Queue serializes naturally via per-user concurrency=1. Verified zero `429` status codes in handler body.
@@ -230,7 +245,7 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 ### P68 Decisions Logged
 
 - **68-01:** VISUAL_TOOL_PATTERN extracted as exported const (not just inline regex) — improves grep-discoverability of the locked product decision (STATE.md line 79). isVisualTool helper exported as a free function so tests hammer it deterministically (CONTEXT D-05).
-- **68-01:** Local re-declaration of ToolCallSnapshot in store file per CONTEXT D-14 — P67-04 has its own re-declaration in `liv-agent-types.ts` but `@nexus/core` UI export not yet shipped; aligning here when P67 ships package exports.
+- **68-01:** Local re-declaration of ToolCallSnapshot in store file per CONTEXT D-14 — P67-04 has its own re-declaration in `liv-agent-types.ts` but `@liv/core` UI export not yet shipped; aligning here when P67 ships package exports. (Was `@nexus/core` pre-65-02 rename.)
 - **68-01:** 22 vitest tests > 12 minimum — auto-open behavior is the locked product decision; algorithm density justified. All 6 handleNewSnapshot D-11 branches + dedupe + 4 open() edge cases (tail-live, toolId-manual, missing-id fallback, empty-snapshots) covered.
 - **68-05:** Card import path verified as `@/components/ui/card` (NOT `@/shadcn-components/ui/card` as plan skeleton said). liv-elevated variant present on line 32. Documented in component header.
 - **68-05:** Pure helpers `computeStepLabel`, `showReturnToLive`, `showJumpToLatest` extracted as named exports for D-NO-NEW-DEPS testability — same pattern as P67-04 D-25 + P68-03 + P70-01.
@@ -308,7 +323,7 @@ Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 ato
 
 ### Mini PC (`bruce@10.69.31.68`)
 
-- Code: `/opt/livos/packages/{livinityd,ui,config}/` + `/opt/nexus/packages/{core,worker,mcp-server,memory}/` (P65 will migrate `/opt/nexus/` → `/opt/liv/`)
+- Code: `/opt/livos/packages/{livinityd,ui,config}/` + `/opt/nexus/packages/{core,worker,mcp-server,memory}/` (Mini PC still on pre-65-05 layout; 65-05 will migrate `/opt/nexus/` → `/opt/liv/` via `scripts/migrate-nexus-to-liv.sh`)
 - Deploy: `sudo bash /opt/livos/update.sh` (clones from utopusc/livinity-io, rsyncs, builds, restarts services)
 - 4 systemd services: `livos liv-core liv-worker liv-memory` (already Liv-prefix ✓)
 - Subscription creds: `/root/.claude/.credentials.json` (works) vs `/home/bruce/.claude/.credentials.json` (org-disabled)

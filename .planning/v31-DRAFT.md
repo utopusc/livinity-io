@@ -1,5 +1,7 @@
 # v31 — Liv Agent: The "WOW" Milestone
 
+> **P65 IN PROGRESS 2026-05-05** — 4/6 plans shipped (65-01/02/03/06; sacred SHA `4f868d31...` preserved). 65-04 (deploy scripts) + 65-05 (Mini PC migration + cutover) pending. See `.planning/phases/65-liv-rename-foundation-cleanup/` for plans + summaries. **The §D "Naming Convention" section below is the spec; code reality already matches `liv/` + `@liv/*` + `LIV_*` per 65-02/03.**
+
 **Codename:** Liv Agent — Reborn
 **Replaces:** Nexus brand entirely (cosmetic) + Liv Agent UI/UX (substantive)
 **Status:** DRAFT (pending /gsd-new-milestone formal intake)

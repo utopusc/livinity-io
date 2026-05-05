@@ -13,7 +13,7 @@
 
 LivOS is a personal server operating system that transforms any Linux machine into a powerful, AI-enhanced home server. It combines the simplicity of consumer NAS devices with the flexibility of self-hosted solutions, all managed through an intuitive web interface.
 
-At its core, LivOS features **Nexus**, an integrated AI assistant that can be accessed through WhatsApp, Telegram, Discord, or the web UI. Nexus can manage your apps, answer questions about your server, execute automated tasks, and extend its capabilities through a modular skills system. It supports both Google Gemini and Anthropic Claude as AI backends.
+At its core, LivOS features **Liv**, an integrated AI assistant that can be accessed through WhatsApp, Telegram, Discord, or the web UI. Liv can manage your apps, answer questions about your server, execute automated tasks, and extend its capabilities through a modular skills system. It supports both Google Gemini and Anthropic Claude as AI backends.
 
 For developers, LivOS includes an MCP (Model Context Protocol) server that integrates directly with Claude Desktop and Cursor IDE, allowing AI coding assistants to interact with your server. All data stays on your hardware, ensuring complete privacy and ownership of your information.
 
@@ -21,7 +21,7 @@ For developers, LivOS includes an MCP (Model Context Protocol) server that integ
 
 ## Features
 
-### AI Assistant (Nexus)
+### AI Assistant (Liv)
 
 - Multi-channel access: WhatsApp, Telegram, Discord, and web interface
 - Tool execution for server management and automation
@@ -89,8 +89,8 @@ cp .env.example .env
 # Start services
 pm2 start ecosystem.config.cjs
 
-# Install Nexus dependencies (optional, for AI features)
-cd ../nexus
+# Install Liv dependencies (optional, for AI features)
+cd ../liv
 npm install
 npm run build
 pm2 start ecosystem.config.cjs
@@ -153,7 +153,7 @@ At least one AI API key is required for AI features.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MCP_PORT` | `3100` | MCP server port for Claude/Cursor |
-| `API_PORT` | `3200` | Nexus API server port |
+| `API_PORT` | `3200` | Liv API server port |
 | `MEMORY_PORT` | `3300` | Memory/embedding service port |
 
 ### Daemon Configuration
@@ -170,12 +170,12 @@ Override defaults for custom installations.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LIVOS_BASE_DIR` | `/opt/livos` | LivOS installation directory |
-| `NEXUS_BASE_DIR` | `/opt/nexus` | Nexus installation directory |
+| `LIV_BASE_DIR` | `/opt/liv` | Liv installation directory |
 | `LIVOS_DATA_DIR` | `$LIVOS_BASE_DIR/data` | App data storage |
 | `LIVOS_LOGS_DIR` | `$LIVOS_BASE_DIR/logs` | Log files |
 | `LIVOS_SKILLS_DIR` | `$LIVOS_BASE_DIR/skills` | LivOS skill definitions |
-| `NEXUS_SKILLS_DIR` | `$NEXUS_BASE_DIR/skills` | Nexus skill definitions |
-| `NEXUS_WORKSPACE_DIR` | `$NEXUS_BASE_DIR/workspace` | Nexus working directory |
+| `LIV_SKILLS_DIR` | `$LIV_BASE_DIR/skills` | Liv skill definitions |
+| `LIV_WORKSPACE_DIR` | `$LIV_BASE_DIR/workspace` | Liv working directory |
 
 ### Domain Configuration
 
@@ -197,7 +197,7 @@ Override if services run on different hosts.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXUS_API_URL` | `http://localhost:3200` | Nexus API endpoint |
+| `LIV_API_URL` | `http://localhost:3200` | Liv API endpoint |
 | `MEMORY_SERVICE_URL` | `http://localhost:3300` | Memory service endpoint |
 
 ### Environment
@@ -238,14 +238,14 @@ livinity-io/
 │   │   └── marketplace/      # App marketplace definitions
 │   └── skills/               # LivOS skill definitions
 │
-└── nexus/                    # AI Agent (npm workspace)
+└── liv/                     # AI Agent (npm workspace)
     ├── packages/
     │   ├── core/             # Agent orchestration
     │   ├── memory/           # Embedding service
     │   ├── mcp-server/       # Claude/Cursor integration
     │   ├── worker/           # Background task processing
     │   └── hooks/            # Lifecycle hooks
-    └── skills/               # Nexus skill definitions
+    └── skills/               # Liv skill definitions
 ```
 
 ### Service Architecture
@@ -263,7 +263,7 @@ livinity-io/
               ┌─────────────────────────────┼─────────────────────────────┐
               │                             │                             │
      ┌────────▼────────┐          ┌────────▼────────┐          ┌────────▼────────┐
-     │    LivOS UI     │          │   Livinityd     │          │   Nexus API     │
+     │    LivOS UI     │          │   Livinityd     │          │    Liv API      │
      │   (React/Vite)  │◄────────►│   (Express)     │◄────────►│   (Express)     │
      │   Port: 5173    │          │   Port: 80/443  │          │   Port: 3200    │
      └─────────────────┘          └────────┬────────┘          └────────┬────────┘
@@ -286,7 +286,7 @@ livinity-io/
 | **Livinityd** | Core backend daemon handling app management, file operations, and system APIs |
 | **UI** | React-based web interface with tRPC client for real-time communication |
 | **@livos/config** | Shared configuration package with Zod validation schemas |
-| **Nexus Core** | AI agent orchestration with intent parsing and skill execution |
+| **Liv Core** | AI agent orchestration with intent parsing and skill execution |
 | **Memory Service** | Vector embedding service for AI context and conversation history |
 | **MCP Server** | Model Context Protocol server for Claude Desktop/Cursor integration |
 
