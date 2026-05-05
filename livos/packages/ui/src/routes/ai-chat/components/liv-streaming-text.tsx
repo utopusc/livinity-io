@@ -33,6 +33,15 @@ import remarkGfm from 'remark-gfm'
 import {TypewriterCaret} from '@/components/motion'
 import {cn} from '@/shadcn-lib/utils'
 
+// Phase 75-07 / CONTEXT D-24 — wire ShikiBlock + MermaidBlock into the
+// markdown render path. Inline `code` stays as native <code>; non-inline
+// blocks route to ShikiBlock for github-dark syntax highlighting; lang
+// === 'mermaid' routes to MermaidBlock for diagram rendering. Both blocks
+// were shipped standalone in plan 75-05 and are imported here for the
+// first time — that is the entire 75-07 wire-up for COMPOSER-06.
+import {MermaidBlock} from './mermaid-block'
+import {ShikiBlock} from './shiki-block'
+
 export interface LivStreamingTextProps {
 	/** The streaming-or-final assistant content (plain string, may be markdown). */
 	content: string
@@ -78,7 +87,32 @@ export function LivStreamingText({content, isStreaming, className}: LivStreaming
 			    its last text node and pin itself to the trailing edge (CONTEXT D-09,
 			    D-33; P66-02 caret API requires `anchorRef`). */}
 			<div ref={anchorRef} className='liv-streaming-text__content'>
-				<ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+				<ReactMarkdown
+					remarkPlugins={[remarkGfm]}
+					components={{
+						// Phase 75-07 / CONTEXT D-24 — code-block dispatcher.
+						// react-markdown 9 passes `inline` via the `node` prop or
+						// detects via parent context; we detect using the className
+						// pattern (`language-xxx` only set on fenced blocks, not
+						// inline `\`code\``). Fall back to native <code> for inline
+						// usage so prose flow is preserved.
+						code(props: any) {
+							const {className: codeClassName, children, inline} = props
+							const isInline = inline === true || !codeClassName
+							const lang = (codeClassName || '').replace('language-', '')
+							const source = String(children ?? '').replace(/\n$/, '')
+							if (isInline) {
+								return <code className={codeClassName}>{children}</code>
+							}
+							if (lang === 'mermaid') {
+								return <MermaidBlock source={source} />
+							}
+							return <ShikiBlock lang={lang || 'text'} source={source} />
+						},
+					}}
+				>
+					{content}
+				</ReactMarkdown>
 			</div>
 			{showCaret && <TypewriterCaret anchorRef={anchorRef} />}
 		</div>

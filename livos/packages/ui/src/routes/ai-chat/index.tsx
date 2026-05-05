@@ -14,6 +14,7 @@ import {
 	IconDeviceDesktop,
 	IconRobot,
 	IconArrowLeft,
+	IconDownload,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -24,12 +25,26 @@ import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/shadcn-components/ui/dropdown-menu'
 
 import {ChatMessageItem, LivAgentStatus, LivTypingDots} from './chat-messages'
 import {ChatInput as _LegacyChatInput} from './chat-input'
 import {LivComposer} from './liv-composer'
 import {LivToolPanel} from './liv-tool-panel'
 import {LivWelcome} from './components/liv-welcome'
+import {LivConversationSearch} from './components/liv-conversation-search'
+import {LivPinnedSidebarSection} from './components/liv-pinned-sidebar-section'
+import {
+	exportToJSON,
+	exportToMarkdown,
+	type ConversationData,
+	type ConversationMessage,
+} from './utils/export-conversation'
 import {useLivAgentStream} from '@/lib/use-liv-agent-stream'
 import {useLivToolPanelStore} from '@/stores/liv-tool-panel-store'
 
@@ -45,6 +60,40 @@ const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m
 const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
 
 type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents'
+
+/**
+ * Phase 75-07 / CONTEXT D-21 — adapt the in-memory ChatMessage[] to the
+ * `ConversationData` shape consumed by `exportToMarkdown` / `exportToJSON`
+ * (Plan 75-04). Uses the conversationId as both id + title fallback so the
+ * downloaded file has a sane filename.
+ */
+function buildConversationData(
+	conversationId: string,
+	messages: ChatMessage[],
+): ConversationData {
+	const title = `Conversation ${conversationId}`
+	const mapped: ConversationMessage[] = messages.map((m) => ({
+		id: m.id,
+		role: m.role === 'system' ? 'system' : (m.role as 'user' | 'assistant'),
+		content: m.content,
+		reasoning: m.reasoning,
+		toolCalls: (m.toolCalls ?? []).map((tc) => ({
+			name: tc.name,
+			input: tc.input,
+			output: tc.output,
+			isError: tc.status === 'error',
+		})),
+		ts: m.timestamp,
+	}))
+	const firstTs =
+		messages.length > 0 ? messages[0].timestamp : Date.now()
+	return {
+		id: conversationId,
+		title,
+		createdAt: firstTs,
+		messages: mapped,
+	}
+}
 
 function ConversationSidebar({
 	conversations,
@@ -119,36 +168,59 @@ function ConversationSidebar({
 			</div>
 
 			{activeView === 'chat' && (
-				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
-					{conversations.length === 0 && (
-						<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
-					)}
-					{conversations.map((conv) => (
-						<button
-							key={conv.id}
-							onClick={() => onSelect(conv.id)}
-							className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
-								activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
-							)}
-						>
-							<IconMessageCircle size={16} className='flex-shrink-0' />
-							<div className='min-w-0 flex-1'>
-								<span className='block truncate text-body-sm'>{conv.title}</span>
-								<span className='text-caption-sm text-text-tertiary'>
-									{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
-								</span>
-							</div>
+				<div className='flex-1 overflow-y-auto overflow-x-hidden'>
+					{/* Phase 75-07 / CONTEXT D-26..D-28 — sidebar search input lands
+					    at the top of the chat tab. Empty query falls back to the
+					    conversation list below. JWT comes from localStorage. */}
+					<div className='px-2 pt-2'>
+						<LivConversationSearch
+							onSelectMessage={(_messageId, conversationId) =>
+								onSelect(conversationId)
+							}
+						/>
+					</div>
+
+					{/* Phase 75-07 / CONTEXT D-18 — pinned items list sits between the
+					    search input and the conversation list. Auto-hides when zero
+					    pins. Click a pin → jumps to its source conversation. */}
+					<LivPinnedSidebarSection
+						className='border-b border-border-default pb-2 mb-1'
+						onSelectMessage={(_messageId, conversationId) => {
+							if (conversationId) onSelect(conversationId)
+						}}
+					/>
+
+					<div className='p-2'>
+						{conversations.length === 0 && (
+							<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
+						)}
+						{conversations.map((conv) => (
 							<button
-								onClick={(e) => {
-									e.stopPropagation()
-									onDelete(conv.id)
-								}}
-								className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
+								key={conv.id}
+								onClick={() => onSelect(conv.id)}
+								className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
+									activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+								)}
 							>
-								<IconTrash size={14} />
+								<IconMessageCircle size={16} className='flex-shrink-0' />
+								<div className='min-w-0 flex-1'>
+									<span className='block truncate text-body-sm'>{conv.title}</span>
+									<span className='text-caption-sm text-text-tertiary'>
+										{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
+									</span>
+								</div>
+								<button
+									onClick={(e) => {
+										e.stopPropagation()
+										onDelete(conv.id)
+									}}
+									className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
+								>
+									<IconTrash size={14} />
+								</button>
 							</button>
-						</button>
-					))}
+						))}
+					</div>
 				</div>
 			)}
 
@@ -523,6 +595,39 @@ export default function AiChat() {
 									${agent.totalCost.toFixed(4)}
 								</span>
 							)}
+							{/* Phase 75-07 / CONTEXT D-22 — Export menu (Markdown + JSON).
+							    Renders only when there is an active conversation with at
+							    least one message — empty conversations have nothing to
+							    export. The dropdown lives at the right edge of the
+							    connection bar so it does not displace existing UI. */}
+							{activeConversationId && displayMessages.length > 0 && (
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<button
+											aria-label='Export conversation'
+											title='Export conversation'
+											className={cn(
+												agent.totalCost > 0 ? 'ml-2' : 'ml-auto',
+												'flex h-6 w-6 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary',
+											)}
+										>
+											<IconDownload size={14} />
+										</button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align='end'>
+										<DropdownMenuItem
+											onClick={() => exportToMarkdown(buildConversationData(activeConversationId, displayMessages))}
+										>
+											Export as Markdown
+										</DropdownMenuItem>
+										<DropdownMenuItem
+											onClick={() => exportToJSON(buildConversationData(activeConversationId, displayMessages))}
+										>
+											Export as JSON
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							)}
 						</div>
 
 						<div
@@ -537,11 +642,14 @@ export default function AiChat() {
 									{/* P70-05 agent status banner — shows thinking/executing/error phases.
 									    Mounted here (post-list, pre-end-anchor) per CONTEXT D-45. */}
 									<LivAgentStatus status={agent.agentStatus} />
-									{displayMessages.map((msg) => {
+									{displayMessages.map((msg, idx) => {
+										const isLast = idx === displayMessages.length - 1
 										return (
 											<ChatMessageItem
 												key={msg.id}
 												message={msg}
+												conversationId={activeConversationId ?? undefined}
+												isLastMessage={isLast}
 											/>
 										)
 									})}
