@@ -693,3 +693,14 @@ function rowToAppInstance(row: any): UserAppInstance {
 		createdAt: row.created_at,
 	}
 }
+
+// Phase 76 MARKET-01 — agent_templates barrel re-export.
+// Allows ai/routes.ts (76-05) + boot seed runner (76-02) to do
+// `import {listAgentTemplates} from '../database/index.js'` without
+// importing the repo file directly.
+export {
+	listAgentTemplates,
+	getAgentTemplate,
+	incrementCloneCount,
+	type AgentTemplate,
+} from './agent-templates-repo.js'
