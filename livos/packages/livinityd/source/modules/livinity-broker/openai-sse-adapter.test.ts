@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import {createOpenAISseAdapter, writeOpenAISseChunk, OPENAI_SSE_DONE} from './openai-sse-adapter.js'
-import type {AgentEvent} from '@nexus/core'
+import type {AgentEvent} from '@liv/core'
 
 function ok(label: string) {
 	console.log(`  PASS ${label}`)

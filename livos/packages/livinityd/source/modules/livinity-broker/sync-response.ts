@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto'
-import type {AgentEvent, AgentResult} from '@nexus/core'
+import type {AgentEvent, AgentResult} from '@liv/core'
 
 /** Anthropic Messages API non-streaming response shape. */
 export interface AnthropicMessagesResponse {

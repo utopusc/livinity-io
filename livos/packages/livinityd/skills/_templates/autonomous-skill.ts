@@ -35,8 +35,8 @@ timeout_ms: 300000
 ---
 */
 
-import type { SkillContext, SkillResult } from '@nexus/core/lib';
-import { researchPrompt, planPrompt, executePrompt, verifyPrompt, buildLearnedEntry, buildFailedEntry } from '@nexus/core/lib';
+import type { SkillContext, SkillResult } from '@liv/core/lib';
+import { researchPrompt, planPrompt, executePrompt, verifyPrompt, buildLearnedEntry, buildFailedEntry } from '@liv/core/lib';
 
 export async function handler(ctx: SkillContext): Promise<SkillResult> {
   // 1. Extract the task from the message

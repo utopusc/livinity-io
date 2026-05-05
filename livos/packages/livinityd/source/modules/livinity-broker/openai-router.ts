@@ -1,6 +1,6 @@
 import type express from 'express'
 import type {Request, Response} from 'express'
-import type {AgentResult} from '@nexus/core'
+import type {AgentResult} from '@liv/core'
 import {resolveAndAuthorizeUserId} from './auth.js'
 import {createSdkAgentRunnerForUser, UpstreamHttpError} from './agent-runner-factory.js'
 import {aggregateChunkText} from './sync-response.js'

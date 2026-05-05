@@ -6,7 +6,7 @@ import {
 } from './openai-translator.js'
 import {_resetAliasCacheForTest} from './alias-resolver.js'
 import {DEFAULT_ALIASES} from './seed-default-aliases.js'
-import type {AgentResult} from '@nexus/core'
+import type {AgentResult} from '@liv/core'
 
 // Phase 61 Plan 03 — `resolveModelAlias` is now async + Redis-backed (re-exported
 // from openai-translator.js for backward-compat with existing imports). The

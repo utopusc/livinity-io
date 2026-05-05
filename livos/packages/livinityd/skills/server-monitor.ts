@@ -32,8 +32,8 @@ timeout_ms: 300000
 ---
 */
 
-import type { SkillContext, SkillResult } from '@nexus/core/lib';
-import { executePrompt, verifyPrompt, buildLearnedEntry } from '@nexus/core/lib';
+import type { SkillContext, SkillResult } from '@liv/core/lib';
+import { executePrompt, verifyPrompt, buildLearnedEntry } from '@liv/core/lib';
 
 export async function handler(ctx: SkillContext): Promise<SkillResult> {
   const issue = ctx.message

@@ -23,7 +23,7 @@ max_turns: 15
 ---
 */
 
-import type { SkillContext, SkillResult } from '@nexus/core/lib';
+import type { SkillContext, SkillResult } from '@liv/core/lib';
 
 export async function handler(ctx: SkillContext): Promise<SkillResult> {
   const task = ctx.message.replace(/^[!\\/]?\s*(subagent|sub agent|alt ajan|ajan|bot)\s*/i, '').trim();

@@ -1,4 +1,4 @@
-import type {AgentEvent, AgentResult} from '@nexus/core'
+import type {AgentEvent, AgentResult} from '@liv/core'
 import type Livinityd from '../../index.js'
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 
