@@ -375,3 +375,41 @@ END$$;
 CREATE INDEX IF NOT EXISTS idx_broker_usage_api_key_id
   ON broker_usage(api_key_id)
   WHERE api_key_id IS NOT NULL;
+
+-- =========================================================================
+-- Conversations + Messages (Phase 75 MEM-04 — Postgres FTS)
+-- Mirror of the in-memory/Redis conversation cache in livos/packages/livinityd/
+-- source/modules/ai/index.ts. Postgres is search-index-only; Redis remains the
+-- runtime source-of-truth for chat read path. Write-through populates these
+-- tables (see Phase 75-02). content_tsv is a STORED GENERATED column (PG12+);
+-- GIN index makes user-scoped FTS sub-100ms even at 100k messages.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS conversations (
+  id          TEXT PRIMARY KEY,
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_user_updated
+  ON conversations(user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user','assistant','system','tool')),
+  content         TEXT NOT NULL,
+  reasoning       TEXT,
+  metadata        JSONB DEFAULT '{}',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  content_tsv     TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', coalesce(content,''))) STORED
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+  ON messages(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_user_created
+  ON messages(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_content_tsv
+  ON messages USING GIN (content_tsv);
