@@ -6,8 +6,9 @@
 - ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
 - ✅ **v29.5 v29.4 Hot-Patch Recovery + Verification Discipline** — Phases 49-54 (shipped local 2026-05-02 via `--accept-debt`) — see [milestones/v29.5-ROADMAP.md](milestones/v29.5-ROADMAP.md)
 - ✅ **v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope)** — Phases 56-63 (shipped local 2026-05-04 via `--accept-debt`) — see [milestones/v30.0-ROADMAP.md](milestones/v30.0-ROADMAP.md)
-- 🟢 **v31.0 Liv Agent Reborn** — Phases 64-76 (active; consumes [REQUIREMENTS.md](REQUIREMENTS.md))
-- ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v32.0)
+- 🟢 **v31.0 Liv Agent Reborn** — Phases 64-79 (active — P77+P78+P79 hot-fix wave shipped 2026-05-05; bytebot MCP working end-to-end via host GNOME desktop)
+- 🟢 **v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime** — Phases 80-91 (active 2026-05-05; consumes [v32-DRAFT.md](v32-DRAFT.md) — Suna UI patterns + Hermes runtime patterns + light theme)
+- ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v33.0)
 
 ---
 
@@ -49,6 +50,61 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 - [ ] **Phase 76: Agent Marketplace + Onboarding Tour** (MARKET-01..07) — agent_templates table + 8-10 seed agents, Suna marketplace UX adapted, first-run interactive tour (9 steps), Settings "Liv Agent" section
 - [ ] **Phase 77: MCP Agent Loop Integration** (MCP-AGENT-01..04) — Wire McpClientManager-discovered tools into agent loop so registered MCP servers' tools reach Claude's `tools[]` array; close discovery gap identified by 2026-05-05 deploy investigation. Sacred file `liv/packages/core/src/sdk-agent-runner.ts` MUST remain untouched (D-NO-BYOK / sdk-subscription-only). Pattern: extend at `agent-runs.ts` factory boundary or via SDK option construction, NOT inside the sacred runner. Deliverables: McpConfigManager.listServers() → mcpServers config injection at runtime; Bytebot env-flag default-on (gated by linux+file-exists guards); integration tests for MCP tool snapshot emission end-to-end.
 - [ ] **Phase 78: Provider Endpoint + MCP Browser Dialog** (PROV-01..03 + MCP-UI-01..04) — Three coupled fixes for "Kimi" badge / MCP page / Suna inline-marketplace feel: (a) liv-core `/api/providers` endpoint reports broker active provider (Claude) so livinityd tRPC stops falling back to hardcoded `'kimi'`; (b) MCP panel install/uninstall buttons wired to actual tRPC mutations + currently-running-tools section; (c) `LivMcpBrowserDialog` component (Suna `BrowseDialog` parity) opened from composer `+ MCP` button + agent settings — `/agent-marketplace` route stays as community-agent destination (Suna parity confirmed).
+- [x] **Phase 79: Bytebot Hot-Fix Wave** (BYTEBOT-01..04) — 4 sequential fixes shipped 2026-05-05 to make bytebot MCP work end-to-end via Mini PC's host GNOME desktop: 79-01 (`AgentSessionManager` MCP injection + `nexus-tools` legacy wrapper default-OFF), 79-02 (JSON-Schema → Zod converter for MCP SDK 1.25.x), 79-03 (XAUTHORITY GDM path `/run/user/1000/gdm/Xauthority`), 79-04 (scrot subprocess replaces nut-js native binding for reliable framebuffer capture). User confirmed working "Tamam simdi calisiyor".
+
+### 🟢 v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime (Active — Phases 80-91)
+
+**Goal:** Suna-faithful UI rewrite + Hermes-inspired background runtime patterns. Light theme. Single MCP source of truth. 4-5 specialized seed agents. Per-agent model badges. Direct in-place at `/ai-chat` (Redis flag-gated). 12 phases / 4-6 günde ship via parallel waves.
+
+**Source plan:** [v32-DRAFT.md](v32-DRAFT.md) (master plan + 5 locked answers from user 2026-05-05).
+
+**Phase summary:**
+
+- [ ] **Phase 80: Foundation** (V32-FOUND-01..05) — OKLCH design tokens (Suna globals.css verbatim), `:root`+`.dark` swap, Geist Sans/Mono fonts via @fontsource-variable, Tailwind config extension, ThemeProvider + useTheme hook, `/playground/v32-theme` preview route. **Wave 1 — file-disjoint, paralel P85+P87.**
+- [ ] **Phase 81: Chat UI Port** (V32-CHAT-01..08) — `routes/ai-chat/v32/{MessageThread, ChatComposer, MessageInput, FileAttachment, AttachmentGroup, preview-renderers}.tsx`, gradient pill rendering, streaming caret animation, drag-drop on Card. Suna `ThreadContent.tsx` + `chat-input/*` ported with LivOS auth/API substitutions. **Wave 2.**
+- [ ] **Phase 82: Tool Side Panel** (V32-PANEL-01..06) — `ToolCallPanel.tsx` (`fixed inset-y-0 right-0 z-30` overlay, slide-in animation, slider scrubber, live/manual mode, "Jump to Live" pill, Cmd+I close, `liv-sidebar-toggled` event). `isVisualTool(name)` regex extended to `mcp_bytebot_*`. **Wave 2 paralel P81+P83.**
+- [ ] **Phase 83: Per-Tool Views** (V32-VIEWS-01..11) — `ToolViewRegistry.tsx` JS object dispatch, `ToolViewWrapper.tsx` shared chrome, 9 view components (Browser/Command/FileOp/StrReplace/WebSearch/WebCrawl/WebScrape/Mcp/Generic), `MCPContentRenderer.tsx` + `mcp-format-detector.ts` (search/table/JSON/markdown/error/plain auto-detect), `getMCPServerColor()` per-server identity. **Wave 2 paralel P81+P82.**
+- [ ] **Phase 84: MCP Single Source of Truth** (V32-MCP-01..09) — `BrowseDialog.tsx` (modal, search + categorized sidebar + server cards), `ConfigDialog.tsx` (credentials form from `configSchema` + tool-selection checkboxes), `ConfiguredMcpList.tsx` (per-agent), `MCPConfigurationNew.tsx` wrapper, source selector pill: "Official" (default `registry.modelcontextprotocol.io`) / "Smithery" (gated by `liv:config:smithery_api_key`), `mcp-smithery-client.ts` new client. tRPC: `mcp.search`, `mcp.installToAgent`, `mcp.removeFromAgent`. DEPRECATE `mcp-panel.tsx` from sidebar. **Wave 3 (depends on P83 view + P85 schema).**
+- [ ] **Phase 85: Agent Management** (V32-AGENT-01..10) — DB migration: `agents` table (agent_id PK, user_id FK, name, description, system_prompt, model_tier, configured_mcps JSONB, agentpress_tools JSONB, avatar emoji, avatar_color, is_default, is_public, marketplace_published_at, download_count, created_at, updated_at). tRPC: `agents.{list,get,create,update,delete,publish,unpublish,clone}`. Routes: `/agents` grid + `/agents/:id` two-pane editor (Manual + Agent Builder Beta tabs). 500ms debounced autosave. `AgentCard.tsx` (rounded-2xl + h-50 color zone + backdrop-blur badges + group-hover delete). 5 seed agents migration: Liv Default + Researcher + Coder + Computer Operator + Data Analyst. **Wave 1 schema migration; Wave 2 UI paralel P81+P82+P83.**
+- [ ] **Phase 86: Marketplace** (V32-MKT-01..06) — Route `/marketplace` (replaces `/agent-marketplace`), 4-col responsive grid (sm:2/lg:3/xl:4), search input + sort select (newest/popular/most_downloaded) + tag filter chip strip, `MarketplaceCard.tsx` (h-50 color zone + backdrop-blur download badge + tag badges + creator/date), "Add to Library" mutation → `agents.cloneFromMarketplace`. Existing `agent_templates` table data migrated to `agents` table with `is_public:true`. **Wave 3 paralel P84.**
+- [ ] **Phase 87: Hermes-inspired Background Runtime** (V32-HERMES-01..07) — Extend `liv/packages/core/src/liv-agent-runner.ts`: (1) new `RunStore.ChunkType.status_detail` payload `{phase, phrase, elapsed}` emitted on each assistant turn + tool dispatch + tool result, (2) `THINKING_VERBS[15]` constants from Hermes verbatim, (3) `maxIterations` LivAgentRunnerOptions field default 90 — INCR counter with error chunk on breach, (4) `_pendingSteer` field + `injectSteer(guidance)` method drained on next assistant turn, (5) `WSClientMessage.steer` type added to `agent-session.ts`, (6) `ToolCallSnapshot.batchId?` additive optional field for parallel grouping, (7) 4-pass JSON repair chain in legacy `kimi-agent-runner.ts` (defensive, low-prio). Sacred `sdk-agent-runner.ts` UNTOUCHED (post-P77 SHA `f3538e1d` baseline). **Wave 1 — backend file-disjoint, paralel P80+P85-schema.**
+- [ ] **Phase 88: WebSocket → SSE Migration** (V32-MIGRATE-01..05) — Refactor `routes/ai-chat/v32/index.tsx` to use `useLivAgentStream` (P67-04 SSE) instead of legacy `useAgentSocket` (WebSocket). Bridge SSE chunks → UI state: text → MessageThread, tool_snapshot → ToolCallPanel auto-open (when `isVisualTool` matches), status_detail → animated phrase card (consumes P87 chunks). Reconnect-with-after-idx logic validated. Deprecate `useAgentSocket` for v32 chat (legacy `/ai-chat` keeps it during cutover grace). **Wave 4 (depends on P81+P82+P87).**
+- [ ] **Phase 89: Theme Toggle + Accessibility + Keyboard** (V32-A11Y-01..06) — `<ThemeToggle>` component (sun/moon icon) in chat header, system default → `<html class>` toggle persisted to localStorage. Keyboard shortcuts: Cmd+I (close panel), Cmd+K (composer focus), Cmd+/ (slash menu), Cmd+Shift+C (copy last message). ARIA labels on all interactive components. WCAG AA color contrast verification on light theme. Focus-visible rings (Tailwind `focus-visible:ring-2`). **Wave 4 paralel P88.**
+- [ ] **Phase 90: Cutover** (V32-CUT-01..05) — Set `liv:config:new_chat_enabled=true` Redis flag, switch `/ai-chat/index.tsx` default routing to `v32/`. Remove `mcp-panel.tsx` sidebar tab from `routes/ai-chat/index.tsx`. `/agent-marketplace` → `/marketplace` HTTP 301 redirect in livinityd `server/index.ts` + client-side fallback. Update Dock app entry. Schedule `useAgentSocket` removal for v33. Update STATE.md + memory. **Wave 5.**
+- [ ] **Phase 91: UAT + Polish** (V32-UAT-01..06) — Full flow smoke test on Mini PC: open chat → chat with each of 5 seed agents → see streaming → tool pill → click pill → side panel opens → screenshot tool → image visible → switch theme to light → no flash → marketplace browse → Add to Library → see in /agents. Mobile responsive verification. A/B blink test: side-by-side screenshot vs current `/ai-chat` (the `igrenc` baseline). User-driven UAT signoff. **Wave 5 (final).**
+
+**Dependency graph:**
+```
+                                          ┌─→ P81 (chat UI)         ┐
+                                          │                          ├─→ P88 (WS→SSE)  ┐
+P80 (foundation) ─────────────────────────┼─→ P82 (tool panel)      ─┤                  ├─→ P90 (cutover) ─→ P91 (UAT)
+                                          │                          │   P89 (a11y)    ─┘
+                                          ├─→ P83 (per-tool views)  ─┴─→ P84 (MCP SoT) ─┐
+P85-schema (DB migration) ────────────────┼─→ P85-UI (agent mgmt)   ─┐                  │
+                                          ├─→ P86 (marketplace)     ─┤                  │
+                                          │                          │                  │
+P87 (Hermes runtime) ─────────────────────┴──────────────────────────┴──────────────────┘
+```
+
+**Wave plan (parallel execution):**
+- **Wave 1** (start now, all file-disjoint): P80 + P85-schema + P87 — 3 paralel agent
+- **Wave 2** (after Wave 1): P81 + P82 + P83 + P85-UI + P86 — 5 paralel
+- **Wave 3** (after Wave 2): P84 — single (depends on multiple Wave 2 deliverables)
+- **Wave 4** (after Wave 3): P88 + P89 — 2 paralel
+- **Wave 5** (after Wave 4): P90 → P91 — sequential (cutover then UAT)
+
+**Locked decisions for v32 entry:**
+- Direct in `/ai-chat` (`liv:config:new_chat_enabled` Redis flag during dev, set true at P90 cutover)
+- MCP source: official MCP Registry preserved, optional Smithery toggle (gated by API key)
+- 5 specialized seed agents (Liv Default + Researcher + Coder + Computer Operator + Data Analyst)
+- Per-agent model badge ("Liv Default · Claude Sonnet 4.6")
+- All 5 Hermes patterns ported at P87
+- Light theme REQUIRED, theme toggle at P89
+- Sacred `sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED throughout v32
+
+---
+
+### v31 Dependencies (legacy)
 
 **Dependencies:**
 ```
