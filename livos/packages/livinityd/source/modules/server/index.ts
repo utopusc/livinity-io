@@ -1676,6 +1676,16 @@ class Server {
 			response.json({running: exitCode === 0, debugging_port: exitCode === 0 ? 9222 : null})
 		})
 
+		// Phase 90 — Cutover. /agent-marketplace was the v31-era route; v32
+		// renames it to /marketplace (P86). HTTP 301 redirect catches direct
+		// hits and external links. Placed BEFORE the SPA static catch-all so
+		// the browser does the redirect before React Router boots. The route
+		// also has a client-side useNavigate fallback for in-app SPA pushes
+		// (see routes/agent-marketplace/index.tsx).
+		this.app.get('/agent-marketplace', (_request, response) => {
+			response.redirect(301, '/marketplace')
+		})
+
 		// If we have no API route hits then serve the ui at the root.
 		// We proxy through to the ui dev server during development with
 		// process.env.LIVINITY_UI_PROXY otherwise in production we

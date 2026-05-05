@@ -175,7 +175,7 @@ export default function AgentsRoute() {
 				) : query.error ? (
 					<ErrorState message={query.error.message} onRetry={() => query.refetch()} />
 				) : partitioned.all.length === 0 ? (
-					<EmptyState onCreate={handleCreate} onBrowse={() => navigate('/agent-marketplace')} />
+					<EmptyState onCreate={handleCreate} onBrowse={() => navigate('/marketplace')} />
 				) : (
 					<StaggerList
 						staggerMs={50}
