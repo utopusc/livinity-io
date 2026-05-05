@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v32.0
 milestone_name: AI Chat Ground-up Rewrite + Hermes Background Runtime
-status: Wave 2 SHIPPED 2026-05-05 — P81 (chat UI) + P82 (tool panel) + P83 (per-tool views) + P85-UI (agent management) + P86 (marketplace) all green, sacred SHA f3538e1d preserved. UI build 36.28s clean. Wave 3 next: P84 MCP Single Source of Truth (depends on Wave 2 deliverables).
-last_updated: "2026-05-05T23:55:00.000Z"
-last_activity: 2026-05-05 — Wave 2 of v32 shipped (5 atomic commits 4379ea89→52944d16). 8/12 phases complete. Autonomous orchestration continuing.
+status: Wave 3 SHIPPED 2026-05-05 — P84 MCP Single Source of Truth (BrowseDialog + ConfigDialog + ConfiguredMcpList + Smithery secondary client + 6-procedure mcp tRPC router + legacy mcp-panel sidebar unwired). Sacred SHA f3538e1d preserved. Wave 4 next: P88+P89 paralel.
+last_updated: "2026-05-06T01:30:00.000Z"
+last_activity: 2026-05-06 — Wave 3 of v32 shipped (commit d719a175, 15 files +2426). 9/12 phases complete. Autonomous orchestration continuing.
 progress:
   total_phases: 12
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 12
-  completed_plans: 8
-  percent: 67
+  completed_plans: 9
+  percent: 75
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md
 Milestone: v32.0 (active) — 8/12 phases complete
 Wave 1: ✅ COMPLETE — `759ef597` P80, `9a276a11` P85-schema, `628ed1ca` P87, `12aa473f` summaries
 Wave 2: ✅ COMPLETE — `4379ea89` P81, `6f758067` P82, `0df7475b` P83, `49d79510` P86, `52944d16` P85-UI
-Wave 3: ◆ NEXT — P84 (MCP Single Source of Truth) — depends on Wave 2 deliverables (BrowseDialog/ConfigDialog/ConfiguredMcpList; replaces legacy mcp-panel sidebar tab)
-Wave 4: P88 + P89 (WS→SSE migration + a11y/keyboard) — depends on Wave 3
+Wave 3: ✅ COMPLETE — `d719a175` P84 (MCP SoT + Smithery secondary + legacy mcp-panel deprecated)
+Wave 4: ◆ NEXT — P88 (WS→SSE migration via useLivAgentStream) + P89 (theme toggle in chat header + Cmd-key shortcuts + ARIA + WCAG AA)
 Wave 5: P90 → P91 (cutover + UAT) — sequential
 
 ## Wave 1 Deliverables (shipped)
