@@ -38,8 +38,12 @@ const sacredFile = join(__dirname, '..', 'sdk-agent-runner.ts');
 // returns empty for the C2 commit (audit-only — no source change).
 // See .planning/phases/40-per-user-claude-oauth-home-isolation/40-CONTEXT.md D-40-02 / D-40-11.
 // See .planning/phases/45-carry-forward-sweep/45-CONTEXT.md FR-CF-02.
-// Computed via: git hash-object nexus/packages/core/src/sdk-agent-runner.ts
-const BASELINE_SHA = '4f868d318abff71f8c8bfbcf443b2393a553018b';
+// Computed via: git hash-object liv/packages/core/src/sdk-agent-runner.ts
+//
+// 2026-05-05 P77-02: Sacred-UNTOUCHED rule retired for v31 per PROJECT.md:319 +
+// REQUIREMENTS.md:15 + ROADMAP.md:72. Baseline updated for additionalMcpServers
+// config option (closes MCP discovery gap; subscription path unchanged).
+const BASELINE_SHA = 'f3538e1d811992b782a9bb057d1b7f0a0189f95f';
 
 /**
  * Compute git's blob SHA-1 of a file. Git's blob format is:

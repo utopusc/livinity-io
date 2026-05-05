@@ -78,6 +78,23 @@ export interface AgentConfig {
   userPersonalization?: UserPersonalization;
   /** Maximum computer use actions (screenshot+click/type cycles) per session. Default: 50. */
   computerUseStepLimit?: number;
+  /**
+   * P77-02: Additional MCP servers to inject into Claude's mcpServers config.
+   *
+   * Built dynamically by api.ts agent-stream handler from McpConfigManager
+   * .listServers() (enabled-only). Allows registered MCP servers (Bytebot,
+   * future ones) to reach Claude's `tools[]` array — closes the discovery
+   * gap identified by the 2026-05-05 deploy investigation.
+   *
+   * Each entry follows Claude Code SDK's `mcpServers` shape:
+   *   { type: 'stdio', command, args, env? }
+   *   { type: 'streamableHttp', url, headers? }
+   *
+   * Each server's tools are auto-approved via wildcard `mcp__<name>__*` in
+   * allowedTools. Server names must NOT collide with reserved entries
+   * 'nexus-tools' or 'chrome-devtools' (silently skipped if they do).
+   */
+  additionalMcpServers?: Record<string, unknown>;
 }
 
 /** Resolve agent config with defaults from NexusConfig */
