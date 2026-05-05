@@ -1285,7 +1285,9 @@ class Server {
 		// bound to nexus's config) lands in P68 / P73. Until then, POST /start
 		// returns 503 with a clear message; the route surface itself is in
 		// place so 67-04's hook + verifier can validate end-to-end.
-		mountAgentRunsRoutes(this.app, this.livinityd)
+		// Phase 73-04: mountAgentRunsRoutes is now async (constructs + starts
+		// a BullMQ-backed RunQueue at mount time when a factory is provided).
+		await mountAgentRunsRoutes(this.app, this.livinityd)
 
 		// Handle log file downloads
 		this.app.get('/logs/', async (request, response) => {
