@@ -48,6 +48,7 @@ import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
 import {mountAgentRunsRoutes} from '../ai/agent-runs.js'
 import {mountConversationSearchRoute} from '../ai/conversation-search.js'
+import {mountPinnedRoutes} from '../ai/pinned-routes.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1297,6 +1298,16 @@ class Server {
 		// matching sidebar component; this mount makes the route reachable
 		// end-to-end and independently curl-able today.
 		mountConversationSearchRoute(this.app, this.livinityd)
+
+		// ── Phase 75-07 — Pinned-messages routes (additive) ──────────────────
+		// POST /api/pinned-messages, DELETE /api/pinned-messages/:id, GET
+		// /api/pinned-messages — JWT-authed, scoped to the authenticated
+		// userId, backed by Plan 75-03's PinnedMessagesRepository. Pin
+		// content is also auto-injected into the agent system prompt at
+		// run time (see ai/index.ts chat()). The injection point is the
+		// task assembly path; this route mount only handles the user-
+		// facing pin/unpin surface.
+		mountPinnedRoutes(this.app, this.livinityd)
 
 		// Handle log file downloads
 		this.app.get('/logs/', async (request, response) => {
