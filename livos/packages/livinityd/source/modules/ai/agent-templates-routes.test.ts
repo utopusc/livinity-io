@@ -130,7 +130,13 @@ function makeTemplateRow(overrides: Partial<any> = {}) {
 }
 
 describe('agent-templates tRPC routes (Phase 76 Plan 76-03)', () => {
-	let fetchSpy: ReturnType<typeof vi.spyOn> | null = null
+	// `any` here: vi.spyOn(globalThis, 'fetch') returns a MockInstance whose
+	// signature does NOT match the generic `MockInstance<(this: unknown, ...args:
+	// unknown[]) => unknown>` that `ReturnType<typeof vi.spyOn>` resolves to in
+	// vitest's type generics. Casting to `any` matches the test-file discipline
+	// from `livinity-broker/mode-dispatch.test.ts`'s Pitfall-3 workaround and
+	// keeps assertions on `fetchSpy.mock.calls[0]` working.
+	let fetchSpy: any = null
 
 	beforeEach(() => {
 		listAgentTemplatesMock.mockReset()

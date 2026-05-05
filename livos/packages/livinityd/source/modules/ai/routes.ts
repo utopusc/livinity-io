@@ -5,7 +5,14 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
-import {getUserPreference, setUserPreference} from '../database/index.js'
+import {
+	getUserPreference,
+	setUserPreference,
+	getPool,
+	listAgentTemplates as repoListAgentTemplates,
+	getAgentTemplate as repoGetAgentTemplate,
+	incrementCloneCount as repoIncrementCloneCount,
+} from '../database/index.js'
 import {
 	isMultiUserMode,
 	ensureUserClaudeDir,
@@ -2820,6 +2827,121 @@ export default router({
 			} catch {
 				return {success: false}
 			}
+		}),
+
+	// ── Agent Templates Marketplace (Phase 76 — MARKET-04, MARKET-05) ──────
+	// Catalog query + clone-into-subagent flow. Per CONTEXT D-06..D-09 the
+	// clone path POSTs to the existing nexus /api/subagents endpoint — we do
+	// NOT create a new user_agents table or local clone storage. clone_count
+	// increment is sequenced AFTER nexus 200 (T-76-03-05 mitigation).
+
+	/** List all agent templates from the global catalog. Optional tag filter. */
+	listAgentTemplates: privateProcedure
+		.input(z.object({tags: z.array(z.string()).optional()}).optional())
+		.query(async ({ctx, input}) => {
+			const pool = getPool()
+			if (!pool) {
+				ctx.livinityd!.logger.error('listAgentTemplates: database not initialized')
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Database not initialized'})
+			}
+			return await repoListAgentTemplates(pool, input)
+		}),
+
+	/** Fetch one template by slug. Throws NOT_FOUND for missing slugs. */
+	getAgentTemplate: privateProcedure
+		.input(z.object({slug: z.string().min(1).max(64)}))
+		.query(async ({ctx, input}) => {
+			const pool = getPool()
+			if (!pool) {
+				ctx.livinityd!.logger.error('getAgentTemplate: database not initialized')
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Database not initialized'})
+			}
+			const tpl = await repoGetAgentTemplate(pool, input.slug)
+			if (!tpl) throw new TRPCError({code: 'NOT_FOUND', message: 'Agent template not found'})
+			return tpl
+		}),
+
+	/** Clone a template into the user's subagent library via the existing
+	 *  nexus /api/subagents endpoint (D-06, D-09). Sequence:
+	 *    1. read template (404 if missing — no nexus call)
+	 *    2. POST nexus subagent
+	 *    3. on 200: increment clone_count
+	 *    4. return nexus body
+	 *  Failure at step 2 short-circuits BEFORE step 3 (T-76-03-05). */
+	cloneAgentTemplate: privateProcedure
+		.input(
+			z.object({
+				slug: z.string().min(1).max(64),
+				name: z.string().min(1).max(128).optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const pool = getPool()
+			if (!pool) {
+				ctx.livinityd!.logger.error('cloneAgentTemplate: database not initialized')
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'Database not initialized'})
+			}
+
+			// Step 1: read the template (NOT_FOUND short-circuits before nexus call).
+			const tpl = await repoGetAgentTemplate(pool, input.slug)
+			if (!tpl) throw new TRPCError({code: 'NOT_FOUND', message: 'Agent template not found'})
+
+			// Generate a per-user subagent id matching the existing nexus pattern
+			// (T-76-03-01 mitigation — slug + userId.slice(0,8) + Date.now() makes
+			// collision per-user-per-millisecond effectively impossible).
+			const userId = ctx.currentUser?.id ?? 'anonymous'
+			const cloneId = `${input.slug}-${userId.slice(0, 8)}-${Date.now()}`.slice(0, 64)
+
+			// Step 2: POST to nexus /api/subagents — body shape mirrors createSubagent
+			// (lines 899-944 in this file) so the existing nexus handler accepts it.
+			// `skills` is the canonical field name in nexus's createSubagent input;
+			// we pass tpl.toolsEnabled there. tier/maxTurns get sane defaults.
+			const nexusUrl = getNexusApiUrl()
+			let response: Response
+			try {
+				response = await fetch(`${nexusUrl}/api/subagents`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...(process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}),
+					},
+					body: JSON.stringify({
+						id: cloneId,
+						name: input.name ?? tpl.name,
+						description: tpl.description,
+						systemPrompt: tpl.systemPrompt,
+						skills: tpl.toolsEnabled,
+						tier: 'sonnet',
+						maxTurns: 10,
+						status: 'active',
+						createdBy: 'marketplace-clone',
+					}),
+				})
+			} catch (error) {
+				ctx.livinityd!.logger.error('cloneAgentTemplate: nexus fetch threw', error)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: `Failed to clone agent: ${getErrorMessage(error).slice(0, 200)}`,
+				})
+			}
+
+			if (!response.ok) {
+				const body = await response.text().catch(() => '<no body>')
+				ctx.livinityd!.logger.error('cloneAgentTemplate: nexus POST failed', {
+					status: response.status,
+					body,
+				})
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: `Failed to clone agent: ${body.slice(0, 200)}`,
+				})
+			}
+
+			// Step 3: ONLY after nexus 200 — increment clone_count.
+			await repoIncrementCloneCount(pool, input.slug)
+
+			// Step 4: return nexus body (the created subagent shape).
+			return await response.json()
 		}),
 
 })
