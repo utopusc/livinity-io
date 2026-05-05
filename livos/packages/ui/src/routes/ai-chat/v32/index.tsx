@@ -21,7 +21,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {toast} from 'sonner'
 
-import {ThemeToggle} from '@/components/theme-toggle'
 import {useLivAgentStream} from '@/lib/use-liv-agent-stream'
 import {cn} from '@/shadcn-lib/utils'
 
@@ -137,28 +136,6 @@ export default function AiChatV32() {
 		}
 	}, [status, sseMessages])
 
-	// ── liv-last-assistant localStorage (P89 deferred wire-up) ─────────
-	// Phase 90 — P89's keyboard hook reads this localStorage key on Cmd+Shift+C
-	// to copy the last assistant message. We write the latest completed
-	// assistant content here so the keyboard shortcut has fresh data.
-	const lastWrittenAssistantIdRef = useRef<string | null>(null)
-	useEffect(() => {
-		// Walk backward to the most recent assistant message.
-		for (let i = v32Messages.length - 1; i >= 0; i--) {
-			const m = v32Messages[i]
-			if (m.role !== 'assistant') continue
-			if (m.status !== 'complete') return // still streaming — wait for completion
-			if (m.id === lastWrittenAssistantIdRef.current) return // already wrote this one
-			try {
-				localStorage.setItem('liv-last-assistant', m.content)
-				lastWrittenAssistantIdRef.current = m.id
-			} catch {
-				// localStorage may be unavailable (SSR, private mode quota) — best-effort only
-			}
-			return
-		}
-	}, [v32Messages])
-
 	// ── Composer submit / stop ─────────────────────────────────────────
 	const isStreaming = isStreamActive(status)
 
@@ -215,14 +192,9 @@ export default function AiChatV32() {
 							disabled={isStreaming}
 						/>
 					</div>
-					{/* Phase 90 — P89 deferred wire-up: ThemeToggle mounts in the v32
-					    chat header. P89 deferred this to avoid a merge race with P88. */}
-					<div className='flex items-center gap-2'>
-						<span className='rounded-full bg-liv-accent px-2 py-0.5 text-xs text-liv-muted-foreground'>
-							dev preview · SSE wired (P88)
-						</span>
-						<ThemeToggle className='ml-1' />
-					</div>
+					<span className='rounded-full bg-liv-accent px-2 py-0.5 text-xs text-liv-muted-foreground'>
+						dev preview · SSE wired (P88)
+					</span>
 				</div>
 			</div>
 

@@ -64,7 +64,7 @@ export default function LivAgentSettings() {
 							</p>
 						</div>
 						<Button variant='liv-primary' size='sm' asChild>
-							<Link to='/marketplace'>
+							<Link to='/agent-marketplace'>
 								Browse <IconExternalLink size={16} className='ml-1.5' />
 							</Link>
 						</Button>

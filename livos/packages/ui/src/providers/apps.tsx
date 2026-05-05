@@ -67,23 +67,6 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/ai-chat',
 	},
-	// Phase 90 — Cutover (D-90-05). v32 ships /agents (two-pane editor + grid)
-	// and /marketplace (public template gallery, replaces /agent-marketplace).
-	// Placeholder image assets reused — v33 ships dedicated SVGs.
-	{
-		id: 'LIVINITY_agents',
-		name: 'Agents',
-		icon: '/figma-exports/dock-server.svg',
-		systemApp: true,
-		systemAppTo: '/agents',
-	},
-	{
-		id: 'LIVINITY_marketplace',
-		name: 'Marketplace',
-		icon: '/figma-exports/dock-app-store.png',
-		systemApp: true,
-		systemAppTo: '/marketplace',
-	},
 	// Phase 24-01 — replaced the legacy server-control app id with LIVINITY_docker.
 	// Final routes/server-control directory delete completed in Phase 27-02.
 	{
